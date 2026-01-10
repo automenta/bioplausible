@@ -1,4 +1,7 @@
-# Equilibrium Propagation: Verified Implementation
+# Bioplausible
+
+----
+
 
 > **Reproducible verification of Equilibrium Propagation research claims**
 
