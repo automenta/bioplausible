@@ -235,11 +235,17 @@ class EqPropTrainer:
         Returns:
             History dict with train/val losses and accuracies
         """
+        # Validate loaders
+        if not hasattr(train_loader, '__iter__') or isinstance(train_loader, str):
+             raise ValueError("train_loader must be an iterable DataLoader (not a string)")
+        if val_loader is not None and (not hasattr(val_loader, '__iter__') or isinstance(val_loader, str)):
+             raise ValueError("val_loader must be an iterable DataLoader (not a string)")
+
         loss_fn = loss_fn or nn.CrossEntropyLoss()
 
         for epoch in range(epochs):
             self._epoch = epoch + 1
-            epoch_start = time.time()
+            epoch_start = time.perf_counter()
 
             # Training phase
             train_loss, train_acc = self._train_epoch(train_loader, loss_fn, log_interval)
@@ -260,7 +266,7 @@ class EqPropTrainer:
                     self._best_metric = val_loss
                     self.save_checkpoint(checkpoint_path)
 
-            epoch_time = time.time() - epoch_start
+            epoch_time = time.perf_counter() - epoch_start
 
             # Callback
             if callback:

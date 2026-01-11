@@ -30,6 +30,18 @@ def spectral_conv2d(in_channels: int, out_channels: int, kernel_size: int,
     return spectral_norm(layer) if use_sn else layer
 
 
+def _get_layer_weight(layer: nn.Module) -> Optional[torch.Tensor]:
+    """Extract weight tensor from a layer."""
+    if hasattr(layer, 'parametrizations') and hasattr(layer.parametrizations, 'weight'):
+        return layer.weight
+    elif hasattr(layer, 'weight'):
+        return layer.weight
+    return None
+
+def _reshape_weight_for_power_iteration(weight: torch.Tensor) -> torch.Tensor:
+    """Reshape weight tensor for power iteration (conv weights to 2D matrix)."""
+    return weight.reshape(weight.shape[0], -1) if weight.dim() > 2 else weight
+
 def estimate_lipschitz(layer: nn.Module, iterations: int = 3) -> float:
     """
     Estimate Lipschitz constant (spectral norm) of a layer using power iteration.
@@ -54,24 +66,10 @@ def estimate_lipschitz(layer: nn.Module, iterations: int = 3) -> float:
     return sigma.item()
 
 
-def _get_layer_weight(layer: nn.Module) -> Optional[torch.Tensor]:
-    """Extract weight tensor from a layer."""
-    if hasattr(layer, 'parametrizations') and hasattr(layer.parametrizations, 'weight'):
-        return layer.weight
-    elif hasattr(layer, 'weight'):
-        return layer.weight
-    return None
-
-
 def _has_spectral_norm(layer: nn.Module) -> bool:
     """Check if a module has spectral normalization."""
     return (hasattr(layer, 'parametrizations') and
             hasattr(layer.parametrizations, 'weight'))
-
-
-def _reshape_weight_for_power_iteration(weight: torch.Tensor) -> torch.Tensor:
-    """Reshape weight tensor for power iteration (conv weights to 2D matrix)."""
-    return weight.reshape(weight.shape[0], -1) if weight.dim() > 2 else weight
 
 
 # =============================================================================
@@ -147,14 +145,6 @@ class LoopedMLP(nn.Module):
             return layer.parametrizations.weight.original
         return layer
 
-    def _get_layer_weight(self, layer: nn.Module) -> Optional[torch.Tensor]:
-        """Extract weight tensor from a layer."""
-        if hasattr(layer, 'parametrizations') and hasattr(layer.parametrizations, 'weight'):
-            return layer.weight
-        elif hasattr(layer, 'weight'):
-            return layer.weight
-        return None
-
     def forward(
         self,
         x: torch.Tensor,
@@ -173,6 +163,9 @@ class LoopedMLP(nn.Module):
             Output logits [batch, output_dim]
             (optionally) trajectory of hidden states
         """
+        if x.shape[1] != self.input_dim:
+            raise ValueError(f"Input dimension mismatch: expected {self.input_dim}, got {x.shape[1]}")
+
         steps = steps or self.max_steps
         batch_size = x.shape[0]
 
