@@ -26,6 +26,9 @@ try:
 except ImportError:
     cp = None
     HAS_CUPY = False
+except Exception: # Capture other potential import errors
+    cp = None
+    HAS_CUPY = False
 
 
 def get_backend(use_gpu: bool) -> Any:
