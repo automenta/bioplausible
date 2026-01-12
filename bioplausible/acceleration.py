@@ -22,24 +22,6 @@ def get_optimal_backend() -> str:
     return backend_detector.detect_best_backend()
 
 
-def get_device_count(device_type: str) -> int:
-    """
-    Get the number of available devices of a given type.
-
-    Args:
-        device_type: Type of device ('cuda', 'cpu', etc.)
-
-    Returns:
-        Number of available devices
-    """
-    if device_type == 'cuda' and torch.cuda.is_available():
-        return torch.cuda.device_count()
-    elif device_type == 'cpu':
-        return 1  # CPU is always available
-    else:
-        return 0
-
-
 class BackendDetector:
     """Helper class to detect the optimal compute backend."""
 
