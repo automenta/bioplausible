@@ -19,10 +19,9 @@ class TestDEQGradients(unittest.TestCase):
             hidden_dim=self.hidden_dim,
             output_dim=self.output_dim,
             max_steps=10,
-            use_spectral_norm=True
+            use_spectral_norm=True  # Re-enable spectral norm to ensure it works too
         ).to(self.device)
 
-    @unittest.skip("DEQ gradient matching is experimental and currently flaky due to graph retention issues.")
     def test_gradients_match_bptt(self):
         """Verify that Equilibrium gradients match BPTT gradients (approximately)."""
         x = torch.randn(self.batch_size, self.input_dim, device=self.device)

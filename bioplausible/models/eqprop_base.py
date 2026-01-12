@@ -45,16 +45,8 @@ class EquilibriumFunction(autograd.Function):
             # Use detached X for the VJP loop to avoid any graph entanglement
             x_transformed_detached = x_transformed.detach()
 
-            # Enable grad for VJP computation
-            # IMPORTANT: We can compute the VJP iteratively without building a huge graph
-            # BUT we need to be careful not to free anything needed by subsequent iterations if we were doing BPTT
-            # Here we are doing fixed point iteration on delta.
-
-            # Use detached X for the VJP loop to avoid any graph entanglement
-            x_transformed_detached = x_transformed.detach()
-
             # Iterate to equilibrium for the backward pass (solving for delta)
-            for i in range(model.max_steps):
+            for _ in range(model.max_steps):
                  with torch.enable_grad():
                     # Need to create a new leaf for h_star at each step for local VJP calc
                     # And x_transformed is detached constant.
@@ -80,22 +72,24 @@ class EquilibriumFunction(autograd.Function):
             # because it belongs to the FORWARD graph, which is immutable now.
             # However, we need to create a NEW graph connecting (params, x_transformed) -> f_h
 
-            # The issue is likely that x_transformed is used in both the forward pass (saved)
-            # and potentially implicitly in the loop? No.
-
-            # Let's try to reconstruct the graph using ONLY the leaves we care about.
-
             with torch.enable_grad():
                 # Re-compute one step to form graph connecting params and x to output
                 # We use the original x_transformed (attached to graph) here
-                f_h = model.forward_step(h_star, x_transformed)
+
+                # CRITICAL FIX: We must detach h_star!
+                h_star_detached = h_star.detach()
+
+                f_h = model.forward_step(h_star_detached, x_transformed)
 
                 inputs = list(params)
                 if x_transformed.requires_grad:
                     inputs.append(x_transformed)
 
-                # IMPORTANT: We use retain_graph=False (default) because this is the final calculation
-                grads = autograd.grad(f_h, inputs, grad_outputs=delta, allow_unused=True)
+                # Use retain_graph=True to avoid freeing graph buffers that might be needed
+                # if autograd needs to access x_transformed's history later?
+                # Actually, for x_transformed, we are at the "leaf" of this local graph.
+                # But x_transformed itself is an intermediate node in the global graph.
+                grads = autograd.grad(f_h, inputs, grad_outputs=delta, allow_unused=True, retain_graph=True)
 
                 grad_params = grads[:len(params)]
                 if x_transformed.requires_grad:
