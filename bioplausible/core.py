@@ -252,6 +252,9 @@ class EqPropTrainer:
                 try:
                     if self.use_kernel:
                         loss, batch_correct, batch_size = self._process_batch_kernel(x, y, is_training)
+                    elif hasattr(self.model, 'train_step') and is_training:
+                        # Delegate to model's custom training step (e.g. for Algorithms)
+                        loss, batch_correct, batch_size = self._process_batch_custom(x, y, is_training)
                     else:
                         loss, batch_correct, batch_size = self._process_batch_pytorch(x, y, loss_fn, is_training)
 
@@ -273,6 +276,25 @@ class EqPropTrainer:
         avg_loss = total_loss / total if total > 0 else float('inf')
         avg_acc = correct / total if total > 0 else 0.0
         return avg_loss, avg_acc
+
+    def _process_batch_custom(
+        self, x: torch.Tensor, y: torch.Tensor, is_training: bool
+    ) -> Tuple[float, int, int]:
+        """Process a single batch using model's custom train_step."""
+        x, y = x.to(self.device), y.to(self.device)
+
+        # Flatten if needed, though algorithms might handle it
+        if x.dim() == 4 and hasattr(self.model, 'input_dim'):
+             x = x.view(x.size(0), -1)
+
+        metrics = self.model.train_step(x, y)
+
+        batch_size = x.size(0)
+        # Handle potential missing keys or different names
+        loss = metrics.get('loss', 0.0)
+        acc = metrics.get('accuracy', 0.0)
+
+        return loss * batch_size, int(acc * batch_size), batch_size
 
     def _process_batch_pytorch(
         self, x: torch.Tensor, y: torch.Tensor, loss_fn: Callable, is_training: bool
