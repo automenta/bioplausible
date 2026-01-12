@@ -7,8 +7,29 @@ Helper functions for ONNX export, model verification, and training utilities.
 from typing import Callable, Dict, List, Optional, Tuple, Any
 from contextlib import contextmanager
 import time
+import random
+import os
 import torch
 import torch.nn as nn
+import numpy as np
+
+
+def seed_everything(seed: int = 42) -> None:
+    """
+    Seed all random number generators for reproducibility.
+
+    Args:
+        seed: Random seed (default: 42)
+    """
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # Ensure deterministic behavior (may impact performance)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def export_to_onnx(
@@ -360,6 +381,7 @@ def spectral_conv2d(in_channels: int, out_channels: int, kernel_size: int, paddi
 
 
 __all__ = [
+    'seed_everything',
     'export_to_onnx',
     'count_parameters',
     'verify_spectral_norm',
