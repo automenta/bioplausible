@@ -305,51 +305,33 @@ class EqPropTrainer:
 
         for batch_idx, (x, y) in enumerate(loader):
             try:
-                batch_result = self._process_training_batch(x, y, loss_fn, batch_idx, log_interval)
+                # Prepare batch
+                x, y = self._prepare_batch(x, y)
 
-                # Track metrics
-                total_loss += batch_result['loss']
-                correct += batch_result['correct']
-                total += batch_result['total']
+                # Process batch
+                batch_loss, batch_correct, batch_total = self._process_batch(x, y, loss_fn)
+
+                # Update metrics
+                total_loss += batch_loss
+                correct += batch_correct
+                total += batch_total
                 self._step += 1
+
+                # Log progress
+                if log_interval > 0 and batch_idx % log_interval == 0:
+                    avg_loss = batch_loss / batch_total if batch_total > 0 else 0
+                    print(f'Batch {batch_idx}: Loss = {avg_loss:.4f}')
 
             except Exception as e:
                 raise RuntimeError(f"Error processing batch {batch_idx}: {str(e)}")
 
         return total_loss / total if total > 0 else 0.0, correct / total if total > 0 else 0.0
 
-    def _process_training_batch(self, x: torch.Tensor, y: torch.Tensor, loss_fn: Callable,
-                              batch_idx: int, log_interval: int) -> Dict[str, float]:
-        """Process a single training batch and return metrics."""
-        x, y = self._move_to_device(x, y)
-
-        # Flatten images if needed
+    def _prepare_batch(self, x: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Move to device and flatten input if necessary."""
+        x, y = x.to(self.device), y.to(self.device)
         x = self._maybe_flatten_input(x)
-
-        # Process batch
-        batch_loss, batch_correct, batch_total = self._process_batch(x, y, loss_fn)
-
-        # Log progress
-        if log_interval > 0 and batch_idx % log_interval == 0:
-            print(f'Batch {batch_idx}: Loss = {batch_loss / batch_total:.4f}')
-
-        return {
-            'loss': batch_loss,
-            'correct': batch_correct,
-            'total': batch_total
-        }
-
-    def _move_to_device(self, x: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Move tensors to the trainer's device.
-
-        Args:
-            x: Input tensor
-            y: Target tensor
-
-        Returns:
-            Tuple of tensors moved to the trainer's device
-        """
-        return x.to(self.device), y.to(self.device)
+        return x, y
 
     def _maybe_flatten_input(self, x: torch.Tensor) -> torch.Tensor:
         """Flatten input tensor if it's 4D and model has input_dim attribute."""
@@ -405,10 +387,17 @@ class EqPropTrainer:
         try:
             for batch_idx, (x, y) in enumerate(loader):
                 try:
-                    batch_metrics = self._evaluate_batch(x, y, loss_fn)
-                    total_loss += batch_metrics['loss']
-                    correct += batch_metrics['correct']
-                    total += batch_metrics['total']
+                    # Prepare batch
+                    x, y = self._prepare_batch(x, y)
+
+                    output = self.model(x)
+                    loss = loss_fn(output, y)
+
+                    batch_loss, batch_correct, batch_total = self._calculate_batch_metrics(loss, output, y, x.size(0))
+
+                    total_loss += batch_loss
+                    correct += batch_correct
+                    total += batch_total
 
                 except Exception as e:
                     print(f"Warning: Error processing evaluation batch {batch_idx}: {str(e)}. Skipping...")
@@ -420,25 +409,6 @@ class EqPropTrainer:
         return {
             'loss': total_loss / total if total > 0 else float('inf'),
             'accuracy': correct / total if total > 0 else 0.0,
-        }
-
-    def _evaluate_batch(self, x: torch.Tensor, y: torch.Tensor, loss_fn: Callable) -> Dict[str, float]:
-        """Evaluate a single batch and return metrics."""
-        x, y = self._move_to_device(x, y)
-        x = self._maybe_flatten_input(x)
-
-        output = self.model(x)
-        loss = loss_fn(output, y)
-
-        batch_size = x.size(0)
-        total_loss = loss.item() * batch_size
-        _, predicted = output.max(1)
-        correct = predicted.eq(y).sum().item()
-
-        return {
-            'loss': total_loss,
-            'correct': correct,
-            'total': batch_size
         }
 
     def save_checkpoint(self, path: str) -> None:

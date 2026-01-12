@@ -57,6 +57,11 @@ class LoopedMLP(nn.Module):
 
         self._init_weights()
 
+    def __repr__(self) -> str:
+        return (f"LoopedMLP(input={self.input_dim}, hidden={self.hidden_dim}, "
+                f"output={self.output_dim}, steps={self.max_steps}, "
+                f"spectral_norm={self.use_spectral_norm})")
+
     def _init_weights(self) -> None:
         """Initialize weights for stable equilibrium dynamics."""
         for layer in [self.W_in, self.W_rec, self.W_out]:
