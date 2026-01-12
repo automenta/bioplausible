@@ -55,6 +55,7 @@ class EqPropTrainer:
         - Checkpoint saving/loading
         - ONNX export for deployment
         - Progress callbacks
+        - Learning Rate Scheduling
     """
 
     def __init__(
@@ -181,6 +182,7 @@ class EqPropTrainer:
         log_interval: int = 100,
         checkpoint_path: Optional[str] = None,
         progress_bar: bool = True,
+        scheduler: Optional[Any] = None,
     ) -> Dict[str, List[float]]:
         """
         Train the model.
@@ -194,6 +196,7 @@ class EqPropTrainer:
             log_interval: Print progress every N batches
             checkpoint_path: Save best checkpoint to this path
             progress_bar: Show tqdm progress bar
+            scheduler: Learning rate scheduler (e.g. torch.optim.lr_scheduler.StepLR)
 
         Returns:
             History dict with train/val losses and accuracies
@@ -201,6 +204,9 @@ class EqPropTrainer:
         self._validate_loader(train_loader, "train_loader")
         if val_loader:
              self._validate_loader(val_loader, "val_loader")
+
+        if scheduler and self.use_kernel:
+             warnings.warn("Learning rate scheduler is not supported in Kernel mode.", UserWarning)
 
         loss_fn = loss_fn or nn.CrossEntropyLoss()
 
@@ -216,6 +222,13 @@ class EqPropTrainer:
             )
             self._history['train_loss'].append(train_loss)
             self._history['train_acc'].append(train_acc)
+
+            # Step scheduler if it's an epoch-based scheduler
+            if scheduler and not self.use_kernel:
+                try:
+                    scheduler.step()
+                except Exception as e:
+                    warnings.warn(f"Scheduler step failed: {e}", RuntimeWarning)
 
             # Validation phase
             val_loss, val_acc = None, None

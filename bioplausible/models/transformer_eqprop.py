@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from typing import Tuple
 from .utils import spectral_linear
 from .eqprop_base import EqPropModel
+from ..acceleration import compile_settling_loop
 
 # =============================================================================
 # TransformerEqProp - Attention with Equilibrium Dynamics
@@ -114,9 +115,7 @@ class TransformerEqProp(EqPropModel):
         self.head = nn.Linear(self.hidden_dim, self.output_dim)
 
     def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
-        """Initialize hidden state (not directly used in TransformerEqProp as h is derived from x_emb initially in old code, but let's standardize).
-           Wait, in old code: h = zeros_like(x_emb).
-        """
+        """Initialize hidden state."""
         batch_size, seq_len = x.shape
         # We need seq_len here, which isn't available until we see x.
         # But this method is called inside forward with x.
@@ -133,20 +132,12 @@ class TransformerEqProp(EqPropModel):
         x_emb = self.token_emb(x) + self.pos_emb(positions)
         return x_emb
 
+    @compile_settling_loop
     def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
         """
         Single equilibrium iteration step.
         """
         # x_transformed is x_emb
-
-        # In original code, the loop was:
-        # for _ in range(steps):
-        #   for i in range(num_layers):
-        #      h = forward_step_layer(h, x_emb, i)
-
-        # So one "step" in EqPropModel terms should probably be one pass through ALL layers?
-        # Yes, standard EqProp usually defines one 'step' as a full pass or update of the state.
-
         current_h = h
         for i in range(self.num_layers):
              current_h = self._forward_layer(current_h, x_transformed, i)
