@@ -29,39 +29,51 @@ class ConvEqProp(EqPropModel):
         use_spectral_norm: bool = True,
         max_steps: int = 25
     ) -> None:
-        super().__init__(max_steps=max_steps)
+        self.input_channels = input_channels
         self.hidden_channels = hidden_channels
+        self.output_dim = output_dim
         self.gamma = gamma
+        self.use_spectral_norm = use_spectral_norm
 
+        super().__init__(
+            input_dim=0, # Not used directly for conv
+            hidden_dim=hidden_channels,
+            output_dim=output_dim,
+            max_steps=max_steps,
+            use_spectral_norm=use_spectral_norm
+        )
+
+        # Initialize for stability (NEBCBase calls _build_layers, but we might want extra init)
+        with torch.no_grad():
+            self.W1.weight.mul_(0.5)
+            self.W2.weight.mul_(0.5)
+
+    def _build_layers(self):
+        """Build layers. Called by NEBCBase init."""
         # Input embedding
         self.embed = spectral_conv2d(
-            input_channels, hidden_channels, kernel_size=3, padding=1,
-            use_sn=use_spectral_norm
+            self.input_channels, self.hidden_channels, kernel_size=3, padding=1,
+            use_sn=self.use_spectral_norm
         )
 
         # Recurrent weights
         self.W1 = spectral_conv2d(
-            hidden_channels, hidden_channels * 2, kernel_size=3, padding=1,
-            use_sn=use_spectral_norm
+            self.hidden_channels, self.hidden_channels * 2, kernel_size=3, padding=1,
+            use_sn=self.use_spectral_norm
         )
         self.W2 = spectral_conv2d(
-            hidden_channels * 2, hidden_channels, kernel_size=3, padding=1,
-            use_sn=use_spectral_norm
+            self.hidden_channels * 2, self.hidden_channels, kernel_size=3, padding=1,
+            use_sn=self.use_spectral_norm
         )
 
-        self.norm = nn.GroupNorm(8, hidden_channels)
+        self.norm = nn.GroupNorm(8, self.hidden_channels)
 
         # Classifier head
         self.head = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(hidden_channels, output_dim)
+            nn.Linear(self.hidden_channels, self.output_dim)
         )
-
-        # Initialize for stability
-        with torch.no_grad():
-            self.W1.weight.mul_(0.5)
-            self.W2.weight.mul_(0.5)
 
     def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
         """Initialize the hidden state tensor."""

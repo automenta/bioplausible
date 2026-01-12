@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 from typing import Optional, List, Tuple, Dict, Union
 from abc import ABC, abstractmethod
+from .nebc_base import NEBCBase
 
-class EqPropModel(nn.Module, ABC):
+class EqPropModel(NEBCBase):
     """
     Abstract base class for Equilibrium Propagation models.
 
@@ -13,11 +14,33 @@ class EqPropModel(nn.Module, ABC):
     - Trajectory tracking
     - Lipschitz constant computation
     - Noise injection for stability analysis
+
+    Inherits from NEBCBase to participate in the NEBC ecosystem (ablation studies, registry).
     """
 
-    def __init__(self, max_steps: int = 30):
-        super().__init__()
+    def __init__(self, max_steps: int = 30, **kwargs):
+        # Pass dummy values to NEBCBase init if not provided in kwargs
+        # EqPropModel subclasses often have different signatures, so we handle basic init here.
+        # NEBCBase expects input_dim, hidden_dim, output_dim.
+        # We'll rely on subclasses to set these or pass them up.
+        input_dim = kwargs.get('input_dim', 0)
+        hidden_dim = kwargs.get('hidden_dim', 0)
+        output_dim = kwargs.get('output_dim', 0)
+
+        super().__init__(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            max_steps=max_steps,
+            # We don't enforce use_spectral_norm here, let subclass handle it
+            use_spectral_norm=kwargs.get('use_spectral_norm', True)
+        )
         self.max_steps = max_steps
+
+    @abstractmethod
+    def _build_layers(self):
+        """Build layers. Required by NEBCBase, implemented by subclasses."""
+        pass
 
     @abstractmethod
     def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
@@ -110,25 +133,8 @@ class EqPropModel(nn.Module, ABC):
             return out, trajectory
         return out
 
-    def compute_lipschitz(self) -> float:
-        """
-        Compute the maximum Lipschitz constant across all layers.
-        Default implementation checks all parameters for spectral norms.
-        """
-        max_L = 0.0
-        with torch.no_grad():
-            for module in self.modules():
-                # Access .weight property if available.
-                # This triggers spectral_norm forward hook if present.
-                if hasattr(module, 'weight') and isinstance(module.weight, torch.Tensor):
-                    w = module.weight
-                    # Only consider weights that look like matrices or filters
-                    if w.dim() >= 2:
-                        w_mat = w.view(w.size(0), -1)
-                        s = torch.linalg.svdvals(w_mat)
-                        if s.numel() > 0:
-                            max_L = max(max_L, s[0].item())
-        return max_L
+    # compute_lipschitz is inherited from NEBCBase (which we updated recently)
+    # It provides the correct implementation iterating over modules.
 
     def inject_noise_and_relax(
         self,

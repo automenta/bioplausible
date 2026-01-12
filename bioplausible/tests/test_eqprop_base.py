@@ -6,13 +6,25 @@ from bioplausible.models.eqprop_base import EqPropModel
 class MockEqPropModel(EqPropModel):
     """Simple mock implementation of EqPropModel for testing."""
     def __init__(self, input_dim, hidden_dim, output_dim, max_steps=10):
-        super().__init__(max_steps=max_steps)
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        self.W_in = nn.Linear(input_dim, hidden_dim)
-        self.W_rec = nn.Linear(hidden_dim, hidden_dim)
-        self.W_out = nn.Linear(hidden_dim, output_dim)
+        # We need to set dims before super().__init__ if NEBCBase uses them immediately,
+        # or pass them via kwargs. EqPropModel passes kwargs to super.
+        self._temp_input = input_dim
+        self._temp_hidden = hidden_dim
+        self._temp_output = output_dim
+
+        super().__init__(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            max_steps=max_steps
+        )
+
+    def _build_layers(self):
+        # Called by super().__init__ -> NEBCBase.__init__
+        # At this point, self.input_dim etc are set by NEBCBase
+        self.W_in = nn.Linear(self.input_dim, self.hidden_dim)
+        self.W_rec = nn.Linear(self.hidden_dim, self.hidden_dim)
+        self.W_out = nn.Linear(self.hidden_dim, self.output_dim)
 
     def _initialize_hidden_state(self, x):
         return torch.zeros(x.shape[0], self.hidden_dim, device=x.device)
@@ -51,8 +63,6 @@ class TestEqPropBase(unittest.TestCase):
         self.assertIn('initial_noise', stats)
         self.assertIn('final_noise', stats)
         self.assertIn('damping_ratio', stats)
-        # Noise should ideally decrease (damping < 100% or ratio < 1) for stable system
-        # Since weights are random, it might not be stable, but keys should be present.
         self.assertTrue(isinstance(stats['initial_noise'], float))
 
     def test_compute_lipschitz(self):

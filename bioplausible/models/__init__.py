@@ -13,12 +13,13 @@ from .utils import (
 )
 
 # Re-export models
+from .eqprop_base import EqPropModel
 from .looped_mlp import LoopedMLP, BackpropMLP
 from .conv_eqprop import ConvEqProp
 from .transformer_eqprop import TransformerEqProp, EqPropAttention
 from .lazy_eqprop import LazyEqProp
 from .ternary import TernaryEqProp
-from .modern_conv_eqprop import ModernConvEqProp
+from .modern_conv_eqprop import ModernConvEqProp, SimpleConvEqProp
 from .causal_transformer_eqprop import CausalTransformerEqProp
 from .eqprop_diffusion import EqPropDiffusion
 from .neural_cube import NeuralCube
@@ -42,6 +43,7 @@ __all__ = [
     'spectral_conv2d',
     'estimate_lipschitz',
     # Models
+    'EqPropModel',
     'LoopedMLP',
     'BackpropMLP',
     'ConvEqProp',
@@ -51,6 +53,7 @@ __all__ = [
     'LazyEqProp',
     'TernaryEqProp',
     'ModernConvEqProp',
+    'SimpleConvEqProp',
     'CausalTransformerEqProp',
     'EqPropDiffusion',
     'NeuralCube',

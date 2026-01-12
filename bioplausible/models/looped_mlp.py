@@ -41,33 +41,37 @@ class LoopedMLP(EqPropModel):
         use_spectral_norm: bool = True,
         max_steps: int = 30,
     ) -> None:
-        super().__init__(max_steps=max_steps)
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        self.use_spectral_norm = use_spectral_norm
-
-        # Input projection
-        self.W_in = nn.Linear(input_dim, hidden_dim)
-
-        # Recurrent (hidden-to-hidden) connection
-        self.W_rec = nn.Linear(hidden_dim, hidden_dim)
-
-        # Output projection
-        self.W_out = nn.Linear(hidden_dim, output_dim)
-
-        # Apply spectral normalization if enabled
-        if use_spectral_norm:
-            self.W_in = spectral_norm(self.W_in)
-            self.W_rec = spectral_norm(self.W_rec)
-            self.W_out = spectral_norm(self.W_out)
-
+        # EqPropModel calls NEBCBase init which builds layers via _build_layers
+        super().__init__(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            max_steps=max_steps,
+            use_spectral_norm=use_spectral_norm
+        )
         self._init_weights()
 
     def __repr__(self) -> str:
         return (f"LoopedMLP(input={self.input_dim}, hidden={self.hidden_dim}, "
                 f"output={self.output_dim}, steps={self.max_steps}, "
                 f"spectral_norm={self.use_spectral_norm})")
+
+    def _build_layers(self):
+        """Build layers. Called by NEBCBase init."""
+        # Input projection
+        self.W_in = nn.Linear(self.input_dim, self.hidden_dim)
+
+        # Recurrent (hidden-to-hidden) connection
+        self.W_rec = nn.Linear(self.hidden_dim, self.hidden_dim)
+
+        # Output projection
+        self.W_out = nn.Linear(self.hidden_dim, self.output_dim)
+
+        # Apply spectral normalization if enabled
+        if self.use_spectral_norm:
+            self.W_in = spectral_norm(self.W_in)
+            self.W_rec = spectral_norm(self.W_rec)
+            self.W_out = spectral_norm(self.W_out)
 
     def _init_weights(self) -> None:
         """Initialize weights for stable equilibrium dynamics."""

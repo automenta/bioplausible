@@ -12,8 +12,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.parametrizations import spectral_norm
 from .utils import spectral_conv2d
+from .eqprop_base import EqPropModel
 
-class ModernConvEqProp(nn.Module):
+class ModernConvEqProp(EqPropModel):
     """
     Multi-stage ConvEqProp with equilibrium settling.
     
@@ -38,41 +39,50 @@ class ModernConvEqProp(nn.Module):
         hidden_channels: int = 64,
         use_spectral_norm: bool = True
     ):
-        super().__init__()
-        self.eq_steps = eq_steps
         self.gamma = gamma
-        self.hidden_channels = hidden_channels
+        self.base_hidden_channels = hidden_channels
+
+        super().__init__(
+            input_dim=0, # Not used directly
+            hidden_dim=hidden_channels*4, # Deepest layer dim
+            output_dim=10,
+            max_steps=eq_steps,
+            use_spectral_norm=use_spectral_norm
+        )
+
+    def _build_layers(self):
+        """Build layers. Called by NEBCBase init."""
+        hidden_channels = self.base_hidden_channels
         
         # Stage 1: Initial feature extraction (32×32)
         self.stage1 = nn.Sequential(
-            spectral_conv2d(3, hidden_channels, 3, padding=1, use_sn=use_spectral_norm),
+            spectral_conv2d(3, hidden_channels, 3, padding=1, use_sn=self.use_spectral_norm),
             nn.GroupNorm(8, hidden_channels),
             nn.Tanh()
         )
         
         # Stage 2: Downsample to 16×16
         self.stage2 = nn.Sequential(
-            spectral_conv2d(hidden_channels, hidden_channels*2, 3, stride=2, padding=1, use_sn=use_spectral_norm),
+            spectral_conv2d(hidden_channels, hidden_channels*2, 3, stride=2, padding=1, use_sn=self.use_spectral_norm),
             nn.GroupNorm(8, hidden_channels*2),
             nn.Tanh()
         )
         
         # Stage 3: Downsample to 8×8
         self.stage3 = nn.Sequential(
-            spectral_conv2d(hidden_channels*2, hidden_channels*4, 3, stride=2, padding=1, use_sn=use_spectral_norm),
+            spectral_conv2d(hidden_channels*2, hidden_channels*4, 3, stride=2, padding=1, use_sn=self.use_spectral_norm),
             nn.GroupNorm(8, hidden_channels*4),
             nn.Tanh()
         )
         
         # Equilibrium recurrent block (operates at 8×8 spatial resolution)
-        self.eq_conv = spectral_conv2d(hidden_channels*4, hidden_channels*4, 3, padding=1, use_sn=use_spectral_norm)
+        self.eq_conv = spectral_conv2d(hidden_channels*4, hidden_channels*4, 3, padding=1, use_sn=self.use_spectral_norm)
         self.eq_norm = nn.GroupNorm(8, hidden_channels*4)
         
         # Output classification head
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Linear(hidden_channels*4, 10)
         
-        # Initialize weights for stable equilibrium
         self._init_weights()
     
     def _init_weights(self):
@@ -93,67 +103,118 @@ class ModernConvEqProp(nn.Module):
                 nn.init.xavier_uniform_(m.weight, gain=0.5)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
-    
-    def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
+
+    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass with equilibrium settling.
-        
-        Args:
-            x: Input images [batch, 3, 32, 32]
-            steps: Number of equilibrium iterations (default: self.eq_steps)
-        
-        Returns:
-            Logits [batch, 10]
+        Initialize hidden state for equilibrium block.
+        Dimensions depend on input x (batch size) and stage 3 output spatial dim (8x8 for CIFAR).
+        However, x here is the RAW input. We need to infer shape or calculate it.
+        Or better, we can calculate it from x, assuming standard CIFAR size or dynamic calculation.
         """
-        steps = steps or self.eq_steps
+        B, _, H, W = x.shape
+        # Assuming 3 downsampling stages with stride 1, 2, 2 ?
+        # Stage 1: stride 1 (32->32)
+        # Stage 2: stride 2 (32->16)
+        # Stage 3: stride 2 (16->8)
+        # So H_out = H // 4, W_out = W // 4
+        H_out, W_out = H // 4, W // 4
+        return torch.zeros(B, self.hidden_dim, H_out, W_out, device=x.device, dtype=x.dtype)
+
+    def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
+        """Run feedforward stages to get input for equilibrium block."""
+        h = self.stage1(x)
+        h = self.stage2(h)
+        h = self.stage3(h)
+        return h
+
+    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
+        """
+        Single equilibrium step.
+        x_transformed is the output of stage3 (the 'input' to the recurrent block).
+        Wait, in original code:
+            h_next = torch.tanh(self.eq_conv(h_norm))
+            h = (1 - gamma) * h + gamma * h_next
+        It didn't seem to add x_transformed (stage3 output) inside the loop?
         
-        # Non-recurrent feature extraction
-        h = self.stage1(x)   # [batch, 64, 32, 32]
-        h = self.stage2(h)   # [batch, 128, 16, 16]
-        h = self.stage3(h)   # [batch, 256, 8, 8]
-        
+        Original code:
         # Equilibrium settling at deepest layer
         for _ in range(steps):
             h_norm = self.eq_norm(h)
             h_next = torch.tanh(self.eq_conv(h_norm))
             # Exponential moving average update
             h = (1 - self.gamma) * h + self.gamma * h_next
+
+        Wait, if h is initialized as stage3 output (which implies h starts as x_transformed?), then it relaxes.
+        BUT, in original code:
+            h = self.stage3(h) # h is now the feature map
+            for _ in range(steps): ...
+        So 'h' acts as both the state and the input?
+        Actually, the recurrent block `eq_conv` connects h to h.
+        There is NO external input added at each step in the original code,
+        EXCEPT that h starts from the feedforward output.
+        This is a "relaxation from initial guess" dynamics, not "driven by input" dynamics?
         
-        # Classification from equilibrium state
-        features = self.pool(h).flatten(1)  # [batch, 256]
-        logits = self.fc(features)          # [batch, 10]
+        Let's look closer at original code:
+           h = self.stage3(h)
+           for _ in range(steps):
+               h_norm = self.eq_norm(h)
+               h_next = torch.tanh(self.eq_conv(h_norm))
+               h = (1-g)*h + g*h_next
+
+        This means the input x affects the initialization of h, but isn't added as a drive term (+ x) in the loop.
+        Standard EqProp usually has +x. This seems to be a variation or maybe 'h' here represents the state OF the neurons driven by bottom-up input?
         
-        return logits
-    
-    def compute_lipschitz(self) -> float:
+        If I map this to EqPropModel:
+        _initialize_hidden_state(x) -> needs to return the output of stages!
+        _transform_input(x) -> returns None? Or maybe just x?
+
+        But `_initialize_hidden_state` is meant to be the 'zero' state usually.
+        If I make `_initialize_hidden_state` return `stage3(x)`, then `_transform_input` is unused.
+
+        However, `EqPropModel.forward` does:
+           h = _initialize_hidden_state(x)
+           x_t = _transform_input(x)
+           for step: h = forward_step(h, x_t)
+
+        If I implement:
+           _initialize_hidden_state(x) -> return self.stage3(self.stage2(self.stage1(x)))
+           _transform_input(x) -> return torch.empty(0) # Unused
+           forward_step(h, x_t) -> standard relaxation (ignore x_t)
+
+        This replicates the behavior.
+
+        Is this desirable?
+        The comment says "Modern Convolutional EqProp... inspired by ResNet".
+        If it's just relaxing, it's finding a fixed point of `h = tanh(W h)`.
+        The input `x` sets the initial basin of attraction.
+        
+        Let's stick to replicating the original behavior for now to ensure correctness of refactor.
         """
-        Estimate Lipschitz constant of equilibrium block.
-        
-        Returns approximate upper bound on L.
-        """
-        with torch.no_grad():
-            # Get weight from equilibrium conv (potentially spectral normed)
-            W = self.eq_conv.weight  # [out_ch, in_ch, k, k]
-            
-            # Reshape to 2D matrix
-            W_2d = W.reshape(W.size(0), -1)
-            
-            # Compute max singular value
-            s = torch.linalg.svdvals(W_2d)
-            
-            # Account for Tanh Lipschitz constant (=1)
-            # and gamma blending
-            L = self.gamma * s[0].item()
-            
-            return L
+        h_norm = self.eq_norm(h)
+        h_next = torch.tanh(self.eq_conv(h_norm))
+        # Exponential moving average update
+        return torch.lerp(h, h_next, self.gamma)
+
+    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
+        """Initialize hidden state using the feedforward path."""
+        h = self.stage1(x)
+        h = self.stage2(h)
+        h = self.stage3(h)
+        return h
+
+    def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
+        """Unused in this variant (input sets initial state)."""
+        return torch.empty(0, device=x.device)
+
+    def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
+        features = self.pool(h).flatten(1)
+        return self.fc(features)
 
 
-class SimpleConvEqProp(nn.Module):
+class SimpleConvEqProp(EqPropModel):
     """
     Simplified single-stage ConvEqProp for comparison.
-    
-    This is a baseline to demonstrate that multi-stage architecture
-    provides significant improvement.
+    Refactored to use EqPropModel.
     """
     
     def __init__(
@@ -163,39 +224,44 @@ class SimpleConvEqProp(nn.Module):
         gamma: float = 0.5,
         use_spectral_norm: bool = True
     ):
-        super().__init__()
         self.hidden_channels = hidden_channels
-        self.eq_steps = eq_steps
         self.gamma = gamma
+        self.use_spectral_norm = use_spectral_norm
+
+        super().__init__(
+            input_dim=0,
+            hidden_dim=hidden_channels,
+            output_dim=10,
+            max_steps=eq_steps,
+            use_spectral_norm=use_spectral_norm
+        )
         
+    def _build_layers(self):
         # Single-stage embedding
-        self.embed = spectral_conv2d(3, hidden_channels, 3, padding=1, use_sn=use_spectral_norm)
+        self.embed = spectral_conv2d(3, self.hidden_channels, 3, padding=1, use_sn=self.use_spectral_norm)
         
         # Recurrent block
-        self.W_rec = spectral_conv2d(hidden_channels, hidden_channels, 3, padding=1, use_sn=use_spectral_norm)
-        self.norm = nn.GroupNorm(8, hidden_channels)
+        self.W_rec = spectral_conv2d(self.hidden_channels, self.hidden_channels, 3, padding=1, use_sn=self.use_spectral_norm)
+        self.norm = nn.GroupNorm(8, self.hidden_channels)
         
         # Classifier
         self.head = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
-            nn.Linear(hidden_channels, 10)
+            nn.Linear(self.hidden_channels, 10)
         )
     
-    def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
-        steps = steps or self.eq_steps
-        
-        # Embed input
-        x_emb = self.embed(x)
-        
-        # Initialize hidden state
-        h = torch.zeros_like(x_emb)
-        
-        # Equilibrium settling
-        for _ in range(steps):
-            h_norm = self.norm(h)
-            h_next = torch.tanh(self.W_rec(h_norm) + x_emb)
-            h = (1 - self.gamma) * h + self.gamma * h_next
-        
-        # Classify
+    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
+        B, _, H, W = x.shape
+        return torch.zeros(B, self.hidden_channels, H, W, device=x.device, dtype=x.dtype)
+
+    def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
+        return self.embed(x)
+
+    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
+        h_norm = self.norm(h)
+        h_next = torch.tanh(self.W_rec(h_norm) + x_transformed)
+        return torch.lerp(h, h_next, self.gamma)
+
+    def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         return self.head(h)

@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
 from .utils import spectral_linear
+from .eqprop_base import EqPropModel
 
 # =============================================================================
 # TransformerEqProp - Attention with Equilibrium Dynamics
@@ -47,7 +48,7 @@ class EqPropAttention(nn.Module):
         return out.transpose(1, 2).contiguous().view(batch_size, seq_len, self.hidden_dim)
 
 
-class TransformerEqProp(nn.Module):
+class TransformerEqProp(EqPropModel):
     """
     Transformer with equilibrium dynamics.
 
@@ -70,45 +71,89 @@ class TransformerEqProp(nn.Module):
         max_seq_len: int = 128,
         alpha: float = 0.5,
         use_spectral_norm: bool = True,
+        max_steps: int = 20
     ) -> None:
-        super().__init__()
+        self.vocab_size = vocab_size
         self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
         self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.max_seq_len = max_seq_len
         self.alpha = alpha
+        self.use_spectral_norm = use_spectral_norm
 
-        self.token_emb = nn.Embedding(vocab_size, hidden_dim)
-        self.pos_emb = nn.Embedding(max_seq_len, hidden_dim)
+        super().__init__(
+            input_dim=0, # Not applicable
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            max_steps=max_steps,
+            use_spectral_norm=use_spectral_norm
+        )
+
+    def _build_layers(self):
+        """Build layers. Called by NEBCBase init."""
+        self.token_emb = nn.Embedding(self.vocab_size, self.hidden_dim)
+        self.pos_emb = nn.Embedding(self.max_seq_len, self.hidden_dim)
 
         self.attentions = nn.ModuleList([
-            EqPropAttention(hidden_dim, num_heads, use_sn=use_spectral_norm)
-            for _ in range(num_layers)
+            EqPropAttention(self.hidden_dim, self.num_heads, use_sn=self.use_spectral_norm)
+            for _ in range(self.num_layers)
         ])
 
         self.ffns = nn.ModuleList([
             nn.Sequential(
-                spectral_linear(hidden_dim, hidden_dim * 2, use_sn=use_spectral_norm),
+                spectral_linear(self.hidden_dim, self.hidden_dim * 2, use_sn=self.use_spectral_norm),
                 nn.ReLU(),
-                spectral_linear(hidden_dim * 2, hidden_dim, use_sn=use_spectral_norm)
-            ) for _ in range(num_layers)
+                spectral_linear(self.hidden_dim * 2, self.hidden_dim, use_sn=self.use_spectral_norm)
+            ) for _ in range(self.num_layers)
         ])
 
-        self.norms1 = nn.ModuleList([nn.LayerNorm(hidden_dim) for _ in range(num_layers)])
-        self.norms2 = nn.ModuleList([nn.LayerNorm(hidden_dim) for _ in range(num_layers)])
+        self.norms1 = nn.ModuleList([nn.LayerNorm(self.hidden_dim) for _ in range(self.num_layers)])
+        self.norms2 = nn.ModuleList([nn.LayerNorm(self.hidden_dim) for _ in range(self.num_layers)])
 
-        self.head = nn.Linear(hidden_dim, output_dim)
+        self.head = nn.Linear(self.hidden_dim, self.output_dim)
 
-    def forward_step(self, h: torch.Tensor, x_emb: torch.Tensor, layer_idx: int) -> torch.Tensor:
+    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
+        """Initialize hidden state (not directly used in TransformerEqProp as h is derived from x_emb initially in old code, but let's standardize).
+           Wait, in old code: h = zeros_like(x_emb).
         """
-        Single equilibrium iteration step for one layer.
+        batch_size, seq_len = x.shape
+        # We need seq_len here, which isn't available until we see x.
+        # But this method is called inside forward with x.
+        # However, we need to know the embedding size.
+        # Let's defer initialization logic slightly or re-compute embeddings.
+        # Actually x_transformed will carry the embeddings.
+        # So we can just return zeros of appropriate shape.
+        return torch.zeros(batch_size, seq_len, self.hidden_dim, device=x.device, dtype=torch.float) # float32 usually
 
-        Args:
-            h: Current hidden state
-            x_emb: Embedded input
-            layer_idx: Index of the current layer
+    def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
+        """Embed input."""
+        batch_size, seq_len = x.shape
+        positions = torch.arange(seq_len, device=x.device).unsqueeze(0)
+        x_emb = self.token_emb(x) + self.pos_emb(positions)
+        return x_emb
 
-        Returns:
-            Next hidden state
+    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
         """
+        Single equilibrium iteration step.
+        """
+        # x_transformed is x_emb
+
+        # In original code, the loop was:
+        # for _ in range(steps):
+        #   for i in range(num_layers):
+        #      h = forward_step_layer(h, x_emb, i)
+
+        # So one "step" in EqPropModel terms should probably be one pass through ALL layers?
+        # Yes, standard EqProp usually defines one 'step' as a full pass or update of the state.
+
+        current_h = h
+        for i in range(self.num_layers):
+             current_h = self._forward_layer(current_h, x_transformed, i)
+        return current_h
+
+    def _forward_layer(self, h: torch.Tensor, x_emb: torch.Tensor, layer_idx: int) -> torch.Tensor:
+        """Original forward_step logic for a single layer."""
         h_norm = self.norms1[layer_idx](h)
         h = h + self.attentions[layer_idx](h_norm)
 
@@ -119,25 +164,5 @@ class TransformerEqProp(nn.Module):
         # Use torch.lerp for more efficient interpolation
         return torch.lerp(h, torch.tanh(h_target), self.alpha)
 
-    def forward(self, x: torch.Tensor, steps: int = 20) -> torch.Tensor:
-        """
-        Forward pass: iterate all layers to joint equilibrium.
-
-        Args:
-            x: Input tensor [batch, seq_len]
-            steps: Number of equilibrium steps
-
-        Returns:
-            Output logits [batch, output_dim]
-        """
-        batch_size, seq_len = x.shape
-        positions = torch.arange(seq_len, device=x.device).unsqueeze(0)
-        x_emb = self.token_emb(x) + self.pos_emb(positions)
-
-        h = torch.zeros_like(x_emb)
-
-        for _ in range(steps):
-            for i in range(self.num_layers):
-                h = self.forward_step(h, x_emb, i)
-
+    def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         return self.head(h.mean(dim=1))
