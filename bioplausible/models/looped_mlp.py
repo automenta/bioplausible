@@ -159,11 +159,6 @@ class LoopedMLP(nn.Module):
         """
         with torch.no_grad():
             W = self.W_rec.weight
-            # Ensure we're using the potentially parametrized weight
-            if hasattr(self.W_rec, 'parametrizations') and hasattr(self.W_rec.parametrizations, 'weight'):
-                 # Accessing .weight on spectral_norm layer triggers computation of the spectral norm weight
-                 pass
-
             s = torch.linalg.svdvals(W)
             return s[0].item()
 
