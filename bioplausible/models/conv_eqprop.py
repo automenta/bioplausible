@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 from .utils import spectral_conv2d
+from .eqprop_base import EqPropModel
 
 # =============================================================================
 # ConvEqProp - Convolutional EqProp for Vision Tasks
 # =============================================================================
 
-class ConvEqProp(nn.Module):
+class ConvEqProp(EqPropModel):
     """
     Convolutional Equilibrium Propagation Model.
 
@@ -25,9 +26,10 @@ class ConvEqProp(nn.Module):
         hidden_channels: int,
         output_dim: int,
         gamma: float = 0.5,
-        use_spectral_norm: bool = True
+        use_spectral_norm: bool = True,
+        max_steps: int = 25
     ) -> None:
-        super().__init__()
+        super().__init__(max_steps=max_steps)
         self.hidden_channels = hidden_channels
         self.gamma = gamma
 
@@ -61,58 +63,37 @@ class ConvEqProp(nn.Module):
             self.W1.weight.mul_(0.5)
             self.W2.weight.mul_(0.5)
 
-    def forward_step(self, h: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
+        """Initialize the hidden state tensor."""
+        B, _, H, W = x.shape
+        return torch.zeros(B, self.hidden_channels, H, W, device=x.device, dtype=x.dtype)
+
+    def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
+        """Transform input: embed(x)"""
+        return self.embed(x)
+
+    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
         """
         Single equilibrium iteration step.
 
         Args:
             h: Current hidden state
-            x: Input tensor
+            x_transformed: Embedded input tensor (x_emb)
 
         Returns:
             Next hidden state
         """
         h_norm = self.norm(h)
-        x_emb = self.embed(x)
 
         pre_act = self.W1(h_norm)
         hidden = torch.tanh(pre_act)
         ffn_out = self.W2(hidden)
 
-        h_target = ffn_out + x_emb
+        h_target = ffn_out + x_transformed
         # Use torch.lerp for more efficient interpolation
         h_next = torch.lerp(h, h_target, self.gamma)
         return h_next
 
-    def forward(self, x: torch.Tensor, steps: int = 25) -> torch.Tensor:
-        """
-        Forward pass: iterate to equilibrium.
-
-        Args:
-            x: Input tensor [batch, channels, height, width]
-            steps: Number of equilibrium steps
-
-        Returns:
-            Output logits [batch, output_dim]
-        """
-        B, _, H, W = x.shape
-        h = self._create_hidden_state_tensor(B, H, W, x)
-
-        for _ in range(steps):
-            h = self.forward_step(h, x)
-
+    def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
+        """Output projection."""
         return self.head(h)
-
-    def _create_hidden_state_tensor(self, batch_size: int, height: int, width: int, reference_tensor: torch.Tensor) -> torch.Tensor:
-        """Create the initial hidden state tensor for ConvEqProp.
-
-        Args:
-            batch_size: Size of the batch dimension
-            height: Height of the spatial dimensions
-            width: Width of the spatial dimensions
-            reference_tensor: Reference tensor to get device from
-
-        Returns:
-            Initialized hidden state tensor
-        """
-        return torch.zeros(batch_size, self.hidden_channels, height, width, device=reference_tensor.device)

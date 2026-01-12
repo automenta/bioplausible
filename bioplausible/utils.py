@@ -4,8 +4,9 @@ EqProp-Torch Utilities
 Helper functions for ONNX export, model verification, and training utilities.
 """
 
-from typing import Callable, Dict, List, Optional, Tuple
-
+from typing import Callable, Dict, List, Optional, Tuple, Any
+from contextlib import contextmanager
+import time
 import torch
 import torch.nn as nn
 
@@ -278,6 +279,85 @@ def create_model_preset(preset_name: str, **overrides) -> nn.Module:
     # Note: overrides would require more sophisticated preset handling
     return presets[preset_name]()
 
+# =============================================================================
+# Profiling Utilities
+# =============================================================================
+
+@contextmanager
+def SimpleProfiler(name: str):
+    """
+    Context manager for simple time profiling.
+
+    Example:
+        >>> with SimpleProfiler("Training Step"):
+        >>>     train_step()
+    """
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        end = time.perf_counter()
+        print(f"[{name}] took {(end - start)*1000:.2f} ms")
+
+def profile_model(model: nn.Module, input_shape: Tuple[int, ...], device: str = "cpu", runs: int = 10) -> Dict[str, float]:
+    """
+    Run a simple performance profile on a model.
+
+    Args:
+        model: Model to profile
+        input_shape: Input tensor shape (including batch dim)
+        device: Device to run on
+        runs: Number of runs for averaging
+
+    Returns:
+        Dictionary with 'avg_ms' and 'std_ms'
+    """
+    model = model.to(device)
+    model.eval()
+    x = torch.randn(*input_shape, device=device)
+
+    # Warmup
+    for _ in range(3):
+        with torch.no_grad():
+            _ = model(x)
+
+    times = []
+    with torch.no_grad():
+        for _ in range(runs):
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            start = time.perf_counter()
+
+            _ = model(x)
+
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            times.append((time.perf_counter() - start) * 1000)
+
+    avg_ms = sum(times) / len(times)
+    std_ms = (sum((t - avg_ms)**2 for t in times) / len(times))**0.5
+
+    return {'avg_ms': avg_ms, 'std_ms': std_ms}
+
+# Missing utils imported by models
+def spectral_linear(in_features: int, out_features: int, use_sn: bool = True) -> nn.Module:
+    """Helper to create a linear layer with optional spectral normalization."""
+    layer = nn.Linear(in_features, out_features)
+    if use_sn:
+        return torch.nn.utils.parametrizations.spectral_norm(layer)
+    return layer
+
+def spectral_conv2d(in_channels: int, out_channels: int, kernel_size: int, padding: int = 0, use_sn: bool = True) -> nn.Module:
+    """Helper to create a conv2d layer with optional spectral normalization."""
+    layer = nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding)
+    if use_sn:
+        return torch.nn.utils.parametrizations.spectral_norm(layer)
+    return layer
+
 
 __all__ = [
     'export_to_onnx',
@@ -288,4 +368,8 @@ __all__ = [
     'ModelRegistry',
     'model_registry',
     'create_model_preset',
+    'SimpleProfiler',
+    'profile_model',
+    'spectral_linear',
+    'spectral_conv2d',
 ]
