@@ -303,35 +303,55 @@ class EqPropTrainer:
         Returns:
             Average loss and accuracy for the epoch
         """
-        if not self.use_kernel:
-            self.model.train()
+        if self.use_kernel:
+            return self._train_epoch_kernel(loader, log_interval)
+        else:
+            return self._train_epoch_pytorch(loader, loss_fn, log_interval)
 
+    def _train_epoch_kernel(self, loader: DataLoader, log_interval: int) -> Tuple[float, float]:
         total_loss = 0.0
         correct = 0
         total = 0
 
         for batch_idx, (x, y) in enumerate(loader):
             try:
-                # Prepare and Process batch
-                if self.use_kernel:
-                     batch_loss, batch_correct, batch_total = self._process_batch_kernel(x, y)
-                else:
-                     x, y = self._prepare_batch(x, y)
-                     batch_loss, batch_correct, batch_total = self._process_batch_pytorch(x, y, loss_fn)
-
-                # Update metrics
+                batch_loss, batch_correct, batch_total = self._process_batch_kernel(x, y)
                 total_loss += batch_loss
                 correct += batch_correct
                 total += batch_total
                 self._step += 1
 
-                # Log progress
                 if log_interval > 0 and batch_idx % log_interval == 0:
                     avg_loss = batch_loss / batch_total if batch_total > 0 else 0
                     print(f'Batch {batch_idx}: Loss = {avg_loss:.4f}')
 
             except Exception as e:
-                raise RuntimeError(f"Error processing batch {batch_idx}: {str(e)}")
+                raise RuntimeError(f"Error processing kernel batch {batch_idx}: {str(e)}")
+
+        return total_loss / total if total > 0 else 0.0, correct / total if total > 0 else 0.0
+
+    def _train_epoch_pytorch(self, loader: DataLoader, loss_fn: Callable, log_interval: int) -> Tuple[float, float]:
+        self.model.train()
+        total_loss = 0.0
+        correct = 0
+        total = 0
+
+        for batch_idx, (x, y) in enumerate(loader):
+            try:
+                x, y = self._prepare_batch(x, y)
+                batch_loss, batch_correct, batch_total = self._process_batch_pytorch(x, y, loss_fn)
+
+                total_loss += batch_loss
+                correct += batch_correct
+                total += batch_total
+                self._step += 1
+
+                if log_interval > 0 and batch_idx % log_interval == 0:
+                    avg_loss = batch_loss / batch_total if batch_total > 0 else 0
+                    print(f'Batch {batch_idx}: Loss = {avg_loss:.4f}')
+
+            except Exception as e:
+                raise RuntimeError(f"Error processing PyTorch batch {batch_idx}: {str(e)}")
 
         return total_loss / total if total > 0 else 0.0, correct / total if total > 0 else 0.0
 
@@ -346,10 +366,6 @@ class EqPropTrainer:
         if x.dim() == 4 and hasattr(self.model, 'input_dim'):
             return x.view(x.size(0), -1)
         return x
-
-    def _process_batch(self, x: torch.Tensor, y: torch.Tensor, loss_fn: Callable) -> Tuple[float, int, int]:
-        """Deprecated: Use _process_batch_pytorch or _process_batch_kernel instead."""
-        return self._process_batch_pytorch(x, y, loss_fn)
 
     def _process_batch_pytorch(self, x: torch.Tensor, y: torch.Tensor, loss_fn: Callable) -> Tuple[float, int, int]:
         """Process a single batch using PyTorch BPTT."""
@@ -412,65 +428,68 @@ class EqPropTrainer:
         """
         loss_fn = loss_fn or nn.CrossEntropyLoss()
 
-        if not self.use_kernel:
-            self.model.eval()
+        if self.use_kernel:
+            return self._evaluate_kernel(loader)
+        else:
+            return self._evaluate_pytorch(loader, loss_fn)
 
+    def _evaluate_kernel(self, loader: DataLoader) -> Dict[str, float]:
         total_loss = 0.0
         correct = 0
         total = 0
 
-        try:
-            for batch_idx, (x, y) in enumerate(loader):
-                try:
-                    if self.use_kernel:
-                        # Kernel Evaluation
-                         if isinstance(x, torch.Tensor):
-                            x = x.cpu().numpy()
-                         if isinstance(y, torch.Tensor):
-                            y = y.cpu().numpy()
-                         if x.ndim == 4:
-                            x = x.reshape(x.shape[0], -1)
+        for batch_idx, (x, y) in enumerate(loader):
+            try:
+                # Kernel Evaluation
+                if isinstance(x, torch.Tensor):
+                    x = x.cpu().numpy()
+                if isinstance(y, torch.Tensor):
+                    y = y.cpu().numpy()
+                if x.ndim == 4:
+                    x = x.reshape(x.shape[0], -1)
 
-                         batch_size = x.shape[0]
+                batch_size = x.shape[0]
 
-                         # Single forward pass for both loss and accuracy
-                         # Solve equilibrium to get fixed point
-                         h_star, _, _ = self._kernel.solve_equilibrium(x)
-                         logits = self._kernel.compute_output(h_star)
+                # Use the kernel's evaluate method which handles forward pass and metrics
+                metrics = self._kernel.evaluate(x, y)
 
-                         # Calculate metrics using kernel utils
-                         loss_val = cross_entropy(logits, y, self._kernel.xp)
-                         batch_loss = float(to_numpy(loss_val)) * batch_size
+                batch_loss = metrics['loss'] * batch_size
+                batch_correct = int(metrics['accuracy'] * batch_size)
 
-                         # Calculate accuracy safely
-                         preds = self._kernel.xp.argmax(logits, axis=1)
-                         # Explicit conversion to numpy to handle potential CuPy vs NumPy issues
-                         preds_np = to_numpy(preds)
-                         y_np = to_numpy(y) if not isinstance(y, np.ndarray) else y
-                         batch_correct = np.sum(preds_np == y_np)
+                total_loss += batch_loss
+                correct += batch_correct
+                total += batch_size
 
-                         total_loss += batch_loss
-                         correct += batch_correct
-                         total += batch_size
+            except Exception as e:
+                print(f"Warning: Error processing kernel evaluation batch {batch_idx}: {str(e)}. Skipping...")
+                continue
 
-                    else:
-                        # PyTorch Evaluation
-                        x, y = self._prepare_batch(x, y)
-                        output = self.model(x)
-                        loss = loss_fn(output, y)
+        return {
+            'loss': total_loss / total if total > 0 else float('inf'),
+            'accuracy': correct / total if total > 0 else 0.0,
+        }
 
-                        batch_loss, batch_correct, batch_total = self._calculate_batch_metrics(loss, output, y, x.size(0))
+    def _evaluate_pytorch(self, loader: DataLoader, loss_fn: Callable) -> Dict[str, float]:
+        self.model.eval()
+        total_loss = 0.0
+        correct = 0
+        total = 0
 
-                        total_loss += batch_loss
-                        correct += batch_correct
-                        total += batch_total
+        for batch_idx, (x, y) in enumerate(loader):
+            try:
+                x, y = self._prepare_batch(x, y)
+                output = self.model(x)
+                loss = loss_fn(output, y)
 
-                except Exception as e:
-                    print(f"Warning: Error processing evaluation batch {batch_idx}: {str(e)}. Skipping...")
-                    continue
+                batch_loss, batch_correct, batch_total = self._calculate_batch_metrics(loss, output, y, x.size(0))
 
-        except Exception as e:
-            raise RuntimeError(f"Evaluation failed: {str(e)}")
+                total_loss += batch_loss
+                correct += batch_correct
+                total += batch_total
+
+            except Exception as e:
+                print(f"Warning: Error processing PyTorch evaluation batch {batch_idx}: {str(e)}. Skipping...")
+                continue
 
         return {
             'loss': total_loss / total if total > 0 else float('inf'),

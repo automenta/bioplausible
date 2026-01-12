@@ -517,7 +517,7 @@ class EqPropKernel:
         logits = self.compute_output(h_star)
         return to_numpy(xp.argmax(logits, axis=1))
 
-    def evaluate(self, x: np.ndarray, y: np.ndarray) -> float:
+    def evaluate(self, x: np.ndarray, y: np.ndarray) -> Dict[str, float]:
         """
         Evaluate accuracy on a dataset.
 
@@ -526,11 +526,25 @@ class EqPropKernel:
             y: True labels
 
         Returns:
-            Accuracy score
+            Dict with 'accuracy' and 'loss'
         """
-        preds = self.predict(x)
-        y_np = to_numpy(y) if not isinstance(y, np.ndarray) else y
-        return float(np.mean(preds == y_np))
+        xp = self.xp
+
+        # Prepare inputs
+        x, y = self._prepare_inputs(x, y)
+
+        h_star, _, _ = self.solve_equilibrium(x)
+        logits = self.compute_output(h_star)
+
+        # Metrics
+        loss = cross_entropy(logits, y, xp)
+        preds = xp.argmax(logits, axis=1)
+        accuracy = xp.mean(preds == y)
+
+        return {
+            'loss': float(to_numpy(loss)),
+            'accuracy': float(to_numpy(accuracy)),
+        }
 
 
 class EqPropKernelBPTT:
