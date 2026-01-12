@@ -45,7 +45,7 @@ except ImportError:
 # Bio-plausible research algorithms (optional - from research codebase)
 # These are first-class PyTorch nn.Module models, same status as LoopedMLP
 try:
-    from .bioplausible import (
+    from .algorithms import (
         ALGORITHM_REGISTRY,
         # Registry
         HAS_BIOPLAUSIBLE,
@@ -67,6 +67,7 @@ try:
         StandardFA,
         StochasticFA,
     )
+    HAS_BIOPLAUSIBLE = True
 except ImportError:
     HAS_BIOPLAUSIBLE = False
     BaseAlgorithm = None

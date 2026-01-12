@@ -10,7 +10,7 @@ Automatically identifies variants that exceed known baselines:
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Any
 import json
-from datetime import datetime
+import datetime
 from pathlib import Path
 
 from .fitness import FitnessScore
@@ -62,7 +62,7 @@ class BreakthroughReport:
     task: str
     breakthrough_dims: List[str]  # Which dimensions exceeded baseline
     improvement_pct: Dict[str, float]  # Percent improvement over baseline
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -246,12 +246,20 @@ class BreakthroughDetector:
     
     def _save_report(self, report: BreakthroughReport) -> None:
         """Save breakthrough report to disk."""
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"breakthrough_{report.task}_{timestamp}.json"
         filepath = self.output_dir / filename
         
+        def json_serial(obj):
+            """JSON serializer for objects not serializable by default json code."""
+            if isinstance(obj, (datetime.datetime, datetime.date)):
+                return obj.isoformat()
+            if hasattr(obj, 'item'):  # For NumPy scalars
+                return obj.item()
+            raise TypeError(f"Type {type(obj)} not serializable")
+
         with open(filepath, 'w') as f:
-            json.dump(report.to_dict(), f, indent=2)
+            json.dump(report.to_dict(), f, indent=2, default=json_serial)
     
     def generate_summary(self) -> str:
         """Generate markdown summary of all breakthroughs."""

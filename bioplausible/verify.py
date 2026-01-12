@@ -14,7 +14,7 @@ RESEARCH TRACKS COVERED:
 """
 
 import argparse
-from validation import Verifier
+from bioplausible.validation import Verifier
 
 def main():
     parser = argparse.ArgumentParser(

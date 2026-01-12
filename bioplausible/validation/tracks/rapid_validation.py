@@ -19,15 +19,15 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from validation.notebook import TrackResult
-from validation.utils import (
+from bioplausible.validation.notebook import TrackResult
+from bioplausible.validation.utils import (
     create_synthetic_dataset, train_model, evaluate_accuracy,
     compute_cohens_d, paired_ttest, classify_evidence_level,
     interpret_effect_size, interpret_pvalue, format_statistical_comparison,
     format_claim_with_evidence, compute_reproducibility_hash
 )
-from models import LoopedMLP
-from models.looped_mlp import BackpropMLP
+from bioplausible.models import LoopedMLP
+from bioplausible.models import BackpropMLP
 
 
 def track_41_rapid_rigorous_validation(verifier) -> TrackResult:

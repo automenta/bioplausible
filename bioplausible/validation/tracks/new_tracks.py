@@ -16,9 +16,9 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from validation.notebook import TrackResult
-from validation.utils import train_model, evaluate_accuracy
-from models import ModernConvEqProp, LoopedMLP, CausalTransformerEqProp, EqPropDiffusion
+from bioplausible.validation.notebook import TrackResult
+from bioplausible.validation.utils import train_model, evaluate_accuracy
+from bioplausible.models import ModernConvEqProp, LoopedMLP, CausalTransformerEqProp, EqPropDiffusion
 
 
 
@@ -196,7 +196,7 @@ def track_35_memory_scaling(verifier) -> TrackResult:
     
     print(f"\n[35a] Testing memory scaling at various depths...")
     
-    from experiments.memory_scaling_demo import DeepEqPropCheckpointed, measure_memory
+    from bioplausible.experiments.memory_scaling_demo import DeepEqPropCheckpointed, measure_memory
     
     depths = [10, 50, 100] if verifier.quick_mode else [10, 50, 100, 200]
     results_eq = []
@@ -272,7 +272,7 @@ def track_36_energy_ood(verifier) -> TrackResult:
     id_data = torch.randn(100, 3, 32, 32).to(device)
     ood_data = torch.randn(100, 3, 32, 32).to(device) * 2.0  # Higher variance
     
-    from experiments.energy_confidence import compute_energy_score
+    from bioplausible.experiments.energy_confidence import compute_energy_score
     
     # Compute scores
     id_scores = []
@@ -341,7 +341,7 @@ def track_37_language_modeling(verifier) -> TrackResult:
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     # Import comparison models
-    from models import BackpropTransformerLM, get_eqprop_lm
+    from bioplausible.models import BackpropTransformerLM, get_eqprop_lm
     import math
     
     # Mode-specific configuration
@@ -767,7 +767,7 @@ def track_40_hardware_analysis(verifier) -> TrackResult:
     
     print("\n[40] Generating hardware efficiency table...")
     
-    from experiments.flop_analysis import count_flops_approximate
+    from bioplausible.experiments.flop_analysis import count_flops_approximate
     
     # FLOP comparison
     model_eq = LoopedMLP(784, 256, 10, use_spectral_norm=True, max_steps=30)
@@ -837,7 +837,7 @@ def track_39_eqprop_diffusion(verifier) -> TrackResult:
     
     # Check dependencies
     try:
-        from experiments.diffusion_mnist import main as run_diffusion
+        from bioplausible.experiments.diffusion_mnist import main as run_diffusion
         # We need to modify main to allow returning results or adapt it.
         # Since we can't easily modify the imported main to return values without refactoring it,
         # we will use a subprocess or reimplement the core check here.

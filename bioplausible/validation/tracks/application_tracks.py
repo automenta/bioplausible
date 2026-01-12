@@ -14,7 +14,7 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from models import LoopedMLP
+from bioplausible.models import LoopedMLP
 
 def track_20_transfer_learning(verifier) -> TrackResult:
     """Track 20: Transfer Learning Efficacy."""

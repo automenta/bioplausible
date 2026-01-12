@@ -15,8 +15,8 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from models import LoopedMLP
-from models.looped_mlp import BackpropMLP
+from bioplausible.models import LoopedMLP
+from bioplausible.models import BackpropMLP
 
 def track_1_spectral_norm(verifier) -> TrackResult:
     """Core: Spectral Normalization maintains L < 1."""

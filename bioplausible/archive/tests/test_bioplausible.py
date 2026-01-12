@@ -28,7 +28,7 @@ from bioplausible import (
     AdaptiveFeedbackAlignment,
     ALGORITHM_REGISTRY,
 )
-from bioplausible.archive.algorithms import AlgorithmConfig
+from bioplausible.algorithms import AlgorithmConfig
 
 
 class TestAlgorithmsAsFirstClassModels(unittest.TestCase):
@@ -74,7 +74,7 @@ class TestAllAlgorithms(unittest.TestCase):
 
     def test_all_algorithms_instantiate(self):
         """Ensure all algorithms can be created."""
-        from bioplausible.archive.algorithms import create_model
+        from bioplausible.algorithms import create_model
         
         for algo_name in ALGORITHM_REGISTRY.keys():
             with self.subTest(algorithm=algo_name):
@@ -92,7 +92,7 @@ class TestAllAlgorithms(unittest.TestCase):
 
     def test_all_algorithms_forward(self):
         """Ensure all algorithms can perform forward pass."""
-        from bioplausible.archive.algorithms import create_model
+        from bioplausible.algorithms import create_model
         
         x = torch.randn(4, self.input_dim)
         

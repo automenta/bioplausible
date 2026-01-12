@@ -11,7 +11,7 @@ from .types import TrainingState
 # Import models from bioplausible
 from bioplausible.models import LoopedMLP, BackpropMLP, ConvEqProp, TransformerEqProp
 from bioplausible.lm_models import create_eqprop_lm
-from bioplausible.bioplausible import (
+from bioplausible.algorithms import (
     StandardFA as DirectFeedbackAlignmentEqProp,
     ContrastiveFeedbackAlignment as ContrastiveHebbianLearning,
 )
@@ -206,7 +206,7 @@ class AlgorithmWrapper:
             self.has_embed = True
             self.embed = nn.Embedding(self.vocab_size, self.hidden_dim).to(self.device)
             # Create a simple model for DFA equivalent using available bioplausible models
-            from algorithms import create_model
+            from bioplausible.algorithms import create_model
             return create_model(
                 'feedback_alignment',
                 input_dim=self.hidden_dim,
@@ -219,7 +219,7 @@ class AlgorithmWrapper:
             self.has_embed = True
             self.embed = nn.Embedding(self.vocab_size, self.hidden_dim).to(self.device)
             # Create a simple model for CHL equivalent using available bioplausible models
-            from algorithms import create_model
+            from bioplausible.algorithms import create_model
             return create_model(
                 'cf_align',  # Contrastive Feedback Alignment (similar to Contrastive Hebbian)
                 input_dim=self.hidden_dim,
@@ -232,7 +232,7 @@ class AlgorithmWrapper:
             self.has_embed = True
             self.embed = nn.Embedding(self.vocab_size, self.hidden_dim).to(self.device)
             # Use the factory function to create a deep model
-            from algorithms import create_model
+            from bioplausible.algorithms import create_model
             return create_model(
                 'backprop',  # Use backprop with many layers to simulate deep hebbian
                 input_dim=self.hidden_dim,

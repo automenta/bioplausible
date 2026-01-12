@@ -36,7 +36,7 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from models import LoopedMLP, BackpropMLP
+from bioplausible.models import LoopedMLP, BackpropMLP
 
 
 def get_memory_usage():

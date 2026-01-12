@@ -13,7 +13,7 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from models import LoopedMLP
+from bioplausible.models import LoopedMLP
 
 def track_19_criticality(verifier) -> TrackResult:
     """Track 19: Criticality / Edge of Chaos Analysis."""
