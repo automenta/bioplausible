@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 
 from .acceleration import compile_model, enable_tf32, get_optimal_backend
+
 # Import kernel components globally if available to avoid import loops inside methods
 try:
     from .kernel import HAS_CUPY, cross_entropy, to_numpy
@@ -42,13 +43,6 @@ class EqPropTrainer:
         - Checkpoint saving/loading
         - ONNX export for deployment
         - Progress callbacks
-
-    Example:
-        >>> from bioplausible import EqPropTrainer, LoopedMLP
-        >>> model = LoopedMLP(784, 256, 10)
-        >>> trainer = EqPropTrainer(model, use_compile=True)
-        >>> trainer.fit(train_loader, epochs=10)
-        >>> print(trainer.evaluate(test_loader))
     """
 
     def __init__(
@@ -76,10 +70,6 @@ class EqPropTrainer:
             device: Device to train on (auto-detected if None)
             compile_mode: torch.compile mode ('default', 'reduce-overhead', 'max-autotune')
             allow_tf32: If True, enable TensorFloat-32 on Ampere+ GPUs (default: True)
-
-        Raises:
-            ValueError: If invalid optimizer or compile_mode
-            RuntimeError: If use_kernel=True but model incompatible
         """
         # Enable TF32 by default for performance
         enable_tf32(allow_tf32)
@@ -94,7 +84,7 @@ class EqPropTrainer:
         self._best_metric = float('inf')
         self._history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
         self._kernel = None
-        self.optimizer = None # Initialized below
+        self.optimizer = None
 
         # Move model to device
         self._setup_model(model, use_compile, compile_mode)
@@ -108,51 +98,23 @@ class EqPropTrainer:
                 self.use_kernel = False
 
         # Create optimizer (only for PyTorch mode)
-        # We do this AFTER potential kernel fallback
         if not self.use_kernel:
             self.optimizer = self._create_optimizer(optimizer, lr, weight_decay)
 
     def _validate_inputs(self, optimizer: str, compile_mode: str, lr: float, weight_decay: float) -> None:
         """Validate initialization parameters."""
-        self._validate_optimizer(optimizer)
-        self._validate_compile_mode(compile_mode)
-        self._validate_lr(lr)
-        self._validate_weight_decay(weight_decay)
-
-    def _validate_optimizer(self, optimizer: str) -> None:
-        """Validate optimizer name."""
-        valid_optimizers = self._get_valid_optimizers()
+        valid_optimizers = ["adam", "adamw", "sgd"]
         if optimizer not in valid_optimizers:
-            raise ValueError(
-                f"Invalid optimizer '{optimizer}'. Must be one of: {', '.join(valid_optimizers)}"
-            )
+            raise ValueError(f"Invalid optimizer '{optimizer}'. Must be one of: {', '.join(valid_optimizers)}")
 
-    def _validate_compile_mode(self, compile_mode: str) -> None:
-        """Validate compile mode."""
-        valid_compile_modes = self._get_valid_compile_modes()
+        valid_compile_modes = ["default", "reduce-overhead", "max-autotune"]
         if compile_mode not in valid_compile_modes:
-            raise ValueError(
-                f"Invalid compile_mode '{compile_mode}'. "
-                f"Must be one of: {', '.join(valid_compile_modes)}"
-            )
+            raise ValueError(f"Invalid compile_mode '{compile_mode}'. Must be one of: {', '.join(valid_compile_modes)}")
 
-    def _validate_lr(self, lr: float) -> None:
-        """Validate learning rate."""
         if lr <= 0:
             raise ValueError(f"Learning rate must be positive, got {lr}")
-
-    def _validate_weight_decay(self, weight_decay: float) -> None:
-        """Validate weight decay."""
         if weight_decay < 0:
             raise ValueError(f"Weight decay must be non-negative, got {weight_decay}")
-
-    def _get_valid_optimizers(self) -> List[str]:
-        """Return list of valid optimizers."""
-        return ["adam", "adamw", "sgd"]
-
-    def _get_valid_compile_modes(self) -> List[str]:
-        """Return list of valid compile modes."""
-        return ["default", "reduce-overhead", "max-autotune"]
 
     def _setup_model(self, model: nn.Module, use_compile: bool, compile_mode: str) -> None:
         """Setup model on device and apply compilation if requested."""
@@ -164,11 +126,7 @@ class EqPropTrainer:
         # Apply torch.compile if requested
         if use_compile and not self.use_kernel:
             if not hasattr(torch, 'compile'):
-                warnings.warn(
-                    "torch.compile not available (requires PyTorch 2.0+). "
-                    "Model will run without compilation.",
-                    UserWarning
-                )
+                warnings.warn("torch.compile not available. Model will run without compilation.", UserWarning)
             else:
                 try:
                     self.model = compile_model(self.model, mode=compile_mode)
@@ -177,43 +135,27 @@ class EqPropTrainer:
 
     def _create_optimizer(self, name: str, lr: float, weight_decay: float) -> torch.optim.Optimizer:
         """Create optimizer by name."""
-        optimizer_factory = self._get_optimizer_factory(name, lr, weight_decay)
-        if optimizer_factory is None:
-            raise ValueError(f"Unknown optimizer: {name}. Use 'adam', 'adamw', or 'sgd'.")
-
-        try:
-            return optimizer_factory()
-        except Exception as e:
-            raise RuntimeError(f"Failed to create optimizer: {e}")
-
-    def _get_optimizer_factory(self, name: str, lr: float, weight_decay: float) -> Optional[Callable[[], torch.optim.Optimizer]]:
-        """Get optimizer factory function by name."""
-        optimizer_factories = {
+        factories = {
             "adam": lambda: torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay),
             "adamw": lambda: torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay),
             "sgd": lambda: torch.optim.SGD(self.model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
         }
-        return optimizer_factories.get(name)
+        try:
+            return factories[name]()
+        except Exception as e:
+            raise RuntimeError(f"Failed to create optimizer: {e}")
 
     def _init_kernel_mode(self) -> None:
         """Initialize CuPy kernel for O(1) memory training."""
         if not HAS_CUPY:
-            raise RuntimeError("CuPy not available. Falling back to PyTorch.")
+            raise RuntimeError("CuPy not available.")
 
-        # Extract model dimensions
         if hasattr(self.model, 'input_dim'):
-            input_dim = self.model.input_dim
-            hidden_dim = self.model.hidden_dim
-            output_dim = self.model.output_dim
+            dims = (self.model.input_dim, self.model.hidden_dim, self.model.output_dim)
         else:
             raise RuntimeError("Model dimensions not detected. Kernel mode disabled.")
 
-        self._kernel = KernelEqPropKernel(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim,
-            use_gpu=True,
-        )
+        self._kernel = KernelEqPropKernel(*dims, use_gpu=True)
 
     def fit(
         self,
@@ -240,11 +182,9 @@ class EqPropTrainer:
         Returns:
             History dict with train/val losses and accuracies
         """
-        # Validate loaders
-        if not hasattr(train_loader, '__iter__') or isinstance(train_loader, str):
-             raise ValueError("train_loader must be an iterable DataLoader (not a string)")
-        if val_loader is not None and (not hasattr(val_loader, '__iter__') or isinstance(val_loader, str)):
-             raise ValueError("val_loader must be an iterable DataLoader (not a string)")
+        self._validate_loader(train_loader, "train_loader")
+        if val_loader:
+             self._validate_loader(val_loader, "val_loader")
 
         loss_fn = loss_fn or nn.CrossEntropyLoss()
 
@@ -253,164 +193,134 @@ class EqPropTrainer:
             epoch_start = time.perf_counter()
 
             # Training phase
-            train_loss, train_acc = self._train_epoch(train_loader, loss_fn, log_interval)
+            train_loss, train_acc = self._run_epoch(
+                train_loader, loss_fn, is_training=True, log_interval=log_interval
+            )
             self._history['train_loss'].append(train_loss)
             self._history['train_acc'].append(train_acc)
 
             # Validation phase
             val_loss, val_acc = None, None
-            if val_loader is not None:
+            if val_loader:
                 val_metrics = self.evaluate(val_loader, loss_fn)
-                val_loss = val_metrics['loss']
-                val_acc = val_metrics['accuracy']
+                val_loss, val_acc = val_metrics['loss'], val_metrics['accuracy']
                 self._history['val_loss'].append(val_loss)
                 self._history['val_acc'].append(val_acc)
 
-                # Checkpoint best model
                 if checkpoint_path and val_loss < self._best_metric:
                     self._best_metric = val_loss
                     self.save_checkpoint(checkpoint_path)
 
             epoch_time = time.perf_counter() - epoch_start
-
-            # Callback
             if callback:
                 callback({
                     'epoch': self._epoch,
-                    'train_loss': train_loss,
-                    'train_acc': train_acc,
-                    'val_loss': val_loss,
-                    'val_acc': val_acc,
+                    'train_loss': train_loss, 'train_acc': train_acc,
+                    'val_loss': val_loss, 'val_acc': val_acc,
                     'time': epoch_time,
                 })
 
         return self._history
 
-    def _train_epoch(
+    def _validate_loader(self, loader: Any, name: str) -> None:
+        if not hasattr(loader, '__iter__') or isinstance(loader, str):
+             raise ValueError(f"{name} must be an iterable DataLoader (not a string)")
+
+    def _run_epoch(
         self,
         loader: DataLoader,
         loss_fn: Callable,
-        log_interval: int,
+        is_training: bool,
+        log_interval: int = 0
     ) -> Tuple[float, float]:
-        """
-        Run one training epoch.
+        """Unified epoch runner for both training and evaluation."""
+        if is_training and not self.use_kernel:
+            self.model.train()
+        elif not self.use_kernel:
+            self.model.eval()
 
-        Args:
-            loader: Training data loader
-            loss_fn: Loss function to use
-            log_interval: Print progress every N batches
-
-        Returns:
-            Average loss and accuracy for the epoch
-        """
-        if self.use_kernel:
-            return self._train_epoch_kernel(loader, log_interval)
-        else:
-            return self._train_epoch_pytorch(loader, loss_fn, log_interval)
-
-    def _train_epoch_kernel(self, loader: DataLoader, log_interval: int) -> Tuple[float, float]:
         total_loss = 0.0
         correct = 0
         total = 0
 
-        for batch_idx, (x, y) in enumerate(loader):
-            try:
-                batch_loss, batch_correct, batch_total = self._process_batch_kernel(x, y)
-                total_loss += batch_loss
-                correct += batch_correct
-                total += batch_total
-                self._step += 1
+        context = torch.no_grad() if (not is_training and not self.use_kernel) else NotImplemented
+        # Use null context if no context manager needed (NotImplemented isn't a context manager, so we use a dummy)
+        if context is NotImplemented:
+             from contextlib import nullcontext
+             context = nullcontext()
 
-                if log_interval > 0 and batch_idx % log_interval == 0:
-                    avg_loss = batch_loss / batch_total if batch_total > 0 else 0
-                    print(f'Batch {batch_idx}: Loss = {avg_loss:.4f}')
+        with context:
+            for batch_idx, (x, y) in enumerate(loader):
+                try:
+                    if self.use_kernel:
+                        loss, batch_correct, batch_size = self._process_batch_kernel(x, y, is_training)
+                    else:
+                        loss, batch_correct, batch_size = self._process_batch_pytorch(x, y, loss_fn, is_training)
 
-            except Exception as e:
-                raise RuntimeError(f"Error processing kernel batch {batch_idx}: {str(e)}")
+                    total_loss += loss
+                    correct += batch_correct
+                    total += batch_size
 
-        return total_loss / total if total > 0 else 0.0, correct / total if total > 0 else 0.0
+                    if is_training:
+                        self._step += 1
+                        if log_interval > 0 and batch_idx % log_interval == 0:
+                            avg_loss = loss / batch_size if batch_size > 0 else 0
+                            print(f'Batch {batch_idx}: Loss = {avg_loss:.4f}')
 
-    def _train_epoch_pytorch(self, loader: DataLoader, loss_fn: Callable, log_interval: int) -> Tuple[float, float]:
-        self.model.train()
-        total_loss = 0.0
-        correct = 0
-        total = 0
+                except Exception as e:
+                    stage = "training" if is_training else "evaluation"
+                    mode = "kernel" if self.use_kernel else "PyTorch"
+                    raise RuntimeError(f"Error processing {mode} {stage} batch {batch_idx}: {str(e)}")
 
-        for batch_idx, (x, y) in enumerate(loader):
-            try:
-                x, y = self._prepare_batch(x, y)
-                batch_loss, batch_correct, batch_total = self._process_batch_pytorch(x, y, loss_fn)
+        avg_loss = total_loss / total if total > 0 else float('inf')
+        avg_acc = correct / total if total > 0 else 0.0
+        return avg_loss, avg_acc
 
-                total_loss += batch_loss
-                correct += batch_correct
-                total += batch_total
-                self._step += 1
-
-                if log_interval > 0 and batch_idx % log_interval == 0:
-                    avg_loss = batch_loss / batch_total if batch_total > 0 else 0
-                    print(f'Batch {batch_idx}: Loss = {avg_loss:.4f}')
-
-            except Exception as e:
-                raise RuntimeError(f"Error processing PyTorch batch {batch_idx}: {str(e)}")
-
-        return total_loss / total if total > 0 else 0.0, correct / total if total > 0 else 0.0
-
-    def _prepare_batch(self, x: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Move to device and flatten input if necessary."""
+    def _process_batch_pytorch(
+        self, x: torch.Tensor, y: torch.Tensor, loss_fn: Callable, is_training: bool
+    ) -> Tuple[float, int, int]:
+        """Process a single batch using PyTorch."""
         x, y = x.to(self.device), y.to(self.device)
-        x = self._maybe_flatten_input(x)
-        return x, y
 
-    def _maybe_flatten_input(self, x: torch.Tensor) -> torch.Tensor:
-        """Flatten input tensor if it's 4D and model has input_dim attribute."""
+        # Flatten input if necessary
         if x.dim() == 4 and hasattr(self.model, 'input_dim'):
-            return x.view(x.size(0), -1)
-        return x
+            x = x.view(x.size(0), -1)
 
-    def _process_batch_pytorch(self, x: torch.Tensor, y: torch.Tensor, loss_fn: Callable) -> Tuple[float, int, int]:
-        """Process a single batch using PyTorch BPTT."""
-        self.optimizer.zero_grad()
+        if is_training:
+            self.optimizer.zero_grad()
+            output = self.model(x)
+            loss = loss_fn(output, y)
+            loss.backward()
+            self.optimizer.step()
+        else:
+            output = self.model(x)
+            loss = loss_fn(output, y)
 
-        output = self.model(x)
-        loss = loss_fn(output, y)
-
-        # Backward pass
-        loss.backward()
-        self.optimizer.step()
-
-        # Calculate metrics
-        return self._calculate_batch_metrics(loss, output, y, x.size(0))
-
-    def _process_batch_kernel(self, x: Any, y: Any) -> Tuple[float, int, int]:
-        """Process a single batch using EqProp Kernel."""
-        if isinstance(x, torch.Tensor):
-            x = x.cpu().numpy()
-        if isinstance(y, torch.Tensor):
-            y = y.cpu().numpy()
-
-        # Flatten if needed
-        if x.ndim == 4:
-            x = x.reshape(x.shape[0], -1)
-
-        metrics = self._kernel.train_step(x, y)
-
-        loss = metrics['loss']
-        accuracy = metrics['accuracy']
-        batch_size = x.shape[0]
-        correct = int(accuracy * batch_size)
-        total_loss = loss * batch_size
-
-        return total_loss, correct, batch_size
-
-    def _calculate_batch_metrics(self, loss: torch.Tensor, output: torch.Tensor,
-                                targets: torch.Tensor, batch_size: int) -> Tuple[float, int, int]:
-        """Calculate loss, correct predictions, and batch size for a batch."""
-        total_loss = loss.item() * batch_size
+        total_loss = loss.item() * x.size(0)
         _, predicted = output.max(1)
-        correct = predicted.eq(targets).sum().item()
+        correct = predicted.eq(y).sum().item()
+
+        return total_loss, correct, x.size(0)
+
+    def _process_batch_kernel(
+        self, x: Any, y: Any, is_training: bool
+    ) -> Tuple[float, int, int]:
+        """Process a single batch using EqProp Kernel."""
+        if isinstance(x, torch.Tensor): x = x.cpu().numpy()
+        if isinstance(y, torch.Tensor): y = y.cpu().numpy()
+        if x.ndim == 4: x = x.reshape(x.shape[0], -1)
+
+        if is_training:
+            metrics = self._kernel.train_step(x, y)
+        else:
+            metrics = self._kernel.evaluate(x, y)
+
+        batch_size = x.shape[0]
+        total_loss = metrics['loss'] * batch_size
+        correct = int(metrics['accuracy'] * batch_size)
+
         return total_loss, correct, batch_size
 
-    @torch.no_grad()
     def evaluate(
         self,
         loader: DataLoader,
@@ -427,74 +337,8 @@ class EqPropTrainer:
             Dict with 'loss' and 'accuracy'
         """
         loss_fn = loss_fn or nn.CrossEntropyLoss()
-
-        if self.use_kernel:
-            return self._evaluate_kernel(loader)
-        else:
-            return self._evaluate_pytorch(loader, loss_fn)
-
-    def _evaluate_kernel(self, loader: DataLoader) -> Dict[str, float]:
-        total_loss = 0.0
-        correct = 0
-        total = 0
-
-        for batch_idx, (x, y) in enumerate(loader):
-            try:
-                # Kernel Evaluation
-                if isinstance(x, torch.Tensor):
-                    x = x.cpu().numpy()
-                if isinstance(y, torch.Tensor):
-                    y = y.cpu().numpy()
-                if x.ndim == 4:
-                    x = x.reshape(x.shape[0], -1)
-
-                batch_size = x.shape[0]
-
-                # Use the kernel's evaluate method which handles forward pass and metrics
-                metrics = self._kernel.evaluate(x, y)
-
-                batch_loss = metrics['loss'] * batch_size
-                batch_correct = int(metrics['accuracy'] * batch_size)
-
-                total_loss += batch_loss
-                correct += batch_correct
-                total += batch_size
-
-            except Exception as e:
-                print(f"Warning: Error processing kernel evaluation batch {batch_idx}: {str(e)}. Skipping...")
-                continue
-
-        return {
-            'loss': total_loss / total if total > 0 else float('inf'),
-            'accuracy': correct / total if total > 0 else 0.0,
-        }
-
-    def _evaluate_pytorch(self, loader: DataLoader, loss_fn: Callable) -> Dict[str, float]:
-        self.model.eval()
-        total_loss = 0.0
-        correct = 0
-        total = 0
-
-        for batch_idx, (x, y) in enumerate(loader):
-            try:
-                x, y = self._prepare_batch(x, y)
-                output = self.model(x)
-                loss = loss_fn(output, y)
-
-                batch_loss, batch_correct, batch_total = self._calculate_batch_metrics(loss, output, y, x.size(0))
-
-                total_loss += batch_loss
-                correct += batch_correct
-                total += batch_total
-
-            except Exception as e:
-                print(f"Warning: Error processing PyTorch evaluation batch {batch_idx}: {str(e)}. Skipping...")
-                continue
-
-        return {
-            'loss': total_loss / total if total > 0 else float('inf'),
-            'accuracy': correct / total if total > 0 else 0.0,
-        }
+        loss, acc = self._run_epoch(loader, loss_fn, is_training=False)
+        return {'loss': loss, 'accuracy': acc}
 
     def save_checkpoint(self, path: str) -> None:
         """Save model checkpoint."""
@@ -508,19 +352,18 @@ class EqPropTrainer:
             }
 
             if self.use_kernel:
-                # Save kernel weights
-                checkpoint['kernel_weights'] = self._kernel.weights
-                checkpoint['kernel_biases'] = self._kernel.biases
-                checkpoint['kernel_sn_state'] = self._kernel.sn_state
-                checkpoint['kernel_adam_state'] = self._kernel.adam_state
+                checkpoint.update({
+                    'kernel_weights': self._kernel.weights,
+                    'kernel_biases': self._kernel.biases,
+                    'kernel_sn_state': self._kernel.sn_state,
+                    'kernel_adam_state': self._kernel.adam_state
+                })
             else:
-                # Handle compiled models
-                model_to_save = self.model
-                if hasattr(self.model, '_orig_mod'):
-                    model_to_save = self.model._orig_mod
-
-                checkpoint['model_state_dict'] = model_to_save.state_dict()
-                checkpoint['optimizer_state_dict'] = self.optimizer.state_dict()
+                model = self.model._orig_mod if hasattr(self.model, '_orig_mod') else self.model
+                checkpoint.update({
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict()
+                })
 
             torch.save(checkpoint, path)
         except Exception as e:
@@ -535,14 +378,13 @@ class EqPropTrainer:
         except Exception as e:
             raise RuntimeError(f"Failed to load checkpoint from {path}: {str(e)}")
 
-        self._epoch = checkpoint['epoch']
-        self._step = checkpoint['step']
+        self._epoch = checkpoint.get('epoch', 0)
+        self._step = checkpoint.get('step', 0)
         self._best_metric = checkpoint.get('best_metric', float('inf'))
         self._history = checkpoint.get('history', self._history)
 
-        # Check if mode matches
         if checkpoint.get('use_kernel', False) != self.use_kernel:
-            warnings.warn("Checkpoint mode (kernel vs torch) does not match current trainer mode.", UserWarning)
+            warnings.warn("Checkpoint mode mismatch (kernel vs torch).", UserWarning)
 
         try:
             if self.use_kernel and 'kernel_weights' in checkpoint:
@@ -551,17 +393,13 @@ class EqPropTrainer:
                  self._kernel.sn_state = checkpoint.get('kernel_sn_state', self._kernel.sn_state)
                  self._kernel.adam_state = checkpoint.get('kernel_adam_state', self._kernel.adam_state)
             elif not self.use_kernel and 'model_state_dict' in checkpoint:
-                # Handle compiled models
-                model_to_load = self.model
-                if hasattr(self.model, '_orig_mod'):
-                    model_to_load = self.model._orig_mod
-
-                model_to_load.load_state_dict(checkpoint['model_state_dict'])
+                model = self.model._orig_mod if hasattr(self.model, '_orig_mod') else self.model
+                model.load_state_dict(checkpoint['model_state_dict'])
                 self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         except KeyError as e:
-            raise ValueError(f"Checkpoint file missing required key: {str(e)}")
+            raise ValueError(f"Checkpoint missing required key: {e}")
         except Exception as e:
-            raise RuntimeError(f"Failed to load model state from checkpoint: {str(e)}")
+            raise RuntimeError(f"Failed to load model state: {e}")
 
     def export_onnx(
         self,
@@ -571,29 +409,18 @@ class EqPropTrainer:
         dynamic_axes: Optional[Dict[str, Dict[int, str]]] = None,
     ) -> None:
         """
-        Export model to ONNX format for deployment.
+        Export model to ONNX format.
 
         Note: Only supported in PyTorch mode.
-
-        Args:
-            path: Output path (.onnx)
-            input_shape: Example input shape, e.g. (1, 784)
-            opset_version: ONNX opset version
-            dynamic_axes: Dynamic axis specification (optional)
         """
         if self.use_kernel:
              warnings.warn("ONNX export is not supported in Kernel mode.", UserWarning)
              return
 
         try:
-            # Get uncompiled model
-            model = self.model
-            if hasattr(self.model, '_orig_mod'):
-                model = self.model._orig_mod
-
+            model = self.model._orig_mod if hasattr(self.model, '_orig_mod') else self.model
             model.eval()
             dummy_input = torch.randn(*input_shape, device=self.device)
-
             dynamic_axes = dynamic_axes or {'input': {0: 'batch'}, 'output': {0: 'batch'}}
 
             torch.onnx.export(
@@ -612,32 +439,24 @@ class EqPropTrainer:
 
     @property
     def history(self) -> Dict[str, List[float]]:
-        """Return training history."""
         return self._history
 
     @property
     def current_epoch(self) -> int:
-        """Return current epoch number."""
         return self._epoch
 
     def compute_lipschitz(self) -> float:
-        """
-        Compute Lipschitz constant if model supports it.
-
-        Returns:
-            Lipschitz constant L (or 0.0 if not supported)
-        """
+        """Compute Lipschitz constant if model supports it."""
         if self.use_kernel:
-            # In kernel mode, we can compute it from weights if supported
-            # But the kernel API doesn't expose it easily yet.
             return 0.0
 
-        if hasattr(self.model, 'compute_lipschitz'):
-            return self.model.compute_lipschitz()
+        model = self.model
+        if hasattr(model, 'compute_lipschitz'):
+            return model.compute_lipschitz()
 
-        # Try to find underlying model (e.g. if compiled)
-        if hasattr(self.model, '_orig_mod') and hasattr(self.model._orig_mod, 'compute_lipschitz'):
-            return self.model._orig_mod.compute_lipschitz()
+        # Check wrapped model
+        if hasattr(model, '_orig_mod') and hasattr(model._orig_mod, 'compute_lipschitz'):
+            return model._orig_mod.compute_lipschitz()
 
         return 0.0
 
