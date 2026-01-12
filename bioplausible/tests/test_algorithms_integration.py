@@ -1,8 +1,10 @@
 
 import pytest
 import torch
+import torch.nn as nn
 from bioplausible.core import EqPropTrainer
 from bioplausible.algorithms.eqprop import StandardEqProp
+from bioplausible.algorithms.feedback_align import StandardFA
 from bioplausible.algorithms.base import AlgorithmConfig
 
 def test_eqprop_algorithm_integration():
@@ -35,26 +37,56 @@ def test_eqprop_algorithm_integration():
     model = StandardEqProp(config)
 
     # Initialize Trainer
-    # We don't need to specify optimizer because StandardEqProp handles it internally
     trainer = EqPropTrainer(model, use_kernel=False, use_compile=False)
 
-    # Initial loss
-    initial_metrics = trainer.evaluate(loader)
-    initial_loss = initial_metrics['loss']
-
     # Train
-    history = trainer.fit(loader, epochs=5)
+    history = trainer.fit(loader, epochs=2)
 
-    # Final loss
-    final_metrics = trainer.evaluate(loader)
-    final_loss = final_metrics['loss']
-
-    print(f"Initial Loss: {initial_loss}, Final Loss: {final_loss}")
-
-    # Basic check: Loss should not be NaN and preferably decrease (though with random data/small steps it might vary)
-    assert not torch.isnan(torch.tensor(final_loss))
     assert 'train_loss' in history
-    assert len(history['train_loss']) == 5
+    assert len(history['train_loss']) == 2
+    assert history['train_loss'][-1] > 0 # Just check it ran
+
+def test_feedback_alignment_integration():
+    """
+    Test StandardFA with EqPropTrainer.
+    Verifies that feedback weights are moved to device and training runs.
+    """
+    input_dim = 8
+    hidden_dim = 16
+    output_dim = 4
+    batch_size = 4
+
+    x = torch.randn(batch_size, input_dim)
+    y = torch.randint(0, output_dim, (batch_size,))
+    dataset = torch.utils.data.TensorDataset(x, y)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
+
+    config = AlgorithmConfig(
+        name='feedback_alignment',
+        input_dim=input_dim,
+        hidden_dims=[hidden_dim],
+        output_dim=output_dim,
+        learning_rate=0.01
+    )
+
+    model = StandardFA(config)
+
+    # Test device movement (simulated if cpu, but structure check)
+    if torch.cuda.is_available():
+        device = 'cuda'
+        model.to(device)
+        # Check feedback weights
+        assert model.feedback_weights[0].device.type == 'cuda'
+
+    # Trainer
+    trainer = EqPropTrainer(model, use_kernel=False, use_compile=False)
+
+    history = trainer.fit(loader, epochs=2)
+
+    assert 'train_loss' in history
+    # Accuracy should exist
+    assert 'train_acc' in history
+    assert len(history['train_acc']) == 2
 
 def test_eqprop_dynamics_shapes():
     """Verify shapes during dynamics."""

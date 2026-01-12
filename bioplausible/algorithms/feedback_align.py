@@ -16,13 +16,23 @@ class StandardFA(BaseAlgorithm):
     def __init__(self, config: AlgorithmConfig):
         super().__init__(config)
         
-        # Random fixed feedback weights - stored as plain lists
-        self.feedback_weights = []
+        # Random fixed feedback weights - stored as buffers to move with model
+        self.feedback_weights = nn.ParameterList() # Use ParameterList with requires_grad=False for easy management
         dims = [config.input_dim] + config.hidden_dims + [config.output_dim]
         
         for i in range(len(dims) - 1):
-            B = torch.randn(dims[i+1], dims[i], device=self.device) * 0.1
-            self.feedback_weights.append(B)
+            # B maps from layer i+1 (out) to layer i (in)
+            # Shape: [dims[i], dims[i+1]] ?
+            # In train_step: grad_h = error @ B.
+            # error: [batch, dims[i+1]].
+            # We need grad_h: [batch, dims[i]].
+            # So [batch, dims[i+1]] @ [dims[i+1], dims[i]] -> [batch, dims[i]].
+            # B should be [dims[i+1], dims[i]].
+
+            B = torch.randn(dims[i+1], dims[i]) * 0.1
+            # Register as parameter but freeze it
+            p = nn.Parameter(B, requires_grad=False)
+            self.feedback_weights.append(p)
         
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.Adam(
@@ -72,26 +82,75 @@ class StandardFA(BaseAlgorithm):
                 grad_h = error
             else:
                 # Use stored feedback matrix
-                B = self.feedback_weights[i+1] # Adjust index if needed
-                # Wait, indices.
-                # layers: 0..L-1
-                # dims: 0..L
-                # i counts down: L-1 -> 0
-                # feedback_weights len = L. stored 0..L-1.
-                # i+1 index might be out of range if not careful.
-                # feedback_weights[0] corresponds to layer 0? 
-                # Let's check init:
-                # dims[i+1] -> dims[i]
-                # B matches layer i's transpose roughly.
-                # we want error from layer i+1 backwards to layer i.
-                # error shape (B, dims[i+1]).  B shape (dims[i+1], dims[i]).
-                # grad_h = error @ B -> (B, dims[i]).
+                # Loop goes from len(layers)-1 down to 0.
+                # Layer i connects activations[i] to activations[i+1].
+                # We are at layer i.
+                # error is at activations[i+1] (output of layer i).
+                # We need to propagate error through feedback weights of layer i to get error at activations[i]?
+                # No, backprop: dL/dh_{i+1} -> dL/dh_i.
+                # Standard backprop: dL/dh_i = (dL/dh_{i+1} * sigma'(z)) @ W_i.
+                # FA: dL/dh_i = (dL/dh_{i+1} * sigma'(z)) @ B_i.
+
+                # feedback_weights[i] corresponds to layer i.
+
+                # In the loop:
+                # First iteration: i = L-1 (output layer). handled by 'if i == ...'. grad_h = error.
+                # Next iteration: i = L-2. We have 'error' from previous iter (which was grad_h of layer L-1 input).
+
+                # Wait, 'error' variable in loop is propagated backwards.
+                # Start: error = output - target. (at output of layer L-1).
+                # i = L-1: grad_h = error. (This is dL/dz at output).
+                # Update layer L-1 weights using grad_h and h_{L-1}.
+                # Propagate error to input of layer L-1?
+                # No, 'error' variable becomes 'grad_h' at end of loop.
+                # grad_h is dL/dz at OUTPUT of layer i (if linear) or pre-activation?
+
+                # Let's trace standard backprop manually.
+                # y = Wx. E = (y-t)^2. dE/dy = (y-t). dE/dW = dE/dy * x.T. dE/dx = W.T * dE/dy.
+                # Here:
+                # i = L-1. Output layer.
+                # grad_h (dE/dz) = error (dE/dy) * sigma'(z) (if activation).
+                # But BaseAlgorithm puts activation AFTER layer i for i < L-1.
+                # Output layer (i=L-1) has NO activation in BaseAlgorithm (usually).
+                # So grad_h = error.
+
+                # Next layer down (i = L-2).
+                # We need error at input of layer L-1 (which is output of layer L-2).
+                # dE/dh_{L-2} = W_{L-1}^T * dE/dz_{L-1}.
+                # FA replaces W^T with B.
+                # So backprop_error = dE/dz_{L-1} @ B_{L-1}.
+                # dE/dz_{L-1} is 'grad_h' from previous iteration.
+                # B_{L-1} is feedback_weights[L-1].
+
+                # So we need to use feedback_weights[i+1] where i+1 is the index of the PREVIOUS layer we processed?
+                # The loop variable 'i' is the current layer we are updating.
+                # The error signal comes from layer 'i+1'.
+                # So we need B from layer 'i+1'.
+
+                # Example: 2 layers. 0, 1.
+                # reversed: 1, 0.
+                # i=1: grad_h = error. Update layer 1. error_out = grad_h.
+                # i=0: we need to backprop through layer 1 to get error for layer 0?
+                # Wait, the code says:
+                # grad_h = torch.mm(error, self.feedback_weights[i+1])
+                # If i=0, we access feedback_weights[1]. This is B for layer 1.
+                # This matches: we propagate error from layer 1 output to layer 0 output through B_1.
+                # So yes, index i+1 is correct for accessing the feedback weights of the layer *above*.
+
+                # Code check: 'error' at start of i=0 loop is 'grad_h' from i=1 loop.
+                # grad_h from i=1 is dL/dz_1.
+                # We want dL/dh_1 = dL/dz_1 @ B_1.
+                # Then dL/dz_0 = dL/dh_1 * sigma'(z_0).
                 
-                # feedback_weights[i] should be the one.
-                # But initialization: range(len(dims)-1) -> 0..L-1.
-                # feedback_weights[i] matches layer i.
+                # Code:
+                # grad_h = torch.mm(error, self.feedback_weights[i+1])
+                # Here 'error' is dL/dz_{i+1} (from previous iter).
+                # self.feedback_weights[i+1] is B_{i+1}.
+                # So grad_h becomes dL/dh_{i} (roughly).
+                # Then we apply sigma derivative of layer i output.
+                # This looks correct.
                 
-                grad_h = torch.mm(error, self.feedback_weights[i+1].to(error.device))
+                grad_h = torch.mm(error, self.feedback_weights[i+1])
                 
                 h_curr = activations[i+1] # layer i output
                 if self.config.activation == 'silu':
