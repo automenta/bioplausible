@@ -139,17 +139,6 @@ class ModernConvEqProp(EqPropModel):
         # Exponential moving average update
         return torch.lerp(h, h_next, self.gamma)
 
-    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
-        """Initialize hidden state using the feedforward path."""
-        h = self.stage1(x)
-        h = self.stage2(h)
-        h = self.stage3(h)
-        return h
-
-    def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
-        """Unused in this variant (input sets initial state)."""
-        return torch.empty(0, device=x.device)
-
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         features = self.pool(h).flatten(1)
         return self.fc(features)
