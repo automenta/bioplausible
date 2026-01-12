@@ -20,8 +20,8 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from models import LoopedMLP, LazyEqProp
-from models.kernel import EqPropKernel
+from bioplausible.models import LoopedMLP, LazyEqProp
+from bioplausible.kernel import EqPropKernel
 
 
 def track_22_golden_reference(verifier) -> TrackResult:

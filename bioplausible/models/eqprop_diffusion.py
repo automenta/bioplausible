@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.conv_eqprop import ConvEqProp
+from bioplausible.models import ConvEqProp
 
 class EqPropDiffusion(nn.Module):
     """

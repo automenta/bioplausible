@@ -14,10 +14,10 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from models import (
+from bioplausible.models import (
     LoopedMLP, ConvEqProp, TransformerEqProp
 )
-from models.kernel import EqPropKernel, compare_memory_autograd_vs_kernel
+from bioplausible.kernel import EqPropKernel, compare_memory_autograd_vs_kernel
 
 def track_13_conv_eqprop(verifier) -> TrackResult:
     """Advanced: Convolutional EqProp for images."""

@@ -14,7 +14,7 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from models import (
+from bioplausible.models import (
     LoopedMLP, TernaryEqProp, FeedbackAlignmentEqProp,
     TemporalResonanceEqProp, HomeostaticEqProp
 )

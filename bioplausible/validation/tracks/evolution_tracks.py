@@ -26,9 +26,10 @@ def track_60_evolution_validation(verifier) -> Dict[str, Any]:
     - Cohen's d > 0.5 (medium effect size)
     - Best evolutionary config > best random config
     """
-    from evolution.breeder import VariationBreeder, ArchConfig
-    from evolution.evaluator import VariationEvaluator, EvalTier
-    from evolution.engine import EvolutionEngine, EvolutionConfig
+    from bioplausible.evolution.breeder import VariationBreeder, ArchConfig
+    from bioplausible.evolution.evaluator import VariationEvaluator, EvalTier
+    from bioplausible.evolution.engine import EvolutionEngine, EvolutionConfig
+    from bioplausible.validation.notebook import TrackResult
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
@@ -102,6 +103,7 @@ def track_60_evolution_validation(verifier) -> Dict[str, Any]:
     engine = EvolutionEngine(config=evo_config)
     state = engine.run(verbose=False)
     evo_time = time.time() - evo_start
+    total_time = evo_time + random_time
     
     # Extract final population accuracies
     evo_scores = [
@@ -159,16 +161,21 @@ def track_60_evolution_validation(verifier) -> Dict[str, Any]:
         status = 'fail'
         message = f"Evolution did not outperform random search"
     
-    return {
-        'name': 'Evolution vs Random Search',
-        'status': status,
-        'message': message,
-        'data': results,
-        'metrics': {
+    score = 100.0 if status == 'pass' else (50.0 if status == 'partial' else 0.0)
+
+    return TrackResult(
+        track_id=60,
+        name='Evolution vs Random Search',
+        status=status,
+        score=score,
+        time_seconds=total_time,
+        metrics={
             'evo_mean_acc': results['evolution']['mean'],
             'random_mean_acc': results['random']['mean'],
             'cohens_d': cohens_d,
             'evo_best': results['evolution']['best'],
             'random_best': results['random']['best'],
-        }
-    }
+        },
+        evidence=message,
+        evidence_level="directional"
+    )

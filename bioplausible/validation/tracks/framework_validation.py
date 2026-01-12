@@ -16,8 +16,8 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from validation.notebook import TrackResult
-from validation.utils import (
+from bioplausible.validation.notebook import TrackResult
+from bioplausible.validation.utils import (
     compute_cohens_d,
     paired_ttest,
     classify_evidence_level,
