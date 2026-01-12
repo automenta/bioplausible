@@ -40,6 +40,7 @@ class LoopedMLP(EqPropModel):
         output_dim: int,
         use_spectral_norm: bool = True,
         max_steps: int = 30,
+        gradient_method: str = 'bptt',
     ) -> None:
         # EqPropModel calls NEBCBase init which builds layers via _build_layers
         super().__init__(
@@ -47,7 +48,8 @@ class LoopedMLP(EqPropModel):
             hidden_dim=hidden_dim,
             output_dim=output_dim,
             max_steps=max_steps,
-            use_spectral_norm=use_spectral_norm
+            use_spectral_norm=use_spectral_norm,
+            gradient_method=gradient_method
         )
         self._init_weights()
 

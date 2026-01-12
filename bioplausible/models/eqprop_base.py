@@ -46,19 +46,28 @@ class EquilibriumFunction(autograd.Function):
             x_transformed_detached = x_transformed.detach()
 
             # Enable grad for VJP computation
-            with torch.enable_grad():
-                h_star = h_star.detach().requires_grad_(True)
+            # IMPORTANT: We can compute the VJP iteratively without building a huge graph
+            # BUT we need to be careful not to free anything needed by subsequent iterations if we were doing BPTT
+            # Here we are doing fixed point iteration on delta.
 
-                # Iterate to equilibrium for the backward pass
-                for i in range(model.max_steps):
-                    f_h = model.forward_step(h_star, x_transformed_detached)
+            # Use detached X for the VJP loop to avoid any graph entanglement
+            x_transformed_detached = x_transformed.detach()
 
-                    # We treat delta as a constant vector for the VJP calculation.
-                    delta_detached = delta.detach()
+            # Iterate to equilibrium for the backward pass (solving for delta)
+            for i in range(model.max_steps):
+                 with torch.enable_grad():
+                    # Need to create a new leaf for h_star at each step for local VJP calc
+                    # And x_transformed is detached constant.
+                    h_star_loop = h_star.detach().requires_grad_(True)
+                    f_h = model.forward_step(h_star_loop, x_transformed_detached)
 
                     # VJP: v = grad(f(h), h) @ delta
-                    vjp = autograd.grad(f_h, h_star, grad_outputs=delta_detached, retain_graph=False)[0]
+                    # delta must be detached to stop graph from growing across iterations
+                    # retain_graph=False ensures we free the f_h graph immediately.
 
+                    vjp = autograd.grad(f_h, h_star_loop, grad_outputs=delta.detach(), retain_graph=False)[0]
+
+                    # Update delta
                     delta = vjp + grad_output
 
             # 3. Compute gradients for parameters and input
@@ -67,16 +76,32 @@ class EquilibriumFunction(autograd.Function):
 
             delta = delta.detach()
 
+            # IMPORTANT: We must NOT use torch.enable_grad() here for x_transformed if it's from saved_tensors
+            # because it belongs to the FORWARD graph, which is immutable now.
+            # However, we need to create a NEW graph connecting (params, x_transformed) -> f_h
+
+            # The issue is likely that x_transformed is used in both the forward pass (saved)
+            # and potentially implicitly in the loop? No.
+
+            # Let's try to reconstruct the graph using ONLY the leaves we care about.
+
             with torch.enable_grad():
                 # Re-compute one step to form graph connecting params and x to output
                 # We use the original x_transformed (attached to graph) here
                 f_h = model.forward_step(h_star, x_transformed)
 
-                inputs = [x_transformed] + list(params)
+                inputs = list(params)
+                if x_transformed.requires_grad:
+                    inputs.append(x_transformed)
+
+                # IMPORTANT: We use retain_graph=False (default) because this is the final calculation
                 grads = autograd.grad(f_h, inputs, grad_outputs=delta, allow_unused=True)
 
-            grad_x = grads[0]
-            grad_params = grads[1:]
+                grad_params = grads[:len(params)]
+                if x_transformed.requires_grad:
+                    grad_x = grads[-1]
+                else:
+                    grad_x = None
 
         finally:
             # Restore training state
@@ -179,6 +204,8 @@ class EqPropModel(NEBCBase):
 
         elif self.gradient_method == 'equilibrium':
             # O(1) memory implicit differentiation
+            # We must pass params to apply so they are captured by ctx for backward
+            # Note: We use list(self.parameters()) to get all parameters including weight_orig
             params = list(self.parameters())
             h_star = EquilibriumFunction.apply(self, x_transformed, h, *params)
             out = self._output_projection(h_star)
