@@ -1,28 +1,30 @@
 # TorEqProp Verification Results
 
-**Generated**: 2026-01-11 23:55:41
+**Generated**: 2026-01-12 18:27:28
 
 
 ## Executive Summary
 
-**Verification completed in 96.6 seconds.**
+**Verification completed in 0.3 seconds.**
 
 ### Overall Results
 
 | Metric | Value |
 |--------|-------|
-| Tracks Verified | 1 |
-| Passed | 0 ✅ |
+| Tracks Verified | 3 |
+| Passed | 3 ✅ |
 | Partial | 0 ⚠️ |
-| Failed | 1 ❌ |
+| Failed | 0 ❌ |
 | Stubs (TODO) | 0 🔧 |
-| Average Score | 0.0/100 |
+| Average Score | 100.0/100 |
 
 ### Track Summary
 
 | # | Track | Status | Score | Time |
 |---|-------|--------|-------|------|
-| 60 | Evolution vs Random Search | ❌ | 0 | 96.6s |
+| 50 | NEBC EqProp Variants | ✅ | 100 | 0.1s |
+| 51 | NEBC Adaptive Feedback Alignment | ✅ | 100 | 0.1s |
+| 52 | NEBC Equilibrium Alignment | ✅ | 100 | 0.1s |
 
 
 **Seed**: 42 (deterministic)
@@ -32,11 +34,34 @@
 ---
 
 
-## Track 60: Evolution vs Random Search
+## Track 50: NEBC EqProp Variants
 
 
-❌ **Status**: FAIL | **Score**: 0.0/100 | **Time**: 96.6s
+✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 0.1s
 
-📊 **Evidence Level**: Directional
+🧪 **Evidence Level**: Smoke Test
 
-Evolution did not outperform random search
+Successfully instantiated and stepped 5/5 LM variants.
+
+
+
+## Track 51: NEBC Adaptive Feedback Alignment
+
+
+✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 0.1s
+
+🧪 **Evidence Level**: Smoke Test
+
+AdaptiveFA runs train_step without error.
+
+
+
+## Track 52: NEBC Equilibrium Alignment
+
+
+✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 0.1s
+
+🧪 **Evidence Level**: Smoke Test
+
+EquilibriumAlignment runs train_step without error.
+
