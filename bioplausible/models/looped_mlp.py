@@ -18,6 +18,12 @@ class LoopedMLP(nn.Module):
         h_{t+1} = tanh(W_in @ x + W_rec @ h_t)
         output = W_out @ h*  (where h* is the fixed point)
 
+    This model can be trained using:
+    1. BPTT (Backpropagation Through Time): With EqPropTrainer(use_kernel=False)
+    2. EqProp (Equilibrium Propagation): Using EqPropTrainer(use_kernel=True).
+       Note: For EqProp kernel mode, the weights are managed by the kernel (NumPy/CuPy),
+       not this PyTorch module. This module is primarily for BPTT or inference/visualization.
+
     Example:
         >>> model = LoopedMLP(784, 256, 10, use_spectral_norm=True)
         >>> x = torch.randn(32, 784)

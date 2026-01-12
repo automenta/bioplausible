@@ -45,6 +45,28 @@ def to_numpy(arr: Any) -> np.ndarray:
     return arr
 
 
+def softmax(x: np.ndarray, xp=np) -> np.ndarray:
+    """Stable softmax."""
+    x_max = xp.max(x, axis=-1, keepdims=True)
+    exp_x = xp.exp(x - x_max)
+    return exp_x / xp.sum(exp_x, axis=-1, keepdims=True)
+
+
+def cross_entropy(logits: np.ndarray, targets: np.ndarray, xp=np) -> float:
+    """Cross-entropy loss from logits."""
+    batch_size = logits.shape[0]
+    probs = softmax(logits, xp)
+    probs = xp.clip(probs, 1e-10, 1.0)
+    log_probs = xp.log(probs)
+    loss = -xp.sum(log_probs[xp.arange(batch_size), targets]) / batch_size
+    return loss
+
+
+def tanh_deriv(x: np.ndarray, xp=np) -> np.ndarray:
+    """Derivative of tanh: 1 - tanh(x)^2"""
+    return 1 - xp.tanh(x) ** 2
+
+
 def spectral_normalize(W: np.ndarray, num_iters: int = 1, u: Optional[np.ndarray] = None, xp=np) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
     """Power iteration spectral normalization.
 
@@ -105,28 +127,6 @@ def _compute_u_vector(W: np.ndarray, v: np.ndarray, xp) -> np.ndarray:
 def _compute_spectral_norm(W: np.ndarray, u: np.ndarray, v: np.ndarray) -> float:
     """Compute the spectral norm (largest singular value) of W."""
     return u @ W @ v
-
-
-def softmax(x: np.ndarray, xp=np) -> np.ndarray:
-    """Stable softmax."""
-    x_max = xp.max(x, axis=-1, keepdims=True)
-    exp_x = xp.exp(x - x_max)
-    return exp_x / xp.sum(exp_x, axis=-1, keepdims=True)
-
-
-def cross_entropy_loss(logits: np.ndarray, targets: np.ndarray, xp=np) -> float:
-    """Cross-entropy loss from logits."""
-    batch_size = logits.shape[0]
-    probs = softmax(logits, xp)
-    probs = xp.clip(probs, 1e-10, 1.0)
-    log_probs = xp.log(probs)
-    loss = -xp.sum(log_probs[xp.arange(batch_size), targets]) / batch_size
-    return loss
-
-
-def tanh_deriv(x: np.ndarray, xp=np) -> np.ndarray:
-    """Derivative of tanh: 1 - tanh(x)^2"""
-    return 1 - xp.tanh(x) ** 2
 
 
 class EqPropKernel:
@@ -488,7 +488,7 @@ class EqPropKernel:
     def _compute_training_metrics(self, logits: np.ndarray, y: np.ndarray,
                                 info_free: Dict[str, Any], info_nudged: Dict[str, Any], xp) -> Dict[str, float]:
         """Compute training metrics."""
-        loss = cross_entropy_loss(logits, y, xp)
+        loss = cross_entropy(logits, y, xp)
         preds = xp.argmax(logits, axis=1)
         accuracy = xp.mean(preds == y)
 
@@ -531,14 +531,6 @@ class EqPropKernel:
         preds = self.predict(x)
         y_np = to_numpy(y) if not isinstance(y, np.ndarray) else y
         return float(np.mean(preds == y_np))
-
-
-def cross_entropy(logits, targets, xp=np):
-    """Cross-entropy loss from logits."""
-    probs = softmax(logits, xp)
-    batch_size = logits.shape[0]
-    log_probs = xp.log(probs[xp.arange(batch_size), targets] + 1e-8)
-    return -xp.mean(log_probs)
 
 
 class EqPropKernelBPTT:

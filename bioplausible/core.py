@@ -7,21 +7,37 @@ checkpointing, and ONNX export.
 
 import time
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import numpy as np
 
 from .acceleration import compile_model, enable_tf32, get_optimal_backend
+# Import kernel components globally if available to avoid import loops inside methods
+try:
+    from .kernel import HAS_CUPY, cross_entropy, to_numpy
+    from .kernel import EqPropKernel as KernelEqPropKernel
+except ImportError:
+    HAS_CUPY = False
+    KernelEqPropKernel = None
+    cross_entropy = None
+    to_numpy = lambda x: x
 
 
 class EqPropTrainer:
     """
     High-level trainer for Equilibrium Propagation models.
 
+    Supports two modes:
+    1. PyTorch Autograd (BPTT): Uses standard PyTorch backpropagation through time.
+       This is accurate but memory intensive O(T).
+    2. Kernel Mode (EqProp): Uses custom NumPy/CuPy kernel for Equilibrium Propagation.
+       This is memory efficient O(1) but requires a compatible kernel implementation.
+
     Features:
-        - Automatic torch.compile for 2-3x speedup
+        - Automatic torch.compile for 2-3x speedup (PyTorch mode)
         - Optional CuPy kernel mode for O(1) memory
         - Checkpoint saving/loading
         - ONNX export for deployment
@@ -77,16 +93,24 @@ class EqPropTrainer:
         self._step = 0
         self._best_metric = float('inf')
         self._history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
+        self._kernel = None
+        self.optimizer = None # Initialized below
 
         # Move model to device
         self._setup_model(model, use_compile, compile_mode)
 
-        # Create optimizer
-        self.optimizer = self._create_optimizer(optimizer, lr, weight_decay)
+        # Kernel mode initialization attempt
+        if self.use_kernel:
+            try:
+                self._init_kernel_mode()
+            except Exception as e:
+                warnings.warn(f"Kernel mode initialization failed: {e}. Falling back to PyTorch BPTT mode.", UserWarning)
+                self.use_kernel = False
 
-        # Kernel mode initialization
-        if use_kernel:
-            self._init_kernel_mode_safe()
+        # Create optimizer (only for PyTorch mode)
+        # We do this AFTER potential kernel fallback
+        if not self.use_kernel:
+            self.optimizer = self._create_optimizer(optimizer, lr, weight_decay)
 
     def _validate_inputs(self, optimizer: str, compile_mode: str, lr: float, weight_decay: float) -> None:
         """Validate initialization parameters."""
@@ -151,14 +175,6 @@ class EqPropTrainer:
                 except Exception as e:
                     warnings.warn(f"torch.compile failed: {e}. Using uncompiled model.", UserWarning)
 
-    def _init_kernel_mode_safe(self) -> None:
-        """Initialize CuPy kernel for O(1) memory training with error handling."""
-        try:
-            self._init_kernel_mode()
-        except Exception as e:
-            warnings.warn(f"Kernel mode initialization failed: {e}", UserWarning)
-            self.use_kernel = False
-
     def _create_optimizer(self, name: str, lr: float, weight_decay: float) -> torch.optim.Optimizer:
         """Create optimizer by name."""
         optimizer_factory = self._get_optimizer_factory(name, lr, weight_decay)
@@ -181,17 +197,8 @@ class EqPropTrainer:
 
     def _init_kernel_mode(self) -> None:
         """Initialize CuPy kernel for O(1) memory training."""
-        from .kernel import HAS_CUPY
-        from .kernel import EqPropKernel as KernelEqPropKernel
-
         if not HAS_CUPY:
-            warnings.warn(
-                "CuPy not available. Falling back to PyTorch. "
-                "Install CuPy for kernel mode: pip install cupy-cuda12x",
-                RuntimeWarning
-            )
-            self.use_kernel = False
-            return
+            raise RuntimeError("CuPy not available. Falling back to PyTorch.")
 
         # Extract model dimensions
         if hasattr(self.model, 'input_dim'):
@@ -199,9 +206,7 @@ class EqPropTrainer:
             hidden_dim = self.model.hidden_dim
             output_dim = self.model.output_dim
         else:
-            warnings.warn("Model dimensions not detected. Kernel mode disabled.", RuntimeWarning)
-            self.use_kernel = False
-            return
+            raise RuntimeError("Model dimensions not detected. Kernel mode disabled.")
 
         self._kernel = KernelEqPropKernel(
             input_dim=input_dim,
@@ -298,18 +303,21 @@ class EqPropTrainer:
         Returns:
             Average loss and accuracy for the epoch
         """
-        self.model.train()
+        if not self.use_kernel:
+            self.model.train()
+
         total_loss = 0.0
         correct = 0
         total = 0
 
         for batch_idx, (x, y) in enumerate(loader):
             try:
-                # Prepare batch
-                x, y = self._prepare_batch(x, y)
-
-                # Process batch
-                batch_loss, batch_correct, batch_total = self._process_batch(x, y, loss_fn)
+                # Prepare and Process batch
+                if self.use_kernel:
+                     batch_loss, batch_correct, batch_total = self._process_batch_kernel(x, y)
+                else:
+                     x, y = self._prepare_batch(x, y)
+                     batch_loss, batch_correct, batch_total = self._process_batch_pytorch(x, y, loss_fn)
 
                 # Update metrics
                 total_loss += batch_loss
@@ -340,7 +348,11 @@ class EqPropTrainer:
         return x
 
     def _process_batch(self, x: torch.Tensor, y: torch.Tensor, loss_fn: Callable) -> Tuple[float, int, int]:
-        """Process a single batch and return loss, correct count, and total count."""
+        """Deprecated: Use _process_batch_pytorch or _process_batch_kernel instead."""
+        return self._process_batch_pytorch(x, y, loss_fn)
+
+    def _process_batch_pytorch(self, x: torch.Tensor, y: torch.Tensor, loss_fn: Callable) -> Tuple[float, int, int]:
+        """Process a single batch using PyTorch BPTT."""
         self.optimizer.zero_grad()
 
         output = self.model(x)
@@ -352,6 +364,27 @@ class EqPropTrainer:
 
         # Calculate metrics
         return self._calculate_batch_metrics(loss, output, y, x.size(0))
+
+    def _process_batch_kernel(self, x: Any, y: Any) -> Tuple[float, int, int]:
+        """Process a single batch using EqProp Kernel."""
+        if isinstance(x, torch.Tensor):
+            x = x.cpu().numpy()
+        if isinstance(y, torch.Tensor):
+            y = y.cpu().numpy()
+
+        # Flatten if needed
+        if x.ndim == 4:
+            x = x.reshape(x.shape[0], -1)
+
+        metrics = self._kernel.train_step(x, y)
+
+        loss = metrics['loss']
+        accuracy = metrics['accuracy']
+        batch_size = x.shape[0]
+        correct = int(accuracy * batch_size)
+        total_loss = loss * batch_size
+
+        return total_loss, correct, batch_size
 
     def _calculate_batch_metrics(self, loss: torch.Tensor, output: torch.Tensor,
                                 targets: torch.Tensor, batch_size: int) -> Tuple[float, int, int]:
@@ -378,7 +411,9 @@ class EqPropTrainer:
             Dict with 'loss' and 'accuracy'
         """
         loss_fn = loss_fn or nn.CrossEntropyLoss()
-        self.model.eval()
+
+        if not self.use_kernel:
+            self.model.eval()
 
         total_loss = 0.0
         correct = 0
@@ -387,17 +422,48 @@ class EqPropTrainer:
         try:
             for batch_idx, (x, y) in enumerate(loader):
                 try:
-                    # Prepare batch
-                    x, y = self._prepare_batch(x, y)
+                    if self.use_kernel:
+                        # Kernel Evaluation
+                         if isinstance(x, torch.Tensor):
+                            x = x.cpu().numpy()
+                         if isinstance(y, torch.Tensor):
+                            y = y.cpu().numpy()
+                         if x.ndim == 4:
+                            x = x.reshape(x.shape[0], -1)
 
-                    output = self.model(x)
-                    loss = loss_fn(output, y)
+                         batch_size = x.shape[0]
 
-                    batch_loss, batch_correct, batch_total = self._calculate_batch_metrics(loss, output, y, x.size(0))
+                         # Single forward pass for both loss and accuracy
+                         # Solve equilibrium to get fixed point
+                         h_star, _, _ = self._kernel.solve_equilibrium(x)
+                         logits = self._kernel.compute_output(h_star)
 
-                    total_loss += batch_loss
-                    correct += batch_correct
-                    total += batch_total
+                         # Calculate metrics using kernel utils
+                         loss_val = cross_entropy(logits, y, self._kernel.xp)
+                         batch_loss = float(to_numpy(loss_val)) * batch_size
+
+                         # Calculate accuracy safely
+                         preds = self._kernel.xp.argmax(logits, axis=1)
+                         # Explicit conversion to numpy to handle potential CuPy vs NumPy issues
+                         preds_np = to_numpy(preds)
+                         y_np = to_numpy(y) if not isinstance(y, np.ndarray) else y
+                         batch_correct = np.sum(preds_np == y_np)
+
+                         total_loss += batch_loss
+                         correct += batch_correct
+                         total += batch_size
+
+                    else:
+                        # PyTorch Evaluation
+                        x, y = self._prepare_batch(x, y)
+                        output = self.model(x)
+                        loss = loss_fn(output, y)
+
+                        batch_loss, batch_correct, batch_total = self._calculate_batch_metrics(loss, output, y, x.size(0))
+
+                        total_loss += batch_loss
+                        correct += batch_correct
+                        total += batch_total
 
                 except Exception as e:
                     print(f"Warning: Error processing evaluation batch {batch_idx}: {str(e)}. Skipping...")
@@ -414,19 +480,28 @@ class EqPropTrainer:
     def save_checkpoint(self, path: str) -> None:
         """Save model checkpoint."""
         try:
-            # Handle compiled models
-            model_to_save = self.model
-            if hasattr(self.model, '_orig_mod'):
-                model_to_save = self.model._orig_mod
-
             checkpoint = {
                 'epoch': self._epoch,
                 'step': self._step,
-                'model_state_dict': model_to_save.state_dict(),
-                'optimizer_state_dict': self.optimizer.state_dict(),
                 'best_metric': self._best_metric,
                 'history': self._history,
+                'use_kernel': self.use_kernel,
             }
+
+            if self.use_kernel:
+                # Save kernel weights
+                checkpoint['kernel_weights'] = self._kernel.weights
+                checkpoint['kernel_biases'] = self._kernel.biases
+                checkpoint['kernel_sn_state'] = self._kernel.sn_state
+                checkpoint['kernel_adam_state'] = self._kernel.adam_state
+            else:
+                # Handle compiled models
+                model_to_save = self.model
+                if hasattr(self.model, '_orig_mod'):
+                    model_to_save = self.model._orig_mod
+
+                checkpoint['model_state_dict'] = model_to_save.state_dict()
+                checkpoint['optimizer_state_dict'] = self.optimizer.state_dict()
 
             torch.save(checkpoint, path)
         except Exception as e:
@@ -441,18 +516,29 @@ class EqPropTrainer:
         except Exception as e:
             raise RuntimeError(f"Failed to load checkpoint from {path}: {str(e)}")
 
-        # Handle compiled models
-        model_to_load = self.model
-        if hasattr(self.model, '_orig_mod'):
-            model_to_load = self.model._orig_mod
+        self._epoch = checkpoint['epoch']
+        self._step = checkpoint['step']
+        self._best_metric = checkpoint.get('best_metric', float('inf'))
+        self._history = checkpoint.get('history', self._history)
+
+        # Check if mode matches
+        if checkpoint.get('use_kernel', False) != self.use_kernel:
+            warnings.warn("Checkpoint mode (kernel vs torch) does not match current trainer mode.", UserWarning)
 
         try:
-            model_to_load.load_state_dict(checkpoint['model_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self._epoch = checkpoint['epoch']
-            self._step = checkpoint['step']
-            self._best_metric = checkpoint.get('best_metric', float('inf'))
-            self._history = checkpoint.get('history', self._history)
+            if self.use_kernel and 'kernel_weights' in checkpoint:
+                 self._kernel.weights = checkpoint['kernel_weights']
+                 self._kernel.biases = checkpoint['kernel_biases']
+                 self._kernel.sn_state = checkpoint.get('kernel_sn_state', self._kernel.sn_state)
+                 self._kernel.adam_state = checkpoint.get('kernel_adam_state', self._kernel.adam_state)
+            elif not self.use_kernel and 'model_state_dict' in checkpoint:
+                # Handle compiled models
+                model_to_load = self.model
+                if hasattr(self.model, '_orig_mod'):
+                    model_to_load = self.model._orig_mod
+
+                model_to_load.load_state_dict(checkpoint['model_state_dict'])
+                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         except KeyError as e:
             raise ValueError(f"Checkpoint file missing required key: {str(e)}")
         except Exception as e:
@@ -468,12 +554,18 @@ class EqPropTrainer:
         """
         Export model to ONNX format for deployment.
 
+        Note: Only supported in PyTorch mode.
+
         Args:
             path: Output path (.onnx)
             input_shape: Example input shape, e.g. (1, 784)
             opset_version: ONNX opset version
             dynamic_axes: Dynamic axis specification (optional)
         """
+        if self.use_kernel:
+             warnings.warn("ONNX export is not supported in Kernel mode.", UserWarning)
+             return
+
         try:
             # Get uncompiled model
             model = self.model
@@ -516,6 +608,11 @@ class EqPropTrainer:
         Returns:
             Lipschitz constant L (or 0.0 if not supported)
         """
+        if self.use_kernel:
+            # In kernel mode, we can compute it from weights if supported
+            # But the kernel API doesn't expose it easily yet.
+            return 0.0
+
         if hasattr(self.model, 'compute_lipschitz'):
             return self.model.compute_lipschitz()
 
