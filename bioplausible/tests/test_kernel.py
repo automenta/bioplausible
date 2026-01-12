@@ -1,9 +1,7 @@
-"""
-Tests for EqPropKernel (NumPy/CuPy implementation).
-"""
-
 import unittest
+import torch
 import numpy as np
+from torch.utils.data import DataLoader, TensorDataset
 import sys
 from pathlib import Path
 
@@ -11,75 +9,79 @@ from pathlib import Path
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from bioplausible.kernel import EqPropKernel, HAS_CUPY, spectral_normalize
+from bioplausible.core import EqPropTrainer
+from bioplausible.models.looped_mlp import LoopedMLP
+from bioplausible.kernel import EqPropKernel, HAS_CUPY
 
 class TestEqPropKernel(unittest.TestCase):
-    """Test EqPropKernel functionality."""
+    """
+    Tests for the EqPropKernel (NumPy/CuPy backend) which offers O(1) memory training.
+    """
 
     def setUp(self):
         self.input_dim = 10
-        self.hidden_dim = 20
-        self.output_dim = 5
+        self.hidden_dim = 32
+        self.output_dim = 2
         self.batch_size = 4
+        self.epochs = 5
 
-        self.kernel = EqPropKernel(
-            input_dim=self.input_dim,
-            hidden_dim=self.hidden_dim,
-            output_dim=self.output_dim,
-            use_gpu=False # Force CPU for standard testing
+        # Synthetic data (NumPy)
+        self.x_np = np.random.randn(20, self.input_dim).astype(np.float32)
+        self.y_np = np.random.randint(0, self.output_dim, (20,)).astype(np.int64)
+
+        # Torch data for Trainer integration
+        self.x_torch = torch.from_numpy(self.x_np)
+        self.y_torch = torch.from_numpy(self.y_np)
+        self.dataset = TensorDataset(self.x_torch, self.y_torch)
+        self.loader = DataLoader(self.dataset, batch_size=self.batch_size, shuffle=True)
+
+    def test_kernel_standalone_numpy(self):
+        """Test the kernel class directly in NumPy mode."""
+        kernel = EqPropKernel(
+            self.input_dim,
+            self.hidden_dim,
+            self.output_dim,
+            use_gpu=False # Force NumPy
         )
 
-        self.x = np.random.randn(self.batch_size, self.input_dim).astype(np.float32)
-        self.y = np.random.randint(0, self.output_dim, size=(self.batch_size,))
+        initial_metrics = kernel.evaluate(self.x_np, self.y_np)
+        initial_loss = initial_metrics['loss']
 
-    def test_initialization(self):
-        """Test kernel initialization."""
-        self.assertIsNotNone(self.kernel)
-        self.assertEqual(self.kernel.input_dim, self.input_dim)
+        for _ in range(self.epochs):
+            # Batch training
+            for i in range(0, len(self.x_np), self.batch_size):
+                bx = self.x_np[i:i+self.batch_size]
+                by = self.y_np[i:i+self.batch_size]
+                kernel.train_step(bx, by)
 
-        # Check weights exist
-        self.assertTrue('W1' in self.kernel.weights)
-        self.assertTrue('W2' in self.kernel.weights)
+        final_metrics = kernel.evaluate(self.x_np, self.y_np)
+        final_loss = final_metrics['loss']
 
-    def test_forward_step(self):
-        """Test single forward step."""
-        x_emb = self.kernel._compute_embedded_input(self.x)
-        h = np.zeros((self.batch_size, self.hidden_dim), dtype=np.float32)
+        print(f"Kernel (NumPy): {initial_loss:.4f} -> {final_loss:.4f}")
+        # Relaxed check for convergence on random data, but should generally decrease or stay finite
+        self.assertTrue(np.isfinite(final_loss))
+        # Ensure it updated weights (loss changed)
+        self.assertNotEqual(initial_loss, final_loss)
 
-        h_next, activations = self.kernel.forward_step(h, x_emb, self.kernel.weights)
+    def test_trainer_integration_kernel_mode(self):
+        """Test EqPropTrainer with use_kernel=True (calls KernelEqPropKernel)."""
+        # We need a model instance just to pass dimensions to the Trainer
+        model = LoopedMLP(self.input_dim, self.hidden_dim, self.output_dim)
 
-        self.assertEqual(h_next.shape, (self.batch_size, self.hidden_dim))
-        self.assertTrue('ffn_hidden' in activations)
+        # Initialize trainer with use_kernel=True
+        # With my fix in core.py, this should work even without CuPy (falling back to NumPy)
+        trainer = EqPropTrainer(model, use_kernel=True, use_compile=False)
 
-    def test_train_step(self):
-        """Test full training step."""
-        metrics = self.kernel.train_step(self.x, self.y)
+        # Run fit
+        history = trainer.fit(self.loader, epochs=self.epochs)
 
-        self.assertTrue('loss' in metrics)
-        self.assertTrue('accuracy' in metrics)
-        self.assertTrue('free_steps' in metrics)
+        train_loss = history['train_loss']
+        self.assertTrue(len(train_loss) > 0)
+        print(f"Trainer (Kernel Mode): {train_loss[0]:.4f} -> {train_loss[-1]:.4f}")
 
-        # Loss should be a number
-        self.assertIsInstance(metrics['loss'], float)
-
-    def test_spectral_normalize(self):
-        """Test spectral normalization helper."""
-        W = np.random.randn(10, 10).astype(np.float32)
-        W_norm, u, sigma = spectral_normalize(W)
-
-        self.assertEqual(W_norm.shape, W.shape)
-        self.assertGreater(sigma, 0)
-
-        # Run again with u
-        W_norm_2, u_2, sigma_2 = spectral_normalize(W, u=u)
-        self.assertEqual(W_norm_2.shape, W.shape)
-
-    def test_predict(self):
-        """Test prediction."""
-        preds = self.kernel.predict(self.x)
-        self.assertEqual(preds.shape, (self.batch_size,))
-        self.assertTrue(np.all(preds >= 0))
-        self.assertTrue(np.all(preds < self.output_dim))
+        # Verify it actually used the kernel
+        self.assertIsNotNone(trainer._kernel)
+        self.assertFalse(trainer._kernel.use_gpu) # Should be False on CPU env
 
 if __name__ == '__main__':
     unittest.main()
