@@ -7,6 +7,7 @@ checkpointing, and ONNX export.
 
 import time
 import warnings
+from contextlib import nullcontext
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
@@ -243,11 +244,8 @@ class EqPropTrainer:
         correct = 0
         total = 0
 
-        context = torch.no_grad() if (not is_training and not self.use_kernel) else NotImplemented
-        # Use null context if no context manager needed (NotImplemented isn't a context manager, so we use a dummy)
-        if context is NotImplemented:
-             from contextlib import nullcontext
-             context = nullcontext()
+        # Select context manager: no_grad() for PyTorch eval, nullcontext() otherwise
+        context = torch.no_grad() if (not is_training and not self.use_kernel) else nullcontext()
 
         with context:
             for batch_idx, (x, y) in enumerate(loader):
