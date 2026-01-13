@@ -148,15 +148,17 @@ class EqPropTrainer:
 
     def _init_kernel_mode(self) -> None:
         """Initialize CuPy kernel for O(1) memory training."""
-        if not HAS_CUPY:
-            raise RuntimeError("CuPy not available.")
+        # Allow fallback to NumPy if CuPy is missing, handled by kernel internal logic
+        # if not HAS_CUPY:
+        #    raise RuntimeError("CuPy not available.")
 
         if hasattr(self.model, 'input_dim'):
             dims = (self.model.input_dim, self.model.hidden_dim, self.model.output_dim)
         else:
             raise RuntimeError("Model dimensions not detected. Kernel mode disabled.")
 
-        self._kernel = KernelEqPropKernel(*dims, use_gpu=True)
+        # Pass use_gpu=True only if CuPy is available, otherwise False for NumPy fallback
+        self._kernel = KernelEqPropKernel(*dims, use_gpu=HAS_CUPY)
 
     def fit(
         self,
