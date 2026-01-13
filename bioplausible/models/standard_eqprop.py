@@ -9,6 +9,7 @@ import torch.nn as nn
 from typing import Dict, Optional, List
 from .base import BioModel, ModelConfig, register_model
 
+
 @register_model("eqprop")
 class StandardEqProp(BioModel):
     """
@@ -28,39 +29,48 @@ class StandardEqProp(BioModel):
 
         # Build MLP layers
         self.layers = nn.ModuleList()
-        hidden_dims = self.config.hidden_dims if self.config.hidden_dims else [self.hidden_dim] if hasattr(self, 'hidden_dim') else []
+        hidden_dims = (
+            self.config.hidden_dims
+            if self.config.hidden_dims
+            else [self.hidden_dim] if hasattr(self, "hidden_dim") else []
+        )
         dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
         for i in range(len(dims) - 1):
-            layer = nn.Linear(dims[i], dims[i+1])
+            layer = nn.Linear(dims[i], dims[i + 1])
             layer = self.apply_spectral_norm(layer)
             self.layers.append(layer)
 
-        self.to(kwargs.get('device', 'cpu'))
+        self.to(kwargs.get("device", "cpu"))
 
         # Initialize Optimizer
         # Note: We use Adam by default as requested/implied by benchmark
         self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
 
-    def forward_dynamics(self, activations: List[torch.Tensor], beta: float = 0.0, target: Optional[torch.Tensor] = None) -> List[torch.Tensor]:
+    def forward_dynamics(
+        self,
+        activations: List[torch.Tensor],
+        beta: float = 0.0,
+        target: Optional[torch.Tensor] = None,
+    ) -> List[torch.Tensor]:
         """
         Run one pass of relaxation dynamics over all layers.
         """
-        new_activations = [activations[0]] # Input is clamped
+        new_activations = [activations[0]]  # Input is clamped
 
         num_layers = len(self.layers)
 
         for i in range(num_layers):
             layer = self.layers[i]
-            h_prev = activations[i]     # h_{i}
+            h_prev = activations[i]  # h_{i}
             a_bu = layer(h_prev)
 
             # Top-down contribution
             a_td = 0.0
             if i < num_layers - 1:
-                next_layer = self.layers[i+1]
-                h_next = activations[i+2]
-                if hasattr(next_layer, 'weight'):
+                next_layer = self.layers[i + 1]
+                h_next = activations[i + 2]
+                if hasattr(next_layer, "weight"):
                     w = next_layer.weight
                     a_td = torch.matmul(h_next, w)
 
@@ -78,7 +88,9 @@ class StandardEqProp(BioModel):
 
         return new_activations
 
-    def forward(self, x: torch.Tensor, beta: float = 0.0, target: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, beta: float = 0.0, target: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         Run equilibrium dynamics.
         """
@@ -122,10 +134,10 @@ class StandardEqProp(BioModel):
         with torch.no_grad():
             for i, layer in enumerate(self.layers):
                 h_prev_free = free_activations[i]
-                h_post_free = free_activations[i+1]
+                h_post_free = free_activations[i + 1]
 
                 h_prev_nudged = nudged_activations[i]
-                h_post_nudged = nudged_activations[i+1]
+                h_post_nudged = nudged_activations[i + 1]
 
                 prod_nudged = torch.matmul(h_post_nudged.T, h_prev_nudged)
                 prod_free = torch.matmul(h_post_free.T, h_prev_free)
@@ -140,11 +152,13 @@ class StandardEqProp(BioModel):
 
                 # Set gradient manually
                 param_container = layer
-                weight_name = 'weight'
+                weight_name = "weight"
 
-                if hasattr(layer, 'parametrizations') and hasattr(layer.parametrizations, 'weight'):
+                if hasattr(layer, "parametrizations") and hasattr(
+                    layer.parametrizations, "weight"
+                ):
                     param_container = layer.parametrizations.weight
-                    weight_name = 'original'
+                    weight_name = "original"
 
                 w_param = getattr(param_container, weight_name)
 
@@ -171,6 +185,6 @@ class StandardEqProp(BioModel):
         loss = nn.functional.cross_entropy(output_free, y).item()
 
         return {
-            'loss': loss,
-            'accuracy': acc,
+            "loss": loss,
+            "accuracy": acc,
         }

@@ -12,6 +12,7 @@ sys.path.insert(0, str(parent_dir))
 
 from bioplausible.models.looped_mlp import LoopedMLP
 
+
 class TestEquilibriumStress(unittest.TestCase):
     """
     Stress test for Implicit Differentiation (Equilibrium Mode).
@@ -19,7 +20,7 @@ class TestEquilibriumStress(unittest.TestCase):
     """
 
     def setUp(self):
-        self.device = 'cpu'
+        self.device = "cpu"
         self.input_dim = 20
         self.hidden_dim = 100
         self.output_dim = 5
@@ -39,7 +40,7 @@ class TestEquilibriumStress(unittest.TestCase):
             hidden_dim=self.hidden_dim,
             output_dim=self.output_dim,
             max_steps=self.max_steps,
-            gradient_method='equilibrium'
+            gradient_method="equilibrium",
         ).to(self.device)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -66,10 +67,13 @@ class TestEquilibriumStress(unittest.TestCase):
             print(f"Epoch {epoch+1}/{self.epochs} - Loss: {avg_loss:.4f}")
 
         # 1. Verify Convergence
-        self.assertLess(losses[-1], losses[0], "Model failed to learn (Loss did not decrease)")
+        self.assertLess(
+            losses[-1], losses[0], "Model failed to learn (Loss did not decrease)"
+        )
 
         # 2. Verify Stability (No NaNs)
         self.assertFalse(torch.isnan(torch.tensor(losses)).any(), "Loss contains NaNs")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

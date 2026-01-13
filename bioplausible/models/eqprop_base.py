@@ -5,12 +5,14 @@ from typing import Optional, List, Tuple, Dict, Union, Any
 from abc import ABC, abstractmethod
 from .nebc_base import NEBCBase
 
+
 class EquilibriumFunction(autograd.Function):
     """
     Implicit differentiation for Equilibrium Propagation models.
     Allows O(1) memory training by computing gradients via fixed-point iteration
     instead of unrolling the graph (BPTT).
     """
+
     @staticmethod
     def forward(ctx, model, x_transformed, h_init, *params):
         ctx.model = model
@@ -47,7 +49,7 @@ class EquilibriumFunction(autograd.Function):
 
             # Iterate to equilibrium for the backward pass (solving for delta)
             for _ in range(model.max_steps):
-                 with torch.enable_grad():
+                with torch.enable_grad():
                     # Need to create a new leaf for h_star at each step for local VJP calc
                     # And x_transformed is detached constant.
                     h_star_loop = h_star.detach().requires_grad_(True)
@@ -57,7 +59,12 @@ class EquilibriumFunction(autograd.Function):
                     # delta must be detached to stop graph from growing across iterations
                     # retain_graph=False ensures we free the f_h graph immediately.
 
-                    vjp = autograd.grad(f_h, h_star_loop, grad_outputs=delta.detach(), retain_graph=False)[0]
+                    vjp = autograd.grad(
+                        f_h,
+                        h_star_loop,
+                        grad_outputs=delta.detach(),
+                        retain_graph=False,
+                    )[0]
 
                     # Update delta
                     delta = vjp + grad_output
@@ -89,9 +96,15 @@ class EquilibriumFunction(autograd.Function):
                 # if autograd needs to access x_transformed's history later?
                 # Actually, for x_transformed, we are at the "leaf" of this local graph.
                 # But x_transformed itself is an intermediate node in the global graph.
-                grads = autograd.grad(f_h, inputs, grad_outputs=delta, allow_unused=True, retain_graph=True)
+                grads = autograd.grad(
+                    f_h,
+                    inputs,
+                    grad_outputs=delta,
+                    allow_unused=True,
+                    retain_graph=True,
+                )
 
-                grad_params = grads[:len(params)]
+                grad_params = grads[: len(params)]
                 if x_transformed.requires_grad:
                     grad_x = grads[-1]
                 else:
@@ -109,27 +122,22 @@ class EqPropModel(NEBCBase):
     Abstract base class for Equilibrium Propagation models.
     """
 
-    def __init__(
-        self,
-        max_steps: int = 30,
-        gradient_method: str = 'bptt',
-        **kwargs
-    ):
+    def __init__(self, max_steps: int = 30, gradient_method: str = "bptt", **kwargs):
         """
         Args:
             max_steps: Number of equilibrium steps
             gradient_method: 'bptt' (default) or 'equilibrium' (O(1) memory implicit diff)
         """
-        input_dim = kwargs.get('input_dim', 0)
-        hidden_dim = kwargs.get('hidden_dim', 0)
-        output_dim = kwargs.get('output_dim', 0)
+        input_dim = kwargs.get("input_dim", 0)
+        hidden_dim = kwargs.get("hidden_dim", 0)
+        output_dim = kwargs.get("output_dim", 0)
 
         super().__init__(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             output_dim=output_dim,
             max_steps=max_steps,
-            use_spectral_norm=kwargs.get('use_spectral_norm', True)
+            use_spectral_norm=kwargs.get("use_spectral_norm", True),
         )
         self.max_steps = max_steps
         self.gradient_method = gradient_method
@@ -140,7 +148,9 @@ class EqPropModel(NEBCBase):
         pass
 
     @abstractmethod
-    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
+    def forward_step(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
         """Single equilibrium iteration step."""
         pass
 
@@ -183,7 +193,7 @@ class EqPropModel(NEBCBase):
         h = self._initialize_hidden_state(x)
         x_transformed = self._transform_input(x)
 
-        if return_trajectory or self.gradient_method == 'bptt':
+        if return_trajectory or self.gradient_method == "bptt":
             # Standard unrolling (BPTT)
             trajectory = [h] if return_trajectory else None
             for _ in range(steps):
@@ -196,7 +206,7 @@ class EqPropModel(NEBCBase):
                 return out, trajectory
             return out
 
-        elif self.gradient_method == 'equilibrium':
+        elif self.gradient_method == "equilibrium":
             # O(1) memory implicit differentiation
             # We must pass params to apply so they are captured by ctx for backward
             # Note: We use list(self.parameters()) to get all parameters including weight_orig
@@ -227,7 +237,7 @@ class EqPropModel(NEBCBase):
         h_clean = h.clone()
         h_noisy = h + torch.randn_like(h) * noise_level
 
-        initial_noise_norm = (h_noisy - h_clean).norm().item() / h.numel()**0.5
+        initial_noise_norm = (h_noisy - h_clean).norm().item() / h.numel() ** 0.5
 
         # Run remaining steps
         steps_remaining = total_steps - injection_step
@@ -235,13 +245,15 @@ class EqPropModel(NEBCBase):
             h_noisy = self.forward_step(h_noisy, x_transformed)
             h_clean = self.forward_step(h_clean, x_transformed)
 
-        final_noise_norm = (h_noisy - h_clean).norm().item() / h.numel()**0.5
+        final_noise_norm = (h_noisy - h_clean).norm().item() / h.numel() ** 0.5
 
-        ratio = final_noise_norm / initial_noise_norm if initial_noise_norm > 1e-9 else 0.0
+        ratio = (
+            final_noise_norm / initial_noise_norm if initial_noise_norm > 1e-9 else 0.0
+        )
 
         return {
-            'initial_noise': initial_noise_norm,
-            'final_noise': final_noise_norm,
-            'damping_ratio': ratio,
-            'damping_percent': (1 - ratio) * 100,
+            "initial_noise": initial_noise_norm,
+            "final_noise": final_noise_norm,
+            "damping_ratio": ratio,
+            "damping_percent": (1 - ratio) * 100,
         }

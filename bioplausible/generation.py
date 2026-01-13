@@ -43,19 +43,19 @@ def generate_text(
         Generated text string
     """
     model.eval()
-    
+
     # Convert prompt to indices
     if prompt:
         indices = [char_to_idx.get(c, 0) for c in prompt]
     else:
         indices = [0]  # Start with first char
-    
+
     generated = list(indices)
-    
+
     with torch.no_grad():
         for _ in range(max_new_tokens):
             # Prepare input
-            if hasattr(model, 'config'):
+            if hasattr(model, "config"):
                 # Research algorithm - needs one-hot encoding
                 vocab_size = len(char_to_idx)
                 x = torch.tensor([indices[-1]], device=device)
@@ -63,11 +63,11 @@ def generate_text(
             else:
                 # LM variant or standard model
                 x = torch.tensor([indices], device=device)
-            
+
             # Forward pass
             try:
                 logits = model(x)
-                
+
                 # Handle different output shapes
                 if logits.dim() == 3:
                     # [batch, seq, vocab] - take last token
@@ -78,7 +78,7 @@ def generate_text(
                         logits = logits[0]
                     else:
                         logits = logits[-1]
-                
+
             except Exception as e:
                 # Fallback: try with different input format
                 try:
@@ -91,25 +91,25 @@ def generate_text(
                 except:
                     # Give up and return what we have
                     break
-            
+
             # Apply temperature
             logits = logits / temperature
-            
+
             # Apply top-k filtering
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[-1]] = -float('Inf')
-            
+                logits[logits < v[-1]] = -float("Inf")
+
             # Sample
             probs = F.softmax(logits, dim=-1)
             next_idx = torch.multinomial(probs, num_samples=1).item()
-            
+
             # Add to generated sequence
             generated.append(next_idx)
             indices.append(next_idx)
-    
+
     # Decode to text
-    text = ''.join([idx_to_char.get(idx, '?') for idx in generated])
+    text = "".join([idx_to_char.get(idx, "?") for idx in generated])
     return text
 
 
@@ -138,10 +138,10 @@ def generate_from_dataset(
     # Extract vocab from dataset
     char_to_idx = dataset.char_to_idx
     idx_to_char = dataset.idx_to_char
-    
+
     # Determine device
     device = next(model.parameters()).device if list(model.parameters()) else "cpu"
-    
+
     return generate_text(
         model=model,
         char_to_idx=char_to_idx,

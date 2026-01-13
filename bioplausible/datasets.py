@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader, Dataset
 # Vision Datasets
 # =============================================================================
 
+
 def get_vision_dataset(
     name: str = "mnist",
     root: str = "./data",
@@ -53,10 +54,10 @@ def _build_transforms(name: str, flatten: bool):
 
     transform_list = [transforms.ToTensor()]
 
-    if name in ['mnist', 'fashion_mnist', 'kmnist']:
+    if name in ["mnist", "fashion_mnist", "kmnist"]:
         # Normalize grayscale to [-1, 1] range
         transform_list.append(transforms.Normalize((0.5,), (0.5,)))
-    elif name == 'cifar10':
+    elif name == "cifar10":
         transform_list.append(transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
 
     if flatten:
@@ -70,14 +71,16 @@ def _get_dataset_class(name: str) -> type:
     from torchvision import datasets
 
     dataset_map = {
-        'mnist': datasets.MNIST,
-        'fashion_mnist': datasets.FashionMNIST,
-        'cifar10': datasets.CIFAR10,
-        'kmnist': datasets.KMNIST,
+        "mnist": datasets.MNIST,
+        "fashion_mnist": datasets.FashionMNIST,
+        "cifar10": datasets.CIFAR10,
+        "kmnist": datasets.KMNIST,
     }
 
     if name not in dataset_map:
-        raise ValueError(f"Unknown dataset: {name}. Available: {list(dataset_map.keys())}")
+        raise ValueError(
+            f"Unknown dataset: {name}. Available: {list(dataset_map.keys())}"
+        )
 
     return dataset_map[name]
 
@@ -86,29 +89,30 @@ def _get_dataset_class(name: str) -> type:
 # Language Modeling Datasets
 # =============================================================================
 
+
 class CharDataset(Dataset):
     """Character-level language modeling dataset."""
-    
+
     def __init__(self, text: str, seq_len: int = 128) -> None:
         self.seq_len = seq_len
-        
+
         # Build vocabulary
         chars = sorted(set(text))
         self.char_to_idx = {c: i for i, c in enumerate(chars)}
         self.idx_to_char = {i: c for c, i in self.char_to_idx.items()}
         self.vocab_size = len(chars)
-        
+
         # Encode text
         self.data = torch.tensor([self.char_to_idx[c] for c in text], dtype=torch.long)
-    
+
     def __len__(self) -> int:
         return max(0, len(self.data) - self.seq_len - 1)
-    
+
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        x = self.data[idx:idx + self.seq_len]
-        y = self.data[idx + 1:idx + self.seq_len + 1]
+        x = self.data[idx : idx + self.seq_len]
+        y = self.data[idx + 1 : idx + self.seq_len + 1]
         return x, y
-    
+
     def decode(self, indices: torch.Tensor) -> str:
         """
         Convert indices back to text.
@@ -119,7 +123,7 @@ class CharDataset(Dataset):
         Returns:
             Decoded text string
         """
-        return ''.join(self.idx_to_char[i.item()] for i in indices)
+        return "".join(self.idx_to_char[i.item()] for i in indices)
 
 
 def get_lm_dataset(
@@ -129,15 +133,15 @@ def get_lm_dataset(
 ) -> CharDataset:
     """
     Load a language modeling dataset as a CharDataset.
-    
+
     Args:
         name: Dataset name ('tiny_shakespeare', 'wikitext-2', 'ptb')
         seq_len: Sequence length for training
         split: 'train', 'validation', or 'test'
-        
+
     Returns:
         CharDataset with vocab_size attribute
-        
+
     Example:
         >>> dataset = get_lm_dataset('tiny_shakespeare', seq_len=128)
         >>> print(f"Vocab size: {dataset.vocab_size}")
@@ -149,7 +153,7 @@ def get_lm_dataset(
         raise ImportError(
             "HuggingFace datasets required. Install with: pip install datasets"
         )
-    
+
     # Load dataset
     if name == "tiny_shakespeare":
         # Shakespeare from HuggingFace
@@ -158,47 +162,55 @@ def get_lm_dataset(
             # tiny_shakespeare has 'train', 'validation', 'test' splits
             # Each row has a 'text' field containing a line
             split_data = dataset[split]
-            
+
             # Collect all text from the split
             texts = []
             for item in split_data:
-                if isinstance(item['text'], str):
-                    texts.append(item['text'])
-            
+                if isinstance(item["text"], str):
+                    texts.append(item["text"])
+
             text = "\n".join(texts)
-            
+
             if not text or len(text) == 0:
                 raise ValueError("Empty text after loading")
-                
+
         except Exception as e:
             # Fallback: load from URL
             warnings.warn(f"HuggingFace dataset failed, using fallback: {e}")
             import urllib.request
+
             url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
             with urllib.request.urlopen(url) as response:
-                text = response.read().decode('utf-8')
-    
+                text = response.read().decode("utf-8")
+
     elif name == "wikitext-2":
         dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
         text = "\n".join(dataset[split]["text"])
-    
+
     elif name == "ptb":
         dataset = load_dataset("ptb_text_only")
-        split_name = "train" if split == "train" else "validation" if split == "validation" else "test"
+        split_name = (
+            "train"
+            if split == "train"
+            else "validation" if split == "validation" else "test"
+        )
         text = " ".join(dataset[split_name]["sentence"])
-    
+
     else:
-        raise ValueError(f"Unknown LM dataset: {name}. Available: tiny_shakespeare, wikitext-2, ptb")
-    
+        raise ValueError(
+            f"Unknown LM dataset: {name}. Available: tiny_shakespeare, wikitext-2, ptb"
+        )
+
     # Create and return CharDataset (not DataLoader)
     char_dataset = CharDataset(text, seq_len=seq_len)
-    
+
     return char_dataset
 
 
 # =============================================================================
 # Utility Functions
 # =============================================================================
+
 
 def create_data_loaders(
     dataset_name: str = "mnist",
@@ -208,38 +220,38 @@ def create_data_loaders(
 ) -> Tuple[DataLoader, DataLoader]:
     """
     Create train and test data loaders for a vision dataset.
-    
+
     Args:
         dataset_name: Name of dataset
         batch_size: Batch size
         num_workers: Number of data loading workers
         flatten: Flatten images for MLP models
-        
+
     Returns:
         (train_loader, test_loader)
     """
     train_data = get_vision_dataset(dataset_name, train=True, flatten=flatten)
     test_data = get_vision_dataset(dataset_name, train=False, flatten=flatten)
-    
+
     train_loader = DataLoader(
-        train_data, 
-        batch_size=batch_size, 
-        shuffle=True, 
+        train_data,
+        batch_size=batch_size,
+        shuffle=True,
         num_workers=num_workers,
     )
     test_loader = DataLoader(
-        test_data, 
-        batch_size=batch_size, 
-        shuffle=False, 
+        test_data,
+        batch_size=batch_size,
+        shuffle=False,
         num_workers=num_workers,
     )
-    
+
     return train_loader, test_loader
 
 
 __all__ = [
-    'get_vision_dataset',
-    'get_lm_dataset',
-    'CharDataset',
-    'create_data_loaders',
+    "get_vision_dataset",
+    "get_lm_dataset",
+    "CharDataset",
+    "create_data_loaders",
 ]

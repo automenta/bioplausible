@@ -17,17 +17,21 @@ class SparseEquilibrium(BioModel):
     def __init__(self, config: Optional[ModelConfig] = None, **kwargs):
         super().__init__(config, **kwargs)
 
-        if not hasattr(self, 'layers') or len(self.layers) == 0:
+        if not hasattr(self, "layers") or len(self.layers) == 0:
             self.layers = nn.ModuleList()
-            hidden_dims = self.config.hidden_dims if self.config.hidden_dims else [self.hidden_dim] if hasattr(self, 'hidden_dim') else []
+            hidden_dims = (
+                self.config.hidden_dims
+                if self.config.hidden_dims
+                else [self.hidden_dim] if hasattr(self, "hidden_dim") else []
+            )
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
             for i in range(len(dims) - 1):
-                layer = nn.Linear(dims[i], dims[i+1])
+                layer = nn.Linear(dims[i], dims[i + 1])
                 layer = self.apply_spectral_norm(layer)
                 self.layers.append(layer)
 
-            self.to(kwargs.get('device', 'cpu'))
+            self.to(kwargs.get("device", "cpu"))
 
         self.sparsity = 0.5
         self.criterion = nn.CrossEntropyLoss()
@@ -73,4 +77,7 @@ class SparseEquilibrium(BioModel):
         loss.backward()
         optimizer.step()
 
-        return {'loss': loss.item(), 'accuracy': (output.argmax(1) == y).float().mean().item()}
+        return {
+            "loss": loss.item(),
+            "accuracy": (output.argmax(1) == y).float().mean().item(),
+        }

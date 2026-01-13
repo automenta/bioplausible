@@ -107,10 +107,14 @@ KERNEL_CONFIG = {
 @dataclass
 class TrainerConfig:
     """Global configuration for the trainer."""
+
     epochs: int = 3  # Centralized default for all experiments (baseline & trials)
     quick_mode: bool = True
-    max_trial_time: float = 60.0 # Total trial budget in seconds (used to derive per-epoch limit)
-    task: str = 'shakespeare'
+    max_trial_time: float = (
+        60.0  # Total trial budget in seconds (used to derive per-epoch limit)
+    )
+    task: str = "shakespeare"
+
 
 # Global instance
 GLOBAL_CONFIG = TrainerConfig()
@@ -136,6 +140,7 @@ def get_model_config(preset_name: str, **overrides) -> Dict[str, Any]:
     config.update(overrides)
     return config
 
+
 def _validate_preset_name(preset_name: str) -> None:
     """Validate that the preset name exists."""
     if preset_name not in MODEL_PRESETS:
@@ -155,7 +160,7 @@ def get_dataset_info(dataset_name: str) -> Dict[str, Any]:
     Returns:
         Configuration dict with input_dim, output_dim, etc.
     """
-    dataset_name = dataset_name.lower().replace('-', '_')
+    dataset_name = dataset_name.lower().replace("-", "_")
 
     if dataset_name not in DATASET_CONFIG:
         raise ValueError(

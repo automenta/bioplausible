@@ -19,22 +19,24 @@ logger = logging.getLogger(__name__)
 
 class ModelRegistry:
     """Registry for model builders."""
-    
+
     _builders: Dict[str, Callable] = {}
-    
+
     @classmethod
     def register(cls, model_type: str):
         """Decorator to register a model builder function."""
+
         def decorator(builder_fn: Callable) -> Callable:
             cls._builders[model_type] = builder_fn
             return builder_fn
+
         return decorator
-    
+
     @classmethod
     def get_builder(cls, model_type: str) -> Optional[Callable]:
         """Get builder function for a model type."""
         return cls._builders.get(model_type)
-    
+
     @classmethod
     def list_models(cls) -> list:
         """List all registered model types."""
@@ -43,28 +45,30 @@ class ModelRegistry:
 
 class DefaultModelBuilder(ModelBuilder):
     """Default implementation of ModelBuilder using the registry."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-    
+
     def build(self, config: ArchConfig, task: str) -> nn.Module:
         """Build model from configuration."""
         # Validate first
         if not self.validate_config(config, task):
             raise ValueError(f"Invalid config for task {task}")
-        
+
         # Get task info
         task_info = TASK_CONFIGS.get(task, {})
-        input_dim = task_info.get('input_dim', 784)
-        output_dim = task_info.get('output_dim', 10)
-        
+        input_dim = task_info.get("input_dim", 784)
+        output_dim = task_info.get("output_dim", 10)
+
         # Get builder
         builder = ModelRegistry.get_builder(config.model_type)
         if builder is None:
             # Fallback to looped_mlp
-            self.logger.warning(f"Unknown model type {config.model_type}, using looped_mlp")
-            builder = ModelRegistry.get_builder('looped_mlp')
-        
+            self.logger.warning(
+                f"Unknown model type {config.model_type}, using looped_mlp"
+            )
+            builder = ModelRegistry.get_builder("looped_mlp")
+
         # Build
         try:
             model = builder(config, input_dim, output_dim)
@@ -72,24 +76,24 @@ class DefaultModelBuilder(ModelBuilder):
         except Exception as e:
             self.logger.error(f"Failed to build {config.model_type}: {e}")
             raise
-    
+
     def validate_config(self, config: ArchConfig, task: str) -> bool:
         """Validate configuration."""
         constraints = MODEL_CONSTRAINTS.get(config.model_type, {})
-        
+
         # Check depth
-        if 'max_depth' in constraints:
-            if config.depth > constraints['max_depth']:
+        if "max_depth" in constraints:
+            if config.depth > constraints["max_depth"]:
                 self.logger.warning(
                     f"Depth {config.depth} exceeds max {constraints['max_depth']}"
                 )
                 return False
-        
+
         # Check SN requirement
-        if constraints.get('requires_sn', False) and not config.use_sn:
+        if constraints.get("requires_sn", False) and not config.use_sn:
             self.logger.warning(f"{config.model_type} requires spectral normalization")
             return False
-        
+
         return True
 
 
@@ -97,10 +101,12 @@ class DefaultModelBuilder(ModelBuilder):
 # Register model builders
 # ============================================================================
 
-@ModelRegistry.register('looped_mlp')
+
+@ModelRegistry.register("looped_mlp")
 def build_looped_mlp(config: ArchConfig, input_dim: int, output_dim: int) -> nn.Module:
     """Build LoopedMLP from config."""
     from models import LoopedMLP
+
     return LoopedMLP(
         input_dim=input_dim,
         hidden_dim=config.width,
@@ -110,16 +116,16 @@ def build_looped_mlp(config: ArchConfig, input_dim: int, output_dim: int) -> nn.
     )
 
 
-@ModelRegistry.register('transformer')
+@ModelRegistry.register("transformer")
 def build_transformer(config: ArchConfig, input_dim: int, output_dim: int) -> nn.Module:
     """Build Transformer from config."""
     from models import CausalTransformerEqProp
-    
+
     # Ensure num_heads divides hidden_dim
     num_heads = config.num_heads
     while config.width % num_heads != 0 and num_heads > 1:
         num_heads -= 1
-    
+
     return CausalTransformerEqProp(
         vocab_size=output_dim,
         hidden_dim=config.width,
@@ -129,17 +135,19 @@ def build_transformer(config: ArchConfig, input_dim: int, output_dim: int) -> nn
     )
 
 
-@ModelRegistry.register('conv')
+@ModelRegistry.register("conv")
 def build_conv(config: ArchConfig, input_dim: int, output_dim: int) -> nn.Module:
     """Build ConvNet from config."""
     from models import ModernConvEqProp
+
     return ModernConvEqProp(eq_steps=config.eq_steps)
 
 
-@ModelRegistry.register('hebbian')
+@ModelRegistry.register("hebbian")
 def build_hebbian(config: ArchConfig, input_dim: int, output_dim: int) -> nn.Module:
     """Build Hebbian chain from config."""
     from models import DeepHebbianChain
+
     return DeepHebbianChain(
         input_dim=input_dim,
         hidden_dim=config.width,
@@ -149,10 +157,13 @@ def build_hebbian(config: ArchConfig, input_dim: int, output_dim: int) -> nn.Mod
     )
 
 
-@ModelRegistry.register('feedback_alignment')
-def build_feedback_alignment(config: ArchConfig, input_dim: int, output_dim: int) -> nn.Module:
+@ModelRegistry.register("feedback_alignment")
+def build_feedback_alignment(
+    config: ArchConfig, input_dim: int, output_dim: int
+) -> nn.Module:
     """Build Feedback Alignment model from config."""
     from models import FeedbackAlignmentEqProp
+
     return FeedbackAlignmentEqProp(
         input_dim=input_dim,
         hidden_dim=config.width,

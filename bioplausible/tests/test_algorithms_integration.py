@@ -1,4 +1,3 @@
-
 import pytest
 import torch
 import torch.nn as nn
@@ -6,6 +5,7 @@ from bioplausible.core import EqPropTrainer
 from bioplausible.models.standard_eqprop import StandardEqProp
 from bioplausible.models.simple_fa import StandardFA
 from bioplausible.models.base import ModelConfig
+
 
 def test_eqprop_algorithm_integration():
     """
@@ -25,13 +25,13 @@ def test_eqprop_algorithm_integration():
 
     # Configure Algorithm
     config = ModelConfig(
-        name='eqprop',
+        name="eqprop",
         input_dim=input_dim,
         hidden_dims=[hidden_dim],
         output_dim=output_dim,
         learning_rate=0.01,
-        equilibrium_steps=5, # Short for testing
-        beta=0.1
+        equilibrium_steps=5,  # Short for testing
+        beta=0.1,
     )
 
     model = StandardEqProp(config)
@@ -42,9 +42,10 @@ def test_eqprop_algorithm_integration():
     # Train
     history = trainer.fit(loader, epochs=2)
 
-    assert 'train_loss' in history
-    assert len(history['train_loss']) == 2
-    assert history['train_loss'][-1] > 0 # Just check it ran
+    assert "train_loss" in history
+    assert len(history["train_loss"]) == 2
+    assert history["train_loss"][-1] > 0  # Just check it ran
+
 
 def test_feedback_alignment_integration():
     """
@@ -62,45 +63,46 @@ def test_feedback_alignment_integration():
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
 
     config = ModelConfig(
-        name='feedback_alignment',
+        name="feedback_alignment",
         input_dim=input_dim,
         hidden_dims=[hidden_dim],
         output_dim=output_dim,
-        learning_rate=0.01
+        learning_rate=0.01,
     )
 
     model = StandardFA(config)
 
     # Test device movement (simulated if cpu, but structure check)
     if torch.cuda.is_available():
-        device = 'cuda'
+        device = "cuda"
         model.to(device)
         # Check feedback weights (stored as params/buffers in BioModel)
         # StandardFA stores them in self.feedback_weights which is a ParameterList
-        assert model.feedback_weights[0].device.type == 'cuda'
+        assert model.feedback_weights[0].device.type == "cuda"
 
     # Trainer
     trainer = EqPropTrainer(model, use_kernel=False, use_compile=False)
 
     history = trainer.fit(loader, epochs=2)
 
-    assert 'train_loss' in history
+    assert "train_loss" in history
     # Accuracy should exist
-    assert 'train_acc' in history
-    assert len(history['train_acc']) == 2
+    assert "train_acc" in history
+    assert len(history["train_acc"]) == 2
+
 
 def test_eqprop_dynamics_shapes():
     """Verify shapes during dynamics."""
     config = ModelConfig(
-        name='eqprop',
+        name="eqprop",
         input_dim=5,
         hidden_dims=[10, 8],
         output_dim=3,
-        equilibrium_steps=2
+        equilibrium_steps=2,
     )
     model = StandardEqProp(config)
 
-    x = torch.randn(2, 5) # Batch 2
+    x = torch.randn(2, 5)  # Batch 2
 
     # Forward
     out = model(x)

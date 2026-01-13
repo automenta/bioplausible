@@ -14,21 +14,21 @@ from .fitness import FitnessScore
 
 class ModelBuilder(ABC):
     """Abstract interface for building models from configurations."""
-    
+
     @abstractmethod
     def build(self, config: ArchConfig, task: str) -> Any:
         """
         Build a model from architecture configuration.
-        
+
         Args:
             config: Architecture configuration
             task: Task name (mnist, cifar10, etc.)
-            
+
         Returns:
             Built model instance
         """
         pass
-    
+
     @abstractmethod
     def validate_config(self, config: ArchConfig, task: str) -> bool:
         """Validate that config is compatible with this builder."""
@@ -37,20 +37,16 @@ class ModelBuilder(ABC):
 
 class Evaluator(ABC):
     """Abstract interface for model evaluation."""
-    
+
     @abstractmethod
-    def evaluate(
-        self,
-        config: ArchConfig,
-        **kwargs
-    ) -> FitnessScore:
+    def evaluate(self, config: ArchConfig, **kwargs) -> FitnessScore:
         """
         Evaluate a configuration.
-        
+
         Args:
             config: Architecture to evaluate
             **kwargs: Additional evaluation parameters
-            
+
         Returns:
             Fitness score
         """
@@ -59,7 +55,7 @@ class Evaluator(ABC):
 
 class SelectionStrategy(ABC):
     """Abstract interface for parent selection in evolution."""
-    
+
     @abstractmethod
     def select_parents(
         self,
@@ -68,11 +64,11 @@ class SelectionStrategy(ABC):
     ) -> list:
         """
         Select parents from population for breeding.
-        
+
         Args:
             population: List of evaluated individuals
             n_parents: Number of parents to select
-            
+
         Returns:
             Selected parent individuals
         """
@@ -81,7 +77,7 @@ class SelectionStrategy(ABC):
 
 class BreedingStrategy(ABC):
     """Abstract interface for breeding new individuals."""
-    
+
     @abstractmethod
     def breed(
         self,
@@ -90,11 +86,11 @@ class BreedingStrategy(ABC):
     ) -> list:
         """
         Create offspring from parents.
-        
+
         Args:
             parents: Parent configurations
             n_offspring: Number of offspring to create
-            
+
         Returns:
             List of new configurations
         """
@@ -103,7 +99,7 @@ class BreedingStrategy(ABC):
 
 class TerminationCriterion(ABC):
     """Abstract interface for evolution termination conditions."""
-    
+
     @abstractmethod
     def should_terminate(
         self,
@@ -113,12 +109,12 @@ class TerminationCriterion(ABC):
     ) -> bool:
         """
         Check if evolution should terminate.
-        
+
         Args:
             generation: Current generation number
             population: Current population
             elapsed_time: Elapsed time in seconds
-            
+
         Returns:
             True if evolution should stop
         """
@@ -128,11 +124,12 @@ class TerminationCriterion(ABC):
 @dataclass
 class EvaluationResult:
     """Standard result format for evaluations."""
+
     fitness: FitnessScore
     success: bool
     error: Optional[str] = None
     metadata: Dict[str, Any] = None
-    
+
     def __post_init__(self):
         if self.metadata is None:
             self.metadata = {}

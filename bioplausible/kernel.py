@@ -15,18 +15,19 @@ Usage:
     kernel.train_step(x_batch, y_batch)
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 # Try to import CuPy for GPU
 try:
     import cupy as cp
+
     HAS_CUPY = True
 except ImportError:
     cp = None
     HAS_CUPY = False
-except Exception: # Capture other potential import errors
+except Exception:  # Capture other potential import errors
     cp = None
     HAS_CUPY = False
 
@@ -68,10 +69,7 @@ def tanh_deriv(x: np.ndarray, xp: Any = np) -> np.ndarray:
 
 
 def spectral_normalize(
-    W: np.ndarray,
-    num_iters: int = 1,
-    u: Optional[np.ndarray] = None,
-    xp: Any = np
+    W: np.ndarray, num_iters: int = 1, u: Optional[np.ndarray] = None, xp: Any = np
 ) -> Tuple[np.ndarray, Optional[np.ndarray], float]:
     """Power iteration spectral normalization.
 
@@ -108,7 +106,9 @@ def _add_epsilon(value: float, epsilon: float = 1e-12) -> float:
     return value + epsilon
 
 
-def _initialize_u_vector(u: Optional[np.ndarray], out_dim: int, dtype: np.dtype, xp: Any) -> np.ndarray:
+def _initialize_u_vector(
+    u: Optional[np.ndarray], out_dim: int, dtype: np.dtype, xp: Any
+) -> np.ndarray:
     """Initialize or validate the u vector for power iteration."""
     if u is None:
         u = xp.random.randn(out_dim).astype(dtype)
@@ -183,26 +183,26 @@ class EqPropKernel:
         # Initialize weights
         scale = 0.5
         self.weights = {
-            'embed': self._init_weight(input_dim, hidden_dim, scale),
-            'W1': self._init_weight(hidden_dim, hidden_dim * 4, scale),
-            'W2': self._init_weight(hidden_dim * 4, hidden_dim, scale),
-            'head': self._init_weight(hidden_dim, output_dim, scale),
+            "embed": self._init_weight(input_dim, hidden_dim, scale),
+            "W1": self._init_weight(hidden_dim, hidden_dim * 4, scale),
+            "W2": self._init_weight(hidden_dim * 4, hidden_dim, scale),
+            "head": self._init_weight(hidden_dim, output_dim, scale),
         }
 
         self.biases = {
-            'embed': self.xp.zeros(hidden_dim, dtype=np.float32),
-            'W1': self.xp.zeros(hidden_dim * 4, dtype=np.float32),
-            'W2': self.xp.zeros(hidden_dim, dtype=np.float32),
-            'head': self.xp.zeros(output_dim, dtype=np.float32),
+            "embed": self.xp.zeros(hidden_dim, dtype=np.float32),
+            "W1": self.xp.zeros(hidden_dim * 4, dtype=np.float32),
+            "W2": self.xp.zeros(hidden_dim, dtype=np.float32),
+            "head": self.xp.zeros(output_dim, dtype=np.float32),
         }
 
-        self.sn_state: Dict[str, Optional[np.ndarray]] = {'W1_u': None, 'W2_u': None}
+        self.sn_state: Dict[str, Optional[np.ndarray]] = {"W1_u": None, "W2_u": None}
 
         # Adam state
         self.adam_state = {
-            'm': {k: self.xp.zeros_like(v) for k, v in self.weights.items()},
-            'v': {k: self.xp.zeros_like(v) for k, v in self.weights.items()},
-            't': 0,
+            "m": {k: self.xp.zeros_like(v) for k, v in self.weights.items()},
+            "v": {k: self.xp.zeros_like(v) for k, v in self.weights.items()},
+            "t": 0,
         }
 
     def _init_weight(self, in_dim: int, out_dim: int, scale: float = 0.5) -> np.ndarray:
@@ -220,14 +220,14 @@ class EqPropKernel:
         weights = self.weights.copy()
 
         # Normalize W1 and W2 with spectral normalization
-        weights['W1'] = self._normalize_weight('W1', 'W1_u')
-        weights['W2'] = self._normalize_weight('W2', 'W2_u')
+        weights["W1"] = self._normalize_weight("W1", "W1_u")
+        weights["W2"] = self._normalize_weight("W2", "W2_u")
 
         return weights
 
     def _should_normalize_weight(self, weight_key: str) -> bool:
         """Check if a weight should be normalized."""
-        return self.use_spectral_norm and weight_key in ['W1', 'W2']
+        return self.use_spectral_norm and weight_key in ["W1", "W2"]
 
     def _normalize_weight(self, weight_key: str, sn_state_key: str) -> np.ndarray:
         """Normalize a specific weight matrix using spectral normalization."""
@@ -241,7 +241,9 @@ class EqPropKernel:
         self.sn_state[sn_state_key] = new_u_state
         return normalized_weight
 
-    def forward_step(self, h: np.ndarray, x_emb: np.ndarray, weights: Dict[str, np.ndarray]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+    def forward_step(
+        self, h: np.ndarray, x_emb: np.ndarray, weights: Dict[str, np.ndarray]
+    ) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """Single equilibrium step."""
         xp = self.xp
 
@@ -249,21 +251,23 @@ class EqPropKernel:
         h_std = xp.std(h, axis=-1, keepdims=True) + 1e-5
         h_norm = (h - h_mean) / h_std
 
-        ffn_hidden = xp.tanh(h_norm @ weights['W1'].T + self.biases['W1'])
-        ffn_out = ffn_hidden @ weights['W2'].T + self.biases['W2']
+        ffn_hidden = xp.tanh(h_norm @ weights["W1"].T + self.biases["W1"])
+        ffn_out = ffn_hidden @ weights["W2"].T + self.biases["W2"]
 
         h_next = (1 - self.gamma) * h + self.gamma * (ffn_out + x_emb)
 
         activations = {
-            'h_norm': h_norm,
-            'ffn_hidden': ffn_hidden,
-            'h': h,
-            'h_next': h_next,
+            "h_norm": h_norm,
+            "ffn_hidden": ffn_hidden,
+            "h": h,
+            "h_next": h_next,
         }
 
         return h_next, activations
 
-    def solve_equilibrium(self, x: np.ndarray, nudge_grad: Optional[np.ndarray] = None) -> Tuple[np.ndarray, List[Dict[str, np.ndarray]], Dict[str, Any]]:
+    def solve_equilibrium(
+        self, x: np.ndarray, nudge_grad: Optional[np.ndarray] = None
+    ) -> Tuple[np.ndarray, List[Dict[str, np.ndarray]], Dict[str, Any]]:
         """Find equilibrium state h* via fixed-point iteration."""
         xp = self.xp
         batch_size = x.shape[0]
@@ -276,13 +280,15 @@ class EqPropKernel:
         activations_log = []
 
         for t in range(self.max_steps):
-            h, activations = self._perform_equilibrium_step(h, x_emb, weights, nudge_grad)
+            h, activations = self._perform_equilibrium_step(
+                h, x_emb, weights, nudge_grad
+            )
             activations_log.append(activations)
 
-            if self._check_convergence(h, activations_log[-1]['h'], t):
-                return h, activations_log, {'steps': t + 1, 'converged': True}
+            if self._check_convergence(h, activations_log[-1]["h"], t):
+                return h, activations_log, {"steps": t + 1, "converged": True}
 
-        return h, activations_log, {'steps': self.max_steps, 'converged': False}
+        return h, activations_log, {"steps": self.max_steps, "converged": False}
 
     def _prepare_input(self, x: np.ndarray) -> np.ndarray:
         """Prepare input for processing on the appropriate device."""
@@ -292,10 +298,15 @@ class EqPropKernel:
 
     def _compute_embedded_input(self, x: np.ndarray) -> np.ndarray:
         """Compute embedded input representation."""
-        return x @ self.weights['embed'].T + self.biases['embed']
+        return x @ self.weights["embed"].T + self.biases["embed"]
 
-    def _perform_equilibrium_step(self, h: np.ndarray, x_emb: np.ndarray, weights: Dict[str, np.ndarray],
-                                 nudge_grad: Optional[np.ndarray]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+    def _perform_equilibrium_step(
+        self,
+        h: np.ndarray,
+        x_emb: np.ndarray,
+        weights: Dict[str, np.ndarray],
+        nudge_grad: Optional[np.ndarray],
+    ) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """Perform a single equilibrium step, applying nudge if provided."""
         h, activations = self.forward_step(h, x_emb, weights)
 
@@ -317,39 +328,51 @@ class EqPropKernel:
 
     def compute_output(self, h: np.ndarray) -> np.ndarray:
         """Compute output logits from hidden state."""
-        return h @ self.weights['head'].T + self.biases['head']
+        return h @ self.weights["head"].T + self.biases["head"]
 
-    def compute_hebbian_update(self, act_free: Dict[str, np.ndarray], act_nudged: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    def compute_hebbian_update(
+        self, act_free: Dict[str, np.ndarray], act_nudged: Dict[str, np.ndarray]
+    ) -> Dict[str, np.ndarray]:
         """Compute contrastive Hebbian weight updates."""
-        batch_size = act_free['h'].shape[0]
+        batch_size = act_free["h"].shape[0]
 
         grads = {}
 
-        grad_free_W2 = act_free['h_next'].T @ act_free['ffn_hidden'] / batch_size
-        grad_nudged_W2 = act_nudged['h_next'].T @ act_nudged['ffn_hidden'] / batch_size
-        grads['W2'] = (1.0 / self.beta) * (grad_nudged_W2 - grad_free_W2)
+        grad_free_W2 = act_free["h_next"].T @ act_free["ffn_hidden"] / batch_size
+        grad_nudged_W2 = act_nudged["h_next"].T @ act_nudged["ffn_hidden"] / batch_size
+        grads["W2"] = (1.0 / self.beta) * (grad_nudged_W2 - grad_free_W2)
 
-        grad_free_W1 = act_free['ffn_hidden'].T @ act_free['h_norm'] / batch_size
-        grad_nudged_W1 = act_nudged['ffn_hidden'].T @ act_nudged['h_norm'] / batch_size
-        grads['W1'] = (1.0 / self.beta) * (grad_nudged_W1 - grad_free_W1)
+        grad_free_W1 = act_free["ffn_hidden"].T @ act_free["h_norm"] / batch_size
+        grad_nudged_W1 = act_nudged["ffn_hidden"].T @ act_nudged["h_norm"] / batch_size
+        grads["W1"] = (1.0 / self.beta) * (grad_nudged_W1 - grad_free_W1)
 
         return grads
 
-    def adam_update(self, grads: Dict[str, np.ndarray], beta1: float = 0.9, beta2: float = 0.999, eps: float = 1e-8) -> None:
+    def adam_update(
+        self,
+        grads: Dict[str, np.ndarray],
+        beta1: float = 0.9,
+        beta2: float = 0.999,
+        eps: float = 1e-8,
+    ) -> None:
         """Apply Adam optimizer update."""
-        self.adam_state['t'] += 1
-        t = self.adam_state['t']
+        self.adam_state["t"] += 1
+        t = self.adam_state["t"]
 
         for key in grads:
             if key not in self.weights:
                 continue
 
             g = grads[key]
-            self.adam_state['m'][key] = beta1 * self.adam_state['m'][key] + (1 - beta1) * g
-            self.adam_state['v'][key] = beta2 * self.adam_state['v'][key] + (1 - beta2) * (g ** 2)
+            self.adam_state["m"][key] = (
+                beta1 * self.adam_state["m"][key] + (1 - beta1) * g
+            )
+            self.adam_state["v"][key] = beta2 * self.adam_state["v"][key] + (
+                1 - beta2
+            ) * (g**2)
 
-            m_hat = self.adam_state['m'][key] / (1 - beta1 ** t)
-            v_hat = self.adam_state['v'][key] / (1 - beta2 ** t)
+            m_hat = self.adam_state["m"][key] / (1 - beta1**t)
+            v_hat = self.adam_state["v"][key] / (1 - beta2**t)
 
             self.weights[key] -= self.lr * m_hat / (self.xp.sqrt(v_hat) + eps)
 
@@ -364,14 +387,16 @@ class EqPropKernel:
         h_free, act_log_free, info_free = self.solve_equilibrium(x)
 
         # Compute gradients for nudging
-        logits, d_logits, nudge_grad = self._compute_gradients_for_nudging(h_free, y, xp)
+        logits, d_logits, nudge_grad = self._compute_gradients_for_nudging(
+            h_free, y, xp
+        )
 
         # Nudged Phase
         h_nudged, act_log_nudged, info_nudged = self.solve_equilibrium(x, nudge_grad)
 
         # Compute Updates
         grads = self.compute_hebbian_update(act_log_free[-1], act_log_nudged[-1])
-        grads['head'] = d_logits.T @ h_free / self._get_batch_size(x)
+        grads["head"] = d_logits.T @ h_free / self._get_batch_size(x)
 
         self.adam_update(grads)
 
@@ -380,11 +405,15 @@ class EqPropKernel:
 
         return metrics
 
-    def _prepare_inputs(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _prepare_inputs(
+        self, x: np.ndarray, y: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Prepare input tensors for processing."""
         xp = self.xp
 
-        if not isinstance(x, np.ndarray) and not (HAS_CUPY and cp is not None and isinstance(x, cp.ndarray)):
+        if not isinstance(x, np.ndarray) and not (
+            HAS_CUPY and cp is not None and isinstance(x, cp.ndarray)
+        ):
             x = np.asarray(x)
         if self.use_gpu:
             x = xp.asarray(x)
@@ -392,7 +421,9 @@ class EqPropKernel:
 
         return x, y
 
-    def _compute_gradients_for_nudging(self, h_free: np.ndarray, y: np.ndarray, xp: Any) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _compute_gradients_for_nudging(
+        self, h_free: np.ndarray, y: np.ndarray, xp: Any
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Compute gradients needed for the nudging phase."""
         logits = self.compute_output(h_free)
         probs = softmax(logits, xp)
@@ -401,7 +432,7 @@ class EqPropKernel:
         one_hot = xp.zeros_like(probs)
         one_hot[xp.arange(batch_size), y] = 1.0
         d_logits = probs - one_hot
-        nudge_grad = d_logits @ self.weights['head']
+        nudge_grad = d_logits @ self.weights["head"]
 
         return logits, d_logits, nudge_grad
 
@@ -409,18 +440,24 @@ class EqPropKernel:
         """Get the batch size from a tensor."""
         return tensor.shape[0]
 
-    def _compute_training_metrics(self, logits: np.ndarray, y: np.ndarray,
-                                info_free: Dict[str, Any], info_nudged: Dict[str, Any], xp: Any) -> Dict[str, float]:
+    def _compute_training_metrics(
+        self,
+        logits: np.ndarray,
+        y: np.ndarray,
+        info_free: Dict[str, Any],
+        info_nudged: Dict[str, Any],
+        xp: Any,
+    ) -> Dict[str, float]:
         """Compute training metrics."""
         loss = cross_entropy(logits, y, xp)
         preds = xp.argmax(logits, axis=1)
         accuracy = xp.mean(preds == y)
 
         return {
-            'loss': float(to_numpy(loss)),
-            'accuracy': float(to_numpy(accuracy)),
-            'free_steps': info_free['steps'],
-            'nudged_steps': info_nudged['steps'],
+            "loss": float(to_numpy(loss)),
+            "accuracy": float(to_numpy(accuracy)),
+            "free_steps": info_free["steps"],
+            "nudged_steps": info_nudged["steps"],
         }
 
     def predict(self, x: np.ndarray) -> np.ndarray:
@@ -449,8 +486,8 @@ class EqPropKernel:
         accuracy = xp.mean(preds == y)
 
         return {
-            'loss': float(to_numpy(loss)),
-            'accuracy': float(to_numpy(accuracy)),
+            "loss": float(to_numpy(loss)),
+            "accuracy": float(to_numpy(accuracy)),
         }
 
 
@@ -484,16 +521,29 @@ class EqPropKernelBPTT:
         # Xavier initialization with gain=0.5
         scale = 0.5
         xp = self.xp
-        self.W_in = xp.random.randn(hidden_dim, input_dim).astype(xp.float32) * scale * xp.sqrt(2.0 / input_dim)
-        self.W_rec = xp.random.randn(hidden_dim, hidden_dim).astype(xp.float32) * scale * xp.sqrt(2.0 / hidden_dim)
-        self.W_out = xp.random.randn(output_dim, hidden_dim).astype(xp.float32) * scale * xp.sqrt(2.0 / hidden_dim)
+        self.W_in = (
+            xp.random.randn(hidden_dim, input_dim).astype(xp.float32)
+            * scale
+            * xp.sqrt(2.0 / input_dim)
+        )
+        self.W_rec = (
+            xp.random.randn(hidden_dim, hidden_dim).astype(xp.float32)
+            * scale
+            * xp.sqrt(2.0 / hidden_dim)
+        )
+        self.W_out = (
+            xp.random.randn(output_dim, hidden_dim).astype(xp.float32)
+            * scale
+            * xp.sqrt(2.0 / hidden_dim)
+        )
 
         self.b_in = xp.zeros(hidden_dim, dtype=xp.float32)
         self.b_rec = xp.zeros(hidden_dim, dtype=xp.float32)
         self.b_out = xp.zeros(output_dim, dtype=xp.float32)
 
-
-    def forward(self, x: np.ndarray) -> Tuple[np.ndarray, List[Tuple[np.ndarray, np.ndarray]]]:
+    def forward(
+        self, x: np.ndarray
+    ) -> Tuple[np.ndarray, List[Tuple[np.ndarray, np.ndarray]]]:
         """Forward pass storing trajectory for BPTT."""
         xp = self.xp
 
@@ -522,7 +572,12 @@ class EqPropKernelBPTT:
 
         return logits, trajectory
 
-    def backward(self, x: np.ndarray, trajectory: List[Tuple[np.ndarray, np.ndarray]], d_logits: np.ndarray) -> Dict[str, np.ndarray]:
+    def backward(
+        self,
+        x: np.ndarray,
+        trajectory: List[Tuple[np.ndarray, np.ndarray]],
+        d_logits: np.ndarray,
+    ) -> Dict[str, np.ndarray]:
         """
         Backprop through time - exactly matches PyTorch.
 
@@ -557,7 +612,7 @@ class EqPropKernelBPTT:
 
             # Accumulate gradients
             if t > 0:
-                h_prev = trajectory[t-1][1]
+                h_prev = trajectory[t - 1][1]
             else:
                 h_prev = xp.zeros_like(h)
 
@@ -569,9 +624,11 @@ class EqPropKernelBPTT:
             dh = dtanh @ self.W_rec
 
         return {
-            'dW_out': dW_out, 'db_out': db_out,
-            'dW_rec': dW_rec, 'db_rec': db_rec,
-            'dW_in': dW_in,
+            "dW_out": dW_out,
+            "db_out": db_out,
+            "dW_rec": dW_rec,
+            "db_rec": db_rec,
+            "dW_in": dW_in,
         }
 
     def train_step(self, x: np.ndarray, y: np.ndarray) -> Dict[str, float]:
@@ -600,18 +657,18 @@ class EqPropKernelBPTT:
         grads = self.backward(x, trajectory, d_logits)
 
         # Update
-        self.W_out -= self.lr * grads['dW_out']
-        self.W_rec -= self.lr * grads['dW_rec']
-        self.W_in -= self.lr * grads['dW_in']
-        self.b_out -= self.lr * grads['db_out']
-        self.b_rec -= self.lr * grads['db_rec']
+        self.W_out -= self.lr * grads["dW_out"]
+        self.W_rec -= self.lr * grads["dW_rec"]
+        self.W_in -= self.lr * grads["dW_in"]
+        self.b_out -= self.lr * grads["db_out"]
+        self.b_rec -= self.lr * grads["db_rec"]
 
         # Metrics
         loss = cross_entropy(logits, y, xp)
         preds = xp.argmax(logits, axis=1)
         acc = xp.mean(preds == y)
 
-        return {'loss': float(to_numpy(loss)), 'accuracy': float(to_numpy(acc))}
+        return {"loss": float(to_numpy(loss)), "accuracy": float(to_numpy(acc))}
 
     def evaluate(self, x: np.ndarray, y: np.ndarray) -> Dict[str, float]:
         """Evaluate accuracy."""
@@ -627,7 +684,7 @@ class EqPropKernelBPTT:
         preds = xp.argmax(logits, axis=1)
         acc = xp.mean(preds == y)
         loss = cross_entropy(logits, y, xp)
-        return {'accuracy': float(to_numpy(acc)), 'loss': float(to_numpy(loss))}
+        return {"accuracy": float(to_numpy(acc)), "loss": float(to_numpy(loss))}
 
 
 def compare_memory_autograd_vs_kernel(hidden_dim: int, depth: int) -> Dict[str, float]:
@@ -635,17 +692,18 @@ def compare_memory_autograd_vs_kernel(hidden_dim: int, depth: int) -> Dict[str, 
     kernel_activation = 32 * hidden_dim * 4
     autograd_activation = 32 * hidden_dim * depth * 4
     return {
-        'kernel_activation_mb': kernel_activation / 1e6,
-        'autograd_activation_mb': autograd_activation / 1e6,
-        'ratio': autograd_activation / kernel_activation,
+        "kernel_activation_mb": kernel_activation / 1e6,
+        "autograd_activation_mb": autograd_activation / 1e6,
+        "ratio": autograd_activation / kernel_activation,
     }
 
+
 __all__ = [
-    'EqPropKernel',
-    'EqPropKernelBPTT',
-    'HAS_CUPY',
-    'get_backend',
-    'to_numpy',
-    'spectral_normalize',
-    'compare_memory_autograd_vs_kernel',
+    "EqPropKernel",
+    "EqPropKernelBPTT",
+    "HAS_CUPY",
+    "get_backend",
+    "to_numpy",
+    "spectral_normalize",
+    "compare_memory_autograd_vs_kernel",
 ]

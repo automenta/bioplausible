@@ -9,6 +9,7 @@ import torch.nn as nn
 from typing import Dict, Optional
 from .base import BioModel, ModelConfig, register_model
 
+
 @register_model("feedback_alignment")
 class StandardFA(BioModel):
     """Feedback Alignment with random fixed backward weights."""
@@ -18,24 +19,26 @@ class StandardFA(BioModel):
 
         # Random fixed feedback weights - stored as buffers
         self.feedback_weights = nn.ParameterList()
-        hidden_dims = self.config.hidden_dims if self.config.hidden_dims else [self.hidden_dim]
+        hidden_dims = (
+            self.config.hidden_dims if self.config.hidden_dims else [self.hidden_dim]
+        )
         dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
         # Build Layers
         self.layers = nn.ModuleList()
         for i in range(len(dims) - 1):
-            self.layers.append(nn.Linear(dims[i], dims[i+1]))
+            self.layers.append(nn.Linear(dims[i], dims[i + 1]))
 
             # Feedback Matrix B (from layer i+1 to i)
             # Shape: [dims[i+1], dims[i]] (transpose of forward weight shape)
-            B = torch.randn(dims[i+1], dims[i]) * 0.1
+            B = torch.randn(dims[i + 1], dims[i]) * 0.1
             p = nn.Parameter(B, requires_grad=False)
             self.feedback_weights.append(p)
 
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.Adam(
             [p for p in self.parameters() if p.requires_grad],
-            lr=self.config.learning_rate
+            lr=self.config.learning_rate,
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
@@ -79,20 +82,24 @@ class StandardFA(BioModel):
             if i == len(self.layers) - 1:
                 grad_h = error
             else:
-                grad_h = torch.mm(error, self.feedback_weights[i+1])
+                grad_h = torch.mm(error, self.feedback_weights[i + 1])
 
                 # Apply derivative of activation function at layer i
-                h_curr = activations[i+1] # layer i output (post activation)
+                h_curr = activations[i + 1]  # layer i output (post activation)
 
                 # Assume SiLU/ReLU/Tanh derived from activation module or config
                 if isinstance(self.activation, nn.SiLU):
-                     grad_h = grad_h * torch.sigmoid(h_curr) * (1 + h_curr * (1 - torch.sigmoid(h_curr)))
+                    grad_h = (
+                        grad_h
+                        * torch.sigmoid(h_curr)
+                        * (1 + h_curr * (1 - torch.sigmoid(h_curr)))
+                    )
                 elif isinstance(self.activation, nn.ReLU):
-                     grad_h = grad_h * (h_curr > 0).float()
+                    grad_h = grad_h * (h_curr > 0).float()
                 elif isinstance(self.activation, nn.Tanh):
-                     grad_h = grad_h * (1 - h_curr**2)
+                    grad_h = grad_h * (1 - h_curr**2)
                 else:
-                     grad_h = grad_h * (h_curr > 0).float()
+                    grad_h = grad_h * (h_curr > 0).float()
 
             # Weight gradient for layer i
             grad_W = torch.mm(grad_h.T, h_prev) / x.size(0)
@@ -120,6 +127,6 @@ class StandardFA(BioModel):
         acc = (pred == y).float().mean().item()
 
         return {
-            'loss': loss.item(),
-            'accuracy': acc,
+            "loss": loss.item(),
+            "accuracy": acc,
         }

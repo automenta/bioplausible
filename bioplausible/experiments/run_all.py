@@ -8,17 +8,18 @@ import sys
 import subprocess
 from pathlib import Path
 
+
 def run_experiment(script_name, description=None):
     script_path = Path(__file__).parent / script_name
-    
+
     if not script_path.exists():
         print(f"❌ Script not found: {script_name}")
         return False
-        
+
     print(f"\n{'='*60}")
     print(f"RUNNING: {description or script_name}")
     print(f"{'='*60}")
-    
+
     try:
         # Run with current python executable
         subprocess.run([sys.executable, str(script_path)], check=True)
@@ -28,10 +29,11 @@ def run_experiment(script_name, description=None):
         print(f"❌ {script_name} failed with exit code {e.returncode}.")
         return False
 
+
 def main():
     print("TorEqProp Consolidated Experiment Suite")
     print("=======================================")
-    
+
     experiments = [
         ("sn_benchmark_datasets.py", "Spectral Normalization Multi-Dataset Benchmark"),
         ("sn_benchmark_model_size.py", "Spectral Normalization Model Size Benchmark"),
@@ -45,14 +47,17 @@ def main():
         ("diffusion_mnist.py", "Track 39: Diffusion Models"),
         ("flop_analysis.py", "Track 40: FLOP Analysis"),
     ]
-    
+
     success_count = 0
-    
+
     for script, desc in experiments:
         if run_experiment(script, desc):
             success_count += 1
-            
-    print(f"\n\nSuite Complete: {success_count}/{len(experiments)} experiments ran successfully.")
+
+    print(
+        f"\n\nSuite Complete: {success_count}/{len(experiments)} experiments ran successfully."
+    )
+
 
 if __name__ == "__main__":
     main()

@@ -1,13 +1,14 @@
-
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from datetime import datetime
 from pathlib import Path
 import numpy as np
 
+
 @dataclass
 class TrackResult:
     """Result of a verification track."""
+
     track_id: int
     name: str
     status: str  # 'pass', 'fail', 'partial', 'stub'
@@ -21,68 +22,77 @@ class TrackResult:
     reproducibility_hash: Optional[str] = None
 
 
-
 class VerificationNotebook:
     """Generates a comprehensive markdown evidence notebook."""
-    
+
     def __init__(self, title: str = "TorEqProp Verification Results"):
         self.title = title
         self.sections: List[str] = []
         self.start_time = datetime.now()
         self.track_results: List[TrackResult] = []
-    
+
     def add_header(self, seed: int = 42):
         """Add title and metadata."""
         self.sections.append(f"# {self.title}\n")
-        self.sections.append(f"**Generated**: {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        self.sections.append(
+            f"**Generated**: {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        )
         self.sections.append(f"**Seed**: {seed} (deterministic)\n")
-        self.sections.append("**Reproducibility**: All experiments use fixed seeds for exact reproduction.\n")
+        self.sections.append(
+            "**Reproducibility**: All experiments use fixed seeds for exact reproduction.\n"
+        )
         self.sections.append("---\n")
-    
+
     def add_section(self, title: str, content: str):
         self.sections.append(f"\n## {title}\n\n{content}\n")
-    
+
     def add_subsection(self, title: str, content: str):
         self.sections.append(f"\n### {title}\n\n{content}\n")
-    
+
     def add_table(self, headers: List[str], rows: List[List[str]]):
         header_row = "| " + " | ".join(headers) + " |"
         separator = "| " + " | ".join(["---"] * len(headers)) + " |"
-        data_rows = "\n".join("| " + " | ".join(str(c) for c in row) + " |" for row in rows)
+        data_rows = "\n".join(
+            "| " + " | ".join(str(c) for c in row) + " |" for row in rows
+        )
         self.sections.append(f"\n{header_row}\n{separator}\n{data_rows}\n")
-    
+
     def add_chart(self, title: str, data: Dict[str, float], max_width: int = 40):
         if not data:
             return
         max_val = max(abs(v) for v in data.values()) or 1
         scale = max_width / max_val
-        
+
         lines = [f"\n**{title}**\n```"]
         max_label = max(len(str(k)) for k in data.keys())
-        
+
         for label, value in data.items():
             bar_len = int(abs(value) * scale)
             bar = "█" * bar_len
             lines.append(f"{str(label):<{max_label}} │ {bar} {value:.3f}")
-        
+
         lines.append("```\n")
         self.sections.append("\n".join(lines))
-    
+
     def add_code_block(self, code: str, lang: str = ""):
         self.sections.append(f"\n```{lang}\n{code}\n```\n")
-    
+
     def add_track_result(self, result: TrackResult):
         """Add a track result to the notebook."""
         self.track_results.append(result)
-        
-        status_icon = {"pass": "✅", "fail": "❌", "partial": "⚠️", "stub": "🔧"}.get(result.status, "❓")
-        evidence_icon = {"smoke": "🧪", "directional": "📊", "conclusive": "✅"}.get(result.evidence_level, "❓")
+
+        status_icon = {"pass": "✅", "fail": "❌", "partial": "⚠️", "stub": "🔧"}.get(
+            result.status, "❓"
+        )
+        evidence_icon = {"smoke": "🧪", "directional": "📊", "conclusive": "✅"}.get(
+            result.evidence_level, "❓"
+        )
         evidence_label = {
             "smoke": "Smoke Test",
             "directional": "Directional",
-            "conclusive": "Conclusive"
+            "conclusive": "Conclusive",
         }.get(result.evidence_level, "Unknown")
-        
+
         content = f"""
 {status_icon} **Status**: {result.status.upper()} | **Score**: {result.score:.1f}/100 | **Time**: {result.time_seconds:.1f}s
 
@@ -90,24 +100,24 @@ class VerificationNotebook:
 
 {result.evidence}
 """
-        
+
         # Add limitations if any
         if result.limitations:
             content += "\n**Limitations**:\n"
             for lim in result.limitations:
                 content += f"- {lim}\n"
-        
+
         # Add reproducibility hash if available
         if result.reproducibility_hash:
             content += f"\n*Reproducibility Hash*: `{result.reproducibility_hash}`\n"
-        
+
         self.add_section(f"Track {result.track_id}: {result.name}", content)
-        
+
         # Add improvements if any
         if result.improvements:
             improvements_md = "\n".join(f"- {imp}" for imp in result.improvements)
             self.add_subsection("Areas for Improvement", improvements_md)
-    
+
     def add_executive_summary(self):
         """Add executive summary based on all track results."""
         total = len(self.track_results)
@@ -115,10 +125,12 @@ class VerificationNotebook:
         partial = sum(1 for r in self.track_results if r.status == "partial")
         failed = sum(1 for r in self.track_results if r.status == "fail")
         stubs = sum(1 for r in self.track_results if r.status == "stub")
-        
-        avg_score = np.mean([r.score for r in self.track_results]) if self.track_results else 0
+
+        avg_score = (
+            np.mean([r.score for r in self.track_results]) if self.track_results else 0
+        )
         total_time = sum(r.time_seconds for r in self.track_results)
-        
+
         summary = f"""
 ## Executive Summary
 
@@ -141,17 +153,19 @@ class VerificationNotebook:
 |---|-------|--------|-------|------|
 """
         for r in self.track_results:
-            icon = {"pass": "✅", "fail": "❌", "partial": "⚠️", "stub": "🔧"}.get(r.status, "❓")
+            icon = {"pass": "✅", "fail": "❌", "partial": "⚠️", "stub": "🔧"}.get(
+                r.status, "❓"
+            )
             summary += f"| {r.track_id} | {r.name} | {icon} | {r.score:.0f} | {r.time_seconds:.1f}s |\n"
-        
+
         summary += "\n"
-        
+
         # Insert at position 2 (after header)
         self.sections.insert(2, summary)
-    
+
     def save(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.add_executive_summary()
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             f.write("\n".join(self.sections))
         print(f"📓 Notebook saved to: {path}")

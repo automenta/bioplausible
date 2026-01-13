@@ -22,7 +22,7 @@ def seed_everything(seed: int = 42) -> None:
         seed: Random seed (default: 42)
     """
     random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -56,7 +56,7 @@ def export_to_onnx(
         >>> export_to_onnx(model, "model.onnx", (1, 784))
     """
     # Handle compiled models
-    if hasattr(model, '_orig_mod'):
+    if hasattr(model, "_orig_mod"):
         model = model._orig_mod
 
     model.eval()
@@ -64,10 +64,7 @@ def export_to_onnx(
     dummy_input = torch.randn(*input_shape, device=device)
 
     if dynamic_axes is None:
-        dynamic_axes = {
-            'input': {0: 'batch'},
-            'output': {0: 'batch'}
-        }
+        dynamic_axes = {"input": {0: "batch"}, "output": {0: "batch"}}
 
     try:
         torch.onnx.export(
@@ -75,8 +72,8 @@ def export_to_onnx(
             dummy_input,
             output_path,
             opset_version=opset_version,
-            input_names=['input'],
-            output_names=['output'],
+            input_names=["input"],
+            output_names=["output"],
             dynamic_axes=dynamic_axes,
             do_constant_folding=True,
         )
@@ -113,7 +110,7 @@ def verify_spectral_norm(model: nn.Module) -> Dict[str, float]:
     Returns:
         Dict mapping layer names to their Lipschitz constants
     """
-    if hasattr(model, '_orig_mod'):
+    if hasattr(model, "_orig_mod"):
         model = model._orig_mod
 
     lipschitz_values = {}
@@ -127,10 +124,11 @@ def verify_spectral_norm(model: nn.Module) -> Dict[str, float]:
 
     return lipschitz_values
 
+
 def _compute_module_spectral_norm(module: nn.Module) -> Optional[float]:
     """Compute spectral norm for a module if possible."""
     with torch.no_grad():
-        weight = getattr(module, 'weight', None)
+        weight = getattr(module, "weight", None)
         if weight is not None and weight.dim() >= 2:
             return _compute_spectral_norm(weight)
     return None
@@ -138,8 +136,9 @@ def _compute_module_spectral_norm(module: nn.Module) -> Optional[float]:
 
 def _has_spectral_norm(module: nn.Module) -> bool:
     """Check if a module has spectral normalization."""
-    return (hasattr(module, 'parametrizations') and
-            hasattr(module.parametrizations, 'weight'))
+    return hasattr(module, "parametrizations") and hasattr(
+        module.parametrizations, "weight"
+    )
 
 
 def _compute_spectral_norm(weight: torch.Tensor) -> float:
@@ -152,7 +151,7 @@ def _compute_spectral_norm(weight: torch.Tensor) -> float:
 
 def _get_model_for_processing(model: nn.Module) -> nn.Module:
     """Get the appropriate model for processing (handle compiled models)."""
-    if hasattr(model, '_orig_mod'):
+    if hasattr(model, "_orig_mod"):
         return model._orig_mod
     return model
 
@@ -176,7 +175,7 @@ def compute_gradient_norm(model: nn.Module) -> float:
             squared_norms.append(param_norm.item() ** 2)
 
     total_squared_norm = sum(squared_norms)
-    return total_squared_norm ** 0.5
+    return total_squared_norm**0.5
 
 
 def estimate_memory_usage(
@@ -200,10 +199,10 @@ def estimate_memory_usage(
     activation_memory = _estimate_activation_memory(input_shape, batch_size)
 
     return {
-        'parameters_mb': param_memory,
-        'gradients_mb': grad_memory,
-        'activations_mb': activation_memory,
-        'total_mb': param_memory + grad_memory + activation_memory,
+        "parameters_mb": param_memory,
+        "gradients_mb": grad_memory,
+        "activations_mb": activation_memory,
+        "total_mb": param_memory + grad_memory + activation_memory,
     }
 
 
@@ -253,7 +252,9 @@ class ModelRegistry:
             Created model instance
         """
         if name not in self._factories:
-            raise ValueError(f"Model '{name}' not registered. Available: {list(self._factories.keys())}")
+            raise ValueError(
+                f"Model '{name}' not registered. Available: {list(self._factories.keys())}"
+            )
         return self._factories[name](**kwargs)
 
     def list_models(self) -> List[str]:
@@ -287,22 +288,26 @@ def create_model_preset(preset_name: str, **overrides) -> nn.Module:
     from .models import ConvEqProp, LoopedMLP
 
     presets = {
-        'mnist_small': lambda: LoopedMLP(784, 128, 10, use_spectral_norm=True),
-        'mnist_medium': lambda: LoopedMLP(784, 256, 10, use_spectral_norm=True),
-        'mnist_large': lambda: LoopedMLP(784, 512, 10, use_spectral_norm=True),
-        'cifar_conv': lambda: ConvEqProp(3, 64, 10),
-        'cifar_mlp': lambda: LoopedMLP(3072, 512, 10, use_spectral_norm=True),
+        "mnist_small": lambda: LoopedMLP(784, 128, 10, use_spectral_norm=True),
+        "mnist_medium": lambda: LoopedMLP(784, 256, 10, use_spectral_norm=True),
+        "mnist_large": lambda: LoopedMLP(784, 512, 10, use_spectral_norm=True),
+        "cifar_conv": lambda: ConvEqProp(3, 64, 10),
+        "cifar_mlp": lambda: LoopedMLP(3072, 512, 10, use_spectral_norm=True),
     }
 
     if preset_name not in presets:
-        raise ValueError(f"Unknown preset '{preset_name}'. Available: {list(presets.keys())}")
+        raise ValueError(
+            f"Unknown preset '{preset_name}'. Available: {list(presets.keys())}"
+        )
 
     # Note: overrides would require more sophisticated preset handling
     return presets[preset_name]()
 
+
 # =============================================================================
 # Profiling Utilities
 # =============================================================================
+
 
 @contextmanager
 def SimpleProfiler(name: str):
@@ -324,7 +329,10 @@ def SimpleProfiler(name: str):
         end = time.perf_counter()
         print(f"[{name}] took {(end - start)*1000:.2f} ms")
 
-def profile_model(model: nn.Module, input_shape: Tuple[int, ...], device: str = "cpu", runs: int = 10) -> Dict[str, float]:
+
+def profile_model(
+    model: nn.Module, input_shape: Tuple[int, ...], device: str = "cpu", runs: int = 10
+) -> Dict[str, float]:
     """
     Run a simple performance profile on a model.
 
@@ -360,19 +368,29 @@ def profile_model(model: nn.Module, input_shape: Tuple[int, ...], device: str = 
             times.append((time.perf_counter() - start) * 1000)
 
     avg_ms = sum(times) / len(times)
-    std_ms = (sum((t - avg_ms)**2 for t in times) / len(times))**0.5
+    std_ms = (sum((t - avg_ms) ** 2 for t in times) / len(times)) ** 0.5
 
-    return {'avg_ms': avg_ms, 'std_ms': std_ms}
+    return {"avg_ms": avg_ms, "std_ms": std_ms}
+
 
 # Missing utils imported by models
-def spectral_linear(in_features: int, out_features: int, use_sn: bool = True) -> nn.Module:
+def spectral_linear(
+    in_features: int, out_features: int, use_sn: bool = True
+) -> nn.Module:
     """Helper to create a linear layer with optional spectral normalization."""
     layer = nn.Linear(in_features, out_features)
     if use_sn:
         return torch.nn.utils.parametrizations.spectral_norm(layer)
     return layer
 
-def spectral_conv2d(in_channels: int, out_channels: int, kernel_size: int, padding: int = 0, use_sn: bool = True) -> nn.Module:
+
+def spectral_conv2d(
+    in_channels: int,
+    out_channels: int,
+    kernel_size: int,
+    padding: int = 0,
+    use_sn: bool = True,
+) -> nn.Module:
     """Helper to create a conv2d layer with optional spectral normalization."""
     layer = nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding)
     if use_sn:
@@ -381,17 +399,17 @@ def spectral_conv2d(in_channels: int, out_channels: int, kernel_size: int, paddi
 
 
 __all__ = [
-    'seed_everything',
-    'export_to_onnx',
-    'count_parameters',
-    'verify_spectral_norm',
-    'compute_gradient_norm',
-    'estimate_memory_usage',
-    'ModelRegistry',
-    'model_registry',
-    'create_model_preset',
-    'SimpleProfiler',
-    'profile_model',
-    'spectral_linear',
-    'spectral_conv2d',
+    "seed_everything",
+    "export_to_onnx",
+    "count_parameters",
+    "verify_spectral_norm",
+    "compute_gradient_norm",
+    "estimate_memory_usage",
+    "ModelRegistry",
+    "model_registry",
+    "create_model_preset",
+    "SimpleProfiler",
+    "profile_model",
+    "spectral_linear",
+    "spectral_conv2d",
 ]

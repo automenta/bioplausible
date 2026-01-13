@@ -10,6 +10,7 @@ from ..acceleration import compile_settling_loop
 # LoopedMLP - Core EqProp Model
 # =============================================================================
 
+
 class LoopedMLP(EqPropModel):
     """
     A recurrent MLP that iterates to a fixed-point equilibrium.
@@ -41,7 +42,7 @@ class LoopedMLP(EqPropModel):
         output_dim: int,
         use_spectral_norm: bool = True,
         max_steps: int = 30,
-        gradient_method: str = 'bptt',
+        gradient_method: str = "bptt",
     ) -> None:
         # EqPropModel calls NEBCBase init which builds layers via _build_layers
         super().__init__(
@@ -50,14 +51,16 @@ class LoopedMLP(EqPropModel):
             output_dim=output_dim,
             max_steps=max_steps,
             use_spectral_norm=use_spectral_norm,
-            gradient_method=gradient_method
+            gradient_method=gradient_method,
         )
         self._init_weights()
 
     def __repr__(self) -> str:
-        return (f"LoopedMLP(input={self.input_dim}, hidden={self.hidden_dim}, "
-                f"output={self.output_dim}, steps={self.max_steps}, "
-                f"spectral_norm={self.use_spectral_norm})")
+        return (
+            f"LoopedMLP(input={self.input_dim}, hidden={self.hidden_dim}, "
+            f"output={self.output_dim}, steps={self.max_steps}, "
+            f"spectral_norm={self.use_spectral_norm})"
+        )
 
     def _build_layers(self):
         """Build layers. Called by NEBCBase init."""
@@ -84,30 +87,38 @@ class LoopedMLP(EqPropModel):
     def _initialize_single_layer(self, layer: nn.Module) -> None:
         """Initialize a single layer with proper weight and bias values."""
         actual_layer = self._get_actual_layer(layer)
-        if hasattr(actual_layer, 'weight'):
+        if hasattr(actual_layer, "weight"):
             nn.init.xavier_uniform_(actual_layer.weight, gain=0.5)
             if actual_layer.bias is not None:
                 nn.init.zeros_(actual_layer.bias)
 
     def _get_actual_layer(self, layer: nn.Module) -> nn.Module:
         """Get the actual layer from a potentially wrapped layer."""
-        if hasattr(layer, 'parametrizations') and hasattr(layer.parametrizations, 'weight'):
+        if hasattr(layer, "parametrizations") and hasattr(
+            layer.parametrizations, "weight"
+        ):
             return layer.parametrizations.weight.original
         return layer
 
     def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
         """Initialize the hidden state tensor."""
         batch_size = x.shape[0]
-        return torch.zeros((batch_size, self.hidden_dim), device=x.device, dtype=x.dtype)
+        return torch.zeros(
+            (batch_size, self.hidden_dim), device=x.device, dtype=x.dtype
+        )
 
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         """Transform input: W_in @ x"""
         if x.shape[1] != self.input_dim:
-            raise ValueError(f"Input dimension mismatch: expected {self.input_dim}, got {x.shape[1]}")
+            raise ValueError(
+                f"Input dimension mismatch: expected {self.input_dim}, got {x.shape[1]}"
+            )
         return self.W_in(x)
 
     @compile_settling_loop
-    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
+    def forward_step(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
         """Single step: h = tanh(W_in x + W_rec h)"""
         return torch.tanh(x_transformed + self.W_rec(h))
 
@@ -119,6 +130,7 @@ class LoopedMLP(EqPropModel):
 # =============================================================================
 # BackpropMLP - Baseline for Comparison
 # =============================================================================
+
 
 class BackpropMLP(nn.Module):
     """Standard feedforward MLP for comparison (no equilibrium dynamics)."""

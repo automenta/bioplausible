@@ -1,4 +1,3 @@
-
 import time
 import torch
 import torch.nn.functional as F
@@ -18,16 +17,17 @@ if str(root_path) not in sys.path:
 from bioplausible.models import LoopedMLP
 from bioplausible.models import BackpropMLP
 
+
 def track_1_spectral_norm(verifier) -> TrackResult:
     """Core: Spectral Normalization maintains L < 1."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TRACK 1: Spectral Normalization Stability")
-    print("="*60)
-    
+    print("=" * 60)
+
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 128, 10
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
-    
+
     # Without SN - use higher LR to show instability
     print("\n[1a] Without spectral norm (aggressive training)...")
     model_no_sn = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=False)
@@ -35,18 +35,18 @@ def track_1_spectral_norm(verifier) -> TrackResult:
     # Higher LR causes L to grow more
     train_model(model_no_sn, X, y, epochs=verifier.epochs, lr=0.05, name="No SN")
     L_after_no = model_no_sn.compute_lipschitz()
-    
+
     # With SN
     print("[1b] With spectral norm...")
     model_sn = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
     L_before_sn = model_sn.compute_lipschitz()
     train_model(model_sn, X, y, epochs=verifier.epochs, lr=0.05, name="With SN")
     L_after_sn = model_sn.compute_lipschitz()
-    
+
     # Evaluate: Key insight is that SN constrains L while non-SN allows growth
     sn_constrained = L_after_sn <= 1.05  # With SN, L should stay near 1
     l_difference = L_after_no - L_after_sn  # Non-SN should have larger L
-    
+
     # Score based on whether SN is effective
     if sn_constrained and l_difference > 0.5:
         score = 100
@@ -57,7 +57,7 @@ def track_1_spectral_norm(verifier) -> TrackResult:
     else:
         score = 25
         status = "fail"
-    
+
     evidence = f"""
 **Claim**: Spectral normalization constrains Lipschitz constant L ≤ 1, unlike unconstrained training.
 
@@ -75,13 +75,17 @@ def track_1_spectral_norm(verifier) -> TrackResult:
 - With SN: L = {L_after_sn:.2f} (constrained to ~1.0)
 - SN provides {(L_after_no / L_after_sn - 1) * 100:.0f}% reduction in Lipschitz constant
 """
-    
+
     improvements = []
     if not sn_constrained:
-        improvements.append("Spectral norm not constraining L ≤ 1; check implementation")
+        improvements.append(
+            "Spectral norm not constraining L ≤ 1; check implementation"
+        )
     if l_difference < 0.5:
-        improvements.append("Difference between SN/non-SN too small; increase epochs or LR")
-    
+        improvements.append(
+            "Difference between SN/non-SN too small; increase epochs or LR"
+        )
+
     return TrackResult(
         track_id=1,
         name="Spectral Normalization Stability",
@@ -90,43 +94,46 @@ def track_1_spectral_norm(verifier) -> TrackResult:
         metrics={"L_no_sn": L_after_no, "L_sn": L_after_sn, "difference": l_difference},
         evidence=evidence,
         time_seconds=time.time() - start,
-        improvements=improvements
+        improvements=improvements,
     )
+
 
 def track_2_backprop_parity(verifier) -> TrackResult:
     """Core: EqProp achieves accuracy parity with Backprop."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TRACK 2: EqProp vs Backprop Parity")
-    print("="*60)
-    
+    print("=" * 60)
+
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 128, 10
-    
+
     # Create a single dataset and split it for fair comparison
     # Using the same data for both methods ensures fair algorithm comparison
-    X_all, y_all = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
+    X_all, y_all = create_synthetic_dataset(
+        verifier.n_samples, input_dim, 10, verifier.seed
+    )
     split = int(0.8 * len(X_all))
     X_train, y_train = X_all[:split], y_all[:split]
     X_test, y_test = X_all[split:], y_all[split:]
-    
+
     # Backprop
     print("\n[2a] Backprop MLP...")
     bp_model = BackpropMLP(input_dim, hidden_dim, output_dim)
     train_model(bp_model, X_train, y_train, epochs=verifier.epochs, name="Backprop")
     bp_acc = evaluate_accuracy(bp_model, X_test, y_test)
-    
+
     # EqProp
     print("[2b] EqProp (LoopedMLP)...")
     eq_model = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
     train_model(eq_model, X_train, y_train, epochs=verifier.epochs, name="EqProp")
     eq_acc = evaluate_accuracy(eq_model, X_test, y_test)
-    
+
     gap = (bp_acc - eq_acc) * 100
-    
+
     # Score: Pass if both achieve excellent performance (>99%) OR gap < 3%
     # This handles floating point precision issues when both round to 100.0%
-    both_excellent = (bp_acc >= 0.99 and eq_acc >= 0.99)
-    
+    both_excellent = bp_acc >= 0.99 and eq_acc >= 0.99
+
     if both_excellent or abs(gap) < 3:
         score = 100
         status = "pass"
@@ -136,7 +143,7 @@ def track_2_backprop_parity(verifier) -> TrackResult:
     else:
         score = 30
         status = "fail"
-    
+
     evidence = f"""
 **Claim**: EqProp achieves competitive accuracy with Backpropagation (gap < 3%).
 
@@ -151,55 +158,62 @@ def track_2_backprop_parity(verifier) -> TrackResult:
 
 **Note**: Small datasets may show variance; run with --full for 5-seed validation.
 """
-    
+
     improvements = []
     if abs(gap) > 3:
-        improvements.append(f"Gap of {abs(gap):.1f}% exceeds target; tune hyperparameters")
+        improvements.append(
+            f"Gap of {abs(gap):.1f}% exceeds target; tune hyperparameters"
+        )
     if eq_acc < 0.8:
         improvements.append("Low absolute accuracy; increase epochs or model size")
-    
+
     return TrackResult(
-        track_id=2, name="EqProp vs Backprop Parity",
-        status=status, score=score,
+        track_id=2,
+        name="EqProp vs Backprop Parity",
+        status=status,
+        score=score,
         metrics={"bp_acc": bp_acc, "eq_acc": eq_acc, "gap": gap},
         evidence=evidence,
         time_seconds=time.time() - start,
-        improvements=improvements
+        improvements=improvements,
     )
+
 
 def track_3_adversarial_healing(verifier) -> TrackResult:
     """Track 1 (README): Adversarial Self-Healing via noise damping."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TRACK 3: Adversarial Self-Healing")
-    print("="*60)
-    
+    print("=" * 60)
+
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 128, 10
-    
+
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
     model = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
-    
+
     print("\n[3a] Pre-training model...")
     train_model(model, X, y, epochs=verifier.epochs, name="Pre-train")
-    
+
     print("[3b] Testing noise damping...")
     noise_levels = [0.5, 1.0, 2.0]
     results = {}
-    
+
     for noise in noise_levels:
         damping = model.inject_noise_and_relax(X[:32], noise_level=noise)
         results[noise] = damping
         print(f"  σ={noise}: damping={damping['damping_percent']:.1f}%")
-    
-    avg_damping = np.mean([r['damping_percent'] for r in results.values()])
+
+    avg_damping = np.mean([r["damping_percent"] for r in results.values()])
     score = min(100, avg_damping)
     status = "pass" if avg_damping > 95 else ("partial" if avg_damping > 50 else "fail")
-    
-    table_rows = "\n".join([
-        f"| σ={n} | {r['initial_noise']:.3f} | {r['final_noise']:.6f} | {r['damping_percent']:.1f}% |"
-        for n, r in results.items()
-    ])
-    
+
+    table_rows = "\n".join(
+        [
+            f"| σ={n} | {r['initial_noise']:.3f} | {r['final_noise']:.6f} | {r['damping_percent']:.1f}% |"
+            for n, r in results.items()
+        ]
+    )
+
     evidence = f"""
 **Claim**: EqProp networks automatically damp injected noise to zero via contraction mapping.
 
@@ -215,16 +229,20 @@ def track_3_adversarial_healing(verifier) -> TrackResult:
 
 **Hardware Impact**: Enables radiation-hardened, fault-tolerant neuromorphic chips.
 """
-    
+
     improvements = []
     if avg_damping < 99:
-        improvements.append(f"Damping at {avg_damping:.1f}%; check Lipschitz constraint")
-    
+        improvements.append(
+            f"Damping at {avg_damping:.1f}%; check Lipschitz constraint"
+        )
+
     return TrackResult(
-        track_id=3, name="Adversarial Self-Healing",
-        status=status, score=score,
+        track_id=3,
+        name="Adversarial Self-Healing",
+        status=status,
+        score=score,
         metrics={"avg_damping": avg_damping, "results": results},
         evidence=evidence,
         time_seconds=time.time() - start,
-        improvements=improvements
+        improvements=improvements,
     )

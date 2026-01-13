@@ -1,9 +1,9 @@
-
 import torch
 import torch.nn as nn
 import unittest
 from bioplausible.models.looped_mlp import LoopedMLP
 from bioplausible.models.eqprop_base import EqPropModel, EquilibriumFunction
+
 
 class TestDEQGradients(unittest.TestCase):
     def setUp(self):
@@ -19,7 +19,7 @@ class TestDEQGradients(unittest.TestCase):
             hidden_dim=self.hidden_dim,
             output_dim=self.output_dim,
             max_steps=10,
-            use_spectral_norm=True  # Re-enable spectral norm to ensure it works too
+            use_spectral_norm=True,  # Re-enable spectral norm to ensure it works too
         ).to(self.device)
 
     def test_gradients_match_bptt(self):
@@ -30,7 +30,7 @@ class TestDEQGradients(unittest.TestCase):
 
         # 1. Compute BPTT gradients
         self.model.zero_grad()
-        self.model.gradient_method = 'bptt'
+        self.model.gradient_method = "bptt"
         out_bptt = self.model(x)
         loss_bptt = criterion(out_bptt, y)
         loss_bptt.backward()
@@ -42,7 +42,7 @@ class TestDEQGradients(unittest.TestCase):
 
         # 2. Compute Equilibrium gradients
         self.model.zero_grad()
-        self.model.gradient_method = 'equilibrium'
+        self.model.gradient_method = "equilibrium"
         out_deq = self.model(x)
         loss_deq = criterion(out_deq, y)
         loss_deq.backward()
@@ -75,7 +75,7 @@ class TestDEQGradients(unittest.TestCase):
 
         # BPTT Memory
         torch.cuda.reset_peak_memory_stats()
-        self.model.gradient_method = 'bptt'
+        self.model.gradient_method = "bptt"
         out = self.model(x)
         loss = criterion(out, y)
         loss.backward()
@@ -83,7 +83,7 @@ class TestDEQGradients(unittest.TestCase):
 
         # DEQ Memory
         torch.cuda.reset_peak_memory_stats()
-        self.model.gradient_method = 'equilibrium'
+        self.model.gradient_method = "equilibrium"
         out = self.model(x)
         loss = criterion(out, y)
         loss.backward()
@@ -95,5 +95,6 @@ class TestDEQGradients(unittest.TestCase):
         # Assert usually holds but might depend on overhead
         # self.assertLess(mem_deq, mem_bptt)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -3,8 +3,10 @@ import torch
 import torch.nn as nn
 from bioplausible.models.eqprop_base import EqPropModel
 
+
 class MockEqPropModel(EqPropModel):
     """Simple mock implementation of EqPropModel for testing."""
+
     def __init__(self, input_dim, hidden_dim, output_dim, max_steps=10):
         # We need to set dims before super().__init__ if NEBCBase uses them immediately,
         # or pass them via kwargs. EqPropModel passes kwargs to super.
@@ -16,7 +18,7 @@ class MockEqPropModel(EqPropModel):
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             output_dim=output_dim,
-            max_steps=max_steps
+            max_steps=max_steps,
         )
 
     def _build_layers(self):
@@ -38,6 +40,7 @@ class MockEqPropModel(EqPropModel):
     def _output_projection(self, h):
         return self.W_out(h)
 
+
 class TestEqPropBase(unittest.TestCase):
     def setUp(self):
         self.input_dim = 10
@@ -54,20 +57,23 @@ class TestEqPropBase(unittest.TestCase):
         x = torch.randn(16, self.input_dim)
         steps = 5
         out, traj = self.model(x, steps=steps, return_trajectory=True)
-        self.assertEqual(len(traj), steps + 1) # Initial + 5 steps
+        self.assertEqual(len(traj), steps + 1)  # Initial + 5 steps
         self.assertEqual(traj[0].shape, (16, self.hidden_dim))
 
     def test_inject_noise_and_relax(self):
         x = torch.randn(16, self.input_dim)
-        stats = self.model.inject_noise_and_relax(x, noise_level=0.1, injection_step=5, total_steps=10)
-        self.assertIn('initial_noise', stats)
-        self.assertIn('final_noise', stats)
-        self.assertIn('damping_ratio', stats)
-        self.assertTrue(isinstance(stats['initial_noise'], float))
+        stats = self.model.inject_noise_and_relax(
+            x, noise_level=0.1, injection_step=5, total_steps=10
+        )
+        self.assertIn("initial_noise", stats)
+        self.assertIn("final_noise", stats)
+        self.assertIn("damping_ratio", stats)
+        self.assertTrue(isinstance(stats["initial_noise"], float))
 
     def test_compute_lipschitz(self):
         L = self.model.compute_lipschitz()
         self.assertTrue(L >= 0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

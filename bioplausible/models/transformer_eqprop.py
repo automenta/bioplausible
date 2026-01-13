@@ -11,10 +11,13 @@ from ..acceleration import compile_settling_loop
 # TransformerEqProp - Attention with Equilibrium Dynamics
 # =============================================================================
 
+
 class EqPropAttention(nn.Module):
     """Self-attention that participates in equilibrium dynamics."""
 
-    def __init__(self, hidden_dim: int, num_heads: int = 4, use_sn: bool = True) -> None:
+    def __init__(
+        self, hidden_dim: int, num_heads: int = 4, use_sn: bool = True
+    ) -> None:
         super().__init__()
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
@@ -37,16 +40,34 @@ class EqPropAttention(nn.Module):
 
         return self.W_o(self._reshape_output(out, batch_size, seq_len))
 
-    def _compute_qkv(self, h: torch.Tensor, batch_size: int, seq_len: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _compute_qkv(
+        self, h: torch.Tensor, batch_size: int, seq_len: int
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute Query, Key, and Value tensors."""
-        Q = self.W_q(h).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        K = self.W_k(h).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        V = self.W_v(h).view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        Q = (
+            self.W_q(h)
+            .view(batch_size, seq_len, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+        K = (
+            self.W_k(h)
+            .view(batch_size, seq_len, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+        V = (
+            self.W_v(h)
+            .view(batch_size, seq_len, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
         return Q, K, V
 
-    def _reshape_output(self, out: torch.Tensor, batch_size: int, seq_len: int) -> torch.Tensor:
+    def _reshape_output(
+        self, out: torch.Tensor, batch_size: int, seq_len: int
+    ) -> torch.Tensor:
         """Reshape attention output back to the original format."""
-        return out.transpose(1, 2).contiguous().view(batch_size, seq_len, self.hidden_dim)
+        return (
+            out.transpose(1, 2).contiguous().view(batch_size, seq_len, self.hidden_dim)
+        )
 
 
 class TransformerEqProp(EqPropModel):
@@ -72,7 +93,7 @@ class TransformerEqProp(EqPropModel):
         max_seq_len: int = 128,
         alpha: float = 0.5,
         use_spectral_norm: bool = True,
-        max_steps: int = 20
+        max_steps: int = 20,
     ) -> None:
         self.vocab_size = vocab_size
         self.hidden_dim = hidden_dim
@@ -84,11 +105,11 @@ class TransformerEqProp(EqPropModel):
         self.use_spectral_norm = use_spectral_norm
 
         super().__init__(
-            input_dim=0, # Not applicable
+            input_dim=0,  # Not applicable
             hidden_dim=hidden_dim,
             output_dim=output_dim,
             max_steps=max_steps,
-            use_spectral_norm=use_spectral_norm
+            use_spectral_norm=use_spectral_norm,
         )
 
     def _build_layers(self):
@@ -96,21 +117,40 @@ class TransformerEqProp(EqPropModel):
         self.token_emb = nn.Embedding(self.vocab_size, self.hidden_dim)
         self.pos_emb = nn.Embedding(self.max_seq_len, self.hidden_dim)
 
-        self.attentions = nn.ModuleList([
-            EqPropAttention(self.hidden_dim, self.num_heads, use_sn=self.use_spectral_norm)
-            for _ in range(self.num_layers)
-        ])
+        self.attentions = nn.ModuleList(
+            [
+                EqPropAttention(
+                    self.hidden_dim, self.num_heads, use_sn=self.use_spectral_norm
+                )
+                for _ in range(self.num_layers)
+            ]
+        )
 
-        self.ffns = nn.ModuleList([
-            nn.Sequential(
-                spectral_linear(self.hidden_dim, self.hidden_dim * 2, use_sn=self.use_spectral_norm),
-                nn.ReLU(),
-                spectral_linear(self.hidden_dim * 2, self.hidden_dim, use_sn=self.use_spectral_norm)
-            ) for _ in range(self.num_layers)
-        ])
+        self.ffns = nn.ModuleList(
+            [
+                nn.Sequential(
+                    spectral_linear(
+                        self.hidden_dim,
+                        self.hidden_dim * 2,
+                        use_sn=self.use_spectral_norm,
+                    ),
+                    nn.ReLU(),
+                    spectral_linear(
+                        self.hidden_dim * 2,
+                        self.hidden_dim,
+                        use_sn=self.use_spectral_norm,
+                    ),
+                )
+                for _ in range(self.num_layers)
+            ]
+        )
 
-        self.norms1 = nn.ModuleList([nn.LayerNorm(self.hidden_dim) for _ in range(self.num_layers)])
-        self.norms2 = nn.ModuleList([nn.LayerNorm(self.hidden_dim) for _ in range(self.num_layers)])
+        self.norms1 = nn.ModuleList(
+            [nn.LayerNorm(self.hidden_dim) for _ in range(self.num_layers)]
+        )
+        self.norms2 = nn.ModuleList(
+            [nn.LayerNorm(self.hidden_dim) for _ in range(self.num_layers)]
+        )
 
         self.head = nn.Linear(self.hidden_dim, self.output_dim)
 
@@ -123,7 +163,9 @@ class TransformerEqProp(EqPropModel):
         # Let's defer initialization logic slightly or re-compute embeddings.
         # Actually x_transformed will carry the embeddings.
         # So we can just return zeros of appropriate shape.
-        return torch.zeros(batch_size, seq_len, self.hidden_dim, device=x.device, dtype=torch.float) # float32 usually
+        return torch.zeros(
+            batch_size, seq_len, self.hidden_dim, device=x.device, dtype=torch.float
+        )  # float32 usually
 
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         """Embed input."""
@@ -133,17 +175,21 @@ class TransformerEqProp(EqPropModel):
         return x_emb
 
     @compile_settling_loop
-    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
+    def forward_step(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
         """
         Single equilibrium iteration step.
         """
         # x_transformed is x_emb
         current_h = h
         for i in range(self.num_layers):
-             current_h = self._forward_layer(current_h, x_transformed, i)
+            current_h = self._forward_layer(current_h, x_transformed, i)
         return current_h
 
-    def _forward_layer(self, h: torch.Tensor, x_emb: torch.Tensor, layer_idx: int) -> torch.Tensor:
+    def _forward_layer(
+        self, h: torch.Tensor, x_emb: torch.Tensor, layer_idx: int
+    ) -> torch.Tensor:
         """Original forward_step logic for a single layer."""
         h_norm = self.norms1[layer_idx](h)
         h = h + self.attentions[layer_idx](h_norm)

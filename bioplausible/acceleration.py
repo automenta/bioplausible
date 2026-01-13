@@ -38,22 +38,22 @@ class BackendDetector:
             if backend:
                 return backend
 
-        return 'cpu'
+        return "cpu"
 
     @staticmethod
     def _get_cuda_backend() -> str:
         """Get CUDA backend if available."""
-        return 'cuda' if torch.cuda.is_available() else None
+        return "cuda" if torch.cuda.is_available() else None
 
     @staticmethod
     def _get_mps_backend() -> str:
         """Get MPS backend if available."""
-        return 'mps' if BackendDetector._is_mps_available() else None
+        return "mps" if BackendDetector._is_mps_available() else None
 
     @staticmethod
     def _is_mps_available() -> bool:
         """Check if MPS backend is available (Apple Silicon)."""
-        return hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
+        return hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
 
 
 def enable_tf32(enable: bool = True) -> None:
@@ -70,7 +70,7 @@ def enable_tf32(enable: bool = True) -> None:
     if torch.cuda.is_available():
         # High precision = TF32 enabled
         # Highest precision = TF32 disabled (slow)
-        precision = 'high' if enable else 'highest'
+        precision = "high" if enable else "highest"
         torch.backends.cuda.matmul.allow_tf32 = enable
         torch.backends.cudnn.allow_tf32 = enable
         torch.set_float32_matmul_precision(precision)
@@ -95,6 +95,7 @@ class CupyChecker:
         """Check if CuPy is available with proper CUDA configuration."""
         try:
             import cupy as cp
+
             # Try a simple operation to verify CUDA works
             _ = cp.zeros(10)
             return True, "CuPy available with CUDA"
@@ -133,11 +134,11 @@ def compile_model(
         >>> model = compile_model(model, mode='reduce-overhead')
     """
     # Check PyTorch version
-    if not hasattr(torch, 'compile'):
+    if not hasattr(torch, "compile"):
         warnings.warn(
             "torch.compile not available (requires PyTorch 2.0+). "
             "Using uncompiled model.",
-            RuntimeWarning
+            RuntimeWarning,
         )
         return model
 
@@ -151,8 +152,7 @@ def compile_model(
         return compiled
     except Exception as e:
         warnings.warn(
-            f"torch.compile failed: {e}. Using uncompiled model.",
-            RuntimeWarning
+            f"torch.compile failed: {e}. Using uncompiled model.", RuntimeWarning
         )
         return model
 
@@ -173,11 +173,11 @@ def compile_settling_loop(settling_fn: Callable) -> Callable:
     Returns:
         Compiled function
     """
-    if not hasattr(torch, 'compile'):
+    if not hasattr(torch, "compile"):
         return settling_fn
 
     try:
-        return torch.compile(settling_fn, mode='reduce-overhead')
+        return torch.compile(settling_fn, mode="reduce-overhead")
     except Exception:
         return settling_fn
 
@@ -190,6 +190,7 @@ TRITON_AVAILABLE = False
 try:
     import triton  # noqa: F401
     import triton.language as tl  # noqa: F401
+
     TRITON_AVAILABLE = True
 except ImportError:
     pass
@@ -215,10 +216,10 @@ def check_triton_available() -> Tuple[bool, str]:
 
 
 __all__ = [
-    'get_optimal_backend',
-    'check_cupy_available',
-    'check_triton_available',
-    'compile_model',
-    'compile_settling_loop',
-    'TRITON_AVAILABLE',
+    "get_optimal_backend",
+    "check_cupy_available",
+    "check_triton_available",
+    "compile_model",
+    "compile_settling_loop",
+    "TRITON_AVAILABLE",
 ]

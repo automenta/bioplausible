@@ -15,10 +15,11 @@ from .utils import spectral_conv2d
 from .eqprop_base import EqPropModel
 from ..acceleration import compile_settling_loop
 
+
 class ModernConvEqProp(EqPropModel):
     """
     Multi-stage ConvEqProp with equilibrium settling.
-    
+
     Architecture:
         Input: 3×32×32 (CIFAR-10)
         Stage 1: Conv 3→64, no pooling (32×32)
@@ -26,79 +27,101 @@ class ModernConvEqProp(EqPropModel):
         Stage 3: Conv 128→256, stride 2 (8×8)
         Equilibrium: Recurrent conv at 256 channels
         Output: Global pool → Linear(256, 10)
-    
+
     Key Features:
     - All convolutions use spectral normalization
     - GroupNorm instead of BatchNorm (better for small batches)
     - Equilibrium settling only in deepest stage (efficient)
     """
-    
+
     def __init__(
-        self, 
-        eq_steps: int = 15, 
+        self,
+        eq_steps: int = 15,
         gamma: float = 0.5,
         hidden_channels: int = 64,
-        use_spectral_norm: bool = True
+        use_spectral_norm: bool = True,
     ):
         self.gamma = gamma
         self.base_hidden_channels = hidden_channels
 
         super().__init__(
-            input_dim=0, # Not used directly
-            hidden_dim=hidden_channels*4, # Deepest layer dim
+            input_dim=0,  # Not used directly
+            hidden_dim=hidden_channels * 4,  # Deepest layer dim
             output_dim=10,
             max_steps=eq_steps,
-            use_spectral_norm=use_spectral_norm
+            use_spectral_norm=use_spectral_norm,
         )
 
     def _build_layers(self):
         """Build layers. Called by NEBCBase init."""
         hidden_channels = self.base_hidden_channels
-        
+
         # Stage 1: Initial feature extraction (32×32)
         self.stage1 = nn.Sequential(
-            spectral_conv2d(3, hidden_channels, 3, padding=1, use_sn=self.use_spectral_norm),
+            spectral_conv2d(
+                3, hidden_channels, 3, padding=1, use_sn=self.use_spectral_norm
+            ),
             nn.GroupNorm(8, hidden_channels),
-            nn.Tanh()
+            nn.Tanh(),
         )
-        
+
         # Stage 2: Downsample to 16×16
         self.stage2 = nn.Sequential(
-            spectral_conv2d(hidden_channels, hidden_channels*2, 3, stride=2, padding=1, use_sn=self.use_spectral_norm),
-            nn.GroupNorm(8, hidden_channels*2),
-            nn.Tanh()
+            spectral_conv2d(
+                hidden_channels,
+                hidden_channels * 2,
+                3,
+                stride=2,
+                padding=1,
+                use_sn=self.use_spectral_norm,
+            ),
+            nn.GroupNorm(8, hidden_channels * 2),
+            nn.Tanh(),
         )
-        
+
         # Stage 3: Downsample to 8×8
         self.stage3 = nn.Sequential(
-            spectral_conv2d(hidden_channels*2, hidden_channels*4, 3, stride=2, padding=1, use_sn=self.use_spectral_norm),
-            nn.GroupNorm(8, hidden_channels*4),
-            nn.Tanh()
+            spectral_conv2d(
+                hidden_channels * 2,
+                hidden_channels * 4,
+                3,
+                stride=2,
+                padding=1,
+                use_sn=self.use_spectral_norm,
+            ),
+            nn.GroupNorm(8, hidden_channels * 4),
+            nn.Tanh(),
         )
-        
+
         # Equilibrium recurrent block (operates at 8×8 spatial resolution)
-        self.eq_conv = spectral_conv2d(hidden_channels*4, hidden_channels*4, 3, padding=1, use_sn=self.use_spectral_norm)
-        self.eq_norm = nn.GroupNorm(8, hidden_channels*4)
-        
+        self.eq_conv = spectral_conv2d(
+            hidden_channels * 4,
+            hidden_channels * 4,
+            3,
+            padding=1,
+            use_sn=self.use_spectral_norm,
+        )
+        self.eq_norm = nn.GroupNorm(8, hidden_channels * 4)
+
         # Output classification head
         self.pool = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Linear(hidden_channels*4, 10)
-        
+        self.fc = nn.Linear(hidden_channels * 4, 10)
+
         self._init_weights()
-    
+
     def _init_weights(self):
         """Initialize with small weights for better convergence."""
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 # Handle spectral norm wrapper
-                if hasattr(m, 'parametrizations'):
+                if hasattr(m, "parametrizations"):
                     weight = m.parametrizations.weight.original
                 else:
                     weight = m.weight
-                nn.init.kaiming_normal_(weight, mode='fan_out', nonlinearity='tanh')
+                nn.init.kaiming_normal_(weight, mode="fan_out", nonlinearity="tanh")
                 # Scale down for stability
                 weight.data.mul_(0.5)
-                if hasattr(m, 'bias') and m.bias is not None:
+                if hasattr(m, "bias") and m.bias is not None:
                     nn.init.zeros_(m.bias)
             elif isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight, gain=0.5)
@@ -119,7 +142,9 @@ class ModernConvEqProp(EqPropModel):
         # Stage 3: stride 2 (16->8)
         # So H_out = H // 4, W_out = W // 4
         H_out, W_out = H // 4, W // 4
-        return torch.zeros(B, self.hidden_dim, H_out, W_out, device=x.device, dtype=x.dtype)
+        return torch.zeros(
+            B, self.hidden_dim, H_out, W_out, device=x.device, dtype=x.dtype
+        )
 
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         """Run feedforward stages to get input for equilibrium block."""
@@ -129,7 +154,9 @@ class ModernConvEqProp(EqPropModel):
         return h
 
     @compile_settling_loop
-    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
+    def forward_step(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
         """
         Single equilibrium step.
         Injects the transformed input (stage3 features) into the recurrent dynamics.
@@ -151,13 +178,13 @@ class SimpleConvEqProp(EqPropModel):
     Simplified single-stage ConvEqProp for comparison.
     Refactored to use EqPropModel.
     """
-    
+
     def __init__(
-        self, 
+        self,
         hidden_channels: int = 128,
         eq_steps: int = 20,
         gamma: float = 0.5,
-        use_spectral_norm: bool = True
+        use_spectral_norm: bool = True,
     ):
         self.hidden_channels = hidden_channels
         self.gamma = gamma
@@ -168,33 +195,43 @@ class SimpleConvEqProp(EqPropModel):
             hidden_dim=hidden_channels,
             output_dim=10,
             max_steps=eq_steps,
-            use_spectral_norm=use_spectral_norm
+            use_spectral_norm=use_spectral_norm,
         )
-        
+
     def _build_layers(self):
         # Single-stage embedding
-        self.embed = spectral_conv2d(3, self.hidden_channels, 3, padding=1, use_sn=self.use_spectral_norm)
-        
+        self.embed = spectral_conv2d(
+            3, self.hidden_channels, 3, padding=1, use_sn=self.use_spectral_norm
+        )
+
         # Recurrent block
-        self.W_rec = spectral_conv2d(self.hidden_channels, self.hidden_channels, 3, padding=1, use_sn=self.use_spectral_norm)
+        self.W_rec = spectral_conv2d(
+            self.hidden_channels,
+            self.hidden_channels,
+            3,
+            padding=1,
+            use_sn=self.use_spectral_norm,
+        )
         self.norm = nn.GroupNorm(8, self.hidden_channels)
-        
+
         # Classifier
         self.head = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten(),
-            nn.Linear(self.hidden_channels, 10)
+            nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(self.hidden_channels, 10)
         )
-    
+
     def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
         B, _, H, W = x.shape
-        return torch.zeros(B, self.hidden_channels, H, W, device=x.device, dtype=x.dtype)
+        return torch.zeros(
+            B, self.hidden_channels, H, W, device=x.device, dtype=x.dtype
+        )
 
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         return self.embed(x)
 
     @compile_settling_loop
-    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
+    def forward_step(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
         h_norm = self.norm(h)
         h_next = torch.tanh(self.W_rec(h_norm) + x_transformed)
         return torch.lerp(h, h_next, self.gamma)

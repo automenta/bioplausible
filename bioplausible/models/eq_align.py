@@ -6,7 +6,8 @@ from typing import Optional, List, Dict, Union
 from .eqprop_base import EqPropModel
 from .nebc_base import register_nebc
 
-@register_nebc('eq_align')
+
+@register_nebc("eq_align")
 class EquilibriumAlignment(EqPropModel):
     """
     Equilibrium Alignment (EqAlign) - Native Implementation.
@@ -66,18 +67,21 @@ class EquilibriumAlignment(EqPropModel):
         # Shape: (Hidden, Output) effectively, but we use it as error @ B
         # error: (Batch, Out). B: (Out, Hidden). -> (Batch, Hidden).
         self.B_out = nn.Parameter(
-            torch.randn(self.output_dim, self.hidden_dim) * 0.1,
-            requires_grad=False
+            torch.randn(self.output_dim, self.hidden_dim) * 0.1, requires_grad=False
         )
 
     def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
         batch_size = x.shape[0]
-        return torch.zeros((batch_size, self.hidden_dim), device=x.device, dtype=x.dtype)
+        return torch.zeros(
+            (batch_size, self.hidden_dim), device=x.device, dtype=x.dtype
+        )
 
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         return self.W_in(x)
 
-    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
+    def forward_step(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
         return torch.tanh(x_transformed + self.W_rec(h))
 
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
@@ -142,17 +146,17 @@ class EquilibriumAlignment(EqPropModel):
 
         grad_W_out = torch.mm(delta_out.T, h_star) / batch_size
         grad_W_rec = torch.mm(delta_h.T, h_star) / batch_size
-        grad_W_in  = torch.mm(delta_h.T, x) / batch_size
+        grad_W_in = torch.mm(delta_h.T, x) / batch_size
 
         grad_b_out = delta_out.mean(0)
-        grad_b_rec = delta_h.mean(0) # Bias for recurrent part effectively
+        grad_b_rec = delta_h.mean(0)  # Bias for recurrent part effectively
 
         # 5. Update Weights (Manual SGD)
         # Note: We must update the original parameters, not the spectral_norm wrapped ones.
 
         def update_layer(layer, grad_w, grad_b=None):
             # Handle Spectral Norm wrapping
-            if hasattr(layer, 'parametrizations'):
+            if hasattr(layer, "parametrizations"):
                 weight_param = layer.parametrizations.weight.original
             else:
                 weight_param = layer.weight
@@ -163,12 +167,14 @@ class EquilibriumAlignment(EqPropModel):
                 layer.bias.data -= self.learning_rate * grad_b
 
         update_layer(self.W_out, grad_W_out, grad_b_out)
-        update_layer(self.W_rec, grad_W_rec, grad_b_rec) # W_rec usually has no bias in this formulation
-        update_layer(self.W_in, grad_W_in, grad_b_rec)   # W_in bias shared? No.
+        update_layer(
+            self.W_rec, grad_W_rec, grad_b_rec
+        )  # W_rec usually has no bias in this formulation
+        update_layer(self.W_in, grad_W_in, grad_b_rec)  # W_in bias shared? No.
         # Wait, linear layers have their own bias.
         # forward_step: tanh(W_in(x) + W_rec(h)).
         # W_in(x) adds bias_in. W_rec(h) adds bias_rec.
         # Total bias = bias_in + bias_rec.
         # Let's update both with grad_b_rec.
 
-        return {'loss': loss.item(), 'accuracy': acc}
+        return {"loss": loss.item(), "accuracy": acc}
