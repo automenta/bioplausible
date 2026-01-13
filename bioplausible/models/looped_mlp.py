@@ -144,6 +144,7 @@ class LoopedMLP(nn.Module):
                                return_trajectory: bool, trajectory: Optional[List[torch.Tensor]]) -> torch.Tensor:
         """Iterate the hidden state to equilibrium."""
         for _ in range(steps):
+            # Optimized for torch.compile
             h = torch.tanh(x_proj + self.W_rec(h))
             if return_trajectory:
                 trajectory.append(h)
