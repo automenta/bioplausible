@@ -31,12 +31,16 @@ class ContrastiveFeedbackAlignment(BioModel):
             self.to(kwargs.get('device', 'cpu'))
 
         self.criterion = nn.CrossEntropyLoss()
+
         # Feedback weights
         self.feedback_weights = nn.ParameterList()
-        dims = [self.input_dim] + (self.config.hidden_dims if self.config.hidden_dims else [self.hidden_dim]) + [self.output_dim]
+        hidden_dims = self.config.hidden_dims if self.config.hidden_dims else [self.hidden_dim] if hasattr(self, 'hidden_dim') else []
+        dims = [self.input_dim] + hidden_dims + [self.output_dim]
         for i in range(len(dims) - 1):
             B = torch.randn(dims[i+1], dims[i]) * 0.1
             self.feedback_weights.append(nn.Parameter(B, requires_grad=False))
+
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.config.learning_rate)
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         h = x
@@ -47,12 +51,11 @@ class ContrastiveFeedbackAlignment(BioModel):
         return h
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> Dict[str, float]:
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.config.learning_rate)
-        optimizer.zero_grad()
+        self.optimizer.zero_grad()
 
         output = self.forward(x)
         loss = self.criterion(output, y)
         loss.backward()
-        optimizer.step()
+        self.optimizer.step()
 
         return {'loss': loss.item(), 'accuracy': (output.argmax(1) == y).float().mean().item()}

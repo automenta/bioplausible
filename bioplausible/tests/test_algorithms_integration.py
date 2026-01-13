@@ -3,9 +3,9 @@ import pytest
 import torch
 import torch.nn as nn
 from bioplausible.core import EqPropTrainer
-from bioplausible.algorithms.eqprop import StandardEqProp
-from bioplausible.algorithms.feedback_align import StandardFA
-from bioplausible.algorithms.base import AlgorithmConfig
+from bioplausible.models.standard_eqprop import StandardEqProp
+from bioplausible.models.simple_fa import StandardFA
+from bioplausible.models.base import ModelConfig
 
 def test_eqprop_algorithm_integration():
     """
@@ -24,7 +24,7 @@ def test_eqprop_algorithm_integration():
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
 
     # Configure Algorithm
-    config = AlgorithmConfig(
+    config = ModelConfig(
         name='eqprop',
         input_dim=input_dim,
         hidden_dims=[hidden_dim],
@@ -61,7 +61,7 @@ def test_feedback_alignment_integration():
     dataset = torch.utils.data.TensorDataset(x, y)
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
 
-    config = AlgorithmConfig(
+    config = ModelConfig(
         name='feedback_alignment',
         input_dim=input_dim,
         hidden_dims=[hidden_dim],
@@ -75,7 +75,8 @@ def test_feedback_alignment_integration():
     if torch.cuda.is_available():
         device = 'cuda'
         model.to(device)
-        # Check feedback weights
+        # Check feedback weights (stored as params/buffers in BioModel)
+        # StandardFA stores them in self.feedback_weights which is a ParameterList
         assert model.feedback_weights[0].device.type == 'cuda'
 
     # Trainer
@@ -90,7 +91,7 @@ def test_feedback_alignment_integration():
 
 def test_eqprop_dynamics_shapes():
     """Verify shapes during dynamics."""
-    config = AlgorithmConfig(
+    config = ModelConfig(
         name='eqprop',
         input_dim=5,
         hidden_dims=[10, 8],
