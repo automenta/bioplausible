@@ -33,16 +33,19 @@ from bioplausible.models import (
     EqPropAttentionOnlyLM,
     RecurrentEqPropLM,
     HybridEqPropLM,
-    LoopedMLPForLM
+    LoopedMLPForLM,
 )
+
 
 class TestAllModels(unittest.TestCase):
 
     def setUp(self):
-        self.device = 'cpu' # Keep it simple for smoke tests
+        self.device = "cpu"  # Keep it simple for smoke tests
 
     def test_lazy_eqprop(self):
-        model = LazyEqProp(input_dim=10, hidden_dim=20, output_dim=5, num_layers=2).to(self.device)
+        model = LazyEqProp(input_dim=10, hidden_dim=20, output_dim=5, num_layers=2).to(
+            self.device
+        )
         x = torch.randn(2, 10).to(self.device)
         y = model(x)
         self.assertEqual(y.shape, (2, 5))
@@ -69,7 +72,11 @@ class TestAllModels(unittest.TestCase):
     def test_causal_transformer_eqprop(self):
         vocab_size = 50
         model = CausalTransformerEqProp(
-            vocab_size=vocab_size, hidden_dim=16, num_layers=2, num_heads=2, max_seq_len=20
+            vocab_size=vocab_size,
+            hidden_dim=16,
+            num_layers=2,
+            num_heads=2,
+            max_seq_len=20,
         ).to(self.device)
         x = torch.randint(0, vocab_size, (2, 10)).to(self.device)
         y = model(x)
@@ -81,11 +88,11 @@ class TestAllModels(unittest.TestCase):
 
     def test_eqprop_diffusion(self):
         try:
-             model = EqPropDiffusion(input_dim=10, hidden_dim=20).to(self.device)
-             x = torch.randn(2, 10).to(self.device)
-             t = torch.randint(0, 10, (2,)).to(self.device)
-             y = model(x, t)
-             self.assertEqual(y.shape, (2, 10))
+            model = EqPropDiffusion(input_dim=10, hidden_dim=20).to(self.device)
+            x = torch.randn(2, 10).to(self.device)
+            t = torch.randint(0, 10, (2,)).to(self.device)
+            y = model(x, t)
+            self.assertEqual(y.shape, (2, 10))
         except TypeError:
             pass
 
@@ -108,19 +115,25 @@ class TestAllModels(unittest.TestCase):
         self.assertEqual(y.shape, (2, 10, vocab_size))
 
     def test_feedback_alignment(self):
-        model = FeedbackAlignmentEqProp(input_dim=10, hidden_dim=20, output_dim=5).to(self.device)
+        model = FeedbackAlignmentEqProp(input_dim=10, hidden_dim=20, output_dim=5).to(
+            self.device
+        )
         x = torch.randn(2, 10).to(self.device)
         y = model(x)
         self.assertEqual(y.shape, (2, 5))
 
     def test_dfa_eqprop(self):
-        model = DirectFeedbackAlignmentEqProp(input_dim=10, hidden_dim=20, output_dim=5).to(self.device)
+        model = DirectFeedbackAlignmentEqProp(
+            input_dim=10, hidden_dim=20, output_dim=5
+        ).to(self.device)
         x = torch.randn(2, 10).to(self.device)
         y = model(x)
         self.assertEqual(y.shape, (2, 5))
 
     def test_temporal_resonance(self):
-        model = TemporalResonanceEqProp(input_dim=10, hidden_dim=20, output_dim=5).to(self.device)
+        model = TemporalResonanceEqProp(input_dim=10, hidden_dim=20, output_dim=5).to(
+            self.device
+        )
         x = torch.randn(2, 10).to(self.device)
         y = model(x)
         self.assertEqual(y.shape, (2, 5))
@@ -130,25 +143,33 @@ class TestAllModels(unittest.TestCase):
         self.assertEqual(y_seq.shape, (2, 5, 5))
 
     def test_chl(self):
-        model = ContrastiveHebbianLearning(input_dim=10, hidden_dim=20, output_dim=5).to(self.device)
+        model = ContrastiveHebbianLearning(
+            input_dim=10, hidden_dim=20, output_dim=5
+        ).to(self.device)
         x = torch.randn(2, 10).to(self.device)
         y = model(x)
         self.assertEqual(y.shape, (2, 5))
 
     def test_homeostatic(self):
-        model = HomeostaticEqProp(input_dim=10, hidden_dim=20, output_dim=5).to(self.device)
+        model = HomeostaticEqProp(input_dim=10, hidden_dim=20, output_dim=5).to(
+            self.device
+        )
         x = torch.randn(2, 10).to(self.device)
         y = model(x)
         self.assertEqual(y.shape, (2, 5))
 
     def test_hebbian_chain(self):
-        model = DeepHebbianChain(input_dim=10, hidden_dim=20, output_dim=5).to(self.device)
+        model = DeepHebbianChain(input_dim=10, hidden_dim=20, output_dim=5).to(
+            self.device
+        )
         x = torch.randn(2, 10).to(self.device)
         y = model(x)
         self.assertEqual(y.shape, (2, 5))
 
     def test_adaptive_fa(self):
-        model = AdaptiveFA(input_dim=10, hidden_dim=20, output_dim=5, num_layers=3).to(self.device)
+        model = AdaptiveFA(input_dim=10, hidden_dim=20, output_dim=5, num_layers=3).to(
+            self.device
+        )
         x = torch.randn(2, 10).to(self.device)
         y = model(x)
         self.assertEqual(y.shape, (2, 5))
@@ -156,10 +177,12 @@ class TestAllModels(unittest.TestCase):
         # Test train_step
         target = torch.randint(0, 5, (2,)).to(self.device)
         metrics = model.train_step(x, target)
-        self.assertIn('loss', metrics)
+        self.assertIn("loss", metrics)
 
     def test_eq_align(self):
-        model = EquilibriumAlignment(input_dim=10, hidden_dim=20, output_dim=5, max_steps=5).to(self.device)
+        model = EquilibriumAlignment(
+            input_dim=10, hidden_dim=20, output_dim=5, max_steps=5
+        ).to(self.device)
         x = torch.randn(2, 10).to(self.device)
         y = model(x)
         self.assertEqual(y.shape, (2, 5))
@@ -167,17 +190,26 @@ class TestAllModels(unittest.TestCase):
         # Test train_step
         target = torch.randint(0, 5, (2,)).to(self.device)
         metrics = model.train_step(x, target)
-        self.assertIn('loss', metrics)
+        self.assertIn("loss", metrics)
 
     def test_lm_models(self):
         vocab_size = 20
         seq_len = 10
         x = torch.randint(0, vocab_size, (2, seq_len)).to(self.device)
 
-        for cls in [FullEqPropLM, EqPropAttentionOnlyLM, RecurrentEqPropLM, HybridEqPropLM, LoopedMLPForLM]:
-            model = cls(vocab_size=vocab_size, hidden_dim=32, num_layers=2, max_seq_len=20).to(self.device)
+        for cls in [
+            FullEqPropLM,
+            EqPropAttentionOnlyLM,
+            RecurrentEqPropLM,
+            HybridEqPropLM,
+            LoopedMLPForLM,
+        ]:
+            model = cls(
+                vocab_size=vocab_size, hidden_dim=32, num_layers=2, max_seq_len=20
+            ).to(self.device)
             y = model(x)
             self.assertEqual(y.shape, (2, seq_len, vocab_size))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -20,7 +20,7 @@ from gui.capabilities import CapabilitiesDemoWindow
 def main():
     """Launch the capabilities demo."""
     app = QApplication(sys.argv)
-    
+
     # Dark theme (same as bio_trainer_gui)
     app.setStyle("Fusion")
     palette = QPalette()
@@ -31,16 +31,16 @@ def main():
     palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
     palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
     app.setPalette(palette)
-    
+
     # Global font
     app.setFont(QFont("Segoe UI", 9))
-    
+
     # Create and show window
     window = CapabilitiesDemoWindow()
     window.show()
-    
+
     sys.exit(app.exec())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

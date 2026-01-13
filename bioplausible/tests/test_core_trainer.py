@@ -1,8 +1,8 @@
-
 import unittest
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 from bioplausible import EqPropTrainer, LoopedMLP
+
 
 class TestCoreTrainer(unittest.TestCase):
     def setUp(self):
@@ -19,20 +19,21 @@ class TestCoreTrainer(unittest.TestCase):
         self.loader = DataLoader(self.dataset, batch_size=self.batch_size)
 
     def test_fit_and_evaluate(self):
-        trainer = EqPropTrainer(self.model, use_compile=False, device='cpu')
+        trainer = EqPropTrainer(self.model, use_compile=False, device="cpu")
 
         # Test fit
         history = trainer.fit(self.loader, epochs=1, val_loader=self.loader)
-        self.assertIn('train_loss', history)
-        self.assertIn('val_loss', history)
-        self.assertTrue(len(history['train_loss']) == 1)
+        self.assertIn("train_loss", history)
+        self.assertIn("val_loss", history)
+        self.assertTrue(len(history["train_loss"]) == 1)
 
         # Test evaluate explicit call
         metrics = trainer.evaluate(self.loader)
-        self.assertIn('loss', metrics)
-        self.assertIn('accuracy', metrics)
-        self.assertIsInstance(metrics['loss'], float)
-        self.assertIsInstance(metrics['accuracy'], float)
+        self.assertIn("loss", metrics)
+        self.assertIn("accuracy", metrics)
+        self.assertIsInstance(metrics["loss"], float)
+        self.assertIsInstance(metrics["accuracy"], float)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

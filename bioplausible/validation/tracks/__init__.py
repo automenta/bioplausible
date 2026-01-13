@@ -10,4 +10,3 @@ from . import negative_results  # Track 55 - scientific negative results
 from . import scaling_tracks  # Add missing import
 from . import architecture_comparison  # Track 56 - depth architecture comparison
 from . import honest_tradeoff  # Track 57 - reality check
-

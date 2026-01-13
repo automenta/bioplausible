@@ -18,40 +18,46 @@ class AdaptiveFeedbackAlignment(BioModel):
         super().__init__(config, **kwargs)
 
         # Build default layers if not done by subclass custom logic
-        if not hasattr(self, 'layers') or len(self.layers) == 0:
+        if not hasattr(self, "layers") or len(self.layers) == 0:
             self.layers = nn.ModuleList()
-            hidden_dims = self.config.hidden_dims if self.config.hidden_dims else [self.hidden_dim] if hasattr(self, 'hidden_dim') else []
+            hidden_dims = (
+                self.config.hidden_dims
+                if self.config.hidden_dims
+                else [self.hidden_dim] if hasattr(self, "hidden_dim") else []
+            )
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
             for i in range(len(dims) - 1):
-                layer = nn.Linear(dims[i], dims[i+1])
+                layer = nn.Linear(dims[i], dims[i + 1])
                 layer = self.apply_spectral_norm(layer)
                 self.layers.append(layer)
 
-            self.to(kwargs.get('device', 'cpu'))
+            self.to(kwargs.get("device", "cpu"))
 
         # Feedback weights as ParameterList
         self.feedback_weights = nn.ParameterList()
         # Use self.config instead of config, or ensure config is populated
         if config is None:
-             config = self.config
+            config = self.config
 
-        hidden_dims = config.hidden_dims if config.hidden_dims else [self.hidden_dim] if hasattr(self, 'hidden_dim') else []
+        hidden_dims = (
+            config.hidden_dims
+            if config.hidden_dims
+            else [self.hidden_dim] if hasattr(self, "hidden_dim") else []
+        )
         dims = [config.input_dim] + hidden_dims + [config.output_dim]
 
         for i in range(len(dims) - 1):
-            B = torch.randn(dims[i+1], dims[i]) * 0.1
+            B = torch.randn(dims[i + 1], dims[i]) * 0.1
             self.feedback_weights.append(nn.Parameter(B, requires_grad=True))
 
         self.criterion = nn.CrossEntropyLoss()
 
         self.w_optimizer = torch.optim.Adam(
-            self.layers.parameters(),
-            lr=self.config.learning_rate
+            self.layers.parameters(), lr=self.config.learning_rate
         )
         self.b_optimizer = torch.optim.Adam(
-            self.feedback_weights.parameters(),
-            lr=self.config.learning_rate * 0.001
+            self.feedback_weights.parameters(), lr=self.config.learning_rate * 0.001
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
@@ -86,8 +92,8 @@ class AdaptiveFeedbackAlignment(BioModel):
                 if i == len(self.layers) - 1:
                     grad_h = error
                 else:
-                    grad_h = torch.mm(error, self.feedback_weights[i+1])
-                    h_curr = activations[i+1]
+                    grad_h = torch.mm(error, self.feedback_weights[i + 1])
+                    h_curr = activations[i + 1]
 
                     if isinstance(self.activation, nn.ReLU):
                         grad_h = grad_h * (h_curr > 0).float()
@@ -111,8 +117,8 @@ class AdaptiveFeedbackAlignment(BioModel):
 
                 # Update B to match W
                 if i < len(self.layers) - 1:
-                    target_B = self.layers[i+1].weight.data
-                    current_B = self.feedback_weights[i+1].data
+                    target_B = self.layers[i + 1].weight.data
+                    current_B = self.feedback_weights[i + 1].data
 
                     # This update is non-gradient based (it's a tracking update)
                     # We can keep doing it manually or wrap it in a custom optimizer step?
@@ -126,14 +132,17 @@ class AdaptiveFeedbackAlignment(BioModel):
                     # Matches the logic.
 
                     grad_B = -(target_B - current_B)
-                    if self.feedback_weights[i+1].grad is None:
-                        self.feedback_weights[i+1].grad = grad_B
+                    if self.feedback_weights[i + 1].grad is None:
+                        self.feedback_weights[i + 1].grad = grad_B
                     else:
-                        self.feedback_weights[i+1].grad += grad_B
+                        self.feedback_weights[i + 1].grad += grad_B
 
                 error = grad_h
 
         self.w_optimizer.step()
         self.b_optimizer.step()
 
-        return {'loss': loss.item(), 'accuracy': (output.argmax(1) == y).float().mean().item()}
+        return {
+            "loss": loss.item(),
+            "accuracy": (output.argmax(1) == y).float().mean().item(),
+        }

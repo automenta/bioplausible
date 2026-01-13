@@ -1,4 +1,10 @@
-from .nebc_base import NEBCBase, NEBCRegistry, register_nebc, train_nebc_model, evaluate_nebc_model
+from .nebc_base import (
+    NEBCBase,
+    NEBCRegistry,
+    register_nebc,
+    train_nebc_model,
+    evaluate_nebc_model,
+)
 from .eqprop_base import EqPropModel, EquilibriumFunction
 from .base import BioModel, ModelConfig, register_model, ModelRegistry
 
@@ -16,7 +22,10 @@ from .neural_cube import NeuralCube
 from .ternary import TernaryEqProp, TernaryEqProp as TernaryWeightMLP
 from .chl import ContrastiveHebbianLearning, CHLAutoencoder
 from .hebbian_chain import DeepHebbianChain
-from .temporal_resonance import TemporalResonanceEqProp, TemporalResonanceEqProp as TemporalResonanceNetwork
+from .temporal_resonance import (
+    TemporalResonanceEqProp,
+    TemporalResonanceEqProp as TemporalResonanceNetwork,
+)
 from .backprop_transformer_lm import BackpropTransformerLM
 
 # Algorithm-Models (Migrated from algorithms/)
@@ -43,60 +52,62 @@ from .eqprop_lm_variants import (
     EqPropAttentionOnlyLM,
     RecurrentEqPropLM,
     HybridEqPropLM,
-    LoopedMLPForLM
+    LoopedMLPForLM,
 )
 
 # Export registry
 __all__ = [
     # Base
-    'BioModel', 'ModelConfig', 'register_model', 'ModelRegistry',
-    'NEBCBase', 'NEBCRegistry', 'register_nebc',
-    'EqPropModel', 'EquilibriumFunction',
-
+    "BioModel",
+    "ModelConfig",
+    "register_model",
+    "ModelRegistry",
+    "NEBCBase",
+    "NEBCRegistry",
+    "register_nebc",
+    "EqPropModel",
+    "EquilibriumFunction",
     # Core
-    'LoopedMLP',
-    'BackpropMLP',
-    'ConvEqProp',
-    'ModernConvEqProp',
-    'SimpleConvEqProp',
-    'TransformerEqProp',
-    'CausalTransformerEqProp',
-    'EqPropDiffusion',
-    'LazyEqProp',
-    'HomeostaticEqProp',
-    'DirectFeedbackAlignmentEqProp',
-    'NeuralCube',
-    'TernaryWeightMLP',
-    'TernaryEqProp',
-    'ContrastiveHebbianLearning',
-    'CHLAutoencoder',
-    'DeepHebbianChain',
-    'TemporalResonanceNetwork',
-    'TemporalResonanceEqProp',
-    'BackpropTransformerLM',
-
+    "LoopedMLP",
+    "BackpropMLP",
+    "ConvEqProp",
+    "ModernConvEqProp",
+    "SimpleConvEqProp",
+    "TransformerEqProp",
+    "CausalTransformerEqProp",
+    "EqPropDiffusion",
+    "LazyEqProp",
+    "HomeostaticEqProp",
+    "DirectFeedbackAlignmentEqProp",
+    "NeuralCube",
+    "TernaryWeightMLP",
+    "TernaryEqProp",
+    "ContrastiveHebbianLearning",
+    "CHLAutoencoder",
+    "DeepHebbianChain",
+    "TemporalResonanceNetwork",
+    "TemporalResonanceEqProp",
+    "BackpropTransformerLM",
     # Algorithm-Models
-    'StandardEqProp',
-    'StandardFA',
-    'AdaptiveFeedbackAlignment',
-    'EquilibriumAlignment',
-    'ContrastiveFeedbackAlignment',
-    'LayerwiseEquilibriumFA',
-    'EnergyGuidedFA',
-    'PredictiveCodingHybrid',
-    'SparseEquilibrium',
-    'MomentumEquilibrium',
-    'StochasticFA',
-    'EnergyMinimizingFA',
-
+    "StandardEqProp",
+    "StandardFA",
+    "AdaptiveFeedbackAlignment",
+    "EquilibriumAlignment",
+    "ContrastiveFeedbackAlignment",
+    "LayerwiseEquilibriumFA",
+    "EnergyGuidedFA",
+    "PredictiveCodingHybrid",
+    "SparseEquilibrium",
+    "MomentumEquilibrium",
+    "StochasticFA",
+    "EnergyMinimizingFA",
     # FA Variants
-    'FeedbackAlignmentEqProp',
-    'AdaptiveFA',
-
+    "FeedbackAlignmentEqProp",
+    "AdaptiveFA",
     # LM
-    'FullEqPropLM',
-    'EqPropAttentionOnlyLM',
-    'RecurrentEqPropLM',
-    'HybridEqPropLM',
-    'LoopedMLPForLM',
+    "FullEqPropLM",
+    "EqPropAttentionOnlyLM",
+    "RecurrentEqPropLM",
+    "HybridEqPropLM",
+    "LoopedMLPForLM",
 ]

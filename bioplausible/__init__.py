@@ -12,7 +12,12 @@ from .acceleration import (
     get_optimal_backend,
 )
 from .core import EqPropTrainer
-from .datasets import CharDataset, create_data_loaders, get_lm_dataset, get_vision_dataset
+from .datasets import (
+    CharDataset,
+    create_data_loaders,
+    get_lm_dataset,
+    get_vision_dataset,
+)
 from .generation import generate_from_dataset, generate_text
 from .kernel import HAS_CUPY, EqPropKernel
 from .models import (
@@ -36,6 +41,7 @@ try:
         get_eqprop_lm,
         list_eqprop_lm_variants,
     )
+
     HAS_LM_VARIANTS = True
 except ImportError:
     HAS_LM_VARIANTS = False
@@ -67,6 +73,7 @@ try:
         StandardFA,
         StochasticFA,
     )
+
     HAS_BIOPLAUSIBLE = True
 except ImportError:
     HAS_BIOPLAUSIBLE = False

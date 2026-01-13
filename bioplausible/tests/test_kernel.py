@@ -13,6 +13,7 @@ from bioplausible.core import EqPropTrainer
 from bioplausible.models.looped_mlp import LoopedMLP
 from bioplausible.kernel import EqPropKernel, HAS_CUPY
 
+
 class TestEqPropKernel(unittest.TestCase):
     """
     Tests for the EqPropKernel (NumPy/CuPy backend) which offers O(1) memory training.
@@ -41,21 +42,21 @@ class TestEqPropKernel(unittest.TestCase):
             self.input_dim,
             self.hidden_dim,
             self.output_dim,
-            use_gpu=False # Force NumPy
+            use_gpu=False,  # Force NumPy
         )
 
         initial_metrics = kernel.evaluate(self.x_np, self.y_np)
-        initial_loss = initial_metrics['loss']
+        initial_loss = initial_metrics["loss"]
 
         for _ in range(self.epochs):
             # Batch training
             for i in range(0, len(self.x_np), self.batch_size):
-                bx = self.x_np[i:i+self.batch_size]
-                by = self.y_np[i:i+self.batch_size]
+                bx = self.x_np[i : i + self.batch_size]
+                by = self.y_np[i : i + self.batch_size]
                 kernel.train_step(bx, by)
 
         final_metrics = kernel.evaluate(self.x_np, self.y_np)
-        final_loss = final_metrics['loss']
+        final_loss = final_metrics["loss"]
 
         print(f"Kernel (NumPy): {initial_loss:.4f} -> {final_loss:.4f}")
         # Relaxed check for convergence on random data, but should generally decrease or stay finite
@@ -75,13 +76,14 @@ class TestEqPropKernel(unittest.TestCase):
         # Run fit
         history = trainer.fit(self.loader, epochs=self.epochs)
 
-        train_loss = history['train_loss']
+        train_loss = history["train_loss"]
         self.assertTrue(len(train_loss) > 0)
         print(f"Trainer (Kernel Mode): {train_loss[0]:.4f} -> {train_loss[-1]:.4f}")
 
         # Verify it actually used the kernel
         self.assertIsNotNone(trainer._kernel)
-        self.assertFalse(trainer._kernel.use_gpu) # Should be False on CPU env
+        self.assertFalse(trainer._kernel.use_gpu)  # Should be False on CPU env
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

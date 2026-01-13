@@ -6,9 +6,12 @@ import torch.nn as nn
 from bioplausible.core import EqPropTrainer
 from bioplausible.models.looped_mlp import LoopedMLP
 
+
 class TestONNXExport(unittest.TestCase):
     def setUp(self):
-        self.model = LoopedMLP(input_dim=10, hidden_dim=20, output_dim=2, use_spectral_norm=False)
+        self.model = LoopedMLP(
+            input_dim=10, hidden_dim=20, output_dim=2, use_spectral_norm=False
+        )
         self.trainer = EqPropTrainer(self.model, use_compile=False)
         self.onnx_path = "test_model.onnx"
         self.temp_dir = "temp_dir"
@@ -18,7 +21,7 @@ class TestONNXExport(unittest.TestCase):
             os.remove(self.onnx_path)
             # Remove potential .data file created by newer torch versions for large models or certain configs
             if os.path.exists(self.onnx_path + ".data"):
-                 os.remove(self.onnx_path + ".data")
+                os.remove(self.onnx_path + ".data")
 
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
@@ -40,7 +43,8 @@ class TestONNXExport(unittest.TestCase):
             self.trainer.export_onnx(path, input_shape=(1, 10))
             self.assertTrue(os.path.exists(path))
         except RuntimeError as e:
-             self.skipTest(f"ONNX export failed: {e}")
+            self.skipTest(f"ONNX export failed: {e}")
+
 
 if __name__ == "__main__":
     unittest.main()

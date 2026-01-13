@@ -8,28 +8,26 @@ from typing import Any, Dict, Optional
 import logging
 
 
-def setup_logger(name: str, level: str = 'INFO') -> logging.Logger:
+def setup_logger(name: str, level: str = "INFO") -> logging.Logger:
     """
     Setup a logger with consistent formatting.
-    
+
     Args:
         name: Logger name
         level: Logging level
-        
+
     Returns:
         Configured logger
     """
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, level.upper()))
-    
+
     if not logger.handlers:
         handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            '[%(levelname)s] %(message)s'
-        )
+        formatter = logging.Formatter("[%(levelname)s] %(message)s")
         handler.setFormatter(formatter)
         logger.addHandler(handler)
-    
+
     return logger
 
 
@@ -78,37 +76,39 @@ def dict_to_str(d: Dict[str, Any], indent: int = 0) -> str:
 
 class MovingAverage:
     """Track moving average of a metric."""
-    
+
     def __init__(self, window_size: int = 10):
         self.window_size = window_size
         self.values = []
-    
+
     def update(self, value: float):
         self.values.append(value)
         if len(self.values) > self.window_size:
             self.values.pop(0)
-    
+
     def get(self) -> Optional[float]:
         if not self.values:
             return None
         return sum(self.values) / len(self.values)
-    
+
     def reset(self):
         self.values = []
 
 
-def validate_config_dict(config: Dict[str, Any], required_keys: list, optional_keys: list = None) -> bool:
+def validate_config_dict(
+    config: Dict[str, Any], required_keys: list, optional_keys: list = None
+) -> bool:
     """
     Validate that a config dict has required keys.
-    
+
     Args:
         config: Configuration dictionary
         required_keys: List of required key names
         optional_keys: List of optional key names (for documentation)
-        
+
     Returns:
         True if valid
-        
+
     Raises:
         ValueError: If required keys are missing
     """

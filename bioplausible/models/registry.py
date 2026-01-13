@@ -7,19 +7,22 @@ Defines specifications for available models and algorithms, used by experiments 
 from dataclasses import dataclass
 from typing import List, Optional
 
+
 @dataclass
 class ModelSpec:
     """Specification for a model."""
-    name: str           # Display name
-    description: str    # Short description
-    model_type: str     # Internal type key (mapped to model class)
-    variant: Optional[str] = None # Variant for transformer models
+
+    name: str  # Display name
+    description: str  # Short description
+    model_type: str  # Internal type key (mapped to model class)
+    variant: Optional[str] = None  # Variant for transformer models
     default_lr: float = 0.001
     default_beta: float = 0.22
     default_steps: int = 30
     has_beta: bool = False
     has_steps: bool = False
-    color: str = '#888888'
+    color: str = "#888888"
+
 
 # All models available - ordered by category
 MODEL_REGISTRY = [
@@ -29,7 +32,7 @@ MODEL_REGISTRY = [
         description="Standard Backprop Transformer baseline",
         model_type="backprop",
         default_lr=0.001,
-        color="#ff6b6b"
+        color="#ff6b6b",
     ),
     # EqProp MLP
     ModelSpec(
@@ -41,7 +44,7 @@ MODEL_REGISTRY = [
         default_steps=30,
         has_beta=True,
         has_steps=True,
-        color="#4ecdc4"
+        color="#4ecdc4",
     ),
     # Other Bio-Plausible Algorithms
     ModelSpec(
@@ -49,7 +52,7 @@ MODEL_REGISTRY = [
         description="Random feedback weights",
         model_type="dfa",
         default_lr=0.001,
-        color="#45b7d1"
+        color="#45b7d1",
     ),
     ModelSpec(
         name="CHL (Contrastive Hebbian)",
@@ -60,14 +63,14 @@ MODEL_REGISTRY = [
         default_steps=20,
         has_beta=True,
         has_steps=True,
-        color="#f9ca24"
+        color="#f9ca24",
     ),
     ModelSpec(
         name="Deep Hebbian (Hundred-Layer)",
         description="100-layer Hebbian chain with SN",
         model_type="deep_hebbian",
         default_lr=0.0005,
-        color="#6c5ce7"
+        color="#6c5ce7",
     ),
     # EqProp Transformers (From Track 37 results) - SLOW MODELS LAST
     ModelSpec(
@@ -78,7 +81,7 @@ MODEL_REGISTRY = [
         default_lr=0.0003,
         default_steps=10,
         has_steps=True,
-        color="#2ecc71"
+        color="#2ecc71",
     ),
     ModelSpec(
         name="EqProp Transformer (Full)",
@@ -88,7 +91,7 @@ MODEL_REGISTRY = [
         default_lr=0.0003,
         default_steps=15,
         has_steps=True,
-        color="#27ae60"
+        color="#27ae60",
     ),
     ModelSpec(
         name="EqProp Transformer (Hybrid)",
@@ -98,7 +101,7 @@ MODEL_REGISTRY = [
         default_lr=0.0003,
         default_steps=10,
         has_steps=True,
-        color="#1abc9c"
+        color="#1abc9c",
     ),
     ModelSpec(
         name="EqProp Transformer (Recurrent)",
@@ -108,9 +111,10 @@ MODEL_REGISTRY = [
         default_lr=0.0003,
         default_steps=20,
         has_steps=True,
-        color="#16a085"
+        color="#16a085",
     ),
 ]
+
 
 def get_model_spec(name: str) -> ModelSpec:
     """Get model spec by name."""
@@ -118,6 +122,7 @@ def get_model_spec(name: str) -> ModelSpec:
         if spec.name == name:
             return spec
     raise ValueError(f"Unknown model: {name}")
+
 
 def list_model_names() -> List[str]:
     """List all available model names."""

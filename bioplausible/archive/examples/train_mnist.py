@@ -24,11 +24,11 @@ def main():
     EPOCHS = 10
     BATCH_SIZE = 64
     LR = 0.001
-    
+
     print("=" * 60)
     print("EqProp-Torch: MNIST Training Example")
     print("=" * 60)
-    
+
     # Create model with spectral normalization (required for stability)
     model = LoopedMLP(
         input_dim=784,
@@ -39,7 +39,7 @@ def main():
     )
     print(f"Model: LoopedMLP({784} → {HIDDEN_DIM} → {10})")
     print(f"Initial Lipschitz: {model.compute_lipschitz():.4f}")
-    
+
     # Create trainer with torch.compile for 2x speedup
     trainer = EqPropTrainer(
         model,
@@ -47,25 +47,27 @@ def main():
         use_compile=True,  # Enable torch.compile (portable to CPU/CUDA/MPS)
     )
     print(f"Device: {trainer.device}")
-    
+
     # Load MNIST dataset
     train_loader, test_loader = create_data_loaders(
-        'mnist', 
-        batch_size=BATCH_SIZE, 
+        "mnist",
+        batch_size=BATCH_SIZE,
         flatten=True,  # Flatten for MLP
     )
     print(f"Train samples: {len(train_loader.dataset)}")
     print(f"Test samples: {len(test_loader.dataset)}")
-    
+
     print("\nTraining...")
     print("-" * 60)
-    
+
     # Callback for progress
     def on_epoch(metrics):
-        print(f"Epoch {metrics['epoch']:3d}/{EPOCHS} | "
-              f"Loss: {metrics['train_loss']:.4f} | "
-              f"Acc: {metrics['train_acc']:.1%}")
-    
+        print(
+            f"Epoch {metrics['epoch']:3d}/{EPOCHS} | "
+            f"Loss: {metrics['train_loss']:.4f} | "
+            f"Acc: {metrics['train_acc']:.1%}"
+        )
+
     # Train
     history = trainer.fit(
         train_loader,
@@ -73,19 +75,19 @@ def main():
         val_loader=test_loader,
         callback=on_epoch,
     )
-    
+
     print("-" * 60)
-    
+
     # Final evaluation
     test_metrics = trainer.evaluate(test_loader)
     print(f"\nFinal Test Accuracy: {test_metrics['accuracy']:.1%}")
     print(f"Final Test Loss: {test_metrics['loss']:.4f}")
     print(f"Final Lipschitz: {trainer.compute_lipschitz():.4f}")
-    
+
     # Save model
     trainer.save_checkpoint("mnist_eqprop.pt")
     print("\nCheckpoint saved to: mnist_eqprop.pt")
-    
+
     print("\n" + "=" * 60)
     print("Training complete!")
     print("=" * 60)

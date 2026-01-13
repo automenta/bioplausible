@@ -1,10 +1,10 @@
-
 import torch
 import torch.nn as nn
 from typing import Dict, List, Optional
 from .nebc_base import NEBCBase, register_nebc
 
-@register_nebc('adaptive_fa')
+
+@register_nebc("adaptive_fa")
 class AdaptiveFA(NEBCBase):
     """
     Adaptive Feedback Alignment (AFA) as a native NEBC model.
@@ -21,7 +21,7 @@ class AdaptiveFA(NEBCBase):
         hidden_dim: int,
         output_dim: int,
         num_layers: int = 2,
-        activation: str = 'relu',
+        activation: str = "relu",
         learning_rate: float = 0.001,
         feedback_lr_scale: float = 0.001,
         **kwargs
@@ -48,11 +48,15 @@ class AdaptiveFA(NEBCBase):
         self.feedback_weights = nn.ParameterList()
 
         # Dimensions: [In, Hidden, ..., Hidden, Out]
-        dims = [self.input_dim] + [self.hidden_dim] * (self.num_layers - 1) + [self.output_dim]
+        dims = (
+            [self.input_dim]
+            + [self.hidden_dim] * (self.num_layers - 1)
+            + [self.output_dim]
+        )
 
         for i in range(len(dims) - 1):
             # Forward Layer
-            layer = nn.Linear(dims[i], dims[i+1])
+            layer = nn.Linear(dims[i], dims[i + 1])
             self.layers.append(layer)
 
             # Feedback Weight (B)
@@ -60,12 +64,12 @@ class AdaptiveFA(NEBCBase):
             # Standard backprop uses W.T (In, Out) -> (Out, In) effectively in computation
             # Here we store B explicitly.
             # Shape matching: error @ B. error: [Batch, Out]. B: [Out, In]. -> [Batch, In].
-            B = torch.randn(dims[i+1], dims[i]) * 0.1
+            B = torch.randn(dims[i + 1], dims[i]) * 0.1
             self.feedback_weights.append(nn.Parameter(B, requires_grad=True))
 
-        if self.activation_name == 'relu':
+        if self.activation_name == "relu":
             self.act = nn.ReLU()
-        elif self.activation_name == 'tanh':
+        elif self.activation_name == "tanh":
             self.act = nn.Tanh()
         else:
             self.act = nn.Identity()
@@ -119,14 +123,14 @@ class AdaptiveFA(NEBCBase):
                     # Propagate error from layer above (i+1) down to layer i
                     # using FEEDBACK weights of layer i+1
                     # Accessing feedback_weights[i+1]
-                    B = self.feedback_weights[i+1]
+                    B = self.feedback_weights[i + 1]
                     grad_h = torch.mm(error, B)
 
                     # Apply activation derivative of layer i output
-                    h_curr = activations[i+1]
-                    if self.activation_name == 'relu':
+                    h_curr = activations[i + 1]
+                    if self.activation_name == "relu":
                         grad_h = grad_h * (h_curr > 0).float()
-                    elif self.activation_name == 'tanh':
+                    elif self.activation_name == "tanh":
                         grad_h = grad_h * (1 - h_curr**2)
 
                 # Compute gradient for weights W_i
@@ -139,7 +143,7 @@ class AdaptiveFA(NEBCBase):
                 # Apply update (SGD/Adam would be better, but simple update here)
                 self.layers[i].weight.data -= self.learning_rate * grad_W
                 if self.layers[i].bias is not None:
-                     self.layers[i].bias.data -= self.learning_rate * grad_b
+                    self.layers[i].bias.data -= self.learning_rate * grad_b
 
                 # Update Feedback weights (B) to align with W
                 # Only strictly needed if we want B to track W (Alignment)
@@ -168,17 +172,19 @@ class AdaptiveFA(NEBCBase):
 
                 if i < len(self.layers) - 1:
                     # Access layer i+1
-                    W_next = self.layers[i+1].weight.data
-                    B_next = self.feedback_weights[i+1].data
+                    W_next = self.layers[i + 1].weight.data
+                    B_next = self.feedback_weights[i + 1].data
 
                     # Diff
                     diff = W_next - B_next
                     # Update
-                    self.feedback_weights[i+1].data += self.learning_rate * self.feedback_lr_scale * diff
+                    self.feedback_weights[i + 1].data += (
+                        self.learning_rate * self.feedback_lr_scale * diff
+                    )
 
                 # Prepare error for next iteration (which is layer below)
                 error = grad_h
 
         pred = output.argmax(dim=1)
         acc = (pred == y).float().mean().item()
-        return {'loss': loss.item(), 'accuracy': acc}
+        return {"loss": loss.item(), "accuracy": acc}

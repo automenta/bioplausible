@@ -21,6 +21,7 @@ from torch.nn.utils.parametrizations import spectral_norm
 @dataclass
 class ModelConfig:
     """Configuration for a bio-plausible model."""
+
     name: str
     input_dim: int
     output_dim: int
@@ -33,7 +34,7 @@ class ModelConfig:
 
     # Architecture
     use_spectral_norm: bool = True
-    activation: str = 'silu'
+    activation: str = "silu"
 
     # Additional kwargs
     extra: Dict[str, Any] = field(default_factory=dict)
@@ -64,7 +65,7 @@ class BioModel(nn.Module, ABC):
         hidden_dim: Optional[int] = None,
         output_dim: Optional[int] = None,
         use_spectral_norm: bool = True,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
 
@@ -80,7 +81,7 @@ class BioModel(nn.Module, ABC):
                 output_dim=output_dim,
                 hidden_dims=[hidden_dim] if hidden_dim else [],
                 use_spectral_norm=use_spectral_norm,
-                extra=kwargs
+                extra=kwargs,
             )
         else:
             self.config = config
@@ -94,10 +95,14 @@ class BioModel(nn.Module, ABC):
         self.activation = self._get_activation(self.config.activation)
 
     def _get_activation(self, name: str) -> nn.Module:
-        if name == 'silu': return nn.SiLU()
-        if name == 'relu': return nn.ReLU()
-        if name == 'tanh': return nn.Tanh()
-        if name == 'gelu': return nn.GELU()
+        if name == "silu":
+            return nn.SiLU()
+        if name == "relu":
+            return nn.ReLU()
+        if name == "tanh":
+            return nn.Tanh()
+        if name == "gelu":
+            return nn.GELU()
         return nn.ReLU()
 
     def apply_spectral_norm(self, layer: nn.Module) -> nn.Module:
@@ -112,7 +117,9 @@ class BioModel(nn.Module, ABC):
         with torch.no_grad():
             for module in self.modules():
                 # Access .weight property if available (handles spectral_norm)
-                if hasattr(module, 'weight') and isinstance(module.weight, torch.Tensor):
+                if hasattr(module, "weight") and isinstance(
+                    module.weight, torch.Tensor
+                ):
                     w = module.weight
                     if w.dim() >= 2:
                         w_mat = w.view(w.size(0), -1)
@@ -124,9 +131,9 @@ class BioModel(nn.Module, ABC):
     def get_stats(self) -> Dict[str, float]:
         """Get algorithm-specific statistics for reporting."""
         return {
-            'lipschitz': self.compute_lipschitz(),
-            'num_params': sum(p.numel() for p in self.parameters()),
-            'spectral_norm': self.use_spectral_norm,
+            "lipschitz": self.compute_lipschitz(),
+            "num_params": sum(p.numel() for p in self.parameters()),
+            "spectral_norm": self.use_spectral_norm,
         }
 
     @abstractmethod
@@ -143,11 +150,14 @@ class BioModel(nn.Module, ABC):
 
         However, for compatibility with BaseAlgorithm, we allow this to be abstract or default to BPTT.
         """
-        raise NotImplementedError("Model does not implement custom train_step. Use BPTT.")
+        raise NotImplementedError(
+            "Model does not implement custom train_step. Use BPTT."
+        )
 
 
 class ModelRegistry:
     """Registry for BioModels."""
+
     _models: Dict[str, type] = {}
 
     @classmethod
@@ -156,13 +166,17 @@ class ModelRegistry:
             cls._models[name] = model_cls
             model_cls.algorithm_name = name
             return model_cls
+
         return decorator
 
     @classmethod
     def get(cls, name: str) -> type:
         if name not in cls._models:
-            raise ValueError(f"Unknown model: {name}. Available: {list(cls._models.keys())}")
+            raise ValueError(
+                f"Unknown model: {name}. Available: {list(cls._models.keys())}"
+            )
         return cls._models[name]
+
 
 # Convenience
 register_model = ModelRegistry.register

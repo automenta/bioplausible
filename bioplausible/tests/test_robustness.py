@@ -14,13 +14,14 @@ sys.path.insert(0, str(parent_dir))
 from bioplausible import EqPropTrainer, LoopedMLP
 from torch.utils.data import DataLoader, TensorDataset
 
+
 class TestRobustness(unittest.TestCase):
     """Test robustness and edge cases."""
 
     def test_looped_mlp_dimension_mismatch(self):
         """Test LoopedMLP raises error on dimension mismatch."""
         model = LoopedMLP(10, 5, 2)
-        x = torch.randn(4, 11) # Wrong input dim (11 vs 10)
+        x = torch.randn(4, 11)  # Wrong input dim (11 vs 10)
 
         with self.assertRaises(ValueError) as cm:
             model(x)
@@ -47,8 +48,9 @@ class TestRobustness(unittest.TestCase):
 
         # Should not crash, just do 0 updates
         history = trainer.fit(empty_loader, epochs=1)
-        self.assertEqual(len(history['train_loss']), 1)
+        self.assertEqual(len(history["train_loss"]), 1)
         self.assertEqual(trainer.current_epoch, 1)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
