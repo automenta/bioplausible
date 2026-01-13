@@ -70,10 +70,15 @@ class NEBCBase(nn.Module, ABC):
         """Compute the maximum Lipschitz constant across all layers."""
         max_L = 0.0
         with torch.no_grad():
-            for name, param in self.named_parameters():
-                if 'weight' in name and param.dim() >= 2:
-                    s = torch.linalg.svdvals(param.view(param.size(0), -1))
-                    max_L = max(max_L, s[0].item())
+            for module in self.modules():
+                # Access .weight property if available (handles spectral_norm)
+                if hasattr(module, 'weight') and isinstance(module.weight, torch.Tensor):
+                    w = module.weight
+                    if w.dim() >= 2:
+                        w_mat = w.view(w.size(0), -1)
+                        s = torch.linalg.svdvals(w_mat)
+                        if s.numel() > 0:
+                            max_L = max(max_L, s[0].item())
         return max_L
     
     def get_stats(self) -> Dict[str, float]:
