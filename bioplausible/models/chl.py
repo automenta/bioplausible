@@ -192,6 +192,84 @@ class ContrastiveHebbianLearning(NEBCBase):
         delta_W = (pos_corr - neg_corr) / self.beta
         return delta_W
     
+    def train_step(self, x: torch.Tensor, y: torch.Tensor, lr: float = 0.01) -> Dict[str, float]:
+        """
+        Perform a single training step using Contrastive Hebbian Learning.
+
+        Args:
+            x: Input batch
+            y: Target labels
+            lr: Learning rate (if not using external optimizer)
+
+        Returns:
+            Dict with metrics
+        """
+        # Get positive and negative phases
+        h_pos, h_neg = self.contrastive_update(x, y)
+
+        # Calculate gradients
+        # Note: We need to update W_in, W_hidden, W_out, and layers
+
+        # This implementation of CHL in _relax is single hidden state h.
+        # W_in projects x -> h
+        # W_hidden projects h -> h
+        # layers project h -> h (additional recurrence)
+        # W_out projects h -> y
+
+        # Gradient for W_out: (y - y_free) * h_free^T ?
+        # In CHL, we clamp output in positive phase.
+        # y_pos is target (or close to it). y_neg is free phase output.
+        # dW_out ~ y_pos @ h_pos.T - y_neg @ h_neg.T
+
+        batch_size = x.size(0)
+
+        # Targets
+        if y.dim() == 1:
+            target = F.one_hot(y, self.output_dim).float()
+        else:
+            target = y
+
+        y_pos = target # In clamped phase, output is target
+        y_neg = self.W_out(h_neg)
+
+        dW_out = (y_pos.T @ h_pos - y_neg.T @ h_neg) / (self.beta * batch_size)
+
+        # Gradient for W_in:
+        # Input x is constant.
+        # dW_in ~ (h_pos - h_neg) @ x.T
+        dW_in = ((h_pos - h_neg).T @ x) / (self.beta * batch_size)
+
+        # Gradient for W_hidden (recurrent):
+        # dW_hidden ~ h_pos @ h_pos.T - h_neg @ h_neg.T
+        dW_hidden = (h_pos.T @ h_pos - h_neg.T @ h_neg) / (self.beta * batch_size)
+
+        # Apply updates
+        self._apply_update(self.W_out, dW_out, lr)
+        self._apply_update(self.W_in, dW_in, lr)
+        self._apply_update(self.W_hidden, dW_hidden, lr)
+
+        # Update additional layers
+        for layer in self.layers:
+             self._apply_update(layer, dW_hidden, lr) # Same recurrent update
+
+        # Compute loss (free phase cross entropy)
+        loss = F.cross_entropy(y_neg, y).item() if y.dim() == 1 else F.mse_loss(y_neg, y).item()
+        acc = (y_neg.argmax(1) == y).float().mean().item() if y.dim() == 1 else 0.0
+
+        return {'loss': loss, 'accuracy': acc}
+
+    def _apply_update(self, layer: nn.Module, grad: torch.Tensor, lr: float):
+        """Apply gradient update handling spectral norm."""
+        if hasattr(layer, 'parametrizations') and hasattr(layer.parametrizations, 'weight'):
+             param = layer.parametrizations.weight.original
+        elif hasattr(layer, 'weight_orig'):
+             param = layer.weight_orig
+        else:
+             param = layer.weight
+
+        with torch.no_grad():
+             param.data += lr * grad
+
     def get_stats(self) -> Dict[str, float]:
         """Get CHL-specific statistics."""
         stats = super().get_stats()

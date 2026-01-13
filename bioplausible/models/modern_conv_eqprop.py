@@ -130,68 +130,12 @@ class ModernConvEqProp(EqPropModel):
     def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
         """
         Single equilibrium step.
-        x_transformed is the output of stage3 (the 'input' to the recurrent block).
-        Wait, in original code:
-            h_next = torch.tanh(self.eq_conv(h_norm))
-            h = (1 - gamma) * h + gamma * h_next
-        It didn't seem to add x_transformed (stage3 output) inside the loop?
-        
-        Original code:
-        # Equilibrium settling at deepest layer
-        for _ in range(steps):
-            h_norm = self.eq_norm(h)
-            h_next = torch.tanh(self.eq_conv(h_norm))
-            # Exponential moving average update
-            h = (1 - self.gamma) * h + self.gamma * h_next
-
-        Wait, if h is initialized as stage3 output (which implies h starts as x_transformed?), then it relaxes.
-        BUT, in original code:
-            h = self.stage3(h) # h is now the feature map
-            for _ in range(steps): ...
-        So 'h' acts as both the state and the input?
-        Actually, the recurrent block `eq_conv` connects h to h.
-        There is NO external input added at each step in the original code,
-        EXCEPT that h starts from the feedforward output.
-        This is a "relaxation from initial guess" dynamics, not "driven by input" dynamics?
-        
-        Let's look closer at original code:
-           h = self.stage3(h)
-           for _ in range(steps):
-               h_norm = self.eq_norm(h)
-               h_next = torch.tanh(self.eq_conv(h_norm))
-               h = (1-g)*h + g*h_next
-
-        This means the input x affects the initialization of h, but isn't added as a drive term (+ x) in the loop.
-        Standard EqProp usually has +x. This seems to be a variation or maybe 'h' here represents the state OF the neurons driven by bottom-up input?
-        
-        If I map this to EqPropModel:
-        _initialize_hidden_state(x) -> needs to return the output of stages!
-        _transform_input(x) -> returns None? Or maybe just x?
-
-        But `_initialize_hidden_state` is meant to be the 'zero' state usually.
-        If I make `_initialize_hidden_state` return `stage3(x)`, then `_transform_input` is unused.
-
-        However, `EqPropModel.forward` does:
-           h = _initialize_hidden_state(x)
-           x_t = _transform_input(x)
-           for step: h = forward_step(h, x_t)
-
-        If I implement:
-           _initialize_hidden_state(x) -> return self.stage3(self.stage2(self.stage1(x)))
-           _transform_input(x) -> return torch.empty(0) # Unused
-           forward_step(h, x_t) -> standard relaxation (ignore x_t)
-
-        This replicates the behavior.
-
-        Is this desirable?
-        The comment says "Modern Convolutional EqProp... inspired by ResNet".
-        If it's just relaxing, it's finding a fixed point of `h = tanh(W h)`.
-        The input `x` sets the initial basin of attraction.
-        
-        Let's stick to replicating the original behavior for now to ensure correctness of refactor.
+        Injects the transformed input (stage3 features) into the recurrent dynamics.
+        h_next = tanh(W * norm(h) + x_transformed)
         """
         h_norm = self.eq_norm(h)
-        h_next = torch.tanh(self.eq_conv(h_norm))
+        # Add input drive to recurrent input
+        h_next = torch.tanh(self.eq_conv(h_norm) + x_transformed)
         # Exponential moving average update
         return torch.lerp(h, h_next, self.gamma)
 
