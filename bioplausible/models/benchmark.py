@@ -18,8 +18,13 @@ from bioplausible.utils import profile_model
 def run_benchmark(model_name: str, device: str = 'cpu') -> Dict[str, Any]:
     print(f"Benchmarking {model_name} on {device}...")
 
-    if model_name == 'looped_mlp':
+    if model_name.startswith('looped_mlp'):
+        # Check for gradient method
+        grad_method = 'equilibrium' if 'deq' in model_name else 'bptt'
         model = LoopedMLP(784, 512, 10, max_steps=30)
+        # Assuming EqPropModel now accepts gradient_method in init or property
+        if hasattr(model, 'gradient_method'):
+            model.gradient_method = grad_method
         input_shape = (32, 784)
     elif model_name == 'conv_eqprop':
         model = ConvEqProp(3, 64, 10, max_steps=20)
@@ -73,7 +78,7 @@ def main():
         print("CUDA not available, falling back to CPU")
         args.device = 'cpu'
 
-    models = ['looped_mlp', 'conv_eqprop', 'modern_conv', 'simple_conv', 'transformer']
+    models = ['looped_mlp', 'looped_mlp_deq', 'conv_eqprop', 'modern_conv', 'simple_conv', 'transformer']
 
     results = []
     for m in models:
