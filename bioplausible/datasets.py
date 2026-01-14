@@ -8,7 +8,8 @@ import warnings
 from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
-from torch.utils.data import DataLoader, Dataset
+import numpy as np
+from torch.utils.data import DataLoader, Dataset, TensorDataset
 
 
 # =============================================================================
@@ -27,7 +28,7 @@ def get_vision_dataset(
     Load a vision dataset with standard transforms.
 
     Args:
-        name: Dataset name ('mnist', 'fashion_mnist', 'cifar10', 'kmnist', 'svhn')
+        name: Dataset name ('mnist', 'fashion_mnist', 'cifar10', 'kmnist', 'svhn', 'digits')
         root: Data directory
         train: If True, load training set
         download: If True, download if not present
@@ -40,12 +41,47 @@ def get_vision_dataset(
         >>> train_data = get_vision_dataset('mnist', train=True)
         >>> test_data = get_vision_dataset('mnist', train=False)
     """
+
+    if name == "digits":
+        return _load_sklearn_digits(train, flatten)
+
     from torchvision import datasets, transforms
 
     transform = _build_transforms(name, flatten)
     dataset_class = _get_dataset_class(name)
 
     return dataset_class(root, train=train, download=download, transform=transform)
+
+
+def _load_sklearn_digits(train: bool, flatten: bool) -> Dataset:
+    """Load sklearn 8x8 digits dataset."""
+    try:
+        from sklearn.datasets import load_digits
+        from sklearn.model_selection import train_test_split
+    except ImportError:
+        raise ImportError("scikit-learn required for 'digits' dataset. pip install scikit-learn")
+
+    digits = load_digits()
+    X = digits.data.astype(np.float32) # (1797, 64)
+    y = digits.target.astype(np.int64) # (1797,)
+
+    # Normalize to [0, 1] (digits are 0-16)
+    X /= 16.0
+
+    # Simple split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, shuffle=True
+    )
+
+    X_data = X_train if train else X_test
+    y_data = y_train if train else y_test
+
+    # Sklearn digits are already flattened (N, 64) by default in .data
+    # If not flatten, reshape to (N, 1, 8, 8)
+    if not flatten:
+        X_data = X_data.reshape(-1, 1, 8, 8)
+
+    return TensorDataset(torch.from_numpy(X_data), torch.from_numpy(y_data))
 
 
 def _build_transforms(name: str, flatten: bool):
@@ -79,7 +115,7 @@ def _get_dataset_class(name: str) -> type:
 
     if name not in dataset_map:
         raise ValueError(
-            f"Unknown dataset: {name}. Available: {list(dataset_map.keys())}"
+            f"Unknown dataset: {name}. Available: {list(dataset_map.keys())} + ['digits']"
         )
 
     return dataset_map[name]

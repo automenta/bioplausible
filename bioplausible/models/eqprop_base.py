@@ -75,38 +75,40 @@ class EquilibriumFunction(autograd.Function):
 
             delta = delta.detach()
 
-            # IMPORTANT: We must NOT use torch.enable_grad() here for x_transformed if it's from saved_tensors
-            # because it belongs to the FORWARD graph, which is immutable now.
-            # However, we need to create a NEW graph connecting (params, x_transformed) -> f_h
-
             with torch.enable_grad():
-                # Re-compute one step to form graph connecting params and x to output
-                # We use the original x_transformed (attached to graph) here
-
-                # CRITICAL FIX: We must detach h_star!
                 h_star_detached = h_star.detach()
 
-                f_h = model.forward_step(h_star_detached, x_transformed)
+                # A. Compute gradients for parameters (W_rec, etc.)
+                # CRITICAL: Detach x_transformed to prevent tracing back to W_in or other upstream params.
+                # If we don't detach, autograd will trace d(f_h)/d(x) * d(x)/d(params) and return it as d(params),
+                # effectively double-counting the gradient for params that affect x_transformed.
+                x_detached = x_transformed.detach()
 
-                inputs = list(params)
+                # Check if params need grad
+                params_with_grad = [p for p in params if p.requires_grad]
+
+                if params_with_grad:
+                    f_h_params = model.forward_step(h_star_detached, x_detached)
+                    grads_params = autograd.grad(
+                        f_h_params,
+                        params,
+                        grad_outputs=delta,
+                        allow_unused=True,
+                        retain_graph=False
+                    )
+                else:
+                    grads_params = [None] * len(params)
+
+                # B. Compute gradients for input (x_transformed)
                 if x_transformed.requires_grad:
-                    inputs.append(x_transformed)
-
-                # Use retain_graph=True to avoid freeing graph buffers that might be needed
-                # if autograd needs to access x_transformed's history later?
-                # Actually, for x_transformed, we are at the "leaf" of this local graph.
-                # But x_transformed itself is an intermediate node in the global graph.
-                grads = autograd.grad(
-                    f_h,
-                    inputs,
-                    grad_outputs=delta,
-                    allow_unused=True,
-                    retain_graph=True,
-                )
-
-                grad_params = grads[: len(params)]
-                if x_transformed.requires_grad:
-                    grad_x = grads[-1]
+                     # We use the attached x_transformed here
+                     f_h_x = model.forward_step(h_star_detached, x_transformed)
+                     grad_x = autograd.grad(
+                         f_h_x,
+                         x_transformed,
+                         grad_outputs=delta,
+                         retain_graph=False
+                     )[0]
                 else:
                     grad_x = None
 
@@ -114,7 +116,7 @@ class EquilibriumFunction(autograd.Function):
             # Restore training state
             model.train(was_training)
 
-        return (None, grad_x, None, *grad_params)
+        return (None, grad_x, None, *grads_params)
 
 
 class EqPropModel(NEBCBase):

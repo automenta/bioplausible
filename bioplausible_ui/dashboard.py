@@ -6,6 +6,7 @@ Features stunning dark cyberpunk theme with live pyqtgraph plots.
 """
 
 import sys
+import numpy as np
 from typing import Optional, Dict, List, Tuple, Any
 from pathlib import Path
 
@@ -82,7 +83,7 @@ except ImportError:
 ENABLE_WEIGHT_VIZ = False  # Disabled due to pyqtgraph/matplotlib/pyparsing version conflicts
 
 from .themes import CYBERPUNK_DARK, PLOT_COLORS
-from .worker import TrainingWorker
+from .worker import TrainingWorker, RLWorker
 from .generation import UniversalGenerator, SimpleCharTokenizer, count_parameters, format_parameter_count
 from .hyperparams import get_hyperparams_for_model, HyperparamSpec
 from .viz_utils import extract_weights, format_weight_for_display, normalize_weights_for_display, get_layer_description
@@ -119,6 +120,11 @@ class EqPropDashboard(QMainWindow):
         self.loss_history: List[float] = []
         self.acc_history: List[float] = []
         self.lipschitz_history: List[float] = []
+
+        # RL History
+        self.rl_reward_history: List[float] = []
+        self.rl_loss_history: List[float] = []
+        self.rl_avg_reward_history: List[float] = []
 
         # Initialize UI
         self._setup_ui()
@@ -205,6 +211,10 @@ class EqPropDashboard(QMainWindow):
         # Tab 2: Vision
         vision_tab = self._create_vision_tab()
         self.tabs.addTab(vision_tab, "📷 Vision")
+
+        # Tab 3: Reinforcement Learning
+        rl_tab = self._create_rl_tab()
+        self.tabs.addTab(rl_tab, "🎮 Reinforcement Learning")
 
         # Status bar
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
@@ -637,6 +647,118 @@ class EqPropDashboard(QMainWindow):
 
         return tab
 
+    def _create_rl_tab(self) -> QWidget:
+        """Create the Reinforcement Learning tab."""
+        tab = QWidget()
+        layout = QHBoxLayout(tab)
+        layout.setSpacing(15)
+
+        # Left panel: Controls
+        left_panel = QVBoxLayout()
+        layout.addLayout(left_panel, stretch=1)
+
+        # Environment Selection
+        env_items = ["CartPole-v1", "Acrobot-v1", "MountainCar-v0"]
+        self.rl_env_combo = QComboBox()
+        self.rl_env_combo.addItems(env_items)
+
+        # Model/Algo Selection
+        self.rl_algo_combo = QComboBox()
+        self.rl_algo_combo.addItems(["LoopedMLP (EqProp)", "LoopedMLP (BPTT)", "Standard Backprop"])
+
+        # Gradient Method
+        self.rl_grad_combo = QComboBox()
+        self.rl_grad_combo.addItems(["equilibrium", "bptt"])
+        # Logic to hide this if standard backprop is selected?
+        # For simplicity, we keep it visible but ignored for backprop model.
+
+        self.rl_hidden_spin = QSpinBox()
+        self.rl_hidden_spin.setRange(32, 512)
+        self.rl_hidden_spin.setValue(64)
+
+        self.rl_steps_spin = QSpinBox()
+        self.rl_steps_spin.setRange(5, 50)
+        self.rl_steps_spin.setValue(20)
+
+        model_controls = [
+            ("Environment:", self.rl_env_combo),
+            ("Algorithm:", self.rl_algo_combo),
+            ("Gradient Mode:", self.rl_grad_combo),
+            ("Hidden Dim:", self.rl_hidden_spin),
+            ("Eq Steps:", self.rl_steps_spin)
+        ]
+        model_group = self._create_control_group("🎮 Task & Model", model_controls)
+        left_panel.addWidget(model_group)
+
+        # Training Settings
+        self.rl_episodes_spin = QSpinBox()
+        self.rl_episodes_spin.setRange(10, 5000)
+        self.rl_episodes_spin.setValue(200)
+
+        self.rl_lr_spin = QDoubleSpinBox()
+        self.rl_lr_spin.setRange(0.0001, 0.1)
+        self.rl_lr_spin.setValue(0.005)
+        self.rl_lr_spin.setDecimals(4)
+
+        train_controls = [
+            ("Episodes:", self.rl_episodes_spin),
+            ("Learning Rate:", self.rl_lr_spin),
+        ]
+        train_group = self._create_control_group("⚙️ Training", train_controls)
+        left_panel.addWidget(train_group)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+
+        self.rl_train_btn = QPushButton("▶ Train")
+        self.rl_train_btn.clicked.connect(lambda: self._start_training('rl'))
+        btn_layout.addWidget(self.rl_train_btn)
+
+        self.rl_stop_btn = QPushButton("⏹ Stop")
+        self.rl_stop_btn.setEnabled(False)
+        self.rl_stop_btn.clicked.connect(self._stop_training)
+        btn_layout.addWidget(self.rl_stop_btn)
+
+        left_panel.addLayout(btn_layout)
+
+        # Progress Bar
+        self.rl_progress = QProgressBar()
+        self.rl_progress.setFormat("Episode %v / %m")
+        left_panel.addWidget(self.rl_progress)
+
+        left_panel.addStretch()
+
+        # Right panel: Plots
+        right_panel = QVBoxLayout()
+        layout.addLayout(right_panel, stretch=2)
+
+        if HAS_PYQTGRAPH:
+            metrics_group = QGroupBox("📊 RL Metrics")
+            metrics_layout = QVBoxLayout(metrics_group)
+
+            self.rl_reward_plot, self.rl_reward_curve = self._create_plot_widget("Total Reward", "Reward", xlabel="Episode")
+            # Add rolling avg curve
+            self.rl_avg_reward_curve = self.rl_reward_plot.plot(pen=pg.mkPen('y', width=2))
+            metrics_layout.addWidget(self.rl_reward_plot)
+
+            self.rl_loss_plot, self.rl_loss_curve = self._create_plot_widget("Loss", "Loss", xlabel="Episode")
+            metrics_layout.addWidget(self.rl_loss_plot)
+
+            right_panel.addWidget(metrics_group)
+
+        # Stats
+        stats_group = QGroupBox("📈 Results")
+        stats_layout = QGridLayout(stats_group)
+
+        stats_layout.addWidget(QLabel("Avg Reward (last 50):"), 0, 0)
+        self.rl_avg_label = QLabel("--")
+        self.rl_avg_label.setObjectName("metricLabel")
+        stats_layout.addWidget(self.rl_avg_label, 0, 1)
+
+        right_panel.addWidget(stats_group)
+
+        return tab
+
     def _start_training(self, mode: str):
         """Start training in background thread."""
         try:
@@ -645,6 +767,8 @@ class EqPropDashboard(QMainWindow):
 
             if mode == 'vision':
                 self._start_vision_training()
+            elif mode == 'rl':
+                self._start_rl_training()
             else:
                 self._start_lm_training()
 
@@ -897,6 +1021,74 @@ class EqPropDashboard(QMainWindow):
         self.plot_timer.start(100)
         self.worker.start()
 
+    def _start_rl_training(self):
+        """Start RL training."""
+        import torch
+        from bioplausible.models.looped_mlp import LoopedMLP
+        from bioplausible.models import BackpropMLP
+        import gymnasium as gym
+
+        env_name = self.rl_env_combo.currentText()
+        algo_name = self.rl_algo_combo.currentText()
+        grad_method = self.rl_grad_combo.currentText()
+        hidden = self.rl_hidden_spin.value()
+        steps = self.rl_steps_spin.value()
+        episodes = self.rl_episodes_spin.value()
+        lr = self.rl_lr_spin.value()
+
+        # Determine Dimensions
+        temp_env = gym.make(env_name)
+        input_dim = temp_env.observation_space.shape[0]
+        output_dim = temp_env.action_space.n
+        temp_env.close()
+
+        # Create Model
+        if "Standard Backprop" in algo_name:
+            model = BackpropMLP(input_dim, hidden, output_dim)
+        else:
+            # LoopedMLP
+            model = LoopedMLP(
+                input_dim, hidden, output_dim,
+                max_steps=steps,
+                gradient_method=grad_method, # 'equilibrium' or 'bptt'
+                use_spectral_norm=True
+            )
+
+        # Clear history
+        self.rl_reward_history.clear()
+        self.rl_loss_history.clear()
+        self.rl_avg_reward_history.clear()
+
+        # Create Worker
+        self.worker = RLWorker(model, env_name, episodes, lr, steps)
+        self.worker.progress.connect(self._on_rl_progress)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.error.connect(self._on_error)
+
+        # Update UI
+        self.rl_train_btn.setEnabled(False)
+        self.rl_stop_btn.setEnabled(True)
+        self.rl_progress.setMaximum(episodes)
+        self.rl_progress.setValue(0)
+
+        self.status_label.setText(f"Training {algo_name} on {env_name}...")
+        self.plot_timer.start(100)
+        self.worker.start()
+
+    def _on_rl_progress(self, metrics: dict):
+        """Handle RL progress."""
+        self.rl_reward_history.append(metrics['reward'])
+        self.rl_loss_history.append(metrics['loss'])
+        self.rl_avg_reward_history.append(metrics['avg_reward'])
+
+        self.rl_progress.setValue(metrics['episode'])
+        self.rl_avg_label.setText(f"{metrics['avg_reward']:.1f}")
+
+        self.status_label.setText(
+            f"Ep {metrics['episode']}/{metrics['total_episodes']} | "
+            f"Reward: {metrics['reward']:.1f} | "
+            f"Avg: {metrics['avg_reward']:.1f}"
+        )
 
     def _stop_training(self):
         """Stop training."""
@@ -950,7 +1142,11 @@ class EqPropDashboard(QMainWindow):
                     self.lm_acc_curve.setData(epochs, self.acc_history)
                 self.lm_lip_curve.setData(epochs, self.lipschitz_history)
 
-
+        if self.rl_reward_history and hasattr(self, 'rl_reward_curve'):
+            episodes = list(range(1, len(self.rl_reward_history) + 1))
+            self.rl_reward_curve.setData(episodes, self.rl_reward_history)
+            self.rl_avg_reward_curve.setData(episodes, self.rl_avg_reward_history)
+            self.rl_loss_curve.setData(episodes, self.rl_loss_history)
 
     def _on_finished(self, result: dict):
         """Handle training completion."""
@@ -959,6 +1155,9 @@ class EqPropDashboard(QMainWindow):
         self.vis_stop_btn.setEnabled(False)
         self.lm_train_btn.setEnabled(True)
         self.lm_stop_btn.setEnabled(False)
+        if hasattr(self, 'rl_train_btn'):
+            self.rl_train_btn.setEnabled(True)
+            self.rl_stop_btn.setEnabled(False)
 
         if result.get('success'):
             self.status_label.setText(f"✓ Training complete! ({result['epochs_completed']} epochs)")
@@ -970,6 +1169,12 @@ class EqPropDashboard(QMainWindow):
         self.plot_timer.stop()
         self.vis_train_btn.setEnabled(True)
         self.vis_stop_btn.setEnabled(False)
+        self.lm_train_btn.setEnabled(True)
+        self.lm_stop_btn.setEnabled(False)
+        if hasattr(self, 'rl_train_btn'):
+            self.rl_train_btn.setEnabled(True)
+            self.rl_stop_btn.setEnabled(False)
+
         self.status_label.setText("Training error!")
         QMessageBox.critical(self, "Training Error", error)
 

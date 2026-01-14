@@ -312,3 +312,54 @@ class GenerationWorker(QThread):
                 self.error.emit("Model does not support generation")
         except Exception as e:
             self.error.emit(str(e))
+import numpy as np
+from bioplausible.rl.trainer import RLTrainer
+
+class RLWorker(QThread):
+    """Background worker for RL training."""
+
+    progress = pyqtSignal(dict)
+    finished = pyqtSignal(dict)
+    error = pyqtSignal(str)
+
+    def __init__(self, model, env_name, episodes=500, lr=1e-3, device='cpu', parent=None):
+        super().__init__(parent)
+        self.model = model
+        self.env_name = env_name
+        self.episodes = episodes
+        self.lr = lr
+        self.device = device
+        self._stop_requested = False
+
+    def stop(self):
+        """Request training stop."""
+        self._stop_requested = True
+
+    def run(self):
+        try:
+            trainer = RLTrainer(self.model, self.env_name, device=self.device, lr=self.lr)
+
+            start_time = time.time()
+
+            for ep in range(self.episodes):
+                if self._stop_requested:
+                    break
+
+                metrics = trainer.train_episode()
+
+                # Calculate rolling average
+                avg_reward = np.mean(trainer.reward_history[-50:]) if trainer.reward_history else 0.0
+
+                self.progress.emit({
+                    'episode': ep + 1,
+                    'total_episodes': self.episodes,
+                    'reward': metrics['reward'],
+                    'loss': metrics['loss'],
+                    'avg_reward': avg_reward,
+                    'time': time.time() - start_time
+                })
+
+            self.finished.emit({'success': True})
+
+        except Exception as e:
+            self.error.emit(f"{type(e).__name__}: {e}\n{traceback.format_exc()}")
