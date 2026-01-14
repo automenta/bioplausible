@@ -155,6 +155,16 @@ class ModernConvEqProp(EqPropModel):
         h = self.stage3(h)
         return h
 
+    def _forward_step_impl(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
+        """Single step implementation (uncompiled)."""
+        h_norm = self.eq_norm(h)
+        # Add input drive to recurrent input
+        h_next = torch.tanh(self.eq_conv(h_norm) + x_transformed)
+        # Exponential moving average update
+        return torch.lerp(h, h_next, self.gamma)
+
     @compile_settling_loop
     def forward_step(
         self, h: torch.Tensor, x_transformed: torch.Tensor
@@ -164,11 +174,7 @@ class ModernConvEqProp(EqPropModel):
         Injects the transformed input (stage3 features) into the recurrent dynamics.
         h_next = tanh(W * norm(h) + x_transformed)
         """
-        h_norm = self.eq_norm(h)
-        # Add input drive to recurrent input
-        h_next = torch.tanh(self.eq_conv(h_norm) + x_transformed)
-        # Exponential moving average update
-        return torch.lerp(h, h_next, self.gamma)
+        return self._forward_step_impl(h, x_transformed)
 
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         features = self.pool(h).flatten(1)
@@ -232,13 +238,18 @@ class SimpleConvEqProp(EqPropModel):
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         return self.embed(x)
 
-    @compile_settling_loop
-    def forward_step(
+    def _forward_step_impl(
         self, h: torch.Tensor, x_transformed: torch.Tensor
     ) -> torch.Tensor:
         h_norm = self.norm(h)
         h_next = torch.tanh(self.W_rec(h_norm) + x_transformed)
         return torch.lerp(h, h_next, self.gamma)
+
+    @compile_settling_loop
+    def forward_step(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
+        return self._forward_step_impl(h, x_transformed)
 
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         return self.head(h)

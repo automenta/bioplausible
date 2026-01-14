@@ -63,6 +63,9 @@ class EquilibriumFunction(autograd.Function):
             # Use detached X for the VJP loop to avoid any graph entanglement with input gradients yet
             x_transformed_detached = x_transformed.detach()
 
+            # Check if model has _forward_step_impl (uncompiled) to avoid torch.compile overhead in loop
+            forward_fn = getattr(model, "_forward_step_impl", model.forward_step)
+
             # Iterate to equilibrium for the backward pass (solving for delta)
             # delta_{t+1} = (df/dh)^T * delta_t + grad_output
             for _ in range(model.max_steps):
@@ -71,15 +74,17 @@ class EquilibriumFunction(autograd.Function):
                     h_star_loop = h_star.detach().requires_grad_(True)
 
                     # Compute f(h, x)
-                    f_h = model.forward_step(h_star_loop, x_transformed_detached)
+                    f_h = forward_fn(h_star_loop, x_transformed_detached)
 
                     # VJP: v = (df/dh)^T @ delta
                     # retain_graph=False ensures we free the f_h graph immediately.
+                    # We detach delta because for the purpose of the VJP, delta is a constant vector.
                     vjp = autograd.grad(
                         f_h,
                         h_star_loop,
                         grad_outputs=delta.detach(),
                         retain_graph=False,
+                        create_graph=False
                     )[0]
 
                     # Update delta
@@ -104,7 +109,8 @@ class EquilibriumFunction(autograd.Function):
 
                 if params_with_grad:
                     # Re-run forward step to build graph from params to f_h
-                    f_h_params = model.forward_step(h_star_detached, x_detached)
+                    # Use uncompiled function here too for consistency.
+                    f_h_params = forward_fn(h_star_detached, x_detached)
 
                     computed_grads = autograd.grad(
                         f_h_params,

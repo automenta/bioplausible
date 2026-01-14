@@ -176,6 +176,16 @@ class TransformerEqProp(EqPropModel):
         x_emb = self.token_emb(x) + self.pos_emb(positions)
         return x_emb
 
+    def _forward_step_impl(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
+        """Single step implementation (uncompiled)."""
+        # x_transformed is x_emb
+        current_h = h
+        for i in range(self.num_layers):
+            current_h = self._forward_layer(current_h, x_transformed, i)
+        return current_h
+
     @compile_settling_loop
     def forward_step(
         self, h: torch.Tensor, x_transformed: torch.Tensor
@@ -183,11 +193,7 @@ class TransformerEqProp(EqPropModel):
         """
         Single equilibrium iteration step.
         """
-        # x_transformed is x_emb
-        current_h = h
-        for i in range(self.num_layers):
-            current_h = self._forward_layer(current_h, x_transformed, i)
-        return current_h
+        return self._forward_step_impl(h, x_transformed)
 
     def _forward_layer(
         self, h: torch.Tensor, x_emb: torch.Tensor, layer_idx: int
