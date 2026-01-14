@@ -131,7 +131,7 @@ def track_13_conv_eqprop(verifier) -> TrackResult:
     evidence = f"""
 **Claim**: ConvEqProp classifies non-trivial noisy shapes (Square, Plus, Frame).
 
-**Experiment**: Train on 16x16 noisy images (Gaussian noise $\sigma=0.3$). N=3 seeds.
+**Experiment**: Train on 16x16 noisy images (Gaussian noise $\\sigma=0.3$). N=3 seeds.
 
 | Metric | Mean | StdDev |
 |--------|------|--------|
