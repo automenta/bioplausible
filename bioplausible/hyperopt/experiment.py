@@ -20,6 +20,7 @@ from bioplausible.models.looped_mlp import LoopedMLP
 from bioplausible.models.backprop_transformer_lm import BackpropTransformerLM
 from bioplausible.models.simple_fa import StandardFA
 from bioplausible.models.cf_align import ContrastiveFeedbackAlignment
+from bioplausible.models.hebbian_chain import DeepHebbianChain
 
 from .storage import HyperoptStorage
 from .metrics import TrialMetrics
@@ -123,26 +124,24 @@ class ExperimentAlgorithm:
             return ContrastiveFeedbackAlignment(config=config).to(self.device)
 
         elif model_type == "deep_hebbian":
-            # This was simulated using backprop with many layers in legacy code
-            # We can replicate that behavior or implement a real Hebbian chain if available.
-            # For now, replicate legacy behavior: Deep MLP with Backprop
             self.has_embed = True
             self.embed = nn.Embedding(self.vocab_size, self.hidden_dim).to(self.device)
 
-            # Simple deep MLP
-            layers = []
-            layers.append(nn.Linear(self.hidden_dim, self.hidden_dim))
-            for _ in range(self.num_layers):
-                layers.append(nn.Linear(self.hidden_dim, self.hidden_dim))
-                layers.append(nn.ReLU())
-            layers.append(nn.Linear(self.hidden_dim, self.vocab_size))
-            return nn.Sequential(*layers).to(self.device)
+            return DeepHebbianChain(
+                input_dim=self.hidden_dim,
+                hidden_dim=self.hidden_dim,
+                output_dim=self.vocab_size,
+                num_layers=self.num_layers,
+                use_spectral_norm=True,
+                hebbian_lr=0.001,
+                use_oja=True
+            ).to(self.device)
 
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
     def update_hyperparams(
-        self, lr: float = None, beta: float = None, steps: int = None
+        self, lr: float = None, beta: float = None, steps: int = None, **kwargs
     ):
         if lr is not None:
             self.lr = lr
@@ -152,6 +151,20 @@ class ExperimentAlgorithm:
             self.beta = beta
         if steps is not None:
             self.steps = steps
+
+        # Handle Hebbian-specific updates
+        if isinstance(self.model, DeepHebbianChain):
+            if 'hebbian_lr' in kwargs:
+                self.model.hebbian_lr = kwargs['hebbian_lr']
+            if 'use_oja' in kwargs:
+                self.model.use_oja = kwargs['use_oja']
+                for layer in self.model.chain:
+                    if hasattr(layer, 'original_layer'): # If spectral normed
+                        layer.original_layer.use_oja = kwargs['use_oja']
+                        layer.original_layer.learning_rate = self.model.hebbian_lr
+                    else:
+                        layer.use_oja = kwargs['use_oja']
+                        layer.learning_rate = self.model.hebbian_lr
 
     def train_step(self, x, y, step_num) -> Any:
         """Single training iteration."""
@@ -324,29 +337,78 @@ class TrialRunner:
 
         # Load data using new dataset utils
         print(f"Loading {task} dataset...")
-        try:
-            self.dataset = get_lm_dataset("tiny_shakespeare", seq_len=self.seq_len)
-            self.data = self.dataset.data
-            self.vocab_size = self.dataset.vocab_size
-        except Exception as e:
-            print(f"Failed to load dataset: {e}")
-            raise e
 
-        # Split train/val
-        n = int(0.9 * len(self.data))
-        self.data_train = self.data[:n]
-        self.data_val = self.data[n:]
+        if task == "tiny_shakespeare" or task == "shakespeare":
+            try:
+                self.dataset = get_lm_dataset("tiny_shakespeare", seq_len=self.seq_len)
+                self.data = self.dataset.data
+                self.vocab_size = self.dataset.vocab_size
+            except Exception as e:
+                print(f"Failed to load dataset: {e}")
+                raise e
 
-        print(
-            f"Dataset ready: {len(self.data_train)} train, {len(self.data_val)} val tokens"
-        )
+            # Split train/val
+            n = int(0.9 * len(self.data))
+            self.data_train = self.data[:n]
+            self.data_val = self.data[n:]
+            print(f"Dataset ready: {len(self.data_train)} train, {len(self.data_val)} val tokens")
+
+        elif task in ["mnist", "cifar10"]:
+            from bioplausible.datasets import get_vision_dataset
+            # Vision tasks use flattened inputs for MLP or 2D for Conv
+
+            # Load vision data
+            self.train_dataset = get_vision_dataset(task, train=True, flatten=False)
+            self.test_dataset = get_vision_dataset(task, train=False, flatten=False)
+
+            # Simple in-memory approach for now
+            self.train_x = torch.stack([t[0] for t in self.train_dataset]).to(self.device)
+            self.train_y = torch.tensor([t[1] for t in self.train_dataset]).to(self.device)
+
+            # Subsample val for speed
+            val_size = 1000
+            self.val_x = torch.stack([self.test_dataset[i][0] for i in range(val_size)]).to(self.device)
+            self.val_y = torch.tensor([self.test_dataset[i][1] for i in range(val_size)]).to(self.device)
+
+            if task == "mnist":
+                self.vocab_size = 10 # Output classes
+                self.input_shape = (1, 28, 28)
+            else:
+                self.vocab_size = 10
+                self.input_shape = (3, 32, 32)
+
+        elif task == "cartpole":
+            # RL Environment
+            import gymnasium as gym
+            self.env = gym.make("CartPole-v1")
+            self.vocab_size = self.env.action_space.n # Output actions
+            self.input_dim = self.env.observation_space.shape[0]
+
+        else:
+            raise ValueError(f"Unknown task: {task}")
 
     def get_batch(self, data, device):
         """Get a random batch."""
-        idx = torch.randint(0, len(data) - self.seq_len - 1, (self.batch_size,))
-        x = torch.stack([data[i : i + self.seq_len] for i in idx]).to(device)
-        y = torch.stack([data[i + self.seq_len] for i in idx]).to(device)
-        return x, y
+        if self.task in ["shakespeare", "tiny_shakespeare"]:
+            idx = torch.randint(0, len(data) - self.seq_len - 1, (self.batch_size,))
+            x = torch.stack([data[i : i + self.seq_len] for i in idx]).to(device)
+            y = torch.stack([data[i + self.seq_len] for i in idx]).to(device)
+            return x, y
+
+        elif self.task in ["mnist", "cifar10"]:
+            # Data is (x, y) tensors
+            if data == "train":
+                dataset_x, dataset_y = self.train_x, self.train_y
+            else:
+                dataset_x, dataset_y = self.val_x, self.val_y
+
+            idx = torch.randint(0, len(dataset_x), (self.batch_size,))
+            x = dataset_x[idx]
+            y = dataset_y[idx]
+
+            return x, y
+
+        return None, None
 
     def run_trial(self, trial_id: int, pruning_callback=None) -> bool:
         """Run a single trial and record results."""
@@ -372,6 +434,10 @@ class TrialRunner:
             hidden_dim = config.get("hidden_dim", 128)
             num_layers = config.get("num_layers", 4)
 
+            # Determine if flattening is needed for MLPs on Vision tasks
+            is_vision = self.task in ["mnist", "cifar10"]
+            is_mlp = "mlp" in trial.model_name.lower() or "fa" in trial.model_name.lower() or "chl" in trial.model_name.lower() or "hebbian" in trial.model_name.lower()
+
             algo = ExperimentAlgorithm(
                 spec,
                 self.vocab_size,
@@ -380,11 +446,34 @@ class TrialRunner:
                 device=self.device,
             )
 
+            # Disable embedding if vision task and using MLP
+            if is_vision and is_mlp:
+                algo.has_embed = False
+
+                # RE-INIT MODEL manually for Vision MLPs
+                if self.task == "mnist":
+                    input_dim = 784
+                else:
+                    input_dim = 3072
+
+                if "EqProp MLP" in trial.model_name:
+                    algo.model = LoopedMLP(input_dim, hidden_dim, 10, use_spectral_norm=True).to(self.device)
+                elif "Hebbian" in trial.model_name:
+                    algo.model = DeepHebbianChain(input_dim, hidden_dim, 10, num_layers=num_layers).to(self.device)
+
             # Apply hyperparameters
             lr = config.get("lr", spec.default_lr)
             beta = config.get("beta", spec.default_beta) if spec.has_beta else None
             steps = config.get("steps", spec.default_steps) if spec.has_steps else None
-            algo.update_hyperparams(lr=lr, beta=beta, steps=steps)
+
+            # Additional params
+            extra_params = {}
+            if "hebbian_lr" in config:
+                extra_params["hebbian_lr"] = config["hebbian_lr"]
+            if "use_oja" in config:
+                extra_params["use_oja"] = config["use_oja"]
+
+            algo.update_hyperparams(lr=lr, beta=beta, steps=steps, **extra_params)
 
             # Training loop
             epoch_times = []
@@ -416,10 +505,19 @@ class TrialRunner:
                             # Simple forward
                             logits = algo.model(h)
                         else:
+                            # Vision or direct input
+                            # For Vision MLPs, we need to flatten if shape is [B, C, H, W]
+                            if x.dim() == 4 and "mlp" in trial.model_name.lower():
+                                x_in = x.view(x.size(0), -1)
+                            elif x.dim() == 4 and "hebbian" in trial.model_name.lower():
+                                x_in = x.view(x.size(0), -1)
+                            else:
+                                x_in = x
+
                             logits = (
-                                algo.model(x, steps=algo.steps)
+                                algo.model(x_in, steps=algo.steps)
                                 if hasattr(algo.model, "eq_steps")
-                                else algo.model(x)
+                                else algo.model(x_in)
                             )
                             if logits.dim() == 3:
                                 logits = logits[:, -1, :]
