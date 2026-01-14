@@ -99,6 +99,21 @@ class ConvEqProp(EqPropModel):
         """Transform input: embed(x)"""
         return self.embed(x)
 
+    def _forward_step_impl(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
+        """Single step implementation (uncompiled)."""
+        h_norm = self.norm(h)
+
+        pre_act = self.W1(h_norm)
+        hidden = torch.tanh(pre_act)
+        ffn_out = self.W2(hidden)
+
+        h_target = ffn_out + x_transformed
+        # Use torch.lerp for more efficient interpolation
+        h_next = torch.lerp(h, h_target, self.gamma)
+        return h_next
+
     @compile_settling_loop
     def forward_step(
         self, h: torch.Tensor, x_transformed: torch.Tensor
@@ -113,16 +128,7 @@ class ConvEqProp(EqPropModel):
         Returns:
             Next hidden state
         """
-        h_norm = self.norm(h)
-
-        pre_act = self.W1(h_norm)
-        hidden = torch.tanh(pre_act)
-        ffn_out = self.W2(hidden)
-
-        h_target = ffn_out + x_transformed
-        # Use torch.lerp for more efficient interpolation
-        h_next = torch.lerp(h, h_target, self.gamma)
-        return h_next
+        return self._forward_step_impl(h, x_transformed)
 
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         """Output projection."""

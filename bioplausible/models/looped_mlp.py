@@ -115,12 +115,18 @@ class LoopedMLP(EqPropModel):
             )
         return self.W_in(x)
 
+    def _forward_step_impl(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
+        """Single step implementation (uncompiled)."""
+        return torch.tanh(x_transformed + self.W_rec(h))
+
     @compile_settling_loop
     def forward_step(
         self, h: torch.Tensor, x_transformed: torch.Tensor
     ) -> torch.Tensor:
         """Single step: h = tanh(W_in x + W_rec h)"""
-        return torch.tanh(x_transformed + self.W_rec(h))
+        return self._forward_step_impl(h, x_transformed)
 
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         """Output: W_out @ h"""
