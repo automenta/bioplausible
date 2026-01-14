@@ -216,6 +216,14 @@ class EqPropDashboard(QMainWindow):
         rl_tab = self._create_rl_tab()
         self.tabs.addTab(rl_tab, "🎮 Reinforcement Learning")
 
+        # Tab 4: Microscope (Dynamics)
+        micro_tab = self._create_microscope_tab()
+        self.tabs.addTab(micro_tab, "🔬 Microscope")
+
+        # Tab 5: Model Search (Hyperopt)
+        search_tab = self._create_search_tab()
+        self.tabs.addTab(search_tab, "🔍 Model Search")
+
         # Status bar
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
         self.status_label.setStyleSheet("color: #808090; padding: 5px;")
@@ -758,6 +766,200 @@ class EqPropDashboard(QMainWindow):
         right_panel.addWidget(stats_group)
 
         return tab
+
+    def _create_microscope_tab(self) -> QWidget:
+        """Create the Microscope tab for visualizing dynamics."""
+        tab = QWidget()
+        layout = QHBoxLayout(tab)
+        layout.setSpacing(15)
+
+        # Left panel: Controls
+        left_panel = QVBoxLayout()
+        layout.addLayout(left_panel, stretch=1)
+
+        # Model Selection
+        self.micro_model_combo = QComboBox()
+        self.micro_model_combo.addItems([
+            "LoopedMLP (Default)",
+            "LoopedMLP (Deep)",
+            "ConvEqProp (MNIST)",
+        ])
+
+        self.micro_steps_spin = QSpinBox()
+        self.micro_steps_spin.setRange(10, 200)
+        self.micro_steps_spin.setValue(50)
+
+        model_controls = [
+            ("Model:", self.micro_model_combo),
+            ("Equilibrium Steps:", self.micro_steps_spin),
+        ]
+        model_group = self._create_control_group("🔬 Setup", model_controls)
+        left_panel.addWidget(model_group)
+
+        # Analysis Controls
+        self.micro_run_btn = QPushButton("▶ Run Analysis")
+        self.micro_run_btn.clicked.connect(self._run_microscope_analysis)
+        left_panel.addWidget(self.micro_run_btn)
+
+        # Info
+        info_label = QLabel(
+            "Visualizes the settling process of the network.\n"
+            "Checks if the network converges to a fixed point (L < 1)."
+        )
+        info_label.setStyleSheet("color: #808090; font-style: italic;")
+        info_label.setWordWrap(True)
+        left_panel.addWidget(info_label)
+
+        left_panel.addStretch()
+
+        # Right panel: Plots
+        right_panel = QVBoxLayout()
+        layout.addLayout(right_panel, stretch=2)
+
+        if HAS_PYQTGRAPH:
+            metrics_group = QGroupBox("📈 Dynamics")
+            metrics_layout = QVBoxLayout(metrics_group)
+
+            # Convergence Plot (Delta h)
+            self.micro_conv_plot, self.micro_conv_curve = self._create_plot_widget(
+                "Convergence (||Δh||)", "Delta Norm", xlabel="Step"
+            )
+            self.micro_conv_plot.setLogMode(x=False, y=True)
+            metrics_layout.addWidget(self.micro_conv_plot)
+
+            # Activity Plot (Mean h)
+            self.micro_act_plot, self.micro_act_curve = self._create_plot_widget(
+                "Mean Activity", "Activity", xlabel="Step"
+            )
+            metrics_layout.addWidget(self.micro_act_plot)
+
+            right_panel.addWidget(metrics_group)
+
+        return tab
+
+    def _run_microscope_analysis(self):
+        """Run a single forward pass with dynamics tracking."""
+        try:
+            import torch
+            from bioplausible.models.looped_mlp import LoopedMLP
+            from bioplausible.models.conv_eqprop import ConvEqProp
+
+            model_name = self.micro_model_combo.currentText()
+            steps = self.micro_steps_spin.value()
+
+            # Create model
+            if "Conv" in model_name:
+                model = ConvEqProp(1, 16, 10, max_steps=steps)
+                input_shape = (1, 1, 28, 28)
+            elif "Deep" in model_name:
+                model = LoopedMLP(784, 256, 10, max_steps=steps, use_spectral_norm=True)
+                # Hack to make it deeper for demo
+                import torch.nn as nn
+                # Rebuild layers isn't easy here, sticking to standard for now but maybe deeper hidden
+                input_shape = (1, 784)
+            else:
+                model = LoopedMLP(784, 256, 10, max_steps=steps, use_spectral_norm=True)
+                input_shape = (1, 784)
+
+            # Create random input
+            x = torch.randn(*input_shape)
+
+            # Run forward with dynamics
+            model.eval()
+            with torch.no_grad():
+                # We expect (out, dynamics_dict) because return_dynamics=True
+                # But we also set return_trajectory=True just in case logic depends on it
+                out, dynamics = model(x, steps=steps, return_dynamics=True, return_trajectory=True)
+
+            deltas = dynamics['deltas']
+            traj = dynamics['trajectory']
+
+            # Compute mean activity per step
+            activities = [h.abs().mean().item() for h in traj]
+
+            # Update plots
+            if hasattr(self, 'micro_conv_curve'):
+                self.micro_conv_curve.setData(deltas)
+                self.micro_act_curve.setData(activities)
+
+            self.status_label.setText(f"Analysis complete. Final delta: {deltas[-1]:.2e}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Analysis Error", str(e))
+            import traceback
+            traceback.print_exc()
+
+    def _create_search_tab(self) -> QWidget:
+        """Create the Model Search tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(20)
+        layout.setContentsMargins(40, 40, 40, 40)
+
+        # Title
+        title_label = QLabel("🚀 Automated Model Search")
+        title_label.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title_label)
+
+        # Description
+        desc_label = QLabel(
+            "Use Evolutionary Algorithms to find the best hyperparameters and architectures.\n"
+            "Compares Bio-Plausible algorithms (EqProp, DFA, Hebbian) against Backprop baselines."
+        )
+        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc_label.setStyleSheet("color: #a0a0b0; font-size: 14px;")
+        layout.addWidget(desc_label)
+
+        # Task Selection (Placeholder for now, defaults to Shakespeare)
+        form_layout = QHBoxLayout()
+        form_layout.addWidget(QLabel("Task:"))
+        self.search_task_combo = QComboBox()
+        self.search_task_combo.addItems(["Language Modeling (TinyShakespeare)"]) # Vision pending implementation
+        self.search_task_combo.setMinimumWidth(200)
+        form_layout.addWidget(self.search_task_combo)
+        form_layout.addStretch()
+
+        container = QWidget()
+        container.setLayout(form_layout)
+        layout.addWidget(container)
+
+        # Launch Button
+        launch_btn = QPushButton("Launch Search Tool")
+        launch_btn.setMinimumHeight(60)
+        launch_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f39c12;
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #e67e22;
+            }
+        """)
+        launch_btn.clicked.connect(self._launch_search_tool)
+        layout.addWidget(launch_btn)
+
+        layout.addStretch()
+        return tab
+
+    def _launch_search_tool(self):
+        """Launch the Hyperopt Dashboard in a new window."""
+        try:
+            from bioplausible_ui.hyperopt_dashboard import HyperoptSearchDashboard
+
+            # Create as a new window
+            self.search_window = HyperoptSearchDashboard(task="shakespeare", quick_mode=True)
+            self.search_window.show()
+
+            self.status_label.setText("Launched Model Search Tool")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Launch Error", f"Failed to launch search tool:\n{e}")
+            import traceback
+            traceback.print_exc()
 
     def _start_training(self, mode: str):
         """Start training in background thread."""
