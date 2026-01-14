@@ -88,7 +88,9 @@ class EquilibriumFunction(autograd.Function):
                     )[0]
 
                     # Update delta
-                    delta = vjp + grad_output
+                    # Crucial: detach delta to prevent graph growth during the fixed-point iteration
+                    # The VJP loop is purely for finding the value of the adjoint state.
+                    delta = (vjp + grad_output).detach()
 
             # 3. Compute gradients for parameters and input using the converged delta
             delta = delta.detach()
