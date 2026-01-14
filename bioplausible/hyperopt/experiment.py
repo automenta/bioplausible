@@ -29,6 +29,18 @@ from bioplausible.models.deep_ep import DirectedEP
 from bioplausible.models.finite_nudge_ep import FiniteNudgeEP
 from bioplausible.models.modern_conv_eqprop import ModernConvEqProp
 
+# Experimental / Hybrid Models
+from bioplausible.models.ada_fa import AdaptiveFeedbackAlignment
+from bioplausible.models.eq_align import EquilibriumAlignment
+from bioplausible.models.leq_fa import LayerwiseEquilibriumFA
+from bioplausible.models.eg_fa import EnergyGuidedFA
+from bioplausible.models.pc_hybrid import PredictiveCodingHybrid
+from bioplausible.models.sparse_eq import SparseEquilibrium
+from bioplausible.models.mom_eq import MomentumEquilibrium
+from bioplausible.models.sto_fa import StochasticFA
+from bioplausible.models.em_fa import EnergyMinimizingFA
+
+
 from .storage import HyperoptStorage
 from .metrics import TrialMetrics
 
@@ -94,6 +106,19 @@ class ExperimentAlgorithm:
 
         input_size = self.input_dim if self.input_dim is not None else self.hidden_dim
 
+        # Common config creation helper
+        def make_config(name):
+            return ModelConfig(
+                name=name,
+                input_dim=input_size,
+                output_dim=self.output_dim,
+                hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
+                beta=self.beta,
+                learning_rate=self.lr,
+                equilibrium_steps=self.steps,
+                use_spectral_norm=True
+            )
+
         if model_type == "backprop":
             if self.task_type == "lm":
                 # Use the robust BackpropTransformerLM
@@ -138,13 +163,7 @@ class ExperimentAlgorithm:
                 self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
 
             # Use StandardFA
-            config = ModelConfig(
-                name="feedback_alignment",
-                input_dim=input_size,
-                output_dim=self.output_dim,
-                hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
-                use_spectral_norm=True,
-            )
+            config = make_config("feedback_alignment")
             return StandardFA(config=config).to(self.device)
 
         elif model_type == "chl":
@@ -153,13 +172,7 @@ class ExperimentAlgorithm:
                 self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
 
             # Use ContrastiveFeedbackAlignment
-            config = ModelConfig(
-                name="cf_align",
-                input_dim=input_size,
-                output_dim=self.output_dim,
-                hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
-                use_spectral_norm=True,
-            )
+            config = make_config("cf_align")
             return ContrastiveFeedbackAlignment(config=config).to(self.device)
 
         elif model_type == "deep_hebbian":
@@ -182,15 +195,7 @@ class ExperimentAlgorithm:
                 self.has_embed = True
                 self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
 
-            config = ModelConfig(
-                name="holomorphic_ep",
-                input_dim=input_size,
-                output_dim=self.output_dim,
-                hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
-                beta=self.beta,
-                learning_rate=self.lr,
-                equilibrium_steps=self.steps,
-            )
+            config = make_config("holomorphic_ep")
             return HolomorphicEP(config=config, device=self.device).to(self.device)
 
         elif model_type == "directed_ep":
@@ -198,15 +203,7 @@ class ExperimentAlgorithm:
                 self.has_embed = True
                 self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
 
-            config = ModelConfig(
-                name="directed_ep",
-                input_dim=input_size,
-                output_dim=self.output_dim,
-                hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
-                beta=self.beta,
-                learning_rate=self.lr,
-                equilibrium_steps=self.steps,
-            )
+            config = make_config("directed_ep")
             return DirectedEP(config=config, device=self.device).to(self.device)
 
         elif model_type == "finite_nudge_ep":
@@ -214,25 +211,88 @@ class ExperimentAlgorithm:
                 self.has_embed = True
                 self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
 
-            config = ModelConfig(
-                name="finite_nudge_ep",
-                input_dim=input_size,
-                output_dim=self.output_dim,
-                hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
-                beta=self.beta,
-                learning_rate=self.lr,
-                equilibrium_steps=self.steps,
-            )
+            config = make_config("finite_nudge_ep")
             return FiniteNudgeEP(config=config, device=self.device).to(self.device)
 
         elif model_type == "modern_conv_eqprop":
-            # Hardcoded for CIFAR-like logic for now, but accepts parameters
-            # Ignores input_dim/output_dim in init if hardcoded, but we pass them anyway via config or init?
             # ModernConvEqProp init: (eq_steps, gamma, hidden_channels, use_spectral_norm)
             return ModernConvEqProp(
                 eq_steps=self.steps,
                 hidden_channels=self.hidden_dim,
             ).to(self.device)
+
+        # --- Hybrid / Experimental Models ---
+
+        elif model_type == "adaptive_feedback_alignment":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+            config = make_config("adaptive_feedback_alignment")
+            return AdaptiveFeedbackAlignment(config=config).to(self.device)
+
+        elif model_type == "eq_align":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+            # EquilibriumAlignment init signature matches BioModel partly but has specific args
+            # Using config as kwargs via **config.as_dict() logic if implemented, or explicit
+            return EquilibriumAlignment(
+                input_dim=input_size,
+                hidden_dim=self.hidden_dim,
+                output_dim=self.output_dim,
+                max_steps=self.steps,
+                use_spectral_norm=True,
+                learning_rate=self.lr
+            ).to(self.device)
+
+        elif model_type == "layerwise_equilibrium_fa":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+            config = make_config("layerwise_equilibrium_fa")
+            return LayerwiseEquilibriumFA(config=config).to(self.device)
+
+        elif model_type == "energy_guided_fa":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+            config = make_config("energy_guided_fa")
+            return EnergyGuidedFA(config=config).to(self.device)
+
+        elif model_type == "predictive_coding_hybrid":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+            config = make_config("predictive_coding_hybrid")
+            return PredictiveCodingHybrid(config=config).to(self.device)
+
+        elif model_type == "sparse_equilibrium":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+            config = make_config("sparse_equilibrium")
+            return SparseEquilibrium(config=config).to(self.device)
+
+        elif model_type == "momentum_equilibrium":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+            config = make_config("momentum_equilibrium")
+            return MomentumEquilibrium(config=config).to(self.device)
+
+        elif model_type == "stochastic_fa":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+            config = make_config("stochastic_fa")
+            return StochasticFA(config=config).to(self.device)
+
+        elif model_type == "energy_minimizing_fa":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+            config = make_config("energy_minimizing_fa")
+            return EnergyMinimizingFA(config=config).to(self.device)
 
         else:
             raise ValueError(f"Unknown model type: {model_type}")
