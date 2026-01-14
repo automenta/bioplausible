@@ -23,6 +23,12 @@ from bioplausible.models.cf_align import ContrastiveFeedbackAlignment
 from bioplausible.models.hebbian_chain import DeepHebbianChain
 from bioplausible.rl.trainer import RLTrainer
 
+# New Models
+from bioplausible.models.holomorphic_ep import HolomorphicEP
+from bioplausible.models.deep_ep import DirectedEP
+from bioplausible.models.finite_nudge_ep import FiniteNudgeEP
+from bioplausible.models.modern_conv_eqprop import ModernConvEqProp
+
 from .storage import HyperoptStorage
 from .metrics import TrialMetrics
 
@@ -171,6 +177,63 @@ class ExperimentAlgorithm:
                 use_oja=True
             ).to(self.device)
 
+        elif model_type == "holomorphic_ep":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+
+            config = ModelConfig(
+                name="holomorphic_ep",
+                input_dim=input_size,
+                output_dim=self.output_dim,
+                hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
+                beta=self.beta,
+                learning_rate=self.lr,
+                equilibrium_steps=self.steps,
+            )
+            return HolomorphicEP(config=config, device=self.device).to(self.device)
+
+        elif model_type == "directed_ep":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+
+            config = ModelConfig(
+                name="directed_ep",
+                input_dim=input_size,
+                output_dim=self.output_dim,
+                hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
+                beta=self.beta,
+                learning_rate=self.lr,
+                equilibrium_steps=self.steps,
+            )
+            return DirectedEP(config=config, device=self.device).to(self.device)
+
+        elif model_type == "finite_nudge_ep":
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+
+            config = ModelConfig(
+                name="finite_nudge_ep",
+                input_dim=input_size,
+                output_dim=self.output_dim,
+                hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
+                beta=self.beta,
+                learning_rate=self.lr,
+                equilibrium_steps=self.steps,
+            )
+            return FiniteNudgeEP(config=config, device=self.device).to(self.device)
+
+        elif model_type == "modern_conv_eqprop":
+            # Hardcoded for CIFAR-like logic for now, but accepts parameters
+            # Ignores input_dim/output_dim in init if hardcoded, but we pass them anyway via config or init?
+            # ModernConvEqProp init: (eq_steps, gamma, hidden_channels, use_spectral_norm)
+            return ModernConvEqProp(
+                eq_steps=self.steps,
+                hidden_channels=self.hidden_dim,
+            ).to(self.device)
+
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
@@ -220,7 +283,11 @@ class ExperimentAlgorithm:
                 # But keep 2D/3D for Conv models if we support them later
                 # For now, our models (LoopedMLP, FA, CHL, Hebbian) expect vector input (batch, dim)
                 if x.dim() > 2 and self.task_type in ["vision", "rl"]:
-                     h = x.view(x.size(0), -1)
+                    if self.spec.model_type == "modern_conv_eqprop":
+                         # Do not flatten
+                         h = x
+                    else:
+                         h = x.view(x.size(0), -1)
                 else:
                      h = x
 
@@ -598,7 +665,9 @@ class TrialRunner:
                             else:
                                 # Vision or direct input
                                 # For Vision MLPs, we need to flatten if shape is [B, C, H, W]
-                                if x.dim() > 2:
+                                if x.dim() > 2 and algo.spec.model_type == "modern_conv_eqprop":
+                                    x_in = x
+                                elif x.dim() > 2:
                                     x_in = x.view(x.size(0), -1)
                                 else:
                                     x_in = x
