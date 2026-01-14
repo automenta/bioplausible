@@ -168,7 +168,8 @@ class TrainingWorker(QThread):
             # Emit batch-level progress every 10 batches or on last batch
             if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == num_batches:
                 self._emit_batch_progress(epoch, batch_idx, num_batches, epoch_loss,
-                                        epoch_correct, epoch_total, x, batch_time, total_start)
+                                        epoch_correct, epoch_total, x, batch_time, total_start,
+                                        batch_correct_batch, batch_total_batch)
 
         # End of epoch: compute Lipschitz
         try:
@@ -183,7 +184,8 @@ class TrainingWorker(QThread):
         return {'loss': epoch_loss / max(epoch_total, 1), 'accuracy': epoch_correct / max(epoch_total, 1)}
 
     def _emit_batch_progress(self, epoch, batch_idx, num_batches, epoch_loss,
-                           epoch_correct, epoch_total, x, batch_time, total_start):
+                           epoch_correct, epoch_total, x, batch_time, total_start,
+                           batch_correct_last, batch_total_last):
         """Emit progress update for batch processing."""
         current_loss = epoch_loss / max(epoch_total, 1)
         current_acc = epoch_correct / max(epoch_total, 1)
@@ -207,7 +209,7 @@ class TrainingWorker(QThread):
             'loss': current_loss,
             'batch_loss': current_loss,  # Use current loss as batch loss
             'accuracy': current_acc,
-            'batch_accuracy': batch_correct_batch / max(batch_total_batch, 1),
+            'batch_accuracy': batch_correct_last / max(batch_total_last, 1),
             'lipschitz': 0.0,  # Placeholder, computed below
             'samples_per_sec': samples_per_sec,
             'eta_seconds': eta_seconds,

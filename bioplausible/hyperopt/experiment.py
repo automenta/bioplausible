@@ -15,30 +15,9 @@ from bioplausible.config import GLOBAL_CONFIG
 from bioplausible.models.registry import get_model_spec, ModelSpec
 from bioplausible.datasets import get_lm_dataset
 from bioplausible.models.base import ModelConfig
-from bioplausible.lm_models import create_eqprop_lm
-from bioplausible.models.looped_mlp import LoopedMLP, BackpropMLP
-from bioplausible.models.backprop_transformer_lm import BackpropTransformerLM
-from bioplausible.models.simple_fa import StandardFA
-from bioplausible.models.cf_align import ContrastiveFeedbackAlignment
+from bioplausible.models.factory import create_model
 from bioplausible.models.hebbian_chain import DeepHebbianChain
 from bioplausible.rl.trainer import RLTrainer
-
-# New Models
-from bioplausible.models.holomorphic_ep import HolomorphicEP
-from bioplausible.models.deep_ep import DirectedEP
-from bioplausible.models.finite_nudge_ep import FiniteNudgeEP
-from bioplausible.models.modern_conv_eqprop import ModernConvEqProp
-
-# Experimental / Hybrid Models
-from bioplausible.models.ada_fa import AdaptiveFeedbackAlignment
-from bioplausible.models.eq_align import EquilibriumAlignment
-from bioplausible.models.leq_fa import LayerwiseEquilibriumFA
-from bioplausible.models.eg_fa import EnergyGuidedFA
-from bioplausible.models.pc_hybrid import PredictiveCodingHybrid
-from bioplausible.models.sparse_eq import SparseEquilibrium
-from bioplausible.models.mom_eq import MomentumEquilibrium
-from bioplausible.models.sto_fa import StochasticFA
-from bioplausible.models.em_fa import EnergyMinimizingFA
 
 
 from .storage import HyperoptStorage
@@ -98,204 +77,22 @@ class ExperimentAlgorithm:
 
     def _create_model(self):
         """Factory method for model creation using bioplausible models."""
-        model_type = self.spec.model_type
+        model = create_model(
+            spec=self.spec,
+            input_dim=self.input_dim,
+            output_dim=self.output_dim,
+            hidden_dim=self.hidden_dim,
+            num_layers=self.num_layers,
+            device=self.device,
+            task_type=self.task_type
+        )
 
-        # Decide if we need embeddings (LM only, usually)
-        # If input_dim is provided, we assume vector input (Vision/RL)
-        use_embedding = (self.input_dim is None) and (self.task_type == "lm")
+        # Attach embedding if created by factory
+        if getattr(model, 'has_embed', False):
+            self.has_embed = True
+            self.embed = model.embed
 
-        input_size = self.input_dim if self.input_dim is not None else self.hidden_dim
-
-        # Common config creation helper
-        def make_config(name):
-            return ModelConfig(
-                name=name,
-                input_dim=input_size,
-                output_dim=self.output_dim,
-                hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
-                beta=self.beta,
-                learning_rate=self.lr,
-                equilibrium_steps=self.steps,
-                use_spectral_norm=True
-            )
-
-        if model_type == "backprop":
-            if self.task_type == "lm":
-                # Use the robust BackpropTransformerLM
-                return BackpropTransformerLM(
-                    vocab_size=self.output_dim,
-                    hidden_dim=self.hidden_dim,
-                    num_layers=self.num_layers,
-                    max_seq_len=256,
-                ).to(self.device)
-            else:
-                # Use BackpropMLP for Vision/RL
-                return BackpropMLP(
-                    input_dim=input_size,
-                    hidden_dim=self.hidden_dim,
-                    output_dim=self.output_dim
-                ).to(self.device)
-
-        elif model_type == "eqprop_transformer":
-            return create_eqprop_lm(
-                self.spec.variant,
-                vocab_size=self.output_dim,
-                hidden_dim=self.hidden_dim,
-                num_layers=self.num_layers,
-                use_sn=True,
-            ).to(self.device)
-
-        elif model_type == "eqprop_mlp":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-
-            return LoopedMLP(
-                input_dim=input_size,
-                hidden_dim=self.hidden_dim,
-                output_dim=self.output_dim,
-                use_spectral_norm=True,
-            ).to(self.device)
-
-        elif model_type == "dfa":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-
-            # Use StandardFA
-            config = make_config("feedback_alignment")
-            return StandardFA(config=config).to(self.device)
-
-        elif model_type == "chl":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-
-            # Use ContrastiveFeedbackAlignment
-            config = make_config("cf_align")
-            return ContrastiveFeedbackAlignment(config=config).to(self.device)
-
-        elif model_type == "deep_hebbian":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-
-            return DeepHebbianChain(
-                input_dim=input_size,
-                hidden_dim=self.hidden_dim,
-                output_dim=self.output_dim,
-                num_layers=self.num_layers,
-                use_spectral_norm=True,
-                hebbian_lr=0.001,
-                use_oja=True
-            ).to(self.device)
-
-        elif model_type == "holomorphic_ep":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-
-            config = make_config("holomorphic_ep")
-            return HolomorphicEP(config=config, device=self.device).to(self.device)
-
-        elif model_type == "directed_ep":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-
-            config = make_config("directed_ep")
-            return DirectedEP(config=config, device=self.device).to(self.device)
-
-        elif model_type == "finite_nudge_ep":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-
-            config = make_config("finite_nudge_ep")
-            return FiniteNudgeEP(config=config, device=self.device).to(self.device)
-
-        elif model_type == "modern_conv_eqprop":
-            # ModernConvEqProp init: (eq_steps, gamma, hidden_channels, use_spectral_norm)
-            return ModernConvEqProp(
-                eq_steps=self.steps,
-                hidden_channels=self.hidden_dim,
-            ).to(self.device)
-
-        # --- Hybrid / Experimental Models ---
-
-        elif model_type == "adaptive_feedback_alignment":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-            config = make_config("adaptive_feedback_alignment")
-            return AdaptiveFeedbackAlignment(config=config).to(self.device)
-
-        elif model_type == "eq_align":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-            # EquilibriumAlignment init signature matches BioModel partly but has specific args
-            # Using config as kwargs via **config.as_dict() logic if implemented, or explicit
-            return EquilibriumAlignment(
-                input_dim=input_size,
-                hidden_dim=self.hidden_dim,
-                output_dim=self.output_dim,
-                max_steps=self.steps,
-                use_spectral_norm=True,
-                learning_rate=self.lr
-            ).to(self.device)
-
-        elif model_type == "layerwise_equilibrium_fa":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-            config = make_config("layerwise_equilibrium_fa")
-            return LayerwiseEquilibriumFA(config=config).to(self.device)
-
-        elif model_type == "energy_guided_fa":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-            config = make_config("energy_guided_fa")
-            return EnergyGuidedFA(config=config).to(self.device)
-
-        elif model_type == "predictive_coding_hybrid":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-            config = make_config("predictive_coding_hybrid")
-            return PredictiveCodingHybrid(config=config).to(self.device)
-
-        elif model_type == "sparse_equilibrium":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-            config = make_config("sparse_equilibrium")
-            return SparseEquilibrium(config=config).to(self.device)
-
-        elif model_type == "momentum_equilibrium":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-            config = make_config("momentum_equilibrium")
-            return MomentumEquilibrium(config=config).to(self.device)
-
-        elif model_type == "stochastic_fa":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-            config = make_config("stochastic_fa")
-            return StochasticFA(config=config).to(self.device)
-
-        elif model_type == "energy_minimizing_fa":
-            if use_embedding:
-                self.has_embed = True
-                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
-            config = make_config("energy_minimizing_fa")
-            return EnergyMinimizingFA(config=config).to(self.device)
-
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
+        return model
 
     def update_hyperparams(
         self, lr: float = None, beta: float = None, steps: int = None, **kwargs
