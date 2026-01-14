@@ -919,11 +919,16 @@ class EqPropDashboard(QMainWindow):
         desc_label.setStyleSheet("color: #a0a0b0; font-size: 14px;")
         layout.addWidget(desc_label)
 
-        # Task Selection (Placeholder for now, defaults to Shakespeare)
+        # Task Selection
         form_layout = QHBoxLayout()
         form_layout.addWidget(QLabel("Task:"))
         self.search_task_combo = QComboBox()
-        self.search_task_combo.addItems(["Language Modeling (TinyShakespeare)"]) # Vision pending implementation
+        self.search_task_combo.addItems([
+            "Language Modeling (TinyShakespeare)",
+            "Vision (MNIST)",
+            "Vision (CIFAR-10)",
+            "RL (CartPole-v1)"
+        ])
         self.search_task_combo.setMinimumWidth(200)
         form_layout.addWidget(self.search_task_combo)
         form_layout.addStretch()
@@ -958,11 +963,24 @@ class EqPropDashboard(QMainWindow):
         try:
             from bioplausible_ui.hyperopt_dashboard import HyperoptSearchDashboard
 
+            # Determine task from combo box
+            task_text = self.search_task_combo.currentText()
+            if "Shakespeare" in task_text:
+                task = "shakespeare"
+            elif "MNIST" in task_text:
+                task = "mnist"
+            elif "CIFAR" in task_text:
+                task = "cifar10"
+            elif "CartPole" in task_text:
+                task = "cartpole"
+            else:
+                task = "shakespeare"
+
             # Create as a new window
-            self.search_window = HyperoptSearchDashboard(task="shakespeare", quick_mode=True)
+            self.search_window = HyperoptSearchDashboard(task=task, quick_mode=True)
             self.search_window.show()
 
-            self.status_label.setText("Launched Model Search Tool")
+            self.status_label.setText(f"Launched Model Search Tool for {task}")
 
         except Exception as e:
             QMessageBox.critical(self, "Launch Error", f"Failed to launch search tool:\n{e}")
