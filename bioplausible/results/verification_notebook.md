@@ -1,18 +1,18 @@
 # TorEqProp Verification Results
 
-**Generated**: 2026-01-13 22:51:10
+**Generated**: 2026-01-14 14:24:03
 
 
 ## Executive Summary
 
-**Verification completed in 76.9 seconds.**
+**Verification completed in 1.2 seconds.**
 
 ### Overall Results
 
 | Metric | Value |
 |--------|-------|
-| Tracks Verified | 2 |
-| Passed | 2 ✅ |
+| Tracks Verified | 3 |
+| Passed | 3 ✅ |
 | Partial | 0 ⚠️ |
 | Failed | 0 ❌ |
 | Stubs (TODO) | 0 🔧 |
@@ -22,8 +22,9 @@
 
 | # | Track | Status | Score | Time |
 |---|-------|--------|-------|------|
-| 14 | Transformer EqProp | ✅ | 100 | 75.0s |
-| 22 | Golden Reference Harness | ✅ | 100 | 1.8s |
+| 0 | Framework Validation | ✅ | 100 | 1.0s |
+| 53 | NEBC Contrastive Hebbian | ✅ | 100 | 0.1s |
+| 54 | NEBC Deep Hebbian Chain | ✅ | 100 | 0.1s |
 
 
 **Seed**: 42 (deterministic)
@@ -33,61 +34,53 @@
 ---
 
 
-## Track 14: Transformer EqProp
+## Track 0: Framework Validation
 
 
-✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 75.0s
-
-🧪 **Evidence Level**: Smoke Test
-
-
-**Claim**: Equilibrium Transformer can solve sequence manipulation tasks (Reversal).
-
-**Experiment**: Learn to reverse a sequence of length 8. N=3 seeds.
-
-| Metric | Mean | StdDev |
-|--------|------|--------|
-| Accuracy | 100.0% | 0.0% |
-
-**Key Finding**: Iterative equilibrium attention successfully routes information
-from pos $i$ to $L-i-1$.
-
-
-
-
-## Track 22: Golden Reference Harness
-
-
-✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 1.8s
+✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 1.0s
 
 🧪 **Evidence Level**: Smoke Test
 
 
-**Claim**: NumPy kernel matches PyTorch autograd to within numerical tolerance.
+**Framework Self-Test Results**
 
-**Experiment**: Compare hidden states at each relaxation step.
+| Test | Status |
+|------|--------|
+| Cohen's d calculation | ✅ |
+| Statistical significance (t-tests) | ✅ |
+| Evidence classification | ✅ |
+| Human-readable interpretations | ✅ |
+| Statistical comparison formatting | ✅ |
+| Reproducibility hashing | ✅ |
 
-| Metric | Value | Threshold |
-|--------|-------|-----------|
-| Max Hidden Diff | 3.28e-07 | < 1.00e-05 |
-| Output Diff | 2.24e-07 | < 1.00e-05 |
-| Steps Compared | 30 | - |
+**Tests Passed**: 6/6
 
-**Step-by-Step Comparison** (first/last steps):
+**Purpose**: This track validates the validation framework itself, ensuring all statistical
+functions work correctly before running model validation tracks.
 
-| Step | Max Difference |
-|------|----------------|
-| 0 | 1.79e-07 |
-| 1 | 2.38e-07 |
-| 2 | 2.38e-07 |
-| 3 | 3.28e-07 |
-| 4 | 1.79e-07 |
-| 28 | 2.38e-07 |
-| 29 | 2.38e-07 |
 
-**Purpose**: This harness enables safe optimization of the engine. Any new kernel
-implementation must pass this test before deployment.
+**Limitations**:
+- Framework-level test only, does not validate EqProp models
 
-**Status**: ✅ VALIDATED - Safe to optimize
 
+
+## Track 53: NEBC Contrastive Hebbian
+
+
+✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 0.1s
+
+🧪 **Evidence Level**: Smoke Test
+
+ContrastiveHebbianLearning runs train_step without error.
+
+
+
+## Track 54: NEBC Deep Hebbian Chain
+
+
+✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 0.1s
+
+🧪 **Evidence Level**: Smoke Test
+
+DeepHebbianChain maintains signal through 50 layers.
 

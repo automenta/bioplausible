@@ -30,6 +30,7 @@ class ConvEqProp(EqPropModel):
         gamma: float = 0.5,
         use_spectral_norm: bool = True,
         max_steps: int = 25,
+        gradient_method: str = "bptt",
     ) -> None:
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
@@ -43,6 +44,7 @@ class ConvEqProp(EqPropModel):
             output_dim=output_dim,
             max_steps=max_steps,
             use_spectral_norm=use_spectral_norm,
+            gradient_method=gradient_method,
         )
 
         # Initialize for stability (NEBCBase calls _build_layers, but we might want extra init)

@@ -43,7 +43,10 @@ class HebbianLayer(nn.Module):
 
         # Weight matrix
         self.weight = nn.Parameter(torch.empty(out_features, in_features))
-        nn.init.xavier_uniform_(self.weight, gain=0.1)
+        # Use higher gain to prevent signal collapse in deep chains
+        # Spectral norm will prevent explosion
+        # Orthogonal initialization ensures signal preservation at depth
+        nn.init.orthogonal_(self.weight, gain=1.5)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Linear transformation."""

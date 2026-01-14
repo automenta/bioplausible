@@ -94,6 +94,7 @@ class TransformerEqProp(EqPropModel):
         alpha: float = 0.5,
         use_spectral_norm: bool = True,
         max_steps: int = 20,
+        gradient_method: str = "bptt",
     ) -> None:
         self.vocab_size = vocab_size
         self.hidden_dim = hidden_dim
@@ -110,6 +111,7 @@ class TransformerEqProp(EqPropModel):
             output_dim=output_dim,
             max_steps=max_steps,
             use_spectral_norm=use_spectral_norm,
+            gradient_method=gradient_method,
         )
 
     def _build_layers(self):
