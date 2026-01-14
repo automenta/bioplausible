@@ -28,8 +28,8 @@ class ModelSpec:
 MODEL_REGISTRY = [
     # Baselines
     ModelSpec(
-        name="Backprop (Transformer)",
-        description="Standard Backprop Transformer baseline",
+        name="Backprop Baseline",
+        description="Standard Backprop baseline (Transformer/MLP)",
         model_type="backprop",
         default_lr=0.001,
         color="#ff6b6b",
