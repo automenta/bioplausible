@@ -27,6 +27,9 @@ from .temporal_resonance import (
     TemporalResonanceEqProp as TemporalResonanceNetwork,
 )
 from .backprop_transformer_lm import BackpropTransformerLM
+from .holomorphic_ep import HolomorphicEP
+from .deep_ep import DirectedEP
+from .finite_nudge_ep import FiniteNudgeEP
 
 # Algorithm-Models (Migrated from algorithms/)
 from .standard_eqprop import StandardEqProp
@@ -90,6 +93,9 @@ __all__ = [
     "TemporalResonanceNetwork",
     "TemporalResonanceEqProp",
     "BackpropTransformerLM",
+    "HolomorphicEP",
+    "DirectedEP",
+    "FiniteNudgeEP",
     # Algorithm-Models
     "StandardEqProp",
     "StandardFA",
