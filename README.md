@@ -51,6 +51,29 @@ eqprop-verify --list
 
 **Output**: `./results/verification_notebook.md` with complete experimental evidence.
 
+### Scikit-Learn Integration
+
+Bioplausible provides a wrapper compatible with Scikit-Learn's `fit`/`predict` API:
+
+```python
+from bioplausible.sklearn import EqPropClassifier
+from sklearn.datasets import load_digits
+
+X, y = load_digits(return_X_y=True)
+clf = EqPropClassifier(hidden_dim=128, epochs=10)
+clf.fit(X, y)
+print(f"Accuracy: {clf.score(X, y):.2%}")
+```
+
+### Docker Support
+
+Run the verification suite in a container:
+
+```bash
+docker build -t bioplausible .
+docker run bioplausible
+```
+
 ---
 
 ## Verification Index (38 Tracks)
