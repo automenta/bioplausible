@@ -13,6 +13,7 @@ import sys
 
 def main():
     """Launch the EqProp Trainer dashboard."""
+    # Entry point for the main dashboard application
     import argparse
     import json
 
