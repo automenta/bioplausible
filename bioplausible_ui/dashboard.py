@@ -7,6 +7,7 @@ Features stunning dark cyberpunk theme with live pyqtgraph plots.
 
 import sys
 import numpy as np
+import logging
 from typing import Optional, Dict, List, Tuple, Any
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QTabWidget, QTextEdit, QProgressBar, QSlider,
     QSplitter, QFrame, QCheckBox, QMessageBox, QApplication, QFileDialog
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
 
 # Monkeypatch pyparsing for matplotlib compatibility (snake_case -> camelCase)
@@ -99,6 +100,19 @@ from .dashboard_helpers import (
 )
 
 
+class QtLogHandler(logging.Handler, QObject):
+    """Custom logging handler that emits a signal for each log record."""
+    log_signal = pyqtSignal(str)
+
+    def __init__(self):
+        logging.Handler.__init__(self)
+        QObject.__init__(self)
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.log_signal.emit(msg)
+
+
 class EqPropDashboard(QMainWindow):
     """Main dashboard window for EqProp training."""
 
@@ -111,6 +125,9 @@ class EqPropDashboard(QMainWindow):
 
         # Apply theme
         self.setStyleSheet(CYBERPUNK_DARK)
+
+        # Setup system logger
+        self._setup_logging()
 
         # Training state
         self.worker: Optional[TrainingWorker] = None
@@ -731,9 +748,15 @@ class EqPropDashboard(QMainWindow):
         self.rl_lr_spin.setValue(0.005)
         self.rl_lr_spin.setDecimals(4)
 
+        self.rl_gamma_spin = QDoubleSpinBox()
+        self.rl_gamma_spin.setRange(0.0, 1.0)
+        self.rl_gamma_spin.setValue(0.99)
+        self.rl_gamma_spin.setSingleStep(0.01)
+
         train_controls = [
             ("Episodes:", self.rl_episodes_spin),
             ("Learning Rate:", self.rl_lr_spin),
+            ("Gamma (Discount):", self.rl_gamma_spin),
         ]
         train_group = self._create_control_group("⚙️ Training", train_controls)
         left_panel.addWidget(train_group)
@@ -1078,6 +1101,17 @@ class EqPropDashboard(QMainWindow):
         layout.addStretch()
         return tab
 
+    def _setup_logging(self):
+        """Setup logging to redirect to console tab."""
+        self.log_handler = QtLogHandler()
+        self.log_handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+        self.log_handler.log_signal.connect(self._append_log)
+
+        # Configure root logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
+        root_logger.addHandler(self.log_handler)
+
     def _create_console_tab(self) -> QWidget:
         """Create a console log tab."""
         tab = QWidget()
@@ -1095,7 +1129,10 @@ class EqPropDashboard(QMainWindow):
         if hasattr(self, 'console_log'):
              import time
              timestamp = time.strftime("%H:%M:%S")
-             self.console_log.append(f"[{timestamp}] {message}")
+             if not message.startswith("["): # Avoid double timestamping if already timestamped
+                 self.console_log.append(f"[{timestamp}] {message}")
+             else:
+                 self.console_log.append(message)
 
     def _launch_search_tool(self):
         """Launch the Hyperopt Dashboard in a new window."""
@@ -1396,7 +1433,11 @@ class EqPropDashboard(QMainWindow):
         self.rl_avg_reward_history.clear()
 
         # Create Worker
-        self.worker = RLWorker(model, env_name, episodes, lr, steps)
+        # Use CPU unless explicitly needed, RL is often CPU bound on small envs
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        gamma = self.rl_gamma_spin.value()
+
+        self.worker = RLWorker(model, env_name, episodes=episodes, lr=lr, gamma=gamma, device=device)
         self.worker.progress.connect(self._on_rl_progress)
         self.worker.finished.connect(self._on_finished)
         self.worker.error.connect(self._on_error)

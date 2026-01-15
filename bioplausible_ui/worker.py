@@ -366,12 +366,13 @@ class RLWorker(QThread):
     error = pyqtSignal(str)
     log = pyqtSignal(str)
 
-    def __init__(self, model, env_name, episodes=500, lr=1e-3, device='cpu', parent=None):
+    def __init__(self, model, env_name, episodes=500, lr=1e-3, gamma=0.99, device='cpu', parent=None):
         super().__init__(parent)
         self.model = model
         self.env_name = env_name
         self.episodes = episodes
         self.lr = lr
+        self.gamma = gamma
         self.device = device
         self._stop_requested = False
 
@@ -381,7 +382,7 @@ class RLWorker(QThread):
 
     def run(self):
         try:
-            trainer = RLTrainer(self.model, self.env_name, device=self.device, lr=self.lr)
+            trainer = RLTrainer(self.model, self.env_name, device=self.device, lr=self.lr, gamma=self.gamma)
 
             start_time = time.time()
 
