@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Entry point for python -m bioplausible_ui
+Wrapper for bioplausible.cli
 """
-from .main import main
+from bioplausible.cli import main
 
 if __name__ == "__main__":
     main()

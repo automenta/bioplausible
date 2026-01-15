@@ -30,20 +30,26 @@ This repository provides **undeniable experimental evidence** for these claims.
 ## Quick Start
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install package
+pip install -e .
 
 # Run full verification (all tracks)
-python verify.py --quick
+eqprop-verify --quick
+
+# Launch Dashboard
+eqprop-dashboard
+
+# Launch Model Search
+eqprop-hyperopt --task mnist
 
 # Run specific tracks
-python verify.py --track 1 2 3
+eqprop-verify --track 1 2 3
 
 # List all tracks
-python verify.py --list
+eqprop-verify --list
 ```
 
-**Output**: `results/verification_notebook.md` with complete experimental evidence.
+**Output**: `./results/verification_notebook.md` with complete experimental evidence.
 
 ---
 
@@ -203,18 +209,18 @@ Without this constraint, $L$ grows unboundedly during training ($L \gg 1$), caus
 
 ```
 release/
-├── verify.py                  # MAIN ENTRY POINT for all verification
-├── requirements.txt           # Dependencies (torch, numpy)
-├── models/                    # Validated Model Definitions (The "Engine")
-│   ├── looped_mlp.py          # Core LoopedMLP (Dense)
-│   ├── conv_eqprop.py         # ConvEqProp (Convolutional)
-│   ├── transformer.py         # TransformerEqProp (Attention)
+├── pyproject.toml             # Project configuration and entry points
+├── bioplausible/              # Core Package
+│   ├── cli.py                 # CLI entry point (eqprop-verify)
+│   ├── verify.py              # Legacy entry point
+│   ├── models/                # Validated Model Definitions
+│   ├── validation/            # Scientific Verification Framework
 │   └── ...
-├── validation/                # Scientific Verification Framework
-│   ├── core.py                # Test harness logic
-│   └── tracks/                # Implementation of all 37 tracks
-└── results/
-    └── verification_notebook.md  # Generated evidence
+├── bioplausible_ui/           # User Interface Package
+│   ├── main.py                # Dashboard entry point (eqprop-dashboard)
+│   ├── hyperopt_app.py        # Hyperopt entry point (eqprop-hyperopt)
+│   └── ...
+└── results/                   # Verification output (generated)
 ```
 
 ---
@@ -246,7 +252,7 @@ release/
 
 ```python
 import torch
-from models import LoopedMLP
+from bioplausible import LoopedMLP
 from torch.optim import Adam
 import torch.nn.functional as F
 
@@ -273,7 +279,7 @@ for x, y in dataloader:
 ### Running Verification
 
 ```python
-from validation import Verifier
+from bioplausible.validation import Verifier
 
 # Quick verification (2 mins)
 verifier = Verifier(quick_mode=True)

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["bioplausible", "bioplausible_ui"]
+
+[project]
+name = "bioplausible"
+version = "0.1.0"
+description = "Reproducible verification of Equilibrium Propagation research claims"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision",
+    "numpy",
+    "scipy",
+    "tqdm",
+    "gymnasium",
+    "scikit-learn",
+    "transformers",
+    "datasets",
+    "tokenizers",
+    "onnx",
+    "onnxscript",
+    "psutil",
+    "PyQt6",
+    "pyqtgraph",
+    "pytest",
+    "pytest-xdist",
+    "flake8",
+    "black",
+    "isort",
+]
+
+[project.scripts]
+eqprop-verify = "bioplausible.cli:main"
+eqprop-dashboard = "bioplausible_ui.main:main"
+eqprop-hyperopt = "bioplausible_ui.hyperopt_app:main"
