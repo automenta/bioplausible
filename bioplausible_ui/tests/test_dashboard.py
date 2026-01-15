@@ -157,9 +157,8 @@ class TestDashboardImports(unittest.TestCase):
     def test_dashboard_helpers_imports(self):
         """Test importing dashboard_helpers module."""
         try:
-            from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, generate_text_universal
+            from bioplausible_ui.dashboard_helpers import update_hyperparams_generic
             self.assertTrue(callable(update_hyperparams_generic))
-            self.assertTrue(callable(generate_text_universal))
         except ImportError as e:
             self.fail(f"Dashboard helpers import failed: {e}")
 

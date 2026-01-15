@@ -92,7 +92,6 @@ from .generation import UniversalGenerator, SimpleCharTokenizer, count_parameter
 from .hyperparams import get_hyperparams_for_model, HyperparamSpec
 from .viz_utils import extract_weights, format_weight_for_display, normalize_weights_for_display, get_layer_description
 from .dashboard_helpers import (
-    generate_text_universal,
     update_hyperparams_generic,
     get_current_hyperparams_generic,
     create_weight_viz_widgets_generic,
@@ -413,6 +412,11 @@ class EqPropDashboard(QMainWindow):
                 # 3. Load Weights
                 self.model.load_state_dict(checkpoint['model_state_dict'])
                 self.status_label.setText(f"Model loaded from {fname}")
+
+                # 4. Update Tab References
+                if self.model:
+                    self.lm_tab.update_model_ref(self.model)
+                    self.micro_tab.update_model_ref(self.model)
 
             except Exception as e:
                 QMessageBox.critical(self, "Load Error", f"Failed to load: {str(e)}")
@@ -929,10 +933,6 @@ class EqPropDashboard(QMainWindow):
 
         self.status_label.setText("Training error!")
         QMessageBox.critical(self, "Training Error", error)
-
-    def _generate_text(self):
-        """Generate text from the model (works even with untrained models)."""
-        generate_text_universal(self)
 
     def _update_lm_hyperparams(self, model_name: str):
         """Update LM hyperparameter widgets based on selected model."""

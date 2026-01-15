@@ -6,9 +6,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from bioplausible.models.registry import MODEL_REGISTRY
-from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic, generate_text_universal, create_weight_viz_widgets_generic, update_weight_visualization_generic
-from bioplausible_ui.generation import count_parameters, format_parameter_count
+from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
+from bioplausible_ui.generation import count_parameters, format_parameter_count, UniversalGenerator
 from bioplausible_ui.themes import PLOT_COLORS
+from PyQt6.QtWidgets import QApplication
 
 try:
     import pyqtgraph as pg
@@ -24,6 +25,8 @@ class LMTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.model = None
+        self.generator = None
         self._setup_ui()
 
     def _create_control_group(self, title, controls):
@@ -228,18 +231,55 @@ class LMTab(QWidget):
         update_hyperparams_generic(self, model_name, self.lm_hyperparam_layout, self.lm_hyperparam_widgets, self.lm_hyperparam_group)
 
     def _generate_text(self):
-        # We need access to the model, which is managed by the main dashboard.
-        # So we trigger a method on parent? Or pass model here?
-        # Ideally generate_text_universal handles `self.model`
-        # But `self` here is the Tab, not the Dashboard.
-        # We need to expose `model` attribute or delegate.
-        # For now, let's assume the Dashboard sets `self.model` on this tab or we communicate via signal?
-        # Easiest refactor: `generate_text_universal` takes `self` which has `model`.
-        # So we need `self.model` to be updated by the Dashboard when training starts/loads.
-        pass # To be wired up
+        """Generate text using the current model."""
+        if self.model is None:
+            self.gen_output.setText("⚠️ No model loaded. Start training to create a model.")
+            return
+
+        # Ensure generator exists
+        if self.generator is None or self.generator.model is not self.model:
+            try:
+                # Determine vocab size
+                vocab_size = 95
+                if hasattr(self.model, 'vocab_size'):
+                    vocab_size = self.model.vocab_size
+                elif hasattr(self.model, 'lm_head'):
+                    vocab_size = self.model.lm_head.out_features
+                elif hasattr(self.model, 'output_dim'):
+                    vocab_size = min(self.model.output_dim, 256)
+
+                device = next(self.model.parameters()).device
+                self.generator = UniversalGenerator(
+                    self.model,
+                    vocab_size=vocab_size,
+                    device=str(device)
+                )
+            except Exception as e:
+                self.gen_output.setText(f"❌ Failed to create generator: {e}")
+                return
+
+        temperature = self.temp_slider.value() / 10.0
+        prompt = "ROMEO:"
+        self.gen_output.setText(f"🎲 Generating from '{prompt}'...\n(May be gibberish if undertrained)")
+
+        # Force UI update
+        QApplication.processEvents()
+
+        try:
+            # Generate text
+            text = self.generator.generate(
+                prompt=prompt,
+                max_new_tokens=100,
+                temperature=temperature
+            )
+            self.gen_output.setText(f"📝 Generated:\n\n{text}")
+        except Exception as e:
+            self.gen_output.setText(f"❌ Generation failed: {str(e)}\n\nTip: Train for a few epochs first!")
 
     def update_model_ref(self, model):
         self.model = model
+        # Reset generator to ensure it uses new model
+        self.generator = None
 
     def get_current_hyperparams(self):
         return get_current_hyperparams_generic(self.lm_hyperparam_widgets)
