@@ -15,10 +15,13 @@ import json
 from pathlib import Path
 import sys
 
-# Add root to path
-sys.path.append(str(Path(__file__).parent.parent))
+# Add root to path (./) so we can import bioplausible
+# parent -> experiments
+# parent.parent -> bioplausible
+# parent.parent.parent -> root
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from models.eqprop_diffusion import EqPropDiffusion
+from bioplausible.models.eqprop_diffusion import EqPropDiffusion
 
 
 def main():
