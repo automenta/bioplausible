@@ -27,10 +27,10 @@ from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional
 import numpy as np
 
-# Add parent to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from models import BackpropTransformerLM, get_eqprop_lm
+from bioplausible.models import BackpropTransformerLM, get_eqprop_lm
 
 
 @dataclass

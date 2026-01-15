@@ -19,9 +19,10 @@ from pathlib import Path
 import time
 import sys
 
-sys.path.append(str(Path(__file__).parent.parent))
+# Add project root to path so we can import bioplausible
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from models import ModernConvEqProp, SimpleConvEqProp
+from bioplausible.models import ModernConvEqProp, SimpleConvEqProp
 
 
 def get_cifar10_loader(batch_size=128, num_workers=2, augment=True):

@@ -12,6 +12,7 @@ These scripts correspond to the "Breakthrough" phase of the roadmap.
 - **Track 37**: 
     - [`language_modeling.py`](./language_modeling.py) - Single EqProp character-level LM training
     - [`language_modeling_comparison.py`](./language_modeling_comparison.py) - **EqProp vs Backprop comparison** with parameter efficiency analysis
+    - [`lm_scale_study.py`](./lm_scale_study.py) - Dataset size and sequence length scaling study (See [LM_SCALE_STUDY.md](./LM_SCALE_STUDY.md))
 
 - **Track 38**: [`adaptive_compute.py`](./adaptive_compute.py) - Variable computation limits per sample.
 - **Track 39**: [`diffusion_mnist.py`](./diffusion_mnist.py) - Score-based generative modeling.

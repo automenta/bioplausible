@@ -917,7 +917,7 @@ def track_39_eqprop_diffusion(verifier) -> TrackResult:
             name="EqProp Diffusion",
             status="fail",
             score=0,
-            results={},
+            metrics={},
             evidence="Could not import experiments.diffusion_mnist",
             improvements=["Ensure experiments/diffusion_mnist.py exists"],
         )

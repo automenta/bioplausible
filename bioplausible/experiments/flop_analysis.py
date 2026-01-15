@@ -15,9 +15,10 @@ from pathlib import Path
 import json
 import sys
 
-sys.path.append(str(Path(__file__).parent.parent))
+# Add project root to path
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from models import LoopedMLP, BackpropMLP
+from bioplausible.models import LoopedMLP, BackpropMLP
 
 
 def count_flops_approximate(model, x):
