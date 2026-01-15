@@ -87,7 +87,7 @@ from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec, ModelSp
 from bioplausible.models.factory import create_model
 
 from .themes import CYBERPUNK_DARK, PLOT_COLORS
-from .worker import TrainingWorker, RLWorker
+from .worker import TrainingWorker, RLWorker, BenchmarkWorker
 from .generation import UniversalGenerator, SimpleCharTokenizer, count_parameters, format_parameter_count
 from .hyperparams import get_hyperparams_for_model, HyperparamSpec
 from .viz_utils import extract_weights, format_weight_for_display, normalize_weights_for_display, get_layer_description
@@ -259,7 +259,11 @@ class EqPropDashboard(QMainWindow):
         search_tab = self._create_search_tab()
         self.tabs.addTab(search_tab, "🔍 Model Search")
 
-        # Tab 6: Console
+        # Tab 6: Benchmarks
+        bench_tab = self._create_benchmarks_tab()
+        self.tabs.addTab(bench_tab, "🏆 Benchmarks")
+
+        # Tab 7: Console
         console_tab = self._create_console_tab()
         self.tabs.addTab(console_tab, "💻 Console")
 
@@ -895,7 +899,7 @@ class EqPropDashboard(QMainWindow):
         return tab
 
     def _save_model(self):
-        """Save the current model to a file."""
+        """Save the current model to a file, including current UI configuration."""
         if not self.model:
             QMessageBox.warning(self, "No Model", "No model to save.")
             return
@@ -904,10 +908,36 @@ class EqPropDashboard(QMainWindow):
         if fname:
             try:
                 import torch
+
+                # Capture current UI state
+                current_config = {}
+
+                # Active tab determines which controls to read
+                if self.tabs.currentIndex() == 0: # LM
+                    current_config.update({
+                        'task': 'lm',
+                        'model_name': self.lm_model_combo.currentText(),
+                        'hidden_dim': self.lm_hidden_spin.value(),
+                        'num_layers': self.lm_layers_spin.value(),
+                        'steps': self.lm_steps_spin.value(),
+                        'dataset': self.lm_dataset_combo.currentText(),
+                        'seq_len': self.lm_seqlen_spin.value(),
+                        'hyperparams': self._get_current_hyperparams(self.lm_hyperparam_widgets)
+                    })
+                elif self.tabs.currentIndex() == 1: # Vision
+                    current_config.update({
+                        'task': 'vision',
+                        'model_name': self.vis_model_combo.currentText(),
+                        'hidden_dim': self.vis_hidden_spin.value(),
+                        'steps': self.vis_steps_spin.value(),
+                        'dataset': self.vis_dataset_combo.currentText(),
+                        'hyperparams': self._get_current_hyperparams(self.vis_hyperparam_widgets)
+                    })
+
                 state = {
                     'model_state_dict': self.model.state_dict(),
-                    'config': self.initial_config, # Or current config if we tracked it better
-                    'model_name': self.lm_model_combo.currentText() if self.tabs.currentIndex() == 0 else self.vis_model_combo.currentText()
+                    'config': current_config,
+                    'model_name': current_config.get('model_name', 'Unknown')
                 }
                 torch.save(state, fname)
                 self.status_label.setText(f"Model saved to {fname}")
@@ -915,29 +945,110 @@ class EqPropDashboard(QMainWindow):
                 QMessageBox.critical(self, "Save Error", str(e))
 
     def _load_model(self):
-        """Load a model from a file."""
+        """Load a model from a file and restore UI state."""
         fname, _ = QFileDialog.getOpenFileName(self, "Load Model Checkpoint", "", "PyTorch Checkpoints (*.pt)")
         if fname:
             try:
                 import torch
                 checkpoint = torch.load(fname)
+                config = checkpoint.get('config', {})
 
-                # We need to recreate the model structure first
-                # For now, we rely on the user having the right settings or we try to infer
-                # This is tricky without a full config object.
-                # Simplification: Warn user they need to select correct architecture first
+                # 1. Restore UI State from Config
+                if config.get('task') == 'lm':
+                    self.tabs.setCurrentIndex(0)
+                    if 'model_name' in config:
+                        idx = self.lm_model_combo.findText(config['model_name'])
+                        if idx >= 0: self.lm_model_combo.setCurrentIndex(idx)
 
-                if not self.model:
-                     QMessageBox.information(self, "Load Info", "Please select the correct architecture/task first, then load weights.")
-                     # Ideally we'd reconstruct from checkpoint info but let's assume they just trained it
-                     # or want to load weights into current model
-                     return
+                    if 'hidden_dim' in config: self.lm_hidden_spin.setValue(config['hidden_dim'])
+                    if 'num_layers' in config: self.lm_layers_spin.setValue(config['num_layers'])
+                    if 'steps' in config: self.lm_steps_spin.setValue(config['steps'])
+                    if 'dataset' in config:
+                        idx = self.lm_dataset_combo.findText(config['dataset'])
+                        if idx >= 0: self.lm_dataset_combo.setCurrentIndex(idx)
 
+                elif config.get('task') == 'vision':
+                    self.tabs.setCurrentIndex(1)
+                    if 'model_name' in config:
+                        idx = self.vis_model_combo.findText(config['model_name'])
+                        if idx >= 0: self.vis_model_combo.setCurrentIndex(idx)
+
+                    if 'hidden_dim' in config: self.vis_hidden_spin.setValue(config['hidden_dim'])
+                    if 'steps' in config: self.vis_steps_spin.setValue(config['steps'])
+                    if 'dataset' in config:
+                        idx = self.vis_dataset_combo.findText(config['dataset'])
+                        if idx >= 0: self.vis_dataset_combo.setCurrentIndex(idx)
+
+                # Process pending events to ensure UI updates (like hyperparam widgets) are triggered
+                QApplication.processEvents()
+
+                # 2. Recreate Model Structure
+                # Now that UI is set, we can trigger model recreation or do it manually using the config
+                # Ideally, we call _create_model_and_loader but that also makes a dataloader which is heavy.
+                # Let's recreate just the model for now.
+
+                task = config.get('task', 'vision') # Default to vision if unknown
+
+                if task == 'lm':
+                    # We need vocab size to recreate model. It's usually in dataset or saved config.
+                    # If strictly relying on UI, we might need to load dataset.
+                    # Fast path: try to guess or use saved vocab size if we had it (we didn't save it explicitly but model has it)
+                    # Let's try to load the dataset briefly to get vocab size
+                    from bioplausible.datasets import get_lm_dataset
+                    ds_name = config.get('dataset', 'tiny_shakespeare')
+                    ds = get_lm_dataset(ds_name, seq_len=128, split='train') # dummy load
+                    vocab_size = ds.vocab_size
+
+                    spec = get_model_spec(config['model_name'])
+                    self.model = create_model(
+                        spec=spec,
+                        input_dim=None,
+                        output_dim=vocab_size,
+                        hidden_dim=config.get('hidden_dim', 256),
+                        num_layers=config.get('num_layers', 4),
+                        device="cuda" if torch.cuda.is_available() else "cpu",
+                        task_type="lm"
+                    )
+                else:
+                    # Vision
+                    from bioplausible.datasets import get_vision_dataset
+                    ds_name = config.get('dataset', 'mnist').lower()
+                    # Flatten logic
+                    spec = get_model_spec(config['model_name'])
+                    use_flatten = spec.model_type != "modern_conv_eqprop"
+
+                    input_dim = 784
+                    if 'cifar' in ds_name: input_dim = 3072
+                    if 'svhn' in ds_name: input_dim = 3072
+                    if not use_flatten:
+                        input_dim = 3 if ('cifar' in ds_name or 'svhn' in ds_name) else 1
+
+                    self.model = create_model(
+                        spec=spec,
+                        input_dim=input_dim,
+                        output_dim=10,
+                        hidden_dim=config.get('hidden_dim', 256),
+                        device="cuda" if torch.cuda.is_available() else "cpu",
+                        task_type="vision"
+                    )
+
+                # 3. Load Weights
                 self.model.load_state_dict(checkpoint['model_state_dict'])
+
+                # 4. Restore Hyperparams (after model creation to ensure widgets exist)
+                # Note: widget update logic is triggered by combo box change, but specific values might need setting
+                if 'hyperparams' in config:
+                    # This is tricky because the widgets are dynamic.
+                    # We rely on the user manually checking or we'd need a robust way to set them.
+                    # For now, UI state restoration + Model Weights is a big improvement.
+                    pass
+
                 self.status_label.setText(f"Model loaded from {fname}")
 
             except Exception as e:
-                QMessageBox.critical(self, "Load Error", str(e))
+                QMessageBox.critical(self, "Load Error", f"Failed to load: {str(e)}")
+                import traceback
+                traceback.print_exc()
 
     def _run_microscope_analysis(self):
         """Run a single forward pass with dynamics tracking."""
@@ -1111,6 +1222,148 @@ class EqPropDashboard(QMainWindow):
         root_logger = logging.getLogger()
         root_logger.setLevel(logging.INFO)
         root_logger.addHandler(self.log_handler)
+
+    def _create_benchmarks_tab(self) -> QWidget:
+        """Create the Benchmarks (Verification) tab."""
+        tab = QWidget()
+        layout = QHBoxLayout(tab)
+
+        # Left Panel: Control and List
+        left_panel = QVBoxLayout()
+        layout.addLayout(left_panel, stretch=2)
+
+        # Controls
+        controls_group = QGroupBox("Benchmark Controls")
+        controls_layout = QHBoxLayout(controls_group)
+
+        self.bench_quick_check = QCheckBox("Quick Mode (Smoke Tests)")
+        self.bench_quick_check.setChecked(True)
+        controls_layout.addWidget(self.bench_quick_check)
+
+        run_sel_btn = QPushButton("▶ Run Selected")
+        run_sel_btn.clicked.connect(self._run_selected_benchmarks)
+        controls_layout.addWidget(run_sel_btn)
+
+        run_all_btn = QPushButton("⏩ Run All")
+        run_all_btn.clicked.connect(self._run_all_benchmarks)
+        controls_layout.addWidget(run_all_btn)
+
+        left_panel.addWidget(controls_group)
+
+        # Track List Table
+        self.bench_table = QTableWidget()
+        self.bench_table.setColumnCount(4)
+        self.bench_table.setHorizontalHeaderLabels(["ID", "Track Name", "Status", "Score"])
+        self.bench_table.horizontalHeader().setStretchLastSection(True)
+        self.bench_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+
+        # Populate Tracks
+        try:
+            from bioplausible.validation.core import Verifier
+            # Create a dummy verifier to get list
+            v = Verifier(quick_mode=True)
+            self.bench_table.setRowCount(len(v.tracks))
+
+            for i, (tid, (name, _)) in enumerate(v.tracks.items()):
+                self.bench_table.setItem(i, 0, QTableWidgetItem(str(tid)))
+                self.bench_table.setItem(i, 1, QTableWidgetItem(name))
+                self.bench_table.setItem(i, 2, QTableWidgetItem("Pending"))
+                self.bench_table.setItem(i, 3, QTableWidgetItem("--"))
+        except Exception as e:
+            self.bench_table.setRowCount(1)
+            self.bench_table.setItem(0, 1, QTableWidgetItem(f"Error loading tracks: {e}"))
+
+        left_panel.addWidget(self.bench_table)
+
+        # Right Panel: Details/Output
+        right_panel = QVBoxLayout()
+        layout.addLayout(right_panel, stretch=1)
+
+        details_group = QGroupBox("Benchmark Details")
+        details_layout = QVBoxLayout(details_group)
+
+        self.bench_output = QTextEdit()
+        self.bench_output.setReadOnly(True)
+        self.bench_output.setPlaceholderText("Select a track to see details or run benchmarks...")
+        details_layout.addWidget(self.bench_output)
+
+        right_panel.addWidget(details_group)
+
+        return tab
+
+    def _run_selected_benchmarks(self):
+        """Run selected benchmarks."""
+        selected_rows = self.bench_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "No Selection", "Please select at least one track to run.")
+            return
+
+        track_ids = []
+        for row in selected_rows:
+            tid_item = self.bench_table.item(row.row(), 0)
+            if tid_item:
+                track_ids.append(int(tid_item.text()))
+
+        self._start_benchmark_worker(track_ids)
+
+    def _run_all_benchmarks(self):
+        """Run all benchmarks."""
+        rows = self.bench_table.rowCount()
+        track_ids = []
+        for r in range(rows):
+            tid_item = self.bench_table.item(r, 0)
+            if tid_item:
+                track_ids.append(int(tid_item.text()))
+
+        self._start_benchmark_worker(track_ids)
+
+    def _start_benchmark_worker(self, track_ids):
+        """Start the benchmark worker."""
+        quick = self.bench_quick_check.isChecked()
+        self.bench_output.clear()
+        self.bench_output.append(f"Starting {len(track_ids)} tracks (Quick={quick})...\n")
+
+        # Reset status in table
+        for r in range(self.bench_table.rowCount()):
+            tid_item = self.bench_table.item(r, 0)
+            if tid_item and int(tid_item.text()) in track_ids:
+                self.bench_table.setItem(r, 2, QTableWidgetItem("Running..."))
+                self.bench_table.item(r, 2).setForeground(Qt.GlobalColor.yellow)
+
+        self.bench_worker = BenchmarkWorker(track_ids, quick_mode=quick)
+        self.bench_worker.progress.connect(self._on_bench_progress)
+        self.bench_worker.finished.connect(self._on_bench_finished)
+        self.bench_worker.error.connect(self._on_bench_error)
+        self.bench_worker.start()
+
+    def _on_bench_progress(self, msg):
+        self.bench_output.append(msg)
+        self._append_log(msg) # Also log to console
+
+    def _on_bench_finished(self, results):
+        self.bench_output.append("\nBenchmarking Complete!")
+
+        # Update table
+        for tid, res in results.items():
+            # Find row
+            for r in range(self.bench_table.rowCount()):
+                if int(self.bench_table.item(r, 0).text()) == tid:
+                    status = res['status']
+                    score = res['score']
+
+                    status_item = QTableWidgetItem(status.upper())
+                    if status == 'pass':
+                        status_item.setForeground(Qt.GlobalColor.green)
+                    else:
+                        status_item.setForeground(Qt.GlobalColor.red)
+
+                    self.bench_table.setItem(r, 2, status_item)
+                    self.bench_table.setItem(r, 3, QTableWidgetItem(f"{score:.1f}"))
+                    break
+
+    def _on_bench_error(self, err):
+        self.bench_output.append(f"\nERROR: {err}")
+        QMessageBox.critical(self, "Benchmark Error", err)
 
     def _create_console_tab(self) -> QWidget:
         """Create a console log tab."""
