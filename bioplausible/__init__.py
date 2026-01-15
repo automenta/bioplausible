@@ -33,6 +33,7 @@ from .utils import (
     export_to_onnx,
     verify_spectral_norm,
 )
+from .sklearn import EqPropClassifier
 
 # Language model variants (optional import - fails gracefully if dependencies missing)
 try:
@@ -114,6 +115,7 @@ __all__ = [
     "verify_spectral_norm",
     "create_model_preset",
     "ModelRegistry",
+    "EqPropClassifier",
     # LM variants (if available)
     "get_eqprop_lm",
     "list_eqprop_lm_variants",
