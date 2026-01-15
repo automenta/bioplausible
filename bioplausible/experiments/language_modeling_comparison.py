@@ -36,9 +36,10 @@ from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Tuple
 import sys
 
-sys.path.append(str(Path(__file__).parent.parent))
+# Add project root to path
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from models import (
+from bioplausible.models import (
     BackpropTransformerLM,
     CausalTransformerEqProp,
     get_eqprop_lm,
