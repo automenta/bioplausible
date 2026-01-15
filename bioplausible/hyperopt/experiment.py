@@ -413,7 +413,16 @@ class TrialRunner:
             # --- Branch: Reinforcement Learning ---
             if task_type == "rl":
                 print("Running RL Training Loop...")
-                rl_trainer = RLTrainer(algo.model, "CartPole-v1", device=self.device, lr=lr)
+                # Determine environment name based on task (default to CartPole if generic 'rl')
+                env_name = "CartPole-v1"
+                # If we had more RL tasks mapped in self.task, we could switch here
+                # Currently TrialRunner handles 'cartpole' -> 'CartPole-v1' implicit mapping
+                # via hardcoded input/output dims in __init__, so using CartPole-v1 here is consistent.
+
+                # Check for gamma in config
+                gamma = config.get("gamma", 0.99)
+
+                rl_trainer = RLTrainer(algo.model, env_name, device=self.device, lr=lr, gamma=gamma)
 
                 # Apply extra params to RL trainer's model if needed
                 # (algo.model is reference passed to RLTrainer)
