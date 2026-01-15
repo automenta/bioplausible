@@ -242,6 +242,10 @@ class EqPropDashboard(QMainWindow):
         search_tab = self._create_search_tab()
         self.tabs.addTab(search_tab, "🔍 Model Search")
 
+        # Tab 6: Console
+        console_tab = self._create_console_tab()
+        self.tabs.addTab(console_tab, "💻 Console")
+
         # Status bar
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
         self.status_label.setStyleSheet("color: #808090; padding: 5px;")
@@ -289,11 +293,7 @@ class EqPropDashboard(QMainWindow):
         # Populate using registry
         lm_items = []
         for spec in MODEL_REGISTRY:
-            # Filter for LM appropriate models (simplistic check: if it says Transformer or is general)
-            if "Transformer" in spec.name or spec.model_type in ["backprop", "eqprop_mlp"]:
-                lm_items.append(f"{spec.name}")
-            # Add other research models
-            elif spec.model_type not in ["modern_conv_eqprop"]: # Exclude vision-only
+            if spec.task_compat is None or "lm" in spec.task_compat:
                 lm_items.append(f"{spec.name}")
 
         self.lm_model_combo.addItems(lm_items)
@@ -371,11 +371,15 @@ class EqPropDashboard(QMainWindow):
         self.lm_kernel_check = QCheckBox("O(1) Kernel Mode (GPU)")
         self.lm_kernel_check.setToolTip("Use fused EqProp kernel for O(1) memory training")
 
+        self.lm_micro_check = QCheckBox("Live Dynamics Analysis")
+        self.lm_micro_check.setToolTip("Periodically analyze convergence dynamics during training")
+
         train_controls = [
             ("Epochs:", self.lm_epochs_spin),
             ("Learning Rate:", self.lm_lr_spin),
             ("", self.lm_compile_check),
-            ("", self.lm_kernel_check)
+            ("", self.lm_kernel_check),
+            ("", self.lm_micro_check)
         ]
         train_group = self._create_control_group("⚙️ Training", train_controls)
         left_panel.addWidget(train_group)
@@ -500,8 +504,7 @@ class EqPropDashboard(QMainWindow):
         # Populate using registry
         model_items = []
         for spec in MODEL_REGISTRY:
-             # Exclude Transformer specific models
-            if "Transformer" not in spec.name:
+            if spec.task_compat is None or "vision" in spec.task_compat:
                 model_items.append(f"{spec.name}")
 
         self.vis_model_combo.addItems(model_items)
@@ -539,6 +542,7 @@ class EqPropDashboard(QMainWindow):
             "Fashion-MNIST",
             "CIFAR-10",
             "KMNIST",
+            "SVHN",
         ])
 
         self.vis_batch_spin = QSpinBox()
@@ -568,11 +572,15 @@ class EqPropDashboard(QMainWindow):
         self.vis_kernel_check = QCheckBox("O(1) Kernel Mode (GPU)")
         self.vis_kernel_check.setToolTip("Use fused EqProp kernel for O(1) memory training")
 
+        self.vis_micro_check = QCheckBox("Live Dynamics Analysis")
+        self.vis_micro_check.setToolTip("Periodically analyze convergence dynamics during training")
+
         train_controls = [
             ("Epochs:", self.vis_epochs_spin),
             ("Learning Rate:", self.vis_lr_spin),
             ("", self.vis_compile_check),
-            ("", self.vis_kernel_check)
+            ("", self.vis_kernel_check),
+            ("", self.vis_micro_check)
         ]
         train_group = self._create_control_group("⚙️ Training", train_controls)
         left_panel.addWidget(train_group)
@@ -681,7 +689,14 @@ class EqPropDashboard(QMainWindow):
 
         # Model/Algo Selection
         self.rl_algo_combo = QComboBox()
-        self.rl_algo_combo.addItems(["LoopedMLP (EqProp)", "LoopedMLP (BPTT)", "Standard Backprop"])
+
+        # Populate using registry filtering for RL
+        rl_items = []
+        for spec in MODEL_REGISTRY:
+             if spec.task_compat is None or "rl" in spec.task_compat:
+                 rl_items.append(spec.name)
+
+        self.rl_algo_combo.addItems(rl_items)
         self.rl_algo_combo.currentTextChanged.connect(self._update_rl_controls)
 
         # Gradient Method
@@ -1063,6 +1078,25 @@ class EqPropDashboard(QMainWindow):
         layout.addStretch()
         return tab
 
+    def _create_console_tab(self) -> QWidget:
+        """Create a console log tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        self.console_log = QTextEdit()
+        self.console_log.setReadOnly(True)
+        self.console_log.setStyleSheet("background-color: #0a0a0f; color: #a0a0b0; font-family: Consolas, monospace;")
+        layout.addWidget(self.console_log)
+
+        return tab
+
+    def _append_log(self, message: str):
+        """Append a message to the console log."""
+        if hasattr(self, 'console_log'):
+             import time
+             timestamp = time.strftime("%H:%M:%S")
+             self.console_log.append(f"[{timestamp}] {message}")
+
     def _launch_search_tool(self):
         """Launch the Hyperopt Dashboard in a new window."""
         try:
@@ -1238,6 +1272,10 @@ class EqPropDashboard(QMainWindow):
             self.vis_param_label.setText(f"Parameters: {format_parameter_count(count)}")
 
         # Create and start worker
+        micro_interval = 1 if self.vis_micro_check.isChecked() else 0
+
+        micro_interval = 1 if self.lm_micro_check.isChecked() else 0
+
         self.worker = TrainingWorker(
             self.model,
             self.train_loader,
@@ -1246,11 +1284,14 @@ class EqPropDashboard(QMainWindow):
             use_compile=self.vis_compile_check.isChecked(),
             use_kernel=self.vis_kernel_check.isChecked(),
             hyperparams=hyperparams,
+            microscope_interval=micro_interval,
         )
         self.worker.progress.connect(self._on_progress)
         self.worker.finished.connect(self._on_finished)
         self.worker.error.connect(self._on_error)
         self.worker.weights_updated.connect(self._update_weight_visualization)
+        self.worker.log.connect(self._append_log)
+        self.worker.dynamics_update.connect(self._on_dynamics_update)
 
         # Update UI
         self.vis_train_btn.setEnabled(False)
@@ -1295,11 +1336,14 @@ class EqPropDashboard(QMainWindow):
             use_compile=self.lm_compile_check.isChecked(),
             use_kernel=self.lm_kernel_check.isChecked(),
             hyperparams=hyperparams,
+            microscope_interval=micro_interval,
         )
         self.worker.progress.connect(self._on_progress)
         self.worker.finished.connect(self._on_finished)
         self.worker.error.connect(self._on_error)
         self.worker.weights_updated.connect(self._update_weight_visualization)
+        self.worker.log.connect(self._append_log)
+        self.worker.dynamics_update.connect(self._on_dynamics_update)
 
         # Update UI
         self.lm_train_btn.setEnabled(False)
@@ -1356,6 +1400,7 @@ class EqPropDashboard(QMainWindow):
         self.worker.progress.connect(self._on_rl_progress)
         self.worker.finished.connect(self._on_finished)
         self.worker.error.connect(self._on_error)
+        self.worker.log.connect(self._append_log)
 
         # Update UI
         self.rl_train_btn.setEnabled(False)
@@ -1387,6 +1432,23 @@ class EqPropDashboard(QMainWindow):
         if self.worker:
             self.worker.stop()
             self.status_label.setText("Stopping training...")
+
+    def _on_dynamics_update(self, dynamics: dict):
+        """Handle live dynamics update from worker."""
+        # Update microscope plots if they exist
+        if hasattr(self, 'micro_conv_curve') and hasattr(self, 'micro_act_curve'):
+            deltas = dynamics.get('deltas', [])
+            traj = dynamics.get('trajectory', [])
+
+            if deltas:
+                self.micro_conv_curve.setData(deltas)
+
+            if traj:
+                try:
+                    activities = [h.abs().mean().item() for h in traj]
+                    self.micro_act_curve.setData(activities)
+                except:
+                    pass
 
     def _on_progress(self, metrics: dict):
         """Handle training progress update."""

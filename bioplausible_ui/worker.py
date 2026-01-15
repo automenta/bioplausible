@@ -18,8 +18,10 @@ class TrainingWorker(QThread):
     progress = pyqtSignal(dict)  # Emit training metrics frequently
     finished = pyqtSignal(dict)  # Emit final results
     error = pyqtSignal(str)      # Emit error message
+    log = pyqtSignal(str)        # Emit log messages
     generation = pyqtSignal(str) # Emit generated text
     weights_updated = pyqtSignal(dict)  # Emit weight snapshots for visualization
+    dynamics_update = pyqtSignal(dict)  # Emit dynamics data
 
     def __init__(
         self,
@@ -30,6 +32,7 @@ class TrainingWorker(QThread):
         use_compile: bool = True,
         use_kernel: bool = False,
         generate_interval: int = 5,  # Generate text every N epochs
+        microscope_interval: int = 0, # Run microscope every N epochs (0=off)
         prompts: list = None,
         hyperparams: dict = None,  # Model-specific hyperparameters
         parent=None,
@@ -42,6 +45,7 @@ class TrainingWorker(QThread):
         self.use_compile = use_compile
         self.use_kernel = use_kernel
         self.generate_interval = generate_interval
+        self.microscope_interval = microscope_interval
         self.prompts = prompts or ["ROMEO:"]
         self.hyperparams = hyperparams or {}
 
@@ -177,11 +181,54 @@ class TrainingWorker(QThread):
         except:
             lipschitz = 0.0  # Default if computation fails
 
+        # Microscope analysis
+        if self.microscope_interval > 0 and (epoch + 1) % self.microscope_interval == 0:
+            self._run_microscope(trainer)
+
         # Emit final epoch metrics
         self._emit_epoch_metrics(epoch, num_batches, epoch_loss, epoch_correct,
                                epoch_total, lipschitz)
 
         return {'loss': epoch_loss / max(epoch_total, 1), 'accuracy': epoch_correct / max(epoch_total, 1)}
+
+    def _run_microscope(self, trainer):
+        """Run a single forward pass with dynamics tracking."""
+        try:
+            # Get a single batch
+            x, _ = next(iter(self.train_loader))
+
+            # Convert input
+            if not self.use_kernel:
+                x = self._convert_input_format(x)
+
+            x = x.to(trainer.device)
+
+            # Determine arguments for dynamics
+            kwargs = {}
+            import inspect
+            sig = inspect.signature(self.model.forward)
+            if 'return_dynamics' in sig.parameters:
+                kwargs['return_dynamics'] = True
+
+            # Run forward pass (no grad needed for visualization)
+            with torch.no_grad():
+                self.model.eval()
+                out = self.model(x, **kwargs)
+                self.model.train() # Switch back to train mode
+
+                dynamics = {}
+                if isinstance(out, tuple) and len(out) > 1:
+                    dynamics = out[1]
+                elif hasattr(self.model, 'dynamics'):
+                    dynamics = self.model.dynamics
+
+                if dynamics:
+                    self.dynamics_update.emit(dynamics)
+                    self.log.emit(f"Microscope: Captured dynamics for epoch.")
+
+        except Exception as e:
+            self.log.emit(f"Microscope failed: {e}")
+            # Don't crash training for this
 
     def _emit_batch_progress(self, epoch, batch_idx, num_batches, epoch_loss,
                            epoch_correct, epoch_total, x, batch_time, total_start,
@@ -317,6 +364,7 @@ class RLWorker(QThread):
     progress = pyqtSignal(dict)
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
+    log = pyqtSignal(str)
 
     def __init__(self, model, env_name, episodes=500, lr=1e-3, device='cpu', parent=None):
         super().__init__(parent)

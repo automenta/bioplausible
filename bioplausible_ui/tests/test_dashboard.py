@@ -35,15 +35,12 @@ class TestDashboardModelCreation(unittest.TestCase):
 
     def test_bioplausible_vision_models(self):
         """Test creating bioplausible models for vision."""
-        from bioplausible import HAS_BIOPLAUSIBLE
-
-        if not HAS_BIOPLAUSIBLE:
-            self.skipTest("Bioplausible models not available")
-
-        from algorithms import create_model
+        from bioplausible.models.registry import get_model_spec
+        from bioplausible.models.factory import create_model
 
         # Test creating a research algorithm
-        model = create_model('eqprop', 784, [256], 10)
+        spec = get_model_spec('EqProp MLP')
+        model = create_model(spec=spec, input_dim=784, hidden_dim=256, output_dim=10)
         self.assertIsNotNone(model)
 
     def test_lm_dataset_loading(self):

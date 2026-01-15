@@ -22,6 +22,7 @@ class ModelSpec:
     has_beta: bool = False
     has_steps: bool = False
     color: str = "#888888"
+    task_compat: Optional[List[str]] = None  # ['vision', 'lm', 'rl'] or None for all applicable
 
 
 # All models available - ordered by category
@@ -33,6 +34,7 @@ MODEL_REGISTRY = [
         model_type="backprop",
         default_lr=0.001,
         color="#ff6b6b",
+        task_compat=["vision", "lm", "rl"],
     ),
     # EqProp MLP
     ModelSpec(
@@ -45,6 +47,7 @@ MODEL_REGISTRY = [
         has_beta=True,
         has_steps=True,
         color="#4ecdc4",
+        task_compat=["vision", "rl"],
     ),
     # Advanced EqProp Variants
     ModelSpec(
@@ -57,6 +60,7 @@ MODEL_REGISTRY = [
         has_beta=True,
         has_steps=True,
         color="#a55eea",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Directed EqProp (Deep EP)",
@@ -68,6 +72,7 @@ MODEL_REGISTRY = [
         has_beta=True,
         has_steps=True,
         color="#fd9644",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Finite-Nudge EqProp",
@@ -79,6 +84,7 @@ MODEL_REGISTRY = [
         has_beta=True,
         has_steps=True,
         color="#fc5c65",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Conv EqProp (CIFAR-10)",
@@ -88,6 +94,7 @@ MODEL_REGISTRY = [
         default_steps=15,
         has_steps=True,
         color="#26de81",
+        task_compat=["vision"],
     ),
     # Hybrid & Experimental Algorithms
     ModelSpec(
@@ -96,6 +103,7 @@ MODEL_REGISTRY = [
         model_type="adaptive_feedback_alignment",
         default_lr=0.001,
         color="#4b7bec",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Equilibrium Alignment",
@@ -105,6 +113,7 @@ MODEL_REGISTRY = [
         default_steps=30,
         has_steps=True,
         color="#d1d8e0",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Layerwise Equilibrium FA",
@@ -112,6 +121,7 @@ MODEL_REGISTRY = [
         model_type="layerwise_equilibrium_fa",
         default_lr=0.001,
         color="#a5b1c2",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Energy Guided FA",
@@ -119,6 +129,7 @@ MODEL_REGISTRY = [
         model_type="energy_guided_fa",
         default_lr=0.001,
         color="#778ca3",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Predictive Coding Hybrid",
@@ -128,6 +139,7 @@ MODEL_REGISTRY = [
         default_steps=20,
         has_steps=True,
         color="#3867d6",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Sparse Equilibrium",
@@ -137,6 +149,7 @@ MODEL_REGISTRY = [
         default_beta=0.1,
         has_beta=True,
         color="#8854d0",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Momentum Equilibrium",
@@ -144,6 +157,7 @@ MODEL_REGISTRY = [
         model_type="momentum_equilibrium",
         default_lr=0.001,
         color="#45aaf2",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Stochastic FA",
@@ -151,6 +165,7 @@ MODEL_REGISTRY = [
         model_type="stochastic_fa",
         default_lr=0.001,
         color="#2bcbba",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Energy Minimizing FA",
@@ -158,6 +173,7 @@ MODEL_REGISTRY = [
         model_type="energy_minimizing_fa",
         default_lr=0.001,
         color="#0fb9b1",
+        task_compat=["vision", "rl"],
     ),
     # Other Bio-Plausible Algorithms
     ModelSpec(
@@ -166,6 +182,7 @@ MODEL_REGISTRY = [
         model_type="dfa",
         default_lr=0.001,
         color="#45b7d1",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="CHL (Contrastive Hebbian)",
@@ -177,6 +194,7 @@ MODEL_REGISTRY = [
         has_beta=True,
         has_steps=True,
         color="#f9ca24",
+        task_compat=["vision", "rl"],
     ),
     ModelSpec(
         name="Deep Hebbian (Hundred-Layer)",
@@ -184,6 +202,7 @@ MODEL_REGISTRY = [
         model_type="deep_hebbian",
         default_lr=0.0005,
         color="#6c5ce7",
+        task_compat=["vision", "rl"],
     ),
     # EqProp Transformers (From Track 37 results) - SLOW MODELS LAST
     ModelSpec(
@@ -195,6 +214,7 @@ MODEL_REGISTRY = [
         default_steps=10,
         has_steps=True,
         color="#2ecc71",
+        task_compat=["lm"],
     ),
     ModelSpec(
         name="EqProp Transformer (Full)",
@@ -205,6 +225,7 @@ MODEL_REGISTRY = [
         default_steps=15,
         has_steps=True,
         color="#27ae60",
+        task_compat=["lm"],
     ),
     ModelSpec(
         name="EqProp Transformer (Hybrid)",
@@ -215,6 +236,7 @@ MODEL_REGISTRY = [
         default_steps=10,
         has_steps=True,
         color="#1abc9c",
+        task_compat=["lm"],
     ),
     ModelSpec(
         name="EqProp Transformer (Recurrent)",
@@ -225,6 +247,7 @@ MODEL_REGISTRY = [
         default_steps=20,
         has_steps=True,
         color="#16a085",
+        task_compat=["lm"],
     ),
 ]
 
