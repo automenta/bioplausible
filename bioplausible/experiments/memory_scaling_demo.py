@@ -17,9 +17,10 @@ import json
 from pathlib import Path
 import sys
 
-sys.path.append(str(Path(__file__).parent.parent))
+# Add project root to path
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from models import LoopedMLP
+from bioplausible.models import LoopedMLP
 
 
 class DeepEqPropCheckpointed(nn.Module):

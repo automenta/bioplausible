@@ -15,10 +15,10 @@ from pathlib import Path
 import json
 import sys
 
-# Add root to path
-sys.path.append(str(Path(__file__).parent.parent))
+# Add project root to path
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from models import CausalTransformerEqProp
+from bioplausible.models import CausalTransformerEqProp
 
 def measure_settling_time(model, x, max_steps=100, epsilon=1e-5):
     """
@@ -115,7 +115,7 @@ def main():
         current_vocab = np.random.randint(2, args.vocab_size + 1)
         
         # Generate sequence
-        seq_ data = torch.randint(0, current_vocab, (1, args.seq_len)).to(device)
+        seq_data = torch.randint(0, current_vocab, (1, args.seq_len)).to(device)
         
         # Measure settling time
         settling_time = measure_settling_time(model, seq_data, max_steps=30)

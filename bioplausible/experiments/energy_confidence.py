@@ -18,9 +18,10 @@ from pathlib import Path
 import json
 import sys
 
-sys.path.append(str(Path(__file__).parent.parent))
+# Add project root to path
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from models import LoopedMLP
+from bioplausible.models import LoopedMLP
 
 
 def compute_energy_score(model, x, max_steps=30, epsilon=1e-5):
