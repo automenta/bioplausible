@@ -99,6 +99,13 @@ from .dashboard_helpers import (
     update_weight_visualization_generic
 )
 
+from bioplausible_ui.tabs.lm_tab import LMTab
+from bioplausible_ui.tabs.vision_tab import VisionTab
+from bioplausible_ui.tabs.rl_tab import RLTab
+from bioplausible_ui.tabs.microscope_tab import MicroscopeTab
+from bioplausible_ui.tabs.benchmarks_tab import BenchmarksTab
+from bioplausible_ui.tabs.console_tab import ConsoleTab
+
 
 class QtLogHandler(logging.Handler, QObject):
     """Custom logging handler that emits a signal for each log record."""
@@ -167,18 +174,18 @@ class EqPropDashboard(QMainWindow):
 
             if is_vision:
                 self.tabs.setCurrentIndex(1)
-                combo = self.vis_model_combo
-                hidden_spin = self.vis_hidden_spin
-                steps_spin = self.vis_steps_spin
-                lr_spin = self.vis_lr_spin
-                epochs_spin = self.vis_epochs_spin
+                combo = self.vis_tab.vis_model_combo
+                hidden_spin = self.vis_tab.vis_hidden_spin
+                steps_spin = self.vis_tab.vis_steps_spin
+                lr_spin = self.vis_tab.vis_lr_spin
+                epochs_spin = self.vis_tab.vis_epochs_spin
             else:
                 self.tabs.setCurrentIndex(0)
-                combo = self.lm_model_combo
-                hidden_spin = self.lm_hidden_spin
-                steps_spin = self.lm_steps_spin
-                lr_spin = self.lm_lr_spin
-                epochs_spin = self.lm_epochs_spin
+                combo = self.lm_tab.lm_model_combo
+                hidden_spin = self.lm_tab.lm_hidden_spin
+                steps_spin = self.lm_tab.lm_steps_spin
+                lr_spin = self.lm_tab.lm_lr_spin
+                epochs_spin = self.lm_tab.lm_epochs_spin
 
             # Select model in combo box
             index = combo.findText(model_name, Qt.MatchFlag.MatchContains)
@@ -196,9 +203,9 @@ class EqPropDashboard(QMainWindow):
                 epochs_spin.setValue(int(config['epochs']))
             if 'num_layers' in config:
                 if is_vision:
-                    pass # Vision tab currently doesn't have layers spin (it's hardcoded or part of model)
+                    pass
                 else:
-                    self.lm_layers_spin.setValue(int(config['num_layers']))
+                    self.lm_tab.lm_layers_spin.setValue(int(config['num_layers']))
 
             self.status_label.setText(f"Loaded configuration for {model_name}")
 
@@ -240,663 +247,44 @@ class EqPropDashboard(QMainWindow):
         layout.addWidget(self.tabs, stretch=1)
 
         # Tab 1: Language Modeling
-        lm_tab = self._create_lm_tab()
-        self.tabs.addTab(lm_tab, "🔤 Language Model")
+        self.lm_tab = LMTab()
+        self.lm_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+        self.lm_tab.stop_training_signal.connect(self._stop_training)
+        self.tabs.addTab(self.lm_tab, "🔤 Language Model")
 
         # Tab 2: Vision
-        vision_tab = self._create_vision_tab()
-        self.tabs.addTab(vision_tab, "📷 Vision")
+        self.vis_tab = VisionTab()
+        self.vis_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+        self.vis_tab.stop_training_signal.connect(self._stop_training)
+        self.tabs.addTab(self.vis_tab, "📷 Vision")
 
         # Tab 3: Reinforcement Learning
-        rl_tab = self._create_rl_tab()
-        self.tabs.addTab(rl_tab, "🎮 Reinforcement Learning")
+        self.rl_tab = RLTab()
+        self.rl_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+        self.rl_tab.stop_training_signal.connect(self._stop_training)
+        self.tabs.addTab(self.rl_tab, "🎮 Reinforcement Learning")
 
         # Tab 4: Microscope (Dynamics)
-        micro_tab = self._create_microscope_tab()
-        self.tabs.addTab(micro_tab, "🔬 Microscope")
+        self.micro_tab = MicroscopeTab()
+        self.tabs.addTab(self.micro_tab, "🔬 Microscope")
 
         # Tab 5: Model Search (Hyperopt)
         search_tab = self._create_search_tab()
         self.tabs.addTab(search_tab, "🔍 Model Search")
 
         # Tab 6: Benchmarks
-        bench_tab = self._create_benchmarks_tab()
-        self.tabs.addTab(bench_tab, "🏆 Benchmarks")
+        self.bench_tab = BenchmarksTab()
+        self.bench_tab.log_message.connect(self._append_log)
+        self.tabs.addTab(self.bench_tab, "🏆 Benchmarks")
 
         # Tab 7: Console
-        console_tab = self._create_console_tab()
-        self.tabs.addTab(console_tab, "💻 Console")
+        self.console_tab = ConsoleTab()
+        self.tabs.addTab(self.console_tab, "💻 Console")
 
         # Status bar
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
         self.status_label.setStyleSheet("color: #808090; padding: 5px;")
         layout.addWidget(self.status_label)
-
-    def _create_control_group(self, title: str, controls: List[Tuple[str, object]]) -> QGroupBox:
-        """Create a generic control group with common layout."""
-        group = QGroupBox(title)
-        layout = QGridLayout(group)
-
-        for i, (label, widget) in enumerate(controls):
-            layout.addWidget(QLabel(label), i, 0)
-            layout.addWidget(widget, i, 1)
-
-        return group
-
-    def _create_plot_widget(self, title: str, ylabel: str, xlabel: str = 'Epoch',
-                           yrange: Optional[Tuple[float, float]] = None) -> tuple:
-        """Create a standardized plot widget."""
-        plot_widget = pg.PlotWidget()
-        plot_widget.setBackground('#0a0a0f')
-        plot_widget.setLabel('left', ylabel, color=PLOT_COLORS.get(ylabel.lower().split()[0], '#ffffff'))
-        plot_widget.setLabel('bottom', xlabel)
-        plot_widget.showGrid(x=True, y=True, alpha=0.2)
-
-        if yrange:
-            plot_widget.setYRange(*yrange)
-
-        curve = plot_widget.plot(pen=pg.mkPen(PLOT_COLORS.get(ylabel.lower().split()[0], '#ffffff'), width=2))
-        return plot_widget, curve
-
-    def _create_lm_tab(self) -> QWidget:
-        """Create the Language Modeling tab."""
-        tab = QWidget()
-        layout = QHBoxLayout(tab)
-        layout.setSpacing(15)
-
-        # Left panel: Controls
-        left_panel = QVBoxLayout()
-        layout.addLayout(left_panel, stretch=1)
-
-        # Model Selection
-        self.lm_model_combo = QComboBox()
-
-        # Populate using registry
-        lm_items = []
-        for spec in MODEL_REGISTRY:
-            if spec.task_compat is None or "lm" in spec.task_compat:
-                lm_items.append(f"{spec.name}")
-
-        self.lm_model_combo.addItems(lm_items)
-
-        self.lm_hidden_spin = QSpinBox()
-        self.lm_hidden_spin.setRange(64, 1024)
-        self.lm_hidden_spin.setValue(256)
-        self.lm_hidden_spin.setSingleStep(64)
-
-        self.lm_layers_spin = QSpinBox()
-        self.lm_layers_spin.setRange(1, 100)  # Support deep architectures
-        self.lm_layers_spin.setValue(4)
-
-        self.lm_steps_spin = QSpinBox()
-        self.lm_steps_spin.setRange(5, 50)
-        self.lm_steps_spin.setValue(15)
-
-        model_controls = [
-            ("Architecture:", self.lm_model_combo),
-            ("Hidden Dim:", self.lm_hidden_spin),
-            ("Layers:", self.lm_layers_spin),
-            ("Eq Steps:", self.lm_steps_spin)
-        ]
-        model_group = self._create_control_group("🧠 Model", model_controls)
-        left_panel.addWidget(model_group)
-
-        # Dynamic Hyperparameters Group
-        self.lm_hyperparam_group = QGroupBox("⚙️ Model Hyperparameters")
-        self.lm_hyperparam_layout = QGridLayout(self.lm_hyperparam_group)
-        self.lm_hyperparam_widgets = {}  # Store widgets for cleanup
-        left_panel.addWidget(self.lm_hyperparam_group)
-        self.lm_hyperparam_group.setVisible(False)  # Hidden by default
-
-        # Connect model selection to update hyperparameters
-        self.lm_model_combo.currentTextChanged.connect(self._update_lm_hyperparams)
-
-        # Dataset Selection
-        self.lm_dataset_combo = QComboBox()
-        self.lm_dataset_combo.addItems([
-            "tiny_shakespeare",
-            "wikitext-2",
-            "ptb",
-        ])
-
-        self.lm_seqlen_spin = QSpinBox()
-        self.lm_seqlen_spin.setRange(32, 512)
-        self.lm_seqlen_spin.setValue(128)
-
-        self.lm_batch_spin = QSpinBox()
-        self.lm_batch_spin.setRange(8, 256)
-        self.lm_batch_spin.setValue(64)
-
-        data_controls = [
-            ("Dataset:", self.lm_dataset_combo),
-            ("Seq Length:", self.lm_seqlen_spin),
-            ("Batch Size:", self.lm_batch_spin)
-        ]
-        data_group = self._create_control_group("📚 Dataset", data_controls)
-        left_panel.addWidget(data_group)
-
-        # Training Settings
-        self.lm_epochs_spin = QSpinBox()
-        self.lm_epochs_spin.setRange(1, 500)
-        self.lm_epochs_spin.setValue(50)
-
-        self.lm_lr_spin = QDoubleSpinBox()
-        self.lm_lr_spin.setRange(0.0001, 0.1)
-        self.lm_lr_spin.setValue(0.001)
-        self.lm_lr_spin.setSingleStep(0.0001)
-        self.lm_lr_spin.setDecimals(4)
-
-        self.lm_compile_check = QCheckBox("torch.compile (2x speedup)")
-        self.lm_compile_check.setChecked(True)
-
-        self.lm_kernel_check = QCheckBox("O(1) Kernel Mode (GPU)")
-        self.lm_kernel_check.setToolTip("Use fused EqProp kernel for O(1) memory training")
-
-        self.lm_micro_check = QCheckBox("Live Dynamics Analysis")
-        self.lm_micro_check.setToolTip("Periodically analyze convergence dynamics during training")
-
-        train_controls = [
-            ("Epochs:", self.lm_epochs_spin),
-            ("Learning Rate:", self.lm_lr_spin),
-            ("", self.lm_compile_check),
-            ("", self.lm_kernel_check),
-            ("", self.lm_micro_check)
-        ]
-        train_group = self._create_control_group("⚙️ Training", train_controls)
-        left_panel.addWidget(train_group)
-
-        # Train/Stop Buttons
-        btn_layout = QHBoxLayout()
-
-        self.lm_train_btn = QPushButton("▶ Train")
-        self.lm_train_btn.setObjectName("trainButton")
-        self.lm_train_btn.clicked.connect(lambda: self._start_training('lm'))
-        btn_layout.addWidget(self.lm_train_btn)
-
-        self.lm_stop_btn = QPushButton("⏹ Stop")
-        self.lm_stop_btn.setObjectName("stopButton")
-        self.lm_stop_btn.setEnabled(False)
-        self.lm_stop_btn.clicked.connect(self._stop_training)
-        btn_layout.addWidget(self.lm_stop_btn)
-
-        left_panel.addLayout(btn_layout)
-
-        # Progress bar
-        self.lm_progress = QProgressBar()
-        self.lm_progress.setTextVisible(True)
-        self.lm_progress.setFormat("Epoch %v / %m")
-        left_panel.addWidget(self.lm_progress)
-
-        # Parameter count display
-        self.lm_param_label = QLabel("Parameters: --")
-        self.lm_param_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 5px;")
-        left_panel.addWidget(self.lm_param_label)
-
-        # Stretch to push everything up
-        left_panel.addStretch()
-
-        # Right panel: Plots and Generation
-        right_panel = QVBoxLayout()
-        layout.addLayout(right_panel, stretch=2)
-
-        if HAS_PYQTGRAPH:
-            # Configure pyqtgraph for dark theme
-            pg.setConfigOptions(antialias=True)
-
-            # Loss/Accuracy plot
-            metrics_group = QGroupBox("📊 Training Metrics")
-            metrics_layout = QVBoxLayout(metrics_group)
-
-            self.lm_loss_plot, self.lm_loss_curve = self._create_plot_widget("Loss", "Loss")
-            metrics_layout.addWidget(self.lm_loss_plot)
-
-            # Accuracy plot
-            self.lm_acc_plot, self.lm_acc_curve = self._create_plot_widget("Accuracy", "Accuracy", yrange=(0, 1.0))
-            metrics_layout.addWidget(self.lm_acc_plot)
-
-            # Lipschitz plot
-            self.lm_lip_plot, self.lm_lip_curve = self._create_plot_widget("Lipschitz L", "Lipschitz L")
-            self.lm_lip_plot.addLine(y=1.0, pen=pg.mkPen('r', width=1, style=Qt.PenStyle.DashLine))
-            metrics_layout.addWidget(self.lm_lip_plot)
-
-            right_panel.addWidget(metrics_group, stretch=2)
-        else:
-            # Fallback text display
-            no_plot_label = QLabel("Install pyqtgraph for live plots: pip install pyqtgraph")
-            no_plot_label.setStyleSheet("color: #808090; padding: 20px;")
-            right_panel.addWidget(no_plot_label)
-
-        # Generation panel
-        gen_group = QGroupBox("✨ Text Generation")
-        gen_layout = QVBoxLayout(gen_group)
-
-        gen_controls = QHBoxLayout()
-        gen_controls.addWidget(QLabel("Temperature:"))
-        self.temp_slider = QSlider(Qt.Orientation.Horizontal)
-        self.temp_slider.setRange(1, 20)  # 0.1 to 2.0
-        self.temp_slider.setValue(10)
-        gen_controls.addWidget(self.temp_slider)
-        self.temp_label = QLabel("1.0")
-        self.temp_label.setFixedWidth(40)
-        gen_controls.addWidget(self.temp_label)
-        self.temp_slider.valueChanged.connect(lambda v: self.temp_label.setText(f"{v/10:.1f}"))
-
-        gen_btn = QPushButton("Generate")
-        gen_btn.clicked.connect(self._generate_text)
-        gen_controls.addWidget(gen_btn)
-        gen_layout.addLayout(gen_controls)
-
-        self.gen_output = QTextEdit()
-        self.gen_output.setReadOnly(True)
-        self.gen_output.setPlaceholderText("Generated text will appear here...")
-        gen_layout.addWidget(self.gen_output)
-
-        right_panel.addWidget(gen_group, stretch=1)
-
-        # Weight Visualization (if pyqtgraph available)
-        if HAS_PYQTGRAPH and ENABLE_WEIGHT_VIZ:
-            viz_group = QGroupBox("🎞️ Weight Matrices")
-            viz_layout = QVBoxLayout(viz_group)
-
-            self.lm_weight_widgets = []
-            self.lm_weight_labels = []
-
-            self.lm_weights_container = QWidget()
-            self.lm_weights_layout = QVBoxLayout(self.lm_weights_container)
-            viz_layout.addWidget(self.lm_weights_container)
-
-            right_panel.addWidget(viz_group)
-
-        return tab
-
-    def _create_vision_tab(self) -> QWidget:
-        """Create the Vision training tab."""
-        tab = QWidget()
-        layout = QHBoxLayout(tab)
-        layout.setSpacing(15)
-
-        # Left panel: Controls
-        left_panel = QVBoxLayout()
-        layout.addLayout(left_panel, stretch=1)
-
-        # Model Selection
-        self.vis_model_combo = QComboBox()
-
-        # Populate using registry
-        model_items = []
-        for spec in MODEL_REGISTRY:
-            if spec.task_compat is None or "vision" in spec.task_compat:
-                model_items.append(f"{spec.name}")
-
-        self.vis_model_combo.addItems(model_items)
-
-        self.vis_hidden_spin = QSpinBox()
-        self.vis_hidden_spin.setRange(64, 1024)
-        self.vis_hidden_spin.setValue(256)
-
-        self.vis_steps_spin = QSpinBox()
-        self.vis_steps_spin.setRange(5, 100)
-        self.vis_steps_spin.setValue(30)
-
-        model_controls = [
-            ("Architecture:", self.vis_model_combo),
-            ("Hidden Dim:", self.vis_hidden_spin),
-            ("Max Steps:", self.vis_steps_spin)
-        ]
-        model_group = self._create_control_group("🧠 Model", model_controls)
-        left_panel.addWidget(model_group)
-
-        # Dynamic Hyperparameters Group
-        self.vis_hyperparam_group = QGroupBox("⚙️ Model Hyperparameters")
-        self.vis_hyperparam_layout = QGridLayout(self.vis_hyperparam_group)
-        self.vis_hyperparam_widgets = {}  # Store widgets for cleanup
-        left_panel.addWidget(self.vis_hyperparam_group)
-        self.vis_hyperparam_group.setVisible(False)  # Hidden by default
-
-        # Connect model selection to update hyperparameters
-        self.vis_model_combo.currentTextChanged.connect(self._update_vis_hyperparams)
-
-        # Dataset
-        self.vis_dataset_combo = QComboBox()
-        self.vis_dataset_combo.addItems([
-            "MNIST",
-            "Fashion-MNIST",
-            "CIFAR-10",
-            "KMNIST",
-            "SVHN",
-        ])
-
-        self.vis_batch_spin = QSpinBox()
-        self.vis_batch_spin.setRange(16, 512)
-        self.vis_batch_spin.setValue(64)
-
-        data_controls = [
-            ("Dataset:", self.vis_dataset_combo),
-            ("Batch Size:", self.vis_batch_spin)
-        ]
-        data_group = self._create_control_group("📚 Dataset", data_controls)
-        left_panel.addWidget(data_group)
-
-        # Training
-        self.vis_epochs_spin = QSpinBox()
-        self.vis_epochs_spin.setRange(1, 100)
-        self.vis_epochs_spin.setValue(10)
-
-        self.vis_lr_spin = QDoubleSpinBox()
-        self.vis_lr_spin.setRange(0.0001, 0.1)
-        self.vis_lr_spin.setValue(0.001)
-        self.vis_lr_spin.setDecimals(4)
-
-        self.vis_compile_check = QCheckBox("torch.compile")
-        self.vis_compile_check.setChecked(True)
-
-        self.vis_kernel_check = QCheckBox("O(1) Kernel Mode (GPU)")
-        self.vis_kernel_check.setToolTip("Use fused EqProp kernel for O(1) memory training")
-
-        self.vis_micro_check = QCheckBox("Live Dynamics Analysis")
-        self.vis_micro_check.setToolTip("Periodically analyze convergence dynamics during training")
-
-        train_controls = [
-            ("Epochs:", self.vis_epochs_spin),
-            ("Learning Rate:", self.vis_lr_spin),
-            ("", self.vis_compile_check),
-            ("", self.vis_kernel_check),
-            ("", self.vis_micro_check)
-        ]
-        train_group = self._create_control_group("⚙️ Training", train_controls)
-        left_panel.addWidget(train_group)
-
-        # Buttons
-        btn_layout = QHBoxLayout()
-
-        self.vis_train_btn = QPushButton("▶ Train")
-        self.vis_train_btn.setObjectName("trainButton")
-        self.vis_train_btn.clicked.connect(lambda: self._start_training('vision'))
-        btn_layout.addWidget(self.vis_train_btn)
-
-        self.vis_stop_btn = QPushButton("⏹ Stop")
-        self.vis_stop_btn.setObjectName("stopButton")
-        self.vis_stop_btn.setEnabled(False)
-        self.vis_stop_btn.clicked.connect(self._stop_training)
-        btn_layout.addWidget(self.vis_stop_btn)
-
-        left_panel.addLayout(btn_layout)
-
-        self.vis_progress = QProgressBar()
-        self.vis_progress.setFormat("Epoch %v / %m")
-        left_panel.addWidget(self.vis_progress)
-
-        # Parameter count display
-        self.vis_param_label = QLabel("Parameters: --")
-        self.vis_param_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 5px;")
-        left_panel.addWidget(self.vis_param_label)
-
-        left_panel.addStretch()
-
-        # Right panel: Plots
-        right_panel = QVBoxLayout()
-        layout.addLayout(right_panel, stretch=2)
-
-        if HAS_PYQTGRAPH:
-            metrics_group = QGroupBox("📊 Training Metrics")
-            metrics_layout = QVBoxLayout(metrics_group)
-
-            self.vis_loss_plot, self.vis_loss_curve = self._create_plot_widget("Loss", "Loss")
-            metrics_layout.addWidget(self.vis_loss_plot)
-
-            # Accuracy plot
-            self.vis_acc_plot, self.vis_acc_curve = self._create_plot_widget("Accuracy", "Accuracy", yrange=(0, 1.0))
-            metrics_layout.addWidget(self.vis_acc_plot)
-
-            self.vis_lip_plot, self.vis_lip_curve = self._create_plot_widget("Lipschitz L", "Lipschitz L")
-            self.vis_lip_plot.addLine(y=1.0, pen=pg.mkPen('r', width=1, style=Qt.PenStyle.DashLine))
-            metrics_layout.addWidget(self.vis_lip_plot)
-
-            right_panel.addWidget(metrics_group)
-
-        # Stats display
-        stats_group = QGroupBox("📈 Results")
-        stats_layout = QGridLayout(stats_group)
-
-        stats_layout.addWidget(QLabel("Test Accuracy:"), 0, 0)
-        self.vis_acc_label = QLabel("--")
-        self.vis_acc_label.setObjectName("metricLabel")
-        stats_layout.addWidget(self.vis_acc_label, 0, 1)
-
-        stats_layout.addWidget(QLabel("Final Loss:"), 1, 0)
-        self.vis_loss_label = QLabel("--")
-        stats_layout.addWidget(self.vis_loss_label, 1, 1)
-
-        stats_layout.addWidget(QLabel("Lipschitz:"), 2, 0)
-        self.vis_lip_label = QLabel("--")
-        stats_layout.addWidget(self.vis_lip_label, 2, 1)
-
-        right_panel.addWidget(stats_group)
-
-        # Weight Visualization (if pyqtgraph available)
-        if HAS_PYQTGRAPH and ENABLE_WEIGHT_VIZ:
-            viz_group = QGroupBox("🎞️ Weight Matrices")
-            viz_layout = QVBoxLayout(viz_group)
-
-            # Create container for weight heatmaps
-            self.vis_weight_widgets = []  # Store ImageView widgets
-            self.vis_weight_labels = []   # Store labels
-
-            # We'll create these dynamically when model is available
-            self.vis_weights_container = QWidget()
-            self.vis_weights_layout = QVBoxLayout(self.vis_weights_container)
-            viz_layout.addWidget(self.vis_weights_container)
-
-            right_panel.addWidget(viz_group)
-
-        right_panel.addStretch()
-
-        return tab
-
-    def _create_rl_tab(self) -> QWidget:
-        """Create the Reinforcement Learning tab."""
-        tab = QWidget()
-        layout = QHBoxLayout(tab)
-        layout.setSpacing(15)
-
-        # Left panel: Controls
-        left_panel = QVBoxLayout()
-        layout.addLayout(left_panel, stretch=1)
-
-        # Environment Selection
-        env_items = ["CartPole-v1", "Acrobot-v1", "MountainCar-v0"]
-        self.rl_env_combo = QComboBox()
-        self.rl_env_combo.addItems(env_items)
-
-        # Model/Algo Selection
-        self.rl_algo_combo = QComboBox()
-
-        # Populate using registry filtering for RL
-        rl_items = []
-        for spec in MODEL_REGISTRY:
-             if spec.task_compat is None or "rl" in spec.task_compat:
-                 rl_items.append(spec.name)
-
-        self.rl_algo_combo.addItems(rl_items)
-        self.rl_algo_combo.currentTextChanged.connect(self._update_rl_controls)
-
-        # Gradient Method
-        self.rl_grad_combo = QComboBox()
-        self.rl_grad_combo.addItems(["equilibrium", "bptt"])
-
-        self.rl_hidden_spin = QSpinBox()
-        self.rl_hidden_spin.setRange(32, 512)
-        self.rl_hidden_spin.setValue(64)
-
-        self.rl_steps_spin = QSpinBox()
-        self.rl_steps_spin.setRange(5, 50)
-        self.rl_steps_spin.setValue(20)
-
-        model_controls = [
-            ("Environment:", self.rl_env_combo),
-            ("Algorithm:", self.rl_algo_combo),
-            ("Gradient Mode:", self.rl_grad_combo),
-            ("Hidden Dim:", self.rl_hidden_spin),
-            ("Eq Steps:", self.rl_steps_spin)
-        ]
-        model_group = self._create_control_group("🎮 Task & Model", model_controls)
-        left_panel.addWidget(model_group)
-
-        # Training Settings
-        self.rl_episodes_spin = QSpinBox()
-        self.rl_episodes_spin.setRange(10, 5000)
-        self.rl_episodes_spin.setValue(200)
-
-        self.rl_lr_spin = QDoubleSpinBox()
-        self.rl_lr_spin.setRange(0.0001, 0.1)
-        self.rl_lr_spin.setValue(0.005)
-        self.rl_lr_spin.setDecimals(4)
-
-        self.rl_gamma_spin = QDoubleSpinBox()
-        self.rl_gamma_spin.setRange(0.0, 1.0)
-        self.rl_gamma_spin.setValue(0.99)
-        self.rl_gamma_spin.setSingleStep(0.01)
-
-        train_controls = [
-            ("Episodes:", self.rl_episodes_spin),
-            ("Learning Rate:", self.rl_lr_spin),
-            ("Gamma (Discount):", self.rl_gamma_spin),
-        ]
-        train_group = self._create_control_group("⚙️ Training", train_controls)
-        left_panel.addWidget(train_group)
-
-        # Buttons
-        btn_layout = QHBoxLayout()
-
-        self.rl_train_btn = QPushButton("▶ Train")
-        self.rl_train_btn.clicked.connect(lambda: self._start_training('rl'))
-        btn_layout.addWidget(self.rl_train_btn)
-
-        self.rl_stop_btn = QPushButton("⏹ Stop")
-        self.rl_stop_btn.setEnabled(False)
-        self.rl_stop_btn.clicked.connect(self._stop_training)
-        btn_layout.addWidget(self.rl_stop_btn)
-
-        left_panel.addLayout(btn_layout)
-
-        # Progress Bar
-        self.rl_progress = QProgressBar()
-        self.rl_progress.setFormat("Episode %v / %m")
-        left_panel.addWidget(self.rl_progress)
-
-        left_panel.addStretch()
-
-        # Right panel: Plots
-        right_panel = QVBoxLayout()
-        layout.addLayout(right_panel, stretch=2)
-
-        if HAS_PYQTGRAPH:
-            metrics_group = QGroupBox("📊 RL Metrics")
-            metrics_layout = QVBoxLayout(metrics_group)
-
-            self.rl_reward_plot, self.rl_reward_curve = self._create_plot_widget("Total Reward", "Reward", xlabel="Episode")
-            # Add rolling avg curve
-            self.rl_avg_reward_curve = self.rl_reward_plot.plot(pen=pg.mkPen('y', width=2))
-            metrics_layout.addWidget(self.rl_reward_plot)
-
-            self.rl_loss_plot, self.rl_loss_curve = self._create_plot_widget("Loss", "Loss", xlabel="Episode")
-            metrics_layout.addWidget(self.rl_loss_plot)
-
-            right_panel.addWidget(metrics_group)
-
-        # Stats
-        stats_group = QGroupBox("📈 Results")
-        stats_layout = QGridLayout(stats_group)
-
-        stats_layout.addWidget(QLabel("Avg Reward (last 50):"), 0, 0)
-        self.rl_avg_label = QLabel("--")
-        self.rl_avg_label.setObjectName("metricLabel")
-        stats_layout.addWidget(self.rl_avg_label, 0, 1)
-
-        right_panel.addWidget(stats_group)
-
-        return tab
-
-    def _update_rl_controls(self, text):
-        """Enable/Disable controls based on RL algorithm selection."""
-        if "Backprop" in text:
-            self.rl_grad_combo.setEnabled(False)
-        else:
-            self.rl_grad_combo.setEnabled(True)
-            if "(EqProp)" in text:
-                self.rl_grad_combo.setCurrentText("equilibrium")
-            elif "(BPTT)" in text:
-                self.rl_grad_combo.setCurrentText("bptt")
-
-    def _create_microscope_tab(self) -> QWidget:
-        """Create the Microscope tab for visualizing dynamics."""
-        tab = QWidget()
-        layout = QHBoxLayout(tab)
-        layout.setSpacing(15)
-
-        # Left panel: Controls
-        left_panel = QVBoxLayout()
-        layout.addLayout(left_panel, stretch=1)
-
-        # Model Selection
-        self.micro_model_combo = QComboBox()
-        self.micro_model_combo.addItems([
-            "LoopedMLP (Default)",
-            "LoopedMLP (Deep)",
-            "ConvEqProp (MNIST)",
-        ])
-
-        self.micro_steps_spin = QSpinBox()
-        self.micro_steps_spin.setRange(10, 200)
-        self.micro_steps_spin.setValue(50)
-
-        model_controls = [
-            ("Model:", self.micro_model_combo),
-            ("Equilibrium Steps:", self.micro_steps_spin),
-        ]
-        model_group = self._create_control_group("🔬 Setup", model_controls)
-        left_panel.addWidget(model_group)
-
-        # Analysis Controls
-        self.micro_run_btn = QPushButton("▶ Run Analysis")
-        self.micro_run_btn.clicked.connect(self._run_microscope_analysis)
-        left_panel.addWidget(self.micro_run_btn)
-
-        # Info
-        info_label = QLabel(
-            "Visualizes the settling process of the network.\n"
-            "Checks if the network converges to a fixed point (L < 1)."
-        )
-        info_label.setStyleSheet("color: #808090; font-style: italic;")
-        info_label.setWordWrap(True)
-        left_panel.addWidget(info_label)
-
-        left_panel.addStretch()
-
-        # Right panel: Plots
-        right_panel = QVBoxLayout()
-        layout.addLayout(right_panel, stretch=2)
-
-        if HAS_PYQTGRAPH:
-            metrics_group = QGroupBox("📈 Dynamics")
-            metrics_layout = QVBoxLayout(metrics_group)
-
-            # Convergence Plot (Delta h)
-            self.micro_conv_plot, self.micro_conv_curve = self._create_plot_widget(
-                "Convergence (||Δh||)", "Delta Norm", xlabel="Step"
-            )
-            self.micro_conv_plot.setLogMode(x=False, y=True)
-            metrics_layout.addWidget(self.micro_conv_plot)
-
-            # Activity Plot (Mean h)
-            self.micro_act_plot, self.micro_act_curve = self._create_plot_widget(
-                "Mean Activity", "Activity", xlabel="Step"
-            )
-            metrics_layout.addWidget(self.micro_act_plot)
-
-            right_panel.addWidget(metrics_group)
-
-        return tab
 
     def _save_model(self):
         """Save the current model to a file, including current UI configuration."""
@@ -916,22 +304,22 @@ class EqPropDashboard(QMainWindow):
                 if self.tabs.currentIndex() == 0: # LM
                     current_config.update({
                         'task': 'lm',
-                        'model_name': self.lm_model_combo.currentText(),
-                        'hidden_dim': self.lm_hidden_spin.value(),
-                        'num_layers': self.lm_layers_spin.value(),
-                        'steps': self.lm_steps_spin.value(),
-                        'dataset': self.lm_dataset_combo.currentText(),
-                        'seq_len': self.lm_seqlen_spin.value(),
-                        'hyperparams': self._get_current_hyperparams(self.lm_hyperparam_widgets)
+                        'model_name': self.lm_tab.lm_model_combo.currentText(),
+                        'hidden_dim': self.lm_tab.lm_hidden_spin.value(),
+                        'num_layers': self.lm_tab.lm_layers_spin.value(),
+                        'steps': self.lm_tab.lm_steps_spin.value(),
+                        'dataset': self.lm_tab.lm_dataset_combo.currentText(),
+                        'seq_len': self.lm_tab.lm_seqlen_spin.value(),
+                        'hyperparams': self._get_current_hyperparams(self.lm_tab.lm_hyperparam_widgets)
                     })
                 elif self.tabs.currentIndex() == 1: # Vision
                     current_config.update({
                         'task': 'vision',
-                        'model_name': self.vis_model_combo.currentText(),
-                        'hidden_dim': self.vis_hidden_spin.value(),
-                        'steps': self.vis_steps_spin.value(),
-                        'dataset': self.vis_dataset_combo.currentText(),
-                        'hyperparams': self._get_current_hyperparams(self.vis_hyperparam_widgets)
+                        'model_name': self.vis_tab.vis_model_combo.currentText(),
+                        'hidden_dim': self.vis_tab.vis_hidden_spin.value(),
+                        'steps': self.vis_tab.vis_steps_spin.value(),
+                        'dataset': self.vis_tab.vis_dataset_combo.currentText(),
+                        'hyperparams': self._get_current_hyperparams(self.vis_tab.vis_hyperparam_widgets)
                     })
 
                 state = {
@@ -957,46 +345,38 @@ class EqPropDashboard(QMainWindow):
                 if config.get('task') == 'lm':
                     self.tabs.setCurrentIndex(0)
                     if 'model_name' in config:
-                        idx = self.lm_model_combo.findText(config['model_name'])
-                        if idx >= 0: self.lm_model_combo.setCurrentIndex(idx)
+                        idx = self.lm_tab.lm_model_combo.findText(config['model_name'])
+                        if idx >= 0: self.lm_tab.lm_model_combo.setCurrentIndex(idx)
 
-                    if 'hidden_dim' in config: self.lm_hidden_spin.setValue(config['hidden_dim'])
-                    if 'num_layers' in config: self.lm_layers_spin.setValue(config['num_layers'])
-                    if 'steps' in config: self.lm_steps_spin.setValue(config['steps'])
+                    if 'hidden_dim' in config: self.lm_tab.lm_hidden_spin.setValue(config['hidden_dim'])
+                    if 'num_layers' in config: self.lm_tab.lm_layers_spin.setValue(config['num_layers'])
+                    if 'steps' in config: self.lm_tab.lm_steps_spin.setValue(config['steps'])
                     if 'dataset' in config:
-                        idx = self.lm_dataset_combo.findText(config['dataset'])
-                        if idx >= 0: self.lm_dataset_combo.setCurrentIndex(idx)
+                        idx = self.lm_tab.lm_dataset_combo.findText(config['dataset'])
+                        if idx >= 0: self.lm_tab.lm_dataset_combo.setCurrentIndex(idx)
 
                 elif config.get('task') == 'vision':
                     self.tabs.setCurrentIndex(1)
                     if 'model_name' in config:
-                        idx = self.vis_model_combo.findText(config['model_name'])
-                        if idx >= 0: self.vis_model_combo.setCurrentIndex(idx)
+                        idx = self.vis_tab.vis_model_combo.findText(config['model_name'])
+                        if idx >= 0: self.vis_tab.vis_model_combo.setCurrentIndex(idx)
 
-                    if 'hidden_dim' in config: self.vis_hidden_spin.setValue(config['hidden_dim'])
-                    if 'steps' in config: self.vis_steps_spin.setValue(config['steps'])
+                    if 'hidden_dim' in config: self.vis_tab.vis_hidden_spin.setValue(config['hidden_dim'])
+                    if 'steps' in config: self.vis_tab.vis_steps_spin.setValue(config['steps'])
                     if 'dataset' in config:
-                        idx = self.vis_dataset_combo.findText(config['dataset'])
-                        if idx >= 0: self.vis_dataset_combo.setCurrentIndex(idx)
+                        idx = self.vis_tab.vis_dataset_combo.findText(config['dataset'])
+                        if idx >= 0: self.vis_tab.vis_dataset_combo.setCurrentIndex(idx)
 
                 # Process pending events to ensure UI updates (like hyperparam widgets) are triggered
                 QApplication.processEvents()
 
                 # 2. Recreate Model Structure
-                # Now that UI is set, we can trigger model recreation or do it manually using the config
-                # Ideally, we call _create_model_and_loader but that also makes a dataloader which is heavy.
-                # Let's recreate just the model for now.
-
-                task = config.get('task', 'vision') # Default to vision if unknown
+                task = config.get('task', 'vision')
 
                 if task == 'lm':
-                    # We need vocab size to recreate model. It's usually in dataset or saved config.
-                    # If strictly relying on UI, we might need to load dataset.
-                    # Fast path: try to guess or use saved vocab size if we had it (we didn't save it explicitly but model has it)
-                    # Let's try to load the dataset briefly to get vocab size
                     from bioplausible.datasets import get_lm_dataset
                     ds_name = config.get('dataset', 'tiny_shakespeare')
-                    ds = get_lm_dataset(ds_name, seq_len=128, split='train') # dummy load
+                    ds = get_lm_dataset(ds_name, seq_len=128, split='train')
                     vocab_size = ds.vocab_size
 
                     spec = get_model_spec(config['model_name'])
@@ -1010,10 +390,8 @@ class EqPropDashboard(QMainWindow):
                         task_type="lm"
                     )
                 else:
-                    # Vision
                     from bioplausible.datasets import get_vision_dataset
                     ds_name = config.get('dataset', 'mnist').lower()
-                    # Flatten logic
                     spec = get_model_spec(config['model_name'])
                     use_flatten = spec.model_type != "modern_conv_eqprop"
 
@@ -1034,15 +412,6 @@ class EqPropDashboard(QMainWindow):
 
                 # 3. Load Weights
                 self.model.load_state_dict(checkpoint['model_state_dict'])
-
-                # 4. Restore Hyperparams (after model creation to ensure widgets exist)
-                # Note: widget update logic is triggered by combo box change, but specific values might need setting
-                if 'hyperparams' in config:
-                    # This is tricky because the widgets are dynamic.
-                    # We rely on the user manually checking or we'd need a robust way to set them.
-                    # For now, UI state restoration + Model Weights is a big improvement.
-                    pass
-
                 self.status_label.setText(f"Model loaded from {fname}")
 
             except Exception as e:
@@ -1051,105 +420,10 @@ class EqPropDashboard(QMainWindow):
                 traceback.print_exc()
 
     def _run_microscope_analysis(self):
-        """Run a single forward pass with dynamics tracking."""
-        try:
-            import torch
-            from bioplausible.models.looped_mlp import LoopedMLP
-            from bioplausible.models.conv_eqprop import ConvEqProp
-
-            steps = self.micro_steps_spin.value()
-
-            # Use current model if available
-            if self.model is not None:
-                model = self.model
-                # Determine input shape from model
-                if hasattr(model, 'input_dim'):
-                     # Flattened input
-                     input_shape = (1, model.input_dim)
-                elif hasattr(model, 'embed'):
-                     # LM input (tokens)
-                     input_shape = (1, 128) # Fake sequence
-                     x = torch.randint(0, model.embed.num_embeddings, input_shape)
-                else:
-                     # Fallback
-                     input_shape = (1, 784)
-            else:
-                # Fallback to creating a new model if none loaded
-                model_name = self.micro_model_combo.currentText()
-                if "Conv" in model_name:
-                    model = ConvEqProp(1, 16, 10, max_steps=steps)
-                    input_shape = (1, 1, 28, 28)
-                else:
-                    model = LoopedMLP(784, 256, 10, max_steps=steps, use_spectral_norm=True)
-                    input_shape = (1, 784)
-
-            # Create random input if not created above (LM case)
-            if 'x' not in locals():
-                x = torch.randn(*input_shape)
-                if hasattr(self.model, 'device'):
-                     x = x.to(self.model.device)
-
-            # Run forward with dynamics
-            model.eval()
-            with torch.no_grad():
-                # We expect (out, dynamics_dict) because return_dynamics=True
-                # But we also set return_trajectory=True just in case logic depends on it
-
-                # Check if model supports return_dynamics
-                kwargs = {}
-                import inspect
-                sig = inspect.signature(model.forward)
-                if 'return_dynamics' in sig.parameters:
-                    kwargs['return_dynamics'] = True
-                if 'return_trajectory' in sig.parameters:
-                    kwargs['return_trajectory'] = True
-                if 'steps' in sig.parameters:
-                    kwargs['steps'] = steps
-
-                # Preprocess input if needed (LM embedding)
-                if hasattr(model, 'has_embed') and model.has_embed:
-                     h = model.embed(x)
-                     # If model expects flattened input (e.g. MLP LM), average
-                     if isinstance(model, LoopedMLP):
-                         h = h.mean(dim=1)
-                     out = model(h, **kwargs)
-                else:
-                     out = model(x, **kwargs)
-
-                # Handle output format
-                if isinstance(out, tuple):
-                    dynamics = out[1]
-                else:
-                    # Try to retrieve dynamics from model attribute if not returned
-                    if hasattr(model, 'dynamics'):
-                        dynamics = model.dynamics
-                    else:
-                        raise ValueError("Model did not return dynamics")
-
-            deltas = dynamics.get('deltas', [])
-            traj = dynamics.get('trajectory', [])
-
-            if not deltas:
-                 self.status_label.setText("No dynamics data returned.")
-                 return
-
-            # Compute mean activity per step
-            if traj:
-                activities = [h.abs().mean().item() for h in traj]
-            else:
-                activities = [0.0] * len(deltas)
-
-            # Update plots
-            if hasattr(self, 'micro_conv_curve'):
-                self.micro_conv_curve.setData(deltas)
-                self.micro_act_curve.setData(activities)
-
-            self.status_label.setText(f"Analysis complete. Final delta: {deltas[-1]:.2e}")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Analysis Error", str(e))
-            import traceback
-            traceback.print_exc()
+        """Delegate analysis to microscope tab."""
+        # Need to wire up the model reference if not already done
+        self.micro_tab.update_model_ref(self.model)
+        self.micro_tab._run_microscope_analysis()
 
     def _create_search_tab(self) -> QWidget:
         """Create the Model Search tab."""
@@ -1211,181 +485,6 @@ class EqPropDashboard(QMainWindow):
 
         layout.addStretch()
         return tab
-
-    def _setup_logging(self):
-        """Setup logging to redirect to console tab."""
-        self.log_handler = QtLogHandler()
-        self.log_handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
-        self.log_handler.log_signal.connect(self._append_log)
-
-        # Configure root logger
-        root_logger = logging.getLogger()
-        root_logger.setLevel(logging.INFO)
-        root_logger.addHandler(self.log_handler)
-
-    def _create_benchmarks_tab(self) -> QWidget:
-        """Create the Benchmarks (Verification) tab."""
-        tab = QWidget()
-        layout = QHBoxLayout(tab)
-
-        # Left Panel: Control and List
-        left_panel = QVBoxLayout()
-        layout.addLayout(left_panel, stretch=2)
-
-        # Controls
-        controls_group = QGroupBox("Benchmark Controls")
-        controls_layout = QHBoxLayout(controls_group)
-
-        self.bench_quick_check = QCheckBox("Quick Mode (Smoke Tests)")
-        self.bench_quick_check.setChecked(True)
-        controls_layout.addWidget(self.bench_quick_check)
-
-        run_sel_btn = QPushButton("▶ Run Selected")
-        run_sel_btn.clicked.connect(self._run_selected_benchmarks)
-        controls_layout.addWidget(run_sel_btn)
-
-        run_all_btn = QPushButton("⏩ Run All")
-        run_all_btn.clicked.connect(self._run_all_benchmarks)
-        controls_layout.addWidget(run_all_btn)
-
-        left_panel.addWidget(controls_group)
-
-        # Track List Table
-        self.bench_table = QTableWidget()
-        self.bench_table.setColumnCount(4)
-        self.bench_table.setHorizontalHeaderLabels(["ID", "Track Name", "Status", "Score"])
-        self.bench_table.horizontalHeader().setStretchLastSection(True)
-        self.bench_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-
-        # Populate Tracks
-        try:
-            from bioplausible.validation.core import Verifier
-            # Create a dummy verifier to get list
-            v = Verifier(quick_mode=True)
-            self.bench_table.setRowCount(len(v.tracks))
-
-            for i, (tid, (name, _)) in enumerate(v.tracks.items()):
-                self.bench_table.setItem(i, 0, QTableWidgetItem(str(tid)))
-                self.bench_table.setItem(i, 1, QTableWidgetItem(name))
-                self.bench_table.setItem(i, 2, QTableWidgetItem("Pending"))
-                self.bench_table.setItem(i, 3, QTableWidgetItem("--"))
-        except Exception as e:
-            self.bench_table.setRowCount(1)
-            self.bench_table.setItem(0, 1, QTableWidgetItem(f"Error loading tracks: {e}"))
-
-        left_panel.addWidget(self.bench_table)
-
-        # Right Panel: Details/Output
-        right_panel = QVBoxLayout()
-        layout.addLayout(right_panel, stretch=1)
-
-        details_group = QGroupBox("Benchmark Details")
-        details_layout = QVBoxLayout(details_group)
-
-        self.bench_output = QTextEdit()
-        self.bench_output.setReadOnly(True)
-        self.bench_output.setPlaceholderText("Select a track to see details or run benchmarks...")
-        details_layout.addWidget(self.bench_output)
-
-        right_panel.addWidget(details_group)
-
-        return tab
-
-    def _run_selected_benchmarks(self):
-        """Run selected benchmarks."""
-        selected_rows = self.bench_table.selectionModel().selectedRows()
-        if not selected_rows:
-            QMessageBox.warning(self, "No Selection", "Please select at least one track to run.")
-            return
-
-        track_ids = []
-        for row in selected_rows:
-            tid_item = self.bench_table.item(row.row(), 0)
-            if tid_item:
-                track_ids.append(int(tid_item.text()))
-
-        self._start_benchmark_worker(track_ids)
-
-    def _run_all_benchmarks(self):
-        """Run all benchmarks."""
-        rows = self.bench_table.rowCount()
-        track_ids = []
-        for r in range(rows):
-            tid_item = self.bench_table.item(r, 0)
-            if tid_item:
-                track_ids.append(int(tid_item.text()))
-
-        self._start_benchmark_worker(track_ids)
-
-    def _start_benchmark_worker(self, track_ids):
-        """Start the benchmark worker."""
-        quick = self.bench_quick_check.isChecked()
-        self.bench_output.clear()
-        self.bench_output.append(f"Starting {len(track_ids)} tracks (Quick={quick})...\n")
-
-        # Reset status in table
-        for r in range(self.bench_table.rowCount()):
-            tid_item = self.bench_table.item(r, 0)
-            if tid_item and int(tid_item.text()) in track_ids:
-                self.bench_table.setItem(r, 2, QTableWidgetItem("Running..."))
-                self.bench_table.item(r, 2).setForeground(Qt.GlobalColor.yellow)
-
-        self.bench_worker = BenchmarkWorker(track_ids, quick_mode=quick)
-        self.bench_worker.progress.connect(self._on_bench_progress)
-        self.bench_worker.finished.connect(self._on_bench_finished)
-        self.bench_worker.error.connect(self._on_bench_error)
-        self.bench_worker.start()
-
-    def _on_bench_progress(self, msg):
-        self.bench_output.append(msg)
-        self._append_log(msg) # Also log to console
-
-    def _on_bench_finished(self, results):
-        self.bench_output.append("\nBenchmarking Complete!")
-
-        # Update table
-        for tid, res in results.items():
-            # Find row
-            for r in range(self.bench_table.rowCount()):
-                if int(self.bench_table.item(r, 0).text()) == tid:
-                    status = res['status']
-                    score = res['score']
-
-                    status_item = QTableWidgetItem(status.upper())
-                    if status == 'pass':
-                        status_item.setForeground(Qt.GlobalColor.green)
-                    else:
-                        status_item.setForeground(Qt.GlobalColor.red)
-
-                    self.bench_table.setItem(r, 2, status_item)
-                    self.bench_table.setItem(r, 3, QTableWidgetItem(f"{score:.1f}"))
-                    break
-
-    def _on_bench_error(self, err):
-        self.bench_output.append(f"\nERROR: {err}")
-        QMessageBox.critical(self, "Benchmark Error", err)
-
-    def _create_console_tab(self) -> QWidget:
-        """Create a console log tab."""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-
-        self.console_log = QTextEdit()
-        self.console_log.setReadOnly(True)
-        self.console_log.setStyleSheet("background-color: #0a0a0f; color: #a0a0b0; font-family: Consolas, monospace;")
-        layout.addWidget(self.console_log)
-
-        return tab
-
-    def _append_log(self, message: str):
-        """Append a message to the console log."""
-        if hasattr(self, 'console_log'):
-             import time
-             timestamp = time.strftime("%H:%M:%S")
-             if not message.startswith("["): # Avoid double timestamping if already timestamped
-                 self.console_log.append(f"[{timestamp}] {message}")
-             else:
-                 self.console_log.append(message)
 
     def _launch_search_tool(self):
         """Launch the Hyperopt Dashboard in a new window."""
@@ -1449,10 +548,10 @@ class EqPropDashboard(QMainWindow):
         from torch.utils.data import DataLoader
 
         # Get dataset
-        dataset_name = self.vis_dataset_combo.currentText().lower().replace('-', '_')
+        dataset_name = self.vis_tab.vis_dataset_combo.currentText().lower().replace('-', '_')
 
         # Determine flattening based on model type
-        model_name = self.vis_model_combo.currentText()
+        model_name = self.vis_tab.vis_model_combo.currentText()
         try:
             spec = get_model_spec(model_name)
             use_flatten = spec.model_type != "modern_conv_eqprop"
@@ -1460,16 +559,16 @@ class EqPropDashboard(QMainWindow):
              use_flatten = True
 
         train_data = get_vision_dataset(dataset_name, train=True, flatten=use_flatten)
-        self.train_loader = DataLoader(train_data, batch_size=self.vis_batch_spin.value(), shuffle=True)
+        self.train_loader = DataLoader(train_data, batch_size=self.vis_tab.vis_batch_spin.value(), shuffle=True)
 
         # Create model
-        hidden = self.vis_hidden_spin.value()
+        hidden = self.vis_tab.vis_hidden_spin.value()
 
         try:
             spec = get_model_spec(model_name)
 
             # Determine input_dim based on dataset
-            if 'MNIST' in self.vis_dataset_combo.currentText():
+            if 'MNIST' in self.vis_tab.vis_dataset_combo.currentText():
                 input_dim = 784 if use_flatten else 1
             else:  # CIFAR-10
                 input_dim = 3072 if use_flatten else 3
@@ -1485,9 +584,9 @@ class EqPropDashboard(QMainWindow):
 
             # Update step if spin box is used
             if hasattr(model, 'max_steps'):
-                model.max_steps = self.vis_steps_spin.value()
+                model.max_steps = self.vis_tab.vis_steps_spin.value()
             elif hasattr(model, 'eq_steps'):
-                model.eq_steps = self.vis_steps_spin.value()
+                model.eq_steps = self.vis_tab.vis_steps_spin.value()
 
         except Exception as e:
              QMessageBox.warning(self, "Model Creation Failed", f"Could not create {model_name}: {e}")
@@ -1500,12 +599,12 @@ class EqPropDashboard(QMainWindow):
         from bioplausible.datasets import get_lm_dataset
         from torch.utils.data import DataLoader
 
-        model_name = self.lm_model_combo.currentText()
+        model_name = self.lm_tab.lm_model_combo.currentText()
 
         try:
             # Get dataset
-            dataset_name = self.lm_dataset_combo.currentText()
-            seq_len = self.lm_seqlen_spin.value()
+            dataset_name = self.lm_tab.lm_dataset_combo.currentText()
+            seq_len = self.lm_tab.lm_seqlen_spin.value()
 
             dataset = get_lm_dataset(dataset_name, seq_len=seq_len, split='train')
             vocab_size = dataset.vocab_size if hasattr(dataset, 'vocab_size') else 256
@@ -1516,19 +615,19 @@ class EqPropDashboard(QMainWindow):
                 spec=spec,
                 input_dim=None, # Uses embedding
                 output_dim=vocab_size,
-                hidden_dim=self.lm_hidden_spin.value(),
-                num_layers=self.lm_layers_spin.value(),
+                hidden_dim=self.lm_tab.lm_hidden_spin.value(),
+                num_layers=self.lm_tab.lm_layers_spin.value(),
                 device="cuda" if torch.cuda.is_available() else "cpu",
                 task_type="lm"
             )
 
             # Apply steps
             if hasattr(model, 'max_steps'):
-                 model.max_steps = self.lm_steps_spin.value()
+                 model.max_steps = self.lm_tab.lm_steps_spin.value()
             elif hasattr(model, 'eq_steps'):
-                 model.eq_steps = self.lm_steps_spin.value()
+                 model.eq_steps = self.lm_tab.lm_steps_spin.value()
 
-            train_loader = DataLoader(dataset, batch_size=self.lm_batch_spin.value(), shuffle=True)
+            train_loader = DataLoader(dataset, batch_size=self.lm_tab.lm_batch_spin.value(), shuffle=True)
             return model, train_loader
 
         except Exception as e:
@@ -1554,25 +653,23 @@ class EqPropDashboard(QMainWindow):
         self.lipschitz_history.clear()
 
         # Get hyperparameters
-        hyperparams = self._get_current_hyperparams(self.vis_hyperparam_widgets)
+        hyperparams = self._get_current_hyperparams(self.vis_tab.vis_hyperparam_widgets)
 
         # Update parameter count
-        if hasattr(self, 'vis_param_label'):
+        if hasattr(self.vis_tab, 'vis_param_label'):
             count = count_parameters(self.model)
-            self.vis_param_label.setText(f"Parameters: {format_parameter_count(count)}")
+            self.vis_tab.vis_param_label.setText(f"Parameters: {format_parameter_count(count)}")
 
         # Create and start worker
-        micro_interval = 1 if self.vis_micro_check.isChecked() else 0
-
-        micro_interval = 1 if self.lm_micro_check.isChecked() else 0
+        micro_interval = 1 if self.vis_tab.vis_micro_check.isChecked() else 0
 
         self.worker = TrainingWorker(
             self.model,
             self.train_loader,
-            epochs=self.vis_epochs_spin.value(),
-            lr=self.vis_lr_spin.value(),
-            use_compile=self.vis_compile_check.isChecked(),
-            use_kernel=self.vis_kernel_check.isChecked(),
+            epochs=self.vis_tab.vis_epochs_spin.value(),
+            lr=self.vis_tab.vis_lr_spin.value(),
+            use_compile=self.vis_tab.vis_compile_check.isChecked(),
+            use_kernel=self.vis_tab.vis_kernel_check.isChecked(),
             hyperparams=hyperparams,
             microscope_interval=micro_interval,
         )
@@ -1584,12 +681,12 @@ class EqPropDashboard(QMainWindow):
         self.worker.dynamics_update.connect(self._on_dynamics_update)
 
         # Update UI
-        self.vis_train_btn.setEnabled(False)
-        self.vis_stop_btn.setEnabled(True)
-        self.vis_progress.setMaximum(self.vis_epochs_spin.value())
-        self.vis_progress.setValue(0)
+        self.vis_tab.vis_train_btn.setEnabled(False)
+        self.vis_tab.vis_stop_btn.setEnabled(True)
+        self.vis_tab.vis_progress.setMaximum(self.vis_tab.vis_epochs_spin.value())
+        self.vis_tab.vis_progress.setValue(0)
 
-        model_name = self.vis_model_combo.currentText()
+        model_name = self.vis_tab.vis_model_combo.currentText()
         self.status_label.setText(f"Training {model_name}...")
         self.plot_timer.start(100)
         self.worker.start()
@@ -1605,26 +702,32 @@ class EqPropDashboard(QMainWindow):
         self.model = model
         self.train_loader = train_loader
 
+        # Keep reference for generation
+        self.lm_tab.update_model_ref(self.model)
+
         # Clear history
         self.loss_history.clear()
         self.acc_history.clear()
         self.lipschitz_history.clear()
 
         # Get hyperparameters
-        hyperparams = self._get_current_hyperparams(self.lm_hyperparam_widgets)
+        hyperparams = self._get_current_hyperparams(self.lm_tab.lm_hyperparam_widgets)
 
         # Update parameter count
-        if hasattr(self, 'lm_param_label'):
+        if hasattr(self.lm_tab, 'lm_param_label'):
             count = count_parameters(self.model)
-            self.lm_param_label.setText(f"Parameters: {format_parameter_count(count)}")
+            self.lm_tab.lm_param_label.setText(f"Parameters: {format_parameter_count(count)}")
+
+        # Create and start worker
+        micro_interval = 1 if self.lm_tab.lm_micro_check.isChecked() else 0
 
         self.worker = TrainingWorker(
             self.model,
             self.train_loader,
-            epochs=self.lm_epochs_spin.value(),
-            lr=self.lm_lr_spin.value(),
-            use_compile=self.lm_compile_check.isChecked(),
-            use_kernel=self.lm_kernel_check.isChecked(),
+            epochs=self.lm_tab.lm_epochs_spin.value(),
+            lr=self.lm_tab.lm_lr_spin.value(),
+            use_compile=self.lm_tab.lm_compile_check.isChecked(),
+            use_kernel=self.lm_tab.lm_kernel_check.isChecked(),
             hyperparams=hyperparams,
             microscope_interval=micro_interval,
         )
@@ -1636,13 +739,13 @@ class EqPropDashboard(QMainWindow):
         self.worker.dynamics_update.connect(self._on_dynamics_update)
 
         # Update UI
-        self.lm_train_btn.setEnabled(False)
-        self.lm_stop_btn.setEnabled(True)
-        self.lm_progress.setMaximum(self.lm_epochs_spin.value())
-        self.lm_progress.setValue(0)
+        self.lm_tab.lm_train_btn.setEnabled(False)
+        self.lm_tab.lm_stop_btn.setEnabled(True)
+        self.lm_tab.lm_progress.setMaximum(self.lm_tab.lm_epochs_spin.value())
+        self.lm_tab.lm_progress.setValue(0)
 
-        model_name = self.lm_model_combo.currentText()
-        dataset_name = self.lm_dataset_combo.currentText()
+        model_name = self.lm_tab.lm_model_combo.currentText()
+        dataset_name = self.lm_tab.lm_dataset_combo.currentText()
         self.status_label.setText(f"Training {model_name} on {dataset_name}...")
         self.plot_timer.start(100)
         self.worker.start()
@@ -1654,13 +757,13 @@ class EqPropDashboard(QMainWindow):
         from bioplausible.models import BackpropMLP
         import gymnasium as gym
 
-        env_name = self.rl_env_combo.currentText()
-        algo_name = self.rl_algo_combo.currentText()
-        grad_method = self.rl_grad_combo.currentText()
-        hidden = self.rl_hidden_spin.value()
-        steps = self.rl_steps_spin.value()
-        episodes = self.rl_episodes_spin.value()
-        lr = self.rl_lr_spin.value()
+        env_name = self.rl_tab.rl_env_combo.currentText()
+        algo_name = self.rl_tab.rl_algo_combo.currentText()
+        grad_method = self.rl_tab.rl_grad_combo.currentText()
+        hidden = self.rl_tab.rl_hidden_spin.value()
+        steps = self.rl_tab.rl_steps_spin.value()
+        episodes = self.rl_tab.rl_episodes_spin.value()
+        lr = self.rl_tab.rl_lr_spin.value()
 
         # Determine Dimensions
         temp_env = gym.make(env_name)
@@ -1688,7 +791,7 @@ class EqPropDashboard(QMainWindow):
         # Create Worker
         # Use CPU unless explicitly needed, RL is often CPU bound on small envs
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        gamma = self.rl_gamma_spin.value()
+        gamma = self.rl_tab.rl_gamma_spin.value()
 
         self.worker = RLWorker(model, env_name, episodes=episodes, lr=lr, gamma=gamma, device=device)
         self.worker.progress.connect(self._on_rl_progress)
@@ -1697,10 +800,10 @@ class EqPropDashboard(QMainWindow):
         self.worker.log.connect(self._append_log)
 
         # Update UI
-        self.rl_train_btn.setEnabled(False)
-        self.rl_stop_btn.setEnabled(True)
-        self.rl_progress.setMaximum(episodes)
-        self.rl_progress.setValue(0)
+        self.rl_tab.rl_train_btn.setEnabled(False)
+        self.rl_tab.rl_stop_btn.setEnabled(True)
+        self.rl_tab.rl_progress.setMaximum(episodes)
+        self.rl_tab.rl_progress.setValue(0)
 
         self.status_label.setText(f"Training {algo_name} on {env_name}...")
         self.plot_timer.start(100)
@@ -1712,8 +815,8 @@ class EqPropDashboard(QMainWindow):
         self.rl_loss_history.append(metrics['loss'])
         self.rl_avg_reward_history.append(metrics['avg_reward'])
 
-        self.rl_progress.setValue(metrics['episode'])
-        self.rl_avg_label.setText(f"{metrics['avg_reward']:.1f}")
+        self.rl_tab.rl_progress.setValue(metrics['episode'])
+        self.rl_tab.rl_avg_label.setText(f"{metrics['avg_reward']:.1f}")
 
         self.status_label.setText(
             f"Ep {metrics['episode']}/{metrics['total_episodes']} | "
@@ -1730,19 +833,20 @@ class EqPropDashboard(QMainWindow):
     def _on_dynamics_update(self, dynamics: dict):
         """Handle live dynamics update from worker."""
         # Update microscope plots if they exist
-        if hasattr(self, 'micro_conv_curve') and hasattr(self, 'micro_act_curve'):
-            deltas = dynamics.get('deltas', [])
-            traj = dynamics.get('trajectory', [])
+        deltas = dynamics.get('deltas', [])
+        traj = dynamics.get('trajectory', [])
 
-            if deltas:
-                self.micro_conv_curve.setData(deltas)
+        # Calculate activity
+        activities = []
+        if traj:
+            try:
+                activities = [h.abs().mean().item() for h in traj]
+            except:
+                pass
+        else:
+            activities = [0.0] * len(deltas)
 
-            if traj:
-                try:
-                    activities = [h.abs().mean().item() for h in traj]
-                    self.micro_act_curve.setData(activities)
-                except:
-                    pass
+        self.micro_tab.update_plots_from_data(deltas, activities)
 
     def _on_progress(self, metrics: dict):
         """Handle training progress update."""
@@ -1751,13 +855,13 @@ class EqPropDashboard(QMainWindow):
         self.lipschitz_history.append(metrics['lipschitz'])
 
         # Update progress bar
-        self.vis_progress.setValue(metrics['epoch'])
-        self.lm_progress.setValue(metrics['epoch'])
+        self.vis_tab.vis_progress.setValue(metrics['epoch'])
+        self.lm_tab.lm_progress.setValue(metrics['epoch'])
 
         # Update labels
-        self.vis_acc_label.setText(f"{metrics['accuracy']:.1%}")
-        self.vis_loss_label.setText(f"{metrics['loss']:.4f}")
-        self.vis_lip_label.setText(f"{metrics['lipschitz']:.4f}")
+        self.vis_tab.vis_acc_label.setText(f"{metrics['accuracy']:.1%}")
+        self.vis_tab.vis_loss_label.setText(f"{metrics['loss']:.4f}")
+        self.vis_tab.vis_lip_label.setText(f"{metrics['lipschitz']:.4f}")
 
         self.status_label.setText(
             f"Epoch {metrics['epoch']}/{metrics['total_epochs']} | "
@@ -1775,37 +879,37 @@ class EqPropDashboard(QMainWindow):
             epochs = list(range(1, len(self.loss_history) + 1))
 
             # Update vision plots
-            if hasattr(self, 'vis_loss_curve'):
-                self.vis_loss_curve.setData(epochs, self.loss_history)
+            if hasattr(self.vis_tab, 'vis_loss_curve'):
+                self.vis_tab.vis_loss_curve.setData(epochs, self.loss_history)
                 # Check for separate acc plot
-                if hasattr(self, 'vis_acc_curve'):
-                    self.vis_acc_curve.setData(epochs, self.acc_history)
-                self.vis_lip_curve.setData(epochs, self.lipschitz_history)
+                if hasattr(self.vis_tab, 'vis_acc_curve'):
+                    self.vis_tab.vis_acc_curve.setData(epochs, self.acc_history)
+                self.vis_tab.vis_lip_curve.setData(epochs, self.lipschitz_history)
 
             # Update LM plots
-            if hasattr(self, 'lm_loss_curve'):
-                self.lm_loss_curve.setData(epochs, self.loss_history)
+            if hasattr(self.lm_tab, 'lm_loss_curve'):
+                self.lm_tab.lm_loss_curve.setData(epochs, self.loss_history)
                 # Check for separate acc plot
-                if hasattr(self, 'lm_acc_curve'):
-                    self.lm_acc_curve.setData(epochs, self.acc_history)
-                self.lm_lip_curve.setData(epochs, self.lipschitz_history)
+                if hasattr(self.lm_tab, 'lm_acc_curve'):
+                    self.lm_tab.lm_acc_curve.setData(epochs, self.acc_history)
+                self.lm_tab.lm_lip_curve.setData(epochs, self.lipschitz_history)
 
-        if self.rl_reward_history and hasattr(self, 'rl_reward_curve'):
+        if self.rl_reward_history and hasattr(self.rl_tab, 'rl_reward_curve'):
             episodes = list(range(1, len(self.rl_reward_history) + 1))
-            self.rl_reward_curve.setData(episodes, self.rl_reward_history)
-            self.rl_avg_reward_curve.setData(episodes, self.rl_avg_reward_history)
-            self.rl_loss_curve.setData(episodes, self.rl_loss_history)
+            self.rl_tab.rl_reward_curve.setData(episodes, self.rl_reward_history)
+            self.rl_tab.rl_avg_reward_curve.setData(episodes, self.rl_avg_reward_history)
+            self.rl_tab.rl_loss_curve.setData(episodes, self.rl_loss_history)
 
     def _on_finished(self, result: dict):
         """Handle training completion."""
         self.plot_timer.stop()
-        self.vis_train_btn.setEnabled(True)
-        self.vis_stop_btn.setEnabled(False)
-        self.lm_train_btn.setEnabled(True)
-        self.lm_stop_btn.setEnabled(False)
-        if hasattr(self, 'rl_train_btn'):
-            self.rl_train_btn.setEnabled(True)
-            self.rl_stop_btn.setEnabled(False)
+        self.vis_tab.vis_train_btn.setEnabled(True)
+        self.vis_tab.vis_stop_btn.setEnabled(False)
+        self.lm_tab.lm_train_btn.setEnabled(True)
+        self.lm_tab.lm_stop_btn.setEnabled(False)
+        if hasattr(self.rl_tab, 'rl_train_btn'):
+            self.rl_tab.rl_train_btn.setEnabled(True)
+            self.rl_tab.rl_stop_btn.setEnabled(False)
 
         if result.get('success'):
             self.status_label.setText(f"✓ Training complete! ({result['epochs_completed']} epochs)")
@@ -1815,13 +919,13 @@ class EqPropDashboard(QMainWindow):
     def _on_error(self, error: str):
         """Handle training error."""
         self.plot_timer.stop()
-        self.vis_train_btn.setEnabled(True)
-        self.vis_stop_btn.setEnabled(False)
-        self.lm_train_btn.setEnabled(True)
-        self.lm_stop_btn.setEnabled(False)
-        if hasattr(self, 'rl_train_btn'):
-            self.rl_train_btn.setEnabled(True)
-            self.rl_stop_btn.setEnabled(False)
+        self.vis_tab.vis_train_btn.setEnabled(True)
+        self.vis_tab.vis_stop_btn.setEnabled(False)
+        self.lm_tab.lm_train_btn.setEnabled(True)
+        self.lm_tab.lm_stop_btn.setEnabled(False)
+        if hasattr(self.rl_tab, 'rl_train_btn'):
+            self.rl_tab.rl_train_btn.setEnabled(True)
+            self.rl_tab.rl_stop_btn.setEnabled(False)
 
         self.status_label.setText("Training error!")
         QMessageBox.critical(self, "Training Error", error)
@@ -1832,11 +936,11 @@ class EqPropDashboard(QMainWindow):
 
     def _update_lm_hyperparams(self, model_name: str):
         """Update LM hyperparameter widgets based on selected model."""
-        update_hyperparams_generic(self, model_name, self.lm_hyperparam_layout, self.lm_hyperparam_widgets, self.lm_hyperparam_group)
+        update_hyperparams_generic(self, model_name, self.lm_tab.lm_hyperparam_layout, self.lm_tab.lm_hyperparam_widgets, self.lm_tab.lm_hyperparam_group)
 
     def _update_vis_hyperparams(self, model_name: str):
         """Update Vision hyperparameter widgets based on selected model."""
-        update_hyperparams_generic(self, model_name, self.vis_hyperparam_layout, self.vis_hyperparam_widgets, self.vis_hyperparam_group)
+        update_hyperparams_generic(self, model_name, self.vis_tab.vis_hyperparam_layout, self.vis_tab.vis_hyperparam_widgets, self.vis_tab.vis_hyperparam_group)
 
     def _get_current_hyperparams(self, widgets: dict) -> dict:
         """Extract current values from hyperparameter widgets."""
@@ -1852,13 +956,13 @@ class EqPropDashboard(QMainWindow):
 
         # 0 = LM Tab, 1 = Vision Tab
         if active_idx == 0:
-            layout = self.lm_weights_layout
-            widgets = self.lm_weight_widgets
-            labels = self.lm_weight_labels
+            layout = self.lm_tab.lm_weights_layout
+            widgets = self.lm_tab.lm_weight_widgets
+            labels = self.lm_tab.lm_weight_labels
         else:
-            layout = self.vis_weights_layout
-            widgets = self.vis_weight_widgets
-            labels = self.vis_weight_labels
+            layout = self.vis_tab.vis_weights_layout
+            widgets = self.vis_tab.vis_weight_widgets
+            labels = self.vis_tab.vis_weight_labels
 
         # If widgets list is empty, create them
         if not widgets:
@@ -1901,3 +1005,28 @@ class EqPropDashboard(QMainWindow):
                 labels[i].setText(get_layer_description(name))
             except Exception:
                 pass
+
+    def _setup_logging(self):
+        """Setup logging to redirect to console tab."""
+        self.log_handler = QtLogHandler()
+        self.log_handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+        self.log_handler.log_signal.connect(self._append_log)
+
+        # Configure root logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
+        root_logger.addHandler(self.log_handler)
+
+    def _append_log(self, message: str):
+        """Append a message to the console log."""
+        if hasattr(self, 'console_log'):
+             import time
+             timestamp = time.strftime("%H:%M:%S")
+             if not message.startswith("["): # Avoid double timestamping if already timestamped
+                 self.console_log.append(f"[{timestamp}] {message}")
+             else:
+                 self.console_log.append(message)
+
+        # Also append to the ConsoleTab if initialized
+        if hasattr(self, 'console_tab'):
+            self.console_tab.append_log(message)
