@@ -38,12 +38,22 @@ class Verifier:
         seed: int = 42,
         n_seeds_override: Optional[int] = None,
         export_data: bool = False,
+        output_dir: Optional[str] = None,
     ):
         self.quick_mode = quick_mode
         self.intermediate_mode = intermediate_mode
         self.seed = seed
         self.export_data = export_data
         self.notebook = VerificationNotebook()
+
+        # Set output directory (default to ./results if not specified)
+        if output_dir is None:
+            self.output_dir = Path("results")
+        else:
+            self.output_dir = Path(output_dir)
+
+        # Create output directory if it doesn't exist
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
         torch.manual_seed(seed)
         np.random.seed(seed)
@@ -391,10 +401,8 @@ class Verifier:
 
         # Save
         total_time = time.time() - start_time
-        # output path relative to original verify.py location
-        output_path = (
-            Path(__file__).parent.parent / "results" / "verification_notebook.md"
-        )
+
+        output_path = self.output_dir / "verification_notebook.md"
         self.notebook.save(output_path)
 
         # Summary
@@ -411,7 +419,7 @@ class Verifier:
         if self.export_data and self.data_records:
             import csv
 
-            csv_path = Path(__file__).parent.parent / "results" / "data.csv"
+            csv_path = self.output_dir / "data.csv"
             keys = self.data_records[0].keys()
             with open(csv_path, "w", newline="") as f:
                 dict_writer = csv.DictWriter(f, keys)
