@@ -280,3 +280,93 @@ class SupervisedTrainer(BaseTrainer):
             "time": epoch_time,
             "iteration_time": epoch_time / self.batches_per_epoch
         }
+
+    def evaluate_loader(self, loader) -> Dict[str, float]:
+        """Evaluate on a DataLoader."""
+        if not self.use_kernel:
+            self.model.eval()
+
+        losses = []
+        accs = []
+
+        context = torch.no_grad() if not self.use_kernel else torch.utils.contextlib.nullcontext()
+
+        with context:
+            for x, y in loader:
+                x, y = x.to(self.device), y.to(self.device)
+
+                if self.use_kernel:
+                    x_np = self._prepare_input(x)
+                    y_np = y.cpu().numpy() if isinstance(y, torch.Tensor) else y
+                    metrics = self.kernel.evaluate(x_np, y_np)
+                    losses.append(metrics["loss"])
+                    accs.append(metrics["accuracy"])
+                else:
+                    h = self._prepare_input(x)
+                    if hasattr(self.model, "eq_steps"):
+                        logits = self.model(h, steps=self.steps)
+                    else:
+                        logits = self.model(h)
+
+                    if logits.dim() == 3 and self.task_type == "lm":
+                        logits = logits[:, -1, :]
+
+                    loss = self.criterion(logits, y)
+
+                    # Compute accuracy
+                    if self.task_type in ["lm", "vision"]:
+                        acc = (logits.argmax(1) == y).float().mean().item()
+                    else:
+                        acc = 0.0
+
+                    losses.append(loss.item())
+                    accs.append(acc)
+
+        return {
+            "loss": np.mean(losses) if losses else 0.0,
+            "accuracy": np.mean(accs) if accs else 0.0
+        }
+
+    def fit(self, train_loader, val_loader=None, epochs=10, callbacks=None, progress_bar=False):
+        """
+        Train using a standard PyTorch DataLoader.
+        Restores compatibility with sklearn wrapper and standard usage.
+        """
+        print(f"Starting training for {epochs} epochs...")
+
+        for epoch in range(epochs):
+            t0 = time.time()
+            train_losses = []
+            train_accs = []
+
+            # Training Loop
+            self.model.train()
+            for batch_idx, (x, y) in enumerate(train_loader):
+                x, y = x.to(self.device), y.to(self.device)
+                metrics = self.train_batch(x, y)
+                train_losses.append(metrics["loss"])
+                train_accs.append(metrics.get("accuracy", 0.0))
+
+            # Validation Loop
+            val_loss = 0.0
+            val_acc = 0.0
+            if val_loader:
+                val_metrics = self.evaluate_loader(val_loader)
+                val_loss = val_metrics["loss"]
+                val_acc = val_metrics["accuracy"]
+
+            # Logging
+            avg_loss = np.mean(train_losses) if train_losses else 0.0
+            avg_acc = np.mean(train_accs) if train_accs else 0.0
+            epoch_time = time.time() - t0
+
+            if progress_bar or (epoch + 1) % 1 == 0:
+                val_str = f", Val Loss={val_loss:.4f}, Val Acc={val_acc:.4f}" if val_loader else ""
+                print(f"Epoch {epoch+1}/{epochs}: "
+                      f"Loss={avg_loss:.4f}, Acc={avg_acc:.4f}"
+                      f"{val_str}, "
+                      f"Time={epoch_time:.1f}s")
+
+            if callbacks:
+                for cb in callbacks:
+                    cb(epoch, {"loss": avg_loss, "accuracy": avg_acc, "val_loss": val_loss, "val_accuracy": val_acc})

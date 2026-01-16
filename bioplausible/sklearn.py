@@ -103,14 +103,18 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         )
 
         # Initialize Trainer
+        # Use task=None and task_type="vision" since we provide manual loader
         self.trainer_ = EqPropTrainer(
             model=self.model_,
+            task=None,
+            task_type="vision",
             lr=self.learning_rate,
-            device=self.device,
+            device=self.device if self.device else "cpu",
             use_compile=False, # Disable compile for simple sklearn usage to avoid overhead
+            steps=self.steps
         )
 
-        # Train
+        # Train using new fit method
         self.trainer_.fit(loader, epochs=self.epochs, progress_bar=False)
 
         return self
