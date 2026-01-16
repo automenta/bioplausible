@@ -252,6 +252,11 @@ class SimpleConvEqProp(EqPropModel):
         self, h: torch.Tensor, x_transformed: torch.Tensor
     ) -> torch.Tensor:
         h_norm = self.norm(h)
+
+        if TritonEqPropOps.is_available() and h.is_cuda:
+            pre_act = self.W_rec(h_norm) + x_transformed
+            return TritonEqPropOps.step(h, pre_act, alpha=self.gamma)
+
         h_next = torch.tanh(self.W_rec(h_norm) + x_transformed)
         return torch.lerp(h, h_next, self.gamma)
 

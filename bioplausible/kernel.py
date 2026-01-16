@@ -17,7 +17,16 @@ Usage:
 
 from typing import Any, Dict, List, Optional, Tuple
 
+import os
 import numpy as np
+
+# Heuristic: Set CUDA_PATH if not set and standard location exists
+# This helps CuPy find CUDA libraries on some systems
+if "CUDA_PATH" not in os.environ:
+    for path in ["/usr/local/cuda", "/opt/cuda"]:
+        if os.path.exists(path):
+            os.environ["CUDA_PATH"] = path
+            break
 
 # Try to import CuPy for GPU
 try:
