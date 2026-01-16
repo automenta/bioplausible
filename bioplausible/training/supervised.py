@@ -26,7 +26,7 @@ class SupervisedTrainer(BaseTrainer):
     def __init__(
         self,
         model: nn.Module,
-        task,  # BaseTask
+        task: Optional[Any] = None,  # BaseTask, optional
         device: str = "cpu",
         lr: float = 0.001,
         batches_per_epoch: int = 100,
@@ -35,10 +35,12 @@ class SupervisedTrainer(BaseTrainer):
         use_compile: bool = True,
         use_kernel: bool = False,
         compile_mode: str = "reduce-overhead",
+        task_type: str = "vision", # Fallback task type
         **kwargs
     ):
         super().__init__(model, device)
         self.task = task
+        self.task_type = task.task_type if task else task_type
         self.batches_per_epoch = batches_per_epoch
         self.eval_batches = eval_batches
         self.steps = steps
@@ -106,7 +108,7 @@ class SupervisedTrainer(BaseTrainer):
             return self.embed(x).mean(dim=1)
         else:
             # Vision or direct input
-            if self.task.task_type in ["vision", "rl"]:
+            if self.task_type in ["vision", "rl"]:
                 # Check for Conv models (ModernConvEqProp)
                 is_conv = "Conv" in self.model.__class__.__name__
                 if hasattr(self.model, 'config') and self.model.config and hasattr(self.model.config, 'name'):
@@ -127,6 +129,28 @@ class SupervisedTrainer(BaseTrainer):
                      return x
             else:
                  return x
+
+    def get_dynamics(self, x, return_trajectory=True):
+        """
+        Run the model in inference mode and return internal dynamics.
+        Useful for studying convergence, fixed points, and stability.
+        """
+        self.model.eval()
+        x = x.to(self.device)
+        h = self._prepare_input(x)
+
+        if hasattr(self.model, "forward"):
+            # Try to call forward with dynamics args
+            try:
+                # Assuming EqPropModel signature
+                result = self.model(h, return_trajectory=return_trajectory, return_dynamics=True)
+                # Result could be (out, traj) or (out, dynamics_dict)
+                return result
+            except TypeError:
+                # Fallback if model doesn't support these args
+                return self.model(h)
+        else:
+            return self.model(h)
 
     def train_batch(self, x, y) -> Dict[str, float]:
         """Run a single training step."""
@@ -158,7 +182,7 @@ class SupervisedTrainer(BaseTrainer):
             else:
                 logits = self.model(h)
 
-            if logits.dim() == 3 and self.task.task_type == "lm":
+            if logits.dim() == 3 and self.task_type == "lm":
                 # logits: [B, T, V] -> [B, V] (last token)
                 logits = logits[:, -1, :]
 
@@ -171,7 +195,7 @@ class SupervisedTrainer(BaseTrainer):
 
             # Compute accuracy (detached)
             with torch.no_grad():
-                if self.task.task_type in ["lm", "vision"]:
+                if self.task_type in ["lm", "vision"]:
                     acc = (logits.argmax(1) == y).float().mean().item()
                 else:
                     acc = 0.0
@@ -182,6 +206,9 @@ class SupervisedTrainer(BaseTrainer):
 
     def evaluate(self) -> Dict[str, float]:
         """Run validation loop."""
+        if not self.task:
+            raise RuntimeError("Task not provided. Cannot run standard evaluation loop.")
+
         if not self.use_kernel:
             self.model.eval()
 
@@ -209,7 +236,7 @@ class SupervisedTrainer(BaseTrainer):
                     else:
                         logits = self.model(h)
 
-                    if logits.dim() == 3 and self.task.task_type == "lm":
+                    if logits.dim() == 3 and self.task_type == "lm":
                         logits = logits[:, -1, :]
 
                     loss = self.criterion(logits, y)
@@ -224,11 +251,14 @@ class SupervisedTrainer(BaseTrainer):
         return {
             "val_loss": avg_loss,
             "val_accuracy": avg_acc,
-            "val_perplexity": np.exp(min(avg_loss, 10)) if self.task.task_type == "lm" else 0.0
+            "val_perplexity": np.exp(min(avg_loss, 10)) if self.task_type == "lm" else 0.0
         }
 
     def train_epoch(self) -> Dict[str, float]:
         """Run full training epoch (train + eval)."""
+        if not self.task:
+             raise RuntimeError("Task not provided. Cannot run train_epoch. Use train_batch in your own loop.")
+
         t0 = time.time()
 
         # Training
@@ -250,3 +280,93 @@ class SupervisedTrainer(BaseTrainer):
             "time": epoch_time,
             "iteration_time": epoch_time / self.batches_per_epoch
         }
+
+    def evaluate_loader(self, loader) -> Dict[str, float]:
+        """Evaluate on a DataLoader."""
+        if not self.use_kernel:
+            self.model.eval()
+
+        losses = []
+        accs = []
+
+        context = torch.no_grad() if not self.use_kernel else torch.utils.contextlib.nullcontext()
+
+        with context:
+            for x, y in loader:
+                x, y = x.to(self.device), y.to(self.device)
+
+                if self.use_kernel:
+                    x_np = self._prepare_input(x)
+                    y_np = y.cpu().numpy() if isinstance(y, torch.Tensor) else y
+                    metrics = self.kernel.evaluate(x_np, y_np)
+                    losses.append(metrics["loss"])
+                    accs.append(metrics["accuracy"])
+                else:
+                    h = self._prepare_input(x)
+                    if hasattr(self.model, "eq_steps"):
+                        logits = self.model(h, steps=self.steps)
+                    else:
+                        logits = self.model(h)
+
+                    if logits.dim() == 3 and self.task_type == "lm":
+                        logits = logits[:, -1, :]
+
+                    loss = self.criterion(logits, y)
+
+                    # Compute accuracy
+                    if self.task_type in ["lm", "vision"]:
+                        acc = (logits.argmax(1) == y).float().mean().item()
+                    else:
+                        acc = 0.0
+
+                    losses.append(loss.item())
+                    accs.append(acc)
+
+        return {
+            "loss": np.mean(losses) if losses else 0.0,
+            "accuracy": np.mean(accs) if accs else 0.0
+        }
+
+    def fit(self, train_loader, val_loader=None, epochs=10, callbacks=None, progress_bar=False):
+        """
+        Train using a standard PyTorch DataLoader.
+        Restores compatibility with sklearn wrapper and standard usage.
+        """
+        print(f"Starting training for {epochs} epochs...")
+
+        for epoch in range(epochs):
+            t0 = time.time()
+            train_losses = []
+            train_accs = []
+
+            # Training Loop
+            self.model.train()
+            for batch_idx, (x, y) in enumerate(train_loader):
+                x, y = x.to(self.device), y.to(self.device)
+                metrics = self.train_batch(x, y)
+                train_losses.append(metrics["loss"])
+                train_accs.append(metrics.get("accuracy", 0.0))
+
+            # Validation Loop
+            val_loss = 0.0
+            val_acc = 0.0
+            if val_loader:
+                val_metrics = self.evaluate_loader(val_loader)
+                val_loss = val_metrics["loss"]
+                val_acc = val_metrics["accuracy"]
+
+            # Logging
+            avg_loss = np.mean(train_losses) if train_losses else 0.0
+            avg_acc = np.mean(train_accs) if train_accs else 0.0
+            epoch_time = time.time() - t0
+
+            if progress_bar or (epoch + 1) % 1 == 0:
+                val_str = f", Val Loss={val_loss:.4f}, Val Acc={val_acc:.4f}" if val_loader else ""
+                print(f"Epoch {epoch+1}/{epochs}: "
+                      f"Loss={avg_loss:.4f}, Acc={avg_acc:.4f}"
+                      f"{val_str}, "
+                      f"Time={epoch_time:.1f}s")
+
+            if callbacks:
+                for cb in callbacks:
+                    cb(epoch, {"loss": avg_loss, "accuracy": avg_acc, "val_loss": val_loss, "val_accuracy": val_acc})

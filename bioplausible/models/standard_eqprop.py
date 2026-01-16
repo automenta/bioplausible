@@ -6,7 +6,7 @@ Reference implementation with correct top-down feedback dynamics.
 
 import torch
 import torch.nn as nn
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Union, Tuple, Any
 from .base import BioModel, ModelConfig, register_model
 
 
@@ -89,11 +89,20 @@ class StandardEqProp(BioModel):
         return new_activations
 
     def forward(
-        self, x: torch.Tensor, beta: float = 0.0, target: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+        self,
+        x: torch.Tensor,
+        beta: float = 0.0,
+        target: Optional[torch.Tensor] = None,
+        steps: Optional[int] = None,
+        return_trajectory: bool = False,
+        return_dynamics: bool = False,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, Any]]:
         """
         Run equilibrium dynamics.
         """
+        eq_steps = steps if steps is not None else self.eq_steps
+
+        # Initial feedforward pass
         activations = [x]
         h = x
         for i, layer in enumerate(self.layers):
@@ -102,11 +111,42 @@ class StandardEqProp(BioModel):
                 h = self.activation(h)
             activations.append(h)
 
-        for _ in range(self.eq_steps):
+        # Storage for dynamics
+        trajectory = []
+        deltas = []
+
+        if return_trajectory:
+            trajectory.append([a.detach().cpu() for a in activations])
+
+        for _ in range(eq_steps):
+            prev_activations = activations
             activations = self.forward_dynamics(activations, beta, target)
 
+            if return_dynamics:
+                # Calculate change in hidden state
+                delta = 0.0
+                # activations[0] is input (fixed), so skip
+                for k in range(1, len(activations)):
+                    delta += (activations[k] - prev_activations[k]).norm().item()
+                deltas.append(delta)
+
+            if return_trajectory:
+                trajectory.append([a.detach().cpu() for a in activations])
+
         self._last_activations = activations
-        return activations[-1]
+        out = activations[-1]
+
+        if return_dynamics:
+            return out, {
+                "trajectory": trajectory if return_trajectory else None,
+                "deltas": deltas,
+                "final_delta": deltas[-1] if deltas else 0.0,
+            }
+
+        if return_trajectory:
+            return out, trajectory
+
+        return out
 
     def train_step(
         self,
