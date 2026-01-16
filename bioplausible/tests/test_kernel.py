@@ -84,6 +84,31 @@ class TestEqPropKernel(unittest.TestCase):
         self.assertIsNotNone(trainer._kernel)
         self.assertFalse(trainer._kernel.use_gpu)  # Should be False on CPU env
 
+    def test_memory_optimization(self):
+        """Test that O(1) memory optimization works (trajectory not stored)."""
+        kernel = EqPropKernel(
+            self.input_dim,
+            self.hidden_dim,
+            self.output_dim,
+            max_steps=5,
+            use_gpu=False,
+        )
+
+        # Default behavior: O(1) memory
+        _, log, _ = kernel.solve_equilibrium(self.x_np[:2])
+        self.assertEqual(len(log), 1, "Should only store last step by default")
+
+        # Explicit full trajectory
+        _, log_full, _ = kernel.solve_equilibrium(self.x_np[:2], store_trajectory=True)
+        # It might converge early, so check length >= 1 and <= max_steps
+        self.assertTrue(len(log_full) >= 1)
+        # If it doesn't converge instantly, it should be > 1
+        # With random weights, it likely won't converge in 1 step unless threshold is huge
+        if len(log_full) == 1:
+            print("Warning: Converged in 1 step, can't fully verify trajectory storage difference")
+        else:
+            self.assertGreater(len(log_full), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

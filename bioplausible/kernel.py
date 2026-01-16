@@ -266,7 +266,10 @@ class EqPropKernel:
         return h_next, activations
 
     def solve_equilibrium(
-        self, x: np.ndarray, nudge_grad: Optional[np.ndarray] = None
+        self,
+        x: np.ndarray,
+        nudge_grad: Optional[np.ndarray] = None,
+        store_trajectory: bool = False,
     ) -> Tuple[np.ndarray, List[Dict[str, np.ndarray]], Dict[str, Any]]:
         """Find equilibrium state h* via fixed-point iteration."""
         xp = self.xp
@@ -278,15 +281,24 @@ class EqPropKernel:
         h = xp.zeros((batch_size, self.hidden_dim), dtype=np.float32)
 
         activations_log = []
+        last_activations = None
 
         for t in range(self.max_steps):
             h, activations = self._perform_equilibrium_step(
                 h, x_emb, weights, nudge_grad
             )
-            activations_log.append(activations)
+            last_activations = activations
 
-            if self._check_convergence(h, activations_log[-1]["h"], t):
+            if store_trajectory:
+                activations_log.append(activations)
+
+            if self._check_convergence(h, activations["h"], t):
+                if not store_trajectory:
+                    activations_log = [last_activations]
                 return h, activations_log, {"steps": t + 1, "converged": True}
+
+        if not store_trajectory:
+            activations_log = [last_activations]
 
         return h, activations_log, {"steps": self.max_steps, "converged": False}
 
