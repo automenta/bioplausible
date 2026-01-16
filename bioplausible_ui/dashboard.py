@@ -523,13 +523,25 @@ class EqPropDashboard(QMainWindow):
             else:  # CIFAR-10
                 input_dim = 3072 if use_flatten else 3
 
+            # Map combo text to internal string
+            grad_text = self.vis_tab.vis_grad_combo.currentText()
+            if "BPTT" in grad_text:
+                grad_method = "bptt"
+            elif "Equilibrium" in grad_text:
+                grad_method = "equilibrium"
+            elif "Contrastive" in grad_text:
+                grad_method = "contrastive"
+            else:
+                grad_method = "bptt"
+
             model = create_model(
                 spec=spec,
                 input_dim=input_dim,
                 output_dim=10,
                 hidden_dim=hidden,
                 device="cuda" if torch.cuda.is_available() else "cpu",
-                task_type="vision"
+                task_type="vision",
+                gradient_method=grad_method
             )
 
             # Update step if spin box is used

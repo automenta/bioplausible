@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.autograd as autograd
 from typing import Optional, List, Tuple, Dict, Union, Any
 from abc import abstractmethod
@@ -155,7 +156,7 @@ class EqPropModel(NEBCBase):
         """
         Args:
             max_steps: Number of equilibrium steps
-            gradient_method: 'bptt' (default) or 'equilibrium' (O(1) memory implicit diff)
+            gradient_method: 'bptt', 'equilibrium' (implicit diff), or 'contrastive' (Hebbian)
         """
         input_dim = kwargs.get("input_dim", 0)
         hidden_dim = kwargs.get("hidden_dim", 0)
@@ -170,6 +171,11 @@ class EqPropModel(NEBCBase):
         )
         self.max_steps = max_steps
         self.gradient_method = gradient_method
+
+        # Contrastive Hebbian specific params
+        self.beta = kwargs.get("beta", 0.1)
+        self.hebbian_lr = kwargs.get("learning_rate", 0.001)
+        self.internal_optimizer = None
 
     @abstractmethod
     def _build_layers(self):
@@ -197,6 +203,201 @@ class EqPropModel(NEBCBase):
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         """Project hidden state to output."""
         pass
+
+    def get_hebbian_pairs(
+        self, h: torch.Tensor, x: torch.Tensor
+    ) -> List[Tuple[nn.Module, torch.Tensor, torch.Tensor]]:
+        """
+        Return list of (layer_module, input, output_target) for Hebbian updates.
+
+        This defines the topology for contrastive learning.
+        For a layer y = f(W, u), we typically return (layer, u, y).
+        The generic update will compute gradients of (layer(u) * y).sum().
+
+        Args:
+            h: Hidden state at equilibrium
+            x: Raw input
+
+        Returns:
+            List of tuples: (layer, input_to_layer, target_output_of_layer)
+        """
+        raise NotImplementedError("Subclasses must implement get_hebbian_pairs for generic contrastive learning.")
+
+    def contrastive_update(
+        self,
+        h_free: torch.Tensor,
+        h_nudged: torch.Tensor,
+        x: torch.Tensor,
+        y: torch.Tensor,
+    ):
+        """
+        Perform generic contrastive Hebbian update using 'get_hebbian_pairs'.
+
+        Implements: Delta W ~ grad(Layer(x) @ y_nudged) - grad(Layer(x) @ y_free)
+        """
+        batch_size = x.shape[0]
+        scale = 1.0 / (self.beta * batch_size)
+
+        # 1. Get pairs for Free and Nudged states
+        # Note: We recompute 'transform_input' or similar if needed, but 'get_hebbian_pairs'
+        # usually takes raw x and h.
+        pairs_free = self.get_hebbian_pairs(h_free, x)
+        pairs_nudged = self.get_hebbian_pairs(h_nudged, x)
+
+        # 2. Iterate and accumulate gradients
+        for (layer, inp_f, tgt_f), (_, inp_n, tgt_n) in zip(pairs_free, pairs_nudged):
+
+            # Helper to get the underlying parameter to set .grad on
+            # We assume 'layer' is an nn.Module with parameters.
+            # We compute gradients of a 'proxy loss'.
+
+            # Proxy Loss = (Layer(input) * target).sum()
+            # Gradients of this w.r.t layer params give us the Hebbian term.
+
+            # Free Phase Term
+            out_f = layer(inp_f)
+            proxy_loss_f = torch.sum(out_f * tgt_f.detach())
+            grads_f = autograd.grad(proxy_loss_f, layer.parameters(), retain_graph=True, allow_unused=True)
+
+            # Nudged Phase Term
+            out_n = layer(inp_n)
+            proxy_loss_n = torch.sum(out_n * tgt_n.detach())
+            grads_n = autograd.grad(proxy_loss_n, layer.parameters(), retain_graph=True, allow_unused=True)
+
+            # Apply update
+            for param, gf, gn in zip(layer.parameters(), grads_f, grads_n):
+                if param.requires_grad:
+                    # Delta W ~ (Nudged - Free)
+                    # Check for None (unused params)
+                    g_update = 0.0
+                    if gn is not None: g_update += gn
+                    if gf is not None: g_update -= gf
+
+                    if isinstance(g_update, float) and g_update == 0.0:
+                        continue
+
+                    grad_term = scale * g_update
+
+                    if param.grad is None:
+                        param.grad = grad_term
+                    else:
+                        param.grad.add_(grad_term)
+
+        # 3. Output Layer (Standard Backprop on Nudged or Free?)
+        # Standard EqProp: W_out update is just gradient of Cost function at Free phase.
+        logits = self._output_projection(h_free)
+        loss = F.cross_entropy(logits, y)
+
+        # We need to find W_out parameters.
+        # Since _output_projection is abstract, we can't easily identify W_out here generically.
+        # BUT, if we assume the model registered all params, we can just run backward on loss?
+        # No, that would update ALL weights via BPTT.
+
+        # Hack: Subclasses should return W_out in get_hebbian_pairs? No, W_out is supervised.
+        # Let's rely on autograd to find params that affect logits, BUT exclude those handled by Hebbian?
+        # No, that's hard.
+
+        # Solution: Let's assume W_out is the ONLY thing not in get_hebbian_pairs?
+        # Or require subclasses to handle W_out explicitly?
+        # Better: Standard EqProp treats W_out as just another layer where target is clamped?
+        # Scellier 2017: Output layer weights update same as others: h_out * h_pen.
+
+        # Current compromise: Use autograd.grad on loss, but ONLY apply to params not updated yet?
+        # Or, explicit mechanism.
+
+        # Let's try to update W_out using standard grad, but we need to know which params are W_out.
+        # We can detect params that have .grad set (from Hebbian) and skip them?
+        # Yes!
+
+        grads_loss = autograd.grad(loss, self.parameters(), allow_unused=True)
+        for param, g in zip(self.parameters(), grads_loss):
+            if g is not None:
+                if param.grad is None:
+                    # This param wasn't updated by Hebbian loop -> Must be W_out or similar
+                    param.grad = g
+                else:
+                    # Already has Hebbian grad -> Do not add Loss grad (unless hybrid?)
+                    # Pure EqProp: Internal weights only update via Hebbian.
+                    pass
+
+    def train_step(self, x: torch.Tensor, y: torch.Tensor) -> Dict[str, float]:
+        """
+        Perform a single training step.
+        If gradient_method is 'contrastive', this runs the EqProp loop manually.
+        Otherwise, it returns None to let SupervisedTrainer handle BPTT/Implicit.
+        """
+        if self.gradient_method != "contrastive":
+            return None  # Delegate to standard trainer
+
+        # Initialize optimizer on first call
+        if self.internal_optimizer is None:
+            self.internal_optimizer = torch.optim.Adam(self.parameters(), lr=self.hebbian_lr)
+
+        self.internal_optimizer.zero_grad()
+
+        # 1. Free Phase
+        with torch.no_grad():
+            h_free = self._initialize_hidden_state(x)
+            x_transformed = self._transform_input(x)
+
+            for _ in range(self.max_steps):
+                h_free = self.forward_step(h_free, x_transformed)
+
+            logits_free = self._output_projection(h_free)
+
+        # 2. Nudged Phase
+        # We need to compute gradients of the loss w.r.t h to nudge
+        # But for 'contrastive', we typically nudge via a top-down drive or explicit gradient injection
+
+        # Enable grad just for the nudge calculation
+        h_nudged = h_free.clone().detach().requires_grad_(True)
+
+        # Run one step to connect h to output (if needed) or just project
+        # Ideally we settle in the nudged phase with a constant nudge.
+        # Nudge term: - beta * dL/dh
+
+        # Calculate dL/dh at equilibrium
+        logits_nudge_init = self._output_projection(h_nudged)
+        loss = F.cross_entropy(logits_nudge_init, y)
+        grads_h = autograd.grad(loss, h_nudged)[0]
+
+        # Nudged dynamics: h <- forward_step(h) - beta * dL/dh
+        # Note: In continuous time, dot_h = -h + sigma(...) - beta * dL/dh
+        # In discrete step: h_new = forward_step(h) - beta * dL/dh
+
+        # We perform fixed point iteration with the nudge
+        # Nudge should be constant if dL/dh is approx constant locally, or updated?
+        # Standard EqProp keeps the nudge target fixed (y) but dL/dh changes as h changes.
+
+        with torch.no_grad():
+            h_nudged = h_free.clone()
+
+            # Simple implementation: Apply constant nudge derived from free phase error?
+            # Or recompute nudge each step?
+            # Scellier 2017: weakly clamp output units.
+            # Here output is a projection. We inject gradient.
+
+            # We'll use a constant nudge vector derived from free phase for stability/speed
+            nudge_vec = -self.beta * grads_h
+
+            for _ in range(self.max_steps // 2): # Typically fewer steps for nudged phase
+                # h = f(h) + nudge
+                h_next = self.forward_step(h_nudged, x_transformed)
+                h_nudged = h_next + nudge_vec
+
+            logits_nudged = self._output_projection(h_nudged)
+
+        # 3. Weight Update
+        self.contrastive_update(h_free, h_nudged, x, y)
+
+        self.internal_optimizer.step()
+
+        # Compute metrics
+        with torch.no_grad():
+            acc = (logits_free.argmax(dim=1) == y).float().mean().item()
+            loss_val = F.cross_entropy(logits_free, y).item()
+
+        return {"loss": loss_val, "accuracy": acc}
 
     def forward(
         self,

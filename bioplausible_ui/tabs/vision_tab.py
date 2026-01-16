@@ -112,6 +112,13 @@ class VisionTab(QWidget):
         self.vis_lr_spin.setValue(0.001)
         self.vis_lr_spin.setDecimals(4)
 
+        self.vis_grad_combo = QComboBox()
+        self.vis_grad_combo.addItems(["BPTT (Standard)", "Equilibrium (Implicit Diff)", "Contrastive (Hebbian)"])
+        self.vis_grad_combo.setToolTip("Method for computing gradients:\n"
+                                       "BPTT: Backprop Through Time (Exact, high memory)\n"
+                                       "Equilibrium: Implicit Differentiation (O(1) memory)\n"
+                                       "Contrastive: Explicit Hebbian Update (Bio-plausible)")
+
         self.vis_compile_check = QCheckBox("torch.compile")
         self.vis_compile_check.setChecked(True)
 
@@ -122,6 +129,7 @@ class VisionTab(QWidget):
         self.vis_micro_check.setToolTip("Periodically analyze convergence dynamics during training")
 
         train_controls = [
+            ("Gradient:", self.vis_grad_combo),
             ("Epochs:", self.vis_epochs_spin),
             ("Learning Rate:", self.vis_lr_spin),
             ("", self.vis_compile_check),

@@ -141,6 +141,24 @@ class LoopedMLP(EqPropModel):
         """Output: W_out @ h"""
         return self.W_out(h)
 
+    def get_hebbian_pairs(self, h, x):
+        """
+        Return Hebbian update pairs.
+        W_in connects x -> h
+        W_rec connects h -> h
+
+        Target for both is h (the equilibrium state).
+        Input is x (for W_in) and h (for W_rec).
+        """
+        # Note: We need to use the *actual* layers, not the SpectralNorm wrappers,
+        # but the forward pass uses the wrappers.
+        # The generic updater calls layer(input). If layer is wrapped, it works fine.
+
+        return [
+            (self.W_in, x, h),
+            (self.W_rec, h, h)
+        ]
+
 
 # =============================================================================
 # BackpropMLP - Baseline for Comparison

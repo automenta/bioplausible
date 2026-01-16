@@ -81,8 +81,8 @@ class TestEqPropKernel(unittest.TestCase):
         print(f"Trainer (Kernel Mode): {train_loss[0]:.4f} -> {train_loss[-1]:.4f}")
 
         # Verify it actually used the kernel
-        self.assertIsNotNone(trainer._kernel)
-        self.assertFalse(trainer._kernel.use_gpu)  # Should be False on CPU env
+        self.assertIsNotNone(trainer.kernel)
+        self.assertFalse(trainer.kernel.use_gpu)  # Should be False on CPU env
 
     def test_memory_optimization(self):
         """Test that O(1) memory optimization works (trajectory not stored)."""
