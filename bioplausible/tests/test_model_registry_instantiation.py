@@ -2,80 +2,88 @@ import torch
 import unittest
 import numpy as np
 from bioplausible.models.registry import get_model_spec
-from bioplausible.hyperopt.experiment import ExperimentAlgorithm
+from bioplausible.models.factory import create_model
 from bioplausible.config import GLOBAL_CONFIG
+from bioplausible.hyperopt.tasks import VisionTask, BaseTask
+from bioplausible.training.supervised import SupervisedTrainer
+
+# Mock Task for testing
+class MockVisionTask(BaseTask):
+    def __init__(self):
+        super().__init__("mock_vision", "cpu", True)
+        self._input_dim = 32
+        self._output_dim = 10
+
+    @property
+    def task_type(self):
+        return "vision"
+
+    def setup(self): pass
+    def get_batch(self, split="train", batch_size=32):
+        return torch.randn(batch_size, 32), torch.randint(0, 10, (batch_size,))
+
+    def create_trainer(self, model, **kwargs):
+        return SupervisedTrainer(model, self, device="cpu", **kwargs)
 
 class TestModelRegistryInstantiation(unittest.TestCase):
     def setUp(self):
         GLOBAL_CONFIG.quick_mode = True
+        self.task = MockVisionTask()
+
+    def _test_model(self, model_name, input_dim=32, input_shape=None):
+        print(f"\nTesting {model_name}...")
+        spec = get_model_spec(model_name)
+
+        # Adjust task input dim if needed (e.g. for Conv)
+        if input_shape:
+             self.task._input_dim = None # Ignored by factory if input_dim passed explicitly
+        else:
+             self.task._input_dim = input_dim
+
+        # Factory uses input_dim arg if provided, otherwise task's.
+        # But we pass input_dim explicitly here to match old test logic
+        model = create_model(
+            spec=spec,
+            output_dim=10,
+            input_dim=input_dim if not input_shape else None, # Conv models handled differently?
+            # Actually factory logic: if input_dim is None -> embedding (LM).
+            # If input_dim provided -> vector.
+            # For Conv: input_dim=None ? No, modern_conv_eqprop uses hidden_dim for channels?
+            # Let's check factory.py:
+            # if model_type == "modern_conv_eqprop": model = ModernConvEqProp(...)
+            # It ignores input_dim for creation but assumes 4D input for forward.
+
+            hidden_dim=16 if not input_shape else 64,
+            num_layers=2,
+            device="cpu",
+            task_type="vision"
+        )
+
+        trainer = SupervisedTrainer(model, self.task, device="cpu", steps=5)
+
+        if input_shape:
+            x = torch.randn(*input_shape)
+        else:
+            x = torch.randn(4, input_dim)
+
+        y = torch.randint(0, 10, (4,))
+
+        metrics = trainer.train_batch(x, y)
+        self.assertIsNotNone(metrics["loss"])
+        print(f"  Passed: {model_name} Loss={metrics['loss']}")
 
     def test_holomorphic_ep_instantiation(self):
-        print("\nTesting Holomorphic EP...")
-        spec = get_model_spec("Holomorphic EqProp")
-        algo = ExperimentAlgorithm(
-            spec=spec,
-            output_dim=10,
-            input_dim=32,
-            hidden_dim=16,
-            num_layers=2,
-            device="cpu",
-            task_type="vision"
-        )
-        x = torch.randn(4, 32)
-        y = torch.randint(0, 10, (4,))
-        state = algo.train_step(x, y, 0)
-        self.assertIsNotNone(state.loss)
+        self._test_model("Holomorphic EqProp")
 
     def test_directed_ep_instantiation(self):
-        print("\nTesting Directed EP...")
-        spec = get_model_spec("Directed EqProp (Deep EP)")
-        algo = ExperimentAlgorithm(
-            spec=spec,
-            output_dim=10,
-            input_dim=32,
-            hidden_dim=16,
-            num_layers=2,
-            device="cpu",
-            task_type="vision"
-        )
-        x = torch.randn(4, 32)
-        y = torch.randint(0, 10, (4,))
-        state = algo.train_step(x, y, 0)
-        self.assertIsNotNone(state.loss)
+        self._test_model("Directed EqProp (Deep EP)")
 
     def test_finite_nudge_ep_instantiation(self):
-        print("\nTesting Finite-Nudge EP...")
-        spec = get_model_spec("Finite-Nudge EqProp")
-        algo = ExperimentAlgorithm(
-            spec=spec,
-            output_dim=10,
-            input_dim=32,
-            hidden_dim=16,
-            num_layers=2,
-            device="cpu",
-            task_type="vision"
-        )
-        x = torch.randn(4, 32)
-        y = torch.randint(0, 10, (4,))
-        state = algo.train_step(x, y, 0)
-        self.assertIsNotNone(state.loss)
+        self._test_model("Finite-Nudge EqProp")
 
     def test_modern_conv_eqprop_instantiation(self):
-        print("\nTesting Conv EqProp (CIFAR-10)...")
-        spec = get_model_spec("Conv EqProp (CIFAR-10)")
-        algo = ExperimentAlgorithm(
-            spec=spec,
-            output_dim=10,
-            input_dim=None,
-            hidden_dim=64,
-            num_layers=2,
-            device="cpu",
-            task_type="vision"
-        )
-        x = torch.randn(4, 3, 32, 32)
-        y = torch.randint(0, 10, (4,))
-        state = algo.train_step(x, y, 0)
-        self.assertIsNotNone(state.loss)
+        # Conv input shape
+        self._test_model("Conv EqProp (CIFAR-10)", input_shape=(4, 3, 32, 32))
 
     def test_hybrid_models(self):
         models_to_test = [
@@ -91,23 +99,8 @@ class TestModelRegistryInstantiation(unittest.TestCase):
         ]
 
         for model_name in models_to_test:
-            print(f"\nTesting {model_name}...")
-            spec = get_model_spec(model_name)
-            algo = ExperimentAlgorithm(
-                spec=spec,
-                output_dim=10,
-                input_dim=32,
-                hidden_dim=16,
-                num_layers=2,
-                device="cpu",
-                task_type="vision"
-            )
-            x = torch.randn(4, 32)
-            y = torch.randint(0, 10, (4,))
             try:
-                state = algo.train_step(x, y, 0)
-                self.assertIsNotNone(state.loss)
-                print(f"  Passed: {model_name} Loss={state.loss}")
+                self._test_model(model_name)
             except Exception as e:
                 self.fail(f"Failed {model_name}: {e}")
 

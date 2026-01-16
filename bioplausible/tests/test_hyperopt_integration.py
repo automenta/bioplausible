@@ -2,8 +2,9 @@ import unittest
 import torch
 import shutil
 from pathlib import Path
-from bioplausible.hyperopt.experiment import TrialRunner, ExperimentAlgorithm
+from bioplausible.hyperopt.experiment import TrialRunner
 from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
+from bioplausible.models.factory import create_model
 from bioplausible.hyperopt.storage import HyperoptStorage
 
 class TestHyperoptIntegration(unittest.TestCase):
@@ -18,27 +19,27 @@ class TestHyperoptIntegration(unittest.TestCase):
             Path(self.test_db).unlink()
 
     def test_instantiate_all_models_lm(self):
-        """Test instantiation of all model types for LM task."""
+        """Test instantiation of all model types for LM task using factory."""
         vocab_size = 65
         for spec in MODEL_REGISTRY:
-            if spec.model_type in ["deep_hebbian", "eqprop_mlp"]:
-               # deep_hebbian and eqprop_mlp in current registry config are set up for vision/vector tasks primarily
-               # but ExperimentAlgorithm handles them for LM by adding embedding.
-               pass
-
             try:
-                algo = ExperimentAlgorithm(
+                model = create_model(
                     spec,
+                    input_dim=None,
                     output_dim=vocab_size,
                     hidden_dim=32,
                     num_layers=2,
                     device="cpu",
                     task_type="lm"
                 )
-                self.assertIsNotNone(algo.model)
+                self.assertIsNotNone(model)
+
+                # Check embedding logic which was previously in ExperimentAlgorithm
+                # Factory now attaches it.
                 if spec.model_type in ["eqprop_mlp", "dfa", "chl", "deep_hebbian"]:
-                    self.assertTrue(algo.has_embed)
-                    self.assertIsNotNone(algo.embed)
+                    self.assertTrue(getattr(model, 'has_embed', False))
+                    self.assertIsNotNone(getattr(model, 'embed', None))
+
             except Exception as e:
                 self.fail(f"Failed to instantiate {spec.name} for LM: {e}")
 
@@ -51,17 +52,17 @@ class TestHyperoptIntegration(unittest.TestCase):
 
         for spec in mlp_specs:
             try:
-                algo = ExperimentAlgorithm(
+                model = create_model(
                     spec,
-                    output_dim=output_dim,
                     input_dim=input_dim,
+                    output_dim=output_dim,
                     hidden_dim=32,
                     num_layers=2,
                     device="cpu",
                     task_type="vision"
                 )
-                self.assertIsNotNone(algo.model)
-                self.assertFalse(algo.has_embed)
+                self.assertIsNotNone(model)
+                self.assertFalse(getattr(model, 'has_embed', False))
             except Exception as e:
                 self.fail(f"Failed to instantiate {spec.name} for Vision: {e}")
 

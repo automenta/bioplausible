@@ -11,6 +11,7 @@ import numpy as np
 from typing import Tuple, Dict, Any, Optional
 
 from bioplausible.datasets import get_lm_dataset, get_vision_dataset
+from bioplausible.training.base import BaseTrainer
 
 class BaseTask(ABC):
     """Abstract base class for all tasks."""
@@ -30,6 +31,11 @@ class BaseTask(ABC):
     @abstractmethod
     def get_batch(self, split: str = "train", batch_size: int = 32) -> Tuple[torch.Tensor, torch.Tensor]:
         """Get a batch of data."""
+        pass
+
+    @abstractmethod
+    def create_trainer(self, model: nn.Module, **kwargs) -> BaseTrainer:
+        """Create a trainer specific to this task."""
         pass
 
     @property
@@ -84,23 +90,11 @@ class LMTask(BaseTask):
         y = torch.stack([data[i + self.seq_len] for i in idx]).to(self.device)
         return x, y
 
+    def create_trainer(self, model: nn.Module, **kwargs) -> BaseTrainer:
+        from bioplausible.training.supervised import SupervisedTrainer
+        return SupervisedTrainer(model, self, device=self.device, **kwargs)
+
     def compute_metrics(self, logits: torch.Tensor, y: torch.Tensor, loss: float) -> Dict[str, float]:
-        # Logits: [B, V] (last token) or [B, T, V]
-        # If logits are [B, V], y is [B] (target for last token)
-        # But for LM usually we predict next token.
-        # TrialRunner logic was:
-        # logits = logits[:, -1, :]
-        # acc = (logits.argmax(1) == y).float().mean()
-
-        # We assume logits are already processed to match y shape if needed,
-        # or we handle it here if we know the shape.
-
-        # In TrialRunner, x is [B, T], y is [B] (next char after sequence)
-        # But wait, get_batch returns y as [B] (single char)?
-        # Let's check get_batch in TrialRunner:
-        # x = stack(data[i:i+seq_len])
-        # y = stack(data[i+seq_len]) -> this is indeed a single char per sequence.
-
         if logits.dim() == 3:
             logits = logits[:, -1, :]
 
@@ -129,7 +123,6 @@ class VisionTask(BaseTask):
         test_dataset = get_vision_dataset(self.name, train=False, flatten=False)
 
         # In-memory loading (replicating TrialRunner logic for speed)
-        # Note: Be careful with large datasets like ImageNet
         self.train_x = torch.stack([t[0] for t in dataset]).to(self.device)
         self.train_y = torch.tensor([t[1] for t in dataset]).to(self.device)
 
@@ -139,10 +132,10 @@ class VisionTask(BaseTask):
 
         if self.name == "mnist":
             self._output_dim = 10
-            self._input_dim = 784 # Flattened size, but data is kept 2D until batching if needed
+            self._input_dim = 784
         else:
             self._output_dim = 10
-            self._input_dim = 3072 # CIFAR flattened
+            self._input_dim = 3072
 
     def get_batch(self, split: str = "train", batch_size: int = 32) -> Tuple[torch.Tensor, torch.Tensor]:
         if split == "train":
@@ -155,8 +148,12 @@ class VisionTask(BaseTask):
         y = dataset_y[idx]
         return x, y
 
+    def create_trainer(self, model: nn.Module, **kwargs) -> BaseTrainer:
+        from bioplausible.training.supervised import SupervisedTrainer
+        return SupervisedTrainer(model, self, device=self.device, **kwargs)
+
     def compute_metrics(self, logits: torch.Tensor, y: torch.Tensor, loss: float) -> Dict[str, float]:
-        if logits.dim() == 3: # Should not happen for standard classification but just in case
+        if logits.dim() == 3:
              logits = logits[:, -1, :]
 
         acc = (logits.argmax(1) == y).float().mean().item()
@@ -180,14 +177,15 @@ class RLTask(BaseTask):
         self.env = gym.make(self.env_name)
         self._output_dim = self.env.action_space.n
         self._input_dim = self.env.observation_space.shape[0]
-        # RL doesn't preload data
 
     def get_batch(self, split: str = "train", batch_size: int = 32):
         raise NotImplementedError("RL Task does not support get_batch directly, use RLTrainer")
 
-    def create_trainer(self, model, lr=0.001, gamma=0.99):
-        from bioplausible.rl.trainer import RLTrainer
-        return RLTrainer(model, self.env_name, device=self.device, lr=lr, gamma=gamma)
+    def create_trainer(self, model, **kwargs):
+        from bioplausible.training.rl import RLTrainer
+        # Filter kwargs? RLTrainer takes lr, gamma, etc.
+        # TrialRunner passes everything. RLTrainer should handle **kwargs.
+        return RLTrainer(model, self.env_name, device=self.device, **kwargs)
 
 
 def create_task(task_name: str, device: str = "cpu", quick_mode: bool = False) -> BaseTask:
