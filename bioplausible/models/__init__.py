@@ -58,6 +58,7 @@ from .eqprop_lm_variants import (
     LoopedMLPForLM,
     get_eqprop_lm,
     create_eqprop_lm,
+    list_eqprop_lm_variants,
 )
 
 # Export registry
@@ -120,4 +121,5 @@ __all__ = [
     "LoopedMLPForLM",
     "get_eqprop_lm",
     "create_eqprop_lm",
+    "list_eqprop_lm_variants",
 ]
