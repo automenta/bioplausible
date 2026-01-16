@@ -20,60 +20,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
 
-# Monkeypatch pyparsing for matplotlib compatibility (snake_case -> camelCase)
-try:
-    import pyparsing
-
-    # helper to alias method if missing
-    def alias_method(cls, snake, camel):
-        if hasattr(cls, camel) and not hasattr(cls, snake):
-            setattr(cls, snake, getattr(cls, camel))
-
-    # Alias one_of -> oneOf, nested_expr -> nestedExpr
-    alias_method(pyparsing, 'one_of', 'oneOf')
-    alias_method(pyparsing, 'nested_expr', 'nestedExpr')
-
-    # Generic alias for common snake_case -> camelCase mismatches in pyparsing
-    for snake, camel in [
-        ('delimited_list', 'delimitedList'),
-        ('counted_array', 'countedArray'),
-        ('infix_notation', 'infixNotation'),
-        ('one_of', 'oneOf'),
-    ]:
-        alias_method(pyparsing, snake, camel)
-
-    # Alias ParserElement methods (parse_string, reset_cache, enable_packrat)
-    if hasattr(pyparsing, 'ParserElement'):
-        PE = pyparsing.ParserElement
-        alias_method(PE, 'parse_string', 'parseString')
-
-        # fix for static methods (resetCache, enablePackrat) being called as instance methods
-        if hasattr(PE, 'resetCache') and not hasattr(PE, 'reset_cache'):
-            PE.reset_cache = lambda *args, **kwargs: PE.resetCache()
-
-        if hasattr(PE, 'enablePackrat') and not hasattr(PE, 'enable_packrat'):
-            PE.enable_packrat = lambda *args, **kwargs: PE.enablePackrat(*args, **kwargs)
-
-    # Alias pyparsing_common attributes (convert_to_float -> convertToFloat, etc)
-    if hasattr(pyparsing, 'pyparsing_common'):
-        PC = pyparsing.pyparsing_common
-        for snake, camel in [
-            ('convert_to_float', 'convertToFloat'),
-            ('convert_to_integer', 'convertToInteger'),
-            ('html_entity', 'htmlEntity'),
-            ('common_html_entity', 'commonHTMLEntity'),
-            ('signed_integer', 'signedInteger'),
-            ('grouped', 'grouped'),
-        ]:
-            alias_method(PC, snake, camel)
-
-    # Alias ParseException
-    if hasattr(pyparsing, 'ParseException'):
-        alias_method(pyparsing.ParseException, 'mark_input_line', 'markInputLine')
-
-except ImportError:
-    pass
-
 try:
     import pyqtgraph as pg
     HAS_PYQTGRAPH = True

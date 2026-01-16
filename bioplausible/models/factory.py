@@ -18,7 +18,7 @@ from bioplausible.models.backprop_transformer_lm import BackpropTransformerLM
 from bioplausible.models.simple_fa import StandardFA
 from bioplausible.models.cf_align import ContrastiveFeedbackAlignment
 from bioplausible.models.hebbian_chain import DeepHebbianChain
-from bioplausible.lm_models import create_eqprop_lm
+from bioplausible.models.eqprop_lm_variants import create_eqprop_lm
 
 # Advanced EqProp Models
 from bioplausible.models.holomorphic_ep import HolomorphicEP
