@@ -204,6 +204,25 @@ class EqPropModel(NEBCBase):
         """Project hidden state to output."""
         pass
 
+    def get_hebbian_pairs(
+        self, h: torch.Tensor, x: torch.Tensor
+    ) -> List[Tuple[nn.Module, torch.Tensor, torch.Tensor]]:
+        """
+        Return list of (layer_module, input, output_target) for Hebbian updates.
+
+        This defines the topology for contrastive learning.
+        For a layer y = f(W, u), we typically return (layer, u, y).
+        The generic update will compute gradients of (layer(u) * y).sum().
+
+        Args:
+            h: Hidden state at equilibrium
+            x: Raw input
+
+        Returns:
+            List of tuples: (layer, input_to_layer, target_output_of_layer)
+        """
+        raise NotImplementedError("Subclasses must implement get_hebbian_pairs for generic contrastive learning.")
+
     def contrastive_update(
         self,
         h_free: torch.Tensor,
@@ -212,10 +231,94 @@ class EqPropModel(NEBCBase):
         y: torch.Tensor,
     ):
         """
-        Perform contrastive Hebbian update.
-        Must be implemented by subclasses if gradient_method='contrastive'.
+        Perform generic contrastive Hebbian update using 'get_hebbian_pairs'.
+
+        Implements: Delta W ~ grad(Layer(x) @ y_nudged) - grad(Layer(x) @ y_free)
         """
-        raise NotImplementedError("Subclasses must implement contrastive_update for Hebbian learning.")
+        batch_size = x.shape[0]
+        scale = 1.0 / (self.beta * batch_size)
+
+        # 1. Get pairs for Free and Nudged states
+        # Note: We recompute 'transform_input' or similar if needed, but 'get_hebbian_pairs'
+        # usually takes raw x and h.
+        pairs_free = self.get_hebbian_pairs(h_free, x)
+        pairs_nudged = self.get_hebbian_pairs(h_nudged, x)
+
+        # 2. Iterate and accumulate gradients
+        for (layer, inp_f, tgt_f), (_, inp_n, tgt_n) in zip(pairs_free, pairs_nudged):
+
+            # Helper to get the underlying parameter to set .grad on
+            # We assume 'layer' is an nn.Module with parameters.
+            # We compute gradients of a 'proxy loss'.
+
+            # Proxy Loss = (Layer(input) * target).sum()
+            # Gradients of this w.r.t layer params give us the Hebbian term.
+
+            # Free Phase Term
+            out_f = layer(inp_f)
+            proxy_loss_f = torch.sum(out_f * tgt_f.detach())
+            grads_f = autograd.grad(proxy_loss_f, layer.parameters(), retain_graph=True, allow_unused=True)
+
+            # Nudged Phase Term
+            out_n = layer(inp_n)
+            proxy_loss_n = torch.sum(out_n * tgt_n.detach())
+            grads_n = autograd.grad(proxy_loss_n, layer.parameters(), retain_graph=True, allow_unused=True)
+
+            # Apply update
+            for param, gf, gn in zip(layer.parameters(), grads_f, grads_n):
+                if param.requires_grad:
+                    # Delta W ~ (Nudged - Free)
+                    # Check for None (unused params)
+                    g_update = 0.0
+                    if gn is not None: g_update += gn
+                    if gf is not None: g_update -= gf
+
+                    if isinstance(g_update, float) and g_update == 0.0:
+                        continue
+
+                    grad_term = scale * g_update
+
+                    if param.grad is None:
+                        param.grad = grad_term
+                    else:
+                        param.grad.add_(grad_term)
+
+        # 3. Output Layer (Standard Backprop on Nudged or Free?)
+        # Standard EqProp: W_out update is just gradient of Cost function at Free phase.
+        logits = self._output_projection(h_free)
+        loss = F.cross_entropy(logits, y)
+
+        # We need to find W_out parameters.
+        # Since _output_projection is abstract, we can't easily identify W_out here generically.
+        # BUT, if we assume the model registered all params, we can just run backward on loss?
+        # No, that would update ALL weights via BPTT.
+
+        # Hack: Subclasses should return W_out in get_hebbian_pairs? No, W_out is supervised.
+        # Let's rely on autograd to find params that affect logits, BUT exclude those handled by Hebbian?
+        # No, that's hard.
+
+        # Solution: Let's assume W_out is the ONLY thing not in get_hebbian_pairs?
+        # Or require subclasses to handle W_out explicitly?
+        # Better: Standard EqProp treats W_out as just another layer where target is clamped?
+        # Scellier 2017: Output layer weights update same as others: h_out * h_pen.
+
+        # Current compromise: Use autograd.grad on loss, but ONLY apply to params not updated yet?
+        # Or, explicit mechanism.
+
+        # Let's try to update W_out using standard grad, but we need to know which params are W_out.
+        # We can detect params that have .grad set (from Hebbian) and skip them?
+        # Yes!
+
+        grads_loss = autograd.grad(loss, self.parameters(), allow_unused=True)
+        for param, g in zip(self.parameters(), grads_loss):
+            if g is not None:
+                if param.grad is None:
+                    # This param wasn't updated by Hebbian loop -> Must be W_out or similar
+                    param.grad = g
+                else:
+                    # Already has Hebbian grad -> Do not add Loss grad (unless hybrid?)
+                    # Pure EqProp: Internal weights only update via Hebbian.
+                    pass
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> Dict[str, float]:
         """

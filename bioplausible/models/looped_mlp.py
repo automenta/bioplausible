@@ -141,67 +141,23 @@ class LoopedMLP(EqPropModel):
         """Output: W_out @ h"""
         return self.W_out(h)
 
-    def contrastive_update(self, h_free, h_nudged, x, y):
+    def get_hebbian_pairs(self, h, x):
         """
-        Implement contrastive Hebbian update for LoopedMLP.
-        Delta W_rec ~ h_n @ h_n.T - h_f @ h_f.T
-        Delta W_in  ~ h_n @ x.T   - h_f @ x.T
+        Return Hebbian update pairs.
+        W_in connects x -> h
+        W_rec connects h -> h
+
+        Target for both is h (the equilibrium state).
+        Input is x (for W_in) and h (for W_rec).
         """
-        batch_size = x.size(0)
-        scale = 1.0 / (self.beta * batch_size)
+        # Note: We need to use the *actual* layers, not the SpectralNorm wrappers,
+        # but the forward pass uses the wrappers.
+        # The generic updater calls layer(input). If layer is wrapped, it works fine.
 
-        # 1. W_rec Update
-        # grad = h_f @ h_f.T - h_n @ h_n.T
-        # But we need to handle batch dim.
-        # einsum 'bi,bj->ij'
-        grad_rec_free = torch.einsum('bi,bj->ij', h_free, h_free)
-        grad_rec_nudged = torch.einsum('bi,bj->ij', h_nudged, h_nudged)
-
-        grad_rec = scale * (grad_rec_free - grad_rec_nudged)
-
-        # Helper to get parameter
-        def get_param(layer):
-            actual = self._get_actual_layer(layer)
-            if isinstance(actual, torch.nn.Parameter):
-                return actual
-            return actual.weight
-
-        # Set .grad for W_rec
-        w_rec_param = get_param(self.W_rec)
-        if w_rec_param.grad is None:
-            w_rec_param.grad = grad_rec
-        else:
-            w_rec_param.grad.add_(grad_rec)
-
-        # 2. W_in Update
-        # grad = h_f @ x.T - h_n @ x.T
-        grad_in_free = torch.einsum('bi,bj->ij', h_free, x)
-        grad_in_nudged = torch.einsum('bi,bj->ij', h_nudged, x)
-
-        grad_in = scale * (grad_in_free - grad_in_nudged)
-
-        w_in_param = get_param(self.W_in)
-        if w_in_param.grad is None:
-            w_in_param.grad = grad_in
-        else:
-            w_in_param.grad.add_(grad_in)
-
-        # 3. W_out Update (Standard Gradient)
-        # We compute gradient of CE loss w.r.t W_out at h_free
-        # We can use autograd for this part easily
-        logits = self._output_projection(h_free)
-        loss = torch.nn.functional.cross_entropy(logits, y)
-
-        # We only want grad for W_out
-        w_out_param = get_param(self.W_out)
-
-        # Use autograd.grad
-        grads_out = torch.autograd.grad(loss, w_out_param, retain_graph=False)[0]
-
-        if w_out_param.grad is None:
-            w_out_param.grad = grads_out
-        else:
-            w_out_param.grad.add_(grads_out)
+        return [
+            (self.W_in, x, h),
+            (self.W_rec, h, h)
+        ]
 
 
 # =============================================================================

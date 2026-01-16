@@ -198,6 +198,72 @@ class ModernConvEqProp(EqPropModel):
         features = self.pool(h).flatten(1)
         return self.fc(features)
 
+    def get_hebbian_pairs(self, h, x):
+        """
+        Hebbian updates for ModernConvEqProp.
+        Only the recurrent layer (eq_conv) uses Hebbian learning in the equilibrium block.
+        The feedforward stages (stage1, stage2, stage3) are trained via gradients backpropagated
+        from the equilibrium block (which acts as a 'target generator').
+
+        Wait, for true contrastive, we need to propagate the nudge BACK through stages?
+        Scellier 2017: If multiple layers, ALL layers update via local contrastive rule.
+
+        However, ModernConvEqProp has feedforward stages leading to a recurrent block.
+        If we only update eq_conv contrastively, the stages won't learn unless we backprop
+        the "error" from eq_conv to them.
+
+        In the generic `contrastive_update` implementation, `proxy_loss` is computed.
+        For `eq_conv`, proxy_loss = (eq_conv(h_norm) * h).sum().
+        Gradients of this w.r.t eq_conv parameters are computed.
+
+        For stages?
+        The stages produce `x_transformed`.
+        In `train_step`, `x_transformed` is fixed during the loop.
+        So `h_free` and `h_nudged` differ.
+        The 'input' to eq_conv is `h_norm` AND `x_transformed`.
+        The drive is `x_transformed`.
+        The update for `x_transformed` generator (stages) should be:
+        Delta Params ~ grad(x_transformed @ h_nudged) - grad(x_transformed @ h_free)
+
+        So we can treat `x_transformed` as the 'weight' and backprop to stage parameters?
+        Yes! `contrastive_update` calculates gradients w.r.t parameters.
+
+        We need a way to express the interaction between Stages and H.
+        In `forward_step`: `h_next = tanh(eq_conv(h_norm) + x_transformed)`.
+        Effective input current is `eq_conv(h_norm) + x_transformed`.
+        Target is `h` (before tanh, roughly).
+
+        So we need pairs that cover all learnable parameters.
+        1. `eq_conv`: Input `h_norm`, Target `h`.
+        2. `stages`: The output of stage3 is `x_transformed`.
+           It connects to `h`.
+           So we can say the "layer" is the entire stage pipeline?
+           Input to stages is `x`. Target is `h`.
+           But stages don't output `h`, they output `x_transformed` which adds to `h`.
+
+           We can wrap the stages in a lambda or use `self.forward_stages`?
+           Wait, `get_hebbian_pairs` expects (layer, input, target).
+           And it computes `layer(input) * target`.
+
+           If we pass `(self.stage_pipeline, x, h)`, it computes `stage_pipeline(x) * h`.
+           Since `stage_pipeline(x)` is `x_transformed`, and `x_transformed` is added to `eq_conv(h)`,
+           this dot product `x_transformed * h` correctly captures the interaction term!
+
+           So yes:
+           - Recurrent weights: `(eq_conv, h_norm, h)`
+           - Feedforward weights: `(feedforward_container, x, h)`
+        """
+        # We need a container for the stages
+        if not hasattr(self, 'feedforward_net'):
+            self.feedforward_net = nn.Sequential(self.stage1, self.stage2, self.stage3)
+
+        h_norm = self.eq_norm(h)
+
+        return [
+            (self.eq_conv, h_norm, h),
+            (self.feedforward_net, x, h)
+        ]
+
 
 class SimpleConvEqProp(EqPropModel):
     """
@@ -276,3 +342,10 @@ class SimpleConvEqProp(EqPropModel):
 
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         return self.head(h)
+
+    def get_hebbian_pairs(self, h, x):
+        h_norm = self.norm(h)
+        return [
+            (self.W_rec, h_norm, h),
+            (self.embed, x, h)
+        ]
