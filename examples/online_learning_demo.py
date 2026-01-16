@@ -1,90 +1,96 @@
 """
-Online Learning Demo
+Online Learning Demo with EqPropClassifier
 
-Demonstrates how to use the SupervisedTrainer for online learning (streaming data)
-without the rigid Task/Dataset structure. This allows integration into other systems
-where data arrives sequentially.
+Demonstrates how to use the EqPropClassifier in an online learning setting
+using the `partial_fit` method. This allows processing data streams or
+datasets too large to fit in memory.
 """
 
-import torch
 import numpy as np
-from bioplausible.training.supervised import SupervisedTrainer
-from bioplausible.models.standard_eqprop import StandardEqProp
+import torch
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+
+from bioplausible.sklearn import EqPropClassifier
+from bioplausible.datasets import get_vision_dataset
 
 def main():
-    print("Initializing Online Learning Demo...")
+    print("Loading Digits dataset (sklearn)...")
+    # Load dataset as TensorDataset
+    train_dataset = get_vision_dataset("digits", train=True, flatten=True)
+    test_dataset = get_vision_dataset("digits", train=False, flatten=True)
 
-    # 1. Define Model
-    # We use StandardEqProp which is a multi-layer EqProp network
-    input_dim = 20
-    output_dim = 2
-    hidden_dim = 64
+    # Extract tensors for sklearn compatibility
+    X_train = train_dataset.tensors[0].numpy()
+    y_train = train_dataset.tensors[1].numpy()
+    X_test = test_dataset.tensors[0].numpy()
+    y_test = test_dataset.tensors[1].numpy()
 
-    model = StandardEqProp(
-        input_dim=input_dim,
-        output_dim=output_dim,
-        hidden_dim=hidden_dim,
-        # Config via kwargs for convenience in BioModel
+    print(f"Training samples: {len(X_train)}")
+    print(f"Test samples: {len(X_test)}")
+
+    # Initialize Classifier
+    # We can choose any model from the registry. Let's use "EqProp MLP".
+    clf = EqPropClassifier(
+        model_name="EqProp MLP",
+        hidden_dim=128,
+        steps=20, # Fewer steps for speed
         learning_rate=0.01,
-        beta=0.5,
-        equilibrium_steps=20
+        device="cpu", # Force CPU for small dataset
+        random_state=42
     )
 
-    # 2. Initialize Trainer without a Task
-    # We specify task_type="vision" (generic vector input) so it knows how to handle input
-    trainer = SupervisedTrainer(
-        model=model,
-        task=None,         # No Task object needed!
-        task_type="vision",
-        device="cpu",      # or "cuda"
-        use_compile=False  # Disable compile for simple demo speed
-    )
+    # Online Learning Simulation
+    batch_size = 32
+    n_batches = len(X_train) // batch_size
+    classes = np.unique(y_train)
 
-    print("Trainer initialized. Starting online training loop...")
+    print("\nStarting Online Learning Stream...")
+    print("-" * 50)
+    print(f"{'Batch':<10} | {'Test Acc':<10}")
+    print("-" * 50)
 
-    # 3. Simulated Data Stream
-    # Let's learn a simple XOR-like pattern or random projection
-    # Target: Class 0 if sum(x) > 0 else Class 1
-
-    losses = []
     accuracies = []
 
-    n_samples = 1000
+    # Shuffle for streaming simulation
+    indices = np.arange(len(X_train))
+    np.random.shuffle(indices)
+    X_stream = X_train[indices]
+    y_stream = y_train[indices]
 
-    for i in range(n_samples):
-        # Generate single sample (Online)
-        x = torch.randn(1, input_dim)
-        y_val = 1 if x.sum().item() > 0 else 0
-        y = torch.tensor([y_val])
+    for i in range(n_batches):
+        start = i * batch_size
+        end = start + batch_size
+        X_batch = X_stream[start:end]
+        y_batch = y_stream[start:end]
 
-        # Train on single sample (or small batch)
-        metrics = trainer.train_batch(x, y)
+        # Incremental update
+        # classes arg is only needed for the first call, but safe to pass always
+        clf.partial_fit(X_batch, y_batch, classes=classes)
 
-        loss = metrics["loss"]
-        acc = metrics["accuracy"]
+        # Monitor progress every 5 batches
+        if (i + 1) % 5 == 0:
+            y_pred = clf.predict(X_test)
+            acc = accuracy_score(y_test, y_pred)
+            accuracies.append(acc)
+            print(f"{i+1:<10} | {acc:.4f}")
 
-        losses.append(loss)
-        accuracies.append(acc)
+    print("-" * 50)
+    print(f"Final Test Accuracy: {accuracies[-1]:.4f}")
 
-        if i % 100 == 0:
-            avg_loss = np.mean(losses[-100:]) if i > 0 else loss
-            avg_acc = np.mean(accuracies[-100:]) if i > 0 else acc
-            print(f"Step {i}: Loss={avg_loss:.4f}, Acc={avg_acc:.4f}")
-
-    print("\nTraining Complete.")
-    print(f"Final Average Accuracy (last 100): {np.mean(accuracies[-100:]):.4f}")
-
-    # Verify inference
-    test_x = torch.randn(10, input_dim)
-    test_y = (test_x.sum(dim=1) > 0).long()
-
-    model.eval()
-    with torch.no_grad():
-        out = model(test_x)
-        preds = out.argmax(dim=1)
-        test_acc = (preds == test_y).float().mean().item()
-
-    print(f"Test Accuracy: {test_acc:.4f}")
+    # Plot Learning Curve
+    try:
+        plt.figure(figsize=(10, 5))
+        plt.plot(range(5, n_batches + 1, 5), accuracies, marker='o')
+        plt.title("Online Learning Curve (EqProp MLP on Digits)")
+        plt.xlabel("Batches Processed")
+        plt.ylabel("Test Accuracy")
+        plt.grid(True)
+        plt.savefig("online_learning_curve.png")
+        print("Learning curve saved to 'online_learning_curve.png'")
+    except Exception as e:
+        print(f"Could not save plot: {e}")
 
 if __name__ == "__main__":
     main()
