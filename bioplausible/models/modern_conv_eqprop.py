@@ -135,11 +135,19 @@ class ModernConvEqProp(EqPropModel):
         """
         Initialize hidden state for equilibrium block.
         Dimensions depend on input x (batch size) and stage 3 output spatial dim (8x8 for CIFAR).
-        However, x here is the RAW input. We need to infer shape or calculate it.
-        Or better, we can calculate it from x, assuming standard CIFAR size or dynamic calculation.
         """
-        B, _, H, W = x.shape
-        # Assuming 3 downsampling stages with stride 1, 2, 2 ?
+        # x is the raw input [B, C, H, W]
+        B = x.shape[0]
+        # Check input dimensions to avoid unpacking errors on flattened inputs
+        if x.dim() == 4:
+            H, W = x.shape[2], x.shape[3]
+        else:
+            # Fallback for flattened inputs if they occur (e.g., legacy tests)
+            # Assume square image if flattened
+            side = int((x.shape[1] / 3) ** 0.5)
+            H, W = side, side
+
+        # Assuming 3 downsampling stages with stride 1, 2, 2
         # Stage 1: stride 1 (32->32)
         # Stage 2: stride 2 (32->16)
         # Stage 3: stride 2 (16->8)

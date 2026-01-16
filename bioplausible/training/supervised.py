@@ -2,14 +2,25 @@ import torch
 import torch.nn as nn
 import time
 import numpy as np
+import warnings
 from typing import Dict, Any, Optional
 
 from bioplausible.training.base import BaseTrainer
 from bioplausible.models.hebbian_chain import DeepHebbianChain
+from bioplausible.acceleration import compile_model, enable_tf32, get_optimal_backend
+
+# Optional imports for Kernel mode
+try:
+    from bioplausible.kernel import HAS_CUPY, cross_entropy, to_numpy
+    from bioplausible.kernel import EqPropKernel as KernelEqPropKernel
+except ImportError:
+    HAS_CUPY = False
+    KernelEqPropKernel = None
 
 class SupervisedTrainer(BaseTrainer):
     """
     Trainer for Supervised Learning (LM, Vision).
+    Combines simplicity of ExperimentAlgorithm with power of EqPropTrainer.
     """
 
     def __init__(
@@ -21,6 +32,9 @@ class SupervisedTrainer(BaseTrainer):
         batches_per_epoch: int = 100,
         eval_batches: int = 20,
         steps: int = 20, # EqProp steps
+        use_compile: bool = True,
+        use_kernel: bool = False,
+        compile_mode: str = "reduce-overhead",
         **kwargs
     ):
         super().__init__(model, device)
@@ -28,19 +42,39 @@ class SupervisedTrainer(BaseTrainer):
         self.batches_per_epoch = batches_per_epoch
         self.eval_batches = eval_batches
         self.steps = steps
+        self.use_kernel = use_kernel
+        self.kernel = None
 
         # Check for embeddings
         self.has_embed = getattr(model, 'has_embed', False)
         self.embed = getattr(model, 'embed', None)
 
-        # Optimizer
-        if not hasattr(self.model, 'optimizer'):
-            params = list(self.model.parameters())
-            if self.has_embed and self.embed:
-                params.extend(list(self.embed.parameters()))
-            self.opt = torch.optim.Adam(params, lr=lr)
-        else:
-            self.opt = None
+        # Setup model compilation
+        if use_compile and not self.use_kernel:
+            try:
+                self.model = compile_model(self.model, mode=compile_mode)
+            except Exception as e:
+                warnings.warn(f"Compilation failed: {e}")
+
+        # Kernel Initialization
+        if self.use_kernel:
+            if hasattr(self.model, "input_dim"):
+                dims = (self.model.input_dim, self.model.hidden_dim, self.model.output_dim)
+                # Pass use_gpu=True only if CuPy is available
+                self.kernel = KernelEqPropKernel(*dims, use_gpu=HAS_CUPY)
+            else:
+                warnings.warn("Model dimensions not detected. Kernel mode disabled.")
+                self.use_kernel = False
+
+        # Optimizer (PyTorch mode only)
+        if not self.use_kernel:
+            if not hasattr(self.model, 'optimizer'):
+                params = list(self.model.parameters())
+                if self.has_embed and self.embed:
+                    params.extend(list(self.embed.parameters()))
+                self.opt = torch.optim.Adam(params, lr=lr)
+            else:
+                self.opt = None # Model manages optimizer
 
         self.criterion = nn.CrossEntropyLoss()
 
@@ -60,25 +94,52 @@ class SupervisedTrainer(BaseTrainer):
 
     def _prepare_input(self, x):
         """Prepare input tensor (embedding, flattening, etc.)."""
+        # If Kernel mode, return flattened numpy/cupy array
+        if self.use_kernel:
+            if isinstance(x, torch.Tensor):
+                x = x.cpu().numpy() # Kernel handles transfer if GPU
+            if x.ndim == 4:
+                x = x.reshape(x.shape[0], -1)
+            return x
+
         if self.has_embed:
-            # Average pooling over sequence for MLP-like models on LM task
-            # (If this logic is correct for the intended LM models)
-            # ExperimentAlgorithm used: h = self.embed(x).mean(dim=1)
             return self.embed(x).mean(dim=1)
         else:
             # Vision or direct input
-            if x.dim() > 2 and self.task.task_type in ["vision", "rl"]:
+            if self.task.task_type in ["vision", "rl"]:
                 # Check for Conv models (ModernConvEqProp)
-                # We check via class name or attribute to avoid importing the class here if possible
-                if "Conv" in self.model.__class__.__name__:
+                is_conv = "Conv" in self.model.__class__.__name__
+                if hasattr(self.model, 'config') and self.model.config and hasattr(self.model.config, 'name'):
+                     if "Conv" in self.model.config.name:
+                          is_conv = True
+
+                # Unwrap model if compiled
+                if hasattr(self.model, '_orig_mod'):
+                     orig = self.model._orig_mod
+                     if "Conv" in orig.__class__.__name__:
+                          is_conv = True
+
+                if is_conv:
                      return x
-                else:
+                elif x.dim() > 2:
                      return x.view(x.size(0), -1)
+                else:
+                     return x
             else:
                  return x
 
     def train_batch(self, x, y) -> Dict[str, float]:
         """Run a single training step."""
+
+        # Kernel Mode Branch
+        if self.use_kernel:
+            x_np = self._prepare_input(x)
+            y_np = y.cpu().numpy() if isinstance(y, torch.Tensor) else y
+
+            metrics = self.kernel.train_step(x_np, y_np)
+            return metrics # returns {'loss': ..., 'accuracy': ...}
+
+        # PyTorch Mode Branch
         self.model.train()
         if self.opt:
             self.opt.zero_grad()
@@ -121,32 +182,44 @@ class SupervisedTrainer(BaseTrainer):
 
     def evaluate(self) -> Dict[str, float]:
         """Run validation loop."""
-        self.model.eval()
+        if not self.use_kernel:
+            self.model.eval()
+
         val_losses = []
         val_accs = []
 
-        with torch.no_grad():
+        # No grad context for PyTorch mode
+        context = torch.no_grad() if not self.use_kernel else torch.utils.contextlib.nullcontext()
+
+        with context:
             for _ in range(self.eval_batches):
                 x, y = self.task.get_batch("val")
 
-                h = self._prepare_input(x)
-
-                if hasattr(self.model, "eq_steps"):
-                    logits = self.model(h, steps=self.steps)
+                if self.use_kernel:
+                    x_np = self._prepare_input(x)
+                    y_np = y.cpu().numpy() if isinstance(y, torch.Tensor) else y
+                    metrics = self.kernel.evaluate(x_np, y_np)
+                    val_losses.append(metrics["loss"])
+                    val_accs.append(metrics["accuracy"])
                 else:
-                    logits = self.model(h)
+                    h = self._prepare_input(x)
 
-                if logits.dim() == 3 and self.task.task_type == "lm":
-                    logits = logits[:, -1, :]
+                    if hasattr(self.model, "eq_steps"):
+                        logits = self.model(h, steps=self.steps)
+                    else:
+                        logits = self.model(h)
 
-                loss = self.criterion(logits, y)
-                metrics = self.task.compute_metrics(logits, y, loss.item())
+                    if logits.dim() == 3 and self.task.task_type == "lm":
+                        logits = logits[:, -1, :]
 
-                val_losses.append(metrics["loss"])
-                val_accs.append(metrics.get("accuracy", 0.0))
+                    loss = self.criterion(logits, y)
+                    metrics = self.task.compute_metrics(logits, y, loss.item())
 
-        avg_loss = np.mean(val_losses)
-        avg_acc = np.mean(val_accs)
+                    val_losses.append(metrics["loss"])
+                    val_accs.append(metrics.get("accuracy", 0.0))
+
+        avg_loss = np.mean(val_losses) if val_losses else 0.0
+        avg_acc = np.mean(val_accs) if val_accs else 0.0
 
         return {
             "val_loss": avg_loss,
