@@ -221,6 +221,7 @@ def create_model(
     num_layers: int = 4,
     device: str = "cpu",
     task_type: str = "lm",  # "lm", "vision", "rl"
+    **kwargs
 ) -> nn.Module:
     """
     Factory method to create a model instance from a specification.
@@ -245,6 +246,12 @@ def create_model(
 
     # Build model
     model = builder(spec, input_size, output_dim, hidden_dim, num_layers, device, task_type)
+
+    # Configure optional properties from kwargs
+    if "gradient_method" in kwargs and hasattr(model, "gradient_method"):
+        model.gradient_method = kwargs["gradient_method"]
+    if "beta" in kwargs and hasattr(model, "beta"):
+        model.beta = kwargs["beta"]
 
     # Attach embedding if needed
     embedding_layer = None

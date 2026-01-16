@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.autograd as autograd
 from typing import Optional, List, Tuple, Dict, Union, Any
 from abc import abstractmethod
@@ -155,7 +156,7 @@ class EqPropModel(NEBCBase):
         """
         Args:
             max_steps: Number of equilibrium steps
-            gradient_method: 'bptt' (default) or 'equilibrium' (O(1) memory implicit diff)
+            gradient_method: 'bptt', 'equilibrium' (implicit diff), or 'contrastive' (Hebbian)
         """
         input_dim = kwargs.get("input_dim", 0)
         hidden_dim = kwargs.get("hidden_dim", 0)
@@ -170,6 +171,11 @@ class EqPropModel(NEBCBase):
         )
         self.max_steps = max_steps
         self.gradient_method = gradient_method
+
+        # Contrastive Hebbian specific params
+        self.beta = kwargs.get("beta", 0.1)
+        self.hebbian_lr = kwargs.get("learning_rate", 0.001)
+        self.internal_optimizer = None
 
     @abstractmethod
     def _build_layers(self):
@@ -197,6 +203,98 @@ class EqPropModel(NEBCBase):
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         """Project hidden state to output."""
         pass
+
+    def contrastive_update(
+        self,
+        h_free: torch.Tensor,
+        h_nudged: torch.Tensor,
+        x: torch.Tensor,
+        y: torch.Tensor,
+    ):
+        """
+        Perform contrastive Hebbian update.
+        Must be implemented by subclasses if gradient_method='contrastive'.
+        """
+        raise NotImplementedError("Subclasses must implement contrastive_update for Hebbian learning.")
+
+    def train_step(self, x: torch.Tensor, y: torch.Tensor) -> Dict[str, float]:
+        """
+        Perform a single training step.
+        If gradient_method is 'contrastive', this runs the EqProp loop manually.
+        Otherwise, it returns None to let SupervisedTrainer handle BPTT/Implicit.
+        """
+        if self.gradient_method != "contrastive":
+            return None  # Delegate to standard trainer
+
+        # Initialize optimizer on first call
+        if self.internal_optimizer is None:
+            self.internal_optimizer = torch.optim.Adam(self.parameters(), lr=self.hebbian_lr)
+
+        self.internal_optimizer.zero_grad()
+
+        # 1. Free Phase
+        with torch.no_grad():
+            h_free = self._initialize_hidden_state(x)
+            x_transformed = self._transform_input(x)
+
+            for _ in range(self.max_steps):
+                h_free = self.forward_step(h_free, x_transformed)
+
+            logits_free = self._output_projection(h_free)
+
+        # 2. Nudged Phase
+        # We need to compute gradients of the loss w.r.t h to nudge
+        # But for 'contrastive', we typically nudge via a top-down drive or explicit gradient injection
+
+        # Enable grad just for the nudge calculation
+        h_nudged = h_free.clone().detach().requires_grad_(True)
+
+        # Run one step to connect h to output (if needed) or just project
+        # Ideally we settle in the nudged phase with a constant nudge.
+        # Nudge term: - beta * dL/dh
+
+        # Calculate dL/dh at equilibrium
+        logits_nudge_init = self._output_projection(h_nudged)
+        loss = F.cross_entropy(logits_nudge_init, y)
+        grads_h = autograd.grad(loss, h_nudged)[0]
+
+        # Nudged dynamics: h <- forward_step(h) - beta * dL/dh
+        # Note: In continuous time, dot_h = -h + sigma(...) - beta * dL/dh
+        # In discrete step: h_new = forward_step(h) - beta * dL/dh
+
+        # We perform fixed point iteration with the nudge
+        # Nudge should be constant if dL/dh is approx constant locally, or updated?
+        # Standard EqProp keeps the nudge target fixed (y) but dL/dh changes as h changes.
+
+        with torch.no_grad():
+            h_nudged = h_free.clone()
+
+            # Simple implementation: Apply constant nudge derived from free phase error?
+            # Or recompute nudge each step?
+            # Scellier 2017: weakly clamp output units.
+            # Here output is a projection. We inject gradient.
+
+            # We'll use a constant nudge vector derived from free phase for stability/speed
+            nudge_vec = -self.beta * grads_h
+
+            for _ in range(self.max_steps // 2): # Typically fewer steps for nudged phase
+                # h = f(h) + nudge
+                h_next = self.forward_step(h_nudged, x_transformed)
+                h_nudged = h_next + nudge_vec
+
+            logits_nudged = self._output_projection(h_nudged)
+
+        # 3. Weight Update
+        self.contrastive_update(h_free, h_nudged, x, y)
+
+        self.internal_optimizer.step()
+
+        # Compute metrics
+        with torch.no_grad():
+            acc = (logits_free.argmax(dim=1) == y).float().mean().item()
+            loss_val = F.cross_entropy(logits_free, y).item()
+
+        return {"loss": loss_val, "accuracy": acc}
 
     def forward(
         self,

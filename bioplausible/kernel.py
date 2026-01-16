@@ -23,7 +23,24 @@ import numpy as np
 # Heuristic: Set CUDA_PATH if not set and standard location exists
 # This helps CuPy find CUDA libraries on some systems
 if "CUDA_PATH" not in os.environ:
-    for path in ["/usr/local/cuda", "/opt/cuda"]:
+    candidates = [
+        "/usr/local/cuda",
+        "/opt/cuda",
+        "/usr/lib/cuda",
+        "/usr/lib/nvidia-cuda-toolkit",
+        "/run/opengl-driver/lib"  # NixOS
+    ]
+    # Also check LD_LIBRARY_PATH
+    if "LD_LIBRARY_PATH" in os.environ:
+        for path in os.environ["LD_LIBRARY_PATH"].split(os.pathsep):
+            if "cuda" in path.lower() and os.path.exists(path):
+                # Attempt to find root from lib dir
+                if path.endswith("lib64") or path.endswith("lib"):
+                    candidates.append(os.path.dirname(path))
+                else:
+                    candidates.append(path)
+
+    for path in candidates:
         if os.path.exists(path):
             os.environ["CUDA_PATH"] = path
             break

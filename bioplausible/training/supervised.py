@@ -171,8 +171,11 @@ class SupervisedTrainer(BaseTrainer):
         h = self._prepare_input(x)
 
         # Check for custom train_step (BioModel)
+        metrics = None
         if hasattr(self.model, "train_step"):
             metrics = self.model.train_step(h, y)
+
+        if metrics is not None:
             loss = metrics.get("loss", 0.0)
             acc = metrics.get("accuracy", 0.0)
         else:
@@ -334,6 +337,13 @@ class SupervisedTrainer(BaseTrainer):
         """
         print(f"Starting training for {epochs} epochs...")
 
+        history = {
+            "train_loss": [],
+            "train_acc": [],
+            "val_loss": [],
+            "val_acc": []
+        }
+
         for epoch in range(epochs):
             t0 = time.time()
             train_losses = []
@@ -360,6 +370,13 @@ class SupervisedTrainer(BaseTrainer):
             avg_acc = np.mean(train_accs) if train_accs else 0.0
             epoch_time = time.time() - t0
 
+            # Update history
+            history["train_loss"].append(avg_loss)
+            history["train_acc"].append(avg_acc)
+            if val_loader:
+                history["val_loss"].append(val_loss)
+                history["val_acc"].append(val_acc)
+
             if progress_bar or (epoch + 1) % 1 == 0:
                 val_str = f", Val Loss={val_loss:.4f}, Val Acc={val_acc:.4f}" if val_loader else ""
                 print(f"Epoch {epoch+1}/{epochs}: "
@@ -370,3 +387,5 @@ class SupervisedTrainer(BaseTrainer):
             if callbacks:
                 for cb in callbacks:
                     cb(epoch, {"loss": avg_loss, "accuracy": avg_acc, "val_loss": val_loss, "val_accuracy": val_acc})
+
+        return history
