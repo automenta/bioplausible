@@ -6,27 +6,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Callable
 
 from .notebook import VerificationNotebook, TrackResult
-from .tracks import (
-    core_tracks,
-    advanced_tracks,
-    scaling_tracks,
-    special_tracks,
-    hardware_tracks,
-    analysis_tracks,
-    application_tracks,
-    engine_validation_tracks,
-    enhanced_validation_tracks,
-    new_tracks,
-    rapid_validation,
-    framework_validation,
-    nebc_tracks,
-    negative_results,
-    architecture_comparison,
-    honest_tradeoff,
-    evolution_tracks,
-    research_tracks,
-)
-
+from .tracks import track_registry
 
 class Verifier:
     """Complete verification suite for all research tracks."""
@@ -85,140 +65,21 @@ class Verifier:
         self.data_records = []  # For CSV export
         self.current_seed = seed  # Track current seed for logging
 
-        # Track definitions
-        self.tracks = {
-            0: (
-                "Framework Validation",
-                framework_validation.track_0_framework_validation,
-            ),
-            1: ("Spectral Normalization Stability", core_tracks.track_1_spectral_norm),
-            2: ("EqProp vs Backprop Parity", core_tracks.track_2_backprop_parity),
-            3: ("Adversarial Self-Healing", core_tracks.track_3_adversarial_healing),
-            4: ("Ternary Weights", advanced_tracks.track_4_ternary_weights),
-            5: ("Neural Cube 3D Topology", scaling_tracks.track_5_neural_cube),
-            6: ("Feedback Alignment", advanced_tracks.track_6_feedback_alignment),
-            7: ("Temporal Resonance", advanced_tracks.track_7_temporal_resonance),
-            8: ("Homeostatic Stability", advanced_tracks.track_8_homeostatic),
-            9: ("Gradient Alignment", advanced_tracks.track_9_gradient_alignment),
-            # Track 10 removed - superseded by Track 26 (O(1) Memory Reality)
-            # Track 11 removed - consolidated into Track 23
-            12: ("Lazy Event-Driven Updates", scaling_tracks.track_12_lazy_updates),
-            13: ("Convolutional EqProp", special_tracks.track_13_conv_eqprop),
-            14: ("Transformer EqProp", special_tracks.track_14_transformer),
-            15: ("PyTorch vs Kernel", special_tracks.track_15_kernel_comparison),
-            16: ("FPGA Bit Precision", hardware_tracks.track_16_fpga_quantization),
-            17: ("Analog/Photonics Noise", hardware_tracks.track_17_analog_photonics),
-            18: ("DNA/Thermodynamic", hardware_tracks.track_18_thermodynamic_dna),
-            19: ("Criticality Analysis", analysis_tracks.track_19_criticality),
-            20: ("Transfer Learning", application_tracks.track_20_transfer_learning),
-            21: ("Continual Learning", application_tracks.track_21_continual_learning),
-            22: (
-                "Golden Reference Harness",
-                engine_validation_tracks.track_22_golden_reference,
-            ),
-            23: (
-                "Comprehensive Depth Scaling",
-                engine_validation_tracks.track_23_comprehensive_depth,
-            ),
-            24: (
-                "Lazy Updates Wall-Clock",
-                engine_validation_tracks.track_24_lazy_wallclock,
-            ),
-            25: (
-                "Real Dataset Benchmark",
-                enhanced_validation_tracks.track_25_real_dataset,
-            ),
-            26: (
-                "O(1) Memory Reality",
-                enhanced_validation_tracks.track_26_memory_reality,
-            ),
-            # Track 27 removed - consolidated into Track 23
-            28: (
-                "Robustness Suite",
-                enhanced_validation_tracks.track_28_robustness_suite,
-            ),
-            29: (
-                "Energy Dynamics",
-                enhanced_validation_tracks.track_29_energy_dynamics,
-            ),
-            30: (
-                "Damage Tolerance",
-                enhanced_validation_tracks.track_30_damage_tolerance,
-            ),
-            31: (
-                "Residual EqProp",
-                enhanced_validation_tracks.track_31_residual_eqprop,
-            ),
-            32: (
-                "Bidirectional Generation",
-                enhanced_validation_tracks.track_32_bidirectional_generation,
-            ),
-            33: (
-                "CIFAR-10 Benchmark",
-                enhanced_validation_tracks.track_33_cifar10_benchmark,
-            ),
-            34: ("CIFAR-10 Breakthrough", new_tracks.track_34_cifar10_breakthrough),
-            35: ("O(1) Memory Scaling", new_tracks.track_35_memory_scaling),
-            36: ("Energy OOD Detection", new_tracks.track_36_energy_ood),
-            37: ("Character LM", new_tracks.track_37_language_modeling),
-            38: ("Adaptive Compute", new_tracks.track_38_adaptive_compute),
-            39: ("EqProp Diffusion", new_tracks.track_39_eqprop_diffusion),
-            40: ("Hardware Analysis", new_tracks.track_40_hardware_analysis),
-            41: (
-                "Rapid Rigorous Validation",
-                rapid_validation.track_41_rapid_rigorous_validation,
-            ),
-            # NEBC (Nobody Ever Bothered Club) - Bio-plausible algorithms + Spectral Norm
-            50: ("NEBC EqProp Variants", nebc_tracks.track_50_nebc_eqprop_variants),
-            51: (
-                "NEBC Feedback Alignment",
-                nebc_tracks.track_51_nebc_feedback_alignment,
-            ),
-            52: (
-                "NEBC Direct Feedback Alignment",
-                nebc_tracks.track_52_nebc_direct_feedback_alignment,
-            ),
-            53: (
-                "NEBC Contrastive Hebbian",
-                nebc_tracks.track_53_nebc_contrastive_hebbian,
-            ),
-            54: (
-                "NEBC Deep Hebbian Chain",
-                nebc_tracks.track_54_nebc_deep_hebbian_chain,
-            ),
-            # Negative Results - Scientific Completeness
-            55: (
-                "Negative Result: Linear Chain",
-                negative_results.track_55_negative_linear_chain,
-            ),
-            56: (
-                "Depth Architecture Comparison",
-                architecture_comparison.track_56_depth_architecture_comparison,
-            ),
-            # Reality Check - Should we continue?
-            57: (
-                "Honest Trade-off Analysis",
-                honest_tradeoff.track_57_honest_tradeoff_analysis,
-            ),
-            # Evolution System
-            60: (
-                "Evolution vs Random Search",
-                evolution_tracks.track_60_evolution_validation,
-            ),
-            # New Research Tracks (2025)
-            42: (
-                "Holomorphic EP",
-                research_tracks.track_42_holomorphic_ep,
-            ),
-            43: (
-                "Directed EP",
-                research_tracks.track_43_directed_ep,
-            ),
-            44: (
-                "Finite-Nudge EP",
-                research_tracks.track_44_finite_nudge_ep,
-            ),
-        }
+        # Track definitions loaded from central registry
+        self.tracks = {}
+        self._load_tracks()
+
+    def _load_tracks(self):
+        """Load tracks from the registry into local format."""
+        # Convert raw functions to (name, function) tuples expected by Verifier
+        for tid, func in track_registry.ALL_TRACKS.items():
+            # Attempt to extract nice name from docstring or function name
+            name = func.__doc__.split('\n')[0] if func.__doc__ else func.__name__
+            # Clean up name (remove "Track X: " prefix if present)
+            if ":" in name and "Track" in name.split(":")[0]:
+                name = name.split(":", 1)[1].strip()
+
+            self.tracks[tid] = (name, func)
 
     def print_header(self):
         evidence_labels = {
