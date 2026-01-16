@@ -95,3 +95,38 @@ class EqPropDiffusion(nn.Module):
             h = h - 0.1 * grad
 
         return h
+
+    def forward(self, x, t=None):
+        """
+        Forward pass for training/inference.
+
+        If training (no t provided):
+            Returns the 'denoised' prediction from the network directly.
+            This is used by the trainer to compute loss against the clean image.
+
+        Args:
+            x: Noisy image batch (if t provided) or Input batch (if t embedded in x?)
+               Actually, for training, x usually contains both if not handling t separately.
+            t: Time steps (optional)
+        """
+        # If input x has extra channels, it might already include t embedding?
+        # self.denoiser input channels = img_channels + 1
+
+        if x.shape[1] == self.img_channels + 1:
+            # Already has time embedding concatenated
+            return self.denoiser(x)
+
+        if t is None:
+            # Assume t is zero or handle gracefully?
+            # Or assume this is just the denoiser call?
+            # For simplicity, if standard forward is called without t,
+            # we might just return the denoiser output assuming x is formatted correctly
+            # or fail if shape mismatch.
+            return self.denoiser(x)
+
+        # If t is provided, embed and concat
+        batch_size, _, h, w = x.shape
+        t_emb = t.view(batch_size, 1, 1, 1).expand(batch_size, 1, h, w)
+        x_input = torch.cat([x, t_emb], dim=1)
+
+        return self.denoiser(x_input)
