@@ -5,6 +5,7 @@ from typing import Optional, List, Tuple, Dict, Union
 
 from .eqprop_base import EqPropModel
 from ..acceleration import compile_settling_loop
+from .triton_kernel import TritonEqPropOps
 
 # =============================================================================
 # LoopedMLP - Core EqProp Model
@@ -119,6 +120,14 @@ class LoopedMLP(EqPropModel):
         self, h: torch.Tensor, x_transformed: torch.Tensor
     ) -> torch.Tensor:
         """Single step implementation (uncompiled)."""
+        # Use Triton kernel if available for fused update
+        if TritonEqPropOps.is_available():
+            # pre_act = W_rec(h) + x_transformed
+            # The kernel computes (1-a)h + a*tanh(pre_act)
+            # Here we want straight tanh(pre_act), so alpha=1.0
+            pre_act = x_transformed + self.W_rec(h)
+            return TritonEqPropOps.step(h, pre_act, alpha=1.0)
+
         return torch.tanh(x_transformed + self.W_rec(h))
 
     @compile_settling_loop

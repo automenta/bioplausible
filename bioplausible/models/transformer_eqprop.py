@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from typing import Tuple
 from .utils import spectral_linear
 from .eqprop_base import EqPropModel
+from .triton_kernel import TritonEqPropOps
 from ..acceleration import compile_settling_loop
 
 # =============================================================================
@@ -206,6 +207,10 @@ class TransformerEqProp(EqPropModel):
         ffn_out = self.ffns[layer_idx](h_norm)
 
         h_target = h + ffn_out + x_emb
+
+        if TritonEqPropOps.is_available() and h.is_cuda:
+             return TritonEqPropOps.step(h, h_target, alpha=self.alpha)
+
         # Use torch.lerp for more efficient interpolation
         return torch.lerp(h, torch.tanh(h_target), self.alpha)
 

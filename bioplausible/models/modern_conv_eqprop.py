@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from torch.nn.utils.parametrizations import spectral_norm
 from .utils import spectral_conv2d
 from .eqprop_base import EqPropModel
+from .triton_kernel import TritonEqPropOps
 from ..acceleration import compile_settling_loop
 
 
@@ -160,6 +161,15 @@ class ModernConvEqProp(EqPropModel):
     ) -> torch.Tensor:
         """Single step implementation (uncompiled)."""
         h_norm = self.eq_norm(h)
+
+        if TritonEqPropOps.is_available() and h.is_cuda:
+            # pre_act = eq_conv(h_norm) + x_transformed
+            # fused update: lerp(h, tanh(pre_act), gamma)
+            # Triton step computes: (1-alpha)h + alpha*tanh(pre_act)
+            # This is exactly lerp(h, tanh(pre_act), alpha)
+            pre_act = self.eq_conv(h_norm) + x_transformed
+            return TritonEqPropOps.step(h, pre_act, alpha=self.gamma)
+
         # Add input drive to recurrent input
         h_next = torch.tanh(self.eq_conv(h_norm) + x_transformed)
         # Exponential moving average update
@@ -242,6 +252,11 @@ class SimpleConvEqProp(EqPropModel):
         self, h: torch.Tensor, x_transformed: torch.Tensor
     ) -> torch.Tensor:
         h_norm = self.norm(h)
+
+        if TritonEqPropOps.is_available() and h.is_cuda:
+            pre_act = self.W_rec(h_norm) + x_transformed
+            return TritonEqPropOps.step(h, pre_act, alpha=self.gamma)
+
         h_next = torch.tanh(self.W_rec(h_norm) + x_transformed)
         return torch.lerp(h, h_next, self.gamma)
 

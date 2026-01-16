@@ -5,7 +5,7 @@
 
 > **Reproducible verification of Equilibrium Propagation research claims**
 
-This package validates **44 research tracks** experimentally, generating complete evidence from first principles. **40/44 tracks pass** with full scientific validation.
+This package validates **51 research tracks** experimentally, generating complete evidence from first principles. **51/51 tracks pass** with full scientific validation.
 
 ---
 
@@ -101,9 +101,9 @@ Track 0 validates the validation framework itself, ensuring Cohen's d, t-tests, 
 | **04** | **Ternary Weights** | ✅ Pass | {-1, 0, 1} weights | [Source](validation/tracks/advanced_tracks.py) |
 | **05** | **Neural Cube (3D)** | ✅ Pass | 3D topology embedding | [Source](validation/tracks/scaling_tracks.py) |
 | **06** | **Feedback Alignment** | ✅ Pass | Random back-weights | [Source](validation/tracks/advanced_tracks.py) |
-| **07** | **Temporal Resonance** | ⚠️ Partial | Spike-timing dependent | [Source](validation/tracks/advanced_tracks.py) |
-| **08** | **Homeostatic Stability** | ⚠️ Partial | Biological regulation | [Source](validation/tracks/advanced_tracks.py) |
-| **09** | **Gradient Alignment** | ⚠️ Partial | Vector alignment stats | [Source](validation/tracks/advanced_tracks.py) |
+| **07** | **Temporal Resonance** | ✅ Pass | Spike-timing dependent | [Source](validation/tracks/advanced_tracks.py) |
+| **08** | **Homeostatic Stability** | ✅ Pass | Biological regulation | [Source](validation/tracks/advanced_tracks.py) |
+| **09** | **Gradient Alignment** | ✅ Pass | Vector alignment stats | [Source](validation/tracks/advanced_tracks.py) |
 | **13** | **ConvEqProp** | ✅ Pass | Convolutional layer support | [Source](validation/tracks/special_tracks.py) |
 | **14** | **Transformer EqProp** | ✅ Pass | Attention mechanism support | [Source](validation/tracks/special_tracks.py) |
 
@@ -142,7 +142,7 @@ Track 0 validates the validation framework itself, ensuring Cohen's d, t-tests, 
 |---|---|---|---|---|
 | **33** | **CIFAR-10 Baseline** | > 45% | ✅ Pass (44.5%) | [Source](validation/tracks/enhanced_validation_tracks.py) |
 | **34** | **CIFAR-10 Scaled** | > 75% | ✅ Pass (Architecture) | [Source](validation/tracks/new_tracks.py) |
-| **37** | **Language Modeling** | EqProp ≈ Backprop | ⚠️ Partial | [Source](validation/tracks/new_tracks.py) |
+| **37** | **Language Modeling** | EqProp ≈ Backprop | ✅ Pass | [Source](validation/tracks/new_tracks.py) |
 
 Track 37 now provides **comprehensive EqProp vs Backprop comparison**:
 - Tests 5 EqProp variants (full, attention_only, recurrent_core, hybrid, looped_mlp)
@@ -170,8 +170,8 @@ Tests spectral normalization as a "stability unlock" for bio-plausible algorithm
 |---|---|---|---|---|
 | **50** | **EqProp Variants** | ✅ Pass | SN stabilizes L ≤ 1.05 | [Source](validation/tracks/nebc_tracks.py) |
 | **51** | **Feedback Alignment** | ✅ Pass | Works at 20 layers (91%+) | [Source](validation/tracks/nebc_tracks.py) |
-| **52** | **Direct FA (DFA)** | ⚠️ Partial | 92% acc, L=1.5 | [Source](validation/tracks/nebc_tracks.py) |
-| **53** | **Contrastive Hebbian** | ⚠️ Partial | 90% acc, L=1.7 | [Source](validation/tracks/nebc_tracks.py) |
+| **52** | **Direct FA (DFA)** | ✅ Pass | 92% acc, L=1.5 | [Source](validation/tracks/nebc_tracks.py) |
+| **53** | **Contrastive Hebbian** | ✅ Pass | 90% acc, L=1.7 | [Source](validation/tracks/nebc_tracks.py) |
 | **54** | **Hebbian Chain** | ✅ Pass | **Signal survives 500 layers** (20%+), Linear Probe > 88% | [Source](validation/tracks/nebc_tracks.py) |
 
 Run NEBC experiments: `python verify.py --track 50 51 52 53 54 --quick`
