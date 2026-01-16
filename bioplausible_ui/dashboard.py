@@ -153,10 +153,12 @@ class EqPropDashboard(QMainWindow):
                     self.lm_tab.lm_layers_spin.setValue(int(config['num_layers']))
 
             self.status_label.setText(f"Loaded configuration for {model_name}")
+            self.status_label.setStyleSheet("color: #00aacc; padding: 5px;")
 
         except Exception as e:
             print(f"Error applying config: {e}")
             self.status_label.setText(f"Error loading config: {e}")
+            self.status_label.setStyleSheet("color: #ff5588; padding: 5px;")
 
     def _setup_ui(self):
         """Set up the main user interface."""
@@ -358,6 +360,7 @@ class EqPropDashboard(QMainWindow):
                 # 3. Load Weights
                 self.model.load_state_dict(checkpoint['model_state_dict'])
                 self.status_label.setText(f"Model loaded from {fname}")
+                self.status_label.setStyleSheet("color: #00ff88; padding: 5px;")
 
                 # 4. Update Tab References
                 if self.model:
@@ -650,6 +653,7 @@ class EqPropDashboard(QMainWindow):
 
         model_name = self.vis_tab.vis_model_combo.currentText()
         self.status_label.setText(f"Training {model_name}...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
         self.plot_timer.start(100)
         self.worker.start()
 
@@ -709,6 +713,7 @@ class EqPropDashboard(QMainWindow):
         model_name = self.lm_tab.lm_model_combo.currentText()
         dataset_name = self.lm_tab.lm_dataset_combo.currentText()
         self.status_label.setText(f"Training {model_name} on {dataset_name}...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
         self.plot_timer.start(100)
         self.worker.start()
 
@@ -768,6 +773,7 @@ class EqPropDashboard(QMainWindow):
         self.rl_tab.rl_progress.setValue(0)
 
         self.status_label.setText(f"Training {algo_name} on {env_name}...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
         self.plot_timer.start(100)
         self.worker.start()
 
@@ -791,6 +797,7 @@ class EqPropDashboard(QMainWindow):
         if self.worker:
             self.worker.stop()
             self.status_label.setText("Stopping training...")
+            self.status_label.setStyleSheet("color: #ffaa00; padding: 5px; font-weight: bold;")
 
     def _on_dynamics_update(self, dynamics: dict):
         """Handle live dynamics update from worker."""
@@ -875,8 +882,10 @@ class EqPropDashboard(QMainWindow):
 
         if result.get('success'):
             self.status_label.setText(f"✓ Training complete! ({result['epochs_completed']} epochs)")
+            self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
         else:
             self.status_label.setText("Training stopped.")
+            self.status_label.setStyleSheet("color: #ffaa00; padding: 5px;")
 
     def _on_error(self, error: str):
         """Handle training error."""
@@ -890,6 +899,7 @@ class EqPropDashboard(QMainWindow):
             self.rl_tab.rl_stop_btn.setEnabled(False)
 
         self.status_label.setText("Training error!")
+        self.status_label.setStyleSheet("color: #ff5588; padding: 5px; font-weight: bold;")
         QMessageBox.critical(self, "Training Error", error)
 
     def _update_lm_hyperparams(self, model_name: str):

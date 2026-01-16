@@ -30,6 +30,8 @@ THEME_COLORS = {
     'button_train_alt': '#00ccaa',
     'button_stop': '#cc3355',
     'button_stop_alt': '#992244',
+    'button_reset': '#aa7722',
+    'button_reset_alt': '#cc9933',
     'slider_handle': '#00ffff',
     'slider_handle_alt': '#0088aa',
     'progress_fill': '#00aacc',
@@ -142,6 +144,14 @@ QPushButton#stopButton {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
         stop:0 {THEME_COLORS['button_stop']}, stop:1 {THEME_COLORS['button_stop_alt']});
     color: white;
+}}
+
+QPushButton#resetButton {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 {THEME_COLORS['button_reset']}, stop:1 {THEME_COLORS['button_reset_alt']});
+    color: white;
+    min-width: 60px;
+    padding: 10px;
 }}
 
 /* === Sliders === */

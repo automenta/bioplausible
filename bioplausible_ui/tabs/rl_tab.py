@@ -55,6 +55,7 @@ class RLTab(QWidget):
         # Environment
         self.rl_env_combo = QComboBox()
         self.rl_env_combo.addItems(["CartPole-v1", "Acrobot-v1", "MountainCar-v0"])
+        self.rl_env_combo.setToolTip("Gymnasium environment to train on")
 
         # Model/Algo Selection
         self.rl_algo_combo = QComboBox()
@@ -68,14 +69,19 @@ class RLTab(QWidget):
         # Gradient Method
         self.rl_grad_combo = QComboBox()
         self.rl_grad_combo.addItems(["equilibrium", "bptt"])
+        self.rl_grad_combo.setToolTip("Method for computing gradients:\n"
+                                      "equilibrium: Implicit Differentiation (Memory efficient)\n"
+                                      "bptt: Backprop Through Time (Exact)")
 
         self.rl_hidden_spin = QSpinBox()
         self.rl_hidden_spin.setRange(32, 512)
         self.rl_hidden_spin.setValue(64)
+        self.rl_hidden_spin.setToolTip("Dimension of hidden state vectors")
 
         self.rl_steps_spin = QSpinBox()
         self.rl_steps_spin.setRange(5, 50)
         self.rl_steps_spin.setValue(20)
+        self.rl_steps_spin.setToolTip("Number of equilibrium steps per forward pass")
 
         model_controls = [
             ("Environment:", self.rl_env_combo),
@@ -91,16 +97,19 @@ class RLTab(QWidget):
         self.rl_episodes_spin = QSpinBox()
         self.rl_episodes_spin.setRange(10, 5000)
         self.rl_episodes_spin.setValue(200)
+        self.rl_episodes_spin.setToolTip("Total number of episodes to train")
 
         self.rl_lr_spin = QDoubleSpinBox()
         self.rl_lr_spin.setRange(0.0001, 0.1)
         self.rl_lr_spin.setValue(0.005)
         self.rl_lr_spin.setDecimals(4)
+        self.rl_lr_spin.setToolTip("Learning rate for optimizer")
 
         self.rl_gamma_spin = QDoubleSpinBox()
         self.rl_gamma_spin.setRange(0.0, 1.0)
         self.rl_gamma_spin.setValue(0.99)
         self.rl_gamma_spin.setSingleStep(0.01)
+        self.rl_gamma_spin.setToolTip("Discount factor for future rewards")
 
         train_controls = [
             ("Episodes:", self.rl_episodes_spin),
@@ -120,6 +129,12 @@ class RLTab(QWidget):
         self.rl_stop_btn.setEnabled(False)
         self.rl_stop_btn.clicked.connect(self.stop_training_signal.emit)
         btn_layout.addWidget(self.rl_stop_btn)
+
+        self.rl_reset_btn = QPushButton("↺ Reset")
+        self.rl_reset_btn.setObjectName("resetButton")
+        self.rl_reset_btn.setToolTip("Reset all hyperparameters to default values")
+        self.rl_reset_btn.clicked.connect(self._reset_defaults)
+        btn_layout.addWidget(self.rl_reset_btn)
         left_panel.addLayout(btn_layout)
 
         # Progress
@@ -151,6 +166,19 @@ class RLTab(QWidget):
         self.rl_avg_label.setObjectName("metricLabel")
         stats_layout.addWidget(self.rl_avg_label, 0, 1)
         right_panel.addWidget(stats_group)
+
+    def _reset_defaults(self):
+        """Reset all controls to default values."""
+        self.rl_hidden_spin.setValue(64)
+        self.rl_steps_spin.setValue(20)
+        self.rl_episodes_spin.setValue(200)
+        self.rl_lr_spin.setValue(0.005)
+        self.rl_gamma_spin.setValue(0.99)
+        self.rl_env_combo.setCurrentIndex(0)
+        # RL Algo combo and grad combo might depend on each other,
+        # but resetting them to default (likely index 0) is a safe bet or specific index
+        self.rl_algo_combo.setCurrentIndex(0)
+        self.rl_grad_combo.setCurrentIndex(0)
 
     def _update_rl_controls(self, text):
         if "Backprop" in text:

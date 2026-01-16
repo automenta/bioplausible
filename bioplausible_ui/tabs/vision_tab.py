@@ -64,10 +64,12 @@ class VisionTab(QWidget):
         self.vis_hidden_spin = QSpinBox()
         self.vis_hidden_spin.setRange(64, 1024)
         self.vis_hidden_spin.setValue(256)
+        self.vis_hidden_spin.setToolTip("Dimension of hidden state vectors")
 
         self.vis_steps_spin = QSpinBox()
         self.vis_steps_spin.setRange(5, 100)
         self.vis_steps_spin.setValue(30)
+        self.vis_steps_spin.setToolTip("Number of equilibrium steps per forward pass")
 
         model_controls = [
             ("Architecture:", self.vis_model_combo),
@@ -90,10 +92,12 @@ class VisionTab(QWidget):
         # Dataset
         self.vis_dataset_combo = QComboBox()
         self.vis_dataset_combo.addItems(["MNIST", "Fashion-MNIST", "CIFAR-10", "KMNIST", "SVHN"])
+        self.vis_dataset_combo.setToolTip("Image dataset for training")
 
         self.vis_batch_spin = QSpinBox()
         self.vis_batch_spin.setRange(16, 512)
         self.vis_batch_spin.setValue(64)
+        self.vis_batch_spin.setToolTip("Number of images per training step")
 
         data_controls = [
             ("Dataset:", self.vis_dataset_combo),
@@ -106,11 +110,13 @@ class VisionTab(QWidget):
         self.vis_epochs_spin = QSpinBox()
         self.vis_epochs_spin.setRange(1, 100)
         self.vis_epochs_spin.setValue(10)
+        self.vis_epochs_spin.setToolTip("Total number of passes over the dataset")
 
         self.vis_lr_spin = QDoubleSpinBox()
         self.vis_lr_spin.setRange(0.0001, 0.1)
         self.vis_lr_spin.setValue(0.001)
         self.vis_lr_spin.setDecimals(4)
+        self.vis_lr_spin.setToolTip("Step size for optimizer")
 
         self.vis_grad_combo = QComboBox()
         self.vis_grad_combo.addItems(["BPTT (Standard)", "Equilibrium (Implicit Diff)", "Contrastive (Hebbian)"])
@@ -121,6 +127,7 @@ class VisionTab(QWidget):
 
         self.vis_compile_check = QCheckBox("torch.compile")
         self.vis_compile_check.setChecked(True)
+        self.vis_compile_check.setToolTip("Use PyTorch 2.0 graph compilation for speedup")
 
         self.vis_kernel_check = QCheckBox("O(1) Kernel Mode (GPU)")
         self.vis_kernel_check.setToolTip("Use fused EqProp kernel for O(1) memory training")
@@ -151,6 +158,12 @@ class VisionTab(QWidget):
         self.vis_stop_btn.setEnabled(False)
         self.vis_stop_btn.clicked.connect(self.stop_training_signal.emit)
         btn_layout.addWidget(self.vis_stop_btn)
+
+        self.vis_reset_btn = QPushButton("↺ Reset")
+        self.vis_reset_btn.setObjectName("resetButton")
+        self.vis_reset_btn.setToolTip("Reset all hyperparameters to default values")
+        self.vis_reset_btn.clicked.connect(self._reset_defaults)
+        btn_layout.addWidget(self.vis_reset_btn)
         left_panel.addLayout(btn_layout)
 
         self.vis_progress = QProgressBar()
@@ -206,6 +219,19 @@ class VisionTab(QWidget):
             viz_layout.addWidget(self.vis_weights_container)
             right_panel.addWidget(viz_group)
         right_panel.addStretch()
+
+    def _reset_defaults(self):
+        """Reset all controls to default values."""
+        self.vis_hidden_spin.setValue(256)
+        self.vis_steps_spin.setValue(30)
+        self.vis_batch_spin.setValue(64)
+        self.vis_epochs_spin.setValue(10)
+        self.vis_lr_spin.setValue(0.001)
+        self.vis_compile_check.setChecked(True)
+        self.vis_kernel_check.setChecked(False)
+        self.vis_micro_check.setChecked(False)
+        self.vis_dataset_combo.setCurrentIndex(0)
+        self.vis_grad_combo.setCurrentIndex(0)
 
     def _update_vis_hyperparams(self, model_name):
         update_hyperparams_generic(self, model_name, self.vis_hyperparam_layout, self.vis_hyperparam_widgets, self.vis_hyperparam_group)
