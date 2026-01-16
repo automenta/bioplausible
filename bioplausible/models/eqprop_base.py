@@ -429,8 +429,9 @@ class EqPropModel(NEBCBase):
         h = self._initialize_hidden_state(x)
         x_transformed = self._transform_input(x)
 
-        if return_trajectory or return_dynamics or self.gradient_method == "bptt":
-            # Standard unrolling (BPTT or Analysis)
+        if return_trajectory or return_dynamics or self.gradient_method in ["bptt", "contrastive"]:
+            # Standard unrolling (BPTT, Analysis, or Contrastive Inference)
+            # For contrastive mode, forward() is just inference (free phase)
             trajectory = [h]
             deltas = []
 

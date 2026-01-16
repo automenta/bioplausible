@@ -18,6 +18,7 @@ Usage:
 from typing import Any, Dict, List, Optional, Tuple
 
 import os
+import shutil
 import numpy as np
 
 # Heuristic: Set CUDA_PATH if not set and standard location exists
@@ -30,6 +31,14 @@ if "CUDA_PATH" not in os.environ:
         "/usr/lib/nvidia-cuda-toolkit",
         "/run/opengl-driver/lib"  # NixOS
     ]
+
+    # Try finding nvcc
+    nvcc_path = shutil.which("nvcc")
+    if nvcc_path:
+        # e.g., /usr/local/cuda/bin/nvcc -> /usr/local/cuda
+        cuda_root = os.path.dirname(os.path.dirname(nvcc_path))
+        candidates.insert(0, cuda_root)
+
     # Also check LD_LIBRARY_PATH
     if "LD_LIBRARY_PATH" in os.environ:
         for path in os.environ["LD_LIBRARY_PATH"].split(os.pathsep):
