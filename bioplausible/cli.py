@@ -6,13 +6,74 @@ Entry point for the installed `eqprop-verify` command.
 """
 
 import argparse
+import sys
+import os
 from bioplausible.validation import Verifier
+
+
+def check_system_command():
+    """Run system diagnostics."""
+    print("=" * 60)
+    print("Bioplausible System Check")
+    print("=" * 60)
+
+    # Python
+    print(f"Python: {sys.version.split()[0]}")
+
+    # PyTorch
+    try:
+        import torch
+        print(f"PyTorch: {torch.__version__} (CUDA: {torch.cuda.is_available()})")
+        if torch.cuda.is_available():
+            print(f"  Device: {torch.cuda.get_device_name(0)}")
+            print(f"  CUDA Version: {torch.version.cuda}")
+    except ImportError:
+        print("PyTorch: ❌ Not found")
+
+    # Triton
+    try:
+        from bioplausible.models.triton_kernel import TritonEqPropOps
+        if TritonEqPropOps.is_available():
+            print("Triton: ✅ Available")
+        else:
+            print("Triton: ⚠️ Installed but not available (requires CUDA)")
+    except ImportError:
+        print("Triton: ❌ Not installed")
+    except Exception as e:
+        print(f"Triton: ❌ Error ({e})")
+
+    # CuPy
+    try:
+        from bioplausible.kernel import HAS_CUPY, cp
+        if HAS_CUPY:
+            try:
+                # Check if it actually works (if GPU is present)
+                if cp.cuda.is_available():
+                    print("CuPy: ✅ Available and working")
+                else:
+                    print("CuPy: ⚠️ Installed but no GPU detected")
+            except Exception as e:
+                print(f"CuPy: ⚠️ Installed but check failed ({e})")
+        else:
+            print("CuPy: ❌ Not installed or CUDA_PATH missing")
+
+        # Check CUDA_PATH
+        cuda_path = os.environ.get("CUDA_PATH", "Not Set")
+        print(f"  CUDA_PATH: {cuda_path}")
+
+    except Exception as e:
+        print(f"CuPy Check Error: {e}")
+
+    print("-" * 60)
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="TorEqProp Comprehensive Verification Suite",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--check-system", action="store_true", help="Check system compatibility (CUDA, Triton, CuPy)"
     )
     parser.add_argument(
         "--quick", "-q", action="store_true", help="Quick mode (~2 min, smoke test)"
@@ -44,6 +105,10 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.check_system:
+        check_system_command()
+        return
 
     verifier = Verifier(
         quick_mode=args.quick,

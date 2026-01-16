@@ -23,14 +23,13 @@ if HAS_TRITON:
     def _eqprop_step_kernel(
         h_ptr,          # Current hidden state
         pre_act_ptr,    # Linear projection (Wx + Wh)
-        bias_ptr,       # Bias
         out_ptr,        # Output pointer
         alpha,          # Nudge factor
         n_elements,     # Total elements
         BLOCK_SIZE: tl.constexpr,
     ):
         """
-        Fused kernel for: h_new = (1 - alpha) * h + alpha * tanh(pre_act + bias)
+        Fused kernel for: h_new = (1 - alpha) * h + alpha * tanh(pre_act)
         """
         pid = tl.program_id(axis=0)
         block_start = pid * BLOCK_SIZE
@@ -40,21 +39,6 @@ if HAS_TRITON:
         # Load data
         h = tl.load(h_ptr + offsets, mask=mask)
         pre = tl.load(pre_act_ptr + offsets, mask=mask)
-
-        # Load bias (optional broadcasting handling could be added, but assuming flattened for now)
-        # If bias is [hidden_dim] and others are [batch, hidden_dim], we need modulo indexing
-        # But for simplicity, let's assume the caller expands bias or adds it to pre_act beforehand.
-        # Actually, adding bias to pre_act beforehand in PyTorch is fast.
-        # Let's assume pre_act ALREADY includes bias for maximum simplicity or we handle it here.
-        # Handling it here is better for fusion.
-        # BUT, standard matmul result doesn't include bias.
-        # Let's keep it simple: caller adds bias to pre_act using addmm or similar,
-        # OR we pass bias pointer.
-        # If bias is vector, we need the column index.
-        # offsets is linear index. col = offsets % hidden_dim.
-        # That requires passing hidden_dim.
-
-        # Let's assume pre_act includes bias for now to avoid complex indexing in v1.
 
         val = tl.math.tanh(pre)
         out = (1.0 - alpha) * h + alpha * val
@@ -148,7 +132,7 @@ class TritonEqPropOps:
             )
         else:
             _eqprop_step_kernel[grid](
-                h, pre_act, None, out,  # bias ptr unused
+                h, pre_act, out,
                 alpha, n_elements,
                 BLOCK_SIZE=BLOCK_SIZE
             )
