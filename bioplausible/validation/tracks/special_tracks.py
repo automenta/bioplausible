@@ -17,6 +17,7 @@ if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
 from bioplausible.models import LoopedMLP, ConvEqProp, TransformerEqProp
+from bioplausible.models.triton_kernel import TritonEqPropOps
 from bioplausible.kernel import (
     EqPropKernelBPTT,
     compare_memory_autograd_vs_kernel,
@@ -28,6 +29,11 @@ def track_13_conv_eqprop(verifier) -> TrackResult:
     print("\n" + "=" * 60)
     print("TRACK 13: Convolutional EqProp")
     print("=" * 60)
+
+    if TritonEqPropOps.is_available():
+        print("  [Accelerator] Triton GPU Kernels: ENABLED")
+    else:
+        print("  [Accelerator] Triton GPU Kernels: UNAVAILABLE (Using standard PyTorch)")
 
     start = time.time()
 
@@ -156,6 +162,11 @@ def track_14_transformer(verifier) -> TrackResult:
     print("\n" + "=" * 60)
     print("TRACK 14: Transformer EqProp")
     print("=" * 60)
+
+    if TritonEqPropOps.is_available():
+        print("  [Accelerator] Triton GPU Kernels: ENABLED")
+    else:
+        print("  [Accelerator] Triton GPU Kernels: UNAVAILABLE (Using standard PyTorch)")
 
     start = time.time()
 
