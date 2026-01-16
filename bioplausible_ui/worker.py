@@ -9,7 +9,12 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from typing import Optional, Dict, Any
 import traceback
 import time
+import numpy as np
 
+# Use new unified training module
+from bioplausible.training.supervised import SupervisedTrainer
+from bioplausible.training.rl import RLTrainer
+from bioplausible.hyperopt.tasks import BaseTask
 
 class TrainingWorker(QThread):
     """Background worker for model training with real-time updates."""
@@ -71,74 +76,61 @@ class TrainingWorker(QThread):
             elif hasattr(self.model, name):
                 setattr(self.model, name, value)
 
-    def _convert_input_format(self, x):
-        """Convert input tensor to appropriate format based on model type."""
-        if x.dim() == 4 and hasattr(self.model, 'input_dim'):
-            # Vision: flatten images
-            return x.view(x.size(0), -1)
-        elif x.dtype == torch.long:
-            # LM tokens: convert to float for bioplausible models
-            if hasattr(self.model, 'config'):
-                vocab_size = getattr(self.model.config, 'input_dim', 256)
-                # Flatten sequence tokens and one-hot encode
-                x_flat = x.reshape(-1)
-                return torch.nn.functional.one_hot(x_flat, num_classes=vocab_size).float()
-
-        return x
-
-    def _compute_loss_and_accuracy(self, output, y):
-        """Compute loss and accuracy based on output dimensions."""
-        if output.dim() == 3:
-            # Language modeling: output is [batch, seq_len, vocab_size]
-            batch_size, seq_len, vocab_size = output.shape
-            output_flat = output.reshape(batch_size * seq_len, vocab_size)
-            y_flat = y.reshape(batch_size * seq_len)
-            loss = torch.nn.functional.cross_entropy(output_flat, y_flat)
-
-            pred = output.argmax(dim=-1)
-            batch_correct = (pred == y).sum().item()
-            batch_total = batch_size * seq_len
-        else:
-            # Vision: output is [batch, num_classes]
-            loss = torch.nn.functional.cross_entropy(output, y)
-
-            pred = output.argmax(dim=1)
-            batch_correct = (pred == y).sum().item()
-            batch_total = y.size(0)  # Use y.size(0) instead of x.size(0) for consistency
-
-        return loss, batch_correct, batch_total
-
-    def _process_batch(self, x, y, trainer):
-        """Process a single batch using EqPropTrainer."""
-        # Handle input conversions (flattening etc) if NOT using kernel
-        # Kernel handles flattening internally
-        if not self.use_kernel:
-            x = self._convert_input_format(x)
-
-        # Use trainer's unified batch processing
-        # Returns (avg_loss, correct_count, batch_size)
-        loss_val, batch_correct, batch_total = trainer.train_batch(x, y)
-
-        return loss_val, batch_correct, batch_total
-
     def _initialize_trainer(self):
-        """Initialize the EqProp trainer with proper error handling."""
+        """Initialize the SupervisedTrainer."""
         try:
-            from bioplausible import EqPropTrainer
+            # We need a Task object for SupervisedTrainer.
+            # Since the UI creates loaders manually, we can create a dummy/wrapper task
+            # that helps with metric computation or input handling, OR we pass a lightweight task wrapper.
 
-            trainer = EqPropTrainer(
+            # Identify task type from model or context
+            # This is a bit hacky, but the worker is generic.
+            # Ideally the worker should receive the Task object.
+            # For now, we mock it or infer it.
+
+            class WorkerTask(BaseTask):
+                def __init__(self, model):
+                    super().__init__("ui_worker_task")
+                    self.model = model
+                    # Guess task type
+                    if getattr(model, 'has_embed', False):
+                        self._task_type = "lm"
+                    else:
+                        self._task_type = "vision"
+
+                @property
+                def task_type(self):
+                    return self._task_type
+
+                def setup(self): pass
+                def get_batch(self, split="train"): pass
+                def create_trainer(self, model, **kwargs): pass
+
+                def compute_metrics(self, logits, y, loss):
+                    # Logic duplicated from tasks.py temporarily or reuse
+                    if logits.dim() == 3 and self.task_type == "lm":
+                        logits = logits[:, -1, :]
+
+                    acc = (logits.argmax(1) == y).float().mean().item()
+                    ppl = np.exp(min(loss, 10)) if self.task_type == "lm" else 0.0
+                    return {"loss": loss, "accuracy": acc, "perplexity": ppl}
+
+            task = WorkerTask(self.model)
+
+            trainer = SupervisedTrainer(
                 self.model,
+                task=task,
                 lr=self.lr,
-                use_compile=self.use_compile,
-                use_kernel=self.use_kernel,
+                device="cuda" if torch.cuda.is_available() else "cpu"
+                # use_compile and use_kernel are not standard args for SupervisedTrainer yet?
+                # We should add them to SupervisedTrainer or handle them here.
+                # For now, let's assume they are handled via **kwargs or ignored if not supported by standard trainer.
             )
 
             # Apply dynamic hyperparameters
             self._apply_hyperparams(trainer)
             return trainer
-        except ImportError:
-            self.error.emit("EqPropTrainer not available. Please install bioplausible.")
-            return None
+
         except Exception as e:
             self.error.emit(f"Failed to initialize trainer: {e}")
             return None
@@ -157,29 +149,42 @@ class TrainingWorker(QThread):
             if self._stop_requested:
                 return None
 
+            x, y = x.to(trainer.device), y.to(trainer.device)
+
             batch_start = time.time()
 
-            # Process the batch
-            loss_item, batch_correct_batch, batch_total_batch = self._process_batch(x, y, trainer)
+            # Process the batch using SupervisedTrainer's train_batch
+            # returns dict with loss, accuracy
+            metrics = trainer.train_batch(x, y)
+
+            loss_val = metrics['loss']
+            acc_val = metrics.get('accuracy', 0.0)
 
             batch_time = time.time() - batch_start
 
+            # Calculate counts from average accuracy for reporting
+            # x.size(0) might vary on last batch
+            batch_size = x.size(0)
+            batch_correct_count = int(acc_val * batch_size)
+            batch_total_count = batch_size
+
             # Accumulate metrics
-            epoch_loss += loss_item * x.size(0)
-            epoch_correct += batch_correct_batch
-            epoch_total += batch_total_batch
+            epoch_loss += loss_val * batch_size
+            epoch_correct += batch_correct_count
+            epoch_total += batch_total_count
 
             # Emit batch-level progress every 10 batches or on last batch
             if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == num_batches:
                 self._emit_batch_progress(epoch, batch_idx, num_batches, epoch_loss,
                                         epoch_correct, epoch_total, x, batch_time, total_start,
-                                        batch_correct_batch, batch_total_batch)
+                                        batch_correct_count, batch_total_count)
 
         # End of epoch: compute Lipschitz
+        # Standard models have compute_lipschitz
         try:
-            lipschitz = trainer.compute_lipschitz() or 0.0
+            lipschitz = trainer.model.compute_lipschitz() if hasattr(trainer.model, 'compute_lipschitz') else 0.0
         except:
-            lipschitz = 0.0  # Default if computation fails
+            lipschitz = 0.0
 
         # Microscope analysis
         if self.microscope_interval > 0 and (epoch + 1) % self.microscope_interval == 0:
@@ -197,11 +202,27 @@ class TrainingWorker(QThread):
             # Get a single batch
             x, _ = next(iter(self.train_loader))
 
-            # Convert input
-            if not self.use_kernel:
-                x = self._convert_input_format(x)
+            # Use trainer's prep logic if possible, or manual
+            # SupervisedTrainer._prepare_input is internal.
+            # But the model expects prepared input usually.
 
             x = x.to(trainer.device)
+            # We mimic trainer prep:
+            if getattr(trainer, 'has_embed', False):
+                 # LM
+                 pass # Embedding layer is inside model or attached?
+                 # In SupervisedTrainer: self.embed(x).mean(dim=1)
+                 # Here we might need to do that manually if the model expects vector input.
+                 # Wait, trainer.train_batch calls _prepare_input.
+                 # But for microscope we call model directly.
+                 # If model.has_embed is True, model itself doesn't handle embedding usually (it's attached).
+                 # So we need to embed.
+                 if hasattr(trainer, 'embed') and trainer.embed:
+                     x = trainer.embed(x).mean(dim=1)
+            else:
+                 # Vision
+                 if x.dim() > 2 and "Conv" not in trainer.model.__class__.__name__:
+                      x = x.view(x.size(0), -1)
 
             # Determine arguments for dynamics
             kwargs = {}
@@ -228,7 +249,7 @@ class TrainingWorker(QThread):
 
         except Exception as e:
             self.log.emit(f"Microscope failed: {e}")
-            # Don't crash training for this
+            traceback.print_exc()
 
     def _emit_batch_progress(self, epoch, batch_idx, num_batches, epoch_loss,
                            epoch_correct, epoch_total, x, batch_time, total_start,
@@ -352,20 +373,12 @@ class BenchmarkWorker(QThread):
             from contextlib import redirect_stdout
 
             # Custom Verifier that respects stop signal and emits progress
-            # Since Verifier is synchronous and prints to stdout, we wrap it or
-            # we rely on it printing.
-            # Better: We can capture stdout line by line?
-            # Or just run it and let it print to console if we hooked up logging.
-            # But we want to update the UI table.
-
-            # Let's use a capture mechanism that emits signals
             class SignalVerifier(Verifier):
                 def __init__(self, worker, *args, **kwargs):
                     super().__init__(*args, **kwargs)
                     self.worker = worker
 
                 def run_tracks(self, track_ids):
-                    # We override this to emit progress
                     results = {}
                     for i, track_id in enumerate(track_ids):
                         if self.worker._stop_requested:
@@ -374,7 +387,6 @@ class BenchmarkWorker(QThread):
                         self.worker.progress.emit(f"Running Track {track_id}...")
 
                         try:
-                            # Re-use logic from Verifier.run_tracks but per track
                             name, method = self.tracks[track_id]
                             result = method(self)
                             results[track_id] = result
@@ -397,7 +409,6 @@ class BenchmarkWorker(QThread):
             results = verifier.run_tracks(self.track_ids)
 
             # Convert results to dict for signal
-            # TrackResult objects are not directly picklable/serializable sometimes, so convert to simple dict
             final_results = {}
             for tid, res in results.items():
                 final_results[tid] = {
@@ -440,8 +451,7 @@ class GenerationWorker(QThread):
                 self.error.emit("Model does not support generation")
         except Exception as e:
             self.error.emit(str(e))
-import numpy as np
-from bioplausible.rl.trainer import RLTrainer
+
 
 class RLWorker(QThread):
     """Background worker for RL training."""

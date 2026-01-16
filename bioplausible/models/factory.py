@@ -2,11 +2,12 @@
 Model Factory
 
 Centralizes model creation logic for Experiment Runner and UI.
+Now uses a registration system to allow for easier extension.
 """
 
 import torch
 import torch.nn as nn
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable
 
 from bioplausible.models.registry import ModelSpec
 from bioplausible.models.base import ModelConfig
@@ -17,7 +18,7 @@ from bioplausible.models.backprop_transformer_lm import BackpropTransformerLM
 from bioplausible.models.simple_fa import StandardFA
 from bioplausible.models.cf_align import ContrastiveFeedbackAlignment
 from bioplausible.models.hebbian_chain import DeepHebbianChain
-from bioplausible.lm_models import create_eqprop_lm
+from bioplausible.models.eqprop_lm_variants import create_eqprop_lm
 
 # Advanced EqProp Models
 from bioplausible.models.holomorphic_ep import HolomorphicEP
@@ -36,6 +37,181 @@ from bioplausible.models.mom_eq import MomentumEquilibrium
 from bioplausible.models.sto_fa import StochasticFA
 from bioplausible.models.em_fa import EnergyMinimizingFA
 
+
+# =============================================================================
+# Registry Logic
+# =============================================================================
+
+class ModelFactoryRegistry:
+    _builders: Dict[str, Callable] = {}
+
+    @classmethod
+    def register(cls, model_type: str):
+        def decorator(func: Callable):
+            cls._builders[model_type] = func
+            return func
+        return decorator
+
+    @classmethod
+    def get_builder(cls, model_type: str) -> Optional[Callable]:
+        return cls._builders.get(model_type)
+
+register_model_builder = ModelFactoryRegistry.register
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def _make_config(name: str, input_dim: int, output_dim: int, hidden_dim: int,
+                 num_layers: int, spec: ModelSpec) -> ModelConfig:
+    return ModelConfig(
+        name=name,
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_dims=[hidden_dim] * min(num_layers, 5),
+        beta=spec.default_beta if spec.has_beta else 0.1,
+        learning_rate=spec.default_lr,
+        equilibrium_steps=spec.default_steps if spec.has_steps else 20,
+        use_spectral_norm=True
+    )
+
+# =============================================================================
+# Builders
+# =============================================================================
+
+@register_model_builder("backprop")
+def build_backprop(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    if task_type == "lm":
+        return BackpropTransformerLM(
+            vocab_size=output_dim,
+            hidden_dim=hidden_dim,
+            num_layers=num_layers,
+            max_seq_len=256,
+        ).to(device)
+    else:
+        return BackpropMLP(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim
+        ).to(device)
+
+@register_model_builder("eqprop_transformer")
+def build_eqprop_transformer(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    return create_eqprop_lm(
+        spec.variant,
+        vocab_size=output_dim,
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
+        use_sn=True,
+    ).to(device)
+
+@register_model_builder("eqprop_mlp")
+def build_eqprop_mlp(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    return LoopedMLP(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=output_dim,
+        use_spectral_norm=True,
+    ).to(device)
+
+@register_model_builder("dfa")
+def build_dfa(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("feedback_alignment", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return StandardFA(config=config).to(device)
+
+@register_model_builder("chl")
+def build_chl(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("cf_align", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return ContrastiveFeedbackAlignment(config=config).to(device)
+
+@register_model_builder("deep_hebbian")
+def build_deep_hebbian(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    return DeepHebbianChain(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=output_dim,
+        num_layers=num_layers,
+        use_spectral_norm=True,
+        hebbian_lr=0.001,
+        use_oja=True
+    ).to(device)
+
+@register_model_builder("holomorphic_ep")
+def build_holomorphic_ep(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("holomorphic_ep", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return HolomorphicEP(config=config, device=device).to(device)
+
+@register_model_builder("directed_ep")
+def build_directed_ep(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("directed_ep", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return DirectedEP(config=config, device=device).to(device)
+
+@register_model_builder("finite_nudge_ep")
+def build_finite_nudge_ep(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("finite_nudge_ep", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return FiniteNudgeEP(config=config, device=device).to(device)
+
+@register_model_builder("modern_conv_eqprop")
+def build_modern_conv_eqprop(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    return ModernConvEqProp(
+        eq_steps=spec.default_steps if spec.has_steps else 30,
+        hidden_channels=hidden_dim,
+    ).to(device)
+
+@register_model_builder("adaptive_feedback_alignment")
+def build_adaptive_fa(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("adaptive_feedback_alignment", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return AdaptiveFeedbackAlignment(config=config).to(device)
+
+@register_model_builder("eq_align")
+def build_eq_align(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    return EquilibriumAlignment(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=output_dim,
+        max_steps=spec.default_steps if spec.has_steps else 30,
+        use_spectral_norm=True,
+        learning_rate=spec.default_lr
+    ).to(device)
+
+@register_model_builder("layerwise_equilibrium_fa")
+def build_leq_fa(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("layerwise_equilibrium_fa", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return LayerwiseEquilibriumFA(config=config).to(device)
+
+@register_model_builder("energy_guided_fa")
+def build_eg_fa(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("energy_guided_fa", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return EnergyGuidedFA(config=config).to(device)
+
+@register_model_builder("predictive_coding_hybrid")
+def build_pc_hybrid(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("predictive_coding_hybrid", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return PredictiveCodingHybrid(config=config).to(device)
+
+@register_model_builder("sparse_equilibrium")
+def build_sparse_eq(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("sparse_equilibrium", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return SparseEquilibrium(config=config).to(device)
+
+@register_model_builder("momentum_equilibrium")
+def build_mom_eq(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("momentum_equilibrium", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return MomentumEquilibrium(config=config).to(device)
+
+@register_model_builder("stochastic_fa")
+def build_sto_fa(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("stochastic_fa", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return StochasticFA(config=config).to(device)
+
+@register_model_builder("energy_minimizing_fa")
+def build_em_fa(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    config = _make_config("energy_minimizing_fa", input_dim, output_dim, hidden_dim, num_layers, spec)
+    return EnergyMinimizingFA(config=config).to(device)
+
+# =============================================================================
+# Main Factory Function
+# =============================================================================
 
 def create_model(
     spec: ModelSpec,
@@ -62,151 +238,18 @@ def create_model(
 
     input_size = input_dim if input_dim is not None else hidden_dim
 
-    # Common config creation helper
-    def make_config(name):
-        return ModelConfig(
-            name=name,
-            input_dim=input_size,
-            output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
-            beta=spec.default_beta if spec.has_beta else 0.1,
-            learning_rate=spec.default_lr,
-            equilibrium_steps=spec.default_steps if spec.has_steps else 20,
-            use_spectral_norm=True
-        )
+    # Get builder
+    builder = ModelFactoryRegistry.get_builder(model_type)
+    if not builder:
+        raise ValueError(f"Unknown model type: {model_type}")
 
-    # Embedding wrapper if needed
+    # Build model
+    model = builder(spec, input_size, output_dim, hidden_dim, num_layers, device, task_type)
+
+    # Attach embedding if needed
     embedding_layer = None
     if use_embedding:
         embedding_layer = nn.Embedding(output_dim, hidden_dim).to(device)
-
-    model = None
-
-    if model_type == "backprop":
-        if task_type == "lm":
-            # Use the robust BackpropTransformerLM
-            model = BackpropTransformerLM(
-                vocab_size=output_dim,
-                hidden_dim=hidden_dim,
-                num_layers=num_layers,
-                max_seq_len=256,
-            )
-        else:
-            # Use BackpropMLP for Vision/RL
-            model = BackpropMLP(
-                input_dim=input_size,
-                hidden_dim=hidden_dim,
-                output_dim=output_dim
-            )
-
-    elif model_type == "eqprop_transformer":
-        model = create_eqprop_lm(
-            spec.variant,
-            vocab_size=output_dim,
-            hidden_dim=hidden_dim,
-            num_layers=num_layers,
-            use_sn=True,
-        )
-
-    elif model_type == "eqprop_mlp":
-        model = LoopedMLP(
-            input_dim=input_size,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim,
-            use_spectral_norm=True,
-        )
-
-    elif model_type == "dfa":
-        config = make_config("feedback_alignment")
-        model = StandardFA(config=config)
-
-    elif model_type == "chl":
-        config = make_config("cf_align")
-        model = ContrastiveFeedbackAlignment(config=config)
-
-    elif model_type == "deep_hebbian":
-        model = DeepHebbianChain(
-            input_dim=input_size,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim,
-            num_layers=num_layers,
-            use_spectral_norm=True,
-            hebbian_lr=0.001,
-            use_oja=True
-        )
-
-    elif model_type == "holomorphic_ep":
-        config = make_config("holomorphic_ep")
-        model = HolomorphicEP(config=config, device=device)
-
-    elif model_type == "directed_ep":
-        config = make_config("directed_ep")
-        model = DirectedEP(config=config, device=device)
-
-    elif model_type == "finite_nudge_ep":
-        config = make_config("finite_nudge_ep")
-        model = FiniteNudgeEP(config=config, device=device)
-
-    elif model_type == "modern_conv_eqprop":
-        # ModernConvEqProp init: (eq_steps, gamma, hidden_channels, use_spectral_norm)
-        model = ModernConvEqProp(
-            eq_steps=spec.default_steps if spec.has_steps else 30,
-            hidden_channels=hidden_dim,
-        )
-
-    # --- Hybrid / Experimental Models ---
-
-    elif model_type == "adaptive_feedback_alignment":
-        config = make_config("adaptive_feedback_alignment")
-        model = AdaptiveFeedbackAlignment(config=config)
-
-    elif model_type == "eq_align":
-        model = EquilibriumAlignment(
-            input_dim=input_size,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim,
-            max_steps=spec.default_steps if spec.has_steps else 30,
-            use_spectral_norm=True,
-            learning_rate=spec.default_lr
-        )
-
-    elif model_type == "layerwise_equilibrium_fa":
-        config = make_config("layerwise_equilibrium_fa")
-        model = LayerwiseEquilibriumFA(config=config)
-
-    elif model_type == "energy_guided_fa":
-        config = make_config("energy_guided_fa")
-        model = EnergyGuidedFA(config=config)
-
-    elif model_type == "predictive_coding_hybrid":
-        config = make_config("predictive_coding_hybrid")
-        model = PredictiveCodingHybrid(config=config)
-
-    elif model_type == "sparse_equilibrium":
-        config = make_config("sparse_equilibrium")
-        model = SparseEquilibrium(config=config)
-
-    elif model_type == "momentum_equilibrium":
-        config = make_config("momentum_equilibrium")
-        model = MomentumEquilibrium(config=config)
-
-    elif model_type == "stochastic_fa":
-        config = make_config("stochastic_fa")
-        model = StochasticFA(config=config)
-
-    elif model_type == "energy_minimizing_fa":
-        config = make_config("energy_minimizing_fa")
-        model = EnergyMinimizingFA(config=config)
-
-    else:
-        raise ValueError(f"Unknown model type: {model_type}")
-
-    # Attach embedding if created and not already integrated
-    # Some models might handle embedding internally, but here we assume if we created it, we attach it.
-    # Note: The caller needs to know if 'embedding_layer' was created.
-    # But standard models don't have an 'embed' attribute by default.
-    # We can attach it to the model instance.
-    if embedding_layer is not None:
         model.embed = embedding_layer
         model.has_embed = True
     else:

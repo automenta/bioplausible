@@ -6,8 +6,11 @@ import numpy as np
 import gymnasium as gym
 from collections import deque
 from typing import Dict, Any, List, Optional
+import time
 
-class RLTrainer:
+from bioplausible.training.base import BaseTrainer
+
+class RLTrainer(BaseTrainer):
     """
     Reinforcement Learning Trainer for EqProp and Backprop models.
     Implements standard REINFORCE (Policy Gradient).
@@ -20,11 +23,14 @@ class RLTrainer:
         device: str = "cpu",
         lr: float = 1e-3,
         gamma: float = 0.99,
-        seed: int = 42
+        seed: int = 42,
+        episodes_per_epoch: int = 10,
+        **kwargs
     ):
-        self.model = model.to(device)
-        self.device = device
+        super().__init__(model, device)
+        self.model = self.model.to(device)
         self.gamma = gamma
+        self.episodes_per_epoch = episodes_per_epoch
 
         # Initialize Environment
         self.env = gym.make(env_name)
@@ -123,6 +129,30 @@ class RLTrainer:
             "reward": total_reward,
             "loss": loss.item(),
             "steps": len(rewards)
+        }
+
+    def train_epoch(self) -> Dict[str, float]:
+        """Run multiple episodes as an 'epoch'."""
+        t0 = time.time()
+
+        epoch_reward_sum = 0
+        epoch_loss_sum = 0
+
+        for _ in range(self.episodes_per_epoch):
+            metrics = self.train_episode()
+            epoch_reward_sum += metrics['reward']
+            epoch_loss_sum += metrics['loss']
+
+        avg_reward = epoch_reward_sum / self.episodes_per_epoch
+        avg_loss = epoch_loss_sum / self.episodes_per_epoch
+        epoch_time = time.time() - t0
+
+        return {
+            "loss": avg_loss,
+            "accuracy": avg_reward, # Map reward to accuracy for generic visualization
+            "perplexity": 0.0,
+            "time": epoch_time,
+            "iteration_time": epoch_time / self.episodes_per_epoch
         }
 
     def evaluate(self, episodes=5) -> float:
