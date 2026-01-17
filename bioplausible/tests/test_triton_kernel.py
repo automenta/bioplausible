@@ -68,5 +68,24 @@ class TestTritonKernel(unittest.TestCase):
 
         self.assertTrue(torch.allclose(out_triton, expected, atol=1e-5))
 
+    def test_linear_fallback_cpu(self):
+        """Test linear step fallback on CPU."""
+        if self.device.type == "cpu":
+            h_target = self.h + self.pre_act  # Just some target
+            out = TritonEqPropOps.step_linear(self.h, h_target, self.alpha)
+            expected = (1 - self.alpha) * self.h + self.alpha * h_target
+            self.assertTrue(torch.allclose(out, expected, atol=1e-5))
+
+    def test_linear_triton_match(self):
+        """Test linear step Triton matches PyTorch."""
+        if not TritonEqPropOps.is_available():
+            return
+
+        h_target = self.h + self.pre_act
+        out_triton = TritonEqPropOps.step_linear(self.h, h_target, self.alpha)
+        expected = (1 - self.alpha) * self.h + self.alpha * h_target
+        self.assertTrue(torch.allclose(out_triton, expected, atol=1e-5))
+
+
 if __name__ == "__main__":
     unittest.main()

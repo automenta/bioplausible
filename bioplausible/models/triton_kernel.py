@@ -82,6 +82,31 @@ if HAS_TRITON:
 
         tl.store(out_ptr + offsets, out, mask=mask)
 
+    @triton.jit
+    def _eqprop_step_linear_kernel(
+        h_ptr,          # Current hidden state
+        target_ptr,     # Target state (e.g. h + ffn_out + x)
+        out_ptr,        # Output pointer
+        alpha,          # Nudge factor
+        n_elements,     # Total elements
+        BLOCK_SIZE: tl.constexpr,
+    ):
+        """
+        Fused kernel for linear relaxation: h_new = (1 - alpha) * h + alpha * target
+        """
+        pid = tl.program_id(axis=0)
+        block_start = pid * BLOCK_SIZE
+        offsets = block_start + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < n_elements
+
+        # Load data
+        h = tl.load(h_ptr + offsets, mask=mask)
+        target = tl.load(target_ptr + offsets, mask=mask)
+
+        out = (1.0 - alpha) * h + alpha * target
+
+        tl.store(out_ptr + offsets, out, mask=mask)
+
 
 class TritonEqPropOps:
     """Interface for Triton kernels."""
@@ -136,5 +161,33 @@ class TritonEqPropOps:
                 alpha, n_elements,
                 BLOCK_SIZE=BLOCK_SIZE
             )
+
+        return out
+
+    @staticmethod
+    def step_linear(h: torch.Tensor, target: torch.Tensor, alpha: float) -> torch.Tensor:
+        """
+        Perform one EqProp linear step: h <- (1-a)h + a*target
+        """
+        if not TritonEqPropOps.is_available():
+            # Fallback
+            return (1 - alpha) * h + alpha * target
+
+        # Ensure contiguity
+        if not h.is_contiguous():
+            h = h.contiguous()
+        if not target.is_contiguous():
+            target = target.contiguous()
+
+        out = torch.empty_like(h)
+        n_elements = h.numel()
+        BLOCK_SIZE = 1024
+        grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+
+        _eqprop_step_linear_kernel[grid](
+            h, target, out,
+            alpha, n_elements,
+            BLOCK_SIZE=BLOCK_SIZE
+        )
 
         return out

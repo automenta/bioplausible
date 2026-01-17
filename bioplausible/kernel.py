@@ -29,7 +29,11 @@ if "CUDA_PATH" not in os.environ:
         "/opt/cuda",
         "/usr/lib/cuda",
         "/usr/lib/nvidia-cuda-toolkit",
-        "/run/opengl-driver/lib"  # NixOS
+        "/run/opengl-driver/lib",  # NixOS
+        "/usr/local/cuda-12.2",    # Common versions
+        "/usr/local/cuda-12.1",
+        "/usr/local/cuda-11.8",
+        "/usr/local/cuda-11.7",
     ]
 
     # Try finding nvcc
@@ -48,6 +52,19 @@ if "CUDA_PATH" not in os.environ:
                     candidates.append(os.path.dirname(path))
                 else:
                     candidates.append(path)
+
+    # Last resort: Try loading cudart via ctypes to find its location
+    try:
+        from ctypes.util import find_library
+
+        cudart_lib = find_library("cudart")
+        if cudart_lib and os.path.isabs(cudart_lib):
+            # e.g. /usr/local/cuda/lib64/libcudart.so
+            lib_dir = os.path.dirname(cudart_lib)
+            if lib_dir.endswith("lib64") or lib_dir.endswith("lib"):
+                candidates.append(os.path.dirname(lib_dir))
+    except Exception:
+        pass
 
     for path in candidates:
         if os.path.exists(path):
