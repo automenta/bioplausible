@@ -18,6 +18,14 @@ except ImportError:
     triton = None
     tl = None
 
+# Try to import CuPy for type checking/pointer access if available
+try:
+    import cupy as cp
+    HAS_CUPY = True
+except ImportError:
+    cp = None
+    HAS_CUPY = False
+
 if HAS_TRITON:
     @triton.jit
     def _eqprop_step_kernel(
@@ -187,6 +195,43 @@ class TritonEqPropOps:
         _eqprop_step_linear_kernel[grid](
             h, target, out,
             alpha, n_elements,
+            BLOCK_SIZE=BLOCK_SIZE
+        )
+
+        return out
+
+    @staticmethod
+    def step_linear_cupy(h, target, alpha: float):
+        """
+        Perform one EqProp linear step using CuPy arrays: h <- (1-a)h + a*target
+        """
+        # Fallback if no Triton or no CuPy
+        if not HAS_TRITON or not HAS_CUPY:
+             # This fallback assumes standard NumPy/CuPy broadcasting
+             return (1 - alpha) * h + alpha * target
+
+        # Ensure we are dealing with CuPy arrays on GPU
+        if not isinstance(h, cp.ndarray) or not isinstance(target, cp.ndarray):
+             return (1 - alpha) * h + alpha * target
+
+        # Ensure contiguity (Triton requires contiguous memory)
+        if not h.flags.c_contiguous:
+            h = cp.ascontiguousarray(h)
+        if not target.flags.c_contiguous:
+            target = cp.ascontiguousarray(target)
+
+        out = cp.empty_like(h)
+        n_elements = h.size
+        BLOCK_SIZE = 1024
+        grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+
+        # Launch kernel using raw pointers
+        _eqprop_step_linear_kernel[grid](
+            h.data.ptr,         # h_ptr
+            target.data.ptr,    # target_ptr
+            out.data.ptr,       # out_ptr
+            alpha,              # alpha
+            n_elements,         # n_elements
             BLOCK_SIZE=BLOCK_SIZE
         )
 

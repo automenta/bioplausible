@@ -83,6 +83,14 @@ except Exception:  # Capture other potential import errors
     cp = None
     HAS_CUPY = False
 
+# Try to import Triton kernels
+try:
+    from bioplausible.models.triton_kernel import TritonEqPropOps
+    HAS_TRITON_OPS = True
+except ImportError:
+    TritonEqPropOps = None
+    HAS_TRITON_OPS = False
+
 
 def get_backend(use_gpu: bool) -> Any:
     """Return appropriate array library (CuPy or NumPy)."""
@@ -306,7 +314,13 @@ class EqPropKernel:
         ffn_hidden = xp.tanh(h_norm @ weights["W1"].T + self.biases["W1"])
         ffn_out = ffn_hidden @ weights["W2"].T + self.biases["W2"]
 
-        h_next = (1 - self.gamma) * h + self.gamma * (ffn_out + x_emb)
+        if HAS_TRITON_OPS and self.use_gpu and HAS_CUPY and isinstance(h, cp.ndarray):
+            # Use fused Triton kernel for the update: h_next = (1-g)h + g*target
+            h_next = TritonEqPropOps.step_linear_cupy(
+                h, ffn_out + x_emb, self.gamma
+            )
+        else:
+            h_next = (1 - self.gamma) * h + self.gamma * (ffn_out + x_emb)
 
         activations = {
             "h_norm": h_norm,
