@@ -152,13 +152,19 @@ class Coordinator:
         with self.lock:
             self.nodes.add(client_id)
 
+from bioplausible.p2p.state import load_state, save_state
+
 class Worker:
     def __init__(self, coordinator_url: str, client_id: str = None):
         self.coordinator_url = coordinator_url.rstrip('/')
         self.client_id = client_id or str(uuid.uuid4())[:8]
         self.running = False
-        self.points = 0
-        self.jobs_done = 0
+
+        # Load state
+        state = load_state()
+        self.points = state.get('points', 0)
+        self.jobs_done = state.get('jobs_done', 0)
+
         self.current_status = "Idle"
 
         # Signals/Callbacks
@@ -219,6 +225,7 @@ class Worker:
 
                         self.points += 10 # Gamification
                         self.jobs_done += 1
+                        save_state(self.points, self.jobs_done) # Persist
                         self.log(f"Job {job_id} submitted! Points: {self.points}")
                     else:
                         self.log(f"Job {job_id} failed locally.")

@@ -226,6 +226,8 @@ class EqPropDashboard(QMainWindow):
 
         # Tab 6: Community Grid (P2P)
         self.p2p_tab = P2PTab()
+        # Connect P2P log to main console
+        self.p2p_tab.bridge_log_signal.connect(self._append_log)
         self.tabs.addTab(self.p2p_tab, "🌐 Community Grid")
 
         # Tab 7: Benchmarks

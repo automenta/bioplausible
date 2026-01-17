@@ -106,6 +106,17 @@ class P2PTab(QWidget):
         self.input_label = QLabel("Coordinator URL:")
         conn_layout.addWidget(self.input_label)
 
+        # Bootstrap Nodes Dropdown (for DHT mode)
+        self.bootstrap_combo = QComboBox()
+        self.bootstrap_combo.setEditable(True)
+        self.bootstrap_combo.addItems([
+            "bootstrap1.bioplausible.org",
+            "bootstrap2.bioplausible.org",
+            "127.0.0.1:8468 (Local Test)"
+        ])
+        self.bootstrap_combo.setVisible(False)
+        conn_layout.addWidget(self.bootstrap_combo)
+
         self.url_input = QLineEdit("http://localhost:8000") # Default for local testing
         self.url_input.setPlaceholderText("http://grid.bioplausible.org")
         conn_layout.addWidget(self.url_input)
@@ -193,12 +204,15 @@ class P2PTab(QWidget):
     def _update_input_label(self):
         if self.radio_coord.isChecked():
             self.input_label.setText("Coordinator URL:")
+            self.url_input.setVisible(True)
+            self.bootstrap_combo.setVisible(False)
             self.url_input.setPlaceholderText("http://grid.bioplausible.org")
             self.url_input.setText("http://localhost:8000")
         else:
             self.input_label.setText("Bootstrap Node (IP):")
-            self.url_input.setPlaceholderText("1.2.3.4 (Leave empty for solo/bootstrap)")
-            self.url_input.setText("")
+            self.url_input.setVisible(False)
+            self.bootstrap_combo.setVisible(True)
+            self.bootstrap_combo.setCurrentIndex(2) # Default to local for safety
 
     def _toggle_connection(self):
         if self.worker and self.worker.running:
@@ -216,24 +230,24 @@ class P2PTab(QWidget):
             self.radio_coord.setEnabled(False)
             self.radio_dht.setEnabled(False)
 
-            target = self.url_input.text()
-
             if self.radio_coord.isChecked():
                 # Client Mode
+                target = self.url_input.text()
                 if not target: target = "http://localhost:8000"
                 self.worker = Worker(target)
                 self.worker.start_loop()
             else:
                 # DHT Mode
+                target = self.bootstrap_combo.currentText()
                 # Logic: if target is empty, we are a bootstrap node or solo
                 # if target has IP, we bootstrap from it
                 # target format: IP or IP:PORT
                 ip = None
                 port = 8468
-                if target:
-                    parts = target.split(':')
-                    ip = parts[0]
-                    if len(parts) > 1: port = int(parts[1])
+                if target and "bootstrap" not in target: # Skip placeholder domains if not resolved
+                     parts = target.split(':')
+                     ip = parts[0]
+                     if len(parts) > 1: port = int(parts[1])
 
                 self.worker = P2PEvolution(bootstrap_ip=ip, bootstrap_port=port)
                 self.worker.start(auto_nice=True)

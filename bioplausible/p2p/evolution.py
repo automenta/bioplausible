@@ -14,6 +14,9 @@ from typing import Optional, Dict
 from bioplausible.p2p.dht import DHTNode
 from bioplausible.hyperopt.search_space import get_search_space
 from bioplausible.p2p.node import Worker # Reuse worker logic for running jobs
+from bioplausible.hyperopt.experiment import TrialRunner
+from bioplausible.hyperopt.storage import HyperoptStorage
+from bioplausible.p2p.state import load_state, save_state
 
 logger = logging.getLogger("P2PEvolution")
 
@@ -27,8 +30,11 @@ class P2PEvolution:
 
         # State
         self.current_task = "shakespeare" # Default
-        self.points = 0
-        self.jobs_done = 0
+
+        state = load_state()
+        self.points = state.get('points', 0)
+        self.jobs_done = state.get('jobs_done', 0)
+
         self.current_status = "Stopped"
 
         # Signals
@@ -123,6 +129,8 @@ class P2PEvolution:
                 # job_id is random for local logging
                 job_id = random.randint(1000, 9999)
 
+                # Use standard TrialRunner logic via Worker helper
+                # Reusing Worker._run_job ensures consistent environment setup
                 metrics = self.worker_logic._run_job(
                     job_id=job_id,
                     task=self.current_task,
@@ -134,6 +142,7 @@ class P2PEvolution:
                     acc = metrics.get('accuracy', 0.0)
                     self.jobs_done += 1
                     self.points += 5 # 5 points for DHT contribution
+                    save_state(self.points, self.jobs_done)
 
                     self._log(f"Evaluation complete. Acc: {acc:.4f} (Beat: {score_to_beat:.4f})")
 
@@ -144,6 +153,7 @@ class P2PEvolution:
                         mutated_config['model_name'] = model_name
                         self.dht.publish_best_model(self.current_task, mutated_config, acc)
                         self.points += 50 # Bonus for improvement
+                        save_state(self.points, self.jobs_done)
                         self._log(f"🎉 New Best Model Discovered! ({acc:.4f})")
 
                 else:
