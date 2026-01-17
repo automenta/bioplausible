@@ -15,10 +15,12 @@ class EqPropDiffusion(nn.Module):
         super().__init__()
         # Input channels + 1 for time embedding (concatenated as a channel)
         # Using SimpleConvEqProp allows Triton acceleration
+        # Use pool_output=False for spatial output (Dense prediction)
         self.denoiser = SimpleConvEqProp(
             input_channels=img_channels + 1,
             hidden_channels=hidden_channels,
-            output_dim=img_channels * 28 * 28,  # Flattened output size for MNIST
+            output_dim=img_channels,  # Output channels
+            pool_output=False,
             use_spectral_norm=True,
         )
         self.img_channels = img_channels
@@ -54,9 +56,8 @@ class EqPropDiffusion(nn.Module):
         # Use the network to predict the clean image (or noise), then relax towards it.
 
         # Run forward pass of EqProp network to get prediction
-        # Note: ConvEqProp output is usually flattened, reshape it back
-        h_flat = self.denoiser(x_input)
-        h_pred = h_flat.view_as(x_noisy)
+        h_pred = self.denoiser(x_input)
+        # Output is already [B, C, H, W] if pool_output=False
 
         # Refine prediction via energy gradient (simplified)
         # In full EqProp, this happens inside the layers.
@@ -87,8 +88,7 @@ class EqPropDiffusion(nn.Module):
             # Since self.denoiser is stateless between calls unless we pass state,
             # and it returns a prediction.
 
-            h_flat_pred = self.denoiser(x_input)
-            x_pred = h_flat_pred.view_as(x_noisy)
+            x_pred = self.denoiser(x_input)
 
             # Gradient descent on Energy = ||h - x_pred||^2
             # grad_h E = 2 * (h - x_pred)

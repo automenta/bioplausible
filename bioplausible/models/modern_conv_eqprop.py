@@ -280,12 +280,14 @@ class SimpleConvEqProp(EqPropModel):
         gradient_method: str = "bptt",
         input_channels: int = 3,
         output_dim: int = 10,
+        pool_output: bool = True,
     ):
         self.hidden_channels = hidden_channels
         self.gamma = gamma
         self.use_spectral_norm = use_spectral_norm
         self.input_channels_count = input_channels
         self.output_dim_val = output_dim
+        self.pool_output = pool_output
 
         super().__init__(
             input_dim=0,
@@ -317,11 +319,20 @@ class SimpleConvEqProp(EqPropModel):
         self.norm = nn.GroupNorm(8, self.hidden_channels)
 
         # Classifier / Output Head
-        self.head = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Flatten(),
-            nn.Linear(self.hidden_channels, self.output_dim_val),
-        )
+        if self.pool_output:
+            self.head = nn.Sequential(
+                nn.AdaptiveAvgPool2d(1),
+                nn.Flatten(),
+                nn.Linear(self.hidden_channels, self.output_dim_val),
+            )
+        else:
+            # Spatial output (e.g. for diffusion)
+            self.head = spectral_conv2d(
+                self.hidden_channels,
+                self.output_dim_val,
+                kernel_size=1, # 1x1 conv for projection
+                use_sn=self.use_spectral_norm
+            )
 
     def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
         B, _, H, W = x.shape

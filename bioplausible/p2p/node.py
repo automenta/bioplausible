@@ -43,7 +43,12 @@ class CoordinatorHandler(BaseHTTPRequestHandler):
         elif self.path.startswith('/get_job'):
             # Parse query params (simple)
             # /get_job?client_id=xyz
-            job = self.server.coordinator.get_job()
+            import urllib.parse
+            query = urllib.parse.urlparse(self.path).query
+            params = urllib.parse.parse_qs(query)
+            client_id = params.get('client_id', [None])[0]
+
+            job = self.server.coordinator.get_job(client_id)
             if job:
                 self._send_response(job)
             else:
@@ -102,12 +107,17 @@ class Coordinator:
         # Add some advanced ones occasionally
         if self.job_counter % 5 == 0:
             models.append("EqProp Transformer (Attention Only)")
+            models.append("ModernConvEqProp")
 
         # Populate queue if running low
         import random
         while len(self.job_queue) < 10:
             task = random.choice(tasks)
             model_name = random.choice(models)
+
+            requirements = {}
+            if model_name in ["ModernConvEqProp", "EqProp Transformer (Attention Only)"]:
+                requirements["gpu"] = True
 
             try:
                 space = get_search_space(model_name)
@@ -122,7 +132,8 @@ class Coordinator:
                     "job_id": self.job_counter,
                     "task": task,
                     "model_name": model_name,
-                    "config": config
+                    "config": config,
+                    "requirements": requirements
                 })
                 self.job_counter += 1
             except Exception as e:
@@ -148,13 +159,27 @@ class Coordinator:
         self.running = False
         logger.info("Coordinator stopped")
 
-    def get_job(self) -> Optional[Dict]:
+    def get_job(self, client_id: str = None) -> Optional[Dict]:
         with self.lock:
             if len(self.job_queue) < 5:
                 self._populate_initial_jobs() # Replenish if running low
 
-            if self.job_queue:
-                return self.job_queue.pop(0)
+            # Check capabilities if client_id is known
+            client_caps = self.node_capabilities.get(client_id, {})
+            has_gpu = client_caps.get("cuda", False)
+
+            # Find a suitable job
+            for i, job in enumerate(self.job_queue):
+                requirements = job.get("requirements", {})
+                requires_gpu = requirements.get("gpu", False)
+
+                # If job requires GPU but client doesn't have it, skip
+                if requires_gpu and not has_gpu:
+                    continue
+
+                # Found suitable job
+                return self.job_queue.pop(i)
+
             return None
 
     def submit_result(self, result: Dict):
