@@ -5,6 +5,8 @@ Hyperopt Trial Execution Helper.
 import tempfile
 import shutil
 import traceback
+import contextlib
+import io
 from pathlib import Path
 from typing import Dict, Optional, Any
 
@@ -54,7 +56,10 @@ def run_single_trial_task(
             runner.epochs = int(config['epochs'])
 
         # Run
-        success = runner.run_trial(trial_id)
+        # Suppress output to avoid cluttering the P2P log
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+             success = runner.run_trial(trial_id)
 
         if success:
             trial = storage.get_trial(trial_id)

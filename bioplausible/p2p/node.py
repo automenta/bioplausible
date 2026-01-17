@@ -89,28 +89,39 @@ class Coordinator:
         self._populate_initial_jobs()
 
     def _populate_initial_jobs(self):
-        # Generate some random jobs for testing
-        # In a real system, this would come from an evolutionary algorithm
+        # Dynamically generate jobs using search space sampling
         tasks = ["shakespeare", "mnist"]
-        models = ["EqProp MLP", "Backprop Baseline"]
+        # Basic models to seed the network
+        models = ["EqProp MLP", "Backprop Baseline", "Direct Feedback Alignment"]
 
-        for i in range(10):
-            model = models[i % len(models)]
-            space = get_search_space(model)
-            config = space.sample()
-            # Force small steps for quick testing/demo
-            if 'epochs' not in config: config['epochs'] = 1
-            if 'steps' in config: config['steps'] = 5
+        # Add some advanced ones occasionally
+        if self.job_counter % 5 == 0:
+            models.append("EqProp Transformer (Attention Only)")
 
-            task = tasks[i % len(tasks)]
+        # Populate queue if running low
+        import random
+        while len(self.job_queue) < 10:
+            task = random.choice(tasks)
+            model_name = random.choice(models)
 
-            self.job_queue.append({
-                "job_id": self.job_counter,
-                "task": task,
-                "model_name": model,
-                "config": config
-            })
-            self.job_counter += 1
+            try:
+                space = get_search_space(model_name)
+                config = space.sample()
+
+                # Apply sensible defaults for P2P/Network load
+                config['epochs'] = 1
+                if 'steps' in config:
+                    config['steps'] = min(config['steps'], 20)
+
+                self.job_queue.append({
+                    "job_id": self.job_counter,
+                    "task": task,
+                    "model_name": model_name,
+                    "config": config
+                })
+                self.job_counter += 1
+            except Exception as e:
+                logger.error(f"Failed to generate job for {model_name}: {e}")
 
     def start(self):
         if self.running: return
@@ -131,8 +142,8 @@ class Coordinator:
 
     def get_job(self) -> Optional[Dict]:
         with self.lock:
-            if not self.job_queue:
-                self._populate_initial_jobs() # Replenish
+            if len(self.job_queue) < 5:
+                self._populate_initial_jobs() # Replenish if running low
 
             if self.job_queue:
                 return self.job_queue.pop(0)

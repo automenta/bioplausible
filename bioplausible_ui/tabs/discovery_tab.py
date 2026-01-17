@@ -6,7 +6,7 @@ Visualizes the architecture search space and P2P network activity.
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QGroupBox, QPushButton,
-    QLabel, QComboBox, QSplitter
+    QLabel, QComboBox, QSplitter, QCheckBox
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
@@ -60,7 +60,17 @@ class DiscoveryTab(QWidget):
         self.refresh_btn.clicked.connect(self._refresh_viz)
         controls.addWidget(self.refresh_btn)
 
+        self.auto_refresh_check = QCheckBox("Auto-Refresh")
+        self.auto_refresh_check.setChecked(True)
+        self.auto_refresh_check.toggled.connect(self._toggle_auto_refresh)
+        controls.addWidget(self.auto_refresh_check)
+
         controls.addStretch()
+
+        self.last_update_label = QLabel("Last Updated: Never")
+        self.last_update_label.setStyleSheet("color: #666; font-size: 10px;")
+        controls.addWidget(self.last_update_label)
+
         arch_layout.addLayout(controls)
 
         # Plot
@@ -122,6 +132,12 @@ class DiscoveryTab(QWidget):
         else:
             self.p2p_node_ref = None # Standard worker doesn't expose DHT table
 
+    def _toggle_auto_refresh(self, checked):
+        if checked:
+            self.viz_timer.start(5000)
+        else:
+            self.viz_timer.stop()
+
     def _refresh_viz(self):
         """Fetch results and update architecture plot."""
         try:
@@ -160,6 +176,9 @@ class DiscoveryTab(QWidget):
                 })
 
             self.scatter_item.setData(spots=spots)
+
+            import time
+            self.last_update_label.setText(f"Last Updated: {time.strftime('%H:%M:%S')}")
 
         except Exception as e:
             logger.error(f"Viz refresh error: {e}")
