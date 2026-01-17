@@ -17,3 +17,7 @@ flake8
 black
 isort
 matplotlib
+# P2P & UI Dependencies
+kademlia
+PyQt6
+pyqtgraph

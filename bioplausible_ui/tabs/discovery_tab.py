@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QGroupBox, QPushButton,
     QLabel, QComboBox, QSplitter, QCheckBox
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
 from PyQt6.QtGui import QFont, QColor
 
 import numpy as np
@@ -20,6 +20,51 @@ from bioplausible.hyperopt.analysis import encode_configs, reduce_dimensions
 
 logger = logging.getLogger("DiscoveryTab")
 
+class VizWorker(QObject):
+    """Worker thread for heavy visualization calculations."""
+    finished = pyqtSignal(list) # returns spots list
+
+    def run(self, method='pca'):
+        try:
+            storage = HyperoptStorage()
+            trials = storage.get_all_trials()
+            storage.close()
+
+            if not trials:
+                self.finished.emit([])
+                return
+
+            configs = [t.config for t in trials]
+            accuracies = [t.accuracy for t in trials]
+
+            features = encode_configs(configs)
+            if features.size == 0:
+                self.finished.emit([])
+                return
+
+            coords = reduce_dimensions(features, method=method)
+
+            spots = []
+            for i in range(len(coords)):
+                acc = accuracies[i]
+                r = int(255 * (1 - acc))
+                g = int(255 * acc)
+                color = QColor(r, g, 0, 200)
+
+                spots.append({
+                    'pos': (coords[i, 0], coords[i, 1]),
+                    'data': trials[i],
+                    'brush': pg.mkBrush(color),
+                    'symbol': 'o',
+                    'size': 10
+                })
+
+            self.finished.emit(spots)
+
+        except Exception as e:
+            logger.error(f"Viz calculation error: {e}")
+            self.finished.emit([])
+
 class DiscoveryTab(QWidget):
     """
     Visualization Dashboard for NAS and P2P.
@@ -27,17 +72,25 @@ class DiscoveryTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.p2p_node_ref = None # Reference to active DHT node/worker
+        self.p2p_node_ref = None
         self._setup_ui()
+
+        # Setup Thread for Viz
+        self.thread = QThread()
+        self.worker = VizWorker()
+        self.worker.moveToThread(self.thread)
+        self.worker.finished.connect(self._on_viz_ready)
+        self.start_calc_signal.connect(self.worker.run)
+        self.thread.start()
 
         # Data timers
         self.viz_timer = QTimer()
-        self.viz_timer.timeout.connect(self._refresh_viz)
-        self.viz_timer.start(5000) # Every 5s
+        self.viz_timer.timeout.connect(self._request_viz_update)
+        self.viz_timer.start(5000)
 
         self.net_timer = QTimer()
         self.net_timer.timeout.connect(self._refresh_network)
-        self.net_timer.start(2000) # Every 2s
+        self.net_timer.start(2000)
 
     def _setup_ui(self):
         layout = QHBoxLayout(self)
@@ -138,50 +191,28 @@ class DiscoveryTab(QWidget):
         else:
             self.viz_timer.stop()
 
-    def _refresh_viz(self):
-        """Fetch results and update architecture plot."""
-        try:
-            storage = HyperoptStorage() # Opens default db
-            trials = storage.get_all_trials()
-            storage.close()
+    def _request_viz_update(self):
+        """Request update from worker thread."""
+        method = self.algo_combo.currentText().lower()
+        # We can't call worker.run directly as it would run in main thread
+        # We use QMetaObject.invokeMethod or just a signal if we set it up that way
+        # But easier here is to just use a custom signal or lambda if worker was just a function
+        # Since it's a QObject in a thread, best practice is signal-slot
+        pass # We need to trigger the run.
 
-            if not trials: return
+        # Actually, let's just use a simple approach:
+        # Re-instantiate worker logic? No.
+        # Let's add a signal to this class to trigger worker
+        self.start_calc_signal.emit(method)
 
-            configs = [t.config for t in trials]
-            accuracies = [t.accuracy for t in trials]
+    start_calc_signal = pyqtSignal(str) # Define at class level
 
-            # Encode
-            features = encode_configs(configs)
-            if features.size == 0: return
-
-            # Reduce
-            method = self.algo_combo.currentText().lower()
-            coords = reduce_dimensions(features, method=method)
-
-            # Update Plot
-            spots = []
-            for i in range(len(coords)):
-                # Color map: Red (0.0) -> Yellow (0.5) -> Green (1.0)
-                acc = accuracies[i]
-                r = int(255 * (1 - acc))
-                g = int(255 * acc)
-                color = QColor(r, g, 0, 200)
-
-                spots.append({
-                    'pos': (coords[i, 0], coords[i, 1]),
-                    'data': trials[i],
-                    'brush': pg.mkBrush(color),
-                    'symbol': 'o',
-                    'size': 10
-                })
-
+    def _on_viz_ready(self, spots):
+        """Update plot with calculated spots."""
+        if spots:
             self.scatter_item.setData(spots=spots)
-
             import time
             self.last_update_label.setText(f"Last Updated: {time.strftime('%H:%M:%S')}")
-
-        except Exception as e:
-            logger.error(f"Viz refresh error: {e}")
 
     def _on_point_clicked(self, plot, points):
         if len(points) > 0:

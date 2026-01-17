@@ -135,7 +135,10 @@ class Coordinator:
 
     def stop(self):
         if self.server:
-            self.server.shutdown()
+            # Shutdown in a separate thread to avoid deadlocks if called from request handler
+            t = threading.Thread(target=self.server.shutdown)
+            t.start()
+            t.join(timeout=2)
             self.server.server_close()
         self.running = False
         logger.info("Coordinator stopped")
