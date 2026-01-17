@@ -157,6 +157,12 @@ class RLTab(QWidget):
         self.rl_progress = QProgressBar()
         self.rl_progress.setFormat("Episode %v / %m")
         left_panel.addWidget(self.rl_progress)
+
+        # ETA Label
+        self.rl_eta_label = QLabel("ETA: --:-- | Speed: -- ep/s")
+        self.rl_eta_label.setStyleSheet("color: #888888; font-size: 11px;")
+        self.rl_eta_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_panel.addWidget(self.rl_eta_label)
         left_panel.addStretch()
 
         # Right panel: Plots

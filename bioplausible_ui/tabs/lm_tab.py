@@ -198,6 +198,12 @@ class LMTab(QWidget):
         self.lm_progress.setFormat("Epoch %v / %m")
         left_panel.addWidget(self.lm_progress)
 
+        # ETA Label
+        self.lm_eta_label = QLabel("ETA: --:-- | Speed: -- it/s")
+        self.lm_eta_label.setStyleSheet("color: #888888; font-size: 11px;")
+        self.lm_eta_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_panel.addWidget(self.lm_eta_label)
+
         # Parameter count
         self.lm_param_label = QLabel("Parameters: --")
         self.lm_param_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 5px;")

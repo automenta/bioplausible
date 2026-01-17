@@ -186,6 +186,12 @@ class VisionTab(QWidget):
         self.vis_progress.setFormat("Epoch %v / %m")
         left_panel.addWidget(self.vis_progress)
 
+        # ETA Label
+        self.vis_eta_label = QLabel("ETA: --:-- | Speed: -- it/s")
+        self.vis_eta_label.setStyleSheet("color: #888888; font-size: 11px;")
+        self.vis_eta_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_panel.addWidget(self.vis_eta_label)
+
         # Parameter count
         self.vis_param_label = QLabel("Parameters: --")
         self.vis_param_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 5px;")

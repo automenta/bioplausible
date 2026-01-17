@@ -87,6 +87,7 @@ class EqPropDashboard(QMainWindow):
         self.train_loader = None
         self.current_hyperparams: Dict = {}  # Model-specific hyperparameters
         self.generator: Optional[UniversalGenerator] = None
+        self.start_time = None
 
         # Plot data
         self.loss_history: List[float] = []
@@ -683,6 +684,9 @@ class EqPropDashboard(QMainWindow):
         self.vis_tab.vis_progress.setMaximum(self.vis_tab.vis_epochs_spin.value())
         self.vis_tab.vis_progress.setValue(0)
 
+        import time
+        self.start_time = time.time()
+
         model_name = self.vis_tab.vis_model_combo.currentText()
         self.status_label.setText(f"Training {model_name}...")
         self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
@@ -741,6 +745,9 @@ class EqPropDashboard(QMainWindow):
         self.lm_tab.lm_stop_btn.setEnabled(True)
         self.lm_tab.lm_progress.setMaximum(self.lm_tab.lm_epochs_spin.value())
         self.lm_tab.lm_progress.setValue(0)
+
+        import time
+        self.start_time = time.time()
 
         model_name = self.lm_tab.lm_model_combo.currentText()
         dataset_name = self.lm_tab.lm_dataset_combo.currentText()
@@ -804,6 +811,9 @@ class EqPropDashboard(QMainWindow):
         self.rl_tab.rl_progress.setMaximum(episodes)
         self.rl_tab.rl_progress.setValue(0)
 
+        import time
+        self.start_time = time.time()
+
         self.status_label.setText(f"Training {algo_name} on {env_name}...")
         self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
         self.plot_timer.start(100)
@@ -817,6 +827,18 @@ class EqPropDashboard(QMainWindow):
 
         self.rl_tab.rl_progress.setValue(metrics['episode'])
         self.rl_tab.rl_avg_label.setText(f"{metrics['avg_reward']:.1f}")
+
+        # Calculate ETA
+        if self.start_time:
+            import time
+            elapsed = time.time() - self.start_time
+            if metrics['episode'] > 0:
+                speed = metrics['episode'] / elapsed
+                remaining = metrics['total_episodes'] - metrics['episode']
+                eta_seconds = remaining / speed if speed > 0 else 0
+                eta_str = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+
+                self.rl_tab.rl_eta_label.setText(f"ETA: {eta_str} | Speed: {speed:.1f} ep/s")
 
         self.status_label.setText(
             f"Ep {metrics['episode']}/{metrics['total_episodes']} | "
@@ -858,6 +880,21 @@ class EqPropDashboard(QMainWindow):
         # Update progress bar
         self.vis_tab.vis_progress.setValue(metrics['epoch'])
         self.lm_tab.lm_progress.setValue(metrics['epoch'])
+
+        # Calculate ETA
+        if self.start_time:
+            import time
+            elapsed = time.time() - self.start_time
+            if metrics['epoch'] > 0:
+                speed = metrics['epoch'] / elapsed
+                remaining = metrics['total_epochs'] - metrics['epoch']
+                eta_seconds = remaining / speed if speed > 0 else 0
+                eta_str = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+
+                # Update both tabs just in case (or determine active tab)
+                eta_text = f"ETA: {eta_str} | Speed: {speed:.2f} ep/s"
+                self.vis_tab.vis_eta_label.setText(eta_text)
+                self.lm_tab.lm_eta_label.setText(eta_text)
 
         # Update labels
         self.vis_tab.vis_acc_label.setText(f"{metrics['accuracy']:.1%}")
