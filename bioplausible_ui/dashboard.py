@@ -50,6 +50,7 @@ from bioplausible_ui.tabs.rl_tab import RLTab
 from bioplausible_ui.tabs.microscope_tab import MicroscopeTab
 from bioplausible_ui.tabs.benchmarks_tab import BenchmarksTab
 from bioplausible_ui.tabs.console_tab import ConsoleTab
+from bioplausible_ui.tabs.p2p_tab import P2PTab
 
 
 class QtLogHandler(logging.Handler, QObject):
@@ -223,12 +224,16 @@ class EqPropDashboard(QMainWindow):
         search_tab = self._create_search_tab()
         self.tabs.addTab(search_tab, "🔍 Model Search")
 
-        # Tab 6: Benchmarks
+        # Tab 6: Community Grid (P2P)
+        self.p2p_tab = P2PTab()
+        self.tabs.addTab(self.p2p_tab, "🌐 Community Grid")
+
+        # Tab 7: Benchmarks
         self.bench_tab = BenchmarksTab()
         self.bench_tab.log_message.connect(self._append_log)
         self.tabs.addTab(self.bench_tab, "🏆 Benchmarks")
 
-        # Tab 7: Console
+        # Tab 8: Console
         self.console_tab = ConsoleTab()
         self.tabs.addTab(self.console_tab, "💻 Console")
 
