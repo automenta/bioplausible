@@ -27,6 +27,9 @@ class HyperoptStorage:
         self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
 
+        # Enable Write-Ahead Logging for better concurrency
+        self.conn.execute("PRAGMA journal_mode=WAL;")
+
         cursor = self.conn.cursor()
 
         # Trials table
