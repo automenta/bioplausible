@@ -4,7 +4,6 @@ import time
 import socket
 import logging
 import uuid
-import tempfile
 import os
 import shutil
 from pathlib import Path
@@ -14,9 +13,8 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 from typing import Optional, Dict, Any, List
 
-from bioplausible.hyperopt.experiment import TrialRunner
-from bioplausible.hyperopt.storage import HyperoptStorage
 from bioplausible.hyperopt.search_space import get_search_space
+from bioplausible.hyperopt.runner import run_single_trial_task
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -247,54 +245,15 @@ class Worker:
         self._update_status("Stopped")
 
     def _run_job(self, job_id, task, model_name, config) -> Optional[Dict]:
-        # Create temp storage
-        temp_dir = tempfile.mkdtemp()
-        db_path = Path(temp_dir) / "worker_temp.db"
-
-        try:
-            storage = HyperoptStorage(str(db_path))
-
-            # Create trial entry
-            # Note: config must be serializable
-            trial_id = storage.create_trial(model_name, config)
-
-            # Create runner
-            # Assuming TrialRunner can handle 'task' correctly
-            runner = TrialRunner(
-                storage=storage,
-                device="auto", # Use whatever we have
-                task=task,
-                quick_mode=True # P2P jobs should probably be quick for now or config controlled
-            )
-
-            # Override epochs from config if present (TrialRunner uses global config usually)
-            if 'epochs' in config:
-                runner.epochs = int(config['epochs'])
-
-            # Run
-            success = runner.run_trial(trial_id)
-
-            if success:
-                trial = storage.get_trial(trial_id)
-                metrics = {
-                    "accuracy": trial.accuracy,
-                    "loss": trial.final_loss,
-                    "perplexity": trial.perplexity,
-                    "time": trial.iteration_time
-                }
-                storage.close()
-                return metrics
-            else:
-                storage.close()
-                return None
-
-        except Exception as e:
-            self.log(f"Execution Error: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-        finally:
-            shutil.rmtree(temp_dir)
+        # Remote jobs are stored in the main DB so they appear in visualizations
+        # Use default storage path: "results/hyperopt.db"
+        return run_single_trial_task(
+            task=task,
+            model_name=model_name,
+            config=config,
+            storage_path="results/hyperopt.db",
+            job_id=job_id
+        )
 
     def _update_status(self, status):
         self.current_status = status

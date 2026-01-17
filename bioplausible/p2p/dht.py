@@ -128,3 +128,36 @@ class DHTNode:
         }
         self.set(key, data)
         logger.info(f"Published new best model for {task} (Score: {score:.4f})")
+
+    def get_known_peers(self) -> List[Dict]:
+        """
+        Get list of known peers from the routing table.
+        Returns [{'id': str, 'ip': str, 'port': int}, ...]
+        """
+        if not self.running or not self.server:
+            return []
+
+        peers = []
+        try:
+            # Safely access routing table. Accessing cross-thread is risky but reading buckets is generally okay-ish
+            # or we should schedule it on the loop.
+
+            async def _get_peers():
+                # kademlia.protocol.RoutingTable
+                # Accessing buckets
+                p_list = []
+                for bucket in self.server.protocol.router.buckets:
+                    for node in bucket.get_nodes():
+                        p_list.append({
+                            'id': node.id.hex(),
+                            'ip': node.ip,
+                            'port': node.port
+                        })
+                return p_list
+
+            future = asyncio.run_coroutine_threadsafe(_get_peers(), self.loop)
+            peers = future.result(timeout=2)
+        except Exception as e:
+            logger.debug(f"Error getting peers: {e}")
+
+        return peers

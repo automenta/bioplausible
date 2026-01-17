@@ -214,6 +214,10 @@ class P2PTab(QWidget):
             self.bootstrap_combo.setVisible(True)
             self.bootstrap_combo.setCurrentIndex(2) # Default to local for safety
 
+    # Helper signals to expose inner bridge signals to dashboard
+    bridge_log_signal = pyqtSignal(str)
+    bridge_status_signal = pyqtSignal(str, int, int)
+
     def _toggle_connection(self):
         if self.worker and self.worker.running:
             # Stop
@@ -256,6 +260,10 @@ class P2PTab(QWidget):
             self.bridge = P2PWorkerBridge(self.worker)
             self.bridge.status_changed.connect(self._on_status_changed)
             self.bridge.log_received.connect(self._log)
+
+            # Forward signals to external world
+            self.bridge.status_changed.connect(self.bridge_status_signal.emit)
+            self.bridge.log_received.connect(self.bridge_log_signal.emit)
 
             self.connect_btn.setText("⏹ Stop Contributing")
             self.connect_btn.setStyleSheet("font-weight: bold; font-size: 14px; background-color: #c0392b;")

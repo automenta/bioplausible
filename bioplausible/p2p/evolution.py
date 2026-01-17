@@ -14,8 +14,7 @@ from typing import Optional, Dict
 from bioplausible.p2p.dht import DHTNode
 from bioplausible.hyperopt.search_space import get_search_space
 from bioplausible.p2p.node import Worker # Reuse worker logic for running jobs
-from bioplausible.hyperopt.experiment import TrialRunner
-from bioplausible.hyperopt.storage import HyperoptStorage
+from bioplausible.hyperopt.runner import run_single_trial_task
 from bioplausible.p2p.state import load_state, save_state
 
 logger = logging.getLogger("P2PEvolution")
@@ -24,7 +23,6 @@ class P2PEvolution:
     def __init__(self, bootstrap_ip: str = None, bootstrap_port: int = 8468):
         self.bootstrap_nodes = [(bootstrap_ip, bootstrap_port)] if bootstrap_ip else []
         self.dht = None
-        self.worker_logic = Worker("dummy") # Used for _run_job
         self.running = False
         self.thread = None
 
@@ -129,13 +127,14 @@ class P2PEvolution:
                 # job_id is random for local logging
                 job_id = random.randint(1000, 9999)
 
-                # Use standard TrialRunner logic via Worker helper
-                # Reusing Worker._run_job ensures consistent environment setup
-                metrics = self.worker_logic._run_job(
-                    job_id=job_id,
+                # Use shared runner logic directly
+                # P2P Evolution results are stored in the MAIN DB to populate the Research Map
+                metrics = run_single_trial_task(
                     task=self.current_task,
                     model_name=model_name,
-                    config=mutated_config
+                    config=mutated_config,
+                    storage_path="results/hyperopt.db",
+                    job_id=job_id
                 )
 
                 if metrics:
