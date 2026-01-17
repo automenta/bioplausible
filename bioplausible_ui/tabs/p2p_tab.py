@@ -6,16 +6,17 @@ Allows users to contribute to the Bio-Plausible Research Network.
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QGroupBox, QPushButton,
-    QLabel, QLineEdit, QTextEdit, QProgressBar, QScrollArea
+    QLabel, QLineEdit, QTextEdit, QProgressBar, QScrollArea, QRadioButton, QButtonGroup
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, QTimer
 from PyQt6.QtGui import QFont, QDesktopServices, QColor
 from PyQt6.QtCore import QUrl
 
 from bioplausible.p2p import Worker, CLOUD_PROVIDERS, DEPLOYMENT_TIPS
+from bioplausible.p2p.evolution import P2PEvolution
 
 class P2PWorkerBridge(QObject):
-    """Bridges P2P Worker callbacks to Qt Signals."""
+    """Bridges P2P Worker/Evolution callbacks to Qt Signals."""
     status_changed = pyqtSignal(str, int, int) # status, points, jobs
     log_received = pyqtSignal(str)
 
@@ -36,7 +37,7 @@ class P2PTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.worker = None
+        self.worker = None # Can be Worker or P2PEvolution
         self.bridge = None
         self._setup_ui()
 
@@ -85,7 +86,26 @@ class P2PTab(QWidget):
         conn_group = QGroupBox("🔌 Network Settings")
         conn_layout = QVBoxLayout(conn_group)
 
-        conn_layout.addWidget(QLabel("Coordinator URL:"))
+        # Mode Selection
+        mode_layout = QHBoxLayout()
+        self.mode_group = QButtonGroup(self)
+
+        self.radio_coord = QRadioButton("Standard (Coordinator)")
+        self.radio_coord.setChecked(True)
+        self.mode_group.addButton(self.radio_coord)
+        mode_layout.addWidget(self.radio_coord)
+
+        self.radio_dht = QRadioButton("True P2P (DHT Mesh)")
+        self.mode_group.addButton(self.radio_dht)
+        mode_layout.addWidget(self.radio_dht)
+
+        conn_layout.addLayout(mode_layout)
+
+        self.radio_coord.toggled.connect(self._update_input_label)
+
+        self.input_label = QLabel("Coordinator URL:")
+        conn_layout.addWidget(self.input_label)
+
         self.url_input = QLineEdit("http://localhost:8000") # Default for local testing
         self.url_input.setPlaceholderText("http://grid.bioplausible.org")
         conn_layout.addWidget(self.url_input)
@@ -170,6 +190,16 @@ class P2PTab(QWidget):
         cloud_layout.addWidget(scroll)
         right_panel.addWidget(cloud_group)
 
+    def _update_input_label(self):
+        if self.radio_coord.isChecked():
+            self.input_label.setText("Coordinator URL:")
+            self.url_input.setPlaceholderText("http://grid.bioplausible.org")
+            self.url_input.setText("http://localhost:8000")
+        else:
+            self.input_label.setText("Bootstrap Node (IP):")
+            self.url_input.setPlaceholderText("1.2.3.4 (Leave empty for solo/bootstrap)")
+            self.url_input.setText("")
+
     def _toggle_connection(self):
         if self.worker and self.worker.running:
             # Stop
@@ -179,18 +209,39 @@ class P2PTab(QWidget):
             self.status_label.setText("DISCONNECTED")
             self.status_label.setStyleSheet("color: #ff5555; border: 2px solid #ff5555; border-radius: 5px; padding: 10px;")
             self._log("Worker stopped.")
+            self.radio_coord.setEnabled(True)
+            self.radio_dht.setEnabled(True)
         else:
             # Start
-            url = self.url_input.text()
-            if not url:
-                url = "http://localhost:8000"
+            self.radio_coord.setEnabled(False)
+            self.radio_dht.setEnabled(False)
 
-            self.worker = Worker(url)
+            target = self.url_input.text()
+
+            if self.radio_coord.isChecked():
+                # Client Mode
+                if not target: target = "http://localhost:8000"
+                self.worker = Worker(target)
+                self.worker.start_loop()
+            else:
+                # DHT Mode
+                # Logic: if target is empty, we are a bootstrap node or solo
+                # if target has IP, we bootstrap from it
+                # target format: IP or IP:PORT
+                ip = None
+                port = 8468
+                if target:
+                    parts = target.split(':')
+                    ip = parts[0]
+                    if len(parts) > 1: port = int(parts[1])
+
+                self.worker = P2PEvolution(bootstrap_ip=ip, bootstrap_port=port)
+                self.worker.start(auto_nice=True)
+
+            # Setup Bridge
             self.bridge = P2PWorkerBridge(self.worker)
             self.bridge.status_changed.connect(self._on_status_changed)
             self.bridge.log_received.connect(self._log)
-
-            self.worker.start_loop()
 
             self.connect_btn.setText("⏹ Stop Contributing")
             self.connect_btn.setStyleSheet("font-weight: bold; font-size: 14px; background-color: #c0392b;")
@@ -199,9 +250,9 @@ class P2PTab(QWidget):
 
     def _on_status_changed(self, status, points, jobs):
         self.status_label.setText(status.upper())
-        if "Running" in status:
+        if "Running" in status or "Mesh" in status or "Evaluating" in status:
              self.status_label.setStyleSheet("color: #00ff88; border: 2px solid #00ff88; border-radius: 5px; padding: 10px;")
-        elif "Idle" in status:
+        elif "Idle" in status or "Resting" in status:
              self.status_label.setStyleSheet("color: #3498db; border: 2px solid #3498db; border-radius: 5px; padding: 10px;")
 
         self.points_label.setText(str(points))
