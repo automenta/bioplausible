@@ -9,7 +9,7 @@ import time
 import os
 import logging
 import random
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 
 from bioplausible.p2p.dht import DHTNode
 from bioplausible.hyperopt.search_space import get_search_space
@@ -20,9 +20,13 @@ from bioplausible.p2p.state import load_state, save_state
 logger = logging.getLogger("P2PEvolution")
 
 class P2PEvolution:
-    def __init__(self, bootstrap_ip: str = None, bootstrap_port: int = 8468):
+    def __init__(self, bootstrap_ip: str = None, bootstrap_port: int = 8468,
+                 discovery_mode: str = 'quick', constraints: Dict[str, Any] = None):
         self.bootstrap_nodes = [(bootstrap_ip, bootstrap_port)] if bootstrap_ip else []
         self.dht = None
+        self.discovery_mode = discovery_mode
+        self.constraints = constraints or {}
+
         self.running = False
         self.thread = None
 
@@ -110,15 +114,25 @@ class P2PEvolution:
                 # 2. Mutate
                 self._update_status("Mutating Genome...")
                 space = get_search_space(model_name)
+
+                # Apply User Constraints to Space
+                if self.constraints:
+                    space = space.apply_constraints(self.constraints)
+
                 # Ensure we have a valid config to mutate
                 if not config: config = space.sample()
 
                 # Apply Mutation
                 mutated_config = space.mutate(config)
-                # Fix parameters for quick loop
-                mutated_config['epochs'] = 1
-                if 'steps' in mutated_config:
-                    mutated_config['steps'] = max(5, min(mutated_config['steps'], 20))
+
+                # Apply Mode Settings (Quick vs Deep)
+                if self.discovery_mode == 'quick':
+                    mutated_config['epochs'] = 1
+                    if 'steps' in mutated_config:
+                        mutated_config['steps'] = min(mutated_config['steps'], 15)
+                elif self.discovery_mode == 'deep':
+                    mutated_config['epochs'] = 5
+                    # Allow larger steps if defined in space
 
                 # 3. Evaluate
                 self._update_status(f"Evaluating: {model_name}")

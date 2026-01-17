@@ -125,6 +125,59 @@ class SearchSpace:
 
         return child
 
+    def apply_constraints(self, constraints: Dict[str, Any]) -> "SearchSpace":
+        """
+        Return a new SearchSpace with constraints applied.
+
+        Supported constraints:
+        - max_layers (int): Cap the maximum number of layers
+        - max_hidden (int): Cap the maximum hidden dimension
+        - max_steps (int): Cap the maximum equilibrium steps
+        """
+        if not constraints:
+            return self
+
+        new_params = self.params.copy()
+
+        for param, spec in new_params.items():
+            # Handle discrete choices (list)
+            if isinstance(spec, list):
+                if param == "num_layers" and "max_layers" in constraints:
+                    new_params[param] = [x for x in spec if x <= constraints["max_layers"]]
+                    if not new_params[param]: # Fallback if empty
+                        new_params[param] = [min(spec)]
+
+                elif param == "hidden_dim" and "max_hidden" in constraints:
+                    new_params[param] = [x for x in spec if x <= constraints["max_hidden"]]
+                    if not new_params[param]:
+                        new_params[param] = [min(spec)]
+
+                elif param == "steps" and "max_steps" in constraints:
+                    new_params[param] = [x for x in spec if x <= constraints["max_steps"]]
+                    if not new_params[param]:
+                        new_params[param] = [min(spec)]
+
+            # Handle continuous ranges (tuple)
+            elif isinstance(spec, tuple):
+                min_val, max_val, scale = spec
+
+                if param == "num_layers" and "max_layers" in constraints:
+                    max_val = min(max_val, constraints["max_layers"])
+                    if min_val > max_val: min_val = max_val
+                    new_params[param] = (min_val, max_val, scale)
+
+                elif param == "hidden_dim" and "max_hidden" in constraints:
+                    max_val = min(max_val, constraints["max_hidden"])
+                    if min_val > max_val: min_val = max_val
+                    new_params[param] = (min_val, max_val, scale)
+
+                elif param == "steps" and "max_steps" in constraints:
+                    max_val = min(max_val, constraints["max_steps"])
+                    if min_val > max_val: min_val = max_val
+                    new_params[param] = (min_val, max_val, scale)
+
+        return SearchSpace(self.name, new_params)
+
 
 # Define search spaces for all models
 SEARCH_SPACES = {

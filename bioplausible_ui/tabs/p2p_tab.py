@@ -135,6 +135,37 @@ class P2PTab(QWidget):
 
         left_panel.addWidget(conn_group)
 
+        # Strategy & Constraints
+        strat_group = QGroupBox("🎯 Discovery Strategy")
+        strat_layout = QVBoxLayout(strat_group)
+
+        # Strategy Radio
+        strat_radio_layout = QHBoxLayout()
+        self.strat_group_btn = QButtonGroup(self)
+        self.radio_quick = QRadioButton("🐇 Quick Exploration")
+        self.radio_quick.setToolTip("Fast, shallow searches (1 epoch). Good for broad discovery.")
+        self.radio_quick.setChecked(True)
+        self.strat_group_btn.addButton(self.radio_quick)
+
+        self.radio_deep = QRadioButton("🐢 Deep Focus")
+        self.radio_deep.setToolTip("Longer training (5+ epochs). Good for refining high performers.")
+        self.strat_group_btn.addButton(self.radio_deep)
+
+        strat_radio_layout.addWidget(self.radio_quick)
+        strat_radio_layout.addWidget(self.radio_deep)
+        strat_layout.addLayout(strat_radio_layout)
+
+        # Constraints Checkboxes
+        self.check_low_mem = QCheckBox("Low Memory (Mobile/Laptop)")
+        self.check_low_mem.setToolTip("Limits model size (hidden dimensions, layers).")
+        strat_layout.addWidget(self.check_low_mem)
+
+        self.check_fast = QCheckBox("Time Constrained (Max Steps)")
+        self.check_fast.setToolTip("Limits equilibrium steps for faster iterations.")
+        strat_layout.addWidget(self.check_fast)
+
+        left_panel.addWidget(strat_group)
+
         # Log
         log_group = QGroupBox("📜 Activity Log")
         log_layout = QVBoxLayout(log_group)
@@ -253,7 +284,21 @@ class P2PTab(QWidget):
                      ip = parts[0]
                      if len(parts) > 1: port = int(parts[1])
 
-                self.worker = P2PEvolution(bootstrap_ip=ip, bootstrap_port=port)
+                # Gather settings
+                mode = 'quick' if self.radio_quick.isChecked() else 'deep'
+                constraints = {}
+                if self.check_low_mem.isChecked():
+                    constraints['max_hidden'] = 64
+                    constraints['max_layers'] = 3
+                if self.check_fast.isChecked():
+                    constraints['max_steps'] = 12
+
+                self.worker = P2PEvolution(
+                    bootstrap_ip=ip,
+                    bootstrap_port=port,
+                    discovery_mode=mode,
+                    constraints=constraints
+                )
                 self.worker.start(auto_nice=True)
 
             # Setup Bridge
