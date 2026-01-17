@@ -35,8 +35,11 @@ class CoordinatorHandler(BaseHTTPRequestHandler):
             self._send_response({
                 "status": "online",
                 "nodes": len(self.server.coordinator.nodes),
-                "jobs_completed": self.server.coordinator.jobs_completed
+                "jobs_completed": self.server.coordinator.jobs_completed,
+                "node_capabilities": self.server.coordinator.node_capabilities
             })
+        elif self.path == '/health':
+            self._send_response({"status": "healthy"})
         elif self.path.startswith('/get_job'):
             # Parse query params (simple)
             # /get_job?client_id=xyz
@@ -64,7 +67,8 @@ class CoordinatorHandler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode('utf-8'))
             client_id = data.get('client_id', 'unknown')
-            self.server.coordinator.register_node(client_id)
+            capabilities = data.get('capabilities', {})
+            self.server.coordinator.register_node(client_id, capabilities)
             self._send_response({"status": "registered"})
         else:
             self.send_error(404)
@@ -80,6 +84,7 @@ class Coordinator:
         self.thread = None
         self.running = False
         self.nodes = set()
+        self.node_capabilities = {}
         self.jobs_completed = 0
         self.job_counter = 0
         self.lock = threading.Lock()
@@ -160,9 +165,11 @@ class Coordinator:
         logger.info(f"Job {job_id} completed. Acc: {acc:.4f}")
         # Here we would feed back into the evolutionary algo
 
-    def register_node(self, client_id: str):
+    def register_node(self, client_id: str, capabilities: Dict = None):
         with self.lock:
             self.nodes.add(client_id)
+            if capabilities:
+                self.node_capabilities[client_id] = capabilities
 
 from bioplausible.p2p.state import load_state, save_state
 
@@ -200,9 +207,18 @@ class Worker:
     def _loop(self):
         self.log(f"Worker {self.client_id} started. Connecting to {self.coordinator_url}...")
 
+        # Collect capabilities
+        import torch
+        from bioplausible.models.triton_kernel import TritonEqPropOps
+        caps = {
+            "cuda": torch.cuda.is_available(),
+            "triton": TritonEqPropOps.is_available(),
+            "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu"
+        }
+
         # Register
         try:
-            self._post('/register', {"client_id": self.client_id})
+            self._post('/register', {"client_id": self.client_id, "capabilities": caps})
         except Exception as e:
             self.log(f"Failed to register: {e}")
             # Continue anyway, maybe transient

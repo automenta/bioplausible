@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from bioplausible.models import ConvEqProp
+from bioplausible.models import SimpleConvEqProp
 
 
 class EqPropDiffusion(nn.Module):
@@ -14,7 +14,8 @@ class EqPropDiffusion(nn.Module):
     def __init__(self, img_channels=1, hidden_channels=64):
         super().__init__()
         # Input channels + 1 for time embedding (concatenated as a channel)
-        self.denoiser = ConvEqProp(
+        # Using SimpleConvEqProp allows Triton acceleration
+        self.denoiser = SimpleConvEqProp(
             input_channels=img_channels + 1,
             hidden_channels=hidden_channels,
             output_dim=img_channels * 28 * 28,  # Flattened output size for MNIST

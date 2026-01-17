@@ -278,15 +278,19 @@ class SimpleConvEqProp(EqPropModel):
         gamma: float = 0.5,
         use_spectral_norm: bool = True,
         gradient_method: str = "bptt",
+        input_channels: int = 3,
+        output_dim: int = 10,
     ):
         self.hidden_channels = hidden_channels
         self.gamma = gamma
         self.use_spectral_norm = use_spectral_norm
+        self.input_channels_count = input_channels
+        self.output_dim_val = output_dim
 
         super().__init__(
             input_dim=0,
             hidden_dim=hidden_channels,
-            output_dim=10,
+            output_dim=output_dim,
             max_steps=eq_steps,
             use_spectral_norm=use_spectral_norm,
             gradient_method=gradient_method,
@@ -295,7 +299,11 @@ class SimpleConvEqProp(EqPropModel):
     def _build_layers(self):
         # Single-stage embedding
         self.embed = spectral_conv2d(
-            3, self.hidden_channels, 3, padding=1, use_sn=self.use_spectral_norm
+            self.input_channels_count,
+            self.hidden_channels,
+            3,
+            padding=1,
+            use_sn=self.use_spectral_norm,
         )
 
         # Recurrent block
@@ -308,9 +316,11 @@ class SimpleConvEqProp(EqPropModel):
         )
         self.norm = nn.GroupNorm(8, self.hidden_channels)
 
-        # Classifier
+        # Classifier / Output Head
         self.head = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(self.hidden_channels, 10)
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(self.hidden_channels, self.output_dim_val),
         )
 
     def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
