@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from bioplausible.models.registry import MODEL_REGISTRY
+from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
 from bioplausible_ui.themes import PLOT_COLORS
 
@@ -20,6 +20,7 @@ class VisionTab(QWidget):
 
     start_training_signal = pyqtSignal(str) # Mode ('vision')
     stop_training_signal = pyqtSignal()
+    clear_plots_signal = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -60,6 +61,11 @@ class VisionTab(QWidget):
             if spec.task_compat is None or "vision" in spec.task_compat:
                 model_items.append(f"{spec.name}")
         self.vis_model_combo.addItems(model_items)
+        self.vis_model_combo.currentTextChanged.connect(self._update_model_desc)
+
+        self.vis_desc_label = QLabel("")
+        self.vis_desc_label.setWordWrap(True)
+        self.vis_desc_label.setStyleSheet("color: #a0a0b0; font-size: 11px; font-style: italic; margin-bottom: 5px;")
 
         self.vis_hidden_spin = QSpinBox()
         self.vis_hidden_spin.setRange(64, 1024)
@@ -73,11 +79,15 @@ class VisionTab(QWidget):
 
         model_controls = [
             ("Architecture:", self.vis_model_combo),
+            ("", self.vis_desc_label),
             ("Hidden Dim:", self.vis_hidden_spin),
             ("Max Steps:", self.vis_steps_spin)
         ]
         model_group = self._create_control_group("🧠 Model", model_controls)
         left_panel.addWidget(model_group)
+
+        # Trigger initial update
+        self._update_model_desc(self.vis_model_combo.currentText())
 
         # Dynamic Hyperparameters Group
         self.vis_hyperparam_group = QGroupBox("⚙️ Model Hyperparameters")
@@ -164,6 +174,12 @@ class VisionTab(QWidget):
         self.vis_reset_btn.setToolTip("Reset all hyperparameters to default values")
         self.vis_reset_btn.clicked.connect(self._reset_defaults)
         btn_layout.addWidget(self.vis_reset_btn)
+
+        self.vis_clear_btn = QPushButton("🗑️ Clear")
+        self.vis_clear_btn.setObjectName("resetButton") # Re-use styling
+        self.vis_clear_btn.setToolTip("Clear plot history")
+        self.vis_clear_btn.clicked.connect(self.clear_plots_signal.emit)
+        btn_layout.addWidget(self.vis_clear_btn)
         left_panel.addLayout(btn_layout)
 
         self.vis_progress = QProgressBar()
@@ -235,6 +251,14 @@ class VisionTab(QWidget):
 
     def _update_vis_hyperparams(self, model_name):
         update_hyperparams_generic(self, model_name, self.vis_hyperparam_layout, self.vis_hyperparam_widgets, self.vis_hyperparam_group)
+
+    def _update_model_desc(self, model_name):
+        """Update model description label."""
+        try:
+            spec = get_model_spec(model_name)
+            self.vis_desc_label.setText(spec.description)
+        except Exception:
+            self.vis_desc_label.setText("")
 
     def get_current_hyperparams(self):
         return get_current_hyperparams_generic(self.vis_hyperparam_widgets)

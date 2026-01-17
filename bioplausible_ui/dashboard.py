@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QSplitter, QFrame, QCheckBox, QMessageBox, QApplication, QFileDialog
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QKeySequence, QShortcut
 
 try:
     import pyqtgraph as pg
@@ -197,18 +197,21 @@ class EqPropDashboard(QMainWindow):
         self.lm_tab = LMTab()
         self.lm_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
         self.lm_tab.stop_training_signal.connect(self._stop_training)
+        self.lm_tab.clear_plots_signal.connect(self._clear_plots)
         self.tabs.addTab(self.lm_tab, "🔤 Language Model")
 
         # Tab 2: Vision
         self.vis_tab = VisionTab()
         self.vis_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
         self.vis_tab.stop_training_signal.connect(self._stop_training)
+        self.vis_tab.clear_plots_signal.connect(self._clear_plots)
         self.tabs.addTab(self.vis_tab, "📷 Vision")
 
         # Tab 3: Reinforcement Learning
         self.rl_tab = RLTab()
         self.rl_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
         self.rl_tab.stop_training_signal.connect(self._stop_training)
+        self.rl_tab.clear_plots_signal.connect(self._clear_plots)
         self.tabs.addTab(self.rl_tab, "🎮 Reinforcement Learning")
 
         # Tab 4: Microscope (Dynamics)
@@ -232,6 +235,35 @@ class EqPropDashboard(QMainWindow):
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
         self.status_label.setStyleSheet("color: #808090; padding: 5px;")
         layout.addWidget(self.status_label)
+
+        # Keyboard Shortcuts
+        self.train_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
+        self.train_shortcut.activated.connect(self._on_train_shortcut)
+
+        self.stop_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
+        self.stop_shortcut.activated.connect(self._stop_training)
+
+    def _clear_plots(self):
+        """Clear all plot history and refresh plots."""
+        self.loss_history.clear()
+        self.acc_history.clear()
+        self.lipschitz_history.clear()
+        self.rl_reward_history.clear()
+        self.rl_loss_history.clear()
+        self.rl_avg_reward_history.clear()
+        self._update_plots()
+        self.status_label.setText("Plot history cleared.")
+        self.status_label.setStyleSheet("color: #a0a0b0; padding: 5px;")
+
+    def _on_train_shortcut(self):
+        """Handle start training shortcut based on active tab."""
+        current = self.tabs.currentWidget()
+        if isinstance(current, LMTab):
+            self._start_training('lm')
+        elif isinstance(current, VisionTab):
+            self._start_training('vision')
+        elif isinstance(current, RLTab):
+            self._start_training('rl')
 
     def _save_model(self):
         """Save the current model to a file, including current UI configuration."""

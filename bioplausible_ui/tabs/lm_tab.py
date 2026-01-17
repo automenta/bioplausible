@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from bioplausible.models.registry import MODEL_REGISTRY
+from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
 from bioplausible_ui.generation import count_parameters, format_parameter_count, UniversalGenerator
 from bioplausible_ui.themes import PLOT_COLORS
@@ -22,6 +22,7 @@ class LMTab(QWidget):
 
     start_training_signal = pyqtSignal(str) # Mode ('lm')
     stop_training_signal = pyqtSignal()
+    clear_plots_signal = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -64,6 +65,11 @@ class LMTab(QWidget):
             if spec.task_compat is None or "lm" in spec.task_compat:
                 lm_items.append(f"{spec.name}")
         self.lm_model_combo.addItems(lm_items)
+        self.lm_model_combo.currentTextChanged.connect(self._update_model_desc)
+
+        self.lm_desc_label = QLabel("")
+        self.lm_desc_label.setWordWrap(True)
+        self.lm_desc_label.setStyleSheet("color: #a0a0b0; font-size: 11px; font-style: italic; margin-bottom: 5px;")
 
         self.lm_hidden_spin = QSpinBox()
         self.lm_hidden_spin.setRange(64, 1024)
@@ -83,12 +89,16 @@ class LMTab(QWidget):
 
         model_controls = [
             ("Architecture:", self.lm_model_combo),
+            ("", self.lm_desc_label),
             ("Hidden Dim:", self.lm_hidden_spin),
             ("Layers:", self.lm_layers_spin),
             ("Eq Steps:", self.lm_steps_spin)
         ]
         model_group = self._create_control_group("🧠 Model", model_controls)
         left_panel.addWidget(model_group)
+
+        # Trigger initial update
+        self._update_model_desc(self.lm_model_combo.currentText())
 
         # Dynamic Hyperparameters Group
         self.lm_hyperparam_group = QGroupBox("⚙️ Model Hyperparameters")
@@ -174,6 +184,12 @@ class LMTab(QWidget):
         self.lm_reset_btn.setToolTip("Reset all hyperparameters to default values")
         self.lm_reset_btn.clicked.connect(self._reset_defaults)
         btn_layout.addWidget(self.lm_reset_btn)
+
+        self.lm_clear_btn = QPushButton("🗑️ Clear")
+        self.lm_clear_btn.setObjectName("resetButton")
+        self.lm_clear_btn.setToolTip("Clear plot history")
+        self.lm_clear_btn.clicked.connect(self.clear_plots_signal.emit)
+        btn_layout.addWidget(self.lm_clear_btn)
         left_panel.addLayout(btn_layout)
 
         # Progress bar
@@ -259,6 +275,14 @@ class LMTab(QWidget):
 
     def _update_lm_hyperparams(self, model_name):
         update_hyperparams_generic(self, model_name, self.lm_hyperparam_layout, self.lm_hyperparam_widgets, self.lm_hyperparam_group)
+
+    def _update_model_desc(self, model_name):
+        """Update model description label."""
+        try:
+            spec = get_model_spec(model_name)
+            self.lm_desc_label.setText(spec.description)
+        except Exception:
+            self.lm_desc_label.setText("")
 
     def _generate_text(self):
         """Generate text using the current model."""

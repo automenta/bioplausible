@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal
 
-from bioplausible.models.registry import MODEL_REGISTRY
+from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.themes import PLOT_COLORS
 
 try:
@@ -19,6 +19,7 @@ class RLTab(QWidget):
 
     start_training_signal = pyqtSignal(str) # Mode ('rl')
     stop_training_signal = pyqtSignal()
+    clear_plots_signal = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -65,6 +66,11 @@ class RLTab(QWidget):
                  rl_items.append(spec.name)
         self.rl_algo_combo.addItems(rl_items)
         self.rl_algo_combo.currentTextChanged.connect(self._update_rl_controls)
+        self.rl_algo_combo.currentTextChanged.connect(self._update_model_desc)
+
+        self.rl_desc_label = QLabel("")
+        self.rl_desc_label.setWordWrap(True)
+        self.rl_desc_label.setStyleSheet("color: #a0a0b0; font-size: 11px; font-style: italic; margin-bottom: 5px;")
 
         # Gradient Method
         self.rl_grad_combo = QComboBox()
@@ -86,12 +92,16 @@ class RLTab(QWidget):
         model_controls = [
             ("Environment:", self.rl_env_combo),
             ("Algorithm:", self.rl_algo_combo),
+            ("", self.rl_desc_label),
             ("Gradient Mode:", self.rl_grad_combo),
             ("Hidden Dim:", self.rl_hidden_spin),
             ("Eq Steps:", self.rl_steps_spin)
         ]
         model_group = self._create_control_group("🎮 Task & Model", model_controls)
         left_panel.addWidget(model_group)
+
+        # Trigger initial update
+        self._update_model_desc(self.rl_algo_combo.currentText())
 
         # Training
         self.rl_episodes_spin = QSpinBox()
@@ -135,6 +145,12 @@ class RLTab(QWidget):
         self.rl_reset_btn.setToolTip("Reset all hyperparameters to default values")
         self.rl_reset_btn.clicked.connect(self._reset_defaults)
         btn_layout.addWidget(self.rl_reset_btn)
+
+        self.rl_clear_btn = QPushButton("🗑️ Clear")
+        self.rl_clear_btn.setObjectName("resetButton")
+        self.rl_clear_btn.setToolTip("Clear plot history")
+        self.rl_clear_btn.clicked.connect(self.clear_plots_signal.emit)
+        btn_layout.addWidget(self.rl_clear_btn)
         left_panel.addLayout(btn_layout)
 
         # Progress
@@ -189,3 +205,11 @@ class RLTab(QWidget):
                 self.rl_grad_combo.setCurrentText("equilibrium")
             elif "(BPTT)" in text:
                 self.rl_grad_combo.setCurrentText("bptt")
+
+    def _update_model_desc(self, model_name):
+        """Update model description label."""
+        try:
+            spec = get_model_spec(model_name)
+            self.rl_desc_label.setText(spec.description)
+        except Exception:
+            self.rl_desc_label.setText("")
