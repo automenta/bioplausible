@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from bioplausible.models.registry import MODEL_REGISTRY
+from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
 from bioplausible_ui.generation import count_parameters, format_parameter_count, UniversalGenerator
 from bioplausible_ui.themes import PLOT_COLORS
@@ -22,6 +22,7 @@ class LMTab(QWidget):
 
     start_training_signal = pyqtSignal(str) # Mode ('lm')
     stop_training_signal = pyqtSignal()
+    clear_plots_signal = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -64,28 +65,40 @@ class LMTab(QWidget):
             if spec.task_compat is None or "lm" in spec.task_compat:
                 lm_items.append(f"{spec.name}")
         self.lm_model_combo.addItems(lm_items)
+        self.lm_model_combo.currentTextChanged.connect(self._update_model_desc)
+
+        self.lm_desc_label = QLabel("")
+        self.lm_desc_label.setWordWrap(True)
+        self.lm_desc_label.setStyleSheet("color: #a0a0b0; font-size: 11px; font-style: italic; margin-bottom: 5px;")
 
         self.lm_hidden_spin = QSpinBox()
         self.lm_hidden_spin.setRange(64, 1024)
         self.lm_hidden_spin.setValue(256)
         self.lm_hidden_spin.setSingleStep(64)
+        self.lm_hidden_spin.setToolTip("Dimension of hidden state vectors")
 
         self.lm_layers_spin = QSpinBox()
         self.lm_layers_spin.setRange(1, 100)
         self.lm_layers_spin.setValue(4)
+        self.lm_layers_spin.setToolTip("Number of Transformer/RNN layers")
 
         self.lm_steps_spin = QSpinBox()
         self.lm_steps_spin.setRange(5, 50)
         self.lm_steps_spin.setValue(15)
+        self.lm_steps_spin.setToolTip("Number of equilibrium steps per forward pass")
 
         model_controls = [
             ("Architecture:", self.lm_model_combo),
+            ("", self.lm_desc_label),
             ("Hidden Dim:", self.lm_hidden_spin),
             ("Layers:", self.lm_layers_spin),
             ("Eq Steps:", self.lm_steps_spin)
         ]
         model_group = self._create_control_group("🧠 Model", model_controls)
         left_panel.addWidget(model_group)
+
+        # Trigger initial update
+        self._update_model_desc(self.lm_model_combo.currentText())
 
         # Dynamic Hyperparameters Group
         self.lm_hyperparam_group = QGroupBox("⚙️ Model Hyperparameters")
@@ -100,14 +113,17 @@ class LMTab(QWidget):
         # Dataset Selection
         self.lm_dataset_combo = QComboBox()
         self.lm_dataset_combo.addItems(["tiny_shakespeare", "wikitext-2", "ptb"])
+        self.lm_dataset_combo.setToolTip("Source text dataset for training")
 
         self.lm_seqlen_spin = QSpinBox()
         self.lm_seqlen_spin.setRange(32, 512)
         self.lm_seqlen_spin.setValue(128)
+        self.lm_seqlen_spin.setToolTip("Context length (tokens) for backpropagation")
 
         self.lm_batch_spin = QSpinBox()
         self.lm_batch_spin.setRange(8, 256)
         self.lm_batch_spin.setValue(64)
+        self.lm_batch_spin.setToolTip("Number of sequences per training step")
 
         data_controls = [
             ("Dataset:", self.lm_dataset_combo),
@@ -121,15 +137,18 @@ class LMTab(QWidget):
         self.lm_epochs_spin = QSpinBox()
         self.lm_epochs_spin.setRange(1, 500)
         self.lm_epochs_spin.setValue(50)
+        self.lm_epochs_spin.setToolTip("Total number of passes over the dataset")
 
         self.lm_lr_spin = QDoubleSpinBox()
         self.lm_lr_spin.setRange(0.0001, 0.1)
         self.lm_lr_spin.setValue(0.001)
         self.lm_lr_spin.setSingleStep(0.0001)
         self.lm_lr_spin.setDecimals(4)
+        self.lm_lr_spin.setToolTip("Step size for optimizer")
 
         self.lm_compile_check = QCheckBox("torch.compile (2x speedup)")
         self.lm_compile_check.setChecked(True)
+        self.lm_compile_check.setToolTip("Use PyTorch 2.0 graph compilation")
 
         self.lm_kernel_check = QCheckBox("O(1) Kernel Mode (GPU)")
         self.lm_kernel_check.setToolTip("Use fused EqProp kernel for O(1) memory training")
@@ -159,6 +178,18 @@ class LMTab(QWidget):
         self.lm_stop_btn.setEnabled(False)
         self.lm_stop_btn.clicked.connect(self.stop_training_signal.emit)
         btn_layout.addWidget(self.lm_stop_btn)
+
+        self.lm_reset_btn = QPushButton("↺ Reset")
+        self.lm_reset_btn.setObjectName("resetButton")
+        self.lm_reset_btn.setToolTip("Reset all hyperparameters to default values")
+        self.lm_reset_btn.clicked.connect(self._reset_defaults)
+        btn_layout.addWidget(self.lm_reset_btn)
+
+        self.lm_clear_btn = QPushButton("🗑️ Clear")
+        self.lm_clear_btn.setObjectName("resetButton")
+        self.lm_clear_btn.setToolTip("Clear plot history")
+        self.lm_clear_btn.clicked.connect(self.clear_plots_signal.emit)
+        btn_layout.addWidget(self.lm_clear_btn)
         left_panel.addLayout(btn_layout)
 
         # Progress bar
@@ -166,6 +197,12 @@ class LMTab(QWidget):
         self.lm_progress.setTextVisible(True)
         self.lm_progress.setFormat("Epoch %v / %m")
         left_panel.addWidget(self.lm_progress)
+
+        # ETA Label
+        self.lm_eta_label = QLabel("ETA: --:-- | Speed: -- it/s")
+        self.lm_eta_label.setStyleSheet("color: #888888; font-size: 11px;")
+        self.lm_eta_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_panel.addWidget(self.lm_eta_label)
 
         # Parameter count
         self.lm_param_label = QLabel("Parameters: --")
@@ -227,8 +264,31 @@ class LMTab(QWidget):
             viz_layout.addWidget(self.lm_weights_container)
             right_panel.addWidget(viz_group)
 
+    def _reset_defaults(self):
+        """Reset all controls to default values."""
+        self.lm_hidden_spin.setValue(256)
+        self.lm_layers_spin.setValue(4)
+        self.lm_steps_spin.setValue(15)
+        self.lm_seqlen_spin.setValue(128)
+        self.lm_batch_spin.setValue(64)
+        self.lm_epochs_spin.setValue(50)
+        self.lm_lr_spin.setValue(0.001)
+        self.lm_compile_check.setChecked(True)
+        self.lm_kernel_check.setChecked(False)
+        self.lm_micro_check.setChecked(False)
+        # Reset combo boxes if needed, though they usually default to index 0 or specific items
+        self.lm_dataset_combo.setCurrentIndex(0)
+
     def _update_lm_hyperparams(self, model_name):
         update_hyperparams_generic(self, model_name, self.lm_hyperparam_layout, self.lm_hyperparam_widgets, self.lm_hyperparam_group)
+
+    def _update_model_desc(self, model_name):
+        """Update model description label."""
+        try:
+            spec = get_model_spec(model_name)
+            self.lm_desc_label.setText(spec.description)
+        except Exception:
+            self.lm_desc_label.setText("")
 
     def _generate_text(self):
         """Generate text using the current model."""

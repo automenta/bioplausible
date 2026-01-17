@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QSplitter, QFrame, QCheckBox, QMessageBox, QApplication, QFileDialog
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QKeySequence, QShortcut
 
 try:
     import pyqtgraph as pg
@@ -87,6 +87,7 @@ class EqPropDashboard(QMainWindow):
         self.train_loader = None
         self.current_hyperparams: Dict = {}  # Model-specific hyperparameters
         self.generator: Optional[UniversalGenerator] = None
+        self.start_time = None
 
         # Plot data
         self.loss_history: List[float] = []
@@ -153,10 +154,12 @@ class EqPropDashboard(QMainWindow):
                     self.lm_tab.lm_layers_spin.setValue(int(config['num_layers']))
 
             self.status_label.setText(f"Loaded configuration for {model_name}")
+            self.status_label.setStyleSheet("color: #00aacc; padding: 5px;")
 
         except Exception as e:
             print(f"Error applying config: {e}")
             self.status_label.setText(f"Error loading config: {e}")
+            self.status_label.setStyleSheet("color: #ff5588; padding: 5px;")
 
     def _setup_ui(self):
         """Set up the main user interface."""
@@ -195,18 +198,21 @@ class EqPropDashboard(QMainWindow):
         self.lm_tab = LMTab()
         self.lm_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
         self.lm_tab.stop_training_signal.connect(self._stop_training)
+        self.lm_tab.clear_plots_signal.connect(self._clear_plots)
         self.tabs.addTab(self.lm_tab, "🔤 Language Model")
 
         # Tab 2: Vision
         self.vis_tab = VisionTab()
         self.vis_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
         self.vis_tab.stop_training_signal.connect(self._stop_training)
+        self.vis_tab.clear_plots_signal.connect(self._clear_plots)
         self.tabs.addTab(self.vis_tab, "📷 Vision")
 
         # Tab 3: Reinforcement Learning
         self.rl_tab = RLTab()
         self.rl_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
         self.rl_tab.stop_training_signal.connect(self._stop_training)
+        self.rl_tab.clear_plots_signal.connect(self._clear_plots)
         self.tabs.addTab(self.rl_tab, "🎮 Reinforcement Learning")
 
         # Tab 4: Microscope (Dynamics)
@@ -230,6 +236,35 @@ class EqPropDashboard(QMainWindow):
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
         self.status_label.setStyleSheet("color: #808090; padding: 5px;")
         layout.addWidget(self.status_label)
+
+        # Keyboard Shortcuts
+        self.train_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
+        self.train_shortcut.activated.connect(self._on_train_shortcut)
+
+        self.stop_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
+        self.stop_shortcut.activated.connect(self._stop_training)
+
+    def _clear_plots(self):
+        """Clear all plot history and refresh plots."""
+        self.loss_history.clear()
+        self.acc_history.clear()
+        self.lipschitz_history.clear()
+        self.rl_reward_history.clear()
+        self.rl_loss_history.clear()
+        self.rl_avg_reward_history.clear()
+        self._update_plots()
+        self.status_label.setText("Plot history cleared.")
+        self.status_label.setStyleSheet("color: #a0a0b0; padding: 5px;")
+
+    def _on_train_shortcut(self):
+        """Handle start training shortcut based on active tab."""
+        current = self.tabs.currentWidget()
+        if isinstance(current, LMTab):
+            self._start_training('lm')
+        elif isinstance(current, VisionTab):
+            self._start_training('vision')
+        elif isinstance(current, RLTab):
+            self._start_training('rl')
 
     def _save_model(self):
         """Save the current model to a file, including current UI configuration."""
@@ -358,6 +393,7 @@ class EqPropDashboard(QMainWindow):
                 # 3. Load Weights
                 self.model.load_state_dict(checkpoint['model_state_dict'])
                 self.status_label.setText(f"Model loaded from {fname}")
+                self.status_label.setStyleSheet("color: #00ff88; padding: 5px;")
 
                 # 4. Update Tab References
                 if self.model:
@@ -648,8 +684,12 @@ class EqPropDashboard(QMainWindow):
         self.vis_tab.vis_progress.setMaximum(self.vis_tab.vis_epochs_spin.value())
         self.vis_tab.vis_progress.setValue(0)
 
+        import time
+        self.start_time = time.time()
+
         model_name = self.vis_tab.vis_model_combo.currentText()
         self.status_label.setText(f"Training {model_name}...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
         self.plot_timer.start(100)
         self.worker.start()
 
@@ -706,9 +746,13 @@ class EqPropDashboard(QMainWindow):
         self.lm_tab.lm_progress.setMaximum(self.lm_tab.lm_epochs_spin.value())
         self.lm_tab.lm_progress.setValue(0)
 
+        import time
+        self.start_time = time.time()
+
         model_name = self.lm_tab.lm_model_combo.currentText()
         dataset_name = self.lm_tab.lm_dataset_combo.currentText()
         self.status_label.setText(f"Training {model_name} on {dataset_name}...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
         self.plot_timer.start(100)
         self.worker.start()
 
@@ -767,7 +811,11 @@ class EqPropDashboard(QMainWindow):
         self.rl_tab.rl_progress.setMaximum(episodes)
         self.rl_tab.rl_progress.setValue(0)
 
+        import time
+        self.start_time = time.time()
+
         self.status_label.setText(f"Training {algo_name} on {env_name}...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
         self.plot_timer.start(100)
         self.worker.start()
 
@@ -780,6 +828,18 @@ class EqPropDashboard(QMainWindow):
         self.rl_tab.rl_progress.setValue(metrics['episode'])
         self.rl_tab.rl_avg_label.setText(f"{metrics['avg_reward']:.1f}")
 
+        # Calculate ETA
+        if self.start_time:
+            import time
+            elapsed = time.time() - self.start_time
+            if metrics['episode'] > 0:
+                speed = metrics['episode'] / elapsed
+                remaining = metrics['total_episodes'] - metrics['episode']
+                eta_seconds = remaining / speed if speed > 0 else 0
+                eta_str = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+
+                self.rl_tab.rl_eta_label.setText(f"ETA: {eta_str} | Speed: {speed:.1f} ep/s")
+
         self.status_label.setText(
             f"Ep {metrics['episode']}/{metrics['total_episodes']} | "
             f"Reward: {metrics['reward']:.1f} | "
@@ -791,6 +851,7 @@ class EqPropDashboard(QMainWindow):
         if self.worker:
             self.worker.stop()
             self.status_label.setText("Stopping training...")
+            self.status_label.setStyleSheet("color: #ffaa00; padding: 5px; font-weight: bold;")
 
     def _on_dynamics_update(self, dynamics: dict):
         """Handle live dynamics update from worker."""
@@ -819,6 +880,21 @@ class EqPropDashboard(QMainWindow):
         # Update progress bar
         self.vis_tab.vis_progress.setValue(metrics['epoch'])
         self.lm_tab.lm_progress.setValue(metrics['epoch'])
+
+        # Calculate ETA
+        if self.start_time:
+            import time
+            elapsed = time.time() - self.start_time
+            if metrics['epoch'] > 0:
+                speed = metrics['epoch'] / elapsed
+                remaining = metrics['total_epochs'] - metrics['epoch']
+                eta_seconds = remaining / speed if speed > 0 else 0
+                eta_str = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+
+                # Update both tabs just in case (or determine active tab)
+                eta_text = f"ETA: {eta_str} | Speed: {speed:.2f} ep/s"
+                self.vis_tab.vis_eta_label.setText(eta_text)
+                self.lm_tab.lm_eta_label.setText(eta_text)
 
         # Update labels
         self.vis_tab.vis_acc_label.setText(f"{metrics['accuracy']:.1%}")
@@ -875,8 +951,10 @@ class EqPropDashboard(QMainWindow):
 
         if result.get('success'):
             self.status_label.setText(f"✓ Training complete! ({result['epochs_completed']} epochs)")
+            self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
         else:
             self.status_label.setText("Training stopped.")
+            self.status_label.setStyleSheet("color: #ffaa00; padding: 5px;")
 
     def _on_error(self, error: str):
         """Handle training error."""
@@ -890,6 +968,7 @@ class EqPropDashboard(QMainWindow):
             self.rl_tab.rl_stop_btn.setEnabled(False)
 
         self.status_label.setText("Training error!")
+        self.status_label.setStyleSheet("color: #ff5588; padding: 5px; font-weight: bold;")
         QMessageBox.critical(self, "Training Error", error)
 
     def _update_lm_hyperparams(self, model_name: str):

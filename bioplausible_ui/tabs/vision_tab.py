@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from bioplausible.models.registry import MODEL_REGISTRY
+from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
 from bioplausible_ui.themes import PLOT_COLORS
 
@@ -20,6 +20,7 @@ class VisionTab(QWidget):
 
     start_training_signal = pyqtSignal(str) # Mode ('vision')
     stop_training_signal = pyqtSignal()
+    clear_plots_signal = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -60,22 +61,33 @@ class VisionTab(QWidget):
             if spec.task_compat is None or "vision" in spec.task_compat:
                 model_items.append(f"{spec.name}")
         self.vis_model_combo.addItems(model_items)
+        self.vis_model_combo.currentTextChanged.connect(self._update_model_desc)
+
+        self.vis_desc_label = QLabel("")
+        self.vis_desc_label.setWordWrap(True)
+        self.vis_desc_label.setStyleSheet("color: #a0a0b0; font-size: 11px; font-style: italic; margin-bottom: 5px;")
 
         self.vis_hidden_spin = QSpinBox()
         self.vis_hidden_spin.setRange(64, 1024)
         self.vis_hidden_spin.setValue(256)
+        self.vis_hidden_spin.setToolTip("Dimension of hidden state vectors")
 
         self.vis_steps_spin = QSpinBox()
         self.vis_steps_spin.setRange(5, 100)
         self.vis_steps_spin.setValue(30)
+        self.vis_steps_spin.setToolTip("Number of equilibrium steps per forward pass")
 
         model_controls = [
             ("Architecture:", self.vis_model_combo),
+            ("", self.vis_desc_label),
             ("Hidden Dim:", self.vis_hidden_spin),
             ("Max Steps:", self.vis_steps_spin)
         ]
         model_group = self._create_control_group("🧠 Model", model_controls)
         left_panel.addWidget(model_group)
+
+        # Trigger initial update
+        self._update_model_desc(self.vis_model_combo.currentText())
 
         # Dynamic Hyperparameters Group
         self.vis_hyperparam_group = QGroupBox("⚙️ Model Hyperparameters")
@@ -90,10 +102,12 @@ class VisionTab(QWidget):
         # Dataset
         self.vis_dataset_combo = QComboBox()
         self.vis_dataset_combo.addItems(["MNIST", "Fashion-MNIST", "CIFAR-10", "KMNIST", "SVHN"])
+        self.vis_dataset_combo.setToolTip("Image dataset for training")
 
         self.vis_batch_spin = QSpinBox()
         self.vis_batch_spin.setRange(16, 512)
         self.vis_batch_spin.setValue(64)
+        self.vis_batch_spin.setToolTip("Number of images per training step")
 
         data_controls = [
             ("Dataset:", self.vis_dataset_combo),
@@ -106,11 +120,13 @@ class VisionTab(QWidget):
         self.vis_epochs_spin = QSpinBox()
         self.vis_epochs_spin.setRange(1, 100)
         self.vis_epochs_spin.setValue(10)
+        self.vis_epochs_spin.setToolTip("Total number of passes over the dataset")
 
         self.vis_lr_spin = QDoubleSpinBox()
         self.vis_lr_spin.setRange(0.0001, 0.1)
         self.vis_lr_spin.setValue(0.001)
         self.vis_lr_spin.setDecimals(4)
+        self.vis_lr_spin.setToolTip("Step size for optimizer")
 
         self.vis_grad_combo = QComboBox()
         self.vis_grad_combo.addItems(["BPTT (Standard)", "Equilibrium (Implicit Diff)", "Contrastive (Hebbian)"])
@@ -121,6 +137,7 @@ class VisionTab(QWidget):
 
         self.vis_compile_check = QCheckBox("torch.compile")
         self.vis_compile_check.setChecked(True)
+        self.vis_compile_check.setToolTip("Use PyTorch 2.0 graph compilation for speedup")
 
         self.vis_kernel_check = QCheckBox("O(1) Kernel Mode (GPU)")
         self.vis_kernel_check.setToolTip("Use fused EqProp kernel for O(1) memory training")
@@ -151,11 +168,29 @@ class VisionTab(QWidget):
         self.vis_stop_btn.setEnabled(False)
         self.vis_stop_btn.clicked.connect(self.stop_training_signal.emit)
         btn_layout.addWidget(self.vis_stop_btn)
+
+        self.vis_reset_btn = QPushButton("↺ Reset")
+        self.vis_reset_btn.setObjectName("resetButton")
+        self.vis_reset_btn.setToolTip("Reset all hyperparameters to default values")
+        self.vis_reset_btn.clicked.connect(self._reset_defaults)
+        btn_layout.addWidget(self.vis_reset_btn)
+
+        self.vis_clear_btn = QPushButton("🗑️ Clear")
+        self.vis_clear_btn.setObjectName("resetButton") # Re-use styling
+        self.vis_clear_btn.setToolTip("Clear plot history")
+        self.vis_clear_btn.clicked.connect(self.clear_plots_signal.emit)
+        btn_layout.addWidget(self.vis_clear_btn)
         left_panel.addLayout(btn_layout)
 
         self.vis_progress = QProgressBar()
         self.vis_progress.setFormat("Epoch %v / %m")
         left_panel.addWidget(self.vis_progress)
+
+        # ETA Label
+        self.vis_eta_label = QLabel("ETA: --:-- | Speed: -- it/s")
+        self.vis_eta_label.setStyleSheet("color: #888888; font-size: 11px;")
+        self.vis_eta_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_panel.addWidget(self.vis_eta_label)
 
         # Parameter count
         self.vis_param_label = QLabel("Parameters: --")
@@ -207,8 +242,29 @@ class VisionTab(QWidget):
             right_panel.addWidget(viz_group)
         right_panel.addStretch()
 
+    def _reset_defaults(self):
+        """Reset all controls to default values."""
+        self.vis_hidden_spin.setValue(256)
+        self.vis_steps_spin.setValue(30)
+        self.vis_batch_spin.setValue(64)
+        self.vis_epochs_spin.setValue(10)
+        self.vis_lr_spin.setValue(0.001)
+        self.vis_compile_check.setChecked(True)
+        self.vis_kernel_check.setChecked(False)
+        self.vis_micro_check.setChecked(False)
+        self.vis_dataset_combo.setCurrentIndex(0)
+        self.vis_grad_combo.setCurrentIndex(0)
+
     def _update_vis_hyperparams(self, model_name):
         update_hyperparams_generic(self, model_name, self.vis_hyperparam_layout, self.vis_hyperparam_widgets, self.vis_hyperparam_group)
+
+    def _update_model_desc(self, model_name):
+        """Update model description label."""
+        try:
+            spec = get_model_spec(model_name)
+            self.vis_desc_label.setText(spec.description)
+        except Exception:
+            self.vis_desc_label.setText("")
 
     def get_current_hyperparams(self):
         return get_current_hyperparams_generic(self.vis_hyperparam_widgets)
