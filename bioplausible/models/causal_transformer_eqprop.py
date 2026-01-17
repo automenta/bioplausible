@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import math
 from torch.nn.utils.parametrizations import spectral_norm
 from .utils import spectral_linear
+from bioplausible.models.triton_kernel import TritonEqPropOps
 
 
 class CausalEqPropAttention(nn.Module):
@@ -173,7 +174,11 @@ class CausalTransformerEqProp(nn.Module):
 
                 # Update with input embedding and FFN
                 h_target = h + ffn_out + x_emb
-                h = (1 - self.alpha) * h + self.alpha * torch.tanh(h_target)
+
+                if TritonEqPropOps.is_available() and h.is_cuda:
+                    h = TritonEqPropOps.step(h, h_target, alpha=self.alpha)
+                else:
+                    h = (1 - self.alpha) * h + self.alpha * torch.tanh(h_target)
 
         # LM head: predict next token for each position
         logits = self.lm_head(h)  # [batch, seq_len, vocab_size]

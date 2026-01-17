@@ -20,6 +20,7 @@ import torch.nn.functional as F
 import math
 from typing import Dict, Type, Optional, Callable
 from torch.nn.utils.parametrizations import spectral_norm
+from bioplausible.models.triton_kernel import TritonEqPropOps
 
 # Registry for EqProp LM variants
 EQPROP_LM_REGISTRY: Dict[str, Type[nn.Module]] = {}
@@ -227,7 +228,11 @@ class FullEqPropLM(nn.Module):
                 ffn_out = self.ffns[i](h_norm)
 
                 h_target = h + ffn_out + x_emb
-                h = (1 - self.alpha) * h + self.alpha * torch.tanh(h_target)
+
+                if TritonEqPropOps.is_available() and h.is_cuda:
+                    h = TritonEqPropOps.step(h, h_target, alpha=self.alpha)
+                else:
+                    h = (1 - self.alpha) * h + self.alpha * torch.tanh(h_target)
 
         return self.lm_head(h)
 
@@ -409,7 +414,11 @@ class RecurrentEqPropLM(nn.Module):
             ffn_out = self.ffn(h_norm)
 
             h_target = h + ffn_out + x_emb
-            h = (1 - self.alpha) * h + self.alpha * torch.tanh(h_target)
+
+            if TritonEqPropOps.is_available() and h.is_cuda:
+                h = TritonEqPropOps.step(h, h_target, alpha=self.alpha)
+            else:
+                h = (1 - self.alpha) * h + self.alpha * torch.tanh(h_target)
 
         return self.lm_head(h)
 
@@ -508,7 +517,11 @@ class HybridEqPropLM(nn.Module):
             ffn_out = self.eq_ffn(h_norm)
 
             h_target = h + ffn_out + h_input
-            h = (1 - self.alpha) * h + self.alpha * torch.tanh(h_target)
+
+            if TritonEqPropOps.is_available() and h.is_cuda:
+                h = TritonEqPropOps.step(h, h_target, alpha=self.alpha)
+            else:
+                h = (1 - self.alpha) * h + self.alpha * torch.tanh(h_target)
 
         return self.lm_head(h)
 

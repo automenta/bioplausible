@@ -35,12 +35,20 @@ class CoordinatorHandler(BaseHTTPRequestHandler):
             self._send_response({
                 "status": "online",
                 "nodes": len(self.server.coordinator.nodes),
-                "jobs_completed": self.server.coordinator.jobs_completed
+                "jobs_completed": self.server.coordinator.jobs_completed,
+                "node_capabilities": self.server.coordinator.node_capabilities
             })
+        elif self.path == '/health':
+            self._send_response({"status": "healthy"})
         elif self.path.startswith('/get_job'):
             # Parse query params (simple)
             # /get_job?client_id=xyz
-            job = self.server.coordinator.get_job()
+            import urllib.parse
+            query = urllib.parse.urlparse(self.path).query
+            params = urllib.parse.parse_qs(query)
+            client_id = params.get('client_id', [None])[0]
+
+            job = self.server.coordinator.get_job(client_id)
             if job:
                 self._send_response(job)
             else:
@@ -64,7 +72,8 @@ class CoordinatorHandler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode('utf-8'))
             client_id = data.get('client_id', 'unknown')
-            self.server.coordinator.register_node(client_id)
+            capabilities = data.get('capabilities', {})
+            self.server.coordinator.register_node(client_id, capabilities)
             self._send_response({"status": "registered"})
         else:
             self.send_error(404)
@@ -80,6 +89,7 @@ class Coordinator:
         self.thread = None
         self.running = False
         self.nodes = set()
+        self.node_capabilities = {}
         self.jobs_completed = 0
         self.job_counter = 0
         self.lock = threading.Lock()
@@ -97,12 +107,17 @@ class Coordinator:
         # Add some advanced ones occasionally
         if self.job_counter % 5 == 0:
             models.append("EqProp Transformer (Attention Only)")
+            models.append("ModernConvEqProp")
 
         # Populate queue if running low
         import random
         while len(self.job_queue) < 10:
             task = random.choice(tasks)
             model_name = random.choice(models)
+
+            requirements = {}
+            if model_name in ["ModernConvEqProp", "EqProp Transformer (Attention Only)"]:
+                requirements["gpu"] = True
 
             try:
                 space = get_search_space(model_name)
@@ -117,7 +132,8 @@ class Coordinator:
                     "job_id": self.job_counter,
                     "task": task,
                     "model_name": model_name,
-                    "config": config
+                    "config": config,
+                    "requirements": requirements
                 })
                 self.job_counter += 1
             except Exception as e:
@@ -143,13 +159,27 @@ class Coordinator:
         self.running = False
         logger.info("Coordinator stopped")
 
-    def get_job(self) -> Optional[Dict]:
+    def get_job(self, client_id: str = None) -> Optional[Dict]:
         with self.lock:
             if len(self.job_queue) < 5:
                 self._populate_initial_jobs() # Replenish if running low
 
-            if self.job_queue:
-                return self.job_queue.pop(0)
+            # Check capabilities if client_id is known
+            client_caps = self.node_capabilities.get(client_id, {})
+            has_gpu = client_caps.get("cuda", False)
+
+            # Find a suitable job
+            for i, job in enumerate(self.job_queue):
+                requirements = job.get("requirements", {})
+                requires_gpu = requirements.get("gpu", False)
+
+                # If job requires GPU but client doesn't have it, skip
+                if requires_gpu and not has_gpu:
+                    continue
+
+                # Found suitable job
+                return self.job_queue.pop(i)
+
             return None
 
     def submit_result(self, result: Dict):
@@ -160,9 +190,11 @@ class Coordinator:
         logger.info(f"Job {job_id} completed. Acc: {acc:.4f}")
         # Here we would feed back into the evolutionary algo
 
-    def register_node(self, client_id: str):
+    def register_node(self, client_id: str, capabilities: Dict = None):
         with self.lock:
             self.nodes.add(client_id)
+            if capabilities:
+                self.node_capabilities[client_id] = capabilities
 
 from bioplausible.p2p.state import load_state, save_state
 
@@ -200,9 +232,18 @@ class Worker:
     def _loop(self):
         self.log(f"Worker {self.client_id} started. Connecting to {self.coordinator_url}...")
 
+        # Collect capabilities
+        import torch
+        from bioplausible.models.triton_kernel import TritonEqPropOps
+        caps = {
+            "cuda": torch.cuda.is_available(),
+            "triton": TritonEqPropOps.is_available(),
+            "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu"
+        }
+
         # Register
         try:
-            self._post('/register', {"client_id": self.client_id})
+            self._post('/register', {"client_id": self.client_id, "capabilities": caps})
         except Exception as e:
             self.log(f"Failed to register: {e}")
             # Continue anyway, maybe transient
