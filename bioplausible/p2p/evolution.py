@@ -65,12 +65,22 @@ class P2PEvolution:
 
         # Start DHT
         try:
-            # Random local port to avoid conflicts if running multiple on same machine
-            local_port = 8468 + random.randint(0, 1000)
-            self.dht = DHTNode(port=local_port, bootstrap_nodes=self.bootstrap_nodes)
-            self.dht.start()
+            # Try to bind to a port, with retries
+            base_port = 8468 + random.randint(0, 1000)
+            for i in range(10):
+                try:
+                    local_port = base_port + i
+                    self.dht = DHTNode(port=local_port, bootstrap_nodes=self.bootstrap_nodes)
+                    self.dht.start()
+                    self._log(f"DHT started on port {local_port}")
+                    break
+                except Exception as e:
+                    self._log(f"Port {local_port} busy/failed, retrying... ({e})")
+                    if i == 9: raise # Rethrow on last attempt
+                    time.sleep(0.5)
+
         except Exception as e:
-            self._log(f"Failed to start DHT: {e}")
+            self._log(f"Failed to start DHT after retries: {e}")
             return
 
         self.running = True
