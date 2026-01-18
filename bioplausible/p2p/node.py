@@ -6,6 +6,7 @@ import logging
 import uuid
 import os
 import shutil
+import random
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -31,7 +32,27 @@ class CoordinatorHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(data).encode('utf-8'))
 
     def do_GET(self):
-        if self.path == '/status':
+        if self.path == '/':
+            # Simple dashboard
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            html = f"""
+            <html>
+            <head><title>BioPlausible P2P Coordinator</title></head>
+            <body>
+                <h1>Coordinator Status</h1>
+                <p>Status: Online</p>
+                <p>Connected Nodes: {len(self.server.coordinator.nodes)}</p>
+                <p>Jobs Completed: {self.server.coordinator.jobs_completed}</p>
+                <p>Queue Length: {len(self.server.coordinator.job_queue)}</p>
+                <h3>Nodes</h3>
+                <pre>{json.dumps(self.server.coordinator.node_capabilities, indent=2)}</pre>
+            </body>
+            </html>
+            """
+            self.wfile.write(html.encode('utf-8'))
+        elif self.path == '/status':
             self._send_response({
                 "status": "online",
                 "nodes": len(self.server.coordinator.nodes),
@@ -126,7 +147,12 @@ class Coordinator:
                 # Apply sensible defaults for P2P/Network load
                 config['epochs'] = 1
                 if 'steps' in config:
-                    config['steps'] = min(config['steps'], 20)
+                    # Vary steps to explore trade-off
+                    config['steps'] = random.choice([5, 10, 15, 20])
+
+                # Explore nudge strength
+                if 'beta' not in config:
+                     config['beta'] = random.choice([0.1, 0.22, 0.5])
 
                 self.job_queue.append({
                     "job_id": self.job_counter,
@@ -169,16 +195,30 @@ class Coordinator:
             has_gpu = client_caps.get("cuda", False)
 
             # Find a suitable job
+            best_job_idx = -1
+
             for i, job in enumerate(self.job_queue):
                 requirements = job.get("requirements", {})
                 requires_gpu = requirements.get("gpu", False)
 
-                # If job requires GPU but client doesn't have it, skip
+                # Filter incompatible jobs
                 if requires_gpu and not has_gpu:
                     continue
 
-                # Found suitable job
-                return self.job_queue.pop(i)
+                # Prioritize:
+                # 1. If worker has GPU, prefer GPU jobs (to not waste GPU on CPU tasks)
+                # 2. Otherwise FCFS
+                if has_gpu and requires_gpu:
+                    best_job_idx = i
+                    break # Ideal match
+
+                # If worker has GPU but job is CPU, keep looking for a GPU job
+                # But if we haven't found anything else, this is a candidate
+                if best_job_idx == -1:
+                    best_job_idx = i
+
+            if best_job_idx != -1:
+                return self.job_queue.pop(best_job_idx)
 
             return None
 
