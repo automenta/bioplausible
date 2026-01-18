@@ -113,8 +113,10 @@ class P2PTab(QWidget):
         self.bootstrap_combo.addItems([
             "bootstrap1.bioplausible.org",
             "bootstrap2.bioplausible.org",
-            "127.0.0.1:8468 (Local Test)"
+            "127.0.0.1:8468 (Local Test)",
+            ""  # Empty for self-bootstrap
         ])
+        self.bootstrap_combo.setPlaceholderText("Leave empty to start new network")
         self.bootstrap_combo.setVisible(False)
         conn_layout.addWidget(self.bootstrap_combo)
 

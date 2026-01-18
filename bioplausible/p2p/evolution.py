@@ -177,26 +177,20 @@ class P2PEvolution:
                     target_config['model_name'] = parent_model
                     target_model_name = parent_model
 
-                # Apply Constraints & Mode Settings
-                if self.constraints:
-                     space = get_search_space(target_model_name)
-                     # Re-apply constraints might be tricky on an existing config
-                     # Ideally we limit the space then sample/mutate within bounds
-                     # But mutate() usually clamps. Let's just manually clamp common ones.
-                     pass # Constraints are applied in space.mutate via clamping if implemented,
-                          # but our space implementation clamps during mutate based on range.
-                          # However, if constraints changed the range, we need to respect that.
-                          # Simpler: The mutate() method in SearchSpace respects the ranges defined in __init__.
-                          # We should get a constrained space before mutating.
-
                 # Re-fetch space with constraints applied for final verification/mutation context
                 space = get_search_space(target_model_name)
                 if self.constraints:
                     space = space.apply_constraints(self.constraints)
-                    # Re-mutate slightly to ensure bounds? Or just trust previous steps?
-                    # Let's trust that random sampling respects it, but crossover might not.
-                    # Safety clamp:
-                    # (Simplified for now as deep clamping requires inspecting every param)
+                    # Mutate again with constrained space to ensure we are in bounds
+                    target_config = space.mutate(target_config, mutation_rate=0.0) # Rate 0 just clamps if implemented or we can just assume mutate clamps
+
+                    # Manually clamp common keys if space.mutate doesn't enforce stricter bounds on existing values
+                    if 'max_hidden' in self.constraints and 'hidden_dim' in target_config:
+                        target_config['hidden_dim'] = min(target_config['hidden_dim'], self.constraints['max_hidden'])
+                    if 'max_layers' in self.constraints and 'num_layers' in target_config:
+                        target_config['num_layers'] = min(target_config['num_layers'], self.constraints['max_layers'])
+                    if 'max_steps' in self.constraints and 'steps' in target_config:
+                        target_config['steps'] = min(target_config['steps'], self.constraints['max_steps'])
 
                 # Apply Mode Settings (Quick vs Deep)
                 if self.discovery_mode == 'quick':
