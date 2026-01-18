@@ -79,23 +79,31 @@ class CoordinatorHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == '/submit_result':
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
             try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
                 result = json.loads(post_data.decode('utf-8'))
                 self.server.coordinator.submit_result(result)
                 self._send_response({"status": "accepted"})
+            except json.JSONDecodeError:
+                self.send_error(400, "Invalid JSON")
             except Exception as e:
                 logger.error(f"Error processing result: {e}")
                 self.send_error(500)
         elif self.path == '/register':
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
-            client_id = data.get('client_id', 'unknown')
-            capabilities = data.get('capabilities', {})
-            self.server.coordinator.register_node(client_id, capabilities)
-            self._send_response({"status": "registered"})
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode('utf-8'))
+                client_id = data.get('client_id', 'unknown')
+                capabilities = data.get('capabilities', {})
+                self.server.coordinator.register_node(client_id, capabilities)
+                self._send_response({"status": "registered"})
+            except json.JSONDecodeError:
+                self.send_error(400, "Invalid JSON")
+            except Exception as e:
+                logger.error(f"Error registering node: {e}")
+                self.send_error(500)
         else:
             self.send_error(404)
 
