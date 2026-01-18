@@ -660,7 +660,13 @@ class EqPropKernelBPTT:
 
         for _ in range(self.max_steps):
             pre_act = x_proj + h @ self.W_rec.T + self.b_rec
-            h = xp.tanh(pre_act)
+
+            if HAS_TRITON_OPS and self.use_gpu and HAS_CUPY and isinstance(h, cp.ndarray):
+                # Use Triton kernel for tanh update: (1-a)h + a*tanh(pre_act) with a=1.0
+                h = TritonEqPropOps.step_cupy(h, pre_act, alpha=1.0)
+            else:
+                h = xp.tanh(pre_act)
+
             trajectory.append((pre_act.copy(), h.copy()))
 
         # Output
