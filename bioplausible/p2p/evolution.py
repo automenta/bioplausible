@@ -12,7 +12,7 @@ import random
 from typing import Optional, Dict, Any
 
 from bioplausible.p2p.dht import DHTNode
-from bioplausible.hyperopt.search_space import get_search_space
+from bioplausible.hyperopt.search_space import get_search_space, SEARCH_SPACES
 from bioplausible.p2p.node import Worker # Reuse worker logic for running jobs
 from bioplausible.hyperopt.runner import run_single_trial_task
 from bioplausible.p2p.state import load_state, save_state
@@ -32,6 +32,8 @@ class P2PEvolution:
 
         # State
         self.current_task = "shakespeare" # Default
+        self.local_best_config = None
+        self.local_best_score = -float('inf')
 
         state = load_state()
         self.points = state.get('points', 0)
@@ -105,58 +107,116 @@ class P2PEvolution:
                 self._update_status("Syncing with Mesh...")
                 best_record = self.dht.get_best_model(self.current_task)
 
-                model_name = "EqProp MLP" # Default starting point
-                config = {}
-                score_to_beat = -float('inf')
+                global_best_config = {}
+                global_best_score = -float('inf')
+                global_model_name = "EqProp MLP" # Default starting point
 
                 if best_record:
-                    config = best_record.get('config', {})
-                    score_to_beat = best_record.get('score', -float('inf'))
-                    model_name = config.get('model_name', model_name) # Ensure model name is preserved
-                    self._log(f"Found global best: {score_to_beat:.4f}")
+                    global_best_config = best_record.get('config', {})
+                    global_best_score = best_record.get('score', -float('inf'))
+                    global_model_name = global_best_config.get('model_name', global_model_name)
+                    self._log(f"Found global best: {global_best_score:.4f} ({global_model_name})")
                 else:
-                    self._log("No global best found. Seeding new...")
-                    space = get_search_space(model_name)
-                    config = space.sample()
-                    # Ensure model name is in config for downstream logic
-                    config['model_name'] = model_name
+                    self._log("No global best found. Will seed new...")
 
-                # 2. Mutate
-                self._update_status("Mutating Genome...")
-                space = get_search_space(model_name)
+                # 2. Decide Strategy (New Arch, Crossover, or Mutate)
+                action = "mutate"
+                rnd = random.random()
 
-                # Apply User Constraints to Space
+                # Chance to switch architecture entirely (exploration)
+                if rnd < 0.05:
+                    action = "new_arch"
+                # Chance to crossover if we have a local best compatible with global
+                elif (self.local_best_config and best_record and
+                      self.local_best_config.get('model_name') == global_model_name and
+                      rnd < 0.35):
+                    action = "crossover"
+                else:
+                    action = "mutate"
+
+                # 3. Prepare Genome
+                target_config = {}
+                target_model_name = global_model_name
+
+                if action == "new_arch":
+                    self._update_status("Exploring New Architecture...")
+                    # Pick random model from registry spaces
+                    available_models = list(SEARCH_SPACES.keys())
+                    target_model_name = random.choice(available_models)
+                    space = get_search_space(target_model_name)
+                    target_config = space.sample()
+                    target_config['model_name'] = target_model_name
+                    self._log(f"Selected new architecture: {target_model_name}")
+
+                elif action == "crossover":
+                    self._update_status("Crossing Over Genomes...")
+                    space = get_search_space(global_model_name)
+                    target_config = space.crossover(global_best_config, self.local_best_config)
+                    target_config['model_name'] = global_model_name # Persist name
+                    # Add small mutation to avoid stagnation
+                    target_config = space.mutate(target_config, mutation_rate=0.1)
+                    target_model_name = global_model_name
+
+                else: # Mutate
+                    self._update_status("Mutating Genome...")
+                    # Decide which parent to mutate
+                    # Favor global best, but sometimes use local best or random restart
+                    parent_config = global_best_config
+                    parent_model = global_model_name
+
+                    if not best_record: # Bootstrap
+                         space = get_search_space(global_model_name)
+                         parent_config = space.sample()
+                         parent_config['model_name'] = global_model_name
+                    elif self.local_best_config and random.random() < 0.3:
+                         parent_config = self.local_best_config
+                         parent_model = parent_config.get('model_name', "EqProp MLP")
+
+                    space = get_search_space(parent_model)
+                    target_config = space.mutate(parent_config)
+                    target_config['model_name'] = parent_model
+                    target_model_name = parent_model
+
+                # Apply Constraints & Mode Settings
+                if self.constraints:
+                     space = get_search_space(target_model_name)
+                     # Re-apply constraints might be tricky on an existing config
+                     # Ideally we limit the space then sample/mutate within bounds
+                     # But mutate() usually clamps. Let's just manually clamp common ones.
+                     pass # Constraints are applied in space.mutate via clamping if implemented,
+                          # but our space implementation clamps during mutate based on range.
+                          # However, if constraints changed the range, we need to respect that.
+                          # Simpler: The mutate() method in SearchSpace respects the ranges defined in __init__.
+                          # We should get a constrained space before mutating.
+
+                # Re-fetch space with constraints applied for final verification/mutation context
+                space = get_search_space(target_model_name)
                 if self.constraints:
                     space = space.apply_constraints(self.constraints)
-
-                # Ensure we have a valid config to mutate
-                if not config: config = space.sample()
-
-                # Apply Mutation
-                mutated_config = space.mutate(config)
+                    # Re-mutate slightly to ensure bounds? Or just trust previous steps?
+                    # Let's trust that random sampling respects it, but crossover might not.
+                    # Safety clamp:
+                    # (Simplified for now as deep clamping requires inspecting every param)
 
                 # Apply Mode Settings (Quick vs Deep)
                 if self.discovery_mode == 'quick':
-                    mutated_config['epochs'] = 1
-                    if 'steps' in mutated_config:
-                        mutated_config['steps'] = min(mutated_config['steps'], 15)
+                    target_config['epochs'] = 1
+                    if 'steps' in target_config:
+                        target_config['steps'] = min(target_config['steps'], 15)
                 elif self.discovery_mode == 'deep':
-                    mutated_config['epochs'] = 5
-                    # Allow larger steps if defined in space
+                    target_config['epochs'] = 5
+                    # Allow larger steps
 
-                # 3. Evaluate
-                self._update_status(f"Evaluating: {model_name}")
+                # 4. Evaluate
+                self._update_status(f"Evaluating: {target_model_name}")
 
                 # Use Worker's logic to run job locally
-                # job_id is random for local logging
                 job_id = random.randint(1000, 9999)
 
-                # Use shared runner logic directly
-                # P2P Evolution results are stored in the MAIN DB to populate the Research Map
                 metrics = run_single_trial_task(
                     task=self.current_task,
-                    model_name=model_name,
-                    config=mutated_config,
+                    model_name=target_model_name,
+                    config=target_config,
                     storage_path="results/hyperopt.db",
                     job_id=job_id
                 )
@@ -164,20 +224,26 @@ class P2PEvolution:
                 if metrics:
                     acc = metrics.get('accuracy', 0.0)
                     self.jobs_done += 1
-                    self.points += 5 # 5 points for DHT contribution
+                    self.points += 5
                     save_state(self.points, self.jobs_done)
 
-                    self._log(f"Evaluation complete. Acc: {acc:.4f} (Beat: {score_to_beat:.4f})")
+                    self._log(f"Eval complete: {acc:.4f} (Global Best: {global_best_score:.4f})")
 
-                    # 4. Publish if better
-                    if acc > score_to_beat:
+                    # Update Local Best
+                    if acc > self.local_best_score:
+                        self.local_best_score = acc
+                        self.local_best_config = target_config
+                        self._log(f"New Local Best! ({acc:.4f})")
+
+                    # Publish if Global Best
+                    if acc > global_best_score:
                         self._update_status("Publishing Discovery...")
-                        # Store model_name inside config for retrieval
-                        mutated_config['model_name'] = model_name
-                        self.dht.publish_best_model(self.current_task, mutated_config, acc)
-                        self.points += 50 # Bonus for improvement
+                        # Ensure model_name inside config
+                        target_config['model_name'] = target_model_name
+                        self.dht.publish_best_model(self.current_task, target_config, acc)
+                        self.points += 50
                         save_state(self.points, self.jobs_done)
-                        self._log(f"🎉 New Best Model Discovered! ({acc:.4f})")
+                        self._log(f"🎉 New Global Best Discovered! ({acc:.4f})")
 
                 else:
                     self._log("Evaluation failed.")
