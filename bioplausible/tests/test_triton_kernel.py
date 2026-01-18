@@ -1,6 +1,7 @@
 
 import unittest
 import torch
+import numpy as np
 import sys
 from pathlib import Path
 
@@ -67,6 +68,54 @@ class TestTritonKernel(unittest.TestCase):
         expected = (1 - self.alpha) * self.h + self.alpha * torch.tanh(self.pre_act)
 
         self.assertTrue(torch.allclose(out_triton, expected, atol=1e-5))
+
+    def test_linear_fallback_cpu(self):
+        """Test linear step fallback on CPU."""
+        if self.device.type == "cpu":
+            h_target = self.h + self.pre_act  # Just some target
+            out = TritonEqPropOps.step_linear(self.h, h_target, self.alpha)
+            expected = (1 - self.alpha) * self.h + self.alpha * h_target
+            self.assertTrue(torch.allclose(out, expected, atol=1e-5))
+
+    def test_linear_triton_match(self):
+        """Test linear step Triton matches PyTorch."""
+        if not TritonEqPropOps.is_available():
+            return
+
+        h_target = self.h + self.pre_act
+        out_triton = TritonEqPropOps.step_linear(self.h, h_target, self.alpha)
+        expected = (1 - self.alpha) * self.h + self.alpha * h_target
+        self.assertTrue(torch.allclose(out_triton, expected, atol=1e-5))
+
+    def test_cupy_integration(self):
+        """Test CuPy integration with Triton."""
+        try:
+            import cupy as cp
+        except ImportError:
+            print("Skipping CuPy test (CuPy not installed)")
+            return
+
+        # This test requires GPU and Triton to be meaningful
+        if not TritonEqPropOps.is_available():
+            print("Skipping CuPy Triton test (Triton/GPU not available)")
+            return
+
+        # Create CuPy arrays
+        h_cp = cp.random.randn(self.batch_size, self.hidden_dim, dtype=cp.float32)
+        target_cp = cp.random.randn(self.batch_size, self.hidden_dim, dtype=cp.float32)
+
+        # Run Triton CuPy kernel
+        out_cp = TritonEqPropOps.step_linear_cupy(h_cp, target_cp, self.alpha)
+
+        # Run NumPy/CPU baseline
+        h_np = cp.asnumpy(h_cp)
+        target_np = cp.asnumpy(target_cp)
+        expected_np = (1 - self.alpha) * h_np + self.alpha * target_np
+
+        # Verify
+        self.assertTrue(np.allclose(cp.asnumpy(out_cp), expected_np, atol=1e-5))
+        print("Triton CuPy Integration Verified")
+
 
 if __name__ == "__main__":
     unittest.main()

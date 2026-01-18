@@ -29,7 +29,11 @@ if "CUDA_PATH" not in os.environ:
         "/opt/cuda",
         "/usr/lib/cuda",
         "/usr/lib/nvidia-cuda-toolkit",
-        "/run/opengl-driver/lib"  # NixOS
+        "/run/opengl-driver/lib",  # NixOS
+        "/usr/local/cuda-12.2",    # Common versions
+        "/usr/local/cuda-12.1",
+        "/usr/local/cuda-11.8",
+        "/usr/local/cuda-11.7",
     ]
 
     # Try finding nvcc
@@ -49,6 +53,19 @@ if "CUDA_PATH" not in os.environ:
                 else:
                     candidates.append(path)
 
+    # Last resort: Try loading cudart via ctypes to find its location
+    try:
+        from ctypes.util import find_library
+
+        cudart_lib = find_library("cudart")
+        if cudart_lib and os.path.isabs(cudart_lib):
+            # e.g. /usr/local/cuda/lib64/libcudart.so
+            lib_dir = os.path.dirname(cudart_lib)
+            if lib_dir.endswith("lib64") or lib_dir.endswith("lib"):
+                candidates.append(os.path.dirname(lib_dir))
+    except Exception:
+        pass
+
     for path in candidates:
         if os.path.exists(path):
             os.environ["CUDA_PATH"] = path
@@ -65,6 +82,14 @@ except ImportError:
 except Exception:  # Capture other potential import errors
     cp = None
     HAS_CUPY = False
+
+# Try to import Triton kernels
+try:
+    from bioplausible.models.triton_kernel import TritonEqPropOps
+    HAS_TRITON_OPS = True
+except ImportError:
+    TritonEqPropOps = None
+    HAS_TRITON_OPS = False
 
 
 def get_backend(use_gpu: bool) -> Any:
@@ -289,7 +314,13 @@ class EqPropKernel:
         ffn_hidden = xp.tanh(h_norm @ weights["W1"].T + self.biases["W1"])
         ffn_out = ffn_hidden @ weights["W2"].T + self.biases["W2"]
 
-        h_next = (1 - self.gamma) * h + self.gamma * (ffn_out + x_emb)
+        if HAS_TRITON_OPS and self.use_gpu and HAS_CUPY and isinstance(h, cp.ndarray):
+            # Use fused Triton kernel for the update: h_next = (1-g)h + g*target
+            h_next = TritonEqPropOps.step_linear_cupy(
+                h, ffn_out + x_emb, self.gamma
+            )
+        else:
+            h_next = (1 - self.gamma) * h + self.gamma * (ffn_out + x_emb)
 
         activations = {
             "h_norm": h_norm,

@@ -335,7 +335,15 @@ class EqPropAttentionOnlyLM(nn.Module):
             for _ in range(steps):
                 h_norm = self.norms1[i](h_attn)
                 attn_out = self.attentions[i](h_norm, causal_mask)
-                h_attn = (1 - self.alpha) * h_attn + self.alpha * (h + attn_out)
+
+                h_target = h + attn_out
+
+                if TritonEqPropOps.is_available() and h_attn.is_cuda:
+                    h_attn = TritonEqPropOps.step_linear(
+                        h_attn, h_target, alpha=self.alpha
+                    )
+                else:
+                    h_attn = (1 - self.alpha) * h_attn + self.alpha * h_target
 
             h = h_attn
 
@@ -580,7 +588,11 @@ class LoopedMLPForLM(nn.Module):
 
         # Iterate to equilibrium
         for _ in range(steps):
-            h = torch.tanh(x_proj + self.W_rec(h))
+            pre_act = x_proj + self.W_rec(h)
+            if TritonEqPropOps.is_available() and h.is_cuda:
+                h = TritonEqPropOps.step(h, pre_act, alpha=1.0)
+            else:
+                h = torch.tanh(pre_act)
 
         return self.lm_head(h)
 
