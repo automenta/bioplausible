@@ -6,7 +6,8 @@ Allows users to contribute to the Bio-Plausible Research Network.
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QGroupBox, QPushButton,
-    QLabel, QLineEdit, QTextEdit, QProgressBar, QScrollArea, QRadioButton, QButtonGroup
+    QLabel, QLineEdit, QTextEdit, QProgressBar, QScrollArea, QRadioButton, QButtonGroup,
+    QComboBox, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, QTimer
 from PyQt6.QtGui import QFont, QDesktopServices, QColor

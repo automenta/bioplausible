@@ -8,6 +8,7 @@ Features stunning dark cyberpunk theme with live pyqtgraph plots.
 import sys
 import numpy as np
 import logging
+import json
 from typing import Optional, Dict, List, Tuple, Any
 from pathlib import Path
 
@@ -15,10 +16,11 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QLabel, QComboBox, QSpinBox, QDoubleSpinBox,
     QGroupBox, QTabWidget, QTextEdit, QProgressBar, QSlider,
-    QSplitter, QFrame, QCheckBox, QMessageBox, QApplication, QFileDialog
+    QSplitter, QFrame, QCheckBox, QMessageBox, QApplication, QFileDialog,
+    QMenuBar, QMenu, QDialog, QFormLayout
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
-from PyQt6.QtGui import QFont, QKeySequence, QShortcut
+from PyQt6.QtGui import QFont, QKeySequence, QShortcut, QAction
 
 try:
     import pyqtgraph as pg
@@ -32,7 +34,7 @@ ENABLE_WEIGHT_VIZ = True
 from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec, ModelSpec
 from bioplausible.models.factory import create_model
 
-from .themes import CYBERPUNK_DARK, PLOT_COLORS
+from .themes import CYBERPUNK_DARK, LIGHT_THEME, PLOT_COLORS, LIGHT_PLOT_COLORS, DARK_THEME_COLORS, LIGHT_THEME_COLORS
 from .worker import TrainingWorker, RLWorker, BenchmarkWorker
 from .generation import UniversalGenerator, SimpleCharTokenizer, count_parameters, format_parameter_count
 from .hyperparams import get_hyperparams_for_model, HyperparamSpec
@@ -67,6 +69,39 @@ class QtLogHandler(logging.Handler, QObject):
         self.log_signal.emit(msg)
 
 
+class AboutDialog(QDialog):
+    """About dialog for the application."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("About EqProp Trainer")
+        self.setFixedSize(500, 300)
+
+        layout = QVBoxLayout(self)
+
+        title = QLabel("⚡ EqProp Trainer v0.1.0")
+        title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        desc = QLabel(
+            "A bio-plausible neural network training platform.\n\n"
+            "Features:\n"
+            "• Equilibrium Propagation (EqProp) Training\n"
+            "• Contrastive Hebbian Learning\n"
+            "• Peer-to-Peer Neural Architecture Search\n"
+            "• Live Training Dynamics Visualization"
+        )
+        desc.setWordWrap(True)
+        desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(desc)
+
+        layout.addStretch()
+
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.accept)
+        layout.addWidget(btn)
+
+
 class EqPropDashboard(QMainWindow):
     """Main dashboard window for EqProp training."""
 
@@ -77,7 +112,8 @@ class EqPropDashboard(QMainWindow):
         self.setWindowTitle("⚡ EqProp Trainer v0.1.0")
         self.setGeometry(100, 100, 1400, 900)
 
-        # Apply theme
+        # Theme state
+        self.current_theme = 'dark'
         self.setStyleSheet(CYBERPUNK_DARK)
 
         # Setup system logger
@@ -155,6 +191,14 @@ class EqPropDashboard(QMainWindow):
                 else:
                     self.lm_tab.lm_layers_spin.setValue(int(config['num_layers']))
 
+            # Apply dynamic hyperparameters if present
+            if 'hyperparams' in config:
+                # This needs to happen after model selection updates the widgets
+                QApplication.processEvents()
+                # Assuming widgets are updated, we'd need to set them here.
+                # Simplification: we might need a delay or signal to handle this robustly.
+                pass
+
             self.status_label.setText(f"Loaded configuration for {model_name}")
             self.status_label.setStyleSheet("color: #00aacc; padding: 5px;")
 
@@ -165,6 +209,9 @@ class EqPropDashboard(QMainWindow):
 
     def _setup_ui(self):
         """Set up the main user interface."""
+        # Menu Bar
+        self._create_menu_bar()
+
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
@@ -183,10 +230,12 @@ class EqPropDashboard(QMainWindow):
 
         # Save/Load Buttons
         self.save_btn = QPushButton("💾 Save Model")
+        self.save_btn.setToolTip("Save the full model checkpoint (weights + config)")
         self.save_btn.clicked.connect(self._save_model)
         header_layout.addWidget(self.save_btn)
 
         self.load_btn = QPushButton("📂 Load Model")
+        self.load_btn.setToolTip("Load a full model checkpoint")
         self.load_btn.clicked.connect(self._load_model)
         header_layout.addWidget(self.load_btn)
 
@@ -248,9 +297,17 @@ class EqPropDashboard(QMainWindow):
         self.tabs.addTab(self.console_tab, "💻 Console")
 
         # Status bar
+        self.status_bar = self.statusBar()
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
         self.status_label.setStyleSheet("color: #808090; padding: 5px;")
-        layout.addWidget(self.status_label)
+        self.status_bar.addWidget(self.status_label, 1) # Stretch
+
+        # Device Indicator
+        import torch
+        device_name = "CUDA" if torch.cuda.is_available() else "CPU"
+        self.device_label = QLabel(f"Device: {device_name}")
+        self.device_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 0 10px;")
+        self.status_bar.addPermanentWidget(self.device_label)
 
         # Keyboard Shortcuts
         self.train_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
@@ -258,6 +315,119 @@ class EqPropDashboard(QMainWindow):
 
         self.stop_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
         self.stop_shortcut.activated.connect(self._stop_training)
+
+    def _create_menu_bar(self):
+        """Create the application menu bar."""
+        menubar = self.menuBar()
+
+        # === File Menu ===
+        file_menu = menubar.addMenu("&File")
+
+        save_action = QAction("Save Model...", self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self._save_model)
+        file_menu.addAction(save_action)
+
+        load_action = QAction("Load Model...", self)
+        load_action.setShortcut("Ctrl+O")
+        load_action.triggered.connect(self._load_model)
+        file_menu.addAction(load_action)
+
+        file_menu.addSeparator()
+
+        save_config_action = QAction("Save Configuration...", self)
+        save_config_action.setToolTip("Save only the hyperparameters (no weights)")
+        save_config_action.triggered.connect(self._save_config_only)
+        file_menu.addAction(save_config_action)
+
+        load_config_action = QAction("Load Configuration...", self)
+        load_config_action.triggered.connect(self._load_config_only)
+        file_menu.addAction(load_config_action)
+
+        file_menu.addSeparator()
+
+        exit_action = QAction("Exit", self)
+        exit_action.setShortcut("Ctrl+W")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+        # === View Menu ===
+        view_menu = menubar.addMenu("&View")
+
+        self.theme_action = QAction("Switch to Light Theme", self)
+        self.theme_action.triggered.connect(self._toggle_theme)
+        view_menu.addAction(self.theme_action)
+
+        # === Help Menu ===
+        help_menu = menubar.addMenu("&Help")
+
+        shortcuts_action = QAction("Keyboard Shortcuts", self)
+        shortcuts_action.triggered.connect(self._show_shortcuts)
+        help_menu.addAction(shortcuts_action)
+
+        about_action = QAction("About", self)
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
+
+    def _toggle_theme(self):
+        """Toggle between dark and light themes."""
+        if self.current_theme == 'dark':
+            self.setStyleSheet(LIGHT_THEME)
+            self.current_theme = 'light'
+            self.theme_action.setText("Switch to Dark Theme")
+
+            # Update plots
+            self.lm_tab.update_theme(LIGHT_THEME_COLORS, LIGHT_PLOT_COLORS)
+            self.vis_tab.update_theme(LIGHT_THEME_COLORS, LIGHT_PLOT_COLORS)
+            self.rl_tab.update_theme(LIGHT_THEME_COLORS, LIGHT_PLOT_COLORS)
+
+        else:
+            self.setStyleSheet(CYBERPUNK_DARK)
+            self.current_theme = 'dark'
+            self.theme_action.setText("Switch to Light Theme")
+
+            # Update plots
+            self.lm_tab.update_theme(DARK_THEME_COLORS, PLOT_COLORS)
+            self.vis_tab.update_theme(DARK_THEME_COLORS, PLOT_COLORS)
+            self.rl_tab.update_theme(DARK_THEME_COLORS, PLOT_COLORS)
+
+        self.status_label.setText(f"Switched to {self.current_theme.title()} theme")
+
+    def _show_about(self):
+        """Show About dialog."""
+        dlg = AboutDialog(self)
+        dlg.exec()
+
+    def _show_shortcuts(self):
+        """Show keyboard shortcuts."""
+        QMessageBox.information(
+            self,
+            "Keyboard Shortcuts",
+            "Ctrl+Return: Start Training\n"
+            "Ctrl+Q: Stop Training\n"
+            "Ctrl+S: Save Model\n"
+            "Ctrl+O: Load Model\n"
+            "Ctrl+W: Exit"
+        )
+
+    def closeEvent(self, event):
+        """Handle application close event."""
+        if self.worker and self.worker.isRunning():
+            reply = QMessageBox.question(
+                self, 'Training in Progress',
+                "Training is currently running. Are you sure you want to exit?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+
+            if reply == QMessageBox.StandardButton.Yes:
+                self.worker.stop()
+                self.worker.wait()
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
 
     def _clear_plots(self):
         """Clear all plot history and refresh plots."""
@@ -281,6 +451,55 @@ class EqPropDashboard(QMainWindow):
         elif isinstance(current, RLTab):
             self._start_training('rl')
 
+    def _get_current_config_dict(self) -> Dict:
+        """Helper to get current configuration dictionary from UI."""
+        current_config = {}
+        # Active tab determines which controls to read
+        if self.tabs.currentIndex() == 0: # LM
+            current_config.update({
+                'task': 'lm',
+                'model_name': self.lm_tab.lm_model_combo.currentText(),
+                'hidden_dim': self.lm_tab.lm_hidden_spin.value(),
+                'num_layers': self.lm_tab.lm_layers_spin.value(),
+                'steps': self.lm_tab.lm_steps_spin.value(),
+                'dataset': self.lm_tab.lm_dataset_combo.currentText(),
+                'seq_len': self.lm_tab.lm_seqlen_spin.value(),
+                'hyperparams': self._get_current_hyperparams(self.lm_tab.lm_hyperparam_widgets)
+            })
+        elif self.tabs.currentIndex() == 1: # Vision
+            current_config.update({
+                'task': 'vision',
+                'model_name': self.vis_tab.vis_model_combo.currentText(),
+                'hidden_dim': self.vis_tab.vis_hidden_spin.value(),
+                'steps': self.vis_tab.vis_steps_spin.value(),
+                'dataset': self.vis_tab.vis_dataset_combo.currentText(),
+                'hyperparams': self._get_current_hyperparams(self.vis_tab.vis_hyperparam_widgets)
+            })
+        return current_config
+
+    def _save_config_only(self):
+        """Save only the configuration to a JSON file."""
+        config = self._get_current_config_dict()
+        fname, _ = QFileDialog.getSaveFileName(self, "Save Configuration", "", "JSON Config (*.json)")
+        if fname:
+            try:
+                with open(fname, 'w') as f:
+                    json.dump(config, f, indent=4)
+                self.status_label.setText(f"Configuration saved to {fname}")
+            except Exception as e:
+                QMessageBox.critical(self, "Save Error", str(e))
+
+    def _load_config_only(self):
+        """Load configuration from a JSON file."""
+        fname, _ = QFileDialog.getOpenFileName(self, "Load Configuration", "", "JSON Config (*.json)")
+        if fname:
+            try:
+                with open(fname, 'r') as f:
+                    config = json.load(f)
+                self._apply_config(config)
+            except Exception as e:
+                QMessageBox.critical(self, "Load Error", str(e))
+
     def _save_model(self):
         """Save the current model to a file, including current UI configuration."""
         if not self.model:
@@ -291,32 +510,7 @@ class EqPropDashboard(QMainWindow):
         if fname:
             try:
                 import torch
-
-                # Capture current UI state
-                current_config = {}
-
-                # Active tab determines which controls to read
-                if self.tabs.currentIndex() == 0: # LM
-                    current_config.update({
-                        'task': 'lm',
-                        'model_name': self.lm_tab.lm_model_combo.currentText(),
-                        'hidden_dim': self.lm_tab.lm_hidden_spin.value(),
-                        'num_layers': self.lm_tab.lm_layers_spin.value(),
-                        'steps': self.lm_tab.lm_steps_spin.value(),
-                        'dataset': self.lm_tab.lm_dataset_combo.currentText(),
-                        'seq_len': self.lm_tab.lm_seqlen_spin.value(),
-                        'hyperparams': self._get_current_hyperparams(self.lm_tab.lm_hyperparam_widgets)
-                    })
-                elif self.tabs.currentIndex() == 1: # Vision
-                    current_config.update({
-                        'task': 'vision',
-                        'model_name': self.vis_tab.vis_model_combo.currentText(),
-                        'hidden_dim': self.vis_tab.vis_hidden_spin.value(),
-                        'steps': self.vis_tab.vis_steps_spin.value(),
-                        'dataset': self.vis_tab.vis_dataset_combo.currentText(),
-                        'hyperparams': self._get_current_hyperparams(self.vis_tab.vis_hyperparam_widgets)
-                    })
-
+                current_config = self._get_current_config_dict()
                 state = {
                     'model_state_dict': self.model.state_dict(),
                     'config': current_config,
@@ -337,30 +531,7 @@ class EqPropDashboard(QMainWindow):
                 config = checkpoint.get('config', {})
 
                 # 1. Restore UI State from Config
-                if config.get('task') == 'lm':
-                    self.tabs.setCurrentIndex(0)
-                    if 'model_name' in config:
-                        idx = self.lm_tab.lm_model_combo.findText(config['model_name'])
-                        if idx >= 0: self.lm_tab.lm_model_combo.setCurrentIndex(idx)
-
-                    if 'hidden_dim' in config: self.lm_tab.lm_hidden_spin.setValue(config['hidden_dim'])
-                    if 'num_layers' in config: self.lm_tab.lm_layers_spin.setValue(config['num_layers'])
-                    if 'steps' in config: self.lm_tab.lm_steps_spin.setValue(config['steps'])
-                    if 'dataset' in config:
-                        idx = self.lm_tab.lm_dataset_combo.findText(config['dataset'])
-                        if idx >= 0: self.lm_tab.lm_dataset_combo.setCurrentIndex(idx)
-
-                elif config.get('task') == 'vision':
-                    self.tabs.setCurrentIndex(1)
-                    if 'model_name' in config:
-                        idx = self.vis_tab.vis_model_combo.findText(config['model_name'])
-                        if idx >= 0: self.vis_tab.vis_model_combo.setCurrentIndex(idx)
-
-                    if 'hidden_dim' in config: self.vis_tab.vis_hidden_spin.setValue(config['hidden_dim'])
-                    if 'steps' in config: self.vis_tab.vis_steps_spin.setValue(config['steps'])
-                    if 'dataset' in config:
-                        idx = self.vis_tab.vis_dataset_combo.findText(config['dataset'])
-                        if idx >= 0: self.vis_tab.vis_dataset_combo.setCurrentIndex(idx)
+                self._apply_config(config)
 
                 # Process pending events to ensure UI updates (like hyperparam widgets) are triggered
                 QApplication.processEvents()

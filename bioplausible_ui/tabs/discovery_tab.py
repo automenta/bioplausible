@@ -159,7 +159,7 @@ class DiscoveryTab(QWidget):
         self.net_plot.setRange(xRange=(-100, 100), yRange=(-100, 100))
 
         # Self node
-        self.self_item = pg.ScatterPlotItem(pos=[{'pos': (0,0), 'size': 20, 'brush': pg.mkBrush('#00ff00')}])
+        self.self_item = pg.ScatterPlotItem(spots=[{'pos': (0,0), 'size': 20, 'brush': pg.mkBrush('#00ff00')}])
         self.net_plot.addItem(self.self_item)
 
         # Peer nodes
@@ -190,6 +190,9 @@ class DiscoveryTab(QWidget):
             self.viz_timer.start(5000)
         else:
             self.viz_timer.stop()
+
+    def _refresh_viz(self):
+        self._request_viz_update()
 
     def _request_viz_update(self):
         """Request update from worker thread."""
