@@ -208,7 +208,7 @@ class Verifier:
             "all_scores": scores,
         }
 
-    def run_tracks(self, track_ids: Optional[List[int]] = None) -> Dict:
+    def run_tracks(self, track_ids: Optional[List[int]] = None, parallel: bool = False) -> Dict:
         """Run specified tracks (or all if None)."""
         self.print_header()
         self.notebook.add_header(self.seed)
@@ -224,41 +224,81 @@ class Verifier:
         results = {}
         start_time = time.time()
 
-        for i, track_id in enumerate(track_ids):
-            if track_id not in self.tracks:
-                print(f"⚠️ Unknown track: {track_id}")
-                continue
-
-            name, method = self.tracks[track_id]
-
+        # Helper to run a single track
+        def _execute_track(tid):
+            if tid not in self.tracks:
+                return tid, None, f"Unknown track: {tid}"
+            name, method = self.tracks[tid]
             try:
                 # Pass self (Verifier) to the track method
                 result = method(self)
-                results[track_id] = result
-                self.notebook.add_track_result(result)
-
-                icon = {"pass": "✅", "fail": "❌", "partial": "⚠️", "stub": "🔧"}[
-                    result.status
-                ]
-                print(
-                    f"\n{icon} Track {track_id}: {name} - {result.status.upper()} ({result.score:.0f}/100)"
-                )
-
+                return tid, result, None
             except Exception as e:
-                print(f"\n❌ Track {track_id} failed: {e}")
                 import traceback
+                return tid, None, f"Failed: {e}\n{traceback.format_exc()}"
 
-                traceback.print_exc()
+        if parallel and len(track_ids) > 1:
+            import concurrent.futures
+            print(f"🚀 Running {len(track_ids)} tracks in parallel...")
 
-            # Progress
-            elapsed = time.time() - start_time
-            completed = i + 1
-            remaining = len(track_ids) - completed
-            if remaining > 0:
-                eta = (elapsed / completed) * remaining
-                print(
-                    f"   Progress: {completed}/{len(track_ids)} | Elapsed: {elapsed:.0f}s | ETA: {eta:.0f}s"
-                )
+            # Use ThreadPoolExecutor because tracks are largely I/O bound (PyTorch/CUDA releases GIL often)
+            # or CPU bound but numpy releases GIL.
+            # ProcessPoolExecutor would require pickling everything which is hard with Modules.
+            max_workers = min(len(track_ids), 4) # Cap at 4 to avoid resource contention
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_track = {executor.submit(_execute_track, tid): tid for tid in track_ids}
+
+                completed = 0
+                for future in concurrent.futures.as_completed(future_to_track):
+                    tid, result, error = future.result()
+
+                    if error:
+                        print(f"\n❌ Track {tid} error: {error}")
+                    elif result:
+                        results[tid] = result
+                        # Note: notebook.add_track_result is not thread-safe by default,
+                        # but we are collecting results sequentially here as they complete.
+                        self.notebook.add_track_result(result)
+
+                        icon = {"pass": "✅", "fail": "❌", "partial": "⚠️", "stub": "🔧"}.get(
+                            result.status, "?"
+                        )
+                        name, _ = self.tracks[tid]
+                        print(
+                            f"\n{icon} Track {tid}: {name} - {result.status.upper()} ({result.score:.0f}/100)"
+                        )
+
+                    completed += 1
+                    elapsed = time.time() - start_time
+                    print(f"   Progress: {completed}/{len(track_ids)} | Elapsed: {elapsed:.0f}s")
+
+        else:
+            # Sequential Execution
+            for i, track_id in enumerate(track_ids):
+                tid, result, error = _execute_track(track_id)
+
+                if error:
+                    print(f"\n❌ Track {track_id} failed: {error}")
+                elif result:
+                    results[track_id] = result
+                    self.notebook.add_track_result(result)
+                    icon = {"pass": "✅", "fail": "❌", "partial": "⚠️", "stub": "🔧"}.get(
+                        result.status, "?"
+                    )
+                    name, _ = self.tracks[track_id]
+                    print(
+                        f"\n{icon} Track {track_id}: {name} - {result.status.upper()} ({result.score:.0f}/100)"
+                    )
+
+                # Progress
+                elapsed = time.time() - start_time
+                completed = i + 1
+                remaining = len(track_ids) - completed
+                if remaining > 0:
+                    eta = (elapsed / completed) * remaining
+                    print(
+                        f"   Progress: {completed}/{len(track_ids)} | Elapsed: {elapsed:.0f}s | ETA: {eta:.0f}s"
+                    )
 
         # Save
         total_time = time.time() - start_time
