@@ -173,6 +173,41 @@ class TritonEqPropOps:
         return out
 
     @staticmethod
+    def step_cupy(h, pre_act, alpha: float):
+        """
+        Perform one EqProp step using CuPy arrays: h <- (1-a)h + a*tanh(pre_act)
+        """
+        # Fallback if no Triton or no CuPy
+        if not HAS_TRITON or not HAS_CUPY:
+             return (1 - alpha) * h + alpha * cp.tanh(pre_act)
+
+        # Ensure we are dealing with CuPy arrays on GPU
+        if not isinstance(h, cp.ndarray) or not isinstance(pre_act, cp.ndarray):
+             return (1 - alpha) * h + alpha * cp.tanh(pre_act)
+
+        # Ensure contiguity
+        if not h.flags.c_contiguous:
+            h = cp.ascontiguousarray(h)
+        if not pre_act.flags.c_contiguous:
+            pre_act = cp.ascontiguousarray(pre_act)
+
+        out = cp.empty_like(h)
+        n_elements = h.size
+        BLOCK_SIZE = 1024
+        grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+
+        _eqprop_step_kernel[grid](
+            h.data.ptr,         # h_ptr
+            pre_act.data.ptr,   # pre_act_ptr
+            out.data.ptr,       # out_ptr
+            alpha,              # alpha
+            n_elements,         # n_elements
+            BLOCK_SIZE=BLOCK_SIZE
+        )
+
+        return out
+
+    @staticmethod
     def step_linear(h: torch.Tensor, target: torch.Tensor, alpha: float) -> torch.Tensor:
         """
         Perform one EqProp linear step: h <- (1-a)h + a*target

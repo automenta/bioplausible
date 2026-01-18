@@ -36,6 +36,16 @@ if "CUDA_PATH" not in os.environ:
         "/usr/local/cuda-11.7",
     ]
 
+    # Try getting CUDA_HOME from torch.utils.cpp_extension
+    try:
+        from torch.utils.cpp_extension import CUDA_HOME
+        if CUDA_HOME and os.path.exists(CUDA_HOME):
+            candidates.insert(0, CUDA_HOME)
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
     # Try finding nvcc
     nvcc_path = shutil.which("nvcc")
     if nvcc_path:
@@ -66,7 +76,15 @@ if "CUDA_PATH" not in os.environ:
     except Exception:
         pass
 
+    # Deduplicate candidates while preserving order
+    unique_candidates = []
+    seen = set()
     for path in candidates:
+        if path not in seen and os.path.exists(path):
+            unique_candidates.append(path)
+            seen.add(path)
+
+    for path in unique_candidates:
         if os.path.exists(path):
             os.environ["CUDA_PATH"] = path
             break
