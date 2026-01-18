@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from bioplausible.models import SimpleConvEqProp
 
 
@@ -24,6 +25,49 @@ class EqPropDiffusion(nn.Module):
             use_spectral_norm=True,
         )
         self.img_channels = img_channels
+
+        # Register noise schedule buffers
+        T = 1000
+        beta = torch.linspace(1e-4, 0.02, T)
+        alpha = 1 - beta
+        alpha_bar = torch.cumprod(alpha, dim=0)
+        self.register_buffer("beta", beta)
+        self.register_buffer("alpha", alpha)
+        self.register_buffer("alpha_bar", alpha_bar)
+
+    def train_step(self, x, y=None):
+        """
+        Training step for SupervisedTrainer.
+        x: Clean images [B, C, H, W]
+        y: Labels (ignored)
+        """
+        device = x.device
+        batch_size = x.shape[0]
+
+        # Sample time steps
+        t = torch.randint(0, len(self.beta), (batch_size,), device=device).long()
+
+        # Add noise
+        noise = torch.randn_like(x)
+        sqrt_ab = torch.sqrt(self.alpha_bar[t]).view(-1, 1, 1, 1)
+        sqrt_omab = torch.sqrt(1 - self.alpha_bar[t]).view(-1, 1, 1, 1)
+        x_noisy = sqrt_ab * x + sqrt_omab * noise
+
+        # Predict clean image (x_0)
+        pred = self(x_noisy, t)
+
+        # Compute Loss (MSE against clean image)
+        loss = F.mse_loss(pred, x)
+
+        # Optimization
+        if not hasattr(self, 'optimizer'):
+            self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return {"loss": loss.item()}
 
     def energy(self, x_noisy, x_pred, t):
         """Energy function for denoising."""

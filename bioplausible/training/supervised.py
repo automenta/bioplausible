@@ -109,19 +109,22 @@ class SupervisedTrainer(BaseTrainer):
         else:
             # Vision or direct input
             if self.task_type in ["vision", "rl"]:
-                # Check for Conv models (ModernConvEqProp)
-                is_conv = "Conv" in self.model.__class__.__name__
+                # Check for Conv or Diffusion models
+                model_name = self.model.__class__.__name__
+                is_spatial = "Conv" in model_name or "Diffusion" in model_name
+
                 if hasattr(self.model, 'config') and self.model.config and hasattr(self.model.config, 'name'):
-                     if "Conv" in self.model.config.name:
-                          is_conv = True
+                     if "Conv" in self.model.config.name or "Diffusion" in self.model.config.name:
+                          is_spatial = True
 
                 # Unwrap model if compiled
                 if hasattr(self.model, '_orig_mod'):
                      orig = self.model._orig_mod
-                     if "Conv" in orig.__class__.__name__:
-                          is_conv = True
+                     orig_name = orig.__class__.__name__
+                     if "Conv" in orig_name or "Diffusion" in orig_name:
+                          is_spatial = True
 
-                if is_conv:
+                if is_spatial:
                      return x
                 elif x.dim() > 2:
                      return x.view(x.size(0), -1)

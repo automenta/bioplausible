@@ -36,6 +36,16 @@ if "CUDA_PATH" not in os.environ:
         "/usr/local/cuda-11.7",
     ]
 
+    # Try getting CUDA_HOME from torch.utils.cpp_extension
+    try:
+        from torch.utils.cpp_extension import CUDA_HOME
+        if CUDA_HOME and os.path.exists(CUDA_HOME):
+            candidates.insert(0, CUDA_HOME)
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
     # Try finding nvcc
     nvcc_path = shutil.which("nvcc")
     if nvcc_path:
@@ -66,7 +76,15 @@ if "CUDA_PATH" not in os.environ:
     except Exception:
         pass
 
+    # Deduplicate candidates while preserving order
+    unique_candidates = []
+    seen = set()
     for path in candidates:
+        if path not in seen and os.path.exists(path):
+            unique_candidates.append(path)
+            seen.add(path)
+
+    for path in unique_candidates:
         if os.path.exists(path):
             os.environ["CUDA_PATH"] = path
             break
@@ -642,7 +660,13 @@ class EqPropKernelBPTT:
 
         for _ in range(self.max_steps):
             pre_act = x_proj + h @ self.W_rec.T + self.b_rec
-            h = xp.tanh(pre_act)
+
+            if HAS_TRITON_OPS and self.use_gpu and HAS_CUPY and isinstance(h, cp.ndarray):
+                # Use Triton kernel for tanh update: (1-a)h + a*tanh(pre_act) with a=1.0
+                h = TritonEqPropOps.step_cupy(h, pre_act, alpha=1.0)
+            else:
+                h = xp.tanh(pre_act)
+
             trajectory.append((pre_act.copy(), h.copy()))
 
         # Output
