@@ -26,6 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description="BioPlausible P2P Worker")
     parser.add_argument("--bootstrap-ip", type=str, default=None, help="IP of a known bootstrap node")
     parser.add_argument("--bootstrap-port", type=int, default=8468, help="Port of bootstrap node")
+    parser.add_argument("--task", type=str, default="shakespeare", help="Task to run (e.g. shakespeare, mnist)")
     parser.add_argument("--mode", type=str, default="quick", choices=["quick", "deep"], help="Discovery mode")
     parser.add_argument("--max-hidden", type=int, default=None, help="Constraint: Max hidden dim")
     parser.add_argument("--max-layers", type=int, default=None, help="Constraint: Max layers")
@@ -38,13 +39,14 @@ def main():
     if args.max_layers:
         constraints['max_layers'] = args.max_layers
 
-    logger.info(f"Starting P2P Worker (Mode: {args.mode})")
+    logger.info(f"Starting P2P Worker (Mode: {args.mode}, Task: {args.task})")
 
     worker = P2PEvolution(
         bootstrap_ip=args.bootstrap_ip,
         bootstrap_port=args.bootstrap_port,
         discovery_mode=args.mode,
-        constraints=constraints
+        constraints=constraints,
+        task=args.task
     )
 
     # Register signal handlers

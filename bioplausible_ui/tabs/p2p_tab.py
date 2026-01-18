@@ -127,6 +127,13 @@ class P2PTab(QWidget):
         self.connect_btn = QPushButton("🚀 Join Network")
         self.connect_btn.setMinimumHeight(50)
         self.connect_btn.setStyleSheet("font-weight: bold; font-size: 14px; background-color: #27ae60;")
+        # Task Selection
+        self.task_combo = QComboBox()
+        self.task_combo.addItems(["shakespeare", "mnist", "cifar10", "cartpole"])
+        self.task_combo.setToolTip("Target task to contribute to")
+        conn_layout.addWidget(QLabel("Target Task:"))
+        conn_layout.addWidget(self.task_combo)
+
         self.connect_btn.clicked.connect(self._toggle_connection)
         conn_layout.addWidget(self.connect_btn)
 
@@ -300,7 +307,8 @@ class P2PTab(QWidget):
                     bootstrap_ip=ip,
                     bootstrap_port=port,
                     discovery_mode=mode,
-                    constraints=constraints
+                    constraints=constraints,
+                    task=self.task_combo.currentText()
                 )
                 self.worker.start(auto_nice=True)
 

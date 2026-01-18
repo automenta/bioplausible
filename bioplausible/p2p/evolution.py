@@ -21,17 +21,18 @@ logger = logging.getLogger("P2PEvolution")
 
 class P2PEvolution:
     def __init__(self, bootstrap_ip: str = None, bootstrap_port: int = 8468,
-                 discovery_mode: str = 'quick', constraints: Dict[str, Any] = None):
+                 discovery_mode: str = 'quick', constraints: Dict[str, Any] = None,
+                 task: str = "shakespeare"):
         self.bootstrap_nodes = [(bootstrap_ip, bootstrap_port)] if bootstrap_ip else []
         self.dht = None
         self.discovery_mode = discovery_mode
         self.constraints = constraints or {}
+        self.task = task
 
         self.running = False
         self.thread = None
 
         # State
-        self.current_task = "shakespeare" # Default
         self.local_best_config = None
         self.local_best_score = -float('inf')
 
@@ -105,7 +106,7 @@ class P2PEvolution:
             try:
                 # 1. Fetch Global Best
                 self._update_status("Syncing with Mesh...")
-                best_record = self.dht.get_best_model(self.current_task)
+                best_record = self.dht.get_best_model(self.task)
 
                 global_best_config = {}
                 global_best_score = -float('inf')
@@ -208,11 +209,12 @@ class P2PEvolution:
                 job_id = random.randint(1000, 9999)
 
                 metrics = run_single_trial_task(
-                    task=self.current_task,
+                    task=self.task,
                     model_name=target_model_name,
                     config=target_config,
                     storage_path="results/hyperopt.db",
-                    job_id=job_id
+                    job_id=job_id,
+                    quick_mode=(self.discovery_mode == 'quick')
                 )
 
                 if metrics:
@@ -234,7 +236,7 @@ class P2PEvolution:
                         self._update_status("Publishing Discovery...")
                         # Ensure model_name inside config
                         target_config['model_name'] = target_model_name
-                        self.dht.publish_best_model(self.current_task, target_config, acc)
+                        self.dht.publish_best_model(self.task, target_config, acc)
                         self.points += 50
                         save_state(self.points, self.jobs_done)
                         self._log(f"🎉 New Global Best Discovered! ({acc:.4f})")
