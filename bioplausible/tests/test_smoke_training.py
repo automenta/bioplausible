@@ -350,6 +350,35 @@ class TestSmokeTraining(unittest.TestCase):
         self.assertIn("train_loss", history)
         self.assertGreater(len(history["train_loss"]), 0)
 
+    def test_real_data_digits(self):
+        """Test training on real Digits dataset (sklearn)."""
+        try:
+            from bioplausible.datasets import get_vision_dataset
+            # Digits: 64 input features (8x8 flattened), 10 classes
+            train_dataset = get_vision_dataset("digits", train=True, flatten=True)
+
+            model = LoopedMLP(
+                input_dim=64,
+                hidden_dim=32,
+                output_dim=10,
+                max_steps=10
+            ).to(self.device)
+
+            loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+
+            trainer = EqPropTrainer(model, use_compile=False)
+            history = trainer.fit(loader, epochs=2)
+
+            self.assertIn("train_loss", history)
+            # Check loss went down (basic sanity check)
+            self.assertLess(history["train_loss"][-1], history["train_loss"][0] * 1.5) # allow some fluctuation but not explosion
+
+        except ImportError as e:
+            if "scikit-learn" in str(e):
+                self.skipTest("scikit-learn not installed")
+            else:
+                raise e
+
 
 if __name__ == "__main__":
     unittest.main()

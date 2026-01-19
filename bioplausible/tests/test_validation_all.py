@@ -150,11 +150,13 @@ class TestValidationAll(unittest.TestCase):
         self.assertLess(f_loss, i_loss)
 
     def test_looped_mlp_equilibrium_learns(self):
+        # Equilibrium Mode requires sufficient steps to reach fixed point
+        # for the gradient approximation to be valid.
         model = LoopedMLP(
             self.input_dim,
             32,
             self.output_dim,
-            max_steps=5,
+            max_steps=20,
             gradient_method="equilibrium",
         ).to(self.device)
         i_loss, f_loss = self._train_minimal(model, self.loader)
