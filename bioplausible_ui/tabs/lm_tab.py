@@ -276,20 +276,32 @@ class LMTab(QWidget):
         # Generation panel
         gen_group = QGroupBox("✨ Text Generation")
         gen_layout = QVBoxLayout(gen_group)
+
+        # Prompt Input
+        prompt_layout = QHBoxLayout()
+        prompt_layout.addWidget(QLabel("Prompt:"))
+        self.gen_prompt_input = QTextEdit()
+        self.gen_prompt_input.setPlaceholderText("Enter prompt (e.g. ROMEO:)")
+        self.gen_prompt_input.setMaximumHeight(40)
+        prompt_layout.addWidget(self.gen_prompt_input)
+        gen_layout.addLayout(prompt_layout)
+
         gen_controls = QHBoxLayout()
-        gen_controls.addWidget(QLabel("Temperature:"))
+        gen_controls.addWidget(QLabel("Temp:"))
         self.temp_slider = QSlider(Qt.Orientation.Horizontal)
         self.temp_slider.setRange(1, 20)
         self.temp_slider.setValue(10)
         gen_controls.addWidget(self.temp_slider)
         self.temp_label = QLabel("1.0")
-        self.temp_label.setFixedWidth(40)
+        self.temp_label.setFixedWidth(30)
         gen_controls.addWidget(self.temp_label)
         self.temp_slider.valueChanged.connect(lambda v: self.temp_label.setText(f"{v/10:.1f}"))
-        gen_btn = QPushButton("Generate")
+
+        gen_btn = QPushButton("🎲 Generate")
         gen_btn.clicked.connect(self._generate_text)
         gen_controls.addWidget(gen_btn)
         gen_layout.addLayout(gen_controls)
+
         self.gen_output = QTextEdit()
         self.gen_output.setReadOnly(True)
         self.gen_output.setPlaceholderText("Generated text will appear here...")
@@ -385,7 +397,9 @@ class LMTab(QWidget):
                 return
 
         temperature = self.temp_slider.value() / 10.0
-        prompt = "ROMEO:"
+        prompt = self.gen_prompt_input.toPlainText().strip()
+        if not prompt: prompt = "ROMEO:"
+
         self.gen_output.setText(f"🎲 Generating from '{prompt}'...\n(May be gibberish if undertrained)")
 
         # Force UI update

@@ -62,5 +62,22 @@ class TestTabs(unittest.TestCase):
         dlg = ComparisonDialog(data)
         self.assertIsNotNone(dlg)
 
+    def test_lm_tab_generation(self):
+        from bioplausible_ui.tabs.lm_tab import LMTab
+        tab = LMTab()
+        self.assertIsNotNone(tab)
+
+        # Check if generation UI exists
+        self.assertTrue(hasattr(tab, 'gen_output'))
+        self.assertTrue(hasattr(tab, 'gen_prompt_input'))
+
+    def test_rl_tab_playback(self):
+        from bioplausible_ui.tabs.rl_tab import RLTab
+        tab = RLTab()
+        self.assertIsNotNone(tab)
+
+        # Check if playback method exists
+        self.assertTrue(hasattr(tab, '_watch_agent'))
+
 if __name__ == '__main__':
     unittest.main()

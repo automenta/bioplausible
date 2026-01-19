@@ -1093,6 +1093,9 @@ class EqPropDashboard(QMainWindow):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         gamma = self.rl_tab.rl_gamma_spin.value()
 
+        # Keep reference for playback
+        self.rl_tab.update_model_ref(model)
+
         self.worker = RLWorker(model, env_name, episodes=episodes, lr=lr, gamma=gamma, device=device)
         self.worker.progress.connect(self._on_rl_progress)
         self.worker.finished.connect(self._on_finished)

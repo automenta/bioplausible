@@ -1,9 +1,14 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QSpinBox, QDoubleSpinBox,
-    QGroupBox, QPushButton, QProgressBar, QLabel
+    QGroupBox, QPushButton, QProgressBar, QLabel, QDialog
 )
-from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtCore import pyqtSignal, Qt, QTimer
+from PyQt6.QtGui import QImage, QPixmap, QFont
+
+import torch
+import numpy as np
+import gymnasium as gym
 
 from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.themes import PLOT_COLORS
@@ -14,6 +19,93 @@ try:
 except ImportError:
     HAS_PYQTGRAPH = False
 
+class RLPlaybackDialog(QDialog):
+    """Dialog to playback agent performance."""
+    def __init__(self, model, env_name, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Watching Agent: {env_name}")
+        self.setFixedSize(600, 500)
+        self.model = model
+        self.env_name = env_name
+        self.frames = []
+        self.current_frame = 0
+
+        layout = QVBoxLayout(self)
+
+        self.image_label = QLabel("Running Episode...")
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image_label.setMinimumSize(400, 300)
+        layout.addWidget(self.image_label)
+
+        self.status_label = QLabel("Recording...")
+        layout.addWidget(self.status_label)
+
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.close)
+        layout.addWidget(btn)
+
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._next_frame)
+
+        # Run episode immediately (in background ideally, but short episodes might be ok)
+        QTimer.singleShot(100, self._run_episode)
+
+    def _run_episode(self):
+        try:
+            env = gym.make(self.env_name, render_mode="rgb_array")
+            state, _ = env.reset()
+            done = False
+            truncated = False
+            total_reward = 0
+            steps = 0
+
+            # Record frames
+            self.frames = []
+
+            while not (done or truncated) and steps < 500:
+                frame = env.render()
+                if frame is not None:
+                    self.frames.append(frame)
+
+                # Action
+                with torch.no_grad():
+                    state_t = torch.FloatTensor(state).unsqueeze(0)
+                    if hasattr(self.model, 'device'):
+                        state_t = state_t.to(self.model.device)
+
+                    q_values = self.model(state_t)
+                    action = q_values.argmax().item()
+
+                state, reward, done, truncated, _ = env.step(action)
+                total_reward += reward
+                steps += 1
+
+            env.close()
+
+            self.status_label.setText(f"Episode Finished! Reward: {total_reward:.1f}. Replaying...")
+
+            if self.frames:
+                self.timer.start(50) # 20 FPS
+            else:
+                self.image_label.setText("No frames captured (rendering failed).")
+
+        except Exception as e:
+            self.image_label.setText(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _next_frame(self):
+        if not self.frames: return
+
+        frame = self.frames[self.current_frame]
+        h, w, c = frame.shape
+        qimg = QImage(frame.data, w, h, 3*w, QImage.Format.Format_RGB888)
+        pix = QPixmap.fromImage(qimg)
+
+        self.image_label.setPixmap(pix.scaled(self.image_label.size(), Qt.AspectRatioMode.KeepAspectRatio))
+
+        self.current_frame = (self.current_frame + 1) % len(self.frames)
+
 class RLTab(QWidget):
     """Reinforcement Learning Tab."""
 
@@ -23,6 +115,7 @@ class RLTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.model_ref = None
         self._setup_ui()
 
     def _create_control_group(self, title, controls):
@@ -146,6 +239,12 @@ class RLTab(QWidget):
         self.rl_reset_btn.clicked.connect(self._reset_defaults)
         btn_layout.addWidget(self.rl_reset_btn)
 
+        self.rl_watch_btn = QPushButton("👁️ Watch")
+        self.rl_watch_btn.setObjectName("resetButton")
+        self.rl_watch_btn.setToolTip("Watch agent play one episode")
+        self.rl_watch_btn.clicked.connect(self._watch_agent)
+        btn_layout.addWidget(self.rl_watch_btn)
+
         self.rl_clear_btn = QPushButton("🗑️ Clear")
         self.rl_clear_btn.setObjectName("resetButton")
         self.rl_clear_btn.setToolTip("Clear plot history")
@@ -219,6 +318,24 @@ class RLTab(QWidget):
             self.rl_desc_label.setText(spec.description)
         except Exception:
             self.rl_desc_label.setText("")
+
+    def update_model_ref(self, model):
+        """Store reference to trained model."""
+        self.model_ref = model
+
+    def _watch_agent(self):
+        """Launch playback dialog."""
+        if self.model_ref is None:
+            # Try to load default if not trained? No, better warn.
+            # But for UX, let's create a temporary one if user just wants to see it fail?
+            # No, standard is to warn.
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "No Agent", "Train an agent first!")
+            return
+
+        env_name = self.rl_env_combo.currentText()
+        dlg = RLPlaybackDialog(self.model_ref, env_name, self)
+        dlg.exec()
 
     def update_theme(self, theme_colors, plot_colors):
         """Update plot colors based on theme."""
