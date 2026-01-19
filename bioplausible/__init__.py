@@ -48,34 +48,37 @@ except ImportError:
     get_eqprop_lm = None
     list_eqprop_lm_variants = None
 
-# Bio-plausible research algorithms (optional - from research codebase)
-# These are first-class PyTorch nn.Module models, same status as LoopedMLP
+# Bio-plausible research algorithms
 try:
-    from .algorithms import (
-        ALGORITHM_REGISTRY,
-        # Registry
-        HAS_BIOPLAUSIBLE,
-        AdaptiveFeedbackAlignment,
-        # Core algorithms
-        BackpropBaseline,
-        # Base class
-        BaseAlgorithm,
-        ContrastiveFeedbackAlignment,
-        EnergyGuidedFA,
-        EnergyMinimizingFA,
-        # Hybrid algorithms
-        EquilibriumAlignment,
-        LayerwiseEquilibriumFA,
-        MomentumEquilibrium,
-        PredictiveCodingHybrid,
-        SparseEquilibrium,
-        StandardEqProp,
-        StandardFA,
-        StochasticFA,
-    )
+    from .models.registry import MODEL_REGISTRY
+    from .models.base import BioModel as BaseAlgorithm
+
+    # Alias for compatibility
+    ALGORITHM_REGISTRY = {
+        spec.name: spec.description for spec in MODEL_REGISTRY
+    }
+
+    # Import key models
+    from .models.simple_fa import StandardFA
+    from .models.standard_eqprop import StandardEqProp
+    from .models.ada_fa import AdaptiveFeedbackAlignment
+    from .models.cf_align import ContrastiveFeedbackAlignment
+    from .models.eq_align import EquilibriumAlignment
+    from .models.leq_fa import LayerwiseEquilibriumFA
+    from .models.eg_fa import EnergyGuidedFA
+    from .models.pc_hybrid import PredictiveCodingHybrid
+    from .models.sparse_eq import SparseEquilibrium
+    from .models.mom_eq import MomentumEquilibrium
+    from .models.sto_fa import StochasticFA
+    from .models.em_fa import EnergyMinimizingFA
+
+    # Pseudo-BackpropBaseline for compatibility if referenced
+    from .models.looped_mlp import BackpropMLP as BackpropBaseline
 
     HAS_BIOPLAUSIBLE = True
-except ImportError:
+except ImportError as e:
+    import warnings
+    warnings.warn(f"Bio-plausible models import failed: {e}")
     HAS_BIOPLAUSIBLE = False
     BaseAlgorithm = None
     ALGORITHM_REGISTRY = {}

@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QLabel, QComboBox, QSpinBox, QDoubleSpinBox,
     QGroupBox, QTabWidget, QTextEdit, QProgressBar, QSlider,
-    QSplitter, QFrame, QCheckBox, QMessageBox, QApplication
+    QSplitter, QFrame, QCheckBox, QMessageBox, QApplication, QFileDialog
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -80,7 +80,10 @@ except ImportError:
     HAS_PYQTGRAPH = False
 
 # Feature flags
-ENABLE_WEIGHT_VIZ = False  # Disabled due to pyqtgraph/matplotlib/pyparsing version conflicts
+ENABLE_WEIGHT_VIZ = True
+
+from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec, ModelSpec
+from bioplausible.models.factory import create_model
 
 from .themes import CYBERPUNK_DARK, PLOT_COLORS
 from .worker import TrainingWorker, RLWorker
@@ -194,11 +197,26 @@ class EqPropDashboard(QMainWindow):
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
 
-        # Header
+        # Header Area
+        header_layout = QHBoxLayout()
+
         header = QLabel("⚡ EqProp Trainer")
         header.setObjectName("headerLabel")
         header.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
-        layout.addWidget(header)
+        header_layout.addWidget(header)
+
+        header_layout.addStretch()
+
+        # Save/Load Buttons
+        self.save_btn = QPushButton("💾 Save Model")
+        self.save_btn.clicked.connect(self._save_model)
+        header_layout.addWidget(self.save_btn)
+
+        self.load_btn = QPushButton("📂 Load Model")
+        self.load_btn.clicked.connect(self._load_model)
+        header_layout.addWidget(self.load_btn)
+
+        layout.addLayout(header_layout)
 
         # Main content area with tabs
         self.tabs = QTabWidget()
@@ -266,25 +284,18 @@ class EqPropDashboard(QMainWindow):
         layout.addLayout(left_panel, stretch=1)
 
         # Model Selection
-        lm_items = [
-            "FullEqProp Transformer",
-            "Attention-Only EqProp",
-            "Recurrent Core EqProp",
-            "Hybrid EqProp",
-            "LoopedMLP LM",
-        ]
-
-        # Add bioplausible research algorithms
-        try:
-            from bioplausible import HAS_BIOPLAUSIBLE, ALGORITHM_REGISTRY
-            if HAS_BIOPLAUSIBLE:
-                lm_items.append("--- Bio-Plausible Research Models ---")
-                for key, desc in ALGORITHM_REGISTRY.items():
-                    lm_items.append(f"{key} - {desc}")
-        except:
-            pass
-
         self.lm_model_combo = QComboBox()
+
+        # Populate using registry
+        lm_items = []
+        for spec in MODEL_REGISTRY:
+            # Filter for LM appropriate models (simplistic check: if it says Transformer or is general)
+            if "Transformer" in spec.name or spec.model_type in ["backprop", "eqprop_mlp"]:
+                lm_items.append(f"{spec.name}")
+            # Add other research models
+            elif spec.model_type not in ["modern_conv_eqprop"]: # Exclude vision-only
+                lm_items.append(f"{spec.name}")
+
         self.lm_model_combo.addItems(lm_items)
 
         self.lm_hidden_spin = QSpinBox()
@@ -484,25 +495,15 @@ class EqPropDashboard(QMainWindow):
         layout.addLayout(left_panel, stretch=1)
 
         # Model Selection
-        model_items = [
-            "LoopedMLP",
-            "ConvEqProp",
-            "BackpropMLP (baseline)",
-        ]
-
-        # Try to add bio-plausible algorithms from research codebase
-        try:
-            from bioplausible import HAS_BIOPLAUSIBLE, ALGORITHM_REGISTRY
-            if HAS_BIOPLAUSIBLE:
-                model_items.append("--- Bio-Plausible Research Models ---")
-                # Add algorithms with descriptions
-                for key, desc in ALGORITHM_REGISTRY.items():
-                    # Format: "algorithm_key - Description"
-                    model_items.append(f"{key} - {desc}")
-        except:
-            pass  # Bio-plausible models not available
-
         self.vis_model_combo = QComboBox()
+
+        # Populate using registry
+        model_items = []
+        for spec in MODEL_REGISTRY:
+             # Exclude Transformer specific models
+            if "Transformer" not in spec.name:
+                model_items.append(f"{spec.name}")
+
         self.vis_model_combo.addItems(model_items)
 
         self.vis_hidden_spin = QSpinBox()
@@ -681,12 +682,11 @@ class EqPropDashboard(QMainWindow):
         # Model/Algo Selection
         self.rl_algo_combo = QComboBox()
         self.rl_algo_combo.addItems(["LoopedMLP (EqProp)", "LoopedMLP (BPTT)", "Standard Backprop"])
+        self.rl_algo_combo.currentTextChanged.connect(self._update_rl_controls)
 
         # Gradient Method
         self.rl_grad_combo = QComboBox()
         self.rl_grad_combo.addItems(["equilibrium", "bptt"])
-        # Logic to hide this if standard backprop is selected?
-        # For simplicity, we keep it visible but ignored for backprop model.
 
         self.rl_hidden_spin = QSpinBox()
         self.rl_hidden_spin.setRange(32, 512)
@@ -775,6 +775,17 @@ class EqPropDashboard(QMainWindow):
 
         return tab
 
+    def _update_rl_controls(self, text):
+        """Enable/Disable controls based on RL algorithm selection."""
+        if "Backprop" in text:
+            self.rl_grad_combo.setEnabled(False)
+        else:
+            self.rl_grad_combo.setEnabled(True)
+            if "(EqProp)" in text:
+                self.rl_grad_combo.setCurrentText("equilibrium")
+            elif "(BPTT)" in text:
+                self.rl_grad_combo.setCurrentText("bptt")
+
     def _create_microscope_tab(self) -> QWidget:
         """Create the Microscope tab for visualizing dynamics."""
         tab = QWidget()
@@ -845,6 +856,51 @@ class EqPropDashboard(QMainWindow):
 
         return tab
 
+    def _save_model(self):
+        """Save the current model to a file."""
+        if not self.model:
+            QMessageBox.warning(self, "No Model", "No model to save.")
+            return
+
+        fname, _ = QFileDialog.getSaveFileName(self, "Save Model Checkpoint", "", "PyTorch Checkpoints (*.pt)")
+        if fname:
+            try:
+                import torch
+                state = {
+                    'model_state_dict': self.model.state_dict(),
+                    'config': self.initial_config, # Or current config if we tracked it better
+                    'model_name': self.lm_model_combo.currentText() if self.tabs.currentIndex() == 0 else self.vis_model_combo.currentText()
+                }
+                torch.save(state, fname)
+                self.status_label.setText(f"Model saved to {fname}")
+            except Exception as e:
+                QMessageBox.critical(self, "Save Error", str(e))
+
+    def _load_model(self):
+        """Load a model from a file."""
+        fname, _ = QFileDialog.getOpenFileName(self, "Load Model Checkpoint", "", "PyTorch Checkpoints (*.pt)")
+        if fname:
+            try:
+                import torch
+                checkpoint = torch.load(fname)
+
+                # We need to recreate the model structure first
+                # For now, we rely on the user having the right settings or we try to infer
+                # This is tricky without a full config object.
+                # Simplification: Warn user they need to select correct architecture first
+
+                if not self.model:
+                     QMessageBox.information(self, "Load Info", "Please select the correct architecture/task first, then load weights.")
+                     # Ideally we'd reconstruct from checkpoint info but let's assume they just trained it
+                     # or want to load weights into current model
+                     return
+
+                self.model.load_state_dict(checkpoint['model_state_dict'])
+                self.status_label.setText(f"Model loaded from {fname}")
+
+            except Exception as e:
+                QMessageBox.critical(self, "Load Error", str(e))
+
     def _run_microscope_analysis(self):
         """Run a single forward pass with dynamics tracking."""
         try:
@@ -852,38 +908,87 @@ class EqPropDashboard(QMainWindow):
             from bioplausible.models.looped_mlp import LoopedMLP
             from bioplausible.models.conv_eqprop import ConvEqProp
 
-            model_name = self.micro_model_combo.currentText()
             steps = self.micro_steps_spin.value()
 
-            # Create model
-            if "Conv" in model_name:
-                model = ConvEqProp(1, 16, 10, max_steps=steps)
-                input_shape = (1, 1, 28, 28)
-            elif "Deep" in model_name:
-                model = LoopedMLP(784, 256, 10, max_steps=steps, use_spectral_norm=True)
-                # Hack to make it deeper for demo
-                import torch.nn as nn
-                # Rebuild layers isn't easy here, sticking to standard for now but maybe deeper hidden
-                input_shape = (1, 784)
+            # Use current model if available
+            if self.model is not None:
+                model = self.model
+                # Determine input shape from model
+                if hasattr(model, 'input_dim'):
+                     # Flattened input
+                     input_shape = (1, model.input_dim)
+                elif hasattr(model, 'embed'):
+                     # LM input (tokens)
+                     input_shape = (1, 128) # Fake sequence
+                     x = torch.randint(0, model.embed.num_embeddings, input_shape)
+                else:
+                     # Fallback
+                     input_shape = (1, 784)
             else:
-                model = LoopedMLP(784, 256, 10, max_steps=steps, use_spectral_norm=True)
-                input_shape = (1, 784)
+                # Fallback to creating a new model if none loaded
+                model_name = self.micro_model_combo.currentText()
+                if "Conv" in model_name:
+                    model = ConvEqProp(1, 16, 10, max_steps=steps)
+                    input_shape = (1, 1, 28, 28)
+                else:
+                    model = LoopedMLP(784, 256, 10, max_steps=steps, use_spectral_norm=True)
+                    input_shape = (1, 784)
 
-            # Create random input
-            x = torch.randn(*input_shape)
+            # Create random input if not created above (LM case)
+            if 'x' not in locals():
+                x = torch.randn(*input_shape)
+                if hasattr(self.model, 'device'):
+                     x = x.to(self.model.device)
 
             # Run forward with dynamics
             model.eval()
             with torch.no_grad():
                 # We expect (out, dynamics_dict) because return_dynamics=True
                 # But we also set return_trajectory=True just in case logic depends on it
-                out, dynamics = model(x, steps=steps, return_dynamics=True, return_trajectory=True)
 
-            deltas = dynamics['deltas']
-            traj = dynamics['trajectory']
+                # Check if model supports return_dynamics
+                kwargs = {}
+                import inspect
+                sig = inspect.signature(model.forward)
+                if 'return_dynamics' in sig.parameters:
+                    kwargs['return_dynamics'] = True
+                if 'return_trajectory' in sig.parameters:
+                    kwargs['return_trajectory'] = True
+                if 'steps' in sig.parameters:
+                    kwargs['steps'] = steps
+
+                # Preprocess input if needed (LM embedding)
+                if hasattr(model, 'has_embed') and model.has_embed:
+                     h = model.embed(x)
+                     # If model expects flattened input (e.g. MLP LM), average
+                     if isinstance(model, LoopedMLP):
+                         h = h.mean(dim=1)
+                     out = model(h, **kwargs)
+                else:
+                     out = model(x, **kwargs)
+
+                # Handle output format
+                if isinstance(out, tuple):
+                    dynamics = out[1]
+                else:
+                    # Try to retrieve dynamics from model attribute if not returned
+                    if hasattr(model, 'dynamics'):
+                        dynamics = model.dynamics
+                    else:
+                        raise ValueError("Model did not return dynamics")
+
+            deltas = dynamics.get('deltas', [])
+            traj = dynamics.get('trajectory', [])
+
+            if not deltas:
+                 self.status_label.setText("No dynamics data returned.")
+                 return
 
             # Compute mean activity per step
-            activities = [h.abs().mean().item() for h in traj]
+            if traj:
+                activities = [h.abs().mean().item() for h in traj]
+            else:
+                activities = [0.0] * len(deltas)
 
             # Update plots
             if hasattr(self, 'micro_conv_curve'):
@@ -1021,134 +1126,91 @@ class EqPropDashboard(QMainWindow):
 
         # Get dataset
         dataset_name = self.vis_dataset_combo.currentText().lower().replace('-', '_')
-        use_flatten = 'MLP' in self.vis_model_combo.currentText()
+
+        # Determine flattening based on model type
+        model_name = self.vis_model_combo.currentText()
+        try:
+            spec = get_model_spec(model_name)
+            use_flatten = spec.model_type != "modern_conv_eqprop"
+        except:
+             use_flatten = True
 
         train_data = get_vision_dataset(dataset_name, train=True, flatten=use_flatten)
         self.train_loader = DataLoader(train_data, batch_size=self.vis_batch_spin.value(), shuffle=True)
 
         # Create model
         hidden = self.vis_hidden_spin.value()
-        model_name = self.vis_model_combo.currentText()
 
-        # Check if it's a bio-plausible research algorithm
-        if ' - ' in model_name:  # Bio-plausible models are formatted as "key - description"
-            algorithm_key = model_name.split(' - ')[0]
-            try:
-                from bioplausible import HAS_BIOPLAUSIBLE
-                from algorithms import create_model, AlgorithmConfig
+        try:
+            spec = get_model_spec(model_name)
 
-                if not HAS_BIOPLAUSIBLE:
-                    raise ImportError("Research algorithms not available")
+            # Determine input_dim based on dataset
+            if 'MNIST' in self.vis_dataset_combo.currentText():
+                input_dim = 784 if use_flatten else 1
+            else:  # CIFAR-10
+                input_dim = 3072 if use_flatten else 3
 
-                # Determine input_dim based on dataset
-                if 'MNIST' in self.vis_dataset_combo.currentText():
-                    input_dim = 784
-                else:  # CIFAR-10
-                    input_dim = 3072
+            model = create_model(
+                spec=spec,
+                input_dim=input_dim,
+                output_dim=10,
+                hidden_dim=hidden,
+                device="cuda" if torch.cuda.is_available() else "cpu",
+                task_type="vision"
+            )
 
-                # Create research algorithm model directly (first-class nn.Module)
-                model = create_model(
-                    algorithm_key,
-                    input_dim,
-                    [hidden],  # Single hidden layer
-                    10  # 10 classes
-                )
-            except Exception as e:
-                QMessageBox.warning(self, "Model Creation Failed",
-                                   f"Could not create {algorithm_key}: {e}")
-                return None, None
-        elif 'LoopedMLP' in model_name:
-            input_dim = 784 if 'MNIST' in self.vis_dataset_combo.currentText() else 3072
-            model = LoopedMLP(input_dim, hidden, 10, max_steps=self.vis_steps_spin.value())
-        elif 'ConvEqProp' in model_name:
-            channels = 1 if 'MNIST' in self.vis_dataset_combo.currentText() else 3
-            model = ConvEqProp(channels, hidden // 4, 10)
-        else:  # BackpropMLP
-            input_dim = 784 if 'MNIST' in self.vis_dataset_combo.currentText() else 3072
-            model = BackpropMLP(input_dim, hidden, 10)
+            # Update step if spin box is used
+            if hasattr(model, 'max_steps'):
+                model.max_steps = self.vis_steps_spin.value()
+            elif hasattr(model, 'eq_steps'):
+                model.eq_steps = self.vis_steps_spin.value()
+
+        except Exception as e:
+             QMessageBox.warning(self, "Model Creation Failed", f"Could not create {model_name}: {e}")
+             return None, None
 
         return model, self.train_loader
 
     def _create_lm_model_and_loader(self):
         """Create language model and data loader."""
-        from bioplausible import HAS_LM_VARIANTS, HAS_BIOPLAUSIBLE
         from bioplausible.datasets import get_lm_dataset
         from torch.utils.data import DataLoader
 
         model_name = self.lm_model_combo.currentText()
 
-        # Check if it's a bioplausible algorithm
-        if ' - ' in model_name:
-            algorithm_key = model_name.split(' - ')[0]
-            try:
-                from algorithms import create_model
+        try:
+            # Get dataset
+            dataset_name = self.lm_dataset_combo.currentText()
+            seq_len = self.lm_seqlen_spin.value()
 
-                # Get dataset to determine vocab size
-                dataset_name = self.lm_dataset_combo.currentText()
-                seq_len = self.lm_seqlen_spin.value()
+            dataset = get_lm_dataset(dataset_name, seq_len=seq_len, split='train')
+            vocab_size = dataset.vocab_size if hasattr(dataset, 'vocab_size') else 256
 
-                # Load dataset
-                dataset = get_lm_dataset(dataset_name, seq_len=seq_len, split='train')
-                vocab_size = dataset.vocab_size if hasattr(dataset, 'vocab_size') else 256
+            spec = get_model_spec(model_name)
 
-                # Create algorithm model
-                hidden = self.lm_hidden_spin.value()
-                model = create_model(
-                    algorithm_key,
-                    vocab_size,  # Input = vocab
-                    [hidden],
-                    vocab_size   # Output = vocab (next token prediction)
-                )
+            model = create_model(
+                spec=spec,
+                input_dim=None, # Uses embedding
+                output_dim=vocab_size,
+                hidden_dim=self.lm_hidden_spin.value(),
+                num_layers=self.lm_layers_spin.value(),
+                device="cuda" if torch.cuda.is_available() else "cpu",
+                task_type="lm"
+            )
 
-                train_loader = DataLoader(dataset, batch_size=self.lm_batch_spin.value(), shuffle=True)
-                return model, train_loader
+            # Apply steps
+            if hasattr(model, 'max_steps'):
+                 model.max_steps = self.lm_steps_spin.value()
+            elif hasattr(model, 'eq_steps'):
+                 model.eq_steps = self.lm_steps_spin.value()
 
-            except Exception as e:
-                QMessageBox.warning(self, "Model Creation Failed",
-                                   f"Could not create {algorithm_key}: {e}")
-                return None, None
+            train_loader = DataLoader(dataset, batch_size=self.lm_batch_spin.value(), shuffle=True)
+            return model, train_loader
 
-        # LM variant models
-        elif HAS_LM_VARIANTS:
-            try:
-                from bioplausible import get_eqprop_lm
-
-                # Map UI names to variant keys
-                variant_map = {
-                    "FullEqProp Transformer": "full",
-                    "Attention-Only EqProp": "attention_only",
-                    "Recurrent Core EqProp": "recurrent_core",
-                    "Hybrid EqProp": "hybrid",
-                    "LoopedMLP LM": "looped_mlp"
-                }
-
-                variant = variant_map.get(model_name, "full")
-
-                # Get dataset
-                dataset_name = self.lm_dataset_combo.currentText()
-                seq_len = self.lm_seqlen_spin.value()
-
-                dataset = get_lm_dataset(dataset_name, seq_len=seq_len, split='train')
-                vocab_size = dataset.vocab_size if hasattr(dataset, 'vocab_size') else 256
-
-                # Create LM model
-                model = get_eqprop_lm(
-                    variant,
-                    vocab_size=vocab_size,
-                    hidden_dim=self.lm_hidden_spin.value(),
-                    num_layers=self.lm_layers_spin.value(),
-                    max_seq_len=seq_len,
-                    eq_steps=self.lm_steps_spin.value()
-                )
-
-                train_loader = DataLoader(dataset, batch_size=self.lm_batch_spin.value(), shuffle=True)
-                return model, train_loader
-
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to create LM model:\n{e}")
-                return None, None
-        else:
-            QMessageBox.warning(self, "Not Available", "LM variants not available")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to create LM model:\n{e}")
+            import traceback
+            traceback.print_exc()
             return None, None
 
     def _start_vision_training(self):

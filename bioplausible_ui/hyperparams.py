@@ -4,8 +4,10 @@ Hyperparameter Schemas for EqProp Trainer
 Defines model-specific hyperparameters that appear dynamically in the UI.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
+
+from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec, ModelSpec
 
 
 @dataclass
@@ -274,12 +276,63 @@ def get_hyperparams_for_model(model_name: str) -> List[HyperparamSpec]:
     """
     Get hyperparameter specs for a given model name.
 
+    Dynamically resolves schema based on MODEL_REGISTRY.
+
     Args:
         model_name: Model or algorithm name (can include description)
 
     Returns:
         List of HyperparamSpec objects
     """
+    # 1. Try to find exact spec in registry
+    spec: Optional[ModelSpec] = None
+
+    # Check if exact name
+    for s in MODEL_REGISTRY:
+        if s.name == model_name:
+            spec = s
+            break
+
+    # Check "Key - Description" format
+    if spec is None and ' - ' in model_name:
+        key = model_name.split(' - ')[0]
+        for s in MODEL_REGISTRY:
+            if s.name == key: # Some registry entries might just be the key
+                spec = s
+                break
+
+    # Check legacy/UI mapping if still not found
+    if spec is None:
+        # Map legacy names to model_types if possible, or fallback to key logic
+        # Legacy: "LoopedMLP" -> model_type "eqprop_mlp"
+        legacy_map = {
+            "LoopedMLP": "eqprop_mlp",
+            "ConvEqProp": "modern_conv_eqprop",
+            "FullEqProp Transformer": "eqprop_transformer",
+            "Attention-Only EqProp": "eqprop_transformer",
+            "BackpropMLP (baseline)": "backprop",
+            "Backprop Baseline": "backprop"
+        }
+
+        target_type = legacy_map.get(model_name)
+        if target_type:
+             # Find a spec with this type
+             for s in MODEL_REGISTRY:
+                 if s.model_type == target_type:
+                     spec = s
+                     break
+
+    # 2. Get detailed schema from HYPERPARAM_REGISTRY using model_type
+    if spec:
+        # Try specific model type first
+        schema = HYPERPARAM_REGISTRY.get_schema(spec.model_type)
+        if schema:
+            return schema
+
+        # Fallback: Construct default schema based on flags
+        return _create_default_schema(spec)
+
+    # 3. Fallback for completely unknown models (legacy behavior)
     # Extract algorithm key from formatted names like "eqprop - Description"
     if ' - ' in model_name:
         key = model_name.split(' - ')[0].lower()
@@ -300,8 +353,38 @@ def get_hyperparams_for_model(model_name: str) -> List[HyperparamSpec]:
     }
 
     key = key_mappings.get(key, key)
-
     return HYPERPARAM_REGISTRY.get_schema(key)
+
+
+def _create_default_schema(spec: ModelSpec) -> List[HyperparamSpec]:
+    """Create a default schema based on ModelSpec flags."""
+    schema = []
+
+    if spec.has_beta:
+        schema.append(HyperparamSpec(
+            name='beta',
+            label='Beta (Nudge)',
+            type='float',
+            default=spec.default_beta,
+            min_val=0.0,
+            max_val=1.0,
+            step=0.05,
+            description='Nudging strength'
+        ))
+
+    if spec.has_steps:
+        schema.append(HyperparamSpec(
+            name='steps', # Note: Using 'steps' vs 'eq_steps' requires care. Dashboard/Experiment uses 'steps'.
+            label='Equilibrium Steps',
+            type='int',
+            default=spec.default_steps,
+            min_val=5,
+            max_val=100,
+            step=5,
+            description='Number of equilibrium iterations'
+        ))
+
+    return schema
 
 
 def hyperparams_to_dict(specs: List[HyperparamSpec]) -> Dict[str, Any]:

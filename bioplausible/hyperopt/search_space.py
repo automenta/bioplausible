@@ -6,6 +6,7 @@ Defines the hyperparameter search spaces for each model type in the registry.
 
 from typing import Dict, Any, Tuple, List, Union
 import numpy as np
+from bioplausible.models.registry import MODEL_REGISTRY
 
 # Type aliases
 NumberRange = Tuple[
@@ -212,6 +213,38 @@ SEARCH_SPACES = {
 
 def get_search_space(model_name: str) -> SearchSpace:
     """Get the search space for a model."""
-    if model_name not in SEARCH_SPACES:
-        raise ValueError(f"No search space defined for model: {model_name}")
-    return SEARCH_SPACES[model_name]
+    # 1. Try hardcoded spaces first (for customized ranges)
+    if model_name in SEARCH_SPACES:
+        return SEARCH_SPACES[model_name]
+
+    # 2. Try to generate from registry
+    # Check if exact name in registry
+    spec = next((s for s in MODEL_REGISTRY if s.name == model_name), None)
+
+    if spec:
+        params = {
+            "lr": (1e-5, 1e-2, "log"),
+            "hidden_dim": [64, 128, 256],
+            "num_layers": [2, 4, 6],
+        }
+
+        if spec.has_beta:
+             params["beta"] = (0.05, 0.5, "linear")
+
+        if spec.has_steps:
+             params["steps"] = (5, 30, "int")
+
+        return SearchSpace(model_name, params)
+
+    # 3. Fallback for completely unknown models
+    # Try to infer based on name/flags if possible, or raise error
+    if "EqProp" in model_name:
+         params = {
+            "lr": (1e-5, 1e-2, "log"),
+            "beta": (0.05, 0.5, "linear"),
+            "steps": (5, 20, "int"),
+            "hidden_dim": [64, 128],
+         }
+         return SearchSpace(model_name, params)
+
+    raise ValueError(f"No search space defined for model: {model_name}")
