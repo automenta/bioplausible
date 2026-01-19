@@ -129,7 +129,7 @@ class P2PTab(QWidget):
         self.connect_btn.setStyleSheet("font-weight: bold; font-size: 14px; background-color: #27ae60;")
         # Task Selection
         self.task_combo = QComboBox()
-        self.task_combo.addItems(["shakespeare", "mnist", "cifar10", "cartpole"])
+        self.task_combo.addItems(["shakespeare", "tiny_shakespeare", "mnist", "cifar10", "cartpole"])
         self.task_combo.setToolTip("Target task to contribute to")
         conn_layout.addWidget(QLabel("Target Task:"))
         conn_layout.addWidget(self.task_combo)

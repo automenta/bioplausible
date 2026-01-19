@@ -26,7 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description="BioPlausible P2P Worker")
     parser.add_argument("--bootstrap-ip", type=str, default=None, help="IP of a known bootstrap node")
     parser.add_argument("--bootstrap-port", type=int, default=8468, help="Port of bootstrap node")
-    parser.add_argument("--task", type=str, default="shakespeare", help="Task to run (e.g. shakespeare, mnist)")
+    parser.add_argument("--task", type=str, default="shakespeare", help="Task to run (shakespeare, tiny_shakespeare, mnist, cifar10, cartpole)")
     parser.add_argument("--mode", type=str, default="quick", choices=["quick", "deep"], help="Discovery mode")
     parser.add_argument("--max-hidden", type=int, default=None, help="Constraint: Max hidden dim")
     parser.add_argument("--max-layers", type=int, default=None, help="Constraint: Max layers")
