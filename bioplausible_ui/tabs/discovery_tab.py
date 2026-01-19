@@ -9,20 +9,27 @@ from PyQt6.QtWidgets import (
     QLabel, QComboBox, QSplitter, QCheckBox
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtGui import QFont, QColor, QPen
 
 import numpy as np
 import pyqtgraph as pg
 import logging
+import hashlib
+import json
 
 from bioplausible.hyperopt.storage import HyperoptStorage
 from bioplausible.hyperopt.analysis import encode_configs, reduce_dimensions
 
 logger = logging.getLogger("DiscoveryTab")
 
+def get_config_hash(config: dict) -> str:
+    """Generate a hash for a configuration (same as evolution.py)."""
+    s = json.dumps(config, sort_keys=True)
+    return hashlib.md5(s.encode()).hexdigest()
+
 class VizWorker(QObject):
     """Worker thread for heavy visualization calculations."""
-    finished = pyqtSignal(list) # returns spots list
+    finished = pyqtSignal(list, list) # returns spots list, lines list
 
     def run(self, method='pca'):
         try:
@@ -31,39 +38,65 @@ class VizWorker(QObject):
             storage.close()
 
             if not trials:
-                self.finished.emit([])
+                self.finished.emit([], [])
                 return
 
             configs = [t.config for t in trials]
             accuracies = [t.accuracy for t in trials]
+            trial_hashes = [get_config_hash(c) for c in configs]
+            hash_to_idx = {h: i for i, h in enumerate(trial_hashes)}
 
             features = encode_configs(configs)
             if features.size == 0:
-                self.finished.emit([])
+                self.finished.emit([], [])
                 return
 
             coords = reduce_dimensions(features, method=method)
 
             spots = []
+            lines = [] # List of dicts describing lines
+
             for i in range(len(coords)):
                 acc = accuracies[i]
+                config = configs[i]
+
+                # Color based on accuracy
                 r = int(255 * (1 - acc))
                 g = int(255 * acc)
                 color = QColor(r, g, 0, 200)
 
+                # Generation info
+                gen = config.get('generation', 0)
+
+                # Spot data
                 spots.append({
                     'pos': (coords[i, 0], coords[i, 1]),
                     'data': trials[i],
                     'brush': pg.mkBrush(color),
                     'symbol': 'o',
-                    'size': 10
+                    'size': 10 + (gen * 2) if gen < 5 else 20 # visual cue for generation
                 })
 
-            self.finished.emit(spots)
+                # Lineage Lines
+                parent_id = config.get('parent_id')
+                if parent_id and parent_id in hash_to_idx:
+                    p_idx = hash_to_idx[parent_id]
+                    p_coord = coords[p_idx]
+                    c_coord = coords[i]
+
+                    lines.append({
+                        'x': [p_coord[0], c_coord[0]],
+                        'y': [p_coord[1], c_coord[1]],
+                        'pen': pg.mkPen(color=QColor(255, 255, 255, 50), width=1)
+                    })
+
+            self.finished.emit(spots, lines)
 
         except Exception as e:
             logger.error(f"Viz calculation error: {e}")
-            self.finished.emit([])
+            import traceback
+            traceback.print_exc()
+            self.finished.emit([], [])
 
 class DiscoveryTab(QWidget):
     """
@@ -92,6 +125,9 @@ class DiscoveryTab(QWidget):
         self.net_timer.timeout.connect(self._refresh_network)
         self.net_timer.start(2000)
 
+        # Store plot items
+        self.line_items = []
+
     def _setup_ui(self):
         layout = QHBoxLayout(self)
 
@@ -118,6 +154,11 @@ class DiscoveryTab(QWidget):
         self.auto_refresh_check.toggled.connect(self._toggle_auto_refresh)
         controls.addWidget(self.auto_refresh_check)
 
+        self.traj_check = QCheckBox("Show Trajectories")
+        self.traj_check.setChecked(True)
+        self.traj_check.toggled.connect(self._toggle_trajectories)
+        controls.addWidget(self.traj_check)
+
         controls.addStretch()
 
         self.last_update_label = QLabel("Last Updated: Never")
@@ -127,10 +168,21 @@ class DiscoveryTab(QWidget):
         arch_layout.addLayout(controls)
 
         # Plot
-        self.arch_plot = pg.PlotWidget(title="Architecture Space")
+        self.arch_plot = pg.PlotWidget(title="Evolutionary Architecture Space")
         self.arch_plot.setBackground('#0a0a0f')
         self.arch_plot.setLabel('bottom', "Dimension 1")
         self.arch_plot.setLabel('left', "Dimension 2")
+
+        # Container for lines
+        self.line_container = pg.PlotDataItem() # Placeholder or use separate items
+        # Better: use a list of PlotDataItems, but for performance with many lines,
+        # using a MultiPlotItem or just clearing/adding might be heavy.
+        # GraphItem is complex. Let's use simple PlotDataItems or connect via ScatterPlotItem if supported.
+        # Actually, best for many segments is pg.PlotCurveItem with connect='finite' or 'all' but disconnected.
+        # We will use one PlotCurveItem with NaN separators to draw all lines at once.
+        self.traj_curve = pg.PlotCurveItem(pen=pg.mkPen(color=(255, 255, 255, 60), width=1))
+        self.arch_plot.addItem(self.traj_curve)
+
         self.scatter_item = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
         self.arch_plot.addItem(self.scatter_item)
 
@@ -191,37 +243,52 @@ class DiscoveryTab(QWidget):
         else:
             self.viz_timer.stop()
 
+    def _toggle_trajectories(self, checked):
+        if checked:
+            self.traj_curve.setVisible(True)
+        else:
+            self.traj_curve.setVisible(False)
+
     def _refresh_viz(self):
         self._request_viz_update()
 
     def _request_viz_update(self):
         """Request update from worker thread."""
         method = self.algo_combo.currentText().lower()
-        # We can't call worker.run directly as it would run in main thread
-        # We use QMetaObject.invokeMethod or just a signal if we set it up that way
-        # But easier here is to just use a custom signal or lambda if worker was just a function
-        # Since it's a QObject in a thread, best practice is signal-slot
-        pass # We need to trigger the run.
-
-        # Actually, let's just use a simple approach:
-        # Re-instantiate worker logic? No.
-        # Let's add a signal to this class to trigger worker
         self.start_calc_signal.emit(method)
 
     start_calc_signal = pyqtSignal(str) # Define at class level
 
-    def _on_viz_ready(self, spots):
-        """Update plot with calculated spots."""
+    def _on_viz_ready(self, spots, lines):
+        """Update plot with calculated spots and lineage lines."""
         if spots:
             self.scatter_item.setData(spots=spots)
+
+            # Construct single array for lines with NaNs
+            if lines and self.traj_check.isChecked():
+                x = []
+                y = []
+                for line in lines:
+                    x.extend(line['x'])
+                    x.append(np.nan) # Break line
+                    y.extend(line['y'])
+                    y.append(np.nan)
+
+                self.traj_curve.setData(np.array(x), np.array(y))
+            else:
+                 self.traj_curve.setData([], [])
+
             import time
             self.last_update_label.setText(f"Last Updated: {time.strftime('%H:%M:%S')}")
 
     def _on_point_clicked(self, plot, points):
         if len(points) > 0:
             trial = points[0].data()
+            gen = trial.config.get('generation', '?')
+            pid = trial.config.get('parent_id', 'None')[:8] if trial.config.get('parent_id') else 'None'
+
             self.info_label.setText(
-                f"Trial {trial.trial_id}: {trial.model_name} | Acc: {trial.accuracy:.4f} | Loss: {trial.final_loss:.4f}"
+                f"Gen {gen} | Trial {trial.trial_id}: {trial.model_name} | Acc: {trial.accuracy:.4f} | Parent: {pid}"
             )
 
     def _refresh_network(self):
