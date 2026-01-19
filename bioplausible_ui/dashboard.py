@@ -356,6 +356,7 @@ class EqPropDashboard(QMainWindow):
         # Page 7: Benchmarks
         self.bench_tab = BenchmarksTab()
         self.bench_tab.log_message.connect(self._append_log)
+        self.bench_tab.load_model_signal.connect(self._apply_config)
         self.content_stack.addWidget(self.bench_tab)
 
         # Page 8: Console

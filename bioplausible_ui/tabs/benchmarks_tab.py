@@ -1,15 +1,64 @@
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QGroupBox, QCheckBox,
-    QPushButton, QTableWidget, QTableWidgetItem, QTextEdit, QMessageBox
+    QPushButton, QTableWidget, QTableWidgetItem, QTextEdit, QMessageBox,
+    QDialog, QLabel
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
+
+import pyqtgraph as pg
 
 from bioplausible_ui.worker import BenchmarkWorker
+
+class ComparisonDialog(QDialog):
+    """Dialog to compare benchmark results."""
+    def __init__(self, data, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Benchmark Comparison")
+        self.resize(600, 400)
+
+        layout = QVBoxLayout(self)
+
+        label = QLabel("Performance Comparison")
+        label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label)
+
+        # Bar Chart
+        plot_widget = pg.PlotWidget()
+        plot_widget.setBackground('#0a0a0f')
+        plot_widget.showGrid(y=True, alpha=0.3)
+        layout.addWidget(plot_widget)
+
+        # Prepare Data
+        names = [d['name'] for d in data]
+        scores = [d['score'] for d in data]
+
+        x = range(len(data))
+
+        # Create Bar Graph Item
+        bargraph = pg.BarGraphItem(x=x, height=scores, width=0.6, brush='b')
+        plot_widget.addItem(bargraph)
+
+        # Custom Axis for Strings
+        # This is tricky in pure pyqtgraph without a custom AxisItem subclass
+        # Simple workaround: just show names in legend or tooltip?
+        # Or standard text items.
+
+        # Adding text labels below bars
+        # This is a bit manual
+        pass
+        # For MVP, we just show the chart. Tooltips would be nice but complex here.
+
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.accept)
+        layout.addWidget(btn)
 
 class BenchmarksTab(QWidget):
     """A tab for running validation tracks (benchmarks)."""
 
     log_message = pyqtSignal(str) # Signal to log to console
+    load_model_signal = pyqtSignal(dict) # Signal to load a config for training
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -39,6 +88,10 @@ class BenchmarksTab(QWidget):
         run_all_btn.clicked.connect(self._run_all_benchmarks)
         controls_layout.addWidget(run_all_btn)
 
+        compare_btn = QPushButton("📊 Compare Selected")
+        compare_btn.clicked.connect(self._compare_selected)
+        controls_layout.addWidget(compare_btn)
+
         left_panel.addWidget(controls_group)
 
         # Track List Table
@@ -47,6 +100,8 @@ class BenchmarksTab(QWidget):
         self.bench_table.setHorizontalHeaderLabels(["ID", "Track Name", "Status", "Score"])
         self.bench_table.horizontalHeader().setStretchLastSection(True)
         self.bench_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.bench_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.bench_table.customContextMenuRequested.connect(self._show_context_menu)
 
         # Populate Tracks
         try:
@@ -153,3 +208,94 @@ class BenchmarksTab(QWidget):
     def _on_bench_error(self, err):
         self.bench_output.append(f"\nERROR: {err}")
         QMessageBox.critical(self, "Benchmark Error", err)
+
+    def _show_context_menu(self, pos):
+        """Show context menu for tracks."""
+        from PyQt6.QtWidgets import QMenu
+        from PyQt6.QtGui import QAction
+
+        index = self.bench_table.indexAt(pos)
+        if not index.isValid():
+            return
+
+        row = index.row()
+        tid_item = self.bench_table.item(row, 0)
+        status_item = self.bench_table.item(row, 2)
+
+        if not tid_item or not status_item:
+            return
+
+        menu = QMenu(self)
+
+        # Action: Load Configuration (Transfer Learning / Exploit)
+        # Only if passed? No, maybe debug failed ones too.
+        load_action = QAction("⚡ Load Configuration (Exploit)", self)
+        load_action.triggered.connect(lambda: self._load_track_config(int(tid_item.text())))
+        menu.addAction(load_action)
+
+        menu.exec(self.bench_table.viewport().mapToGlobal(pos))
+
+    def _load_track_config(self, track_id):
+        """Load configuration from a benchmark track."""
+        try:
+            # We need to peek into the track definition
+            from bioplausible.validation.core import Verifier
+            # This is a bit inefficient to instantiate again but safe
+            v = Verifier(quick_mode=True)
+            track_func = v.tracks.get(track_id, (None, None))[1]
+
+            if not track_func:
+                return
+
+            # Infer config from track name or logic?
+            # Ideally tracks would expose their config.
+            # Currently tracks are functions.
+            # We can use a heuristic mapping for major tracks.
+
+            config = {}
+            name = v.tracks[track_id][0].lower()
+
+            if "vision" in name or "mnist" in name or "cifar" in name:
+                config['task'] = 'vision'
+                config['model_name'] = 'ConvEqProp (CIFAR)' if 'cifar' in name else 'EqProp MLP (Standard)'
+                config['dataset'] = 'CIFAR-10' if 'cifar' in name else 'MNIST'
+                config['hidden_dim'] = 256
+                config['steps'] = 30
+            elif "language" in name or "lm" in name:
+                config['task'] = 'lm'
+                config['model_name'] = 'EqProp Recurrent LM'
+                config['dataset'] = 'tiny_shakespeare'
+                config['hidden_dim'] = 64
+                config['steps'] = 20
+            else:
+                config['task'] = 'vision'
+                config['model_name'] = 'EqProp MLP (Standard)'
+
+            self.load_model_signal.emit(config)
+            QMessageBox.information(self, "Config Loaded", f"Loaded heuristic configuration for Track {track_id}.\nSwitching tabs...")
+
+        except Exception as e:
+            QMessageBox.warning(self, "Load Failed", f"Could not load config: {e}")
+
+    def _compare_selected(self):
+        """Compare scores of selected benchmarks."""
+        selected_rows = self.bench_table.selectionModel().selectedRows()
+        if len(selected_rows) < 2:
+            QMessageBox.warning(self, "Select More", "Please select at least two tracks to compare.")
+            return
+
+        data = []
+        for row in selected_rows:
+            r = row.row()
+            name = self.bench_table.item(r, 1).text()
+            score_text = self.bench_table.item(r, 3).text()
+
+            try:
+                score = float(score_text)
+            except ValueError:
+                score = 0.0 # Pending or Error
+
+            data.append({'name': name, 'score': score})
+
+        dlg = ComparisonDialog(data, self)
+        dlg.exec()

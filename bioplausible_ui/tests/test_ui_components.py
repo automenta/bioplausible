@@ -50,5 +50,17 @@ class TestTabs(unittest.TestCase):
         dlg = VisionInferenceDialog(img, pred, gt)
         self.assertIsNotNone(dlg)
 
+    def test_benchmarks_tab_init(self):
+        from bioplausible_ui.tabs.benchmarks_tab import BenchmarksTab
+        tab = BenchmarksTab()
+        self.assertIsNotNone(tab)
+        self.assertTrue(hasattr(tab, 'load_model_signal'))
+
+    def test_benchmarks_comparison_dialog(self):
+        from bioplausible_ui.tabs.benchmarks_tab import ComparisonDialog
+        data = [{'name': 'A', 'score': 10}, {'name': 'B', 'score': 20}]
+        dlg = ComparisonDialog(data)
+        self.assertIsNotNone(dlg)
+
 if __name__ == '__main__':
     unittest.main()
