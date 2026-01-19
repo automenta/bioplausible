@@ -27,6 +27,7 @@ dependencies = [
     "psutil",
     "PyQt6",
     "pyqtgraph",
+    "kademlia",
     "pytest",
     "pytest-xdist",
     "flake8",
@@ -38,3 +39,6 @@ dependencies = [
 eqprop-verify = "bioplausible.cli:main"
 eqprop-dashboard = "bioplausible_ui.main:main"
 eqprop-hyperopt = "bioplausible_ui.hyperopt_app:main"
+eqprop-coordinator = "bioplausible.p2p.coordinator:main"
+eqprop-worker = "bioplausible.p2p.worker:main"
+eqprop-p2p-worker = "bioplausible.p2p.p2p_worker:main"
