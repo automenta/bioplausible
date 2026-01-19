@@ -5,6 +5,7 @@ Centralized configuration for common hyperparameters and settings.
 """
 
 from typing import Any, Dict
+from dataclasses import dataclass
 
 # Default training hyperparameters
 TRAINING_DEFAULTS = {
@@ -103,6 +104,18 @@ KERNEL_CONFIG = {
 }
 
 
+@dataclass
+class TrainerConfig:
+    """Global configuration for the trainer."""
+    epochs: int = 3  # Centralized default for all experiments (baseline & trials)
+    quick_mode: bool = True
+    max_trial_time: float = 60.0 # Total trial budget in seconds (used to derive per-epoch limit)
+    task: str = 'shakespeare'
+
+# Global instance
+GLOBAL_CONFIG = TrainerConfig()
+
+
 def get_model_config(preset_name: str, **overrides) -> Dict[str, Any]:
     """
     Get model configuration from preset with optional overrides.
@@ -159,6 +172,8 @@ __all__ = [
     "DATASET_CONFIG",
     "COMPILE_CONFIG",
     "KERNEL_CONFIG",
+    "GLOBAL_CONFIG",
+    "TrainerConfig",
     "get_model_config",
     "get_dataset_info",
 ]

@@ -25,11 +25,11 @@ from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 import pyqtgraph as pg
 
-from hyperopt.engine import EvolutionaryOptimizer, OptimizationConfig
-from hyperopt.experiment import TrialRunner
-from hyperopt.storage import HyperoptStorage
-from hyperopt.metrics import get_pareto_frontier, rank_trials
-from gui.algorithms import MODEL_REGISTRY
+from bioplausible.hyperopt.engine import EvolutionaryOptimizer, OptimizationConfig
+from bioplausible.hyperopt.experiment import TrialRunner
+from bioplausible.hyperopt.storage import HyperoptStorage
+from bioplausible.hyperopt.metrics import get_pareto_frontier, rank_trials
+from bioplausible.models.registry import MODEL_REGISTRY
 from bioplausible_ui.experiment_scheduler import ExperimentScheduler
 from bioplausible_ui.hyperopt_worker import HyperoptSearchWorker
 
@@ -44,7 +44,7 @@ class HyperoptSearchDashboard(QMainWindow):
         GLOBAL_CONFIG.quick_mode = quick_mode
         GLOBAL_CONFIG.epochs = 3 if quick_mode else 20
         GLOBAL_CONFIG.max_trial_time = max_trial_time
-        
+
         self.task = task
         self.setWindowTitle(f"Hyperparameter Search Dashboard - Task: {task.upper()}")
         self.setGeometry(100, 100, 1800, 1000)
@@ -284,7 +284,7 @@ class HyperoptSearchDashboard(QMainWindow):
             "font-weight: bold; background-color: #e74c3c; color: white; padding: 10px; font-size: 14px;"
         )
         layout.addWidget(reset_btn)
-        
+
         # Checkbox to show/hide pruned trials
         self.show_pruned_cb = QCheckBox("Show Pruned")
         self.show_pruned_cb.setChecked(False)  # Hide by default
@@ -672,7 +672,7 @@ class HyperoptSearchDashboard(QMainWindow):
 
         # Sort trials by trial_id in descending order (most recent first)
         sorted_trials = sorted(trials, key=lambda t: t.trial_id, reverse=True)
-        
+
         # Filter pruned trials if checkbox is not checked
         if hasattr(self, 'show_pruned_cb') and not self.show_pruned_cb.isChecked():
             sorted_trials = [t for t in sorted_trials if t.status.lower() not in ['pruned', 'terminated', 'stopped']]
@@ -772,34 +772,34 @@ class HyperoptSearchDashboard(QMainWindow):
 
         self.status_label.setText(f"✅ Exported best configs to {export_dir}")
 
-    
+
     def spawn_trainer_context_menu(self, position):
         """Show context menu for spawning trainer."""
         from PyQt6.QtWidgets import QMenu
         from PyQt6.QtGui import QAction
-        
+
         index = self.experiment_table.indexAt(position)
         if not index.isValid():
             return
-            
+
         menu = QMenu()
         spawn_action = QAction("🚀 Spawn EqProp Trainer with this config", self)
         spawn_action.triggered.connect(lambda: self.launch_trainer_for_selected_trial())
         menu.addAction(spawn_action)
         menu.exec(self.experiment_table.viewport().mapToGlobal(position))
-        
+
     def launch_trainer_for_selected_trial(self):
         """Launch trainer for the currently selected trial."""
         selected_rows = self.experiment_table.selectionModel().selectedRows()
         if not selected_rows:
             return
-            
+
         # Get trial ID from the first column of the selected row
         row = selected_rows[0].row()
         trial_id_item = self.experiment_table.item(row, 0)
         if not trial_id_item:
             return
-            
+
         try:
             trial_id = int(trial_id_item.text())
             self.launch_trainer_for_trial(trial_id)
@@ -811,27 +811,27 @@ class HyperoptSearchDashboard(QMainWindow):
         import subprocess
         import os
         import json
-        
+
         trial = self.storage.get_trial(trial_id)
         if not trial:
             self.status_label.setText(f"❌ Could not find trial {trial_id}")
             return
-            
+
         config = trial.config
         # Ensure model name is in config
         if 'model_name' not in config:
             config['model_name'] = trial.model_name
-            
+
         # Prepare valid JSON string for CLI
         config_json = json.dumps(config)
-        
+
         try:
             cmd = [sys.executable, "-m", "bioplausible_ui", "--config", config_json]
-            
+
             # Launch in background
             process = subprocess.Popen(cmd)
             self.status_label.setText(f"🚀 Launched EqProp Trainer for Trial {trial_id}")
-            
+
         except Exception as e:
             self.status_label.setText(f"❌ Failed to launch EqProp Trainer: {str(e)}")
 

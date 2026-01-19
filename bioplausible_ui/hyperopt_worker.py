@@ -15,13 +15,11 @@ import numpy as np
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from hyperopt.engine import EvolutionaryOptimizer, OptimizationConfig
-from hyperopt.experiment import TrialRunner
-from hyperopt.storage import HyperoptStorage
-from hyperopt.metrics import get_pareto_frontier, rank_trials
-from gui.algorithms import MODEL_REGISTRY
-from hyperopt.metrics import get_pareto_frontier, rank_trials
-from gui.algorithms import MODEL_REGISTRY
+from bioplausible.hyperopt.engine import EvolutionaryOptimizer, OptimizationConfig
+from bioplausible.hyperopt.experiment import TrialRunner
+from bioplausible.hyperopt.storage import HyperoptStorage
+from bioplausible.hyperopt.metrics import get_pareto_frontier, rank_trials
+from bioplausible.models.registry import MODEL_REGISTRY
 from bioplausible_ui.config import GLOBAL_CONFIG
 
 
@@ -200,8 +198,8 @@ class HyperoptSearchWorker(QThread):
                     # Temporarily override runner epochs for this specific trial
                     # NO! AGGRESSIVE REFACTOR: Enforce GLOBAL_CONFIG.epochs always.
                     # The TrialRunner deals with this.
-                    # self.runner.epochs = experiment['allocated_epochs'] 
-                    
+                    # self.runner.epochs = experiment['allocated_epochs']
+
                     # Use quick mode for efficiency during search
                     original_quick_mode = self.runner.quick_mode
                     self.runner.quick_mode = GLOBAL_CONFIG.quick_mode # Explicitly set from global
@@ -215,14 +213,14 @@ class HyperoptSearchWorker(QThread):
                             # Note: scheduler.update_experiment_progress expects full Trial object usually,
                             # but here we are just checking for pruning conditions.
                             # We can manually trigger the check logic.
-                            
+
                             # Update experiment state in scheduler
                             self.scheduler.update_experiment_progress(
-                                trial_id, 
-                                metrics, 
+                                trial_id,
+                                metrics,
                                 actual_epochs=epoch
                             )
-                            
+
                             # Check if scheduler allocated_epochs has been reduced below current epoch
                             # Only prune if we are stopping EARLY (before the natural end of the trial)
                             if experiment.get('allocated_epochs', 0) <= epoch and epoch < self.runner.epochs:
@@ -299,6 +297,6 @@ class HyperoptSearchWorker(QThread):
              'epochs': GLOBAL_CONFIG.epochs,
              'model_name': 'Backprop (Transformer)'
         }
-        
+
         # Add to scheduler with high priority
         self.scheduler.add_experiment(baseline_config['model_name'], baseline_config, priority=100.0)
