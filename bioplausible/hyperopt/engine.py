@@ -2,6 +2,7 @@
 Evolutionary Optimization Engine
 
 Implements evolutionary search with Pareto-based selection for multi-objective optimization.
+Can integrate with P2P Evolution logic for distributed search.
 """
 
 from typing import List, Dict, Any, Optional, Callable
@@ -28,6 +29,7 @@ class OptimizationConfig:
     crossover_rate: float = 0.7
     elite_fraction: float = 0.2
     random_seed: int = 42
+    use_p2p: bool = False # Flag to use P2P logic
 
 
 class EvolutionaryOptimizer:
@@ -38,10 +40,12 @@ class EvolutionaryOptimizer:
         model_names: List[str],
         config: OptimizationConfig = None,
         storage: HyperoptStorage = None,
+        p2p_controller: Any = None, # P2PEvolution instance
     ):
         self.model_names = model_names
         self.config = config or OptimizationConfig()
         self.storage = storage or HyperoptStorage()
+        self.p2p = p2p_controller
         self.rng = np.random.default_rng(self.config.random_seed)
 
         # Search spaces for each model
@@ -67,10 +71,29 @@ class EvolutionaryOptimizer:
 
     def initialize_population(self, model_name: str) -> List[int]:
         """Initialize random population for a model."""
-        space = self.search_spaces[model_name]
+        # If P2P enabled, try to seed from global best
+        seeded = False
         trial_ids = []
 
-        for _ in range(self.config.population_size):
+        if self.config.use_p2p and self.p2p and self.p2p.dht:
+            try:
+                # TODO: Pass task name properly. For now assuming config context.
+                best = self.p2p.dht.get_best_model("shakespeare") # Placeholder
+                if best and best.get('config'):
+                    config = best['config']
+                    # Ensure it matches model_name if possible, or adapt
+                    if config.get('model_name') == model_name:
+                        config = self._sanitize_config(config)
+                        tid = self.storage.create_trial(model_name, config)
+                        trial_ids.append(tid)
+                        seeded = True
+            except Exception as e:
+                print(f"P2P Seed failed: {e}")
+
+        space = self.search_spaces[model_name]
+
+        needed = self.config.population_size - len(trial_ids)
+        for _ in range(needed):
             config = space.sample(self.rng)
             config = self._sanitize_config(config)
             trial_id = self.storage.create_trial(model_name, config)

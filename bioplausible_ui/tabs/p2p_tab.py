@@ -6,7 +6,8 @@ Allows users to contribute to the Bio-Plausible Research Network.
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QGroupBox, QPushButton,
-    QLabel, QLineEdit, QTextEdit, QProgressBar, QScrollArea, QRadioButton, QButtonGroup
+    QLabel, QLineEdit, QTextEdit, QProgressBar, QScrollArea, QRadioButton, QButtonGroup,
+    QComboBox, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, QTimer
 from PyQt6.QtGui import QFont, QDesktopServices, QColor
@@ -112,8 +113,10 @@ class P2PTab(QWidget):
         self.bootstrap_combo.addItems([
             "bootstrap1.bioplausible.org",
             "bootstrap2.bioplausible.org",
-            "127.0.0.1:8468 (Local Test)"
+            "127.0.0.1:8468 (Local Test)",
+            ""  # Empty for self-bootstrap
         ])
+        self.bootstrap_combo.setPlaceholderText("Leave empty to start new network")
         self.bootstrap_combo.setVisible(False)
         conn_layout.addWidget(self.bootstrap_combo)
 
@@ -124,6 +127,13 @@ class P2PTab(QWidget):
         self.connect_btn = QPushButton("🚀 Join Network")
         self.connect_btn.setMinimumHeight(50)
         self.connect_btn.setStyleSheet("font-weight: bold; font-size: 14px; background-color: #27ae60;")
+        # Task Selection
+        self.task_combo = QComboBox()
+        self.task_combo.addItems(["shakespeare", "tiny_shakespeare", "mnist", "cifar10", "cartpole"])
+        self.task_combo.setToolTip("Target task to contribute to")
+        conn_layout.addWidget(QLabel("Target Task:"))
+        conn_layout.addWidget(self.task_combo)
+
         self.connect_btn.clicked.connect(self._toggle_connection)
         conn_layout.addWidget(self.connect_btn)
 
@@ -297,7 +307,8 @@ class P2PTab(QWidget):
                     bootstrap_ip=ip,
                     bootstrap_port=port,
                     discovery_mode=mode,
-                    constraints=constraints
+                    constraints=constraints,
+                    task=self.task_combo.currentText()
                 )
                 self.worker.start(auto_nice=True)
 

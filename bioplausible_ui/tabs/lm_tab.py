@@ -343,3 +343,29 @@ class LMTab(QWidget):
 
     def get_current_hyperparams(self):
         return get_current_hyperparams_generic(self.lm_hyperparam_widgets)
+
+    def update_theme(self, theme_colors, plot_colors):
+        """Update plot colors based on theme."""
+        if not HAS_PYQTGRAPH:
+            return
+
+        bg = theme_colors.get('background', '#0a0a0f')
+
+        # Update Plots
+        if hasattr(self, 'lm_loss_plot'):
+            self.lm_loss_plot.setBackground(bg)
+            self.lm_loss_curve.setPen(pg.mkPen(plot_colors.get('loss', 'w'), width=2))
+            self.lm_loss_plot.getAxis('left').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
+            self.lm_loss_plot.getAxis('bottom').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
+
+        if hasattr(self, 'lm_acc_plot'):
+            self.lm_acc_plot.setBackground(bg)
+            self.lm_acc_curve.setPen(pg.mkPen(plot_colors.get('accuracy', 'w'), width=2))
+            self.lm_acc_plot.getAxis('left').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
+            self.lm_acc_plot.getAxis('bottom').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
+
+        if hasattr(self, 'lm_lip_plot'):
+            self.lm_lip_plot.setBackground(bg)
+            self.lm_lip_curve.setPen(pg.mkPen(plot_colors.get('lipschitz', 'w'), width=2))
+            self.lm_lip_plot.getAxis('left').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
+            self.lm_lip_plot.getAxis('bottom').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))

@@ -18,7 +18,8 @@ def run_single_trial_task(
     model_name: str,
     config: Dict[str, Any],
     storage_path: Optional[str] = None,
-    job_id: Any = None
+    job_id: Any = None,
+    quick_mode: bool = True
 ) -> Optional[Dict[str, float]]:
     """
     Run a single trial and return metrics.
@@ -28,6 +29,7 @@ def run_single_trial_task(
         model_name: Model architecture name
         config: Hyperparameter dictionary
         storage_path: Path to SQLite DB. If None, uses a temporary DB.
+        quick_mode: If True, uses fewer data/iterations (default True).
     """
     temp_dir = None
 
@@ -48,7 +50,7 @@ def run_single_trial_task(
             storage=storage,
             device="auto",
             task=task,
-            quick_mode=True
+            quick_mode=quick_mode
         )
 
         # Override epochs if present

@@ -1,11 +1,11 @@
 """
-Dark Cyberpunk Theme for EqProp Trainer
+Themes for EqProp Trainer
 
-Neon accents, glassmorphism, and futuristic aesthetics.
+Includes Dark Cyberpunk and Professional Light themes.
 """
 
-# Color constants for maintainability
-THEME_COLORS = {
+# === DARK THEME COLORS ===
+DARK_THEME_COLORS = {
     'background': '#0a0a0f',
     'background_alt': '#0d0d15',
     'background_group': 'rgba(20, 20, 40, 0.7)',
@@ -40,32 +40,73 @@ THEME_COLORS = {
     'checkbox_border': '#3a3a5f',
 }
 
-CYBERPUNK_DARK = f"""
+# === LIGHT THEME COLORS ===
+LIGHT_THEME_COLORS = {
+    'background': '#f5f5f7',
+    'background_alt': '#ffffff',
+    'background_group': 'rgba(240, 240, 245, 0.7)',
+    'background_group_alt': 'rgba(255, 255, 255, 0.95)',
+    'border': '#d0d0d8',
+    'border_alt': '#e0e0e5',
+    'text_primary': '#1d1d1f',
+    'text_secondary': '#515154',
+    'text_accent': '#0066cc',
+    'text_accent_alt': '#008844',
+    'neon_cyan': '#0077aa',
+    'neon_green': '#009944',
+    'neon_pink': '#cc3355',
+    'neon_orange': '#dd7700',
+    'neon_purple': '#8844cc',
+    'neon_magenta': '#cc33cc',
+    'neon_red': '#dd4444',
+    'neon_green_alt': '#44aa44',
+    'button_primary': '#e0e0e5',
+    'button_primary_alt': '#d0d0d5',
+    'button_train': '#28a745',
+    'button_train_alt': '#218838',
+    'button_stop': '#dc3545',
+    'button_stop_alt': '#c82333',
+    'button_reset': '#ffc107',
+    'button_reset_alt': '#e0a800',
+    'slider_handle': '#007aff',
+    'slider_handle_alt': '#0051a8',
+    'progress_fill': '#007aff',
+    'progress_fill_alt': '#5ac8fa',
+    'checkbox_checked': '#007aff',
+    'checkbox_border': '#c0c0c5',
+}
+
+# Backwards compatibility
+THEME_COLORS = DARK_THEME_COLORS
+
+def create_theme(colors):
+    return f"""
 /* === Global === */
 QWidget {{
-    background-color: {THEME_COLORS['background']};
-    color: {THEME_COLORS['text_primary']};
+    background-color: {colors['background']};
+    color: {colors['text_primary']};
     font-family: 'Segoe UI', 'Inter', 'Roboto', sans-serif;
     font-size: 13px;
 }}
 
 /* === Main Window === */
 QMainWindow {{
-    background-color: {THEME_COLORS['background']};
+    background-color: {colors['background']};
 }}
 
 /* === Tab Widget === */
 QTabWidget::pane {{
-    border: 1px solid {THEME_COLORS['border_alt']};
-    background-color: {THEME_COLORS['background_group_alt']};
+    border: 1px solid {colors['border_alt']};
+    background-color: {colors['background_group_alt']};
     border-radius: 8px;
 }}
 
 QTabBar::tab {{
-    background-color: #12121f;
-    color: #808090;
+    background-color: {colors['background_alt']};
+    color: {colors['text_secondary']};
     padding: 12px 24px;
-    border: none;
+    border: 1px solid {colors['border_alt']};
+    border-bottom: none;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     margin-right: 2px;
@@ -73,21 +114,20 @@ QTabBar::tab {{
 }}
 
 QTabBar::tab:selected {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 #1e1e3f, stop:1 #14142a);
-    color: {THEME_COLORS['neon_cyan']};
-    border-bottom: 2px solid {THEME_COLORS['neon_cyan']};
+    background: {colors['background_group_alt']};
+    color: {colors['text_accent']};
+    border-bottom: 2px solid {colors['text_accent']};
 }}
 
 QTabBar::tab:hover:!selected {{
-    background-color: #1a1a35;
-    color: #a0a0b0;
+    background-color: {colors['background_group']};
+    color: {colors['text_primary']};
 }}
 
 /* === Group Boxes === */
 QGroupBox {{
-    background-color: {THEME_COLORS['background_group']};
-    border: 1px solid {THEME_COLORS['border']};
+    background-color: {colors['background_group']};
+    border: 1px solid {colors['border']};
     border-radius: 10px;
     margin-top: 14px;
     padding-top: 10px;
@@ -99,16 +139,15 @@ QGroupBox::title {{
     subcontrol-position: top left;
     left: 15px;
     padding: 0 8px;
-    color: {THEME_COLORS['neon_cyan']};
+    color: {colors['text_accent']};
     font-size: 14px;
 }}
 
 /* === Buttons === */
 QPushButton {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 {THEME_COLORS['button_primary']}, stop:1 #1a1a35);
-    color: {THEME_COLORS['text_primary']};
-    border: 1px solid #3a3a5f;
+    background-color: {colors['button_primary']};
+    color: {colors['text_primary']};
+    border: 1px solid {colors['border']};
     border-radius: 8px;
     padding: 10px 20px;
     font-weight: 600;
@@ -116,18 +155,16 @@ QPushButton {{
 }}
 
 QPushButton:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 {THEME_COLORS['button_primary_alt']}, stop:1 {THEME_COLORS['button_primary']});
-    border-color: {THEME_COLORS['neon_cyan']};
+    background-color: {colors['button_primary_alt']};
+    border-color: {colors['text_accent']};
 }}
 
 QPushButton:pressed {{
-    background: #1a1a35;
+    background-color: {colors['border']};
 }}
 
 QPushButton#trainButton {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {THEME_COLORS['button_train']}, stop:1 #006655);
+    background-color: {colors['button_train']};
     color: white;
     font-size: 16px;
     padding: 15px 40px;
@@ -135,29 +172,34 @@ QPushButton#trainButton {{
 }}
 
 QPushButton#trainButton:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {THEME_COLORS['button_train_alt']}, stop:1 #008877);
-    box-shadow: 0 0 20px rgba(0, 255, 200, 0.4);
+    background-color: {colors['button_train_alt']};
+    box-shadow: 0 0 10px rgba(40, 167, 69, 0.4);
 }}
 
 QPushButton#stopButton {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {THEME_COLORS['button_stop']}, stop:1 {THEME_COLORS['button_stop_alt']});
+    background-color: {colors['button_stop']};
     color: white;
 }}
 
+QPushButton#stopButton:hover {{
+    background-color: {colors['button_stop_alt']};
+}}
+
 QPushButton#resetButton {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {THEME_COLORS['button_reset']}, stop:1 {THEME_COLORS['button_reset_alt']});
+    background-color: {colors['button_reset']};
     color: white;
     min-width: 60px;
     padding: 10px;
 }}
 
+QPushButton#resetButton:hover {{
+    background-color: {colors['button_reset_alt']};
+}}
+
 /* === Sliders === */
 QSlider::groove:horizontal {{
     height: 6px;
-    background: #1a1a35;
+    background: {colors['border_alt']};
     border-radius: 3px;
 }}
 
@@ -165,55 +207,52 @@ QSlider::handle:horizontal {{
     width: 18px;
     height: 18px;
     margin: -6px 0;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 {THEME_COLORS['slider_handle']}, stop:1 {THEME_COLORS['slider_handle_alt']});
+    background: {colors['slider_handle']};
     border-radius: 9px;
-    border: 2px solid #00aacc;
+    border: 2px solid {colors['background_alt']};
 }}
 
 QSlider::handle:horizontal:hover {{
-    background: {THEME_COLORS['slider_handle']};
-    border-color: {THEME_COLORS['slider_handle']};
+    background: {colors['slider_handle_alt']};
 }}
 
 QSlider::sub-page:horizontal {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 #00aacc, stop:1 {THEME_COLORS['slider_handle']});
+    background: {colors['slider_handle']};
     border-radius: 3px;
 }}
 
 /* === Spin Boxes === */
 QSpinBox, QDoubleSpinBox {{
-    background-color: #12121f;
-    border: 1px solid {THEME_COLORS['border']};
+    background-color: {colors['background_alt']};
+    border: 1px solid {colors['border']};
     border-radius: 6px;
     padding: 6px 10px;
-    color: {THEME_COLORS['text_primary']};
+    color: {colors['text_primary']};
 }}
 
 QSpinBox:focus, QDoubleSpinBox:focus {{
-    border-color: {THEME_COLORS['neon_cyan']};
+    border-color: {colors['text_accent']};
 }}
 
 QSpinBox::up-button, QDoubleSpinBox::up-button,
 QSpinBox::down-button, QDoubleSpinBox::down-button {{
-    background-color: #1a1a35;
+    background-color: {colors['button_primary']};
     border: none;
     width: 20px;
 }}
 
 /* === Combo Boxes === */
 QComboBox {{
-    background-color: #12121f;
-    border: 1px solid {THEME_COLORS['border']};
+    background-color: {colors['background_alt']};
+    border: 1px solid {colors['border']};
     border-radius: 6px;
     padding: 8px 12px;
-    color: {THEME_COLORS['text_primary']};
+    color: {colors['text_primary']};
     min-width: 150px;
 }}
 
 QComboBox:hover {{
-    border-color: {THEME_COLORS['neon_cyan']};
+    border-color: {colors['text_accent']};
 }}
 
 QComboBox::drop-down {{
@@ -222,35 +261,34 @@ QComboBox::drop-down {{
 }}
 
 QComboBox QAbstractItemView {{
-    background-color: #12121f;
-    border: 1px solid {THEME_COLORS['border']};
-    selection-background-color: #00aacc;
-    color: {THEME_COLORS['text_primary']};
+    background-color: {colors['background_alt']};
+    border: 1px solid {colors['border']};
+    selection-background-color: {colors['text_accent']};
+    color: {colors['text_primary']};
 }}
 
 /* === Progress Bar === */
 QProgressBar {{
-    background-color: #12121f;
-    border: 1px solid {THEME_COLORS['border']};
+    background-color: {colors['background_alt']};
+    border: 1px solid {colors['border']};
     border-radius: 6px;
     height: 20px;
     text-align: center;
-    color: white;
+    color: {colors['text_primary']};
     font-weight: bold;
 }}
 
 QProgressBar::chunk {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 {THEME_COLORS['progress_fill']}, stop:0.5 {THEME_COLORS['progress_fill_alt']}, stop:1 {THEME_COLORS['progress_fill']});
+    background-color: {colors['progress_fill']};
     border-radius: 5px;
 }}
 
 /* === Text Areas === */
 QTextEdit, QPlainTextEdit {{
-    background-color: {THEME_COLORS['background_alt']};
-    border: 1px solid #252540;
+    background-color: {colors['background_alt']};
+    border: 1px solid {colors['border']};
     border-radius: 8px;
-    color: {THEME_COLORS['text_accent_alt']};
+    color: {colors['text_primary']};
     font-family: 'JetBrains Mono', 'Consolas', monospace;
     font-size: 12px;
     padding: 10px;
@@ -258,36 +296,36 @@ QTextEdit, QPlainTextEdit {{
 
 /* === Labels === */
 QLabel {{
-    color: {THEME_COLORS['text_secondary']};
+    color: {colors['text_secondary']};
 }}
 
 QLabel#headerLabel {{
     font-size: 24px;
     font-weight: bold;
-    color: {THEME_COLORS['neon_cyan']};
+    color: {colors['text_accent']};
 }}
 
 QLabel#metricLabel {{
     font-size: 18px;
     font-weight: bold;
-    color: {THEME_COLORS['neon_pink']};
+    color: {colors['neon_pink']};
 }}
 
 /* === Scrollbars === */
 QScrollBar:vertical {{
-    background-color: {THEME_COLORS['background']};
+    background-color: {colors['background']};
     width: 12px;
     border-radius: 6px;
 }}
 
 QScrollBar::handle:vertical {{
-    background-color: {THEME_COLORS['button_primary']};
+    background-color: {colors['button_primary']};
     border-radius: 6px;
     min-height: 40px;
 }}
 
 QScrollBar::handle:vertical:hover {{
-    background-color: {THEME_COLORS['button_primary_alt']};
+    background-color: {colors['button_primary_alt']};
 }}
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
@@ -296,7 +334,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
 
 /* === Splitter === */
 QSplitter::handle {{
-    background-color: #1a1a35;
+    background-color: {colors['border']};
 }}
 
 QSplitter::handle:horizontal {{
@@ -310,37 +348,51 @@ QSplitter::handle:vertical {{
 /* === Check Boxes === */
 QCheckBox {{
     spacing: 8px;
-    color: {THEME_COLORS['text_secondary']};
+    color: {colors['text_secondary']};
 }}
 
 QCheckBox::indicator {{
     width: 20px;
     height: 20px;
     border-radius: 4px;
-    border: 2px solid {THEME_COLORS['checkbox_border']};
-    background-color: #12121f;
+    border: 2px solid {colors['checkbox_border']};
+    background-color: {colors['background_alt']};
 }}
 
 QCheckBox::indicator:checked {{
-    background-color: {THEME_COLORS['checkbox_checked']};
-    border-color: {THEME_COLORS['neon_cyan']};
+    background-color: {colors['checkbox_checked']};
+    border-color: {colors['text_accent']};
 }}
 
 QCheckBox::indicator:hover {{
-    border-color: {THEME_COLORS['neon_cyan']};
+    border-color: {colors['text_accent']};
 }}
 """
 
-# Neon glow colors for plots
+CYBERPUNK_DARK = create_theme(DARK_THEME_COLORS)
+LIGHT_THEME = create_theme(LIGHT_THEME_COLORS)
+
+# Neon glow colors for plots - Dark theme default, but can be used in Light too
 PLOT_COLORS = {
-    'loss': THEME_COLORS['neon_pink'],       # Pink
-    'accuracy': THEME_COLORS['neon_green'],   # Green
-    'perplexity': THEME_COLORS['neon_orange'], # Orange
-    'lipschitz': THEME_COLORS['neon_cyan'],  # Cyan
-    'memory': THEME_COLORS['neon_purple'],     # Purple
-    'gradient': THEME_COLORS['neon_magenta'],   # Magenta
-    'backprop': THEME_COLORS['neon_red'],   # Red
-    'eqprop': THEME_COLORS['neon_green_alt'],     # Green
+    'loss': DARK_THEME_COLORS['neon_pink'],
+    'accuracy': DARK_THEME_COLORS['neon_green'],
+    'perplexity': DARK_THEME_COLORS['neon_orange'],
+    'lipschitz': DARK_THEME_COLORS['neon_cyan'],
+    'memory': DARK_THEME_COLORS['neon_purple'],
+    'gradient': DARK_THEME_COLORS['neon_magenta'],
+    'backprop': DARK_THEME_COLORS['neon_red'],
+    'eqprop': DARK_THEME_COLORS['neon_green_alt'],
+}
+
+LIGHT_PLOT_COLORS = {
+    'loss': LIGHT_THEME_COLORS['neon_pink'],
+    'accuracy': LIGHT_THEME_COLORS['neon_green'],
+    'perplexity': LIGHT_THEME_COLORS['neon_orange'],
+    'lipschitz': LIGHT_THEME_COLORS['neon_cyan'],
+    'memory': LIGHT_THEME_COLORS['neon_purple'],
+    'gradient': LIGHT_THEME_COLORS['neon_magenta'],
+    'backprop': LIGHT_THEME_COLORS['neon_red'],
+    'eqprop': LIGHT_THEME_COLORS['neon_green_alt'],
 }
 
 # Animation durations (ms)

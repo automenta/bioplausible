@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QSpinBox, QDoubleSpinBox,
     QGroupBox, QPushButton, QProgressBar, QLabel
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, Qt
 
 from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.themes import PLOT_COLORS
@@ -219,3 +219,24 @@ class RLTab(QWidget):
             self.rl_desc_label.setText(spec.description)
         except Exception:
             self.rl_desc_label.setText("")
+
+    def update_theme(self, theme_colors, plot_colors):
+        """Update plot colors based on theme."""
+        if not HAS_PYQTGRAPH:
+            return
+
+        bg = theme_colors.get('background', '#0a0a0f')
+
+        # Update Plots
+        if hasattr(self, 'rl_reward_plot'):
+            self.rl_reward_plot.setBackground(bg)
+            self.rl_reward_curve.setPen(pg.mkPen(plot_colors.get('accuracy', 'y'), width=2)) # Reward ~= Accuracy color
+            self.rl_avg_reward_curve.setPen(pg.mkPen(plot_colors.get('perplexity', 'y'), width=2))
+            self.rl_reward_plot.getAxis('left').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
+            self.rl_reward_plot.getAxis('bottom').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
+
+        if hasattr(self, 'rl_loss_plot'):
+            self.rl_loss_plot.setBackground(bg)
+            self.rl_loss_curve.setPen(pg.mkPen(plot_colors.get('loss', 'r'), width=2))
+            self.rl_loss_plot.getAxis('left').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
+            self.rl_loss_plot.getAxis('bottom').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
