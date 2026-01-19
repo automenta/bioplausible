@@ -232,8 +232,18 @@ class VisionTab(QWidget):
 
         # Weight Visualization
         if HAS_PYQTGRAPH:
-            viz_group = QGroupBox("🎞️ Weight Matrices")
+            viz_group = QGroupBox("🎞️ Network State")
             viz_layout = QVBoxLayout(viz_group)
+
+            # View Toggle
+            toggle_layout = QHBoxLayout()
+            toggle_layout.addWidget(QLabel("View:"))
+            self.viz_mode_combo = QComboBox()
+            self.viz_mode_combo.addItems(["Synaptic Weights (W)", "Synaptic Flow (ΔW)"])
+            self.viz_mode_combo.setToolTip("Switch between viewing static weights or real-time update magnitudes (gradients).")
+            toggle_layout.addWidget(self.viz_mode_combo)
+            viz_layout.addLayout(toggle_layout)
+
             self.vis_weight_widgets = []
             self.vis_weight_labels = []
             self.vis_weights_container = QWidget()

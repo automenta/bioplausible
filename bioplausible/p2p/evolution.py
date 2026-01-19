@@ -23,8 +23,16 @@ logger = logging.getLogger("P2PEvolution")
 
 def get_config_hash(config: Dict) -> str:
     """Generate a hash for a configuration."""
+
+    def _default(obj):
+        if hasattr(obj, 'item'): # numpy scalar
+            return obj.item()
+        if hasattr(obj, 'tolist'): # numpy array
+            return obj.tolist()
+        return str(obj)
+
     # sort keys to ensure determinism
-    s = json.dumps(config, sort_keys=True)
+    s = json.dumps(config, sort_keys=True, default=_default)
     return hashlib.md5(s.encode()).hexdigest()
 
 class P2PEvolution:
@@ -43,6 +51,7 @@ class P2PEvolution:
         # State
         self.local_best_config = None
         self.local_best_score = -float('inf')
+        self.manual_queue = [] # Queue for manually injected genomes
 
         state = load_state()
         self.points = state.get('points', 0)
@@ -106,6 +115,11 @@ class P2PEvolution:
         if self.thread:
             self.thread.join(timeout=2)
         self._update_status("Stopped")
+
+    def inject_genome(self, config: Dict):
+        """Inject a manually designed genome into the evaluation queue."""
+        self._log("💉 Injecting manual genome for evaluation...")
+        self.manual_queue.append(config)
 
     def _verify_model(self, record: Dict) -> bool:
         """
@@ -180,12 +194,15 @@ class P2PEvolution:
                 else:
                     self._log("No global best found. Will seed new...")
 
-                # 2. Decide Strategy (New Arch, Crossover, or Mutate)
+                # 2. Decide Strategy (Manual, New Arch, Crossover, or Mutate)
                 action = "mutate"
                 rnd = random.random()
 
+                # Check manual queue first
+                if self.manual_queue:
+                    action = "manual"
                 # Chance to switch architecture entirely (exploration)
-                if rnd < 0.05:
+                elif rnd < 0.05:
                     action = "new_arch"
                 # Chance to crossover if we have a local best compatible with global
                 elif (self.local_best_config and best_record and
@@ -200,7 +217,18 @@ class P2PEvolution:
                 target_model_name = global_model_name
                 next_gen = global_gen
 
-                if action == "new_arch":
+                if action == "manual":
+                    self._update_status("Evaluating Manual Design...")
+                    target_config = self.manual_queue.pop(0)
+                    target_model_name = target_config.get('model_name', global_model_name)
+                    # Treat as a new branch or continuation depending on if parent_id is set manually
+                    # If not set, we can assume it's a new line or a fork of global
+                    if 'generation' not in target_config:
+                        target_config['generation'] = global_gen + 1
+                    next_gen = target_config['generation']
+                    parent_hash = target_config.get('parent_id') # Might be None
+
+                elif action == "new_arch":
                     self._update_status("Exploring New Architecture...")
                     # Pick random model from registry spaces
                     available_models = list(SEARCH_SPACES.keys())

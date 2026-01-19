@@ -860,7 +860,8 @@ class EqPropDashboard(QMainWindow):
         self.worker.progress.connect(self._on_progress)
         self.worker.finished.connect(self._on_finished)
         self.worker.error.connect(self._on_error)
-        self.worker.weights_updated.connect(self._update_weight_visualization)
+        self.worker.weights_updated.connect(lambda w: self._update_weight_visualization(w, is_grad=False))
+        self.worker.gradients_updated.connect(lambda g: self._update_weight_visualization(g, is_grad=True))
         self.worker.log.connect(self._append_log)
         self.worker.dynamics_update.connect(self._on_dynamics_update)
 
@@ -1169,7 +1170,7 @@ class EqPropDashboard(QMainWindow):
         """Extract current values from hyperparameter widgets."""
         return get_current_hyperparams_generic(widgets)
 
-    def _update_weight_visualization(self, weights: dict):
+    def _update_weight_visualization(self, weights: dict, is_grad: bool = False):
         """Update weight visualization heatmaps."""
         if not HAS_PYQTGRAPH or not ENABLE_WEIGHT_VIZ:
             return
@@ -1182,10 +1183,17 @@ class EqPropDashboard(QMainWindow):
             layout = self.lm_tab.lm_weights_layout
             widgets = self.lm_tab.lm_weight_widgets
             labels = self.lm_tab.lm_weight_labels
+            # LM doesn't have toggle yet, assume Weights only
+            if is_grad: return
         else:
             layout = self.vis_tab.vis_weights_layout
             widgets = self.vis_tab.vis_weight_widgets
             labels = self.vis_tab.vis_weight_labels
+            # Check toggle
+            if hasattr(self.vis_tab, 'viz_mode_combo'):
+                mode = self.vis_tab.viz_mode_combo.currentText()
+                if "Weights" in mode and is_grad: return
+                if "Flow" in mode and not is_grad: return
 
         # If widgets list is empty, create them
         if not widgets:
