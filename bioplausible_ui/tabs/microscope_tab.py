@@ -76,6 +76,12 @@ class MicroscopeTab(QWidget):
         self.micro_run_btn.clicked.connect(self._run_microscope_analysis)
         left_panel.addWidget(self.micro_run_btn)
 
+        self.micro_capture_btn = QPushButton("📸 One-Click Capture")
+        self.micro_capture_btn.setToolTip("Auto-configure steps and run on current model immediately")
+        self.micro_capture_btn.setStyleSheet("background-color: #e67e22; color: white; font-weight: bold;")
+        self.micro_capture_btn.clicked.connect(self._one_click_capture)
+        left_panel.addWidget(self.micro_capture_btn)
+
         # Info
         info_label = QLabel(
             "Visualizes the settling process of the network.\n"
@@ -106,6 +112,11 @@ class MicroscopeTab(QWidget):
 
         self.status_label = QLabel("")
         left_panel.addWidget(self.status_label)
+
+    def _one_click_capture(self):
+        """Auto-configure and run immediately."""
+        self.micro_steps_spin.setValue(100) # Ensure enough steps
+        self._run_microscope_analysis()
 
     def _run_microscope_analysis(self):
         try:

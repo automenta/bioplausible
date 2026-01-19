@@ -1,7 +1,7 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QSpinBox, QDoubleSpinBox,
-    QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel
+    QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel, QToolBox, QFrame
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -54,7 +54,23 @@ class VisionTab(QWidget):
         left_panel = QVBoxLayout()
         layout.addLayout(left_panel, stretch=1)
 
-        # Model Selection
+        # Presets
+        preset_layout = QHBoxLayout()
+        preset_layout.addWidget(QLabel("🚀 Quick Presets:"))
+        self.vis_preset_combo = QComboBox()
+        self.vis_preset_combo.addItems(["Custom", "Standard Backprop", "Fast EqProp", "Deep EqProp (Accurate)"])
+        self.vis_preset_combo.currentTextChanged.connect(self._apply_preset)
+        preset_layout.addWidget(self.vis_preset_combo)
+        left_panel.addLayout(preset_layout)
+
+        # Toolbox for sections
+        self.toolbox = QToolBox()
+        left_panel.addWidget(self.toolbox)
+
+        # --- Section 1: Model ---
+        model_widget = QWidget()
+        model_layout = QVBoxLayout(model_widget)
+
         self.vis_model_combo = QComboBox()
         model_items = []
         for spec in MODEL_REGISTRY:
@@ -83,23 +99,30 @@ class VisionTab(QWidget):
             ("Hidden Dim:", self.vis_hidden_spin),
             ("Max Steps:", self.vis_steps_spin)
         ]
-        model_group = self._create_control_group("🧠 Model", model_controls)
-        left_panel.addWidget(model_group)
 
-        # Trigger initial update
-        self._update_model_desc(self.vis_model_combo.currentText())
-
-        # Dynamic Hyperparameters Group
-        self.vis_hyperparam_group = QGroupBox("⚙️ Model Hyperparameters")
+        # Helper to add grid controls
         from PyQt6.QtWidgets import QGridLayout
+        grid = QGridLayout()
+        for i, (label, widget) in enumerate(model_controls):
+            grid.addWidget(QLabel(label), i, 0)
+            grid.addWidget(widget, i, 1)
+        model_layout.addLayout(grid)
+
+        # Dynamic Hyperparameters
+        self.vis_hyperparam_group = QGroupBox("Dynamic Params")
         self.vis_hyperparam_layout = QGridLayout(self.vis_hyperparam_group)
         self.vis_hyperparam_widgets = {}
-        left_panel.addWidget(self.vis_hyperparam_group)
+        model_layout.addWidget(self.vis_hyperparam_group)
         self.vis_hyperparam_group.setVisible(False)
-
         self.vis_model_combo.currentTextChanged.connect(self._update_vis_hyperparams)
 
-        # Dataset
+        model_layout.addStretch()
+        self.toolbox.addItem(model_widget, "🧠 Model Architecture")
+
+        # --- Section 2: Dataset ---
+        data_widget = QWidget()
+        data_layout = QVBoxLayout(data_widget)
+
         self.vis_dataset_combo = QComboBox()
         self.vis_dataset_combo.addItems(["MNIST", "Fashion-MNIST", "CIFAR-10", "KMNIST", "SVHN"])
         self.vis_dataset_combo.setToolTip("Image dataset for training")
@@ -113,10 +136,20 @@ class VisionTab(QWidget):
             ("Dataset:", self.vis_dataset_combo),
             ("Batch Size:", self.vis_batch_spin)
         ]
-        data_group = self._create_control_group("📚 Dataset", data_controls)
-        left_panel.addWidget(data_group)
 
-        # Training
+        data_grid = QGridLayout()
+        for i, (label, widget) in enumerate(data_controls):
+            data_grid.addWidget(QLabel(label), i, 0)
+            data_grid.addWidget(widget, i, 1)
+        data_layout.addLayout(data_grid)
+        data_layout.addStretch()
+
+        self.toolbox.addItem(data_widget, "📚 Data Configuration")
+
+        # --- Section 3: Training ---
+        train_widget = QWidget()
+        train_layout = QVBoxLayout(train_widget)
+
         self.vis_epochs_spin = QSpinBox()
         self.vis_epochs_spin.setRange(1, 100)
         self.vis_epochs_spin.setValue(10)
@@ -130,10 +163,7 @@ class VisionTab(QWidget):
 
         self.vis_grad_combo = QComboBox()
         self.vis_grad_combo.addItems(["BPTT (Standard)", "Equilibrium (Implicit Diff)", "Contrastive (Hebbian)"])
-        self.vis_grad_combo.setToolTip("Method for computing gradients:\n"
-                                       "BPTT: Backprop Through Time (Exact, high memory)\n"
-                                       "Equilibrium: Implicit Differentiation (O(1) memory)\n"
-                                       "Contrastive: Explicit Hebbian Update (Bio-plausible)")
+        self.vis_grad_combo.setToolTip("Gradient Calculation Method")
 
         self.vis_compile_check = QCheckBox("torch.compile")
         self.vis_compile_check.setChecked(True)
@@ -153,8 +183,18 @@ class VisionTab(QWidget):
             ("", self.vis_kernel_check),
             ("", self.vis_micro_check)
         ]
-        train_group = self._create_control_group("⚙️ Training", train_controls)
-        left_panel.addWidget(train_group)
+
+        train_grid = QGridLayout()
+        for i, (label, widget) in enumerate(train_controls):
+            train_grid.addWidget(QLabel(label), i, 0)
+            train_grid.addWidget(widget, i, 1)
+        train_layout.addLayout(train_grid)
+        train_layout.addStretch()
+
+        self.toolbox.addItem(train_widget, "⚙️ Optimization Strategy")
+
+        # Trigger initial update
+        self._update_model_desc(self.vis_model_combo.currentText())
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -252,6 +292,27 @@ class VisionTab(QWidget):
             right_panel.addWidget(viz_group)
         right_panel.addStretch()
 
+    def _apply_preset(self, preset_name):
+        """Apply a predefined configuration preset."""
+        if preset_name == "Custom":
+            return
+
+        if preset_name == "Standard Backprop":
+            # Find a BP model or set gradient to BPTT
+            self.vis_grad_combo.setCurrentText("BPTT (Standard)")
+            self.vis_steps_spin.setValue(5) # Minimal steps as they aren't used for BP usually or minimal relaxation
+            self.vis_kernel_check.setChecked(False)
+
+        elif preset_name == "Fast EqProp":
+            self.vis_grad_combo.setCurrentText("Equilibrium (Implicit Diff)")
+            self.vis_steps_spin.setValue(15) # Faster
+            self.vis_kernel_check.setChecked(True) # Encourage speed
+
+        elif preset_name == "Deep EqProp (Accurate)":
+            self.vis_grad_combo.setCurrentText("Equilibrium (Implicit Diff)")
+            self.vis_steps_spin.setValue(50) # Deep relaxation
+            self.vis_kernel_check.setChecked(True)
+
     def _reset_defaults(self):
         """Reset all controls to default values."""
         self.vis_hidden_spin.setValue(256)
@@ -264,6 +325,7 @@ class VisionTab(QWidget):
         self.vis_micro_check.setChecked(False)
         self.vis_dataset_combo.setCurrentIndex(0)
         self.vis_grad_combo.setCurrentIndex(0)
+        self.vis_preset_combo.setCurrentIndex(0)
 
     def _update_vis_hyperparams(self, model_name):
         update_hyperparams_generic(self, model_name, self.vis_hyperparam_layout, self.vis_hyperparam_widgets, self.vis_hyperparam_group)
