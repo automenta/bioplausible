@@ -21,3 +21,6 @@ matplotlib
 kademlia
 PyQt6
 pyqtgraph
+uvicorn
+fastapi
+pydantic
