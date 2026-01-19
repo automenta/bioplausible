@@ -344,6 +344,7 @@ class EqPropDashboard(QMainWindow):
 
         # Page 5: Discovery (Viz)
         self.disc_tab = DiscoveryTab()
+        self.disc_tab.load_model_signal.connect(self._apply_config)
         self.content_stack.addWidget(self.disc_tab)
 
         # Page 6: Community Grid (P2P)
