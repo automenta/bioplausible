@@ -975,6 +975,8 @@ class EqPropDashboard(QMainWindow):
         # Update UI
         self.vis_tab.vis_train_btn.setEnabled(False)
         self.vis_tab.vis_stop_btn.setEnabled(True)
+        self.vis_tab.vis_pause_btn.setEnabled(True)
+        self.vis_tab.vis_pause_btn.clicked.connect(self._toggle_pause)
         self.vis_tab.vis_progress.setMaximum(self.vis_tab.vis_epochs_spin.value())
         self.vis_tab.vis_progress.setValue(0)
 
@@ -1037,6 +1039,8 @@ class EqPropDashboard(QMainWindow):
         # Update UI
         self.lm_tab.lm_train_btn.setEnabled(False)
         self.lm_tab.lm_stop_btn.setEnabled(True)
+        self.lm_tab.lm_pause_btn.setEnabled(True)
+        self.lm_tab.lm_pause_btn.clicked.connect(self._toggle_pause)
         self.lm_tab.lm_progress.setMaximum(self.lm_tab.lm_epochs_spin.value())
         self.lm_tab.lm_progress.setValue(0)
 
@@ -1150,6 +1154,21 @@ class EqPropDashboard(QMainWindow):
             self.status_label.setText("Stopping training...")
             self.status_label.setStyleSheet("color: #ffaa00; padding: 5px; font-weight: bold;")
 
+    def _toggle_pause(self):
+        """Pause/Resume training."""
+        if not self.worker: return
+
+        is_paused = self.vis_tab.vis_pause_btn.isChecked() or self.lm_tab.lm_pause_btn.isChecked()
+
+        if is_paused:
+            self.worker.pause()
+            self.status_label.setText("Training paused.")
+            self.status_label.setStyleSheet("color: #f1c40f; padding: 5px; font-weight: bold;")
+        else:
+            self.worker.resume()
+            self.status_label.setText("Training resumed.")
+            self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
+
     def _on_dynamics_update(self, dynamics: dict):
         """Handle live dynamics update from worker."""
         # Update microscope plots if they exist
@@ -1235,16 +1254,26 @@ class EqPropDashboard(QMainWindow):
             self.rl_tab.rl_avg_reward_curve.setData(episodes, self.rl_avg_reward_history)
             self.rl_tab.rl_loss_curve.setData(episodes, self.rl_loss_history)
 
-    def _on_finished(self, result: dict):
-        """Handle training completion."""
-        self.plot_timer.stop()
+    def _reset_training_ui(self):
+        """Reset UI state after training stops."""
         self.vis_tab.vis_train_btn.setEnabled(True)
         self.vis_tab.vis_stop_btn.setEnabled(False)
+        self.vis_tab.vis_pause_btn.setEnabled(False)
+        self.vis_tab.vis_pause_btn.setChecked(False)
+
         self.lm_tab.lm_train_btn.setEnabled(True)
         self.lm_tab.lm_stop_btn.setEnabled(False)
+        self.lm_tab.lm_pause_btn.setEnabled(False)
+        self.lm_tab.lm_pause_btn.setChecked(False)
+
         if hasattr(self.rl_tab, 'rl_train_btn'):
             self.rl_tab.rl_train_btn.setEnabled(True)
             self.rl_tab.rl_stop_btn.setEnabled(False)
+
+    def _on_finished(self, result: dict):
+        """Handle training completion."""
+        self.plot_timer.stop()
+        self._reset_training_ui()
 
         if result.get('success'):
             self.status_label.setText(f"✓ Training complete! ({result['epochs_completed']} epochs)")
@@ -1256,13 +1285,7 @@ class EqPropDashboard(QMainWindow):
     def _on_error(self, error: str):
         """Handle training error."""
         self.plot_timer.stop()
-        self.vis_tab.vis_train_btn.setEnabled(True)
-        self.vis_tab.vis_stop_btn.setEnabled(False)
-        self.lm_tab.lm_train_btn.setEnabled(True)
-        self.lm_tab.lm_stop_btn.setEnabled(False)
-        if hasattr(self.rl_tab, 'rl_train_btn'):
-            self.rl_tab.rl_train_btn.setEnabled(True)
-            self.rl_tab.rl_stop_btn.setEnabled(False)
+        self._reset_training_ui()
 
         self.status_label.setText("Training error!")
         self.status_label.setStyleSheet("color: #ff5588; padding: 5px; font-weight: bold;")

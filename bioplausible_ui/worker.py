@@ -56,10 +56,19 @@ class TrainingWorker(QThread):
         self.hyperparams = hyperparams or {}
 
         self._stop_requested = False
+        self._pause_requested = False
 
     def stop(self):
         """Request training stop."""
         self._stop_requested = True
+
+    def pause(self):
+        """Pause training."""
+        self._pause_requested = True
+
+    def resume(self):
+        """Resume training."""
+        self._pause_requested = False
 
     def _apply_hyperparams(self, trainer):
         """Apply dynamic hyperparameters to trainer/model."""
@@ -150,7 +159,20 @@ class TrainingWorker(QThread):
             if self._stop_requested:
                 return None
 
-            x, y = x.to(trainer.device), y.to(trainer.device)
+            # Handle pause
+            while self._pause_requested:
+                if self._stop_requested: return None
+                time.sleep(0.1)
+
+            try:
+                x, y = x.to(trainer.device), y.to(trainer.device)
+            except RuntimeError as e:
+                if "out of memory" in str(e):
+                    self.error.emit(f"CUDA Out of Memory! Try reducing batch size.\n{e}")
+                    if hasattr(torch.cuda, 'empty_cache'):
+                        torch.cuda.empty_cache()
+                    return None
+                raise e
 
             batch_start = time.time()
 

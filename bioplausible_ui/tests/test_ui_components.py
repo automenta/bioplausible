@@ -79,5 +79,17 @@ class TestTabs(unittest.TestCase):
         # Check if playback method exists
         self.assertTrue(hasattr(tab, '_watch_agent'))
 
+    def test_console_tab_commands(self):
+        from bioplausible_ui.tabs.console_tab import ConsoleTab
+        tab = ConsoleTab()
+        self.assertIsNotNone(tab)
+
+        # Test basic command
+        tab.cmd_input.setText("!help")
+        tab.cmd_input.returnPressed.emit()
+
+        # Check if text was cleared (command processed)
+        self.assertEqual(tab.cmd_input.text(), "")
+
 if __name__ == '__main__':
     unittest.main()

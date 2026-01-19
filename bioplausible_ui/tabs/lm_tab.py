@@ -222,6 +222,12 @@ class LMTab(QWidget):
         self.lm_stop_btn.clicked.connect(self.stop_training_signal.emit)
         btn_layout.addWidget(self.lm_stop_btn)
 
+        self.lm_pause_btn = QPushButton("⏸ Pause")
+        self.lm_pause_btn.setObjectName("resetButton")
+        self.lm_pause_btn.setCheckable(True)
+        self.lm_pause_btn.setEnabled(False)
+        btn_layout.addWidget(self.lm_pause_btn)
+
         self.lm_reset_btn = QPushButton("↺ Reset")
         self.lm_reset_btn.setObjectName("resetButton")
         self.lm_reset_btn.setToolTip("Reset all hyperparameters to default values")

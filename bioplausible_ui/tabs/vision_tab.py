@@ -319,6 +319,12 @@ class VisionTab(QWidget):
         self.vis_stop_btn.clicked.connect(self.stop_training_signal.emit)
         btn_layout.addWidget(self.vis_stop_btn)
 
+        self.vis_pause_btn = QPushButton("⏸ Pause")
+        self.vis_pause_btn.setObjectName("resetButton")
+        self.vis_pause_btn.setCheckable(True)
+        self.vis_pause_btn.setEnabled(False)
+        btn_layout.addWidget(self.vis_pause_btn)
+
         self.vis_reset_btn = QPushButton("↺ Reset")
         self.vis_reset_btn.setObjectName("resetButton")
         self.vis_reset_btn.setToolTip("Reset all hyperparameters to default values")
