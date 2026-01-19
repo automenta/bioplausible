@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from .utils import spectral_conv2d
 from .eqprop_base import EqPropModel
+from ..acceleration import compile_settling_loop
 
 # =============================================================================
 # ConvEqProp - Convolutional EqProp for Vision Tasks
@@ -84,6 +85,7 @@ class ConvEqProp(EqPropModel):
         """Transform input: embed(x)"""
         return self.embed(x)
 
+    @compile_settling_loop
     def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
         """
         Single equilibrium iteration step.

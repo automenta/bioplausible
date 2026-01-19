@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from torch.nn.utils.parametrizations import spectral_norm
 from .utils import spectral_conv2d
 from .eqprop_base import EqPropModel
+from ..acceleration import compile_settling_loop
 
 class ModernConvEqProp(EqPropModel):
     """
@@ -127,6 +128,7 @@ class ModernConvEqProp(EqPropModel):
         h = self.stage3(h)
         return h
 
+    @compile_settling_loop
     def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
         """
         Single equilibrium step.
@@ -191,6 +193,7 @@ class SimpleConvEqProp(EqPropModel):
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         return self.embed(x)
 
+    @compile_settling_loop
     def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
         h_norm = self.norm(h)
         h_next = torch.tanh(self.W_rec(h_norm) + x_transformed)

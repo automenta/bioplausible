@@ -4,6 +4,7 @@ from torch.nn.utils.parametrizations import spectral_norm
 from typing import Optional, List, Tuple, Dict, Union
 
 from .eqprop_base import EqPropModel
+from ..acceleration import compile_settling_loop
 
 # =============================================================================
 # LoopedMLP - Core EqProp Model
@@ -105,6 +106,7 @@ class LoopedMLP(EqPropModel):
             raise ValueError(f"Input dimension mismatch: expected {self.input_dim}, got {x.shape[1]}")
         return self.W_in(x)
 
+    @compile_settling_loop
     def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
         """Single step: h = tanh(W_in x + W_rec h)"""
         return torch.tanh(x_transformed + self.W_rec(h))

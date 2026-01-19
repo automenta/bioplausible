@@ -7,6 +7,7 @@ checkpointing, and ONNX export.
 
 import time
 import warnings
+import os
 from contextlib import nullcontext
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -14,6 +15,16 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import numpy as np
+
+# Optional tqdm for progress bars
+try:
+    from tqdm.auto import tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
+    # Mock tqdm if not available
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
 
 from .acceleration import compile_model, enable_tf32, get_optimal_backend
 
@@ -25,7 +36,7 @@ except ImportError:
     HAS_CUPY = False
     KernelEqPropKernel = None
     cross_entropy = None
-    to_numpy = lambda x: x
+    to_numpy = lambda x: x.cpu().numpy() if hasattr(x, 'cpu') else x
 
 
 class EqPropTrainer:
@@ -44,6 +55,9 @@ class EqPropTrainer:
         - Checkpoint saving/loading
         - ONNX export for deployment
         - Progress callbacks
+        - Learning Rate Scheduling
+        - Gradient Clipping
+        - Automatic Mixed Precision (AMP)
     """
 
     def __init__(
@@ -57,6 +71,7 @@ class EqPropTrainer:
         device: Optional[str] = None,
         compile_mode: str = "reduce-overhead",
         allow_tf32: bool = True,
+        use_amp: bool = False,
     ) -> None:
         """
         Initialize the EqProp trainer.
@@ -71,6 +86,7 @@ class EqPropTrainer:
             device: Device to train on (auto-detected if None)
             compile_mode: torch.compile mode ('default', 'reduce-overhead', 'max-autotune')
             allow_tf32: If True, enable TensorFloat-32 on Ampere+ GPUs (default: True)
+            use_amp: If True, use Automatic Mixed Precision (AMP) for training
         """
         # Enable TF32 by default for performance
         enable_tf32(allow_tf32)
@@ -80,12 +96,14 @@ class EqPropTrainer:
 
         self.device = device or get_optimal_backend()
         self.use_kernel = use_kernel
+        self.use_amp = use_amp
         self._epoch = 0
         self._step = 0
         self._best_metric = float('inf')
         self._history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
         self._kernel = None
         self.optimizer = None
+        self.scaler = None
 
         # Move model to device
         self._setup_model(model, use_compile, compile_mode)
@@ -98,9 +116,15 @@ class EqPropTrainer:
                 warnings.warn(f"Kernel mode initialization failed: {e}. Falling back to PyTorch BPTT mode.", UserWarning)
                 self.use_kernel = False
 
-        # Create optimizer (only for PyTorch mode)
+        if self.use_amp and self.use_kernel:
+            warnings.warn("AMP is not supported in Kernel mode. Ignoring use_amp=True.", UserWarning)
+            self.use_amp = False
+
+        # Create optimizer and scaler (only for PyTorch mode)
         if not self.use_kernel:
             self.optimizer = self._create_optimizer(optimizer, lr, weight_decay)
+            if self.use_amp:
+                self.scaler = torch.amp.GradScaler(self.device if str(self.device).startswith('cuda') else 'cpu')
 
     def _validate_inputs(self, optimizer: str, compile_mode: str, lr: float, weight_decay: float) -> None:
         """Validate initialization parameters."""
@@ -169,6 +193,9 @@ class EqPropTrainer:
         callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         log_interval: int = 100,
         checkpoint_path: Optional[str] = None,
+        progress_bar: bool = True,
+        scheduler: Optional[Any] = None,
+        max_grad_norm: Optional[float] = None,
     ) -> Dict[str, List[float]]:
         """
         Train the model.
@@ -181,6 +208,9 @@ class EqPropTrainer:
             callback: Called after each epoch with metrics dict
             log_interval: Print progress every N batches
             checkpoint_path: Save best checkpoint to this path
+            progress_bar: Show tqdm progress bar
+            scheduler: Learning rate scheduler (e.g. torch.optim.lr_scheduler.StepLR)
+            max_grad_norm: Gradient clipping norm (default: None)
 
         Returns:
             History dict with train/val losses and accuracies
@@ -188,6 +218,9 @@ class EqPropTrainer:
         self._validate_loader(train_loader, "train_loader")
         if val_loader:
              self._validate_loader(val_loader, "val_loader")
+
+        if scheduler and self.use_kernel:
+             warnings.warn("Learning rate scheduler is not supported in Kernel mode.", UserWarning)
 
         loss_fn = loss_fn or nn.CrossEntropyLoss()
 
@@ -197,15 +230,25 @@ class EqPropTrainer:
 
             # Training phase
             train_loss, train_acc = self._run_epoch(
-                train_loader, loss_fn, is_training=True, log_interval=log_interval
+                train_loader, loss_fn, is_training=True,
+                log_interval=log_interval, progress_bar=progress_bar,
+                desc=f"Epoch {self._epoch}/{epochs} [Train]",
+                max_grad_norm=max_grad_norm
             )
             self._history['train_loss'].append(train_loss)
             self._history['train_acc'].append(train_acc)
 
+            # Step scheduler if it's an epoch-based scheduler
+            if scheduler and not self.use_kernel:
+                try:
+                    scheduler.step()
+                except Exception as e:
+                    warnings.warn(f"Scheduler step failed: {e}", RuntimeWarning)
+
             # Validation phase
             val_loss, val_acc = None, None
             if val_loader:
-                val_metrics = self.evaluate(val_loader, loss_fn)
+                val_metrics = self.evaluate(val_loader, loss_fn, progress_bar=False)
                 val_loss, val_acc = val_metrics['loss'], val_metrics['accuracy']
                 self._history['val_loss'].append(val_loss)
                 self._history['val_acc'].append(val_acc)
@@ -215,6 +258,13 @@ class EqPropTrainer:
                     self.save_checkpoint(checkpoint_path)
 
             epoch_time = time.perf_counter() - epoch_start
+
+            # Print epoch summary
+            if (not progress_bar or not HAS_TQDM) and log_interval > 0:
+                print(f"Epoch {self._epoch}/{epochs}: "
+                      f"Train Loss={train_loss:.4f} Acc={train_acc:.2%}"
+                      + (f" | Val Loss={val_loss:.4f} Acc={val_acc:.2%}" if val_loss is not None else ""))
+
             if callback:
                 callback({
                     'epoch': self._epoch,
@@ -234,7 +284,10 @@ class EqPropTrainer:
         loader: DataLoader,
         loss_fn: Callable,
         is_training: bool,
-        log_interval: int = 0
+        log_interval: int = 0,
+        progress_bar: bool = False,
+        desc: str = "",
+        max_grad_norm: Optional[float] = None,
     ) -> Tuple[float, float]:
         """Unified epoch runner for both training and evaluation."""
         if is_training and not self.use_kernel:
@@ -249,8 +302,12 @@ class EqPropTrainer:
         # Select context manager: no_grad() for PyTorch eval, nullcontext() otherwise
         context = torch.no_grad() if (not is_training and not self.use_kernel) else nullcontext()
 
+        # Wrap loader with tqdm if requested
+        use_tqdm = progress_bar and HAS_TQDM
+        iterator = tqdm(loader, desc=desc, leave=False) if use_tqdm else loader
+
         with context:
-            for batch_idx, (x, y) in enumerate(loader):
+            for batch_idx, (x, y) in enumerate(iterator):
                 try:
                     if self.use_kernel:
                         loss, batch_correct, batch_size = self._process_batch_kernel(x, y, is_training)
@@ -258,7 +315,9 @@ class EqPropTrainer:
                         # Delegate to model's custom training step (e.g. for Algorithms)
                         loss, batch_correct, batch_size = self._process_batch_custom(x, y, is_training)
                     else:
-                        loss, batch_correct, batch_size = self._process_batch_pytorch(x, y, loss_fn, is_training)
+                        loss, batch_correct, batch_size = self._process_batch_pytorch(
+                            x, y, loss_fn, is_training, max_grad_norm
+                        )
 
                     total_loss += loss
                     correct += batch_correct
@@ -266,9 +325,17 @@ class EqPropTrainer:
 
                     if is_training:
                         self._step += 1
-                        if log_interval > 0 and batch_idx % log_interval == 0:
-                            avg_loss = loss / batch_size if batch_size > 0 else 0
-                            print(f'Batch {batch_idx}: Loss = {avg_loss:.4f}')
+
+                    # Update progress bar
+                    if use_tqdm and isinstance(iterator, tqdm):
+                        avg_loss = total_loss / total if total > 0 else 0
+                        avg_acc = correct / total if total > 0 else 0
+                        iterator.set_postfix(loss=f"{avg_loss:.4f}", acc=f"{avg_acc:.2%}")
+
+                    # Log to console if not using progress bar
+                    elif is_training and log_interval > 0 and batch_idx % log_interval == 0:
+                        avg_loss = total_loss / total if total > 0 else 0
+                        print(f'Batch {batch_idx}: Loss = {avg_loss:.4f}')
 
                 except Exception as e:
                     stage = "training" if is_training else "evaluation"
@@ -299,9 +366,14 @@ class EqPropTrainer:
         return loss * batch_size, int(acc * batch_size), batch_size
 
     def _process_batch_pytorch(
-        self, x: torch.Tensor, y: torch.Tensor, loss_fn: Callable, is_training: bool
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        loss_fn: Callable,
+        is_training: bool,
+        max_grad_norm: Optional[float] = None
     ) -> Tuple[float, int, int]:
-        """Process a single batch using PyTorch."""
+        """Process a single batch using PyTorch, optionally with AMP and clipping."""
         x, y = x.to(self.device), y.to(self.device)
 
         # Flatten input if necessary
@@ -310,13 +382,41 @@ class EqPropTrainer:
 
         if is_training:
             self.optimizer.zero_grad()
-            output = self.model(x)
-            loss = loss_fn(output, y)
-            loss.backward()
-            self.optimizer.step()
+
+            # Use AMP if enabled
+            if self.use_amp:
+                device_type = 'cuda' if str(self.device).startswith('cuda') else 'cpu'
+                with torch.amp.autocast(device_type=device_type):
+                    output = self.model(x)
+                    loss = loss_fn(output, y)
+
+                self.scaler.scale(loss).backward()
+
+                if max_grad_norm:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_grad_norm)
+
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                output = self.model(x)
+                loss = loss_fn(output, y)
+                loss.backward()
+
+                if max_grad_norm:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_grad_norm)
+
+                self.optimizer.step()
         else:
-            output = self.model(x)
-            loss = loss_fn(output, y)
+            # Eval mode - no need for scaler
+            if self.use_amp:
+                device_type = 'cuda' if str(self.device).startswith('cuda') else 'cpu'
+                with torch.amp.autocast(device_type=device_type):
+                    output = self.model(x)
+                    loss = loss_fn(output, y)
+            else:
+                output = self.model(x)
+                loss = loss_fn(output, y)
 
         total_loss = loss.item() * x.size(0)
         _, predicted = output.max(1)
@@ -347,6 +447,7 @@ class EqPropTrainer:
         self,
         loader: DataLoader,
         loss_fn: Optional[Callable[..., torch.Tensor]] = None,
+        progress_bar: bool = False
     ) -> Dict[str, float]:
         """
         Evaluate model on a dataset.
@@ -354,16 +455,22 @@ class EqPropTrainer:
         Args:
             loader: Data loader
             loss_fn: Loss function (default: CrossEntropyLoss)
+            progress_bar: Show tqdm progress bar
 
         Returns:
             Dict with 'loss' and 'accuracy'
         """
         loss_fn = loss_fn or nn.CrossEntropyLoss()
-        loss, acc = self._run_epoch(loader, loss_fn, is_training=False)
+        loss, acc = self._run_epoch(loader, loss_fn, is_training=False, progress_bar=progress_bar, desc="Evaluating")
         return {'loss': loss, 'accuracy': acc}
 
     def save_checkpoint(self, path: str) -> None:
         """Save model checkpoint."""
+        # Ensure directory exists
+        directory = os.path.dirname(path)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+
         try:
             checkpoint = {
                 'epoch': self._epoch,
@@ -371,6 +478,7 @@ class EqPropTrainer:
                 'best_metric': self._best_metric,
                 'history': self._history,
                 'use_kernel': self.use_kernel,
+                'use_amp': self.use_amp,
             }
 
             if self.use_kernel:
@@ -386,6 +494,9 @@ class EqPropTrainer:
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict()
                 })
+
+            if self.scaler:
+                checkpoint['scaler_state_dict'] = self.scaler.state_dict()
 
             torch.save(checkpoint, path)
         except Exception as e:
@@ -418,6 +529,9 @@ class EqPropTrainer:
                 model = self.model._orig_mod if hasattr(self.model, '_orig_mod') else self.model
                 model.load_state_dict(checkpoint['model_state_dict'])
                 self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+                if self.scaler and 'scaler_state_dict' in checkpoint:
+                    self.scaler.load_state_dict(checkpoint['scaler_state_dict'])
         except KeyError as e:
             raise ValueError(f"Checkpoint missing required key: {e}")
         except Exception as e:
@@ -438,6 +552,11 @@ class EqPropTrainer:
         if self.use_kernel:
              warnings.warn("ONNX export is not supported in Kernel mode.", UserWarning)
              return
+
+        # Ensure directory exists
+        directory = os.path.dirname(path)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
 
         try:
             model = self.model._orig_mod if hasattr(self.model, '_orig_mod') else self.model
