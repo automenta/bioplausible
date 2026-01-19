@@ -91,5 +91,12 @@ class TestTabs(unittest.TestCase):
         # Check if text was cleared (command processed)
         self.assertEqual(tab.cmd_input.text(), "")
 
+    def test_deploy_tab_init(self):
+        from bioplausible_ui.tabs.deploy_tab import DeployTab
+        tab = DeployTab()
+        self.assertIsNotNone(tab)
+        # Check model ref setter
+        self.assertTrue(hasattr(tab, 'update_model_ref'))
+
 if __name__ == '__main__':
     unittest.main()

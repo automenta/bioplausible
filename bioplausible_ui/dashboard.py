@@ -54,6 +54,7 @@ from bioplausible_ui.tabs.benchmarks_tab import BenchmarksTab
 from bioplausible_ui.tabs.console_tab import ConsoleTab
 from bioplausible_ui.tabs.p2p_tab import P2PTab
 from bioplausible_ui.tabs.discovery_tab import DiscoveryTab
+from bioplausible_ui.tabs.deploy_tab import DeployTab
 
 
 class QtLogHandler(logging.Handler, QObject):
@@ -273,7 +274,8 @@ class EqPropDashboard(QMainWindow):
             ("🗺️ Discovery", 5),
             ("🌐 Community Grid", 6),
             ("🏆 Benchmarks", 7),
-            ("💻 Console", 8)
+            ("🚀 Deploy", 8),
+            ("💻 Console", 9)
         ]
 
         for name, idx in items:
@@ -359,7 +361,11 @@ class EqPropDashboard(QMainWindow):
         self.bench_tab.load_model_signal.connect(self._apply_config)
         self.content_stack.addWidget(self.bench_tab)
 
-        # Page 8: Console
+        # Page 8: Deploy
+        self.deploy_tab = DeployTab()
+        self.content_stack.addWidget(self.deploy_tab)
+
+        # Page 9: Console
         self.console_tab = ConsoleTab()
         self.content_stack.addWidget(self.console_tab)
 
@@ -689,6 +695,7 @@ class EqPropDashboard(QMainWindow):
                     self.lm_tab.update_model_ref(self.model)
                     self.vis_tab.update_model_ref(self.model)
                     self.micro_tab.update_model_ref(self.model)
+                    self.deploy_tab.update_model_ref(self.model)
 
             except Exception as e:
                 QMessageBox.critical(self, "Load Error", f"Failed to load: {str(e)}")
@@ -937,6 +944,7 @@ class EqPropDashboard(QMainWindow):
 
         # Keep reference for inference
         self.vis_tab.update_model_ref(self.model)
+        self.deploy_tab.update_model_ref(self.model)
 
         # Clear history
         self.loss_history.clear()
@@ -1002,6 +1010,7 @@ class EqPropDashboard(QMainWindow):
 
         # Keep reference for generation
         self.lm_tab.update_model_ref(self.model)
+        self.deploy_tab.update_model_ref(self.model)
 
         # Clear history
         self.loss_history.clear()
@@ -1099,6 +1108,7 @@ class EqPropDashboard(QMainWindow):
 
         # Keep reference for playback
         self.rl_tab.update_model_ref(model)
+        self.deploy_tab.update_model_ref(model)
 
         self.worker = RLWorker(model, env_name, episodes=episodes, lr=lr, gamma=gamma, device=device)
         self.worker.progress.connect(self._on_rl_progress)
