@@ -108,6 +108,21 @@ class MicroscopeTab(QWidget):
                 "Mean Activity", "Activity", xlabel="Step"
             )
             metrics_layout.addWidget(self.micro_act_plot)
+
+            # Heatmap for Layer Activity
+            # Use PlotItem to get axes labels
+            plot_item = pg.PlotItem()
+            plot_item.setLabel('left', 'Neuron / Layer')
+            plot_item.setLabel('bottom', 'Time Step')
+
+            self.micro_heat_view = pg.ImageView(view=plot_item)
+            self.micro_heat_view.ui.histogram.hide()
+            self.micro_heat_view.ui.roiBtn.hide()
+            self.micro_heat_view.ui.menuBtn.hide()
+
+            metrics_layout.addWidget(QLabel("Layer Activity Heatmap:"))
+            metrics_layout.addWidget(self.micro_heat_view)
+
             right_panel.addWidget(metrics_group)
 
         self.status_label = QLabel("")
@@ -193,6 +208,26 @@ class MicroscopeTab(QWidget):
 
             if traj:
                 activities = [h.abs().mean().item() for h in traj]
+
+                # Prepare heatmap data (Time x Neurons)
+                # We visualize the first 100 neurons/channels to keep it fast
+                heat_data = []
+                for t_step in traj:
+                    flat = t_step.view(-1).cpu().numpy()
+                    if len(flat) > 100:
+                        flat = flat[:100]
+                    heat_data.append(flat)
+
+                if heat_data:
+                    heat_arr = np.array(heat_data)
+                    # Normalize for display
+                    heat_arr = (heat_arr - heat_arr.min()) / (heat_arr.max() - heat_arr.min() + 1e-6)
+                    self.micro_heat_view.setImage(heat_arr.T) # Transpose so X is time? No, usually X is features.
+                    # setImage expects (X, Y) or (X, Y, T).
+                    # We want Time on Y usually or X.
+                    # Let's put Time on X axis for consistency with other plots
+                    self.micro_heat_view.setImage(heat_arr)
+
             else:
                 activities = [0.0] * len(deltas)
 

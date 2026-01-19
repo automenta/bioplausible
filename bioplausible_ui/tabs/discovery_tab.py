@@ -161,6 +161,8 @@ class DiscoveryTab(QWidget):
     Visualization Dashboard for NAS and P2P.
     """
 
+    load_model_signal = pyqtSignal(dict)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.p2p_node_ref = None # Holds DHTNode
@@ -378,11 +380,29 @@ class DiscoveryTab(QWidget):
         """Show context menu for a point."""
         menu = QMenu(self)
 
+        trial = point.data()
+
         fork_action = QAction("🧬 Fork & Edit Genome", self)
-        fork_action.triggered.connect(lambda: self._open_genome_editor(point.data()))
+        fork_action.triggered.connect(lambda: self._open_genome_editor(trial))
         menu.addAction(fork_action)
 
+        train_action = QAction("🏋️ Train Locally", self)
+        train_action.triggered.connect(lambda: self._train_locally(trial))
+        menu.addAction(train_action)
+
         menu.exec(screen_pos.toPoint())
+
+    def _train_locally(self, trial):
+        """Emit signal to load this config into the main trainer."""
+        config = trial.config
+
+        # Ensure we have enough info in config
+        # Sometimes hyperopt configs are minimal, check if we need to infer
+        if 'model_name' not in config:
+            config['model_name'] = trial.model_name
+
+        self.load_model_signal.emit(config)
+        QMessageBox.information(self, "Model Loaded", f"Loaded configuration for trial {trial.trial_id}.\nSwitching to training tab...")
 
     def _open_genome_editor(self, trial):
         """Open the editor for the selected trial."""

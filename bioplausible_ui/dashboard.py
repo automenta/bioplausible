@@ -54,6 +54,7 @@ from bioplausible_ui.tabs.benchmarks_tab import BenchmarksTab
 from bioplausible_ui.tabs.console_tab import ConsoleTab
 from bioplausible_ui.tabs.p2p_tab import P2PTab
 from bioplausible_ui.tabs.discovery_tab import DiscoveryTab
+from bioplausible_ui.tabs.deploy_tab import DeployTab
 
 
 class QtLogHandler(logging.Handler, QObject):
@@ -273,7 +274,8 @@ class EqPropDashboard(QMainWindow):
             ("🗺️ Discovery", 5),
             ("🌐 Community Grid", 6),
             ("🏆 Benchmarks", 7),
-            ("💻 Console", 8)
+            ("🚀 Deploy", 8),
+            ("💻 Console", 9)
         ]
 
         for name, idx in items:
@@ -344,6 +346,7 @@ class EqPropDashboard(QMainWindow):
 
         # Page 5: Discovery (Viz)
         self.disc_tab = DiscoveryTab()
+        self.disc_tab.load_model_signal.connect(self._apply_config)
         self.content_stack.addWidget(self.disc_tab)
 
         # Page 6: Community Grid (P2P)
@@ -355,9 +358,14 @@ class EqPropDashboard(QMainWindow):
         # Page 7: Benchmarks
         self.bench_tab = BenchmarksTab()
         self.bench_tab.log_message.connect(self._append_log)
+        self.bench_tab.load_model_signal.connect(self._apply_config)
         self.content_stack.addWidget(self.bench_tab)
 
-        # Page 8: Console
+        # Page 8: Deploy
+        self.deploy_tab = DeployTab()
+        self.content_stack.addWidget(self.deploy_tab)
+
+        # Page 9: Console
         self.console_tab = ConsoleTab()
         self.content_stack.addWidget(self.console_tab)
 
@@ -411,6 +419,13 @@ class EqPropDashboard(QMainWindow):
         load_config_action = QAction("Load Configuration...", self)
         load_config_action.triggered.connect(self._load_config_only)
         file_menu.addAction(load_config_action)
+
+        file_menu.addSeparator()
+
+        export_logs_action = QAction("Export Training Log...", self)
+        export_logs_action.setToolTip("Export loss and accuracy history to CSV")
+        export_logs_action.triggered.connect(self._export_logs)
+        file_menu.addAction(export_logs_action)
 
         file_menu.addSeparator()
 
@@ -573,6 +588,27 @@ class EqPropDashboard(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Load Error", str(e))
 
+    def _export_logs(self):
+        """Export training history to a CSV file."""
+        if not self.loss_history:
+             QMessageBox.warning(self, "No Data", "No training history to export.")
+             return
+
+        fname, _ = QFileDialog.getSaveFileName(self, "Export Training Logs", "", "CSV Files (*.csv)")
+        if fname:
+            try:
+                import csv
+                with open(fname, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['Epoch', 'Loss', 'Accuracy', 'Lipschitz'])
+                    for i in range(len(self.loss_history)):
+                        acc = self.acc_history[i] if i < len(self.acc_history) else 0.0
+                        lip = self.lipschitz_history[i] if i < len(self.lipschitz_history) else 0.0
+                        writer.writerow([i + 1, self.loss_history[i], acc, lip])
+                self.status_label.setText(f"Logs exported to {fname}")
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", str(e))
+
     def _save_model(self):
         """Save the current model to a file, including current UI configuration."""
         if not self.model:
@@ -657,7 +693,9 @@ class EqPropDashboard(QMainWindow):
                 # 4. Update Tab References
                 if self.model:
                     self.lm_tab.update_model_ref(self.model)
+                    self.vis_tab.update_model_ref(self.model)
                     self.micro_tab.update_model_ref(self.model)
+                    self.deploy_tab.update_model_ref(self.model)
 
             except Exception as e:
                 QMessageBox.critical(self, "Load Error", f"Failed to load: {str(e)}")
@@ -904,6 +942,10 @@ class EqPropDashboard(QMainWindow):
         self.model = model
         self.train_loader = train_loader
 
+        # Keep reference for inference
+        self.vis_tab.update_model_ref(self.model)
+        self.deploy_tab.update_model_ref(self.model)
+
         # Clear history
         self.loss_history.clear()
         self.acc_history.clear()
@@ -941,6 +983,8 @@ class EqPropDashboard(QMainWindow):
         # Update UI
         self.vis_tab.vis_train_btn.setEnabled(False)
         self.vis_tab.vis_stop_btn.setEnabled(True)
+        self.vis_tab.vis_pause_btn.setEnabled(True)
+        self.vis_tab.vis_pause_btn.clicked.connect(self._toggle_pause)
         self.vis_tab.vis_progress.setMaximum(self.vis_tab.vis_epochs_spin.value())
         self.vis_tab.vis_progress.setValue(0)
 
@@ -966,6 +1010,7 @@ class EqPropDashboard(QMainWindow):
 
         # Keep reference for generation
         self.lm_tab.update_model_ref(self.model)
+        self.deploy_tab.update_model_ref(self.model)
 
         # Clear history
         self.loss_history.clear()
@@ -1003,6 +1048,8 @@ class EqPropDashboard(QMainWindow):
         # Update UI
         self.lm_tab.lm_train_btn.setEnabled(False)
         self.lm_tab.lm_stop_btn.setEnabled(True)
+        self.lm_tab.lm_pause_btn.setEnabled(True)
+        self.lm_tab.lm_pause_btn.clicked.connect(self._toggle_pause)
         self.lm_tab.lm_progress.setMaximum(self.lm_tab.lm_epochs_spin.value())
         self.lm_tab.lm_progress.setValue(0)
 
@@ -1059,6 +1106,10 @@ class EqPropDashboard(QMainWindow):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         gamma = self.rl_tab.rl_gamma_spin.value()
 
+        # Keep reference for playback
+        self.rl_tab.update_model_ref(model)
+        self.deploy_tab.update_model_ref(model)
+
         self.worker = RLWorker(model, env_name, episodes=episodes, lr=lr, gamma=gamma, device=device)
         self.worker.progress.connect(self._on_rl_progress)
         self.worker.finished.connect(self._on_finished)
@@ -1112,6 +1163,21 @@ class EqPropDashboard(QMainWindow):
             self.worker.stop()
             self.status_label.setText("Stopping training...")
             self.status_label.setStyleSheet("color: #ffaa00; padding: 5px; font-weight: bold;")
+
+    def _toggle_pause(self):
+        """Pause/Resume training."""
+        if not self.worker: return
+
+        is_paused = self.vis_tab.vis_pause_btn.isChecked() or self.lm_tab.lm_pause_btn.isChecked()
+
+        if is_paused:
+            self.worker.pause()
+            self.status_label.setText("Training paused.")
+            self.status_label.setStyleSheet("color: #f1c40f; padding: 5px; font-weight: bold;")
+        else:
+            self.worker.resume()
+            self.status_label.setText("Training resumed.")
+            self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
 
     def _on_dynamics_update(self, dynamics: dict):
         """Handle live dynamics update from worker."""
@@ -1198,16 +1264,26 @@ class EqPropDashboard(QMainWindow):
             self.rl_tab.rl_avg_reward_curve.setData(episodes, self.rl_avg_reward_history)
             self.rl_tab.rl_loss_curve.setData(episodes, self.rl_loss_history)
 
-    def _on_finished(self, result: dict):
-        """Handle training completion."""
-        self.plot_timer.stop()
+    def _reset_training_ui(self):
+        """Reset UI state after training stops."""
         self.vis_tab.vis_train_btn.setEnabled(True)
         self.vis_tab.vis_stop_btn.setEnabled(False)
+        self.vis_tab.vis_pause_btn.setEnabled(False)
+        self.vis_tab.vis_pause_btn.setChecked(False)
+
         self.lm_tab.lm_train_btn.setEnabled(True)
         self.lm_tab.lm_stop_btn.setEnabled(False)
+        self.lm_tab.lm_pause_btn.setEnabled(False)
+        self.lm_tab.lm_pause_btn.setChecked(False)
+
         if hasattr(self.rl_tab, 'rl_train_btn'):
             self.rl_tab.rl_train_btn.setEnabled(True)
             self.rl_tab.rl_stop_btn.setEnabled(False)
+
+    def _on_finished(self, result: dict):
+        """Handle training completion."""
+        self.plot_timer.stop()
+        self._reset_training_ui()
 
         if result.get('success'):
             self.status_label.setText(f"✓ Training complete! ({result['epochs_completed']} epochs)")
@@ -1219,13 +1295,7 @@ class EqPropDashboard(QMainWindow):
     def _on_error(self, error: str):
         """Handle training error."""
         self.plot_timer.stop()
-        self.vis_tab.vis_train_btn.setEnabled(True)
-        self.vis_tab.vis_stop_btn.setEnabled(False)
-        self.lm_tab.lm_train_btn.setEnabled(True)
-        self.lm_tab.lm_stop_btn.setEnabled(False)
-        if hasattr(self.rl_tab, 'rl_train_btn'):
-            self.rl_tab.rl_train_btn.setEnabled(True)
-            self.rl_tab.rl_stop_btn.setEnabled(False)
+        self._reset_training_ui()
 
         self.status_label.setText("Training error!")
         self.status_label.setStyleSheet("color: #ff5588; padding: 5px; font-weight: bold;")
