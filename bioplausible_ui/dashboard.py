@@ -414,6 +414,13 @@ class EqPropDashboard(QMainWindow):
 
         file_menu.addSeparator()
 
+        export_logs_action = QAction("Export Training Log...", self)
+        export_logs_action.setToolTip("Export loss and accuracy history to CSV")
+        export_logs_action.triggered.connect(self._export_logs)
+        file_menu.addAction(export_logs_action)
+
+        file_menu.addSeparator()
+
         exit_action = QAction("Exit", self)
         exit_action.setShortcut("Ctrl+W")
         exit_action.triggered.connect(self.close)
@@ -573,6 +580,27 @@ class EqPropDashboard(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Load Error", str(e))
 
+    def _export_logs(self):
+        """Export training history to a CSV file."""
+        if not self.loss_history:
+             QMessageBox.warning(self, "No Data", "No training history to export.")
+             return
+
+        fname, _ = QFileDialog.getSaveFileName(self, "Export Training Logs", "", "CSV Files (*.csv)")
+        if fname:
+            try:
+                import csv
+                with open(fname, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['Epoch', 'Loss', 'Accuracy', 'Lipschitz'])
+                    for i in range(len(self.loss_history)):
+                        acc = self.acc_history[i] if i < len(self.acc_history) else 0.0
+                        lip = self.lipschitz_history[i] if i < len(self.lipschitz_history) else 0.0
+                        writer.writerow([i + 1, self.loss_history[i], acc, lip])
+                self.status_label.setText(f"Logs exported to {fname}")
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", str(e))
+
     def _save_model(self):
         """Save the current model to a file, including current UI configuration."""
         if not self.model:
@@ -657,6 +685,7 @@ class EqPropDashboard(QMainWindow):
                 # 4. Update Tab References
                 if self.model:
                     self.lm_tab.update_model_ref(self.model)
+                    self.vis_tab.update_model_ref(self.model)
                     self.micro_tab.update_model_ref(self.model)
 
             except Exception as e:
@@ -903,6 +932,9 @@ class EqPropDashboard(QMainWindow):
 
         self.model = model
         self.train_loader = train_loader
+
+        # Keep reference for inference
+        self.vis_tab.update_model_ref(self.model)
 
         # Clear history
         self.loss_history.clear()

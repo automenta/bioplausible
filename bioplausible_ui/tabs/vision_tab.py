@@ -1,9 +1,14 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QSpinBox, QDoubleSpinBox,
-    QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel, QToolBox, QFrame
+    QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel, QToolBox, QFrame,
+    QDialog, QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QPixmap, QImage, QFont, QColor
+
+import torch
+import numpy as np
 
 from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
@@ -15,6 +20,110 @@ try:
 except ImportError:
     HAS_PYQTGRAPH = False
 
+class VisionInferenceDialog(QDialog):
+    """Dialog to show inference results."""
+    def __init__(self, image_tensor, prediction, ground_truth, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Inference Result")
+        self.setFixedSize(400, 500)
+
+        layout = QVBoxLayout(self)
+
+        # Display Image
+        # Convert tensor (C, H, W) or (H, W) to pixmap
+        img = image_tensor.cpu().numpy()
+        if img.ndim == 3 and img.shape[0] in [1, 3]: # CHW -> HWC
+            img = np.transpose(img, (1, 2, 0))
+        if img.ndim == 3 and img.shape[2] == 1: # Grayscale HWC
+            img = img.squeeze(2)
+
+        # Normalize to 0-255
+        img = (img - img.min()) / (img.max() - img.min() + 1e-6)
+        img = (img * 255).astype(np.uint8)
+
+        h, w = img.shape[:2]
+        if img.ndim == 2: # Grayscale
+            qimg = QImage(img.data, w, h, w, QImage.Format.Format_Grayscale8)
+        else: # RGB
+            qimg = QImage(img.data, w, h, 3*w, QImage.Format.Format_RGB888)
+
+        pixmap = QPixmap.fromImage(qimg).scaled(256, 256, Qt.AspectRatioMode.KeepAspectRatio)
+
+        img_label = QLabel()
+        img_label.setPixmap(pixmap)
+        img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(img_label)
+
+        # Display Result
+        res_label = QLabel(f"Prediction: {prediction}\nGround Truth: {ground_truth}")
+        res_label.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        res_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        if prediction == ground_truth:
+            res_label.setStyleSheet("color: #00ff88; margin-top: 20px;")
+        else:
+             res_label.setStyleSheet("color: #ff5555; margin-top: 20px;")
+
+        layout.addWidget(res_label)
+
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.accept)
+        layout.addWidget(btn)
+
+class RobustnessDialog(QDialog):
+    """Dialog to show robustness check results."""
+    def __init__(self, results, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Robustness Analysis")
+        self.resize(500, 400)
+
+        layout = QVBoxLayout(self)
+
+        label = QLabel("Noise Tolerance Analysis (Gaussian Noise)")
+        label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        layout.addWidget(label)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(["Noise Level (σ)", "Accuracy"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setRowCount(len(results))
+
+        for i, (noise, acc) in enumerate(results):
+            self.table.setItem(i, 0, QTableWidgetItem(f"{noise:.1f}"))
+
+            acc_item = QTableWidgetItem(f"{acc:.1%}")
+            if acc > 0.8:
+                acc_item.setForeground(QColor("#00ff88"))
+            elif acc > 0.5:
+                acc_item.setForeground(QColor("#f1c40f"))
+            else:
+                acc_item.setForeground(QColor("#ff5555"))
+
+            self.table.setItem(i, 1, acc_item)
+
+        layout.addWidget(self.table)
+
+        # Summary
+        drops = [results[0][1] - r[1] for r in results[1:]]
+        avg_drop = sum(drops) / len(drops) if drops else 0.0
+
+        summary = "Robustness Score: "
+        if avg_drop < 0.1:
+            summary += "<span style='color: #00ff88'>Excellent</span>"
+        elif avg_drop < 0.3:
+            summary += "<span style='color: #f1c40f'>Good</span>"
+        else:
+            summary += "<span style='color: #ff5555'>Poor</span>"
+
+        sum_label = QLabel(summary)
+        sum_label.setFont(QFont("Segoe UI", 14))
+        layout.addWidget(sum_label)
+
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.accept)
+        layout.addWidget(btn)
+
 class VisionTab(QWidget):
     """Vision Training Tab."""
 
@@ -24,6 +133,7 @@ class VisionTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.model_ref = None
         self._setup_ui()
 
     def _create_control_group(self, title, controls):
@@ -215,6 +325,18 @@ class VisionTab(QWidget):
         self.vis_reset_btn.clicked.connect(self._reset_defaults)
         btn_layout.addWidget(self.vis_reset_btn)
 
+        self.vis_test_btn = QPushButton("👁️ Test")
+        self.vis_test_btn.setObjectName("resetButton")
+        self.vis_test_btn.setToolTip("Test model on random sample")
+        self.vis_test_btn.clicked.connect(self._test_random_sample)
+        btn_layout.addWidget(self.vis_test_btn)
+
+        self.vis_robust_btn = QPushButton("🛡️ Robustness")
+        self.vis_robust_btn.setObjectName("resetButton")
+        self.vis_robust_btn.setToolTip("Run robustness analysis against noise")
+        self.vis_robust_btn.clicked.connect(self._run_robustness_check)
+        btn_layout.addWidget(self.vis_robust_btn)
+
         self.vis_clear_btn = QPushButton("🗑️ Clear")
         self.vis_clear_btn.setObjectName("resetButton") # Re-use styling
         self.vis_clear_btn.setToolTip("Clear plot history")
@@ -340,6 +462,146 @@ class VisionTab(QWidget):
 
     def get_current_hyperparams(self):
         return get_current_hyperparams_generic(self.vis_hyperparam_widgets)
+
+    def update_model_ref(self, model):
+        """Store reference to the trained model."""
+        self.model_ref = model
+
+    def _test_random_sample(self):
+        """Run inference on a random sample."""
+        if self.model_ref is None:
+            QMessageBox.warning(self, "No Model", "No trained model available. Train or load a model first.")
+            return
+
+        try:
+            from bioplausible.datasets import get_vision_dataset
+
+            # Identify dataset
+            ds_name = self.vis_dataset_combo.currentText().lower().replace('-', '_')
+
+            # Determine if we need flattened input
+            # Check model spec if possible
+            # Simplified check:
+            use_flatten = True
+            try:
+                # Assuming model_ref has 'model_type' or we infer from its structure
+                # But safer to check the combobox as in dashboard.py
+                model_name = self.vis_model_combo.currentText()
+                spec = get_model_spec(model_name)
+                use_flatten = spec.model_type != "modern_conv_eqprop"
+            except:
+                pass
+
+            # Get test dataset
+            # Note: We get the raw dataset to extract a sample easily
+            dataset = get_vision_dataset(ds_name, train=False, flatten=use_flatten)
+
+            idx = np.random.randint(0, len(dataset))
+            x, y = dataset[idx]
+
+            # Prepare input
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x)
+
+            x_input = x.unsqueeze(0).to(next(self.model_ref.parameters()).device)
+
+            # Inference
+            self.model_ref.eval()
+            with torch.no_grad():
+                # Some models take 'steps' arg, others don't.
+                # EqProp models usually have it in forward or use default
+                try:
+                    out = self.model_ref(x_input)
+                except TypeError:
+                    # Try with steps if required, though default should handle it
+                    out = self.model_ref(x_input, steps=20)
+
+                pred = out.argmax(dim=1).item()
+
+            # Show Dialog
+            # We want to show the ORIGINAL image structure (28,28) or (3,32,32) not flattened
+            if use_flatten:
+                if 'mnist' in ds_name:
+                    x_disp = x.view(28, 28)
+                else:
+                    x_disp = x.view(3, 32, 32)
+            else:
+                x_disp = x
+
+            dlg = VisionInferenceDialog(x_disp, pred, y, self)
+            dlg.exec()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Inference Failed", str(e))
+            import traceback
+            traceback.print_exc()
+
+    def _run_robustness_check(self):
+        """Run robustness analysis on the model."""
+        if self.model_ref is None:
+            QMessageBox.warning(self, "No Model", "No trained model available.")
+            return
+
+        try:
+            from bioplausible.datasets import get_vision_dataset
+            from torch.utils.data import DataLoader
+
+            # Setup
+            ds_name = self.vis_dataset_combo.currentText().lower().replace('-', '_')
+            use_flatten = True
+            try:
+                model_name = self.vis_model_combo.currentText()
+                spec = get_model_spec(model_name)
+                use_flatten = spec.model_type != "modern_conv_eqprop"
+            except:
+                pass
+
+            # Use small subset for speed
+            dataset = get_vision_dataset(ds_name, train=False, flatten=use_flatten)
+            subset_indices = np.random.choice(len(dataset), 200, replace=False)
+            subset = torch.utils.data.Subset(dataset, subset_indices)
+            loader = DataLoader(subset, batch_size=50, shuffle=False)
+
+            device = next(self.model_ref.parameters()).device
+            self.model_ref.eval()
+
+            noise_levels = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+            results = []
+
+            # Progress dialog could be nice, but we'll be quick hopefully
+
+            with torch.no_grad():
+                for noise_sigma in noise_levels:
+                    correct = 0
+                    total = 0
+                    for x, y in loader:
+                        x = x.to(device)
+                        y = y.to(device)
+
+                        # Add noise
+                        if noise_sigma > 0:
+                            x = x + torch.randn_like(x) * noise_sigma
+
+                        try:
+                            out = self.model_ref(x)
+                        except TypeError:
+                            out = self.model_ref(x, steps=20)
+
+                        pred = out.argmax(dim=1)
+                        correct += (pred == y).sum().item()
+                        total += y.size(0)
+
+                    acc = correct / total
+                    results.append((noise_sigma, acc))
+
+            from PyQt6.QtGui import QColor # Ensure QColor is available if not imported
+            dlg = RobustnessDialog(results, self)
+            dlg.exec()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Analysis Failed", str(e))
+            import traceback
+            traceback.print_exc()
 
     def update_theme(self, theme_colors, plot_colors):
         """Update plot colors based on theme."""
