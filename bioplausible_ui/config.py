@@ -1,5 +1,5 @@
 """
-Central configuration for Bio-Plausible Trainer.
+Central configuration for Bioplausible Trainer.
 """
 
 from dataclasses import dataclass

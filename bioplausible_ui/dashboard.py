@@ -1,5 +1,5 @@
 """
-Bio-Plausible Trainer Dashboard
+Bioplausible Trainer Dashboard
 
 Main window with tabbed interface for Language Modeling and Vision training.
 Features stunning dark cyberpunk theme with live pyqtgraph plots.
@@ -73,12 +73,12 @@ class AboutDialog(QDialog):
     """About dialog for the application."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("About Bio-Plausible Trainer")
+        self.setWindowTitle("About Bioplausible Trainer")
         self.setFixedSize(500, 300)
 
         layout = QVBoxLayout(self)
 
-        title = QLabel("⚡ Bio-Plausible Trainer v0.1.0")
+        title = QLabel("⚡ Bioplausible Trainer v0.1.0")
         title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
@@ -103,13 +103,13 @@ class AboutDialog(QDialog):
 
 
 class EqPropDashboard(QMainWindow):
-    """Main dashboard window for Bio-Plausible training."""
+    """Main dashboard window for Bioplausible training."""
 
     def __init__(self, initial_config: Optional[Dict] = None):
         super().__init__()
         self.initial_config = initial_config
 
-        self.setWindowTitle("⚡ Bio-Plausible Trainer v0.1.0")
+        self.setWindowTitle("⚡ Bioplausible Trainer v0.1.0")
         self.setGeometry(100, 100, 1400, 900)
 
         # Theme state
@@ -233,7 +233,7 @@ class EqPropDashboard(QMainWindow):
         sidebar_layout.setSpacing(10)
 
         # Header
-        header = QLabel("⚡ Bio-Plausible\nTrainer")
+        header = QLabel("⚡ Bioplausible\nTrainer")
         header.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header.setStyleSheet("color: #00d4ff; margin-bottom: 20px;")

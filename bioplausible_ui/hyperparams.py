@@ -1,5 +1,5 @@
 """
-Hyperparameter Schemas for Bio-Plausible Trainer
+Hyperparameter Schemas for Bioplausible Trainer
 
 Defines model-specific hyperparameters that appear dynamically in the UI.
 """

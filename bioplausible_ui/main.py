@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bio-Plausible Trainer: Entry point for the dashboard application.
+Bioplausible Trainer: Entry point for the dashboard application.
 
 Usage:
     python -m bioplausible_ui
@@ -12,12 +12,12 @@ import sys
 
 
 def main():
-    """Launch the Bio-Plausible Trainer dashboard."""
+    """Launch the Bioplausible Trainer dashboard."""
     # Entry point for the main dashboard application
     import argparse
     import json
 
-    parser = argparse.ArgumentParser(description="Bio-Plausible Trainer Dashboard")
+    parser = argparse.ArgumentParser(description="Bioplausible Trainer Dashboard")
     parser.add_argument('--config', type=str, help='JSON configuration string to initialize the dashboard')
     args = parser.parse_args()
 
@@ -44,7 +44,7 @@ def main():
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Bio-Plausible Trainer")
+    app.setApplicationName("Bioplausible Trainer")
     app.setApplicationVersion("0.1.0")
 
     # Import and create dashboard

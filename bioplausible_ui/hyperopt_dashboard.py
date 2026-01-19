@@ -810,7 +810,7 @@ class HyperoptSearchDashboard(QMainWindow):
             return
 
         menu = QMenu()
-        spawn_action = QAction("🚀 Spawn Bio-Plausible Trainer with this config", self)
+        spawn_action = QAction("🚀 Spawn Bioplausible Trainer with this config", self)
         spawn_action.triggered.connect(lambda: self.launch_trainer_for_selected_trial())
         menu.addAction(spawn_action)
         menu.exec(self.experiment_table.viewport().mapToGlobal(position))

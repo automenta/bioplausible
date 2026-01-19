@@ -1,5 +1,5 @@
 """
-Themes for Bio-Plausible Trainer
+Themes for Bioplausible Trainer
 
 Includes Dark Cyberpunk and Professional Light themes.
 """

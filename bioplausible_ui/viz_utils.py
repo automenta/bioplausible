@@ -1,5 +1,5 @@
 """
-Visualization Utilities for Bio-Plausible Trainer
+Visualization Utilities for Bioplausible Trainer
 
 Weight matrix visualization and display helpers.
 """
