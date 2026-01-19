@@ -1,5 +1,5 @@
 """
-Universal Text Generation for EqProp Trainer
+Universal Text Generation for Bio-Plausible Trainer
 
 Enables text generation for ANY model, including Vision models without native
 generate() methods. Uses autoregressive next-token prediction.

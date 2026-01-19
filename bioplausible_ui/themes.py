@@ -1,5 +1,5 @@
 """
-Themes for EqProp Trainer
+Themes for Bio-Plausible Trainer
 
 Includes Dark Cyberpunk and Professional Light themes.
 """

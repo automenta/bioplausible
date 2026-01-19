@@ -1,5 +1,5 @@
 """
-Training Worker Thread for EqProp Trainer
+Training Worker Thread for Bio-Plausible Trainer
 
 Runs training in background thread with rich, real-time progress updates.
 """

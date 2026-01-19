@@ -1,5 +1,5 @@
 """
-Visualization Utilities for EqProp Trainer
+Visualization Utilities for Bio-Plausible Trainer
 
 Weight matrix visualization and display helpers.
 """

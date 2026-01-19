@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-EqProp-Trainer: Entry point for the dashboard application.
+Bio-Plausible Trainer: Entry point for the dashboard application.
 
 Usage:
     python -m bioplausible_ui
@@ -12,12 +12,12 @@ import sys
 
 
 def main():
-    """Launch the EqProp Trainer dashboard."""
+    """Launch the Bio-Plausible Trainer dashboard."""
     # Entry point for the main dashboard application
     import argparse
     import json
 
-    parser = argparse.ArgumentParser(description="EqProp Trainer Dashboard")
+    parser = argparse.ArgumentParser(description="Bio-Plausible Trainer Dashboard")
     parser.add_argument('--config', type=str, help='JSON configuration string to initialize the dashboard')
     args = parser.parse_args()
 
@@ -44,7 +44,7 @@ def main():
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
 
     app = QApplication(sys.argv)
-    app.setApplicationName("EqProp Trainer")
+    app.setApplicationName("Bio-Plausible Trainer")
     app.setApplicationVersion("0.1.0")
 
     # Import and create dashboard

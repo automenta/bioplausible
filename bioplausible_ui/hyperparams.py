@@ -1,5 +1,5 @@
 """
-Hyperparameter Schemas for EqProp Trainer
+Hyperparameter Schemas for Bio-Plausible Trainer
 
 Defines model-specific hyperparameters that appear dynamically in the UI.
 """

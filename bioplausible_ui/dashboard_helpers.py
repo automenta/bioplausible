@@ -1,5 +1,5 @@
 """
-EqProp Trainer Dashboard - Helper methods extension
+Bio-Plausible Trainer Dashboard - Helper methods extension
 
 Additional methods for hyperparameters, visualization, and generation.
 This file extends the dashboard with new functionality.
