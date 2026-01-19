@@ -39,8 +39,11 @@ eqprop-verify --quick
 # Launch Dashboard
 eqprop-dashboard
 
-# Launch Model Search
+# Launch Model Search (Local)
 eqprop-hyperopt --task mnist
+
+# Join Decentralized Research Grid
+eqprop-p2p-worker --task cifar10 --mode quick
 
 # Run specific tracks
 eqprop-verify --track 1 2 3
@@ -73,6 +76,25 @@ Run the verification suite in a container:
 docker build -t bioplausible .
 docker run bioplausible
 ```
+
+---
+
+## Decentralized Architecture Search (P2P)
+
+Bio-Plausible includes a fully decentralized Neural Architecture Search (NAS) system.
+It allows researchers to pool compute resources to discover optimal equilibrium propagation architectures.
+
+### Modes
+1. **Centralized (Coordinator)**: Traditional client-server model.
+   - Start Coordinator: `eqprop-coordinator --port 8000`
+   - Start Worker: `eqprop-worker --join http://coordinator-ip:8000`
+
+2. **Decentralized (DHT Mesh)**: Server-less peer-to-peer discovery.
+   - Start Worker: `eqprop-p2p-worker --task cifar10`
+   - The worker automatically joins the DHT, syncs the global best model, and begins evolutionary search (mutation/crossover).
+
+### Dashboard Integration
+The `eqprop-dashboard` includes a "Community Grid" tab to monitor the network, visualize the architecture search space, and view live contributions.
 
 ---
 

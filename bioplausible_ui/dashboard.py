@@ -1,5 +1,5 @@
 """
-EqProp Trainer Dashboard
+Bioplausible Trainer Dashboard
 
 Main window with tabbed interface for Language Modeling and Vision training.
 Features stunning dark cyberpunk theme with live pyqtgraph plots.
@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QComboBox, QSpinBox, QDoubleSpinBox,
     QGroupBox, QTabWidget, QTextEdit, QProgressBar, QSlider,
     QSplitter, QFrame, QCheckBox, QMessageBox, QApplication, QFileDialog,
-    QMenuBar, QMenu, QDialog, QFormLayout
+    QMenuBar, QMenu, QDialog, QFormLayout, QListWidget, QListWidgetItem, QStackedWidget
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QKeySequence, QShortcut, QAction
@@ -73,12 +73,12 @@ class AboutDialog(QDialog):
     """About dialog for the application."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("About EqProp Trainer")
+        self.setWindowTitle("About Bioplausible Trainer")
         self.setFixedSize(500, 300)
 
         layout = QVBoxLayout(self)
 
-        title = QLabel("⚡ EqProp Trainer v0.1.0")
+        title = QLabel("⚡ Bioplausible Trainer v0.1.0")
         title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
@@ -103,13 +103,13 @@ class AboutDialog(QDialog):
 
 
 class EqPropDashboard(QMainWindow):
-    """Main dashboard window for EqProp training."""
+    """Main dashboard window for Bioplausible training."""
 
     def __init__(self, initial_config: Optional[Dict] = None):
         super().__init__()
         self.initial_config = initial_config
 
-        self.setWindowTitle("⚡ EqProp Trainer v0.1.0")
+        self.setWindowTitle("⚡ Bioplausible Trainer v0.1.0")
         self.setGeometry(100, 100, 1400, 900)
 
         # Theme state
@@ -157,14 +157,16 @@ class EqPropDashboard(QMainWindow):
             is_vision = any(x in model_name for x in ['MLP', 'Conv', 'Vision']) or 'mnist' in str(self.initial_config).lower() or 'cifar' in str(self.initial_config).lower()
 
             if is_vision:
-                self.tabs.setCurrentIndex(1)
+                self.content_stack.setCurrentIndex(1)
+                self.nav_list.setCurrentRow(1)
                 combo = self.vis_tab.vis_model_combo
                 hidden_spin = self.vis_tab.vis_hidden_spin
                 steps_spin = self.vis_tab.vis_steps_spin
                 lr_spin = self.vis_tab.vis_lr_spin
                 epochs_spin = self.vis_tab.vis_epochs_spin
             else:
-                self.tabs.setCurrentIndex(0)
+                self.content_stack.setCurrentIndex(0)
+                self.nav_list.setCurrentRow(0)
                 combo = self.lm_tab.lm_model_combo
                 hidden_spin = self.lm_tab.lm_hidden_spin
                 steps_spin = self.lm_tab.lm_steps_spin
@@ -215,86 +217,152 @@ class EqPropDashboard(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        # Header Area
-        header_layout = QHBoxLayout()
+        # Main Splitter: Sidebar | Content
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        layout.addWidget(main_splitter)
 
-        header = QLabel("⚡ EqProp Trainer")
-        header.setObjectName("headerLabel")
-        header.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
-        header_layout.addWidget(header)
+        # --- Sidebar ---
+        sidebar_widget = QWidget()
+        sidebar_widget.setFixedWidth(250)
+        sidebar_widget.setStyleSheet("background-color: #15151a; border-right: 1px solid #333;")
+        sidebar_layout = QVBoxLayout(sidebar_widget)
+        sidebar_layout.setContentsMargins(10, 20, 10, 20)
+        sidebar_layout.setSpacing(10)
 
-        header_layout.addStretch()
+        # Header
+        header = QLabel("⚡ Bioplausible\nTrainer")
+        header.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header.setStyleSheet("color: #00d4ff; margin-bottom: 20px;")
+        sidebar_layout.addWidget(header)
 
-        # Save/Load Buttons
-        self.save_btn = QPushButton("💾 Save Model")
-        self.save_btn.setToolTip("Save the full model checkpoint (weights + config)")
+        # Navigation List
+        self.nav_list = QListWidget()
+        self.nav_list.setStyleSheet("""
+            QListWidget {
+                background-color: transparent;
+                border: none;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QListWidget::item {
+                padding: 12px;
+                border-radius: 6px;
+                color: #a0a0b0;
+                margin-bottom: 4px;
+            }
+            QListWidget::item:selected {
+                background-color: #2c3e50;
+                color: #ffffff;
+                border-left: 4px solid #00d4ff;
+            }
+            QListWidget::item:hover {
+                background-color: #1e2530;
+            }
+        """)
+
+        items = [
+            ("🔤 Language Model", 0),
+            ("📷 Vision", 1),
+            ("🎮 RL Agent", 2),
+            ("🔬 Microscope", 3),
+            ("🔍 Model Search", 4),
+            ("🗺️ Discovery", 5),
+            ("🌐 Community Grid", 6),
+            ("🏆 Benchmarks", 7),
+            ("💻 Console", 8)
+        ]
+
+        for name, idx in items:
+            item = QListWidgetItem(name)
+            item.setData(Qt.ItemDataRole.UserRole, idx)
+            self.nav_list.addItem(item)
+
+        self.nav_list.currentRowChanged.connect(self._on_nav_changed)
+        sidebar_layout.addWidget(self.nav_list)
+
+        sidebar_layout.addStretch()
+
+        # Save/Load Buttons in Sidebar
+        self.save_btn = QPushButton("💾 Save Checkpoint")
         self.save_btn.clicked.connect(self._save_model)
-        header_layout.addWidget(self.save_btn)
+        self.save_btn.setStyleSheet("text-align: left; padding: 10px;")
+        sidebar_layout.addWidget(self.save_btn)
 
-        self.load_btn = QPushButton("📂 Load Model")
-        self.load_btn.setToolTip("Load a full model checkpoint")
+        self.load_btn = QPushButton("📂 Load Checkpoint")
         self.load_btn.clicked.connect(self._load_model)
-        header_layout.addWidget(self.load_btn)
+        self.load_btn.setStyleSheet("text-align: left; padding: 10px;")
+        sidebar_layout.addWidget(self.load_btn)
 
-        layout.addLayout(header_layout)
+        main_splitter.addWidget(sidebar_widget)
 
-        # Main content area with tabs
-        self.tabs = QTabWidget()
-        layout.addWidget(self.tabs, stretch=1)
+        # --- Content Area ---
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(20, 20, 20, 20)
 
-        # Tab 1: Language Modeling
+        # We use a StackedWidget instead of Tabs
+        self.content_stack = QStackedWidget()
+        content_layout.addWidget(self.content_stack)
+
+        main_splitter.addWidget(content_widget)
+        main_splitter.setStretchFactor(1, 1) # Content stretches
+
+        # Initialize Tabs (Pages)
+
+        # Page 0: Language Modeling
         self.lm_tab = LMTab()
         self.lm_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
         self.lm_tab.stop_training_signal.connect(self._stop_training)
         self.lm_tab.clear_plots_signal.connect(self._clear_plots)
-        self.tabs.addTab(self.lm_tab, "🔤 Language Model")
+        self.content_stack.addWidget(self.lm_tab)
 
-        # Tab 2: Vision
+        # Page 1: Vision
         self.vis_tab = VisionTab()
         self.vis_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
         self.vis_tab.stop_training_signal.connect(self._stop_training)
         self.vis_tab.clear_plots_signal.connect(self._clear_plots)
-        self.tabs.addTab(self.vis_tab, "📷 Vision")
+        self.content_stack.addWidget(self.vis_tab)
 
-        # Tab 3: Reinforcement Learning
+        # Page 2: Reinforcement Learning
         self.rl_tab = RLTab()
         self.rl_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
         self.rl_tab.stop_training_signal.connect(self._stop_training)
         self.rl_tab.clear_plots_signal.connect(self._clear_plots)
-        self.tabs.addTab(self.rl_tab, "🎮 Reinforcement Learning")
+        self.content_stack.addWidget(self.rl_tab)
 
-        # Tab 4: Microscope (Dynamics)
+        # Page 3: Microscope (Dynamics)
         self.micro_tab = MicroscopeTab()
-        self.tabs.addTab(self.micro_tab, "🔬 Microscope")
+        self.content_stack.addWidget(self.micro_tab)
 
-        # Tab 5: Model Search (Hyperopt)
+        # Page 4: Model Search (Hyperopt)
         search_tab = self._create_search_tab()
-        self.tabs.addTab(search_tab, "🔍 Model Search")
+        self.content_stack.addWidget(search_tab)
 
-        # Tab 6: Discovery (Viz)
+        # Page 5: Discovery (Viz)
         self.disc_tab = DiscoveryTab()
-        self.tabs.addTab(self.disc_tab, "🗺️ Discovery")
+        self.content_stack.addWidget(self.disc_tab)
 
-        # Tab 7: Community Grid (P2P)
+        # Page 6: Community Grid (P2P)
         self.p2p_tab = P2PTab()
-        # Connect P2P log to main console
         self.p2p_tab.bridge_log_signal.connect(self._append_log)
-        # Connect P2P status to Discovery Tab
         self.p2p_tab.bridge_status_signal.connect(lambda s, p, j: self.disc_tab.update_p2p_ref(self.p2p_tab.worker))
-        self.tabs.addTab(self.p2p_tab, "🌐 Community Grid")
+        self.content_stack.addWidget(self.p2p_tab)
 
-        # Tab 8: Benchmarks
-        # Tab 8: Benchmarks
+        # Page 7: Benchmarks
         self.bench_tab = BenchmarksTab()
         self.bench_tab.log_message.connect(self._append_log)
-        self.tabs.addTab(self.bench_tab, "🏆 Benchmarks")
+        self.content_stack.addWidget(self.bench_tab)
 
-        # Tab 9: Console
+        # Page 8: Console
         self.console_tab = ConsoleTab()
-        self.tabs.addTab(self.console_tab, "💻 Console")
+        self.content_stack.addWidget(self.console_tab)
+
+        # Select first item
+        self.nav_list.setCurrentRow(0)
 
         # Status bar
         self.status_bar = self.statusBar()
@@ -441,9 +509,13 @@ class EqPropDashboard(QMainWindow):
         self.status_label.setText("Plot history cleared.")
         self.status_label.setStyleSheet("color: #a0a0b0; padding: 5px;")
 
+    def _on_nav_changed(self, row):
+        """Handle sidebar navigation."""
+        self.content_stack.setCurrentIndex(row)
+
     def _on_train_shortcut(self):
         """Handle start training shortcut based on active tab."""
-        current = self.tabs.currentWidget()
+        current = self.content_stack.currentWidget()
         if isinstance(current, LMTab):
             self._start_training('lm')
         elif isinstance(current, VisionTab):
@@ -455,7 +527,8 @@ class EqPropDashboard(QMainWindow):
         """Helper to get current configuration dictionary from UI."""
         current_config = {}
         # Active tab determines which controls to read
-        if self.tabs.currentIndex() == 0: # LM
+        idx = self.content_stack.currentIndex()
+        if idx == 0: # LM
             current_config.update({
                 'task': 'lm',
                 'model_name': self.lm_tab.lm_model_combo.currentText(),
@@ -466,7 +539,7 @@ class EqPropDashboard(QMainWindow):
                 'seq_len': self.lm_tab.lm_seqlen_spin.value(),
                 'hyperparams': self._get_current_hyperparams(self.lm_tab.lm_hyperparam_widgets)
             })
-        elif self.tabs.currentIndex() == 1: # Vision
+        elif idx == 1: # Vision
             current_config.update({
                 'task': 'vision',
                 'model_name': self.vis_tab.vis_model_combo.currentText(),
@@ -860,7 +933,8 @@ class EqPropDashboard(QMainWindow):
         self.worker.progress.connect(self._on_progress)
         self.worker.finished.connect(self._on_finished)
         self.worker.error.connect(self._on_error)
-        self.worker.weights_updated.connect(self._update_weight_visualization)
+        self.worker.weights_updated.connect(lambda w: self._update_weight_visualization(w, is_grad=False))
+        self.worker.gradients_updated.connect(lambda g: self._update_weight_visualization(g, is_grad=True))
         self.worker.log.connect(self._append_log)
         self.worker.dynamics_update.connect(self._on_dynamics_update)
 
@@ -1169,23 +1243,30 @@ class EqPropDashboard(QMainWindow):
         """Extract current values from hyperparameter widgets."""
         return get_current_hyperparams_generic(widgets)
 
-    def _update_weight_visualization(self, weights: dict):
+    def _update_weight_visualization(self, weights: dict, is_grad: bool = False):
         """Update weight visualization heatmaps."""
         if not HAS_PYQTGRAPH or not ENABLE_WEIGHT_VIZ:
             return
 
         # Determine which tab is active to update correct widgets
-        active_idx = self.tabs.currentIndex()
+        active_idx = self.content_stack.currentIndex()
 
         # 0 = LM Tab, 1 = Vision Tab
         if active_idx == 0:
             layout = self.lm_tab.lm_weights_layout
             widgets = self.lm_tab.lm_weight_widgets
             labels = self.lm_tab.lm_weight_labels
-        else:
+            # LM doesn't have toggle yet, assume Weights only
+            if is_grad: return
+        elif active_idx == 1:
             layout = self.vis_tab.vis_weights_layout
             widgets = self.vis_tab.vis_weight_widgets
             labels = self.vis_tab.vis_weight_labels
+            # Check toggle
+            if hasattr(self.vis_tab, 'viz_mode_combo'):
+                mode = self.vis_tab.viz_mode_combo.currentText()
+                if "Weights" in mode and is_grad: return
+                if "Flow" in mode and not is_grad: return
 
         # If widgets list is empty, create them
         if not widgets:

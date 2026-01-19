@@ -1,7 +1,8 @@
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QSpinBox, QDoubleSpinBox,
-    QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel, QSlider, QTextEdit
+    QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel, QSlider, QTextEdit,
+    QToolBox, QFrame
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -58,7 +59,23 @@ class LMTab(QWidget):
         left_panel = QVBoxLayout()
         layout.addLayout(left_panel, stretch=1)
 
-        # Model Selection
+        # Presets
+        preset_layout = QHBoxLayout()
+        preset_layout.addWidget(QLabel("🚀 Quick Presets:"))
+        self.lm_preset_combo = QComboBox()
+        self.lm_preset_combo.addItems(["Custom", "Small (Fast)", "Medium (Balanced)", "Large (Accurate)"])
+        self.lm_preset_combo.currentTextChanged.connect(self._apply_preset)
+        preset_layout.addWidget(self.lm_preset_combo)
+        left_panel.addLayout(preset_layout)
+
+        # Toolbox
+        self.toolbox = QToolBox()
+        left_panel.addWidget(self.toolbox)
+
+        # --- Section 1: Model ---
+        model_widget = QWidget()
+        model_layout = QVBoxLayout(model_widget)
+
         self.lm_model_combo = QComboBox()
         lm_items = []
         for spec in MODEL_REGISTRY:
@@ -94,23 +111,29 @@ class LMTab(QWidget):
             ("Layers:", self.lm_layers_spin),
             ("Eq Steps:", self.lm_steps_spin)
         ]
-        model_group = self._create_control_group("🧠 Model", model_controls)
-        left_panel.addWidget(model_group)
 
-        # Trigger initial update
-        self._update_model_desc(self.lm_model_combo.currentText())
+        from PyQt6.QtWidgets import QGridLayout
+        grid = QGridLayout()
+        for i, (label, widget) in enumerate(model_controls):
+            grid.addWidget(QLabel(label), i, 0)
+            grid.addWidget(widget, i, 1)
+        model_layout.addLayout(grid)
 
         # Dynamic Hyperparameters Group
-        self.lm_hyperparam_group = QGroupBox("⚙️ Model Hyperparameters")
-        from PyQt6.QtWidgets import QGridLayout
+        self.lm_hyperparam_group = QGroupBox("Dynamic Params")
         self.lm_hyperparam_layout = QGridLayout(self.lm_hyperparam_group)
         self.lm_hyperparam_widgets = {}
-        left_panel.addWidget(self.lm_hyperparam_group)
+        model_layout.addWidget(self.lm_hyperparam_group)
         self.lm_hyperparam_group.setVisible(False)
-
         self.lm_model_combo.currentTextChanged.connect(self._update_lm_hyperparams)
 
-        # Dataset Selection
+        model_layout.addStretch()
+        self.toolbox.addItem(model_widget, "🧠 Model Architecture")
+
+        # --- Section 2: Dataset ---
+        data_widget = QWidget()
+        data_layout = QVBoxLayout(data_widget)
+
         self.lm_dataset_combo = QComboBox()
         self.lm_dataset_combo.addItems(["tiny_shakespeare", "wikitext-2", "ptb"])
         self.lm_dataset_combo.setToolTip("Source text dataset for training")
@@ -130,10 +153,20 @@ class LMTab(QWidget):
             ("Seq Length:", self.lm_seqlen_spin),
             ("Batch Size:", self.lm_batch_spin)
         ]
-        data_group = self._create_control_group("📚 Dataset", data_controls)
-        left_panel.addWidget(data_group)
 
-        # Training Settings
+        data_grid = QGridLayout()
+        for i, (label, widget) in enumerate(data_controls):
+            data_grid.addWidget(QLabel(label), i, 0)
+            data_grid.addWidget(widget, i, 1)
+        data_layout.addLayout(data_grid)
+        data_layout.addStretch()
+
+        self.toolbox.addItem(data_widget, "📚 Text Configuration")
+
+        # --- Section 3: Training ---
+        train_widget = QWidget()
+        train_layout = QVBoxLayout(train_widget)
+
         self.lm_epochs_spin = QSpinBox()
         self.lm_epochs_spin.setRange(1, 500)
         self.lm_epochs_spin.setValue(50)
@@ -163,8 +196,18 @@ class LMTab(QWidget):
             ("", self.lm_kernel_check),
             ("", self.lm_micro_check)
         ]
-        train_group = self._create_control_group("⚙️ Training", train_controls)
-        left_panel.addWidget(train_group)
+
+        train_grid = QGridLayout()
+        for i, (label, widget) in enumerate(train_controls):
+            train_grid.addWidget(QLabel(label), i, 0)
+            train_grid.addWidget(widget, i, 1)
+        train_layout.addLayout(train_grid)
+        train_layout.addStretch()
+
+        self.toolbox.addItem(train_widget, "⚙️ Optimization")
+
+        # Trigger initial update
+        self._update_model_desc(self.lm_model_combo.currentText())
 
         # Train/Stop Buttons
         btn_layout = QHBoxLayout()
@@ -264,6 +307,28 @@ class LMTab(QWidget):
             viz_layout.addWidget(self.lm_weights_container)
             right_panel.addWidget(viz_group)
 
+    def _apply_preset(self, preset_name):
+        """Apply config preset."""
+        if preset_name == "Custom": return
+
+        if preset_name == "Small (Fast)":
+            self.lm_hidden_spin.setValue(128)
+            self.lm_layers_spin.setValue(2)
+            self.lm_steps_spin.setValue(10)
+            self.lm_batch_spin.setValue(128)
+
+        elif preset_name == "Medium (Balanced)":
+            self.lm_hidden_spin.setValue(256)
+            self.lm_layers_spin.setValue(4)
+            self.lm_steps_spin.setValue(20)
+            self.lm_batch_spin.setValue(64)
+
+        elif preset_name == "Large (Accurate)":
+            self.lm_hidden_spin.setValue(512)
+            self.lm_layers_spin.setValue(6)
+            self.lm_steps_spin.setValue(30)
+            self.lm_batch_spin.setValue(32)
+
     def _reset_defaults(self):
         """Reset all controls to default values."""
         self.lm_hidden_spin.setValue(256)
@@ -278,6 +343,7 @@ class LMTab(QWidget):
         self.lm_micro_check.setChecked(False)
         # Reset combo boxes if needed, though they usually default to index 0 or specific items
         self.lm_dataset_combo.setCurrentIndex(0)
+        self.lm_preset_combo.setCurrentIndex(0)
 
     def _update_lm_hyperparams(self, model_name):
         update_hyperparams_generic(self, model_name, self.lm_hyperparam_layout, self.lm_hyperparam_widgets, self.lm_hyperparam_group)

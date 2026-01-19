@@ -1,5 +1,5 @@
 """
-Central configuration for EqProp Trainer.
+Central configuration for Bioplausible Trainer.
 """
 
 from dataclasses import dataclass

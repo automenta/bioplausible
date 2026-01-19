@@ -1,5 +1,5 @@
 """
-Training Worker Thread for EqProp Trainer
+Training Worker Thread for Bioplausible Trainer
 
 Runs training in background thread with rich, real-time progress updates.
 """
@@ -26,6 +26,7 @@ class TrainingWorker(QThread):
     log = pyqtSignal(str)        # Emit log messages
     generation = pyqtSignal(str) # Emit generated text
     weights_updated = pyqtSignal(dict)  # Emit weight snapshots for visualization
+    gradients_updated = pyqtSignal(dict)  # Emit gradient snapshots for visualization
     dynamics_update = pyqtSignal(dict)  # Emit dynamics data
 
     def __init__(
@@ -285,13 +286,21 @@ class TrainingWorker(QThread):
         }
         self.progress.emit(metrics)
 
-        # Emit weight snapshots for visualization
+        # Emit weight/gradient snapshots for visualization
         if (batch_idx + 1) % 10 == 0:
             try:
-                from .viz_utils import extract_weights
+                from .viz_utils import extract_weights, extract_gradients
+
+                # Weights
                 weights = extract_weights(self.model)
                 if weights:
                     self.weights_updated.emit(weights)
+
+                # Gradients (Synaptic Flow)
+                grads = extract_gradients(self.model)
+                if grads:
+                    self.gradients_updated.emit(grads)
+
             except Exception:
                 pass  # Ignore visualization errors
 

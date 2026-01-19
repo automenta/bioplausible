@@ -1,5 +1,5 @@
 """
-Visualization Utilities for EqProp Trainer
+Visualization Utilities for Bioplausible Trainer
 
 Weight matrix visualization and display helpers.
 """
@@ -65,6 +65,49 @@ def extract_weights_optimized(model: nn.Module, max_matrices: int = 6) -> Dict[s
         weights[name] = W
 
     return weights
+
+
+def extract_gradients(model: nn.Module, max_matrices: int = 6) -> Dict[str, np.ndarray]:
+    """
+    Extract gradient matrices from a model for visualization.
+    Similar to extract_weights but checks .grad attribute.
+
+    Args:
+        model: PyTorch model
+        max_matrices: Maximum number of matrices to extract
+
+    Returns:
+        Dict mapping layer names to gradient arrays (as numpy)
+    """
+    grads = OrderedDict()
+
+    # Filter parameters first to avoid unnecessary operations
+    weight_params = [
+        (name, param)
+        for name, param in model.named_parameters()
+        if 'weight' in name and 'norm' not in name.lower() and param.grad is not None
+    ][:max_matrices]
+
+    for name, param in weight_params:
+        # Copy to CPU and convert to numpy
+        G = param.grad.detach().cpu().numpy()
+
+        # Handle different shapes
+        if G.ndim == 4:
+            # Conv weights: [out_channels, in_channels, kernel_h, kernel_w]
+            # Flatten spatial dimensions
+            G = G.reshape(G.shape[0], -1)
+        elif G.ndim > 2:
+            # Other high-dim weights: flatten to 2D
+            G = G.reshape(G.shape[0], -1)
+
+        # Transpose if needed to make it more square-ish for better display
+        if G.shape[0] > G.shape[1] * 3:
+            G = G.T
+
+        grads[name] = G
+
+    return grads
 
 
 def format_weight_for_display(

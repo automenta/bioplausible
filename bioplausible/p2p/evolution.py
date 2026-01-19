@@ -9,6 +9,8 @@ import time
 import os
 import logging
 import random
+import hashlib
+import json
 from typing import Optional, Dict, Any
 
 from bioplausible.p2p.dht import DHTNode
@@ -18,6 +20,20 @@ from bioplausible.hyperopt.runner import run_single_trial_task
 from bioplausible.p2p.state import load_state, save_state
 
 logger = logging.getLogger("P2PEvolution")
+
+def get_config_hash(config: Dict) -> str:
+    """Generate a hash for a configuration."""
+
+    def _default(obj):
+        if hasattr(obj, 'item'): # numpy scalar
+            return obj.item()
+        if hasattr(obj, 'tolist'): # numpy array
+            return obj.tolist()
+        return str(obj)
+
+    # sort keys to ensure determinism
+    s = json.dumps(config, sort_keys=True, default=_default)
+    return hashlib.md5(s.encode()).hexdigest()
 
 class P2PEvolution:
     def __init__(self, bootstrap_ip: str = None, bootstrap_port: int = 8468,
@@ -35,6 +51,7 @@ class P2PEvolution:
         # State
         self.local_best_config = None
         self.local_best_score = -float('inf')
+        self.manual_queue = [] # Queue for manually injected genomes
 
         state = load_state()
         self.points = state.get('points', 0)
@@ -99,6 +116,49 @@ class P2PEvolution:
             self.thread.join(timeout=2)
         self._update_status("Stopped")
 
+    def inject_genome(self, config: Dict):
+        """Inject a manually designed genome into the evaluation queue."""
+        self._log("💉 Injecting manual genome for evaluation...")
+        self.manual_queue.append(config)
+
+    def _verify_model(self, record: Dict) -> bool:
+        """
+        Spot-check a model from the network to ensure accuracy is valid.
+        Returns True if valid (or close enough), False otherwise.
+        """
+        config = record.get('config', {})
+        claimed_score = record.get('score', 0.0)
+        model_name = config.get('model_name', "EqProp MLP")
+
+        self._log(f"🕵️ Verifying global best... (Claimed: {claimed_score:.4f})")
+        self._update_status("Verifying Global Best...")
+
+        # Run a quick evaluation
+        # We might use fewer epochs for speed, but ideally we match the claimed effort
+        # For now, just run same settings as discovery mode
+        metrics = run_single_trial_task(
+            task=self.task,
+            model_name=model_name,
+            config=config,
+            storage_path=None, # Don't pollute main DB with verifications
+            quick_mode=(self.discovery_mode == 'quick')
+        )
+
+        if not metrics:
+            self._log("Verification failed: Could not run model.")
+            return False
+
+        real_score = metrics.get('accuracy', 0.0)
+
+        # Allow some variance (e.g. 5%)
+        tolerance = 0.05
+        if abs(real_score - claimed_score) > tolerance and real_score < claimed_score:
+            self._log(f"❌ Verification FAILED! (Real: {real_score:.4f} vs Claimed: {claimed_score:.4f})")
+            return False
+
+        self._log(f"✅ Verification PASSED (Real: {real_score:.4f})")
+        return True
+
     def _evolution_loop(self):
         self._log("Joined P2P Mesh network.")
 
@@ -111,21 +171,38 @@ class P2PEvolution:
                 global_best_config = {}
                 global_best_score = -float('inf')
                 global_model_name = "EqProp MLP" # Default starting point
+                global_gen = 0
+                parent_hash = None
+
+                if best_record:
+                    # PROOF OF ACCURACY CHECK
+                    # 10% chance to verify if we haven't seen this hash before
+                    # For simplicity, just random check
+                    if random.random() < 0.1:
+                         if not self._verify_model(best_record):
+                             self._log("Ignoring invalid global best.")
+                             best_record = None # Discard it for this iteration
 
                 if best_record:
                     global_best_config = best_record.get('config', {})
                     global_best_score = best_record.get('score', -float('inf'))
                     global_model_name = global_best_config.get('model_name', global_model_name)
-                    self._log(f"Found global best: {global_best_score:.4f} ({global_model_name})")
+                    global_gen = global_best_config.get('generation', 0)
+                    parent_hash = get_config_hash(global_best_config)
+
+                    self._log(f"Found global best: {global_best_score:.4f} (Gen {global_gen})")
                 else:
                     self._log("No global best found. Will seed new...")
 
-                # 2. Decide Strategy (New Arch, Crossover, or Mutate)
+                # 2. Decide Strategy (Manual, New Arch, Crossover, or Mutate)
                 action = "mutate"
                 rnd = random.random()
 
+                # Check manual queue first
+                if self.manual_queue:
+                    action = "manual"
                 # Chance to switch architecture entirely (exploration)
-                if rnd < 0.05:
+                elif rnd < 0.05:
                     action = "new_arch"
                 # Chance to crossover if we have a local best compatible with global
                 elif (self.local_best_config and best_record and
@@ -138,8 +215,20 @@ class P2PEvolution:
                 # 3. Prepare Genome
                 target_config = {}
                 target_model_name = global_model_name
+                next_gen = global_gen
 
-                if action == "new_arch":
+                if action == "manual":
+                    self._update_status("Evaluating Manual Design...")
+                    target_config = self.manual_queue.pop(0)
+                    target_model_name = target_config.get('model_name', global_model_name)
+                    # Treat as a new branch or continuation depending on if parent_id is set manually
+                    # If not set, we can assume it's a new line or a fork of global
+                    if 'generation' not in target_config:
+                        target_config['generation'] = global_gen + 1
+                    next_gen = target_config['generation']
+                    parent_hash = target_config.get('parent_id') # Might be None
+
+                elif action == "new_arch":
                     self._update_status("Exploring New Architecture...")
                     # Pick random model from registry spaces
                     available_models = list(SEARCH_SPACES.keys())
@@ -147,6 +236,8 @@ class P2PEvolution:
                     space = get_search_space(target_model_name)
                     target_config = space.sample()
                     target_config['model_name'] = target_model_name
+                    next_gen = 0 # Reset generation for new species
+                    parent_hash = None
                     self._log(f"Selected new architecture: {target_model_name}")
 
                 elif action == "crossover":
@@ -157,6 +248,9 @@ class P2PEvolution:
                     # Add small mutation to avoid stagnation
                     target_config = space.mutate(target_config, mutation_rate=0.1)
                     target_model_name = global_model_name
+                    # Take max generation of parents + 1
+                    local_gen = self.local_best_config.get('generation', 0)
+                    next_gen = max(global_gen, local_gen) + 1
 
                 else: # Mutate
                     self._update_status("Mutating Genome...")
@@ -164,19 +258,30 @@ class P2PEvolution:
                     # Favor global best, but sometimes use local best or random restart
                     parent_config = global_best_config
                     parent_model = global_model_name
+                    parent_gen = global_gen
 
                     if not best_record: # Bootstrap
                          space = get_search_space(global_model_name)
                          parent_config = space.sample()
                          parent_config['model_name'] = global_model_name
+                         parent_gen = 0
+                         parent_hash = None
                     elif self.local_best_config and random.random() < 0.3:
                          parent_config = self.local_best_config
                          parent_model = parent_config.get('model_name', "EqProp MLP")
+                         parent_gen = parent_config.get('generation', 0)
+                         parent_hash = get_config_hash(parent_config)
 
                     space = get_search_space(parent_model)
                     target_config = space.mutate(parent_config)
                     target_config['model_name'] = parent_model
                     target_model_name = parent_model
+                    next_gen = parent_gen + 1
+
+                # Update Lineage Info
+                target_config['generation'] = next_gen
+                if parent_hash:
+                    target_config['parent_id'] = parent_hash
 
                 # Re-fetch space with constraints applied for final verification/mutation context
                 space = get_search_space(target_model_name)
@@ -203,7 +308,7 @@ class P2PEvolution:
                     # Allow larger steps
 
                 # 4. Evaluate
-                self._update_status(f"Evaluating: {target_model_name}")
+                self._update_status(f"Evaluating: {target_model_name} (Gen {next_gen})")
 
                 # Use Worker's logic to run job locally
                 job_id = random.randint(1000, 9999)
