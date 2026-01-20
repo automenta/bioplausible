@@ -353,6 +353,7 @@ class EqPropDashboard(QMainWindow):
         self.p2p_tab = P2PTab()
         self.p2p_tab.bridge_log_signal.connect(self._append_log)
         self.p2p_tab.bridge_status_signal.connect(lambda s, p, j: self.disc_tab.update_p2p_ref(self.p2p_tab.worker))
+        self.p2p_tab.load_model_signal.connect(self._apply_config)
         self.content_stack.addWidget(self.p2p_tab)
 
         # Page 7: Benchmarks
@@ -380,7 +381,17 @@ class EqPropDashboard(QMainWindow):
 
         # Device Indicator
         import torch
-        device_name = "CUDA" if torch.cuda.is_available() else "CPU"
+        try:
+            from bioplausible.kernel import HAS_TRITON_OPS
+        except ImportError:
+            HAS_TRITON_OPS = False
+
+        device_name = "CPU"
+        if torch.cuda.is_available():
+            device_name = "CUDA"
+            if HAS_TRITON_OPS:
+                device_name += " (Triton Accel)"
+
         self.device_label = QLabel(f"Device: {device_name}")
         self.device_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 0 10px;")
         self.status_bar.addPermanentWidget(self.device_label)

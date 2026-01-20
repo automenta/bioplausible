@@ -254,6 +254,64 @@ SEARCH_SPACES = {
             "align_weight": (0.1, 1.0, "linear"),
         },
     ),
+    # Add Missing Spaces
+    "Layerwise Equilibrium FA": SearchSpace(
+        "Layerwise Equilibrium FA",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "hidden_dim": [64, 128],
+            "num_layers": [2, 4, 6]
+        }
+    ),
+    "Energy Guided FA": SearchSpace(
+        "Energy Guided FA",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "energy_scale": (0.1, 1.0, "linear"),
+            "hidden_dim": [64, 128]
+        }
+    ),
+    "Predictive Coding Hybrid": SearchSpace(
+        "Predictive Coding Hybrid",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "steps": (10, 30, "int"),
+            "hidden_dim": [64, 128]
+        }
+    ),
+    "Sparse Equilibrium": SearchSpace(
+        "Sparse Equilibrium",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "beta": (0.05, 0.3, "linear"),
+            "sparsity": (0.1, 0.9, "linear"),
+            "hidden_dim": [128, 256]
+        }
+    ),
+    "Momentum Equilibrium": SearchSpace(
+        "Momentum Equilibrium",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "momentum": (0.5, 0.95, "linear"),
+            "steps": (10, 30, "int")
+        }
+    ),
+    "Stochastic FA": SearchSpace(
+        "Stochastic FA",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "noise_scale": (0.01, 0.2, "log"),
+            "hidden_dim": [64, 128]
+        }
+    ),
+    "Energy Minimizing FA": SearchSpace(
+        "Energy Minimizing FA",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "hidden_dim": [64, 128]
+        }
+    ),
+
     # Transformers
     "EqProp Transformer (Attention Only)": SearchSpace(
         "EqProp Transformer (Attention Only)",

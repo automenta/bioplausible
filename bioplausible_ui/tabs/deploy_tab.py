@@ -6,13 +6,15 @@ Tools for exporting models and serving them for real-world use.
 
 import os
 import torch
+import uvicorn
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QGroupBox, QPushButton,
-    QLabel, QComboBox, QTextEdit, QFileDialog, QMessageBox, QProgressBar
+    QLabel, QComboBox, QTextEdit, QFileDialog, QMessageBox, QProgressBar,
+    QInputDialog
 )
 from PyQt6.QtCore import pyqtSignal, QThread
 
-from bioplausible.export import export_to_onnx, export_to_torchscript, serve_model
+from bioplausible.export import export_to_onnx, export_to_torchscript
 
 class ExportWorker(QThread):
     finished = pyqtSignal(str)
@@ -35,12 +37,38 @@ class ExportWorker(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
+class ServerWorker(QThread):
+    """Worker to run Uvicorn server in background."""
+    def __init__(self, model, host="0.0.0.0", port=8000):
+        super().__init__()
+        self.model = model
+        self.host = host
+        self.port = port
+        self.server = None
+
+    def run(self):
+        # We need to set the global model instance in export.py
+        import bioplausible.export as export
+        export.model_instance = self.model
+        if self.model:
+            export.model_instance.eval()
+
+        config = uvicorn.Config(export.app, host=self.host, port=self.port, log_level="info")
+        self.server = uvicorn.Server(config)
+        self.server.run()
+
+    def stop(self):
+        if self.server:
+            self.server.should_exit = True
+            self.wait()
+
 class DeployTab(QWidget):
     """Deployment & Export Tab."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.model = None
+        self.server_worker = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -98,6 +126,42 @@ class DeployTab(QWidget):
     def update_model_ref(self, model):
         self.model = model
         self.server_log.append(f"Model loaded: {type(model).__name__}")
+        if self.server_worker and self.server_worker.isRunning():
+            # Update running server model reference
+            import bioplausible.export as export
+            export.model_instance = self.model
+            self.server_log.append("Hot-swapped model in running server.")
+
+    def _guess_input_shape(self):
+        """Intelligently guess input shape or ask user."""
+        if not self.model: return None
+
+        # 1. Check for explicit input_dim (MLP)
+        if hasattr(self.model, 'input_dim') and self.model.input_dim is not None:
+             # Check if it's likely an image flattened?
+             # But for export we need the tensor shape.
+             # If it's a flattened MLP, (1, input_dim) is correct.
+             return (1, self.model.input_dim)
+
+        # 2. Check for LM embedding
+        if hasattr(self.model, 'has_embed') and self.model.has_embed:
+             # LM takes integer indices: (Batch, Seq)
+             # Default to (1, 64)
+             return (1, 64), torch.long
+
+        # 3. Check for Conv layers to guess channels
+        name = type(self.model).__name__
+        if "Conv" in name or "Vision" in name:
+             # Try to find first conv layer
+             for m in self.model.modules():
+                 if isinstance(m, torch.nn.Conv2d):
+                     c_in = m.in_channels
+                     # Assume square 28x28 (MNIST) or 32x32 (CIFAR)
+                     # We can default to 32x32 as it's safe for most
+                     return (1, c_in, 32, 32)
+
+        # Fallback: Ask user
+        return None
 
     def _export_model(self):
         if not self.model:
@@ -112,25 +176,33 @@ class DeployTab(QWidget):
             return
 
         # Prepare dummy input
-        # We need to guess input shape.
-        # This is tricky without task context.
-        # We can try to infer from model attributes or ask user?
-        # For MVP, assume standard shapes based on model type.
+        shape_info = self._guess_input_shape()
+        dtype = torch.float32
+
+        if shape_info:
+            if isinstance(shape_info, tuple) and len(shape_info) == 2 and isinstance(shape_info[1], torch.dtype):
+                shape, dtype = shape_info
+            else:
+                shape = shape_info
+        else:
+            # Dialog
+            text, ok = QInputDialog.getText(self, "Input Shape", "Enter input shape (comma separated, e.g. 1,1,28,28):")
+            if not ok or not text: return
+            try:
+                shape = tuple(map(int, text.split(',')))
+            except:
+                QMessageBox.critical(self, "Error", "Invalid shape format")
+                return
 
         try:
-            if hasattr(self.model, 'input_dim'):
-                # MLP or flattened
-                input_sample = torch.randn(1, self.model.input_dim)
-            elif "Conv" in type(self.model).__name__:
-                # Vision Conv
-                # Try standard image sizes
-                input_sample = torch.randn(1, 1, 28, 28) # MNIST default
+            if dtype == torch.long:
+                input_sample = torch.randint(0, 100, shape)
             else:
-                # Fallback
-                input_sample = torch.randn(1, 784)
+                input_sample = torch.randn(shape)
 
             if hasattr(self.model, 'device'):
-                input_sample = input_sample.to(self.model.device)
+                device = next(self.model.parameters()).device
+                input_sample = input_sample.to(device)
 
             self.progress.setVisible(True)
             self.progress.setRange(0, 0) # Indeterminate
@@ -162,13 +234,9 @@ class DeployTab(QWidget):
                 return
 
             self.server_log.append("Starting server...")
-            # We would need a background process/thread for FastAPI/Uvicorn
-            # For this MVP, we will simulate or use a thread.
-            # Uvicorn run is blocking, needs thread.
 
-            from threading import Thread
-            self.server_thread = Thread(target=serve_model, args=(self.model,), daemon=True)
-            self.server_thread.start()
+            self.server_worker = ServerWorker(self.model)
+            self.server_worker.start()
 
             self.serve_btn.setText("⏹ Stop Server")
             self.serve_btn.setStyleSheet("background-color: #c0392b;")
@@ -176,12 +244,15 @@ class DeployTab(QWidget):
             self.server_log.append("Server running at http://localhost:8000")
             self.server_log.append("Docs at http://localhost:8000/docs")
         else:
-            # Stopping a thread running uvicorn is hard properly without uvicorn.Server object
-            # For MVP, we instruct restart.
-            self.server_log.append("Stopping server not fully implemented in demo (restart app).")
+            if self.server_worker:
+                self.server_log.append("Stopping server...")
+                self.server_worker.stop()
+                self.server_worker = None
+
             self.serve_btn.setText("Start API Server (Port 8000)")
             self.serve_btn.setStyleSheet("")
             self.demo_btn.setEnabled(False)
+            self.server_log.append("Server stopped.")
 
     def _open_web_demo(self):
         from PyQt6.QtGui import QDesktopServices

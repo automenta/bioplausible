@@ -7,7 +7,7 @@ Allows users to contribute to the Bio-Plausible Research Network.
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QGroupBox, QPushButton,
     QLabel, QLineEdit, QTextEdit, QProgressBar, QScrollArea, QRadioButton, QButtonGroup,
-    QComboBox, QCheckBox
+    QComboBox, QCheckBox, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QObject, QTimer
 from PyQt6.QtGui import QFont, QDesktopServices, QColor
@@ -36,11 +36,21 @@ class P2PWorkerBridge(QObject):
 class P2PTab(QWidget):
     """Community Grid / P2P Tab."""
 
+    load_model_signal = pyqtSignal(dict) # Signal to load a model into dashboard
+    bridge_log_signal = pyqtSignal(str)
+    bridge_status_signal = pyqtSignal(str, int, int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.worker = None # Can be Worker or P2PEvolution
         self.bridge = None
+        self.best_config_cache = None
         self._setup_ui()
+
+        # Timer to check for best model updates
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self._check_best_model)
+        self.update_timer.start(2000)
 
     def _setup_ui(self):
         layout = QHBoxLayout(self)
@@ -144,6 +154,13 @@ class P2PTab(QWidget):
         conn_layout.addWidget(info_label)
 
         left_panel.addWidget(conn_group)
+
+        # Load Best Model Button
+        self.load_best_btn = QPushButton("Load Best Found Model")
+        self.load_best_btn.setEnabled(False)
+        self.load_best_btn.setToolTip("Load the best model discovered by the network so far.")
+        self.load_best_btn.clicked.connect(self._load_best_model)
+        left_panel.addWidget(self.load_best_btn)
 
         # Strategy & Constraints
         strat_group = QGroupBox("🎯 Discovery Strategy")
@@ -255,10 +272,6 @@ class P2PTab(QWidget):
             self.bootstrap_combo.setVisible(True)
             self.bootstrap_combo.setCurrentIndex(2) # Default to local for safety
 
-    # Helper signals to expose inner bridge signals to dashboard
-    bridge_log_signal = pyqtSignal(str)
-    bridge_status_signal = pyqtSignal(str, int, int)
-
     def _toggle_connection(self):
         if self.worker and self.worker.running:
             # Stop
@@ -270,6 +283,7 @@ class P2PTab(QWidget):
             self._log("Worker stopped.")
             self.radio_coord.setEnabled(True)
             self.radio_dht.setEnabled(True)
+            self.load_best_btn.setEnabled(False)
         else:
             # Start
             self.radio_coord.setEnabled(False)
@@ -338,3 +352,29 @@ class P2PTab(QWidget):
 
     def _log(self, msg):
         self.log_output.append(msg)
+
+    def _check_best_model(self):
+        """Poll the worker for global best model updates."""
+        if not self.worker or not self.worker.running:
+            return
+
+        best = None
+        # Check P2PEvolution (DHT)
+        if hasattr(self.worker, 'global_best_config') and self.worker.global_best_config:
+             best = self.worker.global_best_config
+
+        # We could also check local database for Coordinator mode,
+        # but that's less "real-time P2P" and more "History".
+        # For now, support P2PEvolution best.
+
+        if best:
+             # Check if it's better than cached or different
+             self.best_config_cache = best
+             acc = best.get('accuracy', 0.0)
+             self.load_best_btn.setText(f"Load Best (Acc: {acc:.1%})")
+             self.load_best_btn.setEnabled(True)
+
+    def _load_best_model(self):
+        if self.best_config_cache:
+            QMessageBox.information(self, "Loading Model", "Loading best discovered architecture into Trainer...")
+            self.load_model_signal.emit(self.best_config_cache)
