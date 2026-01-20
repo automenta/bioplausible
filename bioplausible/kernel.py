@@ -83,6 +83,33 @@ def _find_cuda_path() -> Optional[str]:
     except Exception:
         pass
 
+    # 5. Look for pip-installed nvidia-cuda-nvcc
+    # This is common in PyTorch 2.x envs where cuda is installed as a python package
+    try:
+        import nvidia.cuda_nvcc
+        nvcc_pkg_path = os.path.dirname(nvidia.cuda_nvcc.__file__)
+        # The structure is usually site-packages/nvidia/cuda_nvcc/
+        # And nvcc binary is in bin/
+        # However, CuPy often expects a full CUDA Toolkit structure (bin, lib64, include)
+        # Pip packages are split (nvidia-cuda-runtime-cu12, nvidia-cuda-nvcc-cu12, etc)
+        # But sometimes they are symlinked or we can point to the nvcc root.
+        if os.path.exists(os.path.join(nvcc_pkg_path, "bin", "nvcc")):
+             candidates.append(nvcc_pkg_path)
+    except ImportError:
+        pass
+
+    # 6. Heuristics from torch package location (e.g. conda env)
+    try:
+        import torch
+        torch_root = os.path.dirname(torch.__file__)
+        # Check if we are in a conda env
+        # ../../bin/nvcc relative to site-packages/torch
+        potential_root = os.path.abspath(os.path.join(torch_root, "..", "..", "..", ".."))
+        if os.path.exists(os.path.join(potential_root, "bin", "nvcc")):
+             candidates.append(potential_root)
+    except ImportError:
+        pass
+
     # Deduplicate and verify
     seen = set()
     for path in candidates:
@@ -93,6 +120,7 @@ def _find_cuda_path() -> Optional[str]:
             # Verify it looks like a CUDA root (has bin/ or lib64/ or include/)
             if (os.path.exists(os.path.join(path, "bin", "nvcc")) or
                 os.path.exists(os.path.join(path, "lib64")) or
+                os.path.exists(os.path.join(path, "lib")) or # Some systems use lib
                 os.path.exists(os.path.join(path, "include", "cuda.h"))):
                 return path
 
