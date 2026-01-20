@@ -4,8 +4,10 @@ Themes for Bioplausible Trainer
 Includes Dark Cyberpunk and Professional Light themes.
 """
 
+from typing import Dict, Any
+
 # === DARK THEME COLORS ===
-DARK_THEME_COLORS = {
+DARK_THEME_COLORS: Dict[str, str] = {
     'background': '#0a0a0f',
     'background_alt': '#0d0d15',
     'background_group': 'rgba(20, 20, 40, 0.7)',

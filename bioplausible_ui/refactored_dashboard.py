@@ -36,8 +36,7 @@ from bioplausible.models.factory import create_model
 
 from .themes import CYBERPUNK_DARK, LIGHT_THEME, PLOT_COLORS, LIGHT_PLOT_COLORS, DARK_THEME_COLORS, LIGHT_THEME_COLORS
 from .worker import TrainingWorker, RLWorker, BenchmarkWorker
-from .generation import UniversalGenerator, count_parameters, format_parameter_count
-from .hyperparams import get_hyperparams_for_model
+from .generation import UniversalGenerator, SimpleCharTokenizer, count_parameters, format_parameter_count
 from .viz_utils import extract_weights, format_weight_for_display, normalize_weights_for_display, get_layer_description
 from .dashboard_helpers import (
     update_hyperparams_generic,
@@ -45,6 +44,8 @@ from .dashboard_helpers import (
     create_weight_viz_widgets_generic,
     update_weight_visualization_generic
 )
+from .utils import calculate_eta, show_error_dialog, format_metric_value, get_device_info
+from .common_widgets import create_plot_widget, create_standard_buttons
 
 from bioplausible_ui.tabs.lm_tab import LMTab
 from bioplausible_ui.tabs.vision_tab import VisionTab
@@ -228,6 +229,19 @@ class EqPropDashboard(QMainWindow):
         layout.addWidget(main_splitter)
 
         # --- Sidebar ---
+        self._setup_sidebar(main_splitter)
+
+        # --- Content Area ---
+        self._setup_content_area(main_splitter)
+
+        # Status bar
+        self._setup_status_bar()
+
+        # Keyboard Shortcuts
+        self._setup_keyboard_shortcuts()
+
+    def _setup_sidebar(self, main_splitter):
+        """Set up the sidebar navigation."""
         sidebar_widget = QWidget()
         sidebar_widget.setFixedWidth(250)
         sidebar_widget.setStyleSheet("background-color: #15151a; border-right: 1px solid #333;")
@@ -308,7 +322,8 @@ class EqPropDashboard(QMainWindow):
 
         main_splitter.addWidget(sidebar_widget)
 
-        # --- Content Area ---
+    def _setup_content_area(self, main_splitter):
+        """Set up the main content area with tabs."""
         content_widget = QWidget()
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(20, 20, 20, 20)
@@ -365,7 +380,8 @@ class EqPropDashboard(QMainWindow):
         # Select first item
         self.nav_list.setCurrentRow(0)
 
-        # Status bar
+    def _setup_status_bar(self):
+        """Set up the status bar."""
         self.status_bar = self.statusBar()
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
         self.status_label.setStyleSheet("color: #808090; padding: 5px;")
@@ -373,18 +389,7 @@ class EqPropDashboard(QMainWindow):
         self.status_bar.addWidget(self.status_label, 1) # Stretch
 
         # Device Indicator
-        import torch
-        try:
-            from bioplausible.kernel import HAS_TRITON_OPS
-        except ImportError:
-            HAS_TRITON_OPS = False
-
-        device_name = "CPU"
-        if torch.cuda.is_available():
-            device_name = "CUDA"
-            if HAS_TRITON_OPS:
-                device_name += " (Triton Accel)"
-
+        device_name = get_device_info()
         self.device_label = QLabel(f"Device: {device_name}")
         self.device_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 0 10px;")
         self.device_label.setToolTip("Current compute device being used for training")
@@ -406,7 +411,8 @@ class EqPropDashboard(QMainWindow):
             # psutil not available, skip GPU/RAM monitoring
             pass
 
-        # Keyboard Shortcuts
+    def _setup_keyboard_shortcuts(self):
+        """Set up keyboard shortcuts."""
         self.train_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
         self.train_shortcut.activated.connect(self._on_train_shortcut)
         self.train_shortcut.setToolTip("Start training (Ctrl+Return)")
@@ -632,33 +638,7 @@ class EqPropDashboard(QMainWindow):
             actual_tab = TabClass()
 
             # Set up connections based on tab type
-            if tab_index == 1:  # Vision tab
-                actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
-                actual_tab.stop_training_signal.connect(self._stop_training)
-                actual_tab.clear_plots_signal.connect(self._clear_plots)
-                self.vis_tab = actual_tab
-            elif tab_index == 2:  # RL tab
-                actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
-                actual_tab.stop_training_signal.connect(self._stop_training)
-                actual_tab.clear_plots_signal.connect(self._clear_plots)
-                self.rl_tab = actual_tab
-            elif tab_index == 5:  # Discovery tab
-                actual_tab.load_model_signal.connect(self._apply_config)
-                self.disc_tab = actual_tab
-            elif tab_index == 6:  # P2P tab
-                actual_tab.bridge_log_signal.connect(self._append_log)
-                actual_tab.bridge_status_signal.connect(lambda s, p, j: self.disc_tab.update_p2p_ref(self.p2p_tab.worker))
-                actual_tab.load_model_signal.connect(self._apply_config)
-                self.p2p_tab = actual_tab
-            elif tab_index == 7:  # Benchmarks tab
-                actual_tab.log_message.connect(self._append_log)
-                actual_tab.load_model_signal.connect(self._apply_config)
-                self.bench_tab = actual_tab
-            elif tab_index == 10:  # Diffusion tab
-                actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
-                actual_tab.stop_training_signal.connect(self._stop_training)
-                actual_tab.clear_plots_signal.connect(self._clear_plots)
-                self.diff_tab = actual_tab
+            self._setup_tab_connections(actual_tab, tab_index)
 
             # Replace the placeholder widget with the actual tab
             placeholder = self.content_stack.widget(tab_index)
@@ -670,6 +650,36 @@ class EqPropDashboard(QMainWindow):
 
         # Mark as initialized
         self.tab_initialized[tab_index] = True
+
+    def _setup_tab_connections(self, actual_tab, tab_index):
+        """Set up connections for a specific tab."""
+        if tab_index == 1:  # Vision tab
+            actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+            actual_tab.stop_training_signal.connect(self._stop_training)
+            actual_tab.clear_plots_signal.connect(self._clear_plots)
+            self.vis_tab = actual_tab
+        elif tab_index == 2:  # RL tab
+            actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+            actual_tab.stop_training_signal.connect(self._stop_training)
+            actual_tab.clear_plots_signal.connect(self._clear_plots)
+            self.rl_tab = actual_tab
+        elif tab_index == 5:  # Discovery tab
+            actual_tab.load_model_signal.connect(self._apply_config)
+            self.disc_tab = actual_tab
+        elif tab_index == 6:  # P2P tab
+            actual_tab.bridge_log_signal.connect(self._append_log)
+            actual_tab.bridge_status_signal.connect(lambda s, p, j: self.disc_tab.update_p2p_ref(self.p2p_tab.worker))
+            actual_tab.load_model_signal.connect(self._apply_config)
+            self.p2p_tab = actual_tab
+        elif tab_index == 7:  # Benchmarks tab
+            actual_tab.log_message.connect(self._append_log)
+            actual_tab.load_model_signal.connect(self._apply_config)
+            self.bench_tab = actual_tab
+        elif tab_index == 10:  # Diffusion tab
+            actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+            actual_tab.stop_training_signal.connect(self._stop_training)
+            actual_tab.clear_plots_signal.connect(self._clear_plots)
+            self.diff_tab = actual_tab
 
     def _on_train_shortcut(self):
         """Handle start training shortcut based on active tab."""
@@ -718,7 +728,7 @@ class EqPropDashboard(QMainWindow):
                     json.dump(config, f, indent=4)
                 self.status_label.setText(f"Configuration saved to {fname}")
             except Exception as e:
-                QMessageBox.critical(self, "Save Error", str(e))
+                show_error_dialog(self, "Save Error", str(e))
 
     def _load_config_only(self):
         """Load configuration from a JSON file."""
@@ -729,7 +739,7 @@ class EqPropDashboard(QMainWindow):
                     config = json.load(f)
                 self._apply_config(config)
             except Exception as e:
-                QMessageBox.critical(self, "Load Error", str(e))
+                show_error_dialog(self, "Load Error", str(e))
 
     def _export_logs(self):
         """Export training history to a CSV file."""
@@ -750,7 +760,7 @@ class EqPropDashboard(QMainWindow):
                         writer.writerow([i + 1, self.loss_history[i], acc, lip])
                 self.status_label.setText(f"Logs exported to {fname}")
             except Exception as e:
-                QMessageBox.critical(self, "Export Error", str(e))
+                show_error_dialog(self, "Export Error", str(e))
 
     def _load_recent_models(self):
         """Load recent models from a file."""
@@ -916,15 +926,9 @@ class EqPropDashboard(QMainWindow):
             self._add_recent_model(filepath)
 
         except Exception as e:
-            QMessageBox.critical(self, "Load Error", f"Failed to load: {str(e)}")
+            show_error_dialog(self, "Load Error", f"Failed to load: {str(e)}")
             import traceback
             traceback.print_exc()
-
-    def _clear_recent_models(self):
-        """Clear the recent models list."""
-        self.recent_models = []
-        self._save_recent_models()
-        self._update_recent_models_menu()
 
     def _save_model(self):
         """Save the current model to a file, including current UI configuration."""
@@ -947,14 +951,8 @@ class EqPropDashboard(QMainWindow):
 
                 # Add to recent models
                 self._add_recent_model(fname)
-            except OSError as e:
-                error_msg = f"Could not save to file {fname}: {e}"
-                self._log_error(error_msg)
-                QMessageBox.critical(self, "Save Error", error_msg)
             except Exception as e:
-                error_msg = f"Failed to save model: {e}"
-                self._log_error(error_msg)
-                QMessageBox.critical(self, "Save Error", error_msg)
+                show_error_dialog(self, "Save Error", str(e))
 
     def _load_model(self):
         """Load a model from a file and restore UI state."""
@@ -1026,18 +1024,8 @@ class EqPropDashboard(QMainWindow):
                 # Add to recent models
                 self._add_recent_model(fname)
 
-            except FileNotFoundError:
-                error_msg = f"Model file not found: {fname}"
-                self._log_error(error_msg)
-                QMessageBox.critical(self, "File Not Found", error_msg)
-            except KeyError as e:
-                error_msg = f"Missing key in checkpoint: {e}"
-                self._log_error(error_msg)
-                QMessageBox.critical(self, "Load Error", error_msg)
             except Exception as e:
-                error_msg = f"Failed to load model: {str(e)}"
-                self._log_error(error_msg)
-                QMessageBox.critical(self, "Load Error", error_msg)
+                show_error_dialog(self, "Load Error", f"Failed to load: {str(e)}")
                 import traceback
                 traceback.print_exc()
 
@@ -1048,7 +1036,6 @@ class EqPropDashboard(QMainWindow):
         self.micro_tab._run_microscope_analysis()
 
     def _create_search_tab(self) -> QWidget:
-        """Create the Model Search tab."""
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setSpacing(20)
@@ -1133,7 +1120,7 @@ class EqPropDashboard(QMainWindow):
             self.status_label.setText(f"Launched Model Search Tool for {task}")
 
         except Exception as e:
-            QMessageBox.critical(self, "Launch Error", f"Failed to launch search tool:\n{e}")
+            show_error_dialog(self, "Launch Error", f"Failed to launch search tool:\n{e}")
             import traceback
             traceback.print_exc()
 
@@ -1152,20 +1139,8 @@ class EqPropDashboard(QMainWindow):
             else:
                 self._start_lm_training()
 
-        except ImportError as e:
-            error_msg = f"Missing dependency: {e}"
-            self._log_error(error_msg)
-            QMessageBox.critical(self, "Import Error", error_msg)
         except Exception as e:
-            error_msg = f"Failed to start training: {e}"
-            self._log_error(error_msg)
-            QMessageBox.critical(self, "Error", error_msg)
-
-    def _log_error(self, message: str):
-        """Log an error message."""
-        import logging
-        logging.error(message)
-        self._append_log(f"ERROR: {message}")
+            show_error_dialog(self, "Error", f"Failed to start training:\n{e}")
 
     def _create_model_and_loader(self, mode: str):
         """Create model and data loader based on mode (vision or lm)."""
@@ -1191,16 +1166,11 @@ class EqPropDashboard(QMainWindow):
         try:
             spec = get_model_spec(model_name)
             use_flatten = spec.model_type != "modern_conv_eqprop"
-        except Exception as e:
-            self._log_error(f"Could not get model spec for {model_name}: {e}")
-            use_flatten = True
+        except:
+             use_flatten = True
 
-        try:
-            train_data = get_vision_dataset(dataset_name, train=True, flatten=use_flatten)
-            self.train_loader = DataLoader(train_data, batch_size=self.vis_tab.vis_batch_spin.value(), shuffle=True)
-        except Exception as e:
-            self._log_error(f"Could not load dataset {dataset_name}: {e}")
-            return None, None
+        train_data = get_vision_dataset(dataset_name, train=True, flatten=use_flatten)
+        self.train_loader = DataLoader(train_data, batch_size=self.vis_tab.vis_batch_spin.value(), shuffle=True)
 
         # Create model
         hidden = self.vis_tab.vis_hidden_spin.value()
@@ -1242,10 +1212,8 @@ class EqPropDashboard(QMainWindow):
                 model.eq_steps = self.vis_tab.vis_steps_spin.value()
 
         except Exception as e:
-            error_msg = f"Could not create {model_name}: {e}"
-            self._log_error(error_msg)
-            QMessageBox.warning(self, "Model Creation Failed", error_msg)
-            return None, None
+             QMessageBox.warning(self, "Model Creation Failed", f"Could not create {model_name}: {e}")
+             return None, None
 
         return model, self.train_loader
 
@@ -1286,8 +1254,7 @@ class EqPropDashboard(QMainWindow):
             return model, train_loader
 
         except Exception as e:
-            error_msg = f"Failed to create LM model: {e}"
-            self._log_error(error_msg)
+            show_error_dialog(self, "Error", f"Failed to create LM model:\n{e}")
             import traceback
             traceback.print_exc()
             return None, None
@@ -1317,8 +1284,7 @@ class EqPropDashboard(QMainWindow):
             )
             return model, train_loader
         except Exception as e:
-            error_msg = f"Failed to create Diffusion model: {e}"
-            self._log_error(error_msg)
+            show_error_dialog(self, "Error", f"Failed to create Diffusion model:\n{e}")
             import traceback
             traceback.print_exc()
             return None, None
@@ -1646,27 +1612,22 @@ class EqPropDashboard(QMainWindow):
         # Calculate ETA
         if self.start_time:
             import time
-            elapsed = time.time() - self.start_time
-            if metrics['epoch'] > 0:
-                speed = metrics['epoch'] / elapsed
-                remaining = metrics['total_epochs'] - metrics['epoch']
-                eta_seconds = remaining / speed if speed > 0 else 0
-                eta_str = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+            eta_str, speed_str = calculate_eta(self.start_time, metrics['epoch'], metrics['total_epochs'])
 
-                # Update both tabs just in case (or determine active tab)
-                eta_text = f"ETA: {eta_str} | Speed: {speed:.2f} ep/s"
-                self.vis_tab.vis_eta_label.setText(eta_text)
-                self.lm_tab.lm_eta_label.setText(eta_text)
+            # Update both tabs just in case (or determine active tab)
+            eta_text = f"ETA: {eta_str} | Speed: {speed_str}"
+            self.vis_tab.vis_eta_label.setText(eta_text)
+            self.lm_tab.lm_eta_label.setText(eta_text)
 
         # Update labels
-        self.vis_tab.vis_acc_label.setText(f"{metrics['accuracy']:.1%}")
-        self.vis_tab.vis_loss_label.setText(f"{metrics['loss']:.4f}")
-        self.vis_tab.vis_lip_label.setText(f"{metrics['lipschitz']:.4f}")
+        self.vis_tab.vis_acc_label.setText(format_metric_value('accuracy', metrics['accuracy']))
+        self.vis_tab.vis_loss_label.setText(format_metric_value('loss', metrics['loss']))
+        self.vis_tab.vis_lip_label.setText(format_metric_value('lipschitz', metrics['lipschitz']))
 
         self.status_label.setText(
             f"Epoch {metrics['epoch']}/{metrics['total_epochs']} | "
             f"Loss: {metrics['loss']:.4f} | "
-            f"Acc: {metrics['accuracy']:.1%} | "
+            f"Acc: {format_metric_value('accuracy', metrics['accuracy'])} | "
             f"L: {metrics['lipschitz']:.4f}"
         )
 
@@ -1735,7 +1696,7 @@ class EqPropDashboard(QMainWindow):
 
         self.status_label.setText("Training error!")
         self.status_label.setStyleSheet("color: #ff5588; padding: 5px; font-weight: bold;")
-        QMessageBox.critical(self, "Training Error", error)
+        show_error_dialog(self, "Training Error", error)
 
     def _update_lm_hyperparams(self, model_name: str):
         """Update LM hyperparameter widgets based on selected model."""

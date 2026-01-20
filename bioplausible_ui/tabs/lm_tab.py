@@ -10,6 +10,8 @@ from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
 from bioplausible_ui.generation import count_parameters, format_parameter_count, UniversalGenerator
 from bioplausible_ui.themes import PLOT_COLORS
+from bioplausible_ui.common_widgets import create_plot_widget, create_standard_buttons
+from bioplausible_ui.utils import format_metric_value
 from PyQt6.QtWidgets import QApplication
 
 try:
@@ -62,17 +64,6 @@ class LMTab(QWidget):
             layout.addWidget(QLabel(label), i, 0)
             layout.addWidget(widget, i, 1)
         return group
-
-    def _create_plot_widget(self, title, ylabel, xlabel='Epoch', yrange=None):
-        plot_widget = pg.PlotWidget()
-        plot_widget.setBackground('#0a0a0f')
-        plot_widget.setLabel('left', ylabel, color=PLOT_COLORS.get(ylabel.lower().split()[0], '#ffffff'))
-        plot_widget.setLabel('bottom', xlabel)
-        plot_widget.showGrid(x=True, y=True, alpha=0.2)
-        if yrange:
-            plot_widget.setYRange(*yrange)
-        curve = plot_widget.plot(pen=pg.mkPen(PLOT_COLORS.get(ylabel.lower().split()[0], '#ffffff'), width=2))
-        return plot_widget, curve
 
     def _setup_ui(self):
         layout = QHBoxLayout(self)
@@ -233,35 +224,12 @@ class LMTab(QWidget):
         self._update_model_desc(self.lm_model_combo.currentText())
 
         # Train/Stop Buttons
-        btn_layout = QHBoxLayout()
-        self.lm_train_btn = QPushButton("▶ Train")
-        self.lm_train_btn.setObjectName("trainButton")
-        self.lm_train_btn.clicked.connect(lambda: self.start_training_signal.emit('lm'))
-        btn_layout.addWidget(self.lm_train_btn)
-
-        self.lm_stop_btn = QPushButton("⏹ Stop")
-        self.lm_stop_btn.setObjectName("stopButton")
-        self.lm_stop_btn.setEnabled(False)
-        self.lm_stop_btn.clicked.connect(self.stop_training_signal.emit)
-        btn_layout.addWidget(self.lm_stop_btn)
-
-        self.lm_pause_btn = QPushButton("⏸ Pause")
-        self.lm_pause_btn.setObjectName("resetButton")
-        self.lm_pause_btn.setCheckable(True)
-        self.lm_pause_btn.setEnabled(False)
-        btn_layout.addWidget(self.lm_pause_btn)
-
-        self.lm_reset_btn = QPushButton("↺ Reset")
-        self.lm_reset_btn.setObjectName("resetButton")
-        self.lm_reset_btn.setToolTip("Reset all hyperparameters to default values")
-        self.lm_reset_btn.clicked.connect(self._reset_defaults)
-        btn_layout.addWidget(self.lm_reset_btn)
-
-        self.lm_clear_btn = QPushButton("🗑️ Clear")
-        self.lm_clear_btn.setObjectName("resetButton")
-        self.lm_clear_btn.setToolTip("Clear plot history")
-        self.lm_clear_btn.clicked.connect(self.clear_plots_signal.emit)
-        btn_layout.addWidget(self.lm_clear_btn)
+        btn_layout, self.lm_train_btn, self.lm_stop_btn, self.lm_pause_btn, self.lm_reset_btn, self.lm_clear_btn = create_standard_buttons(
+            lambda: self.start_training_signal.emit('lm'),
+            self.stop_training_signal.emit,
+            self._reset_defaults,
+            self.clear_plots_signal.emit
+        )
         left_panel.addLayout(btn_layout)
 
         # Progress bar
@@ -289,11 +257,11 @@ class LMTab(QWidget):
         if HAS_PYQTGRAPH:
             metrics_group = QGroupBox("📊 Training Metrics")
             metrics_layout = QVBoxLayout(metrics_group)
-            self.lm_loss_plot, self.lm_loss_curve = self._create_plot_widget("Loss", "Loss")
+            self.lm_loss_plot, self.lm_loss_curve = create_plot_widget("Loss", "Loss")
             metrics_layout.addWidget(self.lm_loss_plot)
-            self.lm_acc_plot, self.lm_acc_curve = self._create_plot_widget("Accuracy", "Accuracy", yrange=(0, 1.0))
+            self.lm_acc_plot, self.lm_acc_curve = create_plot_widget("Accuracy", "Accuracy", yrange=(0, 1.0))
             metrics_layout.addWidget(self.lm_acc_plot)
-            self.lm_lip_plot, self.lm_lip_curve = self._create_plot_widget("Lipschitz L", "Lipschitz L")
+            self.lm_lip_plot, self.lm_lip_curve = create_plot_widget("Lipschitz L", "Lipschitz L")
             self.lm_lip_plot.addLine(y=1.0, pen=pg.mkPen('r', width=1, style=Qt.PenStyle.DashLine))
             metrics_layout.addWidget(self.lm_lip_plot)
             right_panel.addWidget(metrics_group, stretch=2)
@@ -456,26 +424,9 @@ class LMTab(QWidget):
 
     def update_theme(self, theme_colors, plot_colors):
         """Update plot colors based on theme."""
+        from bioplausible_ui.common_widgets import update_theme_for_plots
         if not HAS_PYQTGRAPH:
             return
 
-        bg = theme_colors.get('background', '#0a0a0f')
-
         # Update Plots
-        if hasattr(self, 'lm_loss_plot'):
-            self.lm_loss_plot.setBackground(bg)
-            self.lm_loss_curve.setPen(pg.mkPen(plot_colors.get('loss', 'w'), width=2))
-            self.lm_loss_plot.getAxis('left').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
-            self.lm_loss_plot.getAxis('bottom').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
-
-        if hasattr(self, 'lm_acc_plot'):
-            self.lm_acc_plot.setBackground(bg)
-            self.lm_acc_curve.setPen(pg.mkPen(plot_colors.get('accuracy', 'w'), width=2))
-            self.lm_acc_plot.getAxis('left').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
-            self.lm_acc_plot.getAxis('bottom').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
-
-        if hasattr(self, 'lm_lip_plot'):
-            self.lm_lip_plot.setBackground(bg)
-            self.lm_lip_curve.setPen(pg.mkPen(plot_colors.get('lipschitz', 'w'), width=2))
-            self.lm_lip_plot.getAxis('left').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
-            self.lm_lip_plot.getAxis('bottom').setPen(pg.mkPen(theme_colors.get('text_secondary', 'w')))
+        update_theme_for_plots(self, theme_colors, plot_colors)
