@@ -101,9 +101,10 @@ class DiffusionTab(QWidget):
         self.model_combo.addItem("EqProp Diffusion")
         config_layout.addRow("Model:", self.model_combo)
 
-        # Dataset (Fixed for now)
+        # Dataset selection - now with CIFAR-10
         self.dataset_combo = QComboBox()
         self.dataset_combo.addItem("MNIST")
+        self.dataset_combo.addItem("CIFAR-10")  # Added CIFAR-10 support
         config_layout.addRow("Dataset:", self.dataset_combo)
 
         # Hidden Dim
@@ -178,16 +179,54 @@ class DiffusionTab(QWidget):
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
 
-        right_layout.addWidget(QLabel("Generated Samples"))
+        # Training Progress Plots
+        plots_group = QGroupBox("Training Progress")
+        plots_layout = QVBoxLayout(plots_group)
+
+        if HAS_PYQTGRAPH:
+            # Loss Plot
+            self.loss_plot = pg.PlotWidget()
+            self.loss_plot.setTitle("Loss")
+            self.loss_plot.setLabel('left', 'Loss')
+            self.loss_plot.setLabel('bottom', 'Epoch')
+            plots_layout.addWidget(self.loss_plot)
+
+            # FID Score Plot (placeholder)
+            self.fid_plot = pg.PlotWidget()
+            self.fid_plot.setTitle("FID Score (placeholder)")
+            self.fid_plot.setLabel('left', 'FID')
+            self.fid_plot.setLabel('bottom', 'Epoch')
+            plots_layout.addWidget(self.fid_plot)
+
+            # Sample Preview
+            self.preview_label = QLabel("Sample Preview During Training")
+            plots_layout.addWidget(self.preview_label)
+
+            self.sample_preview = pg.ImageView()
+            self.sample_preview.ui.histogram.hide()
+            self.sample_preview.ui.roiBtn.hide()
+            self.sample_preview.ui.menuBtn.hide()
+            plots_layout.addWidget(self.sample_preview)
+
+        else:
+            plots_layout.addWidget(QLabel("PyQtGraph not installed."))
+
+        right_layout.addWidget(plots_group)
+
+        # Generated Samples Section
+        gen_group = QGroupBox("Generated Samples")
+        gen_layout = QVBoxLayout(gen_group)
 
         if HAS_PYQTGRAPH:
             self.img_view = pg.ImageView()
             self.img_view.ui.histogram.hide()
             self.img_view.ui.roiBtn.hide()
             self.img_view.ui.menuBtn.hide()
-            right_layout.addWidget(self.img_view)
+            gen_layout.addWidget(self.img_view)
         else:
-            right_layout.addWidget(QLabel("PyQtGraph not installed."))
+            gen_layout.addWidget(QLabel("PyQtGraph not installed."))
+
+        right_layout.addWidget(gen_group)
 
         splitter.addWidget(right_widget)
         splitter.setStretchFactor(1, 1)
@@ -238,3 +277,49 @@ class DiffusionTab(QWidget):
     def update_theme(self, theme_colors, plot_colors):
         # Update background if needed
         pass
+
+    def update_plots(self, metrics):
+        """Update training plots with new metrics."""
+        if not HAS_PYQTGRAPH:
+            return
+
+        # Add data to plots
+        if hasattr(self, 'loss_curve'):
+            # Update existing curve
+            x_data, y_data = self.loss_curve.getData()
+            x_data = np.append(x_data, [len(x_data)])
+            y_data = np.append(y_data, [metrics.get('loss', 0)])
+            self.loss_curve.setData(x_data, y_data)
+        else:
+            # Create new curve
+            self.loss_curve = self.loss_plot.plot([0], [metrics.get('loss', 0)], 
+                                                pen=pg.mkPen(color='red', width=2))
+
+        # Update FID plot similarly
+        if hasattr(self, 'fid_curve'):
+            x_data, y_data = self.fid_curve.getData()
+            x_data = np.append(x_data, [len(x_data)])
+            y_data = np.append(y_data, [metrics.get('fid', 0)])  # Placeholder
+            self.fid_curve.setData(x_data, y_data)
+        else:
+            self.fid_curve = self.fid_plot.plot([0], [metrics.get('fid', 0)], 
+                                              pen=pg.mkPen(color='green', width=2))
+
+    def update_sample_preview(self, samples):
+        """Update sample preview during training."""
+        if not HAS_PYQTGRAPH:
+            return
+
+        # Convert samples to display format
+        if isinstance(samples, torch.Tensor):
+            samples = samples.detach().cpu().numpy()
+
+        # Take first sample to display
+        if len(samples) > 0:
+            sample = samples[0]  # Shape: [C, H, W]
+            if sample.shape[0] == 1:  # Grayscale
+                img = sample[0]  # Shape: [H, W]
+            else:  # RGB
+                img = np.transpose(sample, (1, 2, 0))  # [H, W, C]
+
+            self.sample_preview.setImage(img.T if len(img.shape) == 2 else img)

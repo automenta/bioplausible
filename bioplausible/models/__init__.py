@@ -49,6 +49,9 @@ from .em_fa import EnergyMinimizingFA
 from .feedback_alignment import FeedbackAlignmentEqProp
 from .adaptive_fa import AdaptiveFA
 
+# Memory Efficient Models
+from .memory_efficient import MemoryEfficientLoopedMLP, MemoryEfficientEqPropModel, create_memory_efficient_model
+
 # Language Models
 from .eqprop_lm_variants import (
     FullEqPropLM,
@@ -113,6 +116,10 @@ __all__ = [
     # FA Variants
     "FeedbackAlignmentEqProp",
     "AdaptiveFA",
+    # Memory Efficient
+    "MemoryEfficientLoopedMLP",
+    "MemoryEfficientEqPropModel",
+    "create_memory_efficient_model",
     # LM
     "FullEqPropLM",
     "EqPropAttentionOnlyLM",

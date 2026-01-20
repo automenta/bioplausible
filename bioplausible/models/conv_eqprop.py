@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from .utils import spectral_conv2d
 from .eqprop_base import EqPropModel
+from .triton_kernel import TritonEqPropOps
 from ..acceleration import compile_settling_loop
 
 # =============================================================================
@@ -110,9 +111,14 @@ class ConvEqProp(EqPropModel):
         ffn_out = self.W2(hidden)
 
         h_target = ffn_out + x_transformed
-        # Use torch.lerp for more efficient interpolation
-        h_next = torch.lerp(h, h_target, self.gamma)
-        return h_next
+
+        if TritonEqPropOps.is_available() and h.is_cuda:
+            # Use Triton kernel for fused update: h_next = (1-gamma)*h + gamma*h_target
+            return TritonEqPropOps.step_linear(h, h_target, self.gamma)
+        else:
+            # Use torch.lerp for more efficient interpolation
+            h_next = torch.lerp(h, h_target, self.gamma)
+            return h_next
 
     @compile_settling_loop
     def forward_step(

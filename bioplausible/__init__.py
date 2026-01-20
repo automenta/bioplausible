@@ -28,6 +28,7 @@ from .models import (
     BackpropMLP,
     ConvEqProp,
     LoopedMLP,
+    MemoryEfficientLoopedMLP,
     TransformerEqProp,
 )
 from .utils import (
@@ -97,6 +98,7 @@ __all__ = [
     "LoopedMLP",
     "BackpropMLP",
     "ConvEqProp",
+    "MemoryEfficientLoopedMLP",
     "TransformerEqProp",
     # Kernel
     "EqPropKernel",

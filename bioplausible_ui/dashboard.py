@@ -116,7 +116,8 @@ class EqPropDashboard(QMainWindow):
 
         # Theme state
         self.current_theme = 'dark'
-        self.setStyleSheet(CYBERPUNK_DARK)
+        from .themes import THEME_REGISTRY
+        self.setStyleSheet(THEME_REGISTRY[self.current_theme]['theme_css'])
 
         # Setup system logger
         self._setup_logging()
@@ -239,6 +240,7 @@ class EqPropDashboard(QMainWindow):
         header.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header.setStyleSheet("color: #00d4ff; margin-bottom: 20px;")
+        header.setToolTip("Bioplausible Neural Network Trainer - Bio-plausible learning algorithms")
         sidebar_layout.addWidget(header)
 
         # Navigation List
@@ -265,6 +267,7 @@ class EqPropDashboard(QMainWindow):
                 background-color: #1e2530;
             }
         """)
+        self.nav_list.setToolTip("Select a training task from the menu")
 
         items = [
             ("🔤 Language Model", 0),
@@ -294,11 +297,13 @@ class EqPropDashboard(QMainWindow):
         self.save_btn = QPushButton("💾 Save Checkpoint")
         self.save_btn.clicked.connect(self._save_model)
         self.save_btn.setStyleSheet("text-align: left; padding: 10px;")
+        self.save_btn.setToolTip("Save the current model and training configuration")
         sidebar_layout.addWidget(self.save_btn)
 
         self.load_btn = QPushButton("📂 Load Checkpoint")
         self.load_btn.clicked.connect(self._load_model)
         self.load_btn.setStyleSheet("text-align: left; padding: 10px;")
+        self.load_btn.setToolTip("Load a previously saved model and training configuration")
         sidebar_layout.addWidget(self.load_btn)
 
         main_splitter.addWidget(sidebar_widget)
@@ -315,69 +320,47 @@ class EqPropDashboard(QMainWindow):
         main_splitter.addWidget(content_widget)
         main_splitter.setStretchFactor(1, 1) # Content stretches
 
-        # Initialize Tabs (Pages)
+        # Initialize Tabs (Pages) - with lazy loading
+        self.tab_classes = {
+            0: LMTab,
+            1: VisionTab,
+            2: RLTab,
+            3: MicroscopeTab,
+            4: None,  # Search tab is created dynamically
+            5: DiscoveryTab,
+            6: P2PTab,
+            7: BenchmarksTab,
+            8: DeployTab,
+            9: ConsoleTab,
+            10: DiffusionTab
+        }
 
-        # Page 0: Language Modeling
+        # Pre-create only the first tab (active one)
         self.lm_tab = LMTab()
         self.lm_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
         self.lm_tab.stop_training_signal.connect(self._stop_training)
         self.lm_tab.clear_plots_signal.connect(self._clear_plots)
         self.content_stack.addWidget(self.lm_tab)
 
-        # Page 1: Vision
-        self.vis_tab = VisionTab()
-        self.vis_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
-        self.vis_tab.stop_training_signal.connect(self._stop_training)
-        self.vis_tab.clear_plots_signal.connect(self._clear_plots)
-        self.content_stack.addWidget(self.vis_tab)
+        # Create placeholder widgets for other tabs
+        for i in range(1, 11):  # 1 to 10 (excluding 4 which is special)
+            if i == 4:  # Search tab
+                search_placeholder = QWidget()
+                search_placeholder.setLayout(QVBoxLayout())
+                search_placeholder.layout().addWidget(QLabel("Search tab - will load on demand"))
+                self.content_stack.addWidget(search_placeholder)
+            else:
+                placeholder = QWidget()
+                placeholder.setLayout(QVBoxLayout())
+                placeholder.layout().addWidget(QLabel(f"Tab {i} - Loading..."))
+                self.content_stack.addWidget(placeholder)
 
-        # Page 2: Reinforcement Learning
-        self.rl_tab = RLTab()
-        self.rl_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
-        self.rl_tab.stop_training_signal.connect(self._stop_training)
-        self.rl_tab.clear_plots_signal.connect(self._clear_plots)
-        self.content_stack.addWidget(self.rl_tab)
+        # Note: Search tab (index 4) is handled specially in _init_tab_lazy
 
-        # Page 3: Microscope (Dynamics)
-        self.micro_tab = MicroscopeTab()
-        self.content_stack.addWidget(self.micro_tab)
-
-        # Page 4: Model Search (Hyperopt)
-        search_tab = self._create_search_tab()
-        self.content_stack.addWidget(search_tab)
-
-        # Page 5: Discovery (Viz)
-        self.disc_tab = DiscoveryTab()
-        self.disc_tab.load_model_signal.connect(self._apply_config)
-        self.content_stack.addWidget(self.disc_tab)
-
-        # Page 6: Community Grid (P2P)
-        self.p2p_tab = P2PTab()
-        self.p2p_tab.bridge_log_signal.connect(self._append_log)
-        self.p2p_tab.bridge_status_signal.connect(lambda s, p, j: self.disc_tab.update_p2p_ref(self.p2p_tab.worker))
-        self.p2p_tab.load_model_signal.connect(self._apply_config)
-        self.content_stack.addWidget(self.p2p_tab)
-
-        # Page 7: Benchmarks
-        self.bench_tab = BenchmarksTab()
-        self.bench_tab.log_message.connect(self._append_log)
-        self.bench_tab.load_model_signal.connect(self._apply_config)
-        self.content_stack.addWidget(self.bench_tab)
-
-        # Page 8: Deploy
-        self.deploy_tab = DeployTab()
-        self.content_stack.addWidget(self.deploy_tab)
-
-        # Page 9: Console
-        self.console_tab = ConsoleTab()
-        self.content_stack.addWidget(self.console_tab)
-
-        # Page 10: Diffusion
-        self.diff_tab = DiffusionTab()
-        self.diff_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
-        self.diff_tab.stop_training_signal.connect(self._stop_training)
-        self.diff_tab.clear_plots_signal.connect(self._clear_plots)
-        self.content_stack.addWidget(self.diff_tab)
+        # Track which tabs have been initialized
+        self.tab_initialized = {0: True}  # First tab is already initialized
+        for i in range(1, 11):
+            self.tab_initialized[i] = False
 
         # Select first item
         self.nav_list.setCurrentRow(0)
@@ -386,6 +369,7 @@ class EqPropDashboard(QMainWindow):
         self.status_bar = self.statusBar()
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
         self.status_label.setStyleSheet("color: #808090; padding: 5px;")
+        self.status_label.setToolTip("Current status of the application")
         self.status_bar.addWidget(self.status_label, 1) # Stretch
 
         # Device Indicator
@@ -403,14 +387,62 @@ class EqPropDashboard(QMainWindow):
 
         self.device_label = QLabel(f"Device: {device_name}")
         self.device_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 0 10px;")
+        self.device_label.setToolTip("Current compute device being used for training")
         self.status_bar.addPermanentWidget(self.device_label)
+
+        # GPU and RAM monitoring
+        try:
+            import psutil
+            self.gpu_monitor_label = QLabel("GPU: N/A | RAM: N/A")
+            self.gpu_monitor_label.setStyleSheet("color: #00ff88; font-weight: bold; padding: 0 10px;")
+            self.gpu_monitor_label.setToolTip("Real-time GPU and RAM usage statistics")
+            self.status_bar.addPermanentWidget(self.gpu_monitor_label)
+
+            # Timer for updating GPU/RAM stats
+            self.system_monitor_timer = QTimer()
+            self.system_monitor_timer.timeout.connect(self._update_system_stats)
+            self.system_monitor_timer.start(2000)  # Update every 2 seconds
+        except ImportError:
+            # psutil not available, skip GPU/RAM monitoring
+            pass
 
         # Keyboard Shortcuts
         self.train_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
         self.train_shortcut.activated.connect(self._on_train_shortcut)
+        self.train_shortcut.setToolTip("Start training (Ctrl+Return)")
 
         self.stop_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
         self.stop_shortcut.activated.connect(self._stop_training)
+        self.stop_shortcut.setToolTip("Stop training (Ctrl+Q)")
+
+        # Additional global shortcuts
+        self.ctrl_t_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)
+        self.ctrl_t_shortcut.activated.connect(self._on_train_shortcut)
+        self.ctrl_t_shortcut.setToolTip("Start Training (Ctrl+T)")
+
+        self.ctrl_s_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.ctrl_s_shortcut.activated.connect(self._save_model)
+        self.ctrl_s_shortcut.setToolTip("Save Model (Ctrl+S)")
+
+        self.ctrl_o_shortcut = QShortcut(QKeySequence("Ctrl+O"), self)
+        self.ctrl_o_shortcut.activated.connect(self._load_model)
+        self.ctrl_o_shortcut.setToolTip("Load Model (Ctrl+O)")
+
+        self.ctrl_r_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        self.ctrl_r_shortcut.activated.connect(self._clear_plots)
+        self.ctrl_r_shortcut.setToolTip("Reset Plots (Ctrl+R)")
+
+        self.ctrl_e_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
+        self.ctrl_e_shortcut.activated.connect(self._export_logs)
+        self.ctrl_e_shortcut.setToolTip("Export Results (Ctrl+E)")
+
+        self.ctrl_m_shortcut = QShortcut(QKeySequence("Ctrl+M"), self)
+        self.ctrl_m_shortcut.activated.connect(self._run_microscope_analysis)
+        self.ctrl_m_shortcut.setToolTip("Microscope Capture (Ctrl+M)")
+
+        self.ctrl_question_shortcut = QShortcut(QKeySequence("Ctrl+?"), self)
+        self.ctrl_question_shortcut.activated.connect(self._show_shortcuts)
+        self.ctrl_question_shortcut.setToolTip("Show Shortcuts (Ctrl+?)")
 
     def _create_menu_bar(self):
         """Create the application menu bar."""
@@ -421,13 +453,21 @@ class EqPropDashboard(QMainWindow):
 
         save_action = QAction("Save Model...", self)
         save_action.setShortcut("Ctrl+S")
+        save_action.setToolTip("Save the current model and its training configuration")
         save_action.triggered.connect(self._save_model)
         file_menu.addAction(save_action)
 
         load_action = QAction("Load Model...", self)
         load_action.setShortcut("Ctrl+O")
+        load_action.setToolTip("Load a previously saved model and its configuration")
         load_action.triggered.connect(self._load_model)
         file_menu.addAction(load_action)
+
+        # Recent Models submenu
+        self.recent_models_menu = file_menu.addMenu("Recent Models")
+        self.recent_models_menu.setToolTip("Access recently opened model files")
+        self._load_recent_models()
+        self._update_recent_models_menu()
 
         file_menu.addSeparator()
 
@@ -437,6 +477,7 @@ class EqPropDashboard(QMainWindow):
         file_menu.addAction(save_config_action)
 
         load_config_action = QAction("Load Configuration...", self)
+        load_config_action.setToolTip("Load a configuration file without model weights")
         load_config_action.triggered.connect(self._load_config_only)
         file_menu.addAction(load_config_action)
 
@@ -451,13 +492,15 @@ class EqPropDashboard(QMainWindow):
 
         exit_action = QAction("Exit", self)
         exit_action.setShortcut("Ctrl+W")
+        exit_action.setToolTip("Close the application")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
         # === View Menu ===
         view_menu = menubar.addMenu("&View")
 
-        self.theme_action = QAction("Switch to Light Theme", self)
+        self.theme_action = QAction("Switch to Next Theme (now: Dark)", self)
+        self.theme_action.setToolTip("Cycle through available UI themes")
         self.theme_action.triggered.connect(self._toggle_theme)
         view_menu.addAction(self.theme_action)
 
@@ -465,36 +508,55 @@ class EqPropDashboard(QMainWindow):
         help_menu = menubar.addMenu("&Help")
 
         shortcuts_action = QAction("Keyboard Shortcuts", self)
+        shortcuts_action.setToolTip("Show available keyboard shortcuts")
         shortcuts_action.triggered.connect(self._show_shortcuts)
         help_menu.addAction(shortcuts_action)
 
         about_action = QAction("About", self)
+        about_action.setToolTip("Show information about the Bioplausible Trainer")
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
     def _toggle_theme(self):
-        """Toggle between dark and light themes."""
-        if self.current_theme == 'dark':
-            self.setStyleSheet(LIGHT_THEME)
-            self.current_theme = 'light'
-            self.theme_action.setText("Switch to Dark Theme")
+        """Cycle through available themes."""
+        from .themes import THEME_REGISTRY
 
-            # Update plots
-            self.lm_tab.update_theme(LIGHT_THEME_COLORS, LIGHT_PLOT_COLORS)
-            self.vis_tab.update_theme(LIGHT_THEME_COLORS, LIGHT_PLOT_COLORS)
-            self.rl_tab.update_theme(LIGHT_THEME_COLORS, LIGHT_PLOT_COLORS)
+        # Get list of available themes
+        available_themes = list(THEME_REGISTRY.keys())
 
-        else:
-            self.setStyleSheet(CYBERPUNK_DARK)
-            self.current_theme = 'dark'
-            self.theme_action.setText("Switch to Light Theme")
+        # Find next theme in cycle
+        current_index = available_themes.index(self.current_theme)
+        next_index = (current_index + 1) % len(available_themes)
+        next_theme_name = available_themes[next_index]
 
-            # Update plots
-            self.lm_tab.update_theme(DARK_THEME_COLORS, PLOT_COLORS)
-            self.vis_tab.update_theme(DARK_THEME_COLORS, PLOT_COLORS)
-            self.rl_tab.update_theme(DARK_THEME_COLORS, PLOT_COLORS)
+        # Apply new theme
+        next_theme = THEME_REGISTRY[next_theme_name]
+        self.setStyleSheet(next_theme['theme_css'])
+        self.current_theme = next_theme_name
 
-        self.status_label.setText(f"Switched to {self.current_theme.title()} theme")
+        # Update theme action text
+        self.theme_action.setText(f"Switch to Next Theme (now: {next_theme_name.title()})")
+
+        # Update plots with new theme colors
+        ui_colors = next_theme['ui']
+        plot_colors = next_theme['plot_colors']
+
+        if hasattr(self, 'lm_tab'):
+            self.lm_tab.update_theme(ui_colors, plot_colors)
+        if hasattr(self, 'vis_tab'):
+            self.vis_tab.update_theme(ui_colors, plot_colors)
+        if hasattr(self, 'rl_tab'):
+            self.rl_tab.update_theme(ui_colors, plot_colors)
+        if hasattr(self, 'micro_tab'):
+            self.micro_tab.update_theme(ui_colors, plot_colors)
+        if hasattr(self, 'bench_tab'):
+            self.bench_tab.update_theme(ui_colors, plot_colors)
+        if hasattr(self, 'deploy_tab'):
+            self.deploy_tab.update_theme(ui_colors, plot_colors)
+        if hasattr(self, 'diff_tab'):
+            self.diff_tab.update_theme(ui_colors, plot_colors)
+
+        self.status_label.setText(f"Switched to {next_theme_name.title()} theme")
 
     def _show_about(self):
         """Show About dialog."""
@@ -507,9 +569,14 @@ class EqPropDashboard(QMainWindow):
             self,
             "Keyboard Shortcuts",
             "Ctrl+Return: Start Training\n"
+            "Ctrl+T: Start Training\n"
             "Ctrl+Q: Stop Training\n"
             "Ctrl+S: Save Model\n"
             "Ctrl+O: Load Model\n"
+            "Ctrl+R: Reset Plots\n"
+            "Ctrl+E: Export Results\n"
+            "Ctrl+M: Microscope Capture\n"
+            "Ctrl+?: Show Shortcuts\n"
             "Ctrl+W: Exit"
         )
 
@@ -545,8 +612,64 @@ class EqPropDashboard(QMainWindow):
         self.status_label.setStyleSheet("color: #a0a0b0; padding: 5px;")
 
     def _on_nav_changed(self, row):
-        """Handle sidebar navigation."""
+        """Handle sidebar navigation with lazy loading."""
+        # Check if tab needs to be initialized
+        if not self.tab_initialized.get(row, False):
+            self._init_tab_lazy(row)
+
         self.content_stack.setCurrentIndex(row)
+
+    def _init_tab_lazy(self, tab_index):
+        """Initialize a tab lazily when first accessed."""
+        if tab_index == 4:  # Search tab - special handling
+            search_tab = self._create_search_tab()
+            # Replace the placeholder
+            self.content_stack.removeWidget(self.content_stack.widget(tab_index))
+            self.content_stack.insertWidget(tab_index, search_tab)
+        elif self.tab_classes.get(tab_index):
+            # Create the actual tab
+            TabClass = self.tab_classes[tab_index]
+            actual_tab = TabClass()
+
+            # Set up connections based on tab type
+            if tab_index == 1:  # Vision tab
+                actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+                actual_tab.stop_training_signal.connect(self._stop_training)
+                actual_tab.clear_plots_signal.connect(self._clear_plots)
+                self.vis_tab = actual_tab
+            elif tab_index == 2:  # RL tab
+                actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+                actual_tab.stop_training_signal.connect(self._stop_training)
+                actual_tab.clear_plots_signal.connect(self._clear_plots)
+                self.rl_tab = actual_tab
+            elif tab_index == 5:  # Discovery tab
+                actual_tab.load_model_signal.connect(self._apply_config)
+                self.disc_tab = actual_tab
+            elif tab_index == 6:  # P2P tab
+                actual_tab.bridge_log_signal.connect(self._append_log)
+                actual_tab.bridge_status_signal.connect(lambda s, p, j: self.disc_tab.update_p2p_ref(self.p2p_tab.worker))
+                actual_tab.load_model_signal.connect(self._apply_config)
+                self.p2p_tab = actual_tab
+            elif tab_index == 7:  # Benchmarks tab
+                actual_tab.log_message.connect(self._append_log)
+                actual_tab.load_model_signal.connect(self._apply_config)
+                self.bench_tab = actual_tab
+            elif tab_index == 10:  # Diffusion tab
+                actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+                actual_tab.stop_training_signal.connect(self._stop_training)
+                actual_tab.clear_plots_signal.connect(self._clear_plots)
+                self.diff_tab = actual_tab
+
+            # Replace the placeholder widget with the actual tab
+            placeholder = self.content_stack.widget(tab_index)
+            self.content_stack.removeWidget(placeholder)
+            self.content_stack.insertWidget(tab_index, actual_tab)
+
+            # Clean up the placeholder
+            placeholder.deleteLater()
+
+        # Mark as initialized
+        self.tab_initialized[tab_index] = True
 
     def _on_train_shortcut(self):
         """Handle start training shortcut based on active tab."""
@@ -629,6 +752,180 @@ class EqPropDashboard(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Export Error", str(e))
 
+    def _load_recent_models(self):
+        """Load recent models from a file."""
+        import os
+        from pathlib import Path
+
+        # Define the path for the recent models file
+        recent_file = Path.home() / ".bioplausible" / "recent.json"
+
+        try:
+            if recent_file.exists():
+                with open(recent_file, 'r') as f:
+                    self.recent_models = json.load(f)
+            else:
+                self.recent_models = []
+        except Exception:
+            self.recent_models = []
+
+    def _save_recent_models(self):
+        """Save recent models to a file."""
+        import os
+        from pathlib import Path
+
+        # Create directory if it doesn't exist
+        recent_dir = Path.home() / ".bioplausible"
+        recent_dir.mkdir(exist_ok=True)
+
+        # Define the path for the recent models file
+        recent_file = recent_dir / "recent.json"
+
+        try:
+            with open(recent_file, 'w') as f:
+                json.dump(self.recent_models, f)
+        except Exception as e:
+            print(f"Error saving recent models: {e}")
+
+    def _add_recent_model(self, filepath):
+        """Add a model to the recent models list."""
+        if not hasattr(self, 'recent_models'):
+            self.recent_models = []
+
+        # Remove the filepath if it's already in the list
+        if filepath in self.recent_models:
+            self.recent_models.remove(filepath)
+
+        # Add to the beginning of the list
+        self.recent_models.insert(0, filepath)
+
+        # Keep only the last 5 models
+        self.recent_models = self.recent_models[:5]
+
+        # Save the updated list
+        self._save_recent_models()
+
+        # Update the menu
+        self._update_recent_models_menu()
+
+    def _update_recent_models_menu(self):
+        """Update the recent models menu."""
+        if not hasattr(self, 'recent_models'):
+            self.recent_models = []
+
+        # Clear the menu
+        self.recent_models_menu.clear()
+
+        if not self.recent_models:
+            # Add a disabled "No recent models" entry
+            no_recent_action = QAction("No recent models", self)
+            no_recent_action.setEnabled(False)
+            self.recent_models_menu.addAction(no_recent_action)
+        else:
+            # Add recent models to the menu
+            for filepath in self.recent_models:
+                action = QAction(filepath, self)
+                action.triggered.connect(lambda checked, f=filepath: self._load_recent_model(f))
+                self.recent_models_menu.addAction(action)
+
+        # Add a separator and clear action
+        self.recent_models_menu.addSeparator()
+        clear_action = QAction("Clear Recent Models", self)
+        clear_action.triggered.connect(self._clear_recent_models)
+        self.recent_models_menu.addAction(clear_action)
+
+    def _load_recent_model(self, filepath):
+        """Load a recent model."""
+        if os.path.exists(filepath):
+            # Load the model
+            self._load_model_from_path(filepath)
+        else:
+            # Remove the file from recent models if it doesn't exist
+            if filepath in self.recent_models:
+                self.recent_models.remove(filepath)
+                self._save_recent_models()
+                self._update_recent_models_menu()
+            QMessageBox.warning(self, "File Not Found", f"The model file does not exist:\n{filepath}")
+
+    def _load_model_from_path(self, filepath):
+        """Load a model from a specific path."""
+        try:
+            import torch
+            checkpoint = torch.load(filepath)
+            config = checkpoint.get('config', {})
+
+            # 1. Restore UI State from Config
+            self._apply_config(config)
+
+            # Process pending events to ensure UI updates (like hyperparam widgets) are triggered
+            QApplication.processEvents()
+
+            # 2. Recreate Model Structure
+            task = config.get('task', 'vision')
+
+            if task == 'lm':
+                from bioplausible.datasets import get_lm_dataset
+                ds_name = config.get('dataset', 'tiny_shakespeare')
+                ds = get_lm_dataset(ds_name, seq_len=128, split='train')
+                vocab_size = ds.vocab_size
+
+                spec = get_model_spec(config['model_name'])
+                self.model = create_model(
+                    spec=spec,
+                    input_dim=None,
+                    output_dim=vocab_size,
+                    hidden_dim=config.get('hidden_dim', 256),
+                    num_layers=config.get('num_layers', 4),
+                    device="cuda" if torch.cuda.is_available() else "cpu",
+                    task_type="lm"
+                )
+            else:
+                from bioplausible.datasets import get_vision_dataset
+                ds_name = config.get('dataset', 'mnist').lower()
+                spec = get_model_spec(config['model_name'])
+                use_flatten = spec.model_type != "modern_conv_eqprop"
+
+                input_dim = 784
+                if 'cifar' in ds_name: input_dim = 3072
+                if 'svhn' in ds_name: input_dim = 3072
+                if not use_flatten:
+                    input_dim = 3 if ('cifar' in ds_name or 'svhn' in ds_name) else 1
+
+                self.model = create_model(
+                    spec=spec,
+                    input_dim=input_dim,
+                    output_dim=10,
+                    hidden_dim=config.get('hidden_dim', 256),
+                    device="cuda" if torch.cuda.is_available() else "cpu",
+                    task_type="vision"
+                )
+
+            # 3. Load Weights
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.status_label.setText(f"Model loaded from {filepath}")
+            self.status_label.setStyleSheet("color: #00ff88; padding: 5px;")
+
+            # 4. Update Tab References
+            if self.model:
+                self.lm_tab.update_model_ref(self.model)
+                self.vis_tab.update_model_ref(self.model)
+                self.micro_tab.update_model_ref(self.model)
+                self.deploy_tab.update_model_ref(self.model)
+
+            # Add to recent models
+            self._add_recent_model(filepath)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Load Error", f"Failed to load: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    def _clear_recent_models(self):
+        """Clear the recent models list."""
+        self.recent_models = []
+        self._save_recent_models()
+        self._update_recent_models_menu()
+
     def _save_model(self):
         """Save the current model to a file, including current UI configuration."""
         if not self.model:
@@ -647,6 +944,9 @@ class EqPropDashboard(QMainWindow):
                 }
                 torch.save(state, fname)
                 self.status_label.setText(f"Model saved to {fname}")
+
+                # Add to recent models
+                self._add_recent_model(fname)
             except Exception as e:
                 QMessageBox.critical(self, "Save Error", str(e))
 
@@ -716,6 +1016,9 @@ class EqPropDashboard(QMainWindow):
                     self.vis_tab.update_model_ref(self.model)
                     self.micro_tab.update_model_ref(self.model)
                     self.deploy_tab.update_model_ref(self.model)
+
+                # Add to recent models
+                self._add_recent_model(fname)
 
             except Exception as e:
                 QMessageBox.critical(self, "Load Error", f"Failed to load: {str(e)}")
@@ -1486,6 +1789,41 @@ class EqPropDashboard(QMainWindow):
         root_logger = logging.getLogger()
         root_logger.setLevel(logging.INFO)
         root_logger.addHandler(self.log_handler)
+
+    def _update_system_stats(self):
+        """Update GPU and RAM usage statistics."""
+        try:
+            import psutil
+
+            # Get RAM usage
+            ram_usage = psutil.virtual_memory().percent
+
+            # Get GPU usage if available
+            gpu_usage = "N/A"
+            gpu_mem = "N/A"
+
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    gpu_usage = torch.cuda.utilization() if hasattr(torch.cuda, 'utilization') else "N/A"
+                    gpu_mem = f"{torch.cuda.memory_allocated()/1024**3:.1f}GB/{torch.cuda.memory_reserved()/1024**3:.1f}GB"
+
+                    # Format GPU usage string
+                    if isinstance(gpu_usage, (int, float)):
+                        gpu_usage = f"{gpu_usage}%"
+                    else:
+                        gpu_usage = "N/A"
+            except:
+                # If torch GPU operations fail, just show N/A
+                gpu_usage = "N/A"
+                gpu_mem = "N/A"
+
+            # Update the label
+            stats_text = f"RAM: {ram_usage}% | GPU: {gpu_usage} | Mem: {gpu_mem}"
+            self.gpu_monitor_label.setText(stats_text)
+        except Exception as e:
+            # If anything goes wrong, silently fail to avoid disrupting the UI
+            pass
 
     def _append_log(self, message: str):
         """Append a message to the console log."""
