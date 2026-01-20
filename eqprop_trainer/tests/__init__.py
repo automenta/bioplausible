@@ -1,1 +1,0 @@
-"""eqprop_trainer tests"""

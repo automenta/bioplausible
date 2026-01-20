@@ -1,0 +1,83 @@
+import os
+import sys
+import shutil
+
+# Add repo root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+def verify_backend():
+    print("="*60)
+    print("Backend Verification")
+    print("="*60)
+
+    # 0. Check Torch import
+    print("\n[Checking Torch]...")
+    try:
+        import torch
+        print(f"Torch version: {torch.__version__}")
+        print(f"Torch file: {torch.__file__}")
+    except ImportError as e:
+        print(f"❌ Failed to import torch: {e}")
+        # Continue to see what else fails
+
+    # 1. Check Environment Variables
+    cuda_path = os.environ.get("CUDA_PATH")
+    print(f"\nCUDA_PATH (env): {cuda_path}")
+
+    # 2. Import kernel (triggers auto-detection)
+    print("\n[Importing bioplausible.kernel]...")
+    try:
+        from bioplausible import kernel
+        print("Successfully imported bioplausible.kernel")
+    except ImportError as e:
+        print(f"Failed to import bioplausible.kernel: {e}")
+        # If this fails, we can't continue checking kernel properties
+        return
+
+    # Check detected CUDA_PATH in environment after import
+    cuda_path_after = os.environ.get("CUDA_PATH")
+    print(f"CUDA_PATH (after import): {cuda_path_after}")
+
+    if cuda_path_after:
+        if os.path.exists(cuda_path_after):
+            print(f"✅ CUDA_PATH exists: {cuda_path_after}")
+        else:
+            print(f"❌ CUDA_PATH does not exist: {cuda_path_after}")
+    else:
+        print("⚠️ CUDA_PATH not detected by kernel module")
+
+    # 3. Check CuPy
+    print(f"\n[Checking CuPy]...")
+    print(f"HAS_CUPY: {kernel.HAS_CUPY}")
+    if kernel.HAS_CUPY:
+        import cupy
+        print(f"CuPy version: {cupy.__version__}")
+        try:
+            # Try a simple operation
+            x = cupy.array([1, 2, 3])
+            print("✅ CuPy basic operation successful")
+        except Exception as e:
+            print(f"❌ CuPy operation failed: {e}")
+
+    # 4. Check Triton
+    print(f"\n[Checking Triton]...")
+    try:
+        from bioplausible.models.triton_kernel import TritonEqPropOps, HAS_TRITON
+        print(f"HAS_TRITON: {HAS_TRITON}")
+        print(f"TritonEqPropOps.is_available(): {TritonEqPropOps.is_available()}")
+
+        if TritonEqPropOps.is_available():
+            print("✅ Triton is available")
+        else:
+            if not HAS_TRITON:
+                print("⚠️ Triton import failed")
+            elif not os.environ.get("CUDA_PATH"):
+                 print("⚠️ CUDA might be missing or torch.cuda.is_available() is False")
+
+            print(f"PyTorch CUDA available: {torch.cuda.is_available()}")
+
+    except ImportError as e:
+        print(f"Failed to import triton_kernel: {e}")
+
+if __name__ == "__main__":
+    verify_backend()

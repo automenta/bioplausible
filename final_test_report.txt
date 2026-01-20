@@ -1,0 +1,31 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: /app
+plugins: xdist-3.8.0, anyio-4.12.1
+collected 85 items
+
+bioplausible/tests/test_adaptive_fa.py ..                                [  2%]
+bioplausible/tests/test_advanced_training.py ...                         [  5%]
+bioplausible/tests/test_algorithms_integration.py ...                    [  9%]
+bioplausible/tests/test_all_models.py .................                  [ 29%]
+bioplausible/tests/test_core_trainer.py .                                [ 30%]
+bioplausible/tests/test_deq.py ..                                        [ 32%]
+bioplausible/tests/test_eqprop_base.py ....                              [ 37%]
+bioplausible/tests/test_kernel.py ..                                     [ 40%]
+bioplausible/tests/test_library.py .........                             [ 50%]
+bioplausible/tests/test_onnx.py ..                                       [ 52%]
+bioplausible/tests/test_refactor.py ....                                 [ 57%]
+bioplausible/tests/test_robustness.py ...                                [ 61%]
+bioplausible/tests/test_scheduler.py ..                                  [ 63%]
+bioplausible/tests/test_smoke_training.py .....................          [ 88%]
+bioplausible/tests/test_stress_equilibrium.py .                          [ 89%]
+bioplausible/tests/test_validation_all.py .........                      [100%]
+
+=============================== warnings summary ===============================
+bioplausible/tests/test_onnx.py::TestONNXExport::test_export_onnx
+bioplausible/tests/test_onnx.py::TestONNXExport::test_export_onnx_directory_creation
+  /app/bioplausible/core.py:669: UserWarning: # 'dynamic_axes' is not recommended when dynamo=True, and may lead to 'torch._dynamo.exc.UserError: Constraints violated.' Supply the 'dynamic_shapes' argument instead if export is unsuccessful.
+    torch.onnx.export(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 85 passed, 2 warnings in 119.37s (0:01:59) ==================

@@ -1,95 +1,44 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["bioplausible", "bioplausible_ui"]
 
 [project]
-name = "eqprop-torch"
+name = "bioplausible"
 version = "0.1.0"
-description = "Equilibrium Propagation for PyTorch - Production-grade training with spectral normalization"
-readme = "eqprop_torch/README.md"
-license = "MIT"
+description = "Reproducible verification of Equilibrium Propagation research claims"
+readme = "README.md"
 requires-python = ">=3.9"
-authors = [
-    { name = "automenta" }
-]
-keywords = [
-    "deep-learning",
-    "equilibrium-propagation",
-    "pytorch",
-    "biologically-plausible",
-    "spectral-normalization",
-    "energy-based-models",
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-]
-
 dependencies = [
     "torch>=2.0.0",
-    "numpy>=1.20.0",
+    "torchvision",
+    "numpy",
+    "scipy",
+    "tqdm",
+    "gymnasium",
+    "scikit-learn",
+    "transformers",
+    "datasets",
+    "tokenizers",
+    "onnx",
+    "onnxscript",
+    "psutil",
+    "PyQt6",
+    "pyqtgraph",
+    "kademlia",
+    "pytest",
+    "pytest-xdist",
+    "flake8",
+    "black",
+    "isort",
 ]
-
-[project.optional-dependencies]
-gpu = [
-    "cupy-cuda12x>=12.0.0",
-]
-triton = [
-    "triton>=2.0.0",
-]
-datasets = [
-    "datasets>=2.0.0",
-    "tokenizers>=0.13.0",
-    "torchvision>=0.15.0",
-]
-app = [
-    "PyQt6>=6.0.0",
-    "pyqtgraph>=0.13.0",
-]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-]
-all = [
-    "eqprop-torch[gpu,datasets,app,dev]",
-]
-
-[project.urls]
-Homepage = "https://github.com/automenta/eqprop"
-Documentation = "https://github.com/automenta/eqprop#readme"
-Repository = "https://github.com/automenta/eqprop"
-Issues = "https://github.com/automenta/eqprop/issues"
 
 [project.scripts]
-eqprop-trainer = "eqprop_trainer.main:main"
-
-[tool.hatch.build.targets.wheel]
-packages = ["eqprop_torch", "eqprop_trainer"]
-
-[tool.hatch.build.targets.sdist]
-include = [
-    "/eqprop_torch",
-    "/eqprop_trainer",
-    "/examples",
-    "/tests",
-]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-v --tb=short"
-
-[tool.ruff]
-line-length = 100
-target-version = "py39"
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I"]
-ignore = ["E501"]
+eqprop-verify = "bioplausible.cli:main"
+eqprop-dashboard = "bioplausible_ui.main:main"
+eqprop-hyperopt = "bioplausible_ui.hyperopt_app:main"
+eqprop-coordinator = "bioplausible.p2p.coordinator:main"
+eqprop-worker = "bioplausible.p2p.worker:main"
+eqprop-p2p-worker = "bioplausible.p2p.p2p_worker:main"

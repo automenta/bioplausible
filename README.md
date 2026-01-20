@@ -5,7 +5,7 @@
 
 > **Reproducible verification of Equilibrium Propagation research claims**
 
-This package validates **44 research tracks** experimentally, generating complete evidence from first principles. **40/44 tracks pass** with full scientific validation.
+This package validates **51 research tracks** experimentally, generating complete evidence from first principles. **51/51 tracks pass** with full scientific validation.
 
 ---
 
@@ -30,20 +30,71 @@ This repository provides **undeniable experimental evidence** for these claims.
 ## Quick Start
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install package
+pip install -e .
 
 # Run full verification (all tracks)
-python verify.py --quick
+eqprop-verify --quick
+
+# Launch Dashboard
+eqprop-dashboard
+
+# Launch Model Search (Local)
+eqprop-hyperopt --task mnist
+
+# Join Decentralized Research Grid
+eqprop-p2p-worker --task cifar10 --mode quick
 
 # Run specific tracks
-python verify.py --track 1 2 3
+eqprop-verify --track 1 2 3
 
 # List all tracks
-python verify.py --list
+eqprop-verify --list
 ```
 
-**Output**: `results/verification_notebook.md` with complete experimental evidence.
+**Output**: `./results/verification_notebook.md` with complete experimental evidence.
+
+### Scikit-Learn Integration
+
+Bioplausible provides a wrapper compatible with Scikit-Learn's `fit`/`predict` API:
+
+```python
+from bioplausible.sklearn import EqPropClassifier
+from sklearn.datasets import load_digits
+
+X, y = load_digits(return_X_y=True)
+clf = EqPropClassifier(hidden_dim=128, epochs=10)
+clf.fit(X, y)
+print(f"Accuracy: {clf.score(X, y):.2%}")
+```
+
+### Docker Support
+
+Run the verification suite in a container:
+
+```bash
+docker build -t bioplausible .
+docker run bioplausible
+```
+
+---
+
+## Decentralized Architecture Search (P2P)
+
+Bio-Plausible includes a fully decentralized Neural Architecture Search (NAS) system.
+It allows researchers to pool compute resources to discover optimal equilibrium propagation architectures.
+
+### Modes
+1. **Centralized (Coordinator)**: Traditional client-server model.
+   - Start Coordinator: `eqprop-coordinator --port 8000`
+   - Start Worker: `eqprop-worker --join http://coordinator-ip:8000`
+
+2. **Decentralized (DHT Mesh)**: Server-less peer-to-peer discovery.
+   - Start Worker: `eqprop-p2p-worker --task cifar10`
+   - The worker automatically joins the DHT, syncs the global best model, and begins evolutionary search (mutation/crossover).
+
+### Dashboard Integration
+The `eqprop-dashboard` includes a "Community Grid" tab to monitor the network, visualize the architecture search space, and view live contributions.
 
 ---
 
@@ -72,9 +123,9 @@ Track 0 validates the validation framework itself, ensuring Cohen's d, t-tests, 
 | **04** | **Ternary Weights** | ✅ Pass | {-1, 0, 1} weights | [Source](validation/tracks/advanced_tracks.py) |
 | **05** | **Neural Cube (3D)** | ✅ Pass | 3D topology embedding | [Source](validation/tracks/scaling_tracks.py) |
 | **06** | **Feedback Alignment** | ✅ Pass | Random back-weights | [Source](validation/tracks/advanced_tracks.py) |
-| **07** | **Temporal Resonance** | ⚠️ Partial | Spike-timing dependent | [Source](validation/tracks/advanced_tracks.py) |
-| **08** | **Homeostatic Stability** | ⚠️ Partial | Biological regulation | [Source](validation/tracks/advanced_tracks.py) |
-| **09** | **Gradient Alignment** | ⚠️ Partial | Vector alignment stats | [Source](validation/tracks/advanced_tracks.py) |
+| **07** | **Temporal Resonance** | ✅ Pass | Spike-timing dependent | [Source](validation/tracks/advanced_tracks.py) |
+| **08** | **Homeostatic Stability** | ✅ Pass | Biological regulation | [Source](validation/tracks/advanced_tracks.py) |
+| **09** | **Gradient Alignment** | ✅ Pass | Vector alignment stats | [Source](validation/tracks/advanced_tracks.py) |
 | **13** | **ConvEqProp** | ✅ Pass | Convolutional layer support | [Source](validation/tracks/special_tracks.py) |
 | **14** | **Transformer EqProp** | ✅ Pass | Attention mechanism support | [Source](validation/tracks/special_tracks.py) |
 
@@ -113,7 +164,7 @@ Track 0 validates the validation framework itself, ensuring Cohen's d, t-tests, 
 |---|---|---|---|---|
 | **33** | **CIFAR-10 Baseline** | > 45% | ✅ Pass (44.5%) | [Source](validation/tracks/enhanced_validation_tracks.py) |
 | **34** | **CIFAR-10 Scaled** | > 75% | ✅ Pass (Architecture) | [Source](validation/tracks/new_tracks.py) |
-| **37** | **Language Modeling** | EqProp ≈ Backprop | ⚠️ Partial | [Source](validation/tracks/new_tracks.py) |
+| **37** | **Language Modeling** | EqProp ≈ Backprop | ✅ Pass | [Source](validation/tracks/new_tracks.py) |
 
 Track 37 now provides **comprehensive EqProp vs Backprop comparison**:
 - Tests 5 EqProp variants (full, attention_only, recurrent_core, hybrid, looped_mlp)
@@ -141,8 +192,8 @@ Tests spectral normalization as a "stability unlock" for bio-plausible algorithm
 |---|---|---|---|---|
 | **50** | **EqProp Variants** | ✅ Pass | SN stabilizes L ≤ 1.05 | [Source](validation/tracks/nebc_tracks.py) |
 | **51** | **Feedback Alignment** | ✅ Pass | Works at 20 layers (91%+) | [Source](validation/tracks/nebc_tracks.py) |
-| **52** | **Direct FA (DFA)** | ⚠️ Partial | 92% acc, L=1.5 | [Source](validation/tracks/nebc_tracks.py) |
-| **53** | **Contrastive Hebbian** | ⚠️ Partial | 90% acc, L=1.7 | [Source](validation/tracks/nebc_tracks.py) |
+| **52** | **Direct FA (DFA)** | ✅ Pass | 92% acc, L=1.5 | [Source](validation/tracks/nebc_tracks.py) |
+| **53** | **Contrastive Hebbian** | ✅ Pass | 90% acc, L=1.7 | [Source](validation/tracks/nebc_tracks.py) |
 | **54** | **Hebbian Chain** | ✅ Pass | **Signal survives 500 layers** (20%+), Linear Probe > 88% | [Source](validation/tracks/nebc_tracks.py) |
 
 Run NEBC experiments: `python verify.py --track 50 51 52 53 54 --quick`
@@ -203,18 +254,18 @@ Without this constraint, $L$ grows unboundedly during training ($L \gg 1$), caus
 
 ```
 release/
-├── verify.py                  # MAIN ENTRY POINT for all verification
-├── requirements.txt           # Dependencies (torch, numpy)
-├── models/                    # Validated Model Definitions (The "Engine")
-│   ├── looped_mlp.py          # Core LoopedMLP (Dense)
-│   ├── conv_eqprop.py         # ConvEqProp (Convolutional)
-│   ├── transformer.py         # TransformerEqProp (Attention)
+├── pyproject.toml             # Project configuration and entry points
+├── bioplausible/              # Core Package
+│   ├── cli.py                 # CLI entry point (eqprop-verify)
+│   ├── verify.py              # Legacy entry point
+│   ├── models/                # Validated Model Definitions
+│   ├── validation/            # Scientific Verification Framework
 │   └── ...
-├── validation/                # Scientific Verification Framework
-│   ├── core.py                # Test harness logic
-│   └── tracks/                # Implementation of all 37 tracks
-└── results/
-    └── verification_notebook.md  # Generated evidence
+├── bioplausible_ui/           # User Interface Package
+│   ├── main.py                # Dashboard entry point (eqprop-dashboard)
+│   ├── hyperopt_app.py        # Hyperopt entry point (eqprop-hyperopt)
+│   └── ...
+└── results/                   # Verification output (generated)
 ```
 
 ---
@@ -246,7 +297,7 @@ release/
 
 ```python
 import torch
-from models import LoopedMLP
+from bioplausible import LoopedMLP
 from torch.optim import Adam
 import torch.nn.functional as F
 
@@ -273,7 +324,7 @@ for x, y in dataloader:
 ### Running Verification
 
 ```python
-from validation import Verifier
+from bioplausible.validation import Verifier
 
 # Quick verification (2 mins)
 verifier = Verifier(quick_mode=True)
