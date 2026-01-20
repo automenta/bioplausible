@@ -63,12 +63,33 @@ class TestNewFeatures(unittest.TestCase):
         self.assertTrue(tab.load_best_btn.isEnabled())
         self.assertIn("95.0%", tab.load_best_btn.text())
 
+        # Cleanup timer
+        if hasattr(tab, 'update_timer'):
+            tab.update_timer.stop()
+
     def test_dashboard_init(self):
         from bioplausible_ui.dashboard import EqPropDashboard
         dash = EqPropDashboard()
         self.assertIsNotNone(dash)
         # Check device label text
         self.assertTrue("Device:" in dash.device_label.text())
+
+        # Cleanup dashboard components to prevent thread leaks
+        if hasattr(dash, 'disc_tab'):
+            if hasattr(dash.disc_tab, 'viz_timer'):
+                dash.disc_tab.viz_timer.stop()
+            if hasattr(dash.disc_tab, 'net_timer'):
+                dash.disc_tab.net_timer.stop()
+            if hasattr(dash.disc_tab, 'thread'):
+                dash.disc_tab.thread.quit()
+                dash.disc_tab.thread.wait()
+
+        if hasattr(dash, 'p2p_tab'):
+             if hasattr(dash.p2p_tab, 'update_timer'):
+                dash.p2p_tab.update_timer.stop()
+
+        if hasattr(dash, 'plot_timer'):
+             dash.plot_timer.stop()
 
 if __name__ == '__main__':
     unittest.main()

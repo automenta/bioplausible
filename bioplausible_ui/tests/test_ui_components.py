@@ -38,6 +38,12 @@ class TestTabs(unittest.TestCase):
             tab.thread.quit()
             tab.thread.wait()
 
+        # Cleanup timers
+        if hasattr(tab, 'viz_timer'):
+            tab.viz_timer.stop()
+        if hasattr(tab, 'net_timer'):
+            tab.net_timer.stop()
+
     def test_vision_tab_inference_dialog(self):
         from bioplausible_ui.tabs.vision_tab import VisionInferenceDialog
         import torch
