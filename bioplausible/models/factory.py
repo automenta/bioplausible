@@ -25,6 +25,8 @@ from bioplausible.models.holomorphic_ep import HolomorphicEP
 from bioplausible.models.deep_ep import DirectedEP
 from bioplausible.models.finite_nudge_ep import FiniteNudgeEP
 from bioplausible.models.modern_conv_eqprop import ModernConvEqProp
+from bioplausible.models.eqprop_diffusion import EqPropDiffusion
+from bioplausible.models.neural_cube import NeuralCube
 
 # Hybrid / Experimental Models
 from bioplausible.models.ada_fa import AdaptiveFeedbackAlignment
@@ -156,6 +158,26 @@ def build_modern_conv_eqprop(spec, input_dim, output_dim, hidden_dim, num_layers
     return ModernConvEqProp(
         eq_steps=spec.default_steps if spec.has_steps else 30,
         hidden_channels=hidden_dim,
+    ).to(device)
+
+@register_model_builder("eqprop_diffusion")
+def build_eqprop_diffusion(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    # input_dim is interpreted as channels for vision tasks
+    channels = input_dim if input_dim is not None else 1
+    return EqPropDiffusion(
+        img_channels=channels,
+        hidden_channels=hidden_dim
+    ).to(device)
+
+@register_model_builder("neural_cube")
+def build_neural_cube(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    # Derive cube size from hidden_dim approx
+    # hidden_dim = n_neurons = cube_size^3
+    cube_size = int(round(hidden_dim ** (1/3)))
+    return NeuralCube(
+        cube_size=max(4, cube_size), # Min size 4
+        input_dim=input_dim,
+        output_dim=output_dim
     ).to(device)
 
 @register_model_builder("adaptive_feedback_alignment")

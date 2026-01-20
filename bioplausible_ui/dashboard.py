@@ -55,6 +55,7 @@ from bioplausible_ui.tabs.console_tab import ConsoleTab
 from bioplausible_ui.tabs.p2p_tab import P2PTab
 from bioplausible_ui.tabs.discovery_tab import DiscoveryTab
 from bioplausible_ui.tabs.deploy_tab import DeployTab
+from bioplausible_ui.tabs.diffusion_tab import DiffusionTab
 
 
 class QtLogHandler(logging.Handler, QObject):
@@ -268,6 +269,7 @@ class EqPropDashboard(QMainWindow):
         items = [
             ("🔤 Language Model", 0),
             ("📷 Vision", 1),
+            ("✨ Diffusion", 10),
             ("🎮 RL Agent", 2),
             ("🔬 Microscope", 3),
             ("🔍 Model Search", 4),
@@ -369,6 +371,13 @@ class EqPropDashboard(QMainWindow):
         # Page 9: Console
         self.console_tab = ConsoleTab()
         self.content_stack.addWidget(self.console_tab)
+
+        # Page 10: Diffusion
+        self.diff_tab = DiffusionTab()
+        self.diff_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+        self.diff_tab.stop_training_signal.connect(self._stop_training)
+        self.diff_tab.clear_plots_signal.connect(self._clear_plots)
+        self.content_stack.addWidget(self.diff_tab)
 
         # Select first item
         self.nav_list.setCurrentRow(0)
@@ -817,6 +826,8 @@ class EqPropDashboard(QMainWindow):
 
             if mode == 'vision':
                 self._start_vision_training()
+            elif mode == 'diffusion':
+                self._start_diffusion_training()
             elif mode == 'rl':
                 self._start_rl_training()
             else:
@@ -941,6 +952,80 @@ class EqPropDashboard(QMainWindow):
             import traceback
             traceback.print_exc()
             return None, None
+
+    def _create_diffusion_model_and_loader(self):
+        """Create diffusion model and data loader."""
+        from bioplausible.datasets import get_vision_dataset
+        from torch.utils.data import DataLoader
+        import torch
+
+        try:
+            # Dataset (MNIST) - must be unflattened [C, H, W]
+            train_data = get_vision_dataset('mnist', train=True, flatten=False)
+            train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
+
+            # Model
+            spec = get_model_spec("EqProp Diffusion")
+            hidden = self.diff_tab.hidden_spin.value()
+
+            model = create_model(
+                spec=spec,
+                input_dim=1, # Channels
+                output_dim=1,
+                hidden_dim=hidden,
+                device="cuda" if torch.cuda.is_available() else "cpu",
+                task_type="vision"
+            )
+            return model, train_loader
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to create Diffusion model:\n{e}")
+            import traceback
+            traceback.print_exc()
+            return None, None
+
+    def _start_diffusion_training(self):
+        """Start diffusion training."""
+        import time
+        model, train_loader = self._create_diffusion_model_and_loader()
+
+        if model is None or train_loader is None:
+            return
+
+        self.model = model
+        self.train_loader = train_loader
+
+        # Refs
+        self.diff_tab.update_model_ref(self.model)
+        self.deploy_tab.update_model_ref(self.model)
+
+        # Clear history
+        self.loss_history.clear()
+
+        # Worker
+        self.worker = TrainingWorker(
+            self.model,
+            self.train_loader,
+            epochs=self.diff_tab.epochs_spin.value(),
+            lr=self.diff_tab.lr_spin.value(),
+            hyperparams={}
+        )
+
+        self.worker.progress.connect(self._on_progress)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.error.connect(self._on_error)
+        self.worker.log.connect(self._append_log)
+
+        # UI
+        self.diff_tab.train_btn.setEnabled(False)
+        self.diff_tab.stop_btn.setEnabled(True)
+        self.diff_tab.progress.setMaximum(self.diff_tab.epochs_spin.value())
+        self.diff_tab.progress.setValue(0)
+
+        self.start_time = time.time()
+        self.status_label.setText("Training Diffusion Model...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
+        self.plot_timer.start(100)
+        self.worker.start()
 
     def _start_vision_training(self):
         """Start vision model training."""
