@@ -1,15 +1,15 @@
 """
-Bioplausible Trainer Dashboard
+Bioplausible Trainer Dashboard - Refactored Version
 
 Main window with tabbed interface for Language Modeling and Vision training.
 Features stunning dark cyberpunk theme with live pyqtgraph plots.
 """
 
 import sys
-import numpy as np
 import logging
 import json
-from typing import Optional, Dict, List, Tuple, Any
+import time
+from typing import Optional, Dict, List, Tuple
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
@@ -31,12 +31,13 @@ except ImportError:
 # Feature flags
 ENABLE_WEIGHT_VIZ = True
 
-from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec, ModelSpec
+from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible.models.factory import create_model
 
 from .themes import CYBERPUNK_DARK, LIGHT_THEME, PLOT_COLORS, LIGHT_PLOT_COLORS, DARK_THEME_COLORS, LIGHT_THEME_COLORS
 from .worker import TrainingWorker, RLWorker, BenchmarkWorker
-from .generation import UniversalGenerator, SimpleCharTokenizer, count_parameters, format_parameter_count
+from .generation import UniversalGenerator, count_parameters, format_parameter_count
+from .hyperparams import get_hyperparams_for_model
 from .viz_utils import extract_weights, format_weight_for_display, normalize_weights_for_display, get_layer_description
 from .dashboard_helpers import (
     update_hyperparams_generic,
@@ -44,8 +45,12 @@ from .dashboard_helpers import (
     create_weight_viz_widgets_generic,
     update_weight_visualization_generic
 )
-from .utils import calculate_eta, show_error_dialog, format_metric_value, get_device_info
-from .common_widgets import create_plot_widget, create_standard_buttons
+from .training_utils import (
+    create_vision_model_and_loader,
+    create_lm_model_and_loader,
+    create_diffusion_model_and_loader,
+    start_training_common
+)
 
 from bioplausible_ui.tabs.lm_tab import LMTab
 from bioplausible_ui.tabs.vision_tab import VisionTab
@@ -123,7 +128,24 @@ class EqPropDashboard(QMainWindow):
         # Setup system logger
         self._setup_logging()
 
-        # Training state
+        # Initialize training state
+        self._initialize_training_state()
+
+        # Initialize plot data
+        self._initialize_plot_data()
+
+        # Initialize UI
+        self._setup_ui()
+
+        # Initialize timers
+        self._setup_timers()
+
+        # Apply initial configuration if provided
+        if self.initial_config:
+            QTimer.singleShot(100, lambda: self._apply_config(self.initial_config))
+
+    def _initialize_training_state(self):
+        """Initialize training-related state variables."""
         self.worker: Optional[TrainingWorker] = None
         self.model = None
         self.train_loader = None
@@ -131,28 +153,24 @@ class EqPropDashboard(QMainWindow):
         self.generator: Optional[UniversalGenerator] = None
         self.start_time = None
 
-        # Plot data
+    def _initialize_plot_data(self):
+        """Initialize plot data storage."""
+        # Training metrics
         self.loss_history: List[float] = []
         self.acc_history: List[float] = []
         self.lipschitz_history: List[float] = []
 
-        # RL History
+        # RL metrics
         self.rl_reward_history: List[float] = []
         self.rl_loss_history: List[float] = []
         self.rl_avg_reward_history: List[float] = []
 
-        # Initialize UI
-        self._setup_ui()
-
-        # Update timer for plots
+    def _setup_timers(self):
+        """Setup QTimer objects."""
         self.plot_timer = QTimer()
         self.plot_timer.timeout.connect(self._update_plots)
 
-        # Apply initial configuration if provided
-        if self.initial_config:
-            QTimer.singleShot(100, lambda: self._apply_config(self.initial_config))
-
-    def _apply_config(self, config: Dict):
+    def _apply_config(self, config: Dict) -> None:
         """Apply initial configuration to UI elements."""
         try:
             model_name = config.get('model_name', '')
@@ -229,10 +247,16 @@ class EqPropDashboard(QMainWindow):
         layout.addWidget(main_splitter)
 
         # --- Sidebar ---
-        self._setup_sidebar(main_splitter)
+        sidebar_widget = self._create_sidebar()
+        main_splitter.addWidget(sidebar_widget)
 
         # --- Content Area ---
-        self._setup_content_area(main_splitter)
+        content_widget = self._create_content_area()
+        main_splitter.addWidget(content_widget)
+        main_splitter.setStretchFactor(1, 1) # Content stretches
+
+        # Initialize Tabs (Pages) - with lazy loading
+        self._initialize_tabs()
 
         # Status bar
         self._setup_status_bar()
@@ -240,8 +264,8 @@ class EqPropDashboard(QMainWindow):
         # Keyboard Shortcuts
         self._setup_keyboard_shortcuts()
 
-    def _setup_sidebar(self, main_splitter):
-        """Set up the sidebar navigation."""
+    def _create_sidebar(self):
+        """Create the sidebar widget."""
         sidebar_widget = QWidget()
         sidebar_widget.setFixedWidth(250)
         sidebar_widget.setStyleSheet("background-color: #15151a; border-right: 1px solid #333;")
@@ -258,8 +282,30 @@ class EqPropDashboard(QMainWindow):
         sidebar_layout.addWidget(header)
 
         # Navigation List
-        self.nav_list = QListWidget()
-        self.nav_list.setStyleSheet("""
+        self.nav_list = self._create_navigation_list()
+        sidebar_layout.addWidget(self.nav_list)
+
+        sidebar_layout.addStretch()
+
+        # Save/Load Buttons in Sidebar
+        self.save_btn = QPushButton("💾 Save Checkpoint")
+        self.save_btn.clicked.connect(self._save_model)
+        self.save_btn.setStyleSheet("text-align: left; padding: 10px;")
+        self.save_btn.setToolTip("Save the current model and training configuration")
+        sidebar_layout.addWidget(self.save_btn)
+
+        self.load_btn = QPushButton("📂 Load Checkpoint")
+        self.load_btn.clicked.connect(self._load_model)
+        self.load_btn.setStyleSheet("text-align: left; padding: 10px;")
+        self.load_btn.setToolTip("Load a previously saved model and training configuration")
+        sidebar_layout.addWidget(self.load_btn)
+
+        return sidebar_widget
+
+    def _create_navigation_list(self):
+        """Create the navigation list widget."""
+        nav_list = QListWidget()
+        nav_list.setStyleSheet("""
             QListWidget {
                 background-color: transparent;
                 border: none;
@@ -281,7 +327,7 @@ class EqPropDashboard(QMainWindow):
                 background-color: #1e2530;
             }
         """)
-        self.nav_list.setToolTip("Select a training task from the menu")
+        nav_list.setToolTip("Select a training task from the menu")
 
         items = [
             ("🔤 Language Model", 0),
@@ -300,30 +346,13 @@ class EqPropDashboard(QMainWindow):
         for name, idx in items:
             item = QListWidgetItem(name)
             item.setData(Qt.ItemDataRole.UserRole, idx)
-            self.nav_list.addItem(item)
+            nav_list.addItem(item)
 
-        self.nav_list.currentRowChanged.connect(self._on_nav_changed)
-        sidebar_layout.addWidget(self.nav_list)
+        nav_list.currentRowChanged.connect(self._on_nav_changed)
+        return nav_list
 
-        sidebar_layout.addStretch()
-
-        # Save/Load Buttons in Sidebar
-        self.save_btn = QPushButton("💾 Save Checkpoint")
-        self.save_btn.clicked.connect(self._save_model)
-        self.save_btn.setStyleSheet("text-align: left; padding: 10px;")
-        self.save_btn.setToolTip("Save the current model and training configuration")
-        sidebar_layout.addWidget(self.save_btn)
-
-        self.load_btn = QPushButton("📂 Load Checkpoint")
-        self.load_btn.clicked.connect(self._load_model)
-        self.load_btn.setStyleSheet("text-align: left; padding: 10px;")
-        self.load_btn.setToolTip("Load a previously saved model and training configuration")
-        sidebar_layout.addWidget(self.load_btn)
-
-        main_splitter.addWidget(sidebar_widget)
-
-    def _setup_content_area(self, main_splitter):
-        """Set up the main content area with tabs."""
+    def _create_content_area(self):
+        """Create the main content area."""
         content_widget = QWidget()
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(20, 20, 20, 20)
@@ -332,9 +361,10 @@ class EqPropDashboard(QMainWindow):
         self.content_stack = QStackedWidget()
         content_layout.addWidget(self.content_stack)
 
-        main_splitter.addWidget(content_widget)
-        main_splitter.setStretchFactor(1, 1) # Content stretches
+        return content_widget
 
+    def _initialize_tabs(self):
+        """Initialize tabs with lazy loading."""
         # Initialize Tabs (Pages) - with lazy loading
         self.tab_classes = {
             0: LMTab,
@@ -381,7 +411,7 @@ class EqPropDashboard(QMainWindow):
         self.nav_list.setCurrentRow(0)
 
     def _setup_status_bar(self):
-        """Set up the status bar."""
+        """Setup the status bar with indicators."""
         self.status_bar = self.statusBar()
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
         self.status_label.setStyleSheet("color: #808090; padding: 5px;")
@@ -389,7 +419,18 @@ class EqPropDashboard(QMainWindow):
         self.status_bar.addWidget(self.status_label, 1) # Stretch
 
         # Device Indicator
-        device_name = get_device_info()
+        import torch
+        try:
+            from bioplausible.kernel import HAS_TRITON_OPS
+        except ImportError:
+            HAS_TRITON_OPS = False
+
+        device_name = "CPU"
+        if torch.cuda.is_available():
+            device_name = "CUDA"
+            if HAS_TRITON_OPS:
+                device_name += " (Triton Accel)"
+
         self.device_label = QLabel(f"Device: {device_name}")
         self.device_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 0 10px;")
         self.device_label.setToolTip("Current compute device being used for training")
@@ -412,7 +453,8 @@ class EqPropDashboard(QMainWindow):
             pass
 
     def _setup_keyboard_shortcuts(self):
-        """Set up keyboard shortcuts."""
+        """Setup keyboard shortcuts for the application."""
+        # Training shortcuts
         self.train_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
         self.train_shortcut.activated.connect(self._on_train_shortcut)
         self.train_shortcut.setToolTip("Start training (Ctrl+Return)")
@@ -617,7 +659,7 @@ class EqPropDashboard(QMainWindow):
         self.status_label.setText("Plot history cleared.")
         self.status_label.setStyleSheet("color: #a0a0b0; padding: 5px;")
 
-    def _on_nav_changed(self, row):
+    def _on_nav_changed(self, row: int) -> None:
         """Handle sidebar navigation with lazy loading."""
         # Check if tab needs to be initialized
         if not self.tab_initialized.get(row, False):
@@ -625,7 +667,7 @@ class EqPropDashboard(QMainWindow):
 
         self.content_stack.setCurrentIndex(row)
 
-    def _init_tab_lazy(self, tab_index):
+    def _init_tab_lazy(self, tab_index: int) -> None:
         """Initialize a tab lazily when first accessed."""
         if tab_index == 4:  # Search tab - special handling
             search_tab = self._create_search_tab()
@@ -638,7 +680,33 @@ class EqPropDashboard(QMainWindow):
             actual_tab = TabClass()
 
             # Set up connections based on tab type
-            self._setup_tab_connections(actual_tab, tab_index)
+            if tab_index == 1:  # Vision tab
+                actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+                actual_tab.stop_training_signal.connect(self._stop_training)
+                actual_tab.clear_plots_signal.connect(self._clear_plots)
+                self.vis_tab = actual_tab
+            elif tab_index == 2:  # RL tab
+                actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+                actual_tab.stop_training_signal.connect(self._stop_training)
+                actual_tab.clear_plots_signal.connect(self._clear_plots)
+                self.rl_tab = actual_tab
+            elif tab_index == 5:  # Discovery tab
+                actual_tab.load_model_signal.connect(self._apply_config)
+                self.disc_tab = actual_tab
+            elif tab_index == 6:  # P2P tab
+                actual_tab.bridge_log_signal.connect(self._append_log)
+                actual_tab.bridge_status_signal.connect(lambda s, p, j: self.disc_tab.update_p2p_ref(self.p2p_tab.worker))
+                actual_tab.load_model_signal.connect(self._apply_config)
+                self.p2p_tab = actual_tab
+            elif tab_index == 7:  # Benchmarks tab
+                actual_tab.log_message.connect(self._append_log)
+                actual_tab.load_model_signal.connect(self._apply_config)
+                self.bench_tab = actual_tab
+            elif tab_index == 10:  # Diffusion tab
+                actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
+                actual_tab.stop_training_signal.connect(self._stop_training)
+                actual_tab.clear_plots_signal.connect(self._clear_plots)
+                self.diff_tab = actual_tab
 
             # Replace the placeholder widget with the actual tab
             placeholder = self.content_stack.widget(tab_index)
@@ -650,36 +718,6 @@ class EqPropDashboard(QMainWindow):
 
         # Mark as initialized
         self.tab_initialized[tab_index] = True
-
-    def _setup_tab_connections(self, actual_tab, tab_index):
-        """Set up connections for a specific tab."""
-        if tab_index == 1:  # Vision tab
-            actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
-            actual_tab.stop_training_signal.connect(self._stop_training)
-            actual_tab.clear_plots_signal.connect(self._clear_plots)
-            self.vis_tab = actual_tab
-        elif tab_index == 2:  # RL tab
-            actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
-            actual_tab.stop_training_signal.connect(self._stop_training)
-            actual_tab.clear_plots_signal.connect(self._clear_plots)
-            self.rl_tab = actual_tab
-        elif tab_index == 5:  # Discovery tab
-            actual_tab.load_model_signal.connect(self._apply_config)
-            self.disc_tab = actual_tab
-        elif tab_index == 6:  # P2P tab
-            actual_tab.bridge_log_signal.connect(self._append_log)
-            actual_tab.bridge_status_signal.connect(lambda s, p, j: self.disc_tab.update_p2p_ref(self.p2p_tab.worker))
-            actual_tab.load_model_signal.connect(self._apply_config)
-            self.p2p_tab = actual_tab
-        elif tab_index == 7:  # Benchmarks tab
-            actual_tab.log_message.connect(self._append_log)
-            actual_tab.load_model_signal.connect(self._apply_config)
-            self.bench_tab = actual_tab
-        elif tab_index == 10:  # Diffusion tab
-            actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
-            actual_tab.stop_training_signal.connect(self._stop_training)
-            actual_tab.clear_plots_signal.connect(self._clear_plots)
-            self.diff_tab = actual_tab
 
     def _on_train_shortcut(self):
         """Handle start training shortcut based on active tab."""
@@ -728,7 +766,7 @@ class EqPropDashboard(QMainWindow):
                     json.dump(config, f, indent=4)
                 self.status_label.setText(f"Configuration saved to {fname}")
             except Exception as e:
-                show_error_dialog(self, "Save Error", str(e))
+                QMessageBox.critical(self, "Save Error", str(e))
 
     def _load_config_only(self):
         """Load configuration from a JSON file."""
@@ -739,7 +777,7 @@ class EqPropDashboard(QMainWindow):
                     config = json.load(f)
                 self._apply_config(config)
             except Exception as e:
-                show_error_dialog(self, "Load Error", str(e))
+                QMessageBox.critical(self, "Load Error", str(e))
 
     def _export_logs(self):
         """Export training history to a CSV file."""
@@ -760,7 +798,7 @@ class EqPropDashboard(QMainWindow):
                         writer.writerow([i + 1, self.loss_history[i], acc, lip])
                 self.status_label.setText(f"Logs exported to {fname}")
             except Exception as e:
-                show_error_dialog(self, "Export Error", str(e))
+                QMessageBox.critical(self, "Export Error", str(e))
 
     def _load_recent_models(self):
         """Load recent models from a file."""
@@ -926,9 +964,15 @@ class EqPropDashboard(QMainWindow):
             self._add_recent_model(filepath)
 
         except Exception as e:
-            show_error_dialog(self, "Load Error", f"Failed to load: {str(e)}")
+            QMessageBox.critical(self, "Load Error", f"Failed to load: {str(e)}")
             import traceback
             traceback.print_exc()
+
+    def _clear_recent_models(self):
+        """Clear the recent models list."""
+        self.recent_models = []
+        self._save_recent_models()
+        self._update_recent_models_menu()
 
     def _save_model(self):
         """Save the current model to a file, including current UI configuration."""
@@ -951,8 +995,14 @@ class EqPropDashboard(QMainWindow):
 
                 # Add to recent models
                 self._add_recent_model(fname)
+            except OSError as e:
+                error_msg = f"Could not save to file {fname}: {e}"
+                self._log_error(error_msg)
+                QMessageBox.critical(self, "Save Error", error_msg)
             except Exception as e:
-                show_error_dialog(self, "Save Error", str(e))
+                error_msg = f"Failed to save model: {e}"
+                self._log_error(error_msg)
+                QMessageBox.critical(self, "Save Error", error_msg)
 
     def _load_model(self):
         """Load a model from a file and restore UI state."""
@@ -1024,8 +1074,18 @@ class EqPropDashboard(QMainWindow):
                 # Add to recent models
                 self._add_recent_model(fname)
 
+            except FileNotFoundError:
+                error_msg = f"Model file not found: {fname}"
+                self._log_error(error_msg)
+                QMessageBox.critical(self, "File Not Found", error_msg)
+            except KeyError as e:
+                error_msg = f"Missing key in checkpoint: {e}"
+                self._log_error(error_msg)
+                QMessageBox.critical(self, "Load Error", error_msg)
             except Exception as e:
-                show_error_dialog(self, "Load Error", f"Failed to load: {str(e)}")
+                error_msg = f"Failed to load model: {str(e)}"
+                self._log_error(error_msg)
+                QMessageBox.critical(self, "Load Error", error_msg)
                 import traceback
                 traceback.print_exc()
 
@@ -1036,6 +1096,7 @@ class EqPropDashboard(QMainWindow):
         self.micro_tab._run_microscope_analysis()
 
     def _create_search_tab(self) -> QWidget:
+        """Create the Model Search tab."""
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setSpacing(20)
@@ -1120,7 +1181,7 @@ class EqPropDashboard(QMainWindow):
             self.status_label.setText(f"Launched Model Search Tool for {task}")
 
         except Exception as e:
-            show_error_dialog(self, "Launch Error", f"Failed to launch search tool:\n{e}")
+            QMessageBox.critical(self, "Launch Error", f"Failed to launch search tool:\n{e}")
             import traceback
             traceback.print_exc()
 
@@ -1139,204 +1200,19 @@ class EqPropDashboard(QMainWindow):
             else:
                 self._start_lm_training()
 
+        except ImportError as e:
+            error_msg = f"Missing dependency: {e}"
+            self._log_error(error_msg)
+            QMessageBox.critical(self, "Import Error", error_msg)
         except Exception as e:
-            show_error_dialog(self, "Error", f"Failed to start training:\n{e}")
-
-    def _create_model_and_loader(self, mode: str):
-        """Create model and data loader based on mode (vision or lm)."""
-        import torch
-        from bioplausible import LoopedMLP, ConvEqProp, BackpropMLP
-        from torch.utils.data import DataLoader
-
-        if mode == 'vision':
-            return self._create_vision_model_and_loader()
-        else:
-            return self._create_lm_model_and_loader()
-
-    def _create_vision_model_and_loader(self):
-        """Create vision model and data loader."""
-        from bioplausible.datasets import get_vision_dataset
-        from torch.utils.data import DataLoader
-
-        # Get dataset
-        dataset_name = self.vis_tab.vis_dataset_combo.currentText().lower().replace('-', '_')
-
-        # Determine flattening based on model type
-        model_name = self.vis_tab.vis_model_combo.currentText()
-        try:
-            spec = get_model_spec(model_name)
-            use_flatten = spec.model_type != "modern_conv_eqprop"
-        except:
-             use_flatten = True
-
-        train_data = get_vision_dataset(dataset_name, train=True, flatten=use_flatten)
-        self.train_loader = DataLoader(train_data, batch_size=self.vis_tab.vis_batch_spin.value(), shuffle=True)
-
-        # Create model
-        hidden = self.vis_tab.vis_hidden_spin.value()
-
-        try:
-            spec = get_model_spec(model_name)
-
-            # Determine input_dim based on dataset
-            if 'MNIST' in self.vis_tab.vis_dataset_combo.currentText():
-                input_dim = 784 if use_flatten else 1
-            else:  # CIFAR-10
-                input_dim = 3072 if use_flatten else 3
-
-            # Map combo text to internal string
-            grad_text = self.vis_tab.vis_grad_combo.currentText()
-            if "BPTT" in grad_text:
-                grad_method = "bptt"
-            elif "Equilibrium" in grad_text:
-                grad_method = "equilibrium"
-            elif "Contrastive" in grad_text:
-                grad_method = "contrastive"
-            else:
-                grad_method = "bptt"
-
-            model = create_model(
-                spec=spec,
-                input_dim=input_dim,
-                output_dim=10,
-                hidden_dim=hidden,
-                device="cuda" if torch.cuda.is_available() else "cpu",
-                task_type="vision",
-                gradient_method=grad_method
-            )
-
-            # Update step if spin box is used
-            if hasattr(model, 'max_steps'):
-                model.max_steps = self.vis_tab.vis_steps_spin.value()
-            elif hasattr(model, 'eq_steps'):
-                model.eq_steps = self.vis_tab.vis_steps_spin.value()
-
-        except Exception as e:
-             QMessageBox.warning(self, "Model Creation Failed", f"Could not create {model_name}: {e}")
-             return None, None
-
-        return model, self.train_loader
-
-    def _create_lm_model_and_loader(self):
-        """Create language model and data loader."""
-        from bioplausible.datasets import get_lm_dataset
-        from torch.utils.data import DataLoader
-
-        model_name = self.lm_tab.lm_model_combo.currentText()
-
-        try:
-            # Get dataset
-            dataset_name = self.lm_tab.lm_dataset_combo.currentText()
-            seq_len = self.lm_tab.lm_seqlen_spin.value()
-
-            dataset = get_lm_dataset(dataset_name, seq_len=seq_len, split='train')
-            vocab_size = dataset.vocab_size if hasattr(dataset, 'vocab_size') else 256
-
-            spec = get_model_spec(model_name)
-
-            model = create_model(
-                spec=spec,
-                input_dim=None, # Uses embedding
-                output_dim=vocab_size,
-                hidden_dim=self.lm_tab.lm_hidden_spin.value(),
-                num_layers=self.lm_tab.lm_layers_spin.value(),
-                device="cuda" if torch.cuda.is_available() else "cpu",
-                task_type="lm"
-            )
-
-            # Apply steps
-            if hasattr(model, 'max_steps'):
-                 model.max_steps = self.lm_tab.lm_steps_spin.value()
-            elif hasattr(model, 'eq_steps'):
-                 model.eq_steps = self.lm_tab.lm_steps_spin.value()
-
-            train_loader = DataLoader(dataset, batch_size=self.lm_tab.lm_batch_spin.value(), shuffle=True)
-            return model, train_loader
-
-        except Exception as e:
-            show_error_dialog(self, "Error", f"Failed to create LM model:\n{e}")
-            import traceback
-            traceback.print_exc()
-            return None, None
-
-    def _create_diffusion_model_and_loader(self):
-        """Create diffusion model and data loader."""
-        from bioplausible.datasets import get_vision_dataset
-        from torch.utils.data import DataLoader
-        import torch
-
-        try:
-            # Dataset (MNIST) - must be unflattened [C, H, W]
-            train_data = get_vision_dataset('mnist', train=True, flatten=False)
-            train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
-
-            # Model
-            spec = get_model_spec("EqProp Diffusion")
-            hidden = self.diff_tab.hidden_spin.value()
-
-            model = create_model(
-                spec=spec,
-                input_dim=1, # Channels
-                output_dim=1,
-                hidden_dim=hidden,
-                device="cuda" if torch.cuda.is_available() else "cpu",
-                task_type="vision"
-            )
-            return model, train_loader
-        except Exception as e:
-            show_error_dialog(self, "Error", f"Failed to create Diffusion model:\n{e}")
-            import traceback
-            traceback.print_exc()
-            return None, None
-
-    def _start_diffusion_training(self):
-        """Start diffusion training."""
-        import time
-        model, train_loader = self._create_diffusion_model_and_loader()
-
-        if model is None or train_loader is None:
-            return
-
-        self.model = model
-        self.train_loader = train_loader
-
-        # Refs
-        self.diff_tab.update_model_ref(self.model)
-        self.deploy_tab.update_model_ref(self.model)
-
-        # Clear history
-        self.loss_history.clear()
-
-        # Worker
-        self.worker = TrainingWorker(
-            self.model,
-            self.train_loader,
-            epochs=self.diff_tab.epochs_spin.value(),
-            lr=self.diff_tab.lr_spin.value(),
-            hyperparams={}
-        )
-
-        self.worker.progress.connect(self._on_progress)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.error.connect(self._on_error)
-        self.worker.log.connect(self._append_log)
-
-        # UI
-        self.diff_tab.train_btn.setEnabled(False)
-        self.diff_tab.stop_btn.setEnabled(True)
-        self.diff_tab.progress.setMaximum(self.diff_tab.epochs_spin.value())
-        self.diff_tab.progress.setValue(0)
-
-        self.start_time = time.time()
-        self.status_label.setText("Training Diffusion Model...")
-        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
-        self.plot_timer.start(100)
-        self.worker.start()
+            error_msg = f"Failed to start training: {e}"
+            self._log_error(error_msg)
+            QMessageBox.critical(self, "Error", error_msg)
 
     def _start_vision_training(self):
         """Start vision model training."""
         # Create model and data loader
-        model, train_loader = self._create_vision_model_and_loader()
+        model, train_loader = create_vision_model_and_loader(self.vis_tab)
 
         if model is None or train_loader is None:
             return  # Error already shown to user
@@ -1348,61 +1224,34 @@ class EqPropDashboard(QMainWindow):
         self.vis_tab.update_model_ref(self.model)
         self.deploy_tab.update_model_ref(self.model)
 
-        # Clear history
-        self.loss_history.clear()
-        self.acc_history.clear()
-        self.lipschitz_history.clear()
-
-        # Get hyperparameters
-        hyperparams = self._get_current_hyperparams(self.vis_tab.vis_hyperparam_widgets)
-
-        # Update parameter count
-        if hasattr(self.vis_tab, 'vis_param_label'):
-            count = count_parameters(self.model)
-            self.vis_tab.vis_param_label.setText(f"Parameters: {format_parameter_count(count)}")
-
-        # Create and start worker
-        micro_interval = 1 if self.vis_tab.vis_micro_check.isChecked() else 0
-
-        self.worker = TrainingWorker(
-            self.model,
-            self.train_loader,
-            epochs=self.vis_tab.vis_epochs_spin.value(),
-            lr=self.vis_tab.vis_lr_spin.value(),
-            use_compile=self.vis_tab.vis_compile_check.isChecked(),
-            use_kernel=self.vis_tab.vis_kernel_check.isChecked(),
-            hyperparams=hyperparams,
-            microscope_interval=micro_interval,
+        # Create and start worker using common method
+        self.worker = start_training_common(
+            model=self.model,
+            train_loader=train_loader,
+            tab_instance=self.vis_tab,
+            tab_name='vis',
+            hyperparam_widgets=self.vis_tab.vis_hyperparam_widgets,
+            microscope_check=self.vis_tab.vis_micro_check,
+            compile_check=self.vis_tab.vis_compile_check,
+            kernel_check=self.vis_tab.vis_kernel_check,
+            epochs_spin=self.vis_tab.vis_epochs_spin,
+            lr_spin=self.vis_tab.vis_lr_spin,
+            progress_bar=self.vis_tab.vis_progress,
+            status_label=self.status_label,
+            worker_class=TrainingWorker
         )
-        self.worker.progress.connect(self._on_progress)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.error.connect(self._on_error)
-        self.worker.weights_updated.connect(lambda w: self._update_weight_visualization(w, is_grad=False))
-        self.worker.gradients_updated.connect(lambda g: self._update_weight_visualization(g, is_grad=True))
-        self.worker.log.connect(self._append_log)
-        self.worker.dynamics_update.connect(self._on_dynamics_update)
 
-        # Update UI
-        self.vis_tab.vis_train_btn.setEnabled(False)
-        self.vis_tab.vis_stop_btn.setEnabled(True)
-        self.vis_tab.vis_pause_btn.setEnabled(True)
-        self.vis_tab.vis_pause_btn.clicked.connect(self._toggle_pause)
-        self.vis_tab.vis_progress.setMaximum(self.vis_tab.vis_epochs_spin.value())
-        self.vis_tab.vis_progress.setValue(0)
-
-        import time
-        self.start_time = time.time()
-
-        model_name = self.vis_tab.vis_model_combo.currentText()
-        self.status_label.setText(f"Training {model_name}...")
-        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
-        self.plot_timer.start(100)
-        self.worker.start()
+        # Additional connections specific to vision training
+        if self.worker:
+            self.worker.weights_updated.connect(lambda w: self._update_weight_visualization(w, is_grad=False))
+            self.worker.gradients_updated.connect(lambda g: self._update_weight_visualization(g, is_grad=True))
+            self.worker.log.connect(self._append_log)
+            self.worker.dynamics_update.connect(self._on_dynamics_update)
 
     def _start_lm_training(self):
         """Start language model training."""
         # Create model and data loader
-        model, train_loader = self._create_lm_model_and_loader()
+        model, train_loader = create_lm_model_and_loader(self.lm_tab)
 
         if model is None or train_loader is None:
             return  # Error already shown to user
@@ -1414,56 +1263,55 @@ class EqPropDashboard(QMainWindow):
         self.lm_tab.update_model_ref(self.model)
         self.deploy_tab.update_model_ref(self.model)
 
-        # Clear history
-        self.loss_history.clear()
-        self.acc_history.clear()
-        self.lipschitz_history.clear()
-
-        # Get hyperparameters
-        hyperparams = self._get_current_hyperparams(self.lm_tab.lm_hyperparam_widgets)
-
-        # Update parameter count
-        if hasattr(self.lm_tab, 'lm_param_label'):
-            count = count_parameters(self.model)
-            self.lm_tab.lm_param_label.setText(f"Parameters: {format_parameter_count(count)}")
-
-        # Create and start worker
-        micro_interval = 1 if self.lm_tab.lm_micro_check.isChecked() else 0
-
-        self.worker = TrainingWorker(
-            self.model,
-            self.train_loader,
-            epochs=self.lm_tab.lm_epochs_spin.value(),
-            lr=self.lm_tab.lm_lr_spin.value(),
-            use_compile=self.lm_tab.lm_compile_check.isChecked(),
-            use_kernel=self.lm_tab.lm_kernel_check.isChecked(),
-            hyperparams=hyperparams,
-            microscope_interval=micro_interval,
+        # Create and start worker using common method
+        self.worker = start_training_common(
+            model=self.model,
+            train_loader=train_loader,
+            tab_instance=self.lm_tab,
+            tab_name='lm',
+            hyperparam_widgets=self.lm_tab.lm_hyperparam_widgets,
+            microscope_check=self.lm_tab.lm_micro_check,
+            compile_check=self.lm_tab.lm_compile_check,
+            kernel_check=self.lm_tab.lm_kernel_check,
+            epochs_spin=self.lm_tab.lm_epochs_spin,
+            lr_spin=self.lm_tab.lm_lr_spin,
+            progress_bar=self.lm_tab.lm_progress,
+            status_label=self.status_label,
+            worker_class=TrainingWorker
         )
-        self.worker.progress.connect(self._on_progress)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.error.connect(self._on_error)
-        self.worker.weights_updated.connect(self._update_weight_visualization)
-        self.worker.log.connect(self._append_log)
-        self.worker.dynamics_update.connect(self._on_dynamics_update)
 
-        # Update UI
-        self.lm_tab.lm_train_btn.setEnabled(False)
-        self.lm_tab.lm_stop_btn.setEnabled(True)
-        self.lm_tab.lm_pause_btn.setEnabled(True)
-        self.lm_tab.lm_pause_btn.clicked.connect(self._toggle_pause)
-        self.lm_tab.lm_progress.setMaximum(self.lm_tab.lm_epochs_spin.value())
-        self.lm_tab.lm_progress.setValue(0)
+        # Additional connections specific to LM training
+        if self.worker:
+            self.worker.weights_updated.connect(self._update_weight_visualization)
+            self.worker.log.connect(self._append_log)
+            self.worker.dynamics_update.connect(self._on_dynamics_update)
 
-        import time
-        self.start_time = time.time()
+    def _start_diffusion_training(self):
+        """Start diffusion training."""
+        model, train_loader = create_diffusion_model_and_loader(self.diff_tab)
 
-        model_name = self.lm_tab.lm_model_combo.currentText()
-        dataset_name = self.lm_tab.lm_dataset_combo.currentText()
-        self.status_label.setText(f"Training {model_name} on {dataset_name}...")
-        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
-        self.plot_timer.start(100)
-        self.worker.start()
+        if model is None or train_loader is None:
+            return
+
+        self.model = model
+        self.train_loader = train_loader
+
+        # Refs
+        self.diff_tab.update_model_ref(self.model)
+        self.deploy_tab.update_model_ref(self.model)
+
+        # Create and start worker using common method
+        self.worker = start_training_common(
+            model=self.model,
+            train_loader=train_loader,
+            tab_instance=self.diff_tab,
+            tab_name='diff',
+            epochs_spin=self.diff_tab.epochs_spin,
+            lr_spin=self.diff_tab.lr_spin,
+            progress_bar=self.diff_tab.progress,
+            status_label=self.status_label,
+            worker_class=TrainingWorker
+        )
 
     def _start_rl_training(self):
         """Start RL training."""
@@ -1524,13 +1372,78 @@ class EqPropDashboard(QMainWindow):
         self.rl_tab.rl_progress.setMaximum(episodes)
         self.rl_tab.rl_progress.setValue(0)
 
-        import time
         self.start_time = time.time()
 
         self.status_label.setText(f"Training {algo_name} on {env_name}...")
         self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
         self.plot_timer.start(100)
         self.worker.start()
+
+    def _log_error(self, message: str):
+        """Log an error message."""
+        import logging
+        logging.error(message)
+        self._append_log(f"ERROR: {message}")
+
+    def _log_warning(self, message: str):
+        """Log a warning message."""
+        import logging
+        logging.warning(message)
+        self._append_log(f"WARNING: {message}")
+
+    def _log_info(self, message: str):
+        """Log an info message."""
+        import logging
+        logging.info(message)
+        self._append_log(f"INFO: {message}")
+
+    def _safe_execute(self, func, *args, **kwargs):
+        """Safely execute a function and handle exceptions."""
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            error_msg = f"Error in {func.__name__}: {str(e)}"
+            self._log_error(error_msg)
+            import traceback
+            self._append_log(f"Traceback: {traceback.format_exc()}")
+            return None
+
+    def _reset_training_ui(self):
+        """Reset UI state after training stops."""
+        self.vis_tab.vis_train_btn.setEnabled(True)
+        self.vis_tab.vis_stop_btn.setEnabled(False)
+        self.vis_tab.vis_pause_btn.setEnabled(False)
+        self.vis_tab.vis_pause_btn.setChecked(False)
+
+        self.lm_tab.lm_train_btn.setEnabled(True)
+        self.lm_tab.lm_stop_btn.setEnabled(False)
+        self.lm_tab.lm_pause_btn.setEnabled(False)
+        self.lm_tab.lm_pause_btn.setChecked(False)
+
+        if hasattr(self.rl_tab, 'rl_train_btn'):
+            self.rl_tab.rl_train_btn.setEnabled(True)
+            self.rl_tab.rl_stop_btn.setEnabled(False)
+
+    def _on_finished(self, result: dict):
+        """Handle training completion."""
+        self.plot_timer.stop()
+        self._reset_training_ui()
+
+        if result.get('success'):
+            self.status_label.setText(f"✓ Training complete! ({result['epochs_completed']} epochs)")
+            self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
+        else:
+            self.status_label.setText("Training stopped.")
+            self.status_label.setStyleSheet("color: #ffaa00; padding: 5px;")
+
+    def _on_error(self, error: str):
+        """Handle training error."""
+        self.plot_timer.stop()
+        self._reset_training_ui()
+
+        self.status_label.setText("Training error!")
+        self.status_label.setStyleSheet("color: #ff5588; padding: 5px; font-weight: bold;")
+        QMessageBox.critical(self, "Training Error", error)
 
     def _on_rl_progress(self, metrics: dict):
         """Handle RL progress."""
@@ -1543,7 +1456,6 @@ class EqPropDashboard(QMainWindow):
 
         # Calculate ETA
         if self.start_time:
-            import time
             elapsed = time.time() - self.start_time
             if metrics['episode'] > 0:
                 speed = metrics['episode'] / elapsed
@@ -1611,23 +1523,27 @@ class EqPropDashboard(QMainWindow):
 
         # Calculate ETA
         if self.start_time:
-            import time
-            eta_str, speed_str = calculate_eta(self.start_time, metrics['epoch'], metrics['total_epochs'])
+            elapsed = time.time() - self.start_time
+            if metrics['epoch'] > 0:
+                speed = metrics['epoch'] / elapsed
+                remaining = metrics['total_epochs'] - metrics['epoch']
+                eta_seconds = remaining / speed if speed > 0 else 0
+                eta_str = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
 
-            # Update both tabs just in case (or determine active tab)
-            eta_text = f"ETA: {eta_str} | Speed: {speed_str}"
-            self.vis_tab.vis_eta_label.setText(eta_text)
-            self.lm_tab.lm_eta_label.setText(eta_text)
+                # Update both tabs just in case (or determine active tab)
+                eta_text = f"ETA: {eta_str} | Speed: {speed:.2f} ep/s"
+                self.vis_tab.vis_eta_label.setText(eta_text)
+                self.lm_tab.lm_eta_label.setText(eta_text)
 
         # Update labels
-        self.vis_tab.vis_acc_label.setText(format_metric_value('accuracy', metrics['accuracy']))
-        self.vis_tab.vis_loss_label.setText(format_metric_value('loss', metrics['loss']))
-        self.vis_tab.vis_lip_label.setText(format_metric_value('lipschitz', metrics['lipschitz']))
+        self.vis_tab.vis_acc_label.setText(f"{metrics['accuracy']:.1%}")
+        self.vis_tab.vis_loss_label.setText(f"{metrics['loss']:.4f}")
+        self.vis_tab.vis_lip_label.setText(f"{metrics['lipschitz']:.4f}")
 
         self.status_label.setText(
             f"Epoch {metrics['epoch']}/{metrics['total_epochs']} | "
             f"Loss: {metrics['loss']:.4f} | "
-            f"Acc: {format_metric_value('accuracy', metrics['accuracy'])} | "
+            f"Acc: {metrics['accuracy']:.1%} | "
             f"L: {metrics['lipschitz']:.4f}"
         )
 
@@ -1660,55 +1576,6 @@ class EqPropDashboard(QMainWindow):
             self.rl_tab.rl_reward_curve.setData(episodes, self.rl_reward_history)
             self.rl_tab.rl_avg_reward_curve.setData(episodes, self.rl_avg_reward_history)
             self.rl_tab.rl_loss_curve.setData(episodes, self.rl_loss_history)
-
-    def _reset_training_ui(self):
-        """Reset UI state after training stops."""
-        self.vis_tab.vis_train_btn.setEnabled(True)
-        self.vis_tab.vis_stop_btn.setEnabled(False)
-        self.vis_tab.vis_pause_btn.setEnabled(False)
-        self.vis_tab.vis_pause_btn.setChecked(False)
-
-        self.lm_tab.lm_train_btn.setEnabled(True)
-        self.lm_tab.lm_stop_btn.setEnabled(False)
-        self.lm_tab.lm_pause_btn.setEnabled(False)
-        self.lm_tab.lm_pause_btn.setChecked(False)
-
-        if hasattr(self.rl_tab, 'rl_train_btn'):
-            self.rl_tab.rl_train_btn.setEnabled(True)
-            self.rl_tab.rl_stop_btn.setEnabled(False)
-
-    def _on_finished(self, result: dict):
-        """Handle training completion."""
-        self.plot_timer.stop()
-        self._reset_training_ui()
-
-        if result.get('success'):
-            self.status_label.setText(f"✓ Training complete! ({result['epochs_completed']} epochs)")
-            self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
-        else:
-            self.status_label.setText("Training stopped.")
-            self.status_label.setStyleSheet("color: #ffaa00; padding: 5px;")
-
-    def _on_error(self, error: str):
-        """Handle training error."""
-        self.plot_timer.stop()
-        self._reset_training_ui()
-
-        self.status_label.setText("Training error!")
-        self.status_label.setStyleSheet("color: #ff5588; padding: 5px; font-weight: bold;")
-        show_error_dialog(self, "Training Error", error)
-
-    def _update_lm_hyperparams(self, model_name: str):
-        """Update LM hyperparameter widgets based on selected model."""
-        update_hyperparams_generic(self, model_name, self.lm_tab.lm_hyperparam_layout, self.lm_tab.lm_hyperparam_widgets, self.lm_tab.lm_hyperparam_group)
-
-    def _update_vis_hyperparams(self, model_name: str):
-        """Update Vision hyperparameter widgets based on selected model."""
-        update_hyperparams_generic(self, model_name, self.vis_tab.vis_hyperparam_layout, self.vis_tab.vis_hyperparam_widgets, self.vis_tab.vis_hyperparam_group)
-
-    def _get_current_hyperparams(self, widgets: dict) -> dict:
-        """Extract current values from hyperparameter widgets."""
-        return get_current_hyperparams_generic(widgets)
 
     def _update_weight_visualization(self, weights: dict, is_grad: bool = False):
         """Update weight visualization heatmaps."""

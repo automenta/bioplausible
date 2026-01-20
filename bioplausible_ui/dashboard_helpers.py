@@ -6,17 +6,17 @@ This file extends the dashboard with new functionality.
 """
 
 import numpy as np
-from typing import Dict
+from typing import Dict, Any, Optional
 from PyQt6.QtWidgets import QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QGridLayout, QGroupBox
 
 try:
     import pyqtgraph as pg
     HAS_PG = True
-except:
+except ImportError:
     HAS_PG = False
 
 
-def _clear_widgets_from_layout(layout: QGridLayout, widgets: dict):
+def _clear_widgets_from_layout(layout: QGridLayout, widgets: dict) -> None:
     """
     Clear existing widgets from layout and dictionary.
 
@@ -24,15 +24,22 @@ def _clear_widgets_from_layout(layout: QGridLayout, widgets: dict):
         layout: Grid layout containing the widgets
         widgets: Dictionary of widgets to clear
     """
+    # Remove widgets from layout and schedule for deletion
     for widget in widgets.values():
         if isinstance(widget, (QSpinBox, QDoubleSpinBox, QCheckBox, QLabel)):
-            widget.deleteLater()
+            layout.removeWidget(widget)
+            widget.setParent(None)  # Remove from parent
+            widget.deleteLater()    # Schedule for deletion
+
+    # Clear the dictionary
     widgets.clear()
 
-    # Remove all items from layout
-    while layout.count():
-        item = layout.takeAt(0)
+    # Remove any remaining items in layout
+    for i in reversed(range(layout.count())):
+        item = layout.itemAt(i)
         if item.widget():
+            layout.removeWidget(item.widget())
+            item.widget().setParent(None)
             item.widget().deleteLater()
 
 
@@ -72,7 +79,7 @@ def _create_widget_for_spec(spec: 'HyperparamSpec'):
     return widget
 
 
-def update_hyperparams_generic(self, model_name: str, layout: QGridLayout, widgets: dict, group: QGroupBox):
+def update_hyperparams_generic(self, model_name: str, layout: QGridLayout, widgets: dict, group: QGroupBox) -> None:
     """
     Generic method to update hyperparameter widgets.
 
@@ -84,6 +91,11 @@ def update_hyperparams_generic(self, model_name: str, layout: QGridLayout, widge
         group: Group box to show/hide
     """
     from .hyperparams import get_hyperparams_for_model
+
+    # Early exit if no model name
+    if not model_name:
+        group.setVisible(False)
+        return
 
     # Clear existing widgets
     _clear_widgets_from_layout(layout, widgets)
@@ -97,6 +109,8 @@ def update_hyperparams_generic(self, model_name: str, layout: QGridLayout, widge
 
     # Create widgets for each hyperparameter
     group.setVisible(True)
+
+    # Batch add widgets to layout for better performance
     for i, spec in enumerate(specs):
         # Label
         label = QLabel(f"{spec.label}:")
@@ -112,7 +126,7 @@ def update_hyperparams_generic(self, model_name: str, layout: QGridLayout, widge
         widgets[spec.name] = widget
 
 
-def get_current_hyperparams_generic(widgets: dict) -> dict:
+def get_current_hyperparams_generic(widgets: dict) -> Dict[str, Any]:
     """
     Extract current values from hyperparameter widgets.
 
@@ -126,14 +140,16 @@ def get_current_hyperparams_generic(widgets: dict) -> dict:
     for name, widget in widgets.items():
         if name.endswith('_label'):
             continue
-        if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+        if isinstance(widget, QSpinBox):
+            hyperparams[name] = widget.value()
+        elif isinstance(widget, QDoubleSpinBox):
             hyperparams[name] = widget.value()
         elif isinstance(widget, QCheckBox):
             hyperparams[name] = widget.isChecked()
     return hyperparams
 
 
-def update_weight_visualization_generic(self, weights: Dict[str, np.ndarray]):
+def update_weight_visualization_generic(self, weights: Dict[str, np.ndarray]) -> None:
     """
     Update weight visualization heatmaps.
 
@@ -141,34 +157,36 @@ def update_weight_visualization_generic(self, weights: Dict[str, np.ndarray]):
         self: Reference to the dashboard instance
         weights: Dictionary mapping layer names to weight arrays
     """
-    if not HAS_PG:
+    if not HAS_PG or not weights:
         return
 
     from .viz_utils import format_weight_for_display, normalize_weights_for_display, get_layer_description
 
-    # Use vision weights container (same pattern for both tabs)
+    # Check if we need to create visualization widgets
     if not hasattr(self, 'vis_weight_widgets') or not self.vis_weight_widgets:
-        # Create weight visualization widgets dynamically
         create_weight_viz_widgets_generic(self, weights)
+        return  # Widgets created, need to call again to update
 
-    # Update each heatmap
+    # Update each heatmap with bounds checking
+    max_widgets = len(self.vis_weight_widgets)
     for i, (name, W) in enumerate(weights.items()):
-        if i >= len(self.vis_weight_widgets):
+        if i >= max_widgets:
             break
 
-        # Normalize and format
-        W_display = format_weight_for_display(W)
-        W_norm = normalize_weights_for_display(W_display)
-
-        # Update ImageView
         try:
+            # Normalize and format
+            W_display = format_weight_for_display(W)
+            W_norm = normalize_weights_for_display(W_display)
+
+            # Update ImageView
             self.vis_weight_widgets[i].setImage(W_norm.T, levels=(0, 1))
             self.vis_weight_labels[i].setText(get_layer_description(name))
         except Exception:
-            pass
+            # Continue with other widgets even if one fails
+            continue
 
 
-def create_weight_viz_widgets_generic(self, weights: Dict[str, np.ndarray]):
+def create_weight_viz_widgets_generic(self, weights: Dict[str, np.ndarray]) -> None:
     """
     Create weight visualization widgets based on model weights.
 
@@ -176,27 +194,22 @@ def create_weight_viz_widgets_generic(self, weights: Dict[str, np.ndarray]):
         self: Reference to the dashboard instance
         weights: Dictionary mapping layer names to weight arrays
     """
-    if not HAS_PG:
+    if not HAS_PG or not weights:
         return
 
     from .viz_utils import get_layer_description
 
-    # Clear existing
-    while self.vis_weights_layout.count():
-        item = self.vis_weights_layout.takeAt(0)
-        if item.widget():
-            item.widget().deleteLater()
+    # Clear existing widgets
+    _clear_weight_viz_widgets(self)
 
-    self.vis_weight_widgets = []
-    self.vis_weight_labels = []
+    # Create widgets for up to 3 weight matrices
+    weight_items = list(weights.items())[:3]
 
-    # Create a widget for each weight matrix
-    for name, W in list(weights.items())[:3]:  # Max 3 visualizations
+    for i, (name, W) in enumerate(weight_items):
         # Label
         label = QLabel(get_layer_description(name))
         label.setStyleSheet("color: #00d4ff; font-weight: bold;")
         self.vis_weights_layout.addWidget(label)
-        self.vis_weight_labels.append(label)
 
         # ImageView for heatmap
         img_view = pg.ImageView()
@@ -206,6 +219,61 @@ def create_weight_viz_widgets_generic(self, weights: Dict[str, np.ndarray]):
         img_view.ui.menuBtn.hide()    # Hide menu button
 
         self.vis_weights_layout.addWidget(img_view)
+
+        # Store references
+        if not hasattr(self, 'vis_weight_labels'):
+            self.vis_weight_labels = []
+        if not hasattr(self, 'vis_weight_widgets'):
+            self.vis_weight_widgets = []
+
+        self.vis_weight_labels.append(label)
         self.vis_weight_widgets.append(img_view)
 
+
+def _clear_weight_viz_widgets(self) -> None:
+    """
+    Clear existing weight visualization widgets.
+
+    Args:
+        self: Reference to the dashboard instance
+    """
+    # Clear existing widgets if they exist
+    if hasattr(self, 'vis_weights_layout'):
+        for i in reversed(range(self.vis_weights_layout.count())):
+            item = self.vis_weights_layout.itemAt(i)
+            if item.widget():
+                self.vis_weights_layout.removeWidget(item.widget())
+                item.widget().setParent(None)
+                item.widget().deleteLater()
+
+    # Clear stored references
+    if hasattr(self, 'vis_weight_widgets'):
+        for widget in self.vis_weight_widgets:
+            widget.setParent(None)
+            widget.deleteLater()
+        self.vis_weight_widgets.clear()
+
+    if hasattr(self, 'vis_weight_labels'):
+        for label in self.vis_weight_labels:
+            label.setParent(None)
+            label.deleteLater()
+        self.vis_weight_labels.clear()
+
+
+def validate_hyperparams(hyperparams: Dict[str, Any], expected_types: Dict[str, type]) -> bool:
+    """
+    Validate hyperparameters against expected types.
+
+    Args:
+        hyperparams: Dictionary of hyperparameter values
+        expected_types: Dictionary mapping param names to expected types
+
+    Returns:
+        True if all params are valid, False otherwise
+    """
+    for param_name, expected_type in expected_types.items():
+        if param_name in hyperparams:
+            if not isinstance(hyperparams[param_name], expected_type):
+                return False
+    return True
 

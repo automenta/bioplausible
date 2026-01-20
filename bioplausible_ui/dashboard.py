@@ -50,6 +50,7 @@ from .training_utils import (
     create_diffusion_model_and_loader,
     start_training_common
 )
+from .logging_utils import get_ui_logger, log_exception, safe_execute
 
 from bioplausible_ui.tabs.lm_tab import LMTab
 from bioplausible_ui.tabs.vision_tab import VisionTab
@@ -116,6 +117,10 @@ class EqPropDashboard(QMainWindow):
         super().__init__()
         self.initial_config = initial_config
 
+        # Initialize logger
+        self.logger = get_ui_logger('dashboard')
+        self.logger.info("Initializing Bioplausible Trainer Dashboard")
+
         self.setWindowTitle("⚡ Bioplausible Trainer v0.1.0")
         self.setGeometry(100, 100, 1400, 900)
 
@@ -173,6 +178,7 @@ class EqPropDashboard(QMainWindow):
         """Apply initial configuration to UI elements."""
         try:
             model_name = config.get('model_name', '')
+            self.logger.info(f"Applying configuration for model: {model_name}")
 
             # Determine if it's Vision or LM based on model name or config
             is_vision = any(x in model_name for x in ['MLP', 'Conv', 'Vision']) or 'mnist' in str(self.initial_config).lower() or 'cifar' in str(self.initial_config).lower()
@@ -224,9 +230,11 @@ class EqPropDashboard(QMainWindow):
 
             self.status_label.setText(f"Loaded configuration for {model_name}")
             self.status_label.setStyleSheet("color: #00aacc; padding: 5px;")
+            self.logger.info(f"Configuration applied successfully for {model_name}")
 
         except Exception as e:
-            print(f"Error applying config: {e}")
+            self.logger.error(f"Error applying config: {e}")
+            log_exception(self.logger, "_apply_config")
             self.status_label.setText(f"Error loading config: {e}")
             self.status_label.setStyleSheet("color: #ff5588; padding: 5px;")
 
@@ -1008,6 +1016,7 @@ class EqPropDashboard(QMainWindow):
         fname, _ = QFileDialog.getOpenFileName(self, "Load Model Checkpoint", "", "PyTorch Checkpoints (*.pt)")
         if fname:
             try:
+                self.logger.info(f"Loading model from: {fname}")
                 import torch
                 checkpoint = torch.load(fname)
                 config = checkpoint.get('config', {})
@@ -1062,6 +1071,7 @@ class EqPropDashboard(QMainWindow):
                 self.model.load_state_dict(checkpoint['model_state_dict'])
                 self.status_label.setText(f"Model loaded from {fname}")
                 self.status_label.setStyleSheet("color: #00ff88; padding: 5px;")
+                self.logger.info(f"Model loaded successfully from {fname}")
 
                 # 4. Update Tab References
                 if self.model:
@@ -1076,17 +1086,19 @@ class EqPropDashboard(QMainWindow):
             except FileNotFoundError:
                 error_msg = f"Model file not found: {fname}"
                 self._log_error(error_msg)
+                self.logger.error(error_msg)
                 QMessageBox.critical(self, "File Not Found", error_msg)
             except KeyError as e:
                 error_msg = f"Missing key in checkpoint: {e}"
                 self._log_error(error_msg)
+                self.logger.error(error_msg)
                 QMessageBox.critical(self, "Load Error", error_msg)
             except Exception as e:
                 error_msg = f"Failed to load model: {str(e)}"
                 self._log_error(error_msg)
+                self.logger.error(f"Failed to load model: {str(e)}")
+                log_exception(self.logger, "_load_model")
                 QMessageBox.critical(self, "Load Error", error_msg)
-                import traceback
-                traceback.print_exc()
 
     def _run_microscope_analysis(self):
         """Delegate analysis to microscope tab."""
