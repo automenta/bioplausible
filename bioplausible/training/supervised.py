@@ -44,8 +44,18 @@ class SupervisedTrainer(BaseTrainer):
         self.batches_per_epoch = batches_per_epoch
         self.eval_batches = eval_batches
         self.steps = steps
-        self.use_kernel = use_kernel
-        self.kernel = None
+
+        # Check if model has its own backend management
+        model_backend = getattr(model, "backend", "pytorch")
+        model_has_kernel = model_backend == "kernel" and hasattr(model, "_engine") and model._engine is not None
+
+        # Prioritize model's internal kernel, then explicit use_kernel flag
+        if model_has_kernel:
+            self.use_kernel = True
+            self.kernel = None # Handled by model
+        else:
+            self.use_kernel = use_kernel
+            self.kernel = None
 
         # Check for embeddings
         self.has_embed = getattr(model, 'has_embed', False)
@@ -58,8 +68,8 @@ class SupervisedTrainer(BaseTrainer):
             except Exception as e:
                 warnings.warn(f"Compilation failed: {e}")
 
-        # Kernel Initialization
-        if self.use_kernel:
+        # Kernel Initialization (Legacy explicit kernel mode)
+        if self.use_kernel and not model_has_kernel:
             if hasattr(self.model, "input_dim"):
                 dims = (self.model.input_dim, self.model.hidden_dim, self.model.output_dim)
                 # Pass use_gpu=True only if CuPy is available
@@ -77,6 +87,8 @@ class SupervisedTrainer(BaseTrainer):
                 self.opt = torch.optim.Adam(params, lr=lr)
             else:
                 self.opt = None # Model manages optimizer
+        else:
+            self.opt = None
 
         self.criterion = nn.CrossEntropyLoss()
 
@@ -158,22 +170,25 @@ class SupervisedTrainer(BaseTrainer):
     def train_batch(self, x, y) -> Dict[str, float]:
         """Run a single training step."""
 
-        # Kernel Mode Branch
-        if self.use_kernel:
+        # Legacy explicit Kernel Mode Branch (where Trainer manages kernel)
+        if self.use_kernel and self.kernel is not None:
             x_np = self._prepare_input(x)
             y_np = y.cpu().numpy() if isinstance(y, torch.Tensor) else y
 
             metrics = self.kernel.train_step(x_np, y_np)
             return metrics # returns {'loss': ..., 'accuracy': ...}
 
-        # PyTorch Mode Branch
+        # PyTorch / Model-Managed Kernel Mode
+        # Even if use_kernel is True (because model.backend='kernel'), we fall through here.
+        # model.train_step will handle delegation to internal engine.
+
         self.model.train()
         if self.opt:
             self.opt.zero_grad()
 
         h = self._prepare_input(x)
 
-        # Check for custom train_step (BioModel)
+        # Check for custom train_step (BioModel or LoopedMLP with backend='kernel')
         metrics = None
         if hasattr(self.model, "train_step"):
             metrics = self.model.train_step(h, y)
@@ -182,7 +197,7 @@ class SupervisedTrainer(BaseTrainer):
             loss = metrics.get("loss", 0.0)
             acc = metrics.get("accuracy", 0.0)
         else:
-            # Standard forward/backward
+            # Standard forward/backward (BPTT / Autograd)
             if hasattr(self.model, "eq_steps"):
                 logits = self.model(h, steps=self.steps)
             else:
@@ -228,15 +243,18 @@ class SupervisedTrainer(BaseTrainer):
             for _ in range(self.eval_batches):
                 x, y = self.task.get_batch("val")
 
-                if self.use_kernel:
+                # Legacy explicit kernel
+                if self.use_kernel and self.kernel is not None:
                     x_np = self._prepare_input(x)
                     y_np = y.cpu().numpy() if isinstance(y, torch.Tensor) else y
                     metrics = self.kernel.evaluate(x_np, y_np)
                     val_losses.append(metrics["loss"])
                     val_accs.append(metrics["accuracy"])
                 else:
+                    # Model-managed kernel or PyTorch
                     h = self._prepare_input(x)
 
+                    # For model-managed kernel, forward() should return logits/outputs
                     if hasattr(self.model, "eq_steps"):
                         logits = self.model(h, steps=self.steps)
                     else:
@@ -245,6 +263,12 @@ class SupervisedTrainer(BaseTrainer):
                     if logits.dim() == 3 and self.task_type == "lm":
                         logits = logits[:, -1, :]
 
+                    # Check if model supports custom evaluation (e.g. kernel mode returning loss dict isn't standard forward)
+                    # LoopedMLP(backend='kernel').forward returns logits Tensor.
+                    # So we can compute loss here using criterion.
+
+                    # Note: For kernel backend, logits are converted to Tensor.
+                    # loss calculation here is valid.
                     loss = self.criterion(logits, y)
                     metrics = self.task.compute_metrics(logits, y, loss.item())
 
@@ -301,7 +325,8 @@ class SupervisedTrainer(BaseTrainer):
             for x, y in loader:
                 x, y = x.to(self.device), y.to(self.device)
 
-                if self.use_kernel:
+                # Legacy explicit kernel
+                if self.use_kernel and self.kernel is not None:
                     x_np = self._prepare_input(x)
                     y_np = y.cpu().numpy() if isinstance(y, torch.Tensor) else y
                     metrics = self.kernel.evaluate(x_np, y_np)
