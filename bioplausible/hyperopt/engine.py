@@ -30,6 +30,7 @@ class OptimizationConfig:
     elite_fraction: float = 0.2
     random_seed: int = 42
     use_p2p: bool = False # Flag to use P2P logic
+    task: str = "shakespeare" # Target task for optimization
 
 
 class EvolutionaryOptimizer:
@@ -75,10 +76,10 @@ class EvolutionaryOptimizer:
         seeded = False
         trial_ids = []
 
-        if self.config.use_p2p and self.p2p and self.p2p.dht:
+        if self.config.use_p2p and self.p2p and hasattr(self.p2p, 'dht') and self.p2p.dht:
             try:
-                # TODO: Pass task name properly. For now assuming config context.
-                best = self.p2p.dht.get_best_model("shakespeare") # Placeholder
+                # Query DHT for best model for the specific task
+                best = self.p2p.dht.get_best_model(self.config.task)
                 if best and best.get('config'):
                     config = best['config']
                     # Ensure it matches model_name if possible, or adapt

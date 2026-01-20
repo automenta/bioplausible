@@ -72,18 +72,25 @@ class LMTask(BaseTask):
 
     def setup(self):
         print(f"Loading LM dataset: {self.name}...")
-        dataset = get_lm_dataset(self.name, seq_len=self.seq_len)
-        data = dataset.data
-        self._output_dim = dataset.vocab_size
-        self._input_dim = None # Uses embeddings
+        try:
+            dataset = get_lm_dataset(self.name, seq_len=self.seq_len)
+            data = dataset.data
+            self._output_dim = dataset.vocab_size
+            self._input_dim = None # Uses embeddings
 
-        # Split train/val
-        n = int(0.9 * len(data))
-        self.data_train = data[:n]
-        self.data_val = data[n:]
-        print(f"Dataset ready: {len(self.data_train)} train, {len(self.data_val)} val tokens")
+            # Split train/val
+            n = int(0.9 * len(data))
+            self.data_train = data[:n]
+            self.data_val = data[n:]
+            print(f"Dataset ready: {len(self.data_train)} train, {len(self.data_val)} val tokens")
+        except Exception as e:
+            print(f"Failed to load dataset {self.name}: {e}")
+            raise
 
     def get_batch(self, split: str = "train", batch_size: int = 32) -> Tuple[torch.Tensor, torch.Tensor]:
+        if self.data_train is None:
+            raise RuntimeError("Dataset not loaded. Call setup() first.")
+
         data = self.data_train if split == "train" else self.data_val
         idx = torch.randint(0, len(data) - self.seq_len - 1, (batch_size,))
         x = torch.stack([data[i : i + self.seq_len] for i in idx]).to(self.device)
@@ -119,25 +126,32 @@ class VisionTask(BaseTask):
 
     def setup(self):
         print(f"Loading Vision dataset: {self.name}...")
-        dataset = get_vision_dataset(self.name, train=True, flatten=False)
-        test_dataset = get_vision_dataset(self.name, train=False, flatten=False)
+        try:
+            dataset = get_vision_dataset(self.name, train=True, flatten=False)
+            test_dataset = get_vision_dataset(self.name, train=False, flatten=False)
 
-        # In-memory loading (replicating TrialRunner logic for speed)
-        self.train_x = torch.stack([t[0] for t in dataset]).to(self.device)
-        self.train_y = torch.tensor([t[1] for t in dataset]).to(self.device)
+            # In-memory loading (replicating TrialRunner logic for speed)
+            self.train_x = torch.stack([t[0] for t in dataset]).to(self.device)
+            self.train_y = torch.tensor([t[1] for t in dataset]).to(self.device)
 
-        val_size = 1000 if self.quick_mode else 5000
-        self.val_x = torch.stack([test_dataset[i][0] for i in range(min(len(test_dataset), val_size))]).to(self.device)
-        self.val_y = torch.tensor([test_dataset[i][1] for i in range(min(len(test_dataset), val_size))]).to(self.device)
+            val_size = 1000 if self.quick_mode else 5000
+            self.val_x = torch.stack([test_dataset[i][0] for i in range(min(len(test_dataset), val_size))]).to(self.device)
+            self.val_y = torch.tensor([test_dataset[i][1] for i in range(min(len(test_dataset), val_size))]).to(self.device)
 
-        if self.name == "mnist":
-            self._output_dim = 10
-            self._input_dim = 784
-        else:
-            self._output_dim = 10
-            self._input_dim = 3072
+            if self.name == "mnist":
+                self._output_dim = 10
+                self._input_dim = 784
+            else:
+                self._output_dim = 10
+                self._input_dim = 3072
+        except Exception as e:
+            print(f"Failed to load dataset {self.name}: {e}")
+            raise
 
     def get_batch(self, split: str = "train", batch_size: int = 32) -> Tuple[torch.Tensor, torch.Tensor]:
+        if self.train_x is None:
+            raise RuntimeError("Dataset not loaded. Call setup() first.")
+
         if split == "train":
             dataset_x, dataset_y = self.train_x, self.train_y
         else:
@@ -174,18 +188,27 @@ class RLTask(BaseTask):
 
     def setup(self):
         import gymnasium as gym
-        self.env = gym.make(self.env_name)
-        self._output_dim = self.env.action_space.n
-        self._input_dim = self.env.observation_space.shape[0]
+        try:
+            self.env = gym.make(self.env_name)
+            self._output_dim = self.env.action_space.n
+            self._input_dim = self.env.observation_space.shape[0]
+        except Exception as e:
+            print(f"Failed to load env {self.env_name}: {e}")
+            raise
 
     def get_batch(self, split: str = "train", batch_size: int = 32):
         raise NotImplementedError("RL Task does not support get_batch directly, use RLTrainer")
 
     def create_trainer(self, model, **kwargs):
         from bioplausible.training.rl import RLTrainer
-        # Filter kwargs? RLTrainer takes lr, gamma, etc.
-        # TrialRunner passes everything. RLTrainer should handle **kwargs.
-        return RLTrainer(model, self.env_name, device=self.device, **kwargs)
+        # Filter relevant args for RLTrainer
+        rl_args = {}
+        valid_keys = ['episodes', 'lr', 'gamma', 'max_steps']
+        for k in valid_keys:
+            if k in kwargs:
+                rl_args[k] = kwargs[k]
+
+        return RLTrainer(model, self.env_name, device=self.device, **rl_args)
 
 
 def create_task(task_name: str, device: str = "cpu", quick_mode: bool = False) -> BaseTask:
