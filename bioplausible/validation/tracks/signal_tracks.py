@@ -13,7 +13,7 @@ import pytest
 
 from bioplausible.experiments.deep_signal_probe import run_signal_propagation_experiment
 from bioplausible.models import LoopedMLP, MemoryEfficientLoopedMLP
-from bioplausible.validation.core import ValidationTrack
+from bioplausible.validation.notebook import ValidationTrack
 
 
 class SignalPropagationTrack(ValidationTrack):

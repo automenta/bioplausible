@@ -28,7 +28,7 @@ from . import (
     honest_tradeoff,
     evolution_tracks,
     research_tracks,
-    # signal_tracks,
+    signal_tracks,
 )
 
 # Initialize registry
@@ -105,7 +105,7 @@ register_tracks_from_module(evolution_tracks)
 register_tracks_from_module(research_tracks)
 
 # 10. Signal Propagation
-# register_tracks_from_module(signal_tracks)
+register_tracks_from_module(signal_tracks)
 
 
 def get_track(track_id: int) -> Callable:

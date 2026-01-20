@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime
 from pathlib import Path
 import numpy as np
@@ -169,3 +169,93 @@ class VerificationNotebook:
         with open(path, "w") as f:
             f.write("\n".join(self.sections))
         print(f"📓 Notebook saved to: {path}")
+
+class ValidationTrack:
+    """Base class for validation tracks to ensure consistent interface."""
+
+    def __init__(
+        self,
+        name: str,
+        track_id: int,
+        description: str,
+        category: str = "core",
+        priority: str = "medium",
+        tags: List[str] = None
+    ):
+        self.name = name
+        self.track_id = track_id
+        self.description = description
+        self.category = category
+        self.priority = priority
+        self.tags = tags or []
+
+    def validate(self) -> Dict[str, Any]:
+        """
+        Execute the validation logic.
+
+        Returns:
+            Dict containing validation results. Should generally include:
+            - success (bool)
+            - score (0-100 float)
+            - metrics (dict)
+            - evidence (str)
+            - improvements (list of str)
+        """
+        raise NotImplementedError("Subclasses must implement validate()")
+
+    def __call__(self, verifier) -> TrackResult:
+        """
+        Callable interface compatible with the Verifier.
+        """
+        import time
+        start_time = time.time()
+
+        try:
+            # Execute validation
+            # Note: We might need 'verifier' in validate() if tracks depend on global config
+            # For now, we assume tracks are self-contained or use global settings
+            # If tracks need verifier props, we could pass it or set it on self
+            self.verifier = verifier
+
+            result_data = self.validate()
+
+            elapsed = time.time() - start_time
+
+            # Construct standard TrackResult
+            # Handle minimal return format if just {'success': ...}
+
+            status = "pass" if result_data.get("success", False) else "fail"
+            score = result_data.get("score", 100.0 if status == "pass" else 0.0)
+            metrics = result_data.get("metrics", {})
+            evidence = result_data.get("evidence", "No evidence provided.")
+
+            # If 'details' or custom fields are present, append to evidence
+            if "details" in result_data:
+                import json
+                # Handle non-serializable objects in details if needed, or just str()
+                evidence += f"\n\n**Details**:\n{str(result_data['details'])}"
+
+            return TrackResult(
+                track_id=self.track_id,
+                name=self.name,
+                status=status,
+                score=score,
+                metrics=metrics,
+                evidence=evidence,
+                time_seconds=elapsed,
+                improvements=result_data.get("improvements", []),
+                evidence_level=result_data.get("evidence_level", "directional")
+            )
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return TrackResult(
+                track_id=self.track_id,
+                name=self.name,
+                status="fail",
+                score=0.0,
+                metrics={"error": str(e)},
+                evidence=f"**Error**: {str(e)}\n\n```\n{traceback.format_exc()}\n```",
+                time_seconds=time.time() - start_time
+            )
