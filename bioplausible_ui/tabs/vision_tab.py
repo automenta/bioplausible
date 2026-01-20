@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel, QToolBox, QFrame,
     QDialog, QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from PyQt6.QtGui import QPixmap, QImage, QFont, QColor
 
 import torch
@@ -19,6 +19,194 @@ try:
     HAS_PYQTGRAPH = True
 except ImportError:
     HAS_PYQTGRAPH = False
+
+class DreamWorker(QThread):
+    """
+    Background worker for 'Dreaming' (Input Optimization).
+    Optimizes input image to maximize activation of target class.
+    """
+    progress = pyqtSignal(np.ndarray)
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(self, model, target_class, input_shape, steps=100, lr=0.1, parent=None):
+        super().__init__(parent)
+        self.model = model
+        self.target = target_class
+        self.shape = input_shape
+        self.steps = steps
+        self.lr = lr
+        self._stop = False
+
+    def stop(self):
+        self._stop = True
+
+    def run(self):
+        try:
+            device = next(self.model.parameters()).device
+            # Start from gray noise
+            x = torch.randn(1, *self.shape, device=device) * 0.1
+            x.requires_grad_(True)
+
+            optimizer = torch.optim.SGD([x], lr=self.lr)
+
+            # Switch model to eval (we optimize x, not weights)
+            self.model.eval()
+
+            for i in range(self.steps):
+                if self._stop: break
+
+                optimizer.zero_grad()
+
+                # Forward pass
+                # Handle models that might require steps arg
+                try:
+                    out = self.model(x)
+                except TypeError:
+                    out = self.model(x, steps=30)
+
+                # Loss: Maximize target logit
+                # We minimize negative target score
+                loss = -out[0, self.target]
+
+                loss.backward()
+                optimizer.step()
+
+                # Regularization / Constraints
+                with torch.no_grad():
+                    # Blur or jitter could be added here for better viz
+                    x.clamp_(-2.5, 2.5) # Assuming approx normalized range
+
+                # Emit progress
+                if i % 2 == 0:
+                    img_np = x.detach().cpu().numpy().squeeze()
+                    self.progress.emit(img_np)
+
+            self.finished.emit()
+
+        except Exception as e:
+            self.error.emit(str(e))
+            import traceback
+            traceback.print_exc()
+
+class DreamDialog(QDialog):
+    """Dialog for Generative Dreaming."""
+    def __init__(self, model, input_shape, parent=None):
+        super().__init__(parent)
+        self.model = model
+        self.input_shape = input_shape
+        self.worker = None
+
+        self.setWindowTitle("Associative Dreaming (Generative Attractor)")
+        self.setFixedSize(500, 600)
+
+        layout = QVBoxLayout(self)
+
+        # Header
+        header = QLabel("Dreaming: Invert Network")
+        header.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(header)
+
+        desc = QLabel("Optimizes the input image to maximize the network's confidence for a specific class. Reveals what features the network has learned.")
+        desc.setWordWrap(True)
+        desc.setStyleSheet("color: #a0a0b0; margin-bottom: 10px;")
+        layout.addWidget(desc)
+
+        # Controls
+        ctrl_layout = QHBoxLayout()
+
+        ctrl_layout.addWidget(QLabel("Target Class:"))
+        self.class_spin = QSpinBox()
+        self.class_spin.setRange(0, 9) # Assume 10 classes for now
+        ctrl_layout.addWidget(self.class_spin)
+
+        ctrl_layout.addWidget(QLabel("Steps:"))
+        self.steps_spin = QSpinBox()
+        self.steps_spin.setRange(10, 500)
+        self.steps_spin.setValue(100)
+        ctrl_layout.addWidget(self.steps_spin)
+
+        layout.addLayout(ctrl_layout)
+
+        # Image Display
+        self.img_label = QLabel()
+        self.img_label.setMinimumSize(300, 300)
+        self.img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.img_label.setStyleSheet("background-color: #000; border: 1px solid #333;")
+        layout.addWidget(self.img_label)
+
+        # Start/Stop
+        btn_layout = QHBoxLayout()
+        self.start_btn = QPushButton("Start Dreaming")
+        self.start_btn.setStyleSheet("background-color: #8e44ad; font-weight: bold; padding: 10px;")
+        self.start_btn.clicked.connect(self._start_dreaming)
+        btn_layout.addWidget(self.start_btn)
+
+        self.stop_btn = QPushButton("Stop")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(self._stop_dreaming)
+        btn_layout.addWidget(self.stop_btn)
+
+        layout.addLayout(btn_layout)
+
+        self.close_btn = QPushButton("Close")
+        self.close_btn.clicked.connect(self.accept)
+        layout.addWidget(self.close_btn)
+
+    def _start_dreaming(self):
+        self.start_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
+        self.class_spin.setEnabled(False)
+
+        self.worker = DreamWorker(
+            self.model,
+            self.class_spin.value(),
+            self.input_shape,
+            steps=self.steps_spin.value()
+        )
+        self.worker.progress.connect(self._update_image)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.error.connect(self._on_error)
+        self.worker.start()
+
+    def _stop_dreaming(self):
+        if self.worker:
+            self.worker.stop()
+
+    def _update_image(self, img):
+        # Normalize for display
+        img = (img - img.min()) / (img.max() - img.min() + 1e-6)
+        img = (img * 255).astype(np.uint8)
+
+        # Handle shapes
+        if img.ndim == 3 and img.shape[0] in [1, 3]: # CHW -> HWC
+            img = np.transpose(img, (1, 2, 0))
+        if img.ndim == 3 and img.shape[2] == 1:
+            img = img.squeeze(2)
+
+        h, w = img.shape[:2]
+        if img.ndim == 2:
+            qimg = QImage(img.data, w, h, w, QImage.Format.Format_Grayscale8)
+        else:
+            qimg = QImage(img.data, w, h, 3*w, QImage.Format.Format_RGB888)
+
+        pixmap = QPixmap.fromImage(qimg).scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio)
+        self.img_label.setPixmap(pixmap)
+
+    def _on_finished(self):
+        self.start_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self.class_spin.setEnabled(True)
+
+    def _on_error(self, msg):
+        self._on_finished()
+        QMessageBox.warning(self, "Dream Error", msg)
+
+    def closeEvent(self, event):
+        self._stop_dreaming()
+        event.accept()
+
 
 class VisionInferenceDialog(QDialog):
     """Dialog to show inference results."""
@@ -331,11 +519,18 @@ class VisionTab(QWidget):
         self.vis_reset_btn.clicked.connect(self._reset_defaults)
         btn_layout.addWidget(self.vis_reset_btn)
 
+        # Test Tools
         self.vis_test_btn = QPushButton("👁️ Test")
         self.vis_test_btn.setObjectName("resetButton")
         self.vis_test_btn.setToolTip("Test model on random sample")
         self.vis_test_btn.clicked.connect(self._test_random_sample)
         btn_layout.addWidget(self.vis_test_btn)
+
+        self.vis_dream_btn = QPushButton("🌙 Dream")
+        self.vis_dream_btn.setObjectName("resetButton")
+        self.vis_dream_btn.setToolTip("Invert the network to dream a class pattern")
+        self.vis_dream_btn.clicked.connect(self._open_dream_dialog)
+        btn_layout.addWidget(self.vis_dream_btn)
 
         self.vis_robust_btn = QPushButton("🛡️ Robustness")
         self.vis_robust_btn.setObjectName("resetButton")
@@ -539,6 +734,59 @@ class VisionTab(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Inference Failed", str(e))
+            import traceback
+            traceback.print_exc()
+
+    def _open_dream_dialog(self):
+        """Open the dreaming dialog."""
+        if self.model_ref is None:
+            QMessageBox.warning(self, "No Model", "No trained model available.")
+            return
+
+        try:
+            # Determine shape
+            ds_name = self.vis_dataset_combo.currentText().lower()
+            if "mnist" in ds_name:
+                shape = (1, 28, 28) # Assuming we reshape flattened models inside if needed?
+                # But wait, DreamWorker optimizes 'x' which is fed to model.
+                # If model expects flattened, x must be flattened (784).
+                # But we want to visualize as image.
+
+                # Check model type for flattening
+                use_flatten = True
+                try:
+                    model_name = self.vis_model_combo.currentText()
+                    spec = get_model_spec(model_name)
+                    use_flatten = spec.model_type != "modern_conv_eqprop"
+                except:
+                    pass
+
+                if use_flatten:
+                    shape = (784,)
+                else:
+                    shape = (1, 28, 28)
+
+            elif "cifar" in ds_name or "svhn" in ds_name:
+                use_flatten = True
+                try:
+                    model_name = self.vis_model_combo.currentText()
+                    spec = get_model_spec(model_name)
+                    use_flatten = spec.model_type != "modern_conv_eqprop"
+                except:
+                    pass
+
+                if use_flatten:
+                    shape = (3072,)
+                else:
+                    shape = (3, 32, 32)
+            else:
+                shape = (784,)
+
+            dlg = DreamDialog(self.model_ref, shape, self)
+            dlg.exec()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Failed to start", str(e))
             import traceback
             traceback.print_exc()
 
