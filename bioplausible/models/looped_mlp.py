@@ -75,7 +75,8 @@ class LoopedMLP(EqPropModel):
                 output_dim=output_dim,
                 max_steps=max_steps,
                 use_spectral_norm=use_spectral_norm,
-                use_gpu=use_gpu
+                use_gpu=use_gpu,
+                architecture="rnn"  # Match LoopedMLP architecture
             )
 
         self._init_weights()

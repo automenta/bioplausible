@@ -108,6 +108,17 @@ def _find_cuda_path() -> Optional[str]:
     except Exception:
         pass
 
+    # 5. Fallback for Windows or unusual Linux setups
+    if os.name == 'nt':
+         # Check Program Files
+         pg_files = os.environ.get("ProgramFiles", "C:\\Program Files")
+         nvidia_gpu = os.path.join(pg_files, "NVIDIA GPU Computing Toolkit", "CUDA")
+         if os.path.exists(nvidia_gpu):
+             # Return highest version
+             versions = sorted(os.listdir(nvidia_gpu), reverse=True)
+             if versions:
+                 return os.path.join(nvidia_gpu, versions[0])
+
     return None
 
 _detected_cuda_path = _find_cuda_path()
@@ -271,6 +282,7 @@ class EqPropKernel:
         use_spectral_norm: bool = True,
         use_gpu: bool = False,
         adaptive_epsilon: bool = True,
+        architecture: str = "layered",  # "layered" or "rnn"
     ) -> None:
         """Initialize EqProp kernel."""
         self.input_dim = input_dim
@@ -284,26 +296,40 @@ class EqPropKernel:
         self.use_spectral_norm = use_spectral_norm
         self.use_gpu = use_gpu and HAS_CUPY
         self.adaptive_epsilon = adaptive_epsilon
+        self.architecture = architecture
 
         self.xp = get_backend(self.use_gpu)
 
         # Initialize weights
         scale = 0.5
-        self.weights = {
-            "embed": self._init_weight(input_dim, hidden_dim, scale),
-            "W1": self._init_weight(hidden_dim, hidden_dim * 4, scale),
-            "W2": self._init_weight(hidden_dim * 4, hidden_dim, scale),
-            "head": self._init_weight(hidden_dim, output_dim, scale),
-        }
-
-        self.biases = {
-            "embed": self.xp.zeros(hidden_dim, dtype=np.float32),
-            "W1": self.xp.zeros(hidden_dim * 4, dtype=np.float32),
-            "W2": self.xp.zeros(hidden_dim, dtype=np.float32),
-            "head": self.xp.zeros(output_dim, dtype=np.float32),
-        }
-
-        self.sn_state: Dict[str, Optional[np.ndarray]] = {"W1_u": None, "W2_u": None}
+        if self.architecture == "layered":
+            self.weights = {
+                "embed": self._init_weight(input_dim, hidden_dim, scale),
+                "W1": self._init_weight(hidden_dim, hidden_dim * 4, scale),
+                "W2": self._init_weight(hidden_dim * 4, hidden_dim, scale),
+                "head": self._init_weight(hidden_dim, output_dim, scale),
+            }
+            self.biases = {
+                "embed": self.xp.zeros(hidden_dim, dtype=np.float32),
+                "W1": self.xp.zeros(hidden_dim * 4, dtype=np.float32),
+                "W2": self.xp.zeros(hidden_dim, dtype=np.float32),
+                "head": self.xp.zeros(output_dim, dtype=np.float32),
+            }
+            self.sn_state: Dict[str, Optional[np.ndarray]] = {"W1_u": None, "W2_u": None}
+        elif self.architecture == "rnn":
+            self.weights = {
+                "W_in": self._init_weight(input_dim, hidden_dim, scale),
+                "W_rec": self._init_weight(hidden_dim, hidden_dim, scale),
+                "W_out": self._init_weight(hidden_dim, output_dim, scale),
+            }
+            self.biases = {
+                "W_in": self.xp.zeros(hidden_dim, dtype=np.float32),
+                "W_rec": self.xp.zeros(hidden_dim, dtype=np.float32),
+                "W_out": self.xp.zeros(output_dim, dtype=np.float32),
+            }
+            self.sn_state: Dict[str, Optional[np.ndarray]] = {"W_rec_u": None}
+        else:
+            raise ValueError(f"Unknown architecture: {self.architecture}")
 
         # Adam state
         self.adam_state = {
@@ -326,15 +352,23 @@ class EqPropKernel:
 
         weights = self.weights.copy()
 
-        # Normalize W1 and W2 with spectral normalization
-        weights["W1"] = self._normalize_weight("W1", "W1_u")
-        weights["W2"] = self._normalize_weight("W2", "W2_u")
+        if self.architecture == "layered":
+            weights["W1"] = self._normalize_weight("W1", "W1_u")
+            weights["W2"] = self._normalize_weight("W2", "W2_u")
+        elif self.architecture == "rnn":
+            weights["W_rec"] = self._normalize_weight("W_rec", "W_rec_u")
 
         return weights
 
     def _should_normalize_weight(self, weight_key: str) -> bool:
         """Check if a weight should be normalized."""
-        return self.use_spectral_norm and weight_key in ["W1", "W2"]
+        if not self.use_spectral_norm:
+            return False
+        if self.architecture == "layered":
+            return weight_key in ["W1", "W2"]
+        elif self.architecture == "rnn":
+            return weight_key in ["W_rec"]
+        return False
 
     def _normalize_weight(self, weight_key: str, sn_state_key: str) -> np.ndarray:
         """Normalize a specific weight matrix using spectral normalization."""
@@ -349,34 +383,59 @@ class EqPropKernel:
         return normalized_weight
 
     def forward_step(
-        self, h: np.ndarray, x_emb: np.ndarray, weights: Dict[str, np.ndarray]
-    ) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+        self,
+        h: np.ndarray,
+        x_emb: np.ndarray,
+        weights: Dict[str, np.ndarray],
+        return_activations: bool = True,
+    ) -> Tuple[np.ndarray, Optional[Dict[str, np.ndarray]]]:
         """Single equilibrium step."""
         xp = self.xp
 
-        h_mean = xp.mean(h, axis=-1, keepdims=True)
-        h_std = xp.std(h, axis=-1, keepdims=True) + 1e-5
-        h_norm = (h - h_mean) / h_std
+        if self.architecture == "layered":
+            h_mean = xp.mean(h, axis=-1, keepdims=True)
+            h_std = xp.std(h, axis=-1, keepdims=True) + 1e-5
+            h_norm = (h - h_mean) / h_std
 
-        ffn_hidden = xp.tanh(h_norm @ weights["W1"].T + self.biases["W1"])
-        ffn_out = ffn_hidden @ weights["W2"].T + self.biases["W2"]
+            ffn_hidden = xp.tanh(h_norm @ weights["W1"].T + self.biases["W1"])
+            ffn_out = ffn_hidden @ weights["W2"].T + self.biases["W2"]
 
-        if HAS_TRITON_OPS and self.use_gpu and HAS_CUPY and isinstance(h, cp.ndarray):
-            # Use fused Triton kernel for the update: h_next = (1-g)h + g*target
-            h_next = TritonEqPropOps.step_linear_cupy(
-                h, ffn_out + x_emb, self.gamma
-            )
-        else:
-            h_next = (1 - self.gamma) * h + self.gamma * (ffn_out + x_emb)
+            if HAS_TRITON_OPS and self.use_gpu and HAS_CUPY and isinstance(h, cp.ndarray):
+                h_next = TritonEqPropOps.step_linear_cupy(
+                    h, ffn_out + x_emb, self.gamma
+                )
+            else:
+                h_next = (1 - self.gamma) * h + self.gamma * (ffn_out + x_emb)
 
-        activations = {
-            "h_norm": h_norm,
-            "ffn_hidden": ffn_hidden,
-            "h": h,
-            "h_next": h_next,
-        }
+            if return_activations:
+                activations = {
+                    "h_norm": h_norm,
+                    "ffn_hidden": ffn_hidden,
+                    "h": h,
+                    "h_next": h_next,
+                }
+                return h_next, activations
+            return h_next, None
 
-        return h_next, activations
+        elif self.architecture == "rnn":
+            # RNN: h = (1-gamma)h + gamma * tanh(W_rec h + x_emb)
+            # x_emb here is W_in @ x + b_in
+            pre_act = h @ weights["W_rec"].T + self.biases["W_rec"] + x_emb
+
+            if HAS_TRITON_OPS and self.use_gpu and HAS_CUPY and isinstance(h, cp.ndarray):
+                # Using Triton kernel which fuses (1-a)h + a*tanh(pre_act)
+                h_next = TritonEqPropOps.step_cupy(h, pre_act, self.gamma)
+            else:
+                h_next = (1 - self.gamma) * h + self.gamma * xp.tanh(pre_act)
+
+            if return_activations:
+                activations = {
+                    "h": h,
+                    "h_next": h_next,
+                }
+                return h_next, activations
+            return h_next, None
+        return h, None
 
     def solve_equilibrium(
         self,
@@ -397,15 +456,17 @@ class EqPropKernel:
         last_activations = None
 
         for t in range(self.max_steps):
+            h_prev = h
+
             h, activations = self._perform_equilibrium_step(
-                h, x_emb, weights, nudge_grad
+                h, x_emb, weights, nudge_grad, return_activations=True
             )
             last_activations = activations
 
             if store_trajectory:
                 activations_log.append(activations)
 
-            if self._check_convergence(h, activations["h"], t):
+            if self._check_convergence(h, h_prev, t):
                 if not store_trajectory:
                     activations_log = [last_activations]
                 return h, activations_log, {"steps": t + 1, "converged": True}
@@ -423,7 +484,11 @@ class EqPropKernel:
 
     def _compute_embedded_input(self, x: np.ndarray) -> np.ndarray:
         """Compute embedded input representation."""
-        return x @ self.weights["embed"].T + self.biases["embed"]
+        if self.architecture == "layered":
+            return x @ self.weights["embed"].T + self.biases["embed"]
+        elif self.architecture == "rnn":
+            return x @ self.weights["W_in"].T + self.biases["W_in"]
+        return x
 
     def _perform_equilibrium_step(
         self,
@@ -431,9 +496,10 @@ class EqPropKernel:
         x_emb: np.ndarray,
         weights: Dict[str, np.ndarray],
         nudge_grad: Optional[np.ndarray],
-    ) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+        return_activations: bool = True,
+    ) -> Tuple[np.ndarray, Optional[Dict[str, np.ndarray]]]:
         """Perform a single equilibrium step, applying nudge if provided."""
-        h, activations = self.forward_step(h, x_emb, weights)
+        h, activations = self.forward_step(h, x_emb, weights, return_activations=return_activations)
 
         if nudge_grad is not None:
             h = h - self.beta * nudge_grad
@@ -453,23 +519,37 @@ class EqPropKernel:
 
     def compute_output(self, h: np.ndarray) -> np.ndarray:
         """Compute output logits from hidden state."""
-        return h @ self.weights["head"].T + self.biases["head"]
+        if self.architecture == "layered":
+            return h @ self.weights["head"].T + self.biases["head"]
+        elif self.architecture == "rnn":
+            return h @ self.weights["W_out"].T + self.biases["W_out"]
+        return h
 
     def compute_hebbian_update(
-        self, act_free: Dict[str, np.ndarray], act_nudged: Dict[str, np.ndarray]
+        self, act_free: Dict[str, np.ndarray], act_nudged: Dict[str, np.ndarray], x: Optional[np.ndarray] = None
     ) -> Dict[str, np.ndarray]:
         """Compute contrastive Hebbian weight updates."""
         batch_size = act_free["h"].shape[0]
-
         grads = {}
 
-        grad_free_W2 = act_free["h_next"].T @ act_free["ffn_hidden"] / batch_size
-        grad_nudged_W2 = act_nudged["h_next"].T @ act_nudged["ffn_hidden"] / batch_size
-        grads["W2"] = (1.0 / self.beta) * (grad_nudged_W2 - grad_free_W2)
+        if self.architecture == "layered":
+            grad_free_W2 = act_free["h_next"].T @ act_free["ffn_hidden"] / batch_size
+            grad_nudged_W2 = act_nudged["h_next"].T @ act_nudged["ffn_hidden"] / batch_size
+            grads["W2"] = (1.0 / self.beta) * (grad_nudged_W2 - grad_free_W2)
 
-        grad_free_W1 = act_free["ffn_hidden"].T @ act_free["h_norm"] / batch_size
-        grad_nudged_W1 = act_nudged["ffn_hidden"].T @ act_nudged["h_norm"] / batch_size
-        grads["W1"] = (1.0 / self.beta) * (grad_nudged_W1 - grad_free_W1)
+            grad_free_W1 = act_free["ffn_hidden"].T @ act_free["h_norm"] / batch_size
+            grad_nudged_W1 = act_nudged["ffn_hidden"].T @ act_nudged["h_norm"] / batch_size
+            grads["W1"] = (1.0 / self.beta) * (grad_nudged_W1 - grad_free_W1)
+
+        elif self.architecture == "rnn":
+            grad_free_rec = act_free["h_next"].T @ act_free["h"] / batch_size
+            grad_nudged_rec = act_nudged["h_next"].T @ act_nudged["h"] / batch_size
+            grads["W_rec"] = (1.0 / self.beta) * (grad_nudged_rec - grad_free_rec)
+
+            if x is not None:
+                grad_free_in = act_free["h_next"].T @ x / batch_size
+                grad_nudged_in = act_nudged["h_next"].T @ x / batch_size
+                grads["W_in"] = (1.0 / self.beta) * (grad_nudged_in - grad_free_in)
 
         return grads
 
@@ -520,8 +600,12 @@ class EqPropKernel:
         h_nudged, act_log_nudged, info_nudged = self.solve_equilibrium(x, nudge_grad)
 
         # Compute Updates
-        grads = self.compute_hebbian_update(act_log_free[-1], act_log_nudged[-1])
-        grads["head"] = d_logits.T @ h_free / self._get_batch_size(x)
+        grads = self.compute_hebbian_update(act_log_free[-1], act_log_nudged[-1], x)
+
+        if self.architecture == "layered":
+            grads["head"] = d_logits.T @ h_free / self._get_batch_size(x)
+        elif self.architecture == "rnn":
+             grads["W_out"] = d_logits.T @ h_free / self._get_batch_size(x)
 
         self.adam_update(grads)
 
@@ -557,7 +641,11 @@ class EqPropKernel:
         one_hot = xp.zeros_like(probs)
         one_hot[xp.arange(batch_size), y] = 1.0
         d_logits = probs - one_hot
-        nudge_grad = d_logits @ self.weights["head"]
+
+        if self.architecture == "layered":
+            nudge_grad = d_logits @ self.weights["head"]
+        elif self.architecture == "rnn":
+            nudge_grad = d_logits @ self.weights["W_out"]
 
         return logits, d_logits, nudge_grad
 
