@@ -115,6 +115,78 @@ if HAS_TRITON:
 
         tl.store(out_ptr + offsets, out, mask=mask)
 
+    @triton.jit
+    def _neural_cube_update_kernel(
+        h_ptr,          # [batch, n_neurons]
+        w_ptr,          # [n_neurons, 27]
+        out_ptr,        # [batch, n_neurons]
+        cube_size,      # int
+        n_neurons,      # int (cube_size**3)
+        n_elements,     # total elements (batch * n_neurons)
+        BLOCK_SIZE: tl.constexpr
+    ):
+        """
+        Fused kernel for NeuralCube 3D local update.
+        Computes weighted sum of 26 neighbors for each neuron.
+        """
+        pid = tl.program_id(0)
+        offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < n_elements
+
+        # Current global index -> batch_idx, neuron_idx
+        batch_idx = offsets // n_neurons
+        neuron_idx = offsets % n_neurons
+
+        # Decompose neuron_idx into z, y, x
+        s2 = cube_size * cube_size
+        z = neuron_idx // s2
+        rem = neuron_idx % s2
+        y = rem // cube_size
+        x = rem % cube_size
+
+        acc = 0.0
+
+        # Loop over 27 neighbors (3x3x3)
+        # Using constant loops for unrolling
+        for dz in range(-1, 2):
+            for dy in range(-1, 2):
+                for dx in range(-1, 2):
+                    nz = z + dz
+                    ny = y + dy
+                    nx = x + dx
+
+                    # Check bounds
+                    in_bounds = (nz >= 0) & (nz < cube_size) & \
+                                (ny >= 0) & (ny < cube_size) & \
+                                (nx >= 0) & (nx < cube_size)
+
+                    # Neighbor neuron index
+                    n_neuron_idx = nz * s2 + ny * cube_size + nx
+
+                    # Global h index: same batch
+                    h_idx = batch_idx * n_neurons + n_neuron_idx
+
+                    # Weight index: specific to this neuron and this neighbor offset
+                    # w_offset maps (-1,-1,-1) -> 0 ... (1,1,1) -> 26
+                    w_offset = (dz + 1) * 9 + (dy + 1) * 3 + (dx + 1)
+                    w_idx = neuron_idx * 27 + w_offset
+
+                    # Masked load
+                    # If out of bounds, we load from index 0 (or anywhere valid) but mask ensures result is 0
+                    # However, to be safe and avoid OOB memory access, we clamp index or use safe mask
+                    # If !in_bounds, h_idx might be invalid if we didn't clamp?
+                    # Actually, if !in_bounds, h_idx calculation might produce something weird but still within range?
+                    # No, n_neuron_idx could be anything if we don't check.
+                    # But we use `mask & in_bounds` for loading.
+                    # Does triton load safe with false mask? Yes.
+
+                    h_val = tl.load(h_ptr + h_idx, mask=mask & in_bounds, other=0.0)
+                    w_val = tl.load(w_ptr + w_idx, mask=mask) # Weight exists for all neurons
+
+                    acc += h_val * w_val
+
+        tl.store(out_ptr + offsets, acc, mask=mask)
+
 
 class TritonEqPropOps:
     """Interface for Triton kernels."""
@@ -202,6 +274,44 @@ class TritonEqPropOps:
             out.data.ptr,       # out_ptr
             alpha,              # alpha
             n_elements,         # n_elements
+            BLOCK_SIZE=BLOCK_SIZE
+        )
+
+        return out
+
+    @staticmethod
+    def neural_cube_update(h: torch.Tensor, w_local: torch.Tensor, cube_size: int) -> torch.Tensor:
+        """
+        Perform 3D local update for NeuralCube.
+
+        Args:
+            h: [batch, n_neurons]
+            w_local: [n_neurons, 27]
+            cube_size: Dimension of the cube
+
+        Returns:
+            Weighted sum [batch, n_neurons]
+        """
+        if not TritonEqPropOps.is_available():
+             raise RuntimeError("Triton not available")
+
+        # Ensure contiguity
+        if not h.is_contiguous():
+            h = h.contiguous()
+        if not w_local.is_contiguous():
+            w_local = w_local.contiguous()
+
+        batch_size, n_neurons = h.shape
+        n_elements = batch_size * n_neurons
+
+        out = torch.empty_like(h)
+
+        BLOCK_SIZE = 512 # Smaller block size due to heavy computation per thread
+        grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+
+        _neural_cube_update_kernel[grid](
+            h, w_local, out,
+            cube_size, n_neurons, n_elements,
             BLOCK_SIZE=BLOCK_SIZE
         )
 

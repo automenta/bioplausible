@@ -13,6 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from typing import Tuple, List, Optional
+from .triton_kernel import TritonEqPropOps
 
 
 class NeuralCube(nn.Module):
@@ -106,6 +107,11 @@ class NeuralCube(nn.Module):
 
         Each neuron's new state depends on weighted sum of its neighbors.
         """
+        # Use Triton kernel if available (huge memory saving + speedup)
+        if hasattr(TritonEqPropOps, 'neural_cube_update') and \
+           TritonEqPropOps.is_available() and h.is_cuda:
+            return TritonEqPropOps.neural_cube_update(h, self.W_local, self.cube_size)
+
         batch_size = h.shape[0]
 
         # Gather neighbor activations
