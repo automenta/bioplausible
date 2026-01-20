@@ -32,13 +32,28 @@ class EquilibriumFunction(autograd.Function):
     ) -> torch.Tensor:
         ctx.model = model
 
+        # Optimization: Freeze Spectral Norm during loop
+        should_freeze_sn = getattr(model, "use_spectral_norm", False) and model.training
+        remaining_steps = model.max_steps
+
         # 1. Find fixed point (no gradient tracking needed for the loop itself)
         # We assume h_init is close to the fixed point if we are continuing from previous state,
         # or we iterate enough steps to converge.
         with torch.no_grad():
             h = h_init
-            for _ in range(model.max_steps):
+
+            if should_freeze_sn and remaining_steps > 0:
+                # Warmup step
                 h = model.forward_step(h, x_transformed)
+                remaining_steps -= 1
+                model.eval()
+
+            try:
+                for _ in range(remaining_steps):
+                    h = model.forward_step(h, x_transformed)
+            finally:
+                if should_freeze_sn:
+                    model.train()
 
         # Save tensors for backward
         # Note: We must save params to ensure autograd knows they participate in the graph
@@ -432,27 +447,45 @@ class EqPropModel(NEBCBase):
 
         if return_trajectory or return_dynamics or self.gradient_method in ["bptt", "contrastive"]:
             # Standard unrolling (BPTT, Analysis, or Contrastive Inference)
-            # For contrastive mode, forward() is just inference (free phase)
-            trajectory = [h]
-            deltas = []
+            trajectory = [h] if return_trajectory else None
+            deltas = [] if return_dynamics else None
 
-            for _ in range(steps):
+            # Optimization: Freeze Spectral Norm during loop to prevent graph breaks
+            should_freeze_sn = getattr(self, "use_spectral_norm", False) and self.training
+            remaining_steps = steps
+
+            if should_freeze_sn and remaining_steps > 0:
+                # Warmup step (update SN stats)
                 h_new = self.forward_step(h, x_transformed)
-
                 if return_dynamics:
-                    # Compute change norm
-                    delta = (h_new - h).norm().item()
-                    deltas.append(delta)
-
+                    deltas.append((h_new - h).norm().item())
                 h = h_new
                 if return_trajectory:
                     trajectory.append(h)
+                remaining_steps -= 1
+                # Switch to eval for the rest of the loop
+                self.eval()
+
+            try:
+                for _ in range(remaining_steps):
+                    h_new = self.forward_step(h, x_transformed)
+
+                    if return_dynamics:
+                        delta = (h_new - h).norm().item()
+                        deltas.append(delta)
+
+                    h = h_new
+                    if return_trajectory:
+                        trajectory.append(h)
+            finally:
+                if should_freeze_sn:
+                    self.train()
 
             out = self._output_projection(h)
 
             if return_dynamics:
                 return out, {
-                    "trajectory": trajectory if return_trajectory else None,
+                    "trajectory": trajectory,
                     "deltas": deltas,
                     "final_delta": deltas[-1] if deltas else 0.0
                 }
