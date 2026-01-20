@@ -26,25 +26,24 @@ import numpy as np
 # 1. Environment variable (explicit override)
 # 2. torch.utils.cpp_extension.CUDA_HOME
 # 3. nvcc location
-# 4. Standard system paths
-# 5. Library search path (LD_LIBRARY_PATH, ldconfig, etc.)
+# 4. Standard system paths / ldconfig / pip packages
 
 def _find_cuda_path() -> Optional[str]:
-    """Finds the CUDA installation path."""
+    """Finds the CUDA installation path using a simplified 4-source fallback."""
+
+    # 1. Environment variable
     if "CUDA_PATH" in os.environ and os.path.exists(os.environ["CUDA_PATH"]):
         return os.environ["CUDA_PATH"]
 
-    candidates = []
-
-    # 1. Ask PyTorch (best bet for compatibility)
+    # 2. Ask PyTorch (best bet for compatibility)
     try:
         from torch.utils.cpp_extension import CUDA_HOME
         if CUDA_HOME and os.path.exists(CUDA_HOME):
-            candidates.append(CUDA_HOME)
+            return CUDA_HOME
     except (ImportError, Exception):
         pass
 
-    # 2. Look for nvcc
+    # 3. Look for nvcc
     nvcc_path = shutil.which("nvcc")
     if nvcc_path:
         # Resolve symlinks (e.g., /usr/bin/nvcc -> /etc/alternatives/nvcc -> /usr/local/cuda/bin/nvcc)
@@ -52,38 +51,51 @@ def _find_cuda_path() -> Optional[str]:
             real_nvcc_path = os.path.realpath(nvcc_path)
             # /usr/local/cuda/bin/nvcc -> /usr/local/cuda
             cuda_root = os.path.dirname(os.path.dirname(real_nvcc_path))
-            if os.path.exists(cuda_root):
-                candidates.append(cuda_root)
+            if os.path.exists(os.path.join(cuda_root, "bin", "nvcc")):
+                return cuda_root
         except Exception:
             pass
 
-    # 3. Common Locations
+    # 4. Fallbacks (Pip, Library Search, Standard Paths)
+
+    # 4a. Pip-installed nvidia-cuda-nvcc (common in PyTorch 2.x)
+    try:
+        import nvidia.cuda_nvcc
+        nvcc_pkg_path = os.path.dirname(nvidia.cuda_nvcc.__file__)
+        if os.path.exists(os.path.join(nvcc_pkg_path, "bin", "nvcc")):
+             return nvcc_pkg_path
+    except ImportError:
+        pass
+
+    # 4b. Standard System Paths
     common_paths = [
         "/usr/local/cuda",
         "/opt/cuda",
         "/usr/lib/cuda",
         "/usr/lib/nvidia-cuda-toolkit",
-        "/run/opengl-driver/lib",  # NixOS
     ]
     # Add versioned paths
     for ver in ["12.8", "12.6", "12.5", "12.4", "12.3", "12.2", "12.1", "12.0", "11.8", "11.7"]:
         common_paths.append(f"/usr/local/cuda-{ver}")
 
-    candidates.extend(common_paths)
+    for path in common_paths:
+        if os.path.exists(path) and os.path.isdir(path):
+             if os.path.exists(os.path.join(path, "bin", "nvcc")) or \
+                os.path.exists(os.path.join(path, "include", "cuda.h")):
+                 return path
 
-    # 4. Infer from loaded libraries (ctypes)
+    # 4c. Library Search (LD_LIBRARY_PATH, ldconfig) via ctypes
     try:
         from ctypes.util import find_library
         cudart = find_library("cudart")
         if cudart:
             # If absolute path, use it
             if os.path.isabs(cudart) and os.path.exists(cudart):
-                # /usr/local/cuda/lib64/libcudart.so -> /usr/local/cuda
-                cuda_root = os.path.dirname(os.path.dirname(cudart))
-                if os.path.exists(cuda_root):
-                    candidates.append(cuda_root)
+                 cuda_root = os.path.dirname(os.path.dirname(cudart))
+                 if os.path.exists(cuda_root):
+                     return cuda_root
             else:
-                # If just a name (libcudart.so.11.0), look in LD_LIBRARY_PATH
+                # Check LD_LIBRARY_PATH
                 ld_path = os.environ.get("LD_LIBRARY_PATH", "")
                 for lib_dir in ld_path.split(os.pathsep):
                     if not lib_dir: continue
@@ -91,51 +103,10 @@ def _find_cuda_path() -> Optional[str]:
                     if os.path.exists(potential_path):
                         cuda_root = os.path.dirname(os.path.dirname(potential_path))
                         if os.path.exists(cuda_root):
-                            candidates.append(cuda_root)
+                            return cuda_root
                         break
     except Exception:
         pass
-
-    # 5. Look for pip-installed nvidia-cuda-nvcc
-    # This is common in PyTorch 2.x envs where cuda is installed as a python package
-    try:
-        import nvidia.cuda_nvcc
-        nvcc_pkg_path = os.path.dirname(nvidia.cuda_nvcc.__file__)
-        # The structure is usually site-packages/nvidia/cuda_nvcc/
-        # And nvcc binary is in bin/
-        # However, CuPy often expects a full CUDA Toolkit structure (bin, lib64, include)
-        # Pip packages are split (nvidia-cuda-runtime-cu12, nvidia-cuda-nvcc-cu12, etc)
-        # But sometimes they are symlinked or we can point to the nvcc root.
-        if os.path.exists(os.path.join(nvcc_pkg_path, "bin", "nvcc")):
-             candidates.append(nvcc_pkg_path)
-    except ImportError:
-        pass
-
-    # 6. Heuristics from torch package location (e.g. conda env)
-    try:
-        import torch
-        torch_root = os.path.dirname(torch.__file__)
-        # Check if we are in a conda env
-        # ../../bin/nvcc relative to site-packages/torch
-        potential_root = os.path.abspath(os.path.join(torch_root, "..", "..", "..", ".."))
-        if os.path.exists(os.path.join(potential_root, "bin", "nvcc")):
-             candidates.append(potential_root)
-    except ImportError:
-        pass
-
-    # Deduplicate and verify
-    seen = set()
-    for path in candidates:
-        if path in seen: continue
-        seen.add(path)
-
-        if os.path.exists(path) and os.path.isdir(path):
-            # Verify it looks like a CUDA root (has bin/ or lib64/ or include/)
-            if (os.path.exists(os.path.join(path, "bin", "nvcc")) or
-                os.path.exists(os.path.join(path, "lib64")) or
-                os.path.exists(os.path.join(path, "lib")) or # Some systems use lib
-                os.path.exists(os.path.join(path, "include", "cuda.h"))):
-                return path
 
     return None
 

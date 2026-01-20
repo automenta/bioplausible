@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
 from torch.nn.utils.parametrizations import spectral_norm
-from typing import Optional, List, Tuple, Dict, Union
+from typing import Optional, List, Tuple, Dict, Union, Any
 
 from .eqprop_base import EqPropModel
 from ..acceleration import compile_settling_loop
 from .triton_kernel import TritonEqPropOps
+from bioplausible.kernel import EqPropKernel, HAS_CUPY
 
 # =============================================================================
 # LoopedMLP - Core EqProp Model
@@ -44,6 +45,7 @@ class LoopedMLP(EqPropModel):
         use_spectral_norm: bool = True,
         max_steps: int = 30,
         gradient_method: str = "bptt",
+        backend: str = "pytorch",  # pytorch, kernel, auto
     ) -> None:
         # EqPropModel calls NEBCBase init which builds layers via _build_layers
         super().__init__(
@@ -54,13 +56,36 @@ class LoopedMLP(EqPropModel):
             use_spectral_norm=use_spectral_norm,
             gradient_method=gradient_method,
         )
+
+        # Handle backend selection
+        if backend == "auto":
+            backend = "kernel" if torch.cuda.is_available() and HAS_CUPY else "pytorch"
+
+        self.backend = backend
+        self._engine = None
+
+        if self.backend == "kernel":
+            # Initialize kernel engine
+            # Note: We pass use_gpu=True if CUDA is available, assuming CuPy works.
+            # EqPropKernel handles fallback if CuPy import failed but HAS_CUPY checks that.
+            use_gpu = HAS_CUPY and torch.cuda.is_available()
+            self._engine = EqPropKernel(
+                input_dim=input_dim,
+                hidden_dim=hidden_dim,
+                output_dim=output_dim,
+                max_steps=max_steps,
+                use_spectral_norm=use_spectral_norm,
+                use_gpu=use_gpu
+            )
+
         self._init_weights()
 
     def __repr__(self) -> str:
+        backend_str = f", backend={self.backend}" if self.backend != "pytorch" else ""
         return (
             f"LoopedMLP(input={self.input_dim}, hidden={self.hidden_dim}, "
             f"output={self.output_dim}, steps={self.max_steps}, "
-            f"spectral_norm={self.use_spectral_norm})"
+            f"spectral_norm={self.use_spectral_norm}{backend_str})"
         )
 
     def _build_layers(self):
@@ -158,6 +183,75 @@ class LoopedMLP(EqPropModel):
             (self.W_in, x, h),
             (self.W_rec, h, h)
         ]
+
+    def train_step(self, x: torch.Tensor, y: torch.Tensor) -> Dict[str, float]:
+        """
+        Train step override.
+        If backend is 'kernel', delegates to EqPropKernel.
+        Otherwise, calls super (EqPropModel) which handles contrastive or returns None for BPTT.
+        """
+        if self.backend == "kernel" and self._engine is not None:
+            # Convert inputs to numpy/cupy
+            if isinstance(x, torch.Tensor):
+                x_np = x.detach().cpu().numpy()
+            else:
+                x_np = x
+
+            if isinstance(y, torch.Tensor):
+                y_np = y.detach().cpu().numpy()
+            else:
+                y_np = y
+
+            # Run kernel training step
+            metrics = self._engine.train_step(x_np, y_np)
+            return metrics
+
+        return super().train_step(x, y)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        steps: Optional[int] = None,
+        return_trajectory: bool = False,
+        return_dynamics: bool = False,
+    ) -> Union[
+        torch.Tensor,
+        Tuple[torch.Tensor, List[torch.Tensor]],
+        Tuple[torch.Tensor, Dict[str, Any]],
+    ]:
+        if self.backend == "kernel" and self._engine is not None:
+            # Kernel inference
+            if isinstance(x, torch.Tensor):
+                x_np = x.detach().cpu().numpy()
+            else:
+                x_np = x
+
+            # Note: EqPropKernel.predict returns class indices, not logits.
+            # But here forward expects logits?
+            # Or we use solve_equilibrium + compute_output.
+
+            # For compatibility with standard PyTorch workflow (e.g. cross_entropy loss external),
+            # we should return logits.
+
+            # Also need to handle steps override if possible (kernel config has max_steps)
+            # The kernel stores max_steps internally.
+
+            # Using solve_equilibrium
+            h_star, _, _ = self._engine.solve_equilibrium(x_np)
+            logits_np = self._engine.compute_output(h_star)
+
+            # Convert back to tensor on same device as input
+            logits = torch.from_numpy(logits_np).to(x.device)
+
+            if return_trajectory or return_dynamics:
+                # Kernel doesn't easily expose full trajectory in same format unless requested
+                # Not implementing full feature parity for trajectory/dynamics in this minimal wrapper
+                # unless critical.
+                return logits, {} if return_dynamics else []
+
+            return logits
+
+        return super().forward(x, steps, return_trajectory, return_dynamics)
 
 
 # =============================================================================
