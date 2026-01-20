@@ -92,6 +92,29 @@ class EqPropDiffusion(nn.Module):
         x_input = torch.cat([x_t, t_emb], dim=1)
         return self.denoiser(x_input)
 
+    def denoise_step(self, x_t, t_norm, steps=30):
+        """
+        Perform a single denoise step with explicit control over equilibrium settling steps.
+        Used for iterative inference or analysis where we want to control precision.
+
+        Args:
+            x_t: Noisy input [B, C, H, W]
+            t_norm: Normalized time [B] or [B, 1, 1, 1] (0.0 to 1.0)
+            steps: Number of equilibrium steps for the denoiser
+        """
+        batch_size, _, h, w = x_t.shape
+
+        # Ensure t_norm is broadcastable
+        if t_norm.dim() == 1:
+            t_emb = t_norm.view(batch_size, 1, 1, 1).expand(batch_size, 1, h, w)
+        else:
+            t_emb = t_norm.expand(batch_size, 1, h, w)
+
+        x_input = torch.cat([x_t, t_emb], dim=1)
+
+        # Forward through EqProp denoiser with specified settling steps
+        return self.denoiser(x_input, steps=steps)
+
     def forward(self, x, t=None):
         """
         Forward pass.
