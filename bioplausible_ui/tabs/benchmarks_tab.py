@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QGroupBox, QCheckBox,
     QPushButton, QTableWidget, QTableWidgetItem, QTextEdit, QMessageBox,
-    QDialog, QLabel
+    QDialog, QLabel, QLineEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -80,6 +80,10 @@ class BenchmarksTab(QWidget):
         self.bench_quick_check.setChecked(True)
         controls_layout.addWidget(self.bench_quick_check)
 
+        self.bench_parallel_check = QCheckBox("Parallel Execution")
+        self.bench_parallel_check.setToolTip("Run tracks in parallel processes (faster, but harder to debug)")
+        controls_layout.addWidget(self.bench_parallel_check)
+
         run_sel_btn = QPushButton("▶ Run Selected")
         run_sel_btn.clicked.connect(self._run_selected_benchmarks)
         controls_layout.addWidget(run_sel_btn)
@@ -93,6 +97,15 @@ class BenchmarksTab(QWidget):
         controls_layout.addWidget(compare_btn)
 
         left_panel.addWidget(controls_group)
+
+        # Search Filter
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel("Filter:"))
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search tracks...")
+        self.search_input.textChanged.connect(self._filter_tracks)
+        filter_layout.addWidget(self.search_input)
+        left_panel.addLayout(filter_layout)
 
         # Track List Table
         self.bench_table = QTableWidget()
@@ -135,6 +148,15 @@ class BenchmarksTab(QWidget):
 
         right_panel.addWidget(details_group)
 
+    def _filter_tracks(self, text):
+        """Filter rows based on text."""
+        for r in range(self.bench_table.rowCount()):
+            name_item = self.bench_table.item(r, 1)
+            id_item = self.bench_table.item(r, 0)
+            if name_item and id_item:
+                match = (text.lower() in name_item.text().lower()) or (text.lower() in id_item.text().lower())
+                self.bench_table.setRowHidden(r, not match)
+
     def _run_selected_benchmarks(self):
         """Run selected benchmarks."""
         selected_rows = self.bench_table.selectionModel().selectedRows()
@@ -144,6 +166,10 @@ class BenchmarksTab(QWidget):
 
         track_ids = []
         for row in selected_rows:
+            # Skip hidden rows
+            if self.bench_table.isRowHidden(row.row()):
+                continue
+
             tid_item = self.bench_table.item(row.row(), 0)
             if tid_item:
                 track_ids.append(int(tid_item.text()))
@@ -155,6 +181,11 @@ class BenchmarksTab(QWidget):
         rows = self.bench_table.rowCount()
         track_ids = []
         for r in range(rows):
+            # Skip hidden rows? Usually run all means all visible?
+            # Or truly all? Let's assume all visible if filter is active.
+            if self.bench_table.isRowHidden(r):
+                continue
+
             tid_item = self.bench_table.item(r, 0)
             if tid_item:
                 track_ids.append(int(tid_item.text()))
@@ -164,8 +195,10 @@ class BenchmarksTab(QWidget):
     def _start_benchmark_worker(self, track_ids):
         """Start the benchmark worker."""
         quick = self.bench_quick_check.isChecked()
+        parallel = self.bench_parallel_check.isChecked()
+
         self.bench_output.clear()
-        self.bench_output.append(f"Starting {len(track_ids)} tracks (Quick={quick})...\n")
+        self.bench_output.append(f"Starting {len(track_ids)} tracks (Quick={quick}, Parallel={parallel})...\n")
 
         # Reset status in table
         for r in range(self.bench_table.rowCount()):
@@ -174,7 +207,7 @@ class BenchmarksTab(QWidget):
                 self.bench_table.setItem(r, 2, QTableWidgetItem("Running..."))
                 self.bench_table.item(r, 2).setForeground(Qt.GlobalColor.yellow)
 
-        self.bench_worker = BenchmarkWorker(track_ids, quick_mode=quick)
+        self.bench_worker = BenchmarkWorker(track_ids, quick_mode=quick, parallel=parallel)
         self.bench_worker.progress.connect(self._on_bench_progress)
         self.bench_worker.finished.connect(self._on_bench_finished)
         self.bench_worker.error.connect(self._on_bench_error)
@@ -287,6 +320,13 @@ class BenchmarksTab(QWidget):
         data = []
         for row in selected_rows:
             r = row.row()
+            # Handle filtered rows correctly?
+            # selectedRows returns model indices, which map correctly even if filtered visually?
+            # QTableWidget items are persistent.
+            # But let's be safe and check if hidden.
+            if self.bench_table.isRowHidden(r):
+                continue
+
             name = self.bench_table.item(r, 1).text()
             score_text = self.bench_table.item(r, 3).text()
 

@@ -388,10 +388,11 @@ class BenchmarkWorker(QThread):
     finished = pyqtSignal(dict) # Final results dict
     error = pyqtSignal(str)
 
-    def __init__(self, track_ids, quick_mode=True, parent=None):
+    def __init__(self, track_ids, quick_mode=True, parallel=False, parent=None):
         super().__init__(parent)
         self.track_ids = track_ids
         self.quick_mode = quick_mode
+        self.parallel = parallel
         self._stop_requested = False
 
     def stop(self):
@@ -400,44 +401,57 @@ class BenchmarkWorker(QThread):
     def run(self):
         try:
             from bioplausible.verify import Verifier
-            import io
-            from contextlib import redirect_stdout
 
-            # Custom Verifier that respects stop signal and emits progress
-            class SignalVerifier(Verifier):
-                def __init__(self, worker, *args, **kwargs):
-                    super().__init__(*args, **kwargs)
-                    self.worker = worker
+            # If parallel, we can't easily intercept per-track progress via the Verifier subclass method
+            # because multiprocessing happens in separate processes.
+            # Verifier.run_tracks(parallel=True) prints to stdout/stderr.
+            # We can capture stdout/stderr but it's tricky across processes.
+            # For now, we will rely on the final result return for parallel mode,
+            # and just emit a "Running..." message.
 
-                def run_tracks(self, track_ids):
-                    results = {}
-                    for i, track_id in enumerate(track_ids):
-                        if self.worker._stop_requested:
-                            break
-
-                        self.worker.progress.emit(f"Running Track {track_id}...")
-
-                        try:
-                            name, method = self.tracks[track_id]
-                            result = method(self)
-                            results[track_id] = result
-
-                            status_icon = "✅" if result.status == "pass" else "❌"
-                            self.worker.progress.emit(f"{status_icon} Track {track_id}: {result.status.upper()} ({result.score}/100)")
-
-                        except Exception as e:
-                            self.worker.progress.emit(f"❌ Track {track_id} Failed: {e}")
-
-                    return results
-
-            verifier = SignalVerifier(
-                self,
+            verifier = Verifier(
                 quick_mode=self.quick_mode,
                 seed=42
             )
 
-            self.progress.emit(f"Starting Benchmark Suite (Quick={self.quick_mode})...")
-            results = verifier.run_tracks(self.track_ids)
+            self.progress.emit(f"Starting Benchmark Suite (Quick={self.quick_mode}, Parallel={self.parallel})...")
+
+            if self.parallel:
+                self.progress.emit("Running in parallel mode. Live updates per track are limited.")
+                results = verifier.run_tracks(self.track_ids, parallel=True)
+            else:
+                # Use sequential signal-based verifier for rich updates
+                class SignalVerifier(Verifier):
+                    def __init__(self, worker, *args, **kwargs):
+                        super().__init__(*args, **kwargs)
+                        self.worker = worker
+
+                    def run_tracks(self, track_ids, parallel=False):
+                        if parallel: return super().run_tracks(track_ids, parallel=True)
+
+                        results = {}
+                        for i, track_id in enumerate(track_ids):
+                            if self.worker._stop_requested:
+                                break
+
+                            self.worker.progress.emit(f"Running Track {track_id}...")
+
+                            try:
+                                name, method = self.tracks[track_id]
+                                result = method(self)
+                                results[track_id] = result
+
+                                status_icon = "✅" if result.status == "pass" else "❌"
+                                self.worker.progress.emit(f"{status_icon} Track {track_id}: {result.status.upper()} ({result.score}/100)")
+
+                            except Exception as e:
+                                self.worker.progress.emit(f"❌ Track {track_id} Failed: {e}")
+
+                        return results
+
+                # Swap instance
+                verifier = SignalVerifier(self, quick_mode=self.quick_mode, seed=42)
+                results = verifier.run_tracks(self.track_ids, parallel=False)
 
             # Convert results to dict for signal
             final_results = {}
