@@ -76,10 +76,23 @@ def _find_cuda_path() -> Optional[str]:
         from ctypes.util import find_library
         cudart = find_library("cudart")
         if cudart:
-            # If find_library returned a name, we might need to load it to find path on some systems
-            # But usually it returns a path if absolute, or we can look in LD_LIBRARY_PATH
-            pass
-            # (Skipped for simplicity as nvcc/torch usually suffice)
+            # If absolute path, use it
+            if os.path.isabs(cudart) and os.path.exists(cudart):
+                # /usr/local/cuda/lib64/libcudart.so -> /usr/local/cuda
+                cuda_root = os.path.dirname(os.path.dirname(cudart))
+                if os.path.exists(cuda_root):
+                    candidates.append(cuda_root)
+            else:
+                # If just a name (libcudart.so.11.0), look in LD_LIBRARY_PATH
+                ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+                for lib_dir in ld_path.split(os.pathsep):
+                    if not lib_dir: continue
+                    potential_path = os.path.join(lib_dir, cudart)
+                    if os.path.exists(potential_path):
+                        cuda_root = os.path.dirname(os.path.dirname(potential_path))
+                        if os.path.exists(cuda_root):
+                            candidates.append(cuda_root)
+                        break
     except Exception:
         pass
 
