@@ -44,6 +44,12 @@ from .dashboard_helpers import (
     create_weight_viz_widgets_generic,
     update_weight_visualization_generic
 )
+from .training_utils import (
+    create_vision_model_and_loader,
+    create_lm_model_and_loader,
+    create_diffusion_model_and_loader,
+    start_training_common
+)
 
 from bioplausible_ui.tabs.lm_tab import LMTab
 from bioplausible_ui.tabs.vision_tab import VisionTab
@@ -1205,7 +1211,7 @@ class EqPropDashboard(QMainWindow):
     def _start_vision_training(self):
         """Start vision model training."""
         # Create model and data loader
-        model, train_loader = self._create_vision_model_and_loader()
+        model, train_loader = create_vision_model_and_loader(self.vis_tab)
 
         if model is None or train_loader is None:
             return  # Error already shown to user
@@ -1217,61 +1223,34 @@ class EqPropDashboard(QMainWindow):
         self.vis_tab.update_model_ref(self.model)
         self.deploy_tab.update_model_ref(self.model)
 
-        # Clear history
-        self.loss_history.clear()
-        self.acc_history.clear()
-        self.lipschitz_history.clear()
-
-        # Get hyperparameters
-        hyperparams = self._get_current_hyperparams(self.vis_tab.vis_hyperparam_widgets)
-
-        # Update parameter count
-        if hasattr(self.vis_tab, 'vis_param_label'):
-            count = count_parameters(self.model)
-            self.vis_tab.vis_param_label.setText(f"Parameters: {format_parameter_count(count)}")
-
-        # Create and start worker
-        micro_interval = 1 if self.vis_tab.vis_micro_check.isChecked() else 0
-
-        self.worker = TrainingWorker(
-            self.model,
-            self.train_loader,
-            epochs=self.vis_tab.vis_epochs_spin.value(),
-            lr=self.vis_tab.vis_lr_spin.value(),
-            use_compile=self.vis_tab.vis_compile_check.isChecked(),
-            use_kernel=self.vis_tab.vis_kernel_check.isChecked(),
-            hyperparams=hyperparams,
-            microscope_interval=micro_interval,
+        # Create and start worker using common method
+        self.worker = start_training_common(
+            model=self.model,
+            train_loader=train_loader,
+            tab_instance=self.vis_tab,
+            tab_name='vis',
+            hyperparam_widgets=self.vis_tab.vis_hyperparam_widgets,
+            microscope_check=self.vis_tab.vis_micro_check,
+            compile_check=self.vis_tab.vis_compile_check,
+            kernel_check=self.vis_tab.vis_kernel_check,
+            epochs_spin=self.vis_tab.vis_epochs_spin,
+            lr_spin=self.vis_tab.vis_lr_spin,
+            progress_bar=self.vis_tab.vis_progress,
+            status_label=self.status_label,
+            worker_class=TrainingWorker
         )
-        self.worker.progress.connect(self._on_progress)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.error.connect(self._on_error)
-        self.worker.weights_updated.connect(lambda w: self._update_weight_visualization(w, is_grad=False))
-        self.worker.gradients_updated.connect(lambda g: self._update_weight_visualization(g, is_grad=True))
-        self.worker.log.connect(self._append_log)
-        self.worker.dynamics_update.connect(self._on_dynamics_update)
 
-        # Update UI
-        self.vis_tab.vis_train_btn.setEnabled(False)
-        self.vis_tab.vis_stop_btn.setEnabled(True)
-        self.vis_tab.vis_pause_btn.setEnabled(True)
-        self.vis_tab.vis_pause_btn.clicked.connect(self._toggle_pause)
-        self.vis_tab.vis_progress.setMaximum(self.vis_tab.vis_epochs_spin.value())
-        self.vis_tab.vis_progress.setValue(0)
-
-        import time
-        self.start_time = time.time()
-
-        model_name = self.vis_tab.vis_model_combo.currentText()
-        self.status_label.setText(f"Training {model_name}...")
-        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
-        self.plot_timer.start(100)
-        self.worker.start()
+        # Additional connections specific to vision training
+        if self.worker:
+            self.worker.weights_updated.connect(lambda w: self._update_weight_visualization(w, is_grad=False))
+            self.worker.gradients_updated.connect(lambda g: self._update_weight_visualization(g, is_grad=True))
+            self.worker.log.connect(self._append_log)
+            self.worker.dynamics_update.connect(self._on_dynamics_update)
 
     def _start_lm_training(self):
         """Start language model training."""
         # Create model and data loader
-        model, train_loader = self._create_lm_model_and_loader()
+        model, train_loader = create_lm_model_and_loader(self.lm_tab)
 
         if model is None or train_loader is None:
             return  # Error already shown to user
@@ -1283,61 +1262,32 @@ class EqPropDashboard(QMainWindow):
         self.lm_tab.update_model_ref(self.model)
         self.deploy_tab.update_model_ref(self.model)
 
-        # Clear history
-        self.loss_history.clear()
-        self.acc_history.clear()
-        self.lipschitz_history.clear()
-
-        # Get hyperparameters
-        hyperparams = self._get_current_hyperparams(self.lm_tab.lm_hyperparam_widgets)
-
-        # Update parameter count
-        if hasattr(self.lm_tab, 'lm_param_label'):
-            count = count_parameters(self.model)
-            self.lm_tab.lm_param_label.setText(f"Parameters: {format_parameter_count(count)}")
-
-        # Create and start worker
-        micro_interval = 1 if self.lm_tab.lm_micro_check.isChecked() else 0
-
-        self.worker = TrainingWorker(
-            self.model,
-            self.train_loader,
-            epochs=self.lm_tab.lm_epochs_spin.value(),
-            lr=self.lm_tab.lm_lr_spin.value(),
-            use_compile=self.lm_tab.lm_compile_check.isChecked(),
-            use_kernel=self.lm_tab.lm_kernel_check.isChecked(),
-            hyperparams=hyperparams,
-            microscope_interval=micro_interval,
+        # Create and start worker using common method
+        self.worker = start_training_common(
+            model=self.model,
+            train_loader=train_loader,
+            tab_instance=self.lm_tab,
+            tab_name='lm',
+            hyperparam_widgets=self.lm_tab.lm_hyperparam_widgets,
+            microscope_check=self.lm_tab.lm_micro_check,
+            compile_check=self.lm_tab.lm_compile_check,
+            kernel_check=self.lm_tab.lm_kernel_check,
+            epochs_spin=self.lm_tab.lm_epochs_spin,
+            lr_spin=self.lm_tab.lm_lr_spin,
+            progress_bar=self.lm_tab.lm_progress,
+            status_label=self.status_label,
+            worker_class=TrainingWorker
         )
-        self.worker.progress.connect(self._on_progress)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.error.connect(self._on_error)
-        self.worker.weights_updated.connect(self._update_weight_visualization)
-        self.worker.log.connect(self._append_log)
-        self.worker.dynamics_update.connect(self._on_dynamics_update)
 
-        # Update UI
-        self.lm_tab.lm_train_btn.setEnabled(False)
-        self.lm_tab.lm_stop_btn.setEnabled(True)
-        self.lm_tab.lm_pause_btn.setEnabled(True)
-        self.lm_tab.lm_pause_btn.clicked.connect(self._toggle_pause)
-        self.lm_tab.lm_progress.setMaximum(self.lm_tab.lm_epochs_spin.value())
-        self.lm_tab.lm_progress.setValue(0)
-
-        import time
-        self.start_time = time.time()
-
-        model_name = self.lm_tab.lm_model_combo.currentText()
-        dataset_name = self.lm_tab.lm_dataset_combo.currentText()
-        self.status_label.setText(f"Training {model_name} on {dataset_name}...")
-        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
-        self.plot_timer.start(100)
-        self.worker.start()
+        # Additional connections specific to LM training
+        if self.worker:
+            self.worker.weights_updated.connect(self._update_weight_visualization)
+            self.worker.log.connect(self._append_log)
+            self.worker.dynamics_update.connect(self._on_dynamics_update)
 
     def _start_diffusion_training(self):
         """Start diffusion training."""
-        import time
-        model, train_loader = self._create_diffusion_model_and_loader()
+        model, train_loader = create_diffusion_model_and_loader(self.diff_tab)
 
         if model is None or train_loader is None:
             return
@@ -1349,34 +1299,18 @@ class EqPropDashboard(QMainWindow):
         self.diff_tab.update_model_ref(self.model)
         self.deploy_tab.update_model_ref(self.model)
 
-        # Clear history
-        self.loss_history.clear()
-
-        # Worker
-        self.worker = TrainingWorker(
-            self.model,
-            self.train_loader,
-            epochs=self.diff_tab.epochs_spin.value(),
-            lr=self.diff_tab.lr_spin.value(),
-            hyperparams={}
+        # Create and start worker using common method
+        self.worker = start_training_common(
+            model=self.model,
+            train_loader=train_loader,
+            tab_instance=self.diff_tab,
+            tab_name='diff',
+            epochs_spin=self.diff_tab.epochs_spin,
+            lr_spin=self.diff_tab.lr_spin,
+            progress_bar=self.diff_tab.progress,
+            status_label=self.status_label,
+            worker_class=TrainingWorker
         )
-
-        self.worker.progress.connect(self._on_progress)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.error.connect(self._on_error)
-        self.worker.log.connect(self._append_log)
-
-        # UI
-        self.diff_tab.train_btn.setEnabled(False)
-        self.diff_tab.stop_btn.setEnabled(True)
-        self.diff_tab.progress.setMaximum(self.diff_tab.epochs_spin.value())
-        self.diff_tab.progress.setValue(0)
-
-        self.start_time = time.time()
-        self.status_label.setText("Training Diffusion Model...")
-        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
-        self.plot_timer.start(100)
-        self.worker.start()
 
     def _start_rl_training(self):
         """Start RL training."""
@@ -1487,145 +1421,36 @@ class EqPropDashboard(QMainWindow):
 
     def _create_vision_model_and_loader(self):
         """Create vision model and data loader."""
-        from bioplausible.datasets import get_vision_dataset
-        from torch.utils.data import DataLoader
-
-        # Get dataset
-        dataset_name = self.vis_tab.vis_dataset_combo.currentText().lower().replace('-', '_')
-
-        # Determine flattening based on model type
-        model_name = self.vis_tab.vis_model_combo.currentText()
+        # This method is now replaced by the utility function
+        # We keep it for backward compatibility if needed elsewhere
         try:
-            spec = get_model_spec(model_name)
-            use_flatten = spec.model_type != "modern_conv_eqprop"
+            return create_vision_model_and_loader(self.vis_tab)
         except Exception as e:
-            self._log_error(f"Could not get model spec for {model_name}: {e}")
-            use_flatten = True
-
-        try:
-            train_data = get_vision_dataset(dataset_name, train=True, flatten=use_flatten)
-            self.train_loader = DataLoader(train_data, batch_size=self.vis_tab.vis_batch_spin.value(), shuffle=True)
-        except Exception as e:
-            self._log_error(f"Could not load dataset {dataset_name}: {e}")
+            self._log_error(f"Error creating vision model and loader: {e}")
+            import traceback
+            traceback.print_exc()
             return None, None
-
-        # Create model
-        hidden = self.vis_tab.vis_hidden_spin.value()
-
-        try:
-            spec = get_model_spec(model_name)
-
-            # Determine input_dim based on dataset
-            if 'MNIST' in self.vis_tab.vis_dataset_combo.currentText():
-                input_dim = 784 if use_flatten else 1
-            else:  # CIFAR-10
-                input_dim = 3072 if use_flatten else 3
-
-            # Map combo text to internal string
-            grad_text = self.vis_tab.vis_grad_combo.currentText()
-            if "BPTT" in grad_text:
-                grad_method = "bptt"
-            elif "Equilibrium" in grad_text:
-                grad_method = "equilibrium"
-            elif "Contrastive" in grad_text:
-                grad_method = "contrastive"
-            else:
-                grad_method = "bptt"
-
-            model = create_model(
-                spec=spec,
-                input_dim=input_dim,
-                output_dim=10,
-                hidden_dim=hidden,
-                device="cuda" if torch.cuda.is_available() else "cpu",
-                task_type="vision",
-                gradient_method=grad_method
-            )
-
-            # Update step if spin box is used
-            if hasattr(model, 'max_steps'):
-                model.max_steps = self.vis_tab.vis_steps_spin.value()
-            elif hasattr(model, 'eq_steps'):
-                model.eq_steps = self.vis_tab.vis_steps_spin.value()
-
-        except Exception as e:
-            error_msg = f"Could not create {model_name}: {e}"
-            self._log_error(error_msg)
-            QMessageBox.warning(self, "Model Creation Failed", error_msg)
-            return None, None
-
-        return model, self.train_loader
 
     def _create_lm_model_and_loader(self):
         """Create language model and data loader."""
-        from bioplausible.datasets import get_lm_dataset
-        from torch.utils.data import DataLoader
-
-        model_name = self.lm_tab.lm_model_combo.currentText()
-
+        # This method is now replaced by the utility function
+        # We keep it for backward compatibility if needed elsewhere
         try:
-            # Get dataset
-            dataset_name = self.lm_tab.lm_dataset_combo.currentText()
-            seq_len = self.lm_tab.lm_seqlen_spin.value()
-
-            dataset = get_lm_dataset(dataset_name, seq_len=seq_len, split='train')
-            vocab_size = dataset.vocab_size if hasattr(dataset, 'vocab_size') else 256
-
-            spec = get_model_spec(model_name)
-
-            model = create_model(
-                spec=spec,
-                input_dim=None, # Uses embedding
-                output_dim=vocab_size,
-                hidden_dim=self.lm_tab.lm_hidden_spin.value(),
-                num_layers=self.lm_tab.lm_layers_spin.value(),
-                device="cuda" if torch.cuda.is_available() else "cpu",
-                task_type="lm"
-            )
-
-            # Apply steps
-            if hasattr(model, 'max_steps'):
-                 model.max_steps = self.lm_tab.lm_steps_spin.value()
-            elif hasattr(model, 'eq_steps'):
-                 model.eq_steps = self.lm_tab.lm_steps_spin.value()
-
-            train_loader = DataLoader(dataset, batch_size=self.lm_tab.lm_batch_spin.value(), shuffle=True)
-            return model, train_loader
-
+            return create_lm_model_and_loader(self.lm_tab)
         except Exception as e:
-            error_msg = f"Failed to create LM model: {e}"
-            self._log_error(error_msg)
+            self._log_error(f"Error creating LM model and loader: {e}")
             import traceback
             traceback.print_exc()
             return None, None
 
     def _create_diffusion_model_and_loader(self):
         """Create diffusion model and data loader."""
-        from bioplausible.datasets import get_vision_dataset
-        from torch.utils.data import DataLoader
-        import torch
-
+        # This method is now replaced by the utility function
+        # We keep it for backward compatibility if needed elsewhere
         try:
-            # Dataset (MNIST) - must be unflattened [C, H, W]
-            train_data = get_vision_dataset('mnist', train=True, flatten=False)
-            train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
-
-            # Model
-            spec = get_model_spec("EqProp Diffusion")
-            hidden = self.diff_tab.hidden_spin.value()
-
-            model = create_model(
-                spec=spec,
-                input_dim=1, # Channels
-                output_dim=1,
-                hidden_dim=hidden,
-                device="cuda" if torch.cuda.is_available() else "cpu",
-                task_type="vision"
-            )
-            return model, train_loader
+            return create_diffusion_model_and_loader(self.diff_tab)
         except Exception as e:
-            error_msg = f"Failed to create Diffusion model: {e}"
-            self._log_error(error_msg)
+            self._log_error(f"Error creating diffusion model and loader: {e}")
             import traceback
             traceback.print_exc()
             return None, None
@@ -1666,182 +1491,6 @@ class EqPropDashboard(QMainWindow):
         self.status_label.setText("Training error!")
         self.status_label.setStyleSheet("color: #ff5588; padding: 5px; font-weight: bold;")
         QMessageBox.critical(self, "Training Error", error)
-
-    def _start_diffusion_training(self):
-        """Start diffusion training."""
-        import time
-        model, train_loader = self._create_diffusion_model_and_loader()
-
-        if model is None or train_loader is None:
-            return
-
-        self.model = model
-        self.train_loader = train_loader
-
-        # Refs
-        self.diff_tab.update_model_ref(self.model)
-        self.deploy_tab.update_model_ref(self.model)
-
-        # Clear history
-        self.loss_history.clear()
-
-        # Worker
-        self.worker = TrainingWorker(
-            self.model,
-            self.train_loader,
-            epochs=self.diff_tab.epochs_spin.value(),
-            lr=self.diff_tab.lr_spin.value(),
-            hyperparams={}
-        )
-
-        self.worker.progress.connect(self._on_progress)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.error.connect(self._on_error)
-        self.worker.log.connect(self._append_log)
-
-        # UI
-        self.diff_tab.train_btn.setEnabled(False)
-        self.diff_tab.stop_btn.setEnabled(True)
-        self.diff_tab.progress.setMaximum(self.diff_tab.epochs_spin.value())
-        self.diff_tab.progress.setValue(0)
-
-        self.start_time = time.time()
-        self.status_label.setText("Training Diffusion Model...")
-        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
-        self.plot_timer.start(100)
-        self.worker.start()
-
-    def _start_vision_training(self):
-        """Start vision model training."""
-        # Create model and data loader
-        model, train_loader = self._create_vision_model_and_loader()
-
-        if model is None or train_loader is None:
-            return  # Error already shown to user
-
-        self.model = model
-        self.train_loader = train_loader
-
-        # Keep reference for inference
-        self.vis_tab.update_model_ref(self.model)
-        self.deploy_tab.update_model_ref(self.model)
-
-        # Clear history
-        self.loss_history.clear()
-        self.acc_history.clear()
-        self.lipschitz_history.clear()
-
-        # Get hyperparameters
-        hyperparams = self._get_current_hyperparams(self.vis_tab.vis_hyperparam_widgets)
-
-        # Update parameter count
-        if hasattr(self.vis_tab, 'vis_param_label'):
-            count = count_parameters(self.model)
-            self.vis_tab.vis_param_label.setText(f"Parameters: {format_parameter_count(count)}")
-
-        # Create and start worker
-        micro_interval = 1 if self.vis_tab.vis_micro_check.isChecked() else 0
-
-        self.worker = TrainingWorker(
-            self.model,
-            self.train_loader,
-            epochs=self.vis_tab.vis_epochs_spin.value(),
-            lr=self.vis_tab.vis_lr_spin.value(),
-            use_compile=self.vis_tab.vis_compile_check.isChecked(),
-            use_kernel=self.vis_tab.vis_kernel_check.isChecked(),
-            hyperparams=hyperparams,
-            microscope_interval=micro_interval,
-        )
-        self.worker.progress.connect(self._on_progress)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.error.connect(self._on_error)
-        self.worker.weights_updated.connect(lambda w: self._update_weight_visualization(w, is_grad=False))
-        self.worker.gradients_updated.connect(lambda g: self._update_weight_visualization(g, is_grad=True))
-        self.worker.log.connect(self._append_log)
-        self.worker.dynamics_update.connect(self._on_dynamics_update)
-
-        # Update UI
-        self.vis_tab.vis_train_btn.setEnabled(False)
-        self.vis_tab.vis_stop_btn.setEnabled(True)
-        self.vis_tab.vis_pause_btn.setEnabled(True)
-        self.vis_tab.vis_pause_btn.clicked.connect(self._toggle_pause)
-        self.vis_tab.vis_progress.setMaximum(self.vis_tab.vis_epochs_spin.value())
-        self.vis_tab.vis_progress.setValue(0)
-
-        import time
-        self.start_time = time.time()
-
-        model_name = self.vis_tab.vis_model_combo.currentText()
-        self.status_label.setText(f"Training {model_name}...")
-        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
-        self.plot_timer.start(100)
-        self.worker.start()
-
-    def _start_lm_training(self):
-        """Start language model training."""
-        # Create model and data loader
-        model, train_loader = self._create_lm_model_and_loader()
-
-        if model is None or train_loader is None:
-            return  # Error already shown to user
-
-        self.model = model
-        self.train_loader = train_loader
-
-        # Keep reference for generation
-        self.lm_tab.update_model_ref(self.model)
-        self.deploy_tab.update_model_ref(self.model)
-
-        # Clear history
-        self.loss_history.clear()
-        self.acc_history.clear()
-        self.lipschitz_history.clear()
-
-        # Get hyperparameters
-        hyperparams = self._get_current_hyperparams(self.lm_tab.lm_hyperparam_widgets)
-
-        # Update parameter count
-        if hasattr(self.lm_tab, 'lm_param_label'):
-            count = count_parameters(self.model)
-            self.lm_tab.lm_param_label.setText(f"Parameters: {format_parameter_count(count)}")
-
-        # Create and start worker
-        micro_interval = 1 if self.lm_tab.lm_micro_check.isChecked() else 0
-
-        self.worker = TrainingWorker(
-            self.model,
-            self.train_loader,
-            epochs=self.lm_tab.lm_epochs_spin.value(),
-            lr=self.lm_tab.lm_lr_spin.value(),
-            use_compile=self.lm_tab.lm_compile_check.isChecked(),
-            use_kernel=self.lm_tab.lm_kernel_check.isChecked(),
-            hyperparams=hyperparams,
-            microscope_interval=micro_interval,
-        )
-        self.worker.progress.connect(self._on_progress)
-        self.worker.finished.connect(self._on_finished)
-        self.worker.error.connect(self._on_error)
-        self.worker.weights_updated.connect(self._update_weight_visualization)
-        self.worker.log.connect(self._append_log)
-        self.worker.dynamics_update.connect(self._on_dynamics_update)
-
-        # Update UI
-        self.lm_tab.lm_train_btn.setEnabled(False)
-        self.lm_tab.lm_stop_btn.setEnabled(True)
-        self.lm_tab.lm_pause_btn.setEnabled(True)
-        self.lm_tab.lm_pause_btn.clicked.connect(self._toggle_pause)
-        self.lm_tab.lm_progress.setMaximum(self.lm_tab.lm_epochs_spin.value())
-        self.lm_tab.lm_progress.setValue(0)
-
-        import time
-        self.start_time = time.time()
-
-        model_name = self.lm_tab.lm_model_combo.currentText()
-        dataset_name = self.lm_tab.lm_dataset_combo.currentText()
-        self.status_label.setText(f"Training {model_name} on {dataset_name}...")
-        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
-        self.plot_timer.start(100)
-        self.worker.start()
 
     def _start_rl_training(self):
         """Start RL training."""

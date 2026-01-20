@@ -48,7 +48,7 @@ def main():
     app.setApplicationVersion("0.1.0")
 
     # Import and create dashboard
-    from .dashboard import EqPropDashboard
+    from bioplausible_ui.dashboard import EqPropDashboard
 
     window = EqPropDashboard(initial_config=initial_config)
     window.show()
