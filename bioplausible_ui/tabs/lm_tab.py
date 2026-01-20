@@ -1,10 +1,18 @@
 
+"""
+Language Modeling Tab for Bioplausible Trainer.
+
+This module implements the language modeling tab interface with training controls,
+visualization, and text generation capabilities.
+"""
+
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QSpinBox, QDoubleSpinBox,
     QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel, QSlider, QTextEdit,
-    QToolBox, QFrame
+    QToolBox, QFrame, QGridLayout
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread
+from typing import Optional
 
 from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
@@ -12,7 +20,7 @@ from bioplausible_ui.generation import count_parameters, format_parameter_count,
 from bioplausible_ui.themes import PLOT_COLORS
 from bioplausible_ui.common_widgets import create_plot_widget, create_standard_buttons
 from bioplausible_ui.utils import format_metric_value
-from PyQt6.QtWidgets import QApplication
+
 
 try:
     import pyqtgraph as pg
@@ -20,7 +28,9 @@ try:
 except ImportError:
     HAS_PYQTGRAPH = False
 
+
 class GenerationWorker(QThread):
+    """Background worker for text generation."""
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
@@ -42,36 +52,37 @@ class GenerationWorker(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
+
 class LMTab(QWidget):
     """Language Modeling Tab."""
 
-    start_training_signal = pyqtSignal(str) # Mode ('lm')
+    start_training_signal = pyqtSignal(str)  # Mode ('lm')
     stop_training_signal = pyqtSignal()
     clear_plots_signal = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.model = None
-        self.generator = None
+        self.generator: Optional[UniversalGenerator] = None
         self.gen_worker = None
         self._setup_ui()
 
-    def _create_control_group(self, title, controls):
-        from PyQt6.QtWidgets import QGridLayout
-        group = QGroupBox(title)
-        layout = QGridLayout(group)
-        for i, (label, widget) in enumerate(controls):
-            layout.addWidget(QLabel(label), i, 0)
-            layout.addWidget(widget, i, 1)
-        return group
-
     def _setup_ui(self):
+        """Set up the user interface."""
         layout = QHBoxLayout(self)
         layout.setSpacing(15)
 
         # Left panel: Controls
-        left_panel = QVBoxLayout()
+        left_panel = self._create_left_panel()
         layout.addLayout(left_panel, stretch=1)
+
+        # Right panel: Plots and Generation
+        right_panel = self._create_right_panel()
+        layout.addLayout(right_panel, stretch=2)
+
+    def _create_left_panel(self):
+        """Create the left control panel."""
+        left_panel = QVBoxLayout()
 
         # Presets
         preset_layout = QHBoxLayout()
@@ -86,10 +97,46 @@ class LMTab(QWidget):
         self.toolbox = QToolBox()
         left_panel.addWidget(self.toolbox)
 
-        # --- Section 1: Model ---
+        # Add sections to toolbox
+        self._add_model_section()
+        self._add_dataset_section()
+        self._add_training_section()
+
+        # Train/Stop Buttons
+        btn_layout, self.lm_train_btn, self.lm_stop_btn, self.lm_pause_btn, self.lm_reset_btn, self.lm_clear_btn = create_standard_buttons(
+            lambda: self.start_training_signal.emit('lm'),
+            self.stop_training_signal.emit,
+            self._reset_defaults,
+            self.clear_plots_signal.emit
+        )
+        left_panel.addLayout(btn_layout)
+
+        # Progress bar
+        self.lm_progress = QProgressBar()
+        self.lm_progress.setTextVisible(True)
+        self.lm_progress.setFormat("Epoch %v / %m")
+        left_panel.addWidget(self.lm_progress)
+
+        # ETA Label
+        self.lm_eta_label = QLabel("ETA: --:-- | Speed: -- it/s")
+        self.lm_eta_label.setStyleSheet("color: #888888; font-size: 11px;")
+        self.lm_eta_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_panel.addWidget(self.lm_eta_label)
+
+        # Parameter count
+        self.lm_param_label = QLabel("Parameters: --")
+        self.lm_param_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 5px;")
+        left_panel.addWidget(self.lm_param_label)
+        left_panel.addStretch()
+
+        return left_panel
+
+    def _add_model_section(self):
+        """Add the model configuration section to the toolbox."""
         model_widget = QWidget()
         model_layout = QVBoxLayout(model_widget)
 
+        # Model controls
         self.lm_model_combo = QComboBox()
         lm_items = []
         for spec in MODEL_REGISTRY:
@@ -126,7 +173,6 @@ class LMTab(QWidget):
             ("Eq Steps:", self.lm_steps_spin)
         ]
 
-        from PyQt6.QtWidgets import QGridLayout
         grid = QGridLayout()
         for i, (label, widget) in enumerate(model_controls):
             grid.addWidget(QLabel(label), i, 0)
@@ -144,7 +190,11 @@ class LMTab(QWidget):
         model_layout.addStretch()
         self.toolbox.addItem(model_widget, "🧠 Model Architecture")
 
-        # --- Section 2: Dataset ---
+        # Trigger initial update
+        self._update_model_desc(self.lm_model_combo.currentText())
+
+    def _add_dataset_section(self):
+        """Add the dataset configuration section to the toolbox."""
         data_widget = QWidget()
         data_layout = QVBoxLayout(data_widget)
 
@@ -177,7 +227,8 @@ class LMTab(QWidget):
 
         self.toolbox.addItem(data_widget, "📚 Text Configuration")
 
-        # --- Section 3: Training ---
+    def _add_training_section(self):
+        """Add the training configuration section to the toolbox."""
         train_widget = QWidget()
         train_layout = QVBoxLayout(train_widget)
 
@@ -220,50 +271,28 @@ class LMTab(QWidget):
 
         self.toolbox.addItem(train_widget, "⚙️ Optimization")
 
-        # Trigger initial update
-        self._update_model_desc(self.lm_model_combo.currentText())
-
-        # Train/Stop Buttons
-        btn_layout, self.lm_train_btn, self.lm_stop_btn, self.lm_pause_btn, self.lm_reset_btn, self.lm_clear_btn = create_standard_buttons(
-            lambda: self.start_training_signal.emit('lm'),
-            self.stop_training_signal.emit,
-            self._reset_defaults,
-            self.clear_plots_signal.emit
-        )
-        left_panel.addLayout(btn_layout)
-
-        # Progress bar
-        self.lm_progress = QProgressBar()
-        self.lm_progress.setTextVisible(True)
-        self.lm_progress.setFormat("Epoch %v / %m")
-        left_panel.addWidget(self.lm_progress)
-
-        # ETA Label
-        self.lm_eta_label = QLabel("ETA: --:-- | Speed: -- it/s")
-        self.lm_eta_label.setStyleSheet("color: #888888; font-size: 11px;")
-        self.lm_eta_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        left_panel.addWidget(self.lm_eta_label)
-
-        # Parameter count
-        self.lm_param_label = QLabel("Parameters: --")
-        self.lm_param_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 5px;")
-        left_panel.addWidget(self.lm_param_label)
-        left_panel.addStretch()
-
-        # Right panel: Plots and Generation
+    def _create_right_panel(self):
+        """Create the right panel with plots and generation."""
         right_panel = QVBoxLayout()
-        layout.addLayout(right_panel, stretch=2)
 
+        # Add plots if pyqtgraph is available
         if HAS_PYQTGRAPH:
             metrics_group = QGroupBox("📊 Training Metrics")
             metrics_layout = QVBoxLayout(metrics_group)
+
+            # Loss plot
             self.lm_loss_plot, self.lm_loss_curve = create_plot_widget("Loss", "Loss")
             metrics_layout.addWidget(self.lm_loss_plot)
+
+            # Accuracy plot
             self.lm_acc_plot, self.lm_acc_curve = create_plot_widget("Accuracy", "Accuracy", yrange=(0, 1.0))
             metrics_layout.addWidget(self.lm_acc_plot)
+
+            # Lipschitz plot
             self.lm_lip_plot, self.lm_lip_curve = create_plot_widget("Lipschitz L", "Lipschitz L")
             self.lm_lip_plot.addLine(y=1.0, pen=pg.mkPen('r', width=1, style=Qt.PenStyle.DashLine))
             metrics_layout.addWidget(self.lm_lip_plot)
+
             right_panel.addWidget(metrics_group, stretch=2)
         else:
             no_plot_label = QLabel("Install pyqtgraph for live plots: pip install pyqtgraph")
@@ -271,6 +300,24 @@ class LMTab(QWidget):
             right_panel.addWidget(no_plot_label)
 
         # Generation panel
+        gen_group = self._create_generation_panel()
+        right_panel.addWidget(gen_group, stretch=1)
+
+        # Weight Visualization
+        if HAS_PYQTGRAPH:
+            viz_group = QGroupBox("🎞️ Weight Matrices")
+            viz_layout = QVBoxLayout(viz_group)
+            self.lm_weight_widgets = []
+            self.lm_weight_labels = []
+            self.lm_weights_container = QWidget()
+            self.lm_weights_layout = QVBoxLayout(self.lm_weights_container)
+            viz_layout.addWidget(self.lm_weights_container)
+            right_panel.addWidget(viz_group)
+
+        return right_panel
+
+    def _create_generation_panel(self):
+        """Create the text generation panel."""
         gen_group = QGroupBox("✨ Text Generation")
         gen_layout = QVBoxLayout(gen_group)
 
@@ -303,22 +350,13 @@ class LMTab(QWidget):
         self.gen_output.setReadOnly(True)
         self.gen_output.setPlaceholderText("Generated text will appear here...")
         gen_layout.addWidget(self.gen_output)
-        right_panel.addWidget(gen_group, stretch=1)
 
-        # Weight Visualization
-        if HAS_PYQTGRAPH:
-            viz_group = QGroupBox("🎞️ Weight Matrices")
-            viz_layout = QVBoxLayout(viz_group)
-            self.lm_weight_widgets = []
-            self.lm_weight_labels = []
-            self.lm_weights_container = QWidget()
-            self.lm_weights_layout = QVBoxLayout(self.lm_weights_container)
-            viz_layout.addWidget(self.lm_weights_container)
-            right_panel.addWidget(viz_group)
+        return gen_group
 
     def _apply_preset(self, preset_name):
         """Apply config preset."""
-        if preset_name == "Custom": return
+        if preset_name == "Custom":
+            return
 
         if preset_name == "Small (Fast)":
             self.lm_hidden_spin.setValue(128)
@@ -355,6 +393,7 @@ class LMTab(QWidget):
         self.lm_preset_combo.setCurrentIndex(0)
 
     def _update_lm_hyperparams(self, model_name):
+        """Update hyperparameter widgets based on model selection."""
         update_hyperparams_generic(self, model_name, self.lm_hyperparam_layout, self.lm_hyperparam_widgets, self.lm_hyperparam_group)
 
     def _update_model_desc(self, model_name):
@@ -395,7 +434,8 @@ class LMTab(QWidget):
 
         temperature = self.temp_slider.value() / 10.0
         prompt = self.gen_prompt_input.toPlainText().strip()
-        if not prompt: prompt = "ROMEO:"
+        if not prompt:
+            prompt = "ROMEO:"
 
         self.gen_output.setText(f"🎲 Generating from '{prompt}'...\n(May be gibberish if undertrained)")
         self.gen_btn.setEnabled(False)
@@ -407,22 +447,26 @@ class LMTab(QWidget):
         self.gen_worker.start()
 
     def _on_gen_finished(self, text):
+        """Handle text generation completion."""
         self.gen_output.setText(f"📝 Generated:\n\n{text}")
         self.gen_btn.setEnabled(True)
 
     def _on_gen_error(self, err):
+        """Handle text generation error."""
         self.gen_output.setText(f"❌ Generation failed: {err}\n\nTip: Train for a few epochs first!")
         self.gen_btn.setEnabled(True)
 
     def update_model_ref(self, model):
+        """Update the model reference."""
         self.model = model
         # Reset generator to ensure it uses new model
         self.generator = None
 
     def get_current_hyperparams(self):
+        """Get current hyperparameter values."""
         return get_current_hyperparams_generic(self.lm_hyperparam_widgets)
 
-    def update_theme(self, theme_colors, plot_colors):
+    def update_theme(self, theme_colors: dict, plot_colors: dict):
         """Update plot colors based on theme."""
         from bioplausible_ui.common_widgets import update_theme_for_plots
         if not HAS_PYQTGRAPH:

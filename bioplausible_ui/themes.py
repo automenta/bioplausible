@@ -6,7 +6,7 @@ Includes Dark Cyberpunk and Professional Light themes.
 
 from typing import Dict, Any
 
-# === DARK THEME COLORS ===
+# === DEFAULT THEME COLORS ===
 DARK_THEME_COLORS: Dict[str, str] = {
     'background': '#0a0a0f',
     'background_alt': '#0d0d15',
@@ -42,7 +42,6 @@ DARK_THEME_COLORS: Dict[str, str] = {
     'checkbox_border': '#3a3a5f',
 }
 
-# === LIGHT THEME COLORS ===
 LIGHT_THEME_COLORS = {
     'background': '#f5f5f7',
     'background_alt': '#ffffff',
@@ -78,10 +77,118 @@ LIGHT_THEME_COLORS = {
     'checkbox_border': '#c0c0c5',
 }
 
+# === ADDITIONAL THEME COLORS ===
+NORD_THEME_COLORS = {
+    'background': '#2e3440',
+    'background_alt': '#3b4252',
+    'background_group': 'rgba(59, 66, 82, 0.7)',
+    'background_group_alt': 'rgba(46, 52, 64, 0.95)',
+    'border': '#4c566a',
+    'border_alt': '#434c5e',
+    'text_primary': '#eceff4',
+    'text_secondary': '#d8dee9',
+    'text_accent': '#88c0d0',
+    'text_accent_alt': '#8fbcbb',
+    'neon_cyan': '#88c0d0',
+    'neon_green': '#a3be8c',
+    'neon_pink': '#bf616a',
+    'neon_orange': '#d08770',
+    'neon_purple': '#b48ead',
+    'neon_magenta': '#d8dee9',
+    'neon_red': '#bf616a',
+    'neon_green_alt': '#a3be8c',
+    'button_primary': '#4c566a',
+    'button_primary_alt': '#5e81ac',
+    'button_train': '#a3be8c',
+    'button_train_alt': '#b48fade',
+    'button_stop': '#bf616a',
+    'button_stop_alt': '#d08770',
+    'button_reset': '#ebcb8b',
+    'button_reset_alt': '#d08770',
+    'slider_handle': '#88c0d0',
+    'slider_handle_alt': '#5e81ac',
+    'progress_fill': '#88c0d0',
+    'progress_fill_alt': '#5e81ac',
+    'checkbox_checked': '#88c0d0',
+    'checkbox_border': '#4c566a',
+}
+
+CYBERPUNK_THEME_COLORS = {
+    'background': '#0a0a0f',
+    'background_alt': '#0d0d15',
+    'background_group': 'rgba(20, 20, 40, 0.7)',
+    'background_group_alt': 'rgba(15, 15, 25, 0.95)',
+    'border': '#2a2a4f',
+    'border_alt': '#1a1a2e',
+    'text_primary': '#e0e0e0',
+    'text_secondary': '#c0c0d0',
+    'text_accent': '#00ffff',
+    'text_accent_alt': '#00ff88',
+    'neon_cyan': '#00ffff',
+    'neon_green': '#00ff88',
+    'neon_pink': '#ff5588',
+    'neon_orange': '#ffaa00',
+    'neon_purple': '#aa88ff',
+    'neon_magenta': '#ff88ff',
+    'neon_red': '#ff6666',
+    'neon_green_alt': '#66ff66',
+    'button_primary': '#2a2a4f',
+    'button_primary_alt': '#3a3a6f',
+    'button_train': '#00aa88',
+    'button_train_alt': '#00ccaa',
+    'button_stop': '#cc3355',
+    'button_stop_alt': '#992244',
+    'button_reset': '#aa7722',
+    'button_reset_alt': '#cc9933',
+    'slider_handle': '#00ffff',
+    'slider_handle_alt': '#0088aa',
+    'progress_fill': '#00aacc',
+    'progress_fill_alt': '#00ffff',
+    'checkbox_checked': '#00aacc',
+    'checkbox_border': '#3a3a5f',
+}
+
+SOLARIZED_THEME_COLORS = {
+    'background': '#fdf6e3',
+    'background_alt': '#eee8d5',
+    'background_group': 'rgba(238, 232, 213, 0.7)',
+    'background_group_alt': 'rgba(253, 246, 227, 0.95)',
+    'border': '#93a1a1',
+    'border_alt': '#b58900',
+    'text_primary': '#586e75',
+    'text_secondary': '#657b83',
+    'text_accent': '#268bd2',
+    'text_accent_alt': '#2aa198',
+    'neon_cyan': '#2aa198',
+    'neon_green': '#859900',
+    'neon_pink': '#d33682',
+    'neon_orange': '#cb4b16',
+    'neon_purple': '#6c71c4',
+    'neon_magenta': '#d33682',
+    'neon_red': '#dc322f',
+    'neon_green_alt': '#859900',
+    'button_primary': '#eee8d5',
+    'button_primary_alt': '#ddd6c1',
+    'button_train': '#859900',
+    'button_train_alt': '#b58900',
+    'button_stop': '#dc322f',
+    'button_stop_alt': '#cb4b16',
+    'button_reset': '#b58900',
+    'button_reset_alt': '#cb4b16',
+    'slider_handle': '#268bd2',
+    'slider_handle_alt': '#839496',
+    'progress_fill': '#268bd2',
+    'progress_fill_alt': '#839496',
+    'checkbox_checked': '#268bd2',
+    'checkbox_border': '#93a1a1',
+}
+
 # Backwards compatibility
 THEME_COLORS = DARK_THEME_COLORS
 
-def create_theme(colors):
+
+def create_theme(colors: Dict[str, str]) -> str:
+    """Create a CSS theme string from a dictionary of colors."""
     return f"""
 /* === Global === */
 QWidget {{
@@ -371,141 +478,31 @@ QCheckBox::indicator:hover {{
 }}
 """
 
+
+def create_plot_colors(color_scheme: Dict[str, str]) -> Dict[str, str]:
+    """Create plot colors based on a color scheme."""
+    return {
+        'loss': color_scheme['neon_pink'],
+        'accuracy': color_scheme['neon_green'],
+        'perplexity': color_scheme['neon_orange'],
+        'lipschitz': color_scheme['neon_cyan'],
+        'memory': color_scheme['neon_purple'],
+        'gradient': color_scheme['neon_magenta'],
+        'backprop': color_scheme['neon_red'],
+        'eqprop': color_scheme['neon_green_alt'],
+    }
+
+
+# Theme definitions
 CYBERPUNK_DARK = create_theme(DARK_THEME_COLORS)
 LIGHT_THEME = create_theme(LIGHT_THEME_COLORS)
 
 # Neon glow colors for plots - Dark theme default, but can be used in Light too
-PLOT_COLORS = {
-    'loss': DARK_THEME_COLORS['neon_pink'],
-    'accuracy': DARK_THEME_COLORS['neon_green'],
-    'perplexity': DARK_THEME_COLORS['neon_orange'],
-    'lipschitz': DARK_THEME_COLORS['neon_cyan'],
-    'memory': DARK_THEME_COLORS['neon_purple'],
-    'gradient': DARK_THEME_COLORS['neon_magenta'],
-    'backprop': DARK_THEME_COLORS['neon_red'],
-    'eqprop': DARK_THEME_COLORS['neon_green_alt'],
-}
-
-LIGHT_PLOT_COLORS = {
-    'loss': LIGHT_THEME_COLORS['neon_pink'],
-    'accuracy': LIGHT_THEME_COLORS['neon_green'],
-    'perplexity': LIGHT_THEME_COLORS['neon_orange'],
-    'lipschitz': LIGHT_THEME_COLORS['neon_cyan'],
-    'memory': LIGHT_THEME_COLORS['neon_purple'],
-    'gradient': LIGHT_THEME_COLORS['neon_magenta'],
-    'backprop': LIGHT_THEME_COLORS['neon_red'],
-    'eqprop': LIGHT_THEME_COLORS['neon_green_alt'],
-}
-
-# Additional theme definitions
-
-# === NORD THEME COLORS ===
-NORD_THEME_COLORS = {
-    'background': '#2e3440',
-    'background_alt': '#3b4252',
-    'background_group': 'rgba(59, 66, 82, 0.7)',
-    'background_group_alt': 'rgba(46, 52, 64, 0.95)',
-    'border': '#4c566a',
-    'border_alt': '#434c5e',
-    'text_primary': '#eceff4',
-    'text_secondary': '#d8dee9',
-    'text_accent': '#88c0d0',
-    'text_accent_alt': '#8fbcbb',
-    'neon_cyan': '#88c0d0',
-    'neon_green': '#a3be8c',
-    'neon_pink': '#bf616a',
-    'neon_orange': '#d08770',
-    'neon_purple': '#b48ead',
-    'neon_magenta': '#d8dee9',
-    'neon_red': '#bf616a',
-    'neon_green_alt': '#a3be8c',
-    'button_primary': '#4c566a',
-    'button_primary_alt': '#5e81ac',
-    'button_train': '#a3be8c',
-    'button_train_alt': '#b48fade',
-    'button_stop': '#bf616a',
-    'button_stop_alt': '#d08770',
-    'button_reset': '#ebcb8b',
-    'button_reset_alt': '#d08770',
-    'slider_handle': '#88c0d0',
-    'slider_handle_alt': '#5e81ac',
-    'progress_fill': '#88c0d0',
-    'progress_fill_alt': '#5e81ac',
-    'checkbox_checked': '#88c0d0',
-    'checkbox_border': '#4c566a',
-}
-
-# === CYBERPUNK THEME COLORS ===
-CYBERPUNK_THEME_COLORS = {
-    'background': '#0a0a0f',
-    'background_alt': '#0d0d15',
-    'background_group': 'rgba(20, 20, 40, 0.7)',
-    'background_group_alt': 'rgba(15, 15, 25, 0.95)',
-    'border': '#2a2a4f',
-    'border_alt': '#1a1a2e',
-    'text_primary': '#e0e0e0',
-    'text_secondary': '#c0c0d0',
-    'text_accent': '#00ffff',
-    'text_accent_alt': '#00ff88',
-    'neon_cyan': '#00ffff',
-    'neon_green': '#00ff88',
-    'neon_pink': '#ff5588',
-    'neon_orange': '#ffaa00',
-    'neon_purple': '#aa88ff',
-    'neon_magenta': '#ff88ff',
-    'neon_red': '#ff6666',
-    'neon_green_alt': '#66ff66',
-    'button_primary': '#2a2a4f',
-    'button_primary_alt': '#3a3a6f',
-    'button_train': '#00aa88',
-    'button_train_alt': '#00ccaa',
-    'button_stop': '#cc3355',
-    'button_stop_alt': '#992244',
-    'button_reset': '#aa7722',
-    'button_reset_alt': '#cc9933',
-    'slider_handle': '#00ffff',
-    'slider_handle_alt': '#0088aa',
-    'progress_fill': '#00aacc',
-    'progress_fill_alt': '#00ffff',
-    'checkbox_checked': '#00aacc',
-    'checkbox_border': '#3a3a5f',
-}
-
-# === SOLARIZED THEME COLORS ===
-SOLARIZED_THEME_COLORS = {
-    'background': '#fdf6e3',
-    'background_alt': '#eee8d5',
-    'background_group': 'rgba(238, 232, 213, 0.7)',
-    'background_group_alt': 'rgba(253, 246, 227, 0.95)',
-    'border': '#93a1a1',
-    'border_alt': '#b58900',
-    'text_primary': '#586e75',
-    'text_secondary': '#657b83',
-    'text_accent': '#268bd2',
-    'text_accent_alt': '#2aa198',
-    'neon_cyan': '#2aa198',
-    'neon_green': '#859900',
-    'neon_pink': '#d33682',
-    'neon_orange': '#cb4b16',
-    'neon_purple': '#6c71c4',
-    'neon_magenta': '#d33682',
-    'neon_red': '#dc322f',
-    'neon_green_alt': '#859900',
-    'button_primary': '#eee8d5',
-    'button_primary_alt': '#ddd6c1',
-    'button_train': '#859900',
-    'button_train_alt': '#b58900',
-    'button_stop': '#dc322f',
-    'button_stop_alt': '#cb4b16',
-    'button_reset': '#b58900',
-    'button_reset_alt': '#cb4b16',
-    'slider_handle': '#268bd2',
-    'slider_handle_alt': '#839496',
-    'progress_fill': '#268bd2',
-    'progress_fill_alt': '#839496',
-    'checkbox_checked': '#268bd2',
-    'checkbox_border': '#93a1a1',
-}
+PLOT_COLORS = create_plot_colors(DARK_THEME_COLORS)
+LIGHT_PLOT_COLORS = create_plot_colors(LIGHT_THEME_COLORS)
+NORD_PLOT_COLORS = create_plot_colors(NORD_THEME_COLORS)
+CYBERPUNK_PLOT_COLORS = create_plot_colors(CYBERPUNK_THEME_COLORS)
+SOLARIZED_PLOT_COLORS = create_plot_colors(SOLARIZED_THEME_COLORS)
 
 # Theme registry
 THEME_REGISTRY = {
@@ -522,44 +519,17 @@ THEME_REGISTRY = {
     'nord': {
         'ui': NORD_THEME_COLORS,
         'theme_css': create_theme(NORD_THEME_COLORS),
-        'plot_colors': {
-            'loss': NORD_THEME_COLORS['neon_pink'],
-            'accuracy': NORD_THEME_COLORS['neon_green'],
-            'perplexity': NORD_THEME_COLORS['neon_orange'],
-            'lipschitz': NORD_THEME_COLORS['neon_cyan'],
-            'memory': NORD_THEME_COLORS['neon_purple'],
-            'gradient': NORD_THEME_COLORS['neon_magenta'],
-            'backprop': NORD_THEME_COLORS['neon_red'],
-            'eqprop': NORD_THEME_COLORS['neon_green_alt'],
-        }
+        'plot_colors': NORD_PLOT_COLORS
     },
     'cyberpunk': {
         'ui': CYBERPUNK_THEME_COLORS,
         'theme_css': create_theme(CYBERPUNK_THEME_COLORS),
-        'plot_colors': {
-            'loss': CYBERPUNK_THEME_COLORS['neon_pink'],
-            'accuracy': CYBERPUNK_THEME_COLORS['neon_green'],
-            'perplexity': CYBERPUNK_THEME_COLORS['neon_orange'],
-            'lipschitz': CYBERPUNK_THEME_COLORS['neon_cyan'],
-            'memory': CYBERPUNK_THEME_COLORS['neon_purple'],
-            'gradient': CYBERPUNK_THEME_COLORS['neon_magenta'],
-            'backprop': CYBERPUNK_THEME_COLORS['neon_red'],
-            'eqprop': CYBERPUNK_THEME_COLORS['neon_green_alt'],
-        }
+        'plot_colors': CYBERPUNK_PLOT_COLORS
     },
     'solarized': {
         'ui': SOLARIZED_THEME_COLORS,
         'theme_css': create_theme(SOLARIZED_THEME_COLORS),
-        'plot_colors': {
-            'loss': SOLARIZED_THEME_COLORS['neon_pink'],
-            'accuracy': SOLARIZED_THEME_COLORS['neon_green'],
-            'perplexity': SOLARIZED_THEME_COLORS['neon_orange'],
-            'lipschitz': SOLARIZED_THEME_COLORS['neon_cyan'],
-            'memory': SOLARIZED_THEME_COLORS['neon_purple'],
-            'gradient': SOLARIZED_THEME_COLORS['neon_magenta'],
-            'backprop': SOLARIZED_THEME_COLORS['neon_red'],
-            'eqprop': SOLARIZED_THEME_COLORS['neon_green_alt'],
-        }
+        'plot_colors': SOLARIZED_PLOT_COLORS
     }
 }
 

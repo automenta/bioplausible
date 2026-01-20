@@ -6,10 +6,9 @@ Features stunning dark cyberpunk theme with live pyqtgraph plots.
 """
 
 import sys
-import numpy as np
 import logging
 import json
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Optional, Dict, List, Tuple
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
@@ -31,7 +30,7 @@ except ImportError:
 # Feature flags
 ENABLE_WEIGHT_VIZ = True
 
-from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec, ModelSpec
+from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible.models.factory import create_model
 
 from .themes import CYBERPUNK_DARK, LIGHT_THEME, PLOT_COLORS, LIGHT_PLOT_COLORS, DARK_THEME_COLORS, LIGHT_THEME_COLORS
@@ -122,7 +121,24 @@ class EqPropDashboard(QMainWindow):
         # Setup system logger
         self._setup_logging()
 
-        # Training state
+        # Initialize training state
+        self._initialize_training_state()
+
+        # Initialize plot data
+        self._initialize_plot_data()
+
+        # Initialize UI
+        self._setup_ui()
+
+        # Initialize timers
+        self._setup_timers()
+
+        # Apply initial configuration if provided
+        if self.initial_config:
+            QTimer.singleShot(100, lambda: self._apply_config(self.initial_config))
+
+    def _initialize_training_state(self):
+        """Initialize training-related state variables."""
         self.worker: Optional[TrainingWorker] = None
         self.model = None
         self.train_loader = None
@@ -130,28 +146,24 @@ class EqPropDashboard(QMainWindow):
         self.generator: Optional[UniversalGenerator] = None
         self.start_time = None
 
-        # Plot data
+    def _initialize_plot_data(self):
+        """Initialize plot data storage."""
+        # Training metrics
         self.loss_history: List[float] = []
         self.acc_history: List[float] = []
         self.lipschitz_history: List[float] = []
 
-        # RL History
+        # RL metrics
         self.rl_reward_history: List[float] = []
         self.rl_loss_history: List[float] = []
         self.rl_avg_reward_history: List[float] = []
 
-        # Initialize UI
-        self._setup_ui()
-
-        # Update timer for plots
+    def _setup_timers(self):
+        """Setup QTimer objects."""
         self.plot_timer = QTimer()
         self.plot_timer.timeout.connect(self._update_plots)
 
-        # Apply initial configuration if provided
-        if self.initial_config:
-            QTimer.singleShot(100, lambda: self._apply_config(self.initial_config))
-
-    def _apply_config(self, config: Dict):
+    def _apply_config(self, config: Dict[str, Any]) -> None:
         """Apply initial configuration to UI elements."""
         try:
             model_name = config.get('model_name', '')
@@ -228,6 +240,25 @@ class EqPropDashboard(QMainWindow):
         layout.addWidget(main_splitter)
 
         # --- Sidebar ---
+        sidebar_widget = self._create_sidebar()
+        main_splitter.addWidget(sidebar_widget)
+
+        # --- Content Area ---
+        content_widget = self._create_content_area()
+        main_splitter.addWidget(content_widget)
+        main_splitter.setStretchFactor(1, 1) # Content stretches
+
+        # Initialize Tabs (Pages) - with lazy loading
+        self._initialize_tabs()
+
+        # Status bar
+        self._setup_status_bar()
+
+        # Keyboard Shortcuts
+        self._setup_keyboard_shortcuts()
+
+    def _create_sidebar(self):
+        """Create the sidebar widget."""
         sidebar_widget = QWidget()
         sidebar_widget.setFixedWidth(250)
         sidebar_widget.setStyleSheet("background-color: #15151a; border-right: 1px solid #333;")
@@ -244,8 +275,30 @@ class EqPropDashboard(QMainWindow):
         sidebar_layout.addWidget(header)
 
         # Navigation List
-        self.nav_list = QListWidget()
-        self.nav_list.setStyleSheet("""
+        self.nav_list = self._create_navigation_list()
+        sidebar_layout.addWidget(self.nav_list)
+
+        sidebar_layout.addStretch()
+
+        # Save/Load Buttons in Sidebar
+        self.save_btn = QPushButton("💾 Save Checkpoint")
+        self.save_btn.clicked.connect(self._save_model)
+        self.save_btn.setStyleSheet("text-align: left; padding: 10px;")
+        self.save_btn.setToolTip("Save the current model and training configuration")
+        sidebar_layout.addWidget(self.save_btn)
+
+        self.load_btn = QPushButton("📂 Load Checkpoint")
+        self.load_btn.clicked.connect(self._load_model)
+        self.load_btn.setStyleSheet("text-align: left; padding: 10px;")
+        self.load_btn.setToolTip("Load a previously saved model and training configuration")
+        sidebar_layout.addWidget(self.load_btn)
+
+        return sidebar_widget
+
+    def _create_navigation_list(self):
+        """Create the navigation list widget."""
+        nav_list = QListWidget()
+        nav_list.setStyleSheet("""
             QListWidget {
                 background-color: transparent;
                 border: none;
@@ -267,7 +320,7 @@ class EqPropDashboard(QMainWindow):
                 background-color: #1e2530;
             }
         """)
-        self.nav_list.setToolTip("Select a training task from the menu")
+        nav_list.setToolTip("Select a training task from the menu")
 
         items = [
             ("🔤 Language Model", 0),
@@ -286,29 +339,13 @@ class EqPropDashboard(QMainWindow):
         for name, idx in items:
             item = QListWidgetItem(name)
             item.setData(Qt.ItemDataRole.UserRole, idx)
-            self.nav_list.addItem(item)
+            nav_list.addItem(item)
 
-        self.nav_list.currentRowChanged.connect(self._on_nav_changed)
-        sidebar_layout.addWidget(self.nav_list)
+        nav_list.currentRowChanged.connect(self._on_nav_changed)
+        return nav_list
 
-        sidebar_layout.addStretch()
-
-        # Save/Load Buttons in Sidebar
-        self.save_btn = QPushButton("💾 Save Checkpoint")
-        self.save_btn.clicked.connect(self._save_model)
-        self.save_btn.setStyleSheet("text-align: left; padding: 10px;")
-        self.save_btn.setToolTip("Save the current model and training configuration")
-        sidebar_layout.addWidget(self.save_btn)
-
-        self.load_btn = QPushButton("📂 Load Checkpoint")
-        self.load_btn.clicked.connect(self._load_model)
-        self.load_btn.setStyleSheet("text-align: left; padding: 10px;")
-        self.load_btn.setToolTip("Load a previously saved model and training configuration")
-        sidebar_layout.addWidget(self.load_btn)
-
-        main_splitter.addWidget(sidebar_widget)
-
-        # --- Content Area ---
+    def _create_content_area(self):
+        """Create the main content area."""
         content_widget = QWidget()
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(20, 20, 20, 20)
@@ -317,9 +354,10 @@ class EqPropDashboard(QMainWindow):
         self.content_stack = QStackedWidget()
         content_layout.addWidget(self.content_stack)
 
-        main_splitter.addWidget(content_widget)
-        main_splitter.setStretchFactor(1, 1) # Content stretches
+        return content_widget
 
+    def _initialize_tabs(self):
+        """Initialize tabs with lazy loading."""
         # Initialize Tabs (Pages) - with lazy loading
         self.tab_classes = {
             0: LMTab,
@@ -365,7 +403,8 @@ class EqPropDashboard(QMainWindow):
         # Select first item
         self.nav_list.setCurrentRow(0)
 
-        # Status bar
+    def _setup_status_bar(self):
+        """Setup the status bar with indicators."""
         self.status_bar = self.statusBar()
         self.status_label = QLabel("Ready. Select a model and dataset to begin training.")
         self.status_label.setStyleSheet("color: #808090; padding: 5px;")
@@ -406,7 +445,9 @@ class EqPropDashboard(QMainWindow):
             # psutil not available, skip GPU/RAM monitoring
             pass
 
-        # Keyboard Shortcuts
+    def _setup_keyboard_shortcuts(self):
+        """Setup keyboard shortcuts for the application."""
+        # Training shortcuts
         self.train_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
         self.train_shortcut.activated.connect(self._on_train_shortcut)
         self.train_shortcut.setToolTip("Start training (Ctrl+Return)")
@@ -611,7 +652,7 @@ class EqPropDashboard(QMainWindow):
         self.status_label.setText("Plot history cleared.")
         self.status_label.setStyleSheet("color: #a0a0b0; padding: 5px;")
 
-    def _on_nav_changed(self, row):
+    def _on_nav_changed(self, row: int) -> None:
         """Handle sidebar navigation with lazy loading."""
         # Check if tab needs to be initialized
         if not self.tab_initialized.get(row, False):
@@ -619,7 +660,7 @@ class EqPropDashboard(QMainWindow):
 
         self.content_stack.setCurrentIndex(row)
 
-    def _init_tab_lazy(self, tab_index):
+    def _init_tab_lazy(self, tab_index: int) -> None:
         """Initialize a tab lazily when first accessed."""
         if tab_index == 4:  # Search tab - special handling
             search_tab = self._create_search_tab()
@@ -1161,11 +1202,277 @@ class EqPropDashboard(QMainWindow):
             self._log_error(error_msg)
             QMessageBox.critical(self, "Error", error_msg)
 
+    def _start_vision_training(self):
+        """Start vision model training."""
+        # Create model and data loader
+        model, train_loader = self._create_vision_model_and_loader()
+
+        if model is None or train_loader is None:
+            return  # Error already shown to user
+
+        self.model = model
+        self.train_loader = train_loader
+
+        # Keep reference for inference
+        self.vis_tab.update_model_ref(self.model)
+        self.deploy_tab.update_model_ref(self.model)
+
+        # Clear history
+        self.loss_history.clear()
+        self.acc_history.clear()
+        self.lipschitz_history.clear()
+
+        # Get hyperparameters
+        hyperparams = self._get_current_hyperparams(self.vis_tab.vis_hyperparam_widgets)
+
+        # Update parameter count
+        if hasattr(self.vis_tab, 'vis_param_label'):
+            count = count_parameters(self.model)
+            self.vis_tab.vis_param_label.setText(f"Parameters: {format_parameter_count(count)}")
+
+        # Create and start worker
+        micro_interval = 1 if self.vis_tab.vis_micro_check.isChecked() else 0
+
+        self.worker = TrainingWorker(
+            self.model,
+            self.train_loader,
+            epochs=self.vis_tab.vis_epochs_spin.value(),
+            lr=self.vis_tab.vis_lr_spin.value(),
+            use_compile=self.vis_tab.vis_compile_check.isChecked(),
+            use_kernel=self.vis_tab.vis_kernel_check.isChecked(),
+            hyperparams=hyperparams,
+            microscope_interval=micro_interval,
+        )
+        self.worker.progress.connect(self._on_progress)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.error.connect(self._on_error)
+        self.worker.weights_updated.connect(lambda w: self._update_weight_visualization(w, is_grad=False))
+        self.worker.gradients_updated.connect(lambda g: self._update_weight_visualization(g, is_grad=True))
+        self.worker.log.connect(self._append_log)
+        self.worker.dynamics_update.connect(self._on_dynamics_update)
+
+        # Update UI
+        self.vis_tab.vis_train_btn.setEnabled(False)
+        self.vis_tab.vis_stop_btn.setEnabled(True)
+        self.vis_tab.vis_pause_btn.setEnabled(True)
+        self.vis_tab.vis_pause_btn.clicked.connect(self._toggle_pause)
+        self.vis_tab.vis_progress.setMaximum(self.vis_tab.vis_epochs_spin.value())
+        self.vis_tab.vis_progress.setValue(0)
+
+        import time
+        self.start_time = time.time()
+
+        model_name = self.vis_tab.vis_model_combo.currentText()
+        self.status_label.setText(f"Training {model_name}...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
+        self.plot_timer.start(100)
+        self.worker.start()
+
+    def _start_lm_training(self):
+        """Start language model training."""
+        # Create model and data loader
+        model, train_loader = self._create_lm_model_and_loader()
+
+        if model is None or train_loader is None:
+            return  # Error already shown to user
+
+        self.model = model
+        self.train_loader = train_loader
+
+        # Keep reference for generation
+        self.lm_tab.update_model_ref(self.model)
+        self.deploy_tab.update_model_ref(self.model)
+
+        # Clear history
+        self.loss_history.clear()
+        self.acc_history.clear()
+        self.lipschitz_history.clear()
+
+        # Get hyperparameters
+        hyperparams = self._get_current_hyperparams(self.lm_tab.lm_hyperparam_widgets)
+
+        # Update parameter count
+        if hasattr(self.lm_tab, 'lm_param_label'):
+            count = count_parameters(self.model)
+            self.lm_tab.lm_param_label.setText(f"Parameters: {format_parameter_count(count)}")
+
+        # Create and start worker
+        micro_interval = 1 if self.lm_tab.lm_micro_check.isChecked() else 0
+
+        self.worker = TrainingWorker(
+            self.model,
+            self.train_loader,
+            epochs=self.lm_tab.lm_epochs_spin.value(),
+            lr=self.lm_tab.lm_lr_spin.value(),
+            use_compile=self.lm_tab.lm_compile_check.isChecked(),
+            use_kernel=self.lm_tab.lm_kernel_check.isChecked(),
+            hyperparams=hyperparams,
+            microscope_interval=micro_interval,
+        )
+        self.worker.progress.connect(self._on_progress)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.error.connect(self._on_error)
+        self.worker.weights_updated.connect(self._update_weight_visualization)
+        self.worker.log.connect(self._append_log)
+        self.worker.dynamics_update.connect(self._on_dynamics_update)
+
+        # Update UI
+        self.lm_tab.lm_train_btn.setEnabled(False)
+        self.lm_tab.lm_stop_btn.setEnabled(True)
+        self.lm_tab.lm_pause_btn.setEnabled(True)
+        self.lm_tab.lm_pause_btn.clicked.connect(self._toggle_pause)
+        self.lm_tab.lm_progress.setMaximum(self.lm_tab.lm_epochs_spin.value())
+        self.lm_tab.lm_progress.setValue(0)
+
+        import time
+        self.start_time = time.time()
+
+        model_name = self.lm_tab.lm_model_combo.currentText()
+        dataset_name = self.lm_tab.lm_dataset_combo.currentText()
+        self.status_label.setText(f"Training {model_name} on {dataset_name}...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
+        self.plot_timer.start(100)
+        self.worker.start()
+
+    def _start_diffusion_training(self):
+        """Start diffusion training."""
+        import time
+        model, train_loader = self._create_diffusion_model_and_loader()
+
+        if model is None or train_loader is None:
+            return
+
+        self.model = model
+        self.train_loader = train_loader
+
+        # Refs
+        self.diff_tab.update_model_ref(self.model)
+        self.deploy_tab.update_model_ref(self.model)
+
+        # Clear history
+        self.loss_history.clear()
+
+        # Worker
+        self.worker = TrainingWorker(
+            self.model,
+            self.train_loader,
+            epochs=self.diff_tab.epochs_spin.value(),
+            lr=self.diff_tab.lr_spin.value(),
+            hyperparams={}
+        )
+
+        self.worker.progress.connect(self._on_progress)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.error.connect(self._on_error)
+        self.worker.log.connect(self._append_log)
+
+        # UI
+        self.diff_tab.train_btn.setEnabled(False)
+        self.diff_tab.stop_btn.setEnabled(True)
+        self.diff_tab.progress.setMaximum(self.diff_tab.epochs_spin.value())
+        self.diff_tab.progress.setValue(0)
+
+        self.start_time = time.time()
+        self.status_label.setText("Training Diffusion Model...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
+        self.plot_timer.start(100)
+        self.worker.start()
+
+    def _start_rl_training(self):
+        """Start RL training."""
+        import torch
+        from bioplausible.models.looped_mlp import LoopedMLP
+        from bioplausible.models import BackpropMLP
+        import gymnasium as gym
+
+        env_name = self.rl_tab.rl_env_combo.currentText()
+        algo_name = self.rl_tab.rl_algo_combo.currentText()
+        grad_method = self.rl_tab.rl_grad_combo.currentText()
+        hidden = self.rl_tab.rl_hidden_spin.value()
+        steps = self.rl_tab.rl_steps_spin.value()
+        episodes = self.rl_tab.rl_episodes_spin.value()
+        lr = self.rl_tab.rl_lr_spin.value()
+
+        # Determine Dimensions
+        temp_env = gym.make(env_name)
+        input_dim = temp_env.observation_space.shape[0]
+        output_dim = temp_env.action_space.n
+        temp_env.close()
+
+        # Create Model
+        if "Standard Backprop" in algo_name:
+            model = BackpropMLP(input_dim, hidden, output_dim)
+        else:
+            # LoopedMLP
+            model = LoopedMLP(
+                input_dim, hidden, output_dim,
+                max_steps=steps,
+                gradient_method=grad_method, # 'equilibrium' or 'bptt'
+                use_spectral_norm=True
+            )
+
+        # Clear history
+        self.rl_reward_history.clear()
+        self.rl_loss_history.clear()
+        self.rl_avg_reward_history.clear()
+
+        # Create Worker
+        # Use CPU unless explicitly needed, RL is often CPU bound on small envs
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        gamma = self.rl_tab.rl_gamma_spin.value()
+
+        # Keep reference for playback
+        self.rl_tab.update_model_ref(model)
+        self.deploy_tab.update_model_ref(model)
+
+        self.worker = RLWorker(model, env_name, episodes=episodes, lr=lr, gamma=gamma, device=device)
+        self.worker.progress.connect(self._on_rl_progress)
+        self.worker.finished.connect(self._on_finished)
+        self.worker.error.connect(self._on_error)
+        self.worker.log.connect(self._append_log)
+
+        # Update UI
+        self.rl_tab.rl_train_btn.setEnabled(False)
+        self.rl_tab.rl_stop_btn.setEnabled(True)
+        self.rl_tab.rl_progress.setMaximum(episodes)
+        self.rl_tab.rl_progress.setValue(0)
+
+        import time
+        self.start_time = time.time()
+
+        self.status_label.setText(f"Training {algo_name} on {env_name}...")
+        self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
+        self.plot_timer.start(100)
+        self.worker.start()
+
     def _log_error(self, message: str):
         """Log an error message."""
         import logging
         logging.error(message)
         self._append_log(f"ERROR: {message}")
+
+    def _log_warning(self, message: str):
+        """Log a warning message."""
+        import logging
+        logging.warning(message)
+        self._append_log(f"WARNING: {message}")
+
+    def _log_info(self, message: str):
+        """Log an info message."""
+        import logging
+        logging.info(message)
+        self._append_log(f"INFO: {message}")
+
+    def _safe_execute(self, func, *args, **kwargs):
+        """Safely execute a function and handle exceptions."""
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            error_msg = f"Error in {func.__name__}: {str(e)}"
+            self._log_error(error_msg)
+            import traceback
+            self._append_log(f"Traceback: {traceback.format_exc()}")
+            return None
 
     def _create_model_and_loader(self, mode: str):
         """Create model and data loader based on mode (vision or lm)."""
@@ -1322,6 +1629,43 @@ class EqPropDashboard(QMainWindow):
             import traceback
             traceback.print_exc()
             return None, None
+
+    def _reset_training_ui(self):
+        """Reset UI state after training stops."""
+        self.vis_tab.vis_train_btn.setEnabled(True)
+        self.vis_tab.vis_stop_btn.setEnabled(False)
+        self.vis_tab.vis_pause_btn.setEnabled(False)
+        self.vis_tab.vis_pause_btn.setChecked(False)
+
+        self.lm_tab.lm_train_btn.setEnabled(True)
+        self.lm_tab.lm_stop_btn.setEnabled(False)
+        self.lm_tab.lm_pause_btn.setEnabled(False)
+        self.lm_tab.lm_pause_btn.setChecked(False)
+
+        if hasattr(self.rl_tab, 'rl_train_btn'):
+            self.rl_tab.rl_train_btn.setEnabled(True)
+            self.rl_tab.rl_stop_btn.setEnabled(False)
+
+    def _on_finished(self, result: dict):
+        """Handle training completion."""
+        self.plot_timer.stop()
+        self._reset_training_ui()
+
+        if result.get('success'):
+            self.status_label.setText(f"✓ Training complete! ({result['epochs_completed']} epochs)")
+            self.status_label.setStyleSheet("color: #00ff88; padding: 5px; font-weight: bold;")
+        else:
+            self.status_label.setText("Training stopped.")
+            self.status_label.setStyleSheet("color: #ffaa00; padding: 5px;")
+
+    def _on_error(self, error: str):
+        """Handle training error."""
+        self.plot_timer.stop()
+        self._reset_training_ui()
+
+        self.status_label.setText("Training error!")
+        self.status_label.setStyleSheet("color: #ff5588; padding: 5px; font-weight: bold;")
+        QMessageBox.critical(self, "Training Error", error)
 
     def _start_diffusion_training(self):
         """Start diffusion training."""
