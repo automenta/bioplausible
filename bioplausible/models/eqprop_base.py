@@ -5,6 +5,7 @@ import torch.autograd as autograd
 from typing import Optional, List, Tuple, Dict, Union, Any
 from abc import abstractmethod
 from .nebc_base import NEBCBase
+from .triton_kernel import TritonEqPropOps
 
 
 class EquilibriumFunction(autograd.Function):
