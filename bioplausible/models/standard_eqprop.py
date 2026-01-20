@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 from typing import Dict, Optional, List, Union, Tuple, Any
 from .base import BioModel, ModelConfig, register_model
+from ..acceleration import compile_settling_loop
 
 
 @register_model("eqprop")
@@ -47,6 +48,7 @@ class StandardEqProp(BioModel):
         # Note: We use Adam by default as requested/implied by benchmark
         self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
 
+    @compile_settling_loop
     def forward_dynamics(
         self,
         activations: List[torch.Tensor],

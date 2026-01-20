@@ -11,6 +11,10 @@ from .acceleration import (
     enable_tf32,
     get_optimal_backend,
 )
+
+# Enable TF32 by default for Ampere+ GPUs (2-3x speedup)
+enable_tf32()
+
 from .core import EqPropTrainer
 from .datasets import (
     CharDataset,
