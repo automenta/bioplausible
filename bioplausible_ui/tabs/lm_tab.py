@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel, QSlider, QTextEdit,
     QToolBox, QFrame
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QThread
 
 from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
 from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
@@ -18,6 +18,28 @@ try:
 except ImportError:
     HAS_PYQTGRAPH = False
 
+class GenerationWorker(QThread):
+    finished = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, generator, prompt, temperature, max_tokens=100, parent=None):
+        super().__init__(parent)
+        self.generator = generator
+        self.prompt = prompt
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+
+    def run(self):
+        try:
+            text = self.generator.generate(
+                prompt=self.prompt,
+                max_new_tokens=self.max_tokens,
+                temperature=self.temperature
+            )
+            self.finished.emit(text)
+        except Exception as e:
+            self.error.emit(str(e))
+
 class LMTab(QWidget):
     """Language Modeling Tab."""
 
@@ -29,6 +51,7 @@ class LMTab(QWidget):
         super().__init__(parent)
         self.model = None
         self.generator = None
+        self.gen_worker = None
         self._setup_ui()
 
     def _create_control_group(self, title, controls):
@@ -303,9 +326,9 @@ class LMTab(QWidget):
         gen_controls.addWidget(self.temp_label)
         self.temp_slider.valueChanged.connect(lambda v: self.temp_label.setText(f"{v/10:.1f}"))
 
-        gen_btn = QPushButton("🎲 Generate")
-        gen_btn.clicked.connect(self._generate_text)
-        gen_controls.addWidget(gen_btn)
+        self.gen_btn = QPushButton("🎲 Generate")
+        self.gen_btn.clicked.connect(self._generate_text)
+        gen_controls.addWidget(self.gen_btn)
         gen_layout.addLayout(gen_controls)
 
         self.gen_output = QTextEdit()
@@ -407,20 +430,21 @@ class LMTab(QWidget):
         if not prompt: prompt = "ROMEO:"
 
         self.gen_output.setText(f"🎲 Generating from '{prompt}'...\n(May be gibberish if undertrained)")
+        self.gen_btn.setEnabled(False)
 
-        # Force UI update
-        QApplication.processEvents()
+        # Start background worker
+        self.gen_worker = GenerationWorker(self.generator, prompt, temperature)
+        self.gen_worker.finished.connect(self._on_gen_finished)
+        self.gen_worker.error.connect(self._on_gen_error)
+        self.gen_worker.start()
 
-        try:
-            # Generate text
-            text = self.generator.generate(
-                prompt=prompt,
-                max_new_tokens=100,
-                temperature=temperature
-            )
-            self.gen_output.setText(f"📝 Generated:\n\n{text}")
-        except Exception as e:
-            self.gen_output.setText(f"❌ Generation failed: {str(e)}\n\nTip: Train for a few epochs first!")
+    def _on_gen_finished(self, text):
+        self.gen_output.setText(f"📝 Generated:\n\n{text}")
+        self.gen_btn.setEnabled(True)
+
+    def _on_gen_error(self, err):
+        self.gen_output.setText(f"❌ Generation failed: {err}\n\nTip: Train for a few epochs first!")
+        self.gen_btn.setEnabled(True)
 
     def update_model_ref(self, model):
         self.model = model

@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QSpinBox, QDoubleSpinBox,
     QGroupBox, QPushButton, QProgressBar, QLabel, QDialog
 )
-from PyQt6.QtCore import pyqtSignal, Qt, QTimer
+from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QThread
 from PyQt6.QtGui import QImage, QPixmap, QFont
 
 import torch
@@ -18,6 +18,48 @@ try:
     HAS_PYQTGRAPH = True
 except ImportError:
     HAS_PYQTGRAPH = False
+
+class PlaybackWorker(QThread):
+    finished = pyqtSignal(float, list) # total_reward, frames
+    error = pyqtSignal(str)
+
+    def __init__(self, model, env_name, parent=None):
+        super().__init__(parent)
+        self.model = model
+        self.env_name = env_name
+
+    def run(self):
+        try:
+            env = gym.make(self.env_name, render_mode="rgb_array")
+            state, _ = env.reset()
+            done = False
+            truncated = False
+            total_reward = 0
+            steps = 0
+            frames = []
+
+            while not (done or truncated) and steps < 500:
+                frame = env.render()
+                if frame is not None:
+                    frames.append(frame)
+
+                # Action
+                with torch.no_grad():
+                    state_t = torch.FloatTensor(state).unsqueeze(0)
+                    if hasattr(self.model, 'device'):
+                        state_t = state_t.to(self.model.device)
+
+                    q_values = self.model(state_t)
+                    action = q_values.argmax().item()
+
+                state, reward, done, truncated, _ = env.step(action)
+                total_reward += reward
+                steps += 1
+
+            env.close()
+            self.finished.emit(total_reward, frames)
+        except Exception as e:
+            self.error.emit(str(e))
 
 class RLPlaybackDialog(QDialog):
     """Dialog to playback agent performance."""
@@ -37,8 +79,13 @@ class RLPlaybackDialog(QDialog):
         self.image_label.setMinimumSize(400, 300)
         layout.addWidget(self.image_label)
 
-        self.status_label = QLabel("Recording...")
+        self.status_label = QLabel("Simulating...")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.status_label)
+
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 0) # Indeterminate
+        layout.addWidget(self.progress)
 
         btn = QPushButton("Close")
         btn.clicked.connect(self.close)
@@ -47,52 +94,26 @@ class RLPlaybackDialog(QDialog):
         self.timer = QTimer()
         self.timer.timeout.connect(self._next_frame)
 
-        # Run episode immediately (in background ideally, but short episodes might be ok)
-        QTimer.singleShot(100, self._run_episode)
+        # Run episode in background
+        self.worker = PlaybackWorker(self.model, self.env_name)
+        self.worker.finished.connect(self._on_episode_finished)
+        self.worker.error.connect(self._on_error)
+        self.worker.start()
 
-    def _run_episode(self):
-        try:
-            env = gym.make(self.env_name, render_mode="rgb_array")
-            state, _ = env.reset()
-            done = False
-            truncated = False
-            total_reward = 0
-            steps = 0
+    def _on_episode_finished(self, reward, frames):
+        self.frames = frames
+        self.progress.setVisible(False)
+        self.status_label.setText(f"Episode Finished! Reward: {reward:.1f}. Replaying...")
 
-            # Record frames
-            self.frames = []
+        if self.frames:
+            self.timer.start(50) # 20 FPS
+        else:
+            self.image_label.setText("No frames captured (rendering failed).")
 
-            while not (done or truncated) and steps < 500:
-                frame = env.render()
-                if frame is not None:
-                    self.frames.append(frame)
-
-                # Action
-                with torch.no_grad():
-                    state_t = torch.FloatTensor(state).unsqueeze(0)
-                    if hasattr(self.model, 'device'):
-                        state_t = state_t.to(self.model.device)
-
-                    q_values = self.model(state_t)
-                    action = q_values.argmax().item()
-
-                state, reward, done, truncated, _ = env.step(action)
-                total_reward += reward
-                steps += 1
-
-            env.close()
-
-            self.status_label.setText(f"Episode Finished! Reward: {total_reward:.1f}. Replaying...")
-
-            if self.frames:
-                self.timer.start(50) # 20 FPS
-            else:
-                self.image_label.setText("No frames captured (rendering failed).")
-
-        except Exception as e:
-            self.image_label.setText(f"Error: {e}")
-            import traceback
-            traceback.print_exc()
+    def _on_error(self, err):
+        self.progress.setVisible(False)
+        self.status_label.setText("Error occurred.")
+        self.image_label.setText(f"Simulation Error:\n{err}")
 
     def _next_frame(self):
         if not self.frames: return
@@ -105,6 +126,12 @@ class RLPlaybackDialog(QDialog):
         self.image_label.setPixmap(pix.scaled(self.image_label.size(), Qt.AspectRatioMode.KeepAspectRatio))
 
         self.current_frame = (self.current_frame + 1) % len(self.frames)
+
+    def closeEvent(self, event):
+        if self.worker.isRunning():
+            self.worker.terminate() # Force kill if closed
+            self.worker.wait()
+        event.accept()
 
 class RLTab(QWidget):
     """Reinforcement Learning Tab."""
