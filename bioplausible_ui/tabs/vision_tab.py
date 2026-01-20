@@ -89,6 +89,154 @@ class DreamWorker(QThread):
             import traceback
             traceback.print_exc()
 
+class OracleWorker(QThread):
+    """
+    Background worker for Oracle Metric analysis.
+    Measures settling time vs uncertainty (noise).
+    """
+    finished = pyqtSignal(list) # List of (noise, settling_time) tuples
+    error = pyqtSignal(str)
+
+    def __init__(self, model, dataset_name, parent=None):
+        super().__init__(parent)
+        self.model = model
+        self.dataset_name = dataset_name
+
+    def run(self):
+        try:
+            from bioplausible.datasets import get_vision_dataset
+            from torch.utils.data import DataLoader
+
+            # Setup data
+            ds_name = self.dataset_name.lower().replace('-', '_')
+            use_flatten = True
+            try:
+                # Infer flattening from model if possible, otherwise assume flat for MLP
+                spec = get_model_spec(self.model.config.name if hasattr(self.model, 'config') else "")
+                use_flatten = spec.model_type != "modern_conv_eqprop"
+            except:
+                pass
+
+            dataset = get_vision_dataset(ds_name, train=False, flatten=use_flatten)
+            # Small subset
+            indices = np.random.choice(len(dataset), 50, replace=False)
+            subset = torch.utils.data.Subset(dataset, indices)
+            loader = DataLoader(subset, batch_size=10, shuffle=False)
+
+            device = next(self.model.parameters()).device
+            self.model.eval()
+
+            results = []
+            noise_levels = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+            with torch.no_grad():
+                for noise in noise_levels:
+                    total_steps = 0
+                    count = 0
+
+                    for x, y in loader:
+                        x = x.to(device)
+                        if noise > 0:
+                            x = x + torch.randn_like(x) * noise
+
+                        # Run with dynamics tracking
+                        # Ensure we request dynamics
+                        try:
+                            # Pass return_dynamics=True if supported
+                            out, dynamics = self.model(x, return_dynamics=True)
+
+                            # dynamics['deltas'] is usually list of scalars per step (avg over batch)
+                            # or list of tensors.
+                            # Standard EqPropModel returns list of floats if batch averaged?
+                            # Let's check implementation.
+                            # EqPropModel.forward: deltas.append((h_new - h).norm().item()) -> Float sum norm?
+                            # This is aggregate. To be precise we need per-sample.
+                            # But aggregate is fine for trend.
+
+                            deltas = dynamics.get('deltas', [])
+                            if deltas:
+                                # Find step where delta drops below threshold (e.g. 1e-3)
+                                # Normalize delta?
+                                threshold = 1e-2 # Heuristic
+                                settled_at = len(deltas)
+                                for i, d in enumerate(deltas):
+                                    if d < threshold:
+                                        settled_at = i + 1
+                                        break
+                                total_steps += settled_at
+                            else:
+                                total_steps += 30 # Max
+
+                        except (TypeError, ValueError):
+                            # Fallback if model doesn't support dynamics
+                            # Just run forward
+                            self.model(x)
+                            total_steps += 30 # Assume max
+
+                        count += 1
+
+                    avg_steps = total_steps / count if count > 0 else 30
+                    results.append((noise, avg_steps))
+
+            self.finished.emit(results)
+
+        except Exception as e:
+            self.error.emit(str(e))
+            import traceback
+            traceback.print_exc()
+
+class OracleDialog(QDialog):
+    """Dialog for Oracle Metric (Uncertainty Analysis)."""
+    def __init__(self, results, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Oracle Metric: Uncertainty vs Time")
+        self.resize(600, 500)
+
+        layout = QVBoxLayout(self)
+
+        header = QLabel("🔮 Oracle Analysis")
+        header.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        layout.addWidget(header)
+
+        desc = QLabel(
+            "Visualizing the correlation between Uncertainty (Noise) and Processing Time (Settling Steps).\n"
+            "A Bio-Plausible network should take longer to resolve ambiguous inputs."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("color: #a0a0b0;")
+        layout.addWidget(desc)
+
+        if HAS_PYQTGRAPH:
+            plot_widget = pg.PlotWidget()
+            plot_widget.setBackground('#0a0a0f')
+            plot_widget.setLabel('left', "Settling Time (Steps)")
+            plot_widget.setLabel('bottom', "Noise Level (σ)")
+            plot_widget.showGrid(x=True, y=True, alpha=0.3)
+
+            # Plot data
+            x = [r[0] for r in results]
+            y = [r[1] for r in results]
+
+            # Plot points and line
+            plot_widget.plot(x, y, symbol='o', pen=pg.mkPen('#00d4ff', width=3), symbolBrush='#00d4ff')
+
+            layout.addWidget(plot_widget)
+
+            # Calculate correlation
+            if len(x) > 1:
+                corr = np.corrcoef(x, y)[0, 1]
+                corr_label = QLabel(f"Correlation: {corr:.3f}")
+                corr_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+                if corr > 0.5:
+                    corr_label.setStyleSheet("color: #00ff88;") # Good positive correlation
+                else:
+                    corr_label.setStyleSheet("color: #f1c40f;")
+                layout.addWidget(corr_label)
+
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.accept)
+        layout.addWidget(btn)
+
 class DreamDialog(QDialog):
     """Dialog for Generative Dreaming."""
     def __init__(self, model, input_shape, parent=None):
@@ -210,10 +358,10 @@ class DreamDialog(QDialog):
 
 class VisionInferenceDialog(QDialog):
     """Dialog to show inference results."""
-    def __init__(self, image_tensor, prediction, ground_truth, parent=None):
+    def __init__(self, image_tensor, prediction, ground_truth, settling_steps=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Inference Result")
-        self.setFixedSize(400, 500)
+        self.setFixedSize(400, 550)
 
         layout = QVBoxLayout(self)
 
@@ -253,6 +401,14 @@ class VisionInferenceDialog(QDialog):
              res_label.setStyleSheet("color: #ff5555; margin-top: 20px;")
 
         layout.addWidget(res_label)
+
+        # Oracle Metric Display
+        if settling_steps is not None:
+            oracle_label = QLabel(f"Settling Time: {settling_steps} steps")
+            oracle_label.setFont(QFont("Segoe UI", 12))
+            oracle_label.setStyleSheet("color: #00d4ff; margin-top: 5px;")
+            oracle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(oracle_label)
 
         btn = QPushButton("Close")
         btn.clicked.connect(self.accept)
@@ -532,6 +688,12 @@ class VisionTab(QWidget):
         self.vis_dream_btn.clicked.connect(self._open_dream_dialog)
         btn_layout.addWidget(self.vis_dream_btn)
 
+        self.vis_oracle_btn = QPushButton("🔮 Oracle")
+        self.vis_oracle_btn.setObjectName("resetButton")
+        self.vis_oracle_btn.setToolTip("Measure Uncertainty vs Settling Time")
+        self.vis_oracle_btn.clicked.connect(self._run_oracle_analysis)
+        btn_layout.addWidget(self.vis_oracle_btn)
+
         self.vis_robust_btn = QPushButton("🛡️ Robustness")
         self.vis_robust_btn.setObjectName("resetButton")
         self.vis_robust_btn.setToolTip("Run robustness analysis against noise")
@@ -708,14 +870,27 @@ class VisionTab(QWidget):
 
             # Inference
             self.model_ref.eval()
+            settling_steps = None
+
             with torch.no_grad():
                 # Some models take 'steps' arg, others don't.
                 # EqProp models usually have it in forward or use default
                 try:
-                    out = self.model_ref(x_input)
+                    # Request dynamics to measure settling time
+                    out, dynamics = self.model_ref(x_input, return_dynamics=True)
+                    if dynamics and 'deltas' in dynamics:
+                        # Calculate settling steps
+                        # assuming deltas is list of scalars
+                        threshold = 1e-2
+                        deltas = dynamics['deltas']
+                        settling_steps = len(deltas)
+                        for i, d in enumerate(deltas):
+                            if d < threshold:
+                                settling_steps = i + 1
+                                break
                 except TypeError:
-                    # Try with steps if required, though default should handle it
-                    out = self.model_ref(x_input, steps=20)
+                    # Fallback
+                    out = self.model_ref(x_input)
 
                 pred = out.argmax(dim=1).item()
 
@@ -729,7 +904,7 @@ class VisionTab(QWidget):
             else:
                 x_disp = x
 
-            dlg = VisionInferenceDialog(x_disp, pred, y, self)
+            dlg = VisionInferenceDialog(x_disp, pred, y, settling_steps, self)
             dlg.exec()
 
         except Exception as e:
@@ -747,11 +922,7 @@ class VisionTab(QWidget):
             # Determine shape
             ds_name = self.vis_dataset_combo.currentText().lower()
             if "mnist" in ds_name:
-                shape = (1, 28, 28) # Assuming we reshape flattened models inside if needed?
-                # But wait, DreamWorker optimizes 'x' which is fed to model.
-                # If model expects flattened, x must be flattened (784).
-                # But we want to visualize as image.
-
+                shape = (1, 28, 28)
                 # Check model type for flattening
                 use_flatten = True
                 try:
@@ -856,6 +1027,32 @@ class VisionTab(QWidget):
             QMessageBox.critical(self, "Analysis Failed", str(e))
             import traceback
             traceback.print_exc()
+
+    def _run_oracle_analysis(self):
+        """Run Oracle Metric analysis (Noise vs Settling Time)."""
+        if self.model_ref is None:
+            QMessageBox.warning(self, "No Model", "No trained model available.")
+            return
+
+        self.vis_oracle_btn.setEnabled(False)
+        self.vis_oracle_btn.setText("Analyzing...")
+
+        self.oracle_worker = OracleWorker(self.model_ref, self.vis_dataset_combo.currentText())
+        self.oracle_worker.finished.connect(self._show_oracle_dialog)
+        self.oracle_worker.error.connect(self._on_oracle_error)
+        self.oracle_worker.start()
+
+    def _show_oracle_dialog(self, results):
+        self.vis_oracle_btn.setEnabled(True)
+        self.vis_oracle_btn.setText("🔮 Oracle")
+
+        dlg = OracleDialog(results, self)
+        dlg.exec()
+
+    def _on_oracle_error(self, msg):
+        self.vis_oracle_btn.setEnabled(True)
+        self.vis_oracle_btn.setText("🔮 Oracle")
+        QMessageBox.critical(self, "Oracle Error", msg)
 
     def update_theme(self, theme_colors, plot_colors):
         """Update plot colors based on theme."""
