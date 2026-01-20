@@ -2,7 +2,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QSpinBox, QDoubleSpinBox,
     QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel, QToolBox, QFrame,
-    QDialog, QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView
+    QDialog, QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView, QSlider
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from PyQt6.QtGui import QPixmap, QImage, QFont, QColor
@@ -19,6 +19,59 @@ try:
     HAS_PYQTGRAPH = True
 except ImportError:
     HAS_PYQTGRAPH = False
+
+class CubeVisualizerDialog(QDialog):
+    """Dialog to visualize 3D Neural Cube slices."""
+    def __init__(self, h_tensor, cube_size, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Neural Cube Visualization ({cube_size}x{cube_size}x{cube_size})")
+        self.resize(600, 600)
+        self.h = h_tensor.cpu().reshape(cube_size, cube_size, cube_size).numpy()
+        self.cube_size = cube_size
+
+        layout = QVBoxLayout(self)
+
+        header = QLabel("3D Activation Topography")
+        header.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(header)
+
+        # Slice control
+        slice_layout = QHBoxLayout()
+        slice_layout.addWidget(QLabel("Z-Slice:"))
+        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider.setRange(0, cube_size - 1)
+        self.slider.setValue(cube_size // 2)
+        self.slider.valueChanged.connect(self._update_slice)
+        slice_layout.addWidget(self.slider)
+        self.slice_label = QLabel(f"{cube_size // 2}")
+        slice_layout.addWidget(self.slice_label)
+        layout.addLayout(slice_layout)
+
+        if HAS_PYQTGRAPH:
+            self.img_view = pg.ImageView()
+            self.img_view.ui.histogram.hide()
+            self.img_view.ui.roiBtn.hide()
+            self.img_view.ui.menuBtn.hide()
+            # Set colormap (Fire)
+            self.img_view.setPredefinedGradient("thermal")
+            layout.addWidget(self.img_view)
+
+            self._update_slice(self.slider.value())
+        else:
+            layout.addWidget(QLabel("PyQtGraph required for visualization"))
+
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.accept)
+        layout.addWidget(btn)
+
+    def _update_slice(self, z):
+        self.slice_label.setText(str(z))
+        if HAS_PYQTGRAPH:
+            # Get slice z
+            # Shape [Z, Y, X]
+            slice_data = self.h[z, :, :]
+            self.img_view.setImage(slice_data.T) # Transpose for display
 
 class DreamWorker(QThread):
     """
@@ -688,6 +741,13 @@ class VisionTab(QWidget):
         self.vis_dream_btn.clicked.connect(self._open_dream_dialog)
         btn_layout.addWidget(self.vis_dream_btn)
 
+        self.vis_cube_btn = QPushButton("🧊 Cube Viz")
+        self.vis_cube_btn.setObjectName("resetButton")
+        self.vis_cube_btn.setToolTip("Visualize 3D Neural Cube Activations")
+        self.vis_cube_btn.clicked.connect(self._open_cube_dialog)
+        self.vis_cube_btn.setEnabled(False) # Enabled only for NeuralCube
+        btn_layout.addWidget(self.vis_cube_btn)
+
         self.vis_oracle_btn = QPushButton("🔮 Oracle")
         self.vis_oracle_btn.setObjectName("resetButton")
         self.vis_oracle_btn.setToolTip("Measure Uncertainty vs Settling Time")
@@ -820,6 +880,10 @@ class VisionTab(QWidget):
         try:
             spec = get_model_spec(model_name)
             self.vis_desc_label.setText(spec.description)
+
+            # Enable/Disable Cube Button based on model type
+            if hasattr(self, 'vis_cube_btn'):
+                self.vis_cube_btn.setEnabled(spec.model_type == "neural_cube")
         except Exception:
             self.vis_desc_label.setText("")
 
@@ -829,6 +893,45 @@ class VisionTab(QWidget):
     def update_model_ref(self, model):
         """Store reference to the trained model."""
         self.model_ref = model
+
+        # Check if NeuralCube to enable button
+        try:
+            if "NeuralCube" in model.__class__.__name__:
+                self.vis_cube_btn.setEnabled(True)
+        except:
+            pass
+
+    def _open_cube_dialog(self):
+        """Open Cube Visualizer."""
+        if self.model_ref is None:
+            QMessageBox.warning(self, "No Model", "No trained model available.")
+            return
+
+        try:
+            # Run inference on one sample to get state
+            from bioplausible.datasets import get_vision_dataset
+            ds_name = self.vis_dataset_combo.currentText().lower().replace('-', '_')
+            dataset = get_vision_dataset(ds_name, train=False, flatten=True) # NeuralCube takes flattened input
+
+            # Get random sample
+            idx = np.random.randint(0, len(dataset))
+            x, _ = dataset[idx]
+            x = torch.tensor(x).unsqueeze(0).to(next(self.model_ref.parameters()).device)
+
+            # Run forward with trajectory
+            self.model_ref.eval()
+            with torch.no_grad():
+                # NeuralCube forward returns out or (out, traj)
+                out, traj = self.model_ref(x, return_trajectory=True)
+                h_final = traj[-1] # [1, n_neurons]
+
+            dlg = CubeVisualizerDialog(h_final, self.model_ref.cube_size, self)
+            dlg.exec()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Viz Error", str(e))
+            import traceback
+            traceback.print_exc()
 
     def _test_random_sample(self):
         """Run inference on a random sample."""

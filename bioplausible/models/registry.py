@@ -104,6 +104,16 @@ MODEL_REGISTRY = [
         color="#fdcb6e",
         task_compat=["vision"],
     ),
+    ModelSpec(
+        name="Neural Cube",
+        description="3D Lattice with local 26-neighbor connectivity",
+        model_type="neural_cube",
+        default_lr=0.002,
+        default_steps=30,
+        has_steps=True,
+        color="#00b894",
+        task_compat=["vision"],
+    ),
     # Hybrid & Experimental Algorithms
     ModelSpec(
         name="Adaptive Feedback Alignment",
