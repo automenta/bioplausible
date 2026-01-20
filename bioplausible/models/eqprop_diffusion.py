@@ -10,6 +10,8 @@ class EqPropDiffusion(nn.Module):
 
     Hypothesis: Denoising diffusion is energy minimization.
     Energy Formulation: E(x,t) = ||x - Denoise(x_t,t)||² + λR(x)
+
+    This model predicts the clean image x_0 from x_t.
     """
 
     def __init__(self, img_channels=1, hidden_channels=64):
@@ -28,12 +30,20 @@ class EqPropDiffusion(nn.Module):
 
         # Register noise schedule buffers
         T = 1000
+        self.T = T
         beta = torch.linspace(1e-4, 0.02, T)
         alpha = 1 - beta
         alpha_bar = torch.cumprod(alpha, dim=0)
+
+        # Calculations for posterior q(x_{t-1} | x_t, x_0)
+        alpha_bar_prev = F.pad(alpha_bar[:-1], (1, 0), value=1.0)
+        posterior_variance = beta * (1. - alpha_bar_prev) / (1. - alpha_bar)
+
         self.register_buffer("beta", beta)
         self.register_buffer("alpha", alpha)
         self.register_buffer("alpha_bar", alpha_bar)
+        self.register_buffer("alpha_bar_prev", alpha_bar_prev)
+        self.register_buffer("posterior_variance", posterior_variance)
 
     def train_step(self, x, y=None):
         """
@@ -45,7 +55,7 @@ class EqPropDiffusion(nn.Module):
         batch_size = x.shape[0]
 
         # Sample time steps
-        t = torch.randint(0, len(self.beta), (batch_size,), device=device).long()
+        t = torch.randint(0, self.T, (batch_size,), device=device).long()
 
         # Add noise
         noise = torch.randn_like(x)
@@ -59,119 +69,88 @@ class EqPropDiffusion(nn.Module):
         # Compute Loss (MSE against clean image)
         loss = F.mse_loss(pred, x)
 
-        # Optimization
+        # Optimization handled by Trainer usually, but if manual:
         if not hasattr(self, 'optimizer'):
             self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
 
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+        if self.training:
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
 
         return {"loss": loss.item()}
 
-    def energy(self, x_noisy, x_pred, t):
-        """Energy function for denoising."""
-        # Simple reconstruction error energy
-        recon_error = ((x_noisy - x_pred) ** 2).sum()
-        # Simple prior: penalize high-frequency noise (Total Variation)
-        prior = self.total_variation(x_pred)
-        return recon_error + 0.1 * prior
+    def predict_x0(self, x_t, t):
+        """Predict x_0 given x_t and t."""
+        # Embed time: simple broadcast/concat
+        batch_size, _, h, w = x_t.shape
 
-    def total_variation(self, x):
-        """Smoothness prior."""
-        dx = (x[:, :, 1:, :] - x[:, :, :-1, :]).abs().sum()
-        dy = (x[:, :, :, 1:] - x[:, :, :, :-1]).abs().sum()
-        return dx + dy
+        # Normalize t to [0,1] for embedding
+        t_norm = t.float() / self.T
+        t_emb = t_norm.view(batch_size, 1, 1, 1).expand(batch_size, 1, h, w)
 
-    def denoise_step(self, x_noisy, t, steps=10):
-        """Single denoising step via equilibrium."""
-        batch_size, _, h, w = x_noisy.shape
-
-        # Embed time: simple broadcast of t
-        # t is expected to be [batch_size]
-        t_emb = t.view(batch_size, 1, 1, 1).expand(batch_size, 1, h, w)
-
-        # Concatenate noisy image and time embedding
-        x_input = torch.cat([x_noisy, t_emb], dim=1)
-
-        # In a real EqProp diffusion, we might iterate to equilibrium *on the input* x_noisy
-        # or use the network to predict the clean image and then take an energy step.
-        # Here we follow the simplified TODO.md implementation:
-        # Use the network to predict the clean image (or noise), then relax towards it.
-
-        # Run forward pass of EqProp network to get prediction
-        h_pred = self.denoiser(x_input)
-        # Output is already [B, C, H, W] if pool_output=False
-
-        # Refine prediction via energy gradient (simplified)
-        # In full EqProp, this happens inside the layers.
-        # Here we simulate an outer loop energy minimization if needed,
-        # but the TODO spec implies the "denoise step" *is* the equilibrium process.
-        # However, ConvEqProp itself has an internal equilibrium loop.
-        # So h_pred is already the "equilibrium" output of the network.
-
-        # If we want to implement the specific logic from TODO.md:
-        # h = x_noisy
-        # for _ in range(steps):
-        #     h_pred = self.denoiser(x_input) ...
-        #     grad = 2 * (h - h_pred)
-        #     h = h - 0.1 * grad
-
-        h = x_noisy.clone()
-        for _ in range(steps):
-            # Recalculate input with current estimate?
-            # Or just use the fixed x_noisy input to predict "target"?
-            # usage in TODO.md: h_pred = self.denoiser(x_input)
-            # This implies x_input is fixed (the noisy image).
-            # And 'h' is the latent code or the cleaned image being refined?
-
-            # Let's interpret the TODO.md strictly:
-            # h starts as x_noisy. We want to move h towards the "clean" manifold.
-            # The network predicts a "chemically pure" version given the noisy input.
-
-            # Since self.denoiser is stateless between calls unless we pass state,
-            # and it returns a prediction.
-
-            x_pred = self.denoiser(x_input)
-
-            # Gradient descent on Energy = ||h - x_pred||^2
-            # grad_h E = 2 * (h - x_pred)
-            grad = 2 * (h - x_pred)
-            h = h - 0.1 * grad
-
-        return h
+        x_input = torch.cat([x_t, t_emb], dim=1)
+        return self.denoiser(x_input)
 
     def forward(self, x, t=None):
         """
-        Forward pass for training/inference.
-
-        If training (no t provided):
-            Returns the 'denoised' prediction from the network directly.
-            This is used by the trainer to compute loss against the clean image.
-
-        Args:
-            x: Noisy image batch (if t provided) or Input batch (if t embedded in x?)
-               Actually, for training, x usually contains both if not handling t separately.
-            t: Time steps (optional)
+        Forward pass.
+        If t is None, assumes x has time embedding or is just feature extraction.
+        If t is provided, embeds t and concatenates.
         """
-        # If input x has extra channels, it might already include t embedding?
-        # self.denoiser input channels = img_channels + 1
-
-        if x.shape[1] == self.img_channels + 1:
-            # Already has time embedding concatenated
-            return self.denoiser(x)
-
         if t is None:
-            # Assume t is zero or handle gracefully?
-            # Or assume this is just the denoiser call?
-            # For simplicity, if standard forward is called without t,
-            # we might just return the denoiser output assuming x is formatted correctly
-            # or fail if shape mismatch.
-            return self.denoiser(x)
+             if x.shape[1] == self.img_channels + 1:
+                 return self.denoiser(x)
+             # Default to t=0? Or error?
+             # For simplicity, assume t=0 (cleanest) if not provided?
+             # Or just fail.
+             raise ValueError("t must be provided for diffusion forward pass")
 
-        # If t is provided, embed and concat
-        batch_size, _, h, w = x.shape
-        t_emb = t.view(batch_size, 1, 1, 1).expand(batch_size, 1, h, w)
-        x_input = torch.cat([x, t_emb], dim=1)
+        return self.predict_x0(x, t)
 
-        return self.denoiser(x_input)
+    @torch.no_grad()
+    def sample(self, num_samples=16, img_size=(1, 28, 28), device="cpu"):
+        """
+        Generate samples using the trained model via DDPM sampling.
+        """
+        self.eval()
+        B = num_samples
+        C, H, W = img_size
+
+        # Start from pure noise
+        x = torch.randn(B, C, H, W, device=device)
+
+        for i in reversed(range(0, self.T)):
+            t = torch.full((B,), i, device=device, dtype=torch.long)
+
+            # 1. Predict x_0
+            x_0_pred = self.predict_x0(x, t)
+
+            # 2. Compute posterior mean for x_{t-1}
+            # mu_t = coeff1 * x_0_pred + coeff2 * x_t
+
+            # Extract coefficients
+            alpha_t = self.alpha[t].view(B, 1, 1, 1)
+            alpha_bar_t = self.alpha_bar[t].view(B, 1, 1, 1)
+            alpha_bar_prev_t = self.alpha_bar_prev[t].view(B, 1, 1, 1)
+            beta_t = self.beta[t].view(B, 1, 1, 1)
+
+            coeff1 = torch.sqrt(alpha_bar_prev_t) * beta_t / (1.0 - alpha_bar_t)
+            coeff2 = torch.sqrt(alpha_t) * (1.0 - alpha_bar_prev_t) / (1.0 - alpha_bar_t)
+
+            mean = coeff1 * x_0_pred + coeff2 * x
+
+            # 3. Add noise
+            if i > 0:
+                noise = torch.randn_like(x)
+                # Fixed variance sigma^2 = beta_t or posterior_variance
+                # We use posterior_variance (sigma_tilde)
+                var = self.posterior_variance[t].view(B, 1, 1, 1)
+                sigma = torch.sqrt(var)
+                x = mean + sigma * noise
+            else:
+                x = mean
+
+        self.train()
+        return x.clamp(-1, 1) # Assume normalized to [-1, 1] usually, or [0,1] if data was [0,1]
+

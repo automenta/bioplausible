@@ -25,6 +25,7 @@ from bioplausible.models.holomorphic_ep import HolomorphicEP
 from bioplausible.models.deep_ep import DirectedEP
 from bioplausible.models.finite_nudge_ep import FiniteNudgeEP
 from bioplausible.models.modern_conv_eqprop import ModernConvEqProp
+from bioplausible.models.eqprop_diffusion import EqPropDiffusion
 
 # Hybrid / Experimental Models
 from bioplausible.models.ada_fa import AdaptiveFeedbackAlignment
@@ -156,6 +157,15 @@ def build_modern_conv_eqprop(spec, input_dim, output_dim, hidden_dim, num_layers
     return ModernConvEqProp(
         eq_steps=spec.default_steps if spec.has_steps else 30,
         hidden_channels=hidden_dim,
+    ).to(device)
+
+@register_model_builder("eqprop_diffusion")
+def build_eqprop_diffusion(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type):
+    # input_dim is interpreted as channels for vision tasks
+    channels = input_dim if input_dim is not None else 1
+    return EqPropDiffusion(
+        img_channels=channels,
+        hidden_channels=hidden_dim
     ).to(device)
 
 @register_model_builder("adaptive_feedback_alignment")

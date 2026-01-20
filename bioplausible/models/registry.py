@@ -96,6 +96,14 @@ MODEL_REGISTRY = [
         color="#26de81",
         task_compat=["vision"],
     ),
+    ModelSpec(
+        name="EqProp Diffusion",
+        description="Generative Diffusion via Equilibrium Propagation",
+        model_type="eqprop_diffusion",
+        default_lr=0.001,
+        color="#fdcb6e",
+        task_compat=["vision"],
+    ),
     # Hybrid & Experimental Algorithms
     ModelSpec(
         name="Adaptive Feedback Alignment",
