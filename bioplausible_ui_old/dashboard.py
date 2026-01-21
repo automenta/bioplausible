@@ -8,7 +8,7 @@ Features stunning dark cyberpunk theme with live pyqtgraph plots.
 import sys
 import logging
 import json
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Any
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
