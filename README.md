@@ -36,8 +36,11 @@ pip install -e .
 # Run full verification (all tracks)
 eqprop-verify --quick
 
-# Launch Dashboard
-eqprop-dashboard
+# Launch Main Dashboard (Production)
+biopl
+
+# Launch Lab Analysis Tools (Research)
+biopl-lab --model checkpoints/my_model.pt
 
 # Launch Model Search (Local)
 eqprop-hyperopt --task mnist
