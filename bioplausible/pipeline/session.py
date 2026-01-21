@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import uuid
 from datetime import datetime
 import dataclasses
+import os
 
 from bioplausible.pipeline.config import TrainingConfig
 from bioplausible.pipeline.events import Event, ProgressEvent, CompletedEvent, PausedEvent, Event
@@ -45,17 +46,11 @@ class TrainingSession:
         try:
             # 1. Setup Task
             self.task = create_task(self.config.dataset, device=self.device)
-            # Some task names might be generic like "vision", usually dataset implies task.
-            # config.dataset holds "mnist", "cifar10", "shakespeare", etc.
 
             self.task.setup()
 
             # 2. Setup Model
             spec = get_model_spec(self.config.model)
-
-            # Prepare hyperparams
-            # We merge config.hyperparams with model spec defaults if needed
-            # For now, we assume factory handles spec defaults
 
             self.model = create_model(
                 spec=spec,
@@ -67,11 +62,9 @@ class TrainingSession:
             )
 
             # 3. Create Trainer
-            # Different tasks might need different trainer setup
-            # BaseTask has create_trainer
             self.trainer = self.task.create_trainer(
                 self.model,
-                batches_per_epoch=100, # Default, maybe should be in config
+                batches_per_epoch=100,
                 eval_batches=20,
                 epochs=self.config.epochs,
                 lr=self.config.learning_rate,
@@ -111,12 +104,18 @@ class TrainingSession:
             raise e
 
     def _save_results(self, metrics):
-        """Save results using ResultsManager."""
+        """Save results and weights using ResultsManager."""
         try:
             mgr = ResultsManager()
             # Convert config dataclass to dict
             config_dict = dataclasses.asdict(self.config)
             mgr.save_run(self.run_id, config_dict, metrics)
+
+            # Save weights
+            if self.model:
+                run_dir = os.path.join(mgr.BASE_DIR, self.run_id)
+                torch.save(self.model.state_dict(), os.path.join(run_dir, "model.pt"))
+
         except Exception as e:
             print(f"Failed to save results: {e}")
 
