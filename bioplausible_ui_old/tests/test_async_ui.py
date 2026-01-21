@@ -17,7 +17,7 @@ if app is None:
 class TestAsyncFeatures(unittest.TestCase):
 
     def test_lm_async_gen(self):
-        from bioplausible_ui.tabs.lm_tab import GenerationWorker
+        from bioplausible_ui_old.tabs.lm_tab import GenerationWorker
 
         # Mock generator
         class MockGen:
@@ -34,7 +34,7 @@ class TestAsyncFeatures(unittest.TestCase):
         self.assertEqual(received[0], "Mock generated text")
 
     def test_rl_async_playback(self):
-        from bioplausible_ui.tabs.rl_tab import PlaybackWorker
+        from bioplausible_ui_old.tabs.rl_tab import PlaybackWorker
 
         # Mock gym environment is harder, but we can test init
         class MockModel(torch.nn.Module):

@@ -1,0 +1,14 @@
+from bioplausible_ui.core.schema import TabSchema, WidgetDef, ActionDef
+from bioplausible_ui.core.widgets.log_output import LogOutput
+
+CONSOLE_TAB_SCHEMA = TabSchema(
+    name="Console",
+    widgets=[
+        WidgetDef("log_output", LogOutput),
+    ],
+    actions=[
+        ActionDef("run_diagnostics", "🩺", "_run_diagnostics"),
+        ActionDef("clear", "🧹", "_clear_logs"),
+    ],
+    plots=[]
+)

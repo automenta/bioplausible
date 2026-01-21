@@ -8,7 +8,7 @@ It combines all the decomposed modules into a cohesive system.
 
 import sys
 import argparse
-from bioplausible_ui.hyperopt_dashboard import HyperoptSearchDashboard
+from bioplausible_ui_old.hyperopt_dashboard import HyperoptSearchDashboard
 from PyQt6.QtWidgets import QApplication
 
 

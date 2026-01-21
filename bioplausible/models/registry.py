@@ -33,6 +33,7 @@ class ModelSpec:
     supports_alignment: bool = False
     supports_cube_viz: bool = False
     supports_robustness: bool = False
+    supports_p2p: bool = False
 
 
 # All models available - ordered by category

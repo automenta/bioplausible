@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 
 from bioplausible.models.looped_mlp import LoopedMLP
 from bioplausible.models.conv_eqprop import ConvEqProp
-from bioplausible_ui.themes import PLOT_COLORS
+from bioplausible_ui_old.themes import PLOT_COLORS
 
 try:
     import pyqtgraph as pg

@@ -15,11 +15,11 @@ from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from typing import Optional
 
 from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
-from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
-from bioplausible_ui.generation import count_parameters, format_parameter_count, UniversalGenerator
-from bioplausible_ui.themes import PLOT_COLORS
-from bioplausible_ui.common_widgets import create_plot_widget, create_standard_buttons
-from bioplausible_ui.utils import format_metric_value
+from bioplausible_ui_old.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
+from bioplausible_ui_old.generation import count_parameters, format_parameter_count, UniversalGenerator
+from bioplausible_ui_old.themes import PLOT_COLORS
+from bioplausible_ui_old.common_widgets import create_plot_widget, create_standard_buttons
+from bioplausible_ui_old.utils import format_metric_value
 
 
 try:
@@ -468,7 +468,7 @@ class LMTab(QWidget):
 
     def update_theme(self, theme_colors: dict, plot_colors: dict):
         """Update plot colors based on theme."""
-        from bioplausible_ui.common_widgets import update_theme_for_plots
+        from bioplausible_ui_old.common_widgets import update_theme_for_plots
         if not HAS_PYQTGRAPH:
             return
 

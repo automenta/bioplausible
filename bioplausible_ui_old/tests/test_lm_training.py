@@ -107,7 +107,7 @@ class TestWorkerFunctionality(unittest.TestCase):
 
     def test_worker_structure(self):
         """Test that the worker has expected methods."""
-        from bioplausible_ui.worker import TrainingWorker
+        from bioplausible_ui_old.worker import TrainingWorker
 
         # Create a mock model for testing
         class MockModel(torch.nn.Module):

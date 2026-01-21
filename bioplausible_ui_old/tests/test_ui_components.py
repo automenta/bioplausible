@@ -17,7 +17,7 @@ if app is None:
 class TestTabs(unittest.TestCase):
 
     def test_microscope_tab_init(self):
-        from bioplausible_ui.tabs.microscope_tab import MicroscopeTab
+        from bioplausible_ui_old.tabs.microscope_tab import MicroscopeTab
         tab = MicroscopeTab()
         self.assertIsNotNone(tab)
 
@@ -26,7 +26,7 @@ class TestTabs(unittest.TestCase):
             self.assertIsNotNone(tab.micro_heat_view)
 
     def test_discovery_tab_init(self):
-        from bioplausible_ui.tabs.discovery_tab import DiscoveryTab
+        from bioplausible_ui_old.tabs.discovery_tab import DiscoveryTab
         tab = DiscoveryTab()
         self.assertIsNotNone(tab)
 
@@ -45,7 +45,7 @@ class TestTabs(unittest.TestCase):
             tab.net_timer.stop()
 
     def test_vision_tab_inference_dialog(self):
-        from bioplausible_ui.tabs.vision_tab import VisionInferenceDialog
+        from bioplausible_ui_old.tabs.vision_tab import VisionInferenceDialog
         import torch
 
         # Mock data
@@ -57,19 +57,19 @@ class TestTabs(unittest.TestCase):
         self.assertIsNotNone(dlg)
 
     def test_benchmarks_tab_init(self):
-        from bioplausible_ui.tabs.benchmarks_tab import BenchmarksTab
+        from bioplausible_ui_old.tabs.benchmarks_tab import BenchmarksTab
         tab = BenchmarksTab()
         self.assertIsNotNone(tab)
         self.assertTrue(hasattr(tab, 'load_model_signal'))
 
     def test_benchmarks_comparison_dialog(self):
-        from bioplausible_ui.tabs.benchmarks_tab import ComparisonDialog
+        from bioplausible_ui_old.tabs.benchmarks_tab import ComparisonDialog
         data = [{'name': 'A', 'score': 10}, {'name': 'B', 'score': 20}]
         dlg = ComparisonDialog(data)
         self.assertIsNotNone(dlg)
 
     def test_lm_tab_generation(self):
-        from bioplausible_ui.tabs.lm_tab import LMTab
+        from bioplausible_ui_old.tabs.lm_tab import LMTab
         tab = LMTab()
         self.assertIsNotNone(tab)
 
@@ -78,7 +78,7 @@ class TestTabs(unittest.TestCase):
         self.assertTrue(hasattr(tab, 'gen_prompt_input'))
 
     def test_rl_tab_playback(self):
-        from bioplausible_ui.tabs.rl_tab import RLTab
+        from bioplausible_ui_old.tabs.rl_tab import RLTab
         tab = RLTab()
         self.assertIsNotNone(tab)
 
@@ -86,7 +86,7 @@ class TestTabs(unittest.TestCase):
         self.assertTrue(hasattr(tab, '_watch_agent'))
 
     def test_console_tab_commands(self):
-        from bioplausible_ui.tabs.console_tab import ConsoleTab
+        from bioplausible_ui_old.tabs.console_tab import ConsoleTab
         tab = ConsoleTab()
         self.assertIsNotNone(tab)
 
@@ -98,7 +98,7 @@ class TestTabs(unittest.TestCase):
         self.assertEqual(tab.cmd_input.text(), "")
 
     def test_deploy_tab_init(self):
-        from bioplausible_ui.tabs.deploy_tab import DeployTab
+        from bioplausible_ui_old.tabs.deploy_tab import DeployTab
         tab = DeployTab()
         self.assertIsNotNone(tab)
         # Check model ref setter

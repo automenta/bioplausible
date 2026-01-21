@@ -36,8 +36,11 @@ pip install -e .
 # Run full verification (all tracks)
 eqprop-verify --quick
 
-# Launch Dashboard
-eqprop-dashboard
+# Launch Main Dashboard (Production)
+bioplausible
+
+# Launch Lab Analysis Tools (Research)
+bioplausible-lab --model checkpoints/my_model.pt
 
 # Launch Model Search (Local)
 eqprop-hyperopt --task mnist

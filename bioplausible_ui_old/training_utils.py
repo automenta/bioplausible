@@ -12,7 +12,7 @@ from PyQt6.QtCore import pyqtSignal
 
 if TYPE_CHECKING:
     from bioplausible.models.registry import ModelSpec
-    from bioplausible_ui.worker import TrainingWorker, RLWorker
+    from bioplausible_ui_old.worker import TrainingWorker, RLWorker
 
 
 def create_vision_model_and_loader(vis_tab: QWidget) -> Tuple[Optional[Any], Optional[DataLoader]]:
@@ -229,8 +229,8 @@ def start_training_common(
     Returns:
         Training worker instance or None if failed
     """
-    from bioplausible_ui.generation import count_parameters, format_parameter_count
-    from bioplausible_ui.worker import TrainingWorker
+    from bioplausible_ui_old.generation import count_parameters, format_parameter_count
+    from bioplausible_ui_old.worker import TrainingWorker
     import time
 
     # Set default worker class if not provided

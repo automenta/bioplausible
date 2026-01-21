@@ -2,28 +2,75 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QDoubleSpinBox, QSpinB
 from bioplausible.models.registry import get_model_spec
 
 class HyperparamEditor(QWidget):
-    def __init__(self, model=None, parent=None):
+    def __init__(self, model=None, defaults=None, parent=None):
         super().__init__(parent)
         self.layout = QFormLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.values = {}
         if model:
             self.update_for_model(model)
+        elif defaults:
+            self.update_from_dict(defaults)
 
     def set_model(self, model_name):
         self.update_for_model(model_name)
 
-    def update_for_model(self, model_name):
+    def update_from_dict(self, defaults):
         # Clear layout
+        self._clear_layout()
+        self.values = {}
+
+        for key, value in defaults.items():
+            if isinstance(value, bool):
+                # Checkbox (not implemented yet, but for now generic spinner or something?)
+                # Actually QCheckBox
+                from PyQt6.QtWidgets import QCheckBox
+                widget = QCheckBox()
+                widget.setChecked(value)
+                self.layout.addRow(key.title() + ":", widget)
+                self.values[key] = widget
+            elif isinstance(value, float):
+                widget = QDoubleSpinBox()
+                widget.setRange(-10000.0, 10000.0)
+                widget.setValue(value)
+                self.layout.addRow(key.title() + ":", widget)
+                self.values[key] = widget
+            elif isinstance(value, int):
+                widget = QSpinBox()
+                widget.setRange(-10000, 10000)
+                widget.setValue(value)
+                self.layout.addRow(key.title() + ":", widget)
+                self.values[key] = widget
+            elif isinstance(value, str):
+                from PyQt6.QtWidgets import QLineEdit
+                widget = QLineEdit(value)
+                self.layout.addRow(key.title() + ":", widget)
+                self.values[key] = widget
+
+    def _clear_layout(self):
         while self.layout.count():
             item = self.layout.takeAt(0)
             widget = item.widget()
             if widget:
                 widget.deleteLater()
 
+    def update_for_model(self, model_name):
+        # Clear layout
+        self._clear_layout()
+
         self.values = {}
         try:
             spec = get_model_spec(model_name)
+
+            # --- Standard Params ---
+
+            # Hidden Dimension
+            self.hidden_spin = QSpinBox()
+            self.hidden_spin.setRange(16, 4096)
+            self.hidden_spin.setValue(256)
+            self.hidden_spin.setSingleStep(32)
+            self.layout.addRow("Hidden Dim:", self.hidden_spin)
+            self.values['hidden_dim'] = self.hidden_spin
 
             # LR
             self.lr_spin = QDoubleSpinBox()
@@ -49,8 +96,47 @@ class HyperparamEditor(QWidget):
                 self.layout.addRow("Steps:", self.steps_spin)
                 self.values['steps'] = self.steps_spin
 
+            # --- Custom Params ---
+            if spec.custom_hyperparams:
+                from PyQt6.QtWidgets import QCheckBox, QLineEdit
+                for key, default_val in spec.custom_hyperparams.items():
+                    label = key.replace("_", " ").title() + ":"
+
+                    if isinstance(default_val, bool):
+                        w = QCheckBox()
+                        w.setChecked(default_val)
+                        self.layout.addRow(label, w)
+                        self.values[key] = w
+                    elif isinstance(default_val, float):
+                        w = QDoubleSpinBox()
+                        w.setRange(-1e6, 1e6)
+                        w.setValue(default_val)
+                        self.layout.addRow(label, w)
+                        self.values[key] = w
+                    elif isinstance(default_val, int):
+                        w = QSpinBox()
+                        w.setRange(-1e6, 1e6)
+                        w.setValue(default_val)
+                        self.layout.addRow(label, w)
+                        self.values[key] = w
+                    elif isinstance(default_val, tuple) and len(default_val) == 2:
+                        # Range tuple (min, max) - assumig float slider or just standard input?
+                        # For now, standard input initialized to min? No, usually (min, max) defines range.
+                        # Let's assume it's (min, max) and default is min? Or maybe it's (default, type)?
+                        # Re-reading ModelSpec... registry example: "custom_hyperparams={"my_param": (0.0, 1.0)}"
+                        # This likely implies a range. Let's pick 0.0 as default for now or mean.
+                        pass # TODO: Implement complex types
+
         except ValueError:
             pass
 
     def get_values(self):
-        return {k: v.value() for k, v in self.values.items()}
+        res = {}
+        for k, v in self.values.items():
+            if hasattr(v, 'value'):
+                res[k] = v.value()
+            elif hasattr(v, 'isChecked'):
+                res[k] = v.isChecked()
+            elif hasattr(v, 'text'):
+                res[k] = v.text()
+        return res
