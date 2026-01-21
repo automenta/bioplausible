@@ -126,5 +126,4 @@ class BaseTab(QWidget, metaclass=TabMeta):
 
     def _build_layout(self, layout_def, parent_widget):
         # Placeholder for complex layout builder
-        # Implementing basic recursion would be good
         pass

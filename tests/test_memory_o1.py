@@ -43,9 +43,13 @@ def test_eqprop_kernel_memory_o1():
     original_update = kernel.compute_hebbian_update
     received_logs = []
 
-    def mock_update(act_free, act_nudged):
+    def mock_update(act_free, act_nudged, x_input=None):
         received_logs.append((act_free, act_nudged))
-        return original_update(act_free, act_nudged)
+        # Handle signature mismatch if original takes x_input or not
+        try:
+             return original_update(act_free, act_nudged, x_input)
+        except TypeError:
+             return original_update(act_free, act_nudged)
 
     kernel.compute_hebbian_update = mock_update
 
