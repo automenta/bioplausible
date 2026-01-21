@@ -5,3 +5,6 @@ from .alignment import AlignmentTool
 from .robustness import RobustnessTool
 from .cube_viz import CubeVizTool
 from .p2p_grid import P2PGridTool
+from .text_gen import TextGenerationTool
+from .agent_watch import AgentWatchTool
+from .diffusion_sampling import DiffusionSamplingTool
