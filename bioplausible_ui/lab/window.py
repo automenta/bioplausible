@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QMainWindow, QTabWidget, QFileDialog, QMessageBox
 from bioplausible_ui.lab.registry import ToolRegistry
-import bioplausible_ui.lab.tools.microscope
+import bioplausible_ui.lab.tools  # Register all tools
 import torch
 from bioplausible.models.registry import get_model_spec
 
