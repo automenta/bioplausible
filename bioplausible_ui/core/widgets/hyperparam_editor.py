@@ -162,3 +162,19 @@ class HyperparamEditor(QWidget):
             elif hasattr(v, 'text'):
                 res[k] = v.text()
         return res
+
+    def set_values(self, values):
+        """Set values for existing widgets."""
+        for k, v in values.items():
+            if k in self.values:
+                widget = self.values[k]
+                if hasattr(widget, 'setValue'):
+                    # Handle int vs float mismatch if necessary
+                    try:
+                        widget.setValue(v)
+                    except TypeError:
+                         widget.setValue(float(v))
+                elif hasattr(widget, 'setChecked'):
+                    widget.setChecked(bool(v))
+                elif hasattr(widget, 'setText'):
+                    widget.setText(str(v))

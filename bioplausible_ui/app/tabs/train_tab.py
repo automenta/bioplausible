@@ -1,8 +1,97 @@
+import torch
+import numpy as np
+from PyQt6.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
+from PyQt6.QtGui import QPixmap, QImage, QFont
+from PyQt6.QtCore import Qt
+
 from bioplausible_ui.core.base import BaseTab
 from bioplausible_ui.app.schemas.train import TRAIN_TAB_SCHEMA
 from bioplausible_ui.core.bridge import SessionBridge
 from bioplausible.pipeline.config import TrainingConfig
-from PyQt6.QtWidgets import QMessageBox
+from bioplausible.pipeline.session import SessionState
+
+class InferenceDialog(QDialog):
+    def __init__(self, task_type, input_data, prediction, truth=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Model Inference Check")
+        self.resize(400, 500)
+        layout = QVBoxLayout(self)
+
+        # Header
+        lbl = QLabel("Model Prediction")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        layout.addWidget(lbl)
+
+        # Content based on task
+        if task_type == "vision":
+            # Input data is (1, C, H, W) or (1, H*W) tensor
+            # Convert to QImage
+            img_lbl = QLabel()
+            img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            img_lbl.setMinimumSize(300, 300)
+
+            # Normalize and convert
+            img = input_data.squeeze()
+            if img.ndim == 1: # Flattened
+                d = int(np.sqrt(img.shape[0]))
+                img = img.view(d, d)
+
+            # img is now (H, W) or (C, H, W)
+            if img.ndim == 3: img = img.permute(1, 2, 0) # CHW -> HWC
+
+            img_np = img.cpu().numpy()
+            # Rescale 0-1 to 0-255
+            img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min() + 1e-6)
+            img_np = (img_np * 255).astype(np.uint8)
+
+            h, w = img_np.shape[:2]
+            if img_np.ndim == 2:
+                qimg = QImage(img_np.data, w, h, w, QImage.Format.Format_Grayscale8)
+            else:
+                qimg = QImage(img_np.data, w, h, 3*w, QImage.Format.Format_RGB888)
+
+            pix = QPixmap.fromImage(qimg).scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio)
+            img_lbl.setPixmap(pix)
+            layout.addWidget(img_lbl)
+
+            # Result
+            res_layout = QVBoxLayout()
+            pred_lbl = QLabel(f"Prediction: {prediction}")
+            pred_lbl.setFont(QFont("Arial", 14))
+            pred_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            res_layout.addWidget(pred_lbl)
+
+            if truth is not None:
+                truth_lbl = QLabel(f"Truth: {truth}")
+                truth_lbl.setFont(QFont("Arial", 12))
+                truth_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                res_layout.addWidget(truth_lbl)
+
+                # Feedback
+                correct = int(prediction) == int(truth)
+                feed_lbl = QLabel("✅ CORRECT" if correct else "❌ INCORRECT")
+                feed_lbl.setStyleSheet(f"color: {'green' if correct else 'red'}; font-size: 18px; font-weight: bold;")
+                feed_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                res_layout.addWidget(feed_lbl)
+
+            layout.addLayout(res_layout)
+
+        elif task_type == "lm":
+            # Text display
+            layout.addWidget(QLabel("Prompt & Completion:"))
+            text_box = QLabel(prediction) # Prediction here is full text
+            text_box.setWordWrap(True)
+            text_box.setStyleSheet("background-color: #222; color: #0f0; padding: 10px; font-family: monospace;")
+            layout.addWidget(text_box)
+
+        else:
+            layout.addWidget(QLabel(f"Output: {prediction}"))
+
+        # Close
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.accept)
+        layout.addWidget(btn)
 
 class TrainTab(BaseTab):
     """Training tab - UI auto-generated from schema."""
@@ -62,7 +151,98 @@ class TrainTab(BaseTab):
         self._actions['stop'].setEnabled(False)
 
     def _test_model(self):
-        # Placeholder for inference logic
-        # In a real implementation, this would load a test sample and run prediction
-        # mimicking _test_random_sample from old vision_tab.py
-        QMessageBox.information(self, "Test", "Running inference on random sample... (Not implemented in this demo)")
+        if not hasattr(self, 'bridge') or not self.bridge.session.model:
+             QMessageBox.warning(self, "Warning", "No model available. Train a model first.")
+             return
+
+        # Ensure not running
+        if self.bridge.session.state == SessionState.RUNNING:
+             QMessageBox.warning(self, "Warning", "Please stop training before testing.")
+             return
+
+        try:
+            session = self.bridge.session
+            model = session.model
+            task = session.task
+
+            model.eval()
+
+            # Get sample
+            x, y = task.get_batch("val") # Returns batch
+
+            # Take first item
+            x_sample = x[0:1]
+            y_sample = y[0:1] if y is not None else None
+
+            # Inference
+            with torch.no_grad():
+                # Prepare input logic similar to Trainer
+                h = x_sample
+                # Simple prep for common cases
+                if x_sample.dim() == 4 and "MLP" in model.__class__.__name__:
+                     h = x_sample.view(1, -1)
+
+                h = h.to(session.device)
+                logits = model(h)
+
+                if session.config.task == "vision":
+                    pred = logits.argmax(1).item()
+                    truth = y_sample.item()
+                    dialog = InferenceDialog("vision", x_sample, pred, truth, self)
+                    dialog.exec()
+
+                elif session.config.task == "lm":
+                    # Generate text if supported
+                    if hasattr(model, "generate"):
+                        # Use simple generation
+                        start_tokens = x_sample[0, :5] # Seed with 5 tokens
+                        gen_text = model.generate(start_tokens.unsqueeze(0), max_new_tokens=20)
+                        # Decode
+                        # Assuming task has decode?
+                        # Tasks in bioplausible usually have decode method?
+                        # Let's check BaseTask or specific LMTask
+                        text = f"Raw Tokens: {gen_text.tolist()}"
+                        dialog = InferenceDialog("lm", None, text, None, self)
+                        dialog.exec()
+                    else:
+                        QMessageBox.information(self, "Result", f"Logits shape: {logits.shape}")
+
+                elif session.config.task == "rl":
+                    # RL typically returns Q-values
+                    q_vals = logits
+                    action = q_vals.argmax().item()
+                    QMessageBox.information(self, "RL Action", f"State: {x_sample.shape}\nPredicted Action: {action}\nQ-Values: {q_vals.cpu().numpy()}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Inference failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def set_config(self, config):
+        """Populate UI from config dict."""
+        if "task" in config:
+            self.task_selector.combo.setCurrentText(config["task"])
+        if "dataset" in config:
+            self.dataset_picker.combo.setCurrentText(config["dataset"])
+        if "model" in config:
+            self.model_selector.combo.setCurrentText(config["model"])
+
+        # Hyperparams need model to be set first to initialize fields
+        if "hyperparams" in config and hasattr(self, "hyperparam_editor"):
+            # Ensure editor is updated for model
+            if "model" in config:
+                self.hyperparam_editor.update_for_model(config["model"])
+
+            self.hyperparam_editor.set_values(config["hyperparams"])
+
+            # Also set training config values (epochs, etc) if present
+            hp = config["hyperparams"]
+            tc_values = {}
+            if "epochs" in hp: tc_values["epochs"] = hp["epochs"]
+            if "batch_size" in hp: tc_values["batch_size"] = hp["batch_size"]
+            # etc...
+            # TrainingConfigWidget doesn't have set_values either...
+            # Let's just rely on HyperparamEditor for model params.
+            # Epochs usually come from search trial config too.
+
+            # TODO: implement set_values for TrainingConfigWidget if needed

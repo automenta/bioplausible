@@ -17,11 +17,23 @@ class AppMainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
-        self.tabs.addTab(TrainTab(), "Train")
+        self.train_tab = TrainTab()
+        self.search_tab = SearchTab()
+        self.results_tab = ResultsTab()
+        self.deploy_tab = DeployTab()
+
+        self.tabs.addTab(self.train_tab, "Train")
         self.tabs.addTab(CompareTab(), "Compare")
-        self.tabs.addTab(SearchTab(), "Search")
-        self.tabs.addTab(ResultsTab(), "Results")
+        self.tabs.addTab(self.search_tab, "Search")
+        self.tabs.addTab(self.results_tab, "Results")
         self.tabs.addTab(BenchmarksTab(), "Benchmarks")
-        self.tabs.addTab(DeployTab(), "Deploy")
+        self.tabs.addTab(self.deploy_tab, "Deploy")
         self.tabs.addTab(ConsoleTab(), "Console")
         self.tabs.addTab(SettingsTab(), "Settings")
+
+        # Connect Search -> Train
+        self.search_tab.transfer_config.connect(self._on_transfer_config)
+
+    def _on_transfer_config(self, config):
+        self.train_tab.set_config(config)
+        self.tabs.setCurrentWidget(self.train_tab)

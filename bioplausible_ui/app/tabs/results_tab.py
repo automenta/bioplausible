@@ -1,7 +1,7 @@
 from bioplausible_ui.core.base import BaseTab
 from bioplausible_ui.app.schemas.results import RESULTS_TAB_SCHEMA
 from bioplausible.pipeline.results import ResultsManager
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox, QFileDialog
 
 class ResultsTab(BaseTab):
     """Results tab - UI auto-generated from schema."""
@@ -47,3 +47,27 @@ class ResultsTab(BaseTab):
                 self._refresh_results()
         else:
             QMessageBox.warning(self, "Warning", "Please select a run to delete.")
+
+    def _export_run(self):
+        run_id = self.results_table.get_selected_run_id()
+        if not run_id:
+            QMessageBox.warning(self, "Warning", "Please select a run to export.")
+            return
+
+        fname, _ = QFileDialog.getSaveFileName(self, "Export Run", f"{run_id}.zip", "Zip Files (*.zip)")
+        if fname:
+            try:
+                self.results_manager.export_run(run_id, fname)
+                QMessageBox.information(self, "Success", f"Run exported to {fname}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", str(e))
+
+    def _import_run(self):
+        fname, _ = QFileDialog.getOpenFileName(self, "Import Run", "", "Zip Files (*.zip)")
+        if fname:
+            try:
+                run_id = self.results_manager.import_run(fname)
+                QMessageBox.information(self, "Success", f"Imported run {run_id}")
+                self._refresh_results()
+            except Exception as e:
+                QMessageBox.critical(self, "Error", str(e))
