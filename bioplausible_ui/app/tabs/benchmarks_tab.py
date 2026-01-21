@@ -26,4 +26,12 @@ class BenchmarksTab(BaseTab):
 
     def _on_finished(self):
         self.results_list.addItem("Benchmarks Completed.")
+        self.results_list.scrollToBottom()
         self._actions['run'].setEnabled(True)
+
+        # Check for success (simple heuristic from logs)
+        # Or better, update worker to emit results
+        QMessageBox.information(self, "Benchmarks", "Execution finished.")
+
+    def _clear_logs(self):
+        self.results_list.clear()

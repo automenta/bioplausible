@@ -218,6 +218,21 @@ class TrainTab(BaseTab):
             import traceback
             traceback.print_exc()
 
+    def _analyze_model(self):
+        if not hasattr(self, 'bridge') or not self.bridge.session.model:
+             QMessageBox.warning(self, "Warning", "No model available. Train a model first.")
+             return
+
+        from bioplausible_ui.lab.window import LabMainWindow
+        from bioplausible.models.registry import get_model_spec
+
+        session = self.bridge.session
+        spec = get_model_spec(session.config.model)
+
+        self.lab_window = LabMainWindow()
+        self.lab_window.load_model_instance(session.model, spec)
+        self.lab_window.show()
+
     def set_config(self, config):
         """Populate UI from config dict."""
         if "task" in config:

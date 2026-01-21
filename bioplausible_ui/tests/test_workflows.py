@@ -7,6 +7,8 @@ from bioplausible.pipeline.results import ResultsManager
 from bioplausible_ui.core.widgets.hyperparam_editor import HyperparamEditor
 from bioplausible_ui.app.tabs.train_tab import TrainTab
 from bioplausible_ui.app.tabs.search_tab import SearchTab
+from bioplausible_ui.app.tabs.compare_tab import CompareTab
+from bioplausible_ui.lab.window import LabMainWindow
 
 # Mocking
 from unittest.mock import MagicMock, patch
@@ -109,3 +111,55 @@ class TestTabs:
                  # Let's verify signal exists and is connected in MainWindow logic (via code review)
                  # Here just check signal object
                  assert hasattr(tab, 'transfer_config')
+
+    def test_compare_tab_logic(self, qtbot, tmp_path):
+        # Create dummy runs
+        mgr = ResultsManager(base_dir=str(tmp_path / "runs"))
+
+        # Run 1
+        metrics1 = {"accuracy": 0.5, "history": [{"epoch": 0, "accuracy": 0.1, "loss": 1.0}, {"epoch": 1, "accuracy": 0.5, "loss": 0.5}]}
+        mgr.save_run("run1", {"model": "m1"}, metrics1)
+
+        # Run 2
+        metrics2 = {"accuracy": 0.6, "history": [{"epoch": 0, "accuracy": 0.2, "loss": 0.9}, {"epoch": 1, "accuracy": 0.6, "loss": 0.4}]}
+        mgr.save_run("run2", {"model": "m2"}, metrics2)
+
+        tab = CompareTab()
+        # Inject manager
+        tab.results_manager = mgr
+        qtbot.addWidget(tab)
+
+        # Refresh selectors
+        tab.run_selector_1.manager = mgr
+        tab.run_selector_1.refresh()
+        tab.run_selector_2.manager = mgr
+        tab.run_selector_2.refresh()
+
+        # Select
+        tab.run_selector_1.combo.setCurrentIndex(0)
+        tab.run_selector_2.combo.setCurrentIndex(1)
+
+        # Call compare
+        tab._compare_saved_runs()
+
+        # Check plot logic execution (no crash)
+        # Verify legend added?
+        # Access internal plot widget
+        assert hasattr(tab.plot_comparison_plot.plot_widget.plotItem, 'legend')
+
+class TestLabWindow:
+    def test_load_model_instance(self, qtbot):
+        # Minimal test
+        win = LabMainWindow()
+        qtbot.addWidget(win)
+
+        # Mock model and spec
+        spec = MagicMock()
+        spec.name = "TestModel"
+
+        model = MagicMock()
+
+        # We need to mock ToolRegistry to avoid actual tool loading which might require heavy deps
+        with patch('bioplausible_ui.lab.registry.ToolRegistry.get_compatible_tools', return_value=[]):
+             win.load_model_instance(model, spec)
+             assert win.model == model

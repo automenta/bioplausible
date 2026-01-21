@@ -8,6 +8,7 @@ RESULTS_TAB_SCHEMA = TabSchema(
     ],
     actions=[
         ActionDef("refresh", "🔄", "_refresh_results"),
+        ActionDef("analyze", "🔬 Analyze", "_analyze_run", style="success"),
         ActionDef("export", "📤 Export", "_export_run"),
         ActionDef("import", "📥 Import", "_import_run"),
         ActionDef("delete", "🗑", "_delete_run", style="danger"),

@@ -33,6 +33,9 @@ class RunSelector(QWidget):
             config = run.get("config", {})
             metrics = run.get("metrics", {})
 
+            if "final_metrics" in metrics:
+                metrics = metrics["final_metrics"]
+
             task = config.get("task", "?")
             model = config.get("model", "?")
             acc = metrics.get("accuracy", 0.0)

@@ -1,4 +1,5 @@
 from PyQt6.QtWidgets import QMainWindow, QTabWidget
+from bioplausible_ui.core.themes import Theme
 from bioplausible_ui.app.tabs.train_tab import TrainTab
 from bioplausible_ui.app.tabs.compare_tab import CompareTab
 from bioplausible_ui.app.tabs.search_tab import SearchTab
@@ -13,6 +14,7 @@ class AppMainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Bioplausible Trainer (biopl)")
         self.resize(1200, 800)
+        self.setStyleSheet(Theme.get_stylesheet())
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)

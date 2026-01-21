@@ -80,71 +80,75 @@ class CompareTab(BaseTab):
     SCHEMA = COMPARE_TAB_SCHEMA
 
     def _post_init(self):
-        self.worker = None
+        self.results_manager = None # Initialized on demand usually, or here
+        from bioplausible.pipeline.results import ResultsManager
+        self.results_manager = ResultsManager()
 
-    def _start_comparison(self):
-        task = self.task_selector.get_task()
-        dataset = self.dataset_picker.get_dataset()
-        model1 = self.model_selector_1.get_selected_model()
-        model2 = self.model_selector_2.get_selected_model()
+    def _compare_saved_runs(self):
+        run_id_1 = self.run_selector_1.get_run_id()
+        run_id_2 = self.run_selector_2.get_run_id()
 
-        # We use defaults for now, or need hyperparam editor for both?
-        # Schema only has selectors. We assume default hyperparams.
+        if not run_id_1 or not run_id_2:
+            QMessageBox.warning(self, "Warning", "Please select two runs to compare.")
+            return
 
-        conf1 = TrainingConfig(task=task, dataset=dataset, model=model1, epochs=10)
-        conf2 = TrainingConfig(task=task, dataset=dataset, model=model2, epochs=10)
+        run1 = self.results_manager.load_run(run_id_1)
+        run2 = self.results_manager.load_run(run_id_2)
 
-        self.plot_loss.clear()
-        self.plot_accuracy.clear()
+        if not run1 or not run2:
+            QMessageBox.critical(self, "Error", "Could not load run data.")
+            return
 
-        # Legend
-        self.plot_loss.add_legend(["Model 1", "Model 2"]) # BaseTab helper might need enhancement for legend
-        # Actually `create_plot_widget` returns plot and curve.
-        # BaseTab stores specific plots by name.
-        # We need 2 curves per plot.
-        # BaseTab logic creates one curve by default?
-        # Let's inspect BaseTab later or just use direct pyqtgraph calls if accessible.
-        # BaseTab `self.plot_loss` is a `PlotWidget` wrapper or `pg.PlotWidget`.
-        # Assuming `PlotWidget` wrapper from `bioplausible_ui.core.widgets.plot_widget`.
+        # Extract history
+        # New format saves history in 'metrics' as 'history' list?
+        # Or did we change _save_results to save dict with history?
+        # See session.py update: `self._save_results(final_results)` where final_results = {final, history}
+        # But `ResultsManager.save_run` takes `metrics`. So the `metrics` field in JSON will now contain `history`.
 
-        self.worker = ComparisonWorker(conf1, conf2)
-        self.worker.progress.connect(self._on_progress)
-        self.worker.completed.connect(self._on_finished)
-        self.worker.start()
+        metrics1 = run1.get("metrics", {})
+        metrics2 = run2.get("metrics", {})
 
-        self._actions['compare'].setEnabled(False)
+        hist1 = metrics1.get("history", [])
+        hist2 = metrics2.get("history", [])
 
-    def _on_progress(self, epoch, m1, m2):
-        # We need to add point to TWO curves.
-        # `PlotWidget` (our wrapper) usually manages one curve via `add_point`.
-        # We might need to access underlying plot or add second curve.
+        if not hist1 and not hist2:
+             QMessageBox.warning(self, "Warning", "No history data found in selected runs (maybe old format?).")
+             return
 
-        # Hacky: access internal plot item
-        if hasattr(self.plot_loss, 'plot_item'): # if it's our wrapper
-            if not hasattr(self, 'curve1_loss'):
-                import pyqtgraph as pg
-                self.curve1_loss = self.plot_loss.plot_item.plot(pen='r', name="Model 1")
-                self.curve2_loss = self.plot_loss.plot_item.plot(pen='b', name="Model 2")
-                self.curve1_acc = self.plot_accuracy.plot_item.plot(pen='r', name="Model 1")
-                self.curve2_acc = self.plot_accuracy.plot_item.plot(pen='b', name="Model 2")
+        # Plot
+        self.plot_comparison_plot.clear()
+        self.plot_loss_plot.clear()
 
-                self.x_data = []
-                self.y1_loss = []
-                self.y2_loss = []
-                self.y1_acc = []
-                self.y2_acc = []
+        # We need to add legend manually or use our widget wrapper if it supports it.
+        # `BasePlotWidget` has `add_legend(labels)`.
 
-            self.x_data.append(epoch)
-            self.y1_loss.append(m1.get('loss', 0))
-            self.y2_loss.append(m2.get('loss', 0))
-            self.y1_acc.append(m1.get('accuracy', 0))
-            self.y2_acc.append(m2.get('accuracy', 0))
+        import pyqtgraph as pg
 
-            self.curve1_loss.setData(self.x_data, self.y1_loss)
-            self.curve2_loss.setData(self.x_data, self.y2_loss)
-            self.curve1_acc.setData(self.x_data, self.y1_acc)
-            self.curve2_acc.setData(self.x_data, self.y2_acc)
+        # Helper to extract
+        def extract(hist, key):
+            return [h.get("epoch", i) for i, h in enumerate(hist)], [h.get(key, 0) for h in hist]
 
-    def _on_finished(self):
-        self._actions['compare'].setEnabled(True)
-        QMessageBox.information(self, "Done", "Comparison Completed")
+        x1, y1_acc = extract(hist1, "accuracy")
+        x2, y2_acc = extract(hist2, "accuracy")
+
+        x1_l, y1_loss = extract(hist1, "loss")
+        x2_l, y2_loss = extract(hist2, "loss")
+
+        # Plot Acc
+        # BasePlotWidget wraps pg.PlotWidget in .plot_widget
+        p1 = self.plot_comparison_plot.plot_widget
+        p1.clear()
+        if p1.plotItem.legend:
+             p1.plotItem.legend.scene().removeItem(p1.plotItem.legend)
+        p1.addLegend()
+        p1.plot(x1, y1_acc, pen=pg.mkPen('r', width=2), name="Run 1")
+        p1.plot(x2, y2_acc, pen=pg.mkPen('b', width=2), name="Run 2")
+
+        # Plot Loss
+        p2 = self.plot_loss_plot.plot_widget
+        p2.clear()
+        if p2.plotItem.legend:
+             p2.plotItem.legend.scene().removeItem(p2.plotItem.legend)
+        p2.addLegend()
+        p2.plot(x1_l, y1_loss, pen=pg.mkPen('r', width=2), name="Run 1")
+        p2.plot(x2_l, y2_loss, pen=pg.mkPen('b', width=2), name="Run 2")

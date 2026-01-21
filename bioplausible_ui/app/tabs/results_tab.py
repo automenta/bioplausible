@@ -20,6 +20,10 @@ class ResultsTab(BaseTab):
             config = run.get("config", {})
             metrics = run.get("metrics", {})
 
+            # Handle nested structure (history support)
+            if "final_metrics" in metrics:
+                metrics = metrics["final_metrics"]
+
             # Determine main metric
             metric_val = metrics.get("accuracy", 0.0)
             if "loss" in metrics and metric_val == 0.0:
@@ -47,6 +51,24 @@ class ResultsTab(BaseTab):
                 self._refresh_results()
         else:
             QMessageBox.warning(self, "Warning", "Please select a run to delete.")
+
+    def _analyze_run(self):
+        run_id = self.results_table.get_selected_run_id()
+        if not run_id:
+            QMessageBox.warning(self, "Warning", "Please select a run to analyze.")
+            return
+
+        import os
+        from bioplausible_ui.lab.window import LabMainWindow
+
+        # We need the path to model.pt
+        model_path = os.path.join(self.results_manager.BASE_DIR, run_id, "model.pt")
+        if not os.path.exists(model_path):
+            QMessageBox.warning(self, "Warning", "Model weights not found for this run.")
+            return
+
+        self.lab_window = LabMainWindow(model_path)
+        self.lab_window.show()
 
     def _export_run(self):
         run_id = self.results_table.get_selected_run_id()

@@ -18,6 +18,7 @@ TRAIN_TAB_SCHEMA = TabSchema(
         ActionDef("start", "▶", "_start_training", style="success", shortcut="Ctrl+R"),
         ActionDef("stop", "⏹", "_stop_training", style="danger", shortcut="Ctrl+Q"),
         ActionDef("test", "👁️", "_test_model", style="primary"),
+        ActionDef("analyze", "🔬", "_analyze_model", style="secondary"),
     ],
     plots=[
         PlotDef("loss", xlabel="Epoch", ylabel="Loss"),
