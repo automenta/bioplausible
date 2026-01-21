@@ -3,6 +3,9 @@ from typing import Generator, Optional, Dict, Any
 import torch
 import torch.nn as nn
 from dataclasses import dataclass, field
+import uuid
+from datetime import datetime
+import dataclasses
 
 from bioplausible.pipeline.config import TrainingConfig
 from bioplausible.pipeline.events import Event, ProgressEvent, CompletedEvent, PausedEvent, Event
@@ -10,6 +13,7 @@ from bioplausible.hyperopt.tasks import create_task, BaseTask
 from bioplausible.models.factory import create_model
 from bioplausible.models.registry import get_model_spec
 from bioplausible.training.base import BaseTrainer
+from bioplausible.pipeline.results import ResultsManager
 
 class SessionState(Enum):
     IDLE = "idle"
@@ -29,6 +33,10 @@ class TrainingSession:
         self.model: Optional[nn.Module] = None
         self.trainer: Optional[BaseTrainer] = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # Unique Run ID
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.run_id = f"run_{timestamp}_{str(uuid.uuid4())[:8]}"
 
     def start(self) -> Generator[Event, None, None]:
         """Start training, yield events."""
@@ -70,6 +78,8 @@ class TrainingSession:
                 **self.config.hyperparams
             )
 
+            metrics = {}
+
             # 4. Training Loop
             for epoch in range(self.config.epochs):
                 if self.state == SessionState.STOPPED:
@@ -77,14 +87,6 @@ class TrainingSession:
 
                 while self.state == SessionState.PAUSED:
                     yield PausedEvent()
-                    # We need a way to sleep or wait, yielding allows consumer to handle wait
-                    # But if we yield, we expect consumer to resume us.
-                    # Since this is a generator, we can't easily wait inside without blocking.
-                    # Usually generators are pulled.
-                    # If paused, we can yield and expect next() to be called later?
-                    # Or we check pause flag at start of epoch.
-                    # Real pause inside epoch might be tricky with this generator structure.
-                    # For now, pause check at epoch start.
                     import time
                     time.sleep(0.1)
 
@@ -96,6 +98,10 @@ class TrainingSession:
 
             if self.state != SessionState.STOPPED:
                 self.state = SessionState.COMPLETED
+
+                # Save results
+                self._save_results(metrics)
+
                 yield CompletedEvent(final_metrics=metrics)
 
         except Exception as e:
@@ -103,6 +109,16 @@ class TrainingSession:
             import traceback
             traceback.print_exc()
             raise e
+
+    def _save_results(self, metrics):
+        """Save results using ResultsManager."""
+        try:
+            mgr = ResultsManager()
+            # Convert config dataclass to dict
+            config_dict = dataclasses.asdict(self.config)
+            mgr.save_run(self.run_id, config_dict, metrics)
+        except Exception as e:
+            print(f"Failed to save results: {e}")
 
     def pause(self):
         if self.state == SessionState.RUNNING:

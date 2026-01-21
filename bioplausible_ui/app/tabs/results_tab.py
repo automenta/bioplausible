@@ -1,5 +1,6 @@
 from bioplausible_ui.core.base import BaseTab
 from bioplausible_ui.app.schemas.results import RESULTS_TAB_SCHEMA
+from bioplausible.pipeline.results import ResultsManager
 from PyQt6.QtWidgets import QMessageBox
 
 class ResultsTab(BaseTab):
@@ -7,15 +8,42 @@ class ResultsTab(BaseTab):
 
     SCHEMA = RESULTS_TAB_SCHEMA
 
+    def _post_init(self):
+        self.results_manager = ResultsManager()
+        self._refresh_results()
+
     def _refresh_results(self):
-        # Mock data for now
-        self.results_table.table.setRowCount(0)
-        self.results_table.add_run("run_001", "vision", "LeNet", 0.98)
-        self.results_table.add_run("run_002", "lm", "Transformer", 0.85)
+        self.results_table.clear_table()
+        runs = self.results_manager.list_runs()
+
+        for run in runs:
+            config = run.get("config", {})
+            metrics = run.get("metrics", {})
+
+            # Determine main metric
+            metric_val = metrics.get("accuracy", 0.0)
+            if "loss" in metrics and metric_val == 0.0:
+                metric_val = metrics.get("loss", 0.0) # Fallback
+
+            self.results_table.add_run(
+                run_id=run.get("run_id", "???"),
+                timestamp=run.get("timestamp", "")[:19].replace("T", " "),
+                task=config.get("task", "unknown"),
+                model=config.get("model", "unknown"),
+                metric_val=metric_val
+            )
 
     def _delete_run(self):
-        current_row = self.results_table.table.currentRow()
-        if current_row >= 0:
-            self.results_table.table.removeRow(current_row)
+        run_id = self.results_table.get_selected_run_id()
+        if run_id:
+            confirm = QMessageBox.question(
+                self, "Confirm Delete",
+                f"Are you sure you want to delete run {run_id}?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+
+            if confirm == QMessageBox.StandardButton.Yes:
+                self.results_manager.delete_run(run_id)
+                self._refresh_results()
         else:
             QMessageBox.warning(self, "Warning", "Please select a run to delete.")
