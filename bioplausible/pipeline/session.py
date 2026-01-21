@@ -72,6 +72,7 @@ class TrainingSession:
             )
 
             metrics = {}
+            history = []
 
             # 4. Training Loop
             for epoch in range(self.config.epochs):
@@ -87,13 +88,21 @@ class TrainingSession:
                     break
 
                 metrics = self.trainer.train_epoch()
+                metrics['epoch'] = epoch
+                history.append(metrics)
+
                 yield ProgressEvent(epoch=epoch, metrics=metrics)
 
             if self.state != SessionState.STOPPED:
                 self.state = SessionState.COMPLETED
 
                 # Save results
-                self._save_results(metrics)
+                # Save full history + final metrics
+                final_results = {
+                    "final_metrics": metrics,
+                    "history": history
+                }
+                self._save_results(final_results)
 
                 yield CompletedEvent(final_metrics=metrics)
 

@@ -8,10 +8,13 @@ def test_app_window(qtbot):
     qtbot.addWidget(window)
 
     assert window.windowTitle() == "Bioplausible Trainer (biopl)"
-    # We added 6 more tabs: Compare, Search, Results, Benchmarks (was there), Deploy, Console, Settings
-    # Total: Train, Compare, Search, Results, Benchmarks, Deploy, Console, Settings = 8
-    assert window.tabs.count() == 8
-    assert isinstance(window.tabs.widget(0), TrainTab)
+    # We added Home tab, so 9 tabs total.
+    # Total: Home, Train, Compare, Search, Results, Benchmarks, Deploy, Console, Settings = 9
+    assert window.tabs.count() == 9
+    # Tab 0 is now HomeTab, Tab 1 is TrainTab
+    from bioplausible_ui.app.tabs.home_tab import HomeTab
+    assert isinstance(window.tabs.widget(0), HomeTab)
+    assert isinstance(window.tabs.widget(1), TrainTab)
     # Check other tabs if necessary, but count is a good indicator
 
 def test_train_tab(qtbot):

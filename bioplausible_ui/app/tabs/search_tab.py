@@ -58,6 +58,7 @@ class SearchTab(BaseTab):
     """Search tab - UI auto-generated from schema."""
 
     SCHEMA = SEARCH_TAB_SCHEMA
+    transfer_config = pyqtSignal(dict)
 
     def _post_init(self):
         self.worker = None
@@ -123,9 +124,20 @@ class SearchTab(BaseTab):
     def _on_radar_click(self, result):
         params = result.get('params', {})
         acc = result.get('accuracy', 0.0)
-        QMessageBox.information(self, "Trial Details",
-            f"Configuration:\n{params}\n\nAccuracy: {acc:.4f}\n\n(Click 'Train' to use this config)")
 
-        # Optional: Auto-fill training tab?
-        # That would require cross-tab communication.
-        # For now, just showing details is enough for "UX loop".
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Trial Details")
+        msg.setText(f"Configuration:\n{params}\n\nAccuracy: {acc:.4f}")
+        train_btn = msg.addButton("Train This Config", QMessageBox.ButtonRole.AcceptRole)
+        msg.addButton(QMessageBox.StandardButton.Close)
+
+        msg.exec()
+
+        if msg.clickedButton() == train_btn:
+            config = {
+                "task": self.task_selector.get_task(),
+                "dataset": self.dataset_picker.get_dataset(),
+                "model": self.model_selector.get_selected_model(),
+                "hyperparams": params
+            }
+            self.transfer_config.emit(config)

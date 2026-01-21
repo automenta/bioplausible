@@ -11,6 +11,7 @@ BENCHMARKS_TAB_SCHEMA = TabSchema(
     ],
     actions=[
         ActionDef("run", "▶", "_run_benchmarks", style="primary"),
+        ActionDef("clear", "🧹", "_clear_logs"),
     ],
     plots=[]
 )
