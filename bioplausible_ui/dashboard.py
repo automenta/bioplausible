@@ -464,40 +464,31 @@ class EqPropDashboard(QMainWindow):
         # Training shortcuts
         self.train_shortcut = QShortcut(QKeySequence("Ctrl+Return"), self)
         self.train_shortcut.activated.connect(self._on_train_shortcut)
-        self.train_shortcut.setToolTip("Start training (Ctrl+Return)")
 
         self.stop_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
         self.stop_shortcut.activated.connect(self._stop_training)
-        self.stop_shortcut.setToolTip("Stop training (Ctrl+Q)")
 
         # Additional global shortcuts
         self.ctrl_t_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)
         self.ctrl_t_shortcut.activated.connect(self._on_train_shortcut)
-        self.ctrl_t_shortcut.setToolTip("Start Training (Ctrl+T)")
 
         self.ctrl_s_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
         self.ctrl_s_shortcut.activated.connect(self._save_model)
-        self.ctrl_s_shortcut.setToolTip("Save Model (Ctrl+S)")
 
         self.ctrl_o_shortcut = QShortcut(QKeySequence("Ctrl+O"), self)
         self.ctrl_o_shortcut.activated.connect(self._load_model)
-        self.ctrl_o_shortcut.setToolTip("Load Model (Ctrl+O)")
 
         self.ctrl_r_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         self.ctrl_r_shortcut.activated.connect(self._clear_plots)
-        self.ctrl_r_shortcut.setToolTip("Reset Plots (Ctrl+R)")
 
         self.ctrl_e_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
         self.ctrl_e_shortcut.activated.connect(self._export_logs)
-        self.ctrl_e_shortcut.setToolTip("Export Results (Ctrl+E)")
 
         self.ctrl_m_shortcut = QShortcut(QKeySequence("Ctrl+M"), self)
         self.ctrl_m_shortcut.activated.connect(self._run_microscope_analysis)
-        self.ctrl_m_shortcut.setToolTip("Microscope Capture (Ctrl+M)")
 
         self.ctrl_question_shortcut = QShortcut(QKeySequence("Ctrl+?"), self)
         self.ctrl_question_shortcut.activated.connect(self._show_shortcuts)
-        self.ctrl_question_shortcut.setToolTip("Show Shortcuts (Ctrl+?)")
 
     def _create_menu_bar(self):
         """Create the application menu bar."""
@@ -709,6 +700,8 @@ class EqPropDashboard(QMainWindow):
                 actual_tab.log_message.connect(self._append_log)
                 actual_tab.load_model_signal.connect(self._apply_config)
                 self.bench_tab = actual_tab
+            elif tab_index == 8:  # Deploy tab
+                self.deploy_tab = actual_tab
             elif tab_index == 10:  # Diffusion tab
                 actual_tab.start_training_signal.connect(lambda mode: self._start_training(mode))
                 actual_tab.stop_training_signal.connect(self._stop_training)
@@ -965,7 +958,8 @@ class EqPropDashboard(QMainWindow):
                 self.lm_tab.update_model_ref(self.model)
                 self.vis_tab.update_model_ref(self.model)
                 self.micro_tab.update_model_ref(self.model)
-                self.deploy_tab.update_model_ref(self.model)
+                if hasattr(self, 'deploy_tab'):
+                    self.deploy_tab.update_model_ref(self.model)
 
             # Add to recent models
             self._add_recent_model(filepath)
@@ -1078,7 +1072,8 @@ class EqPropDashboard(QMainWindow):
                     self.lm_tab.update_model_ref(self.model)
                     self.vis_tab.update_model_ref(self.model)
                     self.micro_tab.update_model_ref(self.model)
-                    self.deploy_tab.update_model_ref(self.model)
+                    if hasattr(self, 'deploy_tab'):
+                        self.deploy_tab.update_model_ref(self.model)
 
                 # Add to recent models
                 self._add_recent_model(fname)
@@ -1233,7 +1228,8 @@ class EqPropDashboard(QMainWindow):
 
         # Keep reference for inference
         self.vis_tab.update_model_ref(self.model)
-        self.deploy_tab.update_model_ref(self.model)
+        if hasattr(self, 'deploy_tab'):
+            self.deploy_tab.update_model_ref(self.model)
 
         # Create and start worker using common method
         self.worker = start_training_common(
@@ -1272,7 +1268,8 @@ class EqPropDashboard(QMainWindow):
 
         # Keep reference for generation
         self.lm_tab.update_model_ref(self.model)
-        self.deploy_tab.update_model_ref(self.model)
+        if hasattr(self, 'deploy_tab'):
+            self.deploy_tab.update_model_ref(self.model)
 
         # Create and start worker using common method
         self.worker = start_training_common(
@@ -1309,7 +1306,8 @@ class EqPropDashboard(QMainWindow):
 
         # Refs
         self.diff_tab.update_model_ref(self.model)
-        self.deploy_tab.update_model_ref(self.model)
+        if hasattr(self, 'deploy_tab'):
+            self.deploy_tab.update_model_ref(self.model)
 
         # Create and start worker using common method
         self.worker = start_training_common(
@@ -1369,7 +1367,8 @@ class EqPropDashboard(QMainWindow):
 
         # Keep reference for playback
         self.rl_tab.update_model_ref(model)
-        self.deploy_tab.update_model_ref(model)
+        if hasattr(self, 'deploy_tab'):
+            self.deploy_tab.update_model_ref(model)
 
         self.worker = RLWorker(model, env_name, episodes=episodes, lr=lr, gamma=gamma, device=device)
         self.worker.progress.connect(self._on_rl_progress)
@@ -1549,7 +1548,8 @@ class EqPropDashboard(QMainWindow):
 
         # Keep reference for playback
         self.rl_tab.update_model_ref(model)
-        self.deploy_tab.update_model_ref(model)
+        if hasattr(self, 'deploy_tab'):
+            self.deploy_tab.update_model_ref(model)
 
         self.worker = RLWorker(model, env_name, episodes=episodes, lr=lr, gamma=gamma, device=device)
         self.worker.progress.connect(self._on_rl_progress)

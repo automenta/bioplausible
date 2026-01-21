@@ -4,9 +4,9 @@ Separated to improve modularity and maintainability.
 """
 
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QSlider, QProgressBar,
-    QGroupBox, QGridLayout, QMessageBox
+    QGroupBox, QGridLayout, QMessageBox, QSpinBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from PyQt6.QtGui import QPixmap, QImage, QFont, QColor
