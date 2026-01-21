@@ -26,7 +26,7 @@ class MockModel(torch.nn.Module):
 class TestNewFeatures(unittest.TestCase):
 
     def test_deploy_tab_new_features(self):
-        from bioplausible_ui.tabs.deploy_tab import DeployTab, ServerWorker
+        from bioplausible_ui_old.tabs.deploy_tab import DeployTab, ServerWorker
         tab = DeployTab()
         self.assertIsNotNone(tab)
 
@@ -41,7 +41,7 @@ class TestNewFeatures(unittest.TestCase):
         # We won't start it as it blocks port 8000 and needs uvicorn
 
     def test_p2p_tab_new_features(self):
-        from bioplausible_ui.tabs.p2p_tab import P2PTab
+        from bioplausible_ui_old.tabs.p2p_tab import P2PTab
         tab = P2PTab()
         self.assertIsNotNone(tab)
 
@@ -68,7 +68,7 @@ class TestNewFeatures(unittest.TestCase):
             tab.update_timer.stop()
 
     def test_dashboard_init(self):
-        from bioplausible_ui.dashboard import EqPropDashboard
+        from bioplausible_ui_old.dashboard import EqPropDashboard
         dash = EqPropDashboard()
         self.assertIsNotNone(dash)
         # Check device label text

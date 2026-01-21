@@ -8,7 +8,7 @@ from PyQt6.QtGui import QFont
 
 import pyqtgraph as pg
 
-from bioplausible_ui.worker import BenchmarkWorker
+from bioplausible_ui_old.worker import BenchmarkWorker
 
 class ComparisonDialog(QDialog):
     """Dialog to compare benchmark results."""

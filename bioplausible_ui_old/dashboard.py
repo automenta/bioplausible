@@ -52,16 +52,16 @@ from .training_utils import (
 )
 from .logging_utils import get_ui_logger, log_exception, safe_execute
 
-from bioplausible_ui.tabs.lm_tab import LMTab
-from bioplausible_ui.tabs.vision_tab import VisionTab
-from bioplausible_ui.tabs.rl_tab import RLTab
-from bioplausible_ui.tabs.microscope_tab import MicroscopeTab
-from bioplausible_ui.tabs.benchmarks_tab import BenchmarksTab
-from bioplausible_ui.tabs.console_tab import ConsoleTab
-from bioplausible_ui.tabs.p2p_tab import P2PTab
-from bioplausible_ui.tabs.discovery_tab import DiscoveryTab
-from bioplausible_ui.tabs.deploy_tab import DeployTab
-from bioplausible_ui.tabs.diffusion_tab import DiffusionTab
+from bioplausible_ui_old.tabs.lm_tab import LMTab
+from bioplausible_ui_old.tabs.vision_tab import VisionTab
+from bioplausible_ui_old.tabs.rl_tab import RLTab
+from bioplausible_ui_old.tabs.microscope_tab import MicroscopeTab
+from bioplausible_ui_old.tabs.benchmarks_tab import BenchmarksTab
+from bioplausible_ui_old.tabs.console_tab import ConsoleTab
+from bioplausible_ui_old.tabs.p2p_tab import P2PTab
+from bioplausible_ui_old.tabs.discovery_tab import DiscoveryTab
+from bioplausible_ui_old.tabs.deploy_tab import DeployTab
+from bioplausible_ui_old.tabs.diffusion_tab import DiffusionTab
 
 
 class QtLogHandler(logging.Handler, QObject):
@@ -1165,7 +1165,7 @@ class EqPropDashboard(QMainWindow):
     def _launch_search_tool(self):
         """Launch the Hyperopt Dashboard in a new window."""
         try:
-            from bioplausible_ui.hyperopt_dashboard import HyperoptSearchDashboard
+            from bioplausible_ui_old.hyperopt_dashboard import HyperoptSearchDashboard
 
             # Determine task from combo box
             task_text = self.search_task_combo.currentText()

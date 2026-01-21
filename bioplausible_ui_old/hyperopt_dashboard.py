@@ -30,8 +30,8 @@ from bioplausible.hyperopt.experiment import TrialRunner
 from bioplausible.hyperopt.storage import HyperoptStorage
 from bioplausible.hyperopt.metrics import get_pareto_frontier, rank_trials
 from bioplausible.models.registry import MODEL_REGISTRY
-from bioplausible_ui.experiment_scheduler import ExperimentScheduler
-from bioplausible_ui.hyperopt_worker import HyperoptSearchWorker
+from bioplausible_ui_old.experiment_scheduler import ExperimentScheduler
+from bioplausible_ui_old.hyperopt_worker import HyperoptSearchWorker
 
 
 class HyperoptSearchDashboard(QMainWindow):

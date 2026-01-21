@@ -62,6 +62,16 @@ class HyperparamEditor(QWidget):
         try:
             spec = get_model_spec(model_name)
 
+            # --- Standard Params ---
+
+            # Hidden Dimension
+            self.hidden_spin = QSpinBox()
+            self.hidden_spin.setRange(16, 4096)
+            self.hidden_spin.setValue(256)
+            self.hidden_spin.setSingleStep(32)
+            self.layout.addRow("Hidden Dim:", self.hidden_spin)
+            self.values['hidden_dim'] = self.hidden_spin
+
             # LR
             self.lr_spin = QDoubleSpinBox()
             self.lr_spin.setRange(0.00001, 1.0)
@@ -85,6 +95,37 @@ class HyperparamEditor(QWidget):
                 self.steps_spin.setValue(spec.default_steps)
                 self.layout.addRow("Steps:", self.steps_spin)
                 self.values['steps'] = self.steps_spin
+
+            # --- Custom Params ---
+            if spec.custom_hyperparams:
+                from PyQt6.QtWidgets import QCheckBox, QLineEdit
+                for key, default_val in spec.custom_hyperparams.items():
+                    label = key.replace("_", " ").title() + ":"
+
+                    if isinstance(default_val, bool):
+                        w = QCheckBox()
+                        w.setChecked(default_val)
+                        self.layout.addRow(label, w)
+                        self.values[key] = w
+                    elif isinstance(default_val, float):
+                        w = QDoubleSpinBox()
+                        w.setRange(-1e6, 1e6)
+                        w.setValue(default_val)
+                        self.layout.addRow(label, w)
+                        self.values[key] = w
+                    elif isinstance(default_val, int):
+                        w = QSpinBox()
+                        w.setRange(-1e6, 1e6)
+                        w.setValue(default_val)
+                        self.layout.addRow(label, w)
+                        self.values[key] = w
+                    elif isinstance(default_val, tuple) and len(default_val) == 2:
+                        # Range tuple (min, max) - assumig float slider or just standard input?
+                        # For now, standard input initialized to min? No, usually (min, max) defines range.
+                        # Let's assume it's (min, max) and default is min? Or maybe it's (default, type)?
+                        # Re-reading ModelSpec... registry example: "custom_hyperparams={"my_param": (0.0, 1.0)}"
+                        # This likely implies a range. Let's pick 0.0 as default for now or mean.
+                        pass # TODO: Implement complex types
 
         except ValueError:
             pass

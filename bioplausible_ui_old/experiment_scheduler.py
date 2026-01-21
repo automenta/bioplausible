@@ -5,7 +5,7 @@ This module manages experiment scheduling with intelligent epoch allocation.
 """
 
 import time
-from bioplausible_ui.config import GLOBAL_CONFIG
+from bioplausible_ui_old.config import GLOBAL_CONFIG
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 import numpy as np

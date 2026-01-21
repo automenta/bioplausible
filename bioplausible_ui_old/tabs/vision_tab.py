@@ -12,8 +12,8 @@ import torch.nn.functional as F
 import numpy as np
 
 from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
-from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
-from bioplausible_ui.themes import PLOT_COLORS
+from bioplausible_ui_old.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
+from bioplausible_ui_old.themes import PLOT_COLORS
 from .vision_specialized_components import (
     AlignmentWorker, AlignmentDialog, CubeVisualizerDialog, DreamWorker,
     OracleWorker, OracleDialog, DreamDialog, VisionInferenceDialog, RobustnessDialog

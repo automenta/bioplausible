@@ -122,7 +122,7 @@ class TestDashboardImports(unittest.TestCase):
     def test_worker_imports(self):
         """Test importing worker module."""
         try:
-            from bioplausible_ui.worker import TrainingWorker
+            from bioplausible_ui_old.worker import TrainingWorker
             self.assertTrue(hasattr(TrainingWorker, '__init__'))
         except ImportError as e:
             self.fail(f"Worker import failed: {e}")
@@ -130,7 +130,7 @@ class TestDashboardImports(unittest.TestCase):
     def test_generation_imports(self):
         """Test importing generation module."""
         try:
-            from bioplausible_ui.generation import UniversalGenerator, SimpleCharTokenizer
+            from bioplausible_ui_old.generation import UniversalGenerator, SimpleCharTokenizer
             self.assertTrue(hasattr(UniversalGenerator, '__init__'))
             self.assertTrue(hasattr(SimpleCharTokenizer, '__init__'))
         except ImportError as e:
@@ -139,7 +139,7 @@ class TestDashboardImports(unittest.TestCase):
     def test_hyperparams_imports(self):
         """Test importing hyperparams module."""
         try:
-            from bioplausible_ui.hyperparams import get_hyperparams_for_model, HyperparamSpec
+            from bioplausible_ui_old.hyperparams import get_hyperparams_for_model, HyperparamSpec
             self.assertTrue(callable(get_hyperparams_for_model))
             self.assertTrue(hasattr(HyperparamSpec, '__init__'))
         except ImportError as e:
@@ -148,7 +148,7 @@ class TestDashboardImports(unittest.TestCase):
     def test_viz_utils_imports(self):
         """Test importing viz_utils module."""
         try:
-            from bioplausible_ui.viz_utils import extract_weights, format_weight_for_display
+            from bioplausible_ui_old.viz_utils import extract_weights, format_weight_for_display
             self.assertTrue(callable(extract_weights))
             self.assertTrue(callable(format_weight_for_display))
         except ImportError as e:
@@ -157,7 +157,7 @@ class TestDashboardImports(unittest.TestCase):
     def test_dashboard_helpers_imports(self):
         """Test importing dashboard_helpers module."""
         try:
-            from bioplausible_ui.dashboard_helpers import update_hyperparams_generic
+            from bioplausible_ui_old.dashboard_helpers import update_hyperparams_generic
             self.assertTrue(callable(update_hyperparams_generic))
         except ImportError as e:
             self.fail(f"Dashboard helpers import failed: {e}")

@@ -20,7 +20,7 @@ from bioplausible.hyperopt.experiment import TrialRunner
 from bioplausible.hyperopt.storage import HyperoptStorage
 from bioplausible.hyperopt.metrics import get_pareto_frontier, rank_trials
 from bioplausible.models.registry import MODEL_REGISTRY
-from bioplausible_ui.config import GLOBAL_CONFIG
+from bioplausible_ui_old.config import GLOBAL_CONFIG
 
 
 class HyperoptSearchWorker(QThread):
