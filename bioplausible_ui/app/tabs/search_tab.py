@@ -61,6 +61,9 @@ class SearchTab(BaseTab):
 
     def _post_init(self):
         self.worker = None
+        # Connect RadarView signal
+        if hasattr(self, 'radar_view'):
+            self.radar_view.pointClicked.connect(self._on_radar_click)
 
     def _start_search(self):
         task = self.task_selector.get_task()
@@ -68,16 +71,9 @@ class SearchTab(BaseTab):
         model = self.model_selector.get_selected_model()
         space_config = self.search_space.get_values()
 
-        # Parse search space from UI
-        # search_space widget returns dict: {param: {type, min, max, etc}}
-        # But BaseTab bindings might just give values.
-        # Actually search_space widget is "ParameterSpaceBuilder"
-        # It likely returns a dict {param_name: [list of values]} or {param_name: (min, max)}
-        # Let's assume for now it returns a dict of lists/ranges that GridSearch/RandomSearch can consume.
-        # Re-checking search_space widget...
-
         self.log_output.append(f"Starting {space_config.get('strategy', 'grid')} search for {model}...")
         self.results_table.table.setRowCount(0)
+        self.radar_view.clear()
 
         # Extract strategy
         strategy = space_config.pop('strategy', 'grid')
@@ -106,18 +102,15 @@ class SearchTab(BaseTab):
         params_str = ", ".join([f"{k}={v}" for k,v in result['params'].items() if k != 'epochs'])
         self.log_output.append(f"Trial: {params_str} -> Acc: {result['accuracy']:.4f}")
 
+        # Add to Radar
+        self.radar_view.add_result(result)
+
         # Add to table
         row = self.results_table.table.rowCount()
         self.results_table.table.insertRow(row)
-        # Assuming table columns: Params, Accuracy, Loss...
-        # Need to check SearchTab schema for table definition
-        # It uses ResultsTable widget which has fixed cols [Timestamp, ID, Task, Model, Metric]
-        # This is a mismatch. SearchTab likely needs a different table or ResultsTable needs to be more flexible.
-        # But schema uses `WidgetDef("results_table", ResultsTable)`
-        # So we adapt:
         from PyQt6.QtWidgets import QTableWidgetItem
         self.results_table.table.setItem(row, 0, QTableWidgetItem("")) # Timestamp
-        self.results_table.table.setItem(row, 1, QTableWidgetItem(params_str)) # ID -> Params
+        self.results_table.table.setItem(row, 1, QTableWidgetItem(params_str))
         self.results_table.table.setItem(row, 2, QTableWidgetItem(self.task_selector.get_task()))
         self.results_table.table.setItem(row, 3, QTableWidgetItem(self.model_selector.get_selected_model()))
         self.results_table.table.setItem(row, 4, QTableWidgetItem(f"{result['accuracy']:.4f}"))
@@ -126,3 +119,13 @@ class SearchTab(BaseTab):
         self.log_output.append("Search finished.")
         self._actions['start'].setEnabled(True)
         self._actions['stop'].setEnabled(False)
+
+    def _on_radar_click(self, result):
+        params = result.get('params', {})
+        acc = result.get('accuracy', 0.0)
+        QMessageBox.information(self, "Trial Details",
+            f"Configuration:\n{params}\n\nAccuracy: {acc:.4f}\n\n(Click 'Train' to use this config)")
+
+        # Optional: Auto-fill training tab?
+        # That would require cross-tab communication.
+        # For now, just showing details is enough for "UX loop".
