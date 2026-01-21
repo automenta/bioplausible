@@ -11,7 +11,7 @@ TRAIN_TAB_SCHEMA = TabSchema(
         WidgetDef("task_selector", TaskSelector),
         WidgetDef("dataset_picker", DatasetPicker, bindings={"task": "@task_selector.value"}),
         WidgetDef("model_selector", ModelSelector, bindings={"task": "@task_selector.value"}),
-        WidgetDef("training_config", TrainingConfigWidget),
+        WidgetDef("training_config", TrainingConfigWidget, bindings={"task": "@task_selector.value"}),
         WidgetDef("hyperparam_editor", HyperparamEditor, bindings={"model": "@model_selector.value"}),
     ],
     actions=[

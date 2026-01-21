@@ -1,3 +1,4 @@
 #!/bin/bash
-
-python -m bioplausible_ui
+# Launch the main Training Dashboard
+export PYTHONPATH=$PYTHONPATH:.
+python3 -m bioplausible_ui.app.main "$@"
