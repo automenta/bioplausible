@@ -48,7 +48,7 @@ if HAS_TRITON:
         h = tl.load(h_ptr + offsets, mask=mask)
         pre = tl.load(pre_act_ptr + offsets, mask=mask)
 
-        val = tl.math.tanh(pre)
+        val = tl.tanh(pre)
         out = (1.0 - alpha) * h + alpha * val
 
         tl.store(out_ptr + offsets, out, mask=mask)
@@ -85,7 +85,7 @@ if HAS_TRITON:
         pre = tl.load(pre_act_ptr + offsets, mask=mask)
         b = tl.load(bias_ptr + col, mask=mask) # Broadcast bias
 
-        val = tl.math.tanh(pre + b)
+        val = tl.tanh(pre + b)
         out = (1.0 - alpha) * h + alpha * val
 
         tl.store(out_ptr + offsets, out, mask=mask)
