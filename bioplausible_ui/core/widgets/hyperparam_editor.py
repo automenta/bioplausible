@@ -22,8 +22,6 @@ class HyperparamEditor(QWidget):
 
         for key, value in defaults.items():
             if isinstance(value, bool):
-                # Checkbox (not implemented yet, but for now generic spinner or something?)
-                # Actually QCheckBox
                 from PyQt6.QtWidgets import QCheckBox
                 widget = QCheckBox()
                 widget.setChecked(value)
@@ -46,6 +44,22 @@ class HyperparamEditor(QWidget):
                 widget = QLineEdit(value)
                 self.layout.addRow(key.title() + ":", widget)
                 self.values[key] = widget
+            elif isinstance(value, tuple) and len(value) == 2:
+                # Handle tuple as (default, range) or (min, max)
+                # Heuristic: if types match, assume range with default = min
+                min_val, max_val = value
+                if isinstance(min_val, float):
+                    widget = QDoubleSpinBox()
+                    widget.setRange(min_val, max_val)
+                    widget.setValue(min_val) # Default to min
+                    self.layout.addRow(key.title() + ":", widget)
+                    self.values[key] = widget
+                elif isinstance(min_val, int):
+                    widget = QSpinBox()
+                    widget.setRange(min_val, max_val)
+                    widget.setValue(min_val)
+                    self.layout.addRow(key.title() + ":", widget)
+                    self.values[key] = widget
 
     def _clear_layout(self):
         while self.layout.count():
@@ -120,12 +134,20 @@ class HyperparamEditor(QWidget):
                         self.layout.addRow(label, w)
                         self.values[key] = w
                     elif isinstance(default_val, tuple) and len(default_val) == 2:
-                        # Range tuple (min, max) - assumig float slider or just standard input?
-                        # For now, standard input initialized to min? No, usually (min, max) defines range.
-                        # Let's assume it's (min, max) and default is min? Or maybe it's (default, type)?
-                        # Re-reading ModelSpec... registry example: "custom_hyperparams={"my_param": (0.0, 1.0)}"
-                        # This likely implies a range. Let's pick 0.0 as default for now or mean.
-                        pass # TODO: Implement complex types
+                        # Assumed (min, max) range, use min as default
+                        min_v, max_v = default_val
+                        if isinstance(min_v, float):
+                            w = QDoubleSpinBox()
+                            w.setRange(min_v, max_v)
+                            w.setValue(min_v)
+                            self.layout.addRow(label, w)
+                            self.values[key] = w
+                        elif isinstance(min_v, int):
+                            w = QSpinBox()
+                            w.setRange(min_v, max_v)
+                            w.setValue(min_v)
+                            self.layout.addRow(label, w)
+                            self.values[key] = w
 
         except ValueError:
             pass
