@@ -82,6 +82,24 @@ docker run bioplausible
 
 ---
 
+## Main Dashboard (Bioplausible UI)
+
+The `bioplausible` command launches a comprehensive PyQt6-based dashboard for managing the entire research workflow.
+
+### Core Functionalities
+*   **Home**: Quick access to common tasks and new features.
+*   **Train**: Configure and execute training runs for Vision, Language, and RL tasks. Supports dynamic hyperparameter tuning.
+*   **Compare**: Visualize and compare metrics from multiple historical runs.
+*   **Search**: Run hyperparameter optimization (Grid/Random Search) and transfer the best config to the Train tab.
+*   **Results**: Manage saved runs, export to ZIP, or analyze in the Lab.
+*   **Benchmarks**: Execute verification tracks to ensure framework integrity.
+*   **Deploy**: Export models to ONNX/TorchScript or serve them via a REST API.
+*   **Community**: Join the **Decentralized Research Grid (P2P)**. Contribute compute to finding optimal architectures or run a local coordinator.
+*   **Console**: View real-time application logs and save them to a file for debugging.
+*   **Settings**: Configure global preferences like Theme, Backend (PyTorch/NumPy), and Compute Device (CPU/CUDA). Settings are persisted to `bioplausible_settings.json`.
+
+---
+
 ## Decentralized Architecture Search (P2P)
 
 Bio-Plausible includes a fully decentralized Neural Architecture Search (NAS) system.
