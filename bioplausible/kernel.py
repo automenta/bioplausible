@@ -132,8 +132,20 @@ if _detected_cuda_path:
 # Try to import CuPy for GPU
 try:
     import cupy as cp
+    # Verify it actually works (catches CUDA_PATH errors)
+    try:
+        if hasattr(cp, 'cuda') and cp.cuda.is_available():
+            with cp.cuda.Device(0):
+               _ = cp.array([1.0])
+               _ = cp.random.rand(1) # Trigger random generator init
+            HAS_CUPY = True
+        else:
+             HAS_CUPY = False
+             cp = None
+    except Exception:
+        HAS_CUPY = False
+        cp = None
 
-    HAS_CUPY = True
 except ImportError:
     cp = None
     HAS_CUPY = False

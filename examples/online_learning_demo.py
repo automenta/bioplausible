@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
-from bioplausible.sklearn import EqPropClassifier
+from bioplausible.sklearn_interface import EqPropClassifier
 from bioplausible.datasets import get_vision_dataset
 
 def main():

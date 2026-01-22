@@ -111,12 +111,13 @@ class TestValidationAll(unittest.TestCase):
                     # Custom training step models (AdaptiveFA)
                     # Note: LoopedMLP technically might have it via mixins but we want standard path usually
                     metrics = model.train_step(bx, by)
-                    loss_val = metrics.get("loss")
-                    total_loss += (
-                        loss_val.item() if hasattr(loss_val, "item") else loss_val
-                    )
-                    count += 1
-                    continue
+                    if metrics is not None:
+                        loss_val = metrics.get("loss")
+                        total_loss += (
+                            loss_val.item() if hasattr(loss_val, "item") else loss_val
+                        )
+                        count += 1
+                        continue
 
                 output = self._forward_safe(model, bx)
                 loss = self._compute_loss(criterion, output, by, is_sequence)

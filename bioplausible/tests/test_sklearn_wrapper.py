@@ -5,7 +5,7 @@ Tests for Scikit-Learn Wrapper
 import pytest
 import numpy as np
 import torch
-from bioplausible.sklearn import EqPropClassifier
+from bioplausible.sklearn_interface import EqPropClassifier
 
 def test_eqprop_classifier_init():
     clf = EqPropClassifier(model_name="EqProp MLP", hidden_dim=64, steps=10)
