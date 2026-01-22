@@ -4,7 +4,7 @@ EqProp-Torch Utilities
 Helper functions for ONNX export, model verification, and training utilities.
 """
 
-from typing import Callable, Dict, List, Optional, Tuple, Any
+from typing import Callable, Dict, List, Optional, Tuple
 from contextlib import contextmanager
 import time
 import torch
