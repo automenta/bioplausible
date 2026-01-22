@@ -11,7 +11,7 @@ def test_app_screenshots_all_tabs(qtbot):
     window = AppMainWindow()
     qtbot.addWidget(window)
     window.show()
-    qtbot.waitExposed(window)
+    # qtbot.waitExposed(window)  # May hang in headless/CI
 
     os.makedirs("screenshots", exist_ok=True)
 
@@ -50,7 +50,7 @@ def test_lab_screenshot_populated(qtbot):
         window = LabMainWindow(model_path="dummy.pt")
         qtbot.addWidget(window)
         window.show()
-        qtbot.waitExposed(window)
+        # qtbot.waitExposed(window)  # May hang in headless/CI
 
         os.makedirs("screenshots", exist_ok=True)
 

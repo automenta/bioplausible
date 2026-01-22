@@ -44,3 +44,7 @@ biopl-lab = "bioplausible_ui.lab.main:main"
 eqprop-coordinator = "bioplausible.p2p.coordinator:main"
 eqprop-worker = "bioplausible.p2p.worker:main"
 eqprop-p2p-worker = "bioplausible.p2p.p2p_worker:main"
+
+[tool.pytest.ini_options]
+addopts = "--ignore=bioplausible/archive --ignore=bioplausible_ui_old"
+testpaths = ["tests", "bioplausible_ui/tests"]
