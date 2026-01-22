@@ -191,8 +191,25 @@ class DreamingTool(BaseTool):
         img = (img * 255).astype(np.uint8)
 
         # Handle shapes
+        if img.ndim == 1:
+            # Flattened, try to infer square
+            d = int(np.sqrt(img.shape[0]))
+            if d*d == img.shape[0]:
+                 img = img.reshape(d, d)
+            elif img.shape[0] == 3072: # CIFAR flattened
+                 img = img.reshape(3, 32, 32)
+            else:
+                 # Fallback, just make it a line? Or square approximation
+                 w = int(np.ceil(np.sqrt(img.shape[0])))
+                 h = int(np.ceil(img.shape[0] / w))
+                 # Pad
+                 padded = np.zeros(h*w, dtype=img.dtype)
+                 padded[:img.shape[0]] = img
+                 img = padded.reshape(h, w)
+
         if img.ndim == 3 and img.shape[0] in [1, 3]:  # CHW -> HWC
             img = np.transpose(img, (1, 2, 0))
+            img = np.ascontiguousarray(img)
         if img.ndim == 3 and img.shape[2] == 1:
             img = img.squeeze(2)
 
