@@ -100,6 +100,15 @@ class TestTritonKernel(unittest.TestCase):
             print("Skipping CuPy Triton test (Triton/GPU not available)")
             return
 
+        # Explicitly check if CuPy works
+        try:
+             with cp.cuda.Device(0):
+                 _ = cp.array([1.0])
+                 _ = cp.random.rand(1)
+        except Exception:
+             print("Skipping CuPy test (CuPy runtime failure)")
+             return
+
         # Create CuPy arrays
         h_cp = cp.random.randn(self.batch_size, self.hidden_dim, dtype=cp.float32)
         target_cp = cp.random.randn(self.batch_size, self.hidden_dim, dtype=cp.float32)

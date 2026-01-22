@@ -30,6 +30,7 @@ dependencies = [
     "kademlia",
     "pytest",
     "pytest-xdist",
+    "pytest-qt",
     "flake8",
     "black",
     "isort",

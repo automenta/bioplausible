@@ -289,12 +289,15 @@ class Worker:
             "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu"
         }
 
-        # Register
-        try:
-            self._post('/register', {"client_id": self.client_id, "capabilities": caps})
-        except Exception as e:
-            self.log(f"Failed to register: {e}")
-            # Continue anyway, maybe transient
+        # Register with retry
+        registered = False
+        while not registered and self.running:
+            try:
+                self._post('/register', {"client_id": self.client_id, "capabilities": caps})
+                registered = True
+            except Exception as e:
+                self.log(f"Failed to register: {e}. Retrying in 2s...")
+                time.sleep(2)
 
         while self.running:
             try:

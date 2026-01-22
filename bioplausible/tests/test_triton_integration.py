@@ -22,8 +22,11 @@ class TestTritonIntegration(unittest.TestCase):
             self.input_dim,
             self.hidden_dim,
             self.output_dim,
-            max_steps=5
         ).to(self.device)
+        
+        # Reset functioning flag to ensure test isolation
+        if HAS_TRITON:
+            TritonEqPropOps._triton_functioning = True
 
     def test_triton_ops_availability(self):
         """Check if Triton ops are correctly detected."""

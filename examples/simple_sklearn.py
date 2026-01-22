@@ -8,7 +8,7 @@ Scikit-Learn API (fit/predict) on a simple dataset.
 from sklearn.datasets import load_digits
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
-from bioplausible.sklearn import EqPropClassifier
+from bioplausible.sklearn_interface import EqPropClassifier
 
 def main():
     print("Loading Digits dataset...")

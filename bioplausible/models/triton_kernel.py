@@ -21,8 +21,16 @@ except ImportError:
 # Try to import CuPy for type checking/pointer access if available
 try:
     import cupy as cp
-    HAS_CUPY = True
-except ImportError:
+    # Robust check
+    if hasattr(cp, 'cuda') and cp.cuda.is_available():
+        with cp.cuda.Device(0):
+            _ = cp.array([1.0])
+            _ = cp.random.rand(1)
+        HAS_CUPY = True
+    else:
+        HAS_CUPY = False
+        cp = None
+except (ImportError, Exception):
     cp = None
     HAS_CUPY = False
 
@@ -191,8 +199,12 @@ if HAS_TRITON:
 class TritonEqPropOps:
     """Interface for Triton kernels."""
 
+    _triton_functioning = True
+
     @staticmethod
     def is_available():
+        if not TritonEqPropOps._triton_functioning:
+            return False
         return HAS_TRITON and torch.cuda.is_available()
 
     @staticmethod
@@ -214,35 +226,42 @@ class TritonEqPropOps:
         if bias is not None and not bias.is_contiguous():
             bias = bias.contiguous()
 
-        # Prepare output
-        out = torch.empty_like(h)
+        try:
+            # Prepare output
+            out = torch.empty_like(h)
 
-        n_elements = h.numel()
+            n_elements = h.numel()
 
-        # Heuristic for block size
-        BLOCK_SIZE = 1024
-        grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+            # Heuristic for block size
+            BLOCK_SIZE = 1024
+            grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
 
-        if bias is not None:
-            # Check shapes
-            assert bias.dim() == 1
-            assert h.dim() == 2
-            n_rows, n_cols = h.shape
-            assert bias.shape[0] == n_cols
+            if bias is not None:
+                # Check shapes
+                assert bias.dim() == 1
+                assert h.dim() == 2
+                n_rows, n_cols = h.shape
+                assert bias.shape[0] == n_cols
 
-            _eqprop_step_kernel_with_bias[grid](
-                h, pre_act, bias, out,
-                alpha, n_rows, n_cols,
-                BLOCK_SIZE=BLOCK_SIZE
-            )
-        else:
-            _eqprop_step_kernel[grid](
-                h, pre_act, out,
-                alpha, n_elements,
-                BLOCK_SIZE=BLOCK_SIZE
-            )
-
-        return out
+                _eqprop_step_kernel_with_bias[grid](
+                    h, pre_act, bias, out,
+                    alpha, n_rows, n_cols,
+                    BLOCK_SIZE=BLOCK_SIZE
+                )
+            else:
+                _eqprop_step_kernel[grid](
+                    h, pre_act, out,
+                    alpha, n_elements,
+                    BLOCK_SIZE=BLOCK_SIZE
+                )
+            return out
+        except Exception as e:
+            # Disable Triton for future calls
+            TritonEqPropOps._triton_functioning = False
+            # Fallback
+            if bias is not None:
+                return (1 - alpha) * h + alpha * torch.tanh(pre_act + bias)
+            return (1 - alpha) * h + alpha * torch.tanh(pre_act)
 
     @staticmethod
     def step_cupy(h, pre_act, alpha: float):
@@ -257,27 +276,31 @@ class TritonEqPropOps:
         if not isinstance(h, cp.ndarray) or not isinstance(pre_act, cp.ndarray):
              return (1 - alpha) * h + alpha * cp.tanh(pre_act)
 
-        # Ensure contiguity
-        if not h.flags.c_contiguous:
-            h = cp.ascontiguousarray(h)
-        if not pre_act.flags.c_contiguous:
-            pre_act = cp.ascontiguousarray(pre_act)
+        try:
+            # Ensure contiguity
+            if not h.flags.c_contiguous:
+                h = cp.ascontiguousarray(h)
+            if not pre_act.flags.c_contiguous:
+                pre_act = cp.ascontiguousarray(pre_act)
 
-        out = cp.empty_like(h)
-        n_elements = h.size
-        BLOCK_SIZE = 1024
-        grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+            out = cp.empty_like(h)
+            n_elements = h.size
+            BLOCK_SIZE = 1024
+            grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
 
-        _eqprop_step_kernel[grid](
-            h.data.ptr,         # h_ptr
-            pre_act.data.ptr,   # pre_act_ptr
-            out.data.ptr,       # out_ptr
-            alpha,              # alpha
-            n_elements,         # n_elements
-            BLOCK_SIZE=BLOCK_SIZE
-        )
+            _eqprop_step_kernel[grid](
+                h.data.ptr,         # h_ptr
+                pre_act.data.ptr,   # pre_act_ptr
+                out.data.ptr,       # out_ptr
+                alpha,              # alpha
+                n_elements,         # n_elements
+                BLOCK_SIZE=BLOCK_SIZE
+            )
 
-        return out
+            return out
+        except Exception:
+            TritonEqPropOps._triton_functioning = False
+            return (1 - alpha) * h + alpha * cp.tanh(pre_act)
 
     @staticmethod
     def neural_cube_update(h: torch.Tensor, w_local: torch.Tensor, cube_size: int) -> torch.Tensor:
@@ -301,21 +324,25 @@ class TritonEqPropOps:
         if not w_local.is_contiguous():
             w_local = w_local.contiguous()
 
-        batch_size, n_neurons = h.shape
-        n_elements = batch_size * n_neurons
+        try:
+            batch_size, n_neurons = h.shape
+            n_elements = batch_size * n_neurons
 
-        out = torch.empty_like(h)
+            out = torch.empty_like(h)
 
-        BLOCK_SIZE = 512 # Smaller block size due to heavy computation per thread
-        grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+            BLOCK_SIZE = 512 # Smaller block size due to heavy computation per thread
+            grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
 
-        _neural_cube_update_kernel[grid](
-            h, w_local, out,
-            cube_size, n_neurons, n_elements,
-            BLOCK_SIZE=BLOCK_SIZE
-        )
+            _neural_cube_update_kernel[grid](
+                h, w_local, out,
+                cube_size, n_neurons, n_elements,
+                BLOCK_SIZE=BLOCK_SIZE
+            )
 
-        return out
+            return out
+        except Exception:
+            TritonEqPropOps._triton_functioning = False
+            raise RuntimeError("Triton failed and no fallback available for neural_cube_update (yet)")
 
     @staticmethod
     def step_linear(h: torch.Tensor, target: torch.Tensor, alpha: float) -> torch.Tensor:
@@ -332,18 +359,22 @@ class TritonEqPropOps:
         if not target.is_contiguous():
             target = target.contiguous()
 
-        out = torch.empty_like(h)
-        n_elements = h.numel()
-        BLOCK_SIZE = 1024
-        grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+        try:
+            out = torch.empty_like(h)
+            n_elements = h.numel()
+            BLOCK_SIZE = 1024
+            grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
 
-        _eqprop_step_linear_kernel[grid](
-            h, target, out,
-            alpha, n_elements,
-            BLOCK_SIZE=BLOCK_SIZE
-        )
+            _eqprop_step_linear_kernel[grid](
+                h, target, out,
+                alpha, n_elements,
+                BLOCK_SIZE=BLOCK_SIZE
+            )
 
-        return out
+            return out
+        except Exception:
+            TritonEqPropOps._triton_functioning = False
+            return (1 - alpha) * h + alpha * target
 
     @staticmethod
     def step_linear_cupy(h, target, alpha: float):
@@ -359,25 +390,29 @@ class TritonEqPropOps:
         if not isinstance(h, cp.ndarray) or not isinstance(target, cp.ndarray):
              return (1 - alpha) * h + alpha * target
 
-        # Ensure contiguity (Triton requires contiguous memory)
-        if not h.flags.c_contiguous:
-            h = cp.ascontiguousarray(h)
-        if not target.flags.c_contiguous:
-            target = cp.ascontiguousarray(target)
+        try:
+            # Ensure contiguity (Triton requires contiguous memory)
+            if not h.flags.c_contiguous:
+                h = cp.ascontiguousarray(h)
+            if not target.flags.c_contiguous:
+                target = cp.ascontiguousarray(target)
 
-        out = cp.empty_like(h)
-        n_elements = h.size
-        BLOCK_SIZE = 1024
-        grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
+            out = cp.empty_like(h)
+            n_elements = h.size
+            BLOCK_SIZE = 1024
+            grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
 
-        # Launch kernel using raw pointers
-        _eqprop_step_linear_kernel[grid](
-            h.data.ptr,         # h_ptr
-            target.data.ptr,    # target_ptr
-            out.data.ptr,       # out_ptr
-            alpha,              # alpha
-            n_elements,         # n_elements
-            BLOCK_SIZE=BLOCK_SIZE
-        )
+            # Launch kernel using raw pointers
+            _eqprop_step_linear_kernel[grid](
+                h.data.ptr,         # h_ptr
+                target.data.ptr,    # target_ptr
+                out.data.ptr,       # out_ptr
+                alpha,              # alpha
+                n_elements,         # n_elements
+                BLOCK_SIZE=BLOCK_SIZE
+            )
 
-        return out
+            return out
+        except Exception:
+            TritonEqPropOps._triton_functioning = False
+            return (1 - alpha) * h + alpha * target

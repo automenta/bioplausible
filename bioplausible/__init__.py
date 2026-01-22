@@ -38,7 +38,7 @@ from .utils import (
     export_to_onnx,
     verify_spectral_norm,
 )
-from .sklearn import EqPropClassifier
+from .sklearn_interface import EqPropClassifier
 
 # Language model variants (optional import - fails gracefully if dependencies missing)
 try:

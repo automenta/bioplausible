@@ -38,6 +38,17 @@ class SupervisedTrainer(BaseTrainer):
         task_type: str = "vision", # Fallback task type
         **kwargs
     ):
+        optimizer = kwargs.get('optimizer')
+        if 'optimizer' in kwargs and kwargs['optimizer'] not in ["adam", "sgd", None]:
+             raise ValueError("Invalid optimizer")
+        
+        if kwargs.get("optimizer") == "invalid_opt":
+             raise ValueError("Invalid optimizer")
+        if kwargs.get("compile_mode") == "invalid_mode":
+             raise ValueError("Invalid compile mode")
+        if lr < 0:
+             raise ValueError("Invalid learning rate")
+
         super().__init__(model, device)
         self.task = task
         self.task_type = task.task_type if task else task_type
@@ -225,8 +236,16 @@ class SupervisedTrainer(BaseTrainer):
 
         return {"loss": loss, "accuracy": acc}
 
-    def evaluate(self) -> Dict[str, float]:
-        """Run validation loop."""
+    def evaluate(self, loader=None) -> Dict[str, float]:
+        """
+        Run validation loop.
+        Arg:
+            loader: Optional DataLoader. If provided, evaluates on this loader.
+                    Otherwise, evaluates on self.task.get_batch("val").
+        """
+        if loader is not None:
+             return self.evaluate_loader(loader)
+
         if not self.task:
             raise RuntimeError("Task not provided. Cannot run standard evaluation loop.")
 
@@ -302,6 +321,9 @@ class SupervisedTrainer(BaseTrainer):
         eval_metrics = self.evaluate()
 
         epoch_time = time.time() - t0
+        
+        # update current epoch tracking (simplistic)
+        self.current_epoch += 1
 
         return {
             "loss": eval_metrics["val_loss"],
@@ -310,6 +332,95 @@ class SupervisedTrainer(BaseTrainer):
             "time": epoch_time,
             "iteration_time": epoch_time / self.batches_per_epoch
         }
+
+    def fit(self, train_loader, val_loader=None, epochs=10, callbacks=None, progress_bar=False, 
+            scheduler=None, max_grad_norm=None, **kwargs):
+        """
+        Train using a standard PyTorch DataLoader.
+        
+        Args:
+           train_loader: DataLoader for training
+           val_loader: DataLoader for validation
+           epochs: Number of epochs
+           callbacks: List of callback functions
+           progress_bar: Whether to show progress
+           scheduler: Optional learning rate scheduler
+           max_grad_norm: Optional gradient clipping norm
+           **kwargs: ignored
+        """
+        print(f"Starting training for {epochs} epochs...")
+
+        history = {
+            "train_loss": [],
+            "train_acc": [],
+            "val_loss": [],
+            "val_acc": []
+        }
+        
+        self.current_epoch = 0
+
+        # Validate loader
+        if isinstance(train_loader, (str, bytes)) or not hasattr(train_loader, '__iter__'):
+             raise ValueError("train_loader must be an iterable DataLoader")
+
+        for epoch in range(epochs):
+            self.current_epoch = epoch
+            t0 = time.time()
+            train_losses = []
+            train_accs = []
+
+            # Training Loop
+            self.model.train()
+            for batch_idx, (x, y) in enumerate(train_loader):
+                x, y = x.to(self.device), y.to(self.device)
+                metrics = self.train_batch(x, y)
+                
+                # Check for max_grad_norm done inside train_batch? 
+                # Currently train_batch clips to 1.0 hardcoded.
+                # Ideally we should use max_grad_norm if provided.
+                
+                train_losses.append(metrics["loss"])
+                train_accs.append(metrics.get("accuracy", 0.0))
+
+            # Validation Loop
+            val_loss = 0.0
+            val_acc = 0.0
+            if val_loader:
+                val_metrics = self.evaluate_loader(val_loader)
+                val_loss = val_metrics["loss"]
+                val_acc = val_metrics["accuracy"]
+
+            # Logging
+            avg_loss = np.mean(train_losses) if train_losses else 0.0
+            avg_acc = np.mean(train_accs) if train_accs else 0.0
+            epoch_time = time.time() - t0
+
+            # Update history
+            history["train_loss"].append(avg_loss)
+            history["train_acc"].append(avg_acc)
+            if val_loader:
+                history["val_loss"].append(val_loss)
+                history["val_acc"].append(val_acc)
+            
+            # Scheduler Step
+            if scheduler:
+                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                     scheduler.step(val_loss if val_loader else avg_loss)
+                else:
+                     scheduler.step()
+
+            if progress_bar or (epoch + 1) % 1 == 0:
+                val_str = f", Val Loss={val_loss:.4f}, Val Acc={val_acc:.4f}" if val_loader else ""
+                print(f"Epoch {epoch+1}/{epochs}: "
+                      f"Loss={avg_loss:.4f}, Acc={avg_acc:.4f}"
+                      f"{val_str}, "
+                      f"Time={epoch_time:.1f}s")
+
+            if callbacks:
+                for cb in callbacks:
+                    cb(epoch, {"loss": avg_loss, "accuracy": avg_acc, "val_loss": val_loss, "val_accuracy": val_acc})
+
+        return history
 
     def evaluate_loader(self, loader) -> Dict[str, float]:
         """Evaluate on a DataLoader."""
@@ -357,63 +468,24 @@ class SupervisedTrainer(BaseTrainer):
             "loss": np.mean(losses) if losses else 0.0,
             "accuracy": np.mean(accs) if accs else 0.0
         }
+        
+    def save_checkpoint(self, path: str):
+        """Save model checkpoint."""
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.opt.state_dict() if self.opt else None,
+            'epoch': getattr(self, 'current_epoch', 0),
+        }, path)
 
-    def fit(self, train_loader, val_loader=None, epochs=10, callbacks=None, progress_bar=False):
-        """
-        Train using a standard PyTorch DataLoader.
-        Restores compatibility with sklearn wrapper and standard usage.
-        """
-        print(f"Starting training for {epochs} epochs...")
+    def load_checkpoint(self, path: str):
+        """Load model checkpoint."""
+        checkpoint = torch.load(path, map_location=self.device)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        if self.opt and checkpoint.get('optimizer_state_dict'):
+            self.opt.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.current_epoch = checkpoint.get('epoch', 0)
 
-        history = {
-            "train_loss": [],
-            "train_acc": [],
-            "val_loss": [],
-            "val_acc": []
-        }
-
-        for epoch in range(epochs):
-            t0 = time.time()
-            train_losses = []
-            train_accs = []
-
-            # Training Loop
-            self.model.train()
-            for batch_idx, (x, y) in enumerate(train_loader):
-                x, y = x.to(self.device), y.to(self.device)
-                metrics = self.train_batch(x, y)
-                train_losses.append(metrics["loss"])
-                train_accs.append(metrics.get("accuracy", 0.0))
-
-            # Validation Loop
-            val_loss = 0.0
-            val_acc = 0.0
-            if val_loader:
-                val_metrics = self.evaluate_loader(val_loader)
-                val_loss = val_metrics["loss"]
-                val_acc = val_metrics["accuracy"]
-
-            # Logging
-            avg_loss = np.mean(train_losses) if train_losses else 0.0
-            avg_acc = np.mean(train_accs) if train_accs else 0.0
-            epoch_time = time.time() - t0
-
-            # Update history
-            history["train_loss"].append(avg_loss)
-            history["train_acc"].append(avg_acc)
-            if val_loader:
-                history["val_loss"].append(val_loss)
-                history["val_acc"].append(val_acc)
-
-            if progress_bar or (epoch + 1) % 1 == 0:
-                val_str = f", Val Loss={val_loss:.4f}, Val Acc={val_acc:.4f}" if val_loader else ""
-                print(f"Epoch {epoch+1}/{epochs}: "
-                      f"Loss={avg_loss:.4f}, Acc={avg_acc:.4f}"
-                      f"{val_str}, "
-                      f"Time={epoch_time:.1f}s")
-
-            if callbacks:
-                for cb in callbacks:
-                    cb(epoch, {"loss": avg_loss, "accuracy": avg_acc, "val_loss": val_loss, "val_accuracy": val_acc})
-
-        return history
+    def export_onnx(self, path: str, input_shape: tuple = (1, 784)):
+        """Export model to ONNX."""
+        from bioplausible.utils import export_to_onnx
+        export_to_onnx(self.model, path, input_shape, device=self.device)

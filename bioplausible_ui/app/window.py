@@ -10,6 +10,7 @@ from bioplausible_ui.app.tabs.search_tab import SearchTab
 from bioplausible_ui.app.tabs.results_tab import ResultsTab
 from bioplausible_ui.app.tabs.benchmarks_tab import BenchmarksTab
 from bioplausible_ui.app.tabs.deploy_tab import DeployTab
+from bioplausible_ui.app.tabs.p2p_tab import P2PTab
 from bioplausible_ui.app.tabs.console_tab import ConsoleTab
 from bioplausible_ui.app.tabs.settings_tab import SettingsTab
 
@@ -45,6 +46,7 @@ class AppMainWindow(QMainWindow):
         self.results_tab = ResultsTab()
         self.benchmarks_tab = BenchmarksTab()
         self.deploy_tab = DeployTab()
+        self.p2p_tab = P2PTab()
         self.console_tab = ConsoleTab()
         self.settings_tab = SettingsTab()
 
@@ -55,6 +57,7 @@ class AppMainWindow(QMainWindow):
         self.tabs.addTab(self.results_tab, "Results")
         self.tabs.addTab(self.benchmarks_tab, "Benchmarks")
         self.tabs.addTab(self.deploy_tab, "Deploy")
+        self.tabs.addTab(self.p2p_tab, "Community")
         self.tabs.addTab(self.console_tab, "Console")
         self.tabs.addTab(self.settings_tab, "Settings")
 
@@ -88,3 +91,12 @@ class AppMainWindow(QMainWindow):
 
         except Exception:
             pass
+
+    def closeEvent(self, event):
+        """Clean up tabs on exit."""
+        self.monitor_timer.stop()
+        for i in range(self.tabs.count()):
+            widget = self.tabs.widget(i)
+            if hasattr(widget, "shutdown"):
+                widget.shutdown()
+        super().closeEvent(event)

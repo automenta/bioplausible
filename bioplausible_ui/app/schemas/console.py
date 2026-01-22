@@ -8,6 +8,7 @@ CONSOLE_TAB_SCHEMA = TabSchema(
     ],
     actions=[
         ActionDef("run_diagnostics", "🩺", "_run_diagnostics"),
+        ActionDef("save", "💾", "_save_logs"),
         ActionDef("clear", "🧹", "_clear_logs"),
     ],
     plots=[]
