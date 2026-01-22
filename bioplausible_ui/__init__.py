@@ -1,16 +1,5 @@
-"""
-EqProp-Trainer: A stunning PyQt6 dashboard for training EqProp models.
+from .app.main import main as run_biopl
+from .lab.main import main as run_lab
 
-Features:
-- Dark cyberpunk theme with neon accents
-- Live training plots (loss, accuracy, Lipschitz)
-- Multi-tab interface (LM + Vision)
-- Real-time text generation
-- HuggingFace dataset integration
-"""
-
-from .dashboard import EqPropDashboard
-from .main import main
-
-__version__ = "0.1.0"
-__all__ = ["EqPropDashboard", "main"]
+__version__ = "0.2.0"
+__all__ = ["run_biopl", "run_lab"]

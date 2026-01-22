@@ -14,7 +14,7 @@ class EqPropDiffusion(nn.Module):
     This model predicts the clean image x_0 from x_t.
     """
 
-    def __init__(self, img_channels=1, hidden_channels=64):
+    def __init__(self, img_channels=1, hidden_channels=64, gradient_method="bptt"):
         super().__init__()
         # Input channels + 1 for time embedding (concatenated as a channel)
         # Using SimpleConvEqProp allows Triton acceleration
@@ -25,6 +25,7 @@ class EqPropDiffusion(nn.Module):
             output_dim=img_channels,  # Output channels
             pool_output=False,
             use_spectral_norm=True,
+            gradient_method=gradient_method,
         )
         self.img_channels = img_channels
 
@@ -176,4 +177,3 @@ class EqPropDiffusion(nn.Module):
 
         self.train()
         return x.clamp(-1, 1) # Assume normalized to [-1, 1] usually, or [0,1] if data was [0,1]
-

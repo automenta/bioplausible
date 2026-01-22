@@ -37,8 +37,9 @@ dependencies = [
 
 [project.scripts]
 eqprop-verify = "bioplausible.cli:main"
-eqprop-dashboard = "bioplausible_ui.main:main"
-eqprop-hyperopt = "bioplausible_ui.hyperopt_app:main"
+eqprop-dashboard = "bioplausible_ui.app.main:main"
+biopl = "bioplausible_ui.app.main:main"
+biopl-lab = "bioplausible_ui.lab.main:main"
 eqprop-coordinator = "bioplausible.p2p.coordinator:main"
 eqprop-worker = "bioplausible.p2p.worker:main"
 eqprop-p2p-worker = "bioplausible.p2p.p2p_worker:main"

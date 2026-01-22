@@ -4,8 +4,8 @@ Model Registry for Bio-Plausible Algorithms
 Defines specifications for available models and algorithms, used by experiments and UI.
 """
 
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict, Any
 
 
 @dataclass
@@ -24,6 +24,20 @@ class ModelSpec:
     color: str = "#888888"
     task_compat: Optional[List[str]] = None  # ['vision', 'lm', 'rl'] or None for all applicable
 
+    # New fields
+    family: str = "experimental"
+    custom_hyperparams: Dict[str, Any] = field(default_factory=dict)
+    supports_dreaming: bool = False
+    supports_dynamics: bool = False
+    supports_oracle: bool = False
+    supports_alignment: bool = False
+    supports_cube_viz: bool = False
+    supports_robustness: bool = False
+    supports_p2p: bool = False
+    supports_text_gen: bool = False
+    supports_agent_watch: bool = False
+    supports_diffusion_sample: bool = False
+
 
 # All models available - ordered by category
 MODEL_REGISTRY = [
@@ -35,6 +49,8 @@ MODEL_REGISTRY = [
         default_lr=0.001,
         color="#ff6b6b",
         task_compat=["vision", "lm", "rl"],
+        family="baseline",
+        supports_agent_watch=True
     ),
     # EqProp MLP
     ModelSpec(
@@ -48,6 +64,13 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#4ecdc4",
         task_compat=["vision", "rl"],
+        family="eqprop",
+        supports_dreaming=True,
+        supports_dynamics=True,
+        supports_oracle=True,
+        supports_alignment=True,
+        supports_robustness=True,
+        supports_agent_watch=True
     ),
     # Advanced EqProp Variants
     ModelSpec(
@@ -61,6 +84,10 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#a55eea",
         task_compat=["vision", "rl"],
+        family="eqprop",
+        supports_dreaming=True,
+        supports_dynamics=True,
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Directed EqProp (Deep EP)",
@@ -73,6 +100,10 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#fd9644",
         task_compat=["vision", "rl"],
+        family="eqprop",
+        supports_dreaming=True,
+        supports_dynamics=True,
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Finite-Nudge EqProp",
@@ -85,6 +116,10 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#fc5c65",
         task_compat=["vision", "rl"],
+        family="eqprop",
+        supports_dreaming=True,
+        supports_dynamics=True,
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Conv EqProp (CIFAR-10)",
@@ -95,6 +130,9 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#26de81",
         task_compat=["vision"],
+        family="eqprop",
+        supports_dreaming=True,
+        supports_dynamics=True
     ),
     ModelSpec(
         name="EqProp Diffusion",
@@ -103,6 +141,9 @@ MODEL_REGISTRY = [
         default_lr=0.001,
         color="#fdcb6e",
         task_compat=["vision"],
+        family="eqprop",
+        supports_dynamics=True,
+        supports_diffusion_sample=True
     ),
     ModelSpec(
         name="Neural Cube",
@@ -113,6 +154,9 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#00b894",
         task_compat=["vision"],
+        family="eqprop",
+        supports_cube_viz=True,
+        supports_dynamics=True
     ),
     # Hybrid & Experimental Algorithms
     ModelSpec(
@@ -122,6 +166,8 @@ MODEL_REGISTRY = [
         default_lr=0.001,
         color="#4b7bec",
         task_compat=["vision", "rl"],
+        family="hybrid",
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Equilibrium Alignment",
@@ -132,6 +178,9 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#d1d8e0",
         task_compat=["vision", "rl"],
+        family="hybrid",
+        supports_dynamics=True,
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Layerwise Equilibrium FA",
@@ -140,6 +189,8 @@ MODEL_REGISTRY = [
         default_lr=0.001,
         color="#a5b1c2",
         task_compat=["vision", "rl"],
+        family="hybrid",
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Energy Guided FA",
@@ -148,6 +199,8 @@ MODEL_REGISTRY = [
         default_lr=0.001,
         color="#778ca3",
         task_compat=["vision", "rl"],
+        family="hybrid",
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Predictive Coding Hybrid",
@@ -158,6 +211,9 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#3867d6",
         task_compat=["vision", "rl"],
+        family="hybrid",
+        supports_dynamics=True,
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Sparse Equilibrium",
@@ -168,6 +224,9 @@ MODEL_REGISTRY = [
         has_beta=True,
         color="#8854d0",
         task_compat=["vision", "rl"],
+        family="hybrid",
+        supports_dynamics=True,
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Momentum Equilibrium",
@@ -176,6 +235,9 @@ MODEL_REGISTRY = [
         default_lr=0.001,
         color="#45aaf2",
         task_compat=["vision", "rl"],
+        family="hybrid",
+        supports_dynamics=True,
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Stochastic FA",
@@ -184,6 +246,8 @@ MODEL_REGISTRY = [
         default_lr=0.001,
         color="#2bcbba",
         task_compat=["vision", "rl"],
+        family="hybrid",
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Energy Minimizing FA",
@@ -192,6 +256,8 @@ MODEL_REGISTRY = [
         default_lr=0.001,
         color="#0fb9b1",
         task_compat=["vision", "rl"],
+        family="hybrid",
+        supports_agent_watch=True
     ),
     # Other Bio-Plausible Algorithms
     ModelSpec(
@@ -201,6 +267,8 @@ MODEL_REGISTRY = [
         default_lr=0.001,
         color="#45b7d1",
         task_compat=["vision", "rl"],
+        family="hybrid",
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="CHL (Contrastive Hebbian)",
@@ -213,6 +281,9 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#f9ca24",
         task_compat=["vision", "rl"],
+        family="hebbian",
+        supports_dynamics=True,
+        supports_agent_watch=True
     ),
     ModelSpec(
         name="Deep Hebbian (Hundred-Layer)",
@@ -221,6 +292,8 @@ MODEL_REGISTRY = [
         default_lr=0.0005,
         color="#6c5ce7",
         task_compat=["vision", "rl"],
+        family="hebbian",
+        supports_agent_watch=True
     ),
     # EqProp Transformers (From Track 37 results) - SLOW MODELS LAST
     ModelSpec(
@@ -233,6 +306,8 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#2ecc71",
         task_compat=["lm"],
+        family="eqprop",
+        supports_text_gen=True
     ),
     ModelSpec(
         name="EqProp Transformer (Full)",
@@ -244,6 +319,8 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#27ae60",
         task_compat=["lm"],
+        family="eqprop",
+        supports_text_gen=True
     ),
     ModelSpec(
         name="EqProp Transformer (Hybrid)",
@@ -255,6 +332,8 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#1abc9c",
         task_compat=["lm"],
+        family="eqprop",
+        supports_text_gen=True
     ),
     ModelSpec(
         name="EqProp Transformer (Recurrent)",
@@ -266,6 +345,8 @@ MODEL_REGISTRY = [
         has_steps=True,
         color="#16a085",
         task_compat=["lm"],
+        family="eqprop",
+        supports_text_gen=True
     ),
 ]
 
