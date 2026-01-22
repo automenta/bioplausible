@@ -16,6 +16,13 @@ class TrainingConfigWidget(QWidget):
         self.batch_spin.setValue(64)
         self.layout.addRow("Batch Size:", self.batch_spin)
 
+        self.lr_spin = QDoubleSpinBox()
+        self.lr_spin.setRange(0.00001, 1.0)
+        self.lr_spin.setValue(0.001)
+        self.lr_spin.setDecimals(5)
+        self.lr_spin.setSingleStep(0.0001)
+        self.layout.addRow("Learning Rate:", self.lr_spin)
+
         # RL Specific
         self.gamma_spin = QDoubleSpinBox()
         self.gamma_spin.setRange(0.0, 1.0)
@@ -62,10 +69,35 @@ class TrainingConfigWidget(QWidget):
             self.seq_len_spin.show()
             self.seq_len_label.show()
 
+    def set_values(self, values):
+        """Set values from a dictionary."""
+        if not values:
+            return
+
+        if "epochs" in values:
+            self.epochs_spin.setValue(int(values["epochs"]))
+        if "batch_size" in values:
+            self.batch_spin.setValue(int(values["batch_size"]))
+        if "learning_rate" in values:
+            self.lr_spin.setValue(float(values["learning_rate"]))
+        if "gradient_method" in values:
+            self.grad_combo.setCurrentText(values["gradient_method"])
+        if "use_compile" in values:
+            self.compile_check.setChecked(bool(values["use_compile"]))
+        if "use_kernel" in values:
+            self.kernel_check.setChecked(bool(values["use_kernel"]))
+        if "monitor_dynamics" in values:
+            self.micro_check.setChecked(bool(values["monitor_dynamics"]))
+        if "gamma" in values:
+            self.gamma_spin.setValue(float(values["gamma"]))
+        if "seq_len" in values:
+            self.seq_len_spin.setValue(int(values["seq_len"]))
+
     def get_values(self):
         return {
             "epochs": self.epochs_spin.value(),
             "batch_size": self.batch_spin.value(),
+            "learning_rate": self.lr_spin.value(),
             "gradient_method": self.grad_combo.currentText(),
             "use_compile": self.compile_check.isChecked(),
             "use_kernel": self.kernel_check.isChecked(),
