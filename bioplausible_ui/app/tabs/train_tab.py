@@ -250,14 +250,13 @@ class TrainTab(BaseTab):
 
             self.hyperparam_editor.set_values(config["hyperparams"])
 
-            # Also set training config values (epochs, etc) if present
-            hp = config["hyperparams"]
-            tc_values = {}
-            if "epochs" in hp: tc_values["epochs"] = hp["epochs"]
-            if "batch_size" in hp: tc_values["batch_size"] = hp["batch_size"]
-            # etc...
-            # TrainingConfigWidget doesn't have set_values either...
-            # Let's just rely on HyperparamEditor for model params.
-            # Epochs usually come from search trial config too.
+        # Set training config values (epochs, batch_size, learning_rate, etc)
+        # These can be in 'config' top level or mixed in 'hyperparams' depending on source
+        # We merge them to be safe
+        tc_values = {}
+        for k, v in config.items():
+            if k in ["epochs", "batch_size", "learning_rate", "gradient_method", "use_compile", "use_kernel", "monitor_dynamics", "gamma", "seq_len"]:
+                tc_values[k] = v
 
-            # TODO: implement set_values for TrainingConfigWidget if needed
+        if hasattr(self, "training_config"):
+            self.training_config.set_values(tc_values)
