@@ -6,8 +6,9 @@ import torch
 import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import List, Optional, Union
+from typing import List, Optional
 import numpy as np
+
 
 def export_to_onnx(model, input_sample, path):
     """Export model to ONNX format."""
@@ -26,10 +27,11 @@ def export_to_onnx(model, input_sample, path):
         export_params=True,
         opset_version=11,
         do_constant_folding=True,
-        input_names=['input'],
-        output_names=['output'],
-        dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}}
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
     )
+
 
 def export_to_torchscript(model, input_sample, path):
     """Export model to TorchScript (JIT)."""
@@ -37,18 +39,20 @@ def export_to_torchscript(model, input_sample, path):
     traced_script_module = torch.jit.trace(model, input_sample)
     traced_script_module.save(path)
 
+
 # --- Serving Logic ---
 
 app = FastAPI(title="Bioplausible Inference API")
 model_instance = None
 
+
 class InferenceRequest(BaseModel):
     data: List[float]
     shape: Optional[List[int]] = None
 
+
 @app.post("/predict")
 def predict(request: InferenceRequest):
-    global model_instance
     if not model_instance:
         return {"error": "No model loaded"}
 
@@ -58,17 +62,20 @@ def predict(request: InferenceRequest):
             data = data.reshape(request.shape)
         else:
             # Try to infer shape or assume flat
-            if hasattr(model_instance, 'input_dim'):
-                if len(data.shape) == 1 and data.shape[0] == model_instance.input_dim:
+            if hasattr(model_instance, "input_dim"):
+                if (
+                    len(data.shape) == 1
+                    and data.shape[0] == model_instance.input_dim
+                ):
                     data = data.reshape(1, -1)
             elif "Conv" in type(model_instance).__name__:
-                 # Assume MNIST/CIFAR single image flat or shaped
-                 pass
+                # Assume MNIST/CIFAR single image flat or shaped
+                pass
 
         # Convert to tensor
         tensor = torch.from_numpy(data)
         if tensor.dim() == 1:
-             tensor = tensor.unsqueeze(0) # Add batch dim
+            tensor = tensor.unsqueeze(0)  # Add batch dim
 
         device = next(model_instance.parameters()).device
         tensor = tensor.to(device)
@@ -81,9 +88,14 @@ def predict(request: InferenceRequest):
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": str(type(model_instance).__name__) if model_instance else "None"}
+    model_name = (
+        str(type(model_instance).__name__) if model_instance else "None"
+    )
+    return {"status": "ok", "model": model_name}
+
 
 def serve_model(model, host="0.0.0.0", port=8000):
     """Run a FastAPI server for the model."""

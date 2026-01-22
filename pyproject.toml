@@ -34,6 +34,11 @@ dependencies = [
     "flake8",
     "black",
     "isort",
+    "matplotlib",
+    "seaborn",
+    "fastapi",
+    "uvicorn",
+    "wandb",
 ]
 
 [project.scripts]

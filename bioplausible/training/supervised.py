@@ -36,6 +36,7 @@ class SupervisedTrainer(BaseTrainer):
         use_kernel: bool = False,
         compile_mode: str = "reduce-overhead",
         task_type: str = "vision", # Fallback task type
+        tracker: Optional[Any] = None,
         **kwargs
     ):
         optimizer = kwargs.get('optimizer')
@@ -55,6 +56,7 @@ class SupervisedTrainer(BaseTrainer):
         self.batches_per_epoch = batches_per_epoch
         self.eval_batches = eval_batches
         self.steps = steps
+        self.tracker = tracker
 
         # Check if model has its own backend management
         model_backend = getattr(model, "backend", "pytorch")
@@ -116,6 +118,18 @@ class SupervisedTrainer(BaseTrainer):
                     else:
                         layer.use_oja = kwargs['use_oja']
                         layer.learning_rate = self.model.hebbian_lr
+
+        # Log initial hyperparameters if tracker is present
+        if self.tracker:
+            self.tracker.log_hyperparams({
+                "lr": lr,
+                "batches_per_epoch": batches_per_epoch,
+                "steps": steps,
+                "use_compile": use_compile,
+                "use_kernel": self.use_kernel,
+                "task_type": self.task_type,
+                "device": device
+            })
 
     def _prepare_input(self, x):
         """Prepare input tensor (embedding, flattening, etc.)."""
@@ -325,13 +339,19 @@ class SupervisedTrainer(BaseTrainer):
         # update current epoch tracking (simplistic)
         self.current_epoch += 1
 
-        return {
+        metrics_dict = {
             "loss": eval_metrics["val_loss"],
             "accuracy": eval_metrics["val_accuracy"],
             "perplexity": eval_metrics["val_perplexity"],
             "time": epoch_time,
             "iteration_time": epoch_time / self.batches_per_epoch
         }
+
+        # Log metrics if tracker is present
+        if self.tracker:
+            self.tracker.log_metrics(metrics_dict, step=self.current_epoch)
+
+        return metrics_dict
 
     def fit(self, train_loader, val_loader=None, epochs=10, callbacks=None, progress_bar=False, 
             scheduler=None, max_grad_norm=None, **kwargs):
@@ -357,13 +377,16 @@ class SupervisedTrainer(BaseTrainer):
             "val_acc": []
         }
         
-        self.current_epoch = 0
+        # Start from current epoch if resuming
+        if not hasattr(self, 'current_epoch'):
+            self.current_epoch = 0
+        start_epoch = self.current_epoch
 
         # Validate loader
         if isinstance(train_loader, (str, bytes)) or not hasattr(train_loader, '__iter__'):
              raise ValueError("train_loader must be an iterable DataLoader")
 
-        for epoch in range(epochs):
+        for epoch in range(start_epoch, start_epoch + epochs):
             self.current_epoch = epoch
             t0 = time.time()
             train_losses = []
@@ -402,6 +425,16 @@ class SupervisedTrainer(BaseTrainer):
                 history["val_loss"].append(val_loss)
                 history["val_acc"].append(val_acc)
             
+            # Tracker logging
+            if self.tracker:
+                self.tracker.log_metrics({
+                    "train_loss": avg_loss,
+                    "train_accuracy": avg_acc,
+                    "val_loss": val_loss,
+                    "val_accuracy": val_acc,
+                    "epoch_time": epoch_time
+                }, step=epoch)
+
             # Scheduler Step
             if scheduler:
                 if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):

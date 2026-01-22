@@ -5,4 +5,4 @@ Multi-objective optimization framework for discovering optimal configurations
 across different learning algorithms.
 """
 
-__version__ = "1.0.0"
+__version__ = "0.1.0"
