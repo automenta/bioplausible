@@ -11,11 +11,11 @@ Interactive demonstrations using actual computation:
 """
 
 import sys
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QPalette, QColor
-from PyQt6.QtCore import Qt
 
 from gui.mechanics_demo import MechanicsDemoWindow
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QPalette
+from PyQt6.QtWidgets import QApplication
 
 
 def main():

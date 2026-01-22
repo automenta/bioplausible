@@ -5,8 +5,8 @@ import sys
 
 sys.path.insert(0, "/home/me/eqprop")
 
-from experiments.shallow_search import ShallowSearcher, load_mnist_subset
 from algorithms import ALGORITHM_REGISTRY
+from experiments.shallow_search import ShallowSearcher, load_mnist_subset
 
 if __name__ == "__main__":
     # Test with first 5 algorithms only

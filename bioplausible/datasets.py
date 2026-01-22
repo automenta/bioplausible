@@ -7,10 +7,9 @@ HuggingFace datasets and tokenizers integration for easy LM and vision dataset l
 import warnings
 from typing import Any, Dict, Optional, Tuple, Union
 
-import torch
 import numpy as np
+import torch
 from torch.utils.data import DataLoader, Dataset, TensorDataset
-
 
 # =============================================================================
 # Vision Datasets
@@ -64,11 +63,13 @@ def _load_sklearn_digits(train: bool, flatten: bool) -> Dataset:
         from sklearn.datasets import load_digits
         from sklearn.model_selection import train_test_split
     except ImportError:
-        raise ImportError("scikit-learn required for 'digits' dataset. pip install scikit-learn")
+        raise ImportError(
+            "scikit-learn required for 'digits' dataset. pip install scikit-learn"
+        )
 
     digits = load_digits()
-    X = digits.data.astype(np.float32) # (1797, 64)
-    y = digits.target.astype(np.int64) # (1797,)
+    X = digits.data.astype(np.float32)  # (1797, 64)
+    y = digits.target.astype(np.int64)  # (1797,)
 
     # Normalize to [0, 1] (digits are 0-16)
     X /= 16.0

@@ -9,11 +9,12 @@ This module provides:
 All NEBC algorithms test spectral normalization as a "stability unlock".
 """
 
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from abc import ABC, abstractmethod
-from typing import Dict, Optional, Tuple, List
 from torch.nn.utils.parametrizations import spectral_norm
 
 

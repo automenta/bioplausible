@@ -11,10 +11,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.parametrizations import spectral_norm
-from .utils import spectral_conv2d
+
+from ..acceleration import compile_settling_loop
 from .eqprop_base import EqPropModel
 from .triton_kernel import TritonEqPropOps
-from ..acceleration import compile_settling_loop
+from .utils import spectral_conv2d
 
 
 class ModernConvEqProp(EqPropModel):
@@ -254,15 +255,12 @@ class ModernConvEqProp(EqPropModel):
            - Feedforward weights: `(feedforward_container, x, h)`
         """
         # We need a container for the stages
-        if not hasattr(self, 'feedforward_net'):
+        if not hasattr(self, "feedforward_net"):
             self.feedforward_net = nn.Sequential(self.stage1, self.stage2, self.stage3)
 
         h_norm = self.eq_norm(h)
 
-        return [
-            (self.eq_conv, h_norm, h),
-            (self.feedforward_net, x, h)
-        ]
+        return [(self.eq_conv, h_norm, h), (self.feedforward_net, x, h)]
 
 
 class SimpleConvEqProp(EqPropModel):
@@ -330,8 +328,8 @@ class SimpleConvEqProp(EqPropModel):
             self.head = spectral_conv2d(
                 self.hidden_channels,
                 self.output_dim_val,
-                kernel_size=1, # 1x1 conv for projection
-                use_sn=self.use_spectral_norm
+                kernel_size=1,  # 1x1 conv for projection
+                use_sn=self.use_spectral_norm,
             )
 
     def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
@@ -366,7 +364,4 @@ class SimpleConvEqProp(EqPropModel):
 
     def get_hebbian_pairs(self, h, x):
         h_norm = self.norm(h)
-        return [
-            (self.W_rec, h_norm, h),
-            (self.embed, x, h)
-        ]
+        return [(self.W_rec, h_norm, h), (self.embed, x, h)]

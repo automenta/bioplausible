@@ -1,24 +1,11 @@
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QCheckBox,
-    QLabel,
-    QGroupBox,
-    QSplitter,
-    QGridLayout,
-    QFrame,
-    QSpinBox,
-    QSlider,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-    QSizePolicy,
-)
-from PyQt6.QtCore import Qt, QRectF, QPointF
-from PyQt6.QtGui import QColor, QPainter, QPen, QFont, QBrush
 import numpy as np
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
+from PyQt6.QtWidgets import (QCheckBox, QFrame, QGridLayout, QGroupBox,
+                             QHBoxLayout, QHeaderView, QLabel, QPushButton,
+                             QSizePolicy, QSlider, QSpinBox, QSplitter,
+                             QTableWidget, QTableWidgetItem, QVBoxLayout,
+                             QWidget)
 
 
 class StatsTable(QTableWidget):

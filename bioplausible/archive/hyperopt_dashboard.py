@@ -6,40 +6,26 @@ Live dashboard for multi-objective hyperparameter optimization.
 Visualizes Pareto frontiers, tracks experiment progress, and exports best configurations.
 """
 
-import sys
-import json
-import time
 import argparse
+import json
+import sys
+import time
 from pathlib import Path
-from PyQt6.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QLabel,
-    QGroupBox,
-    QSplitter,
-    QTableWidget,
-    QTableWidgetItem,
-    QTabWidget,
-    QComboBox,
-    QSpinBox,
-    QTextEdit,
-    QCheckBox,
-    QScrollArea,
-)
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QFont
-import pyqtgraph as pg
-import numpy as np
 
+import numpy as np
+import pyqtgraph as pg
+from gui.algorithms import MODEL_REGISTRY
 from hyperopt.engine import EvolutionaryOptimizer, OptimizationConfig
 from hyperopt.experiment import TrialRunner
-from hyperopt.storage import HyperoptStorage
 from hyperopt.metrics import get_pareto_frontier, rank_trials
-from gui.algorithms import MODEL_REGISTRY
+from hyperopt.storage import HyperoptStorage
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QGroupBox,
+                             QHBoxLayout, QLabel, QMainWindow, QPushButton,
+                             QScrollArea, QSpinBox, QSplitter, QTableWidget,
+                             QTableWidgetItem, QTabWidget, QTextEdit,
+                             QVBoxLayout, QWidget)
 
 
 class OptimizationWorker(QThread):

@@ -5,15 +5,16 @@ Track 39: EqProp Diffusion (Diffusion via Energy Minimization).
 Hypothesis: Diffusion can be formulated as equilibrium energy minimization.
 """
 
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
-import argparse
-import time
-import json
-from pathlib import Path
-import sys
 
 # Add root to path (./) so we can import bioplausible
 # parent -> experiments

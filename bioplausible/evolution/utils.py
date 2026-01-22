@@ -2,10 +2,11 @@
 Utility functions for the evolution system.
 """
 
-import torch
-import numpy as np
-from typing import Any, Dict, Optional
 import logging
+from typing import Any, Dict, Optional
+
+import numpy as np
+import torch
 
 
 def setup_logger(name: str, level: str = "INFO") -> logging.Logger:

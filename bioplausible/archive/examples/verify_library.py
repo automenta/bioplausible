@@ -16,29 +16,11 @@ def test_imports():
     """Test that all imports work."""
     print("Testing imports...")
     try:
-        from bioplausible import (
-            # Core
-            EqPropTrainer,
-            # Models
-            LoopedMLP,
-            BackpropMLP,
-            ConvEqProp,
-            TransformerEqProp,
-            # Kernel
-            EqPropKernel,
-            HAS_CUPY,
-            # Utils
-            compile_model,
-            get_optimal_backend,
-            count_parameters,
-            verify_spectral_norm,
-            create_model_preset,
-            # Datasets
-            get_vision_dataset,
-            get_lm_dataset,
-            # Flags
-            HAS_LM_VARIANTS,
-        )
+        from bioplausible import (  # Core; Models; Kernel; Utils; Datasets; Flags
+            HAS_CUPY, HAS_LM_VARIANTS, BackpropMLP, ConvEqProp, EqPropKernel,
+            EqPropTrainer, LoopedMLP, TransformerEqProp, compile_model,
+            count_parameters, create_model_preset, get_lm_dataset,
+            get_optimal_backend, get_vision_dataset, verify_spectral_norm)
 
         print("✓ All imports successful")
         return True
@@ -51,7 +33,7 @@ def test_model_creation():
     """Test creating models."""
     print("\nTesting model creation...")
     try:
-        from bioplausible import LoopedMLP, ConvEqProp, count_parameters
+        from bioplausible import ConvEqProp, LoopedMLP, count_parameters
 
         # Test MLP
         mlp = LoopedMLP(784, 256, 10, use_spectral_norm=True)
@@ -99,7 +81,8 @@ def test_trainer():
     print("\nTesting EqPropTrainer...")
     try:
         import torch
-        from torch.utils.data import TensorDataset, DataLoader
+        from torch.utils.data import DataLoader, TensorDataset
+
         from bioplausible import EqPropTrainer, LoopedMLP
 
         model = LoopedMLP(50, 32, 5, use_spectral_norm=True)
@@ -128,7 +111,7 @@ def test_presets():
     """Test model presets."""
     print("\nTesting model presets...")
     try:
-        from bioplausible import create_model_preset, count_parameters
+        from bioplausible import count_parameters, create_model_preset
 
         presets = ["mnist_small", "mnist_medium", "mnist_large"]
         for preset in presets:

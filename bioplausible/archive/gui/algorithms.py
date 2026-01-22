@@ -1,19 +1,20 @@
+import time
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-import time
-from typing import Optional, Dict, Any
-from dataclasses import dataclass
+
+from bioplausible.algorithms import \
+    ContrastiveFeedbackAlignment as ContrastiveHebbianLearning
+from bioplausible.algorithms import StandardFA as DirectFeedbackAlignmentEqProp
+from bioplausible.lm_models import create_eqprop_lm
+# Import models from bioplausible
+from bioplausible.models import (BackpropMLP, ConvEqProp, LoopedMLP,
+                                 TransformerEqProp)
 
 from .types import TrainingState
-
-# Import models from bioplausible
-from bioplausible.models import LoopedMLP, BackpropMLP, ConvEqProp, TransformerEqProp
-from bioplausible.lm_models import create_eqprop_lm
-from bioplausible.algorithms import (
-    StandardFA as DirectFeedbackAlignmentEqProp,
-    ContrastiveFeedbackAlignment as ContrastiveHebbianLearning,
-)
 
 # ============================================================================
 # Model Registry - Flat list of all available models with their metadata

@@ -9,12 +9,13 @@ Combines functionality for:
 - Configuration Management
 """
 
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from abc import ABC, abstractmethod
-from typing import Dict, Optional, Optional, Tuple, List, Union, Any
-from dataclasses import dataclass, field
 from torch.nn.utils.parametrizations import spectral_norm
 
 

@@ -4,10 +4,12 @@ MomentumEquilibrium - Novel Algorithm
 Adds momentum to the equilibrium settling dynamics.
 """
 
+from typing import Dict, Optional
+
 import torch
 import torch.nn as nn
+
 from .base import BioModel, ModelConfig, register_model
-from typing import Dict, Optional
 
 
 @register_model("momentum_equilibrium")

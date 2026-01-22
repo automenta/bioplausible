@@ -4,13 +4,13 @@ Evolution Validation Track
 Track 60: Validates that evolution finds better configurations than random search.
 """
 
-import torch
-import numpy as np
-import time
-from typing import Dict, Any
-
 import sys
+import time
 from pathlib import Path
+from typing import Any, Dict
+
+import numpy as np
+import torch
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -27,9 +27,9 @@ def track_60_evolution_validation(verifier) -> Dict[str, Any]:
     - Cohen's d > 0.5 (medium effect size)
     - Best evolutionary config > best random config
     """
-    from bioplausible.evolution.breeder import VariationBreeder, ArchConfig
-    from bioplausible.evolution.evaluator import VariationEvaluator, EvalTier
-    from bioplausible.evolution.engine import EvolutionEngine, EvolutionConfig
+    from bioplausible.evolution.breeder import ArchConfig, VariationBreeder
+    from bioplausible.evolution.engine import EvolutionConfig, EvolutionEngine
+    from bioplausible.evolution.evaluator import EvalTier, VariationEvaluator
     from bioplausible.validation.notebook import TrackResult
 
     device = "cuda" if torch.cuda.is_available() else "cpu"

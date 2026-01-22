@@ -5,10 +5,11 @@ Enables text generation for ANY model, including Vision models without native
 generate() methods. Uses autoregressive next-token prediction.
 """
 
+from typing import Optional, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Union, Optional
 
 
 class SimpleCharTokenizer:
@@ -23,7 +24,7 @@ class SimpleCharTokenizer:
         """
         if chars is None:
             # Default: printable ASCII
-            chars = ''.join(chr(i) for i in range(32, 127))
+            chars = "".join(chr(i) for i in range(32, 127))
 
         self.chars = chars
         self.vocab_size = len(chars)
@@ -52,7 +53,7 @@ class SimpleCharTokenizer:
         Returns:
             Decoded text string
         """
-        return ''.join(self.idx_to_char.get(idx, '?') for idx in indices)
+        return "".join(self.idx_to_char.get(idx, "?") for idx in indices)
 
 
 class UniversalGenerator:
@@ -68,7 +69,7 @@ class UniversalGenerator:
         model: nn.Module,
         vocab_size: int = 95,  # Printable ASCII
         tokenizer: Optional[SimpleCharTokenizer] = None,
-        device: str = 'cpu'
+        device: str = "cpu",
     ):
         """
         Args:
@@ -86,7 +87,9 @@ class UniversalGenerator:
         self.tokenizer = tokenizer
 
         # Check if model has native generation
-        self.has_native_generate = hasattr(model, 'generate') and callable(model.generate)
+        self.has_native_generate = hasattr(model, "generate") and callable(
+            model.generate
+        )
 
     def generate(
         self,
@@ -115,7 +118,7 @@ class UniversalGenerator:
                     prompt_tokens = torch.tensor(
                         self.tokenizer.encode(prompt),
                         dtype=torch.long,
-                        device=self.device
+                        device=self.device,
                     ).unsqueeze(0)
                 else:
                     prompt_tokens = prompt
@@ -124,7 +127,7 @@ class UniversalGenerator:
                 output_tokens = self.model.generate(
                     prompt_tokens,
                     max_new_tokens=max_new_tokens,
-                    temperature=temperature
+                    temperature=temperature,
                 )
 
                 # Decode back to text
@@ -153,11 +156,11 @@ class UniversalGenerator:
                 padding = torch.zeros(
                     self.vocab_size - logits.shape[0],
                     device=logits.device,
-                    dtype=logits.dtype
+                    dtype=logits.dtype,
                 )
                 logits = torch.cat([logits, padding])
             else:
-                logits = logits[:self.vocab_size]
+                logits = logits[: self.vocab_size]
         return logits
 
     def _prepare_input_tensor(self, generated_tokens: list) -> torch.Tensor:
@@ -170,7 +173,7 @@ class UniversalGenerator:
         Returns:
             Prepared input tensor for the model
         """
-        if hasattr(self.model, 'input_dim'):
+        if hasattr(self.model, "input_dim"):
             # Vision model: use last token as flattened input
             input_tensor = torch.zeros(1, self.model.input_dim, device=self.device)
             # One-hot encode last token
@@ -178,12 +181,12 @@ class UniversalGenerator:
                 last_token = generated_tokens[-1] % self.vocab_size
                 if last_token < self.model.input_dim:
                     input_tensor[0, last_token] = 1.0
-        elif hasattr(self.model, 'token_emb'):
+        elif hasattr(self.model, "token_emb"):
             # LM model: use tokens directly
             input_tensor = torch.tensor(
-                generated_tokens[-min(len(generated_tokens), 128):],  # Last 128 tokens
+                generated_tokens[-min(len(generated_tokens), 128) :],  # Last 128 tokens
                 dtype=torch.long,
-                device=self.device
+                device=self.device,
             ).unsqueeze(0)
         else:
             # Generic: one-hot encode last token
@@ -219,13 +222,13 @@ class UniversalGenerator:
                 # Otherwise just flatten
                 logits = output.flatten()
                 if logits.shape[0] > self.vocab_size:
-                    logits = logits[:self.vocab_size]
+                    logits = logits[: self.vocab_size]
                 elif logits.shape[0] < self.vocab_size:
                     # Pad with zeros
                     padding = torch.zeros(
                         self.vocab_size - logits.shape[0],
                         device=logits.device,
-                        dtype=logits.dtype
+                        dtype=logits.dtype,
                     )
                     logits = torch.cat([logits, padding])
         return logits
@@ -279,8 +282,13 @@ class UniversalGenerator:
 
                     # Apply top-k filtering
                     if top_k > 0 and top_k < logits.shape[0]:
-                        indices_to_remove = logits < torch.topk(logits, min(top_k, logits.shape[0]))[0][..., -1, None]
-                        logits[indices_to_remove] = float('-inf')
+                        indices_to_remove = (
+                            logits
+                            < torch.topk(logits, min(top_k, logits.shape[0]))[0][
+                                ..., -1, None
+                            ]
+                        )
+                        logits[indices_to_remove] = float("-inf")
 
                     # Apply softmax and sample
                     probs = F.softmax(logits, dim=-1)

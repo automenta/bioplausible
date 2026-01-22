@@ -5,21 +5,17 @@ Builds models that implement different EqProp algorithm variations
 based on AlgorithmConfig settings.
 """
 
+import math
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.parametrizations import spectral_norm
-from typing import Optional, Tuple
-import math
 
-from .algorithm import (
-    AlgorithmConfig,
-    UpdateRule,
-    EquilibriumDynamics,
-    GradientApprox,
-    SNStrategy,
-    ActivationFunction,
-)
+from .algorithm import (ActivationFunction, AlgorithmConfig,
+                        EquilibriumDynamics, GradientApprox, SNStrategy,
+                        UpdateRule)
 
 
 def get_activation(act_type: ActivationFunction):

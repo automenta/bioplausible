@@ -4,10 +4,12 @@ LayerwiseEquilibriumFA - Novel Hybrid Algorithm
 Combines Layerwise training with Equilibrium dynamics and FA.
 """
 
+from typing import Dict, Optional
+
 import torch
 import torch.nn as nn
+
 from .base import BioModel, ModelConfig, register_model
-from typing import Dict, Optional
 
 
 @register_model("layerwise_equilibrium_fa")

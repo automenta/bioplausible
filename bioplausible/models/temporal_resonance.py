@@ -5,12 +5,14 @@ Limits cycles allow "infinite context window" by resonating with input sequences
 rather than buffering them.
 """
 
+import math
+from typing import Dict, List, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
-from typing import Tuple, List, Dict, Optional
 from torch.nn.utils.parametrizations import spectral_norm
+
 from .utils import spectral_linear
 
 

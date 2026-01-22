@@ -4,24 +4,18 @@ Unit Tests for Novel Hybrid Algorithms
 Proper test suite to verify all algorithms work correctly.
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import unittest
+
 import torch
 import torch.nn as nn
-
-from algorithms import (
-    create_model,
-    BackpropBaseline,
-    StandardEqProp,
-    StandardFA,
-    EquilibriumAlignment,
-    AdaptiveFeedbackAlignment,
-    ALGORITHM_REGISTRY,
-)
+from algorithms import (ALGORITHM_REGISTRY, AdaptiveFeedbackAlignment,
+                        BackpropBaseline, EquilibriumAlignment, StandardEqProp,
+                        StandardFA, create_model)
 
 
 class TestAlgorithmCreation(unittest.TestCase):

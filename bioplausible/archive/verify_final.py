@@ -10,15 +10,9 @@ print("=== EqProp-Torch Final Verification ===\n")
 
 # Test imports
 try:
-    from bioplausible import (
-        LoopedMLP,
-        ConvEqProp,
-        EqPropTrainer,
-        StandardEqProp,
-        AdaptiveFeedbackAlignment,
-        HAS_BIOPLAUSIBLE,
-        enable_tf32,
-    )
+    from bioplausible import (HAS_BIOPLAUSIBLE, AdaptiveFeedbackAlignment,
+                              ConvEqProp, EqPropTrainer, LoopedMLP,
+                              StandardEqProp, enable_tf32)
 
     print("✓ Core imports successful")
 except Exception as e:

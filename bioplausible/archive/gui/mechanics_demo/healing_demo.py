@@ -5,22 +5,16 @@ Demonstrates noise damping via L < 1 contraction property.
 Shows side-by-side clean vs noisy trajectories converging to the same equilibrium.
 """
 
-import torch
 import numpy as np
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QGroupBox,
-)
-from PyQt6.QtCore import QTimer, Qt
 import pyqtgraph as pg
-
-from models import LoopedMLP
-from .utils import get_single_digit, load_mnist_subset, train_quick_epoch
+import torch
 import torch.optim as optim
+from models import LoopedMLP
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (QGroupBox, QHBoxLayout, QLabel, QPushButton,
+                             QVBoxLayout, QWidget)
+
+from .utils import get_single_digit, load_mnist_subset, train_quick_epoch
 
 
 class HealingDemo(QWidget):
@@ -138,16 +132,14 @@ class HealingDemo(QWidget):
 
         # Metrics summary
         self.metrics_label = QLabel("")
-        self.metrics_label.setStyleSheet(
-            """
+        self.metrics_label.setStyleSheet("""
             QLabel {
                 background-color: #2c3e50;
                 padding: 15px;
                 border-radius: 5px;
                 font-size: 12px;
             }
-        """
-        )
+        """)
         layout.addWidget(self.metrics_label)
 
         # Controls

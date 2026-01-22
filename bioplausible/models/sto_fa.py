@@ -4,10 +4,12 @@ StochasticFA - Novel Algorithm
 Randomly drops out feedback connections.
 """
 
+from typing import Dict, Optional
+
 import torch
 import torch.nn as nn
+
 from .base import BioModel, ModelConfig, register_model
-from typing import Dict, Optional
 
 
 @register_model("stochastic_fa")

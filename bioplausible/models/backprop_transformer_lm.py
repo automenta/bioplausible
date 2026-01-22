@@ -5,10 +5,11 @@ This provides a standard causal transformer (no equilibrium dynamics) with
 identical architecture to CausalTransformerEqProp for fair comparison.
 """
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 
 
 class BackpropCausalAttention(nn.Module):

@@ -2,18 +2,14 @@
 Benchmark Script for Bioplausible Models
 """
 
-import torch
-import time
 import argparse
-from typing import Dict, Any
+import time
+from typing import Any, Dict
 
-from bioplausible.models import (
-    LoopedMLP,
-    ConvEqProp,
-    TransformerEqProp,
-    ModernConvEqProp,
-    SimpleConvEqProp,
-)
+import torch
+
+from bioplausible.models import (ConvEqProp, LoopedMLP, ModernConvEqProp,
+                                 SimpleConvEqProp, TransformerEqProp)
 from bioplausible.utils import profile_model
 
 

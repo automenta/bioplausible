@@ -2,13 +2,14 @@
 """
 Bio-Trainer GUI Entry Point
 """
+
 import sys
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QPalette, QColor, QFont
-from PyQt6.QtCore import Qt
 
 # Import from package
 from gui.main_window import BioTrainerGUI
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QFont, QPalette
+from PyQt6.QtWidgets import QApplication
 
 
 def main():

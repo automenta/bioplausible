@@ -14,9 +14,10 @@ Key principles:
 This discovers specialists, not just generalists.
 """
 
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Optional
-from collections import defaultdict
+
 import numpy as np
 
 

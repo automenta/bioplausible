@@ -4,8 +4,10 @@ Search Space Definitions
 Defines the hyperparameter search spaces for each model type in the registry.
 """
 
-from typing import Dict, Any, Tuple, List, Union
+from typing import Any, Dict, List, Tuple, Union
+
 import numpy as np
+
 from bioplausible.models.registry import MODEL_REGISTRY
 
 # Type aliases
@@ -143,17 +145,23 @@ class SearchSpace:
             # Handle discrete choices (list)
             if isinstance(spec, list):
                 if param == "num_layers" and "max_layers" in constraints:
-                    new_params[param] = [x for x in spec if x <= constraints["max_layers"]]
-                    if not new_params[param]: # Fallback if empty
+                    new_params[param] = [
+                        x for x in spec if x <= constraints["max_layers"]
+                    ]
+                    if not new_params[param]:  # Fallback if empty
                         new_params[param] = [min(spec)]
 
                 elif param == "hidden_dim" and "max_hidden" in constraints:
-                    new_params[param] = [x for x in spec if x <= constraints["max_hidden"]]
+                    new_params[param] = [
+                        x for x in spec if x <= constraints["max_hidden"]
+                    ]
                     if not new_params[param]:
                         new_params[param] = [min(spec)]
 
                 elif param == "steps" and "max_steps" in constraints:
-                    new_params[param] = [x for x in spec if x <= constraints["max_steps"]]
+                    new_params[param] = [
+                        x for x in spec if x <= constraints["max_steps"]
+                    ]
                     if not new_params[param]:
                         new_params[param] = [min(spec)]
 
@@ -163,17 +171,20 @@ class SearchSpace:
 
                 if param == "num_layers" and "max_layers" in constraints:
                     max_val = min(max_val, constraints["max_layers"])
-                    if min_val > max_val: min_val = max_val
+                    if min_val > max_val:
+                        min_val = max_val
                     new_params[param] = (min_val, max_val, scale)
 
                 elif param == "hidden_dim" and "max_hidden" in constraints:
                     max_val = min(max_val, constraints["max_hidden"])
-                    if min_val > max_val: min_val = max_val
+                    if min_val > max_val:
+                        min_val = max_val
                     new_params[param] = (min_val, max_val, scale)
 
                 elif param == "steps" and "max_steps" in constraints:
                     max_val = min(max_val, constraints["max_steps"])
-                    if min_val > max_val: min_val = max_val
+                    if min_val > max_val:
+                        min_val = max_val
                     new_params[param] = (min_val, max_val, scale)
 
         return SearchSpace(self.name, new_params)
@@ -222,7 +233,7 @@ SEARCH_SPACES = {
         "Finite-Nudge EqProp",
         {
             "lr": (1e-4, 1e-2, "log"),
-            "beta": (0.5, 3.0, "linear"), # Large beta
+            "beta": (0.5, 3.0, "linear"),  # Large beta
             "steps": (10, 40, "int"),
             "hidden_dim": [64, 128],
         },
@@ -257,27 +268,19 @@ SEARCH_SPACES = {
     # Add Missing Spaces
     "Layerwise Equilibrium FA": SearchSpace(
         "Layerwise Equilibrium FA",
-        {
-            "lr": (1e-4, 1e-2, "log"),
-            "hidden_dim": [64, 128],
-            "num_layers": [2, 4, 6]
-        }
+        {"lr": (1e-4, 1e-2, "log"), "hidden_dim": [64, 128], "num_layers": [2, 4, 6]},
     ),
     "Energy Guided FA": SearchSpace(
         "Energy Guided FA",
         {
             "lr": (1e-4, 1e-2, "log"),
             "energy_scale": (0.1, 1.0, "linear"),
-            "hidden_dim": [64, 128]
-        }
+            "hidden_dim": [64, 128],
+        },
     ),
     "Predictive Coding Hybrid": SearchSpace(
         "Predictive Coding Hybrid",
-        {
-            "lr": (1e-4, 1e-2, "log"),
-            "steps": (10, 30, "int"),
-            "hidden_dim": [64, 128]
-        }
+        {"lr": (1e-4, 1e-2, "log"), "steps": (10, 30, "int"), "hidden_dim": [64, 128]},
     ),
     "Sparse Equilibrium": SearchSpace(
         "Sparse Equilibrium",
@@ -285,33 +288,28 @@ SEARCH_SPACES = {
             "lr": (1e-4, 1e-2, "log"),
             "beta": (0.05, 0.3, "linear"),
             "sparsity": (0.1, 0.9, "linear"),
-            "hidden_dim": [128, 256]
-        }
+            "hidden_dim": [128, 256],
+        },
     ),
     "Momentum Equilibrium": SearchSpace(
         "Momentum Equilibrium",
         {
             "lr": (1e-4, 1e-2, "log"),
             "momentum": (0.5, 0.95, "linear"),
-            "steps": (10, 30, "int")
-        }
+            "steps": (10, 30, "int"),
+        },
     ),
     "Stochastic FA": SearchSpace(
         "Stochastic FA",
         {
             "lr": (1e-4, 1e-2, "log"),
             "noise_scale": (0.01, 0.2, "log"),
-            "hidden_dim": [64, 128]
-        }
+            "hidden_dim": [64, 128],
+        },
     ),
     "Energy Minimizing FA": SearchSpace(
-        "Energy Minimizing FA",
-        {
-            "lr": (1e-4, 1e-2, "log"),
-            "hidden_dim": [64, 128]
-        }
+        "Energy Minimizing FA", {"lr": (1e-4, 1e-2, "log"), "hidden_dim": [64, 128]}
     ),
-
     # Transformers
     "EqProp Transformer (Attention Only)": SearchSpace(
         "EqProp Transformer (Attention Only)",
@@ -382,6 +380,7 @@ SEARCH_SPACES = {
 # However, for consistency, we can export GridSearch/RandomSearch from here if we want them accessible via search_space.py
 from bioplausible.hyperopt.strategies import GridSearch, RandomSearch
 
+
 def get_search_space(model_name: str) -> SearchSpace:
     """Get the search space for a model."""
     # 1. Try hardcoded spaces first (for customized ranges)
@@ -400,22 +399,22 @@ def get_search_space(model_name: str) -> SearchSpace:
         }
 
         if spec.has_beta:
-             params["beta"] = (0.05, 0.5, "linear")
+            params["beta"] = (0.05, 0.5, "linear")
 
         if spec.has_steps:
-             params["steps"] = (5, 30, "int")
+            params["steps"] = (5, 30, "int")
 
         return SearchSpace(model_name, params)
 
     # 3. Fallback for completely unknown models
     # Try to infer based on name/flags if possible, or raise error
     if "EqProp" in model_name:
-         params = {
+        params = {
             "lr": (1e-5, 1e-2, "log"),
             "beta": (0.05, 0.5, "linear"),
             "steps": (5, 20, "int"),
             "hidden_dim": [64, 128],
-         }
-         return SearchSpace(model_name, params)
+        }
+        return SearchSpace(model_name, params)
 
     raise ValueError(f"No search space defined for model: {model_name}")

@@ -4,11 +4,13 @@ Standard Equilibrium Propagation
 Reference implementation with correct top-down feedback dynamics.
 """
 
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
-from typing import Dict, Optional, List, Union, Tuple, Any
-from .base import BioModel, ModelConfig, register_model
+
 from ..acceleration import compile_settling_loop
+from .base import BioModel, ModelConfig, register_model
 
 
 @register_model("eqprop")

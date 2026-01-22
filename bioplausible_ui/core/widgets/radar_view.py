@@ -1,9 +1,10 @@
 import numpy as np
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QMessageBox
 from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QLabel, QMessageBox, QVBoxLayout, QWidget
 
 try:
     import pyqtgraph as pg
+
     HAS_PYQTGRAPH = True
 except ImportError:
     HAS_PYQTGRAPH = False
@@ -11,9 +12,11 @@ except ImportError:
 try:
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
+
     HAS_SKLEARN = True
 except ImportError:
     HAS_SKLEARN = False
+
 
 class RadarView(QWidget):
     """
@@ -24,7 +27,7 @@ class RadarView(QWidget):
     Otherwise falls back to a heuristic complexity vs dynamics mapping.
     """
 
-    pointClicked = pyqtSignal(dict) # Emits result dict
+    pointClicked = pyqtSignal(dict)  # Emits result dict
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -36,21 +39,23 @@ class RadarView(QWidget):
             return
 
         self.plot_widget = pg.PlotWidget(title="Architecture Radar")
-        self.plot_widget.setLabel('bottom', "PC1 (Architecture Space)")
-        self.plot_widget.setLabel('left', "PC2 (Architecture Space)")
+        self.plot_widget.setLabel("bottom", "PC1 (Architecture Space)")
+        self.plot_widget.setLabel("left", "PC2 (Architecture Space)")
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.plot_widget.setBackground('#1e1e2e') # Dark theme
+        self.plot_widget.setBackground("#1e1e2e")  # Dark theme
 
         # Scatter plot item
-        self.scatter = pg.ScatterPlotItem(size=12, pen=pg.mkPen('w', width=1), brush=pg.mkBrush(255, 255, 255, 120))
+        self.scatter = pg.ScatterPlotItem(
+            size=12, pen=pg.mkPen("w", width=1), brush=pg.mkBrush(255, 255, 255, 120)
+        )
         self.scatter.sigClicked.connect(self._on_point_clicked)
         self.plot_widget.addItem(self.scatter)
 
         self.layout.addWidget(self.plot_widget)
 
-        self.data_points = [] # List of result dicts
-        self.vectors = [] # List of feature vectors
-        self.param_keys = None # To ensure consistent ordering
+        self.data_points = []  # List of result dicts
+        self.vectors = []  # List of feature vectors
+        self.param_keys = None  # To ensure consistent ordering
 
     def _vectorize_params(self, params):
         """Convert param dict to vector."""
@@ -92,8 +97,8 @@ class RadarView(QWidget):
                 ys = coords[:, 1]
 
                 self.plot_widget.setTitle(f"Architecture Radar (PCA, N={N})")
-                self.plot_widget.setLabel('bottom', "Principal Component 1")
-                self.plot_widget.setLabel('left', "Principal Component 2")
+                self.plot_widget.setLabel("bottom", "Principal Component 1")
+                self.plot_widget.setLabel("left", "Principal Component 2")
 
             except Exception as e:
                 print(f"PCA failed: {e}, falling back to heuristic")
@@ -101,27 +106,29 @@ class RadarView(QWidget):
         else:
             xs, ys = self._get_heuristic_coords()
             self.plot_widget.setTitle(f"Architecture Radar (Heuristic, N={N})")
-            self.plot_widget.setLabel('bottom', "Complexity (Layers × Width)")
-            self.plot_widget.setLabel('left', "Dynamics (log LR)")
+            self.plot_widget.setLabel("bottom", "Complexity (Layers × Width)")
+            self.plot_widget.setLabel("left", "Dynamics (log LR)")
 
         # Determine brushes (colors) based on accuracy
         brushes = []
         for res in self.data_points:
-            acc = res.get('accuracy', 0.0)
+            acc = res.get("accuracy", 0.0)
             # Heatmap: Blue (0.0) -> Red (1.0)
             r = int(np.clip(acc * 255, 0, 255))
-            b = int(np.clip((1-acc) * 255, 0, 255))
+            b = int(np.clip((1 - acc) * 255, 0, 255))
             brushes.append(pg.mkBrush(r, 0, b, 200))
 
         # Update scatter
         # We must rebuild spots
         spots = []
         for i in range(N):
-            spots.append({
-                'pos': (xs[i], ys[i]),
-                'brush': brushes[i],
-                'data': self.data_points[i]
-            })
+            spots.append(
+                {
+                    "pos": (xs[i], ys[i]),
+                    "brush": brushes[i],
+                    "data": self.data_points[i],
+                }
+            )
 
         self.scatter.setData(spots=spots)
 
@@ -130,14 +137,14 @@ class RadarView(QWidget):
         xs = []
         ys = []
         for res in self.data_points:
-            params = res.get('params', {})
+            params = res.get("params", {})
             # X: Complexity
-            layers = params.get('num_layers', 1)
-            hidden = params.get('hidden_dim', 64)
+            layers = params.get("num_layers", 1)
+            hidden = params.get("hidden_dim", 64)
             xs.append(layers * hidden)
 
             # Y: Dynamics
-            lr = params.get('lr', 0.001)
+            lr = params.get("lr", 0.001)
             ys.append(np.log10(max(lr, 1e-9)))
         return xs, ys
 
@@ -145,7 +152,7 @@ class RadarView(QWidget):
         """
         Add a search result to the radar.
         """
-        params = result.get('params', {})
+        params = result.get("params", {})
         vec = self._vectorize_params(params)
 
         self.data_points.append(result)

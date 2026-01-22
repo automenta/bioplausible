@@ -1,6 +1,8 @@
+from typing import Dict, List, Optional
+
 import torch
 import torch.nn as nn
-from typing import Dict, List, Optional
+
 from .nebc_base import NEBCBase, register_nebc
 
 
@@ -24,7 +26,7 @@ class AdaptiveFA(NEBCBase):
         activation: str = "relu",
         learning_rate: float = 0.001,
         feedback_lr_scale: float = 0.001,
-        **kwargs
+        **kwargs,
     ):
         self.activation_name = activation
         self.learning_rate = learning_rate
@@ -35,7 +37,7 @@ class AdaptiveFA(NEBCBase):
             hidden_dim=hidden_dim,
             output_dim=output_dim,
             num_layers=num_layers,
-            **kwargs
+            **kwargs,
         )
 
         # Standard optimizers (if used via train_step)

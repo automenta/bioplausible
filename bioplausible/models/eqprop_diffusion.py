@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from bioplausible.models import SimpleConvEqProp
 
 
@@ -38,7 +39,7 @@ class EqPropDiffusion(nn.Module):
 
         # Calculations for posterior q(x_{t-1} | x_t, x_0)
         alpha_bar_prev = F.pad(alpha_bar[:-1], (1, 0), value=1.0)
-        posterior_variance = beta * (1. - alpha_bar_prev) / (1. - alpha_bar)
+        posterior_variance = beta * (1.0 - alpha_bar_prev) / (1.0 - alpha_bar)
 
         self.register_buffer("beta", beta)
         self.register_buffer("alpha", alpha)
@@ -71,7 +72,7 @@ class EqPropDiffusion(nn.Module):
         loss = F.mse_loss(pred, x)
 
         # Optimization handled by Trainer usually, but if manual:
-        if not hasattr(self, 'optimizer'):
+        if not hasattr(self, "optimizer"):
             self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
 
         if self.training:
@@ -123,12 +124,12 @@ class EqPropDiffusion(nn.Module):
         If t is provided, embeds t and concatenates.
         """
         if t is None:
-             if x.shape[1] == self.img_channels + 1:
-                 return self.denoiser(x)
-             # Default to t=0? Or error?
-             # For simplicity, assume t=0 (cleanest) if not provided?
-             # Or just fail.
-             raise ValueError("t must be provided for diffusion forward pass")
+            if x.shape[1] == self.img_channels + 1:
+                return self.denoiser(x)
+            # Default to t=0? Or error?
+            # For simplicity, assume t=0 (cleanest) if not provided?
+            # Or just fail.
+            raise ValueError("t must be provided for diffusion forward pass")
 
         return self.predict_x0(x, t)
 
@@ -160,7 +161,9 @@ class EqPropDiffusion(nn.Module):
             beta_t = self.beta[t].view(B, 1, 1, 1)
 
             coeff1 = torch.sqrt(alpha_bar_prev_t) * beta_t / (1.0 - alpha_bar_t)
-            coeff2 = torch.sqrt(alpha_t) * (1.0 - alpha_bar_prev_t) / (1.0 - alpha_bar_t)
+            coeff2 = (
+                torch.sqrt(alpha_t) * (1.0 - alpha_bar_prev_t) / (1.0 - alpha_bar_t)
+            )
 
             mean = coeff1 * x_0_pred + coeff2 * x
 
@@ -176,4 +179,6 @@ class EqPropDiffusion(nn.Module):
                 x = mean
 
         self.train()
-        return x.clamp(-1, 1) # Assume normalized to [-1, 1] usually, or [0,1] if data was [0,1]
+        return x.clamp(
+            -1, 1
+        )  # Assume normalized to [-1, 1] usually, or [0,1] if data was [0,1]

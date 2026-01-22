@@ -2,20 +2,21 @@
 GPU Kernel Benchmark: Fair comparison PyTorch (GPU) vs CuPy Kernel (GPU)
 """
 
+import sys
 import time
+from pathlib import Path
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
-import sys
-from pathlib import Path
 
 root_path = Path(__file__).parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
     sys.path.append(str(root_path / "archive"))
 
-from models import LoopedMLP
 from archive.kernel.eqprop_kernel import EqPropKernel as CuPyKernel
+from models import LoopedMLP
 
 
 def benchmark_gpu(input_dim, hidden_dim, output_dim, n_samples, epochs, max_steps):

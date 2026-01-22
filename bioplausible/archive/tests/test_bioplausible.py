@@ -5,11 +5,12 @@ Tests that the 13 algorithms from algorithms/ are properly integrated
 as first-class PyTorch models (same status as LoopedMLP).
 """
 
+import sys
 import unittest
+from pathlib import Path
+
 import torch
 import torch.nn as nn
-import sys
-from pathlib import Path
 
 # Add parent to path for in-package testing
 parent_dir = Path(__file__).parent.parent.parent
@@ -21,13 +22,8 @@ from bioplausible import HAS_BIOPLAUSIBLE
 if not HAS_BIOPLAUSIBLE:
     raise unittest.SkipTest("Research algorithms not available")
 
-from bioplausible import (
-    BaseAlgorithm,
-    StandardEqProp,
-    StandardFA,
-    AdaptiveFeedbackAlignment,
-    ALGORITHM_REGISTRY,
-)
+from bioplausible import (ALGORITHM_REGISTRY, AdaptiveFeedbackAlignment,
+                          BaseAlgorithm, StandardEqProp, StandardFA)
 from bioplausible.algorithms import AlgorithmConfig
 
 

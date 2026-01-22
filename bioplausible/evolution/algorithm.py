@@ -11,11 +11,12 @@ Defines the genetic encoding for evolving EqProp algorithm variations:
 Key Insight: SN enables stability for ANY contraction-based learning rule.
 """
 
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Any, List, Optional, Callable, Tuple
-from enum import Enum
-import numpy as np
 import copy
+from dataclasses import asdict, dataclass, field
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+import numpy as np
 
 
 class UpdateRule(Enum):

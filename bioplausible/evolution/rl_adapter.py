@@ -5,11 +5,12 @@ Wraps OpenAI Gym environments for evaluation with EqProp models.
 Provides standardized interface for RL task evaluation.
 """
 
+import logging
+from typing import Optional, Tuple
+
 import numpy as np
 import torch
 import torch.nn as nn
-from typing import Tuple, Optional
-import logging
 
 try:
     import gymnasium as gym

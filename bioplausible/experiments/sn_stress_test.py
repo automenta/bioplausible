@@ -11,14 +11,15 @@ Goal: Demonstrate DRAMATIC differences between SN and no-SN by:
 Expected: Without SN, models should diverge or significantly underperform.
 """
 
+import json
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-import time
-import json
-from pathlib import Path
-import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from bioplausible.models import LoopedMLP
@@ -354,8 +355,7 @@ def run_all_stress_tests():
     print("CONCLUSIONS")
     print("=" * 80)
 
-    print(
-        f"""
+    print(f"""
 ### When SN is CRITICAL:
 
 1. **Underfitting regime** (small models): SN prevents weight explosion
@@ -375,8 +375,7 @@ def run_all_stress_tests():
 - Zero cost (PyTorch's spectral_norm is efficient)
 - Guarantees L ≤ 1 (contracts to unique fixed point)
 - Enables self-healing, deep networks, quantization
-"""
-    )
+""")
 
     # Save results
     output_path = Path(__file__).parent / "results" / "sn_stress_test.json"

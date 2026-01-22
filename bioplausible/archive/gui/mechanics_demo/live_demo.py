@@ -18,30 +18,19 @@ Features:
   * Spectral normalization toggle
 """
 
+import numpy as np
+import pyqtgraph as pg
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-import numpy as np
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QGroupBox,
-    QGridLayout,
-    QSlider,
-    QCheckBox,
-    QSpinBox,
-    QDoubleSpinBox,
-    QProgressBar,
-    QSplitter,
-)
-from PyQt6.QtCore import QTimer, Qt
-import pyqtgraph as pg
-
+import torch.optim as optim
 from models import LoopedMLP
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (QCheckBox, QDoubleSpinBox, QGridLayout, QGroupBox,
+                             QHBoxLayout, QLabel, QProgressBar, QPushButton,
+                             QSlider, QSpinBox, QSplitter, QVBoxLayout,
+                             QWidget)
+
 from .utils import load_mnist_subset
 
 

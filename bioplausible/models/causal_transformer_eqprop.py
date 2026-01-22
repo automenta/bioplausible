@@ -5,13 +5,16 @@ Extends TransformerEqProp with causal masking and language modeling head
 for character-level and token-level language modeling tasks.
 """
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 from torch.nn.utils.parametrizations import spectral_norm
-from .utils import spectral_linear
+
 from bioplausible.models.triton_kernel import TritonEqPropOps
+
+from .utils import spectral_linear
 
 
 class CausalEqPropAttention(nn.Module):

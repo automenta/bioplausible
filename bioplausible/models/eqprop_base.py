@@ -1,9 +1,11 @@
+from abc import abstractmethod
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import torch
+import torch.autograd as autograd
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.autograd as autograd
-from typing import Optional, List, Tuple, Dict, Union, Any
-from abc import abstractmethod
+
 from .nebc_base import NEBCBase
 from .triton_kernel import TritonEqPropOps
 
@@ -28,7 +30,7 @@ class EquilibriumFunction(autograd.Function):
         model: nn.Module,
         x_transformed: torch.Tensor,
         h_init: torch.Tensor,
-        *params: torch.Tensor
+        *params: torch.Tensor,
     ) -> torch.Tensor:
         ctx.model = model
 
@@ -61,7 +63,9 @@ class EquilibriumFunction(autograd.Function):
         return h
 
     @staticmethod
-    def backward(ctx: Any, grad_output: torch.Tensor) -> Tuple[Optional[torch.Tensor], ...]:
+    def backward(
+        ctx: Any, grad_output: torch.Tensor
+    ) -> Tuple[Optional[torch.Tensor], ...]:
         h_star, x_transformed, *params = ctx.saved_tensors
         model = ctx.model
 
@@ -101,7 +105,7 @@ class EquilibriumFunction(autograd.Function):
                         h_star_loop,
                         grad_outputs=delta.detach(),
                         retain_graph=False,
-                        create_graph=False
+                        create_graph=False,
                     )[0]
 
                     # Update delta
@@ -136,7 +140,7 @@ class EquilibriumFunction(autograd.Function):
                         params,
                         grad_outputs=delta,
                         allow_unused=True,
-                        retain_graph=False
+                        retain_graph=False,
                     )
                     grads_params_list = list(computed_grads)
 
@@ -144,14 +148,11 @@ class EquilibriumFunction(autograd.Function):
                 # dL/dx = (df/dx)^T @ delta
                 grad_x = None
                 if x_transformed.requires_grad:
-                     # Use attached x_transformed to get gradients w.r.t input
-                     f_h_x = model.forward_step(h_star_detached, x_transformed)
-                     grad_x = autograd.grad(
-                         f_h_x,
-                         x_transformed,
-                         grad_outputs=delta,
-                         retain_graph=False
-                     )[0]
+                    # Use attached x_transformed to get gradients w.r.t input
+                    f_h_x = model.forward_step(h_star_detached, x_transformed)
+                    grad_x = autograd.grad(
+                        f_h_x, x_transformed, grad_outputs=delta, retain_graph=False
+                    )[0]
 
         finally:
             # Restore original training state
@@ -237,7 +238,9 @@ class EqPropModel(NEBCBase):
         Returns:
             List of tuples: (layer, input_to_layer, target_output_of_layer)
         """
-        raise NotImplementedError("Subclasses must implement get_hebbian_pairs for generic contrastive learning.")
+        raise NotImplementedError(
+            "Subclasses must implement get_hebbian_pairs for generic contrastive learning."
+        )
 
     def contrastive_update(
         self,
@@ -273,12 +276,16 @@ class EqPropModel(NEBCBase):
             # Free Phase Term
             out_f = layer(inp_f)
             proxy_loss_f = torch.sum(out_f * tgt_f.detach())
-            grads_f = autograd.grad(proxy_loss_f, layer.parameters(), retain_graph=True, allow_unused=True)
+            grads_f = autograd.grad(
+                proxy_loss_f, layer.parameters(), retain_graph=True, allow_unused=True
+            )
 
             # Nudged Phase Term
             out_n = layer(inp_n)
             proxy_loss_n = torch.sum(out_n * tgt_n.detach())
-            grads_n = autograd.grad(proxy_loss_n, layer.parameters(), retain_graph=True, allow_unused=True)
+            grads_n = autograd.grad(
+                proxy_loss_n, layer.parameters(), retain_graph=True, allow_unused=True
+            )
 
             # Apply update
             for param, gf, gn in zip(layer.parameters(), grads_f, grads_n):
@@ -286,8 +293,10 @@ class EqPropModel(NEBCBase):
                     # Delta W ~ (Nudged - Free)
                     # Check for None (unused params)
                     g_update = 0.0
-                    if gn is not None: g_update += gn
-                    if gf is not None: g_update -= gf
+                    if gn is not None:
+                        g_update += gn
+                    if gf is not None:
+                        g_update -= gf
 
                     if isinstance(g_update, float) and g_update == 0.0:
                         continue
@@ -347,7 +356,9 @@ class EqPropModel(NEBCBase):
 
         # Initialize optimizer on first call
         if self.internal_optimizer is None:
-            self.internal_optimizer = torch.optim.Adam(self.parameters(), lr=self.hebbian_lr)
+            self.internal_optimizer = torch.optim.Adam(
+                self.parameters(), lr=self.hebbian_lr
+            )
 
         self.internal_optimizer.zero_grad()
 
@@ -396,7 +407,9 @@ class EqPropModel(NEBCBase):
             # We'll use a constant nudge vector derived from free phase for stability/speed
             nudge_vec = -self.beta * grads_h
 
-            for _ in range(self.max_steps // 2): # Typically fewer steps for nudged phase
+            for _ in range(
+                self.max_steps // 2
+            ):  # Typically fewer steps for nudged phase
                 # h = f(h) + nudge
                 h_next = self.forward_step(h_nudged, x_transformed)
                 h_nudged = h_next + nudge_vec
@@ -445,13 +458,19 @@ class EqPropModel(NEBCBase):
         h = self._initialize_hidden_state(x)
         x_transformed = self._transform_input(x)
 
-        if return_trajectory or return_dynamics or self.gradient_method in ["bptt", "contrastive"]:
+        if (
+            return_trajectory
+            or return_dynamics
+            or self.gradient_method in ["bptt", "contrastive"]
+        ):
             # Standard unrolling (BPTT, Analysis, or Contrastive Inference)
             trajectory = [h] if return_trajectory else None
             deltas = [] if return_dynamics else None
 
             # Optimization: Freeze Spectral Norm during loop to prevent graph breaks
-            should_freeze_sn = getattr(self, "use_spectral_norm", False) and self.training
+            should_freeze_sn = (
+                getattr(self, "use_spectral_norm", False) and self.training
+            )
             remaining_steps = steps
 
             if should_freeze_sn and remaining_steps > 0:
@@ -487,7 +506,7 @@ class EqPropModel(NEBCBase):
                 return out, {
                     "trajectory": trajectory,
                     "deltas": deltas,
-                    "final_delta": deltas[-1] if deltas else 0.0
+                    "final_delta": deltas[-1] if deltas else 0.0,
                 }
 
             if return_trajectory:

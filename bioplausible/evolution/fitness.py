@@ -10,7 +10,8 @@ Evaluates model variants across multiple dimensions:
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 import numpy as np
 
 
@@ -146,9 +147,10 @@ def compute_fitness(
     This is a simplified version - the full VariationEvaluator handles
     tiered evaluation and more sophisticated metrics.
     """
+    import time
+
     import torch
     import torch.nn as nn
-    import time
 
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)

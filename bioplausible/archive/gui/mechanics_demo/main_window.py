@@ -2,15 +2,16 @@
 Main Window for Mechanics Demo
 """
 
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget, QLabel
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (QLabel, QMainWindow, QTabWidget, QVBoxLayout,
+                             QWidget)
 
+from .cube_demo import CubeDemo
 from .equilibrium_demo import EquilibriumDemo
 from .healing_demo import HealingDemo
-from .cube_demo import CubeDemo
-from .training_demo import TrainingDemo
 from .live_demo import LiveMechanicsDemo
+from .training_demo import TrainingDemo
 
 
 class MechanicsDemoWindow(QMainWindow):

@@ -3,19 +3,20 @@ GPU Kernel Fair Comparison: PyTorch (GPU) vs CuPy Kernel (GPU)
 Uses the updated models/kernel.py with CuPy support
 """
 
+import sys
 import time
+from pathlib import Path
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
-import sys
-from pathlib import Path
 
 root_path = Path(__file__).parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
 from models import LoopedMLP
-from models.kernel import EqPropKernelBPTT, HAS_CUPY
+from models.kernel import HAS_CUPY, EqPropKernelBPTT
 
 
 def benchmark_gpu(input_dim, hidden_dim, output_dim, n_samples, epochs, max_steps):

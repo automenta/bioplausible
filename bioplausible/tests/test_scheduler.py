@@ -1,7 +1,9 @@
 import unittest
+
 import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import StepLR
+
 from bioplausible.core import EqPropTrainer
 from bioplausible.models.looped_mlp import LoopedMLP
 

@@ -5,41 +5,22 @@ A genetic algorithm-based system for evolving and evaluating
 Equilibrium Propagation + Spectral Normalization model variants.
 """
 
-from .fitness import FitnessScore, compute_fitness
-from .breeder import VariationBreeder, ArchConfig
-from .evaluator import VariationEvaluator, EvalTier
-from .breakthrough import BreakthroughDetector
-from .engine import EvolutionEngine
-
-# New modular components
-from .base import (
-    ModelBuilder,
-    Evaluator,
-    SelectionStrategy,
-    BreedingStrategy,
-    TerminationCriterion,
-    EvaluationResult,
-)
-from .config import (
-    TIER_CONFIGS,
-    TASK_CONFIGS,
-    MODEL_CONSTRAINTS,
-    DEFAULT_FITNESS_WEIGHTS,
-    BreedingConfig,
-)
-from .utils import setup_logger, set_seed, count_parameters, format_time
-from .models import ModelRegistry, DefaultModelBuilder
-from .algorithm import (
-    AlgorithmConfig,
-    AlgorithmBreeder,
-    ALGORITHM_PRESETS,
-    UpdateRule,
-    EquilibriumDynamics,
-    GradientApprox,
-    SNStrategy,
-    ActivationFunction,
-)
+from .algorithm import (ALGORITHM_PRESETS, ActivationFunction,
+                        AlgorithmBreeder, AlgorithmConfig, EquilibriumDynamics,
+                        GradientApprox, SNStrategy, UpdateRule)
 from .algorithm_model import AlgorithmVariantModel, build_algorithm_variant
+# New modular components
+from .base import (BreedingStrategy, EvaluationResult, Evaluator, ModelBuilder,
+                   SelectionStrategy, TerminationCriterion)
+from .breakthrough import BreakthroughDetector
+from .breeder import ArchConfig, VariationBreeder
+from .config import (DEFAULT_FITNESS_WEIGHTS, MODEL_CONSTRAINTS, TASK_CONFIGS,
+                     TIER_CONFIGS, BreedingConfig)
+from .engine import EvolutionEngine
+from .evaluator import EvalTier, VariationEvaluator
+from .fitness import FitnessScore, compute_fitness
+from .models import DefaultModelBuilder, ModelRegistry
+from .utils import count_parameters, format_time, set_seed, setup_logger
 
 __all__ = [
     # Core components

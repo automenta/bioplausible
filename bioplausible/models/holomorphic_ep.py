@@ -5,9 +5,11 @@ Implements Equilibrium Propagation with complex-valued states and weights.
 Based on Laborieux et al. (NeurIPS 2024).
 """
 
+from typing import Dict, List, Optional
+
 import torch
 import torch.nn as nn
-from typing import Dict, Optional, List
+
 from .base import BioModel, ModelConfig, register_model
 
 
@@ -101,7 +103,9 @@ class HolomorphicEP(BioModel):
 
                     w_backward = w.conj().T
                     # Manually compute matmul: [B, H_next] @ [H_next, H_curr]
-                    a_td = torch.matmul(h_next, w_backward.T) # .T because we want (w_backward @ h_next.T).T
+                    a_td = torch.matmul(
+                        h_next, w_backward.T
+                    )  # .T because we want (w_backward @ h_next.T).T
 
             total_input = a_bu + a_td
 
@@ -156,7 +160,7 @@ class HolomorphicEP(BioModel):
         """EqProp training step with contrastive phases in complex domain."""
         target = torch.zeros(y.size(0), self.config.output_dim, device=y.device)
         target.scatter_(1, y.unsqueeze(1), 1.0)
-        target = target.to(torch.complex64) # Ensure complex
+        target = target.to(torch.complex64)  # Ensure complex
 
         # Free phase (beta=0)
         with torch.no_grad():

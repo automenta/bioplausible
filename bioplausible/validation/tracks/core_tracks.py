@@ -1,11 +1,13 @@
+import sys
 import time
+from pathlib import Path
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
+
 from ..notebook import TrackResult
-from ..utils import create_synthetic_dataset, train_model, evaluate_accuracy
-import sys
-from pathlib import Path
+from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 
 # Enhance import path to ensure models can be found
 # Assuming structure: release/validation/tracks/
@@ -14,8 +16,7 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.models import LoopedMLP
-from bioplausible.models import BackpropMLP
+from bioplausible.models import BackpropMLP, LoopedMLP
 
 
 def track_1_spectral_norm(verifier) -> TrackResult:

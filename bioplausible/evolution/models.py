@@ -5,14 +5,14 @@ Provides a centralized registry for building models from configurations,
 with proper validation and error handling.
 """
 
-import torch.nn as nn
-from typing import Dict, Type, Callable, Optional
 import logging
+from typing import Callable, Dict, Optional, Type
+
+import torch.nn as nn
 
 from .base import ModelBuilder
 from .breeder import ArchConfig
-from .config import TASK_CONFIGS, MODEL_CONSTRAINTS
-
+from .config import MODEL_CONSTRAINTS, TASK_CONFIGS
 
 logger = logging.getLogger(__name__)
 

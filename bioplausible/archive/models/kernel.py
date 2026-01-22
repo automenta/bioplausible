@@ -10,8 +10,9 @@ This implements BOTH for comparison and validation.
 Now with CuPy GPU support for fair performance comparison.
 """
 
-import numpy as np
 from typing import Dict, Tuple
+
+import numpy as np
 
 # Try to import CuPy for GPU acceleration
 try:

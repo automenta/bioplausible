@@ -4,11 +4,11 @@ SQLite Storage Backend
 Persists trials, configurations, and results to a SQLite database.
 """
 
-import sqlite3
 import json
-from typing import List, Dict, Any, Optional
-from pathlib import Path
+import sqlite3
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from .metrics import TrialMetrics
 
@@ -33,8 +33,7 @@ class HyperoptStorage:
         cursor = self.conn.cursor()
 
         # Trials table
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS trials (
                 trial_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 model_name TEXT NOT NULL,
@@ -49,12 +48,10 @@ class HyperoptStorage:
                 param_count REAL,
                 is_pareto INTEGER DEFAULT 0
             )
-        """
-        )
+        """)
 
         # Epoch metrics table (for detailed logging)
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS epoch_metrics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 trial_id INTEGER NOT NULL,
@@ -65,8 +62,7 @@ class HyperoptStorage:
                 time REAL,
                 FOREIGN KEY (trial_id) REFERENCES trials (trial_id)
             )
-        """
-        )
+        """)
 
         self.conn.commit()
 

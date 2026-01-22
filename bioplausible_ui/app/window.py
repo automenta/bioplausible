@@ -1,18 +1,20 @@
-from PyQt6.QtWidgets import QMainWindow, QTabWidget, QLabel
-from PyQt6.QtCore import QTimer
 import psutil
 import torch
-from bioplausible_ui.core.themes import Theme
-from bioplausible_ui.app.tabs.home_tab import HomeTab
-from bioplausible_ui.app.tabs.train_tab import TrainTab
-from bioplausible_ui.app.tabs.compare_tab import CompareTab
-from bioplausible_ui.app.tabs.search_tab import SearchTab
-from bioplausible_ui.app.tabs.results_tab import ResultsTab
+from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QLabel, QMainWindow, QTabWidget
+
 from bioplausible_ui.app.tabs.benchmarks_tab import BenchmarksTab
-from bioplausible_ui.app.tabs.deploy_tab import DeployTab
-from bioplausible_ui.app.tabs.p2p_tab import P2PTab
+from bioplausible_ui.app.tabs.compare_tab import CompareTab
 from bioplausible_ui.app.tabs.console_tab import ConsoleTab
+from bioplausible_ui.app.tabs.deploy_tab import DeployTab
+from bioplausible_ui.app.tabs.home_tab import HomeTab
+from bioplausible_ui.app.tabs.p2p_tab import P2PTab
+from bioplausible_ui.app.tabs.results_tab import ResultsTab
+from bioplausible_ui.app.tabs.search_tab import SearchTab
 from bioplausible_ui.app.tabs.settings_tab import SettingsTab
+from bioplausible_ui.app.tabs.train_tab import TrainTab
+from bioplausible_ui.core.themes import Theme
+
 
 class AppMainWindow(QMainWindow):
     def __init__(self):
@@ -24,10 +26,12 @@ class AppMainWindow(QMainWindow):
         # Status Bar
         self.status_bar = self.statusBar()
         self.status_label = QLabel("Ready")
-        self.device_label = QLabel(f"Device: {'CUDA' if torch.cuda.is_available() else 'CPU'}")
+        self.device_label = QLabel(
+            f"Device: {'CUDA' if torch.cuda.is_available() else 'CPU'}"
+        )
         self.mem_label = QLabel("Mem: -")
 
-        self.status_bar.addWidget(self.status_label, 1) # Stretch
+        self.status_bar.addWidget(self.status_label, 1)  # Stretch
         self.status_bar.addPermanentWidget(self.device_label)
         self.status_bar.addPermanentWidget(self.mem_label)
 
@@ -81,7 +85,7 @@ class AppMainWindow(QMainWindow):
         # Update memory usage
         try:
             process = psutil.Process()
-            mem = process.memory_info().rss / 1024 / 1024 # MB
+            mem = process.memory_info().rss / 1024 / 1024  # MB
             self.mem_label.setText(f"Mem: {mem:.0f} MB")
 
             # If GPU

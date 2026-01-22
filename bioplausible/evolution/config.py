@@ -5,7 +5,6 @@ Configuration and constants for the evolution system.
 from dataclasses import dataclass
 from typing import Dict, Tuple
 
-
 # ============================================================================
 # Evaluation Tiers
 # ============================================================================

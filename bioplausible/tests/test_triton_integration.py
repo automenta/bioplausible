@@ -1,16 +1,17 @@
-
+import sys
 import unittest
+from pathlib import Path
+
 import torch
 import torch.nn as nn
-from pathlib import Path
-import sys
 
 # Add parent to path for in-package testing
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
 from bioplausible.models.looped_mlp import LoopedMLP
-from bioplausible.models.triton_kernel import TritonEqPropOps, HAS_TRITON
+from bioplausible.models.triton_kernel import HAS_TRITON, TritonEqPropOps
+
 
 class TestTritonIntegration(unittest.TestCase):
     def setUp(self):
@@ -23,7 +24,7 @@ class TestTritonIntegration(unittest.TestCase):
             self.hidden_dim,
             self.output_dim,
         ).to(self.device)
-        
+
         # Reset functioning flag to ensure test isolation
         if HAS_TRITON:
             TritonEqPropOps._triton_functioning = True
@@ -64,6 +65,7 @@ class TestTritonIntegration(unittest.TestCase):
             x = torch.randn(batch_size, self.input_dim).to(self.device)
             out = self.model(x)
             self.assertEqual(out.shape, (batch_size, self.output_dim))
+
 
 if __name__ == "__main__":
     unittest.main()

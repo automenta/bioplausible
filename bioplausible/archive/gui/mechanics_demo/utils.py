@@ -2,12 +2,12 @@
 Utilities for mechanics demos - MNIST loading, training helpers
 """
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
-import numpy as np
 
 
 def load_mnist_subset(train=True, subset_size=1000, batch_size=64):

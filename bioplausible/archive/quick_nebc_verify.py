@@ -5,17 +5,13 @@ Lightweight test to verify SN impact with minimal compute.
 Focuses on: accuracy, Lipschitz, training dynamics.
 """
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-from models import (
-    LoopedMLP,
-    FeedbackAlignmentEqProp,
-    DirectFeedbackAlignmentEqProp,
-    ContrastiveHebbianLearning,
-    DeepHebbianChain,
-)
+from models import (ContrastiveHebbianLearning, DeepHebbianChain,
+                    DirectFeedbackAlignmentEqProp, FeedbackAlignmentEqProp,
+                    LoopedMLP)
 
 # Seed for reproducibility
 torch.manual_seed(42)
@@ -131,7 +127,9 @@ def test_algorithm(name, model_class, X_train, y_train, X_test, y_test, **kwargs
             results["with_sn"]["lipschitz"] <= 1.1
             and acc_delta > -5  # Allow small accuracy drop for stability
         )
-        print(f"    Verdict: {'✅ SN BENEFICIAL' if sn_worth_it else '⚠️ NEEDS TUNING'}")
+        print(
+            f"    Verdict: {'✅ SN BENEFICIAL' if sn_worth_it else '⚠️ NEEDS TUNING'}"
+        )
 
     return results
 
