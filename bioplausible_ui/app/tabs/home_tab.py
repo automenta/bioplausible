@@ -109,5 +109,21 @@ class HomeTab(QWidget):
             lambda: self.request_tab_change.emit("Benchmarks")
         ), 1, 1)
 
+        # Community Grid Card
+        grid.addWidget(create_card(
+            "Community Grid",
+            "Participate in decentralized Neural Architecture Search (P2P).",
+            "🕸️",
+            lambda: self.request_tab_change.emit("Community")
+        ), 2, 0)
+
+        # Deploy Card
+        grid.addWidget(create_card(
+            "Model Serving",
+            "Export models to ONNX/TorchScript or serve via REST API.",
+            "🚀",
+            lambda: self.request_tab_change.emit("Deploy")
+        ), 2, 1)
+
         layout.addLayout(grid)
         layout.addStretch()
