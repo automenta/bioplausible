@@ -2,6 +2,7 @@ from bioplausible_ui.core.base import BaseTab
 from bioplausible_ui.app.schemas.console import CONSOLE_TAB_SCHEMA
 import sys
 from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 class StreamRedirector(QObject):
     text_written = pyqtSignal(str)
@@ -53,6 +54,16 @@ class ConsoleTab(BaseTab):
 
     def _clear_logs(self):
         self.log_output.text_edit.clear()
+
+    def _save_logs(self):
+        fname, _ = QFileDialog.getSaveFileName(self, "Save Logs", "bioplausible.log", "Log Files (*.log)")
+        if fname:
+            try:
+                with open(fname, 'w') as f:
+                    f.write(self.log_output.text_edit.toPlainText())
+                QMessageBox.information(self, "Success", f"Logs saved to {fname}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", str(e))
 
     def closeEvent(self, event):
         # Restore
