@@ -1,12 +1,13 @@
-
 import pytest
 import torch
+
 from bioplausible.models.eqprop_diffusion import EqPropDiffusion
+
 
 def test_eqprop_diffusion_forward():
     """Test that EqPropDiffusion forward pass works with and without t."""
     model = EqPropDiffusion(img_channels=1, hidden_channels=16)
-    model.eval() # Ensure deterministic behavior (freeze spectral norm buffers)
+    model.eval()  # Ensure deterministic behavior (freeze spectral norm buffers)
 
     # Batch size 2, 1 channel, 28x28
     x = torch.randn(2, 1, 28, 28)
@@ -27,6 +28,7 @@ def test_eqprop_diffusion_forward():
 
     # Verify values match (deterministic)
     # assert torch.allclose(out, out2, atol=1e-2)
+
 
 def test_eqprop_diffusion_denoise_step():
     """Test the denoise_step logic."""

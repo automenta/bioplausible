@@ -1,10 +1,13 @@
-import pytest
 import os
-import torch
 from unittest.mock import MagicMock, patch
+
+import pytest
+import torch
+from PyQt6.QtWidgets import QApplication
+
 from bioplausible_ui.app.window import AppMainWindow
 from bioplausible_ui.lab.window import LabMainWindow
-from PyQt6.QtWidgets import QApplication
+
 
 def test_app_screenshots_all_tabs(qtbot):
     """Takes screenshots of every tab in the main application window."""
@@ -25,23 +28,24 @@ def test_app_screenshots_all_tabs(qtbot):
         clean_name = tab_name.replace(" ", "_").lower()
 
         tab_widget.setCurrentIndex(i)
-        qtbot.wait(100) # Wait for tab switch animation/render
+        qtbot.wait(100)  # Wait for tab switch animation/render
 
         # Capture tab
         window.grab().save(f"screenshots/app_tab_{i:02d}_{clean_name}.png")
 
         assert os.path.exists(f"screenshots/app_tab_{i:02d}_{clean_name}.png")
 
+
 def test_lab_screenshot_populated(qtbot):
     """Takes a screenshot of the lab window with a mock model loaded."""
 
     # Mock torch.load to return a dummy checkpoint
     mock_checkpoint = {
-        'config': {'model_name': 'EqProp MLP'}, # A model with many capabilities
-        'state_dict': {}
+        "config": {"model_name": "EqProp MLP"},  # A model with many capabilities
+        "state_dict": {},
     }
 
-    with patch('torch.load', return_value=mock_checkpoint):
+    with patch("torch.load", return_value=mock_checkpoint):
         # We also need to mock get_model_spec because it might read from registry
         # But registry is in memory, so it should be fine if 'EqProp MLP' is in registry.
         # It is in registry (we saw it in previous turns).
@@ -66,7 +70,12 @@ def test_lab_screenshot_populated(qtbot):
         for i in range(tab_widget.count()):
             tab_name = tab_widget.tabText(i)
             # tabText might contain emojis, let's strip them or just use index
-            clean_name = "".join([c for c in tab_name if c.isalnum() or c in (' ', '_')]).strip().replace(" ", "_").lower()
+            clean_name = (
+                "".join([c for c in tab_name if c.isalnum() or c in (" ", "_")])
+                .strip()
+                .replace(" ", "_")
+                .lower()
+            )
 
             tab_widget.setCurrentIndex(i)
             qtbot.wait(100)

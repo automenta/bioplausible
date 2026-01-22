@@ -1,12 +1,14 @@
 import math
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple
-from .utils import spectral_linear
+
+from ..acceleration import compile_settling_loop
 from .eqprop_base import EqPropModel
 from .triton_kernel import TritonEqPropOps
-from ..acceleration import compile_settling_loop
+from .utils import spectral_linear
 
 # =============================================================================
 # TransformerEqProp - Attention with Equilibrium Dynamics
@@ -209,7 +211,7 @@ class TransformerEqProp(EqPropModel):
         h_target = h + ffn_out + x_emb
 
         if TritonEqPropOps.is_available() and h.is_cuda:
-             return TritonEqPropOps.step(h, h_target, alpha=self.alpha)
+            return TritonEqPropOps.step(h, h_target, alpha=self.alpha)
 
         # Use torch.lerp for more efficient interpolation
         return torch.lerp(h, torch.tanh(h_target), self.alpha)

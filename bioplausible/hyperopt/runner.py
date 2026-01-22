@@ -2,16 +2,17 @@
 Hyperopt Trial Execution Helper.
 """
 
-import tempfile
-import shutil
-import traceback
 import contextlib
 import io
+import shutil
+import tempfile
+import traceback
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
-from bioplausible.hyperopt.storage import HyperoptStorage
 from bioplausible.hyperopt.experiment import TrialRunner
+from bioplausible.hyperopt.storage import HyperoptStorage
+
 
 def run_single_trial_task(
     task: str,
@@ -19,7 +20,7 @@ def run_single_trial_task(
     config: Dict[str, Any],
     storage_path: Optional[str] = None,
     job_id: Any = None,
-    quick_mode: bool = True
+    quick_mode: bool = True,
 ) -> Optional[Dict[str, float]]:
     """
     Run a single trial and return metrics.
@@ -47,21 +48,18 @@ def run_single_trial_task(
 
         # Create runner
         runner = TrialRunner(
-            storage=storage,
-            device="auto",
-            task=task,
-            quick_mode=quick_mode
+            storage=storage, device="auto", task=task, quick_mode=quick_mode
         )
 
         # Override epochs if present
-        if 'epochs' in config:
-            runner.epochs = int(config['epochs'])
+        if "epochs" in config:
+            runner.epochs = int(config["epochs"])
 
         # Run
         # Suppress output to avoid cluttering the P2P log
         f = io.StringIO()
         with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
-             success = runner.run_trial(trial_id)
+            success = runner.run_trial(trial_id)
 
         if success:
             trial = storage.get_trial(trial_id)
@@ -69,7 +67,7 @@ def run_single_trial_task(
                 "accuracy": trial.accuracy,
                 "loss": trial.final_loss,
                 "perplexity": trial.perplexity,
-                "time": trial.iteration_time
+                "time": trial.iteration_time,
             }
             storage.close()
             return metrics

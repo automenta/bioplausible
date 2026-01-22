@@ -7,23 +7,14 @@ Demonstrations:
 3. INT8 quantization tolerance
 """
 
-import torch
 import numpy as np
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QGroupBox,
-    QSlider,
-    QGridLayout,
-    QProgressBar,
-)
-from PyQt6.QtCore import Qt
 import pyqtgraph as pg
-
+import torch
 from models import LoopedMLP
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (QGridLayout, QGroupBox, QHBoxLayout, QLabel,
+                             QProgressBar, QPushButton, QSlider, QVBoxLayout,
+                             QWidget)
 
 
 class NeuromorphicPanel(QWidget):
@@ -122,8 +113,7 @@ class NeuromorphicPanel(QWidget):
         backprop_layout.addWidget(QLabel("Backprop:"))
         self.backprop_bar = QProgressBar()
         self.backprop_bar.setMaximum(100)
-        self.backprop_bar.setStyleSheet(
-            """
+        self.backprop_bar.setStyleSheet("""
             QProgressBar {
                 border: 2px solid #e74c3c;
                 border-radius: 5px;
@@ -133,8 +123,7 @@ class NeuromorphicPanel(QWidget):
             QProgressBar::chunk {
                 background-color: #e74c3c;
             }
-        """
-        )
+        """)
         backprop_layout.addWidget(self.backprop_bar)
         self.backprop_label = QLabel("0 MB")
         backprop_layout.addWidget(self.backprop_label)
@@ -144,8 +133,7 @@ class NeuromorphicPanel(QWidget):
         eqprop_layout.addWidget(QLabel("EqProp:"))
         self.eqprop_bar = QProgressBar()
         self.eqprop_bar.setMaximum(100)
-        self.eqprop_bar.setStyleSheet(
-            """
+        self.eqprop_bar.setStyleSheet("""
             QProgressBar {
                 border: 2px solid #27ae60;
                 border-radius: 5px;
@@ -155,8 +143,7 @@ class NeuromorphicPanel(QWidget):
             QProgressBar::chunk {
                 background-color: #27ae60;
             }
-        """
-        )
+        """)
         eqprop_layout.addWidget(self.eqprop_bar)
         self.eqprop_label = QLabel("0 MB")
         eqprop_layout.addWidget(self.eqprop_label)
@@ -166,8 +153,7 @@ class NeuromorphicPanel(QWidget):
 
         # Savings display
         self.memory_savings = QLabel("Savings: 0×")
-        self.memory_savings.setStyleSheet(
-            """
+        self.memory_savings.setStyleSheet("""
             QLabel {
                 font-size: 18px;
                 font-weight: bold;
@@ -176,8 +162,7 @@ class NeuromorphicPanel(QWidget):
                 background-color: #2c3e50;
                 border-radius: 5px;
             }
-        """
-        )
+        """)
         self.memory_savings.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.memory_savings)
 
@@ -267,8 +252,7 @@ class NeuromorphicPanel(QWidget):
         self.fp32_bar.setMaximum(100)
         self.fp32_bar.setMinimum(0)
         self.fp32_bar.setValue(0)
-        self.fp32_bar.setStyleSheet(
-            """
+        self.fp32_bar.setStyleSheet("""
             QProgressBar {
                 border: 2px solid #3498db;
                 border-radius: 5px;
@@ -279,8 +263,7 @@ class NeuromorphicPanel(QWidget):
             QProgressBar::chunk {
                 background-color: #3498db;
             }
-        """
-        )
+        """)
         fp32_layout.addWidget(self.fp32_bar)
         self.fp32_label = QLabel("0%")
         self.fp32_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -296,8 +279,7 @@ class NeuromorphicPanel(QWidget):
         self.int8_bar.setMaximum(100)
         self.int8_bar.setMinimum(0)
         self.int8_bar.setValue(0)
-        self.int8_bar.setStyleSheet(
-            """
+        self.int8_bar.setStyleSheet("""
             QProgressBar {
                 border: 2px solid #27ae60;
                 border-radius: 5px;
@@ -308,8 +290,7 @@ class NeuromorphicPanel(QWidget):
             QProgressBar::chunk {
                 background-color: #27ae60;
             }
-        """
-        )
+        """)
         int8_layout.addWidget(self.int8_bar)
         self.int8_label = QLabel("0%")
         self.int8_label.setAlignment(Qt.AlignmentFlag.AlignCenter)

@@ -8,10 +8,11 @@ Implements genetic operations for evolving model architectures:
 - Crossover between successful variants
 """
 
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Any, List, Optional, Tuple
-import numpy as np
 import copy
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
 
 
 @dataclass

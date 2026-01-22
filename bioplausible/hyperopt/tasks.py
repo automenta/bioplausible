@@ -5,13 +5,15 @@ Encapsulates data loading, batch generation, and evaluation logic for different 
 """
 
 from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional, Tuple
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-from typing import Tuple, Dict, Any, Optional
 
 from bioplausible.datasets import get_lm_dataset, get_vision_dataset
 from bioplausible.training.base import BaseTrainer
+
 
 class BaseTask(ABC):
     """Abstract base class for all tasks."""
@@ -29,7 +31,9 @@ class BaseTask(ABC):
         pass
 
     @abstractmethod
-    def get_batch(self, split: str = "train", batch_size: int = 32) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_batch(
+        self, split: str = "train", batch_size: int = 32
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Get a batch of data."""
         pass
 
@@ -52,7 +56,9 @@ class BaseTask(ABC):
         """Return 'lm', 'vision', or 'rl'."""
         pass
 
-    def compute_metrics(self, logits: torch.Tensor, y: torch.Tensor, loss: float) -> Dict[str, float]:
+    def compute_metrics(
+        self, logits: torch.Tensor, y: torch.Tensor, loss: float
+    ) -> Dict[str, float]:
         """Compute task-specific metrics."""
         return {"loss": loss}
 
@@ -60,7 +66,13 @@ class BaseTask(ABC):
 class LMTask(BaseTask):
     """Language Modeling Task (Character level)."""
 
-    def __init__(self, name: str = "tiny_shakespeare", device: str = "cpu", quick_mode: bool = False, seq_len: int = 64):
+    def __init__(
+        self,
+        name: str = "tiny_shakespeare",
+        device: str = "cpu",
+        quick_mode: bool = False,
+        seq_len: int = 64,
+    ):
         super().__init__(name, device, quick_mode)
         self.seq_len = seq_len
         self.data_train = None
@@ -76,18 +88,22 @@ class LMTask(BaseTask):
             dataset = get_lm_dataset(self.name, seq_len=self.seq_len)
             data = dataset.data
             self._output_dim = dataset.vocab_size
-            self._input_dim = None # Uses embeddings
+            self._input_dim = None  # Uses embeddings
 
             # Split train/val
             n = int(0.9 * len(data))
             self.data_train = data[:n]
             self.data_val = data[n:]
-            print(f"Dataset ready: {len(self.data_train)} train, {len(self.data_val)} val tokens")
+            print(
+                f"Dataset ready: {len(self.data_train)} train, {len(self.data_val)} val tokens"
+            )
         except Exception as e:
             print(f"Failed to load dataset {self.name}: {e}")
             raise
 
-    def get_batch(self, split: str = "train", batch_size: int = 32) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_batch(
+        self, split: str = "train", batch_size: int = 32
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         if self.data_train is None:
             raise RuntimeError("Dataset not loaded. Call setup() first.")
 
@@ -99,9 +115,12 @@ class LMTask(BaseTask):
 
     def create_trainer(self, model: nn.Module, **kwargs) -> BaseTrainer:
         from bioplausible.training.supervised import SupervisedTrainer
+
         return SupervisedTrainer(model, self, device=self.device, **kwargs)
 
-    def compute_metrics(self, logits: torch.Tensor, y: torch.Tensor, loss: float) -> Dict[str, float]:
+    def compute_metrics(
+        self, logits: torch.Tensor, y: torch.Tensor, loss: float
+    ) -> Dict[str, float]:
         if logits.dim() == 3:
             logits = logits[:, -1, :]
 
@@ -113,7 +132,9 @@ class LMTask(BaseTask):
 class VisionTask(BaseTask):
     """Vision Task (MNIST, CIFAR-10)."""
 
-    def __init__(self, name: str = "mnist", device: str = "cpu", quick_mode: bool = False):
+    def __init__(
+        self, name: str = "mnist", device: str = "cpu", quick_mode: bool = False
+    ):
         super().__init__(name, device, quick_mode)
         self.train_x = None
         self.train_y = None
@@ -135,8 +156,12 @@ class VisionTask(BaseTask):
             self.train_y = torch.tensor([t[1] for t in dataset]).to(self.device)
 
             val_size = 1000 if self.quick_mode else 5000
-            self.val_x = torch.stack([test_dataset[i][0] for i in range(min(len(test_dataset), val_size))]).to(self.device)
-            self.val_y = torch.tensor([test_dataset[i][1] for i in range(min(len(test_dataset), val_size))]).to(self.device)
+            self.val_x = torch.stack(
+                [test_dataset[i][0] for i in range(min(len(test_dataset), val_size))]
+            ).to(self.device)
+            self.val_y = torch.tensor(
+                [test_dataset[i][1] for i in range(min(len(test_dataset), val_size))]
+            ).to(self.device)
 
             if self.name == "mnist":
                 self._output_dim = 10
@@ -148,7 +173,9 @@ class VisionTask(BaseTask):
             print(f"Failed to load dataset {self.name}: {e}")
             raise
 
-    def get_batch(self, split: str = "train", batch_size: int = 32) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_batch(
+        self, split: str = "train", batch_size: int = 32
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         if self.train_x is None:
             raise RuntimeError("Dataset not loaded. Call setup() first.")
 
@@ -164,11 +191,14 @@ class VisionTask(BaseTask):
 
     def create_trainer(self, model: nn.Module, **kwargs) -> BaseTrainer:
         from bioplausible.training.supervised import SupervisedTrainer
+
         return SupervisedTrainer(model, self, device=self.device, **kwargs)
 
-    def compute_metrics(self, logits: torch.Tensor, y: torch.Tensor, loss: float) -> Dict[str, float]:
+    def compute_metrics(
+        self, logits: torch.Tensor, y: torch.Tensor, loss: float
+    ) -> Dict[str, float]:
         if logits.dim() == 3:
-             logits = logits[:, -1, :]
+            logits = logits[:, -1, :]
 
         acc = (logits.argmax(1) == y).float().mean().item()
         return {"loss": loss, "accuracy": acc, "perplexity": 0.0}
@@ -177,7 +207,9 @@ class VisionTask(BaseTask):
 class RLTask(BaseTask):
     """Reinforcement Learning Task (CartPole)."""
 
-    def __init__(self, name: str = "cartpole", device: str = "cpu", quick_mode: bool = False):
+    def __init__(
+        self, name: str = "cartpole", device: str = "cpu", quick_mode: bool = False
+    ):
         super().__init__(name, device, quick_mode)
         self.env_name = "CartPole-v1" if name == "cartpole" else name
         self.env = None
@@ -188,6 +220,7 @@ class RLTask(BaseTask):
 
     def setup(self):
         import gymnasium as gym
+
         try:
             self.env = gym.make(self.env_name)
             self._output_dim = self.env.action_space.n
@@ -197,13 +230,16 @@ class RLTask(BaseTask):
             raise
 
     def get_batch(self, split: str = "train", batch_size: int = 32):
-        raise NotImplementedError("RL Task does not support get_batch directly, use RLTrainer")
+        raise NotImplementedError(
+            "RL Task does not support get_batch directly, use RLTrainer"
+        )
 
     def create_trainer(self, model, **kwargs):
         from bioplausible.training.rl import RLTrainer
+
         # Filter relevant args for RLTrainer
         rl_args = {}
-        valid_keys = ['episodes', 'lr', 'gamma', 'max_steps']
+        valid_keys = ["episodes", "lr", "gamma", "max_steps"]
         for k in valid_keys:
             if k in kwargs:
                 rl_args[k] = kwargs[k]
@@ -211,7 +247,9 @@ class RLTask(BaseTask):
         return RLTrainer(model, self.env_name, device=self.device, **rl_args)
 
 
-def create_task(task_name: str, device: str = "cpu", quick_mode: bool = False) -> BaseTask:
+def create_task(
+    task_name: str, device: str = "cpu", quick_mode: bool = False
+) -> BaseTask:
     """Factory function for tasks."""
     if task_name in ["shakespeare", "tiny_shakespeare"]:
         return LMTask(task_name, device, quick_mode)

@@ -4,18 +4,20 @@ Experiment Runner
 Executes hyperparameter optimization trials and collects metrics.
 """
 
+import sys
+import time
+from typing import Any, Dict, Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
-import time
-import numpy as np
-from typing import Dict, Any, Optional
-import sys
 
 from bioplausible.config import GLOBAL_CONFIG
-from bioplausible.models.registry import get_model_spec, ModelSpec
-from bioplausible.models.factory import create_model
 from bioplausible.hyperopt.storage import HyperoptStorage
-from bioplausible.hyperopt.tasks import create_task, BaseTask
+from bioplausible.hyperopt.tasks import BaseTask, create_task
+from bioplausible.models.factory import create_model
+from bioplausible.models.registry import ModelSpec, get_model_spec
+
 
 class TrialRunner:
     """Runs individual hyperparameter optimization trials."""
@@ -71,7 +73,7 @@ class TrialRunner:
                 hidden_dim=hidden_dim,
                 num_layers=num_layers,
                 device=self.device,
-                task_type=self.task_obj.task_type
+                task_type=self.task_obj.task_type,
             )
 
             # Apply hyperparameters
@@ -87,7 +89,7 @@ class TrialRunner:
             # We pass all config items as kwargs to the trainer
             trainer_kwargs = config.copy()
             # Remove keys that are passed explicitly to avoid conflicts
-            for key in ['lr', 'steps', 'batches_per_epoch', 'eval_batches']:
+            for key in ["lr", "steps", "batches_per_epoch", "eval_batches"]:
                 if key in trainer_kwargs:
                     del trainer_kwargs[key]
 
@@ -97,7 +99,7 @@ class TrialRunner:
                 steps=steps if steps else 20,
                 batches_per_epoch=200 if not GLOBAL_CONFIG.quick_mode else 100,
                 eval_batches=50 if not GLOBAL_CONFIG.quick_mode else 20,
-                **trainer_kwargs
+                **trainer_kwargs,
             )
 
             # Manually set beta on model if applicable (since Trainer might not know model internals deeply)
@@ -115,11 +117,11 @@ class TrialRunner:
             # We need to update the model if we have a different beta from config.
             # Most BioModels store beta in config object or as attribute.
 
-            if beta is not None and hasattr(model, 'config'):
-                 # BioModel based
-                 model.config.beta = beta
-            if beta is not None and hasattr(model, 'beta'):
-                 model.beta = beta
+            if beta is not None and hasattr(model, "config"):
+                # BioModel based
+                model.config.beta = beta
+            if beta is not None and hasattr(model, "beta"):
+                model.beta = beta
 
             # Training Loop
             epoch_times = []
@@ -134,7 +136,7 @@ class TrialRunner:
                     metrics["loss"],
                     metrics.get("accuracy", 0.0),
                     metrics.get("perplexity", 0.0),
-                    metrics["time"]
+                    metrics["time"],
                 )
 
                 epoch_times.append(metrics["time"])
@@ -149,15 +151,19 @@ class TrialRunner:
 
                 # Pruning
                 if pruning_callback:
-                     if pruning_callback(trial_id, epoch + 1, metrics):
+                    if pruning_callback(trial_id, epoch + 1, metrics):
                         print(f"✂️ Trial {trial_id} PRUNED at epoch {epoch+1}")
                         self.storage.update_trial(trial_id, status="pruned")
                         return False
 
             # Final Stats
-            avg_iter_time = np.mean(epoch_times) / (trainer.batches_per_epoch if hasattr(trainer, 'batches_per_epoch') else 1) # Fallback for RL
-            if hasattr(trainer, 'episodes_per_epoch'): # RL
-                 avg_iter_time = np.mean(epoch_times) / trainer.episodes_per_epoch
+            avg_iter_time = np.mean(epoch_times) / (
+                trainer.batches_per_epoch
+                if hasattr(trainer, "batches_per_epoch")
+                else 1
+            )  # Fallback for RL
+            if hasattr(trainer, "episodes_per_epoch"):  # RL
+                avg_iter_time = np.mean(epoch_times) / trainer.episodes_per_epoch
 
             param_count = sum(p.numel() for p in model.parameters())
             param_count_millions = param_count / 1e6
@@ -179,6 +185,7 @@ class TrialRunner:
         except Exception as e:
             print(f"\n❌ Trial {trial_id} failed: {e}")
             import traceback
+
             traceback.print_exc()
             self.storage.update_trial(trial_id, status="failed")
             return False

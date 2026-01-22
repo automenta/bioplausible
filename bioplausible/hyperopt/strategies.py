@@ -5,8 +5,10 @@ Implements GridSearch and RandomSearch generators.
 """
 
 import itertools
+from typing import Any, Dict, Iterator, List, Union
+
 import numpy as np
-from typing import Iterator, Dict, Any, List, Union
+
 
 def GridSearch(space: Dict[str, Union[List, tuple]]) -> Iterator[Dict[str, Any]]:
     """
@@ -33,14 +35,14 @@ def GridSearch(space: Dict[str, Union[List, tuple]]) -> Iterator[Dict[str, Any]]
             keys.append(k)
             values.append(v)
         elif isinstance(v, tuple):
-             # Simple discretization for grid search if tuple provided
-             # (min, max, type)
-             if len(v) == 3 and v[2] == 'int':
-                 keys.append(k)
-                 values.append(list(range(int(v[0]), int(v[1]) + 1)))
-             # Ignore continuous for now or sample 3 points?
-             # Let's ignore to avoid explosion
-             pass
+            # Simple discretization for grid search if tuple provided
+            # (min, max, type)
+            if len(v) == 3 and v[2] == "int":
+                keys.append(k)
+                values.append(list(range(int(v[0]), int(v[1]) + 1)))
+            # Ignore continuous for now or sample 3 points?
+            # Let's ignore to avoid explosion
+            pass
         else:
             # Fixed value
             pass
@@ -48,7 +50,10 @@ def GridSearch(space: Dict[str, Union[List, tuple]]) -> Iterator[Dict[str, Any]]
     for combination in itertools.product(*values):
         yield dict(zip(keys, combination))
 
-def RandomSearch(space: Dict[str, Union[List, tuple]], n_iter: int = 10) -> Iterator[Dict[str, Any]]:
+
+def RandomSearch(
+    space: Dict[str, Union[List, tuple]], n_iter: int = 10
+) -> Iterator[Dict[str, Any]]:
     """
     Generator for Random Search.
 

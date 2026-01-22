@@ -15,10 +15,11 @@ Efficiency metrics:
 - Performance density (accuracy / (params * time))
 """
 
-from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional
-import numpy as np
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
 
 
 @dataclass

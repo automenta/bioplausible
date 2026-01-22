@@ -14,19 +14,19 @@ Options:
     --dataset          Dataset to use: mnist, cifar10, fashion (default: mnist)
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import argparse
 import json
-import torch
 from datetime import datetime
 from pathlib import Path
 
-from experiments.shallow_search import ShallowSearcher, load_mnist_subset
+import torch
 from algorithms import ALGORITHM_REGISTRY, list_algorithms
+from experiments.shallow_search import ShallowSearcher, load_mnist_subset
 
 
 def main():

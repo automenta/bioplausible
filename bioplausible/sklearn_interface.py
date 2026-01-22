@@ -8,13 +8,13 @@ Supports incremental learning via .partial_fit().
 import numpy as np
 import torch
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
+from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 from torch.utils.data import DataLoader, TensorDataset
 
 from .core import EqPropTrainer
-from .models.registry import get_model_spec, MODEL_REGISTRY
 from .models.factory import create_model
+from .models.registry import MODEL_REGISTRY, get_model_spec
 
 
 class EqPropClassifier(BaseEstimator, ClassifierMixin):
@@ -89,7 +89,9 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         elif y is not None:
             self.classes_ = unique_labels(y)
         else:
-             raise ValueError("Classes must be provided for initialization if y is None.")
+            raise ValueError(
+                "Classes must be provided for initialization if y is None."
+            )
 
         self.n_classes_ = len(self.classes_)
         self.n_features_in_ = X.shape[1]
@@ -100,7 +102,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
 
         # Determine device
         if self.device is None:
-             self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # Create Model using Factory
         spec = get_model_spec(self.model_name)
@@ -118,16 +120,16 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
             output_dim=self.n_classes_,
             hidden_dim=self.hidden_dim,
             device=self.device,
-            task_type="vision", # Default to vision for tabular/image vectors
-            **factory_kwargs
+            task_type="vision",  # Default to vision for tabular/image vectors
+            **factory_kwargs,
         )
 
         # Handle manual overrides for things that create_model sets from spec
         # (Trainer will handle steps, but we can set max_steps on model too just in case)
-        if hasattr(self.model_, 'max_steps'):
-             self.model_.max_steps = self.steps
-        if hasattr(self.model_, 'eq_steps'):
-             self.model_.eq_steps = self.steps
+        if hasattr(self.model_, "max_steps"):
+            self.model_.max_steps = self.steps
+        if hasattr(self.model_, "eq_steps"):
+            self.model_.eq_steps = self.steps
 
         # Initialize Trainer
         self.trainer_ = EqPropTrainer(
@@ -136,8 +138,8 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
             task_type="vision",
             lr=self.learning_rate,
             device=self.device,
-            use_compile=False, # Disable compile for dynamic/sklearn usage
-            steps=self.steps
+            use_compile=False,  # Disable compile for dynamic/sklearn usage
+            steps=self.steps,
         )
 
     def fit(self, X, y):
@@ -195,11 +197,11 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         X = check_array(X)
 
         if self.model_ is None:
-             self._initialize(X, y, classes=classes)
+            self._initialize(X, y, classes=classes)
 
         # Verify classes match
         if self.classes_ is None and classes is None:
-             raise ValueError("classes must be passed on the first call to partial_fit.")
+            raise ValueError("classes must be passed on the first call to partial_fit.")
 
         X_tensor = torch.FloatTensor(X).to(self.device)
         y_tensor = torch.LongTensor(y).to(self.device)

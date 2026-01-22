@@ -1,34 +1,20 @@
 import sys
-import torch
+
 import numpy as np
-
-from PyQt6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QCheckBox,
-    QLabel,
-    QGroupBox,
-    QSplitter,
-    QGridLayout,
-    QSpinBox,
-    QSlider,
-    QTableWidgetItem,
-    QScrollArea,
-    QFrame,
-    QDoubleSpinBox,
-)
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QPalette, QColor, QFont
 import pyqtgraph as pg
+import torch
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QColor, QFont, QPalette
+from PyQt6.QtWidgets import (QCheckBox, QDoubleSpinBox, QFrame, QGridLayout,
+                             QGroupBox, QHBoxLayout, QLabel, QMainWindow,
+                             QPushButton, QScrollArea, QSlider, QSpinBox,
+                             QSplitter, QTableWidgetItem, QVBoxLayout, QWidget)
 
-from .widgets import StatsTable, AlgorithmCard
-from .worker import TrainingWorker
-from .algorithms import AlgorithmWrapper, MODEL_REGISTRY, get_model_spec
+from .algorithms import MODEL_REGISTRY, AlgorithmWrapper, get_model_spec
 from .types import TrainingState
 from .utils import load_shakespeare
+from .widgets import AlgorithmCard, StatsTable
+from .worker import TrainingWorker
 
 
 class BioTrainerGUI(QMainWindow):
@@ -103,8 +89,7 @@ class BioTrainerGUI(QMainWindow):
         for spec in MODEL_REGISTRY:
             # Container for each model
             container = QGroupBox(spec.name)
-            container.setStyleSheet(
-                f"""
+            container.setStyleSheet(f"""
                 QGroupBox {{ 
                     border: 2px solid {spec.color}; 
                     border-radius: 5px; 
@@ -115,8 +100,7 @@ class BioTrainerGUI(QMainWindow):
                     color: {spec.color}; 
                     font-weight: bold;
                 }}
-            """
-            )
+            """)
             c_layout = QVBoxLayout(container)
 
             # Checkbox to enable

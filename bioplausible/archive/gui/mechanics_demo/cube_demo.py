@@ -5,30 +5,19 @@ Visualizes 3D lattice neural network with local connectivity.
 Shows TRAINING dynamics and activation propagation through 3D space.
 """
 
+import numpy as np
+import pyqtgraph as pg
+import pyqtgraph.opengl as gl
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QGroupBox,
-    QGridLayout,
-)
-from PyQt6.QtCore import QTimer
-import pyqtgraph as pg
-import pyqtgraph.opengl as gl
-
 from models import NeuralCube
-from .utils import (
-    get_single_digit,
-    load_mnist_subset,
-    train_quick_epoch,
-    get_cube_3d_positions,
-)
+from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import (QGridLayout, QGroupBox, QHBoxLayout, QLabel,
+                             QPushButton, QVBoxLayout, QWidget)
+
+from .utils import (get_cube_3d_positions, get_single_digit, load_mnist_subset,
+                    train_quick_epoch)
 
 
 class CubeDemo(QWidget):

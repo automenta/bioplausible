@@ -5,22 +5,16 @@ Shows actual hidden state dynamics converging to equilibrium on a real MNIST dig
 Animates the convergence process step-by-step with heatmap visualization.
 """
 
+import numpy as np
+import pyqtgraph as pg
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QGroupBox,
-)
-from PyQt6.QtCore import QTimer, Qt
-import pyqtgraph as pg
-
 from models import LoopedMLP
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (QGroupBox, QHBoxLayout, QLabel, QPushButton,
+                             QVBoxLayout, QWidget)
+
 from .utils import get_single_digit, load_mnist_subset, train_quick_epoch
 
 

@@ -9,17 +9,18 @@ Implements a multi-tier evaluation pipeline for rapid architecture screening:
 """
 
 import time
-from enum import IntEnum
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Tuple, Callable
+from enum import IntEnum
+from typing import Any, Callable, Dict, Optional, Tuple
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset, Subset
-import numpy as np
+from torch.utils.data import DataLoader, Subset, TensorDataset
 
-from .fitness import FitnessScore
 from .breeder import ArchConfig
+from .fitness import FitnessScore
 
 
 class EvalTier(IntEnum):
@@ -133,7 +134,7 @@ class VariationEvaluator:
     ) -> FitnessScore:
         """Evaluate on RL environment."""
         try:
-            from .rl_adapter import train_rl_model, get_env_name
+            from .rl_adapter import get_env_name, train_rl_model
         except ImportError:
             return FitnessScore(
                 accuracy=0.0,
@@ -401,8 +402,9 @@ class VariationEvaluator:
 
     def _get_shakespeare_data(self, n_samples: int) -> Tuple[DataLoader, DataLoader]:
         """Load Shakespeare dataset for language modeling."""
-        import requests
         import os
+
+        import requests
 
         # Download if needed
         data_path = os.path.join(self.data_dir, "shakespeare.txt")

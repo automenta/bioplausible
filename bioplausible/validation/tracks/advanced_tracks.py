@@ -1,25 +1,23 @@
+import sys
 import time
+from pathlib import Path
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-import sys
-from pathlib import Path
+
 from ..notebook import TrackResult
-from ..utils import create_synthetic_dataset, train_model, evaluate_accuracy
+from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 
 # Enhance import path
 root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.models import (
-    LoopedMLP,
-    TernaryEqProp,
-    FeedbackAlignmentEqProp,
-    TemporalResonanceEqProp,
-    HomeostaticEqProp,
-)
+from bioplausible.models import (FeedbackAlignmentEqProp, HomeostaticEqProp,
+                                 LoopedMLP, TemporalResonanceEqProp,
+                                 TernaryEqProp)
 
 
 def track_4_ternary_weights(verifier) -> TrackResult:

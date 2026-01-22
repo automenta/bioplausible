@@ -5,8 +5,8 @@ Defines abstract interfaces that make the system extensible and modular.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 from .breeder import ArchConfig
 from .fitness import FitnessScore

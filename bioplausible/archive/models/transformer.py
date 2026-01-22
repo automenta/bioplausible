@@ -4,11 +4,13 @@ Transformer EqProp (Track 14)
 Integrates self-attention into equilibrium dynamics.
 """
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 from torch.nn.utils.parametrizations import spectral_norm
+
 from .utils import spectral_linear
 
 

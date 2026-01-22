@@ -1,9 +1,10 @@
-from PyQt6.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
-import torch
 import time
 
-from .types import TrainingState
+import torch
+from PyQt6.QtCore import QMutex, QMutexLocker, QThread, pyqtSignal
+
 from .algorithms import AlgorithmWrapper
+from .types import TrainingState
 
 
 class TrainingWorker(QThread):

@@ -7,23 +7,14 @@ Demonstrations:
 3. Gradient flow comparison
 """
 
-import torch
 import numpy as np
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QGroupBox,
-    QSlider,
-    QGridLayout,
-)
-from PyQt6.QtCore import Qt, QTimer
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
-
+import torch
 from models import DeepHebbianChain, NeuralCube
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (QGridLayout, QGroupBox, QHBoxLayout, QLabel,
+                             QPushButton, QSlider, QVBoxLayout, QWidget)
 
 
 class DepthPanel(QWidget):
@@ -170,16 +161,14 @@ class DepthPanel(QWidget):
             f"<b>Reduction:</b> {stats['connection_reduction']*100:.1f}%"
         )
         stats_label = QLabel(stats_text)
-        stats_label.setStyleSheet(
-            """
+        stats_label.setStyleSheet("""
             QLabel {
                 background-color: #2c3e50;
                 padding: 10px;
                 border-radius: 5px;
                 font-size: 10px;
             }
-        """
-        )
+        """)
         layout.addWidget(stats_label)
 
         # Heatmap using PlotWidget (avoids matplotlib dependency)

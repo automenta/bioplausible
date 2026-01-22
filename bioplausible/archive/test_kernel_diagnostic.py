@@ -4,11 +4,12 @@ Diagnostic test: Compare NumPy kernel vs PyTorch LoopedMLP
 Purpose: Understand why kernel shows 14.5% accuracy vs PyTorch 31.9%
 """
 
-import torch
-import torch.nn.functional as F
-import numpy as np
 import sys
 from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn.functional as F
 
 root_path = Path(__file__).parent
 if str(root_path) not in sys.path:

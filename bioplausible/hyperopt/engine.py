@@ -5,17 +5,14 @@ Implements evolutionary search with Pareto-based selection for multi-objective o
 Can integrate with P2P Evolution logic for distributed search.
 """
 
-from typing import List, Dict, Any, Optional, Callable
-import numpy as np
 from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional
 
+import numpy as np
+
+from .metrics import (TrialMetrics, crowding_distance, get_pareto_frontier,
+                      non_dominated_sort)
 from .search_space import SearchSpace, get_search_space
-from .metrics import (
-    TrialMetrics,
-    non_dominated_sort,
-    crowding_distance,
-    get_pareto_frontier,
-)
 from .storage import HyperoptStorage
 
 
@@ -29,8 +26,8 @@ class OptimizationConfig:
     crossover_rate: float = 0.7
     elite_fraction: float = 0.2
     random_seed: int = 42
-    use_p2p: bool = False # Flag to use P2P logic
-    task: str = "shakespeare" # Target task for optimization
+    use_p2p: bool = False  # Flag to use P2P logic
+    task: str = "shakespeare"  # Target task for optimization
 
 
 class EvolutionaryOptimizer:
@@ -41,7 +38,7 @@ class EvolutionaryOptimizer:
         model_names: List[str],
         config: OptimizationConfig = None,
         storage: HyperoptStorage = None,
-        p2p_controller: Any = None, # P2PEvolution instance
+        p2p_controller: Any = None,  # P2PEvolution instance
     ):
         self.model_names = model_names
         self.config = config or OptimizationConfig()
@@ -76,14 +73,19 @@ class EvolutionaryOptimizer:
         seeded = False
         trial_ids = []
 
-        if self.config.use_p2p and self.p2p and hasattr(self.p2p, 'dht') and self.p2p.dht:
+        if (
+            self.config.use_p2p
+            and self.p2p
+            and hasattr(self.p2p, "dht")
+            and self.p2p.dht
+        ):
             try:
                 # Query DHT for best model for the specific task
                 best = self.p2p.dht.get_best_model(self.config.task)
-                if best and best.get('config'):
-                    config = best['config']
+                if best and best.get("config"):
+                    config = best["config"]
                     # Ensure it matches model_name if possible, or adapt
-                    if config.get('model_name') == model_name:
+                    if config.get("model_name") == model_name:
                         config = self._sanitize_config(config)
                         tid = self.storage.create_trial(model_name, config)
                         trial_ids.append(tid)

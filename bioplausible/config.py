@@ -4,8 +4,8 @@ Configuration defaults for EqProp-Torch
 Centralized configuration for common hyperparameters and settings.
 """
 
-from typing import Any, Dict
 from dataclasses import dataclass
+from typing import Any, Dict
 
 # Default training hyperparameters
 TRAINING_DEFAULTS = {

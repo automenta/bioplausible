@@ -4,14 +4,15 @@ EqProp-Torch Utilities
 Helper functions for ONNX export, model verification, and training utilities.
 """
 
-from typing import Callable, Dict, List, Optional, Tuple, Any
-from contextlib import contextmanager
+import os
+import random
 import time
+from contextlib import contextmanager
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-import random
-import os
 
 
 def seed_everything(seed: int = 42) -> None:

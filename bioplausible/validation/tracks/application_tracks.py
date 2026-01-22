@@ -1,12 +1,14 @@
-import time
-import torch
-import torch.nn as nn
-import numpy as np
 import copy
 import sys
+import time
 from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn as nn
+
 from ..notebook import TrackResult
-from ..utils import create_synthetic_dataset, train_model, evaluate_accuracy
+from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 
 # Enhance import path
 root_path = Path(__file__).parent.parent.parent

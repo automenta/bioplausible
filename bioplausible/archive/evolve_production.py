@@ -25,45 +25,29 @@ Usage:
 
 import argparse
 import json
-import time
 import logging
+import sys
+import time
 import traceback
-from pathlib import Path
-from datetime import datetime, timedelta
-from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Any, Tuple
 from collections import defaultdict
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 import torch
 
-import sys
-
 sys.path.insert(0, str(Path(__file__).parent))
 
-from evolution import (
-    VariationBreeder,
-    ArchConfig,
-    VariationEvaluator,
-    EvalTier,
-    FitnessScore,
-    BreakthroughDetector,
-    AlgorithmBreeder,
-    AlgorithmConfig,
-    build_algorithm_variant,
-    ALGORITHM_PRESETS,
-)
-from evolution.multitask import (
-    TaskAssigner,
-    TaskNormalizedFitness,
-    MultiTaskBreakthroughDetector,
-    TASK_POOL,
-)
-from evolution.pareto import (
-    ParetoFrontAnalyzer,
-    MultiObjectiveMetrics,
-    identify_algorithm_strategies,
-)
-
+from evolution import (ALGORITHM_PRESETS, AlgorithmBreeder, AlgorithmConfig,
+                       ArchConfig, BreakthroughDetector, EvalTier,
+                       FitnessScore, VariationBreeder, VariationEvaluator,
+                       build_algorithm_variant)
+from evolution.multitask import (TASK_POOL, MultiTaskBreakthroughDetector,
+                                 TaskAssigner, TaskNormalizedFitness)
+from evolution.pareto import (MultiObjectiveMetrics, ParetoFrontAnalyzer,
+                              identify_algorithm_strategies)
 
 # ============================================================================
 # Configuration

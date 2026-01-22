@@ -9,9 +9,10 @@ CRITICAL TEST: If both With SN and Without SN vanish equally,
 the core claims of the project are invalidated.
 """
 
+import sys
+
 import torch
 import torch.nn as nn
-import sys
 
 
 class LinearChain(nn.Module):

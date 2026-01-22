@@ -5,17 +5,18 @@ Example: Training on MNIST with EqProp
 Demonstrates the high-level EqPropTrainer API with torch.compile acceleration.
 """
 
-import torch
-from torch.utils.data import DataLoader
 import sys
 from pathlib import Path
+
+import torch
+from torch.utils.data import DataLoader
 
 # Add parent directory to path to allow importing without installation
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import from bioplausible library
 from bioplausible import EqPropTrainer, LoopedMLP
-from bioplausible.datasets import get_vision_dataset, create_data_loaders
+from bioplausible.datasets import create_data_loaders, get_vision_dataset
 
 
 def main():

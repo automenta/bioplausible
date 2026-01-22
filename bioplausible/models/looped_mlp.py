@@ -1,12 +1,14 @@
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
 from torch.nn.utils.parametrizations import spectral_norm
-from typing import Optional, List, Tuple, Dict, Union, Any
 
-from .eqprop_base import EqPropModel
+from bioplausible.kernel import HAS_CUPY, EqPropKernel
+
 from ..acceleration import compile_settling_loop
+from .eqprop_base import EqPropModel
 from .triton_kernel import TritonEqPropOps
-from bioplausible.kernel import EqPropKernel, HAS_CUPY
 
 # =============================================================================
 # LoopedMLP - Core EqProp Model
@@ -76,7 +78,7 @@ class LoopedMLP(EqPropModel):
                 max_steps=max_steps,
                 use_spectral_norm=use_spectral_norm,
                 use_gpu=use_gpu,
-                architecture="rnn"  # Match LoopedMLP architecture
+                architecture="rnn",  # Match LoopedMLP architecture
             )
 
         self._init_weights()
@@ -180,10 +182,7 @@ class LoopedMLP(EqPropModel):
         # but the forward pass uses the wrappers.
         # The generic updater calls layer(input). If layer is wrapped, it works fine.
 
-        return [
-            (self.W_in, x, h),
-            (self.W_rec, h, h)
-        ]
+        return [(self.W_in, x, h), (self.W_rec, h, h)]
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> Dict[str, float]:
         """

@@ -2,22 +2,15 @@
 Main Demo Window - Tab-based interface for capability demonstrations
 """
 
-from PyQt6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QTabWidget,
-    QPushButton,
-    QLabel,
-)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QPushButton,
+                             QTabWidget, QVBoxLayout, QWidget)
 
-from .core_panel import CorePanel
 from .biological_panel import BiologicalPanel
-from .neuromorphic_panel import NeuromorphicPanel
+from .core_panel import CorePanel
 from .depth_panel import DepthPanel
+from .neuromorphic_panel import NeuromorphicPanel
 
 
 class CapabilitiesDemoWindow(QMainWindow):
@@ -111,8 +104,7 @@ class CapabilitiesDemoWindow(QMainWindow):
 
         # Reset all button
         reset_btn = QPushButton("↺ Reset All Demos")
-        reset_btn.setStyleSheet(
-            """
+        reset_btn.setStyleSheet("""
             QPushButton {
                 background-color: #e74c3c;
                 color: white;
@@ -123,8 +115,7 @@ class CapabilitiesDemoWindow(QMainWindow):
             QPushButton:hover {
                 background-color: #c0392b;
             }
-        """
-        )
+        """)
         reset_btn.clicked.connect(self.reset_all)
         layout.addWidget(reset_btn)
 

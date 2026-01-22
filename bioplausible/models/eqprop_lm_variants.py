@@ -14,12 +14,14 @@ Variants:
 Registry pattern allows easy addition of new variants.
 """
 
+import math
+from typing import Callable, Dict, Optional, Type
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
-from typing import Dict, Type, Optional, Callable
 from torch.nn.utils.parametrizations import spectral_norm
+
 from bioplausible.models.triton_kernel import TritonEqPropOps
 
 # Registry for EqProp LM variants

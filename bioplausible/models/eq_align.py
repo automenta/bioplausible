@@ -1,7 +1,8 @@
+from typing import Dict, List, Optional, Union
+
 import torch
 import torch.nn as nn
 from torch.nn.utils.parametrizations import spectral_norm
-from typing import Optional, List, Dict, Union
 
 from .eqprop_base import EqPropModel
 from .nebc_base import register_nebc
@@ -39,7 +40,7 @@ class EquilibriumAlignment(EqPropModel):
         max_steps: int = 30,
         use_spectral_norm: bool = True,
         learning_rate: float = 0.001,
-        **kwargs
+        **kwargs,
     ):
         self.learning_rate = learning_rate
         super().__init__(
@@ -48,7 +49,7 @@ class EquilibriumAlignment(EqPropModel):
             output_dim=output_dim,
             max_steps=max_steps,
             use_spectral_norm=use_spectral_norm,
-            **kwargs
+            **kwargs,
         )
 
     def _build_layers(self):

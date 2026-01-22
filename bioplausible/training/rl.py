@@ -1,14 +1,15 @@
+import time
+from collections import deque
+from typing import Any, Dict, List, Optional
 
+import gymnasium as gym
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
-import gymnasium as gym
-from collections import deque
-from typing import Dict, Any, List, Optional
-import time
 
 from bioplausible.training.base import BaseTrainer
+
 
 class RLTrainer(BaseTrainer):
     """
@@ -25,7 +26,7 @@ class RLTrainer(BaseTrainer):
         gamma: float = 0.99,
         seed: int = 42,
         episodes_per_epoch: int = 10,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(model, device)
         self.model = self.model.to(device)
@@ -55,8 +56,10 @@ class RLTrainer(BaseTrainer):
         """Run one episode and update policy."""
         self.model.train()
 
-        obs, _ = self.env.reset() if hasattr(self.env, 'reset') else (self.env.reset(), {})
-        if isinstance(obs, tuple): # Handle some gym versions
+        obs, _ = (
+            self.env.reset() if hasattr(self.env, "reset") else (self.env.reset(), {})
+        )
+        if isinstance(obs, tuple):  # Handle some gym versions
             obs = obs[0]
 
         log_probs = []
@@ -91,7 +94,7 @@ class RLTrainer(BaseTrainer):
             log_probs.append(log_prob)
             rewards.append(reward)
 
-            if len(rewards) > 1000: # Safety break
+            if len(rewards) > 1000:  # Safety break
                 truncated = True
 
         # 2. Compute Returns
@@ -114,7 +117,7 @@ class RLTrainer(BaseTrainer):
         loss = torch.stack(loss).sum()
 
         self.optimizer.zero_grad()
-        loss.backward() # This triggers BPTT or Equilibrium Backward depending on model config
+        loss.backward()  # This triggers BPTT or Equilibrium Backward depending on model config
 
         # Gradient clipping usually helps RL
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
@@ -125,11 +128,7 @@ class RLTrainer(BaseTrainer):
         self.reward_history.append(total_reward)
         self.loss_history.append(loss.item())
 
-        return {
-            "reward": total_reward,
-            "loss": loss.item(),
-            "steps": len(rewards)
-        }
+        return {"reward": total_reward, "loss": loss.item(), "steps": len(rewards)}
 
     def train_epoch(self) -> Dict[str, float]:
         """Run multiple episodes as an 'epoch'."""
@@ -140,8 +139,8 @@ class RLTrainer(BaseTrainer):
 
         for _ in range(self.episodes_per_epoch):
             metrics = self.train_episode()
-            epoch_reward_sum += metrics['reward']
-            epoch_loss_sum += metrics['loss']
+            epoch_reward_sum += metrics["reward"]
+            epoch_loss_sum += metrics["loss"]
 
         avg_reward = epoch_reward_sum / self.episodes_per_epoch
         avg_loss = epoch_loss_sum / self.episodes_per_epoch
@@ -149,10 +148,10 @@ class RLTrainer(BaseTrainer):
 
         return {
             "loss": avg_loss,
-            "accuracy": avg_reward, # Map reward to accuracy for generic visualization
+            "accuracy": avg_reward,  # Map reward to accuracy for generic visualization
             "perplexity": 0.0,
             "time": epoch_time,
-            "iteration_time": epoch_time / self.episodes_per_epoch
+            "iteration_time": epoch_time / self.episodes_per_epoch,
         }
 
     def evaluate(self, episodes=5) -> float:
@@ -161,8 +160,13 @@ class RLTrainer(BaseTrainer):
         total_rewards = []
 
         for _ in range(episodes):
-            obs, _ = self.env.reset() if hasattr(self.env, 'reset') else (self.env.reset(), {})
-            if isinstance(obs, tuple): obs = obs[0]
+            obs, _ = (
+                self.env.reset()
+                if hasattr(self.env, "reset")
+                else (self.env.reset(), {})
+            )
+            if isinstance(obs, tuple):
+                obs = obs[0]
 
             ep_reward = 0
             done = False
@@ -184,7 +188,8 @@ class RLTrainer(BaseTrainer):
 
                 ep_reward += reward
                 steps += 1
-                if steps > 1000: break
+                if steps > 1000:
+                    break
 
             total_rewards.append(ep_reward)
 

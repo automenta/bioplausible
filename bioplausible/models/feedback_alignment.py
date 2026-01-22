@@ -10,10 +10,11 @@ Reference: Lillicrap et al., 2016 - "Random synaptic feedback weights
 support error backpropagation for deep learning"
 """
 
+from typing import Dict
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict
 from torch.nn.utils.parametrizations import spectral_norm
 
 

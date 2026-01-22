@@ -2,8 +2,8 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["bioplausible", "bioplausible_ui"]
+[tool.setuptools.packages.find]
+exclude = ["bioplausible.archive*", "bioplausible_ui_old*"]
 
 [project]
 name = "bioplausible"
@@ -34,6 +34,11 @@ dependencies = [
     "flake8",
     "black",
     "isort",
+    "matplotlib",
+    "seaborn",
+    "uvicorn",
+    "fastapi",
+    "pydantic",
 ]
 
 [project.scripts]
@@ -46,5 +51,5 @@ eqprop-worker = "bioplausible.p2p.worker:main"
 eqprop-p2p-worker = "bioplausible.p2p.p2p_worker:main"
 
 [tool.pytest.ini_options]
-addopts = "--ignore=bioplausible/archive --ignore=bioplausible_ui_old"
+addopts = "--ignore=bioplausible/archive"
 testpaths = ["tests", "bioplausible_ui/tests"]

@@ -2,10 +2,11 @@
 Shared utilities for TorEqProp models.
 """
 
+from typing import Optional
+
 import torch
 import torch.nn as nn
 from torch.nn.utils.parametrizations import spectral_norm
-from typing import Optional
 
 
 def spectral_linear(

@@ -4,12 +4,13 @@ Kernel Benchmark: Comprehensive accuracy and speed comparison
 Purpose: Determine if kernel should replace PyTorch for faster evaluation
 """
 
+import sys
 import time
+from pathlib import Path
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
-import sys
-from pathlib import Path
 
 root_path = Path(__file__).parent
 if str(root_path) not in sys.path:

@@ -11,10 +11,11 @@ Reference: Oja, E. (1982). Simplified neuron model as a principal
 component analyzer.
 """
 
+from typing import Dict, List, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Optional, List
 from torch.nn.utils.parametrizations import spectral_norm
 
 from .nebc_base import NEBCBase, register_nebc

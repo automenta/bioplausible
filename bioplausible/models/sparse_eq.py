@@ -4,10 +4,12 @@ SparseEquilibrium - Novel Algorithm
 Only top-K neurons update during equilibrium phase.
 """
 
+from typing import Dict, List, Optional
+
 import torch
 import torch.nn as nn
+
 from .base import BioModel, ModelConfig, register_model
-from typing import Dict, List, Optional
 
 
 @register_model("sparse_equilibrium")

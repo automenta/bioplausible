@@ -11,18 +11,20 @@ Usage:
     python simple_transfer.py
 """
 
-import torch
-import torch.nn as nn
-import numpy as np
 import sys
 from pathlib import Path
+
+import numpy as np
+import torch
+import torch.nn as nn
 
 # Add parent directory to path to import local modules
 root_path = Path(__file__).parent.parent
 sys.path.append(str(root_path))
 
 from models import LoopedMLP
-from validation.utils import create_synthetic_dataset, train_model, evaluate_accuracy
+from validation.utils import (create_synthetic_dataset, evaluate_accuracy,
+                              train_model)
 
 
 def main():

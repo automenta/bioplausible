@@ -16,10 +16,10 @@ sys.modules["PyQt6.QtWidgets"].QTabWidget.return_value = mock_tabs
 
 try:
     from bioplausible_ui.dashboard import EqPropDashboard
-    from bioplausible_ui.worker import TrainingWorker
     from bioplausible_ui.generation import UniversalGenerator
     from bioplausible_ui.hyperparams import get_hyperparams_for_model
     from bioplausible_ui.viz_utils import extract_weights
+    from bioplausible_ui.worker import TrainingWorker
 
     print("SUCCESS: All modules imported correctly.")
 except Exception as e:

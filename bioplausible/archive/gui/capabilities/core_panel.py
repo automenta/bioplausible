@@ -7,21 +7,13 @@ Visualizations:
 3. Interactive beta/steps adjustment
 """
 
-import torch
 import numpy as np
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QSlider,
-    QPushButton,
-    QGroupBox,
-)
-from PyQt6.QtCore import Qt, QTimer
 import pyqtgraph as pg
-
+import torch
 from models import LoopedMLP
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (QGroupBox, QHBoxLayout, QLabel, QPushButton,
+                             QSlider, QVBoxLayout, QWidget)
 
 
 class CorePanel(QWidget):
@@ -172,8 +164,7 @@ class CorePanel(QWidget):
         btn_layout = QHBoxLayout()
 
         self.run_btn = QPushButton("▶ Run Demo")
-        self.run_btn.setStyleSheet(
-            """
+        self.run_btn.setStyleSheet("""
             QPushButton {
                 background-color: #27ae60;
                 color: white;
@@ -184,14 +175,12 @@ class CorePanel(QWidget):
             QPushButton:hover {
                 background-color: #229954;
             }
-        """
-        )
+        """)
         self.run_btn.clicked.connect(self.run_demo)
         btn_layout.addWidget(self.run_btn)
 
         self.reset_btn = QPushButton("↺ Reset")
-        self.reset_btn.setStyleSheet(
-            """
+        self.reset_btn.setStyleSheet("""
             QPushButton {
                 background-color: #95a5a6;
                 color: white;
@@ -201,8 +190,7 @@ class CorePanel(QWidget):
             QPushButton:hover {
                 background-color: #7f8c8d;
             }
-        """
-        )
+        """)
         self.reset_btn.clicked.connect(self.reset)
         btn_layout.addWidget(self.reset_btn)
 

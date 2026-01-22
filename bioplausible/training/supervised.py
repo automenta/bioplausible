@@ -1,21 +1,25 @@
+import time
+import warnings
+from typing import Any, Dict, Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
-import time
-import numpy as np
-import warnings
-from typing import Dict, Any, Optional
 
-from bioplausible.training.base import BaseTrainer
+from bioplausible.acceleration import (compile_model, enable_tf32,
+                                       get_optimal_backend)
 from bioplausible.models.hebbian_chain import DeepHebbianChain
-from bioplausible.acceleration import compile_model, enable_tf32, get_optimal_backend
+from bioplausible.training.base import BaseTrainer
 
 # Optional imports for Kernel mode
 try:
-    from bioplausible.kernel import HAS_CUPY, cross_entropy, to_numpy
+    from bioplausible.kernel import HAS_CUPY
     from bioplausible.kernel import EqPropKernel as KernelEqPropKernel
+    from bioplausible.kernel import cross_entropy, to_numpy
 except ImportError:
     HAS_CUPY = False
     KernelEqPropKernel = None
+
 
 class SupervisedTrainer(BaseTrainer):
     """
@@ -31,23 +35,23 @@ class SupervisedTrainer(BaseTrainer):
         lr: float = 0.001,
         batches_per_epoch: int = 100,
         eval_batches: int = 20,
-        steps: int = 20, # EqProp steps
+        steps: int = 20,  # EqProp steps
         use_compile: bool = True,
         use_kernel: bool = False,
         compile_mode: str = "reduce-overhead",
-        task_type: str = "vision", # Fallback task type
-        **kwargs
+        task_type: str = "vision",  # Fallback task type
+        **kwargs,
     ):
-        optimizer = kwargs.get('optimizer')
-        if 'optimizer' in kwargs and kwargs['optimizer'] not in ["adam", "sgd", None]:
-             raise ValueError("Invalid optimizer")
-        
+        optimizer = kwargs.get("optimizer")
+        if "optimizer" in kwargs and kwargs["optimizer"] not in ["adam", "sgd", None]:
+            raise ValueError("Invalid optimizer")
+
         if kwargs.get("optimizer") == "invalid_opt":
-             raise ValueError("Invalid optimizer")
+            raise ValueError("Invalid optimizer")
         if kwargs.get("compile_mode") == "invalid_mode":
-             raise ValueError("Invalid compile mode")
+            raise ValueError("Invalid compile mode")
         if lr < 0:
-             raise ValueError("Invalid learning rate")
+            raise ValueError("Invalid learning rate")
 
         super().__init__(model, device)
         self.task = task
@@ -58,19 +62,23 @@ class SupervisedTrainer(BaseTrainer):
 
         # Check if model has its own backend management
         model_backend = getattr(model, "backend", "pytorch")
-        model_has_kernel = model_backend == "kernel" and hasattr(model, "_engine") and model._engine is not None
+        model_has_kernel = (
+            model_backend == "kernel"
+            and hasattr(model, "_engine")
+            and model._engine is not None
+        )
 
         # Prioritize model's internal kernel, then explicit use_kernel flag
         if model_has_kernel:
             self.use_kernel = True
-            self.kernel = None # Handled by model
+            self.kernel = None  # Handled by model
         else:
             self.use_kernel = use_kernel
             self.kernel = None
 
         # Check for embeddings
-        self.has_embed = getattr(model, 'has_embed', False)
-        self.embed = getattr(model, 'embed', None)
+        self.has_embed = getattr(model, "has_embed", False)
+        self.embed = getattr(model, "embed", None)
 
         # Setup model compilation
         if use_compile and not self.use_kernel:
@@ -82,7 +90,11 @@ class SupervisedTrainer(BaseTrainer):
         # Kernel Initialization (Legacy explicit kernel mode)
         if self.use_kernel and not model_has_kernel:
             if hasattr(self.model, "input_dim"):
-                dims = (self.model.input_dim, self.model.hidden_dim, self.model.output_dim)
+                dims = (
+                    self.model.input_dim,
+                    self.model.hidden_dim,
+                    self.model.output_dim,
+                )
                 # Pass use_gpu=True only if CuPy is available
                 self.kernel = KernelEqPropKernel(*dims, use_gpu=HAS_CUPY)
             else:
@@ -91,13 +103,13 @@ class SupervisedTrainer(BaseTrainer):
 
         # Optimizer (PyTorch mode only)
         if not self.use_kernel:
-            if not hasattr(self.model, 'optimizer'):
+            if not hasattr(self.model, "optimizer"):
                 params = list(self.model.parameters())
                 if self.has_embed and self.embed:
                     params.extend(list(self.embed.parameters()))
                 self.opt = torch.optim.Adam(params, lr=lr)
             else:
-                self.opt = None # Model manages optimizer
+                self.opt = None  # Model manages optimizer
         else:
             self.opt = None
 
@@ -105,16 +117,16 @@ class SupervisedTrainer(BaseTrainer):
 
         # Handle Hebbian-specific updates
         if isinstance(self.model, DeepHebbianChain):
-            if 'hebbian_lr' in kwargs:
-                self.model.hebbian_lr = kwargs['hebbian_lr']
-            if 'use_oja' in kwargs:
-                self.model.use_oja = kwargs['use_oja']
+            if "hebbian_lr" in kwargs:
+                self.model.hebbian_lr = kwargs["hebbian_lr"]
+            if "use_oja" in kwargs:
+                self.model.use_oja = kwargs["use_oja"]
                 for layer in self.model.chain:
-                    if hasattr(layer, 'original_layer'): # If spectral normed
-                        layer.original_layer.use_oja = kwargs['use_oja']
+                    if hasattr(layer, "original_layer"):  # If spectral normed
+                        layer.original_layer.use_oja = kwargs["use_oja"]
                         layer.original_layer.learning_rate = self.model.hebbian_lr
                     else:
-                        layer.use_oja = kwargs['use_oja']
+                        layer.use_oja = kwargs["use_oja"]
                         layer.learning_rate = self.model.hebbian_lr
 
     def _prepare_input(self, x):
@@ -122,7 +134,7 @@ class SupervisedTrainer(BaseTrainer):
         # If Kernel mode, return flattened numpy/cupy array
         if self.use_kernel:
             if isinstance(x, torch.Tensor):
-                x = x.cpu().numpy() # Kernel handles transfer if GPU
+                x = x.cpu().numpy()  # Kernel handles transfer if GPU
             if x.ndim == 4:
                 x = x.reshape(x.shape[0], -1)
             return x
@@ -136,25 +148,32 @@ class SupervisedTrainer(BaseTrainer):
                 model_name = self.model.__class__.__name__
                 is_spatial = "Conv" in model_name or "Diffusion" in model_name
 
-                if hasattr(self.model, 'config') and self.model.config and hasattr(self.model.config, 'name'):
-                     if "Conv" in self.model.config.name or "Diffusion" in self.model.config.name:
-                          is_spatial = True
+                if (
+                    hasattr(self.model, "config")
+                    and self.model.config
+                    and hasattr(self.model.config, "name")
+                ):
+                    if (
+                        "Conv" in self.model.config.name
+                        or "Diffusion" in self.model.config.name
+                    ):
+                        is_spatial = True
 
                 # Unwrap model if compiled
-                if hasattr(self.model, '_orig_mod'):
-                     orig = self.model._orig_mod
-                     orig_name = orig.__class__.__name__
-                     if "Conv" in orig_name or "Diffusion" in orig_name:
-                          is_spatial = True
+                if hasattr(self.model, "_orig_mod"):
+                    orig = self.model._orig_mod
+                    orig_name = orig.__class__.__name__
+                    if "Conv" in orig_name or "Diffusion" in orig_name:
+                        is_spatial = True
 
                 if is_spatial:
-                     return x
+                    return x
                 elif x.dim() > 2:
-                     return x.view(x.size(0), -1)
+                    return x.view(x.size(0), -1)
                 else:
-                     return x
+                    return x
             else:
-                 return x
+                return x
 
     def get_dynamics(self, x, return_trajectory=True):
         """
@@ -169,7 +188,9 @@ class SupervisedTrainer(BaseTrainer):
             # Try to call forward with dynamics args
             try:
                 # Assuming EqPropModel signature
-                result = self.model(h, return_trajectory=return_trajectory, return_dynamics=True)
+                result = self.model(
+                    h, return_trajectory=return_trajectory, return_dynamics=True
+                )
                 # Result could be (out, traj) or (out, dynamics_dict)
                 return result
             except TypeError:
@@ -187,7 +208,7 @@ class SupervisedTrainer(BaseTrainer):
             y_np = y.cpu().numpy() if isinstance(y, torch.Tensor) else y
 
             metrics = self.kernel.train_step(x_np, y_np)
-            return metrics # returns {'loss': ..., 'accuracy': ...}
+            return metrics  # returns {'loss': ..., 'accuracy': ...}
 
         # PyTorch / Model-Managed Kernel Mode
         # Even if use_kernel is True (because model.backend='kernel'), we fall through here.
@@ -244,10 +265,12 @@ class SupervisedTrainer(BaseTrainer):
                     Otherwise, evaluates on self.task.get_batch("val").
         """
         if loader is not None:
-             return self.evaluate_loader(loader)
+            return self.evaluate_loader(loader)
 
         if not self.task:
-            raise RuntimeError("Task not provided. Cannot run standard evaluation loop.")
+            raise RuntimeError(
+                "Task not provided. Cannot run standard evaluation loop."
+            )
 
         if not self.use_kernel:
             self.model.eval()
@@ -256,7 +279,11 @@ class SupervisedTrainer(BaseTrainer):
         val_accs = []
 
         # No grad context for PyTorch mode
-        context = torch.no_grad() if not self.use_kernel else torch.utils.contextlib.nullcontext()
+        context = (
+            torch.no_grad()
+            if not self.use_kernel
+            else torch.utils.contextlib.nullcontext()
+        )
 
         with context:
             for _ in range(self.eval_batches):
@@ -300,13 +327,17 @@ class SupervisedTrainer(BaseTrainer):
         return {
             "val_loss": avg_loss,
             "val_accuracy": avg_acc,
-            "val_perplexity": np.exp(min(avg_loss, 10)) if self.task_type == "lm" else 0.0
+            "val_perplexity": (
+                np.exp(min(avg_loss, 10)) if self.task_type == "lm" else 0.0
+            ),
         }
 
     def train_epoch(self) -> Dict[str, float]:
         """Run full training epoch (train + eval)."""
         if not self.task:
-             raise RuntimeError("Task not provided. Cannot run train_epoch. Use train_batch in your own loop.")
+            raise RuntimeError(
+                "Task not provided. Cannot run train_epoch. Use train_batch in your own loop."
+            )
 
         t0 = time.time()
 
@@ -321,7 +352,7 @@ class SupervisedTrainer(BaseTrainer):
         eval_metrics = self.evaluate()
 
         epoch_time = time.time() - t0
-        
+
         # update current epoch tracking (simplistic)
         self.current_epoch += 1
 
@@ -330,14 +361,23 @@ class SupervisedTrainer(BaseTrainer):
             "accuracy": eval_metrics["val_accuracy"],
             "perplexity": eval_metrics["val_perplexity"],
             "time": epoch_time,
-            "iteration_time": epoch_time / self.batches_per_epoch
+            "iteration_time": epoch_time / self.batches_per_epoch,
         }
 
-    def fit(self, train_loader, val_loader=None, epochs=10, callbacks=None, progress_bar=False, 
-            scheduler=None, max_grad_norm=None, **kwargs):
+    def fit(
+        self,
+        train_loader,
+        val_loader=None,
+        epochs=10,
+        callbacks=None,
+        progress_bar=False,
+        scheduler=None,
+        max_grad_norm=None,
+        **kwargs,
+    ):
         """
         Train using a standard PyTorch DataLoader.
-        
+
         Args:
            train_loader: DataLoader for training
            val_loader: DataLoader for validation
@@ -350,18 +390,15 @@ class SupervisedTrainer(BaseTrainer):
         """
         print(f"Starting training for {epochs} epochs...")
 
-        history = {
-            "train_loss": [],
-            "train_acc": [],
-            "val_loss": [],
-            "val_acc": []
-        }
-        
+        history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
+
         self.current_epoch = 0
 
         # Validate loader
-        if isinstance(train_loader, (str, bytes)) or not hasattr(train_loader, '__iter__'):
-             raise ValueError("train_loader must be an iterable DataLoader")
+        if isinstance(train_loader, (str, bytes)) or not hasattr(
+            train_loader, "__iter__"
+        ):
+            raise ValueError("train_loader must be an iterable DataLoader")
 
         for epoch in range(epochs):
             self.current_epoch = epoch
@@ -374,11 +411,11 @@ class SupervisedTrainer(BaseTrainer):
             for batch_idx, (x, y) in enumerate(train_loader):
                 x, y = x.to(self.device), y.to(self.device)
                 metrics = self.train_batch(x, y)
-                
-                # Check for max_grad_norm done inside train_batch? 
+
+                # Check for max_grad_norm done inside train_batch?
                 # Currently train_batch clips to 1.0 hardcoded.
                 # Ideally we should use max_grad_norm if provided.
-                
+
                 train_losses.append(metrics["loss"])
                 train_accs.append(metrics.get("accuracy", 0.0))
 
@@ -401,24 +438,38 @@ class SupervisedTrainer(BaseTrainer):
             if val_loader:
                 history["val_loss"].append(val_loss)
                 history["val_acc"].append(val_acc)
-            
+
             # Scheduler Step
             if scheduler:
                 if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                     scheduler.step(val_loss if val_loader else avg_loss)
+                    scheduler.step(val_loss if val_loader else avg_loss)
                 else:
-                     scheduler.step()
+                    scheduler.step()
 
             if progress_bar or (epoch + 1) % 1 == 0:
-                val_str = f", Val Loss={val_loss:.4f}, Val Acc={val_acc:.4f}" if val_loader else ""
-                print(f"Epoch {epoch+1}/{epochs}: "
-                      f"Loss={avg_loss:.4f}, Acc={avg_acc:.4f}"
-                      f"{val_str}, "
-                      f"Time={epoch_time:.1f}s")
+                val_str = (
+                    f", Val Loss={val_loss:.4f}, Val Acc={val_acc:.4f}"
+                    if val_loader
+                    else ""
+                )
+                print(
+                    f"Epoch {epoch+1}/{epochs}: "
+                    f"Loss={avg_loss:.4f}, Acc={avg_acc:.4f}"
+                    f"{val_str}, "
+                    f"Time={epoch_time:.1f}s"
+                )
 
             if callbacks:
                 for cb in callbacks:
-                    cb(epoch, {"loss": avg_loss, "accuracy": avg_acc, "val_loss": val_loss, "val_accuracy": val_acc})
+                    cb(
+                        epoch,
+                        {
+                            "loss": avg_loss,
+                            "accuracy": avg_acc,
+                            "val_loss": val_loss,
+                            "val_accuracy": val_acc,
+                        },
+                    )
 
         return history
 
@@ -430,7 +481,11 @@ class SupervisedTrainer(BaseTrainer):
         losses = []
         accs = []
 
-        context = torch.no_grad() if not self.use_kernel else torch.utils.contextlib.nullcontext()
+        context = (
+            torch.no_grad()
+            if not self.use_kernel
+            else torch.utils.contextlib.nullcontext()
+        )
 
         with context:
             for x, y in loader:
@@ -466,26 +521,30 @@ class SupervisedTrainer(BaseTrainer):
 
         return {
             "loss": np.mean(losses) if losses else 0.0,
-            "accuracy": np.mean(accs) if accs else 0.0
+            "accuracy": np.mean(accs) if accs else 0.0,
         }
-        
+
     def save_checkpoint(self, path: str):
         """Save model checkpoint."""
-        torch.save({
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.opt.state_dict() if self.opt else None,
-            'epoch': getattr(self, 'current_epoch', 0),
-        }, path)
+        torch.save(
+            {
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.opt.state_dict() if self.opt else None,
+                "epoch": getattr(self, "current_epoch", 0),
+            },
+            path,
+        )
 
     def load_checkpoint(self, path: str):
         """Load model checkpoint."""
         checkpoint = torch.load(path, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        if self.opt and checkpoint.get('optimizer_state_dict'):
-            self.opt.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.current_epoch = checkpoint.get('epoch', 0)
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        if self.opt and checkpoint.get("optimizer_state_dict"):
+            self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.current_epoch = checkpoint.get("epoch", 0)
 
     def export_onnx(self, path: str, input_shape: tuple = (1, 784)):
         """Export model to ONNX."""
         from bioplausible.utils import export_to_onnx
+
         export_to_onnx(self.model, path, input_shape, device=self.device)

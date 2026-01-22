@@ -1,28 +1,28 @@
+import os
+import sys
 import unittest
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-import sys
-import os
-from pathlib import Path
 
 # Add parent to path for in-package testing
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from bioplausible.models.looped_mlp import LoopedMLP
-from bioplausible.models.conv_eqprop import ConvEqProp
-from bioplausible.models.transformer_eqprop import TransformerEqProp
-from bioplausible.models.modern_conv_eqprop import ModernConvEqProp, SimpleConvEqProp
-from bioplausible.models.feedback_alignment import FeedbackAlignmentEqProp
-from bioplausible.models.dfa_eqprop import DirectFeedbackAlignmentEqProp
 from bioplausible.models.adaptive_fa import AdaptiveFA
+from bioplausible.models.conv_eqprop import ConvEqProp
+from bioplausible.models.dfa_eqprop import DirectFeedbackAlignmentEqProp
+from bioplausible.models.eqprop_lm_variants import (EqPropAttentionOnlyLM,
+                                                    FullEqPropLM,
+                                                    RecurrentEqPropLM)
+from bioplausible.models.feedback_alignment import FeedbackAlignmentEqProp
 from bioplausible.models.homeostatic import HomeostaticEqProp
-from bioplausible.models.eqprop_lm_variants import (
-    FullEqPropLM,
-    EqPropAttentionOnlyLM,
-    RecurrentEqPropLM,
-)
+from bioplausible.models.looped_mlp import LoopedMLP
+from bioplausible.models.modern_conv_eqprop import (ModernConvEqProp,
+                                                    SimpleConvEqProp)
+from bioplausible.models.transformer_eqprop import TransformerEqProp
 
 
 class TestValidationAll(unittest.TestCase):

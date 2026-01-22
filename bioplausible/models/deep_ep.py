@@ -5,9 +5,11 @@ Implements Equilibrium Propagation with asymmetric forward and feedback weights.
 Based on research into relaxing the symmetry constraint (e.g. standard EqProp requires W = W^T).
 """
 
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
-from typing import Dict, Optional, List, Union, Tuple, Any
+
 from .base import BioModel, ModelConfig, register_model
 
 
@@ -43,7 +45,9 @@ class DirectedEP(BioModel):
 
             # Feedback: dim[i+1] -> dim[i]
             # Initialize feedback weights independently
-            bwd = nn.Linear(dims[i + 1], dims[i], bias=False) # Bias usually in forward layer
+            bwd = nn.Linear(
+                dims[i + 1], dims[i], bias=False
+            )  # Bias usually in forward layer
             self.feedback_layers.append(bwd)
 
         self.to(kwargs.get("device", "cpu"))
@@ -71,7 +75,7 @@ class DirectedEP(BioModel):
             # Top-down contribution using Explicit Feedback Weights
             a_td = 0.0
             if i < num_layers - 1:
-                bwd_layer = self.feedback_layers[i + 1] # Feedback from layer i+1 to i?
+                bwd_layer = self.feedback_layers[i + 1]  # Feedback from layer i+1 to i?
                 # Wait, layer i connects h_i to h_{i+1}.
                 # So h_{i+1} sends feedback to h_i.
                 # forward_layers[i] maps h_i -> h_{i+1}.
@@ -103,7 +107,7 @@ class DirectedEP(BioModel):
             # - Bottom-up from h_k via W_k
             # - Top-down from h_{k+2} via B_{k+1} (if exists)
 
-            h_prev = activations[k] # h_k
+            h_prev = activations[k]  # h_k
 
             # Bottom-up
             a_bu = self.forward_layers[k](h_prev)
@@ -111,11 +115,11 @@ class DirectedEP(BioModel):
             # Top-down
             a_td = 0.0
             if k < len(self.forward_layers) - 1:
-                h_next = activations[k+2] # h_{k+2}
+                h_next = activations[k + 2]  # h_{k+2}
                 # Feedback from k+2 to k+1
                 # forward_layers[k+1] goes k+1 -> k+2
                 # feedback_layers[k+1] goes k+2 -> k+1
-                a_td = self.feedback_layers[k+1](h_next)
+                a_td = self.feedback_layers[k + 1](h_next)
 
             total = a_bu + a_td
 
@@ -208,8 +212,8 @@ class DirectedEP(BioModel):
 
         with torch.no_grad():
             for i in range(len(self.forward_layers)):
-                h_prev_free, h_post_free = free[i], free[i+1]
-                h_prev_nudge, h_post_nudge = nudged[i], nudged[i+1]
+                h_prev_free, h_post_free = free[i], free[i + 1]
+                h_prev_nudge, h_post_nudge = nudged[i], nudged[i + 1]
 
                 # 1. Update Forward Weights W
                 # Standard EqProp rule: dW ~ (h_post h_prev^T)_nudged - ...

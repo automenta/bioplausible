@@ -5,31 +5,17 @@ Aggregates all track definitions from various modules into a single lookup dicti
 This allows the Verifier to easily access all available experiments.
 """
 
-from typing import Dict, Callable
+from typing import Callable, Dict
+
 from bioplausible.validation.notebook import TrackResult
 
 # Import all track modules
-from . import (
-    framework_validation,
-    core_tracks,
-    advanced_tracks,
-    scaling_tracks,
-    special_tracks,
-    hardware_tracks,
-    analysis_tracks,
-    application_tracks,
-    engine_validation_tracks,
-    enhanced_validation_tracks,
-    new_tracks,
-    rapid_validation,
-    nebc_tracks,
-    negative_results,
-    architecture_comparison,
-    honest_tradeoff,
-    evolution_tracks,
-    research_tracks,
-    signal_tracks,
-)
+from . import (advanced_tracks, analysis_tracks, application_tracks,
+               architecture_comparison, core_tracks, engine_validation_tracks,
+               enhanced_validation_tracks, evolution_tracks,
+               framework_validation, hardware_tracks, honest_tradeoff,
+               nebc_tracks, negative_results, new_tracks, rapid_validation,
+               research_tracks, scaling_tracks, signal_tracks, special_tracks)
 
 # Initialize registry
 ALL_TRACKS: Dict[int, Callable] = {}
@@ -51,6 +37,7 @@ def register_tracks_from_module(module):
     # Format expected: track_ID_name(verifier)
     if not found_dict:
         import inspect
+
         for name, func in inspect.getmembers(module, inspect.isfunction):
             if name.startswith("track_"):
                 try:

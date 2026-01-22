@@ -9,23 +9,20 @@ Experiments:
 4. Identify which algorithms benefit most from SN
 """
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
+# Ensure models can be imported
+import sys
 import time
 from pathlib import Path
 
-# Ensure models can be imported
-import sys
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from models import (
-    DirectFeedbackAlignmentEqProp,
-    ContrastiveHebbianLearning,
-    DeepHebbianChain,
-)
+from models import (ContrastiveHebbianLearning, DeepHebbianChain,
+                    DirectFeedbackAlignmentEqProp)
 
 
 def load_mnist(n_samples=1000, train=True):

@@ -10,16 +10,17 @@ Main orchestration loop for evolutionary optimization:
 
 import json
 import time
-from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Any, Tuple
-from pathlib import Path
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 
-from .breeder import VariationBreeder, ArchConfig
-from .evaluator import VariationEvaluator, EvalTier
-from .fitness import FitnessScore
 from .breakthrough import BreakthroughDetector
+from .breeder import ArchConfig, VariationBreeder
+from .evaluator import EvalTier, VariationEvaluator
+from .fitness import FitnessScore
 
 
 @dataclass

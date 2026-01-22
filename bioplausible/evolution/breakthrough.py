@@ -7,11 +7,11 @@ Automatically identifies variants that exceed known baselines:
 - Generates breakthrough reports
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Optional, Any
-import json
 import datetime
+import json
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from .fitness import FitnessScore
 

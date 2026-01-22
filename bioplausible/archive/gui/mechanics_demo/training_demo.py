@@ -5,24 +5,17 @@ Side-by-side comparison of EqProp vs Backprop training on MNIST.
 Shows live accuracy/loss curves and current predictions.
 """
 
+import numpy as np
+import pyqtgraph as pg
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QGroupBox,
-    QGridLayout,
-)
+from models import BackpropMLP, LoopedMLP
 from PyQt6.QtCore import QTimer
-import pyqtgraph as pg
+from PyQt6.QtWidgets import (QGridLayout, QGroupBox, QHBoxLayout, QLabel,
+                             QPushButton, QVBoxLayout, QWidget)
 
-from models import LoopedMLP, BackpropMLP
 from .utils import load_mnist_subset
 
 
@@ -154,16 +147,14 @@ class TrainingDemo(QWidget):
 
         # Final comparison
         self.comparison_label = QLabel("")
-        self.comparison_label.setStyleSheet(
-            """
+        self.comparison_label.setStyleSheet("""
             QLabel {
                 background-color: #2c3e50;
                 padding: 15px;
                 border-radius: 5px;
                 font-size: 13px;
             }
-        """
-        )
+        """)
         layout.addWidget(self.comparison_label)
 
         # Controls

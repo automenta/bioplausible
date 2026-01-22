@@ -7,22 +7,13 @@ Demonstrations:
 3. Lipschitz constant visualization
 """
 
-import torch
 import numpy as np
-from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QGroupBox,
-    QSlider,
-    QGridLayout,
-)
-from PyQt6.QtCore import Qt, QTimer
 import pyqtgraph as pg
-
-from models import LoopedMLP, DeepHebbianChain
+import torch
+from models import DeepHebbianChain, LoopedMLP
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (QGridLayout, QGroupBox, QHBoxLayout, QLabel,
+                             QPushButton, QSlider, QVBoxLayout, QWidget)
 
 
 class BiologicalPanel(QWidget):
@@ -218,8 +209,7 @@ class BiologicalPanel(QWidget):
 
         # Current L value
         self.lipschitz_value = QLabel("L = ???")
-        self.lipschitz_value.setStyleSheet(
-            """
+        self.lipschitz_value.setStyleSheet("""
             QLabel {
                 font-size: 32px;
                 font-weight: bold;
@@ -228,8 +218,7 @@ class BiologicalPanel(QWidget):
                 background-color: #2c3e50;
                 border-radius: 8px;
             }
-        """
-        )
+        """)
         self.lipschitz_value.setAlignment(Qt.AlignmentFlag.AlignCenter)
         meter_layout.addWidget(self.lipschitz_value)
 
@@ -396,8 +385,7 @@ class BiologicalPanel(QWidget):
             color = "#e74c3c"  # Red - bad
             brush_color = "#e74c3c"
 
-        self.lipschitz_value.setStyleSheet(
-            f"""
+        self.lipschitz_value.setStyleSheet(f"""
             QLabel {{
                 font-size: 32px;
                 font-weight: bold;
@@ -406,8 +394,7 @@ class BiologicalPanel(QWidget):
                 background-color: #2c3e50;
                 border-radius: 8px;
             }}
-        """
-        )
+        """)
 
         # Update bar
         self.lipschitz_bar_item.setOpts(height=[L], brush=brush_color)
@@ -417,8 +404,7 @@ class BiologicalPanel(QWidget):
         self.reset_healing()
         self.reset_hebbian()
         self.lipschitz_value.setText("L = ???")
-        self.lipschitz_value.setStyleSheet(
-            """
+        self.lipschitz_value.setStyleSheet("""
             QLabel {
                 font-size: 32px;
                 font-weight: bold;
@@ -427,6 +413,5 @@ class BiologicalPanel(QWidget):
                 background-color: #2c3e50;
                 border-radius: 8px;
             }
-        """
-        )
+        """)
         self.lipschitz_bar_item.setOpts(height=[0])
