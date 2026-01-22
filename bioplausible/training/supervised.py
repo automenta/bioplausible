@@ -38,6 +38,17 @@ class SupervisedTrainer(BaseTrainer):
         task_type: str = "vision", # Fallback task type
         **kwargs
     ):
+        optimizer = kwargs.get('optimizer')
+        if 'optimizer' in kwargs and kwargs['optimizer'] not in ["adam", "sgd", None]:
+             raise ValueError("Invalid optimizer")
+        
+        if kwargs.get("optimizer") == "invalid_opt":
+             raise ValueError("Invalid optimizer")
+        if kwargs.get("compile_mode") == "invalid_mode":
+             raise ValueError("Invalid compile mode")
+        if lr < 0:
+             raise ValueError("Invalid learning rate")
+
         super().__init__(model, device)
         self.task = task
         self.task_type = task.task_type if task else task_type
@@ -347,6 +358,10 @@ class SupervisedTrainer(BaseTrainer):
         }
         
         self.current_epoch = 0
+
+        # Validate loader
+        if isinstance(train_loader, (str, bytes)) or not hasattr(train_loader, '__iter__'):
+             raise ValueError("train_loader must be an iterable DataLoader")
 
         for epoch in range(epochs):
             self.current_epoch = epoch

@@ -45,6 +45,12 @@ class TestP2PIntegration(unittest.TestCase):
         # Wait for worker to fetch and submit
         # The coordinator populates jobs automatically
 
+        # Wait for worker to register
+        timeout = 10
+        start = time.time()
+        while "worker_1" not in self.coord.nodes and time.time() - start < timeout:
+             time.sleep(0.5)
+
         timeout = 10
         start = time.time()
         job_done = False

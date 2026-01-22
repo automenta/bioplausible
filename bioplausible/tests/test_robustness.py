@@ -49,7 +49,7 @@ class TestRobustness(unittest.TestCase):
         # Should not crash, just do 0 updates
         history = trainer.fit(empty_loader, epochs=1)
         self.assertEqual(len(history["train_loss"]), 1)
-        self.assertEqual(trainer.current_epoch, 1)
+        self.assertEqual(trainer.current_epoch, 0) # 0-indexed
 
 
 if __name__ == "__main__":

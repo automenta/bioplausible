@@ -51,7 +51,7 @@ class TestSchedulerIntegration(unittest.TestCase):
             def evaluate(self, x, y):
                 return {"loss": 0.1, "accuracy": 0.9}
 
-        self.trainer._kernel = MockKernel()
+        self.trainer.kernel = MockKernel()
         self.trainer.model.input_dim = 10
         self.trainer.model.hidden_dim = 20
         self.trainer.model.output_dim = 2

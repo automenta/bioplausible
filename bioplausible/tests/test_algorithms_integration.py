@@ -81,7 +81,7 @@ def test_feedback_alignment_integration():
         assert model.feedback_weights[0].device.type == "cuda"
 
     # Trainer
-    trainer = EqPropTrainer(model, use_kernel=False, use_compile=False)
+    trainer = EqPropTrainer(model, use_kernel=False, use_compile=False, device=device if torch.cuda.is_available() else "cpu")
 
     history = trainer.fit(loader, epochs=2)
 

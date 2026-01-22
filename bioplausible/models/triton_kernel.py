@@ -21,8 +21,16 @@ except ImportError:
 # Try to import CuPy for type checking/pointer access if available
 try:
     import cupy as cp
-    HAS_CUPY = True
-except ImportError:
+    # Robust check
+    if hasattr(cp, 'cuda') and cp.cuda.is_available():
+        with cp.cuda.Device(0):
+            _ = cp.array([1.0])
+            _ = cp.random.rand(1)
+        HAS_CUPY = True
+    else:
+        HAS_CUPY = False
+        cp = None
+except (ImportError, Exception):
     cp = None
     HAS_CUPY = False
 
