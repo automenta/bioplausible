@@ -181,7 +181,13 @@ class P2PTab(BaseTab):
                 if target and "bootstrap" not in target:
                      parts = target.split(':')
                      ip = parts[0]
-                     if len(parts) > 1: port = int(parts[1])
+                     if len(parts) > 1:
+                         # Handle "8468 (Local Test)"
+                         port_str = parts[1].split()[0]
+                         try:
+                             port = int(port_str)
+                         except ValueError:
+                             port = 8468 # Fallback
 
                 self.worker = P2PEvolution(
                     bootstrap_ip=ip,
