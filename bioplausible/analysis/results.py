@@ -63,10 +63,22 @@ def load_trials(db_path: str) -> List[Dict[str, Any]]:
         """, (trial_id,))
         
         values = cursor.fetchall()
+        
+        # Handle different objective counts
+        # 2 Objectives: Accuracy (0), Loss (1)
+        # 3 Objectives: Accuracy (0), Params (1), Time (2) - Legacy/scalarized?
+        
         if len(values) >= 3:
             trial['accuracy'] = values[0]['value']
             trial['param_count'] = values[1]['value']
             trial['iteration_time'] = values[2]['value']
+        elif len(values) == 2:
+            trial['accuracy'] = values[0]['value']
+            trial['final_loss'] = values[1]['value']
+            # Try to recover params/time from user attrs or trial params if logged differently?
+            # Or just leave as defaults if not specialized objectives
+            trial['param_count'] = 0.0 # Placeholder
+            trial['iteration_time'] = 0.0 # Placeholder
         else:
             trial['accuracy'] = 0.0
             trial['param_count'] = 0.0
@@ -84,13 +96,24 @@ def load_trials(db_path: str) -> List[Dict[str, Any]]:
         trial['config'] = {p['param_name']: p['param_value'] for p in params}
         
         # Load user attributes (e.g. tier)
+        # Optuna stores attributes in 'value_json' column
         cursor.execute("""
-            SELECT key, value
+            SELECT key, value_json
             FROM trial_user_attributes
             WHERE trial_id = ?
         """, (trial_id,))
         attrs = cursor.fetchall()
-        trial['user_attrs'] = {a['key']: a['value'] for a in attrs}
+        
+        user_attrs = {}
+        for a in attrs:
+            import json
+            try:
+                # Optuna stores values as JSON strings
+                user_attrs[a['key']] = json.loads(a['value_json'])
+            except:
+                user_attrs[a['key']] = a['value_json']
+                
+        trial['user_attrs'] = user_attrs
         
         # Extract tier specifically for top-level access
         # Default to 'shallow' if missing (legacy compatibility)

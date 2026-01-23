@@ -313,10 +313,23 @@ MODEL_REGISTRY = [
 
 def get_model_spec(name: str) -> ModelSpec:
     """Get model spec by name."""
+    target = name.lower().replace(" ", "").replace("_", "")
     for spec in MODEL_REGISTRY:
-        if spec.name == name:
+        # Check normalization of name
+        spec_name_norm = spec.name.lower().replace(" ", "").replace("_", "")
+        if spec_name_norm == target:
             return spec
-    raise ValueError(f"Unknown model: {name}")
+        # Check normalization of model_type
+        if spec.model_type.lower().replace("_", "") == target:
+            return spec
+            
+    # Aliases
+    if target == "backpropmlp":
+        return get_model_spec("Backprop Baseline")
+            
+    # Fallback: check partial match if it's unambiguous?
+    # For now, strict normalized match is safer.
+    raise ValueError(f"Unknown model: {name}. Available: {[spec.name for spec in MODEL_REGISTRY]}")
 
 
 def list_model_names() -> List[str]:

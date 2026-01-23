@@ -60,8 +60,12 @@ def run_search(args):
     print(f"   Models: {args.models}")
     print(f"   Config: {config.epochs} epochs, {config.n_trials} trials")
 
-    models = args.models.split(",")
-    models = [m.strip() for m in models if m.strip()]
+    if args.models.lower() == "all":
+        from bioplausible.models.registry import list_model_names
+        models = list_model_names()
+    else:
+        models = args.models.split(",")
+        models = [m.strip() for m in models if m.strip()]
 
     for model in models:
         print(f"\n🔍 Exploring {model}...")
@@ -74,7 +78,6 @@ def run_search(args):
             study_name=study_name,
             use_pruning=config.use_pruning,
             sampler_name="tpe",
-            load_if_exists=True
         )
 
         def objective(trial):

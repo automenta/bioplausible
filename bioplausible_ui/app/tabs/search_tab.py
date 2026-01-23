@@ -48,7 +48,6 @@ class OptunaSearchWorker(QThread):
                 study_name=study_name,
                 use_pruning=self.eval_config.use_pruning,
                 sampler_name="tpe",
-                load_if_exists=True, 
             )
 
             current_model = model # closure capture
