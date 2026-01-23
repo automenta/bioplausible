@@ -73,6 +73,7 @@ def run_single_trial_task(
                 "loss": trial.final_loss,
                 "perplexity": trial.perplexity,
                 "time": trial.iteration_time,
+                "param_count": trial.param_count,  # In millions
             }
             storage.close()
             return metrics

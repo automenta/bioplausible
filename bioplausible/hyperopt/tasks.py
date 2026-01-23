@@ -14,6 +14,9 @@ import torch.nn as nn
 from bioplausible.datasets import get_lm_dataset, get_vision_dataset
 from bioplausible.training.base import BaseTrainer
 
+# Global dataset cache to avoid reloading for every trial
+_DATASET_CACHE = {}
+
 
 class BaseTask(ABC):
     """Abstract base class for all tasks."""
@@ -146,6 +149,19 @@ class VisionTask(BaseTask):
         return "vision"
 
     def setup(self):
+        # Check cache first
+        cache_key = (self.name, str(self.device), self.quick_mode)
+        if cache_key in _DATASET_CACHE:
+            cached = _DATASET_CACHE[cache_key]
+            self.train_x = cached['train_x']
+            self.train_y = cached['train_y']
+            self.val_x = cached['val_x']
+            self.val_y = cached['val_y']
+            self._output_dim = cached['output_dim']
+            self._input_dim = cached['input_dim']
+            print(f"Using cached Vision dataset: {self.name}")
+            return
+        
         print(f"Loading Vision dataset: {self.name}...")
         try:
             dataset = get_vision_dataset(self.name, train=True, flatten=False)
@@ -169,6 +185,17 @@ class VisionTask(BaseTask):
             else:
                 self._output_dim = 10
                 self._input_dim = 3072
+            
+            # Cache for future trials
+            _DATASET_CACHE[cache_key] = {
+                'train_x': self.train_x,
+                'train_y': self.train_y,
+                'val_x': self.val_x,
+                'val_y': self.val_y,
+                'output_dim': self._output_dim,
+                'input_dim': self._input_dim,
+            }
+            print(f"Cached dataset for future trials")
         except Exception as e:
             print(f"Failed to load dataset {self.name}: {e}")
             raise

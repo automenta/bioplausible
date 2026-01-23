@@ -110,8 +110,15 @@ def create_study(
     if evaluation_config and hasattr(evaluation_config, 'use_pruning'):
         use_pruning = evaluation_config.use_pruning
     
-    # Direction: maximize accuracy, minimize loss
-    directions = ["maximize", "minimize"] if n_objectives == 2 else ["maximize"]
+    # Direction: maximize accuracy, minimize loss/params/time
+    if n_objectives == 1:
+        directions = ["maximize"]
+    elif n_objectives == 2:
+        directions = ["maximize", "minimize"]  # accuracy, loss
+    elif n_objectives == 3:
+        directions = ["maximize", "minimize", "minimize"]  # accuracy, params, time
+    else:
+        directions = ["maximize"] + ["minimize"] * (n_objectives - 1)
 
     # Sampler selection with config
     n_startup = 10  # default

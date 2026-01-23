@@ -61,7 +61,7 @@ for model_name in models_to_test:
     # Create study
     study = create_study(
         model_names=[model_name],
-        n_objectives=2,  # accuracy, loss
+        n_objectives=3,  # accuracy, params, time
         storage=storage_path,
         study_name=f"shallow_{model_name.replace(' ', '_').lower()}",
         evaluation_config=eval_config,
@@ -109,9 +109,10 @@ for model_name in models_to_test:
         
         if metrics:
             accuracy = metrics.get("accuracy", 0.0)
-            loss = metrics.get("loss", float("inf"))
-            print(f"    → acc={accuracy:.4f}, loss={loss:.4f}")
-            return accuracy, loss
+            param_count = metrics.get("param_count", 0.0)  # In millions
+            iter_time = metrics.get("time", float("inf"))  # Seconds per iteration
+            print(f"    → acc={accuracy:.4f}, params={param_count:.2f}M, time={iter_time:.4f}s")
+            return accuracy, param_count, iter_time
         else:
             print(f"    → FAILED")
             raise optuna.TrialPruned()
@@ -153,10 +154,11 @@ for model_name, result in results.items():
     
     for i, trial in enumerate(result["best_trials"][:3], 1):
         acc = trial.values[0] if trial.values else 0.0
-        loss = trial.values[1] if len(trial.values) > 1 else 0.0
+        params = trial.values[1] if len(trial.values) > 1 else 0.0
+        time_per_iter = trial.values[2] if len(trial.values) > 2 else 0.0
         
         print(f"\n  #{i}: Trial {trial.number}")
-        print(f"     Accuracy: {acc:.4f}, Loss: {loss:.4f}")
+        print(f"     Accuracy: {acc:.4f}, Params: {params:.2f}M, Time: {time_per_iter:.4f}s")
         print(f"     Hyperparameters:")
         for param, value in sorted(trial.params.items()):
             if param != "epochs":
@@ -173,16 +175,17 @@ for model_name, result in results.items():
         comparison.append({
             "model": model_name,
             "accuracy": best.values[0],
-            "loss": best.values[1],
+            "params": best.values[1],
+            "time": best.values[2],
             "trial_num": best.number,
         })
 
 comparison.sort(key=lambda x: x["accuracy"], reverse=True)
 
-print(f"\n{'Rank':<5} {'Model':<35} {'Accuracy':<10} {'Loss':<10} {'Trial #'}")
+print(f"\n{'Rank':<5} {'Model':<35} {'Accuracy':<10} {'Params (M)':<12} {'Time (s)':<10} {'Trial #'}")
 print("-" * 80)
 for rank, entry in enumerate(comparison, 1):
-    print(f"{rank:<5} {entry['model']:<35} {entry['accuracy']:<10.4f} {entry['loss']:<10.4f} {entry['trial_num']}")
+    print(f"{rank:<5} {entry['model']:<35} {entry['accuracy']:<10.4f} {entry['params']:<12.2f} {entry['time']:<10.4f} {entry['trial_num']}")
 
 # 3. Hyperparameter insights
 print("\n\n📊 Hyperparameter Sensitivity Analysis")
@@ -252,7 +255,8 @@ print(f"   Models evaluated: {len(models_to_test)}")
 winner = comparison[0]
 print(f"\n🏆 Best Model: {winner['model']}")
 print(f"   Accuracy: {winner['accuracy']:.4f}")
-print(f"   Loss: {winner['loss']:.4f}")
+print(f"   Params:   {winner['params']:.2f}M")
+print(f"   Time:     {winner['time']:.4f}s")
 
 print(f"\n💾 Results saved to: {storage_path}")
 print("   View with: optuna-dashboard " + storage_path.replace("sqlite:///", ""))
