@@ -237,12 +237,6 @@ def get_search_space(model_name: str) -> SearchSpace:
             "num_layers": [2, 4, 6],
         }
 
-        if spec.has_beta:
-            params["beta"] = (0.05, 0.5, "linear")
-
-        if spec.has_steps:
-            params["steps"] = (5, 30, "int")
-
         return SearchSpace(model_name, params)
 
     # 3. Fallback for completely unknown models

@@ -21,6 +21,16 @@ from .optuna_bridge import (
 # Search space definitions
 from .search_space import SEARCH_SPACES, SearchSpace, get_search_space
 
+# Evaluation tiers for patience-based optimization
+from .eval_tiers import (
+    PatientLevel,
+    EvaluationConfig,
+    EVALUATION_TIERS,
+    get_evaluation_config,
+    estimate_total_time,
+    print_evaluation_summary,
+)
+
 __all__ = [
     "create_optuna_space",
     "create_study",
@@ -31,5 +41,11 @@ __all__ = [
     "get_search_space",
     "SEARCH_SPACES",
     "HAS_OPTUNA",
+    "PatientLevel",
+    "EvaluationConfig",
+    "EVALUATION_TIERS",
+    "get_evaluation_config",
+    "estimate_total_time",
+    "print_evaluation_summary",
 ]
 

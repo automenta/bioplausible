@@ -78,8 +78,8 @@ class TrialRunner:
 
             # Apply hyperparameters
             lr = config.get("lr", spec.default_lr)
-            beta = config.get("beta", spec.default_beta) if spec.has_beta else None
-            steps = config.get("steps", spec.default_steps) if spec.has_steps else None
+            beta = config.get("beta")  # None if not in config
+            steps = config.get("steps")
 
             # Additional params (for Hebbian, etc.)
             # If the model or trainer needs these, we should pass them.
@@ -102,20 +102,8 @@ class TrialRunner:
                 **trainer_kwargs,
             )
 
-            # Manually set beta on model if applicable (since Trainer might not know model internals deeply)
-            # Or assume Trainer handles it?
-            # SupervisedTrainer does NOT currently set beta.
-            # Let's handle it here or update SupervisedTrainer.
-            # Base logic in ExperimentAlgorithm was: self.beta = beta.
-            # But the model uses config or direct args.
-            # LoopedMLP uses config in constructor.
-            # If we want to *update* it (e.g. from hyperopt trial that overrides default), we need to set it.
-            # But create_model used spec.default_beta.
-            # If config has 'beta', create_model didn't see it?
-            # Ah, create_model takes 'spec', but 'spec' has defaults.
-            # Wait, create_model uses spec.default_beta.
-            # We need to update the model if we have a different beta from config.
-            # Most BioModels store beta in config object or as attribute.
+            # Manually set beta on model if provided in config
+            # Models that use beta will have it in their config or as an attribute
 
             if beta is not None and hasattr(model, "config"):
                 # BioModel based

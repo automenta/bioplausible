@@ -109,8 +109,6 @@ print("-" * 70)
 spec = get_model_spec("Holomorphic EqProp")
 print(f"Model: {spec.name}")
 print(f"Family: {spec.family}")
-print(f"Has beta: {spec.has_beta}")
-print(f"Has steps: {spec.has_steps}")
 
 study_auto = create_study(
     model_names=["Holomorphic EqProp"],

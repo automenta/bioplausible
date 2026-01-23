@@ -15,69 +15,69 @@ from bioplausible.models.registry import ModelSpec, get_model_spec
 
 
 def create_optuna_space(
-    trial: optuna.Trial, model_name: str, constraints: Optional[Dict[str, Any]] = None
+    trial: optuna.Trial, model_name: str, constraints: Optional[Dict[str, Any]] = None,
+    evaluation_config: Optional[Any] = None,  # EvaluationConfig
 ) -> Dict[str, Any]:
     """
-    Create Optuna hyperparameter space from ModelSpec.
+    Create Optuna hyperparameter space from SearchSpace definition.
 
     Args:
         trial: Optuna trial object
         model_name: Name of model from ModelRegistry
         constraints: Optional constraints (max_layers, max_hidden, etc.)
+        evaluation_config: Optional EvaluationConfig for patience-based constraints
 
     Returns:
         Config dictionary with sampled hyperparameters
     """
-    spec = get_model_spec(model_name)
+    # Get search space - this is the single source of truth
+    from .search_space import get_search_space
+    
+    space = get_search_space(model_name)
     config = {}
+    
+    # Merge constraints from evaluation_config if provided
+    if evaluation_config:
+        if constraints is None:
+            constraints = {}
+        if hasattr(evaluation_config, 'max_hidden_dim'):
+            constraints['max_hidden'] = evaluation_config.max_hidden_dim
+        if hasattr(evaluation_config, 'max_layers'):
+            constraints['max_layers'] = evaluation_config.max_layers
+        if hasattr(evaluation_config, 'epochs'):
+            config['epochs'] = evaluation_config.epochs
 
-    # Universal hyperparameters
-    config["lr"] = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
-
-    # Architecture
-    max_hidden = constraints.get("max_hidden", 512) if constraints else 512
-    config["hidden_dim"] = trial.suggest_categorical(
-        "hidden_dim", [64, 128, 256, min(512, max_hidden)]
-    )
-
-    max_layers = constraints.get("max_layers", 30) if constraints else 30
-    if spec.family in ["eqprop", "hybrid", "hebbian"]:
-        # Deeper networks for bio-plausible algorithms
-        config["num_layers"] = trial.suggest_int("num_layers", 2, max_layers)
-    else:
-        config["num_layers"] = trial.suggest_int("num_layers", 2, min(6, max_layers))
-
-    # Model-specific parameters
-    if spec.has_beta:
-        # Different ranges for different families
-        if "Finite-Nudge" in spec.name:
-            config["beta"] = trial.suggest_float("beta", 0.5, 3.0)
-        elif "Holomorphic" in spec.name:
-            config["beta"] = trial.suggest_float("beta", 0.01, 0.3)
+    # Iterate through search space parameters
+    for param_name, param_spec in space.params.items():
+        # Skip if already set (e.g., epochs from evaluation_config)
+        if param_name in config:
+            continue
+            
+        if isinstance(param_spec, tuple):
+            # Continuous or integer range: (min, max, scale)
+            min_val, max_val, scale = param_spec
+            
+            # Apply constraints
+            if param_name == "hidden_dim" and constraints and 'max_hidden' in constraints:
+                max_val = min(max_val, constraints['max_hidden'])
+            elif param_name == "num_layers" and constraints and 'max_layers' in constraints:
+                max_val = min(max_val, constraints['max_layers'])
+            elif param_name == "steps" and constraints and 'max_steps' in constraints:
+                max_val = min(max_val, constraints['max_steps'])
+            
+            if scale == "log":
+                config[param_name] = trial.suggest_float(param_name, min_val, max_val, log=True)
+            elif scale == "int":
+                config[param_name] = trial.suggest_int(param_name, int(min_val), int(max_val))
+            else:  # linear
+                config[param_name] = trial.suggest_float(param_name, min_val, max_val)
+                
+        elif isinstance(param_spec, list):
+            # Categorical choice
+            config[param_name] = trial.suggest_categorical(param_name, param_spec)
         else:
-            config["beta"] = trial.suggest_float("beta", 0.05, 0.5)
-
-    if spec.has_steps:
-        max_steps = constraints.get("max_steps", 40) if constraints else 40
-        if "Transformer" in spec.name:
-            config["steps"] = trial.suggest_int("steps", 5, min(20, max_steps))
-        else:
-            config["steps"] = trial.suggest_int("steps", 5, max_steps)
-
-    # Custom hyperparams from ModelSpec
-    for param, default in spec.custom_hyperparams.items():
-        if isinstance(default, float):
-            if param.endswith("_scale") or param.endswith("_rate"):
-                # Scale/rate parameters - log space
-                config[param] = trial.suggest_float(param, default * 0.1, default * 10.0, log=True)
-            else:
-                # Other floats - linear
-                config[param] = trial.suggest_float(param, default * 0.5, default * 2.0)
-        elif isinstance(default, int):
-            config[param] = trial.suggest_int(param, max(1, default // 2), default * 2)
-        elif isinstance(default, str):
-            # Categorical - just use default for now
-            config[param] = default
+            # Fixed value
+            config[param_name] = param_spec
 
     return config
 
@@ -89,6 +89,7 @@ def create_study(
     study_name: Optional[str] = None,
     use_pruning: bool = True,
     sampler_name: str = "tpe",
+    evaluation_config: Optional[Any] = None,  # EvaluationConfig from eval_tiers
 ) -> optuna.Study:
     """
     Create an Optuna study for hyperparameter optimization.
@@ -100,20 +101,29 @@ def create_study(
         study_name: Name for the study
         use_pruning: Whether to use automatic pruning
         sampler_name: "tpe", "nsga2", or "random"
+        evaluation_config: Optional EvaluationConfig for patience-based settings
 
     Returns:
         Optuna study object
     """
+    # Override pruning from evaluation_config if provided
+    if evaluation_config and hasattr(evaluation_config, 'use_pruning'):
+        use_pruning = evaluation_config.use_pruning
+    
     # Direction: maximize accuracy, minimize loss
     directions = ["maximize", "minimize"] if n_objectives == 2 else ["maximize"]
 
-    # Sampler selection
+    # Sampler selection with config
+    n_startup = 10  # default
+    if evaluation_config and hasattr(evaluation_config, 'n_startup_trials'):
+        n_startup = evaluation_config.n_startup_trials
+    
     if sampler_name == "nsga2":
         sampler = NSGAIISampler()
     elif sampler_name == "random":
         sampler = optuna.samplers.RandomSampler()
     else:  # TPE
-        sampler = TPESampler(multivariate=True, n_startup_trials=10)
+        sampler = TPESampler(multivariate=True, n_startup_trials=n_startup)
 
     # Pruner selection
     pruner = HyperbandPruner() if use_pruning else MedianPruner()

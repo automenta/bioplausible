@@ -100,18 +100,14 @@ class HyperparamEditor(QWidget):
             self.layout.addRow("Learning Rate:", self.lr_spin)
             self.values["learning_rate"] = self.lr_spin
 
-            if spec.has_beta:
                 self.beta_spin = QDoubleSpinBox()
                 self.beta_spin.setRange(0.0, 10.0)
                 self.beta_spin.setSingleStep(0.01)
-                self.beta_spin.setValue(spec.default_beta)
                 self.layout.addRow("Beta:", self.beta_spin)
                 self.values["beta"] = self.beta_spin
 
-            if spec.has_steps:
                 self.steps_spin = QSpinBox()
                 self.steps_spin.setRange(1, 100)
-                self.steps_spin.setValue(spec.default_steps)
                 self.layout.addRow("Steps:", self.steps_spin)
                 self.values["steps"] = self.steps_spin
 

@@ -129,6 +129,9 @@ class SupervisedTrainer(BaseTrainer):
                         layer.use_oja = kwargs["use_oja"]
                         layer.learning_rate = self.model.hebbian_lr
 
+        # Initialize epoch tracking
+        self.current_epoch = 0
+
     def _prepare_input(self, x):
         """Prepare input tensor (embedding, flattening, etc.)."""
         # If Kernel mode, return flattened numpy/cupy array
