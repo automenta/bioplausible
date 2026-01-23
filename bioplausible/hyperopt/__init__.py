@@ -1,28 +1,24 @@
 """
 Hyperparameter Optimization Package for Bio-Plausible Learning Research
 
-Now powered by Optuna for multi-objective optimization.
-Legacy evolution code has been deprecated.
+Powered by Optuna for multi-objective optimization.
 """
 
 __version__ = "0.1.0"
 
-# Optuna-based optimization
-try:
-    from .optuna_bridge import (
-        create_optuna_space,
-        create_study,
-        get_pareto_trials,
-        optimize_with_callback,
-        trial_to_metrics,
-    )
+# Optuna is now required
+HAS_OPTUNA = True
 
-    HAS_OPTUNA = True
-except ImportError:
-    HAS_OPTUNA = False
+# Core Optuna integration
+from .optuna_bridge import (
+    create_optuna_space,
+    create_study,
+    get_pareto_trials,
+    optimize_with_callback,
+    trial_to_metrics,
+)
 
-# Backward compatibility
-from .engine import EvolutionaryOptimizer, OptimizationConfig
+# Search space definitions
 from .search_space import SEARCH_SPACES, SearchSpace, get_search_space
 
 __all__ = [
@@ -31,8 +27,6 @@ __all__ = [
     "get_pareto_trials",
     "optimize_with_callback",
     "trial_to_metrics",
-    "EvolutionaryOptimizer",
-    "OptimizationConfig",
     "SearchSpace",
     "get_search_space",
     "SEARCH_SPACES",

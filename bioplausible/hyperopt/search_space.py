@@ -219,11 +219,6 @@ SEARCH_SPACES = {
     ),
 }
 
-# Import helpers here to avoid circular imports if necessary,
-# but usually strategies depends on SearchSpace, not vice versa.
-# However, for consistency, we can export GridSearch/RandomSearch from here if we want them accessible via search_space.py
-from bioplausible.hyperopt.strategies import GridSearch, RandomSearch
-
 
 def get_search_space(model_name: str) -> SearchSpace:
     """Get the search space for a model."""

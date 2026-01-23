@@ -1,20 +1,11 @@
-import threading
+"""
+Search Tab - Optuna-powered hyperparameter search
+"""
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
-try:
-    import optuna
-    from bioplausible.hyperopt.optuna_bridge import (
-        create_optuna_space,
-        create_study,
-        trial_to_metrics,
-    )
-
-    HAS_OPTUNA = True
-except ImportError:
-    HAS_OPTUNA = False
-
+from bioplausible.hyperopt import create_optuna_space, create_study
 from bioplausible.hyperopt.runner import run_single_trial_task
 from bioplausible_ui.app.schemas.search import SEARCH_TAB_SCHEMA
 from bioplausible_ui.core.base import BaseTab
@@ -46,6 +37,7 @@ class OptunaSearchWorker(QThread):
 
         def objective(trial):
             if not self.running:
+                import optuna
                 raise optuna.TrialPruned()
 
             # Sample hyperparameters
@@ -72,55 +64,13 @@ class OptunaSearchWorker(QThread):
 
                 return accuracy, loss
             else:
+                import optuna
                 raise optuna.TrialPruned()
 
         try:
             study.optimize(objective, n_trials=self.max_trials, show_progress_bar=False)
         except Exception as e:
             print(f"Optimization error: {e}")
-
-        self.finished.emit()
-
-    def stop(self):
-        self.running = False
-
-
-# Fallback worker for legacy code (if Optuna not available)
-class LegacySearchWorker(QThread):
-    trial_finished = pyqtSignal(dict)
-    finished = pyqtSignal()
-
-    def __init__(self, task, model, space, strategy="random", max_trials=10, parent=None):
-        super().__init__(parent)
-        self.task = task
-        self.model = model
-        self.space = space
-        self.strategy = strategy
-        self.max_trials = max_trials
-        self.running = True
-
-    def run(self):
-        from bioplausible.hyperopt.search_space import RandomSearch
-
-        configs = list(RandomSearch(self.space, n_iter=self.max_trials))
-
-        for i, config in enumerate(configs):
-            if not self.running:
-                break
-
-            config["epochs"] = 5
-
-            metrics = run_single_trial_task(
-                task=self.task, model_name=self.model, config=config, quick_mode=True
-            )
-
-            if metrics:
-                result = {
-                    "params": config,
-                    "accuracy": metrics.get("accuracy", 0.0),
-                    "loss": metrics.get("loss", 0.0),
-                }
-                self.trial_finished.emit(result)
 
         self.finished.emit()
 
@@ -145,27 +95,12 @@ class SearchTab(BaseTab):
         dataset = self.dataset_picker.get_dataset()
         model = self.model_selector.get_selected_model()
 
-        self.log_output.append(f"Starting Optuna search for {model}...")
+        self.log_output.append(f"Starting Optuna TPE search for {model}...")
         self.results_table.table.setRowCount(0)
         self.radar_view.clear()
 
-        if HAS_OPTUNA:
-            # Use Optuna
-            self.worker = OptunaSearchWorker(dataset, model, max_trials=10)
-        else:
-            # Fallback to legacy random search
-            self.log_output.append("Warning: Optuna not available, using legacy search")
-            space_config = self.search_space.get_values()
-            max_trials = space_config.pop("max_trials", 10)
-            search_space = {
-                k: v
-                for k, v in space_config.items()
-                if k not in ["strategy", "max_trials"]
-            }
-            self.worker = LegacySearchWorker(
-                dataset, model, search_space, "random", max_trials
-            )
-
+        # Create Optuna worker
+        self.worker = OptunaSearchWorker(dataset, model, max_trials=10)
         self.worker.trial_finished.connect(self._on_trial_finished)
         self.worker.finished.connect(self._on_search_finished)
         self.worker.start()
