@@ -60,14 +60,36 @@ def run_search(args):
     print(f"   Models: {args.models}")
     print(f"   Config: {config.epochs} epochs, {config.n_trials} trials")
 
+    from bioplausible.models.registry import get_model_spec, list_model_names
+
     if args.models.lower() == "all":
-        from bioplausible.models.registry import list_model_names
         models = list_model_names()
     else:
         models = args.models.split(",")
         models = [m.strip() for m in models if m.strip()]
 
     for model in models:
+        # Check compatibility
+        try:
+            spec = get_model_spec(model)
+            if spec.task_compat and args.task not in spec.task_compat:
+                # Normalize task name check just in case (e.g. cifar10 -> vision?)
+                # For now assume explicit match.
+                # Special case: vision covers mnist/cifar
+                is_compat = False
+                if args.task in spec.task_compat:
+                    is_compat = True
+                elif args.task in ["mnist", "cifar10"] and "vision" in spec.task_compat:
+                    is_compat = True
+                elif args.task in ["tiny_shakespeare", "wikitext"] and "lm" in spec.task_compat:
+                    is_compat = True
+                
+                if not is_compat:
+                    print(f"⚠️  Skipping {model}: Incompatible with task '{args.task}' (Needs {spec.task_compat})")
+                    continue
+        except ValueError:
+            pass # Unknown model, let it try/fail naturally later
+
         print(f"\n🔍 Exploring {model}...")
         
         study_name = f"{model}_{args.task}_{tier.value}"
@@ -97,8 +119,10 @@ def run_search(args):
                 task=args.task,
                 model_name=model,
                 config=trial_config,
-                quick_mode=False, # We control epochs manually
-                verbose=False
+                storage_path="bioplausible.db",
+                job_id=trial._trial_id,  # Align with Optuna's trial ID
+                quick_mode=(tier == PatientLevel.SMOKE),
+                verbose=False,
             )
 
             if metrics:

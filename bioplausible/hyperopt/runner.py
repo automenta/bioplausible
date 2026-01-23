@@ -46,7 +46,7 @@ def run_single_trial_task(
         storage = HyperoptStorage(str(db_path))
 
         # Create trial entry
-        trial_id = storage.create_trial(model_name, config)
+        trial_id = storage.create_trial(model_name, config, trial_id=job_id)
 
         # Create runner
         runner = TrialRunner(

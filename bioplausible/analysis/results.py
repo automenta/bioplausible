@@ -30,6 +30,7 @@ def load_trials(db_path: str) -> List[Dict[str, Any]]:
     
     # Query trials with study names
     trials = []
+    # Note: hyperopt_logs table uses Optuna trial_id as PK so we match on trial_id
     cursor.execute("""
         SELECT 
             t.trial_id,
@@ -205,3 +206,101 @@ def get_rankings(trials: List[Dict[str, Any]]) -> List[Any]:
             r.gap_to_baseline = gap
             
     return rankings
+
+
+def print_rankings(rankings: List[Any]):
+    """Print rankings table."""
+    print(f"{'Rank':<6} {'Family':<20} {'Best Acc':<10} {'Gap':<10} {'Trials':>8}")
+    print(f"{'-'*6} {'-'*20} {'-'*10} {'-'*10} {'-'*8}")
+    
+    for i, r in enumerate(rankings, 1):
+        gap = f"{r.gap_to_baseline:+.1f}%" if r.gap_to_baseline is not None else "Base"
+        if r.gap_to_baseline is None and i > 1:
+            # If not baseline but no gap calc (e.g. baseline not found), show nothing or N/A
+            gap = "N/A"
+            
+        print(f"#{i:<5} {r.family:<20} {r.best_value*100:6.2f}%    {gap:<10} {r.n_trials:8d}")
+
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Bioplausible Experiment Analysis")
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+    
+    # helper for filtering
+    def filter_trials(trials, tier=None, task=None):
+        filtered = []
+        for t in trials:
+            # Filter by Tier
+            if tier and t.get('user_attrs', {}).get('tier') != tier:
+                continue
+                
+            # Filter by Task
+            # Task is usually embedded in study name: model_task_tier
+            # OR recorded in trial params/attrs?
+            # Let's try to extract from study name which is standard: "{model}_{task}_{tier}"
+            # But earlier parsing in load_trials removed the study name structure to get model_name.
+            # We captured original study_name in load_trials though? NO, we didn't save it to trial dict.
+            # Wait, load_trials selects study_name!
+            # Let's verify load_trials saves study_name. 
+            # It matches on `s.study_name`.
+            # We should probably save task to user_attrs in run.py! 
+            # I checked run.py and it calls: trial.set_user_attr("tier", tier.value) AND trial.set_user_attr("model_family", model)
+            # BUT IT DOES NOT SET TASK explicitly in user_attrs!
+            # However, study_name is `f"{model}_{args.task}_{tier.value}"`.
+            # So we can filter by checking if task is in study_name.
+            
+            # Re-check load_trials in this file.
+            pass # implementation below will handle this
+            
+            filtered.append(t)
+        return filtered
+
+    # RANK command
+    rank_parser = subparsers.add_parser("rank", help="Show algorithm rankings")
+    rank_parser.add_argument("--db", default="bioplausible.db", help="Path to database")
+    rank_parser.add_argument("--tier", help="Filter by patience tier")
+    rank_parser.add_argument("--task", help="Filter by task (e.g. mnist, lm)")
+    
+    args = parser.parse_args()
+    
+    if args.command == "rank":
+        trials = load_trials(args.db)
+        
+        # Filter
+        if args.tier or args.task:
+            filtered = []
+            for t in trials:
+                # Need to retrieve study_name from DB or infer?
+                # load_trials implementation:
+                # cursor.execute("SELECT ... s.study_name ...")
+                # ... trial = dict(row) ...
+                # so trial['study_name'] EXISTS!
+                
+                if args.tier:
+                    # check explicit tier attr first, fallback to study name suffix
+                    trial_tier = t.get('user_attrs', {}).get('tier')
+                    if not trial_tier:
+                        parts = t['study_name'].split('_')
+                        if parts: trial_tier = parts[-1]
+                    
+                    if trial_tier != args.tier:
+                        continue
+                        
+                if args.task:
+                    # check task in study name
+                    # specific enough? usually model_task_tier
+                    # strict check might be hard if model has underscores.
+                    # simplified check: is task string in study_name?
+                    if args.task not in t['study_name']:
+                        continue
+                        
+                filtered.append(t)
+            trials = filtered
+            
+        rankings = get_rankings(trials)
+        print_rankings(rankings)
+    
+    else:
+        parser.print_help()
