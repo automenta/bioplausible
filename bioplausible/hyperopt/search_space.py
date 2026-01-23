@@ -18,7 +18,13 @@ DiscreteChoice = List[Union[int, float, str]]
 
 
 class SearchSpace:
-    """Hyperparameter search space for a model."""
+    """
+    Hyperparameter search space for a model.
+    
+    Note: This class now only stores parameter definitions.
+    All sampling/mutation/crossover is handled by Optuna.
+    Use optuna_bridge.create_optuna_space() for optimization.
+    """
 
     def __init__(
         self, name: str, params: Dict[str, Union[NumberRange, DiscreteChoice]]
@@ -26,168 +32,6 @@ class SearchSpace:
         self.name = name
         self.params = params
 
-    def sample(self, rng: np.random.Generator = None) -> Dict[str, Any]:
-        """Sample a random configuration from the search space."""
-        if rng is None:
-            rng = np.random.default_rng()
-
-        config = {}
-        for param_name, param_spec in self.params.items():
-            if isinstance(param_spec, tuple):
-                # Continuous or integer range
-                min_val, max_val, scale = param_spec
-                if scale == "log":
-                    val = float(np.exp(rng.uniform(np.log(min_val), np.log(max_val))))
-                elif scale == "int":
-                    val = int(rng.integers(min_val, max_val + 1))
-                else:  # linear
-                    val = float(rng.uniform(min_val, max_val))
-                config[param_name] = val
-            else:
-                # Discrete choice - ensure native Python type
-                choice = rng.choice(param_spec)
-                config[param_name] = (
-                    int(choice)
-                    if isinstance(choice, (np.integer, np.int64))
-                    else choice
-                )
-
-        return config
-
-    def mutate(
-        self,
-        config: Dict[str, Any],
-        mutation_rate: float = 0.3,
-        rng: np.random.Generator = None,
-    ) -> Dict[str, Any]:
-        """Mutate a configuration."""
-        if rng is None:
-            rng = np.random.default_rng()
-
-        mutated = config.copy()
-        for param_name, param_spec in self.params.items():
-            if rng.random() < mutation_rate:
-                if isinstance(param_spec, tuple):
-                    min_val, max_val, scale = param_spec
-                    if scale == "log":
-                        # Gaussian perturbation in log space
-                        current = mutated.get(param_name)
-                        if current is None:
-                            # Initialize if missing
-                            current = rng.uniform(min_val, max_val)
-
-                        log_val = np.log(current) + rng.normal(0, 0.5)
-                        mutated[param_name] = float(
-                            np.clip(np.exp(log_val), min_val, max_val)
-                        )
-                    elif scale == "int":
-                        # Random walk
-                        current = mutated.get(param_name)
-                        if current is None:
-                            current = int((min_val + max_val) / 2)
-
-                        delta = rng.integers(-2, 3)
-                        mutated[param_name] = int(
-                            np.clip(current + delta, min_val, max_val)
-                        )
-                    else:  # linear
-                        # Gaussian perturbation
-                        current = mutated.get(param_name)
-                        if current is None:
-                            current = (min_val + max_val) / 2.0
-
-                        span = max_val - min_val
-                        mutated[param_name] = float(
-                            np.clip(
-                                current + rng.normal(0, span * 0.1), min_val, max_val
-                            )
-                        )
-                else:
-                    # Random new choice
-                    mutated[param_name] = rng.choice(param_spec)
-
-        return mutated
-
-    def crossover(
-        self,
-        config1: Dict[str, Any],
-        config2: Dict[str, Any],
-        rng: np.random.Generator = None,
-    ) -> Dict[str, Any]:
-        """Crossover two configurations."""
-        if rng is None:
-            rng = np.random.default_rng()
-
-        child = {}
-        for param_name in self.params.keys():
-            # Uniform crossover
-            child[param_name] = (
-                config1[param_name] if rng.random() < 0.5 else config2[param_name]
-            )
-
-        return child
-
-    def apply_constraints(self, constraints: Dict[str, Any]) -> "SearchSpace":
-        """
-        Return a new SearchSpace with constraints applied.
-
-        Supported constraints:
-        - max_layers (int): Cap the maximum number of layers
-        - max_hidden (int): Cap the maximum hidden dimension
-        - max_steps (int): Cap the maximum equilibrium steps
-        """
-        if not constraints:
-            return self
-
-        new_params = self.params.copy()
-
-        for param, spec in new_params.items():
-            # Handle discrete choices (list)
-            if isinstance(spec, list):
-                if param == "num_layers" and "max_layers" in constraints:
-                    new_params[param] = [
-                        x for x in spec if x <= constraints["max_layers"]
-                    ]
-                    if not new_params[param]:  # Fallback if empty
-                        new_params[param] = [min(spec)]
-
-                elif param == "hidden_dim" and "max_hidden" in constraints:
-                    new_params[param] = [
-                        x for x in spec if x <= constraints["max_hidden"]
-                    ]
-                    if not new_params[param]:
-                        new_params[param] = [min(spec)]
-
-                elif param == "steps" and "max_steps" in constraints:
-                    new_params[param] = [
-                        x for x in spec if x <= constraints["max_steps"]
-                    ]
-                    if not new_params[param]:
-                        new_params[param] = [min(spec)]
-
-            # Handle continuous ranges (tuple)
-            elif isinstance(spec, tuple):
-                min_val, max_val, scale = spec
-
-                if param == "num_layers" and "max_layers" in constraints:
-                    max_val = min(max_val, constraints["max_layers"])
-                    if min_val > max_val:
-                        min_val = max_val
-                    new_params[param] = (min_val, max_val, scale)
-
-                elif param == "hidden_dim" and "max_hidden" in constraints:
-                    max_val = min(max_val, constraints["max_hidden"])
-                    if min_val > max_val:
-                        min_val = max_val
-                    new_params[param] = (min_val, max_val, scale)
-
-                elif param == "steps" and "max_steps" in constraints:
-                    max_val = min(max_val, constraints["max_steps"])
-                    if min_val > max_val:
-                        min_val = max_val
-                    new_params[param] = (min_val, max_val, scale)
-
-        return SearchSpace(self.name, new_params)
 
 
 # Define search spaces for all models

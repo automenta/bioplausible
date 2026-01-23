@@ -1,7 +1,12 @@
 """
 Search Strategy Implementations
 
-Implements GridSearch and RandomSearch generators.
+DEPRECATED: Use Optuna samplers instead.
+- GridSampler for grid search
+- RandomSampler for random search  
+- TPESampler for smarter Bayesian optimization
+
+These functions are kept only for backward compatibility.
 """
 
 import itertools
@@ -13,20 +18,15 @@ import numpy as np
 def GridSearch(space: Dict[str, Union[List, tuple]]) -> Iterator[Dict[str, Any]]:
     """
     Generator for Grid Search over a parameter space.
+    
+    DEPRECATED: Use optuna.samplers.GridSampler instead.
 
     Args:
         space: Dict where keys are param names and values are lists of discrete choices.
-               Continuous ranges (tuples) are NOT supported for Grid Search directly,
-               they should be discretized first or handled by caller.
 
     Yields:
         Config dictionary
     """
-    # Filter out non-list values (assume fixed or range requiring discretization)
-    # For now, we only grid search over explicit lists.
-    # If a tuple is found, we might need to error or sample discrete points?
-    # Let's assume standard usage is providing discrete lists.
-
     keys = []
     values = []
 
@@ -40,12 +40,6 @@ def GridSearch(space: Dict[str, Union[List, tuple]]) -> Iterator[Dict[str, Any]]
             if len(v) == 3 and v[2] == "int":
                 keys.append(k)
                 values.append(list(range(int(v[0]), int(v[1]) + 1)))
-            # Ignore continuous for now or sample 3 points?
-            # Let's ignore to avoid explosion
-            pass
-        else:
-            # Fixed value
-            pass
 
     for combination in itertools.product(*values):
         yield dict(zip(keys, combination))
@@ -56,6 +50,8 @@ def RandomSearch(
 ) -> Iterator[Dict[str, Any]]:
     """
     Generator for Random Search.
+    
+    DEPRECATED: Use optuna.samplers.RandomSampler instead.
 
     Args:
         space: Dict of parameter spaces.
@@ -64,11 +60,27 @@ def RandomSearch(
     Yields:
         Config dictionary
     """
-    from bioplausible.hyperopt.search_space import SearchSpace
-
-    # Wrap in SearchSpace object
-    search_space = SearchSpace("temp", space)
     rng = np.random.default_rng()
 
     for _ in range(n_iter):
-        yield search_space.sample(rng)
+        config = {}
+        for param_name, param_spec in space.items():
+            if isinstance(param_spec, tuple):
+                # Continuous or integer range
+                min_val, max_val, scale = param_spec
+                if scale == "log":
+                    val = float(np.exp(rng.uniform(np.log(min_val), np.log(max_val))))
+                elif scale == "int":
+                    val = int(rng.integers(min_val, max_val + 1))
+                else:  # linear
+                    val = float(rng.uniform(min_val, max_val))
+                config[param_name] = val
+            elif isinstance(param_spec, list):
+                # Discrete choice
+                choice = rng.choice(param_spec)
+                config[param_name] = (
+                    int(choice)
+                    if isinstance(choice, (np.integer, np.int64))
+                    else choice
+                )
+        yield config
