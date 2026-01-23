@@ -289,7 +289,14 @@ class SupervisedTrainer(BaseTrainer):
 
             loss = loss.item()
 
-        return {"loss": loss, "accuracy": acc}
+        # Merge all metrics
+        result = {"loss": loss, "accuracy": acc}
+        if metrics is not None:
+            for k, v in metrics.items():
+                if k not in result:
+                    result[k] = v
+                    
+        return result
 
     def evaluate(self, loader=None) -> Dict[str, float]:
         """
@@ -376,27 +383,41 @@ class SupervisedTrainer(BaseTrainer):
         t0 = time.time()
 
         # Training
-        train_losses = []
+        from collections import defaultdict
+        train_metrics_agg = defaultdict(list)
+        
         for _ in range(self.batches_per_epoch):
             x, y = self.task.get_batch("train")
-            metrics = self.train_batch(x, y)
-            train_losses.append(metrics["loss"])
+            step_metrics = self.train_batch(x, y)
+            
+            for k, v in step_metrics.items():
+                if isinstance(v, (int, float)):
+                    train_metrics_agg[k].append(v)
 
         # Evaluation
         eval_metrics = self.evaluate()
 
         epoch_time = time.time() - t0
 
-        # update current epoch tracking (simplistic)
-        self.current_epoch += 1
-
-        return {
-            "loss": eval_metrics["val_loss"],
-            "accuracy": eval_metrics["val_accuracy"],
-            "perplexity": eval_metrics["val_perplexity"],
+        # Helper to mean
+        final_metrics = {
+            "val_loss": eval_metrics["val_loss"],
+            "val_accuracy": eval_metrics["val_accuracy"],
+            "val_perplexity": eval_metrics["val_perplexity"],
             "time": epoch_time,
             "iteration_time": epoch_time / self.batches_per_epoch,
         }
+        
+        # Add training averages
+        for k, values in train_metrics_agg.items():
+            if values:
+                final_metrics[f"train_{k}"] = np.mean(values)
+                # Also keep raw "loss" and "accuracy" keys for compatibility if needed
+                if k in ["loss", "accuracy"]:
+                    final_metrics[k] = np.mean(values)
+
+        self.current_epoch += 1
+        return final_metrics
 
     def fit(
         self,

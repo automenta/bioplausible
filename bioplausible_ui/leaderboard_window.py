@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
     QLabel, QPushButton, QComboBox, QApplication, QFrame
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 import pyqtgraph as pg
 import numpy as np
@@ -20,7 +20,7 @@ from bioplausible_ui.leaderboard_data import (
     load_trials, load_trials_timeseries, compute_pareto_frontier, compute_statistics
 )
 from bioplausible_ui.leaderboard_widgets import (
-    SummaryCard, ExpandableTrialCard, InsightWidget
+    SummaryCard, ExpandableTrialCard, InsightWidget, AlgorithmRankingTable
 )
 from bioplausible_ui.leaderboard_insights import generate_insights
 
@@ -28,13 +28,18 @@ from bioplausible_ui.leaderboard_insights import generate_insights
 class LeaderboardWindow(QMainWindow):
     """Modern dashboard-style leaderboard with automatic insights."""
     
+    request_training = pyqtSignal(dict)  # Signal to request training with config
+    
     def __init__(self, db_path="examples/shallow_benchmark.db"):
         super().__init__()
         self.db_path = db_path
         self.trials = []
         self.pareto_ids = []
         self.statistics = {}
+        self.pareto_ids = []
+        self.statistics = {}
         self.current_filter = "all"
+        self.current_tier_filter = "All Tiers"
         
         self.setWindowTitle("🧬 Bioplausible Leaderboard")
         self.setGeometry(100, 100, 1600, 1000)
@@ -117,6 +122,16 @@ class LeaderboardWindow(QMainWindow):
         self.model_filter.currentTextChanged.connect(self.filter_changed)
         header_layout.addWidget(self.model_filter)
         
+        header_layout.addWidget(QLabel("Tier:"))
+        self.tier_filter = QComboBox()
+        self.tier_filter.addItem("All Tiers")
+        self.tier_filter.addItem("smoke")
+        self.tier_filter.addItem("shallow")
+        self.tier_filter.addItem("standard")
+        self.tier_filter.addItem("deep")
+        self.tier_filter.currentTextChanged.connect(self.tier_filter_changed)
+        header_layout.addWidget(self.tier_filter)
+        
         self.refresh_btn = QPushButton("🔄 Refresh")
         self.refresh_btn.clicked.connect(self.refresh_data)
         header_layout.addWidget(self.refresh_btn)
@@ -145,6 +160,15 @@ class LeaderboardWindow(QMainWindow):
         self.progress_chart.showGrid(x=True, y=True, alpha=0.2)
         self.progress_chart.setMinimumHeight(300)
         self.content_layout.addWidget(self.progress_chart)
+
+        # Algorithm Rankings section
+        rankings_header = QLabel("🏆 Algorithm Rankings")
+        rankings_header.setStyleSheet("font-size: 20px; font-weight: bold; color: #e2e8f0; margin-top: 16px;")
+        self.content_layout.addWidget(rankings_header)
+        
+        self.rankings_container = QVBoxLayout()
+        self.rankings_container.setSpacing(8)
+        self.content_layout.addLayout(self.rankings_container)
         
         # Top trials section
         trials_header = QLabel("🎯 Top Trials")
@@ -203,12 +227,26 @@ class LeaderboardWindow(QMainWindow):
         """Handle model filter change."""
         self.current_filter = text
         self.update_ui()
+
+    def tier_filter_changed(self, text):
+        """Handle tier filter change."""
+        self.current_tier_filter = text
+        self.update_ui()
     
     def get_filtered_trials(self):
         """Get trials matching current filter."""
-        if self.current_filter == "All Models":
-            return self.trials
-        return [t for t in self.trials if t['model_name'] == self.current_filter]
+        filtered = self.trials
+        
+        # Filter by Model
+        if self.current_filter != "All Models":
+            filtered = [t for t in filtered if t['model_name'] == self.current_filter]
+            
+        # Filter by Tier
+        if self.current_tier_filter != "All Tiers":
+            # Handle potential missing tier key by defaulting to 'shallow'
+            filtered = [t for t in filtered if t.get('tier', 'shallow') == self.current_tier_filter]
+            
+        return filtered
     
     def update_ui(self):
         """Update all UI components."""
@@ -226,9 +264,69 @@ class LeaderboardWindow(QMainWindow):
         # Update top trials
         self.update_top_trials(trials)
         
+        # Update algorithm rankings
+        self.update_rankings()
+        
         # Update insights
         self.update_insights(trials)
     
+    def update_rankings(self):
+        """Update the algorithm rankings table."""
+        # Clear existing table
+        while self.rankings_container.count():
+            child = self.rankings_container.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        # Get rankings from data
+        if hasattr(self, 'trials') and isinstance(self.trials, dict) and 'rankings' in self.trials:
+            # Note: load_trials returns a list, format_for_frontend returns a dict
+            # We need to ensure we call format_for_frontend or handle the data structure correctly
+            # Let's check refresh_data implementation
+            pass
+
+        # Since refresh_data calls load_trials which returns a LIST, we need to adapt.
+        # leaderboard_data.format_for_frontend actually does the processing including rankings.
+        # But refresh_data currently just calls load_trials directly.
+        # We need to change refresh_data to use format_for_frontend logic or similar.
+        
+        from bioplausible_ui.leaderboard_data import format_for_frontend
+        
+        # We need to fetch rankings from format_for_frontend
+        # But refresh_data sets self.trials directly from load_trials.
+        # Let's re-calculate rankings here for now to avoid breaking existing structure drastically,
+        # OR better: update refresh_data to use the new frontend format function?
+        # But existing code expects self.trials to be a list.
+        
+        from bioplausible.hyperopt.comparison import group_trials_by_family, compute_algorithm_rankings, ComparisonMetric
+        
+        # Filter trials if needed? Rankings should probably be global OR filtered. 
+        # Usually rankings are most useful for ALL models to compare.
+        # Let's use filtered trials if a filter is active, but maybe showing all is better context.
+        # Let's use current filtered trials.
+        
+        displayed_trials = self.get_filtered_trials()
+        if not displayed_trials:
+            return
+
+        trials_by_family = group_trials_by_family(displayed_trials)
+        rankings = compute_algorithm_rankings(
+            trials_by_family, 
+            metric=ComparisonMetric.ACCURACY
+        )
+        
+        # Compute gap to baseline
+        baseline_ranking = next((r for r in rankings if 'backprop' in r.family.lower() or 'baseline' in r.family.lower()), None)
+        if baseline_ranking:
+            for r in rankings:
+                if baseline_ranking.best_value > 0:
+                     # Gap = (Baseline - Mine) / Baseline * 100
+                    gap = (baseline_ranking.best_value - r.best_value) / baseline_ranking.best_value * 100
+                    r.gap_to_baseline = gap
+
+        table = AlgorithmRankingTable(rankings)
+        self.rankings_container.addWidget(table)
+
     def update_summary_cards(self, trials):
         """Update the summary cards at the top."""
         # Clear existing cards
@@ -300,7 +398,15 @@ class LeaderboardWindow(QMainWindow):
             ]
             
             for idx, (model, model_trials) in enumerate(timeseries.items()):
+                # Apply model filter
                 if self.current_filter != "All Models" and model != self.current_filter:
+                    continue
+                
+                # Apply Tier filter manually to timeseries logic (since timeseries is pre-grouped)
+                if self.current_tier_filter != "All Tiers":
+                    model_trials = [t for t in model_trials if t.get('tier', 'shallow') == self.current_tier_filter]
+                
+                if not model_trials:
                     continue
                 
                 color = colors[idx % len(colors)]
@@ -353,6 +459,7 @@ class LeaderboardWindow(QMainWindow):
         for rank, trial in enumerate(top_trials, 1):
             is_pareto = trial['trial_id'] in self.pareto_ids
             card = ExpandableTrialCard(trial, rank, is_pareto)
+            card.request_training.connect(self.request_training.emit)
             self.trials_container.addWidget(card)
     
     def update_insights(self, trials):

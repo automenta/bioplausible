@@ -5,10 +5,10 @@ Reusable UI components for the leaderboard redesign.
 """
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFrame,
     QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QRect, pyqtProperty
+from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QRect, pyqtProperty, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 
 
@@ -76,6 +76,8 @@ class SummaryCard(QFrame):
 
 class ExpandableTrialCard(QFrame):
     """Collapsible card showing trial details."""
+    
+    request_training = pyqtSignal(dict)  # Signal to request training with this config
     
     def __init__(self, trial_data: dict, rank: int, is_pareto: bool = False):
         super().__init__()
@@ -205,6 +207,50 @@ class ExpandableTrialCard(QFrame):
                     param_label = QLabel(param_html)
                     param_label.setStyleSheet("font-size: 12px; margin-left: 16px;")
                     self.details_layout.addWidget(param_label)
+        
+        # Train Button
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        self.train_btn = QPushButton("🚀 Train This Configuration")
+        self.train_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0f172a;
+                color: #a855f7;
+                border: 1px solid #a855f7;
+                padding: 6px 16px;
+                border-radius: 4px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #a855f7;
+                color: white;
+            }
+        """)
+        self.train_btn.clicked.connect(self._on_train_clicked)
+        btn_layout.addWidget(self.train_btn)
+        self.details_layout.addLayout(btn_layout)
+
+    def _on_train_clicked(self):
+        """Handle train button click."""
+        # Create full config proper for TrainTab
+        if 'config' in self.trial_data:
+            config = self.trial_data['config'].copy()
+            # Ensure model/task/dataset are top level if not already
+            if 'model' not in config: config['model'] = self.trial_data['model_name']
+            
+            # Leaderboard data might not have task/dataset explicitly if not stored in config
+            # But typically it is stored. If missing, we might need a fallback or prompt.
+            # Assuming config has everything needed or defaults will work.
+            
+            # Check for hyperparams dict if flattened
+            if 'hyperparams' not in config:
+                # If flat, assume all non-special keys are hyperparams
+                special = ['model', 'task', 'dataset', 'epochs', 'batch_size', 'gradient_method']
+                hyperparams = {k: v for k, v in config.items() if k not in special}
+                config['hyperparams'] = hyperparams
+            
+            self.request_training.emit(config)
     
     def toggle_expand(self):
         """Toggle the expanded state."""
@@ -265,3 +311,104 @@ class InsightWidget(QFrame):
         text_label.setStyleSheet("font-size: 13px; color: #e2e8f0;")
         text_label.setWordWrap(True)
         layout.addWidget(text_label)
+
+
+class AlgorithmRankingTable(QFrame):
+    """Table showing algorithm rankings and comparison to baseline."""
+    
+    def __init__(self, rankings: list):
+        super().__init__()
+        self.setFrameStyle(QFrame.Shape.StyledPanel)
+        self.setStyleSheet("""
+            AlgorithmRankingTable {
+                background-color: #1e293b;
+                border: 1px solid #475569;
+                border-radius: 8px;
+                padding: 10px;
+            }
+            QLabel {
+                color: #e2e8f0;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setSpacing(0)
+        
+        # Header
+        header = QHBoxLayout()
+        header.setContentsMargins(10, 5, 10, 10)
+        
+        headers = ["Rank", "Algorithm Family", "Best Accuracy", "Gap to Baseline", "Trials"]
+        widths = [50, 200, 120, 150, 80]
+        
+        for text, width in zip(headers, widths):
+            label = QLabel(text)
+            label.setStyleSheet("font-weight: bold; color: #94a3b8; font-size: 12px; text-transform: uppercase;")
+            label.setFixedWidth(width)
+            header.addWidget(label)
+        
+        layout.addLayout(header)
+        
+        # Rows
+        if not rankings:
+            no_data = QLabel("No ranking data available")
+            no_data.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            no_data.setStyleSheet("color: #64748b; padding: 20px;")
+            layout.addWidget(no_data)
+        else:
+            for ranking in rankings:
+                row = self.create_row(ranking)
+                layout.addLayout(row)
+                
+                # Separator
+                line = QFrame()
+                line.setFrameShape(QFrame.Shape.HLine)
+                line.setFrameShadow(QFrame.Shadow.Sunken)
+                line.setStyleSheet("background-color: #334155; margin: 0; min-height: 1px; max-height: 1px; border: none;")
+                layout.addWidget(line)
+        
+    def create_row(self, ranking):
+        row = QHBoxLayout()
+        row.setContentsMargins(10, 12, 10, 12)
+        
+        # Rank
+        rank_label = QLabel(f"#{ranking.rank}")
+        rank_label.setFixedWidth(50)
+        rank_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        if ranking.rank == 1:
+            rank_label.setText("🥇")
+        elif ranking.rank == 2:
+            rank_label.setText("🥈") 
+        elif ranking.rank == 3:
+            rank_label.setText("🥉")
+        row.addWidget(rank_label)
+        
+        # Family
+        family_label = QLabel(ranking.family)
+        family_label.setFixedWidth(200)
+        family_label.setStyleSheet("font-weight: 600; font-size: 14px;")
+        row.addWidget(family_label)
+        
+        # Best Accuracy
+        acc_label = QLabel(f"{ranking.best_value*100:.2f}%")
+        acc_label.setFixedWidth(120)
+        acc_label.setStyleSheet("color: #10b981; font-weight: bold;")
+        row.addWidget(acc_label)
+        
+        # Gap
+        gap = ranking.gap_to_baseline
+        gap_text = "Baseline" if gap == 0.0 else f"+{gap:.1f}%" if gap > 0 else f"{gap:.1f}%"
+        gap_color = "#94a3b8" if gap == 0.0 else "#ef4444" if gap > 0 else "#10b981" # Positive gap is bad (distance from baseline)
+        
+        gap_label = QLabel(gap_text)
+        gap_label.setFixedWidth(150)
+        gap_label.setStyleSheet(f"color: {gap_color}; font-weight: bold;")
+        row.addWidget(gap_label)
+        
+        # Trials
+        trials_label = QLabel(str(ranking.n_trials))
+        trials_label.setFixedWidth(80)
+        trials_label.setStyleSheet("color: #cbd5e1;")
+        row.addWidget(trials_label)
+        
+        return row
