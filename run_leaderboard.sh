@@ -1,26 +1,10 @@
 #!/bin/bash
-# Leaderboard Server Launch Script
+# Leaderboard Launcher (PyQt6)
 
-echo "🎯 Starting Bioplausible Leaderboard"
-echo "===================================="
+echo "🎯 Launching Bioplausible Leaderboard (PyQt6)"
+echo "=============================================="
 echo ""
-echo "Default database: examples/shallow_benchmark.db"
-echo "Default port: 5000"
-echo ""
-echo "Options:"
-echo "  --db PATH     : Specify database path"
-echo "  --port N      : Specify port number"
-echo ""
-echo "📊 Server will start at http://localhost:5000"
-echo "   Open this URL in your browser to view the leaderboard"
+echo "Database: ${1:-examples/shallow_benchmark.db}"
 echo ""
 
-# Check if Flask is installed
-if ! python3 -c "import flask" 2>/dev/null; then
-    echo "⚠️  Flask not found. Installing..."
-    pip install flask flask-cors
-fi
-
-# Start server
-cd bioplausible_ui
-python3 leaderboard_server.py "$@"
+python3 -m bioplausible_ui.leaderboard_window "$@"

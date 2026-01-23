@@ -12,7 +12,7 @@ from bioplausible.validation.notebook import TrackResult
 # Import all track modules
 from . import (advanced_tracks, analysis_tracks, application_tracks,
                architecture_comparison, core_tracks, engine_validation_tracks,
-               enhanced_validation_tracks, evolution_tracks,
+               enhanced_validation_tracks,
                framework_validation, hardware_tracks, honest_tradeoff,
                nebc_tracks, negative_results, new_tracks, rapid_validation,
                research_tracks, scaling_tracks, signal_tracks, special_tracks)
@@ -88,7 +88,6 @@ register_tracks_from_module(nebc_tracks)
 register_tracks_from_module(negative_results)
 register_tracks_from_module(architecture_comparison)
 register_tracks_from_module(honest_tradeoff)
-register_tracks_from_module(evolution_tracks)
 register_tracks_from_module(research_tracks)
 
 # 10. Signal Propagation
