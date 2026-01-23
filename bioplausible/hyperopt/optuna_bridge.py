@@ -14,6 +14,31 @@ from optuna.samplers import NSGAIISampler, TPESampler
 from bioplausible.models.registry import ModelSpec, get_model_spec
 
 
+def scalarize_objectives(
+    accuracy: float, param_count: float, iteration_time: float
+) -> float:
+    """
+    Scalarize multi-objectives into single score with priorities:
+    #1 Maximize accuracy (weight: 1.0)
+    #2 Minimize param count (weight: 0.01)
+    #3 Minimize iteration time (weight: 0.001)
+    
+    Args:
+        accuracy: Test accuracy (0-1)
+        param_count: Model parameters in millions
+        iteration_time: Time per iteration in seconds
+    
+    Returns:
+        Scalar score (higher is better)
+    """
+    score = (
+        accuracy * 1.0           # Primary: maximize accuracy
+        - param_count * 0.01     # Secondary: minimize params
+        - iteration_time * 0.001 # Tertiary: minimize time
+    )
+    return score
+
+
 def create_optuna_space(
     trial: optuna.Trial, model_name: str, constraints: Optional[Dict[str, Any]] = None,
     evaluation_config: Optional[Any] = None,  # EvaluationConfig
@@ -90,6 +115,7 @@ def create_study(
     use_pruning: bool = True,
     sampler_name: str = "tpe",
     evaluation_config: Optional[Any] = None,  # EvaluationConfig from eval_tiers
+    mode: str = "pareto",  # "pareto" or "scalarized"
 ) -> optuna.Study:
     """
     Create an Optuna study for hyperparameter optimization.
@@ -102,6 +128,7 @@ def create_study(
         use_pruning: Whether to use automatic pruning
         sampler_name: "tpe", "nsga2", or "random"
         evaluation_config: Optional EvaluationConfig for patience-based settings
+        mode: "pareto" for multi-objective Pareto frontier, "scalarized" for weighted single objective
 
     Returns:
         Optuna study object
@@ -111,7 +138,11 @@ def create_study(
         use_pruning = evaluation_config.use_pruning
     
     # Direction: maximize accuracy, minimize loss/params/time
-    if n_objectives == 1:
+    # For scalarized mode, force n_objectives=1
+    if mode == "scalarized":
+        directions = ["maximize"]  # Maximize scalarized score
+        n_objectives = 1
+    elif n_objectives == 1:
         directions = ["maximize"]
     elif n_objectives == 2:
         directions = ["maximize", "minimize"]  # accuracy, loss
@@ -143,6 +174,9 @@ def create_study(
         study_name=study_name,
         load_if_exists=True,
     )
+    
+    # Store mode metadata
+    study.set_user_attr("mode", mode)
 
     return study
 

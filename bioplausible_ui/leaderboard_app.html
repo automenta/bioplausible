@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bioplausible Leaderboard</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #9333ea;
+            --secondary: #06b6d4;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0f172a;
+            --darker: #020617;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+        }
+        
+        body {
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+            background-attachment: fixed;
+            color: var(--text);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            position: relative;
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a855f7, #06b6d4, #10b981);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.05em;
+        }
+        
+        .subtitle {
+            font-size: 1.25rem;
+            color: var(--text-dim);
+            font-weight: 300;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid var(--success);
+            border-radius: 2rem;
+            margin-top: 1rem;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 25px 80px rgba(147, 51, 234, 0.2);
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .icon {
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        
+        thead {
+            background: rgba(147, 51, 234, 0.2);
+        }
+        
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        th {
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        th:hover {
+            background: rgba(147, 51, 234, 0.3);
+        }
+        
+        tbody tr {
+            transition: background 0.2s;
+        }
+        
+        tbody tr:hover {
+            background: rgba(147, 51, 234, 0.1);
+        }
+        
+        .rank {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        
+        .rank-1 { color: #fbbf24; }
+        .rank-2 { color: #94a3b8; }
+        .rank-3 { color: #fb923c; }
+        
+        .medal {
+            display: inline-block;
+            font-size: 1.2rem;
+            margin-right: 0.25rem;
+        }
+        
+        .pareto-badge {
+            display: inline-block;
+            padding: 0.15rem 0.4rem;
+            background: linear-gradient(135deg, #a855f7, #06b6d4);
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .metric {
+            font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+            color: var(--success);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 350px;
+            margin-top: 1rem;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .stat-box {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #06b6d4, #10b981);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-top: 0.25rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 4rem;
+            font-size: 1.5rem;
+            color: var(--text-dim);
+        }
+        
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid var(--danger);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            color: var(--danger);
+            margin-bottom: 1rem;
+        }
+        
+        .toolbar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        
+        button, select {
+            padding: 0.75rem 1.5rem;
+            background: rgba(147, 51, 234, 0.3);
+            border: 1px solid rgba(147, 51, 234, 0.5);
+            border-radius: 0.5rem;
+            color: var(--text);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        button:hover, select:hover {
+            background: rgba(147, 51, 234, 0.5);
+            border-color: var(--primary);
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        .active {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧬 Bioplausible Leaderboard</h1>
+            <p class="subtitle">Real-time algorithm performance tracking</p>
+            <div class="status-badge" id="status">
+                <span id="status-text">●  Loading...</span>
+            </div>
+        </header>
+        
+        <div class="toolbar">
+            <button class="active" onclick="setView('all')">All Trials</button>
+            <button onclick="setView('pareto')">Pareto Frontier</button>
+            <button onclick="refreshData()">🔄 Refresh</button>
+            <select id="model-filter" onchange="filterByModel()">
+                <option value="all">All Models</option>
+            </select>
+        </div>
+        
+        <div id="error-container"></div>
+        <div id="app">
+            <div class="loading">Loading data...</div>
+        </div>
+    </div>
+    
+    <script>
+        // Global state
+        let allTrials = [];
+        let paretoIds = [];
+        let statistics = {};
+        let bestPerModel = {};
+        let currentView = 'all';
+        let currentFilter = 'all';
+        let charts = {};
+        
+        // Initialize
+        async function init() {
+            await fetchData();
+            setInterval(fetchData, 5000); // Refresh every 5 seconds
+        }
+        
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/trials');
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                
+                allTrials = data.trials;
+                paretoIds = data.pareto_ids;
+                statistics = data.statistics;
+                bestPerModel = data.best_per_model;
+                
+                updateStatus(allTrials.length);
+                updateModelFilter();
+                render();
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+        
+        function updateStatus(count) {
+            const statusText = document.getElementById('status-text');
+            statusText.innerHTML = `● Live (${count} trials)`;
+            document.getElementById('status').style.background = 'rgba(16, 185, 129, 0.2)';
+        }
+        
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = `
+                <div class="error">
+                    <strong>Error:</strong> ${message}
+                </div>
+            `;
+        }
+        
+        function updateModelFilter() {
+            const filter = document.getElementById('model-filter');
+            const models = [...new Set(allTrials.map(t => t.model_name))];
+            
+            // Keep existing selection if possible
+            const currentValue = filter.value;
+            
+            filter.innerHTML = '<option value="all">All Models</option>';
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                filter.appendChild(option);
+            });
+            
+            filter.value = currentValue;
+        }
+        
+        function setView(view) {
+            currentView = view;
+            document.querySelectorAll('.toolbar button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            render();
+        }
+        
+        function filterByModel() {
+            currentFilter = document.getElementById('model-filter').value;
+            render();
+        }
+        
+        function refreshData() {
+            fetchData();
+        }
+        
+        function getFilteredTrials() {
+            let trials = allTrials;
+            
+            if (currentView === 'pareto') {
+                trials = trials.filter(t => paretoIds.includes(t.trial_id));
+            }
+            
+            if (currentFilter !== 'all') {
+                trials = trials.filter(t => t.model_name === currentFilter);
+            }
+            
+            return trials;
+        }
+        
+        function render() {
+            const trials = getFilteredTrials();
+            
+            if (trials.length === 0) {
+                document.getElementById('app').innerHTML = '<div class="loading">No trials found</div>';
+                return;
+            }
+            
+            const html = `
+                <div class="grid">
+                    <div class="card full-width">
+                        <h2 class="card-title">
+                            <span class="icon">🏆</span>
+                            Leaderboard
+                        </h2>
+                        ${renderLeaderboard(trials)}
+                    </div>
+                </div>
+                
+                <div class="grid">
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span class="icon">📊</span>
+                            Accuracy vs Parameters
+                        </h2>
+                        <div class="chart-container">
+                            <canvas id="chart-acc-params"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span class="icon">⚡</span>
+                            Accuracy vs Time
+                        </h2>
+                        <div class="chart-container">
+                            <canvas id="chart-acc-time"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid">
+                    <div class="card full-width">
+                        <h2 class="card-title">
+                            <span class="icon">🎯</span>
+                            3D Pareto Frontier
+                        </h2>
+                        <div id="chart-3d" style="height: 500px;"></div>
+                    </div>
+                </div>
+                
+                <div class="grid">
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span class="icon">📈</span>
+                            Model Comparison
+                        </h2>
+                        <div class="chart-container">
+                            <canvas id="chart-comparison"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2 class="card-title">
+                            <span class="icon">📉</span>
+                            Statistics
+                        </h2>
+                        ${renderStatistics()}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('app').innerHTML = html;
+            
+            // Render charts
+            setTimeout(() => {
+                renderScatterChart('chart-acc-params', trials, 'param_count', 'Params (M)', 'iteration_time');
+                renderScatterChart('chart-acc-time', trials, 'iteration_time', 'Time (s)', 'param_count');
+                render3DChart(trials);
+                renderComparisonChart();
+            }, 100);
+        }
+        
+        function renderLeaderboard(trials) {
+            // Sort by accuracy descending
+            const sorted = [...trials].sort((a, b) => b.accuracy - a.accuracy);
+            
+            const rows = sorted.map((trial, index) => {
+                const rank = index + 1;
+                const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+                const rankClass = `rank-${rank}`;
+                const paretoMark = paretoIds.includes(trial.trial_id) ? '<span class="pareto-badge">Pareto</span>' : '';
+                
+                return `
+                    <tr>
+                        <td class="rank ${rankClass}">${medal} ${rank}</td>
+                        <td>${trial.model_name} ${paretoMark}</td>
+                        <td class="metric">${(trial.accuracy * 100).toFixed(2)}%</td>
+                        <td class="metric">${trial.param_count.toFixed(2)}M</td>
+                        <td class="metric">${trial.iteration_time.toFixed(4)}s</td>
+                        <td>#${trial.trial_id}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            return `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Model</th>
+                            <th>Accuracy</th>
+                            <th>Params</th>
+                            <th>Time</th>
+                            <th>Trial</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        function renderStatistics() {
+            const models = Object.keys(statistics);
+            
+            if (models.length === 0) {
+                return '<p class="stat-label">No statistics available</p>';
+            }
+            
+            const boxes = models.map(model => {
+                const stat = statistics[model];
+                return `
+                    <div class="stat-box">
+                        <div class="stat-value">${(stat.accuracy_mean * 100).toFixed(1)}%</div>
+                        <div class="stat-label">${model}</div>
+                        <div class="stat-label" style="font-size: 0.75rem; color: #64748b;">
+                            ±${(stat.accuracy_std * 100).toFixed(1)}% (n=${stat.n_trials})
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            return `<div class="stats-grid">${boxes}</div>`;
+        }
+        
+        function renderScatterChart(canvasId, trials, xKey, xLabel, sizeKey) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+            
+            // Destroy existing chart
+            if (charts[canvasId]) {
+                charts[canvasId].destroy();
+            }
+            
+            // Group by model
+            const modelGroups = {};
+            trials.forEach(trial => {
+                if (!modelGroups[trial.model_name]) {
+                    modelGroups[trial.model_name] = [];
+                }
+                modelGroups[trial.model_name].push(trial);
+            });
+            
+            const colors = ['#9333ea', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
+            
+            const datasets = Object.keys(modelGroups).map((model, index) => {
+                const data = modelGroups[model].map(trial => ({
+                    x: trial[xKey],
+                    y: trial.accuracy,
+                    r: Math.sqrt(trial[sizeKey] || 1) * 5, // Bubble size
+                }));
+                
+                return {
+                    label: model,
+                    data: data,
+                    backgroundColor: colors[index % colors.length] + '80',
+                    borderColor: colors[index % colors.length],
+                    borderWidth: 2,
+                };
+            });
+            
+            charts[canvasId] = new Chart(ctx, {
+                type: 'bubble',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e2e8f0' }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const val = context.raw;
+                                    return `Acc: ${(val.y * 100).toFixed(2)}%, ${xLabel}: ${val.x.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: xLabel, color: '#e2e8f0' },
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Accuracy', color: '#e2e8f0' },
+                            ticks: { color: '#94a3b8', callback: (val) => (val * 100).toFixed(0) + '%' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function render3DChart(trials) {
+            const modelGroups = {};
+            trials.forEach(trial => {
+                if (!modelGroups[trial.model_name]) {
+                    modelGroups[trial.model_name] = [];
+                }
+                modelGroups[trial.model_name].push(trial);
+            });
+            
+            const traces = Object.keys(modelGroups).map(model => {
+                const data = modelGroups[model];
+                return {
+                    x: data.map(t => t.param_count),
+                    y: data.map(t => t.iteration_time),
+                    z: data.map(t => t.accuracy),
+                    mode: 'markers',
+                    type: 'scatter3d',
+                    name: model,
+                    marker: {
+                        size: 8,
+                        opacity: 0.8,
+                    },
+                    text: data.map(t => `Trial ${t.trial_id}<br>Acc: ${(t.accuracy * 100).toFixed(2)}%`),
+                };
+            });
+            
+            const layout = {
+                scene: {
+                    xaxis: { title: 'Params (M)', color: '#e2e8f0' },
+                    yaxis: { title: 'Time (s)', color: '#e2e8f0' },
+                    zaxis: { title: 'Accuracy', color: '#e2e8f0' },
+                    bgcolor: 'rgba(0,0,0,0)'
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#e2e8f0' },
+                legend: { font: { color: '#e2e8f0' } }
+            };
+            
+            Plotly.newPlot('chart-3d', traces, layout);
+        }
+        
+        function renderComparisonChart() {
+            const ctx = document.getElementById('chart-comparison');
+            if (!ctx) return;
+            
+            if (charts['chart-comparison']) {
+                charts['chart-comparison'].destroy();
+            }
+            
+            const models = Object.keys(bestPerModel);
+            const data = {
+                labels: models,
+                datasets: [
+                    {
+                        label: 'Accuracy (%)',
+                        data: models.map(m => bestPerModel[m].accuracy * 100),
+                        backgroundColor: '#10b981',
+                    },
+                    {
+                        label: 'Params (M)',
+                        data: models.map(m => bestPerModel[m].param_count),
+                        backgroundColor: '#06b6d4',
+                    },
+                ]
+            };
+            
+            charts['chart-comparison'] = new Chart(ctx, {
+                type: 'bar',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#e2e8f0' } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+                    }
+                }
+            });
+        }
+        
+        // Start the app
+        init();
+    </script>
+</body>
+</html>

@@ -37,7 +37,7 @@ class SupervisedTrainer(BaseTrainer):
         eval_batches: int = 20,
         steps: int = 20,  # EqProp steps
         use_compile: bool = True,
-        use_kernel: bool = False,
+        use_kernel: str = "auto",  # "auto", True, False
         compile_mode: str = "reduce-overhead",
         task_type: str = "vision",  # Fallback task type
         **kwargs,
@@ -68,13 +68,27 @@ class SupervisedTrainer(BaseTrainer):
             and model._engine is not None
         )
 
-        # Prioritize model's internal kernel, then explicit use_kernel flag
+        # Determine kernel mode with auto-detection
         if model_has_kernel:
             self.use_kernel = True
             self.kernel = None  # Handled by model
+            self.backend_used = "kernel (model-managed)"
+        elif use_kernel == "auto":
+            # Auto-detect: try kernel if GPU available, else PyTorch
+            if device == "cuda" and HAS_CUPY:
+                self.use_kernel = True
+                self.backend_used = "kernel (auto-enabled)"
+            else:
+                self.use_kernel = False
+                self.backend_used = "pytorch (auto-fallback)"
+        elif use_kernel is True:
+            self.use_kernel = True
+            self.backend_used = "kernel (explicit)"
         else:
-            self.use_kernel = use_kernel
-            self.kernel = None
+            self.use_kernel = False
+            self.backend_used = "pytorch (explicit)"
+        
+        self.kernel = None
 
         # Check for embeddings
         self.has_embed = getattr(model, "has_embed", False)
@@ -95,11 +109,28 @@ class SupervisedTrainer(BaseTrainer):
                     self.model.hidden_dim,
                     self.model.output_dim,
                 )
-                # Pass use_gpu=True only if CuPy is available
-                self.kernel = KernelEqPropKernel(*dims, use_gpu=HAS_CUPY)
+                try:
+                    # Pass use_gpu=True only if CuPy is available
+                    self.kernel = KernelEqPropKernel(*dims, use_gpu=HAS_CUPY)
+                    if use_kernel == "auto":
+                        print(f"✓ GPU acceleration enabled (kernel mode)")
+                except Exception as e:
+                    if use_kernel == "auto":
+                        # Graceful fallback for auto mode
+                        warnings.warn(f"Kernel initialization failed, falling back to PyTorch: {e}")
+                        self.use_kernel = False
+                        self.backend_used = "pytorch (kernel-failed)"
+                    else:
+                        # Re-raise for explicit mode
+                        raise
             else:
-                warnings.warn("Model dimensions not detected. Kernel mode disabled.")
-                self.use_kernel = False
+                if use_kernel == "auto":
+                    # Graceful fallback
+                    self.use_kernel = False
+                    self.backend_used = "pytorch (no-model-dims)"
+                else:
+                    warnings.warn("Model dimensions not detected. Kernel mode disabled.")
+                    self.use_kernel = False
 
         # Optimizer (PyTorch mode only)
         if not self.use_kernel:

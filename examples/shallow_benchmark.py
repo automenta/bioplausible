@@ -3,8 +3,11 @@ Complete SHALLOW Benchmark Evaluation
 
 Runs fair comparison across multiple models with SHALLOW patience level.
 Shows top configurations and insights from results.
+
+Supports both Pareto multi-objective and scalarized(weighted) modes.
 """
 
+import argparse
 import time
 from pathlib import Path
 
@@ -17,8 +20,28 @@ from bioplausible.hyperopt import (
     get_evaluation_config,
     print_evaluation_summary,
 )
+from bioplausible.hyperopt.optuna_bridge import scalarize_objectives
 from bioplausible.hyperopt.runner import run_single_trial_task
 from bioplausible.models.registry import MODEL_REGISTRY, get_model_spec
+
+# Parse arguments
+parser = argparse.ArgumentParser(description="Benchmark bioplausible algorithms")
+parser.add_argument(
+    "--mode",
+    choices=["pareto", "scalarized"],
+    default="pareto",
+    help="Optimization mode: pareto (multi-objective) or scalarized (weighted single objective)"
+)
+parser.add_argument(
+    "--seed-base",
+    type=int,
+    default=42,
+    help="Base random seed for reproducibility"
+)
+args = parser.parse_args()
+
+OPT_MODE = args.mode
+SEED_BASE = args.seed_base
 
 print("=" * 80)
 print("SHALLOW BENCHMARK: Fair Algorithm Comparison")
@@ -63,8 +86,9 @@ for model_name in models_to_test:
         model_names=[model_name],
         n_objectives=3,  # accuracy, params, time
         storage=storage_path,
-        study_name=f"shallow_{model_name.replace(' ', '_').lower()}",
+        study_name=f"shallow_{model_name.replace(' ', '_').lower()}_{OPT_MODE}",
         evaluation_config=eval_config,
+        mode=OPT_MODE,
     )
     
     # Check if we already have trials
@@ -91,12 +115,15 @@ for model_name in models_to_test:
             trial, model_name, evaluation_config=eval_config
         )
         
+        # Add seed for reproducibility
+        config['seed'] = SEED_BASE + trial.number
+        
         print(f"    lr={config['lr']:.6f}, hidden={config['hidden_dim']}, layers={config['num_layers']}", end="")
         if 'beta' in config:
             print(f", beta={config['beta']:.3f}", end="")
         if 'steps' in config:
             print(f", steps={config['steps']}", end="")
-        print()
+        print(f", seed={config['seed']}")
         
         # Run trial
         metrics = run_single_trial_task(
@@ -112,7 +139,15 @@ for model_name in models_to_test:
             param_count = metrics.get("param_count", 0.0)  # In millions
             iter_time = metrics.get("time", float("inf"))  # Seconds per iteration
             print(f"    → acc={accuracy:.4f}, params={param_count:.2f}M, time={iter_time:.4f}s")
-            return accuracy, param_count, iter_time
+            
+            if OPT_MODE == "scalarized":
+                # Return single scalarized score
+                score = scalarize_objectives(accuracy, param_count, iter_time)
+                print(f"    → score={score:.4f}")
+                return score
+            else:
+                # Return all three objectives for Pareto
+                return accuracy, param_count, iter_time
         else:
             print(f"    → FAILED")
             raise optuna.TrialPruned()
