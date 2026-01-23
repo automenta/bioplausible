@@ -1,5 +1,4 @@
-from bioplausible.analysis.results import load_trials, compute_statistics, compute_pareto_frontier, get_rankings
-from bioplausible_ui.leaderboard_data import load_trials_timeseries # Keep this one specific for now or move it too?
+from bioplausible.analysis.results import load_trials, compute_statistics, compute_pareto_frontier, get_rankings, load_trials_timeseries
 # Actually re-implement format_for_frontend by delegating
 
 def format_for_frontend(trials, pareto_ids):

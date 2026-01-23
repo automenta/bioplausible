@@ -23,6 +23,7 @@ except ImportError:
     HAS_UMAP = False
     
 from bioplausible_ui.core.themes import Theme
+from PyQt6.QtGui import QFont
 
 
 class RadarView(QWidget):

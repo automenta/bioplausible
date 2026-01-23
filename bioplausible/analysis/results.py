@@ -205,7 +205,42 @@ def get_rankings(trials: List[Dict[str, Any]]) -> List[Any]:
             gap = (baseline.best_value - r.best_value) / baseline.best_value * 100
             r.gap_to_baseline = gap
             
+
     return rankings
+
+
+def load_trials_timeseries(db_path: str) -> Dict[int, List[Dict[str, Any]]]:
+    """
+    Load epoch-by-epoch metrics for all trials.
+    Returns a dictionary mapping trial_id to a list of epoch metrics.
+    """
+    if not Path(db_path).exists():
+        return {}
+        
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Check if tables exist first to avoid errors on empty DB
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='epoch_metrics'")
+    if not cursor.fetchone():
+        conn.close()
+        return {}
+        
+    cursor.execute("""
+        SELECT 
+            trial_id, epoch, loss, accuracy, perplexity, time
+        FROM epoch_metrics
+        ORDER BY trial_id, epoch
+    """)
+    
+    timeseries = defaultdict(list)
+    for row in cursor.fetchall():
+        trial_id = row['trial_id']
+        timeseries[trial_id].append(dict(row))
+        
+    conn.close()
+    return dict(timeseries)
 
 
 def print_rankings(rankings: List[Any]):
