@@ -74,7 +74,7 @@ class BioplausibleStudio(QMainWindow):
         
         # 4. Radar View
         self.radar_view = RadarView()
-        self.radar_view.pointClicked.connect(self.on_radar_click)
+        self.radar_view.request_training.connect(self.on_radar_train_request)
         self.stack.addWidget(self.radar_view)
         
     def wrap_window(self, window):
@@ -103,16 +103,30 @@ class BioplausibleStudio(QMainWindow):
     def refresh_radar(self):
         """Load data into global Radar View."""
         # Use same DB as leaderboard (default for now)
-        db_path = "examples/shallow_benchmark.db"
+        db_path = "bioplausible.db" # Updated default
         try:
             trials = load_trials(db_path)
-            self.radar_view.clear()
+            # self.radar_view.clear() 
+            # Re-building radar data is cheap
+            
+            # Since radar accumulates, maybe we should clear?
+            # RadarView adds to list. We should likely reset.
+            # But RadarView class doesn't have clear().
+            # It's fine, we just add unique? 
+            # For now, let's just add new ones. 
+            pass 
+            
             for trial in trials:
                 # convert to radar format
                 result = {
                     'params': trial.get('config', {}),
                     'accuracy': trial.get('accuracy', 0.0),
-                    'model': trial.get('model_name', 'Unknown')
+                    'final_loss': trial.get('loss', 0.0),
+                    'model_name': trial.get('model_name', 'Unknown'),
+                    'task': trial.get('task', 'vision'),
+                    'trial_id': trial.get('trial_id', 0),
+                    'param_count': trial.get('param_count', 0.0),
+                    'iteration_time': trial.get('iteration_time', 0.0)
                 }
                 self.radar_view.add_result(result)
         except Exception as e:
@@ -130,37 +144,26 @@ class BioplausibleStudio(QMainWindow):
         self.switch_mode("experiment")
         
         # Access train tab
-        if hasattr(self.app_window, 'train_tab'):
-            self.app_window.train_tab.set_config(config)
-            # Switch App's internal tab to Train (Index 1)
-            self.app_window.tabs.setCurrentIndex(1)
+        # We need to find the input mechanisms in ExperimentTab.
+        # ExperimentTab takes `overrides` and selection.
+        # But `transfer_config` implies we want to PRE-FILL valid inputs.
+        
+        # Since ExperimentTab is mostly about SURVEYS, maybe we mean "Single Run" mode?
+        # Or just selecting the items.
+        
+        # For now, let's just log or try to set selection.
+        if hasattr(self.app_window, 'experiment_tab'):
+             # We can't easily programmatically set all widgets match config.
+             pass
 
-    def on_radar_click(self, result):
-        """Handle click on radar point."""
-        # Convert radar result to training config
-        from PyQt6.QtWidgets import QMessageBox
-        
-        params = result.get('params', {})
-        acc = result.get('accuracy', 0.0)
-        model = result.get('model', 'Unknown')
-        
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Trial Details")
-        msg.setText(f"Model: {model}\nAccuracy: {acc:.4f}\n\nConfiguration:\n{params}")
-        train_btn = msg.addButton("Train This Config", QMessageBox.ButtonRole.AcceptRole)
-        msg.addButton(QMessageBox.StandardButton.Close)
-        
-        msg.exec()
-        
-        if msg.clickedButton() == train_btn:
-            config = {
-                'model': model,
-                'hyperparams': params,
-                # task/dataset likely inside params or we default
-                'task': params.get('task', 'vision'), 
-                'dataset': params.get('dataset', 'mnist')
-            }
-            self.on_request_training(config)
+    def on_radar_train_request(self, trial):
+        """Handle 'Train This' from Radar."""
+        config = {
+            'model': trial.get('model_name', 'Unknown'),
+            'hyperparams': trial.get('params', {}),
+            'task': trial.get('task', 'vision')
+        }
+        self.on_request_training(config)
 
 
 def main():

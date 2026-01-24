@@ -114,7 +114,24 @@ def load_trials(db_path: str) -> List[Dict[str, Any]]:
             except:
                 user_attrs[a['key']] = a['value_json']
                 
+                user_attrs[a['key']] = a['value_json']
+                
         trial['user_attrs'] = user_attrs
+        
+        # Merge with hyperopt_logs for detailed metrics (param_count, time)
+        try:
+            cursor.execute("""
+                SELECT param_count, iteration_time 
+                FROM hyperopt_logs 
+                WHERE trial_id = ?
+            """, (trial_id,))
+            row = cursor.fetchone()
+            if row:
+                if row['param_count']: trial['param_count'] = row['param_count']
+                if row['iteration_time']: trial['iteration_time'] = row['iteration_time']
+        except sqlite3.OperationalError:
+            # Table might not exist in old DBs
+            pass
         
         # Extract tier specifically for top-level access
         # Default to 'shallow' if missing (legacy compatibility)

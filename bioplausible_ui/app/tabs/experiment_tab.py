@@ -40,6 +40,7 @@ class ExperimentWorker(QThread):
         # Apply overrides
         self.max_trials = self.overrides.get('trials', self.base_config.n_trials)
         self.epochs = self.overrides.get('epochs', self.base_config.epochs)
+        self.repeats = self.overrides.get('repeats', 1)
         
         self.running = True
 
@@ -74,7 +75,7 @@ class ExperimentWorker(QThread):
                         import optuna
                         raise optuna.TrialPruned()
 
-                    # Sample hyperparameters
+                    # Sample hyperparameters ONCE for all repeats
                     config = create_optuna_space(trial, current_model)
                     
                     # Apply Config (Tier + Overrides)
@@ -85,36 +86,62 @@ class ExperimentWorker(QThread):
                     trial.set_user_attr("tier", self.tier.value)
                     trial.set_user_attr("model_family", current_model)
                     trial.set_user_attr("task", current_task)
+                    trial.set_user_attr("repeats", self.repeats)
 
-                    # Run trial
-                    # Pass storage_path and job_id to ensure proper logging to hyperopt_logs
-                    metrics = run_single_trial_task(
-                        task=current_task, 
-                        model_name=current_model, 
-                        config=config, 
-                        storage_path="bioplausible.db",
-                        job_id=trial._trial_id,  # Sync ID with logging table
-                        quick_mode=False, # We control epochs manually
-                        train_samples=self.base_config.train_samples,
-                        val_samples=self.base_config.val_samples
-                    )
+                    aggregated_metrics = {
+                        "accuracy": [], "loss": [], "time": [], "param_count": []
+                    }
+                    
+                    # Execute Repeats
+                    for r in range(self.repeats):
+                        if not self.running:
+                            import optuna
+                            raise optuna.TrialPruned()
+                            
+                        # Run trial
+                        # Pass storage_path and job_id to ensure proper logging to hyperopt_logs
+                        metrics = run_single_trial_task(
+                            task=current_task, 
+                            model_name=current_model, 
+                            config=config, 
+                            storage_path="bioplausible.db",
+                            job_id=trial._trial_id,  # Sync ID with logging table
+                            quick_mode=(self.tier == PatientLevel.SMOKE), # Use quick mode for Smoke tier
+                        )
+                        
+                        if metrics:
+                            aggregated_metrics["accuracy"].append(metrics.get("accuracy", 0.0))
+                            aggregated_metrics["loss"].append(metrics.get("loss", float("inf")))
+                            aggregated_metrics["time"].append(metrics.get("time", 0.0))
+                            aggregated_metrics["param_count"].append(metrics.get("param_count", 0.0))
+                        else:
+                            # If a repeat fails, we might want to prune or continue
+                            pass
 
-                    if metrics:
-                        accuracy = metrics.get("accuracy", 0.0)
-                        loss = metrics.get("loss", float("inf"))
-
-                        # Report to UI
+                    # Average results
+                    n_success = len(aggregated_metrics["accuracy"])
+                    if n_success > 0:
+                        avg_acc = sum(aggregated_metrics["accuracy"]) / n_success
+                        avg_loss = sum(aggregated_metrics["loss"]) / n_success
+                        avg_time = sum(aggregated_metrics["time"]) / n_success
+                        avg_params = sum(aggregated_metrics["param_count"]) / n_success
+                        
+                        # Report to UI (Averaged)
                         result = {
                             "model": current_model,
                             "task": current_task,
                             "params": config,
-                            "accuracy": accuracy,
-                            "loss": loss,
+                            "accuracy": avg_acc,
+                            "loss": avg_loss,
+                            "time": avg_time,
+                            "param_count": avg_params,
                             "trial_number": trial.number,
+                            "trial_id": trial.number,
+                            "repeats": n_success
                         }
                         self.trial_finished.emit(result)
 
-                        return accuracy, loss
+                        return avg_acc, avg_loss
                     else:
                         import optuna
                         raise optuna.TrialPruned()
@@ -132,6 +159,8 @@ class ExperimentWorker(QThread):
         self.running = False
 
 
+from bioplausible_ui.leaderboard_window import LeaderboardWindow
+
 class ExperimentTab(BaseTab):
     """Experiment Tab - Comprehensive Survey Runner."""
 
@@ -140,6 +169,7 @@ class ExperimentTab(BaseTab):
 
     def __init__(self):
         super().__init__()
+        self.leaderboard_window = None
         self._init_ui()
 
     def _init_ui(self):
@@ -203,6 +233,12 @@ class ExperimentTab(BaseTab):
         self.trials_override.setPrefix("Trials: ")
         overrides_form.addWidget(self.trials_override)
         
+        self.repeats_override = QSpinBox()
+        self.repeats_override.setRange(1, 10)
+        self.repeats_override.setValue(1)
+        self.repeats_override.setPrefix("Repeats: ")
+        overrides_form.addWidget(self.repeats_override)
+        
         settings_layout.addWidget(overrides_group)
         settings_layout.addStretch()
         
@@ -212,11 +248,17 @@ class ExperimentTab(BaseTab):
         actions_layout = QVBoxLayout()
         self.start_btn = QPushButton("🚀 Run Experiment")
         self.start_btn.clicked.connect(self._start_experiment)
+        
         self.stop_btn = QPushButton("🛑 Stop")
         self.stop_btn.clicked.connect(self._stop_experiment)
         self.stop_btn.setEnabled(False)
+        
+        self.leaderboard_btn = QPushButton("🏆 Leaderboard")
+        self.leaderboard_btn.clicked.connect(self._open_leaderboard)
+        
         actions_layout.addWidget(self.start_btn)
         actions_layout.addWidget(self.stop_btn)
+        actions_layout.addWidget(self.leaderboard_btn)
         actions_layout.addStretch()
         controls_layout.addLayout(actions_layout, 1)
         
@@ -227,7 +269,7 @@ class ExperimentTab(BaseTab):
         
         # Radar View
         self.radar_view = RadarView()
-        self.radar_view.pointClicked.connect(self._on_radar_click)
+        self.radar_view.request_training.connect(self._on_radar_train_request)
         splitter.addWidget(self.radar_view)
         
         # Results Table
@@ -279,14 +321,15 @@ class ExperimentTab(BaseTab):
         
         overrides = {
             'epochs': self.epoch_override.value(),
-            'trials': self.trials_override.value()
+            'trials': self.trials_override.value(),
+            'repeats': self.repeats_override.value()
         }
         
         # 3. UI State
         self.log_output.append(f"Starting Experiment: {len(selected_models)} Models x {len(selected_tasks)} Tasks")
-        self.log_output.append(f"Tier: {tier.name} | Overrides: {overrides}")
+        self.log_output.append(f"Tier: {tier.name} | Repeats: {overrides['repeats']} | Overrides: {overrides}")
         self.results_table.setRowCount(0)
-        self.radar_view.clear()
+        # self.radar_view.clear() # RadarView doesn't have clear(), but we can add logic if needed. Or just leave history.
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         
@@ -315,53 +358,105 @@ class ExperimentTab(BaseTab):
             from bioplausible.analysis.reporting import generate_experiment_report
             tier_str = self.tier_combo.currentText().split()[0].lower() # e.g. "Smoke" -> "smoke"
             report_path = f"experiment_report_{tier_str}.md"
-            generate_experiment_report("bioplausible.db", tier_str, report_path)
+            report_content = generate_experiment_report("bioplausible.db", tier_str, report_path)
             
-            QMessageBox.information(self, "Report Generated", f"Analysis report saved to:\n{report_path}")
             self.log_output.append(f"📄 Report saved: {report_path}")
+            
+            # Show Report Dialog
+            from PyQt6.QtWidgets import QDialog, QTextEdit, QVBoxLayout, QPushButton
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"Experiment Report: {tier_str.title()}")
+            dialog.resize(800, 600)
+            layout = QVBoxLayout(dialog)
+            
+            text_edit = QTextEdit()
+            text_edit.setMarkdown(report_content)
+            text_edit.setReadOnly(True)
+            layout.addWidget(text_edit)
+            
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(dialog.accept)
+            layout.addWidget(close_btn)
+            
+            dialog.exec()
+            
         except Exception as e:
             self.log_output.append(f"Failed to generate report: {e}")
             print(f"Report generation error: {e}")
 
     def _on_trial_finished(self, result):
-        params_str = ", ".join(
-            [f"{k}={v}" for k, v in result["params"].items() if k not in ["epochs", "batch_size"]]
-        )
-        self.log_output.append(
-            f"[{result['model']}@{result['task']}] Acc: {result['accuracy']:.4f}"
-        )
-        
-        # Radar
-        self.radar_view.add_result(result)
-        
-        # Table
-        row = self.results_table.rowCount()
-        self.results_table.insertRow(row)
-        self.results_table.setItem(row, 0, QTableWidgetItem(str(result.get('trial_number'))))
-        self.results_table.setItem(row, 1, QTableWidgetItem(result['task']))
-        self.results_table.setItem(row, 2, QTableWidgetItem(result['model']))
-        self.results_table.setItem(row, 3, QTableWidgetItem(f"{result['accuracy']:.4f}"))
-        self.results_table.setItem(row, 4, QTableWidgetItem(f"{result['loss']:.4f}"))
-        self.results_table.setItem(row, 5, QTableWidgetItem(params_str))
-
-    def _on_radar_click(self, result):
-        # ... Reuse logic ...
         params = result.get("params", {})
         acc = result.get("accuracy", 0.0)
+        loss = result.get("loss", float("inf"))
         
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Trial Details")
-        msg.setText(f"Configuration:\n{params}\n\nAccuracy: {acc:.4f}")
-        train_btn = msg.addButton("Train This Config", QMessageBox.ButtonRole.AcceptRole)
-        msg.addButton(QMessageBox.StandardButton.Close)
+        # 1. Rich Log Output
+        model = result['model']
+        task = result['task']
         
-        msg.exec()
+        # Icon based on task
+        icon = "🧪"
+        if "vision" in task.lower(): icon = "👁️"
+        elif "lm" in task.lower(): icon = "📝"
+        elif "rl" in task.lower(): icon = "🎮"
         
-        if msg.clickedButton() == train_btn:
-             config = {
-                "task": result.get('task', 'vision'),
-                "dataset": "default", # Should infer from task
-                "model": result.get("model", "Unknown"),
-                "hyperparams": params,
-            }
-             self.transfer_config.emit(config)
+        # Color based on accuracy
+        color = "#e2e8f0" # Default white
+        if acc > 0.85: color = "#4ade80" # Green
+        elif acc > 0.70: color = "#60a5fa" # Blue
+        elif acc < 0.50: color = "#f87171" # Red
+        
+        html_msg = (
+            f"<div style='margin-bottom: 2px;'>"
+            f"<span style='font-size: 14px;'>{icon} <b>{model}</b> on <i>{task}</i></span><br>"
+            f"<span style='color: {color}; font-weight: bold;'>⟶ Accuracy: {acc:.2%}</span> "
+            f"<span style='color: #94a3b8;'> (Loss: {loss:.4f})</span>"
+            f"</div>"
+        )
+        self.log_output.append(html_msg)
+        
+        # 2. Radar Update
+        self.radar_view.add_result(result)
+        
+        # 3. Table Update
+        row = self.results_table.rowCount()
+        self.results_table.insertRow(row)
+        
+        # Add items with centering
+        def item(txt):
+            it = QTableWidgetItem(str(txt))
+            it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            return it
+            
+        self.results_table.setItem(row, 0, item(result.get('trial_number')))
+        self.results_table.setItem(row, 1, item(task))
+        self.results_table.setItem(row, 2, item(model))
+        self.results_table.setItem(row, 3, item(f"{acc:.4f}"))
+        self.results_table.setItem(row, 4, item(f"{loss:.4f}"))
+        
+        # Params string
+        p_str = ", ".join([f"{k}={v}" for k, v in params.items() if k not in ['epochs', 'batch_size']])
+        self.results_table.setItem(row, 5, QTableWidgetItem(p_str))
+        
+        # Scroll to bottom
+        self.results_table.scrollToBottom()
+        self.log_output.verticalScrollBar().setValue(
+            self.log_output.verticalScrollBar().maximum()
+        )
+
+    def _on_radar_train_request(self, result):
+        """Called when user clicks 'Train This' in Radar Overlay."""
+        config = {
+            "task": result.get('task', 'vision'),
+            "dataset": "default", 
+            "model": result.get("model", "Unknown"),
+            "hyperparams": result.get("params", {}),
+        }
+        self.transfer_config.emit(config)
+
+    def _open_leaderboard(self):
+        """Open the Leaderboard Window."""
+        if self.leaderboard_window is None:
+            self.leaderboard_window = LeaderboardWindow("bioplausible.db")
+        self.leaderboard_window.show()
+        self.leaderboard_window.raise_()
+        self.leaderboard_window.activateWindow()

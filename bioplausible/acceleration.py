@@ -105,6 +105,39 @@ class CupyChecker:
             return False, f"CuPy installed but CUDA failed: {e}"
 
 
+import os
+
+# Global state for compile safety
+_COMPILE_CHECKED = False
+_COMPILE_WORKS = False
+
+def _check_compile_works() -> bool:
+    """Runtime check to see if torch.compile actually works."""
+    global _COMPILE_CHECKED, _COMPILE_WORKS
+    
+    if _COMPILE_CHECKED:
+        return _COMPILE_WORKS
+        
+    if os.environ.get("BIOPL_DISABLE_COMPILE", "0") == "1":
+        _COMPILE_WORKS = False
+        _COMPILE_CHECKED = True
+        return False
+        
+    try:
+        # Try compiling a tiny dummy function
+        def dummy_fn(x): return x * 2.0
+        compiled = torch.compile(dummy_fn, mode="reduce-overhead")
+        # Must run it to trigger compilation
+        _ = compiled(torch.ones(1))
+        _COMPILE_WORKS = True
+    except Exception as e:
+        warnings.warn(f"torch.compile check failed: {e}. Disabling compilation.", RuntimeWarning)
+        _COMPILE_WORKS = False
+        
+    _COMPILE_CHECKED = True
+    return _COMPILE_WORKS
+
+
 def compile_model(
     model: torch.nn.Module,
     mode: str = "reduce-overhead",
@@ -115,7 +148,7 @@ def compile_model(
     Wrap model with torch.compile for significant speedup.
 
     Works on CPU, CUDA, ROCm, and MPS without modification.
-    Falls back gracefully if torch.compile is unavailable.
+    Falls back gracefully if torch.compile is unavailable or broken.
 
     Args:
         model: PyTorch model to compile
@@ -140,6 +173,10 @@ def compile_model(
             "Using uncompiled model.",
             RuntimeWarning,
         )
+        return model
+
+    # Check stability
+    if not _check_compile_works():
         return model
 
     try:
