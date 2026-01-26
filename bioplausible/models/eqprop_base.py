@@ -411,10 +411,6 @@ class EqPropModel(NEBCBase):
 
             # We'll use a constant nudge vector derived from free phase for stability/speed
             nudge_vec = -self.beta * grads_h
-            
-            # Stability Check 2: Clamp Nudge
-            # Relaxed from 0.5 to 5.0 to ensure meaningful gradients aren't clipped too early
-            nudge_vec = torch.clamp(nudge_vec, -5.0, 5.0)
 
             for _ in range(
                 self.max_steps // 2

@@ -105,7 +105,7 @@ class ExperimentWorker(QThread):
                             model_name=current_model, 
                             config=config, 
                             storage_path="bioplausible.db",
-                            job_id=trial._trial_id,  # Sync ID with logging table
+                            job_id=trial._trial_id if r == 0 else None,  # Sync ID for first run only
                             quick_mode=(self.tier == PatientLevel.SMOKE), # Use quick mode for Smoke tier
                         )
                         
