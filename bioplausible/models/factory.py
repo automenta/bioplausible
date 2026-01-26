@@ -78,9 +78,9 @@ def _make_config(
         input_dim=input_dim,
         output_dim=output_dim,
         hidden_dims=[hidden_dim] * min(num_layers, 5),
-        beta=spec.default_beta if spec.has_beta else 0.1,
+        beta=0.1,  # Default, overridden by hyperopt if needed
         learning_rate=spec.default_lr,
-        equilibrium_steps=spec.default_steps if spec.has_steps else 20,
+        equilibrium_steps=20,  # Default, overridden by hyperopt if needed
         use_spectral_norm=True,
     )
 
@@ -198,7 +198,7 @@ def build_modern_conv_eqprop(
     spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type
 ):
     return ModernConvEqProp(
-        eq_steps=spec.default_steps if spec.has_steps else 30,
+        eq_steps=30,  # Default
         hidden_channels=hidden_dim,
     ).to(device)
 
@@ -249,7 +249,7 @@ def build_eq_align(
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=output_dim,
-        max_steps=spec.default_steps if spec.has_steps else 30,
+        max_steps=30,  # Default
         use_spectral_norm=True,
         learning_rate=spec.default_lr,
     ).to(device)

@@ -34,8 +34,8 @@ class HyperoptStorage:
 
         # Trials table
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS trials (
-                trial_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            CREATE TABLE IF NOT EXISTS hyperopt_logs (
+                trial_id INTEGER PRIMARY KEY,
                 model_name TEXT NOT NULL,
                 config_json TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -60,24 +60,52 @@ class HyperoptStorage:
                 accuracy REAL,
                 perplexity REAL,
                 time REAL,
-                FOREIGN KEY (trial_id) REFERENCES trials (trial_id)
+                FOREIGN KEY (trial_id) REFERENCES hyperopt_logs (trial_id)
             )
         """)
 
         self.conn.commit()
 
-    def create_trial(self, model_name: str, config: Dict[str, Any]) -> int:
-        """Create a new trial and return its ID."""
+    def create_trial(
+        self, model_name: str, config: Dict[str, Any], trial_id: Optional[int] = None
+    ) -> int:
+        """
+        Create a new trial log.
+        
+        Args:
+            model_name: Name of the model
+            config: Configuration dictionary
+            trial_id: Optional explicit trial ID (e.g. from Optuna). 
+                      If None, auto-increments.
+        """
         cursor = self.conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO trials (model_name, config_json, status, timestamp)
-            VALUES (?, ?, ?, ?)
-        """,
-            (model_name, json.dumps(config), "pending", datetime.now().isoformat()),
-        )
-        self.conn.commit()
-        return cursor.lastrowid
+        
+        if trial_id is not None:
+            cursor.execute(
+                """
+                INSERT INTO hyperopt_logs (trial_id, model_name, config_json, status, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """,
+                (
+                    trial_id,
+                    model_name,
+                    json.dumps(config),
+                    "pending",
+                    datetime.now().isoformat(),
+                ),
+            )
+            self.conn.commit()
+            return trial_id
+        else:
+            cursor.execute(
+                """
+                INSERT INTO hyperopt_logs (model_name, config_json, status, timestamp)
+                VALUES (?, ?, ?, ?)
+            """,
+                (model_name, json.dumps(config), "pending", datetime.now().isoformat()),
+            )
+            self.conn.commit()
+            return cursor.lastrowid
 
     def update_trial(
         self,
@@ -118,7 +146,46 @@ class HyperoptStorage:
 
         if updates:
             values.append(trial_id)
-            query = f"UPDATE trials SET {', '.join(updates)} WHERE trial_id = ?"
+    def update_trial(
+        self,
+        trial_id: int,
+        status: str = None,
+        epochs_completed: int = None,
+        final_loss: float = None,
+        accuracy: float = None,
+        perplexity: float = None,
+        iteration_time: float = None,
+        param_count: float = None,
+    ):
+        """Update trial with results."""
+        updates = []
+        values = []
+
+        if status is not None:
+            updates.append("status = ?")
+            values.append(status)
+        if epochs_completed is not None:
+            updates.append("epochs_completed = ?")
+            values.append(epochs_completed)
+        if final_loss is not None:
+            updates.append("final_loss = ?")
+            values.append(final_loss)
+        if accuracy is not None:
+            updates.append("accuracy = ?")
+            values.append(accuracy)
+        if perplexity is not None:
+            updates.append("perplexity = ?")
+            values.append(perplexity)
+        if iteration_time is not None:
+            updates.append("iteration_time = ?")
+            values.append(iteration_time)
+        if param_count is not None:
+            updates.append("param_count = ?")
+            values.append(param_count)
+
+        if updates:
+            values.append(trial_id)
+            query = f"UPDATE hyperopt_logs SET {', '.join(updates)} WHERE trial_id = ?"
             self.conn.execute(query, values)
             self.conn.commit()
 
@@ -144,7 +211,7 @@ class HyperoptStorage:
     def get_trial(self, trial_id: int) -> Optional[TrialMetrics]:
         """Retrieve a trial by ID."""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM trials WHERE trial_id = ?", (trial_id,))
+        cursor.execute("SELECT * FROM hyperopt_logs WHERE trial_id = ?", (trial_id,))
         row = cursor.fetchone()
 
         if row is None:
@@ -167,7 +234,7 @@ class HyperoptStorage:
         self, model_name: str = None, status: str = None
     ) -> List[TrialMetrics]:
         """Retrieve all trials, optionally filtered."""
-        query = "SELECT * FROM trials WHERE 1=1"
+        query = "SELECT * FROM hyperopt_logs WHERE 1=1"
         params = []
 
         if model_name is not None:
@@ -203,13 +270,13 @@ class HyperoptStorage:
     def mark_pareto_frontier(self, trial_ids: List[int]):
         """Mark trials as being on the Pareto frontier."""
         # Clear previous frontier
-        self.conn.execute("UPDATE trials SET is_pareto = 0")
+        self.conn.execute("UPDATE hyperopt_logs SET is_pareto = 0")
 
         # Mark new frontier
         if trial_ids:
             placeholders = ",".join("?" * len(trial_ids))
             self.conn.execute(
-                f"UPDATE trials SET is_pareto = 1 WHERE trial_id IN ({placeholders})",
+                f"UPDATE hyperopt_logs SET is_pareto = 1 WHERE trial_id IN ({placeholders})",
                 trial_ids,
             )
 
@@ -223,7 +290,7 @@ class HyperoptStorage:
         cursor.execute("DELETE FROM epoch_metrics")
 
         # Clear trials
-        cursor.execute("DELETE FROM trials")
+        cursor.execute("DELETE FROM hyperopt_logs")
 
         self.conn.commit()
 

@@ -21,7 +21,7 @@ class BenchmarkWorker(QThread):
 
     def run(self):
         try:
-            from bioplausible.verify import Verifier
+            from bioplausible.validation.core import Verifier
 
             verifier = Verifier(quick_mode=False, seed=42)  # Use standard mode
 

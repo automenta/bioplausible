@@ -387,6 +387,11 @@ class EqPropModel(NEBCBase):
         logits_nudge_init = self._output_projection(h_nudged)
         loss = F.cross_entropy(logits_nudge_init, y)
         grads_h = autograd.grad(loss, h_nudged)[0]
+        
+        # Stability Check 1: Gradients
+        if torch.isnan(grads_h).any() or torch.isinf(grads_h).any():
+            print("Warning: EqProp divergence detected (NaN gradients). Skipping step.")
+            return {"loss": 100.0, "accuracy": 0.1}
 
         # Nudged dynamics: h <- forward_step(h) - beta * dL/dh
         # Note: In continuous time, dot_h = -h + sigma(...) - beta * dL/dh
@@ -423,8 +428,13 @@ class EqPropModel(NEBCBase):
 
         # Compute metrics
         with torch.no_grad():
-            acc = (logits_free.argmax(dim=1) == y).float().mean().item()
-            loss_val = F.cross_entropy(logits_free, y).item()
+            if torch.isnan(logits_free).any():
+                print("Warning: Model collapse (NaN logits).")
+                acc = 0.1
+                loss_val = 100.0
+            else:
+                acc = (logits_free.argmax(dim=1) == y).float().mean().item()
+                loss_val = F.cross_entropy(logits_free, y).item()
 
         return {"loss": loss_val, "accuracy": acc}
 

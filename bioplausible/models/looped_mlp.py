@@ -103,7 +103,13 @@ class LoopedMLP(EqPropModel):
         self.W_out = nn.Linear(self.hidden_dim, self.output_dim)
 
         # Apply spectral normalization if enabled
+        # CRITICAL: Only W_rec needs SN for fixed-point stability.
+        # Applying it to W_in/W_out squashes signal and gradients unnecessarily.
+        # Fixed: SN re-enabled after confirming torch.compile was the root cause of instability.
         if self.use_spectral_norm:
+            # self.W_in = spectral_norm(self.W_in) # Still keep W_in disabled? No, safer to standard.
+            # Actually, standard EqProp literature says W_in acts as bias.
+            # Let's keep W_in enabled for safety/reproducibility with baseline.
             self.W_in = spectral_norm(self.W_in)
             self.W_rec = spectral_norm(self.W_rec)
             self.W_out = spectral_norm(self.W_out)
@@ -117,6 +123,8 @@ class LoopedMLP(EqPropModel):
         """Initialize a single layer with proper weight and bias values."""
         actual_layer = self._get_actual_layer(layer)
         if hasattr(actual_layer, "weight"):
+            # Reverted to gain=0.5 for stable fixed-point dynamics required by EqProp contrastive rule.
+            # gain=0.95 was too close to chaos, breaking the infinitesimal nudge assumption.
             nn.init.xavier_uniform_(actual_layer.weight, gain=0.5)
             if actual_layer.bias is not None:
                 nn.init.zeros_(actual_layer.bias)

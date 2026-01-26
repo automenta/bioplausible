@@ -17,16 +17,12 @@ class ModelSpec:
     model_type: str  # Internal type key (mapped to model class)
     variant: Optional[str] = None  # Variant for transformer models
     default_lr: float = 0.001
-    default_beta: float = 0.22
-    default_steps: int = 30
-    has_beta: bool = False
-    has_steps: bool = False
     color: str = "#888888"
     task_compat: Optional[List[str]] = (
         None  # ['vision', 'lm', 'rl'] or None for all applicable
     )
 
-    # New fields
+    # Model capabilities and family
     family: str = "experimental"
     custom_hyperparams: Dict[str, Any] = field(default_factory=dict)
     supports_dreaming: bool = False
@@ -60,10 +56,6 @@ MODEL_REGISTRY = [
         description="Looped MLP with Spectral Norm",
         model_type="eqprop_mlp",
         default_lr=0.001,
-        default_beta=0.22,
-        default_steps=30,
-        has_beta=True,
-        has_steps=True,
         color="#4ecdc4",
         task_compat=["vision", "rl"],
         family="eqprop",
@@ -80,10 +72,6 @@ MODEL_REGISTRY = [
         description="Complex-valued Equilibrium Propagation",
         model_type="holomorphic_ep",
         default_lr=0.001,
-        default_beta=0.1,
-        default_steps=30,
-        has_beta=True,
-        has_steps=True,
         color="#a55eea",
         task_compat=["vision", "rl"],
         family="eqprop",
@@ -96,10 +84,6 @@ MODEL_REGISTRY = [
         description="Asymmetric forward and feedback weights",
         model_type="directed_ep",
         default_lr=0.001,
-        default_beta=0.2,
-        default_steps=30,
-        has_beta=True,
-        has_steps=True,
         color="#fd9644",
         task_compat=["vision", "rl"],
         family="eqprop",
@@ -112,10 +96,6 @@ MODEL_REGISTRY = [
         description="EqProp with large beta (finite difference)",
         model_type="finite_nudge_ep",
         default_lr=0.001,
-        default_beta=1.0,
-        default_steps=30,
-        has_beta=True,
-        has_steps=True,
         color="#fc5c65",
         task_compat=["vision", "rl"],
         family="eqprop",
@@ -128,8 +108,6 @@ MODEL_REGISTRY = [
         description="Convolutional EqProp optimized for CIFAR-10",
         model_type="modern_conv_eqprop",
         default_lr=0.0005,
-        default_steps=15,
-        has_steps=True,
         color="#26de81",
         task_compat=["vision"],
         family="eqprop",
@@ -152,8 +130,6 @@ MODEL_REGISTRY = [
         description="3D Lattice with local 26-neighbor connectivity",
         model_type="neural_cube",
         default_lr=0.002,
-        default_steps=30,
-        has_steps=True,
         color="#00b894",
         task_compat=["vision"],
         family="eqprop",
@@ -176,8 +152,6 @@ MODEL_REGISTRY = [
         description="EqProp dynamics + Feedback Alignment",
         model_type="eq_align",
         default_lr=0.001,
-        default_steps=30,
-        has_steps=True,
         color="#d1d8e0",
         task_compat=["vision", "rl"],
         family="hybrid",
@@ -209,8 +183,6 @@ MODEL_REGISTRY = [
         description="Hybrid of Predictive Coding and EqProp",
         model_type="predictive_coding_hybrid",
         default_lr=0.001,
-        default_steps=20,
-        has_steps=True,
         color="#3867d6",
         task_compat=["vision", "rl"],
         family="hybrid",
@@ -222,8 +194,6 @@ MODEL_REGISTRY = [
         description="EqProp with sparsity constraints",
         model_type="sparse_equilibrium",
         default_lr=0.001,
-        default_beta=0.1,
-        has_beta=True,
         color="#8854d0",
         task_compat=["vision", "rl"],
         family="hybrid",
@@ -277,10 +247,6 @@ MODEL_REGISTRY = [
         description="Contrastive Hebbian Learning",
         model_type="chl",
         default_lr=0.001,
-        default_beta=0.1,
-        default_steps=20,
-        has_beta=True,
-        has_steps=True,
         color="#f9ca24",
         task_compat=["vision", "rl"],
         family="hebbian",
@@ -304,8 +270,6 @@ MODEL_REGISTRY = [
         model_type="eqprop_transformer",
         variant="attention_only",
         default_lr=0.0003,
-        default_steps=10,
-        has_steps=True,
         color="#2ecc71",
         task_compat=["lm"],
         family="eqprop",
@@ -317,8 +281,6 @@ MODEL_REGISTRY = [
         model_type="eqprop_transformer",
         variant="full",
         default_lr=0.0003,
-        default_steps=15,
-        has_steps=True,
         color="#27ae60",
         task_compat=["lm"],
         family="eqprop",
@@ -330,8 +292,6 @@ MODEL_REGISTRY = [
         model_type="eqprop_transformer",
         variant="hybrid",
         default_lr=0.0003,
-        default_steps=10,
-        has_steps=True,
         color="#1abc9c",
         task_compat=["lm"],
         family="eqprop",
@@ -343,8 +303,6 @@ MODEL_REGISTRY = [
         model_type="eqprop_transformer",
         variant="recurrent_core",
         default_lr=0.0003,
-        default_steps=20,
-        has_steps=True,
         color="#16a085",
         task_compat=["lm"],
         family="eqprop",
@@ -355,10 +313,23 @@ MODEL_REGISTRY = [
 
 def get_model_spec(name: str) -> ModelSpec:
     """Get model spec by name."""
+    target = name.lower().replace(" ", "").replace("_", "")
     for spec in MODEL_REGISTRY:
-        if spec.name == name:
+        # Check normalization of name
+        spec_name_norm = spec.name.lower().replace(" ", "").replace("_", "")
+        if spec_name_norm == target:
             return spec
-    raise ValueError(f"Unknown model: {name}")
+        # Check normalization of model_type
+        if spec.model_type.lower().replace("_", "") == target:
+            return spec
+            
+    # Aliases
+    if target == "backpropmlp":
+        return get_model_spec("Backprop Baseline")
+            
+    # Fallback: check partial match if it's unambiguous?
+    # For now, strict normalized match is safer.
+    raise ValueError(f"Unknown model: {name}. Available: {[spec.name for spec in MODEL_REGISTRY]}")
 
 
 def list_model_names() -> List[str]:

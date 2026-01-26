@@ -21,16 +21,18 @@ def run_single_trial_task(
     storage_path: Optional[str] = None,
     job_id: Any = None,
     quick_mode: bool = True,
+    verbose: bool = False,
 ) -> Optional[Dict[str, float]]:
     """
     Run a single trial and return metrics.
 
     Args:
-        task: Task name (e.g. 'shakespeare')
+        task: Task name (e.g. 'mnist')
         model_name: Model architecture name
         config: Hyperparameter dictionary
         storage_path: Path to SQLite DB. If None, uses a temporary DB.
         quick_mode: If True, uses fewer data/iterations (default True).
+        verbose: If True, show training output
     """
     temp_dir = None
 
@@ -44,7 +46,7 @@ def run_single_trial_task(
         storage = HyperoptStorage(str(db_path))
 
         # Create trial entry
-        trial_id = storage.create_trial(model_name, config)
+        trial_id = storage.create_trial(model_name, config, trial_id=job_id)
 
         # Create runner
         runner = TrialRunner(
@@ -55,11 +57,14 @@ def run_single_trial_task(
         if "epochs" in config:
             runner.epochs = int(config["epochs"])
 
-        # Run
-        # Suppress output to avoid cluttering the P2P log
-        f = io.StringIO()
-        with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+        # Run training
+        if verbose:
             success = runner.run_trial(trial_id)
+        else:
+            # Suppress output but keep stderr for errors
+            f = io.StringIO()
+            with contextlib.redirect_stdout(f):
+                success = runner.run_trial(trial_id)
 
         if success:
             trial = storage.get_trial(trial_id)
@@ -68,16 +73,20 @@ def run_single_trial_task(
                 "loss": trial.final_loss,
                 "perplexity": trial.perplexity,
                 "time": trial.iteration_time,
+                "param_count": trial.param_count,  # In millions
             }
             storage.close()
             return metrics
         else:
+            if verbose:
+                print(f"Trial {trial_id} returned success=False")
             storage.close()
             return None
 
     except Exception as e:
-        print(f"Execution Error (Job {job_id}): {e}")
-        traceback.print_exc()
+        print(f"Execution Error: {e}")
+        if verbose:
+            traceback.print_exc()
         return None
     finally:
         if temp_dir:

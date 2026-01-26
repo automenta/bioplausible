@@ -37,7 +37,7 @@ class SupervisedTrainer(BaseTrainer):
         eval_batches: int = 20,
         steps: int = 20,  # EqProp steps
         use_compile: bool = True,
-        use_kernel: bool = False,
+        use_kernel: str = "auto",  # "auto", True, False
         compile_mode: str = "reduce-overhead",
         task_type: str = "vision",  # Fallback task type
         **kwargs,
@@ -68,13 +68,27 @@ class SupervisedTrainer(BaseTrainer):
             and model._engine is not None
         )
 
-        # Prioritize model's internal kernel, then explicit use_kernel flag
+        # Determine kernel mode with auto-detection
         if model_has_kernel:
             self.use_kernel = True
             self.kernel = None  # Handled by model
+            self.backend_used = "kernel (model-managed)"
+        elif use_kernel == "auto":
+            # Auto-detect: try kernel if GPU available, else PyTorch
+            if device == "cuda" and HAS_CUPY:
+                self.use_kernel = True
+                self.backend_used = "kernel (auto-enabled)"
+            else:
+                self.use_kernel = False
+                self.backend_used = "pytorch (auto-fallback)"
+        elif use_kernel is True:
+            self.use_kernel = True
+            self.backend_used = "kernel (explicit)"
         else:
-            self.use_kernel = use_kernel
-            self.kernel = None
+            self.use_kernel = False
+            self.backend_used = "pytorch (explicit)"
+        
+        self.kernel = None
 
         # Check for embeddings
         self.has_embed = getattr(model, "has_embed", False)
@@ -95,11 +109,28 @@ class SupervisedTrainer(BaseTrainer):
                     self.model.hidden_dim,
                     self.model.output_dim,
                 )
-                # Pass use_gpu=True only if CuPy is available
-                self.kernel = KernelEqPropKernel(*dims, use_gpu=HAS_CUPY)
+                try:
+                    # Pass use_gpu=True only if CuPy is available
+                    self.kernel = KernelEqPropKernel(*dims, use_gpu=HAS_CUPY)
+                    if use_kernel == "auto":
+                        print(f"✓ GPU acceleration enabled (kernel mode)")
+                except Exception as e:
+                    if use_kernel == "auto":
+                        # Graceful fallback for auto mode
+                        warnings.warn(f"Kernel initialization failed, falling back to PyTorch: {e}")
+                        self.use_kernel = False
+                        self.backend_used = "pytorch (kernel-failed)"
+                    else:
+                        # Re-raise for explicit mode
+                        raise
             else:
-                warnings.warn("Model dimensions not detected. Kernel mode disabled.")
-                self.use_kernel = False
+                if use_kernel == "auto":
+                    # Graceful fallback
+                    self.use_kernel = False
+                    self.backend_used = "pytorch (no-model-dims)"
+                else:
+                    warnings.warn("Model dimensions not detected. Kernel mode disabled.")
+                    self.use_kernel = False
 
         # Optimizer (PyTorch mode only)
         if not self.use_kernel:
@@ -128,6 +159,9 @@ class SupervisedTrainer(BaseTrainer):
                     else:
                         layer.use_oja = kwargs["use_oja"]
                         layer.learning_rate = self.model.hebbian_lr
+
+        # Initialize epoch tracking
+        self.current_epoch = 0
 
     def _prepare_input(self, x):
         """Prepare input tensor (embedding, flattening, etc.)."""
@@ -242,7 +276,7 @@ class SupervisedTrainer(BaseTrainer):
             loss = self.criterion(logits, y)
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+            # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             if self.opt:
                 self.opt.step()
 
@@ -255,7 +289,14 @@ class SupervisedTrainer(BaseTrainer):
 
             loss = loss.item()
 
-        return {"loss": loss, "accuracy": acc}
+        # Merge all metrics
+        result = {"loss": loss, "accuracy": acc}
+        if metrics is not None:
+            for k, v in metrics.items():
+                if k not in result:
+                    result[k] = v
+                    
+        return result
 
     def evaluate(self, loader=None) -> Dict[str, float]:
         """
@@ -342,27 +383,41 @@ class SupervisedTrainer(BaseTrainer):
         t0 = time.time()
 
         # Training
-        train_losses = []
+        from collections import defaultdict
+        train_metrics_agg = defaultdict(list)
+        
         for _ in range(self.batches_per_epoch):
             x, y = self.task.get_batch("train")
-            metrics = self.train_batch(x, y)
-            train_losses.append(metrics["loss"])
+            step_metrics = self.train_batch(x, y)
+            
+            for k, v in step_metrics.items():
+                if isinstance(v, (int, float)):
+                    train_metrics_agg[k].append(v)
 
         # Evaluation
         eval_metrics = self.evaluate()
 
         epoch_time = time.time() - t0
 
-        # update current epoch tracking (simplistic)
-        self.current_epoch += 1
-
-        return {
-            "loss": eval_metrics["val_loss"],
-            "accuracy": eval_metrics["val_accuracy"],
-            "perplexity": eval_metrics["val_perplexity"],
+        # Helper to mean
+        final_metrics = {
+            "val_loss": eval_metrics["val_loss"],
+            "val_accuracy": eval_metrics["val_accuracy"],
+            "val_perplexity": eval_metrics["val_perplexity"],
             "time": epoch_time,
             "iteration_time": epoch_time / self.batches_per_epoch,
         }
+        
+        # Add training averages
+        for k, values in train_metrics_agg.items():
+            if values:
+                final_metrics[f"train_{k}"] = np.mean(values)
+                # Also keep raw "loss" and "accuracy" keys for compatibility if needed
+                if k in ["loss", "accuracy"]:
+                    final_metrics[k] = np.mean(values)
+
+        self.current_epoch += 1
+        return final_metrics
 
     def fit(
         self,

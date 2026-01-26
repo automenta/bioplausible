@@ -10,7 +10,7 @@ from bioplausible_ui.app.tabs.deploy_tab import DeployTab
 from bioplausible_ui.app.tabs.home_tab import HomeTab
 from bioplausible_ui.app.tabs.p2p_tab import P2PTab
 from bioplausible_ui.app.tabs.results_tab import ResultsTab
-from bioplausible_ui.app.tabs.search_tab import SearchTab
+from bioplausible_ui.app.tabs.experiment_tab import ExperimentTab
 from bioplausible_ui.app.tabs.settings_tab import SettingsTab
 from bioplausible_ui.app.tabs.train_tab import TrainTab
 from bioplausible_ui.core.themes import Theme
@@ -46,7 +46,7 @@ class AppMainWindow(QMainWindow):
         self.home_tab = HomeTab()
         self.train_tab = TrainTab()
         self.compare_tab = CompareTab()
-        self.search_tab = SearchTab()
+        self.experiment_tab = ExperimentTab()
         self.results_tab = ResultsTab()
         self.benchmarks_tab = BenchmarksTab()
         self.deploy_tab = DeployTab()
@@ -57,7 +57,7 @@ class AppMainWindow(QMainWindow):
         self.tabs.addTab(self.home_tab, "Home")
         self.tabs.addTab(self.train_tab, "Train")
         self.tabs.addTab(self.compare_tab, "Compare")
-        self.tabs.addTab(self.search_tab, "Search")
+        self.tabs.addTab(self.experiment_tab, "Experiment")
         self.tabs.addTab(self.results_tab, "Results")
         self.tabs.addTab(self.benchmarks_tab, "Benchmarks")
         self.tabs.addTab(self.deploy_tab, "Deploy")
@@ -68,8 +68,8 @@ class AppMainWindow(QMainWindow):
         # Connect Home Tab Signals
         self.home_tab.request_tab_change.connect(self._switch_to_tab)
 
-        # Connect Search -> Train
-        self.search_tab.transfer_config.connect(self._on_transfer_config)
+        # Connect Experiment -> Train
+        self.experiment_tab.transfer_config.connect(self._on_transfer_config)
 
     def _switch_to_tab(self, tab_name):
         for i in range(self.tabs.count()):

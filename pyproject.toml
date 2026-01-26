@@ -39,6 +39,7 @@ dependencies = [
     "uvicorn",
     "fastapi",
     "pydantic",
+    "optuna",
 ]
 
 [project.scripts]
