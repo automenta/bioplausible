@@ -125,10 +125,12 @@ def _check_compile_works() -> bool:
         
     try:
         # Try compiling a tiny dummy function
-        def dummy_fn(x): return x * 2.0
+        # CRITICAL: Must use tanh to catch missing tl.tanh in broken Triton envs
+        # AND large enough tensor to trigger Triton backend (small tensors use ATen/C++)
+        def dummy_fn(x): return torch.tanh(x * 2.0)
         compiled = torch.compile(dummy_fn, mode="reduce-overhead")
         # Must run it to trigger compilation
-        _ = compiled(torch.ones(1))
+        _ = compiled(torch.ones(128, 128))
         _COMPILE_WORKS = True
     except Exception as e:
         warnings.warn(f"torch.compile check failed: {e}. Disabling compilation.", RuntimeWarning)
@@ -175,8 +177,11 @@ def compile_model(
         )
         return model
 
-    # Check stability
     if not _check_compile_works():
+        return model
+
+    # CRITICAL: If Triton is broken (missing tanh), compile might crash or produce NaNs.
+    if not TRITON_AVAILABLE:
         return model
 
     try:
@@ -213,6 +218,15 @@ def compile_settling_loop(settling_fn: Callable) -> Callable:
     if not hasattr(torch, "compile"):
         return settling_fn
 
+    # Respect global safety check
+    if not _check_compile_works():
+        return settling_fn
+
+    # CRITICAL: If Triton is broken (missing tanh), compile might crash or produce NaNs.
+    # We detected this in check_triton_available/import.
+    if not TRITON_AVAILABLE:
+        return settling_fn
+
     try:
         return torch.compile(settling_fn, mode="reduce-overhead")
     except Exception:
@@ -228,7 +242,12 @@ try:
     import triton  # noqa: F401
     import triton.language as tl  # noqa: F401
 
-    TRITON_AVAILABLE = True
+    # CRITICAL CHECK for broken Triton installations
+    if not hasattr(tl, "tanh"):
+        warnings.warn("Triton detected but missing 'tanh'. Disabling Triton support.", RuntimeWarning)
+        TRITON_AVAILABLE = False
+    else:
+        TRITON_AVAILABLE = True
 except ImportError:
     pass
 

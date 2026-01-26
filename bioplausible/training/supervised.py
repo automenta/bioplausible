@@ -276,7 +276,7 @@ class SupervisedTrainer(BaseTrainer):
             loss = self.criterion(logits, y)
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+            # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             if self.opt:
                 self.opt.step()
 
