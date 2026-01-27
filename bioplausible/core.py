@@ -141,6 +141,40 @@ class EqPropTrainer:
                     self.device if str(self.device).startswith("cuda") else "cpu"
                 )
 
+    def train_batch(self, x: Any, y: Any) -> Tuple[float, int, int]:
+        """
+        Train on a single batch.
+
+        Args:
+            x: Input batch
+            y: Target batch
+
+        Returns:
+            (loss, correct_count, batch_size)
+        """
+        try:
+            if self.use_kernel:
+                loss, batch_correct, batch_size = self._process_batch_kernel(
+                    x, y, is_training=True
+                )
+            elif hasattr(self.model, "train_step"):
+                # Delegate to model's custom training step (e.g. for Algorithms)
+                loss, batch_correct, batch_size = self._process_batch_custom(
+                    x, y, is_training=True
+                )
+            else:
+                loss, batch_correct, batch_size = self._process_batch_pytorch(
+                    x, y, nn.CrossEntropyLoss(), is_training=True
+                )
+
+            # Update internal step counter
+            self._step += 1
+            return loss / batch_size, batch_correct, batch_size
+
+        except Exception as e:
+            mode = "kernel" if self.use_kernel else "PyTorch"
+            raise RuntimeError(f"Error processing {mode} batch: {str(e)}")
+
     def _validate_inputs(
         self, optimizer: str, compile_mode: str, lr: float, weight_decay: float
     ) -> None:

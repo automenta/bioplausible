@@ -28,6 +28,7 @@ class TrainingWorker(QThread):
         epochs: int = 10,
         lr: float = 0.001,
         use_compile: bool = True,
+        use_kernel: bool = False,
         generate_interval: int = 5,  # Generate text every N epochs
         prompts: list = None,
         hyperparams: dict = None,  # Model-specific hyperparameters
@@ -39,6 +40,7 @@ class TrainingWorker(QThread):
         self.epochs = epochs
         self.lr = lr
         self.use_compile = use_compile
+        self.use_kernel = use_kernel
         self.generate_interval = generate_interval
         self.prompts = prompts or ["ROMEO:"]
         self.hyperparams = hyperparams or {}
@@ -103,26 +105,17 @@ class TrainingWorker(QThread):
         return loss, batch_correct, batch_total
 
     def _process_batch(self, x, y, trainer):
-        """Process a single batch and return loss and accuracy metrics."""
-        x = x.to(trainer.device)
-        y = y.to(trainer.device)
+        """Process a single batch using EqPropTrainer."""
+        # Handle input conversions (flattening etc) if NOT using kernel
+        # Kernel handles flattening internally
+        if not self.use_kernel:
+            x = self._convert_input_format(x)
 
-        # Handle input conversions
-        x = self._convert_input_format(x)
+        # Use trainer's unified batch processing
+        # Returns (avg_loss, correct_count, batch_size)
+        loss_val, batch_correct, batch_total = trainer.train_batch(x, y)
 
-        trainer.optimizer.zero_grad()
-
-        # Forward pass
-        output = self.model(x)
-
-        # Compute loss and accuracy
-        loss, batch_correct, batch_total = self._compute_loss_and_accuracy(output, y)
-
-        # Backward and optimize
-        loss.backward()
-        trainer.optimizer.step()
-
-        return loss.item(), batch_correct, batch_total
+        return loss_val, batch_correct, batch_total
 
     def _initialize_trainer(self):
         """Initialize the EqProp trainer with proper error handling."""
@@ -133,6 +126,7 @@ class TrainingWorker(QThread):
                 self.model,
                 lr=self.lr,
                 use_compile=self.use_compile,
+                use_kernel=self.use_kernel,
             )
 
             # Apply dynamic hyperparameters

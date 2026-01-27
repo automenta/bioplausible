@@ -26,6 +26,9 @@ from bioplausible.models.lazy_eqprop import LazyEqProp
 from bioplausible.models.ternary import TernaryEqProp
 from bioplausible.models.hebbian_chain import DeepHebbianChain
 from bioplausible.models.homeostatic import HomeostaticEqProp
+from bioplausible.models.holomorphic_ep import HolomorphicEP
+from bioplausible.models.deep_ep import DirectedEP
+from bioplausible.models.finite_nudge_ep import FiniteNudgeEP
 from bioplausible.models.eqprop_lm_variants import (
     FullEqPropLM,
     EqPropAttentionOnlyLM,
@@ -309,6 +312,33 @@ class TestSmokeTraining(unittest.TestCase):
         loss.backward()
         optimizer.step()
         self.assertGreater(loss.item(), 0)
+
+    def test_holomorphic_ep(self):
+        model = HolomorphicEP(input_dim=10, hidden_dim=32, output_dim=5).to(self.device)
+        x = torch.randn(self.batch_size, 10).to(self.device)
+        y = torch.randint(0, 5, (self.batch_size,)).to(self.device)
+
+        if hasattr(model, "train_step"):
+            metrics = self._run_custom_training_step(model, x, y)
+            self.assertIn("loss", metrics)
+
+    def test_directed_ep(self):
+        model = DirectedEP(input_dim=10, hidden_dim=32, output_dim=5).to(self.device)
+        x = torch.randn(self.batch_size, 10).to(self.device)
+        y = torch.randint(0, 5, (self.batch_size,)).to(self.device)
+
+        if hasattr(model, "train_step"):
+            metrics = self._run_custom_training_step(model, x, y)
+            self.assertIn("loss", metrics)
+
+    def test_finite_nudge_ep(self):
+        model = FiniteNudgeEP(input_dim=10, hidden_dim=32, output_dim=5, beta=1.0).to(self.device)
+        x = torch.randn(self.batch_size, 10).to(self.device)
+        y = torch.randint(0, 5, (self.batch_size,)).to(self.device)
+
+        if hasattr(model, "train_step"):
+            metrics = self._run_custom_training_step(model, x, y)
+            self.assertIn("loss", metrics)
 
     def test_lm_variants(self):
         vocab_size = 20

@@ -357,10 +357,14 @@ class EqPropDashboard(QMainWindow):
         self.lm_compile_check = QCheckBox("torch.compile (2x speedup)")
         self.lm_compile_check.setChecked(True)
 
+        self.lm_kernel_check = QCheckBox("O(1) Kernel Mode (GPU)")
+        self.lm_kernel_check.setToolTip("Use fused EqProp kernel for O(1) memory training")
+
         train_controls = [
             ("Epochs:", self.lm_epochs_spin),
             ("Learning Rate:", self.lm_lr_spin),
-            ("", self.lm_compile_check)
+            ("", self.lm_compile_check),
+            ("", self.lm_kernel_check)
         ]
         train_group = self._create_control_group("⚙️ Training", train_controls)
         left_panel.addWidget(train_group)
@@ -560,10 +564,14 @@ class EqPropDashboard(QMainWindow):
         self.vis_compile_check = QCheckBox("torch.compile")
         self.vis_compile_check.setChecked(True)
 
+        self.vis_kernel_check = QCheckBox("O(1) Kernel Mode (GPU)")
+        self.vis_kernel_check.setToolTip("Use fused EqProp kernel for O(1) memory training")
+
         train_controls = [
             ("Epochs:", self.vis_epochs_spin),
             ("Learning Rate:", self.vis_lr_spin),
-            ("", self.vis_compile_check)
+            ("", self.vis_compile_check),
+            ("", self.vis_kernel_check)
         ]
         train_group = self._create_control_group("⚙️ Training", train_controls)
         left_panel.addWidget(train_group)
@@ -1156,6 +1164,7 @@ class EqPropDashboard(QMainWindow):
             epochs=self.vis_epochs_spin.value(),
             lr=self.vis_lr_spin.value(),
             use_compile=self.vis_compile_check.isChecked(),
+            use_kernel=self.vis_kernel_check.isChecked(),
             hyperparams=hyperparams,
         )
         self.worker.progress.connect(self._on_progress)
@@ -1204,6 +1213,7 @@ class EqPropDashboard(QMainWindow):
             epochs=self.lm_epochs_spin.value(),
             lr=self.lm_lr_spin.value(),
             use_compile=self.lm_compile_check.isChecked(),
+            use_kernel=self.lm_kernel_check.isChecked(),
             hyperparams=hyperparams,
         )
         self.worker.progress.connect(self._on_progress)

@@ -24,6 +24,7 @@ from .tracks import (
     architecture_comparison,
     honest_tradeoff,
     evolution_tracks,
+    research_tracks,
 )
 
 
@@ -193,6 +194,19 @@ class Verifier:
             60: (
                 "Evolution vs Random Search",
                 evolution_tracks.track_60_evolution_validation,
+            ),
+            # New Research Tracks (2025)
+            42: (
+                "Holomorphic EP",
+                research_tracks.track_42_holomorphic_ep,
+            ),
+            43: (
+                "Directed EP",
+                research_tracks.track_43_directed_ep,
+            ),
+            44: (
+                "Finite-Nudge EP",
+                research_tracks.track_44_finite_nudge_ep,
             ),
         }
 
