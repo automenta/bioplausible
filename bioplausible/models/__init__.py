@@ -53,6 +53,8 @@ from .eqprop_lm_variants import (
     RecurrentEqPropLM,
     HybridEqPropLM,
     LoopedMLPForLM,
+    get_eqprop_lm,
+    create_eqprop_lm,
 )
 
 # Export registry
@@ -110,4 +112,6 @@ __all__ = [
     "RecurrentEqPropLM",
     "HybridEqPropLM",
     "LoopedMLPForLM",
+    "get_eqprop_lm",
+    "create_eqprop_lm",
 ]

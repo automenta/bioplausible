@@ -40,6 +40,7 @@ class ModernConvEqProp(EqPropModel):
         gamma: float = 0.5,
         hidden_channels: int = 64,
         use_spectral_norm: bool = True,
+        gradient_method: str = "bptt",
     ):
         self.gamma = gamma
         self.base_hidden_channels = hidden_channels
@@ -50,6 +51,7 @@ class ModernConvEqProp(EqPropModel):
             output_dim=10,
             max_steps=eq_steps,
             use_spectral_norm=use_spectral_norm,
+            gradient_method=gradient_method,
         )
 
     def _build_layers(self):
@@ -185,6 +187,7 @@ class SimpleConvEqProp(EqPropModel):
         eq_steps: int = 20,
         gamma: float = 0.5,
         use_spectral_norm: bool = True,
+        gradient_method: str = "bptt",
     ):
         self.hidden_channels = hidden_channels
         self.gamma = gamma
@@ -196,6 +199,7 @@ class SimpleConvEqProp(EqPropModel):
             output_dim=10,
             max_steps=eq_steps,
             use_spectral_norm=use_spectral_norm,
+            gradient_method=gradient_method,
         )
 
     def _build_layers(self):
