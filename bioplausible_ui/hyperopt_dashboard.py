@@ -69,6 +69,13 @@ class HyperoptSearchDashboard(QMainWindow):
         # Get model names from registry
         self.model_names = [spec.name for spec in MODEL_REGISTRY]
 
+        # Determine task type and labels
+        self.is_rl = task == "cartpole"
+        self.is_vision = task in ["mnist", "cifar10"]
+        self.acc_label = "Reward" if self.is_rl else "Accuracy"
+        self.loss_label = "Loss" if self.is_rl or self.is_vision else "Perplexity"
+        self.loss_lower_better = True # Usually true
+
         # Initially not running
         self.is_initialized = False
 
@@ -218,9 +225,16 @@ class HyperoptSearchDashboard(QMainWindow):
         # Create a table for experiments with sorting enabled
         self.experiment_table = QTableWidget()
         self.experiment_table.setColumnCount(10)
-        self.experiment_table.setHorizontalHeaderLabels([
-            'Trial ID', 'Model', 'Status', 'Epoch', 'Accuracy', 'Perplexity', 'Time (ms)', 'Params (M)', 'Acc/Param', 'Acc/Time'
-        ])
+
+        # Adaptive Headers
+        headers = [
+            'Trial ID', 'Model', 'Status', 'Epoch',
+            self.acc_label, self.loss_label,
+            'Time (ms)', 'Params (M)',
+            f'{self.acc_label}/Param', f'{self.acc_label}/Time'
+        ]
+
+        self.experiment_table.setHorizontalHeaderLabels(headers)
 
         # Enable sorting
         self.experiment_table.setSortingEnabled(True)
@@ -354,7 +368,7 @@ class HyperoptSearchDashboard(QMainWindow):
         self.baseline_table = QTableWidget()
         self.baseline_table.setColumnCount(5)
         self.baseline_table.setHorizontalHeaderLabels([
-            'Model', 'Accuracy', 'Perplexity', 'Walltime (s)', 'Parameters (M)'
+            'Model', self.acc_label, self.loss_label, 'Walltime (s)', 'Parameters (M)'
         ])
         self.baseline_table.setRowCount(len(self.model_names))
 
@@ -383,21 +397,21 @@ class HyperoptSearchDashboard(QMainWindow):
 
         # Create standardized plots
         self.plot_acc_ppl = self._create_plot_widget(
-            "Accuracy vs Perplexity",
-            "Perplexity (lower is better)",
-            "Accuracy"
+            f"{self.acc_label} vs {self.loss_label}",
+            f"{self.loss_label} (lower is better)",
+            self.acc_label
         )
 
         self.plot_acc_speed = self._create_plot_widget(
-            "Accuracy vs Speed",
+            f"{self.acc_label} vs Speed",
             "Iteration Time (ms)",
-            "Accuracy"
+            self.acc_label
         )
 
         self.plot_acc_params = self._create_plot_widget(
-            "Accuracy vs Parameters",
+            f"{self.acc_label} vs Parameters",
             "Parameters (M)",
-            "Accuracy"
+            self.acc_label
         )
 
         self.plot_speed_params = self._create_plot_widget(
@@ -685,7 +699,20 @@ class HyperoptSearchDashboard(QMainWindow):
             self.experiment_table.setItem(i, 2, QTableWidgetItem(trial.status))
             self.experiment_table.setItem(i, 3, QTableWidgetItem(f"{trial.epochs_completed}"))
             self.experiment_table.setItem(i, 4, QTableWidgetItem(f"{trial.accuracy:.4f}" if trial.accuracy else "--"))
-            self.experiment_table.setItem(i, 5, QTableWidgetItem(f"{trial.perplexity:.2f}" if trial.perplexity else "--"))
+
+            # Perplexity / Loss Column
+            if self.is_rl:
+                 # For RL, 'perplexity' field in storage/metrics is 0.0, 'final_loss' is loss.
+                 # TrialMetrics stores 'perplexity' as object attribute, but maybe we should display final_loss?
+                 # ExperimentAlgorithm logs final_loss. TrialRunner stores final_loss in 'final_loss'.
+                 # Metrics stores 'final_loss'.
+                 # So we should use trial.final_loss here.
+                 val = f"{trial.final_loss:.2f}" if trial.final_loss is not None else "--"
+                 self.experiment_table.setItem(i, 5, QTableWidgetItem(val))
+            else:
+                 val = f"{trial.perplexity:.2f}" if trial.perplexity else "--"
+                 self.experiment_table.setItem(i, 5, QTableWidgetItem(val))
+
             self.experiment_table.setItem(i, 6, QTableWidgetItem(f"{trial.iteration_time*1000:.1f}" if trial.iteration_time else "--"))
             self.experiment_table.setItem(i, 7, QTableWidgetItem(f"{trial.param_count:.2f}" if trial.param_count else "--"))
 

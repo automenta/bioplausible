@@ -16,11 +16,12 @@ from bioplausible.models.registry import get_model_spec, ModelSpec
 from bioplausible.datasets import get_lm_dataset
 from bioplausible.models.base import ModelConfig
 from bioplausible.lm_models import create_eqprop_lm
-from bioplausible.models.looped_mlp import LoopedMLP
+from bioplausible.models.looped_mlp import LoopedMLP, BackpropMLP
 from bioplausible.models.backprop_transformer_lm import BackpropTransformerLM
 from bioplausible.models.simple_fa import StandardFA
 from bioplausible.models.cf_align import ContrastiveFeedbackAlignment
 from bioplausible.models.hebbian_chain import DeepHebbianChain
+from bioplausible.rl.trainer import RLTrainer
 
 from .storage import HyperoptStorage
 from .metrics import TrialMetrics
@@ -35,17 +36,21 @@ class ExperimentAlgorithm:
     def __init__(
         self,
         spec: ModelSpec,
-        vocab_size: int,
+        output_dim: int,
+        input_dim: int = None,
         hidden_dim: int = 128,
         num_layers: int = 4,
         device: str = "cpu",
+        task_type: str = "lm",  # "lm", "vision", "rl"
     ):
         self.spec = spec
         self.name = spec.name
         self.device = device
-        self.vocab_size = vocab_size
+        self.output_dim = output_dim
+        self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
+        self.task_type = task_type
 
         # Hyperparameters from spec
         self.lr = spec.default_lr
@@ -57,8 +62,17 @@ class ExperimentAlgorithm:
         # Create model
         self.model = self._create_model()
 
-        # Optimizer
-        self.opt = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        # Optimizer (only for supervised models that don't have internal optimizers)
+        # Note: Some bio-plausible models (StandardFA) manage their own optimizers.
+        # But we create a default one for standard models.
+        if not hasattr(self.model, 'optimizer'):
+            params = list(self.model.parameters())
+            if self.has_embed:
+                params.extend(list(self.embed.parameters()))
+            self.opt = torch.optim.Adam(params, lr=self.lr)
+        else:
+            self.opt = None
+
         self.criterion = nn.CrossEntropyLoss()
 
         # Calculate param count
@@ -68,69 +82,89 @@ class ExperimentAlgorithm:
         """Factory method for model creation using bioplausible models."""
         model_type = self.spec.model_type
 
+        # Decide if we need embeddings (LM only, usually)
+        # If input_dim is provided, we assume vector input (Vision/RL)
+        use_embedding = (self.input_dim is None) and (self.task_type == "lm")
+
+        input_size = self.input_dim if self.input_dim is not None else self.hidden_dim
+
         if model_type == "backprop":
-            # Use the robust BackpropTransformerLM
-            return BackpropTransformerLM(
-                vocab_size=self.vocab_size,
-                hidden_dim=self.hidden_dim,
-                num_layers=self.num_layers,
-                max_seq_len=256,  # Default limit
-            ).to(self.device)
+            if self.task_type == "lm":
+                # Use the robust BackpropTransformerLM
+                return BackpropTransformerLM(
+                    vocab_size=self.output_dim,
+                    hidden_dim=self.hidden_dim,
+                    num_layers=self.num_layers,
+                    max_seq_len=256,
+                ).to(self.device)
+            else:
+                # Use BackpropMLP for Vision/RL
+                return BackpropMLP(
+                    input_dim=input_size,
+                    hidden_dim=self.hidden_dim,
+                    output_dim=self.output_dim
+                ).to(self.device)
 
         elif model_type == "eqprop_transformer":
             return create_eqprop_lm(
                 self.spec.variant,
-                vocab_size=self.vocab_size,
+                vocab_size=self.output_dim,
                 hidden_dim=self.hidden_dim,
                 num_layers=self.num_layers,
                 use_sn=True,
             ).to(self.device)
 
         elif model_type == "eqprop_mlp":
-            self.has_embed = True
-            # For MLP, we need an embedding layer since LoopedMLP expects vector input
-            self.embed = nn.Embedding(self.vocab_size, self.hidden_dim).to(self.device)
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+
             return LoopedMLP(
-                input_dim=self.hidden_dim,  # We feed embeddings
+                input_dim=input_size,
                 hidden_dim=self.hidden_dim,
-                output_dim=self.vocab_size,
+                output_dim=self.output_dim,
                 use_spectral_norm=True,
             ).to(self.device)
 
         elif model_type == "dfa":
-            self.has_embed = True
-            self.embed = nn.Embedding(self.vocab_size, self.hidden_dim).to(self.device)
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+
             # Use StandardFA
             config = ModelConfig(
                 name="feedback_alignment",
-                input_dim=self.hidden_dim,
-                output_dim=self.vocab_size,
+                input_dim=input_size,
+                output_dim=self.output_dim,
                 hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
                 use_spectral_norm=True,
             )
             return StandardFA(config=config).to(self.device)
 
         elif model_type == "chl":
-            self.has_embed = True
-            self.embed = nn.Embedding(self.vocab_size, self.hidden_dim).to(self.device)
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
+
             # Use ContrastiveFeedbackAlignment
             config = ModelConfig(
                 name="cf_align",
-                input_dim=self.hidden_dim,
-                output_dim=self.vocab_size,
+                input_dim=input_size,
+                output_dim=self.output_dim,
                 hidden_dims=[self.hidden_dim] * min(self.num_layers, 5),
                 use_spectral_norm=True,
             )
             return ContrastiveFeedbackAlignment(config=config).to(self.device)
 
         elif model_type == "deep_hebbian":
-            self.has_embed = True
-            self.embed = nn.Embedding(self.vocab_size, self.hidden_dim).to(self.device)
+            if use_embedding:
+                self.has_embed = True
+                self.embed = nn.Embedding(self.output_dim, self.hidden_dim).to(self.device)
 
             return DeepHebbianChain(
-                input_dim=self.hidden_dim,
+                input_dim=input_size,
                 hidden_dim=self.hidden_dim,
-                output_dim=self.vocab_size,
+                output_dim=self.output_dim,
                 num_layers=self.num_layers,
                 use_spectral_norm=True,
                 hebbian_lr=0.001,
@@ -145,8 +179,9 @@ class ExperimentAlgorithm:
     ):
         if lr is not None:
             self.lr = lr
-            for g in self.opt.param_groups:
-                g["lr"] = lr
+            if self.opt:
+                for g in self.opt.param_groups:
+                    g["lr"] = lr
         if beta is not None:
             self.beta = beta
         if steps is not None:
@@ -167,11 +202,12 @@ class ExperimentAlgorithm:
                         layer.learning_rate = self.model.hebbian_lr
 
     def train_step(self, x, y, step_num) -> Any:
-        """Single training iteration."""
+        """Single training iteration (Supervised)."""
         t0 = time.time()
 
         self.model.train()
-        self.opt.zero_grad()
+        if self.opt:
+            self.opt.zero_grad()
 
         try:
             # Handle Embedding if separate
@@ -179,74 +215,52 @@ class ExperimentAlgorithm:
                 # Average pooling over sequence for MLP-like models
                 # Input x is [batch, seq_len]
                 h = self.embed(x).mean(dim=1)
-
-                # Check for custom train_step (BioModel)
-                if hasattr(self.model, "train_step"):
-                    metrics = self.model.train_step(h, y)
-                    loss = metrics.get("loss", 0.0)
-                    acc = metrics.get("accuracy", 0.0)
-
-                    # Note: train_step usually handles optimizer.step() internaly or via return
-                    # But here we initialized self.opt.
-                    # BioModels usually carry their own optimizer.
-                    # If model has train_step, we trust it to return metrics.
-                    # But we also created self.opt above.
-                    # StandardFA creates its own optimizer.
-                    # LoopedMLP inherits EqPropModel which might need external loop or has train_step.
-                    # LoopedMLP does NOT have train_step by default unless using EqPropTrainer.
-
-                    # If model is LoopedMLP, it doesn't have train_step logic embedded for simple call.
-                    # It relies on EqPropTrainer to do the loop.
-                    # So we should implement the loop here if we are not using EqPropTrainer.
-
-                    # However, legacy AlgorithmWrapper did:
-                    # if hasattr(self.model, 'train_step'): ...
-
-                    # Let's assume for now we use standard forward/backward unless train_step exists.
-                    pass
-                else:
-                    # Standard forward/backward
-                    out = self.model(h)
-                    loss = self.criterion(out, y)
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                    self.opt.step()
-                    acc = (out.argmax(1) == y).float().mean().item()
-                    loss = loss.item()
-
             else:
-                # Transformer models (handle embedding internally)
-                # Input x is [batch, seq_len], y is [batch] (next token) or [batch, seq_len] (shifted)
+                # Vision or direct input: flatten if needed for MLP-like models
+                # But keep 2D/3D for Conv models if we support them later
+                # For now, our models (LoopedMLP, FA, CHL, Hebbian) expect vector input (batch, dim)
+                if x.dim() > 2 and self.task_type in ["vision", "rl"]:
+                     h = x.view(x.size(0), -1)
+                else:
+                     h = x
 
-                # The data loader returns x [B, T], y [B, T] (shifted) usually?
-                # Or x [B, T], y [B] (next token)?
-                # Experiment runner get_batch returns x, y (next token at end).
+            # Check for custom train_step (BioModel)
+            if hasattr(self.model, "train_step"):
+                # Models like StandardFA/CHL have their own update rules
+                metrics = self.model.train_step(h, y)
+                loss = metrics.get("loss", 0.0)
+                acc = metrics.get("accuracy", 0.0)
+                # They manage their own optimization step
+            else:
+                # Standard forward/backward (Backprop, LoopedMLP via autograd/EqProp)
+                # Note: LoopedMLP via ExperimentAlgorithm uses standard backprop
+                # unless we wrap it in EqPropTrainer or use its specialized methods.
+                # However, LoopedMLP has 'gradient_method' which defaults to 'equilibrium' or 'bptt'.
+                # ExperimentAlgorithm here seems to assume a simple forward/backward interface.
+                # For LoopedMLP, backward() triggers the hook if gradient_method='equilibrium'.
 
-                # In experiment.py:
-                # x = data[i:i+seq_len]
-                # y = data[i+seq_len] (single token)
+                # Handling specialized arguments (steps)
+                if hasattr(self.model, "eq_steps"):
+                    logits = self.model(h, steps=self.steps)
+                else:
+                    logits = self.model(h)
 
-                # BackpropTransformerLM expects [B, T] and returns [B, T, V] logits.
-                # We need to take the last logit for the prediction of y.
-
-                logits = (
-                    self.model(x, steps=self.steps)
-                    if hasattr(self.model, "eq_steps")
-                    else self.model(x)
-                )
-
-                if logits.dim() == 3:
-                    # logits: [B, T, V]
-                    # We only care about the last token prediction for y
+                if logits.dim() == 3 and self.task_type == "lm":
+                    # logits: [B, T, V] -> [B, V] (last token)
                     logits = logits[:, -1, :]
 
                 loss = self.criterion(logits, y)
                 loss.backward()
 
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                self.opt.step()
+                if self.opt:
+                    self.opt.step()
 
-                acc = (logits.argmax(1) == y).float().mean().item()
+                if self.task_type == "lm" or self.task_type == "vision":
+                     acc = (logits.argmax(1) == y).float().mean().item()
+                else:
+                     acc = 0.0 # Placeholder for RL/Regression
+
                 loss = loss.item()
 
             # VRAM estimate
@@ -271,7 +285,7 @@ class ExperimentAlgorithm:
             return TrainingState(
                 loss=loss,
                 accuracy=acc,
-                perplexity=np.exp(min(loss, 10)),
+                perplexity=np.exp(min(loss, 10)) if self.task_type == "lm" else 0.0,
                 iter_time=iter_time,
                 vram_gb=vram,
                 step=step_num,
@@ -280,13 +294,10 @@ class ExperimentAlgorithm:
         except Exception as e:
             print(f"Error in {self.name} train_step: {e}")
             import traceback
-
             traceback.print_exc()
 
             class TrainingState:
-                def __init__(
-                    self, loss, accuracy, perplexity, iter_time, vram_gb, step
-                ):
+                def __init__(self, loss, accuracy, perplexity, iter_time, vram_gb, step):
                     self.loss = loss
                     self.accuracy = accuracy
                     self.perplexity = perplexity
@@ -331,9 +342,16 @@ class TrialRunner:
             self.batches_per_epoch = 200
             self.eval_batches = 50
 
+        # RL Config
+        self.rl_episodes = 20 if quick_mode else 100
+
         self.epochs = GLOBAL_CONFIG.epochs
         self.batch_size = 32
         self.seq_len = 64
+
+        # Dimensions
+        self.input_dim = None # For Vision/RL
+        self.output_dim = None # Previously vocab_size
 
         # Load data using new dataset utils
         print(f"Loading {task} dataset...")
@@ -342,7 +360,7 @@ class TrialRunner:
             try:
                 self.dataset = get_lm_dataset("tiny_shakespeare", seq_len=self.seq_len)
                 self.data = self.dataset.data
-                self.vocab_size = self.dataset.vocab_size
+                self.output_dim = self.dataset.vocab_size
             except Exception as e:
                 print(f"Failed to load dataset: {e}")
                 raise e
@@ -371,17 +389,17 @@ class TrialRunner:
             self.val_y = torch.tensor([self.test_dataset[i][1] for i in range(val_size)]).to(self.device)
 
             if task == "mnist":
-                self.vocab_size = 10 # Output classes
-                self.input_shape = (1, 28, 28)
+                self.output_dim = 10
+                self.input_dim = 784 # Flattened
             else:
-                self.vocab_size = 10
-                self.input_shape = (3, 32, 32)
+                self.output_dim = 10
+                self.input_dim = 3072 # Flattened
 
         elif task == "cartpole":
             # RL Environment
             import gymnasium as gym
             self.env = gym.make("CartPole-v1")
-            self.vocab_size = self.env.action_space.n # Output actions
+            self.output_dim = self.env.action_space.n
             self.input_dim = self.env.observation_space.shape[0]
 
         else:
@@ -434,32 +452,25 @@ class TrialRunner:
             hidden_dim = config.get("hidden_dim", 128)
             num_layers = config.get("num_layers", 4)
 
-            # Determine if flattening is needed for MLPs on Vision tasks
-            is_vision = self.task in ["mnist", "cifar10"]
-            is_mlp = "mlp" in trial.model_name.lower() or "fa" in trial.model_name.lower() or "chl" in trial.model_name.lower() or "hebbian" in trial.model_name.lower()
+            # Determine task type
+            if self.task in ["shakespeare", "tiny_shakespeare"]:
+                task_type = "lm"
+            elif self.task in ["mnist", "cifar10"]:
+                task_type = "vision"
+            elif self.task in ["cartpole"]:
+                task_type = "rl"
+            else:
+                task_type = "lm"
 
             algo = ExperimentAlgorithm(
                 spec,
-                self.vocab_size,
+                output_dim=self.output_dim,
+                input_dim=self.input_dim,
                 hidden_dim=hidden_dim,
                 num_layers=num_layers,
                 device=self.device,
+                task_type=task_type
             )
-
-            # Disable embedding if vision task and using MLP
-            if is_vision and is_mlp:
-                algo.has_embed = False
-
-                # RE-INIT MODEL manually for Vision MLPs
-                if self.task == "mnist":
-                    input_dim = 784
-                else:
-                    input_dim = 3072
-
-                if "EqProp MLP" in trial.model_name:
-                    algo.model = LoopedMLP(input_dim, hidden_dim, 10, use_spectral_norm=True).to(self.device)
-                elif "Hebbian" in trial.model_name:
-                    algo.model = DeepHebbianChain(input_dim, hidden_dim, 10, num_layers=num_layers).to(self.device)
 
             # Apply hyperparameters
             lr = config.get("lr", spec.default_lr)
@@ -475,118 +486,196 @@ class TrialRunner:
 
             algo.update_hyperparams(lr=lr, beta=beta, steps=steps, **extra_params)
 
-            # Training loop
-            epoch_times = []
-            n_epochs = self.epochs
+            # --- Branch: Reinforcement Learning ---
+            if task_type == "rl":
+                print("Running RL Training Loop...")
+                rl_trainer = RLTrainer(algo.model, "CartPole-v1", device=self.device, lr=lr)
 
-            for epoch in range(n_epochs):
-                epoch_start = time.time()
+                # Apply extra params to RL trainer's model if needed
+                # (algo.model is reference passed to RLTrainer)
 
-                # Training
-                algo.model.train()
-                train_losses = []
+                episode_rewards = []
+                epoch_times = []
 
-                for _ in range(self.batches_per_epoch):
-                    x, y = self.get_batch(self.data_train, self.device)
-                    state = algo.train_step(x, y, epoch * self.batches_per_epoch + _)
-                    train_losses.append(state.loss)
+                # Use "epochs" as batches of episodes or just episodes?
+                # Let's map epochs to X episodes.
+                episodes_per_epoch = 10
+                total_epochs = self.epochs
 
-                # Validation
-                algo.model.eval()
-                val_losses = []
-                val_accs = []
+                for epoch in range(total_epochs):
+                    epoch_start = time.time()
+                    epoch_reward_sum = 0
+                    epoch_loss_sum = 0
 
-                with torch.no_grad():
-                    for _ in range(self.eval_batches):
-                        x, y = self.get_batch(self.data_val, self.device)
+                    for _ in range(episodes_per_epoch):
+                        metrics = rl_trainer.train_episode()
+                        epoch_reward_sum += metrics['reward']
+                        epoch_loss_sum += metrics['loss']
 
-                        if algo.has_embed:
-                            h = algo.embed(x).mean(dim=1)
-                            # Simple forward
-                            logits = algo.model(h)
-                        else:
-                            # Vision or direct input
-                            # For Vision MLPs, we need to flatten if shape is [B, C, H, W]
-                            if x.dim() == 4 and "mlp" in trial.model_name.lower():
-                                x_in = x.view(x.size(0), -1)
-                            elif x.dim() == 4 and "hebbian" in trial.model_name.lower():
-                                x_in = x.view(x.size(0), -1)
+                    epoch_time = time.time() - epoch_start
+                    epoch_times.append(epoch_time)
+
+                    avg_reward = epoch_reward_sum / episodes_per_epoch
+                    avg_loss = epoch_loss_sum / episodes_per_epoch
+
+                    # Store reward in "accuracy" field for visualization compatibility
+                    # Store -reward in "perplexity" ? Or just 0.
+
+                    self.storage.log_epoch(
+                        trial_id, epoch, avg_loss, avg_reward, 0.0, epoch_time
+                    )
+
+                    print(
+                        f"Epoch {epoch+1}/{total_epochs}: "
+                        f"loss={avg_loss:.4f}, avg_reward={avg_reward:.2f}, "
+                        f"time={epoch_time:.1f}s"
+                    )
+
+                    # Pruning (if reward is too low after some time)
+                    if pruning_callback:
+                         metrics = {
+                            "loss": avg_loss,
+                            "accuracy": avg_reward, # Mapping reward to accuracy for metric genericism
+                            "perplexity": 0.0,
+                            "time": epoch_time,
+                            "iteration_time": epoch_time / episodes_per_epoch,
+                        }
+                         if pruning_callback(trial_id, epoch + 1, metrics):
+                            print(f"✂️ Trial {trial_id} PRUNED")
+                            self.storage.update_trial(trial_id, status="pruned")
+                            return False
+
+                # Final stats
+                final_loss = avg_loss
+                final_reward = avg_reward
+                avg_iter_time = np.mean(epoch_times) / episodes_per_epoch
+                param_count_millions = algo.param_count / 1e6
+
+                self.storage.update_trial(
+                    trial_id,
+                    status="completed",
+                    epochs_completed=total_epochs,
+                    final_loss=final_loss,
+                    accuracy=final_reward,
+                    perplexity=0.0,
+                    iteration_time=avg_iter_time,
+                    param_count=param_count_millions,
+                )
+
+                print(f"\n✅ Trial {trial_id} completed!")
+                return True
+
+            # --- Branch: Supervised Learning (LM / Vision) ---
+            else:
+                epoch_times = []
+                n_epochs = self.epochs
+
+                for epoch in range(n_epochs):
+                    epoch_start = time.time()
+
+                    # Training
+                    algo.model.train()
+                    train_losses = []
+
+                    for _ in range(self.batches_per_epoch):
+                        x, y = self.get_batch(self.data_train, self.device)
+                        state = algo.train_step(x, y, epoch * self.batches_per_epoch + _)
+                        train_losses.append(state.loss)
+
+                    # Validation
+                    algo.model.eval()
+                    val_losses = []
+                    val_accs = []
+
+                    with torch.no_grad():
+                        for _ in range(self.eval_batches):
+                            x, y = self.get_batch(self.data_val, self.device)
+
+                            if algo.has_embed:
+                                h = algo.embed(x).mean(dim=1)
+                                # Simple forward
+                                logits = algo.model(h)
                             else:
-                                x_in = x
+                                # Vision or direct input
+                                # For Vision MLPs, we need to flatten if shape is [B, C, H, W]
+                                if x.dim() > 2:
+                                    x_in = x.view(x.size(0), -1)
+                                else:
+                                    x_in = x
 
-                            logits = (
-                                algo.model(x_in, steps=algo.steps)
-                                if hasattr(algo.model, "eq_steps")
-                                else algo.model(x_in)
-                            )
-                            if logits.dim() == 3:
-                                logits = logits[:, -1, :]
+                                logits = (
+                                    algo.model(x_in, steps=algo.steps)
+                                    if hasattr(algo.model, "eq_steps")
+                                    else algo.model(x_in)
+                                )
+                                if logits.dim() == 3:
+                                    logits = logits[:, -1, :]
 
-                        loss = algo.criterion(logits, y)
-                        acc = (logits.argmax(1) == y).float().mean()
+                            loss = algo.criterion(logits, y)
+                            acc = (logits.argmax(1) == y).float().mean()
 
-                        val_losses.append(loss.item())
-                        val_accs.append(acc.item())
+                            val_losses.append(loss.item())
+                            val_accs.append(acc.item())
 
-                epoch_time = time.time() - epoch_start
-                epoch_times.append(epoch_time)
+                    epoch_time = time.time() - epoch_start
+                    epoch_times.append(epoch_time)
 
-                avg_val_loss = np.mean(val_losses)
-                avg_val_acc = np.mean(val_accs)
-                avg_val_ppl = np.exp(min(avg_val_loss, 10))
+                    avg_val_loss = np.mean(val_losses)
+                    avg_val_acc = np.mean(val_accs)
+                    avg_val_ppl = np.exp(min(avg_val_loss, 10)) if task_type == "lm" else 0.0
 
-                # Log epoch
-                self.storage.log_epoch(
-                    trial_id, epoch, avg_val_loss, avg_val_acc, avg_val_ppl, epoch_time
+                    # Log epoch
+                    self.storage.log_epoch(
+                        trial_id, epoch, avg_val_loss, avg_val_acc, avg_val_ppl, epoch_time
+                    )
+
+                    print(
+                        f"Epoch {epoch+1}/{n_epochs}: "
+                        f"loss={avg_val_loss:.4f}, acc={avg_val_acc:.4f}, "
+                        f"ppl={avg_val_ppl:.2f}, time={epoch_time:.1f}s"
+                    )
+
+                    # Check for pruning
+                    if pruning_callback:
+                        metrics = {
+                            "loss": avg_val_loss,
+                            "accuracy": avg_val_acc,
+                            "perplexity": avg_val_ppl,
+                            "time": epoch_time,
+                            "iteration_time": epoch_time / self.batches_per_epoch,
+                        }
+                        if pruning_callback(trial_id, epoch + 1, metrics):
+                            print(f"✂️ Trial {trial_id} PRUNED at epoch {epoch+1}")
+                            self.storage.update_trial(trial_id, status="pruned")
+                            return False
+
+                # Final metrics
+                final_loss = np.mean(val_losses)
+                final_acc = np.mean(val_accs)
+                final_ppl = np.exp(min(final_loss, 10)) if task_type == "lm" else 0.0
+                avg_epoch_time = np.mean(epoch_times)
+                avg_iter_time = avg_epoch_time / self.batches_per_epoch
+                param_count_millions = algo.param_count / 1e6
+
+                # Update trial
+                self.storage.update_trial(
+                    trial_id,
+                    status="completed",
+                    epochs_completed=n_epochs,
+                    final_loss=final_loss,
+                    accuracy=final_acc,
+                    perplexity=final_ppl,
+                    iteration_time=avg_iter_time,
+                    param_count=param_count_millions,
                 )
 
-                print(
-                    f"Epoch {epoch+1}/{n_epochs}: "
-                    f"loss={avg_val_loss:.4f}, acc={avg_val_acc:.4f}, "
-                    f"ppl={avg_val_ppl:.2f}, time={epoch_time:.1f}s"
-                )
+                print(f"\n✅ Trial {trial_id} completed successfully!")
+                print(f"   Final Accuracy: {final_acc:.4f}")
+                print(f"   Final Perplexity: {final_ppl:.2f}")
+                print(f"   Avg Iter Time: {avg_iter_time*1000:.1f}ms")
+                print(f"   Param Count: {param_count_millions:.2f}M\n")
 
-                # Check for pruning
-                if pruning_callback:
-                    metrics = {
-                        "loss": avg_val_loss,
-                        "accuracy": avg_val_acc,
-                        "perplexity": avg_val_ppl,
-                        "time": epoch_time,
-                        "iteration_time": epoch_time / self.batches_per_epoch,
-                    }
-                    if pruning_callback(trial_id, epoch + 1, metrics):
-                        print(f"✂️ Trial {trial_id} PRUNED at epoch {epoch+1}")
-                        self.storage.update_trial(trial_id, status="pruned")
-                        return False
-
-            # Final metrics
-            final_loss = np.mean(val_losses)
-            final_acc = np.mean(val_accs)
-            final_ppl = np.exp(min(final_loss, 10))
-            avg_epoch_time = np.mean(epoch_times)
-            avg_iter_time = avg_epoch_time / self.batches_per_epoch
-            param_count_millions = algo.param_count / 1e6
-
-            # Update trial
-            self.storage.update_trial(
-                trial_id,
-                status="completed",
-                epochs_completed=n_epochs,
-                final_loss=final_loss,
-                accuracy=final_acc,
-                perplexity=final_ppl,
-                iteration_time=avg_iter_time,
-                param_count=param_count_millions,
-            )
-
-            print(f"\n✅ Trial {trial_id} completed successfully!")
-            print(f"   Final Accuracy: {final_acc:.4f}")
-            print(f"   Final Perplexity: {final_ppl:.2f}")
-            print(f"   Avg Iter Time: {avg_iter_time*1000:.1f}ms")
-            print(f"   Param Count: {param_count_millions:.2f}M\n")
-
-            return True
+                return True
 
         except Exception as e:
             print(f"\n❌ Trial {trial_id} failed: {e}")
