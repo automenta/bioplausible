@@ -50,6 +50,11 @@ def get_vision_dataset(
     transform = _build_transforms(name, flatten)
     dataset_class = _get_dataset_class(name)
 
+    if name == "svhn":
+        # SVHN uses 'split' instead of 'train'
+        split = "train" if train else "test"
+        return dataset_class(root, split=split, download=download, transform=transform)
+
     return dataset_class(root, train=train, download=download, transform=transform)
 
 
@@ -93,7 +98,7 @@ def _build_transforms(name: str, flatten: bool):
     if name in ["mnist", "fashion_mnist", "kmnist"]:
         # Normalize grayscale to [-1, 1] range
         transform_list.append(transforms.Normalize((0.5,), (0.5,)))
-    elif name == "cifar10":
+    elif name in ["cifar10", "svhn"]:
         transform_list.append(transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
 
     if flatten:
@@ -111,6 +116,7 @@ def _get_dataset_class(name: str) -> type:
         "fashion_mnist": datasets.FashionMNIST,
         "cifar10": datasets.CIFAR10,
         "kmnist": datasets.KMNIST,
+        "svhn": datasets.SVHN,
     }
 
     if name not in dataset_map:

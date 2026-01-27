@@ -1,11 +1,11 @@
 # TorEqProp Verification Results
 
-**Generated**: 2026-01-14 19:03:17
+**Generated**: 2026-01-15 11:11:01
 
 
 ## Executive Summary
 
-**Verification completed in 31.8 seconds.**
+**Verification completed in 27.2 seconds.**
 
 ### Overall Results
 
@@ -22,9 +22,9 @@
 
 | # | Track | Status | Score | Time |
 |---|-------|--------|-------|------|
-| 42 | Holomorphic EP | ✅ | 100 | 4.2s |
-| 43 | Directed EP | ✅ | 100 | 4.0s |
-| 44 | Finite-Nudge EP | ✅ | 100 | 23.5s |
+| 42 | Holomorphic EP | ✅ | 100 | 3.6s |
+| 43 | Directed EP | ✅ | 100 | 2.1s |
+| 44 | Finite-Nudge EP | ✅ | 100 | 21.4s |
 
 
 **Seed**: 42 (deterministic)
@@ -37,7 +37,7 @@
 ## Track 42: Holomorphic EP
 
 
-✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 4.2s
+✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 3.6s
 
 🧪 **Evidence Level**: Smoke Test
 
@@ -56,7 +56,7 @@
 ## Track 43: Directed EP
 
 
-✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 4.0s
+✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 2.1s
 
 🧪 **Evidence Level**: Smoke Test
 
@@ -74,7 +74,7 @@
 ## Track 44: Finite-Nudge EP
 
 
-✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 23.5s
+✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 21.4s
 
 🧪 **Evidence Level**: Smoke Test
 

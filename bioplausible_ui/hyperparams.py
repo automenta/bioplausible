@@ -37,6 +37,8 @@ class HyperparamRegistry:
         self._register_feedback_alignment_schemas()
         self._register_standard_model_schemas()
         self._register_lm_variant_schemas()
+        self._register_hebbian_schemas()
+        self._register_hybrid_schemas()
 
     def _register_eqprop_schemas(self):
         """Register EqProp-related hyperparameter schemas."""
@@ -119,6 +121,33 @@ class HyperparamRegistry:
                 description='Target sparsity level (fraction of active neurons)'
             ),
         ]
+        # Holomorphic EP
+        self.schemas['holomorphic_ep'] = [
+            HyperparamSpec(
+                name='beta', label='Beta', type='float', default=0.1, min_val=0.0, max_val=1.0, step=0.01
+            ),
+            HyperparamSpec(
+                name='steps', label='Steps', type='int', default=30, min_val=5, max_val=100, step=5
+            ),
+        ]
+        # Directed EP
+        self.schemas['directed_ep'] = [
+            HyperparamSpec(
+                name='beta', label='Beta', type='float', default=0.2, min_val=0.0, max_val=1.0, step=0.01
+            ),
+            HyperparamSpec(
+                name='steps', label='Steps', type='int', default=30, min_val=5, max_val=100, step=5
+            ),
+        ]
+        # Finite Nudge EP
+        self.schemas['finite_nudge_ep'] = [
+            HyperparamSpec(
+                name='beta', label='Beta (Finite)', type='float', default=1.0, min_val=0.1, max_val=5.0, step=0.1
+            ),
+            HyperparamSpec(
+                name='steps', label='Steps', type='int', default=30, min_val=5, max_val=100, step=5
+            ),
+        ]
 
     def _register_feedback_alignment_schemas(self):
         """Register feedback alignment hyperparameter schemas."""
@@ -158,6 +187,18 @@ class HyperparamRegistry:
                 step=0.001,
                 description='Rate of feedback matrix adaptation'
             ),
+        ]
+        self.schemas['stochastic_fa'] = [
+            HyperparamSpec(name='noise_scale', label='Noise Scale', type='float', default=0.1, min_val=0.0, max_val=1.0, step=0.05)
+        ]
+        self.schemas['energy_guided_fa'] = [
+            HyperparamSpec(name='energy_weight', label='Energy Weight', type='float', default=0.1, min_val=0.0, max_val=1.0, step=0.05)
+        ]
+        self.schemas['energy_minimizing_fa'] = [
+             HyperparamSpec(name='lr_energy', label='Energy LR', type='float', default=0.01, min_val=0.001, max_val=0.1, step=0.001)
+        ]
+        self.schemas['dfa'] = [
+             HyperparamSpec(name='feedback_scale', label='Feedback Scale', type='float', default=1.0, min_val=0.1, max_val=2.0, step=0.1)
         ]
 
         # Equilibrium + Alignment hybrid
@@ -243,6 +284,26 @@ class HyperparamRegistry:
                 max_val=1.0,
                 step=0.05,
             ),
+        ]
+
+    def _register_hebbian_schemas(self):
+        """Register Hebbian learning schemas."""
+        self.schemas['chl'] = [
+            HyperparamSpec(name='beta', label='Beta', type='float', default=0.1, min_val=0.0, max_val=1.0, step=0.01),
+            HyperparamSpec(name='steps', label='Steps', type='int', default=20, min_val=5, max_val=50, step=5)
+        ]
+        self.schemas['deep_hebbian'] = [
+             HyperparamSpec(name='hebbian_lr', label='Hebbian LR', type='float', default=0.01, min_val=0.0001, max_val=0.1, step=0.0001)
+        ]
+
+    def _register_hybrid_schemas(self):
+        """Register hybrid algorithm schemas."""
+        self.schemas['predictive_coding_hybrid'] = [
+             HyperparamSpec(name='pred_steps', label='Pred Steps', type='int', default=20, min_val=5, max_val=50, step=5),
+             HyperparamSpec(name='pred_lr', label='Pred LR', type='float', default=0.1, min_val=0.01, max_val=1.0, step=0.01)
+        ]
+        self.schemas['layerwise_equilibrium_fa'] = [
+             HyperparamSpec(name='steps', label='Steps', type='int', default=20, min_val=5, max_val=50, step=5)
         ]
 
     def get_schema(self, model_type: str) -> List[HyperparamSpec]:

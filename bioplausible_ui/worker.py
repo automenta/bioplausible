@@ -18,8 +18,10 @@ class TrainingWorker(QThread):
     progress = pyqtSignal(dict)  # Emit training metrics frequently
     finished = pyqtSignal(dict)  # Emit final results
     error = pyqtSignal(str)      # Emit error message
+    log = pyqtSignal(str)        # Emit log messages
     generation = pyqtSignal(str) # Emit generated text
     weights_updated = pyqtSignal(dict)  # Emit weight snapshots for visualization
+    dynamics_update = pyqtSignal(dict)  # Emit dynamics data
 
     def __init__(
         self,
@@ -30,6 +32,7 @@ class TrainingWorker(QThread):
         use_compile: bool = True,
         use_kernel: bool = False,
         generate_interval: int = 5,  # Generate text every N epochs
+        microscope_interval: int = 0, # Run microscope every N epochs (0=off)
         prompts: list = None,
         hyperparams: dict = None,  # Model-specific hyperparameters
         parent=None,
@@ -42,6 +45,7 @@ class TrainingWorker(QThread):
         self.use_compile = use_compile
         self.use_kernel = use_kernel
         self.generate_interval = generate_interval
+        self.microscope_interval = microscope_interval
         self.prompts = prompts or ["ROMEO:"]
         self.hyperparams = hyperparams or {}
 
@@ -177,11 +181,54 @@ class TrainingWorker(QThread):
         except:
             lipschitz = 0.0  # Default if computation fails
 
+        # Microscope analysis
+        if self.microscope_interval > 0 and (epoch + 1) % self.microscope_interval == 0:
+            self._run_microscope(trainer)
+
         # Emit final epoch metrics
         self._emit_epoch_metrics(epoch, num_batches, epoch_loss, epoch_correct,
                                epoch_total, lipschitz)
 
         return {'loss': epoch_loss / max(epoch_total, 1), 'accuracy': epoch_correct / max(epoch_total, 1)}
+
+    def _run_microscope(self, trainer):
+        """Run a single forward pass with dynamics tracking."""
+        try:
+            # Get a single batch
+            x, _ = next(iter(self.train_loader))
+
+            # Convert input
+            if not self.use_kernel:
+                x = self._convert_input_format(x)
+
+            x = x.to(trainer.device)
+
+            # Determine arguments for dynamics
+            kwargs = {}
+            import inspect
+            sig = inspect.signature(self.model.forward)
+            if 'return_dynamics' in sig.parameters:
+                kwargs['return_dynamics'] = True
+
+            # Run forward pass (no grad needed for visualization)
+            with torch.no_grad():
+                self.model.eval()
+                out = self.model(x, **kwargs)
+                self.model.train() # Switch back to train mode
+
+                dynamics = {}
+                if isinstance(out, tuple) and len(out) > 1:
+                    dynamics = out[1]
+                elif hasattr(self.model, 'dynamics'):
+                    dynamics = self.model.dynamics
+
+                if dynamics:
+                    self.dynamics_update.emit(dynamics)
+                    self.log.emit(f"Microscope: Captured dynamics for epoch.")
+
+        except Exception as e:
+            self.log.emit(f"Microscope failed: {e}")
+            # Don't crash training for this
 
     def _emit_batch_progress(self, epoch, batch_idx, num_batches, epoch_loss,
                            epoch_correct, epoch_total, x, batch_time, total_start,
@@ -282,6 +329,91 @@ class TrainingWorker(QThread):
             self.error.emit(f"{type(e).__name__}: {e}\n{traceback.format_exc()}")
 
 
+class BenchmarkWorker(QThread):
+    """Worker for running validation tracks (benchmarks)."""
+
+    progress = pyqtSignal(str) # Log message
+    finished = pyqtSignal(dict) # Final results dict
+    error = pyqtSignal(str)
+
+    def __init__(self, track_ids, quick_mode=True, parent=None):
+        super().__init__(parent)
+        self.track_ids = track_ids
+        self.quick_mode = quick_mode
+        self._stop_requested = False
+
+    def stop(self):
+        self._stop_requested = True
+
+    def run(self):
+        try:
+            from bioplausible.verify import Verifier
+            import io
+            from contextlib import redirect_stdout
+
+            # Custom Verifier that respects stop signal and emits progress
+            # Since Verifier is synchronous and prints to stdout, we wrap it or
+            # we rely on it printing.
+            # Better: We can capture stdout line by line?
+            # Or just run it and let it print to console if we hooked up logging.
+            # But we want to update the UI table.
+
+            # Let's use a capture mechanism that emits signals
+            class SignalVerifier(Verifier):
+                def __init__(self, worker, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+                    self.worker = worker
+
+                def run_tracks(self, track_ids):
+                    # We override this to emit progress
+                    results = {}
+                    for i, track_id in enumerate(track_ids):
+                        if self.worker._stop_requested:
+                            break
+
+                        self.worker.progress.emit(f"Running Track {track_id}...")
+
+                        try:
+                            # Re-use logic from Verifier.run_tracks but per track
+                            name, method = self.tracks[track_id]
+                            result = method(self)
+                            results[track_id] = result
+
+                            status_icon = "✅" if result.status == "pass" else "❌"
+                            self.worker.progress.emit(f"{status_icon} Track {track_id}: {result.status.upper()} ({result.score}/100)")
+
+                        except Exception as e:
+                            self.worker.progress.emit(f"❌ Track {track_id} Failed: {e}")
+
+                    return results
+
+            verifier = SignalVerifier(
+                self,
+                quick_mode=self.quick_mode,
+                seed=42
+            )
+
+            self.progress.emit(f"Starting Benchmark Suite (Quick={self.quick_mode})...")
+            results = verifier.run_tracks(self.track_ids)
+
+            # Convert results to dict for signal
+            # TrackResult objects are not directly picklable/serializable sometimes, so convert to simple dict
+            final_results = {}
+            for tid, res in results.items():
+                final_results[tid] = {
+                    'status': res.status,
+                    'score': res.score,
+                    'metrics': res.metrics
+                }
+
+            self.finished.emit(final_results)
+
+        except Exception as e:
+            self.error.emit(str(e))
+            import traceback
+            traceback.print_exc()
+
+
 class GenerationWorker(QThread):
     """Background worker for text generation."""
 
@@ -317,13 +449,15 @@ class RLWorker(QThread):
     progress = pyqtSignal(dict)
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
+    log = pyqtSignal(str)
 
-    def __init__(self, model, env_name, episodes=500, lr=1e-3, device='cpu', parent=None):
+    def __init__(self, model, env_name, episodes=500, lr=1e-3, gamma=0.99, device='cpu', parent=None):
         super().__init__(parent)
         self.model = model
         self.env_name = env_name
         self.episodes = episodes
         self.lr = lr
+        self.gamma = gamma
         self.device = device
         self._stop_requested = False
 
@@ -333,7 +467,7 @@ class RLWorker(QThread):
 
     def run(self):
         try:
-            trainer = RLTrainer(self.model, self.env_name, device=self.device, lr=self.lr)
+            trainer = RLTrainer(self.model, self.env_name, device=self.device, lr=self.lr, gamma=self.gamma)
 
             start_time = time.time()
 

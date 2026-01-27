@@ -128,8 +128,8 @@ class SearchSpace:
 
 # Define search spaces for all models
 SEARCH_SPACES = {
-    "Backprop (Transformer)": SearchSpace(
-        "Backprop (Transformer)",
+    "Backprop Baseline": SearchSpace(
+        "Backprop Baseline",
         {
             "lr": (1e-5, 1e-2, "log"),
             "hidden_dim": [64, 128, 256, 512],
@@ -146,6 +146,62 @@ SEARCH_SPACES = {
             "num_layers": [5, 10, 15],
         },
     ),
+    # Research Models
+    "Holomorphic EqProp": SearchSpace(
+        "Holomorphic EqProp",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "beta": (0.01, 0.3, "linear"),
+            "steps": (10, 40, "int"),
+            "hidden_dim": [64, 128],
+        },
+    ),
+    "Directed EqProp (Deep EP)": SearchSpace(
+        "Directed EqProp (Deep EP)",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "beta": (0.1, 0.5, "linear"),
+            "steps": (10, 40, "int"),
+            "hidden_dim": [64, 128],
+        },
+    ),
+    "Finite-Nudge EqProp": SearchSpace(
+        "Finite-Nudge EqProp",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "beta": (0.5, 3.0, "linear"), # Large beta
+            "steps": (10, 40, "int"),
+            "hidden_dim": [64, 128],
+        },
+    ),
+    "Conv EqProp (CIFAR-10)": SearchSpace(
+        "Conv EqProp (CIFAR-10)",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "steps": (10, 25, "int"),
+            "hidden_dim": [128, 256],
+        },
+    ),
+    # Hybrid & Experimental
+    "Adaptive Feedback Alignment": SearchSpace(
+        "Adaptive Feedback Alignment",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "fa_scale": (0.5, 1.5, "linear"),
+            "adapt_rate": (0.001, 0.1, "log"),
+            "hidden_dim": [64, 128, 256],
+        },
+    ),
+    "Equilibrium Alignment": SearchSpace(
+        "Equilibrium Alignment",
+        {
+            "lr": (1e-4, 1e-2, "log"),
+            "beta": (0.1, 0.5, "linear"),
+            "steps": (10, 30, "int"),
+            "align_weight": (0.1, 1.0, "linear"),
+        },
+    ),
+    # Transformers
     "EqProp Transformer (Attention Only)": SearchSpace(
         "EqProp Transformer (Attention Only)",
         {

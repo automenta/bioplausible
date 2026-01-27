@@ -1,0 +1,285 @@
+
+from PyQt6.QtWidgets import (
+    QWidget, QHBoxLayout, QVBoxLayout, QComboBox, QSpinBox, QDoubleSpinBox,
+    QGroupBox, QCheckBox, QPushButton, QProgressBar, QLabel, QSlider, QTextEdit
+)
+from PyQt6.QtCore import Qt, pyqtSignal
+
+from bioplausible.models.registry import MODEL_REGISTRY
+from bioplausible_ui.dashboard_helpers import update_hyperparams_generic, get_current_hyperparams_generic
+from bioplausible_ui.generation import count_parameters, format_parameter_count, UniversalGenerator
+from bioplausible_ui.themes import PLOT_COLORS
+from PyQt6.QtWidgets import QApplication
+
+try:
+    import pyqtgraph as pg
+    HAS_PYQTGRAPH = True
+except ImportError:
+    HAS_PYQTGRAPH = False
+
+class LMTab(QWidget):
+    """Language Modeling Tab."""
+
+    start_training_signal = pyqtSignal(str) # Mode ('lm')
+    stop_training_signal = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.model = None
+        self.generator = None
+        self._setup_ui()
+
+    def _create_control_group(self, title, controls):
+        from PyQt6.QtWidgets import QGridLayout
+        group = QGroupBox(title)
+        layout = QGridLayout(group)
+        for i, (label, widget) in enumerate(controls):
+            layout.addWidget(QLabel(label), i, 0)
+            layout.addWidget(widget, i, 1)
+        return group
+
+    def _create_plot_widget(self, title, ylabel, xlabel='Epoch', yrange=None):
+        plot_widget = pg.PlotWidget()
+        plot_widget.setBackground('#0a0a0f')
+        plot_widget.setLabel('left', ylabel, color=PLOT_COLORS.get(ylabel.lower().split()[0], '#ffffff'))
+        plot_widget.setLabel('bottom', xlabel)
+        plot_widget.showGrid(x=True, y=True, alpha=0.2)
+        if yrange:
+            plot_widget.setYRange(*yrange)
+        curve = plot_widget.plot(pen=pg.mkPen(PLOT_COLORS.get(ylabel.lower().split()[0], '#ffffff'), width=2))
+        return plot_widget, curve
+
+    def _setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setSpacing(15)
+
+        # Left panel: Controls
+        left_panel = QVBoxLayout()
+        layout.addLayout(left_panel, stretch=1)
+
+        # Model Selection
+        self.lm_model_combo = QComboBox()
+        lm_items = []
+        for spec in MODEL_REGISTRY:
+            if spec.task_compat is None or "lm" in spec.task_compat:
+                lm_items.append(f"{spec.name}")
+        self.lm_model_combo.addItems(lm_items)
+
+        self.lm_hidden_spin = QSpinBox()
+        self.lm_hidden_spin.setRange(64, 1024)
+        self.lm_hidden_spin.setValue(256)
+        self.lm_hidden_spin.setSingleStep(64)
+
+        self.lm_layers_spin = QSpinBox()
+        self.lm_layers_spin.setRange(1, 100)
+        self.lm_layers_spin.setValue(4)
+
+        self.lm_steps_spin = QSpinBox()
+        self.lm_steps_spin.setRange(5, 50)
+        self.lm_steps_spin.setValue(15)
+
+        model_controls = [
+            ("Architecture:", self.lm_model_combo),
+            ("Hidden Dim:", self.lm_hidden_spin),
+            ("Layers:", self.lm_layers_spin),
+            ("Eq Steps:", self.lm_steps_spin)
+        ]
+        model_group = self._create_control_group("🧠 Model", model_controls)
+        left_panel.addWidget(model_group)
+
+        # Dynamic Hyperparameters Group
+        self.lm_hyperparam_group = QGroupBox("⚙️ Model Hyperparameters")
+        from PyQt6.QtWidgets import QGridLayout
+        self.lm_hyperparam_layout = QGridLayout(self.lm_hyperparam_group)
+        self.lm_hyperparam_widgets = {}
+        left_panel.addWidget(self.lm_hyperparam_group)
+        self.lm_hyperparam_group.setVisible(False)
+
+        self.lm_model_combo.currentTextChanged.connect(self._update_lm_hyperparams)
+
+        # Dataset Selection
+        self.lm_dataset_combo = QComboBox()
+        self.lm_dataset_combo.addItems(["tiny_shakespeare", "wikitext-2", "ptb"])
+
+        self.lm_seqlen_spin = QSpinBox()
+        self.lm_seqlen_spin.setRange(32, 512)
+        self.lm_seqlen_spin.setValue(128)
+
+        self.lm_batch_spin = QSpinBox()
+        self.lm_batch_spin.setRange(8, 256)
+        self.lm_batch_spin.setValue(64)
+
+        data_controls = [
+            ("Dataset:", self.lm_dataset_combo),
+            ("Seq Length:", self.lm_seqlen_spin),
+            ("Batch Size:", self.lm_batch_spin)
+        ]
+        data_group = self._create_control_group("📚 Dataset", data_controls)
+        left_panel.addWidget(data_group)
+
+        # Training Settings
+        self.lm_epochs_spin = QSpinBox()
+        self.lm_epochs_spin.setRange(1, 500)
+        self.lm_epochs_spin.setValue(50)
+
+        self.lm_lr_spin = QDoubleSpinBox()
+        self.lm_lr_spin.setRange(0.0001, 0.1)
+        self.lm_lr_spin.setValue(0.001)
+        self.lm_lr_spin.setSingleStep(0.0001)
+        self.lm_lr_spin.setDecimals(4)
+
+        self.lm_compile_check = QCheckBox("torch.compile (2x speedup)")
+        self.lm_compile_check.setChecked(True)
+
+        self.lm_kernel_check = QCheckBox("O(1) Kernel Mode (GPU)")
+        self.lm_kernel_check.setToolTip("Use fused EqProp kernel for O(1) memory training")
+
+        self.lm_micro_check = QCheckBox("Live Dynamics Analysis")
+        self.lm_micro_check.setToolTip("Periodically analyze convergence dynamics during training")
+
+        train_controls = [
+            ("Epochs:", self.lm_epochs_spin),
+            ("Learning Rate:", self.lm_lr_spin),
+            ("", self.lm_compile_check),
+            ("", self.lm_kernel_check),
+            ("", self.lm_micro_check)
+        ]
+        train_group = self._create_control_group("⚙️ Training", train_controls)
+        left_panel.addWidget(train_group)
+
+        # Train/Stop Buttons
+        btn_layout = QHBoxLayout()
+        self.lm_train_btn = QPushButton("▶ Train")
+        self.lm_train_btn.setObjectName("trainButton")
+        self.lm_train_btn.clicked.connect(lambda: self.start_training_signal.emit('lm'))
+        btn_layout.addWidget(self.lm_train_btn)
+
+        self.lm_stop_btn = QPushButton("⏹ Stop")
+        self.lm_stop_btn.setObjectName("stopButton")
+        self.lm_stop_btn.setEnabled(False)
+        self.lm_stop_btn.clicked.connect(self.stop_training_signal.emit)
+        btn_layout.addWidget(self.lm_stop_btn)
+        left_panel.addLayout(btn_layout)
+
+        # Progress bar
+        self.lm_progress = QProgressBar()
+        self.lm_progress.setTextVisible(True)
+        self.lm_progress.setFormat("Epoch %v / %m")
+        left_panel.addWidget(self.lm_progress)
+
+        # Parameter count
+        self.lm_param_label = QLabel("Parameters: --")
+        self.lm_param_label.setStyleSheet("color: #00d4ff; font-weight: bold; padding: 5px;")
+        left_panel.addWidget(self.lm_param_label)
+        left_panel.addStretch()
+
+        # Right panel: Plots and Generation
+        right_panel = QVBoxLayout()
+        layout.addLayout(right_panel, stretch=2)
+
+        if HAS_PYQTGRAPH:
+            metrics_group = QGroupBox("📊 Training Metrics")
+            metrics_layout = QVBoxLayout(metrics_group)
+            self.lm_loss_plot, self.lm_loss_curve = self._create_plot_widget("Loss", "Loss")
+            metrics_layout.addWidget(self.lm_loss_plot)
+            self.lm_acc_plot, self.lm_acc_curve = self._create_plot_widget("Accuracy", "Accuracy", yrange=(0, 1.0))
+            metrics_layout.addWidget(self.lm_acc_plot)
+            self.lm_lip_plot, self.lm_lip_curve = self._create_plot_widget("Lipschitz L", "Lipschitz L")
+            self.lm_lip_plot.addLine(y=1.0, pen=pg.mkPen('r', width=1, style=Qt.PenStyle.DashLine))
+            metrics_layout.addWidget(self.lm_lip_plot)
+            right_panel.addWidget(metrics_group, stretch=2)
+        else:
+            no_plot_label = QLabel("Install pyqtgraph for live plots: pip install pyqtgraph")
+            no_plot_label.setStyleSheet("color: #808090; padding: 20px;")
+            right_panel.addWidget(no_plot_label)
+
+        # Generation panel
+        gen_group = QGroupBox("✨ Text Generation")
+        gen_layout = QVBoxLayout(gen_group)
+        gen_controls = QHBoxLayout()
+        gen_controls.addWidget(QLabel("Temperature:"))
+        self.temp_slider = QSlider(Qt.Orientation.Horizontal)
+        self.temp_slider.setRange(1, 20)
+        self.temp_slider.setValue(10)
+        gen_controls.addWidget(self.temp_slider)
+        self.temp_label = QLabel("1.0")
+        self.temp_label.setFixedWidth(40)
+        gen_controls.addWidget(self.temp_label)
+        self.temp_slider.valueChanged.connect(lambda v: self.temp_label.setText(f"{v/10:.1f}"))
+        gen_btn = QPushButton("Generate")
+        gen_btn.clicked.connect(self._generate_text)
+        gen_controls.addWidget(gen_btn)
+        gen_layout.addLayout(gen_controls)
+        self.gen_output = QTextEdit()
+        self.gen_output.setReadOnly(True)
+        self.gen_output.setPlaceholderText("Generated text will appear here...")
+        gen_layout.addWidget(self.gen_output)
+        right_panel.addWidget(gen_group, stretch=1)
+
+        # Weight Visualization
+        if HAS_PYQTGRAPH:
+            viz_group = QGroupBox("🎞️ Weight Matrices")
+            viz_layout = QVBoxLayout(viz_group)
+            self.lm_weight_widgets = []
+            self.lm_weight_labels = []
+            self.lm_weights_container = QWidget()
+            self.lm_weights_layout = QVBoxLayout(self.lm_weights_container)
+            viz_layout.addWidget(self.lm_weights_container)
+            right_panel.addWidget(viz_group)
+
+    def _update_lm_hyperparams(self, model_name):
+        update_hyperparams_generic(self, model_name, self.lm_hyperparam_layout, self.lm_hyperparam_widgets, self.lm_hyperparam_group)
+
+    def _generate_text(self):
+        """Generate text using the current model."""
+        if self.model is None:
+            self.gen_output.setText("⚠️ No model loaded. Start training to create a model.")
+            return
+
+        # Ensure generator exists
+        if self.generator is None or self.generator.model is not self.model:
+            try:
+                # Determine vocab size
+                vocab_size = 95
+                if hasattr(self.model, 'vocab_size'):
+                    vocab_size = self.model.vocab_size
+                elif hasattr(self.model, 'lm_head'):
+                    vocab_size = self.model.lm_head.out_features
+                elif hasattr(self.model, 'output_dim'):
+                    vocab_size = min(self.model.output_dim, 256)
+
+                device = next(self.model.parameters()).device
+                self.generator = UniversalGenerator(
+                    self.model,
+                    vocab_size=vocab_size,
+                    device=str(device)
+                )
+            except Exception as e:
+                self.gen_output.setText(f"❌ Failed to create generator: {e}")
+                return
+
+        temperature = self.temp_slider.value() / 10.0
+        prompt = "ROMEO:"
+        self.gen_output.setText(f"🎲 Generating from '{prompt}'...\n(May be gibberish if undertrained)")
+
+        # Force UI update
+        QApplication.processEvents()
+
+        try:
+            # Generate text
+            text = self.generator.generate(
+                prompt=prompt,
+                max_new_tokens=100,
+                temperature=temperature
+            )
+            self.gen_output.setText(f"📝 Generated:\n\n{text}")
+        except Exception as e:
+            self.gen_output.setText(f"❌ Generation failed: {str(e)}\n\nTip: Train for a few epochs first!")
+
+    def update_model_ref(self, model):
+        self.model = model
+        # Reset generator to ensure it uses new model
+        self.generator = None
+
+    def get_current_hyperparams(self):
+        return get_current_hyperparams_generic(self.lm_hyperparam_widgets)
