@@ -203,7 +203,12 @@ class EqPropModel(NEBCBase):
         x: torch.Tensor,
         steps: Optional[int] = None,
         return_trajectory: bool = False,
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
+        return_dynamics: bool = False,
+    ) -> Union[
+        torch.Tensor,
+        Tuple[torch.Tensor, List[torch.Tensor]],
+        Tuple[torch.Tensor, Dict[str, Any]],
+    ]:
         """
         Forward pass: iterate to equilibrium.
 
@@ -211,10 +216,11 @@ class EqPropModel(NEBCBase):
             x: Input tensor
             steps: Override number of iteration steps
             return_trajectory: If True, return all hidden states
+            return_dynamics: If True, return detailed convergence metrics
 
         Returns:
             Output logits
-            (optionally) trajectory of hidden states
+            (optionally) trajectory of hidden states or dynamics dict
         """
         steps = steps or self.max_steps
 
@@ -222,15 +228,32 @@ class EqPropModel(NEBCBase):
         h = self._initialize_hidden_state(x)
         x_transformed = self._transform_input(x)
 
-        if return_trajectory or self.gradient_method == "bptt":
-            # Standard unrolling (BPTT)
-            trajectory = [h] if return_trajectory else None
+        if return_trajectory or return_dynamics or self.gradient_method == "bptt":
+            # Standard unrolling (BPTT or Analysis)
+            trajectory = [h]
+            deltas = []
+
             for _ in range(steps):
-                h = self.forward_step(h, x_transformed)
+                h_new = self.forward_step(h, x_transformed)
+
+                if return_dynamics:
+                    # Compute change norm
+                    delta = (h_new - h).norm().item()
+                    deltas.append(delta)
+
+                h = h_new
                 if return_trajectory:
                     trajectory.append(h)
 
             out = self._output_projection(h)
+
+            if return_dynamics:
+                return out, {
+                    "trajectory": trajectory if return_trajectory else None,
+                    "deltas": deltas,
+                    "final_delta": deltas[-1] if deltas else 0.0
+                }
+
             if return_trajectory:
                 return out, trajectory
             return out
