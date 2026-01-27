@@ -1,11 +1,11 @@
 # TorEqProp Verification Results
 
-**Generated**: 2026-01-14 14:34:43
+**Generated**: 2026-01-14 14:53:27
 
 
 ## Executive Summary
 
-**Verification completed in 22.4 seconds.**
+**Verification completed in 0.1 seconds.**
 
 ### Overall Results
 
@@ -22,7 +22,7 @@
 
 | # | Track | Status | Score | Time |
 |---|-------|--------|-------|------|
-| 15 | PyTorch vs Kernel | ✅ | 100 | 22.4s |
+| 52 | NEBC Equilibrium Alignment | ✅ | 100 | 0.1s |
 
 
 **Seed**: 42 (deterministic)
@@ -32,36 +32,12 @@
 ---
 
 
-## Track 15: PyTorch vs Kernel
+## Track 52: NEBC Equilibrium Alignment
 
 
-✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 22.4s
+✅ **Status**: PASS | **Score**: 100.0/100 | **Time**: 0.1s
 
 🧪 **Evidence Level**: Smoke Test
 
-
-**Claim**: Pure NumPy kernel achieves true O(1) memory without autograd overhead.
-
-**Experiment**: Compare PyTorch (autograd) vs NumPy (contrastive Hebbian).
-
-| Implementation | Train Acc | Test Acc | Memory | Notes |
-|----------------|-----------|----------|--------|-------|
-| PyTorch (autograd) | 82.5% | 10.0% | 0.492 MB | Stores graph |
-| NumPy Kernel | 11.2% | 7.5% | 0.016 MB | O(1) state |
-
-**Memory Advantage**: Kernel uses **30× less activation memory**
-
-**How Kernel Works (True EqProp)**:
-1. Free phase: iterate to h* (no graph stored)
-2. Nudged phase: iterate to h_β
-3. Hebbian update: ΔW ∝ (h_nudged - h_free) / β
-
-**Key Insight**: No computational graph = no O(depth) memory overhead
-
-**Learning Status**: W_out gradients work correctly. W_rec/W_in gradients use reduced
-LR (0.1×) as the full contrastive Hebbian formula for recurrent weights needs further
-theoretical refinement. PRIMARY CLAIM (O(1) memory) is fully validated.
-
-**Hardware Ready**: This kernel maps directly to neuromorphic chips.
-
+EquilibriumAlignment runs train_step without error.
 

@@ -2,63 +2,79 @@ import torch
 import torch.nn as nn
 import torch.autograd as autograd
 from typing import Optional, List, Tuple, Dict, Union, Any
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from .nebc_base import NEBCBase
 
 
 class EquilibriumFunction(autograd.Function):
     """
     Implicit differentiation for Equilibrium Propagation models.
-    Allows O(1) memory training by computing gradients via fixed-point iteration
-    instead of unrolling the graph (BPTT).
+
+    Implements O(1) memory backpropagation using the equilibrium property:
+    dL/dtheta = dL/dh * dh/dtheta
+    where dh/dtheta = (I - J)^-1 * df/dtheta
+
+    The backward pass solves for the adjoint state delta:
+    delta = (I - J^T)^-1 * dL/dh
+    via fixed-point iteration:
+    delta_{t+1} = J^T * delta_t + dL/dh
     """
 
     @staticmethod
-    def forward(ctx, model, x_transformed, h_init, *params):
+    def forward(
+        ctx: Any,
+        model: nn.Module,
+        x_transformed: torch.Tensor,
+        h_init: torch.Tensor,
+        *params: torch.Tensor
+    ) -> torch.Tensor:
         ctx.model = model
 
         # 1. Find fixed point (no gradient tracking needed for the loop itself)
+        # We assume h_init is close to the fixed point if we are continuing from previous state,
+        # or we iterate enough steps to converge.
         with torch.no_grad():
             h = h_init
             for _ in range(model.max_steps):
                 h = model.forward_step(h, x_transformed)
 
         # Save tensors for backward
+        # Note: We must save params to ensure autograd knows they participate in the graph
         ctx.save_for_backward(h, x_transformed, *params)
         return h
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx: Any, grad_output: torch.Tensor) -> Tuple[Optional[torch.Tensor], ...]:
         h_star, x_transformed, *params = ctx.saved_tensors
         model = ctx.model
 
         # Capture training state
         was_training = model.training
-        # Set to eval to prevent buffer updates (e.g. Spectral Norm) during backward
+        # Set to eval to prevent buffer updates (e.g. Spectral Norm) during backward fixed-point iteration
+        # This is critical because Spectral Norm updates 'u' and 'v' buffers in .train() mode,
+        # which would cause in-place modification errors or incorrect gradients during the backward loop.
         model.eval()
 
         try:
             # 2. Compute adjoint state (delta) via fixed-point iteration
-            # delta = VJP(f, h*, delta) + grad_output
-            # This solves delta = (I - J)^(-T) @ grad_output
-
+            # Initial guess for delta is dL/dh (grad_output)
             delta = grad_output.clone()
 
-            # Use detached X for the VJP loop to avoid any graph entanglement
+            # Use detached X for the VJP loop to avoid any graph entanglement with input gradients yet
             x_transformed_detached = x_transformed.detach()
 
             # Iterate to equilibrium for the backward pass (solving for delta)
+            # delta_{t+1} = (df/dh)^T * delta_t + grad_output
             for _ in range(model.max_steps):
                 with torch.enable_grad():
-                    # Need to create a new leaf for h_star at each step for local VJP calc
-                    # And x_transformed is detached constant.
+                    # Create a new leaf for h_star at each step for local VJP calc
                     h_star_loop = h_star.detach().requires_grad_(True)
+
+                    # Compute f(h, x)
                     f_h = model.forward_step(h_star_loop, x_transformed_detached)
 
-                    # VJP: v = grad(f(h), h) @ delta
-                    # delta must be detached to stop graph from growing across iterations
+                    # VJP: v = (df/dh)^T @ delta
                     # retain_graph=False ensures we free the f_h graph immediately.
-
                     vjp = autograd.grad(
                         f_h,
                         h_star_loop,
@@ -69,39 +85,41 @@ class EquilibriumFunction(autograd.Function):
                     # Update delta
                     delta = vjp + grad_output
 
-            # 3. Compute gradients for parameters and input
-            # dL/d(params) = grad(f(h*), params) @ delta
-            # dL/dx = grad(f(h*), x) @ delta
-
+            # 3. Compute gradients for parameters and input using the converged delta
             delta = delta.detach()
 
             with torch.enable_grad():
                 h_star_detached = h_star.detach()
 
-                # A. Compute gradients for parameters (W_rec, etc.)
-                # CRITICAL: Detach x_transformed to prevent tracing back to W_in or other upstream params.
-                # If we don't detach, autograd will trace d(f_h)/d(x) * d(x)/d(params) and return it as d(params),
+                # A. Compute gradients for parameters
+                # dL/dtheta = (df/dtheta)^T @ delta
+
+                # CRITICAL: Detach x_transformed here.
+                # If we don't detach, autograd will trace d(f_h)/d(x) * d(x)/d(theta)
                 # effectively double-counting the gradient for params that affect x_transformed.
                 x_detached = x_transformed.detach()
 
-                # Check if params need grad
                 params_with_grad = [p for p in params if p.requires_grad]
+                grads_params_list = [None] * len(params)
 
                 if params_with_grad:
+                    # Re-run forward step to build graph from params to f_h
                     f_h_params = model.forward_step(h_star_detached, x_detached)
-                    grads_params = autograd.grad(
+
+                    computed_grads = autograd.grad(
                         f_h_params,
                         params,
                         grad_outputs=delta,
                         allow_unused=True,
                         retain_graph=False
                     )
-                else:
-                    grads_params = [None] * len(params)
+                    grads_params_list = list(computed_grads)
 
                 # B. Compute gradients for input (x_transformed)
+                # dL/dx = (df/dx)^T @ delta
+                grad_x = None
                 if x_transformed.requires_grad:
-                     # We use the attached x_transformed here
+                     # Use attached x_transformed to get gradients w.r.t input
                      f_h_x = model.forward_step(h_star_detached, x_transformed)
                      grad_x = autograd.grad(
                          f_h_x,
@@ -109,14 +127,15 @@ class EquilibriumFunction(autograd.Function):
                          grad_outputs=delta,
                          retain_graph=False
                      )[0]
-                else:
-                    grad_x = None
 
         finally:
-            # Restore training state
+            # Restore original training state
             model.train(was_training)
 
-        return (None, grad_x, None, *grads_params)
+        # Return gradients corresponding to inputs of forward:
+        # ctx, model, x_transformed, h_init, *params
+        # model and h_init don't get gradients
+        return (None, grad_x, None, *grads_params_list)
 
 
 class EqPropModel(NEBCBase):
