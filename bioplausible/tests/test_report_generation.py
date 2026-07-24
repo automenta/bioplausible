@@ -83,7 +83,7 @@ class TestReportGeneration(unittest.TestCase):
             "INSERT INTO trial_user_attributes VALUES (1, 'task_name', '\"mnist\"')"
         )
         cursor.execute(
-            "INSERT INTO trial_user_attributes VALUES (1, 'tier', \"'standard'\")"
+            "INSERT INTO trial_user_attributes VALUES (1, 'tier', '\"standard\"')"
         )
         cursor.execute("INSERT INTO hyperopt_logs VALUES (1, 10000, 0.5)")
 
@@ -139,10 +139,10 @@ class TestReportGeneration(unittest.TestCase):
 
         self.conn.commit()
 
-    @patch("bioplausible.scientist.report.composer.ResultVisualizer")
-    @patch("bioplausible.scientist.report.composer.MLAnalyzer")
-    @patch("bioplausible.scientist.report.composer.BayesianRanker")
-    @patch("bioplausible.scientist.report.composer.LatexGenerator")
+    @patch("bioplausible.execution.report.composer.ResultVisualizer")
+    @patch("bioplausible.execution.report.composer.MLAnalyzer")
+    @patch("bioplausible.execution.report.composer.BayesianRanker")
+    @patch("bioplausible.execution.report.composer.LatexGenerator")
     def test_report_generation_flow(self, mock_latex, mock_ranker, mock_ml, mock_viz):
         """Test the end-to-end report generation flow."""
 

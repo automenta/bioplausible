@@ -409,7 +409,6 @@ class DistributedEquiTile:
             self.mp_trainer = MixedPrecisionTrainer(
                 model, dtype=self.config.mixed_precision_dtype
             )
-            self.mp_trainer.cast_model()
 
         # Set up tile growth/pruning
         self.growth_config = TileGrowthConfig()
@@ -531,12 +530,7 @@ class DistributedEquiTile:
         if self.mp_trainer is None:
             return self.model.train_step(x, y)
 
-        # self.model._ensure_local_optimizers() # Removed: Method does not exist
-        self.mp_trainer.scaler.unscale_(self.model._optim_io)
-        self.model._optim_io.zero_grad()
-
         with self.mp_trainer.autocast():
-            # Run forward pass in mixed precision
             stats = self.model.train_step(x, y)
 
         return stats

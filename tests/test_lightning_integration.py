@@ -4,6 +4,7 @@ Tests for PyTorch Lightning integration.
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 import torch
 
 from bioplausible.lightning_.callbacks import (
@@ -12,6 +13,18 @@ from bioplausible.lightning_.callbacks import (
 )
 from bioplausible.lightning_.module import BioLightningModule
 from bioplausible.lightning_.strategies import BioPrecisionMixin, build_trainer
+
+
+# pytorch_lightning.Trainer pays a one-time framework-init cost (~1s, GPU/CUDA
+# detection) on its first construction. Charge it to session setup rather than
+# to whichever test happens to build a Trainer first, so individual call
+# durations reflect only the work under test.
+@pytest.fixture(scope="module", autouse=True)
+def _warm_pl_trainer():
+    from pytorch_lightning import Trainer
+
+    Trainer(max_epochs=1, accelerator="cpu", devices=1, logger=None)
+    yield
 
 
 class TestBioLightningModule:
@@ -102,16 +115,18 @@ class TestBuildTrainer:
         """Test basic trainer construction."""
         trainer = build_trainer(
             optimizer_name="adam",
-            max_epochs=5,
+            max_epochs=1,
+            enable_progress_bar=False,
         )
-        assert trainer.max_epochs == 5
+        assert trainer.max_epochs == 1
         assert trainer.precision == "bf16-mixed"
 
     def test_build_trainer_bio_precision(self):
         """Test trainer with bio-plausible optimizer gets FP32."""
         trainer = build_trainer(
             optimizer_name="eqprop",
-            max_epochs=5,
+            max_epochs=1,
+            enable_progress_bar=False,
         )
         assert trainer.precision == "32-true"
 
@@ -373,7 +388,7 @@ class TestPLTrialIntegration:
                 result = run_pl_trial(
                     model_name="backprop_mlp",
                     optimizer_name="adam",
-                    config={"lr": 0.001, "hidden_dim": 128, "epochs": 3},
+                    config={"lr": 0.001, "hidden_dim": 128, "epochs": 1},
                     train_loader=mock_loader,
                     val_loader=mock_loader,
                     quick_mode=True,
@@ -405,7 +420,7 @@ class TestPLTrialIntegration:
                 result = run_pl_trial(
                     model_name="backprop_mlp",
                     optimizer_name="adam",
-                    config={"lr": 0.001, "hidden_dim": 128, "epochs": 3},
+                    config={"lr": 0.001, "hidden_dim": 128, "epochs": 1},
                     train_loader=mock_loader,
                     val_loader=mock_loader,
                     quick_mode=True,

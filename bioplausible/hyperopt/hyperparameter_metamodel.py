@@ -337,6 +337,17 @@ class HyperparameterMetamodel:
             if spec.scope in applicable_scopes:
                 search_space[spec.name] = spec
 
+        # Add transformer-specific params when model_type indicates a transformer
+        model_type = getattr(model_spec, "model_type", "") or ""
+        if "transformer" in model_type.lower():
+            applicable_scopes.add(HyperparamScope.TRANSFORMER)
+            for spec in self.all_specs:
+                if (
+                    spec.scope == HyperparamScope.TRANSFORMER
+                    and spec.name not in search_space
+                ):
+                    search_space[spec.name] = spec
+
         # Apply algorithm-specific activation constraints
         # Example: Holomorphic EqProp REQUIRES tanh (holomorphic)
         if "holomorphic" in model_spec.name.lower():

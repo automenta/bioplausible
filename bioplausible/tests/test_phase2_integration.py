@@ -31,7 +31,7 @@ class TestPhase2Integration(unittest.TestCase):
         storage = HyperoptStorage(str(self.db_path))
 
         # Create Trial
-        model_name = "Backprop Baseline"
+        model_name = "backprop_mlp"
         config = {
             "lr": 0.01,
             "hidden_dim": 32,

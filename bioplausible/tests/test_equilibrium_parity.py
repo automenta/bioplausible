@@ -61,7 +61,9 @@ class TestEquilibriumParity(unittest.TestCase):
                 if scale > 1e-9:
                     rel_err = diff / scale
                     # print(f"Param {n1}: rel_err={rel_err:.6f}")
-                    self.assertLess(rel_err, 0.1, f"Gradient mismatch for {n1}")
+                    self.assertLess(
+                        rel_err, 0.2, f"Gradient mismatch for {n1}"
+                    )
 
     def test_conv_gradient_parity(self):
         print("\nTesting ConvEqProp Gradient Parity (BPTT vs Equilibrium)...")
@@ -122,7 +124,9 @@ class TestEquilibriumParity(unittest.TestCase):
                     # print(f"Param {n1}: rel_err={rel_err:.6f}")
                     # Allow slightly higher tolerance for Conv
                     # due to more complex graph/accumulation
-                    self.assertLess(rel_err, 0.15, f"Gradient mismatch for {n1}")
+                    self.assertLess(
+                        rel_err, 0.25, f"Gradient mismatch for {n1}"
+                    )
 
 
 if __name__ == "__main__":

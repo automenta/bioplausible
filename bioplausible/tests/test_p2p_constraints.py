@@ -37,8 +37,7 @@ class TestP2PConstraints(unittest.TestCase):
         self.assertLessEqual(sample["steps"], 20)
 
     @patch("bioplausible.p2p.evolution.DHTNode")
-    @patch("bioplausible.p2p.evolution.Worker")
-    def test_p2p_evolution_settings(self, mock_worker, mock_dht):
+    def test_p2p_evolution_settings(self, mock_dht):
         # Test Quick Mode
         evo = P2PEvolution(discovery_mode="quick")
 

@@ -13,8 +13,18 @@ class TestP2PIntegration(unittest.TestCase):
         cls.coord_port = 8001
         cls.coord = Coordinator(host="127.0.0.1", port=cls.coord_port)
         cls.coord.start()
-        # Give it a moment to bind
-        time.sleep(1)
+        # Poll /health until the server is bound instead of a fixed sleep:
+        # deterministic and typically returns in a few milliseconds.
+        coord_url = f"http://127.0.0.1:{cls.coord_port}"
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            try:
+                resp = requests.get(f"{coord_url}/health", timeout=0.5)
+                if resp.status_code == 200:
+                    break
+            except requests.exceptions.RequestException:
+                pass
+            time.sleep(0.01)
 
     @classmethod
     def tearDownClass(cls):
@@ -51,7 +61,7 @@ class TestP2PIntegration(unittest.TestCase):
         timeout = 10
         start = time.time()
         while "worker_1" not in self.coord.nodes and time.time() - start < timeout:
-            time.sleep(0.5)
+            time.sleep(0.02)
 
         timeout = 10
         start = time.time()
@@ -61,7 +71,7 @@ class TestP2PIntegration(unittest.TestCase):
             if worker.jobs_done > 0:
                 job_done = True
                 break
-            time.sleep(0.5)
+            time.sleep(0.02)
 
         worker.stop()
         Worker._run_job = original_run_job

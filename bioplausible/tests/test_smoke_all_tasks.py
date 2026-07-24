@@ -1,9 +1,12 @@
 import unittest
 
+import pytest
 import torch
 from torch import nn
 
 from bioplausible.hyperopt.tasks import create_task
+
+_SKIP_ON_DOWNLOAD_KEYWORDS = ("download", "socket", "timeout", "url", "ssl")
 
 
 class TestSmokeAllTasks(unittest.TestCase):
@@ -11,10 +14,11 @@ class TestSmokeAllTasks(unittest.TestCase):
         print(f"\n>>> Smoke Testing Task: {task_name} ({task_type})")
         try:
             task = create_task(task_name, device="cpu", quick_mode=True)
-            # Mock download/loading if possible?
-            # For now, we rely on the environment having access or fast download.
             task.setup()
         except Exception as e:
+            msg = str(e).lower()
+            if any(k in msg for k in _SKIP_ON_DOWNLOAD_KEYWORDS):
+                pytest.skip(f"Skipping {task_name}: dataset unavailable")
             self.fail(f"{task_name} setup failed: {e}")
 
         # Basic Check

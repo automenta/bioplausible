@@ -60,6 +60,7 @@ class _TaskTrainer:
 
     def train_epoch(self) -> dict[str, float]:
         """Run one epoch of training and return aggregated metrics."""
+        import time
         from collections import defaultdict
 
         import numpy as np
@@ -67,6 +68,7 @@ class _TaskTrainer:
         from bioplausible.core.energy import EnergyTracker
 
         agg = defaultdict(list)
+        epoch_t0 = time.time()
         for _ in range(self.batches_per_epoch):
             x, y = self.task.get_batch("train")
             x = x.to(self.device)
@@ -143,6 +145,8 @@ class _TaskTrainer:
             self.model.train()
         except Exception:
             pass
+
+        metrics["time"] = time.time() - epoch_t0
 
         return metrics
 
