@@ -140,10 +140,11 @@ class TestEvaluateModelOnTask:
             name="test_mnist",
             dataset_name="mnist",
             batch_size=64,
+            num_workers=0,
         )
         task.setup()
 
-        result = evaluate_model_on_task(model, task, max_batches=2)
+        result = evaluate_model_on_task(model, task, max_batches=1)
         assert result.model_name == "SimpleModel"
         assert "accuracy" in result.metrics
         assert result.params_count > 0

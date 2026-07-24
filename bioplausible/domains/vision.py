@@ -29,6 +29,7 @@ class VisionTask(DomainTask):
         train_transform=None,
         val_transform=None,
         download: bool = True,
+        num_workers: int = 2,
         **kwargs,
     ):
         super().__init__(name, **kwargs)
@@ -37,6 +38,7 @@ class VisionTask(DomainTask):
         self.train_transform = train_transform
         self.val_transform = val_transform
         self.download = download
+        self.num_workers = num_workers
 
     @property
     def domain_type(self) -> DomainType:
@@ -135,10 +137,16 @@ class VisionTask(DomainTask):
             raise ValueError(f"Unknown dataset: {self.dataset_name}")
 
         self._train_loader = DataLoader(
-            train_ds, batch_size=self.batch_size, shuffle=True, num_workers=2
+            train_ds,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
         )
         self._val_loader = DataLoader(
-            val_ds, batch_size=self.batch_size, shuffle=False, num_workers=2
+            val_ds,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
         )
         self._test_loader = self._val_loader
         self._setup_done = True

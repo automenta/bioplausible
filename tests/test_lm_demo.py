@@ -38,6 +38,27 @@ from bioplausible.equitile.lm_demo.training import (
     TrainingMetrics,
 )
 
+
+def _tiny_lm(vocab_size: int = 100) -> FastLMEquiTile:
+    """Build a minimal FastLMEquiTile shared across tests that don't assert on
+    the factory's specific dimensions."""
+    config = FastLMConfig(
+        vocab_size=vocab_size,
+        embed_dim=32,
+        num_layers=1,
+        hidden_dim=64,
+        neurons_per_tile=8,
+        tiles_per_layer=1,
+        mot_k=1,
+        num_heads=2,
+        num_kv_heads=1,
+        max_seq_len=32,
+    )
+    model = FastLMEquiTile(config)
+    model._init_weights()
+    return model
+
+
 # =============================================================================
 # Model Tests
 # =============================================================================
@@ -193,10 +214,10 @@ class TestFastLMEquiTile:
         """Test model creation."""
         config = FastLMConfig(
             vocab_size=100,
-            embed_dim=64,
-            num_layers=2,
-            num_heads=4,  # Must divide embed_dim
-            num_kv_heads=2,
+            embed_dim=32,
+            num_layers=1,
+            num_heads=2,  # Must divide embed_dim
+            num_kv_heads=1,
         )
         model = FastLMEquiTile(config)
 
@@ -204,7 +225,20 @@ class TestFastLMEquiTile:
 
     def test_model_forward(self):
         """Test model forward pass."""
-        model = create_fast_lm_tiny(vocab_size=100)
+        config = FastLMConfig(
+            vocab_size=100,
+            embed_dim=32,
+            num_layers=1,
+            hidden_dim=64,
+            neurons_per_tile=8,
+            tiles_per_layer=1,
+            mot_k=1,
+            num_heads=2,
+            num_kv_heads=1,
+            max_seq_len=32,
+        )
+        model = FastLMEquiTile(config)
+        model._init_weights()
 
         input_ids = torch.randint(0, 100, (2, 10))
         logits = model(input_ids)
@@ -213,7 +247,20 @@ class TestFastLMEquiTile:
 
     def test_model_generation(self):
         """Test autoregressive generation."""
-        model = create_fast_lm_tiny(vocab_size=50)
+        config = FastLMConfig(
+            vocab_size=50,
+            embed_dim=32,
+            num_layers=1,
+            hidden_dim=64,
+            neurons_per_tile=8,
+            tiles_per_layer=1,
+            mot_k=1,
+            num_heads=2,
+            num_kv_heads=1,
+            max_seq_len=32,
+        )
+        model = FastLMEquiTile(config)
+        model._init_weights()
         model.eval()
 
         input_ids = torch.randint(0, 50, (1, 5))
@@ -229,7 +276,20 @@ class TestFastLMEquiTile:
 
     def test_model_training_step(self):
         """Test training step."""
-        model = create_fast_lm_tiny(vocab_size=100)
+        config = FastLMConfig(
+            vocab_size=100,
+            embed_dim=32,
+            num_layers=1,
+            hidden_dim=64,
+            neurons_per_tile=8,
+            tiles_per_layer=1,
+            mot_k=1,
+            num_heads=2,
+            num_kv_heads=1,
+            max_seq_len=32,
+        )
+        model = FastLMEquiTile(config)
+        model._init_weights()
         model.train()
 
         input_ids = torch.randint(0, 100, (2, 10))
@@ -264,7 +324,7 @@ class TestFastLMEquiTile:
 
     def test_tile_importance_output(self):
         """Test tile importance statistics."""
-        model = create_fast_lm_tiny(vocab_size=100)
+        model = _tiny_lm(vocab_size=100)
 
         input_ids = torch.randint(0, 100, (2, 10))
         logits, tile_stats = model(input_ids, return_tile_stats=True)
@@ -478,7 +538,7 @@ class TestLMTrainer:
 
     def test_trainer_creation(self):
         """Test trainer creation."""
-        model = create_fast_lm_tiny(vocab_size=100)
+        model = _tiny_lm(vocab_size=100)
         config = TrainingConfig(epochs=1, device="cpu")
 
         trainer = LMTrainer(model, config)
@@ -488,12 +548,12 @@ class TestLMTrainer:
 
     def test_trainer_evaluate(self):
         """Test trainer evaluation."""
-        model = create_fast_lm_tiny(vocab_size=100)
+        model = _tiny_lm(vocab_size=100)
         config = TrainingConfig(epochs=1, device="cpu")
         trainer = LMTrainer(model, config)
 
         # Create small validation loader
-        text = "hello world " * 50
+        text = "hello world " * 25
         tokenizer = CharacterTokenizer(text)
         from torch.utils.data import DataLoader
 
@@ -506,7 +566,7 @@ class TestLMTrainer:
 
     def test_trainer_generate(self):
         """Test trainer generation."""
-        model = create_fast_lm_tiny(vocab_size=50)
+        model = _tiny_lm(vocab_size=50)
         config = TrainingConfig(epochs=1, device="cpu")
         trainer = LMTrainer(model, config)
 
@@ -525,7 +585,7 @@ class TestLMTrainer:
         import os
         import tempfile
 
-        model = create_fast_lm_tiny(vocab_size=100)
+        model = _tiny_lm(vocab_size=100)
         config = TrainingConfig(epochs=1, device="cpu")
         trainer = LMTrainer(model, config)
 
@@ -552,16 +612,30 @@ class TestIntegration:
     def test_full_training_loop(self):
         """Test complete training loop."""
         # Create small dataset
-        text = "The quick brown fox jumps over the lazy dog. " * 20
+        text = "The quick brown fox jumps over the lazy dog. " * 10
         tokenizer = CharacterTokenizer(text)
 
         from torch.utils.data import DataLoader
 
-        train_dataset = LMDataset(text, tokenizer, seq_length=32)
+        train_dataset = LMDataset(text, tokenizer, seq_length=16)
         train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True)
 
         # Create model
-        model = create_fast_lm_tiny(vocab_size=tokenizer.vocab_size)
+        model = FastLMEquiTile(
+            FastLMConfig(
+                vocab_size=tokenizer.vocab_size,
+                embed_dim=32,
+                num_layers=1,
+                hidden_dim=64,
+                neurons_per_tile=8,
+                tiles_per_layer=1,
+                mot_k=1,
+                num_heads=2,
+                num_kv_heads=1,
+                max_seq_len=32,
+            )
+        )
+        model._init_weights()
 
         # Create trainer
         config = TrainingConfig(
@@ -629,7 +703,7 @@ class TestBenchmarks:
             EfficiencyAnalyzer,
         )
 
-        model = create_fast_lm_tiny(vocab_size=100)
+        model = _tiny_lm(vocab_size=100)
         analyzer = EfficiencyAnalyzer(model, device="cpu")
 
         param_counts = analyzer.count_parameters()

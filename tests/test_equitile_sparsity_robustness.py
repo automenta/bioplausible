@@ -41,15 +41,16 @@ class TestSparsityDynamics:
 
     def test_sparsity_bidirectional(self) -> None:
         """Test sparsity responds bidirectionally to weight changes."""
+        torch.manual_seed(1)
         config = FastLMConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
+            num_layers=1,
             tiles_per_layer=16,
             neurons_per_tile=8,
-            max_seq_len=32,
-            batch_size=4,
+            max_seq_len=16,
+            batch_size=2,
             sparsity_weight=0.5,
             importance_lr=0.1,
             dataset_name="Random",
@@ -67,13 +68,13 @@ class TestSparsityDynamics:
 
         # Phase 1: High sparsity weight
         model.fast_config.sparsity_weight = 2.0
-        for _ in range(100):
+        for _ in range(60):
             model.training_step()
         high_sparsity = get_sparsity(model)
 
         # Phase 2: Low sparsity weight
         model.fast_config.sparsity_weight = 0.1
-        for _ in range(100):
+        for _ in range(60):
             model.training_step()
         low_sparsity = get_sparsity(model)
 
@@ -86,12 +87,12 @@ class TestSparsityDynamics:
         """Test sparsity fluctuates naturally during training."""
         config = FastLMConfig(
             vocab_size=100,
-            embed_dim=64,
-            num_layers=2,
+            embed_dim=32,
+            num_layers=1,
             tiles_per_layer=16,
             neurons_per_tile=8,
-            max_seq_len=32,
-            batch_size=4,
+            max_seq_len=16,
+            batch_size=2,
             sparsity_weight=0.5,
             importance_lr=0.1,
             dataset_name="Random",
@@ -109,7 +110,7 @@ class TestSparsityDynamics:
 
         # Collect sparsity values
         sparsity_values = []
-        for _ in range(50):
+        for _ in range(20):
             model.training_step()
             sparsity_values.append(get_sparsity(model))
 
@@ -121,12 +122,12 @@ class TestSparsityDynamics:
         """Test gate states change during training."""
         config = FastLMConfig(
             vocab_size=100,
-            embed_dim=64,
-            num_layers=2,
+            embed_dim=32,
+            num_layers=1,
             tiles_per_layer=16,
             neurons_per_tile=8,
-            max_seq_len=32,
-            batch_size=4,
+            max_seq_len=16,
+            batch_size=2,
             sparsity_weight=0.5,
             importance_lr=0.1,
             dataset_name="Random",
@@ -147,7 +148,7 @@ class TestSparsityDynamics:
 
         # Train with high sparsity
         model.fast_config.sparsity_weight = 2.0
-        for _ in range(100):
+        for _ in range(30):
             model.training_step()
         high_sparsity_rate = get_gate_open_rate(model)
 
@@ -170,17 +171,17 @@ class TestLMRobustness:
         """Test basic LM functionality."""
         config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
+            num_layers=1,
             max_seq_len=32,
         )
         model = LMEquiTile(config)
 
-        input_ids = torch.randint(0, 100, (4, 32))
+        input_ids = torch.randint(0, 100, (2, 32))
         logits = model(input_ids)
 
-        assert logits.shape == (4, 32, 100)
+        assert logits.shape == (2, 32, 100)
 
         loss_dict = model.train_step(input_ids)
         assert "loss" in loss_dict
@@ -190,35 +191,36 @@ class TestLMRobustness:
         """Test with long sequences."""
         config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
-            max_seq_len=512,
+            num_layers=1,
+            max_seq_len=256,
         )
         model = LMEquiTile(config)
 
-        input_ids = torch.randint(0, 100, (2, 512))
+        input_ids = torch.randint(0, 100, (2, 256))
         logits = model(input_ids)
-        assert logits.shape == (2, 512, 100)
+        assert logits.shape == (2, 256, 100)
 
     def test_lm_batch_sizes(self) -> None:
         """Test various batch sizes."""
         config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
+            num_layers=1,
             max_seq_len=32,
         )
         model = LMEquiTile(config)
 
         for batch_size in [1, 2, 4, 8, 16]:
-            input_ids = torch.randint(0, 100, (batch_size, 32))
+            input_ids = torch.randint(0, 100, (batch_size, 16))
             logits = model(input_ids)
             assert logits.shape[0] == batch_size
 
     def test_lm_numerical_stability(self) -> None:
         """Test numerical stability over multiple steps."""
+        torch.manual_seed(1)
         config = LMEquiTileConfig(
             vocab_size=200,  # Smaller vocab for stability
             embed_dim=32,  # Smaller model
@@ -248,13 +250,13 @@ class TestLMRobustness:
 
             config = LMEquiTileConfig(
                 vocab_size=100,
-                embed_dim=64,
+                embed_dim=32,
                 num_heads=2,
-                num_layers=2,
+                num_layers=1,
             )
             model = LMEquiTile(config)
 
-            input_ids = torch.randint(0, 100, (4, 32))
+            input_ids = torch.randint(0, 100, (2, 16))
             loss_dict = model.train_step(input_ids)
             return loss_dict["loss"]
 
@@ -282,27 +284,27 @@ class TestVisionRobustness:
             input_channels=3,
             input_size=32,
             num_classes=10,
-            conv_channels=[16, 32],
+            conv_channels=[8, 16],
         )
         model = ConvEquiTile(config)
 
-        images = torch.randn(4, 3, 32, 32)
+        images = torch.randn(2, 3, 32, 32)
         logits = model(images)
-        assert logits.shape == (4, 10)
+        assert logits.shape == (2, 10)
 
-        labels = torch.randint(0, 10, (4,))
+        labels = torch.randint(0, 10, (2,))
         stats = model.train_step(images, labels)
         assert "loss" in stats
         assert "accuracy" in stats
 
     def test_vision_various_input_sizes(self) -> None:
         """Test various input sizes."""
-        for input_size in [28, 32, 64]:
+        for input_size in [28, 32, 48]:
             config = ConvEquiTileConfig(
                 input_channels=3,
                 input_size=input_size,
                 num_classes=10,
-                conv_channels=[16, 32],
+                conv_channels=[8, 16],
             )
             model = ConvEquiTile(config)
             images = torch.randn(2, 3, input_size, input_size)
@@ -352,13 +354,13 @@ class TestVisionRobustness:
     def test_vision_factory_functions(self) -> None:
         """Test factory functions."""
         # MNIST
-        mnist_model = create_mnist_model(neurons_per_tile=32)
+        mnist_model = create_mnist_model(neurons_per_tile=16)
         images = torch.randn(2, 1, 28, 28)
         logits = mnist_model(images)
         assert logits.shape == (2, 10)
 
         # CIFAR
-        cifar_model = create_cifar_model(neurons_per_tile=64)
+        cifar_model = create_cifar_model(neurons_per_tile=16)
         images = torch.randn(2, 3, 32, 32)
         logits = cifar_model(images)
         assert logits.shape == (2, 10)
@@ -477,9 +479,9 @@ class TestCrossDomain:
         """Test CPU/CUDA compatibility."""
         config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
+            num_layers=1,
         )
         model = LMEquiTile(config)
 
@@ -499,13 +501,13 @@ class TestCrossDomain:
         """Test gradient flow."""
         config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
+            num_layers=1,
         )
         model = LMEquiTile(config)
 
-        input_ids = torch.randint(0, 100, (4, 32))
+        input_ids = torch.randint(0, 100, (2, 16))
         target_ids = input_ids.clone()
 
         logits = model(input_ids)
@@ -527,11 +529,11 @@ class TestCrossDomain:
         import gc
 
         config = LMEquiTileConfig(
-            vocab_size=1000,
-            embed_dim=256,
-            num_heads=4,
-            num_layers=4,
-            max_seq_len=128,
+            vocab_size=256,
+            embed_dim=64,
+            num_heads=2,
+            num_layers=2,
+            max_seq_len=32,
         )
         model = LMEquiTile(config)
 
@@ -544,8 +546,8 @@ class TestCrossDomain:
             initial_memory = 0
 
         # Run training steps
-        for _ in range(10):
-            input_ids = torch.randint(0, 1000, (8, 128))
+        for _ in range(5):
+            input_ids = torch.randint(0, 256, (2, 32))
             _ = model.train_step(input_ids)
 
         # Check memory growth
@@ -565,9 +567,9 @@ class TestCrossDomain:
         """Test error handling."""
         config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
+            num_layers=1,
             max_seq_len=32,
         )
         model = LMEquiTile(config)

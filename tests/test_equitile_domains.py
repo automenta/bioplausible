@@ -72,7 +72,10 @@ class TestVision:
             input_channels=1,
             input_size=28,
             num_classes=10,
-            conv_channels=[16, 32],
+            conv_channels=[4, 8],
+            neurons_per_tile=16,
+            tiles_per_layer=1,
+            num_fc_layers=1,
         )
         model = ConvEquiTile(config)
         model.eval()
@@ -91,7 +94,10 @@ class TestVision:
             input_channels=1,
             input_size=28,
             num_classes=10,
-            conv_channels=[16, 32],
+            conv_channels=[4, 8],
+            neurons_per_tile=16,
+            tiles_per_layer=1,
+            num_fc_layers=1,
         )
         model = ConvEquiTile(config)
 
@@ -172,10 +178,10 @@ class TestLanguage:
         """Test LMEquiTile creation."""
         config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
-            max_seq_len=32,
+            num_layers=1,
+            max_seq_len=16,
         )
         model = LMEquiTile(config)
 
@@ -186,10 +192,10 @@ class TestLanguage:
         """Test LMEquiTile forward pass."""
         config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
-            max_seq_len=32,
+            num_layers=1,
+            max_seq_len=16,
         )
         model = LMEquiTile(config)
         model.eval()
@@ -206,10 +212,10 @@ class TestLanguage:
         """Test LMEquiTile training step."""
         config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
-            max_seq_len=32,
+            num_layers=1,
+            max_seq_len=16,
         )
         model = LMEquiTile(config)
 
@@ -252,10 +258,10 @@ class TestLanguage:
         """Test LMEquiTile generation."""
         config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
-            max_seq_len=32,
+            num_layers=1,
+            max_seq_len=16,
         )
         model = LMEquiTile(config)
         model.eval()
@@ -500,7 +506,10 @@ class TestDomainIntegration:
             input_channels=1,
             input_size=28,
             num_classes=10,
-            conv_channels=[16, 32],
+            conv_channels=[4, 8],
+            neurons_per_tile=16,
+            tiles_per_layer=1,
+            num_fc_layers=1,
         )
         vision_model = ConvEquiTile(vision_config)
 
@@ -532,15 +541,16 @@ class TestDomainIntegration:
         # Create language model
         lm_config = LMEquiTileConfig(
             vocab_size=100,
-            embed_dim=64,
+            embed_dim=32,
             num_heads=2,
-            num_layers=2,
+            num_layers=1,
+            max_seq_len=16,
         )
         lm_model = LMEquiTile(lm_config)
 
         # Create RL model
         rl_config = RLEquiTileConfig(
-            obs_dim=64,  # Use LM embed dim
+            obs_dim=32,  # Use LM embed dim
             action_dim=4,
             action_type="discrete",
         )

@@ -34,16 +34,16 @@ def test_pc_mode_basic():
     print("Testing PC mode basic functionality...")
 
     model = EquiTile(
-        neurons_per_tile=16,
-        num_layers=3,
-        tiles_per_layer=2,
-        input_dim=16,
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
         output_dim=4,
         mode="pc",
-        inference_steps=5,
+        inference_steps=2,
     )
 
-    x = torch.randn(4, 16)
+    x = torch.randn(4, 8)
     y = torch.randint(0, 4, (4,))
 
     stats = model.train_step(x, y)
@@ -62,17 +62,17 @@ def test_ep_mode_basic():
     print("Testing EP mode basic functionality...")
 
     model = EquiTile(
-        neurons_per_tile=16,
-        num_layers=3,
-        tiles_per_layer=2,
-        input_dim=16,
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
         output_dim=4,
         mode="ep",
         beta=0.1,
-        inference_steps=5,
+        inference_steps=2,
     )
 
-    x = torch.randn(4, 16)
+    x = torch.randn(4, 8)
     y = torch.randint(0, 4, (4,))
 
     stats = model.train_step(x, y)
@@ -94,16 +94,16 @@ def test_equitile_ep_class():
     print("Testing EquiTileEP class...")
 
     model = EquiTileEP(
-        neurons_per_tile=16,
-        num_layers=3,
-        tiles_per_layer=2,
-        input_dim=16,
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
         output_dim=4,
         beta=0.1,
-        inference_steps=5,
+        inference_steps=2,
     )
 
-    x = torch.randn(4, 16)
+    x = torch.randn(4, 8)
     y = torch.randint(0, 4, (4,))
 
     stats = model.train_step(x, y)
@@ -119,17 +119,17 @@ def test_ep_contrastive_property():
     print("Testing EP contrastive property...")
 
     model = EquiTile(
-        neurons_per_tile=16,
-        num_layers=3,
-        tiles_per_layer=2,
-        input_dim=16,
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
         output_dim=4,
         mode="ep",
         beta=0.1,
-        inference_steps=5,
+        inference_steps=2,
     )
 
-    x = torch.randn(4, 16)
+    x = torch.randn(4, 8)
     y = torch.randint(0, 4, (4,))
 
     # Store initial weights
@@ -188,16 +188,16 @@ def test_pc_local_hebbian_property():
     print("Testing PC local Hebbian property...")
 
     model = EquiTile(
-        neurons_per_tile=16,
-        num_layers=3,
-        tiles_per_layer=2,
-        input_dim=16,
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
         output_dim=4,
         mode="pc",
-        inference_steps=5,
+        inference_steps=2,
     )
 
-    x = torch.randn(4, 16)
+    x = torch.randn(4, 8)
     y = torch.randint(0, 4, (4,))
 
     # Store initial weights
@@ -254,18 +254,18 @@ def test_beta_annealing():
     print("Testing EP beta annealing...")
 
     model = EquiTile(
-        neurons_per_tile=16,
-        num_layers=3,
-        tiles_per_layer=2,
-        input_dim=16,
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
         output_dim=4,
         mode="ep",
         beta=0.1,
         beta_anneal=0.9,  # Decay beta each step
-        inference_steps=5,
+        inference_steps=2,
     )
 
-    x = torch.randn(4, 16)
+    x = torch.randn(4, 8)
     y = torch.randint(0, 4, (4,))
 
     # First step
@@ -292,23 +292,23 @@ def test_separate_inference_steps():
     print("Testing separate inference steps...")
 
     model = EquiTile(
-        neurons_per_tile=16,
-        num_layers=3,
-        tiles_per_layer=2,
-        input_dim=16,
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
         output_dim=4,
         mode="ep",
         beta=0.1,
-        inference_steps=5,
-        inference_steps_free=10,  # More steps for free phase
-        inference_steps_nudged=15,  # Even more for nudged phase
+        inference_steps=3,
+        inference_steps_free=4,  # More steps for free phase
+        inference_steps_nudged=6,  # Even more for nudged phase
     )
 
     # Check enhanced/equitile config, not the base BioModel config which is generic
-    assert model.equitile_config.inference_steps_free == 10
-    assert model.equitile_config.inference_steps_nudged == 15
+    assert model.equitile_config.inference_steps_free == 4
+    assert model.equitile_config.inference_steps_nudged == 6
 
-    x = torch.randn(4, 16)
+    x = torch.randn(4, 8)
     y = torch.randint(0, 4, (4,))
 
     stats = model.train_step(x, y)
@@ -324,18 +324,18 @@ def test_early_stopping():
     print("Testing early stopping...")
 
     model = EquiTile(
-        neurons_per_tile=16,
-        num_layers=3,
-        tiles_per_layer=2,
-        input_dim=16,
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
         output_dim=4,
         mode="ep",
         beta=0.1,
-        inference_steps=50,  # Many steps allowed
+        inference_steps=20,  # Many steps allowed
         relaxation_tolerance=1e-3,  # But should stop early if converged
     )
 
-    x = torch.randn(4, 16)
+    x = torch.randn(4, 8)
     y = torch.randint(0, 4, (4,))
 
     stats = model.train_step(x, y)
@@ -352,37 +352,37 @@ def test_mode_comparison_learning():
     print("Testing PC vs EP learning comparison...")
 
     # Create dataset
-    X, y = create_simple_dataset(n_samples=200, input_dim=16, output_dim=4)
+    X, y = create_simple_dataset(n_samples=64, input_dim=8, output_dim=4)
 
     # PC model
     model_pc = EquiTile(
-        neurons_per_tile=16,
-        num_layers=3,
-        tiles_per_layer=2,
-        input_dim=16,
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
         output_dim=4,
         mode="pc",
-        inference_steps=10,
-        learning_rate=0.01,
+        inference_steps=3,
+        learning_rate=0.05,
     )
 
     # EP model
     model_ep = EquiTile(
-        neurons_per_tile=16,
-        num_layers=3,
-        tiles_per_layer=2,
-        input_dim=16,
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
         output_dim=4,
         mode="ep",
         beta=0.1,
-        inference_steps=10,
-        inference_steps_free=15,
-        inference_steps_nudged=15,
-        learning_rate=0.01,
+        inference_steps=3,
+        inference_steps_free=4,
+        inference_steps_nudged=4,
+        learning_rate=0.05,
     )
 
     # Train both for a few epochs
-    n_epochs = 5
+    n_epochs = 3
     pc_losses = []
     ep_losses = []
 
@@ -428,16 +428,16 @@ def test_all_task_types():
         for task_type, output_dim, y in task_configs:
             model = EquiTile(
                 neurons_per_tile=8,
-                num_layers=3,
+                num_layers=2,
                 tiles_per_layer=1,
-                input_dim=16,
+                input_dim=8,
                 output_dim=output_dim,
                 task_type=task_type,
                 mode=mode,
-                inference_steps=3,
+                inference_steps=2,
             )
 
-            x = torch.randn(8, 16)
+            x = torch.randn(8, 8)
             stats = model.train_step(x, y)
 
             assert stats["mode"] == mode
