@@ -235,7 +235,7 @@ def main():
 
     print("\nTesting imports...")
     try:
-        from bioplausible import smep, smep_fast
+        from bioplausible import smep
 
         print("All imports successful")
     except ImportError as e:

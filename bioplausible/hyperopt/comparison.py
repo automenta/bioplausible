@@ -10,6 +10,8 @@ from enum import Enum
 import numpy as np
 from scipy import stats
 
+from bioplausible.zoo import get_model_spec
+
 
 class ComparisonMetric(Enum):
     """Primary metrics for algorithm comparison."""

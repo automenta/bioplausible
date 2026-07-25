@@ -4,9 +4,8 @@ Configuration schemas and defaults for Bioplausible experiments.
 OmegaConf-based structured configs with Pydantic validation.
 """
 
-import os
 import pathlib
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError
@@ -57,7 +56,7 @@ class ExperimentSchema(BaseModel):
     training: dict[str, Any] = Field(
         default_factory=dict, description="Training settings (lr, epochs)"
     )
-    description: Optional[str] = None
+    description: str | None = None
 
 
 def load_config(path: str) -> dict[str, Any]:

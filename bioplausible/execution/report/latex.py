@@ -11,6 +11,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from bioplausible.zoo import get_model_spec
+
 logger = logging.getLogger("LatexGenerator")
 
 

@@ -30,7 +30,7 @@ Usage:
     model = compile_model(model, mode='reduce-overhead')
 """
 
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import numpy as np
 

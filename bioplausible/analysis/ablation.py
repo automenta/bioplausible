@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from bioplausible.config.schema import RunConfig
 from bioplausible.core.trainer import run_from_runconfig as run_from_config
+from bioplausible.zoo import get_model_spec
 
 
 class AblationStudy:

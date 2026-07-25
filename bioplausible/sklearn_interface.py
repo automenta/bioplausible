@@ -220,9 +220,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         self.model_.train()
         for _ in range(self.epochs):
             for batch_x, batch_y in loader:
-                self._train_step(
-                    batch_x.to(self.device), batch_y.to(self.device)
-                )
+                self._train_step(batch_x.to(self.device), batch_y.to(self.device))
 
         return self
 

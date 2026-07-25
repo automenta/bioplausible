@@ -4,8 +4,6 @@ Zoo Models Package
 All models registered with the unified registry system.
 """
 
-from typing import List
-
 from bioplausible.core.registry import Domain, LocalityLevel, Registry, register_model
 
 from . import (

@@ -57,8 +57,6 @@ class TestModelRegistryInstantiation(unittest.TestCase):
         else:
             x = torch.randn(4, input_dim)
 
-        y = torch.randint(0, 10, (4,))
-
         out = model(x)
         self.assertIsNotNone(out)
         print(f"  Passed: {model_name} Output shape={out.shape}")

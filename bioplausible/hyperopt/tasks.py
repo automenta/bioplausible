@@ -172,7 +172,7 @@ class BaseTask(ABC):
         """Get a batch of data."""
 
     @abstractmethod
-    def create_trainer(self, model: nn.Module, **kwargs) -> BaseTrainer:
+    def create_trainer(self, model: nn.Module, **kwargs) -> "_TaskTrainer":
         """Create a trainer specific to this task."""
 
     @property
@@ -252,7 +252,7 @@ class LMTask(BaseTask):
         y = torch.stack([data[i + self.seq_len] for i in idx]).to(self.device)
         return x, y
 
-    def create_trainer(self, model: nn.Module, **kwargs) -> BaseTrainer:
+    def create_trainer(self, model: nn.Module, **kwargs) -> "_TaskTrainer":
         kwargs.pop("device", None)
 
         return _TaskTrainer(model, self, device=self.device, **kwargs)
@@ -526,7 +526,7 @@ class VisionTask(BaseTask):
         y = dataset_y[idx]
         return x, y
 
-    def create_trainer(self, model: nn.Module, **kwargs) -> BaseTrainer:
+    def create_trainer(self, model: nn.Module, **kwargs) -> "_TaskTrainer":
         kwargs.pop("device", None)
 
         return _TaskTrainer(model, self, device=self.device, **kwargs)
@@ -589,7 +589,7 @@ class CharNGramTask(BaseTask):
         y = torch.stack(y_list).to(self.device).long()
         return x, y
 
-    def create_trainer(self, model: nn.Module, **kwargs) -> BaseTrainer:
+    def create_trainer(self, model: nn.Module, **kwargs) -> "_TaskTrainer":
         kwargs.pop("device", None)
 
         return _TaskTrainer(model, self, device=self.device, **kwargs)

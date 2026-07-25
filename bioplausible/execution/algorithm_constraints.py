@@ -6,6 +6,8 @@ Prevents applying inappropriate hyperparameters to different algorithm families.
 import logging
 from typing import Any
 
+from bioplausible.zoo import get_model_spec
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,9 +72,10 @@ def get_constrained_search_space(model_name: str) -> dict[str, Any]:
     try:
         model_spec = get_model_spec(model_name)
         family = model_spec.family.lower()
-    except KeyError, AttributeError:
+    except KeyError, AttributeError, ValueError:
         logger.warning(
-            f"Could not determine family for {model_name}, using baseline constraints"
+            "Could not determine family for %s, using baseline constraints",
+            model_name,
         )
         family = "baseline"
 

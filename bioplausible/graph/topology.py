@@ -11,8 +11,12 @@ independently of the weights/activities.
 from __future__ import annotations
 
 from collections import deque
+from typing import TYPE_CHECKING
 
 from bioplausible.graph.nodes import NodeBase, Slot
+
+if TYPE_CHECKING:
+    from bioplausible.graph.inference import InferenceSGD
 
 
 class Edge:
@@ -59,7 +63,7 @@ class GraphStructure:
         nodes: list[NodeBase],
         edges: list[Edge],
         task_map: TaskMap,
-        inference: InferenceSGD | None = None,  # type: ignore[name-defined]
+        inference: InferenceSGD | None = None,
     ) -> None:
         self.nodes = nodes
         self.edges = edges
@@ -204,7 +208,7 @@ def graph(
     nodes: list[NodeBase],
     edges: list[Edge],
     task_map: TaskMap,
-    inference: InferenceSGD | None = None,  # type: ignore[name-defined]
+    inference: InferenceSGD | None = None,
 ) -> GraphStructure:
     """Assemble and validate a GraphStructure.
 
