@@ -27,6 +27,29 @@ from bioplausible.datasets import create_data_loaders, get_lm_dataset
 logger = logging.getLogger(__name__)
 
 
+def _reshape_logits_targets_for_ce(
+    logits: torch.Tensor, y: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Coerce logits/targets into CrossEntropyLoss-compatible shapes.
+
+    Models may emit 3-D logits ``[B, L, V]`` (LM autoregressive heads) where
+    only the last token's prediction is supervised, and regression-era
+    datasets return float ``[B, 1]`` targets. ``F.cross_entropy`` requires
+    logits ``[B, C]`` paired with long indices ``[B]``. Without this
+    coercer the standard forward/backward path raises a confusing shape
+    error in ``_train_step``/``_validate`` whenever an LM-shaped model
+    doesn't expose its own ``train_step``. Returns logits/y along with the
+    argmax dim expected across the caller.
+    """
+    if logits.dim() == 3:
+        logits = logits[:, -1, :]
+    if y.dim() > 1 and y.size(-1) == 1:
+        y = y.squeeze(-1)
+    if y.dtype != torch.long:
+        y = y.long()
+    return logits, y
+
+
 @dataclass
 class TrainerConfig:
     """Configuration for CoreTrainer."""
@@ -668,7 +691,8 @@ class CoreTrainer:
             self.optimizer.zero_grad()
 
         logits = self.model(x)
-        loss = torch.nn.functional.cross_entropy(logits, y)
+        logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
+        loss = torch.nn.functional.cross_entropy(logits_ce, y_ce)
         loss.backward()
 
         # Gradient clipping
@@ -682,7 +706,7 @@ class CoreTrainer:
 
         # Compute accuracy
         with torch.no_grad():
-            accuracy = (logits.argmax(1) == y).float().mean().item()
+            accuracy = (logits_ce.argmax(1) == y_ce).float().mean().item()
 
         return {"loss": loss.item(), "accuracy": accuracy}
 
@@ -717,10 +741,11 @@ class CoreTrainer:
                 x, y = x.to(self.device), y.to(self.device)
 
                 logits = self.model(x)
-                loss = torch.nn.functional.cross_entropy(logits, y)
+                logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
+                loss = torch.nn.functional.cross_entropy(logits_ce, y_ce)
 
                 val_losses.append(loss.item())
-                accuracy = (logits.argmax(1) == y).float().mean().item()
+                accuracy = (logits_ce.argmax(1) == y_ce).float().mean().item()
                 val_accs.append(accuracy)
 
                 # Perplexity for LM

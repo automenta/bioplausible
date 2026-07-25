@@ -4,6 +4,9 @@ Task Abstraction for Hyperopt and Experiments
 Encapsulates data loading, batch generation, and evaluation logic for different tasks.
 """
 
+from __future__ import annotations
+
+import logging
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -13,8 +16,27 @@ from torch import nn
 
 from bioplausible.datasets import get_lm_dataset, get_vision_dataset
 
+logger = logging.getLogger(__name__)
+
 # Global dataset cache to avoid reloading for every trial
 _DATASET_CACHE = {}
+
+
+def _resolve_task_loss(task: "BaseTask") -> nn.Module:
+    """Pick a torch loss module matching the task's output geometry.
+
+    The `_TaskTrainer` codepath is the generic Protocol-based trainer used
+    by ``run_from_runconfig`` for vision/lm/tabular experiment probes.
+    Regression tasks (``task_type == "tabular"`` with ``output_dim == 1``
+    — e.g. California Housing) emit float ``[B, 1]`` targets and must use
+    MSELoss; everything else (vision/lm/discrete-tabular) treats the
+    target as a class index and uses CrossEntropyLoss. Note: RL tasks
+    bypass ``_TaskTrainer`` entirely via ``RLTask.create_trainer``
+    returning ``RLTrainer``, so RL never flows through this resolver.
+    """
+    if task.task_type == "tabular" and task.output_dim == 1:
+        return nn.MSELoss()
+    return nn.CrossEntropyLoss()
 
 
 class _TaskTrainer:
@@ -52,8 +74,14 @@ class _TaskTrainer:
         self.output_dir = output_dir
         self.ablation_tags = ablation_tags or {}
 
-        # Determine a loss function appropriate to the task output shape.
-        self.loss_fn = nn.CrossEntropyLoss()
+        # Choose a loss matched to the task's output geometry. Regression
+        # tasks (tabular with output_dim==1) require MSE; classification
+        # (vision/lm/tabular-binary) uses CrossEntropy; RL uses MSE over
+        # advantage/returns when the action space is continuous, and
+        # CrossEntropy over logits when discrete. ``task.task_type`` plus
+        # ``task.output_dim`` are the only uniform signals the BaseTask
+        # protocol exposes, so they drive the choice here.
+        self.loss_fn = _resolve_task_loss(task)
 
         self.model.to(self.device)
         self.model.train()
@@ -84,6 +112,12 @@ class _TaskTrainer:
                 logits = self.model(x)
                 if logits.dim() == 3:
                     logits = logits[:, -1, :]
+                # Match loss geometry to targets (see val block comment).
+                if isinstance(self.loss_fn, nn.CrossEntropyLoss):
+                    if y.dim() > 1 and y.size(-1) == 1:
+                        y = y.squeeze(-1).long()
+                    elif y.dtype != torch.long:
+                        y = y.long()
                 loss = self.loss_fn(logits, y)
                 if self.optimizer is not None:
                     loss.backward()
@@ -124,7 +158,12 @@ class _TaskTrainer:
             metrics["peak_memory_mb"] = float(np.mean(agg["peak_memory_mb"]))
         metrics["loss"] = metrics.get("train_loss", 0.0)
         metrics["accuracy"] = metrics.get("train_accuracy", 0.0)
-        metrics["val_accuracy"] = metrics.get("train_accuracy", 0.0)
+        # Initialize validation metrics to NaN so a failed validation pass is
+        # explicitly distinguishable from a 0.0 answer — auto-promotion and
+        # hyperopt comparisons read `val_loss`/`val_accuracy` and would
+        # otherwise mistake a swallowed exception for a real result.
+        metrics["val_accuracy"] = float("nan")
+        metrics["val_loss"] = float("nan")
 
         try:
             val_x, val_y = self.task.get_batch("val")
@@ -137,14 +176,27 @@ class _TaskTrainer:
                 val_logits = self.model(val_x)
                 if val_logits.dim() == 3:
                     val_logits = val_logits[:, -1, :]
+                # Match loss geometry to targets: CrossEntropy takes long
+                # class indices (squeeze singleton channel dim if needed);
+                # MSE takes float targets as-is.
+                if isinstance(self.loss_fn, nn.CrossEntropyLoss):
+                    if val_y.dim() > 1 and val_y.size(-1) == 1:
+                        val_y = val_y.squeeze(-1).long()
+                    elif val_y.dtype != torch.long:
+                        val_y = val_y.long()
                 val_metrics = self.task.compute_metrics(
                     val_logits, val_y, self.loss_fn(val_logits, val_y).item()
                 )
             metrics["val_accuracy"] = float(val_metrics.get("accuracy", 0.0))
             metrics["val_loss"] = float(val_metrics.get("loss", 0.0))
+        except (NotImplementedError, RuntimeError) as e:
+            # Validation is optional but a silent ``except Exception: pass``
+            # here previously hid shape/loss/OOM bugs. Only swallow the
+            # expected "task has no val split" cases; everything else
+            # propagates so callers see real failures.
+            logger.warning("Validation skipped for %s: %s", self.task.name, e)
+        finally:
             self.model.train()
-        except Exception:
-            pass
 
         metrics["time"] = time.time() - epoch_t0
 

@@ -11,7 +11,6 @@ from tqdm import tqdm
 
 from bioplausible.config.schema import RunConfig
 from bioplausible.core.trainer import run_from_runconfig as run_from_config
-from bioplausible.zoo import get_model_spec
 
 
 class AblationStudy:
@@ -70,17 +69,13 @@ class AblationStudy:
         try:
             import warnings
 
-            # Avoid memory efficient/looped mlp num_layers conflict
-            spec = get_model_spec(cfg.model.name)
-            if spec and spec.model_type in [
-                "eqprop_mlp",
-                "memory_efficient_mlp",
-                "backprop_mlp",
-                "looped_mlp",
-            ]:
-                if hasattr(cfg.model, "num_layers"):
-                    delattr(cfg.model, "num_layers")
-
+            # The legacy `delattr(cfg.model, "num_layers")` guard here was
+            # always dead: `cfg.model` is a `ModelConfig` dataclass that
+            # never declares `num_layers` (so `hasattr` was False and the
+            # `delattr` branch unreachable), and `spec.model_type` returns
+            # `credit_assignment_type` (e.g. "equilibrium"), never the
+            # registered model names listed here. Removed per AGENTS.md
+            # "Delete dead code".
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 res = run_from_config(cfg)

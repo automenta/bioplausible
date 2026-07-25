@@ -35,33 +35,47 @@ class _LegacyModelSpec:
     """Adapter providing legacy ModelSpec interface from Registry metadata."""
 
     __slots__ = (
+        "citation",
         "credit_assignment_type",
         "credit_locality",
+        "custom_hyperparams",
         "default_lr",
+        "description",
         "family",
         "model_type",
         "name",
         "requires_backward",
+        "tags",
         "task_compat",
         "variant",
+        "version",
     )
 
     _FAMILY_TAGS = frozenset((
         "eqprop",
         "fa",
-        "hebbian",
+        "forward-only",
         "forward_only",
-        "target_prop",
-        "spiking",
+        "hebbian",
         "predictive_coding",
+        "spiking",
+        "target_prop",
         "backprop",
     ))
 
     def __init__(self, meta: ComponentMetadata) -> None:
         self.name = meta.name
         # Prefer the explicit `family` metadata field; fall back to a tag.
+        # Normalize hyphenated tags (e.g. "forward-only") to underscore form
+        # (e.g. "forward_only") so downstream metamodel `_FAMILY_TAGS` and
+        # `family == "forward_only"` comparisons match consistently.
         self.family = meta.family or next(
-            (t for t in meta.tags if t in self._FAMILY_TAGS), "experimental"
+            (
+                t.replace("-", "_")
+                for t in meta.tags
+                if t.replace("-", "_") in self._FAMILY_TAGS
+            ),
+            "experimental",
         )
         # task_compat from domains
         self.task_compat = [d.value for d in meta.domains]
@@ -69,11 +83,16 @@ class _LegacyModelSpec:
         self.model_type = meta.credit_assignment_type
         # For backward compat with metamodel expecting credit_assignment_type
         self.credit_assignment_type = meta.credit_assignment_type
-        # variant is not directly stored; could be in extra
+        # variant/custom_hyperparams are not directly stored; could be in extra
         self.variant = meta.extra.get("variant")
+        self.custom_hyperparams = meta.extra.get("custom_hyperparams", {}) or {}
         self.default_lr = meta.typical_lr_range[0] if meta.typical_lr_range else 1e-3
         self.credit_locality = meta.locality_level.value
         self.requires_backward = meta.requires_backward
+        self.citation = meta.citation
+        self.description = meta.description
+        self.tags = list(meta.tags)
+        self.version = meta.version
 
 
 def get_model_spec(name: str) -> _LegacyModelSpec:

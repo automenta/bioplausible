@@ -96,7 +96,7 @@ class OracleWorker(QThread):
                             else:
                                 total_steps += 30  # Max
 
-                        except TypeError, ValueError:
+                        except (TypeError, ValueError):
                             # Fallback if model doesn't support dynamics
                             # Just run forward
                             self.model(x)
