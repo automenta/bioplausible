@@ -1,12 +1,8 @@
 # Bioplausible
 
-A framework for neural network learning algorithms that do not depend on global backpropagation.
+Neural network learning algorithms that do not depend on global backpropagation.
 
-Backpropagation faces three fundamental barriers to physical and biological realization: symmetric weight transport (feedback weights must mirror forward weights), a global clock (forward activity must be frozen for backward passes), and memory proportional to depth (all intermediate activations stored). These constraints make backpropagation incompatible with continuous-time analog hardware, ultra-deep architectures, and the biological brain.
-
-Bioplausible implements alternatives — Equilibrium Propagation, Feedback Alignment, Hebbian learning, tile-based architectures, and more — that replace global gradient computation with local, energy-based dynamics. These algorithms converge to solutions using only locally available signals, enabling O(1) memory scaling with depth, asynchronous event-driven computation, fault-tolerant self-healing dynamics, and a path toward physically-realizable neural computation in analog, neuromorphic, and optical substrates.
-
-Beyond the algorithm zoo, Bioplausible provides automated research infrastructure: an AutoScientist agent that continuously explores the hyperparameter space, a Registry-based component discovery system for composition and optimization, and a modular validation framework for rigorous scientific evaluation.
+Backpropagation requires symmetric weight transport, a global clock for separate forward/backward passes, and activation storage proportional to depth — constraints incompatible with continuous-time analog hardware, ultra-deep architectures, and biological neural computation. Bioplausible implements alternatives that replace global gradient computation with local, energy-based dynamics, using only locally available signals for synaptic updates.
 
 ## Contents
 
@@ -16,13 +12,11 @@ Beyond the algorithm zoo, Bioplausible provides automated research infrastructur
 - [Propagators / Credit Assignment](#propagators--credit-assignment)
 - [Optimizers / Parameter Update](#optimizers--parameter-update)
 - [Sparsity Methods](#sparsity-methods)
-- [Core API](#core-api)
 - [Architecture](#architecture)
 - [Validation Framework](#validation-framework)
 - [Automated Research](#automated-research)
 - [Distributed Training & P2P](#distributed-training--p2p)
 - [Deployment & Inference](#deployment--inference)
-- [Domains](#domains)
 - [Analysis & Visualization](#analysis--visualization)
 - [Hardware Acceleration](#hardware-acceleration)
 - [Testing](#testing)
@@ -119,7 +113,7 @@ Partitioned architectures where computation is distributed across independent ti
 | Spiking | `stdp` |
 | Predictive Coding | `pcn` |
 | Backprop | `backprop` |
-| MEP | `smep`, `smep_fast`, `sdmep`, `local_ep`, `natural_ep`, `muon_backprop` |
+| MEP (Muon Equilibrium Propagation) | `smep`, `smep_fast`, `sdmep`, `local_ep`, `natural_ep`, `muon_backprop` |
 
 ## Optimizers / Parameter Update
 
@@ -130,26 +124,13 @@ Partitioned architectures where computation is distributed across independent ti
 | `spectral` | Spectral constraint optimizer |
 | `ewc` | Elastic Weight Consolidation |
 
+MEP presets at `bioplausible/zoo/mep/` compose gradient computation, update rule, constraint, and feedback strategies: `smep` (spectral + Muon + equilibrium), `smep_fast`, `sdmep` (low-rank SVD), `local_ep` (layer-local), `natural_ep` (Fisher whitening), and `muon_backprop`. Strategies are individually composable — gradient (`EPGradient`, `NaturalGradient`), update (`MuonUpdate`, `DionUpdate`, `PlainUpdate`, `FisherUpdate`), constraint (`SpectralConstraint`), and feedback (`ErrorFeedback`).
+
 ## Sparsity Methods
 
 `TopKPruning`, `ActivityDrivenPruning`, `RandomPruning` — structural and activity-based pruning strategies in `bioplausible/zoo/sparsity/`.
 
 ## Architecture
-
-### MEP Optimizer Framework
-
-Composable strategy-pattern optimizers at `bioplausible/zoo/mep/`. Presets combine gradient computation, update rule, constraint, and feedback strategies:
-
-| Preset | Strategy Composition |
-|--------|---------------------|
-| `smep` | Spectral normalization + Muon update + Equilibrium Propagation |
-| `smep_fast` | Optimized SMEP variant |
-| `sdmep` | Low-rank SVD for large-scale models |
-| `local_ep` | Layer-local learning |
-| `natural_ep` | Natural gradient with Fisher whitening |
-| `muon_backprop` | Muon orthogonalization with backprop |
-
-Strategies are individually composable: gradient strategies (`EPGradient`, `NaturalGradient`), update strategies (`MuonUpdate`, `DionUpdate`, `PlainUpdate`, `FisherUpdate`), constraint strategies (`SpectralConstraint`), and feedback strategies (`ErrorFeedback`).
 
 ### Execution Engine
 
@@ -206,13 +187,6 @@ Structured training workflows at `bioplausible/lightning_/`: Lightning module wr
 | Negative Results | Documentation of unsuccessful approaches |
 | NEBC | Nobody Ever Bothered to Check |
 
-### Analysis Tools
-
-- **ResultAnalyzer**: Statistical analysis with effect sizes, confidence intervals, and evidence classification
-- **TrainingVisualizer**: Loss curves and convergence plots
-- **ScalingAnalyzer**: Scaling behavior characterization
-- **FailureManifesto**: Structured negative result documentation
-- **AblationAnalyzer**: Component contribution studies
 
 ## Automated Research
 
@@ -247,6 +221,18 @@ ONNX and TorchScript serialization for cross-platform production deployment. Qua
 ### Inference Engine
 
 High-throughput prediction server with FastAPI REST endpoints and optimized batch processing.
+
+## Analysis & Visualization
+
+Tools at `bioplausible/analysis/` and `bioplausible/visualization_tools.py`.
+
+- **DynamicsAnalyzer**: Training dynamics and convergence analysis
+- **compute_statistics** / **get_rankings**: Statistical analysis with effect sizes, confidence intervals, rankings
+- **AblationStudy**: Component contribution and hyperparameter sensitivity studies
+- **FailureManifestoGenerator**: Structured negative result documentation
+- **TrainingVisualizer**: Loss curves, convergence plots, speed-accuracy tradeoffs
+- **fit_power_law** / **plot_scaling_curves**: Scaling behavior characterization
+- **compute_pareto_frontier**: Multi-objective efficiency frontier computation
 
 ## Hardware Acceleration
 
