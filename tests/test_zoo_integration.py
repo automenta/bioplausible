@@ -1,5 +1,4 @@
-"""
-Integration tests for Zoo component combinations.
+"""Integration tests for Zoo component combinations.
 
 Verifies that registered models, propagators, and optimizers can be
 combined and used with CoreTrainer.
@@ -7,6 +6,7 @@ combined and used with CoreTrainer.
 
 import pathlib
 
+import pytest
 import torch
 from torch import nn
 
@@ -18,6 +18,19 @@ from bioplausible.core.registry import (
     LocalityLevel,
     Registry,
 )
+
+
+@pytest.fixture(autouse=True)
+def _preserve_registry():
+    """Save and restore registry state around each test to prevent
+    cross-test pollution (used by factory-function tests that call
+    Registry.clear())."""
+    import copy
+
+    saved = copy.deepcopy(Registry._components)
+    yield
+    Registry._components.clear()
+    Registry._components.update(copy.deepcopy(saved))
 
 
 def test_registry_has_models():
@@ -173,3 +186,182 @@ def test_export_yaml(tmp_path):
     assert "model" in data
     assert "optimizer" in data
     assert "propagator" in data
+
+
+# ----------------------------------------------------------------------------
+# REFACTOR2 §3.3 — discovery helpers (regression tests for kwargs bug)
+# These were broken because the helpers called Registry.query(locality_level=...)
+# while the public parameter is named `locality`. Without these tests the
+# shipped helpers raised TypeError on every call.
+# ----------------------------------------------------------------------------
+
+
+def test_get_models_for_task_no_filters():
+    """All models returned when only domain filter matches."""
+    from bioplausible.zoo import get_models_for_task
+
+    results = get_models_for_task(Domain.VISION)
+    assert len(results) > 0
+    for r in results:
+        assert Domain.VISION in r["metadata"].domains
+
+
+def test_get_models_for_task_with_locality():
+    """Filtered models preserve locality=EQUILIBRIUM and Domain vision."""
+    from bioplausible.zoo import get_models_for_task
+
+    results = get_models_for_task(Domain.VISION, locality=LocalityLevel.EQUILIBRIUM)
+    assert len(results) > 0
+    for r in results:
+        assert Domain.VISION in r["metadata"].domains
+        assert r["metadata"].locality_level == LocalityLevel.EQUILIBRIUM
+
+
+def test_get_models_for_task_requires_backward_filter():
+    from bioplausible.zoo import get_models_for_task
+
+    results = get_models_for_task(Domain.VISION, requires_backward=False)
+    assert len(results) > 0
+    for r in results:
+        assert r["metadata"].requires_backward is False
+
+
+def test_get_propagators_for_model_matches_locality():
+    """propagators returned share locality + backward compatibility with model."""
+    from bioplausible.zoo import get_propagators_for_model
+
+    results = get_propagators_for_model("eqprop_mlp")
+    assert len(results) > 0
+    # eqprop_mlp is EQUILIBRIUM + no backward — every returned propagator
+    # must match.
+    model_meta = Registry.get_metadata(ComponentCategory.MODEL, "eqprop_mlp")
+    for r in results:
+        assert r["metadata"].locality_level == model_meta.locality_level
+        assert r["metadata"].requires_backward == model_meta.requires_backward
+
+
+def test_get_optimizers_for_propagator_matches_backward():
+    from bioplausible.zoo import get_optimizers_for_propagator
+
+    results = get_optimizers_for_propagator("eq_prop")
+    assert len(results) > 0
+    # all returned optimizers registered with the same requires_backward flag.
+    propagator_meta = Registry.get_metadata(ComponentCategory.PROPAGATOR, "eq_prop")
+    for r in results:
+        assert r["metadata"].requires_backward == propagator_meta.requires_backward
+
+
+def test_get_models_for_task_unknown_returns_empty():
+    """A domain with no registrations returns an empty list (no crash)."""
+    from bioplausible.zoo import get_models_for_task
+
+    # SCIENTIFIC is in the enum but rarely registered; just confirm no raise.
+    results = get_models_for_task(Domain.SCIENTIFIC)
+    assert isinstance(results, list)
+
+
+def test_query_by_family_filter():
+    """Reg test for `family=` kwarg added together with ComponentMetadata.family."""
+    equitile_models = Registry.query(
+        category=ComponentCategory.MODEL, family="equitile"
+    )
+    assert len(equitile_models) > 0
+    for r in equitile_models:
+        assert r["metadata"].family == "equitile"
+
+
+# ----------------------------------------------------------------------------
+# REFACTOR2 zoo/__init__.py — ModelZoo / OptimizerZoo production adapters
+# These were silently broken because they referenced `meta.cls` (which does
+# NOT exist on ComponentMetadata — Registry.get_metadata returns metadata
+# only, never the class) and because the OPTIMIZER→PROPAGATOR fallback
+# raised ValueError before the PROPAGATOR branch could run.
+# ----------------------------------------------------------------------------
+
+
+def test_modelzoo_get_instantiates_registered_model():
+    """ModelZoo.get must actually instantiate by reusing Registry.get()."""
+    from bioplausible.zoo import ModelZoo
+
+    model = ModelZoo.get("backprop_mlp", input_dim=784, hidden_dim=32, output_dim=10)
+    assert isinstance(model, nn.Module)
+    # forward pass sanity check
+    batch_size = 2
+    out = model(torch.randn(batch_size, 784))
+    assert out.shape[0] == batch_size
+
+
+def test_modelzoo_get_unknown_raises_value_error():
+    from bioplausible.zoo import ModelZoo
+
+    with pytest.raises(ValueError, match="Unknown component"):
+        ModelZoo.get("does_not_exist_xyz")
+
+
+def test_optimizerzoo_get_resolves_propagator_preset():
+    """smep is registered as PROPAGATOR (not OPTIMIZER); fallback must find it.
+
+    Without this fallback OptimizerZoo.get('smep', ...) raised
+    ValueError listing only OPTIMIZER names and never tried PROPAGATOR.
+    """
+    from bioplausible.zoo import ModelZoo, OptimizerZoo
+
+    model = ModelZoo.get("backprop_mlp", input_dim=784, hidden_dim=32, output_dim=10)
+    opt = OptimizerZoo.get("smep", model.parameters(), model=model)
+    # smep factory returns a CompositeOptimizer
+    assert opt.__class__.__name__ == "CompositeOptimizer"
+
+
+def test_optimizerzoo_get_resolves_plain_optimizer():
+    from bioplausible.zoo import ModelZoo, OptimizerZoo
+
+    model = ModelZoo.get("backprop_mlp", input_dim=784, hidden_dim=32, output_dim=10)
+    # adam is registered as OPTIMIZER (no `model=` kwarg accepted)
+    opt = OptimizerZoo.get("adam", model.parameters(), model=model)
+    assert opt.__class__.__name__ == "Adam"
+
+
+def test_optimizerzoo_get_unknown_raises_with_available_list():
+    from bioplausible.zoo import OptimizerZoo
+
+    with pytest.raises(ValueError, match="Available"):
+        OptimizerZoo.get("does_not_exist_xyz", iter([]), model=None)
+
+
+# ----------------------------------------------------------------------------
+# Registry.register accepts factory functions (not just classes)
+# MEP presets are callables like smep(params, model, ...) returning an
+# optimizer instance. The decorator previously annotated `type[T]` which
+# would have rejected them; the actual fix uses generic `Component`.
+# ----------------------------------------------------------------------------
+
+
+def test_register_accepts_factory_function():
+    """A bare function (no class) can be registered and retrieved."""
+    from bioplausible.core.registry import Registry, register_optimizer
+
+    Registry.clear()
+
+    def factory(params, model=None):
+        return ("called", params, model)
+
+    register_optimizer("factory_test")(factory)
+    retrieved = Registry.get("optimizer", "factory_test")
+    assert retrieved is factory
+    assert retrieved("p", model="m") == ("called", "p", "m")
+
+
+def test_register_attaches_metadata_to_factory():
+    """factory functions (unlike classes) skip attribute attachment gracefully."""
+    from bioplausible.core.registry import Registry, register_optimizer
+
+    Registry.clear()
+
+    def smep_like(params, model=None):  # noqa: ARG001
+        return params
+
+    register_optimizer("factory_with_meta", bio_plausibility_score=0.95)(smep_like)
+    meta = Registry.get_metadata("optimizer", "factory_with_meta")
+    assert meta.bio_plausibility_score == pytest.approx(0.95)
+    # The function must remain callable (not rewrapped).
+    assert Registry.get("optimizer", "factory_with_meta")("p") == "p"

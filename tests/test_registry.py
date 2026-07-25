@@ -19,12 +19,9 @@ from bioplausible.core.registry import (
 def _preserve_registry():
     """Save and restore registry state around each test to prevent cross-test pollution."""
     saved_components = copy.deepcopy(Registry._components)
-    saved_name_map = dict(Registry._name_to_category)
     yield
     Registry._components.clear()
     Registry._components.update(copy.deepcopy(saved_components))
-    Registry._name_to_category.clear()
-    Registry._name_to_category.update(saved_name_map)
 
 
 def test_registry_clear():

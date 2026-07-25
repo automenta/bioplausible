@@ -1,8 +1,4 @@
-"""
-Core Package
-
-Core infrastructure: Registry, CoreTrainer, Config.
-"""
+"""Core package: Registry, CoreTrainer, Config."""
 
 from bioplausible.core.registry import (
     ComponentCategory,
@@ -11,15 +7,11 @@ from bioplausible.core.registry import (
     Domain,
     LocalityLevel,
     Registry,
-    register_callback,
-    register_data_loader,
-    register_domain,
     register_metric,
     register_model,
     register_optimizer,
     register_propagator,
     register_sparsity,
-    register_task,
 )
 from bioplausible.core.trainer import (
     CoreTrainer,
@@ -41,10 +33,6 @@ __all__ = [
     "register_optimizer",
     "register_sparsity",
     "register_metric",
-    "register_data_loader",
-    "register_task",
-    "register_callback",
-    "register_domain",
     # Trainer
     "CoreTrainer",
     "TrainerConfig",

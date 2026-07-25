@@ -1,11 +1,11 @@
-"""
-Zoo Package - Unified Component Registry
+"""Zoo Package - Unified Component Registry.
 
-All models, propagators, optimizers, sparsity methods, and other components
-are registered here with rich metadata for AutoScientist composition.
+All models, propagators, optimizers, sparsity methods are registered here
+with rich metadata enabling AutoScientist composition.
 """
 
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 import torch
@@ -18,15 +18,11 @@ from bioplausible.core.registry import (
     Domain,
     LocalityLevel,
     Registry,
-    register_callback,
-    register_data_loader,
-    register_domain,
     register_metric,
     register_model,
     register_optimizer,
     register_propagator,
     register_sparsity,
-    register_task,
 )
 
 # Import submodules to trigger registration
@@ -50,27 +46,22 @@ class _LegacyModelSpec:
         "variant",
     )
 
+    _FAMILY_TAGS = frozenset((
+        "eqprop",
+        "fa",
+        "hebbian",
+        "forward_only",
+        "target_prop",
+        "spiking",
+        "predictive_coding",
+        "backprop",
+    ))
+
     def __init__(self, meta: ComponentMetadata) -> None:
         self.name = meta.name
-        # Infer family from tags or name
-        tags = meta.tags or []
-        self.family = next(
-            (
-                t
-                for t in tags
-                if t
-                in {
-                    "eqprop",
-                    "fa",
-                    "hebbian",
-                    "forward_only",
-                    "target_prop",
-                    "spiking",
-                    "predictive_coding",
-                    "backprop",
-                }
-            ),
-            "experimental",
+        # Prefer the explicit `family` metadata field; fall back to a tag.
+        self.family = meta.family or next(
+            (t for t in meta.tags if t in self._FAMILY_TAGS), "experimental"
         )
         # task_compat from domains
         self.task_compat = [d.value for d in meta.domains]
@@ -86,10 +77,12 @@ class _LegacyModelSpec:
 
 
 def get_model_spec(name: str) -> _LegacyModelSpec:
-    """Get a legacy-compatible ModelSpec from the Registry by model name."""
+    """Get a legacy-compatible ModelSpec from the Registry by model name.
+
+    Raises:
+        ValueError: if no model is registered under ``name``.
+    """
     meta = Registry.get_metadata(ComponentCategory.MODEL, name)
-    if meta is None:
-        raise ValueError(f"Model '{name}' not found in Registry")
     return _LegacyModelSpec(meta)
 
 
@@ -107,8 +100,8 @@ def load_weights(
         path: Path to a ``.pt``/``.pth`` checkpoint file.
         device: Device to map the loaded tensors onto.
         strict: If True, require an exact match of keys.
-        freeze_layers: If True, freeze every parameter whose name appears in
-            the loaded state dict (useful for transfer-learning probes).
+        freeze_layers: If True, freeze every parameter whose name appears
+            in the loaded state dict (useful for transfer-learning probes).
     """
     if not path:
         return
@@ -132,29 +125,38 @@ def load_weights(
 
 
 def get_models_for_task(
-    domain: Domain, locality: LocalityLevel = None, requires_backward: bool = None
-):
+    domain: Domain,
+    locality: LocalityLevel | None = None,
+    requires_backward: bool | None = None,
+) -> list[dict[str, Any]]:
+    """Return all models compatible with a task (domain + locality + backward)."""
     return Registry.query(
-        category="model",
+        category=ComponentCategory.MODEL,
         domain=domain,
-        locality_level=locality,
+        locality=locality,
         requires_backward=requires_backward,
     )
 
 
-def get_propagators_for_model(model_name: str):
-    model_meta = Registry.get_metadata("model", model_name)
+def get_propagators_for_model(
+    model_name: str,
+) -> list[dict[str, Any]]:
+    """Return propagators compatible with a model's locality + backward flag."""
+    model_meta = Registry.get_metadata(ComponentCategory.MODEL, model_name)
     return Registry.query(
-        category="propagator",
-        locality_level=model_meta.locality_level,
+        category=ComponentCategory.PROPAGATOR,
+        locality=model_meta.locality_level,
         requires_backward=model_meta.requires_backward,
     )
 
 
-def get_optimizers_for_propagator(propagator_name: str):
-    prop_meta = Registry.get_metadata("propagator", propagator_name)
+def get_optimizers_for_propagator(
+    propagator_name: str,
+) -> list[dict[str, Any]]:
+    """Return optimizers compatible with a propagator's backward flag."""
+    prop_meta = Registry.get_metadata(ComponentCategory.PROPAGATOR, propagator_name)
     return Registry.query(
-        category="optimizer",
+        category=ComponentCategory.OPTIMIZER,
         requires_backward=prop_meta.requires_backward,
     )
 
@@ -162,6 +164,26 @@ def get_optimizers_for_propagator(propagator_name: str):
 # ============================================================================
 # Legacy adapter: ModelZoo / OptimizerZoo
 # ============================================================================
+
+
+def _resolve_component_class(
+    name: str, categories: tuple[ComponentCategory, ...]
+) -> tuple[Any, ComponentCategory]:
+    """Look up a registered component across multiple categories.
+
+    Iterates ``categories`` in order, returning the first match. Raises a
+    ValueError listing available names across all categories if absent.
+    """
+    available: list[str] = []
+    for cat in categories:
+        comps = Registry._components.get(cat, {})
+        if name in comps:
+            return comps[name]["class"], cat
+        available.extend(f"{cat.value}/{n}" for n in comps)
+    raise ValueError(
+        f"Unknown component '{name}' in categories {[c.value for c in categories]}. "
+        f"Available: {available}"
+    )
 
 
 class ModelZoo:
@@ -172,31 +194,38 @@ class ModelZoo:
 
     @staticmethod
     def get(name: str, **params: Any) -> nn.Module:
-        meta = Registry.get_metadata(ComponentCategory.MODEL, name)
-        if meta is None:
-            raise ValueError(f"Model '{name}' not found in Registry")
-        cls = meta.cls
+        cls, _ = _resolve_component_class(name, (ComponentCategory.MODEL,))
         return cls(**params)
 
 
 class OptimizerZoo:
     """Legacy adapter providing ``cls.get(name, params, model=model, **kwargs)``.
 
-    Used by ``experiments.utils.ExperimentRunner``.
+    Used by ``experiments.utils.ExperimentRunner``. Looks the name up in
+    OPTIMIZER first, then PROPAGATOR (since preset factories like ``smep``
+    are registered as propagators). ``params`` is forwarded as the first
+    positional argument — for torch.optim-style optimizers it should be
+    an iterable of parameters; for MEP preset factories it is also an
+    iterable of parameters and ``model`` is supplied as a keyword.
     """
 
     @staticmethod
-    def get(name: str, params, model: nn.Module | None = None, **kwargs: Any):
-        meta = Registry.get_metadata(ComponentCategory.OPTIMIZER, name)
-        if meta is None:
-            meta = Registry.get_metadata(ComponentCategory.PROPAGATOR, name)
-        if meta is None:
-            raise ValueError(f"Optimizer/propagator '{name}' not found in Registry")
-        cls = meta.cls
-        try:
-            return cls(params, model=model, **kwargs)
-        except TypeError:
-            return cls(params, **kwargs)
+    def get(
+        name: str,
+        params: Iterable[Any],
+        model: nn.Module | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        cls, _ = _resolve_component_class(
+            name, (ComponentCategory.OPTIMIZER, ComponentCategory.PROPAGATOR)
+        )
+        if model is not None:
+            try:
+                return cls(params, model=model, **kwargs)
+            except TypeError:
+                # Plain torch.optim optimizers don't accept ``model=``.
+                return cls(params, **kwargs)
+        return cls(params, **kwargs)
 
 
 __all__ = [
@@ -208,6 +237,7 @@ __all__ = [
     "ModelZoo",
     "OptimizerZoo",
     "Registry",
+    "get_model_spec",
     "get_models_for_task",
     "get_optimizers_for_propagator",
     "get_propagators_for_model",
@@ -215,14 +245,10 @@ __all__ = [
     "models",
     "optimizers",
     "propagators",
-    "register_callback",
-    "register_data_loader",
-    "register_domain",
     "register_metric",
     "register_model",
     "register_optimizer",
     "register_propagator",
     "register_sparsity",
-    "register_task",
     "sparsity",
 ]

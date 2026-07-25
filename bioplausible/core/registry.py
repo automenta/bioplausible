@@ -1,10 +1,8 @@
-"""
-Unified Registry System for Bioplausible
+"""Unified Registry System for Bioplausible.
 
-Decorator-based + YAML-backed registry for all components:
-- Models, Propagators, Optimizers, Sparsity, Metrics, DataLoaders, Tasks, etc.
-Enables AutoScientist to query and compose intelligently.
-"""
+Decorator-based registry for all components (models, propagators,
+optimizers, sparsity) enabling AutoScientist to query and compose
+intelligently."""
 
 from __future__ import annotations
 
@@ -18,7 +16,7 @@ from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
+Component = TypeVar("Component")  # registered class or factory callable
 
 
 class ComponentCategory(str, Enum):
@@ -29,10 +27,6 @@ class ComponentCategory(str, Enum):
     OPTIMIZER = "optimizer"
     SPARSITY = "sparsity"
     METRIC = "metric"
-    DATA_LOADER = "data_loader"
-    TASK = "task"
-    CALLBACK = "callback"
-    DOMAIN = "domain"
 
 
 class Domain(str, Enum):
@@ -88,8 +82,8 @@ class ComponentMetadata:
     memory_complexity: str = "O(N)"  # O(1) for MEP, O(N) standard
     min_params: int | None = None
     max_params: int | None = None
-    typical_lr_range: tuple = (1e-5, 1e-1)
-    typical_batch_size_range: tuple = (16, 512)
+    typical_lr_range: tuple[float, float] = (1e-5, 1e-1)
+    typical_batch_size_range: tuple[float, float] = (16, 512)
     supports_mixed_precision: bool = True
     supports_gradient_accumulation: bool = True
     supports_distributed: bool = False
@@ -105,98 +99,126 @@ class ComponentMetadata:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class _QueryFilter:
+    """Immutable capability query predicate spec.
+
+    Held frozen to make intent explicit and to allow future caching
+    over the predicate. Each field is a filter; ``None`` means
+    ``no constraint on this axis``.
+    """
+
+    domain: Domain | None = None
+    locality: LocalityLevel | None = None
+    compute: ComputeProfile | None = None
+    requires_backward: bool | None = None
+    min_bio_score: float | None = None
+    max_bio_score: float | None = None
+    tags: builtins.list[str] | None = None
+    credit_type: str | None = None
+    family: str | None = None
+
+    def matches(self, meta: ComponentMetadata) -> bool:
+        """Return True iff ``meta`` satisfies every constraint in this filter."""
+        return (
+            (self.domain is None or self.domain in meta.domains)
+            and (self.locality is None or meta.locality_level == self.locality)
+            and (self.compute is None or meta.compute_profile == self.compute)
+            and (
+                self.requires_backward is None
+                or meta.requires_backward == self.requires_backward
+            )
+            and (
+                self.min_bio_score is None
+                or meta.bio_plausibility_score >= self.min_bio_score
+            )
+            and (
+                self.max_bio_score is None
+                or meta.bio_plausibility_score <= self.max_bio_score
+            )
+            and (
+                self.credit_type is None
+                or meta.credit_assignment_type == self.credit_type
+            )
+            and (
+                self.tags is None or builtins.all(tag in meta.tags for tag in self.tags)
+            )
+            and (self.family is None or meta.family == self.family)
+        )
+
+
 class Registry:
-    """
-    Central registry for all components.
+    """Central registry for all components.
 
-    Supports:
-    - Decorator-based registration: @register_component(...)
-    - YAML-backed metadata (future)
-    - Query by category, domain, locality, compute profile, etc.
-    - Constraint satisfaction for AutoScientist
+    Supports decorator-based registration, querying by capability
+    metadata, and constraint satisfaction for AutoScientist composition.
     """
 
-    _components: dict[str, dict[str, Any]] = {}  # category -> {name: {cls, metadata}}
-    _name_to_category: dict[str, str] = {}  # name -> category
+    _components: dict[
+        str, dict[str, dict[str, Any]]
+    ] = {}  # category -> {name: {cls, metadata}}
 
-    @classmethod
-    def register(
-        cls, category: ComponentCategory, name: str | None = None, **metadata_kwargs
-    ) -> Callable[[type[T]], type[T]]:
-        """
-        Decorator to register a component.
-
-        Usage:
-            @register_component(
-                category=ComponentCategory.MODEL,
-                name="MyModel",
-                domains=[Domain.VISION, Domain.LM],
-                locality_level=LocalityLevel.EQUILIBRIUM,
-                bio_plausibility_score=0.9,
-                requires_backward=False
-            )
-            class MyModel(nn.Module):
-                ...
-        """
-        if category not in cls._components:
-            cls._components[category] = {}
-
-        def decorator(component_cls: type[T]) -> type[T]:
-            nonlocal name
-            if name is None:
-                name = component_cls.__name__
-
-            if name in cls._components[category]:
-                logger.warning(f"Overwriting component {category.value}/{name}")
-
-            # Build metadata from kwargs, with sensible defaults from class
-            metadata = ComponentMetadata(
-                name=name, category=category, **metadata_kwargs
-            )
-
-            # Try to infer metadata from class attributes
-            cls._infer_metadata(component_cls, metadata)
-
-            cls._components[category][name] = {
-                "class": component_cls,
-                "metadata": metadata,
-            }
-            cls._name_to_category[name] = category.value
-
-            # Attach metadata to class for easy access
-            component_cls._registry_metadata = metadata
-            component_cls._registry_name = name
-            component_cls._registry_category = category
-
-            logger.info(f"Registered {category.value}: {name}")
-            return component_cls
-
-        return decorator
-
-    @classmethod
-    def _infer_metadata(cls, component_cls: type, metadata: ComponentMetadata) -> None:
-        """Infer metadata from class attributes if not explicitly provided."""
-        # Check for class attributes that match metadata fields
-        overrides = getattr(component_cls, "_registry_metadata_overrides", {})
-        for fd in fields(ComponentMetadata):
-            if fd.name in overrides:
-                continue
-            if (
-                hasattr(component_cls, fd.name)
-                and getattr(metadata, fd.name) == fd.default
-            ):
-                setattr(metadata, fd.name, getattr(component_cls, fd.name))
-
-    @classmethod
-    def _resolve_category(cls, category):
+    @staticmethod
+    def _resolve_category(category: ComponentCategory | str) -> ComponentCategory:
         """Resolve category from string or enum."""
         if isinstance(category, str):
             return ComponentCategory(category)
         return category
 
     @classmethod
-    def get(cls, category: ComponentCategory, name: str) -> type:
-        """Get a registered component class by category and name."""
+    def register(
+        cls, category: ComponentCategory, name: str | None = None, **metadata_kwargs
+    ) -> Callable[[Component], Component]:
+        """Decorator factory to register a model/propagator/optimizer/etc.
+
+        Accepts either a class or any callable (e.g. a preset factory
+        function like ``smep``). If ``name`` is None the registered
+        name defaults to ``component.__name__``.
+        """
+        if category not in cls._components:
+            cls._components[category] = {}
+
+        def decorator(component: Component) -> Component:
+            nonlocal name
+            if name is None:
+                name = getattr(component, "__name__", repr(component))
+            if name in cls._components[category]:
+                logger.warning("Overwriting component %s/%s", category.value, name)
+            metadata = ComponentMetadata(
+                name=name, category=category, **metadata_kwargs
+            )
+            cls._infer_metadata(component, metadata)
+            cls._components[category][name] = {
+                "class": component,
+                "metadata": metadata,
+            }
+            # Attach metadata to the component for introspection. We only
+            # set attributes on classes that accept them (factory functions
+            # without ``__dict__`` would raise); use try/except defensively.
+            try:
+                component._registry_metadata = metadata  # type: ignore[attr-defined]
+                component._registry_name = name  # type: ignore[attr-defined]
+                component._registry_category = category  # type: ignore[attr-defined]
+            except AttributeError, TypeError:
+                pass
+            logger.info("Registered %s: %s", category.value, name)
+            return component
+
+        return decorator
+
+    @classmethod
+    def _infer_metadata(cls, component: Any, metadata: ComponentMetadata) -> None:
+        """Infer metadata from component attributes if not explicitly provided."""
+        overrides = getattr(component, "_registry_metadata_overrides", {})
+        for fd in fields(ComponentMetadata):
+            if fd.name in overrides:
+                continue
+            if hasattr(component, fd.name) and getattr(metadata, fd.name) == fd.default:
+                setattr(metadata, fd.name, getattr(component, fd.name))
+
+    @classmethod
+    def get(cls, category: ComponentCategory | str, name: str) -> Any:
+        """Get a registered component (class or factory callable) by name."""
         cat = cls._resolve_category(category)
         if cat not in cls._components:
             raise ValueError(f"Unknown category: {cat}")
@@ -206,7 +228,9 @@ class Registry:
         return cls._components[cat][name]["class"]
 
     @classmethod
-    def get_metadata(cls, category: ComponentCategory, name: str) -> ComponentMetadata:
+    def get_metadata(
+        cls, category: ComponentCategory | str, name: str
+    ) -> ComponentMetadata:
         """Get metadata for a registered component."""
         cat = cls._resolve_category(category)
         if cat not in cls._components:
@@ -218,12 +242,11 @@ class Registry:
 
     @classmethod
     def list(
-        cls, category: ComponentCategory | None = None
+        cls, category: ComponentCategory | str | None = None
     ) -> dict[str, builtins.list[str]]:
         """List all registered components, optionally filtered by category."""
         if category is not None:
-            # Accept both enum and string
-            cat = ComponentCategory(category) if isinstance(category, str) else category
+            cat = cls._resolve_category(category)
             if cat not in cls._components:
                 return {cat.value: []}
             return {cat.value: list(cls._components[cat].keys())}
@@ -232,7 +255,7 @@ class Registry:
     @classmethod
     def query(
         cls,
-        category: ComponentCategory | None = None,
+        category: ComponentCategory | str | None = None,
         domain: Domain | None = None,
         locality: LocalityLevel | None = None,
         compute: ComputeProfile | None = None,
@@ -241,59 +264,41 @@ class Registry:
         max_bio_score: float | None = None,
         tags: builtins.list[str] | None = None,
         credit_type: str | None = None,
+        family: str | None = None,
     ) -> builtins.list[dict[str, Any]]:
-        """
-        Query registry with constraints - enables AutoScientist intelligent composition.
+        """Query registry with capability constraints.
 
-        Returns list of {name, category, class, metadata} matching all criteria.
+        Returns list of ``{name, category, class, metadata}`` dict
+        entries matching ALL criteria. Designed for AutoScientist
+        composition.
         """
-        results = []
-
+        flt = _QueryFilter(
+            domain=domain,
+            locality=locality,
+            compute=compute,
+            requires_backward=requires_backward,
+            min_bio_score=min_bio_score,
+            max_bio_score=max_bio_score,
+            tags=tags,
+            credit_type=credit_type,
+            family=family,
+        )
         cats = [category] if category else list(cls._components.keys())
-        categories = [
-            cls._resolve_category(c) if isinstance(c, str) else c for c in cats
-        ]
+        categories = [cls._resolve_category(c) for c in cats]
 
+        results: builtins.list[dict[str, Any]] = []
         for cat in categories:
             if cat not in cls._components:
                 continue
             for name, info in cls._components[cat].items():
-                meta = info["metadata"]
-
-                # Apply filters
-                if domain and domain not in meta.domains:
-                    continue
-                if locality and meta.locality_level != locality:
-                    continue
-                if compute and meta.compute_profile != compute:
-                    continue
-                if (
-                    requires_backward is not None
-                    and meta.requires_backward != requires_backward
-                ):
-                    continue
-                if (
-                    min_bio_score is not None
-                    and meta.bio_plausibility_score < min_bio_score
-                ):
-                    continue
-                if (
-                    max_bio_score is not None
-                    and meta.bio_plausibility_score > max_bio_score
-                ):
-                    continue
-                if credit_type and meta.credit_assignment_type != credit_type:
-                    continue
-                if tags and not all(tag in meta.tags for tag in tags):
-                    continue
-
-                results.append({
-                    "name": name,
-                    "category": cat,
-                    "class": info["class"],
-                    "metadata": meta,
-                })
-
+                meta: ComponentMetadata = info["metadata"]
+                if flt.matches(meta):
+                    results.append({
+                        "name": name,
+                        "category": cat,
+                        "class": info["class"],
+                        "metadata": meta,
+                    })
         return results
 
     @classmethod
@@ -301,70 +306,40 @@ class Registry:
         cls,
         model_name: str,
         model_category: ComponentCategory = ComponentCategory.MODEL,
-    ) -> dict[ComponentCategory, builtins.list[dict[str, Any]]]:
-        """
-        Get components compatible with a given model.
-        Used by AutoScientist to find valid optimizer/propagator combinations.
-        """
+    ) -> dict[str, builtins.list[dict[str, Any]]]:
+        """Get components compatible with a given model."""
         model_meta = cls.get_metadata(model_category, model_name)
-        compat = {}
+        primary_domain = model_meta.domains[0] if model_meta.domains else None
 
+        compat: dict[str, builtins.list[dict[str, Any]]] = {}
         for cat in ComponentCategory:
             if cat == model_category:
                 continue
-            compat[cat] = cls.query(
-                category=cat,
-                domain=model_meta.domains[0] if model_meta.domains else None,
-                # Could add more sophisticated compatibility logic here
-            )
-
+            compat[cat.value] = cls.query(category=cat, domain=primary_domain)
         return compat
 
     @classmethod
     def clear(cls) -> None:
-        """Clear registry (mainly for testing)."""
+        """Clear the registry (mainly for testing)."""
         cls._components.clear()
-        cls._name_to_category.clear()
 
     @classmethod
     def export_yaml(cls, path: str) -> None:
-        """
-        Export all registered component metadata to a YAML file.
+        """Export all registered component metadata to a YAML file."""
+        import yaml  # local import: keep module import cheap (AGENTS.md)
 
-        This enables AutoScientist and external tools to inspect the full
-        component catalog without importing Python modules.
-
-        Args:
-            path: Output YAML file path.
-        """
-        import yaml
-
-        export_data = {}
+        export_data: dict[str, dict[str, dict[str, Any]]] = {}
         for category, comps in cls._components.items():
-            cat_name = category.value if hasattr(category, "value") else str(category)
+            cat_name = category.value
             export_data[cat_name] = {}
             for name, info in comps.items():
                 meta = info["metadata"]
-                entry = {
+                export_data[cat_name][name] = {
                     "name": meta.name,
-                    "category": (
-                        meta.category.value
-                        if hasattr(meta.category, "value")
-                        else str(meta.category)
-                    ),
-                    "domains": [
-                        d.value if hasattr(d, "value") else str(d) for d in meta.domains
-                    ],
-                    "locality_level": (
-                        meta.locality_level.value
-                        if hasattr(meta.locality_level, "value")
-                        else str(meta.locality_level)
-                    ),
-                    "compute_profile": (
-                        meta.compute_profile.value
-                        if hasattr(meta.compute_profile, "value")
-                        else str(meta.compute_profile)
-                    ),
+                    "category": meta.category.value,
+                    "domains": [d.value for d in meta.domains],
+                    "locality_level": meta.locality_level.value,
+                    "compute_profile": meta.compute_profile.value,
                     "bio_plausibility_score": meta.bio_plausibility_score,
                     "credit_assignment_type": meta.credit_assignment_type,
                     "requires_backward": meta.requires_backward,
@@ -373,14 +348,14 @@ class Registry:
                     "description": meta.description,
                     "citation": meta.citation,
                     "version": meta.version,
+                    "family": meta.family,
                 }
-                export_data[cat_name][name] = entry
 
-        with pathlib.Path(path).open("w") as f:
+        with pathlib.Path(path).open("w", encoding="utf-8") as f:
             yaml.dump(export_data, f, default_flow_style=False, sort_keys=False)
 
         n_components = sum(len(v) for v in export_data.values())
-        logger.info(f"Registry exported to {path}: {n_components} components")
+        logger.info("Registry exported to %s: %d components", path, n_components)
 
 
 # Convenience decorators
@@ -390,7 +365,7 @@ def register_model(name: str | None = None, **kwargs) -> Callable:
 
 
 def register_propagator(name: str | None = None, **kwargs) -> Callable:
-    """Register a propagator/learning rule component."""
+    """Register a propagator/learning-rule component."""
     return Registry.register(ComponentCategory.PROPAGATOR, name, **kwargs)
 
 
@@ -409,41 +384,11 @@ def register_metric(name: str | None = None, **kwargs) -> Callable:
     return Registry.register(ComponentCategory.METRIC, name, **kwargs)
 
 
-def register_data_loader(name: str | None = None, **kwargs) -> Callable:
-    """Register a data loader component."""
-    return Registry.register(ComponentCategory.DATA_LOADER, name, **kwargs)
-
-
-def register_task(name: str | None = None, **kwargs) -> Callable:
-    """Register a task component."""
-    return Registry.register(ComponentCategory.TASK, name, **kwargs)
-
-
-def register_callback(name: str | None = None, **kwargs) -> Callable:
-    """Register a callback component."""
-    return Registry.register(ComponentCategory.CALLBACK, name, **kwargs)
-
-
-def register_domain(name: str | None = None, **kwargs) -> Callable:
-    """Register a domain component."""
-    return Registry.register(ComponentCategory.DOMAIN, name, **kwargs)
-
-
-# Legacy helpers (updated for new structure)
-def get_model_registry() -> dict[str, type]:
-    """Get model registry in legacy format."""
-    models = {}
-    for name, info in Registry._components.get(ComponentCategory.MODEL, {}).items():
-        models[name] = info["class"]
-    return models
-
-
 def list_models() -> list[str]:
-    """List available models."""
+    """Convenience: list all registered model names."""
     return list(Registry._components.get(ComponentCategory.MODEL, {}).keys())
 
 
-# Export key types
 __all__ = [
     "ComponentCategory",
     "ComponentMetadata",
@@ -451,15 +396,10 @@ __all__ = [
     "Domain",
     "LocalityLevel",
     "Registry",
-    "get_model_registry",
     "list_models",
-    "register_callback",
-    "register_data_loader",
-    "register_domain",
     "register_metric",
     "register_model",
     "register_optimizer",
     "register_propagator",
     "register_sparsity",
-    "register_task",
 ]

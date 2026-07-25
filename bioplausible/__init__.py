@@ -55,15 +55,11 @@ from bioplausible.core.registry import (
     LocalityLevel,
     Registry,
     list_models,
-    register_callback,
-    register_data_loader,
-    register_domain,
     register_metric,
     register_model,
     register_optimizer,
     register_propagator,
     register_sparsity,
-    register_task,
 )
 from bioplausible.core.trainer import (
     CoreTrainer,
@@ -189,10 +185,6 @@ __all__ = [
     "register_optimizer",
     "register_sparsity",
     "register_metric",
-    "register_data_loader",
-    "register_task",
-    "register_callback",
-    "register_domain",
     # Domains
     "DomainTask",
     "DomainType",
