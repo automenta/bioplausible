@@ -6,8 +6,7 @@ are registered here with rich metadata for AutoScientist composition.
 """
 
 import logging
-from pathlib import Path
-from typing import Optional
+from typing import Any
 
 import torch
 from torch import nn
@@ -160,33 +159,70 @@ def get_optimizers_for_propagator(propagator_name: str):
     )
 
 
+# ============================================================================
+# Legacy adapter: ModelZoo / OptimizerZoo
+# ============================================================================
+
+
+class ModelZoo:
+    """Legacy adapter providing ``cls.get(name, **params)`` → model instance.
+
+    Used by ``experiments.utils.ExperimentRunner`` and ``deployment.py``.
+    """
+
+    @staticmethod
+    def get(name: str, **params: Any) -> nn.Module:
+        meta = Registry.get_metadata(ComponentCategory.MODEL, name)
+        if meta is None:
+            raise ValueError(f"Model '{name}' not found in Registry")
+        cls = meta.cls
+        return cls(**params)
+
+
+class OptimizerZoo:
+    """Legacy adapter providing ``cls.get(name, params, model=model, **kwargs)``.
+
+    Used by ``experiments.utils.ExperimentRunner``.
+    """
+
+    @staticmethod
+    def get(name: str, params, model: nn.Module | None = None, **kwargs: Any):
+        meta = Registry.get_metadata(ComponentCategory.OPTIMIZER, name)
+        if meta is None:
+            meta = Registry.get_metadata(ComponentCategory.PROPAGATOR, name)
+        if meta is None:
+            raise ValueError(f"Optimizer/propagator '{name}' not found in Registry")
+        cls = meta.cls
+        try:
+            return cls(params, model=model, **kwargs)
+        except TypeError:
+            return cls(params, **kwargs)
+
+
 __all__ = [
-    # Registry
-    "Registry",
     "ComponentCategory",
+    "ComponentMetadata",
+    "ComputeProfile",
     "Domain",
     "LocalityLevel",
-    "ComputeProfile",
-    "ComponentMetadata",
-    # Registration decorators
-    "register_model",
-    "register_propagator",
-    "register_optimizer",
-    "register_sparsity",
-    "register_metric",
-    "register_data_loader",
-    "register_task",
-    "register_callback",
-    "register_domain",
-    # Submodules
-    "models",
-    "propagators",
-    "optimizers",
-    "sparsity",
-    # Discovery helpers
+    "ModelZoo",
+    "OptimizerZoo",
+    "Registry",
     "get_models_for_task",
-    "get_propagators_for_model",
     "get_optimizers_for_propagator",
-    # Weight utilities
+    "get_propagators_for_model",
     "load_weights",
+    "models",
+    "optimizers",
+    "propagators",
+    "register_callback",
+    "register_data_loader",
+    "register_domain",
+    "register_metric",
+    "register_model",
+    "register_optimizer",
+    "register_propagator",
+    "register_sparsity",
+    "register_task",
+    "sparsity",
 ]

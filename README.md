@@ -61,6 +61,7 @@ Algorithms grounded in energy-based models with two-phase dynamics.
 
 Extensions exploring efficiency, robustness, and biological realism.
 
+- **GraphEqProp**: EqProp dynamics on graph-structured data (node classification)
 - **HolomorphicEP**: Complex-valued networks for exact gradient equivalence
 - **DirectedEP**: Asymmetric forward/backward weights for deep scaling
 - **FiniteNudgeEP**: Large beta perturbation for finite-difference gradients
@@ -76,6 +77,7 @@ Extensions exploring efficiency, robustness, and biological realism.
 
 Solutions to the weight transport problem.
 
+- **StandardFA**: Fixed random feedback weights — the canonical FA algorithm
 - **AdaptiveFeedbackAlignment**: Slowly-adapting random feedback weights
 - **DirectFeedbackAlignmentEqProp**: Direct output-to-hidden feedback with EqProp
 - **ContrastiveFeedbackAlignment**: Contrastive learning with feedback signals
@@ -140,6 +142,7 @@ Node-graph topology abstraction and predictive coding training, adapted from [Fa
 
 - **Graph API:** Define networks as `GraphStructure` with `Linear`/`ReLU`/`Tanh` nodes, `Edge` connections, and `Slot` ports. Validate topology automatically.
 - **Dual Training:** Train the same graph with `train_backprop()` (standard autograd) or `train_pcn()` (energy-minimization settling + local weight updates).
+- **PredictiveCodingHybrid**: Combines predictive coding with backpropagation for hybrid credit assignment
 - **BioModel Wrapper:** `FabricPCGraphPCN` (`@register_model("fabricpc_graph_pcn")`) integrates with the existing model factory and trainer.
 - **No JAX:** Pure PyTorch using `torch.func.grad` for local gradients.
 
