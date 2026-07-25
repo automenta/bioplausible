@@ -49,7 +49,7 @@ class DynamicsAnalyzer:
         self.model.eval()
         x = x.to(self.device)
 
-        # Prepare input (similar to SupervisedTrainer logic)
+        # Prepare input (similar to CoreTrainer logic)
         if hasattr(self.model, "has_embed") and self.model.has_embed:
             # Basic handling, assuming model has .embed
             h = self.model.embed(x).mean(dim=1)

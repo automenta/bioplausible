@@ -1,7 +1,9 @@
+# ruff: noqa: N806 — test fixture names follow camelCase convention
+
 import unittest
 from unittest.mock import MagicMock
 
-from bioplausible.execution.strategy import ExecutionStrategy as ScientistStrategy
+from bioplausible.execution.strategy import ExecutionStrategy
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel
 
@@ -9,7 +11,7 @@ from bioplausible.hyperopt import PatientLevel
 class TestStrategyDiversity(unittest.TestCase):
     def setUp(self):
         self.mock_state = MagicMock()
-        self.strategy = ScientistStrategy(self.mock_state)
+        self.strategy = ExecutionStrategy(self.mock_state)
 
     def test_model_diversity_penalty(self):
         # Setup: Mock recent models

@@ -29,7 +29,7 @@ def load_candidate_model(code_path: str):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
-    # We expect the AI to define a class that inherits from bioplausible.models.BioModel
+    # We expect the AI to define a class that inherits from bioplausible.zoo.base.BioModel
     # and provide a function `get_model_class()` or we scan for it.
     if hasattr(mod, "get_model_class"):
         return mod.get_model_class()

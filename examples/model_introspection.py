@@ -1,8 +1,8 @@
 """
 Model Introspection Demo
 
-Demonstrates how to use the "Microscope" functionality to inspect the internal
-convergence dynamics of Equilibrium Propagation models.
+Demonstrates how to use the forward() method with return_dynamics=True to inspect
+internal convergence dynamics of Equilibrium Propagation models.
 """
 
 import torch
@@ -13,15 +13,14 @@ from bioplausible.zoo.models.eqprop import DirectedEP, StandardEqProp
 def run_introspection(model, name):
     print(f"\n--- Introspecting {name} ---")
 
-    # Create trainer (optional, mainly for convenient wrapper)
-    trainer = SupervisedTrainer(model, task=None, task_type="vision", use_compile=False)
-
     # Generate random input
     x = torch.randn(5, model.input_dim)
 
-    # Get Dynamics
+    # Get Dynamics via model.forward() with return_dynamics=True
     print("Running equilibrium dynamics...")
-    out, dynamics = trainer.get_dynamics(x, return_trajectory=True)
+    model.eval()
+    with torch.no_grad():
+        _output, dynamics = model.forward(x, return_trajectory=True, return_dynamics=True)
 
     # Analyze
     deltas = dynamics["deltas"]

@@ -22,7 +22,7 @@ class _TaskTrainer:
 
     Drives training directly off the BaseTask API (get_batch /
     compute_metrics) so we do not depend on the deleted
-    ``SupervisedTrainer`` class.  Used by ``BaseTask.create_trainer``
+    ``CoreTrainer`` class.  Used by ``BaseTask.create_trainer``
     when called from ``CoreTrainer.run_from_runconfig``.
     """
 

@@ -1,5 +1,5 @@
 """
-Experiment Check Functions for ScientistStrategy.
+Experiment Check Functions for ExecutionStrategy.
 
 Contains helper methods that check if various experiment types are needed:
 - Verification trials

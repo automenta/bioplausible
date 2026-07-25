@@ -91,6 +91,8 @@ class EquilibriumFunction(autograd.Function):
 
             # Iterate to equilibrium for the backward pass (solving for delta)
             # delta_{t+1} = (df/dh)^T * delta_t + grad_output
+            # OPTIMIZATION: Early convergence check for the adjoint
+            delta_prev = None
             for _ in range(model.max_steps):
                 with torch.enable_grad():
                     # Create a new leaf for h_star at each step for local VJP calc
@@ -110,11 +112,19 @@ class EquilibriumFunction(autograd.Function):
                         create_graph=False,
                     )[0]
 
-                    # Update delta
-            # Crucial: detach delta to prevent graph growth during
-            # fixed-point iteration. The VJP loop is purely for finding
-            # the value of the adjoint state.
-            delta = (vjp + grad_output).detach()
+                    delta_next = (vjp + grad_output).detach()
+
+                # Check for convergence in adjoint: break early if stable
+                if delta_prev is not None and _ > 3:
+                    with torch.no_grad():
+                        if (
+                            torch.dist(delta_next, delta_prev, p=float("inf")).item()
+                            < 1e-4
+                        ):
+                            delta = delta_next
+                            break
+                delta_prev = delta_next
+                delta = delta_next
 
             # 3. Compute gradients for parameters and input using the converged delta
             delta = delta.detach()
@@ -339,7 +349,7 @@ class EqPropModel(BioModel):
         """
         Perform a single training step.
         If gradient_method is 'contrastive', this runs the EqProp loop manually.
-        Otherwise, it returns None to let SupervisedTrainer handle BPTT/Implicit.
+        Otherwise, it returns None to let CoreTrainer handle BPTT/Implicit.
         """
         if self.gradient_method != "contrastive":
             return None  # Delegate to standard trainer
@@ -503,26 +513,19 @@ class EqPropModel(BioModel):
                     h_new = self.forward_step(h, x_transformed)
 
                     if return_dynamics:
-                        # OPTIMIZATION: Use torch.dist to avoid intermediate allocations
                         delta = torch.dist(h_new, h, p=float("inf")).item()
                         deltas.append(delta)
 
                     if step_idx > 5:
                         convergence_threshold = 1e-4 if step_idx > 10 else 2e-4
-                        # OPTIMIZATION: Use torch.dist
-                        if (
-                            torch.dist(h_new, h, p=float("inf")).item()
-                            < convergence_threshold
-                        ):
+                        if return_dynamics:
+                            dist_val = delta
+                        else:
+                            dist_val = torch.dist(h_new, h, p=float("inf")).item()
+                        if dist_val < convergence_threshold:
                             h = h_new
                             if return_trajectory:
                                 trajectory[current_steps] = h
-                                # Fill remaining slots with same value or truncate?
-                                # Usually trajectory is expected entirely.
-                                # But preallocation size was constant.
-                                # If we break early, we should slice the result?
-                                # Original behavior was append, so len < steps+1.
-                                # So we should slice trajectory at end.
                             current_steps += 1
                             break
 

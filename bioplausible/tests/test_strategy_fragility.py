@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from bioplausible.execution.strategy import ExecutionStrategy as ScientistStrategy
+from bioplausible.execution.strategy import ExecutionStrategy
 
 
 class TestStrategyFragility(unittest.TestCase):
@@ -15,7 +15,7 @@ class TestStrategyFragility(unittest.TestCase):
             "fragile_mlp": 0.25
         }  # Low robustness
 
-        self.strategy = ScientistStrategy(self.mock_state)
+        self.strategy = ExecutionStrategy(self.mock_state)
 
     def test_analyze_fragility_applies_constraints(self):
         # Action

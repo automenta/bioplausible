@@ -333,7 +333,7 @@ class HyperoptStorage:
 
         Args:
             trajectory: TrainingTrajectory object
-                (from bioplausible.scientist.training_dynamics)
+                (from bioplausible.execution.training_dynamics)
         """
         try:
             cursor = self.conn.cursor()

@@ -5,8 +5,19 @@ Allows using EqProp models in Scikit-Learn pipelines with .fit() and .predict().
 Supports incremental learning via .partial_fit().
 """
 
+# ruff: noqa: N803, N806, PLR0913, PLR0917, TRY003 — sklearn convention uses uppercase X
+
+from __future__ import annotations
+
+from typing import Any
+
 import numpy as np
 import torch
+import torch.nn.functional as F
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
+
+from bioplausible.core.registry import ComponentCategory, Registry
 
 # Resilience against broken sklearn/pyarrow
 try:
@@ -16,32 +27,35 @@ try:
 
     SKLEARN_AVAILABLE = True
 except ImportError:
-    # Dummy classes to prevent import crash
+    SKLEARN_AVAILABLE = False
+
     class BaseEstimator:
         pass
 
     class ClassifierMixin:
         pass
 
-    # Dummy utility functions
-    def unique_labels(*args):
+    def unique_labels(*args):  # noqa: ARG001
         return []
 
-    def check_array(X, **kwargs):
+    def check_array(X, **kwargs):  # noqa: ARG001
         return X
 
     def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
         pass
 
-    def check_X_y(X, y, **kwargs):
+    def check_X_y(X, y, **kwargs):  # noqa: ARG001, N802
         return X, y
 
-    SKLEARN_AVAILABLE = False
-from torch.utils.data import DataLoader, TensorDataset
 
-from .core import EqPropTrainer
-from .models.factory import create_model
-from .models.registry import get_model_spec
+_MODEL_NAME_MAP: dict[str, str] = {
+    "EqProp MLP": "eqprop_mlp",
+    "StandardEqProp": "eqprop",
+    "LoopedMLP": "eqprop_mlp",
+    "BackpropMLP": "backprop_mlp",
+    "StandardFA": "standard_fa",
+    "ForwardForward": "forward_forward",
+}
 
 
 class EqPropClassifier(BaseEstimator, ClassifierMixin):
@@ -53,7 +67,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
     Parameters
     ----------
     model_name : str, default="EqProp MLP"
-        Name of the model to use (see MODEL_REGISTRY).
+        Name of the model to use (see Registry).
     hidden_dim : int, default=256
         Number of neurons in the hidden layer.
     steps : int, default=30
@@ -66,26 +80,26 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         Number of training epochs (for fit()).
     use_spectral_norm : bool, default=True
         Whether to use spectral normalization (required for stability).
-    device : str, default='cpu'
+    device : str | None, default=None
         Device to train on ('cpu' or 'cuda').
-    random_state : int, default=None
+    random_state : int | None, default=None
         Random seed for reproducibility.
     **kwargs
-        Additional arguments passed to model factory.
+        Additional arguments passed to model constructor.
     """
 
     def __init__(
         self,
-        model_name="EqProp MLP",
-        hidden_dim=256,
-        steps=30,
-        learning_rate=0.001,
-        batch_size=128,
-        epochs=10,
-        use_spectral_norm=True,
-        device=None,
-        random_state=None,
-        **kwargs,
+        model_name: str = "EqProp MLP",
+        hidden_dim: int = 256,
+        steps: int = 30,
+        learning_rate: float = 0.001,
+        batch_size: int = 128,
+        epochs: int = 10,
+        use_spectral_norm: bool = True,
+        device: str | None = None,
+        random_state: int | None = None,
+        **kwargs: Any,
     ):
         self.model_name = model_name
         self.hidden_dim = hidden_dim
@@ -98,19 +112,23 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         self.random_state = random_state
         self.kwargs = kwargs
 
-        # Internal state
-        self.classes_ = None
-        self.n_classes_ = None
-        self.n_features_in_ = None
-        self.model_ = None
-        self.trainer_ = None
+        self.classes_: np.ndarray | None = None
+        self.n_classes_: int | None = None
+        self.n_features_in_: int | None = None
+        self.model_: nn.Module | None = None
+        self.optimizer_: torch.optim.Optimizer | None = None
 
-    def _initialize(self, X, y=None, classes=None):
-        """Initialize the model and trainer if not already initialized."""
+    def _resolve_model_name(self) -> str:
+        """Map legacy model names to Registry names."""
+        return _MODEL_NAME_MAP.get(self.model_name, self.model_name)
+
+    def _initialize(
+        self, X: np.ndarray, y: np.ndarray | None = None, classes: Any = None
+    ) -> None:
+        """Initialize the model and optimizer if not already initialized."""
         if self.model_ is not None:
             return
 
-        # Determine classes
         if classes is not None:
             self.classes_ = unique_labels(classes)
         elif y is not None:
@@ -127,47 +145,54 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
             torch.manual_seed(self.random_state)
             np.random.seed(self.random_state)
 
-        # Determine device
         if self.device is None:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # Create Model using Factory
-        spec = get_model_spec(self.model_name)
-
-        # Some logic to handle dimensionality.
-        # create_model for vision usually assumes flattened or channel logic.
-        # If X is (N, D), input_dim=D.
+        resolved = self._resolve_model_name()
+        model_cls = Registry.get(ComponentCategory.MODEL, resolved)
+        if model_cls is None:
+            raise ValueError(
+                f"Model '{self.model_name}' (resolved: '{resolved}') not found in Registry. "
+                f"Available: {list(Registry.list(ComponentCategory.MODEL).get('model', []))}"
+            )
 
         factory_kwargs = self.kwargs.copy()
+        factory_kwargs.setdefault("input_dim", self.n_features_in_)
+        factory_kwargs.setdefault("output_dim", self.n_classes_)
+        factory_kwargs.setdefault("hidden_dim", self.hidden_dim)
 
-        self.model_ = create_model(
-            spec=spec,
-            input_dim=self.n_features_in_,
-            output_dim=self.n_classes_,
-            hidden_dim=self.hidden_dim,
-            device=self.device,
-            task_type="vision",
-            **factory_kwargs,
-        )
+        self.model_ = model_cls(**factory_kwargs)
+        self.model_ = self.model_.to(self.device)
 
-        # (Trainer handles steps, but we can set max_steps on model too)
         if hasattr(self.model_, "max_steps"):
             self.model_.max_steps = self.steps
         if hasattr(self.model_, "eq_steps"):
             self.model_.eq_steps = self.steps
 
-        # Initialize Trainer
-        self.trainer_ = EqPropTrainer(
-            model=self.model_,
-            task=None,
-            task_type="vision",
-            lr=self.learning_rate,
-            device=self.device,
-            use_compile=False,  # Disable compile for dynamic/sklearn usage
-            steps=self.steps,
+        self.optimizer_ = torch.optim.Adam(
+            self.model_.parameters(), lr=self.learning_rate
         )
 
-    def fit(self, X, y):
+    def _train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        """Single training step. Handles bio-plausible model train_step if present."""
+        self.optimizer_.zero_grad()
+
+        if hasattr(self.model_, "train_step"):
+            metrics = self.model_.train_step(x, y)
+            if metrics is not None:
+                return metrics
+
+        logits = self.model_(x)
+        loss = F.cross_entropy(logits, y)
+        loss.backward()
+        self.optimizer_.step()
+
+        with torch.no_grad():
+            accuracy = (logits.argmax(1) == y).float().mean().item()
+
+        return {"loss": loss.item(), "accuracy": accuracy}
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> EqPropClassifier:
         """
         Train the EqProp model.
 
@@ -180,27 +205,30 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
 
         Returns
         -------
-        self : object
+        self : EqPropClassifier
             Fitted estimator.
         """
-        # Check that X and y have correct shape
         X, y = check_X_y(X, y)
         self._initialize(X, y)
 
-        # Convert to PyTorch tensors
         X_tensor = torch.FloatTensor(X)
         y_tensor = torch.LongTensor(y)
 
-        # Create DataLoader
         dataset = TensorDataset(X_tensor, y_tensor)
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
-        # Train using fit method
-        self.trainer_.fit(loader, epochs=self.epochs, progress_bar=False)
+        self.model_.train()
+        for _ in range(self.epochs):
+            for batch_x, batch_y in loader:
+                self._train_step(
+                    batch_x.to(self.device), batch_y.to(self.device)
+                )
 
         return self
 
-    def partial_fit(self, X, y, classes=None):
+    def partial_fit(
+        self, X: np.ndarray, y: np.ndarray, classes: Any = None
+    ) -> EqPropClassifier:
         """
         Incremental fit on a batch of samples.
 
@@ -216,7 +244,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
 
         Returns
         -------
-        self : object
+        self : EqPropClassifier
             Returns self.
         """
         X = check_array(X)
@@ -224,17 +252,17 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         if self.model_ is None:
             self._initialize(X, y, classes=classes)
 
-        # Verify classes match
         if self.classes_ is None and classes is None:
             raise ValueError("classes must be passed on the first call to partial_fit.")
 
-        X_tensor = torch.FloatTensor(X).to(self.device)
-        y_tensor = torch.LongTensor(y).to(self.device)
+        x = torch.FloatTensor(X).to(self.device)
+        y_t = torch.LongTensor(y).to(self.device)
 
-        self.trainer_.train_batch(X_tensor, y_tensor)
+        self.model_.train()
+        self._train_step(x, y_t)
         return self
 
-    def predict(self, X):
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """
         Predict class labels for samples in X.
 
@@ -251,7 +279,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         check_is_fitted(self)
         X = check_array(X)
 
-        X_tensor = torch.FloatTensor(X).to(self.trainer_.device)
+        X_tensor = torch.FloatTensor(X).to(self.device)
 
         self.model_.eval()
         with torch.no_grad():
@@ -260,7 +288,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
 
         return predicted.cpu().numpy()
 
-    def predict_proba(self, X):
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """
         Predict class probabilities for samples in X.
 
@@ -277,7 +305,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         check_is_fitted(self)
         X = check_array(X)
 
-        X_tensor = torch.FloatTensor(X).to(self.trainer_.device)
+        X_tensor = torch.FloatTensor(X).to(self.device)
 
         self.model_.eval()
         with torch.no_grad():

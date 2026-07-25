@@ -59,7 +59,7 @@ class GraphStructure:
         nodes: list[NodeBase],
         edges: list[Edge],
         task_map: TaskMap,
-        inference: InferenceSGD | None = None,  # type: ignore[name-defined]  # noqa: F821
+        inference: InferenceSGD | None = None,  # type: ignore[name-defined]
     ) -> None:
         self.nodes = nodes
         self.edges = edges
@@ -204,7 +204,7 @@ def graph(
     nodes: list[NodeBase],
     edges: list[Edge],
     task_map: TaskMap,
-    inference: InferenceSGD | None = None,  # type: ignore[name-defined]  # noqa: F821
+    inference: InferenceSGD | None = None,  # type: ignore[name-defined]
 ) -> GraphStructure:
     """Assemble and validate a GraphStructure.
 

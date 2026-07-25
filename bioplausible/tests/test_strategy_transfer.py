@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from bioplausible.execution.strategy import ExecutionStrategy as ScientistStrategy
+from bioplausible.execution.strategy import ExecutionStrategy
 from bioplausible.hyperopt import PatientLevel
 
 
@@ -10,7 +10,7 @@ class TestStrategyTransfer(unittest.TestCase):
     def setUp(self):
         # Mock State and Curriculum
         self.mock_state = MagicMock()
-        self.strategy = ScientistStrategy(self.mock_state)
+        self.strategy = ExecutionStrategy(self.mock_state)
 
         # We can use the real CurriculumManager (it's stateless logic)
         # But for the test we might want to ensure specific behavior.

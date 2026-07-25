@@ -23,14 +23,14 @@ with (
     patch("bioplausible.execution.state.HyperoptStorage"),
     patch("bioplausible.execution.state.optuna"),
 ):
-    from bioplausible.execution.strategy import ExecutionStrategy as ScientistStrategy
+    from bioplausible.execution.strategy import ExecutionStrategy
     from bioplausible.hyperopt import PatientLevel
 
 
 class TestScientistRefactor(unittest.TestCase):
     def setUp(self):
         self.mock_state = MagicMock()
-        self.strategy = ScientistStrategy(self.mock_state)
+        self.strategy = ExecutionStrategy(self.mock_state)
 
         # Mock MODEL_REGISTRY
         self.mock_registry = [

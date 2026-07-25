@@ -913,7 +913,3 @@ if __name__ == "__main__":
         engine.generate_reports(args.dir)
     else:
         engine.run()
-
-
-# Backward compatibility alias
-AutoScientist = ExecutionEngine
