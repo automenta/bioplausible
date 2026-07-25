@@ -47,7 +47,7 @@ Every component is registered in the Registry (`bioplausible/core/registry.py`) 
 
 ## Models
 
-The model zoo spans 46 registered models across learning families.
+Models are grouped by learning family below.
 
 ### Equilibrium Propagation
 
@@ -61,7 +61,6 @@ Energy-based models with free-phase and nudged-phase dynamics. Gradients emerge 
 | `eqprop_diffusion` | Energy-based diffusion generative model |
 | `holomorphic_ep` | Complex-valued weights and states for exact gradient equivalence |
 | `finite_nudge_ep` | Finite-nudge EqProp using large beta perturbations |
-| `lazy_eqprop` | Event-driven EqProp that updates neurons only when inputs change |
 | `neural_cube` | 3D lattice neural network with neurons occupying 3D space |
 | `sparse_equilibrium` | EqProp with Top-K sparse updates during settling |
 | `momentum_equilibrium` | EqProp with momentum-accelerated settling dynamics |
@@ -81,7 +80,7 @@ Solutions to the weight transport problem that replace symmetric feedback with f
 | `stochastic_fa` | FA with dropout-style noise on feedback signals |
 | `contrastive_feedback_alignment` | Contrastive learning combined with feedback alignment |
 | `direct_feedback_alignment_eqprop` | Direct output-to-hidden feedback pathway with EqProp dynamics |
-| `dfa_deep` | Deep variant of direct feedback alignment with EqProp |
+| `dfa_deep` | DFA variant optimized for extreme depth (1000+ layers) |
 | `standard_fa` | Canonical FA: fixed random backward weights |
 | `energy_guided_fa` | Feedback updates steered by an energy function |
 | `energy_minimizing_fa` | EqProp dynamics combined with FA-style updates |
@@ -149,9 +148,9 @@ Partitioned architectures where computation is distributed across independent ti
 | Name | Description |
 |------|-------------|
 | `equitile` | Core tile architecture supporting predictive-coding and EqProp modes |
-| `equitile_ep` | EquiTile variant using equilibrium propagation across tiles |
-| `dynamic_equitile` | Tile layout that grows or shrinks at runtime |
-| `enhanced_equitile` | Enhanced tile architecture with additional dynamics |
+| `equitile_ep` | EquiTile with strict equilibrium propagation learning |
+| `dynamic_equitile` | Tiles grow, prune, merge, and split during training based on error signals and utilization |
+| `enhanced_equitile` | Enhanced EquiTile with optional, configurable improvements for ablation |
 | `graph_equitile` | Tile message passing over graph-structured data |
 | `lm_equitile` | Tile architecture specialized for language modeling |
 | `optimized_lm_equitile` | Optimized LM tile variant (transformer-style, mixture-of-tiles sparsity) |
@@ -161,7 +160,7 @@ Partitioned architectures where computation is distributed across independent ti
 
 ## Propagators / Credit Assignment
 
-23 credit-assignment strategies that implement the gradient-estimation logic for each learning family:
+Credit-assignment strategies that implement the gradient-estimation logic for each learning family:
 
 | Family | Propagators |
 |--------|-------------|
@@ -175,26 +174,33 @@ Partitioned architectures where computation is distributed across independent ti
 | Backprop | `backprop` |
 | MEP (Muon Equilibrium Propagation) | `smep`, `smep_fast`, `sdmep`, `local_ep`, `natural_ep`, `muon_backprop` |
 
+The MEP presets combine credit assignment with a parameter-update strategy in a single registered propagator; the underlying update strategies are also registered individually as optimizers (see below) and may be composed freely.
+
 ## Optimizers / Parameter Update
 
-| Optimizer | Source |
-|-----------|--------|
-| `sgd`, `adam`, `adamw` | Standard PyTorch optimizers |
-| `muon`, `dion`, `plain`, `fisher` | MEP optimizer strategies |
-| `spectral` | Spectral constraint optimizer |
-| `ewc` | Elastic Weight Consolidation |
+| Name | Description |
+|------|-------------|
+| `sgd` | Stochastic gradient descent (PyTorch wrapper) |
+| `adam` | Adam optimizer (PyTorch wrapper) |
+| `adamw` | Adam with decoupled weight decay (PyTorch wrapper) |
+| `muon` | Muon orthogonalized update — MEP update strategy |
+| `dion` | Diagonal Newton-style update — MEP update strategy |
+| `plain` | Plain SGD-style update — MEP update strategy |
+| `fisher` | Natural-gradient update via Fisher whitening — MEP update strategy |
+| `spectral` | Spectral constraint on weights (maintains Lipschitz-1 stability) |
+| `ewc` | Elastic Weight Consolidation for continual learning |
 
-MEP presets at `bioplausible/zoo/mep/` compose gradient computation, update rule, constraint, and feedback strategies: `smep` (spectral + Muon + equilibrium), `smep_fast`, `sdmep` (low-rank SVD), `local_ep` (layer-local), `natural_ep` (Fisher whitening), and `muon_backprop`. Strategies are individually composable — gradient (`EPGradient`, `NaturalGradient`), update (`MuonUpdate`, `DionUpdate`, `PlainUpdate`, `FisherUpdate`), constraint (`SpectralConstraint`), and feedback (`ErrorFeedback`).
+The MEP update strategies (`muon`, `dion`, `plain`, `fisher`) are individually composable with gradient strategies (`EPGradient`, `NaturalGradient`), constraint strategies (`SpectralConstraint`), and feedback strategies (`ErrorFeedback`) at `bioplausible/zoo/mep/`.
 
 ## Sparsity Methods
+
+Structural and activity-based pruning at `bioplausible/zoo/sparsity/methods.py`:
 
 | Method | Description |
 |--------|-------------|
 | `TopKPruning` | Retain only top-k activations per unit |
 | `ActivityDrivenPruning` | Prune based on measured neuronal activity |
 | `RandomPruning` | Random structural pruning baseline |
-
-Located at `bioplausible/zoo/sparsity/methods.py`.
 
 ## Architecture
 
@@ -204,6 +210,10 @@ State-machine driven experiment orchestration at `bioplausible/execution/`. Mana
 
 CLI entry points: `biopl-scientist` (experiment loop), `biopl-report` (report generation).
 
+### Configuration
+
+Structured configuration system at `bioplausible/config/` with schema validation and default management. Supports YAML-based experiment configuration files.
+
 ### AutoScientist LLM Reasoner
 
 LLM-powered experimental design at `bioplausible/autoscientist/`. Proposes new algorithm configurations based on prior results, selects models, propagators, and optimizers from the Registry, manages the exploration-exploitation trade-off across campaigns, and maintains a persistent chronicle of discovery.
@@ -212,13 +222,13 @@ LLM-powered experimental design at `bioplausible/autoscientist/`. Proposes new a
 
 Node-graph topology abstraction at `bioplausible/graph/` adapted from FabricPC. Define networks as typed nodes (Linear, ReLU, Tanh) connected by edges with slot ports. Train the same graph with standard backpropagation or energy-minimization predictive coding settling with local weight updates.
 
-### EquiTile
+### EquiTile Sub-Framework
 
-Tile-based architecture sub-framework at `bioplausible/equitile/` with variants for vision, language, reinforcement learning, graph, and time-series domains. Supports distributed tile execution, dynamic tile growth, ONNX/TorchScript export, and multiple kernel backends.
+Tile-based architecture sub-framework at `bioplausible/equitile/` with variants for vision, language, reinforcement learning, graph, and time-series domains. Supports distributed tile execution (asynchronous, NCCL-backed, with dynamic tile growth), ONNX/TorchScript export, and multiple kernel backends.
 
-### Configuration
+### PyTorch Lightning Integration
 
-Structured configuration system at `bioplausible/config/` with schema validation and default management. Supports YAML-based experiment configuration files.
+Structured training workflows at `bioplausible/lightning_/`: Lightning module wrapping Bioplausible models, Optuna pruning callbacks, Ray Tune integration, mixed precision support, energy convergence monitoring, and neural architecture search integration.
 
 ### Domains
 
@@ -232,13 +242,9 @@ Structured experiment knowledge at `bioplausible/knowledge/` — a metamodel-bac
 
 Automatic leaderboard generation at `bioplausible/leaderboard/` ranking model-optimizer combinations across benchmarks.
 
-### PyTorch Lightning Integration
-
-Structured training workflows at `bioplausible/lightning_/`: Lightning module wrapping Bioplausible models, Optuna pruning callbacks, Ray Tune integration, mixed precision support, energy convergence monitoring, and neural architecture search integration.
-
 ## Validation Framework
 
-11 modular validation tracks registered via `@register_track`, each a self-contained scientific experiment:
+Modular validation tracks registered via `@register_track`, each a self-contained scientific experiment:
 
 | Track Focus | Areas |
 |-------------|-------|
@@ -273,10 +279,6 @@ PyTorch Lightning multi-GPU and multi-node training with DDP, FSDP, and DeepSpee
 
 Decentralized training coordination at `bioplausible/p2p/` using Kademlia DHT for peer discovery. A coordinator dispatches tasks to distributed workers with asynchronous result aggregation.
 
-### EquiTile Parallelism
-
-Asynchronous tile execution across devices with NCCL backends and dynamic tile growth for runtime architecture adaptation.
-
 ## Deployment & Inference
 
 ### Model Export
@@ -289,7 +291,7 @@ High-throughput prediction server with FastAPI REST endpoints and optimized batc
 
 ## Analysis & Visualization
 
-Tools at `bioplausible/analysis/` and `bioplausible/visualization_tools.py`.
+Tools at `bioplausible/analysis/` and `bioplausible/visualization_tools.py`:
 
 | Tool | Purpose |
 |------|---------|
@@ -302,6 +304,8 @@ Tools at `bioplausible/analysis/` and `bioplausible/visualization_tools.py`.
 | `fit_power_law`, `plot_scaling_curves` | Scaling behavior characterization |
 
 ## Hardware Acceleration
+
+Optional acceleration backends at `bioplausible/acceleration/`:
 
 | Module | Purpose |
 |--------|---------|
