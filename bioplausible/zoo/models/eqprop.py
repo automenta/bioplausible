@@ -1554,14 +1554,29 @@ class EqPropDiffusion(nn.Module):
         return self.predict_x0(x, t)
 
     @torch.no_grad()
-    def sample(self, num_samples=16, img_size=(1, 28, 28), device="cpu"):
+    def sample(self, num_samples=16, img_size=(1, 28, 28), device="cpu", steps=None):
+        """Generate samples via the reverse diffusion process.
+
+        Args:
+            num_samples: Number of samples to generate.
+            img_size: Image dimensions ``(C, H, W)``.
+            device: Target device.
+            steps: Number of reverse steps (default ``self.T``, i.e. full 1000).
+
+        Returns:
+            Tensor of shape ``(num_samples, C, H, W)`` with values in ``[-1, 1]``.
+        """
         self.eval()
         B = num_samples
         C, H, W = img_size
+        T = steps if steps is not None else self.T
 
         x = torch.randn(B, C, H, W, device=device)
 
-        for i in reversed(range(self.T)):
+        stride = self.T // T if T < self.T else 1
+        timesteps = list(reversed(range(0, self.T, stride)))[:T]
+
+        for i in timesteps:
             t = torch.full((B,), i, device=device, dtype=torch.long)
 
             x_0_pred = self.predict_x0(x, t)

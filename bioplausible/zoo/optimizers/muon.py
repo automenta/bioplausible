@@ -1,10 +1,21 @@
-"""Muon/Dion optimizers.
+"""
+Muon/Dion optimizers.
 
-The real Muon/Dion update strategies live in `bioplausible.zoo.mep.optimizers.
-strategies.update` and are registered by `bioplausible.zoo.mep._registration`
-as part of the MEP preset registration. This module exists only to keep the
-`zoo/optimizers` package importable as a unit; it intentionally registers
-nothing itself to avoid duplicate `muon`/`dion` registry entries.
+Re-exports the pure update strategies (MuonUpdate, DionUpdate, PlainUpdate,
+FisherUpdate) so they are discoverable under ``zoo.optimizers``.  Actual
+registration with the ``Registry`` is done in ``zoo.mep._registration``.
 """
 
-__all__: list[str] = []
+from bioplausible.zoo.mep.optimizers import (
+    DionUpdate,
+    FisherUpdate,
+    MuonUpdate,
+    PlainUpdate,
+)
+
+__all__ = [
+    "DionUpdate",
+    "FisherUpdate",
+    "MuonUpdate",
+    "PlainUpdate",
+]

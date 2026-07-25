@@ -32,13 +32,19 @@ class TestDiffusionIntegration(unittest.TestCase):
         )
 
     def test_sample(self):
-        """Test sampling."""
+        """Test sampling with accelerated (few-step) reverse process."""
         model = EqPropDiffusion(img_channels=1, hidden_channels=8)
         model.eval()
 
-        # Test small sample
+        # Use a small number of steps — the full 1000-step DDPM loop is
+        # unnecessary for smoke-testing shape / range invariants.
         with torch.no_grad():
-            samples = model.sample(num_samples=2, img_size=(1, 8, 8), device="cpu")
+            samples = model.sample(
+                num_samples=2,
+                img_size=(1, 8, 8),
+                device="cpu",
+                steps=10,  # fast: 10 steps instead of 1000
+            )
 
         self.assertEqual(samples.shape, (2, 1, 8, 8))
         # Check range roughly

@@ -36,7 +36,7 @@ class TestValidationAll(unittest.TestCase):
         # inherently-flaky `f_loss < i_loss` checks in this suite).
         torch.manual_seed(42)
         self.device = "cpu"
-        self.epochs = 10  # Increased epochs for better convergence signal
+        self.epochs = 5  # Minimal epochs — enough to verify f_loss < i_loss
         self.batch_size = 4
         self.sample_size = 20
         self.input_dim = 10

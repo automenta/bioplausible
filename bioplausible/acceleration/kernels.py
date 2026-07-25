@@ -155,19 +155,25 @@ if _detected_cuda_path:
 try:
     import cupy as cp
 
-    # Verify it actually works (catches CUDA_PATH errors)
-    try:
-        if hasattr(cp, "cuda") and cp.cuda.is_available():
+    # Guard against mock/stub cupy (e.g. from test conftest mocking)
+    if (
+        not hasattr(cp, "ndarray")
+        or not isinstance(cp.ndarray, type)
+        or not hasattr(cp, "cuda")
+        or not cp.cuda.is_available()
+    ):
+        cp = None
+        HAS_CUPY = False
+    else:
+        # Verify it actually works (catches CUDA_PATH errors)
+        try:
             with cp.cuda.Device(0):
                 _ = cp.array([1.0])
-                _ = cp.random.rand(1)  # Trigger random generator init
+                _ = cp.random.rand(1)
             HAS_CUPY = True
-        else:
-            HAS_CUPY = False
+        except Exception:
             cp = None
-    except Exception:
-        HAS_CUPY = False
-        cp = None
+            HAS_CUPY = False
 
 except ImportError:
     cp = None
@@ -533,8 +539,12 @@ class EqPropKernel:
 
     def _prepare_input(self, x: np.ndarray) -> np.ndarray:
         """Prepare input for processing on the appropriate device."""
-        if self.use_gpu and not isinstance(x, self.xp.ndarray):
-            return self.xp.asarray(x)
+        if self.use_gpu:
+            xp_type = getattr(self.xp, "ndarray", None)
+            if xp_type is None or not isinstance(xp_type, type):
+                return x  # backend not a real module (e.g. mocked)
+            if not isinstance(x, xp_type):
+                return self.xp.asarray(x)
         return x
 
     def _compute_embedded_input(self, x: np.ndarray) -> np.ndarray:
