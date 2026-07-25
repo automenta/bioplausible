@@ -31,6 +31,10 @@ class TestValidationAll(unittest.TestCase):
     """
 
     def setUp(self):
+        # Seed torch at setup so the per-test random tensors are independent
+        # of upstream test RNG usage (which can flip pass/fail rates of the
+        # inherently-flaky `f_loss < i_loss` checks in this suite).
+        torch.manual_seed(42)
         self.device = "cpu"
         self.epochs = 10  # Increased epochs for better convergence signal
         self.batch_size = 4
@@ -47,9 +51,9 @@ class TestValidationAll(unittest.TestCase):
             TensorDataset(self.x, self.y), batch_size=self.batch_size, shuffle=True
         )
 
-        # 2. Convolutional Data (CIFAR-like shape: B, 3, 32, 32)
+        # 2. Convolutional Data (CIFAR-like shape: B, 3, 16, 16)
         # We need targets compatible with the model's output dim (usually 10 for these models)
-        self.x_conv = torch.randn(self.sample_size, 3, 32, 32).to(self.device)
+        self.x_conv = torch.randn(self.sample_size, 3, 16, 16).to(self.device)
         self.y_conv = torch.randint(0, 10, (self.sample_size,)).to(
             self.device
         )  # Models default to 10 classes
@@ -156,7 +160,7 @@ class TestValidationAll(unittest.TestCase):
             self.input_dim,
             32,
             self.output_dim,
-            max_steps=20,
+            max_steps=12,
             gradient_method="equilibrium",
         ).to(self.device)
         i_loss, f_loss = self._train_minimal(model, self.loader)

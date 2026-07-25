@@ -1,3 +1,5 @@
+import os
+import pathlib
 import unittest
 
 import pytest
@@ -7,11 +9,35 @@ from torch import nn
 from bioplausible.hyperopt.tasks import create_task
 
 _SKIP_ON_DOWNLOAD_KEYWORDS = ("download", "socket", "timeout", "url", "ssl")
+_OFFLINE_VISION_DATASETS = {
+    "cifar10",
+    "cifar100",
+    "svhn",
+    "kmnist",
+    "usps",
+    "fashion_mnist",
+}
+
+
+def _dataset_available(task_name: str) -> bool:
+    """Check whether the dataset's local files already exist."""
+    data_dir = os.path.join(os.getcwd(), "data")
+    if task_name == "cifar10":
+        return pathlib.Path(os.path.join(data_dir, "cifar-10-batches-py")).is_dir()
+    if task_name == "cifar100":
+        return pathlib.Path(os.path.join(data_dir, "cifar-100-python")).is_dir()
+    return True
 
 
 class TestSmokeAllTasks(unittest.TestCase):
     def _test_task(self, task_name, task_type):
         print(f"\n>>> Smoke Testing Task: {task_name} ({task_type})")
+        if (
+            task_type == "vision"
+            and task_name in _OFFLINE_VISION_DATASETS
+            and not _dataset_available(task_name)
+        ):
+            pytest.skip(f"Skipping {task_name}: dataset not present locally")
         try:
             task = create_task(task_name, device="cpu", quick_mode=True)
             task.setup()

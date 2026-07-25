@@ -215,6 +215,11 @@ spiking = [
     { name = "snntorch" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pyright" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "bioplausible", extras = ["knowledgebase", "graphs", "spiking"], marker = "extra == 'full'" },
@@ -263,6 +268,9 @@ requires-dist = [
     { name = "twine", marker = "extra == 'dev'" },
     { name = "uvicorn" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pyright", specifier = ">=1.1.411" }]
 
 [[package]]
 name = "boolean-py"

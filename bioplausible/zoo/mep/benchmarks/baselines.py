@@ -7,8 +7,15 @@ Includes both standard PyTorch optimizers (baselines) and EP-based optimizers.
 
 from typing import Any
 
-from bioplausible.zoo.mep.presets import local_ep, muon_backprop, natural_ep, sdmep, smep
 from torch import nn, optim
+
+from bioplausible.zoo.mep.presets import (
+    local_ep,
+    muon_backprop,
+    natural_ep,
+    sdmep,
+    smep,
+)
 
 
 def get_optimizer(

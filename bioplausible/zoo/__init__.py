@@ -40,6 +40,7 @@ class _LegacyModelSpec:
     """Adapter providing legacy ModelSpec interface from Registry metadata."""
 
     __slots__ = (
+        "credit_assignment_type",
         "credit_locality",
         "default_lr",
         "family",
@@ -48,7 +49,6 @@ class _LegacyModelSpec:
         "requires_backward",
         "task_compat",
         "variant",
-        "credit_assignment_type",
     )
 
     def __init__(self, meta: ComponentMetadata) -> None:

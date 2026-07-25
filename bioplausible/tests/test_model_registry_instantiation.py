@@ -74,9 +74,7 @@ class TestModelRegistryInstantiation(unittest.TestCase):
 
     def test_modern_conv_eqprop_instantiation(self):
         # Conv input shape: 4 batch, 3 channels, 32x32
-        self._test_model(
-            "modern_conv_eqprop", input_dim=3, input_shape=(4, 3, 32, 32)
-        )
+        self._test_model("modern_conv_eqprop", input_dim=3, input_shape=(4, 3, 32, 32))
 
     def test_hybrid_models(self):
         models_to_test = [

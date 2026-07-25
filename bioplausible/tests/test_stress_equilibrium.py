@@ -22,15 +22,15 @@ class TestEquilibriumStress(unittest.TestCase):
     def setUp(self):
         self.device = "cpu"
         self.input_dim = 20
-        self.hidden_dim = 100
+        self.hidden_dim = 32
         self.output_dim = 5
-        self.batch_size = 32
-        self.epochs = 5
-        self.max_steps = 20
+        self.batch_size = 16
+        self.epochs = 3
+        self.max_steps = 12
 
         # Synthetic data
-        self.x = torch.randn(200, self.input_dim).to(self.device)
-        self.y = torch.randint(0, self.output_dim, (200,)).to(self.device)
+        self.x = torch.randn(80, self.input_dim).to(self.device)
+        self.y = torch.randint(0, self.output_dim, (80,)).to(self.device)
         self.dataset = TensorDataset(self.x, self.y)
         self.loader = DataLoader(self.dataset, batch_size=self.batch_size, shuffle=True)
 

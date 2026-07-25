@@ -45,12 +45,8 @@ class TestBias(unittest.TestCase):
 
         with (
             patch.object(self.strategy.curriculum, "TRACKS", mock_tracks),
-            patch.object(
-                self.strategy, "TASK_WEIGHTS", mock_weights
-            ),
-            patch(
-                "bioplausible.execution.strategy._MODEL_SPECS", mock_reg
-            ),
+            patch.object(self.strategy, "TASK_WEIGHTS", mock_weights),
+            patch("bioplausible.execution.strategy._MODEL_SPECS", mock_reg),
         ):
             candidates = self.strategy.generate_candidates()
 

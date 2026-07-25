@@ -11,10 +11,11 @@ import time
 
 import torch
 import torch.nn.functional as F
-from bioplausible.zoo.mep.presets import smep
 from torch import nn
 from torch.utils.data import DataLoader, Subset, TensorDataset
 from torchvision import datasets, transforms
+
+from bioplausible.zoo.mep.presets import smep
 
 # ============================================================================
 # NICHE 1: REGRESSION (EP's Natural Domain)

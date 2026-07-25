@@ -292,10 +292,7 @@ class HyperparameterMetamodel:
         elif family == "fa" or family == "feedback_alignment":
             applicable_scopes.add(HyperparamScope.FEEDBACK_ALIGNMENT)
 
-        elif family == "mep":
-            applicable_scopes.add(HyperparamScope.FORWARD_ONLY)
-
-        elif family == "forward_only" or family == "forward-only":
+        elif family == "mep" or family == "forward_only" or family == "forward-only":
             applicable_scopes.add(HyperparamScope.FORWARD_ONLY)
 
         elif family == "target_prop" or family == "target-prop":

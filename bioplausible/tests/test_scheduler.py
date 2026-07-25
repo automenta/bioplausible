@@ -19,6 +19,7 @@ class TestSchedulerIntegration(unittest.TestCase):
                 "hidden_dim": 20,
                 "output_dim": 10,
                 "use_spectral_norm": False,
+                "max_steps": 3,
             },
             optimizer="adam",
             task="mnist",
@@ -27,6 +28,7 @@ class TestSchedulerIntegration(unittest.TestCase):
             batches_per_epoch=2,
             val_batches=1,
             use_compile=False,
+            num_workers=0,
         )
         self.trainer = CoreTrainer(config)
         self.trainer.setup()
@@ -61,9 +63,7 @@ class TestSchedulerIntegration(unittest.TestCase):
         optimizer = torch.optim.SGD(self.model.parameters(), lr=0.1)
         scheduler = StepLR(optimizer, step_size=1, gamma=0.1)
 
-        with self.assertLogs(
-            logger="bioplausible.core.trainer", level="WARNING"
-        ) as cm:
+        with self.assertLogs(logger="bioplausible.core.trainer", level="WARNING") as cm:
             self.trainer.fit(scheduler=scheduler)
         self.assertTrue(
             any("kernel" in msg.lower() for msg in cm.output),

@@ -1,3 +1,5 @@
+import os
+import pathlib
 import unittest
 
 import pytest
@@ -7,6 +9,15 @@ from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.hyperopt.tasks import VisionTask, create_task
 
 _SKIP_ON_DOWNLOAD_KEYWORDS = ("download", "socket", "timeout", "url", "ssl")
+
+
+def _dataset_available(task_name: str) -> bool:
+    data_dir = os.path.join(os.getcwd(), "data")
+    if task_name == "cifar10":
+        return pathlib.Path(os.path.join(data_dir, "cifar-10-batches-py")).is_dir()
+    if task_name == "cifar100":
+        return pathlib.Path(os.path.join(data_dir, "cifar-100-python")).is_dir()
+    return True
 
 
 def _instantiate_backprop_mlp(
@@ -30,6 +41,8 @@ def _instantiate_backprop_mlp(
 class TestVisionTask(unittest.TestCase):
     def _test_task(self, task_name, expected_channels, expected_h, expected_w):
         print(f"Testing task: {task_name}")
+        if not _dataset_available(task_name):
+            pytest.skip(f"Skipping {task_name}: dataset not present locally")
         try:
             task = create_task(task_name, device="cpu", quick_mode=True)
             task.setup()

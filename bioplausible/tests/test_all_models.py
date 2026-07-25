@@ -149,13 +149,9 @@ class TestAllModels(unittest.TestCase):
         a model's parameters. Verify construction + step signatures."""
         from bioplausible.zoo.models.eqprop import LoopedMLP
 
-        model = LoopedMLP(
-            input_dim=10, hidden_dim=20, output_dim=5
-        ).to(self.device)
+        model = LoopedMLP(input_dim=10, hidden_dim=20, output_dim=5).to(self.device)
         params = list(model.parameters())
-        chl = ContrastiveHebbianLearning(
-            params, model=model, lr=0.01
-        )
+        chl = ContrastiveHebbianLearning(params, model=model, lr=0.01)
         x = torch.randn(2, 10).to(self.device)
         y = torch.randint(0, 5, (2,)).to(self.device)
         # Step signature requires (x, target).

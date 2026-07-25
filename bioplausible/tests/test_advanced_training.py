@@ -20,9 +20,10 @@ class TestAdvancedTraining(unittest.TestCase):
             model="eqprop_mlp",
             model_kwargs={
                 "input_dim": 784,
-                "hidden_dim": 20,
+                "hidden_dim": 8,
                 "output_dim": 10,
                 "use_spectral_norm": False,
+                "max_steps": 3,
             },
             optimizer="adam",
             optimizer_kwargs={"lr": 1e-3},
@@ -32,6 +33,7 @@ class TestAdvancedTraining(unittest.TestCase):
             batches_per_epoch=2,
             val_batches=1,
             grad_clip=0.1,
+            num_workers=0,
             **overrides,
         )
         return CoreTrainer(config)

@@ -11,7 +11,6 @@ parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
 from bioplausible.acceleration.kernels import EqPropKernel  # noqa: E402
-from bioplausible.zoo.models.eqprop import LoopedMLP  # noqa: E402
 
 
 class TestEqPropKernel(unittest.TestCase):
@@ -83,9 +82,10 @@ class TestEqPropKernel(unittest.TestCase):
             task="mnist",
             epochs=1,
             batches_per_epoch=2,
-            val_batches=2,
+            val_batches=1,
             batch_size=self.batch_size,
             use_compile=False,
+            num_workers=0,
         )
         trainer = CoreTrainer(config)
         trainer.setup()

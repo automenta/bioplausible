@@ -240,13 +240,9 @@ class TestSmokeTraining(unittest.TestCase):
         # Use a small LoopedMLP model and exercise the propagator step instead.
         from bioplausible.zoo.models.eqprop import LoopedMLP
 
-        model = LoopedMLP(
-            input_dim=10, hidden_dim=32, output_dim=5
-        ).to(self.device)
+        model = LoopedMLP(input_dim=10, hidden_dim=32, output_dim=5).to(self.device)
         params = list(model.parameters())
-        chl = ContrastiveHebbianLearning(
-            params, model=model, lr=0.01
-        )
+        chl = ContrastiveHebbianLearning(params, model=model, lr=0.01)
         x = torch.randn(self.batch_size, 10).to(self.device)
         y = torch.randint(0, 5, (self.batch_size,)).to(self.device)
 
