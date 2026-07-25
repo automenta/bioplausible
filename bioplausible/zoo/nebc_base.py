@@ -19,7 +19,7 @@ from .base import BioModel
 
 class NEBCBase(BioModel, ABC):
     """
-    Abstract base class for NEBC (Nobody Ever Bothered Club) algorithms.
+    Abstract base class for NEBC (Nobody Ever Bothered to Check) algorithms.
 
     Now inherits from BioModel for unified architecture.
     Kept for backward compatibility.

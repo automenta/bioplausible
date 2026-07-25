@@ -1891,6 +1891,7 @@ class LazyStats:
         self.skipped_neurons = 0
 
 
+@register_model("lazy_eqprop")
 class LazyEqProp(nn.Module):
     """
     Event-driven Equilibrium Propagation with lazy updates.

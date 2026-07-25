@@ -61,6 +61,7 @@ Energy-based models with free-phase and nudged-phase dynamics. Gradients emerge 
 | `eqprop_diffusion` | Energy-based diffusion generative model |
 | `holomorphic_ep` | Complex-valued weights and states for exact gradient equivalence |
 | `finite_nudge_ep` | Finite-nudge EqProp using large beta perturbations |
+| `lazy_eqprop` | Event-driven EqProp that updates neurons only when inputs change |
 | `neural_cube` | 3D lattice neural network with neurons occupying 3D space |
 | `sparse_equilibrium` | EqProp with Top-K sparse updates during settling |
 | `momentum_equilibrium` | EqProp with momentum-accelerated settling dynamics |
