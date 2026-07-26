@@ -255,7 +255,7 @@ def run_ewc_benchmark(
     ewc_lambda: float = 1.0,
     device: torch.device | None = None,
     seed: int = 42,
-) -> "ContinualLearningResult":  # noqa: F821 — forward-reference str annotation, false positive on ruff 0.15
+) -> ContinualLearningResult:  # noqa: F821 — forward-reference str annotation, false positive on ruff 0.15
     """
     Run EWC baseline for Permuted MNIST benchmark.
 

@@ -609,7 +609,7 @@ class CoreTrainer:
             else:
                 try:
                     x, y = next(self._train_iter)
-                except (AttributeError, StopIteration):
+                except AttributeError, StopIteration:
                     self._train_iter = iter(self.train_loader)
                     x, y = next(self._train_iter)
 
@@ -626,7 +626,10 @@ class CoreTrainer:
                     )
                     requires_backward = meta.requires_backward
                 except Exception:
-                    pass
+                    logger.warning(
+                        "Could not fetch metadata for %s",
+                        getattr(self.model, "algorithm_name", self.config.model),
+                    )
 
                 with EnergyTracker(
                     self.model, requires_backward=requires_backward
@@ -713,7 +716,7 @@ class CoreTrainer:
     def _validate(self, val_batches: int) -> dict[str, Any]:
         """Run validation."""
         if self.val_loader is None and self.task_obj is None:
-            return {}
+            return {"val_loss": float("nan"), "val_accuracy": float("nan")}
 
         self.model.eval()
 
@@ -734,7 +737,7 @@ class CoreTrainer:
                 else:
                     try:
                         x, y = next(self._val_iter)
-                    except (AttributeError, StopIteration):
+                    except AttributeError, StopIteration:
                         self._val_iter = iter(self.val_loader)
                         x, y = next(self._val_iter)
 
@@ -753,8 +756,8 @@ class CoreTrainer:
                     val_perplexities.append(np.exp(min(loss.item(), 10)))
 
         result = {
-            "val_loss": np.mean(val_losses) if val_losses else 0.0,
-            "val_accuracy": np.mean(val_accs) if val_accs else 0.0,
+            "val_loss": float(np.mean(val_losses)) if val_losses else float("nan"),
+            "val_accuracy": float(np.mean(val_accs)) if val_accs else float("nan"),
         }
 
         if val_perplexities:

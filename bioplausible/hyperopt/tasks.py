@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 _DATASET_CACHE = {}
 
 
-def _resolve_task_loss(task: "BaseTask") -> nn.Module:
+def _resolve_task_loss(task: BaseTask) -> nn.Module:
     """Pick a torch loss module matching the task's output geometry.
 
     The `_TaskTrainer` codepath is the generic Protocol-based trainer used
@@ -121,7 +121,7 @@ class _TaskTrainer:
                 loss = self.loss_fn(logits, y)
                 if self.optimizer is not None:
                     loss.backward()
-                    if self.grad_clip:
+                    if self.grad_clip is not None:
                         torch.nn.utils.clip_grad_norm_(
                             self.model.parameters(), self.grad_clip
                         )
@@ -224,7 +224,7 @@ class BaseTask(ABC):
         """Get a batch of data."""
 
     @abstractmethod
-    def create_trainer(self, model: nn.Module, **kwargs) -> "_TaskTrainer":
+    def create_trainer(self, model: nn.Module, **kwargs) -> _TaskTrainer:
         """Create a trainer specific to this task."""
 
     @property
@@ -267,7 +267,7 @@ class LMTask(BaseTask):
         return "lm"
 
     def setup(self):
-        print(f"Loading LM dataset: {self.name}...")
+        logger.info("Loading LM dataset: %s...", self.name)
         try:
             dataset = get_lm_dataset(self.name, seq_len=self.seq_len)
             data = dataset.data
@@ -284,12 +284,13 @@ class LMTask(BaseTask):
                 self.data_train = self.data_train[:n_quick].clone()
                 self.data_val = self.data_val[: min(len(self.data_val), 1000)].clone()
 
-            print(
-                f"Dataset ready: {len(self.data_train)} train, "
-                f"{len(self.data_val)} val tokens"
+            logger.info(
+                "Dataset ready: %d train, %d val tokens",
+                len(self.data_train),
+                len(self.data_val),
             )
-        except Exception as e:
-            print(f"Failed to load dataset {self.name}: {e}")
+        except Exception:
+            logger.exception("Failed to load dataset %s", self.name)
             raise
 
     def get_batch(
@@ -304,7 +305,7 @@ class LMTask(BaseTask):
         y = torch.stack([data[i + self.seq_len] for i in idx]).to(self.device)
         return x, y
 
-    def create_trainer(self, model: nn.Module, **kwargs) -> "_TaskTrainer":
+    def create_trainer(self, model: nn.Module, **kwargs) -> _TaskTrainer:
         kwargs.pop("device", None)
 
         return _TaskTrainer(model, self, device=self.device, **kwargs)
@@ -368,15 +369,19 @@ class VisionTask(BaseTask):
             self.val_y = cached["val_y"]
             self._output_dim = cached["output_dim"]
             self._input_dim = cached["input_dim"]
-            print(
-                f"Using cached Vision dataset: {self.name} "
-                f"(Fold={self.fold}, Frac={self.data_fraction})"
+            logger.info(
+                "Using cached Vision dataset: %s (Fold=%s, Frac=%s)",
+                self.name,
+                self.fold,
+                self.data_fraction,
             )
             return
 
-        print(
-            f"Loading Vision dataset: {self.name}"
-            f" (Fold={self.fold}, Frac={self.data_fraction})..."
+        logger.info(
+            "Loading Vision dataset: %s (Fold=%s, Frac=%s)...",
+            self.name,
+            self.fold,
+            self.data_fraction,
         )
         try:
             # We first load the full training set (and test set)
@@ -512,9 +517,10 @@ class VisionTask(BaseTask):
                     perm = torch.randperm(len(self.train_x))[:n_samples]
                     self.train_x = self.train_x[perm]
                     self.train_y = self.train_y[perm]
-                    print(
-                        f"Subsampled dataset to {n_samples} samples"
-                        f" ({self.data_fraction:.0%})"
+                    logger.info(
+                        "Subsampled dataset to %d samples (%.0f%%)",
+                        n_samples,
+                        self.data_fraction * 100,
                     )
 
                 # Validation Set (Subset of Test Set for speed if quick_mode)
@@ -554,9 +560,9 @@ class VisionTask(BaseTask):
                 "output_dim": self._output_dim,
                 "input_dim": self._input_dim,
             }
-            print("Cached dataset for future trials")
-        except Exception as e:
-            print(f"Failed to load dataset {self.name}: {e}")
+            logger.info("Cached dataset for future trials")
+        except Exception:
+            logger.exception("Failed to load dataset %s", self.name)
             raise
 
     def get_batch(
@@ -578,7 +584,7 @@ class VisionTask(BaseTask):
         y = dataset_y[idx]
         return x, y
 
-    def create_trainer(self, model: nn.Module, **kwargs) -> "_TaskTrainer":
+    def create_trainer(self, model: nn.Module, **kwargs) -> _TaskTrainer:
         kwargs.pop("device", None)
 
         return _TaskTrainer(model, self, device=self.device, **kwargs)
@@ -641,7 +647,7 @@ class CharNGramTask(BaseTask):
         y = torch.stack(y_list).to(self.device).long()
         return x, y
 
-    def create_trainer(self, model: nn.Module, **kwargs) -> "_TaskTrainer":
+    def create_trainer(self, model: nn.Module, **kwargs) -> _TaskTrainer:
         kwargs.pop("device", None)
 
         return _TaskTrainer(model, self, device=self.device, **kwargs)
@@ -676,8 +682,8 @@ class RLTask(BaseTask):
             # Determine Input Dim (Observation Space)
             self._input_dim = self.env.observation_space.shape[0]
 
-        except Exception as e:
-            print(f"Failed to load env {self.env_name}: {e}")
+        except Exception:
+            logger.exception("Failed to load env %s", self.env_name)
             raise
 
     def get_batch(self, split: str = "train", batch_size: int = 32):
@@ -811,5 +817,5 @@ def create_task(
         return TabularTask(base_name, device, quick_mode)
 
     # Default to LM
-    print(f"Warning: Unknown task '{task_name}', defaulting to tiny_shakespeare LM")
+    logger.warning("Unknown task '%s', defaulting to tiny_shakespeare LM", task_name)
     return LMTask("tiny_shakespeare", device, quick_mode)
