@@ -22,7 +22,8 @@ from torch import nn
 
 from bioplausible.core.energy import EnergyTracker
 from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.datasets import create_data_loaders, get_lm_dataset
+from bioplausible.data.lm import get_lm_dataset
+from bioplausible.data.vision import create_data_loaders
 
 logger = logging.getLogger(__name__)
 
@@ -463,8 +464,7 @@ class CoreTrainer:
             opt_cls = getattr(torch.optim, self.config.optimizer, None)
             if opt_cls is None:
                 logger.warning(
-                    "Optimizer %s not found in registry "
-                    "or torch.optim, using Adam",
+                    "Optimizer %s not found in registry or torch.optim, using Adam",
                     self.config.optimizer,
                 )
                 opt_cls = torch.optim.Adam
@@ -610,7 +610,7 @@ class CoreTrainer:
             else:
                 try:
                     x, y = next(self._train_iter)
-                except (AttributeError, StopIteration):
+                except AttributeError, StopIteration:
                     self._train_iter = iter(self.train_loader)
                     x, y = next(self._train_iter)
 
@@ -738,7 +738,7 @@ class CoreTrainer:
                 else:
                     try:
                         x, y = next(self._val_iter)
-                    except (AttributeError, StopIteration):
+                    except AttributeError, StopIteration:
                         self._val_iter = iter(self.val_loader)
                         x, y = next(self._val_iter)
 
@@ -774,19 +774,15 @@ class CoreTrainer:
 
     def _log_epoch(self, metrics: TrainingMetrics) -> None:
         """Log epoch metrics."""
-        msg = (
-            "Epoch %d: "
-            "Train Loss=%.4f, "
-            "Train Acc=%.4f"
-        ) % (
+        msg = ("Epoch %d: Train Loss=%.4f, Train Acc=%.4f") % (
             metrics.epoch,
             metrics.train_loss,
             metrics.train_accuracy,
         )
         if metrics.val_loss is not None:
-            msg += (
-                ", Val Loss=%.4f, Val Acc=%.4f"
-                % (metrics.val_loss, metrics.val_accuracy)
+            msg += ", Val Loss=%.4f, Val Acc=%.4f" % (
+                metrics.val_loss,
+                metrics.val_accuracy,
             )
         if metrics.val_perplexity is not None:
             msg += ", Val PPL=%.2f" % metrics.val_perplexity

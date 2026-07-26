@@ -387,7 +387,7 @@ class TileLocalAttention(nn.Module):
                 available_backends = torch.backends.cuda.get_flash_sdp_backends()
                 if SDPBackend.FLASH_ATTENTION in available_backends:
                     return "flash"
-            except (ImportError, AttributeError):
+            except ImportError, AttributeError:
                 pass
 
         return "sdpa"
@@ -486,7 +486,7 @@ class TileLocalAttention(nn.Module):
                     is_causal=causal,
                     enable_gqa=True,
                 )
-        except (RuntimeError, TypeError):
+        except RuntimeError, TypeError:
             # Fallback to SDPA if flash fails
             return self._sdpa_attention(q, k, v, causal)
 

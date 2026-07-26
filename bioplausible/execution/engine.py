@@ -851,7 +851,7 @@ class ExecutionEngine:
 
     def _get_train_loader(self, task: ExperimentTask):
         """Get training DataLoader for a task."""
-        from bioplausible.datasets import create_data_loaders
+        from bioplausible.data.vision import create_data_loaders
 
         batch_size = (
             task.fixed_config.get("batch_size", 64) if task.fixed_config else 64
@@ -866,7 +866,7 @@ class ExecutionEngine:
 
     def _get_val_loader(self, task: ExperimentTask):
         """Get validation DataLoader for a task."""
-        from bioplausible.datasets import create_data_loaders
+        from bioplausible.data.vision import create_data_loaders
 
         batch_size = (
             task.fixed_config.get("batch_size", 64) if task.fixed_config else 64

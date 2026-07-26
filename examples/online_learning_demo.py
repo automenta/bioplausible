@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import accuracy_score
 
-from bioplausible.datasets import get_vision_dataset
+from bioplausible.data.vision import get_vision_dataset
 from bioplausible.sklearn_interface import EqPropClassifier
 
 

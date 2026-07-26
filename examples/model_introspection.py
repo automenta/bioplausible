@@ -20,7 +20,9 @@ def run_introspection(model, name):
     print("Running equilibrium dynamics...")
     model.eval()
     with torch.no_grad():
-        _output, dynamics = model.forward(x, return_trajectory=True, return_dynamics=True)
+        _output, dynamics = model.forward(
+            x, return_trajectory=True, return_dynamics=True
+        )
 
     # Analyze
     deltas = dynamics["deltas"]

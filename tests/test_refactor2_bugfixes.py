@@ -913,6 +913,3 @@ def test_trainer_energy_logs_warning_on_metadata_failure(caplog):
     metrics = trainer._train_step(x, y)
     assert "loss" in metrics
     assert math.isfinite(metrics["loss"])
-
-
-

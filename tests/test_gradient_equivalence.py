@@ -21,48 +21,21 @@ def test_contrastive_gradients():
     x = torch.randn(4, 10)
     y = torch.randint(0, 5, (4,))
 
-    # Store initial weights to ensure they don't change drastically incorrectly
-    {name: param.clone() for name, param in model.named_parameters()}
-
     # Run contrastive step
-    # This invokes the optimized contrastive_update method
     metrics = model.train_step(x, y)
 
     print(f"Metrics: {metrics}")
 
     # Verify gradients exist and are valid (no NaNs)
-    # The optimization was deferring .detach(). If done incorrectly, gradients might be double-counted or detached too early (None).
     has_grads = False
     for name, param in model.named_parameters():
         if param.requires_grad:
             if param.grad is not None:
                 has_grads = True
-                if torch.isnan(param.grad).any():
-                    print(f"FAILURE: NaN gradient for {name}")
-                    return False
-                if torch.isinf(param.grad).any():
-                    print(f"FAILURE: Inf gradient for {name}")
-                    return False
+                assert not torch.isnan(param.grad).any(), f"NaN gradient for {name}"
+                assert not torch.isinf(param.grad).any(), f"Inf gradient for {name}"
                 # Check magnitude is reasonable
                 grad_norm = param.grad.norm().item()
-                if grad_norm > 100.0:
-                    print(f"WARNING: High gradient norm for {name}: {grad_norm}")
-            else:
-                # Some params might not get gradients in contrastive if not involved in Hebbian pairs?
-                # LoopedMLP has W_in, W_rec, W_out. All should be updated.
-                # W_out relies on standard loss gradient, others on Hebbian.
-                print(f"INFO: No gradient for {name}")
+                assert grad_norm <= 100.0, f"High gradient norm for {name}: {grad_norm}"
 
-    if not has_grads:
-        print("FAILURE: No gradients computed for any parameter.")
-        return False
-
-    print("✓ Gradient equivalence test passed (gradients exist and are valid)")
-    return True
-
-
-if __name__ == "__main__":
-    if test_contrastive_gradients():
-        exit(0)
-    else:
-        exit(1)
+    assert has_grads, "No gradients computed for any parameter."

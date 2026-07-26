@@ -23,7 +23,9 @@ class TestTransferLoading(unittest.TestCase):
 
         from bioplausible.hyperopt.experiment import TrialRunner
 
-        self.runner = TrialRunner(storage=MagicMock(), task="mnist", quick_mode=True, epochs=1)
+        self.runner = TrialRunner(
+            storage=MagicMock(), task="mnist", quick_mode=True, epochs=1
+        )
 
     def tearDown(self):
         for p in self.patches:

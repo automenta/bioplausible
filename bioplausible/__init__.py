@@ -69,11 +69,8 @@ from bioplausible.core.trainer import (
 )
 
 # Data
-from bioplausible.datasets import (
-    create_data_loaders,
-    get_lm_dataset,
-    get_vision_dataset,
-)
+from bioplausible.data.lm import get_lm_dataset
+from bioplausible.data.vision import create_data_loaders, get_vision_dataset
 
 # Domains
 from bioplausible.domains import (

@@ -199,7 +199,7 @@ class Registry:
                 component._registry_metadata = metadata  # type: ignore[attr-defined]
                 component._registry_name = name  # type: ignore[attr-defined]
                 component._registry_category = category  # type: ignore[attr-defined]
-            except (AttributeError, TypeError):
+            except AttributeError, TypeError:
                 pass
             logger.info("Registered %s: %s", category.value, name)
             return component

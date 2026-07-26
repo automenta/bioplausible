@@ -415,7 +415,7 @@ class TestSmokeTraining(unittest.TestCase):
     def test_real_data_digits(self):
         """Test training on real Digits dataset (sklearn)."""
         try:
-            from bioplausible.datasets import get_vision_dataset
+            from bioplausible.data.vision import get_vision_dataset
         except ImportError as e:
             if "scikit-learn" in str(e):
                 self.skipTest("scikit-learn not installed")

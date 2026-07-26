@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 from bioplausible.analysis import DynamicsAnalyzer
-from bioplausible.datasets import get_vision_dataset
+from bioplausible.data.vision import get_vision_dataset
 
 
 def main():

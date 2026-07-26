@@ -1,10 +1,8 @@
 """
-Spiking / STDP propagators.
+Spiking Neural Network propagator (STDP).
 
 Classes: STDP
 """
-
-import torch
 
 from bioplausible.core.registry import register_propagator
 
@@ -13,7 +11,17 @@ from .base import LearningRuleOptimizer
 
 @register_propagator("stdp")
 class STDP(LearningRuleOptimizer):
-    """Spike-Timing-Dependent Plasticity."""
+    """Spike-Timing-Dependent Plasticity (STDP) propagator.
 
-    def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None:
-        raise NotImplementedError
+    Note: STDP learning is handled by SpikingSTDP model which
+    implements its own learning rule internally. See
+    bioplausible.zoo.models.spiking.SpikingSTDP.
+    """
+
+    def step(self, x, target=None):
+        msg = (
+            "STDP propagator is not yet implemented via the Zoo interface. "
+            "Use bioplausible.zoo.models.spiking.SpikingSTDP which "
+            "handles STDP updates internally."
+        )
+        raise NotImplementedError(msg)

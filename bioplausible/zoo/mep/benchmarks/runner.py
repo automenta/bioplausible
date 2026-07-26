@@ -485,7 +485,7 @@ def plot_results(
     # Set style
     try:
         sns.set_style("whitegrid")
-    except:
+    except Exception:
         pass
     plt.rcParams["figure.figsize"] = (12, 8)
 

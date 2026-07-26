@@ -14,7 +14,7 @@ from bioplausible.core.registry import ComponentCategory, Registry
 
 
 def create_model(
-    name: str, input_dim: int = None, output_dim: int = None, **kwargs
+    name: str, input_dim: int | None = None, output_dim: int | None = None, **kwargs
 ) -> nn.Module:
     """Instantiate a registered model from the Zoo registry.
 

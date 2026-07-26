@@ -2,7 +2,6 @@ import unittest
 
 import torch
 
-from bioplausible.config import GLOBAL_CONFIG
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.hyperopt.tasks import BaseTask
 
@@ -31,7 +30,6 @@ class MockVisionTask(BaseTask):
 
 class TestModelRegistryInstantiation(unittest.TestCase):
     def setUp(self):
-        GLOBAL_CONFIG.quick_mode = True
         self.task = MockVisionTask()
 
     def _test_model(self, model_name: str, input_dim: int = 32, input_shape=None):

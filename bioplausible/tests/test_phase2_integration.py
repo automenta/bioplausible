@@ -3,11 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bioplausible.config import GLOBAL_CONFIG
 from bioplausible.hyperopt.experiment import TrialRunner
 from bioplausible.hyperopt.storage import HyperoptStorage
-
-# from bioplausible.core.registry import Registry # Imported implicitly
 
 
 class TestPhase2Integration(unittest.TestCase):
@@ -15,15 +12,8 @@ class TestPhase2Integration(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = Path(self.temp_dir) / "verify.db"
 
-        # Configure global settings
-        GLOBAL_CONFIG.quick_mode = True
-        # Save original epochs
-        self.original_epochs = GLOBAL_CONFIG.epochs
-        GLOBAL_CONFIG.epochs = 5
-
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
-        GLOBAL_CONFIG.epochs = self.original_epochs
 
     def test_end_to_end_trajectory_storage(self):
         """Verify that running a trial stores trajectory and checkpoints in DB."""

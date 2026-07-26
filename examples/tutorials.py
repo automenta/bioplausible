@@ -25,7 +25,7 @@ def tutorial_1_quick_start():
     research presets.
     """
     from bioplausible import get_preset, list_presets, run_preset
-    from bioplausible.datasets import get_vision_dataset
+    from bioplausible.data.vision import get_vision_dataset
 
     print("=" * 60)
     print("TUTORIAL 1: Quick Start with Presets")
@@ -75,7 +75,7 @@ def tutorial_2_compare_optimizers():
     This tutorial shows how to compare different optimizers on the same model.
     """
     from bioplausible import ExperimentRunner, quick_comparison
-    from bioplausible.datasets import get_vision_dataset
+    from bioplausible.data.vision import get_vision_dataset
 
     print("=" * 60)
     print("TUTORIAL 2: Comparing Optimizers")
@@ -132,7 +132,7 @@ def tutorial_3_hyperparameter_search():
     This tutorial shows how to search for optimal hyperparameters.
     """
     from bioplausible import HyperparameterSearch
-    from bioplausible.datasets import get_vision_dataset
+    from bioplausible.data.vision import get_vision_dataset
 
     print("=" * 60)
     print("TUTORIAL 3: Hyperparameter Search")
@@ -187,7 +187,7 @@ def tutorial_4_export_deploy():
         export_model,
         load_model,
     )
-    from bioplausible.datasets import get_vision_dataset
+    from bioplausible.data.vision import get_vision_dataset
 
     print("=" * 60)
     print("TUTORIAL 4: Model Export and Deployment")
@@ -261,7 +261,7 @@ def tutorial_5_statistical_analysis():
     This tutorial shows how to analyze results statistically.
     """
     from bioplausible import ExperimentRunner, analyze_results
-    from bioplausible.datasets import get_vision_dataset
+    from bioplausible.data.vision import get_vision_dataset
 
     print("=" * 60)
     print("TUTORIAL 5: Statistical Analysis")
@@ -321,7 +321,7 @@ def tutorial_6_custom_experiment():
     This tutorial shows how to design custom experiments.
     """
     from bioplausible import ExperimentRunner
-    from bioplausible.datasets import get_vision_dataset
+    from bioplausible.data.vision import get_vision_dataset
 
     print("=" * 60)
     print("TUTORIAL 6: Custom Experiment Design")

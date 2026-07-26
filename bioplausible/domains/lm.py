@@ -54,7 +54,7 @@ class LMTask(DomainTask):
     def setup(self) -> None:
         """Load LM dataset."""
         # Use existing dataset loading from bioplausible.datasets
-        from bioplausible.datasets import get_lm_dataset
+        from bioplausible.data.lm import get_lm_dataset
 
         dataset = get_lm_dataset(self.dataset_name, seq_len=self.seq_len)
         data = dataset.data

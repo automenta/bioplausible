@@ -65,8 +65,8 @@ def test_domain_spec_defaults():
     assert spec.tags == []
 
 
-class TestDomainTask(DomainTask):
-    """Concrete test task."""
+class _DomainTaskForTesting(DomainTask):
+    """Concrete test task (non-Test-prefixed to avoid pytest collection issues)."""
 
     @property
     def domain_type(self) -> DomainType:
@@ -94,7 +94,7 @@ class TestDomainTask(DomainTask):
 
 def test_domain_task_interface():
     """Test that DomainTask abstract interface works."""
-    task = TestDomainTask(name="test_task", device="cpu")
+    task = _DomainTaskForTesting(name="test_task", device="cpu")
     assert task.name == "test_task"
     assert task.device.type == "cpu"
     assert task.domain_type == DomainType.CUSTOM
@@ -102,14 +102,14 @@ def test_domain_task_interface():
 
 def test_domain_task_input_output_dim():
     """Test input/output dimension properties."""
-    task = TestDomainTask(name="test_task")
+    task = _DomainTaskForTesting(name="test_task")
     assert task.input_dim == 10
     assert task.output_dim == 2
 
 
 def test_domain_task_get_model_kwargs():
     """Test get_model_kwargs."""
-    task = TestDomainTask(name="test_task")
+    task = _DomainTaskForTesting(name="test_task")
     kwargs = task.get_model_kwargs()
     assert kwargs["input_dim"] == 10
     assert kwargs["output_dim"] == 2
@@ -160,7 +160,7 @@ def test_domain_registry():
 
 def test_metrics_computation():
     """Test compute_metrics."""
-    task = TestDomainTask(name="test")
+    task = _DomainTaskForTesting(name="test")
     outputs = torch.tensor([[2.0, 0.0], [0.0, 3.0]])
     targets = torch.tensor([0, 1])
 

@@ -14,7 +14,8 @@ import torch
 from sklearn.model_selection import KFold
 from torch import nn
 
-from bioplausible.datasets import get_lm_dataset, get_vision_dataset
+from bioplausible.data.lm import get_lm_dataset
+from bioplausible.data.vision import get_vision_dataset
 
 logger = logging.getLogger(__name__)
 

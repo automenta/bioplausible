@@ -43,7 +43,7 @@ def _find_cuda_path() -> str | None:
 
         if CUDA_HOME and pathlib.Path(CUDA_HOME).exists():
             return CUDA_HOME
-    except (ImportError, Exception):
+    except ImportError, Exception:
         pass
 
     # 3. Look for nvcc

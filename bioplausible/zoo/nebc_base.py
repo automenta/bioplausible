@@ -21,8 +21,7 @@ class NEBCBase(BioModel, ABC):
     """
     Abstract base class for NEBC (Nobody Ever Bothered to Check) algorithms.
 
-    Now inherits from BioModel for unified architecture.
-    Kept for backward compatibility.
+    Inherits from BioModel for unified architecture.
     """
 
     algorithm_name: str = "NEBCBase"

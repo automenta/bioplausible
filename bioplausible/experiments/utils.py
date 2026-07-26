@@ -528,7 +528,7 @@ def quick_comparison(
     Returns:
         List of results sorted by accuracy.
     """
-    from bioplausible.datasets import get_vision_dataset
+    from bioplausible.data.vision import get_vision_dataset
 
     if optimizer_names is None:
         optimizer_names = ["smep", "smep_fast", "muon_backprop"]
@@ -570,7 +570,7 @@ def benchmark_model(
     Returns:
         ExperimentResult with benchmark metrics.
     """
-    from bioplausible.datasets import get_vision_dataset
+    from bioplausible.data.vision import get_vision_dataset
 
     train_loader, val_loader, test_loader = get_vision_dataset(
         dataset="mnist",

@@ -16,7 +16,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from bioplausible.datasets import get_vision_dataset
+from bioplausible.data.vision import get_vision_dataset
 from bioplausible.zoo.models.eqprop import LoopedMLP, MemoryEfficientLoopedMLP
 
 
