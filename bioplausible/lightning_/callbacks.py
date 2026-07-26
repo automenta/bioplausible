@@ -1,8 +1,8 @@
 """
 PyTorch Lightning Callbacks for Bioplausible MLOps
 
-Replaces legacy TrainingVisualizer, ResultsDashboard, and
-ResultAnalyzer with standard PL Callbacks.
+Standard PL callback implementations replacing ad-hoc visualisation and
+analysis paths with idiomatic Lightning hooks.
 """
 
 import json
@@ -80,7 +80,6 @@ class BioPrecisionCallback(Callback):
 class BioPredictionWriter(Callback):
     """
     Writes predictions to disk asynchronously for downstream analysis.
-    Replaces the legacy ResultAnalyzer batch processing.
     """
 
     def __init__(self, output_dir: str = "./predictions"):

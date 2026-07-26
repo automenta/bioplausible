@@ -31,8 +31,13 @@ from bioplausible.zoo import models, optimizers, propagators, sparsity
 logger = logging.getLogger("bioplausible.zoo")
 
 
-class _LegacyModelSpec:
-    """Adapter providing legacy ModelSpec interface from Registry metadata."""
+class ModelSpec:
+    """Adapter providing attribute-style access to a model's Registry metadata.
+
+    Subset of fields consumed by the hyperparameter metamodel and reporting
+    tools — these are flat strings/booleans/lists/dicts rather than the
+    structured ``ComponentMetadata``.
+    """
 
     __slots__ = (
         "citation",
@@ -67,8 +72,8 @@ class _LegacyModelSpec:
         self.name = meta.name
         # Prefer the explicit `family` metadata field; fall back to a tag.
         # Normalize hyphenated tags (e.g. "forward-only") to underscore form
-        # (e.g. "forward_only") so downstream metamodel `_FAMILY_TAGS` and
-        # `family == "forward_only"` comparisons match consistently.
+        # (e.g. "forward_only") so downstream metamodel comparisons against
+        # `family == "forward_only"` match consistently.
         self.family = meta.family or next(
             (
                 t.replace("-", "_")
@@ -77,13 +82,9 @@ class _LegacyModelSpec:
             ),
             "experimental",
         )
-        # task_compat from domains
         self.task_compat = [d.value for d in meta.domains]
-        # model_type from credit_assignment_type
         self.model_type = meta.credit_assignment_type
-        # For backward compat with metamodel expecting credit_assignment_type
         self.credit_assignment_type = meta.credit_assignment_type
-        # variant/custom_hyperparams are not directly stored; could be in extra
         self.variant = meta.extra.get("variant")
         self.custom_hyperparams = meta.extra.get("custom_hyperparams", {}) or {}
         self.default_lr = meta.typical_lr_range[0] if meta.typical_lr_range else 1e-3
@@ -95,14 +96,14 @@ class _LegacyModelSpec:
         self.version = meta.version
 
 
-def get_model_spec(name: str) -> _LegacyModelSpec:
-    """Get a legacy-compatible ModelSpec from the Registry by model name.
+def get_model_spec(name: str) -> ModelSpec:
+    """Get a :class:`ModelSpec` for the registered model ``name``.
 
     Raises:
         ValueError: if no model is registered under ``name``.
     """
     meta = Registry.get_metadata(ComponentCategory.MODEL, name)
-    return _LegacyModelSpec(meta)
+    return ModelSpec(meta)
 
 
 def load_weights(

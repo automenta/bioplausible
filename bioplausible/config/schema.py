@@ -195,13 +195,13 @@ def validate_config(cfg: Any) -> ExperimentConfig:
 
 
 # ──────────────────────────────────────────────
-# Merged from config_schema.py (legacy RunConfig types)
+# Run configuration types for YAML-driven experiments
 # ──────────────────────────────────────────────
 
 
 @dataclass
 class RunConfigData:
-    """Data configuration for legacy run configs."""
+    """Data section of a :class:`RunConfig` YAML experiment."""
 
     task: str = MISSING
     batch_size: int = 64
@@ -212,7 +212,7 @@ class RunConfigData:
 
 @dataclass
 class RunConfigModel:
-    """Model configuration for legacy run configs."""
+    """Model section of a :class:`RunConfig` YAML experiment."""
 
     name: str = MISSING
     hidden_dim: int = 256
@@ -222,7 +222,7 @@ class RunConfigModel:
 
 @dataclass
 class RunConfigOptimizer:
-    """Optimizer configuration for legacy run configs."""
+    """Optimizer section of a :class:`RunConfig` YAML experiment."""
 
     name: str = "adam"
     lr: float = 0.001
@@ -234,7 +234,7 @@ class RunConfigOptimizer:
 
 @dataclass
 class RunConfigTrainer:
-    """Trainer configuration for legacy run configs."""
+    """Trainer section of a :class:`RunConfig` YAML experiment."""
 
     epochs: int = 10
     batches_per_epoch: int = 100
@@ -246,7 +246,7 @@ class RunConfigTrainer:
 
 @dataclass
 class RunConfig:
-    """Top-level legacy run configuration."""
+    """Top-level YAML-driven configuration consumed by ``run_from_runconfig``."""
 
     seed: int = 42
     device: str = "auto"

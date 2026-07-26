@@ -399,115 +399,6 @@ class ExperimentRunner:
         return results
 
 
-class HyperparameterSearch:
-    """
-    Hyperparameter search utilities.
-
-    Example usage:
-        search = HyperparameterSearch()
-
-        # Grid search
-        best_result = search.grid_search(
-            model_name='looped_mlp',
-            optimizer_name='smep',
-            param_grid={
-                'lr': [0.001, 0.01, 0.1],
-                'settle_steps': [10, 30],
-                'beta': [0.3, 0.5],
-            },
-            train_loader=train_loader,
-            val_loader=val_loader,
-        )
-    """
-
-    def __init__(self, device: str = "auto"):
-        self.device = device
-        if device == "auto":
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    def grid_search(
-        self,
-        model_name: str,
-        optimizer_name: str,
-        param_grid: dict[str, list[Any]],
-        train_loader: DataLoader,
-        val_loader: DataLoader | None = None,
-        model_params: dict[str, Any] | None = None,
-        epochs: int = 5,
-        verbose: bool = True,
-    ) -> tuple[dict[str, Any], ExperimentResult]:
-        """
-        Perform grid search over optimizer hyperparameters.
-
-        Args:
-            model_name: Name of model.
-            optimizer_name: Name of optimizer.
-            param_grid: Dict of param_name -> list of values.
-            train_loader: Training data loader.
-            val_loader: Validation data loader.
-            model_params: Fixed model parameters.
-            epochs: Training epochs per configuration.
-            verbose: Print progress.
-
-        Returns:
-            Tuple of (best_params, best_result).
-        """
-        from itertools import product
-
-        runner = ExperimentRunner(device=self.device)
-
-        # Generate all combinations
-        param_names = list(param_grid.keys())
-        param_values = list(param_grid.values())
-
-        all_configs = []
-        for values in product(*param_values):
-            config = dict(zip(param_names, values))
-            all_configs.append(config)
-
-        if verbose:
-            print(f"Grid search: {len(all_configs)} configurations")
-
-        best_result = None
-        best_params = None
-        best_accuracy = -1.0
-
-        for i, config in enumerate(all_configs):
-            if verbose:
-                print(f"\n[{i + 1}/{len(all_configs)}] Testing: {config}")
-
-            # Merge with base optimizer params
-            optimizer_params = {**(model_params or {}), **config}
-
-            try:
-                result = runner.run(
-                    model_name=model_name,
-                    optimizer_name=optimizer_name,
-                    train_loader=train_loader,
-                    val_loader=val_loader,
-                    model_params=model_params,
-                    optimizer_params=optimizer_params,
-                    epochs=epochs,
-                    verbose=False,
-                )
-
-                if result.val_accuracy > best_accuracy:
-                    best_accuracy = result.val_accuracy
-                    best_params = config
-                    best_result = result
-
-            except Exception as e:
-                if verbose:
-                    print(f"  Failed: {e}")
-                continue
-
-        if verbose:
-            print(f"\nBest params: {best_params}")
-            print(f"Best val accuracy: {best_accuracy:.2f}%")
-
-        return best_params, best_result
-
-
 def quick_comparison(
     model_name: str = "looped_mlp",
     optimizer_names: list[str] | None = None,
@@ -595,7 +486,6 @@ __all__ = [
     "ExperimentConfig",
     "ExperimentResult",
     "ExperimentRunner",
-    "HyperparameterSearch",
     "benchmark_model",
     "quick_comparison",
 ]

@@ -21,6 +21,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.zoo.base import ModelConfig
 
 from .language import LMEquiTile, LMEquiTileConfig, PositionalEncoding
 
@@ -681,7 +682,3 @@ def create_optimized_small_lm(
         use_compile=use_compile,
         **kwargs,
     )
-
-
-# Import base classes for compatibility
-from bioplausible.zoo.base import ModelConfig  # noqa: E402

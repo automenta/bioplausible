@@ -22,23 +22,23 @@ from bioplausible.core.trainer import (
     TrainerConfig,
     _reshape_logits_targets_for_ce,
 )
-from bioplausible.zoo import _LegacyModelSpec, get_model_spec
+from bioplausible.zoo import ModelSpec, get_model_spec
 
 # ---------------------------------------------------------------------------
 # Bug #1: `spec.citation` raised AttributeError in execution/report/latex.py
-# because `citation` was not declared in `_LegacyModelSpec.__slots__`.
+# because `citation` was not declared in `ModelSpec.__slots__`.
 # ---------------------------------------------------------------------------
 
 
-def test_legacy_model_spec_exposes_citation_slot():
-    """`_LegacyModelSpec.citation` must be a readable attribute.
+def test_model_spec_exposes_citation_slot():
+    """`ModelSpec.citation` must be a readable attribute.
 
     Regression: previously `latex.py:51` did ``if spec.citation:`` but
     `citation` was missing from ``__slots__`` → AttributeError at runtime
     whenever the LaTeX report generator resolved a model successfully.
     """
     spec = get_model_spec("eqprop_mlp")
-    assert isinstance(spec, _LegacyModelSpec)
+    assert isinstance(spec, ModelSpec)
     # Reading the attribute must not raise — None is acceptable for models
     # without a bibliographic citation.
     assert spec.citation is None or isinstance(spec.citation, str)
@@ -63,7 +63,7 @@ def test_legacy_model_spec_exposes_citation_slot():
         "name",
     ],
 )
-def test_legacy_model_spec_slot_readable(attr: str):
+def test_model_spec_slot_readable(attr: str):
     """Every legacy adapter attribute must be reachable on every model."""
     for name in Registry.list("model")["model"]:
         spec = get_model_spec(name)
@@ -71,7 +71,7 @@ def test_legacy_model_spec_slot_readable(attr: str):
         getattr(spec, attr)
 
 
-def test_legacy_model_spec_citation_read_in_latex_report_context():
+def test_model_spec_citation_read_in_latex_report_context():
     """End-to-end smoke: latex report generator can read `spec.citation`.
 
     Simulates the exact pattern used in
@@ -110,13 +110,13 @@ def test_forward_only_family_resolves_correctly(model_name: str):
 
 
 def test_family_resolution_normalizes_hyphenated_tags():
-    """`_LegacyModelSpec._FAMILY_TAGS` accepts both hyphenated and
+    """`ModelSpec._FAMILY_TAGS` accepts both hyphenated and
     underscored variants of algorithm family tags.
     """
-    from bioplausible.zoo import _LegacyModelSpec
+    from bioplausible.zoo import ModelSpec
 
-    assert "forward_only" in _LegacyModelSpec._FAMILY_TAGS
-    assert "forward-only" in _LegacyModelSpec._FAMILY_TAGS
+    assert "forward_only" in ModelSpec._FAMILY_TAGS
+    assert "forward-only" in ModelSpec._FAMILY_TAGS
 
 
 # ---------------------------------------------------------------------------

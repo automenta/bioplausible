@@ -1,8 +1,7 @@
 """
 HPO Integration: Optuna + PyTorch Lightning
 
-Replaces the legacy HyperparameterSearch with scalable,
-pruning-aware hyperparameter optimisation via PyTorch Lightning.
+Scalable, pruning-aware hyperparameter optimisation via PyTorch Lightning.
 """
 
 from typing import Any

@@ -968,10 +968,8 @@ def _convert_dictconfig(obj):
 def run_from_runconfig(cfg) -> dict[str, Any]:
     """Run an experiment from an OmegaConf-based ``RunConfig``.
 
-    This is the legacy ``bioplausible.runner.run_from_config`` entry
-    point, moved here as the canonical location.  It accepts a
-    ``RunConfig`` (defined in :mod:`bioplausible.config.schema`) produced
-    by loading the YAML experiment configs in ``configs/``.
+    Accepts a ``RunConfig`` (defined in :mod:`bioplausible.config.schema`)
+    produced by loading the YAML experiment configs in ``configs/``.
 
     Args:
         cfg: ``RunConfig`` instance with ``data``/``model``/``optimizer``/

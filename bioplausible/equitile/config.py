@@ -68,7 +68,7 @@ class EquiTileConfig:
     """Main EquiTile configuration.
 
     This class aggregates Architecture, Optimization, and Dynamics configurations.
-    Fields are kept flat for backward compatibility and ease of use in CLI/Hyperopt.
+    Fields are kept flat for ease of use in CLI/Hyperopt.
 
     Architecture
     ------------
@@ -242,7 +242,7 @@ class EquiTileConfig:
 class EnhancedEquiTileConfig(EquiTileConfig):
     """
     Enhanced configuration for EquiTile with all improvements.
-    Inherits from EquiTileConfig for compatibility and reduced duplication.
+    Inherits from :class:`EquiTileConfig` to avoid field duplication.
     """
 
     # Normalization
@@ -422,28 +422,9 @@ class AsyncConfig:
 
 
 # =============================================================================
-# Enhanced EP Configuration
 # =============================================================================
-
-
-@dataclass
-class EnhancedEPConfig:
-    """Configuration for enhanced EP features.
-
-    Deprecated: Use EnhancedEquiTileConfig instead.
-    """
-
-    use_layer_norm: bool = True
-    layer_norm_eps: float = 1e-5
-    layer_norm_affine: bool = True
-
-    use_curriculum: bool = False
-    curriculum_stages: int = 5
-
-    use_weight_norm: bool = False
-
-    init_scheme: Literal["xavier", "kaiming", "orthogonal"] = "xavier"
-    init_gain: float = 1.0
+# Curriculum Configuration
+# =============================================================================
 
 
 @dataclass

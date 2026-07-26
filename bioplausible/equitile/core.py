@@ -715,14 +715,6 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
         self._init_activities(input_proj, batch, device)
         self._relax(input_proj, steps)
 
-    def _pc_inference(
-        self, input_proj: Tensor, batch: int, device: torch.device
-    ) -> None:
-        """Run PC inference phase. Alias for compatibility."""
-        self._run_inference(
-            input_proj, self.equitile_config.inference_steps, batch, device
-        )
-
     def _train_step_ep(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Train with strict two-phase Equilibrium Propagation."""
         batch = x.shape[0]

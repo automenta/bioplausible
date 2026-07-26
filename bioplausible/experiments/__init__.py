@@ -52,7 +52,6 @@ from bioplausible.experiments.utils import (
     ExperimentConfig,
     ExperimentResult,
     ExperimentRunner,
-    HyperparameterSearch,
     benchmark_model,
     quick_comparison,
 )
@@ -62,7 +61,6 @@ __all__ = [
     "ExperimentResult",
     "ExperimentConfig",
     "ExperimentRunner",
-    "HyperparameterSearch",
     "quick_comparison",
     "benchmark_model",
     # Presets

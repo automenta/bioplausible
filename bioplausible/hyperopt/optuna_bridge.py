@@ -98,7 +98,7 @@ def create_optuna_space(
         min_val = spec.range_min
         max_val = spec.range_max
 
-        # Handle constraints logic (legacy compatibility + new)
+        # Apply tier/algorithm constraints to ranges
         if constraints:
             if param_name == "hidden_dim" and "max_hidden" in constraints:
                 # For discrete choices, filter them

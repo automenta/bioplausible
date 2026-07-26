@@ -176,10 +176,12 @@ class TestResearchSynthesizer(unittest.TestCase):
 
     def _trials_df(self):
         import pandas as pd
+
         return self.synth._get_trials_df(self.conn)
 
     def _failures_df(self):
         import pandas as pd
+
         return pd.read_sql("SELECT * FROM failures", self.conn)
 
     def test_cross_algorithm_insights(self):

@@ -82,31 +82,23 @@ def run_search(args):
         # Check compatibility
         try:
             meta = Registry.get_metadata(ComponentCategory.MODEL, model)
-            # Use domain list for compatibility check
-            domain_names = [d.value for d in meta.domains]
-            if domain_names and args.task not in domain_names:
-                # Normalize task name check just in case (e.g. cifar10 -> vision?)
-                # For now assume explicit match.
-                # Special case: vision covers mnist/cifar
-                is_compat = False
-                if (
-                    args.task in domain_names
-                    or (args.task in ["mnist", "cifar10"] and "vision" in domain_names)
-                    or (
-                        args.task in ["tiny_shakespeare", "wikitext"]
-                        and "lm" in domain_names
-                    )
-                ):
-                    is_compat = True
-
-                if not is_compat:
-                    logger.warning(
-                        "⚠️  Skipping %s: Incompatible with task '%s' (Needs %s)",
-                        model,
-                        args.task,
-                        domain_names,
-                    )
-                    continue
+            domain_names: list[str] = [d.value for d in meta.domains]
+            if not domain_names:
+                pass
+            elif args.task in domain_names:
+                pass
+            elif args.task in {"mnist", "cifar10"} and "vision" in domain_names:
+                pass
+            elif args.task in {"tiny_shakespeare", "wikitext"} and "lm" in domain_names:
+                pass
+            else:
+                logger.warning(
+                    "⚠️  Skipping %s: Incompatible with task '%s' (Needs %s)",
+                    model,
+                    args.task,
+                    domain_names,
+                )
+                continue
         except Exception:
             logger.warning("Unknown model '%s', letting it try naturally", model)
 

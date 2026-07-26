@@ -1,8 +1,9 @@
 """
-Bridge between the new AutoScientist and the legacy Scientist execution engine.
+Bridge that translates AutoScientist experiment proposals into
+ExperimentTask objects consumable by the Scientist execution engine.
 
-AutoScientist proposes experiments; the Bridge translates proposals into
-ExperimentTask objects that the Scientist can execute.
+AutoScientist proposes experiments; the Bridge packages them as
+``propsal_to_task`` configs that the Scientist can execute.
 """
 
 import logging

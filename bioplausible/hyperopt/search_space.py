@@ -348,7 +348,7 @@ def get_search_space(model_name: str) -> SearchSpace:
 
         return SearchSpace(model_name, params)
 
-    # 3. Fallback inference (legacy)
+    # 3. Heuristic fallback: assume EqProp-ish defaults for unregistered models
     if "EqProp" in model_name:
         params = {
             "lr": (1e-5, 1e-2, "log"),

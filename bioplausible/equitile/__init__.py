@@ -122,7 +122,6 @@ from .config import (
     CurriculumConfig,
     DistributedConfig,
     DynamicEquiTileConfig,
-    EnhancedEPConfig,
     EnhancedEquiTileConfig,
     EquiTileConfig,
     MultiGPUConfig,
@@ -308,7 +307,6 @@ __all__ = [
     "NCCLConfig",
     "AsyncConfig",
     # Enhanced configs
-    "EnhancedEPConfig",
     "EnhancedEquiTileConfig",
     "CurriculumConfig",
     # Dynamics configs

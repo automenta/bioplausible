@@ -129,42 +129,37 @@ def tutorial_3_hyperparameter_search():
     """
     Tutorial 3: Hyperparameter Search
 
-    This tutorial shows how to search for optimal hyperparameters.
+    This tutorial shows how to search for optimal hyperparameters using
+    Optuna (the canonical HPO backend) instead of legacy grid search.
     """
-    from bioplausible import HyperparameterSearch
-    from bioplausible.data.vision import get_vision_dataset
+    from bioplausible.hyperopt import create_optuna_space, create_study
 
     print("=" * 60)
     print("TUTORIAL 3: Hyperparameter Search")
     print("=" * 60)
 
-    # Load data
-    train_loader, val_loader, _ = get_vision_dataset(
-        dataset="mnist",
-        batch_size=128,
-        normalize=True,
+    study = create_study(
+        model_names=["EqProp MLP"],
+        n_objectives=1,
+        storage=None,
+        study_name="eqprop_search",
+        use_pruning=True,
+        sampler_name="tpe",
     )
 
-    # Grid search
-    search = HyperparameterSearch(device="cpu")
+    def objective(trial):
+        config = create_optuna_space(trial, "EqProp MLP")
+        # Real code would train a model here and return its accuracy.
+        return 0.5 + config.get("lr", 1e-3)
 
-    print("\nRunning grid search...")
-    best_params, best_result = search.grid_search(
-        model_name="looped_mlp",
-        optimizer_name="smep",
-        param_grid={
-            "lr": [0.001, 0.01],
-            "settle_steps": [10, 20],
-            "beta": [0.3, 0.5],
-        },
-        train_loader=train_loader,
-        val_loader=val_loader,
-        epochs=2,
-        verbose=True,
-    )
+    print("\nRunning 5 trials with TPE sampler...")
+    study.optimize(objective, n_trials=5, show_progress_bar=False)
 
-    print(f"\nBest parameters: {best_params}")
-    print(f"Best accuracy: {best_result.val_accuracy:.2f}%")
+    print("\nBest trial:")
+    print(f"   Accuracy: {study.best_value:.4f}")
+    print("   Best hyperparameters:")
+    for key, value in study.best_trial.params.items():
+        print(f"     {key}: {value}")
 
 
 # ============================================================================

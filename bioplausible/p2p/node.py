@@ -9,6 +9,9 @@ from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+import torch
+
+from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 from bioplausible.hyperopt.experiment import run_single_trial_task
 from bioplausible.hyperopt.search_space import get_search_space
 from bioplausible.p2p.state import load_state, save_state
@@ -300,10 +303,6 @@ class Worker:
         )
 
         # Collect capabilities
-        import torch
-
-        from bioplausible.acceleration.triton_kernels import TritonEqPropOps
-
         caps = {
             "cuda": torch.cuda.is_available(),
             "triton": TritonEqPropOps.is_available(),

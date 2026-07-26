@@ -120,19 +120,6 @@ class HyperoptStorage:
             " ON training_checkpoints(epoch);"
         )
 
-        # Schema Migration: Add samples_seen if missing (for legacy DBs)
-        cursor.execute("PRAGMA table_info(training_checkpoints)")
-        columns = [row["name"] for row in cursor.fetchall()]
-        if "samples_seen" not in columns:
-            logger.info("Migrating schema: Adding samples_seen column...")
-            try:
-                cursor.execute(
-                    "ALTER TABLE training_checkpoints"
-                    " ADD COLUMN samples_seen INTEGER DEFAULT 0"
-                )
-            except sqlite3.OperationalError:
-                pass  # Already exists (race condition)
-
         self.conn.commit()
 
     def create_trial(
@@ -408,8 +395,6 @@ class HyperoptStorage:
         for row in rows:
             traj_id = row["id"]
 
-            # 2. Get checkpoints for this trajectory
-            # Use SELECT * to handle varying schema (e.g. samples_seen)
             cursor.execute(
                 """
                 SELECT *
@@ -423,14 +408,6 @@ class HyperoptStorage:
 
             checkpoints = []
             for cr in ckpt_rows:
-                # Safely get samples_seen (defaults to 0 if column missing in legacy DB)
-                # sqlite3.Row supports keys() or explicit check
-                samples_seen_val = 0
-                try:
-                    samples_seen_val = cr["samples_seen"]
-                except IndexError, KeyError:
-                    pass
-
                 checkpoints.append(
                     TrainingCheckpoint(
                         epoch=cr["epoch"],
@@ -448,7 +425,7 @@ class HyperoptStorage:
                         reward=cr["reward"],
                         wall_time_seconds=cr["wall_time_seconds"],
                         total_flops=cr["total_flops"],
-                        samples_seen=samples_seen_val,
+                        samples_seen=cr["samples_seen"],
                     )
                 )
 

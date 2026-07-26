@@ -702,8 +702,8 @@ class EnhancedEquiTile(EquiTile):
             # For now fallback to base EP, or raise
             return super().train_step(x, y)
 
-        # Call base implementation which calls _pc_inference (using overridden _relaxation_step)
-        # and _pc_learning (overridden here)
+        # Call base implementation which calls the overridden _relaxation_step
+        # and per-tile learning overrides.
         return super().train_step(x, y)
 
     def forward(self, x: Tensor, steps: int | None = None) -> Tensor:

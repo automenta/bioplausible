@@ -19,7 +19,7 @@ dist/
 htmlcov/
 results/
 logs/
-data/
+/data/
 *.log
 .DS_Store
 *.db

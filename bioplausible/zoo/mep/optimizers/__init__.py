@@ -97,18 +97,18 @@ __all__ = [
     "EPOptimizer",
     "EPConfig",
     "EWCState",
-    # O(1) memory prototype v1 (legacy)
+    # O(1) memory implementation used by EPOptimizerWithEWC
     "manual_energy_compute",
     "settle_manual",
     "energy_from_states",
     "O1MemoryEP",
-    # O(1) memory prototype v2 (legacy)
+    # O(1) memory v2 implementation used by EPOptimizerWithEWC
     "analytic_state_gradients",
     "settle_manual_o1",
     "manual_energy_compute_o1",
     "energy_from_states_minimal",
     "O1MemoryEPv2",
-    # EWC for continual learning (legacy)
+    # EWC continual-learning support
     "EWCRegularizer",
     "EPOptimizerWithEWC",
     "TaskMemory",
