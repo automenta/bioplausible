@@ -7,7 +7,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 import torch
 from torch import nn
@@ -38,7 +37,7 @@ class TaskSplit(str, Enum):
     TRAIN_VAL = "train_val"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class DomainSpec:
     """Specification for a domain."""
 
@@ -56,13 +55,13 @@ class DomainSpec:
     tags: list[str] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Batch:
     """Standard batch format."""
 
     inputs: torch.Tensor
     targets: torch.Tensor
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
     def to(self, device: torch.device) -> Batch:
         """Move batch to device."""
@@ -77,7 +76,7 @@ class Batch:
         return self.inputs.shape[0]
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Metrics:
     """Standardized metrics output."""
 
@@ -216,7 +215,7 @@ class DomainTask(ABC):
         accuracy = (outputs.argmax(1) == targets).float().mean().item()
         return Metrics(loss=loss, accuracy=accuracy)
 
-    def get_model_kwargs(self) -> dict[str, Any]:
+    def get_model_kwargs(self) -> dict[str, object]:
         """Get keyword arguments for model construction."""
         return {
             "input_dim": self.input_dim,

@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class EnergyProfile:
     forward_flops: int  # via torch.profiler or hook counting
     backward_flops: int  # 0 for EP/FF/PEPITA/Hebbian

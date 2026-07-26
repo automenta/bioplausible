@@ -7,17 +7,22 @@ a unified, validated configuration system.
 
 from __future__ import annotations
 
-# Register custom resolvers for date interpolation
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from omegaconf import OmegaConf
+from omegaconf import MISSING, OmegaConf
 
-try:
-    OmegaConf.register_new_resolver("now", lambda fmt: time.strftime(fmt))
-except Exception:
-    pass  # Already registered
+
+def _register_resolvers() -> None:
+    """Register OmegaConf custom resolvers. Safe to call multiple times."""
+    import contextlib
+
+    with contextlib.suppress(Exception):
+        OmegaConf.register_new_resolver("now", time.strftime)
+
+
+_register_resolvers()
 
 
 @dataclass
@@ -132,7 +137,7 @@ class ExperimentConfig:
             model=ModelConfig(name="equitile"),
             optimizer=OptimizerConfig(name="smep", lr=0.01),
             dataset=DatasetConfig(name="mnist", batch_size=128),
-            trainer=TrainerConfig(epochs=20),
+            trainer=TrainingConfig(epochs=20),
         )
         cfg = OmegaConf.structured(config)
         OmegaConf.save(cfg, "config.yaml")
@@ -183,7 +188,6 @@ def validate_config(cfg: Any) -> ExperimentConfig:
                 OmegaConf.create(cfg),
             )
         )
-    # OmegaConf DictConfig
     return OmegaConf.to_object(
         OmegaConf.merge(
             OmegaConf.structured(ExperimentConfig),
@@ -196,18 +200,11 @@ def validate_config(cfg: Any) -> ExperimentConfig:
 # Merged from config_schema.py (legacy RunConfig types)
 # ──────────────────────────────────────────────
 
-from dataclasses import dataclass, field
-
-from omegaconf import MISSING, OmegaConf
-
-try:
-    OmegaConf.register_new_resolver("now", lambda fmt: time.strftime(fmt))
-except Exception:
-    pass
-
 
 @dataclass
 class RunConfigData:
+    """Data configuration for legacy run configs."""
+
     task: str = MISSING
     batch_size: int = 64
     seq_len: int = 64
@@ -217,6 +214,8 @@ class RunConfigData:
 
 @dataclass
 class RunConfigModel:
+    """Model configuration for legacy run configs."""
+
     name: str = MISSING
     hidden_dim: int = 256
     num_layers: int = 3
@@ -225,6 +224,8 @@ class RunConfigModel:
 
 @dataclass
 class RunConfigOptimizer:
+    """Optimizer configuration for legacy run configs."""
+
     name: str = "adam"
     lr: float = 0.001
     weight_decay: float = 0.0
@@ -235,6 +236,8 @@ class RunConfigOptimizer:
 
 @dataclass
 class RunConfigTrainer:
+    """Trainer configuration for legacy run configs."""
+
     epochs: int = 10
     batches_per_epoch: int = 100
     grad_clip: float | None = None
@@ -245,6 +248,8 @@ class RunConfigTrainer:
 
 @dataclass
 class RunConfig:
+    """Top-level legacy run configuration."""
+
     seed: int = 42
     device: str = "auto"
     output_dir: str = "results/${now:%Y%m%d_%H%M%S}"

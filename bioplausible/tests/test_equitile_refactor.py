@@ -166,5 +166,5 @@ def test_multigpu_equitile_training():
         stats = multi_gpu.train_step(x, y)
         assert "loss" in stats
         assert "accuracy" in stats
-    except RuntimeError, ValueError:
+    except (RuntimeError, ValueError):
         pytest.skip("NCCL not available or failed to initialize")

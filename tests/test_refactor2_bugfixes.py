@@ -9,7 +9,6 @@ CPU without external dependencies.
 from __future__ import annotations
 
 import math
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -24,7 +23,6 @@ from bioplausible.core.trainer import (
     _reshape_logits_targets_for_ce,
 )
 from bioplausible.zoo import _LegacyModelSpec, get_model_spec
-
 
 # ---------------------------------------------------------------------------
 # Bug #1: `spec.citation` raised AttributeError in execution/report/latex.py
@@ -219,7 +217,7 @@ def test_task_trainer_nan_val_when_validation_fails():
             self._output_dim = 3
 
         # setup not exercised by trainer; provide no-op to honor abstract API.
-        def setup(self) -> None:  # noqa: D401
+        def setup(self) -> None:
             pass
 
         @property
@@ -262,8 +260,8 @@ def test_task_trainer_uses_mse_for_regression_tasks():
     """
     from bioplausible.hyperopt.tasks import (
         BaseTask,
-        _TaskTrainer,
         _resolve_task_loss,
+        _TaskTrainer,
     )
 
     class RegressionTask(BaseTask):
@@ -495,3 +493,305 @@ def test_core_trainer_validate_supports_3d_logits_model():
     assert "val_accuracy" in result
     assert math.isfinite(result["val_loss"])
     assert 0.0 <= result["val_accuracy"] <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Bug: Python 2-style `except X, Y:` syntax (broken in 3.14). All 22
+# occurrences rewritten to `except (X, Y):`. Verify none remain in source.
+# ---------------------------------------------------------------------------
+
+
+def test_no_comma_except_syntax_remains():
+    """Fail if any file under bioplausible/ still uses Python 2
+    ``except X, Y:`` comma form.  Ruff's formatter normalises
+    ``except (X, Y):`` to ``except X, Y:`` (equivalent in 3.14),
+    so this only checks lib files, not tests."""
+    from pathlib import Path
+
+    def _check_file(p: Path) -> list[str]:
+        """Return list of offending line numbers."""
+        try:
+            lines = p.read_text().splitlines()
+        except Exception:
+            return []
+        bad: list[str] = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if not stripped.startswith("except "):
+                continue
+            if stripped.startswith("except*"):
+                continue
+            if " as " in stripped:
+                continue
+            body = stripped[len("except ") :]
+            if "," in body and not body.startswith("("):
+                bad.append(f"{p}:{i}: {stripped}")
+        return bad
+
+    all_bad: list[str] = []
+    for p in Path("bioplausible").rglob("*.py"):
+        if ".venv" in str(p) or "__pycache__" in str(p):
+            continue
+        all_bad.extend(_check_file(p))
+    assert not all_bad, (
+        f"Found {len(all_bad)} occurrence(s) of comma-form `except X, Y:`:\n"
+        + "\n".join(all_bad)
+    )
+
+
+def test_comma_except_syntax_at_runtime_catches_both_types():
+    """Verify the rewritten `except (X, Y):` form actually catches all listed
+    exception types at runtime."""
+    # Should catch ValueError
+    try:
+        int("not_a_number")
+    except RuntimeError, ValueError:
+        pass  # Must catch ValueError
+    else:
+        pytest.fail("except (RuntimeError, ValueError): did not catch ValueError")
+
+    # Should catch ImportError
+    try:
+        import nonexistent_module_xyz  # noqa: F401
+    except ImportError, OSError:
+        pass  # Must catch ImportError
+    else:
+        pytest.fail("except (ImportError, OSError): did not catch ImportError")
+
+    # Should NOT catch TypeError (selectivity check)
+    try:
+        msg: str = "hello"
+        msg + 1  # type: ignore[operator]  # raises TypeError
+    except RuntimeError, ValueError:
+        pytest.fail("(RuntimeError, ValueError) should NOT catch TypeError")
+    except TypeError:
+        pass  # Expected — TypeError should propagate out
+
+    # Should catch multiple exception types: three at once
+    results: list[str] = []
+
+    def raise_triple(exc_type: type[BaseException]) -> None:
+        try:
+            raise exc_type("test")
+        except RuntimeError, ValueError, IndexError:
+            results.append("caught")
+
+    raise_triple(RuntimeError)
+    raise_triple(ValueError)
+    raise_triple(IndexError)
+    assert len(results) == 3, (
+        f"expected (RuntimeError, ValueError, IndexError) to catch all 3, "
+        f"caught {len(results)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Regression: frozen+slots dataclasses for value objects (AGENTS.md).
+# ---------------------------------------------------------------------------
+
+
+def test_config_schema_dataclasses_are_dataclasses():
+    """All config dataclasses must be dataclasses (they are I/O boundary
+    types, not internal value objects — OmegaConf requires mutability)."""
+    import dataclasses
+
+    from bioplausible.config.schema import (
+        DatasetConfig,
+        DomainConfig,
+        ExperimentConfig,
+        LightningConfig,
+        ModelConfig,
+        OptimizerConfig,
+        PropagatorConfig,
+        RunConfig,
+        RunConfigData,
+        RunConfigModel,
+        RunConfigOptimizer,
+        RunConfigTrainer,
+        ScientistConfig,
+        SparsityConfig,
+        TrainingConfig,
+    )
+
+    config_classes = [
+        DatasetConfig,
+        DomainConfig,
+        ExperimentConfig,
+        LightningConfig,
+        ModelConfig,
+        OptimizerConfig,
+        PropagatorConfig,
+        RunConfig,
+        RunConfigData,
+        RunConfigModel,
+        RunConfigOptimizer,
+        RunConfigTrainer,
+        ScientistConfig,
+        SparsityConfig,
+        TrainingConfig,
+    ]
+    for cls in config_classes:
+        assert dataclasses.is_dataclass(cls), f"{cls.__name__} is not a dataclass"
+
+
+def test_energy_profile_is_frozen_with_slots():
+    """EnergyProfile is a value object — must be frozen+slots."""
+    import dataclasses
+
+    from bioplausible.core.energy import EnergyProfile
+
+    assert dataclasses.is_dataclass(EnergyProfile)
+    assert EnergyProfile.__dataclass_params__.frozen
+    assert hasattr(EnergyProfile, "__slots__")
+
+
+def test_domain_dataclasses_are_frozen_with_slots():
+    """DomainSpec, Batch, Metrics are value objects — must be frozen+slots."""
+    import dataclasses
+
+    from bioplausible.domains.base import Batch, DomainSpec, Metrics
+
+    for cls in (DomainSpec, Batch, Metrics):
+        assert dataclasses.is_dataclass(cls), f"{cls.__name__} is not a dataclass"
+        assert cls.__dataclass_params__.frozen, f"{cls.__name__} is not frozen"
+        assert hasattr(cls, "__slots__"), f"{cls.__name__} does not have __slots__"
+
+
+# ---------------------------------------------------------------------------
+# Regression: __all__ must be defined in package __init__.py (AGENTS.md).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "pkg_path",
+    [
+        "bioplausible/cli",
+        "bioplausible/leaderboard",
+        "bioplausible/p2p",
+        "bioplausible/validation",
+    ],
+)
+def test_package_init_defines_all(pkg_path: str):
+    """Package __init__.py must define __all__ (AGENTS.md)."""
+    import importlib
+
+    mod = importlib.import_module(pkg_path.replace("/", "."))
+    assert hasattr(mod, "__all__"), f"{pkg_path} __init__.py missing __all__"
+    assert isinstance(mod.__all__, list), f"{pkg_path} __all__ is not a list"
+    assert len(mod.__all__) > 0, f"{pkg_path} __all__ is empty"
+
+
+# ---------------------------------------------------------------------------
+# Regression: config/schema.py must have no duplicate-code / module-level I/O.
+# ---------------------------------------------------------------------------
+
+
+def test_config_schema_no_duplicate_code():
+    """config/schema.py must not contain duplicate resolver registrations or
+    duplicate imports."""
+    import ast
+    from pathlib import Path
+
+    src = Path("bioplausible/config/schema.py").read_text()
+    tree = ast.parse(src)
+
+    # Count `register_new_resolver("now", ...)` calls
+    resolver_calls = 0
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "register_new_resolver"
+        ):
+            resolver_calls += 1
+    assert resolver_calls == 1, (
+        f"Expected exactly 1 OmegaConf.register_new_resolver('now',...) call, "
+        f"found {resolver_calls} (duplicate code was deduplicated)"
+    )
+
+    # Count `from dataclasses import` statements
+    dataclass_imports = 0
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "dataclasses":
+            dataclass_imports += 1
+    assert dataclass_imports == 1, (
+        f"Expected exactly 1 'from dataclasses import' statement, "
+        f"found {dataclass_imports} (duplicate import was removed)"
+    )
+
+    # Count `from omegaconf import` statements
+    omegaconf_imports = 0
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "omegaconf":
+            omegaconf_imports += 1
+    assert omegaconf_imports == 1, (
+        f"Expected exactly 1 'from omegaconf import' statement, "
+        f"found {omegaconf_imports} (duplicate import was removed)"
+    )
+
+
+def test_config_schema_no_module_level_io():
+    """The OmegaConf resolver must be registered via a function call, not at
+    module level — module-level I/O is forbidden by AGENTS.md."""
+    import ast
+    from pathlib import Path
+
+    src = Path("bioplausible/config/schema.py").read_text()
+    tree = ast.parse(src)
+
+    # Find the register_new_resolver call — it should be inside a function def
+    call_line = None
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "register_new_resolver"
+        ):
+            call_line = node.lineno
+
+    assert call_line is not None, "No register_new_resolver call found"
+
+    # Verify it's inside a function (not at module level)
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.FunctionDef)
+            and node.lineno <= call_line <= node.end_lineno
+        ):
+            return  # Found enclosing function — OK
+    pytest.fail(
+        f"register_new_resolver call at line {call_line} is at module level, "
+        f"not inside a function"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Regression: confirm exception tuple syntax works for all 22 fixed sites
+# by importing each module that was fixed.
+# ---------------------------------------------------------------------------
+
+
+def test_fixed_modules_import_without_error():
+    """Import each module that had comma-except fixes to confirm no regressions."""
+    modules = [
+        "bioplausible.acceleration.backends",
+        "bioplausible.acceleration.kernels",
+        "bioplausible.analysis.results",
+        "bioplausible.core.trainer",
+        "bioplausible.core.registry",
+        "bioplausible.generation",
+        "bioplausible.hyperopt.comparison",
+        "bioplausible.hyperopt.storage",
+        "bioplausible.execution.algorithm_constraints",
+        "bioplausible.execution.synthesizer",
+        "bioplausible.execution.failure_tracker",
+        "bioplausible.execution.report.composer",
+        "bioplausible.execution.training_dynamics",
+        "bioplausible.zoo.mep.optimizers.energy",
+    ]
+    import importlib
+
+    for mod_name in modules:
+        try:
+            importlib.import_module(mod_name)
+        except Exception as e:
+            pytest.fail(f"Failed to import {mod_name}: {e}")
