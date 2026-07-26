@@ -246,8 +246,8 @@ class CoreTrainer:
         # Callbacks
         self._callbacks: list[Callable] = []
 
-        logger.info(f"CoreTrainer initialized on {self.device}")
-        logger.info(f"Output dir: {self.output_dir}")
+        logger.info("CoreTrainer initialized on %s", self.device)
+        logger.info("Output dir: %s", self.output_dir)
 
     @classmethod
     def from_yaml(cls, path: str) -> CoreTrainer:
@@ -309,9 +309,9 @@ class CoreTrainer:
         if self.config.use_compile and not self._is_kernal_model():
             try:
                 self.model = torch.compile(self.model, mode=self.config.compile_mode)
-                logger.info(f"Model compiled with mode={self.config.compile_mode}")
+                logger.info("Model compiled with mode=%s", self.config.compile_mode)
             except Exception as e:
-                logger.warning(f"Compilation failed: {e}")
+                logger.warning("Compilation failed: %s", e)
 
         # 6. Move to device
         self.model = self.model.to(self.device)
@@ -320,7 +320,7 @@ class CoreTrainer:
 
     def _setup_data(self) -> None:
         """Setup data loaders."""
-        logger.info(f"Setting up data for task: {self.config.task}")
+        logger.info("Setting up data for task: %s", self.config.task)
 
         batch_size = self.config.batch_size
         val_batch_size = self.config.val_batch_size or batch_size
@@ -352,12 +352,12 @@ class CoreTrainer:
                     **self.config.data_kwargs,
                 )
             except Exception as e:
-                logger.warning(f"Could not load dataset {self.config.task}: {e}")
+                logger.warning("Could not load dataset %s: %s", self.config.task, e)
                 raise
 
         train_len = len(self.train_loader)
         val_len = len(self.val_loader) if self.val_loader else 0
-        logger.info(f"Data loaders created: train={train_len}, val={val_len}")
+        logger.info("Data loaders created: train=%d, val=%d", train_len, val_len)
 
     def _setup_lm_data(self, batch_size: int, val_batch_size: int) -> None:
         """Setup language modeling data."""
@@ -388,7 +388,7 @@ class CoreTrainer:
 
     def _create_model(self) -> None:
         """Create model from registry."""
-        logger.info(f"Creating model: {self.config.model}")
+        logger.info("Creating model: %s", self.config.model)
 
         # Check if model is registered in new registry
         if Registry._components.get(ComponentCategory.MODEL, {}).get(self.config.model):
@@ -402,8 +402,8 @@ class CoreTrainer:
                 f"Model '{self.config.model}' not registered. Available: {available}"
             )
 
-        logger.info(f"Model created: {self.model.__class__.__name__}")
-        logger.info(f"Parameters: {sum(p.numel() for p in self.model.parameters()):,}")
+        logger.info("Model created: %s", self.model.__class__.__name__)
+        logger.info("Parameters: %s", sum(p.numel() for p in self.model.parameters()))
 
     def _is_kernal_model(self) -> bool:
         """Check if model uses kernel backend (not compatible with torch.compile)."""
@@ -414,7 +414,7 @@ class CoreTrainer:
         if not self.config.propagator:
             return
 
-        logger.info(f"Creating propagator: {self.config.propagator}")
+        logger.info("Creating propagator: %s", self.config.propagator)
 
         if Registry._components.get(ComponentCategory.PROPAGATOR, {}).get(
             self.config.propagator
@@ -425,12 +425,12 @@ class CoreTrainer:
             self.propagator = prop_cls(self.model, **self.config.propagator_kwargs)
         else:
             logger.warning(
-                f"Propagator {self.config.propagator} not in registry, skipping"
+                "Propagator %s not in registry, skipping", self.config.propagator
             )
 
     def _create_optimizer(self) -> None:
         """Create optimizer."""
-        logger.info(f"Creating optimizer: {self.config.optimizer}")
+        logger.info("Creating optimizer: %s", self.config.optimizer)
 
         # Check if optimizer is in new registry
         if Registry._components.get(ComponentCategory.OPTIMIZER, {}).get(
@@ -463,15 +463,16 @@ class CoreTrainer:
             opt_cls = getattr(torch.optim, self.config.optimizer, None)
             if opt_cls is None:
                 logger.warning(
-                    f"Optimizer {self.config.optimizer} not found in registry "
-                    f"or torch.optim, using Adam"
+                    "Optimizer %s not found in registry "
+                    "or torch.optim, using Adam",
+                    self.config.optimizer,
                 )
                 opt_cls = torch.optim.Adam
             self.optimizer = opt_cls(
                 self.model.parameters(), **self.config.optimizer_kwargs
             )
 
-        logger.info(f"Optimizer created: {self.optimizer.__class__.__name__}")
+        logger.info("Optimizer created: %s", self.optimizer.__class__.__name__)
 
     def fit(
         self, scheduler: torch.optim.lr_scheduler.LRScheduler | None = None
@@ -492,7 +493,7 @@ class CoreTrainer:
         if self.model is None:
             self.setup()
 
-        logger.info(f"Starting training for {self.config.epochs} epochs")
+        logger.info("Starting training for %d epochs", self.config.epochs)
 
         # Determine batches per epoch
         if self.config.batches_per_epoch:
@@ -566,7 +567,7 @@ class CoreTrainer:
 
                 # Early stopping
                 if self._check_early_stopping(epoch_metrics):
-                    logger.info(f"Early stopping triggered at epoch {epoch}")
+                    logger.info("Early stopping triggered at epoch %d", epoch)
                     break
 
                 # Scheduler step (if any)
@@ -581,7 +582,7 @@ class CoreTrainer:
         except KeyboardInterrupt:
             logger.info("Training interrupted by user")
         except Exception as e:
-            logger.error(f"Training failed: {e}", exc_info=True)
+            logger.error("Training failed: %s", e, exc_info=True)
             raise
         finally:
             self._save_history()
@@ -609,7 +610,7 @@ class CoreTrainer:
             else:
                 try:
                     x, y = next(self._train_iter)
-                except AttributeError, StopIteration:
+                except (AttributeError, StopIteration):
                     self._train_iter = iter(self.train_loader)
                     x, y = next(self._train_iter)
 
@@ -737,7 +738,7 @@ class CoreTrainer:
                 else:
                     try:
                         x, y = next(self._val_iter)
-                    except AttributeError, StopIteration:
+                    except (AttributeError, StopIteration):
                         self._val_iter = iter(self.val_loader)
                         x, y = next(self._val_iter)
 
@@ -774,19 +775,24 @@ class CoreTrainer:
     def _log_epoch(self, metrics: TrainingMetrics) -> None:
         """Log epoch metrics."""
         msg = (
-            f"Epoch {metrics.epoch}: "
-            f"Train Loss={metrics.train_loss:.4f}, "
-            f"Train Acc={metrics.train_accuracy:.4f}"
+            "Epoch %d: "
+            "Train Loss=%.4f, "
+            "Train Acc=%.4f"
+        ) % (
+            metrics.epoch,
+            metrics.train_loss,
+            metrics.train_accuracy,
         )
         if metrics.val_loss is not None:
             msg += (
-                f", Val Loss={metrics.val_loss:.4f}, Val Acc={metrics.val_accuracy:.4f}"
+                ", Val Loss=%.4f, Val Acc=%.4f"
+                % (metrics.val_loss, metrics.val_accuracy)
             )
         if metrics.val_perplexity is not None:
-            msg += f", Val PPL={metrics.val_perplexity:.2f}"
+            msg += ", Val PPL=%.2f" % metrics.val_perplexity
         if metrics.learning_rate is not None:
-            msg += f", LR={metrics.learning_rate:.2e}"
-        msg += f", Time={metrics.epoch_time:.1f}s"
+            msg += ", LR=%.2e" % metrics.learning_rate
+        msg += ", Time=%.1fs" % metrics.epoch_time
 
         logger.info(msg)
 
@@ -794,7 +800,7 @@ class CoreTrainer:
         """Log step metrics."""
         loss = metrics.get("loss", 0)
         acc = metrics.get("accuracy", 0)
-        logger.debug(f"Step {step}/{total}: Loss={loss:.4f}, Acc={acc:.4f}")
+        logger.debug("Step %d/%d: Loss=%.4f, Acc=%.4f", step, total, loss, acc)
 
     def _run_callbacks(self, metrics: TrainingMetrics) -> None:
         """Run registered callbacks."""
@@ -802,7 +808,7 @@ class CoreTrainer:
             try:
                 cb(self, metrics)
             except Exception as e:
-                logger.warning(f"Callback failed: {e}")
+                logger.warning("Callback failed: %s", e)
 
     def add_callback(self, callback: Callable) -> None:
         """Add a callback function."""
@@ -852,7 +858,7 @@ class CoreTrainer:
             path,
         )
 
-        logger.info(f"Checkpoint saved: {path}")
+        logger.info("Checkpoint saved: %s", path)
 
     def _check_early_stopping(self, metrics: TrainingMetrics) -> bool:
         """Check early stopping condition."""
@@ -896,7 +902,7 @@ class CoreTrainer:
         self.current_epoch = checkpoint.get("epoch", 0)
         self.global_step = checkpoint.get("global_step", 0)
         self.history = [TrainingMetrics(**m) for m in checkpoint.get("metrics", [])]
-        logger.info(f"Loaded checkpoint from epoch {self.current_epoch}")
+        logger.info("Loaded checkpoint from epoch %d", self.current_epoch)
 
     def search(self, param_space: dict[str, Any], n_trials: int = 20) -> dict[str, Any]:
         """

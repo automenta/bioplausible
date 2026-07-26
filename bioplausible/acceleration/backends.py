@@ -31,12 +31,12 @@ class BackendDetector:
         return "cpu"
 
     @staticmethod
-    def _get_cuda_backend() -> str:
+    def _get_cuda_backend() -> str | None:
         """Get CUDA backend if available."""
         return "cuda" if torch.cuda.is_available() else None
 
     @staticmethod
-    def _get_mps_backend() -> str:
+    def _get_mps_backend() -> str | None:
         """Get MPS backend if available."""
         return "mps" if BackendDetector._is_mps_available() else None
 
@@ -84,11 +84,12 @@ class CupyChecker:
             import cupy as cp
 
             _ = cp.zeros(10)
-            return True, "CuPy available with CUDA"
         except ImportError:
             return False, "CuPy not installed. Install with: pip install cupy-cuda12x"
         except Exception as e:
             return False, f"CuPy installed but CUDA failed: {e}"
+        else:
+            return True, "CuPy available with CUDA"
 
 
 def check_cupy_available() -> tuple[bool, str]:

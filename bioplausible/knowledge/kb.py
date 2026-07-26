@@ -930,48 +930,6 @@ def create_knowledge_base(
     return KnowledgeBase(db_path=db_path, **kwargs)
 
 
-# Backward compatibility
-class LegacyKnowledgeBase:
-    """Backward compatible wrapper for old JSON-based KnowledgeBase."""
-
-    def __init__(
-        self, storage_path: str = "knowledgebase.json", load_seed: bool = False
-    ):
-        self.storage_path = storage_path
-        self.kb = KnowledgeBase(db_path=storage_path.replace(".json", ".db"))
-        if load_seed:
-            self.kb._load_seed_data()
-
-    @property
-    def findings(self) -> list[dict[str, Any]]:
-        entries = self.kb.query(limit=10000)
-        return [e.to_dict() for e in entries]
-
-    def add_finding(
-        self,
-        topic: str,
-        model_family: str,
-        finding: str,
-        details: str,
-        confidence: float,
-        tags: list[str],
-    ) -> str:
-        entry = KnowledgeEntry(
-            id=f"KB-{len(self.findings) + 1:03d}",
-            topic=topic,
-            model_family=model_family,
-            finding=finding,
-            details=details,
-            confidence=confidence,
-            tags=tags,
-        )
-        return self.kb.add_entry(entry)
-
-    def query(self, tag: str = None, model_family: str = None) -> list[dict[str, Any]]:
-        entries = self.kb.query(tag=tag, model_family=model_family)
-        return [e.to_dict() for e in entries]
-
-
 # Default instance
 DEFAULT_KB = KnowledgeBase()
 
@@ -980,6 +938,5 @@ __all__ = [
     "DEFAULT_KB",
     "KnowledgeBase",
     "KnowledgeEntry",
-    "LegacyKnowledgeBase",
     "create_knowledge_base",
 ]

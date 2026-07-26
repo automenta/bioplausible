@@ -136,7 +136,6 @@ class HyperoptStorage:
         self,
         model_name: str,
         config: dict[str, Any],
-        _legacy_force_id: int | None = None,
     ) -> int:
         """
         Create a new trial log.
@@ -144,38 +143,18 @@ class HyperoptStorage:
         Args:
             model_name: Name of the model
             config: Configuration dictionary
-            _legacy_force_id: DEPRECATED. Do not use.
-                              If provided, forces a specific Trial ID (dangerous).
         """
         cursor = self.conn.cursor()
 
-        if _legacy_force_id is not None:
-            cursor.execute(
-                """
-                INSERT INTO hyperopt_logs
-                    (trial_id, model_name, config_json, status, timestamp)
-                VALUES (?, ?, ?, ?, ?)
-            """,
-                (
-                    _legacy_force_id,
-                    model_name,
-                    json.dumps(config),
-                    "pending",
-                    datetime.now().isoformat(),
-                ),
-            )
-            self.conn.commit()
-            return _legacy_force_id
-        else:
-            cursor.execute(
-                """
-                INSERT INTO hyperopt_logs (model_name, config_json, status, timestamp)
-                VALUES (?, ?, ?, ?)
-            """,
-                (model_name, json.dumps(config), "pending", datetime.now().isoformat()),
-            )
-            self.conn.commit()
-            return cursor.lastrowid
+        cursor.execute(
+            """
+            INSERT INTO hyperopt_logs (model_name, config_json, status, timestamp)
+            VALUES (?, ?, ?, ?)
+        """,
+            (model_name, json.dumps(config), "pending", datetime.now().isoformat()),
+        )
+        self.conn.commit()
+        return cursor.lastrowid
 
     def update_trial(
         self,

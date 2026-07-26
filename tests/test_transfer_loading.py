@@ -5,14 +5,9 @@ from unittest.mock import MagicMock, patch
 
 class TestTransferLoading(unittest.TestCase):
     def setUp(self):
-        # We need to mock imports inside bioplausible.hyperopt.experiment
-        # Since we can't easily unimport modules, we patch where the class is defined
-
         # Patch dependencies for TrialRunner instantiation
+
         self.patches = [
-            patch(
-                "bioplausible.hyperopt.experiment.GLOBAL_CONFIG", MagicMock(epochs=1)
-            ),
             patch(
                 "bioplausible.hyperopt.experiment.create_task",
                 return_value=MagicMock(input_dim=10, output_dim=2),
@@ -28,7 +23,7 @@ class TestTransferLoading(unittest.TestCase):
 
         from bioplausible.hyperopt.experiment import TrialRunner
 
-        self.runner = TrialRunner(storage=MagicMock(), task="mnist", quick_mode=True)
+        self.runner = TrialRunner(storage=MagicMock(), task="mnist", quick_mode=True, epochs=1)
 
     def tearDown(self):
         for p in self.patches:

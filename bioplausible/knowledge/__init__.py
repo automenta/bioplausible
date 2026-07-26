@@ -10,11 +10,10 @@ from bioplausible.knowledge.kb import (
     DEFAULT_KB,
     KnowledgeBase,
     KnowledgeEntry,
-    LegacyKnowledgeBase,
     create_knowledge_base,
 )
 
-# Backward compatibility
+# Seed data
 from bioplausible.knowledge.seed import DEFAULT_KB as SEED_KB
 from bioplausible.knowledge.seed import KNOWLEDGE_BASE_SEED
 
@@ -22,10 +21,9 @@ __all__ = [
     # New KnowledgeBase
     "KnowledgeBase",
     "KnowledgeEntry",
-    "LegacyKnowledgeBase",
     "create_knowledge_base",
     "DEFAULT_KB",
-    # Legacy
+    # Seed data
     "KNOWLEDGE_BASE_SEED",
     "SEED_KB",
 ]

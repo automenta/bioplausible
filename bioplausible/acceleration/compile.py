@@ -6,45 +6,50 @@ Provides torch.compile wrappers for 2-3x speedup.
 
 import os
 import warnings
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import torch
 
 from bioplausible.acceleration.backends import TRITON_AVAILABLE
 
-_GLOBAL_COMPILE_CHECKED = False
-_GLOBAL_COMPILE_WORKS = False
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
-def _check_compile_works() -> bool:
-    """Runtime check to see if torch.compile actually works."""
-    global _GLOBAL_COMPILE_CHECKED, _GLOBAL_COMPILE_WORKS
+class _CompileCache:
+    """Cache for torch.compile availability check."""
 
-    if _GLOBAL_COMPILE_CHECKED:
-        return _GLOBAL_COMPILE_WORKS
+    _checked: bool = False
+    _works: bool = False
 
-    if os.environ.get("BIOPL_DISABLE_COMPILE", "0") == "1":
-        _GLOBAL_COMPILE_WORKS = False
-        _GLOBAL_COMPILE_CHECKED = True
-        return False
+    @classmethod
+    def check(cls) -> bool:
+        """Runtime check to see if torch.compile actually works."""
+        if cls._checked:
+            return cls._works
 
-    try:
+        if os.environ.get("BIOPL_DISABLE_COMPILE", "0") == "1":
+            cls._works = False
+            cls._checked = True
+            return False
 
-        def dummy_fn(x):
-            return torch.tanh(x * 2.0)
+        try:
 
-        compiled = torch.compile(dummy_fn, mode="reduce-overhead")
-        _ = compiled(torch.ones(128, 128))
-        _GLOBAL_COMPILE_WORKS = True
-    except Exception as e:
-        warnings.warn(
-            f"torch.compile check failed: {e}. Disabling compilation.",
-            RuntimeWarning,
-        )
-        _GLOBAL_COMPILE_WORKS = False
+            def dummy_fn(x: torch.Tensor) -> torch.Tensor:
+                return torch.tanh(x * 2.0)
 
-    _GLOBAL_COMPILE_CHECKED = True
-    return _GLOBAL_COMPILE_WORKS
+            compiled = torch.compile(dummy_fn, mode="reduce-overhead")
+            _ = compiled(torch.ones(128, 128))
+            cls._works = True
+        except Exception as e:
+            warnings.warn(
+                f"torch.compile check failed: {e}. Disabling compilation.",
+                RuntimeWarning,
+            )
+            cls._works = False
+
+        cls._checked = True
+        return cls._works
 
 
 def compile_model(
@@ -83,7 +88,7 @@ def compile_model(
         )
         return model
 
-    if not _check_compile_works():
+    if not _CompileCache.check():
         return model
 
     if not TRITON_AVAILABLE:
@@ -96,12 +101,14 @@ def compile_model(
             fullgraph=fullgraph,
             dynamic=dynamic,
         )
-        return compiled
     except Exception as e:
         warnings.warn(
             f"torch.compile failed: {e}. Using uncompiled model.",
             RuntimeWarning,
         )
+        return model
+    else:
+        return compiled
         return model
 
 
@@ -127,7 +134,7 @@ def compile_settling_loop(settling_fn: Callable) -> Callable:
     if not torch.cuda.is_available():
         return settling_fn
 
-    if not _check_compile_works():
+    if not _CompileCache.check():
         return settling_fn
 
     if not TRITON_AVAILABLE:

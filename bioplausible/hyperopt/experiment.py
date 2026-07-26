@@ -17,7 +17,6 @@ from typing import Any
 import numpy as np
 import torch
 
-from bioplausible.config import GLOBAL_CONFIG
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.execution.archiver import ExperimentArchiver
 from bioplausible.execution.checkpoint_manager import CheckpointManager
@@ -43,13 +42,14 @@ class TrialRunner:
         checkpoint_db_path: str = None,
         task_kwargs: dict = None,
         timeout: float = 3600.0,
+        epochs: int = 3,
     ):
         self.storage = storage or HyperoptStorage()
         self.checkpoint_db_path = checkpoint_db_path
         self.device = self._select_device(device)
         self.task_name = task
         self.quick_mode = quick_mode
-        self.epochs = GLOBAL_CONFIG.epochs
+        self.epochs = epochs
         self.task_kwargs = task_kwargs or {}
         self.timeout = timeout
 
@@ -305,8 +305,8 @@ class TrialRunner:
             model,
             lr=lr,
             steps=steps if steps else 20,
-            batches_per_epoch=200 if not GLOBAL_CONFIG.quick_mode else 5,
-            eval_batches=50 if not GLOBAL_CONFIG.quick_mode else 2,
+            batches_per_epoch=200 if not self.quick_mode else 5,
+            eval_batches=50 if not self.quick_mode else 2,
             tracker=tracker,
             safety_config=safety_config,
             **trainer_kwargs,
