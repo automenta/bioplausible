@@ -5,8 +5,6 @@ Replaces the legacy config_schema.py and config_loader.py with
 a unified, validated configuration system.
 """
 
-from __future__ import annotations
-
 import time
 from dataclasses import dataclass, field
 from typing import Any

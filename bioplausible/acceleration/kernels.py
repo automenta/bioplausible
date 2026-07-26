@@ -15,72 +15,72 @@ Usage:
     kernel.train_step(x_batch, y_batch)
 """
 
+import logging
 import os
 import pathlib
 import shutil
+import sys
+from ctypes.util import find_library
 from typing import Any
 
 import numpy as np
 
-# Robust CUDA_PATH detection logic
-# Priority:
-# 1. Environment variable (explicit override)
-# 2. torch.utils.cpp_extension.CUDA_HOME
-# 3. nvcc location
-# 4. Standard system paths / ldconfig / pip packages
+
+def _from_env_var() -> pathlib.Path | None:
+    """Check CUDA_PATH environment variable."""
+    if path := os.environ.get("CUDA_PATH"):
+        p = pathlib.Path(path)
+        if p.exists():
+            return p
+    return None
 
 
-def _find_cuda_path() -> str | None:
-    """Finds the CUDA installation path using a simplified 4-source fallback."""
-
-    # 1. Environment variable
-    if "CUDA_PATH" in os.environ and pathlib.Path(os.environ["CUDA_PATH"]).exists():
-        return os.environ["CUDA_PATH"]
-
-    # 2. Ask PyTorch (best bet for compatibility)
+def _from_torch() -> pathlib.Path | None:
+    """Query PyTorch's CUDA_HOME."""
     try:
         from torch.utils.cpp_extension import CUDA_HOME
+    except ImportError:
+        return None
+    if CUDA_HOME and (p := pathlib.Path(CUDA_HOME)).exists():
+        return p
+    return None
 
-        if CUDA_HOME and pathlib.Path(CUDA_HOME).exists():
-            return CUDA_HOME
-    except ImportError, Exception:
-        pass
 
-    # 3. Look for nvcc
-    nvcc_path = shutil.which("nvcc")
-    if nvcc_path:
-        # Resolve symlinks:
-        # /usr/bin/nvcc -> /etc/alternatives/nvcc -> /usr/local/cuda/bin/nvcc
-        try:
-            real_nvcc_path = os.path.realpath(nvcc_path)
-            # /usr/local/cuda/bin/nvcc -> /usr/local/cuda
-            cuda_root = os.path.dirname(os.path.dirname(real_nvcc_path))
-            if pathlib.Path(os.path.join(cuda_root, "bin", "nvcc")).exists():
-                return cuda_root
-        except Exception:
-            pass
+def _from_nvcc() -> pathlib.Path | None:
+    """Find CUDA root by resolving nvcc symlinks."""
+    if (nvcc_path := shutil.which("nvcc")) is None:
+        return None
+    try:
+        real_nvcc = pathlib.Path(nvcc_path).resolve()
+        cuda_root = real_nvcc.parent.parent
+        if (cuda_root / "bin" / "nvcc").exists():
+            return cuda_root
+    except OSError, RuntimeError:
+        return None
+    return None
 
-    # 4. Fallbacks (Pip, Library Search, Standard Paths)
 
-    # 4a. Pip-installed nvidia-cuda-nvcc (common in PyTorch 2.x)
+def _from_pip_package() -> pathlib.Path | None:
+    """Check pip-installed nvidia-cuda-nvcc package."""
     try:
         import nvidia.cuda_nvcc
-
-        nvcc_pkg_path = os.path.dirname(nvidia.cuda_nvcc.__file__)
-        if pathlib.Path(os.path.join(nvcc_pkg_path, "bin", "nvcc")).exists():
-            return nvcc_pkg_path
     except ImportError:
-        pass
+        return None
+    pkg_path = pathlib.Path(nvidia.cuda_nvcc.__file__).parent
+    if (pkg_path / "bin" / "nvcc").exists():
+        return pkg_path
+    return None
 
-    # 4b. Standard System Paths
-    common_paths = [
-        "/usr/local/cuda",
-        "/opt/cuda",
-        "/usr/lib/cuda",
-        "/usr/lib/nvidia-cuda-toolkit",
+
+def _from_standard_paths() -> pathlib.Path | None:
+    """Check common CUDA installation paths."""
+    common_paths: list[pathlib.Path] = [
+        pathlib.Path("/usr/local/cuda"),
+        pathlib.Path("/opt/cuda"),
+        pathlib.Path("/usr/lib/cuda"),
+        pathlib.Path("/usr/lib/nvidia-cuda-toolkit"),
     ]
-    # Add versioned paths (CUDA 12.x and 11.x)
-    cuda_versions = [
+    for ver in (
         "12.8",
         "12.6",
         "12.5",
@@ -91,55 +91,68 @@ def _find_cuda_path() -> str | None:
         "12.0",
         "11.8",
         "11.7",
-    ]
-    for ver in cuda_versions:
-        common_paths.append(f"/usr/local/cuda-{ver}")
+    ):
+        common_paths.append(pathlib.Path(f"/usr/local/cuda-{ver}"))
 
     for path in common_paths:
-        if pathlib.Path(path).exists() and pathlib.Path(path).is_dir():
-            if (
-                pathlib.Path(os.path.join(path, "bin", "nvcc")).exists()
-                or pathlib.Path(os.path.join(path, "include", "cuda.h")).exists()
-            ):
-                return path
+        if path.is_dir() and (
+            (path / "bin" / "nvcc").exists() or (path / "include" / "cuda.h").exists()
+        ):
+            return path
+    return None
 
-    # 4c. Library Search (LD_LIBRARY_PATH, ldconfig) via ctypes
+
+def _from_ldconfig() -> pathlib.Path | None:
+    """Find CUDA via ldconfig / LD_LIBRARY_PATH."""
+    if (cudart := find_library("cudart")) is None:
+        return None
+
+    # If absolute path, use it directly
+    cudart_path = pathlib.Path(cudart)
+    if cudart_path.is_absolute() and cudart_path.exists():
+        return cudart_path.parent.parent
+
+    # Otherwise search LD_LIBRARY_PATH
+    ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+    for lib_dir in ld_path.split(os.pathsep):
+        if not lib_dir:
+            continue
+        potential = pathlib.Path(lib_dir) / cudart
+        if potential.exists():
+            return potential.parent.parent
+    return None
+
+
+def _from_windows() -> pathlib.Path | None:
+    """Fallback for Windows NVIDIA GPU Computing Toolkit."""
+    if sys.platform != "win32":
+        return None
+    pg_files = pathlib.Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+    nvidia_root = pg_files / "NVIDIA GPU Computing Toolkit" / "CUDA"
+    if not nvidia_root.exists():
+        return None
     try:
-        from ctypes.util import find_library
+        versions = sorted(nvidia_root.iterdir(), reverse=True)
+        if versions:
+            return versions[0]
+    except OSError:
+        return None
+    return None
 
-        cudart = find_library("cudart")
-        if cudart:
-            # If absolute path, use it
-            if pathlib.Path(cudart).is_absolute() and pathlib.Path(cudart).exists():
-                cuda_root = os.path.dirname(os.path.dirname(cudart))
-                if pathlib.Path(cuda_root).exists():
-                    return cuda_root
-            else:
-                # Check LD_LIBRARY_PATH
-                ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-                for lib_dir in ld_path.split(os.pathsep):
-                    if not lib_dir:
-                        continue
-                    potential_path = os.path.join(lib_dir, cudart)
-                    if pathlib.Path(potential_path).exists():
-                        cuda_root = os.path.dirname(os.path.dirname(potential_path))
-                        if pathlib.Path(cuda_root).exists():
-                            return cuda_root
-                        break
-    except Exception:
-        pass
 
-    # 5. Fallback for Windows or unusual Linux setups
-    if os.name == "nt":
-        # Check Program Files
-        pg_files = os.environ.get("ProgramFiles", "C:\\Program Files")
-        nvidia_gpu = os.path.join(pg_files, "NVIDIA GPU Computing Toolkit", "CUDA")
-        if pathlib.Path(nvidia_gpu).exists():
-            # Return highest version
-            versions = sorted(os.listdir(nvidia_gpu), reverse=True)
-            if versions:
-                return os.path.join(nvidia_gpu, versions[0])
-
+def _find_cuda_path() -> str | None:
+    """Find CUDA installation path using prioritized fallback chain."""
+    for finder in (
+        _from_env_var,
+        _from_torch,
+        _from_nvcc,
+        _from_pip_package,
+        _from_standard_paths,
+        _from_ldconfig,
+        _from_windows,
+    ):
+        if (path := finder()) is not None:
+            return str(path)
     return None
 
 
@@ -147,9 +160,9 @@ _detected_cuda_path = _find_cuda_path()
 if _detected_cuda_path:
     os.environ["CUDA_PATH"] = _detected_cuda_path
     # Also ensure it is in PATH for nvcc if not already
-    bin_path = os.path.join(_detected_cuda_path, "bin")
-    if pathlib.Path(bin_path).exists() and bin_path not in os.environ.get("PATH", ""):
-        os.environ["PATH"] = bin_path + os.pathsep + os.environ.get("PATH", "")
+    bin_path = pathlib.Path(_detected_cuda_path) / "bin"
+    if bin_path.exists() and str(bin_path) not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = str(bin_path) + os.pathsep + os.environ.get("PATH", "")
 
 # Try to import CuPy for GPU
 try:
@@ -208,8 +221,11 @@ def to_numpy(arr: Any) -> np.ndarray:
             ):
                 return cp.asnumpy(arr)
         except Exception:
-            pass
+            logger.warning("Failed to convert CuPy array to NumPy, falling back")
     return arr
+
+
+logger = logging.getLogger(__name__)
 
 
 def softmax(x: np.ndarray, xp: Any = np) -> np.ndarray:

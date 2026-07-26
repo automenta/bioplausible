@@ -4,8 +4,6 @@ Pre-built benchmarks for standard tasks across all domains.
 Each benchmark returns a callable that evaluates a model and returns BenchmarkResult.
 """
 
-from __future__ import annotations
-
 import builtins
 from collections.abc import Callable
 

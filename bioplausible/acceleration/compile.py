@@ -4,6 +4,7 @@ Model Compilation Utilities
 Provides torch.compile wrappers for 2-3x speedup.
 """
 
+import logging
 import os
 import warnings
 from typing import TYPE_CHECKING
@@ -11,6 +12,8 @@ from typing import TYPE_CHECKING
 import torch
 
 from bioplausible.acceleration.backends import TRITON_AVAILABLE
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -143,6 +146,7 @@ def compile_settling_loop(settling_fn: Callable) -> Callable:
     try:
         return torch.compile(settling_fn, mode="reduce-overhead")
     except Exception:
+        logger.warning("torch.compile settling loop failed, using uncompiled version")
         return settling_fn
 
 

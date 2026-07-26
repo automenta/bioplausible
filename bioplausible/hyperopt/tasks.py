@@ -4,8 +4,6 @@ Task Abstraction for Hyperopt and Experiments
 Encapsulates data loading, batch generation, and evaluation logic for different tasks.
 """
 
-from __future__ import annotations
-
 import logging
 from abc import ABC, abstractmethod
 

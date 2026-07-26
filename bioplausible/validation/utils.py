@@ -14,12 +14,15 @@ Scientific Rigor Features:
 - Reproducibility tracking
 """
 
+import logging
 from typing import Any
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+logger = logging.getLogger(__name__)
 
 
 def progress_bar(current: int, total: int, width: int = 20) -> str:
@@ -82,22 +85,24 @@ def train_model(
             )
 
         acc = (out.argmax(dim=1) == y).float().mean().item() * 100
-        print(
-            f"\r  {name}: {progress_bar(epoch + 1, epochs)} loss={loss.item():.3f} acc={acc:.1f}%",
-            end="",
-            flush=True,
+        logger.debug(
+            "  %s: %s loss=%.3f acc=%.1f%%",
+            name,
+            progress_bar(epoch + 1, epochs),
+            loss.item(),
+            acc,
         )
 
         # Early stopping: if 100% accuracy for 3 consecutive epochs, stop
         if acc >= 100.0:
             perfect_streak += 1
             if perfect_streak >= 3:
-                print(" [early stop]", end="")
+                logger.info("  [early stop] %s", name)
                 break
         else:
             perfect_streak = 0
 
-    print()
+    logger.info("Training complete for %s", name)
     return losses
 
 

@@ -1,6 +1,5 @@
 """Tests for the EWC and SpectralConstraint optimizer implementations."""
 
-import pytest
 import torch
 from torch import nn
 

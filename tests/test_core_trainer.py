@@ -6,7 +6,6 @@ from bioplausible.core.trainer import (
     CoreTrainer,
     TrainerConfig,
     TrainingMetrics,
-    run_from_config,
 )
 
 
@@ -67,19 +66,6 @@ def test_trainer_config_to_dict():
     d = config.to_dict()
     assert d["model"] == "test_model"
     assert d["epochs"] == 10
-
-
-def test_run_from_config_error():
-    """Test run_from_config with invalid model (should raise)."""
-    config = TrainerConfig(
-        model="nonexistent_model",
-        epochs=1,
-        batches_per_epoch=2,
-        task="mnist",
-    )
-
-    with pytest.raises((ValueError, KeyError, ImportError)):
-        run_from_config(config)
 
 
 def test_core_trainer_from_dict():

@@ -1,10 +1,13 @@
 import json
+import logging
 from typing import Any
 
 import optuna
 
 from bioplausible.execution.failure_tracker import FailureTracker
 from bioplausible.hyperopt.storage import HyperoptStorage
+
+logger = logging.getLogger(__name__)
 
 
 class ExperimentState:
@@ -120,11 +123,11 @@ class ExperimentState:
                     if "task" in config:
                         recent_tasks.append(config["task"])
                 except Exception:
-                    pass
+                    logger.warning("Failed to deserialize recent task entry")
             return recent_tasks
         except Exception as e:
             # Fallback
-            print(f"Error fetching recent tasks: {e}")
+            logger.error("Error fetching recent tasks: %s", e)
             return []
 
     def get_recent_models(self, limit: int = 10) -> list[str]:
@@ -146,7 +149,7 @@ class ExperimentState:
             rows = cursor.fetchall()
             return [row[0] for row in rows]
         except Exception as e:
-            print(f"Error fetching recent models: {e}")
+            logger.error("Error fetching recent models: %s", e)
             return []
 
     def get_fragile_models(
@@ -186,7 +189,7 @@ class ExperimentState:
                 fragile_models[model_name] = avg_rob
 
         except Exception:
-            pass
+            logger.warning("Failed to query fragile models")
 
         return fragile_models
 

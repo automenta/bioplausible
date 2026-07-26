@@ -6,9 +6,11 @@ ResultAnalyzer with standard PL Callbacks.
 """
 
 import json
-import os
-import pathlib
+import logging
+from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import pytorch_lightning as pl
 import torch
@@ -49,7 +51,7 @@ class EnergyConvergenceCallback(Callback):
 
         if self._counter >= self.patience:
             trainer.should_stop = True
-            print("[BioPrecisionCallback] Down-casting to FP32")
+            logger.info("[BioPrecisionCallback] Down-casting to FP32")
 
 
 class BioPrecisionCallback(Callback):
@@ -68,9 +70,9 @@ class BioPrecisionCallback(Callback):
         opt_name = getattr(pl_module, "optimizer_name", "").lower()
 
         if any(kw in opt_name for kw in bio_keywords):
-            print(
-                f"[BioPrecisionCallback] Down-casting "
-                f"{pl_module.__class__.__name__} to FP32"
+            logger.info(
+                "[BioPrecisionCallback] Down-casting %s to FP32",
+                pl_module.__class__.__name__,
             )
             pl_module.to(torch.float32)
 
@@ -84,7 +86,7 @@ class BioPredictionWriter(Callback):
     def __init__(self, output_dir: str = "./predictions"):
         super().__init__()
         self.output_dir = output_dir
-        pathlib.Path(output_dir).mkdir(exist_ok=True, parents=True)
+        Path(output_dir).mkdir(exist_ok=True, parents=True)
         self._buffer: list[dict[str, Any]] = []
 
     def on_validation_batch_end(
@@ -111,8 +113,8 @@ class BioPredictionWriter(Callback):
     def on_validation_epoch_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
-        path = os.path.join(self.output_dir, f"epoch_{trainer.current_epoch}.jsonl")
-        with pathlib.Path(path).open("w") as f:
+        path = Path(self.output_dir) / f"epoch_{trainer.current_epoch}.jsonl"
+        with path.open("w") as f:
             for rec in self._buffer:
                 f.write(json.dumps(rec) + "\n")
         self._buffer.clear()

@@ -8,8 +8,6 @@ Analogous to FabricPC's GraphStructure which defines node connectivity
 independently of the weights/activities.
 """
 
-from __future__ import annotations
-
 from collections import deque
 from typing import TYPE_CHECKING
 

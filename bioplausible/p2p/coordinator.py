@@ -28,8 +28,8 @@ def main():
     )
     logger = logging.getLogger("CoordinatorCLI")
 
-    print(f"Starting Coordinator on {args.host}:{args.port}...")
-    print("Press Ctrl+C to stop.")
+    logger.info("Starting Coordinator on %s:%s...", args.host, args.port)
+    logger.info("Press Ctrl+C to stop.")
 
     coord = Coordinator(host=args.host, port=args.port)
     coord.start()
@@ -49,7 +49,7 @@ def main():
             )
 
     except KeyboardInterrupt:
-        print("\nStopping Coordinator...")
+        logger.info("Stopping Coordinator...")
         coord.stop()
 
 

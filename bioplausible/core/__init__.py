@@ -17,7 +17,6 @@ from bioplausible.core.trainer import (
     CoreTrainer,
     TrainerConfig,
     TrainingMetrics,
-    run_from_config,
 )
 
 __all__ = [
@@ -37,5 +36,4 @@ __all__ = [
     "CoreTrainer",
     "TrainerConfig",
     "TrainingMetrics",
-    "run_from_config",
 ]

@@ -20,8 +20,6 @@ Examples
 >>> action, value, log_prob = model.act(observation)
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 

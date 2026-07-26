@@ -7,11 +7,14 @@ to guide future research directions.
 """
 
 import json
+import logging
 import sqlite3
 import traceback
 from typing import Any
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 class ResearchSynthesizer:
@@ -81,7 +84,7 @@ class ResearchSynthesizer:
 
             return df
         except Exception as e:
-            print(f"⚠️ Error loading convergence data: {e}")
+            logger.warning("⚠️ Error loading convergence data: %s", e)
             return pd.DataFrame()
 
     def synthesize_full_report(self) -> dict[str, Any]:
@@ -104,6 +107,7 @@ class ResearchSynthesizer:
                 failures_query = "SELECT * FROM failures"
                 failures_df = pd.read_sql(failures_query, conn)
             except Exception:
+                logger.warning("Failed to load failures table, using empty DataFrame")
                 failures_df = pd.DataFrame()
 
             insights = {
@@ -542,36 +546,6 @@ class ResearchSynthesizer:
             return "Failures exist but missing failure_type."
         except Exception as e:
             return f"Failure analysis failed: {e}"
-
-    def find_quick_wins(self) -> list[str]:
-        """Backward compatibility for tests."""
-        conn = sqlite3.connect(self.db_path)
-        trials = self._get_trials_df(conn)
-        try:
-            failures = pd.read_sql("SELECT * FROM failures", conn)
-        except Exception:
-            failures = pd.DataFrame()
-        conn.close()
-        return self._find_quick_wins(trials, failures)
-
-    def identify_research_gaps(self) -> list[str]:
-        """Backward compatibility for tests."""
-        conn = sqlite3.connect(self.db_path)
-        trials = self._get_trials_df(conn)
-        conn.close()
-        return self._identify_gaps(trials)
-
-    def generate_cross_algorithm_insights(self) -> str | dict[str, Any]:
-        """Backward compatibility for tests."""
-        conn = sqlite3.connect(self.db_path)
-        trials = self._get_trials_df(conn)
-        conn.close()
-        return self._analyze_cross_algo(trials)
-
-    def generate_architecture_recommendations(self) -> list[str]:
-        """Backward compatibility for tests."""
-        # Simple implementation for test compatibility
-        return ["Recommendation 1", "Recommendation 2"]
 
     def _find_quick_wins(
         self, trials: pd.DataFrame, failures: pd.DataFrame

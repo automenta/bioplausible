@@ -171,21 +171,21 @@ class TestResearchSynthesizer(unittest.TestCase):
 
         self.synth._get_trials_df = get_trials_df_mock
 
-        # Replace find_quick_wins to use the in-memory db connection
-        def find_quick_wins_mock():
-
-            trials = self.synth._get_trials_df(self.conn)
-            failures = pd.read_sql("SELECT * FROM failures", self.conn)
-            return self.synth._find_quick_wins(trials, failures)
-
-        self.synth.find_quick_wins = find_quick_wins_mock
-
     def tearDown(self):
         self.conn.close()
 
+    def _trials_df(self):
+        import pandas as pd
+        return self.synth._get_trials_df(self.conn)
+
+    def _failures_df(self):
+        import pandas as pd
+        return pd.read_sql("SELECT * FROM failures", self.conn)
+
     def test_cross_algorithm_insights(self):
         """Test that insights are generated correctly."""
-        insights = self.synth.generate_cross_algorithm_insights()
+        trials = self._trials_df()
+        insights = self.synth._analyze_cross_algo(trials)
         self.assertIn("rankings", insights)
         rankings = insights["rankings"]
 
@@ -193,14 +193,11 @@ class TestResearchSynthesizer(unittest.TestCase):
         self.assertEqual(best["model"], "GELU Model")
         self.assertAlmostEqual(best["best_accuracy"], 0.98)
 
-    def test_architecture_recommendations(self):
-        """Test hybrid recommendation generation."""
-        recs = self.synth.generate_architecture_recommendations()
-        self.assertGreater(len(recs), 0)
-
     def test_quick_wins(self):
         """Test detection of activation function wins."""
-        wins = self.synth.find_quick_wins()
+        trials = self._trials_df()
+        failures = self._failures_df()
+        wins = self.synth._find_quick_wins(trials, failures)
 
         # Expecting NaN failure advice
         nan_win = next(
@@ -216,7 +213,8 @@ class TestResearchSynthesizer(unittest.TestCase):
 
     def test_research_gaps(self):
         """Test gap detection."""
-        gaps = self.synth.identify_research_gaps()
+        trials = self._trials_df()
+        gaps = self.synth._identify_gaps(trials)
         self.assertTrue(any("cartpole" in g for g in gaps))
         self.assertTrue(any("Graph Neural Network" in g for g in gaps))
 

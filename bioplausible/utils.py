@@ -4,11 +4,14 @@ EqProp-Torch Utilities
 Helper functions for ONNX export, model verification, and training utilities.
 """
 
+import logging
 import os
 import random
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 import torch
@@ -78,7 +81,7 @@ def export_to_onnx(
             dynamic_axes=dynamic_axes,
             do_constant_folding=True,
         )
-        print(f"✓ Model exported to {output_path}")
+        logger.info("✓ Model exported to %s", output_path)
     except Exception as e:
         raise RuntimeError(f"ONNX export failed: {e}")
 
@@ -329,7 +332,7 @@ def SimpleProfiler(name: str):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         end = time.perf_counter()
-        print(f"[{name}] took {(end - start) * 1000:.2f} ms")
+        logger.debug("[%s] took %.2f ms", name, (end - start) * 1000)
 
 
 def profile_model(

@@ -15,8 +15,6 @@ Example
 >>> text = tokenizer.decode(ids)
 """
 
-from __future__ import annotations
-
 import json
 import re
 from collections import Counter, defaultdict

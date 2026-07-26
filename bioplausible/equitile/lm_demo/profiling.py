@@ -16,8 +16,6 @@ Example
 >>> profiler.report()
 """
 
-from __future__ import annotations
-
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass

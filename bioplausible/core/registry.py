@@ -4,8 +4,6 @@ Decorator-based registry for all components (models, propagators,
 optimizers, sparsity) enabling AutoScientist to query and compose
 intelligently."""
 
-from __future__ import annotations
-
 import builtins
 import logging
 import pathlib

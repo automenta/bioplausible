@@ -6,6 +6,7 @@ Executes hyperparameter optimization trials and collects metrics.
 
 import contextlib
 import io
+import logging
 import shutil
 import tempfile
 import time
@@ -13,6 +14,8 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 import torch
@@ -80,7 +83,7 @@ class TrialRunner:
 
         artifact_dir = Path("artifacts")
         if not artifact_dir.exists():
-            print("⚠️ Warning: Artifacts directory not found.")
+            logger.warning("Artifacts directory not found.")
             return
 
         def _load_state_dict(path: Path, model: torch.nn.Module, freeze_layers: bool):
@@ -115,16 +118,16 @@ class TrialRunner:
                                     return
                     break
 
-            print(f"⚠️ Warning: Could not find artifact for trial {transfer_from}")
+            logger.warning("Could not find artifact for trial %s", transfer_from)
 
         except Exception as e:
-            print(f"❌ Error loading transfer weights: {e}")
+            logger.error("Error loading transfer weights: %s", e)
 
     def run_trial(self, trial_id: int, pruning_callback=None) -> bool:
         """Run a single trial and record results."""
         trial = self.storage.get_trial(trial_id)
         if not trial:
-            print(f"Trial {trial_id} not found")
+            logger.warning("Trial %s not found", trial_id)
             return False
 
         self.storage.update_trial(trial_id, status="running")
@@ -160,7 +163,7 @@ class TrialRunner:
                         self.checkpoint_db_path, trial_id
                     )
                 except Exception as e:
-                    print(f"⚠️ Failed to init CheckpointManager: {e}")
+                    logger.warning("Failed to init CheckpointManager: %s", e)
 
             # 3. Define Callbacks
             epoch_times = []
@@ -169,9 +172,10 @@ class TrialRunner:
             def on_epoch_end_callback(epoch, metrics):
                 # Timeout Check
                 if time.time() - start_time > self.timeout:
-                    print(
-                        f"Trial {trial_id} exceeded timeout "
-                        f"({self.timeout}s). Stopping."
+                    logger.warning(
+                        "Trial %s exceeded timeout (%ss). Stopping.",
+                        trial_id,
+                        self.timeout,
                     )
                     raise TimeoutError(f"Trial exceeded {self.timeout}s limit.")
 
@@ -230,7 +234,7 @@ class TrialRunner:
             )
 
         except Exception as e:
-            print(f"\n❌ Trial {trial_id} failed: {e}")
+            logger.error("Trial %s failed: %s", trial_id, e)
             import traceback
 
             traceback.print_exc()
@@ -264,7 +268,9 @@ class TrialRunner:
 
         transfer_from = config.get("transfer_from")
         if transfer_from:
-            print(f"🔄 Initializing Transfer Learning from Trial {transfer_from}...")
+            logger.info(
+                "Initializing Transfer Learning from Trial %s...", transfer_from
+            )
             self._load_transfer_weights(transfer_from, model, config)
 
         meta = Registry.get_metadata(ComponentCategory.MODEL, trial.model_name)
@@ -333,12 +339,12 @@ class TrialRunner:
             return False  # Pruned
 
         if monitor and monitor.check_interference():
-            print("⚠️ INTERFERENCE DETECTED: Rejecting trial results.")
+            logger.warning("INTERFERENCE DETECTED: Rejecting trial results.")
             self.storage.update_trial(trial_id, status="failed")
             return False
 
         if not trajectory.checkpoints:
-            print("⚠️ No checkpoints found. Marking trial as failed.")
+            logger.warning("No checkpoints found. Marking trial as failed.")
             self.storage.update_trial(trial_id, status="failed")
             return False
 
@@ -371,7 +377,7 @@ class TrialRunner:
         )
 
         if config.get("save_artifacts"):
-            print("📦 Archiving artifacts...")
+            logger.info("Archiving artifacts...")
             archiver = ExperimentArchiver()
             final_metrics = {
                 "loss": last_ckpt.train_loss,
@@ -382,7 +388,7 @@ class TrialRunner:
                 trial_id=trial_id, model=model, config=config, metrics=final_metrics
             )
 
-        print(f"\n✅ Trial {trial_id} completed successfully!")
+        logger.info("Trial %s completed successfully!", trial_id)
         return True
 
 
@@ -418,9 +424,13 @@ def run_single_trial_task(
         # Log basic config info
         tier = config.get("tier", "unknown")
         epochs = config.get("epochs", "?")
-        print(
-            f"\n[Trial {trial_id}] Task: {task} | Model: {model_name}"
-            f" | Tier: {tier} | Epochs: {epochs}"
+        logger.info(
+            "[Trial %s] Task: %s | Model: %s | Tier: %s | Epochs: %s",
+            trial_id,
+            task,
+            model_name,
+            tier,
+            epochs,
         )
 
         # Extract task kwargs
@@ -468,7 +478,7 @@ def run_single_trial_task(
             return metrics
         else:
             if verbose:
-                print(f"Trial {trial_id} returned success=False")
+                logger.warning("Trial %s returned success=False", trial_id)
 
             # Log logical failure (e.g. NaN, divergence)
             failure_tracker.log_failure(
@@ -488,7 +498,7 @@ def run_single_trial_task(
             return None
 
     except TimeoutError as e:
-        print(f"Timeout Error: {e}")
+        logger.error("Timeout Error: %s", e)
         failure_tracker.log_failure(
             FailureRecord(
                 timestamp=datetime.now().isoformat(),
@@ -507,7 +517,7 @@ def run_single_trial_task(
         return None
 
     except Exception as e:
-        print(f"Execution Error: {e}")
+        logger.error("Execution Error: %s", e)
         if verbose:
             traceback.print_exc()
 
@@ -534,7 +544,7 @@ def run_single_trial_task(
 
         # Cleanup
         if verbose:
-            print("Cleaning up trial resources...")
+            logger.info("Cleaning up trial resources...")
 
         # Explicitly break references
         if "runner" in locals():
@@ -548,7 +558,7 @@ def run_single_trial_task(
             torch.cuda.empty_cache()
 
         if verbose:
-            print("Cleanup complete.")
+            logger.info("Cleanup complete.")
 
         if temp_dir:
             shutil.rmtree(temp_dir)

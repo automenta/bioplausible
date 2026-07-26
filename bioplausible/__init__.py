@@ -65,7 +65,6 @@ from bioplausible.core.trainer import (
     CoreTrainer,
     TrainerConfig,
     TrainingMetrics,
-    run_from_config,
 )
 
 # Data
@@ -151,7 +150,6 @@ from bioplausible.zoo import sparsity as zoo_sparsity
 # Optimizers / Propagators
 from bioplausible.zoo.mep.presets import muon_backprop, smep, smep_fast
 
-# Models (legacy + new zoo)
 from bioplausible.zoo.models.eqprop import (
     BackpropMLP,
     ConvEqProp,
@@ -252,7 +250,6 @@ __all__ = [
     "register_propagator",
     "register_sparsity",
     "run_cross_domain_benchmark",
-    "run_from_config",
     "run_nas_search",
     "run_pl_trial",
     "run_pl_trial_with_wandb",

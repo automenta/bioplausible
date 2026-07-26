@@ -26,8 +26,6 @@ Examples
 ...     stats = async_model.train_step(X, y)
 """
 
-from __future__ import annotations
-
 import queue
 import time
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor

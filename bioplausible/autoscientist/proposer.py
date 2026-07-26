@@ -5,8 +5,6 @@ Takes hypotheses from HypothesisReasoner and converts them into
 concrete experiment proposals with configurations.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Any
 

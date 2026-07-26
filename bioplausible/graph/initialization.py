@@ -7,8 +7,6 @@
 Calls each node's initialize_params with a shared RNG.
 """
 
-from __future__ import annotations
-
 import torch
 
 from bioplausible.graph.topology import GraphStructure

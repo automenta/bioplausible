@@ -12,10 +12,12 @@ Features:
 """
 
 import json
-import os
-import pathlib
+import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import torch
 from torch import nn
@@ -99,7 +101,7 @@ class ModelExporter:
         if formats is None:
             formats = ["onnx", "torchscript", "config", "state"]
 
-        pathlib.Path(output_dir).mkdir(exist_ok=True, parents=True)
+        Path(output_dir).mkdir(exist_ok=True, parents=True)
         model = model.to(self.device)
         model.eval()
 
@@ -115,7 +117,7 @@ class ModelExporter:
                 export_paths["onnx"] = path
             except Exception as e:
                 if verbose:
-                    print(f"  ONNX export failed: {e}")
+                    logger.warning("ONNX export failed: %s", e)
 
         if "torchscript" in formats:
             try:
@@ -123,7 +125,7 @@ class ModelExporter:
                 export_paths["torchscript"] = path
             except Exception as e:
                 if verbose:
-                    print(f"  TorchScript export failed: {e}")
+                    logger.warning("TorchScript export failed: %s", e)
 
         if "config" in formats:
             path = self._export_config(
@@ -157,9 +159,9 @@ class ModelExporter:
         )
 
         if verbose:
-            print(f"Exported {model_name} to {output_dir}")
-            print(f"  Formats: {info.export_format}")
-            print(f"  Parameters: {num_params:,}")
+            logger.info("Exported %s to %s", model_name, output_dir)
+            logger.info("  Formats: %s", info.export_format)
+            logger.info("  Parameters: %s", f"{num_params:,}")
 
         return info
 
@@ -171,7 +173,7 @@ class ModelExporter:
         verbose: bool,
     ) -> str:
         """Export to ONNX format."""
-        path = os.path.join(output_dir, "model.onnx")
+        path = str(Path(output_dir) / "model.onnx")
 
         model.eval()
         dummy_input = torch.randn(input_shape, device=self.device)
@@ -192,7 +194,7 @@ class ModelExporter:
         )
 
         if verbose:
-            print(f"  ✓ ONNX: {path}")
+            logger.info("  ✓ ONNX: %s", path)
 
         return path
 
@@ -217,7 +219,7 @@ class ModelExporter:
             stacklevel=2,
         )
 
-        path = os.path.join(output_dir, "model.pt")
+        path = str(Path(output_dir) / "model.pt")
 
         model.eval()
         dummy_input = torch.randn(input_shape, device=self.device)
@@ -227,7 +229,7 @@ class ModelExporter:
         traced.save(path)
 
         if verbose:
-            print(f"  ✓ TorchScript: {path}")
+            logger.info("  ✓ TorchScript: %s", path)
 
         return path
 
@@ -243,7 +245,7 @@ class ModelExporter:
         verbose: bool,
     ) -> str:
         """Export model configuration to JSON."""
-        path = os.path.join(output_dir, "config.json")
+        path = str(Path(output_dir) / "config.json")
 
         config = {
             "model_name": model_name,
@@ -255,11 +257,11 @@ class ModelExporter:
             "export_version": "1.0",
         }
 
-        with pathlib.Path(path).open("w") as f:
+        with Path(path).open("w") as f:
             json.dump(config, f, indent=2, default=str)
 
         if verbose:
-            print(f"  ✓ Config: {path}")
+            logger.info("  ✓ Config: %s", path)
 
         return path
 
@@ -271,7 +273,7 @@ class ModelExporter:
         verbose: bool,
     ) -> str:
         """Export model and optimizer state."""
-        path = os.path.join(output_dir, "checkpoint.pt")
+        path = str(Path(output_dir) / "checkpoint.pt")
 
         checkpoint = {
             "model_state_dict": model.state_dict(),
@@ -283,7 +285,7 @@ class ModelExporter:
         torch.save(checkpoint, path)
 
         if verbose:
-            print(f"  ✓ State: {path}")
+            logger.info("  ✓ State: %s", path)
 
         return path
 
@@ -337,7 +339,7 @@ class ModelLoader:
         """
         from bioplausible.zoo import ModelZoo
 
-        with pathlib.Path(config_path).open() as f:
+        with Path(config_path).open() as f:
             config = json.load(f)
 
         model_name = config["model_name"]
@@ -348,7 +350,7 @@ class ModelLoader:
 
         # Load state dict if available
         state_path = config_path.replace("config.json", "checkpoint.pt")
-        if pathlib.Path(state_path).exists():
+        if Path(state_path).exists():
             checkpoint = torch.load(
                 state_path, map_location=self.device, weights_only=True
             )
@@ -459,7 +461,7 @@ class InferenceEngine:
             InferenceEngine instance.
         """
         loader = ModelLoader(device="cpu")
-        config_path = os.path.join(export_dir, "config.json")
+        config_path = str(Path(export_dir) / "config.json")
 
         model, config = loader.load_from_config(config_path)
 
@@ -626,7 +628,7 @@ def load_model(
         Tuple of (model, config).
     """
     loader = ModelLoader(device="cpu")
-    config_path = os.path.join(export_dir, "config.json")
+    config_path = str(Path(export_dir) / "config.json")
     return loader.load_from_config(config_path)
 
 

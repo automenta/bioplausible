@@ -1,7 +1,6 @@
 {
   "strict": true,
   "pythonVersion": "3.14",
-  "targetVersion": "3.14",
   "reportMissingImports": "error",
   "reportMissingModuleSource": "error",
   "reportMissingTypeStubs": "error",
@@ -40,8 +39,8 @@
   "reportUnusedCoroutine": "warning",
   "reportUnusedImport": "warning",
   "reportUnusedExcept": "warning",
-    "reportUnusedExpression": "warning",
-    "exclude": [
+  "reportUnusedExpression": "warning",
+  "exclude": [
     "**/node_modules",
     "**/__pycache__",
     "**/.pytest_cache",

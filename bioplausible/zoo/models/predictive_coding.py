@@ -5,8 +5,6 @@ Combined Predictive Coding Models
 Aggregates all predictive coding models into a single module for the model zoo.
 """
 
-from __future__ import annotations
-
 import torch
 from torch import nn
 

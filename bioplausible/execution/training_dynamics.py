@@ -5,9 +5,12 @@ Captures detailed metrics during training (gradients, weight norms, loss curves)
 to analyze convergence behavior, detect overfitting, and measure sample efficiency.
 """
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -290,14 +293,14 @@ class ContinuousTrainingSchedule:
                 optuna_trial.report(v_acc, target_epoch)
                 if optuna_trial.should_prune():
                     trajectory.converged = False
-                    print(f"✂️ Trial {trial_id} PRUNED at epoch {target_epoch}")
+                    logger.info("✂️ Trial %s PRUNED at epoch %s", trial_id, target_epoch)
                     break
 
             elif pruning_callback and self.enable_pruning:
                 # Use generic callback if provided
                 if pruning_callback(trial_id, target_epoch, last_metrics):
                     trajectory.converged = False
-                    print(f"✂️ Trial {trial_id} PRUNED at epoch {target_epoch}")
+                    logger.info("✂️ Trial %s PRUNED at epoch %s", trial_id, target_epoch)
                     break
 
         # Post-training analysis

@@ -35,10 +35,9 @@ class AlignmentWorker(QThread):
 
     def run(self):
         try:
+            from bioplausible.datasets import get_vision_dataset
             from bioplausible.models.registry import get_model_spec
             from torch.utils.data import DataLoader
-
-            from bioplausible.datasets import get_vision_dataset
 
             # 1. Setup Data
             ds_name = self.dataset_name.lower().replace("-", "_")

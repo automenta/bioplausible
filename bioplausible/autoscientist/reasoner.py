@@ -5,8 +5,6 @@ Analyses experiment history and KnowledgeBase to generate hypotheses.
 Supports both rule-based reasoning and optional LLM integration.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 from dataclasses import dataclass, field
@@ -348,7 +346,6 @@ class LLMHypothesisGenerator:
         ]
 
 
-# Re-export for backward compatibility
 __all__ = [
     "Hypothesis",
     "HypothesisReasoner",

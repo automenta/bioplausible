@@ -33,8 +33,6 @@ Multi-process (spawn):
 >>> spawn_multi_gpu_worker(worker, world_size=4)
 """
 
-from __future__ import annotations
-
 import os
 import threading
 import time

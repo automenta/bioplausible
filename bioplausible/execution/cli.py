@@ -52,19 +52,7 @@ def main() -> None:
         "--out", default="reports", help="Output directory for reports"
     )
 
-    # Hack to support running without 'run' command for backward compatibility
-    # If no command provided, default to 'run'
-    if len(sys.argv) == 1:
-        args = parser.parse_args(["run"])
-    elif sys.argv[1] not in ["run", "report"] and not sys.argv[1].startswith("-"):
-        # Could be 'bioplausible-scientist' assuming 'run'
-        # But if user typed 'bioplausible-scientist --task mnist', sys.argv[1] is --task
-        # We need to inject 'run' if it's missing
-        args = parser.parse_args(["run"] + sys.argv[1:])
-    elif sys.argv[1].startswith("-") and sys.argv[1] not in ["-h", "--help"]:
-        args = parser.parse_args(["run"] + sys.argv[1:])
-    else:
-        args = parser.parse_args()
+    args = parser.parse_args()
 
     if args.command == "report":
         _run_reporter(args)

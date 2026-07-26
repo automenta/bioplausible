@@ -5,8 +5,6 @@ Tracks and ranks all model+propagator+optimizer combinations
 across standardized benchmarks.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 from dataclasses import dataclass, field

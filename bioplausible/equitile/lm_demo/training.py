@@ -24,8 +24,6 @@ Example
 >>> trainer.train(train_loader, val_loader)
 """
 
-from __future__ import annotations
-
 import json
 import math
 import time

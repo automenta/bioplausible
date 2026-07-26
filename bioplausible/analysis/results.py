@@ -146,7 +146,6 @@ def load_trials(db_path: str) -> list[dict[str, Any]]:
             pass
 
         # Extract tier specifically for top-level access
-        # Default to 'shallow' if missing (legacy compatibility)
         trial["tier"] = trial["user_attrs"].get("tier", "shallow")
 
         # Placeholders

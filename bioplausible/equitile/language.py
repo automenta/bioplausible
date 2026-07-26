@@ -23,8 +23,6 @@ Examples
 >>> loss = model.compute_loss(logits, target_ids)
 """
 
-from __future__ import annotations
-
 import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal

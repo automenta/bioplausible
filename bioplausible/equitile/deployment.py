@@ -17,8 +17,6 @@ Examples
 >>> exporter.to_torchscript("model.pt")
 """
 
-from __future__ import annotations
-
 import pathlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal

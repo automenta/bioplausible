@@ -16,8 +16,6 @@ Enhanced version of EquiTile with configurable improvements for general-purpose 
 All improvements are optional/configurable for ablation studies.
 """
 
-from __future__ import annotations
-
 import math
 from typing import TYPE_CHECKING, Literal
 
@@ -743,10 +741,6 @@ class EnhancedEquiTile(EquiTile):
     def summarize(self) -> str:
         """Get model summary."""
         return super().summarize() + " (Enhanced)"
-
-
-# Factory function for backward compatibility
-EnhancedEPConfig = EnhancedEquiTileConfig
 
 
 def create_enhanced_model(

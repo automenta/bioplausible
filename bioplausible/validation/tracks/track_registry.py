@@ -5,6 +5,7 @@ Aggregates all track definitions from various modules into a single lookup dicti
 This allows the Verifier to easily access all available experiments.
 """
 
+import logging
 from collections.abc import Callable
 
 # Import all KEPT track modules (Phase 4 deleted: advanced_tracks, analysis_tracks,
@@ -22,6 +23,8 @@ from . import (
     signal_tracks,
     tradeoff_tracks,
 )
+
+logger = logging.getLogger(__name__)
 
 # Initialize registry
 ALL_TRACKS: dict[int, Callable] = {}
@@ -54,7 +57,7 @@ def register_tracks_from_module(module):
                             track_id = int(parts[1])
                             ALL_TRACKS[track_id] = func
                     except Exception:
-                        pass
+                        logger.warning("Failed to parse track name '%s'", name)
     except Exception as e:
         print(f"Warning: Failed to register tracks from module {module.__name__}: {e}")
 

@@ -5,10 +5,13 @@ Provides autoregressive generation for any model that outputs logits,
 including bioplausible research algorithms.
 """
 
+import logging
 from typing import Any
 
 import torch
 import torch.nn.functional as F
+
+logger = logging.getLogger(__name__)
 
 
 def generate_text(
@@ -80,6 +83,7 @@ def generate_text(
                         logits = logits[-1]
 
             except Exception:
+                logger.warning("Complex dispatch fallback triggered")
                 # Fallback: try with different input format
                 try:
                     x = torch.tensor([[indices[-1]]], device=device)

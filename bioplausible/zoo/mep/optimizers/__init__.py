@@ -27,9 +27,6 @@ from .ep_optimizer import (
     EPConfig,
     EPOptimizer,
     EWCState,
-    muon_backprop,
-    smep,
-    smep_fast,
 )
 from .ewc import EPOptimizerWithEWC, EWCRegularizer, TaskMemory
 from .inspector import ModelInspector
@@ -100,10 +97,6 @@ __all__ = [
     "EPOptimizer",
     "EPConfig",
     "EWCState",
-    # Legacy presets (backward compatible)
-    "smep",
-    "smep_fast",
-    "muon_backprop",
     # O(1) memory prototype v1 (legacy)
     "manual_energy_compute",
     "settle_manual",

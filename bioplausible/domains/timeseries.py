@@ -4,8 +4,6 @@ Time Series Domain Tasks
 Standard time series datasets and evaluation.
 """
 
-from __future__ import annotations
-
 import numpy as np
 import torch
 from torch import nn

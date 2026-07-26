@@ -8,8 +8,6 @@ Both train_backprop and train_pcn accept the same GraphStructure and params,
 enabling fair comparison on identical architectures.
 """
 
-from __future__ import annotations
-
 import time
 
 import torch

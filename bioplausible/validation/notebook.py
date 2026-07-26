@@ -1,7 +1,10 @@
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -173,7 +176,7 @@ class VerificationNotebook:
         self.add_executive_summary()
         with Path(path).open("w") as f:
             f.write("\n".join(self.sections))
-        print(f"📓 Notebook saved to: {path}")
+        logger.info("📓 Notebook saved to: %s", path)
 
 
 class ValidationTrack:

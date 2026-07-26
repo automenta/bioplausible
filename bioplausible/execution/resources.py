@@ -102,7 +102,7 @@ class ResourceMonitor:
                     )
                     return True
             except Exception:
-                pass  # Ignore GPU check errors
+                logger.warning("GPU check failed, continuing")
         return False
 
     def _check_disk_overload(self) -> bool:

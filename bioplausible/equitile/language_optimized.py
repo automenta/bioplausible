@@ -14,8 +14,6 @@ Examples
 >>> logits = model(input_ids)
 """
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Any, Literal
 
 import torch

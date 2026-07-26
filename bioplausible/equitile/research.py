@@ -19,10 +19,7 @@ Examples
 >>> tracker.save()
 """
 
-from __future__ import annotations
-
 import json
-import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -90,7 +87,7 @@ class ExperimentTracker:
 
         # Set up log directory
         if log_dir is None:
-            log_dir = os.path.join("logs", "equitile", self.experiment_name)
+            log_dir = str(Path("logs") / "equitile" / self.experiment_name)
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -741,7 +738,9 @@ class AblationStudy:
         log_dir: str | None = None,
     ) -> None:
         self.config = config
-        self.log_dir = Path(log_dir or os.path.join("logs", "ablation", config.name))
+        self.log_dir = (
+            Path(log_dir) if log_dir else Path("logs") / "ablation" / config.name
+        )
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
         self._results: dict[str, dict[str, Any]] = {}

@@ -44,7 +44,6 @@ from bioplausible.hyperopt.experiment import run_single_trial_task
 from bioplausible.hyperopt.parallel_runner import ParallelTrialRunner
 from bioplausible.lightning_.experiment import run_pl_trial
 
-# Re-export for backward compatibility
 __all__ = [
     "ExecutionEngine",
     "ExecutionStrategy",
@@ -132,25 +131,25 @@ class ExecutionEngine:
             for task in model.values()
         )
 
-        print("\n" + "=" * 60)
-        print("📋 RESUME CONTEXT")
-        print("=" * 60)
-        print(f"Total trials completed: {total_trials}")
+        logger.info("\n" + "=" * 60)
+        logger.info("📋 RESUME CONTEXT")
+        logger.info("=" * 60)
+        logger.info("Total trials completed: %s", total_trials)
 
         recent_models = self.state.get_recent_models(limit=5)
         recent_tasks = self.state.get_recent_tasks(limit=5)
         if recent_models:
-            print(f"Recent models: {', '.join(recent_models)}")
+            logger.info("Recent models: %s", ", ".join(recent_models))
         if recent_tasks:
-            print(f"Recent tasks: {', '.join(recent_tasks)}")
+            logger.info("Recent tasks: %s", ", ".join(recent_tasks))
 
         failure_analysis = self.state.get_failure_analysis()
         if failure_analysis.get("patterns"):
-            print("\n⚠️ Known failure patterns:")
+            logger.info("Known failure patterns:")
             for p in failure_analysis["patterns"][:2]:
-                print(f"  - {p}")
+                logger.info("  - %s", p)
 
-        print("=" * 60 + "\n")
+        logger.info("=" * 60)
 
         logger.info(f"Resuming from trial #{total_trials}")
 

@@ -5,8 +5,6 @@ Provides hybrid structured + embedding search for AutoScientist.
 Integrates surrogate models, symbolic regression, causal discovery.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import pathlib

@@ -173,7 +173,6 @@ from .enhanced import (
     TileLayerNorm,
     create_enhanced_model,
 )
-from .enhanced import EnhancedEPConfig as EnhancedEPConfigClass
 
 # Graph Neural Networks
 from .graph import (
@@ -319,7 +318,6 @@ __all__ = [
     "TileLayerNorm",
     "EnhancedCurriculumConfig",
     "CurriculumScheduler",
-    "EnhancedEPConfigClass",
     "EnhancedEquiTile",
     "create_enhanced_model",
     # Dynamics

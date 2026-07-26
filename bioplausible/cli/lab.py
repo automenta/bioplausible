@@ -3,32 +3,37 @@ CLI Lab for Verification and Inspection
 """
 
 import argparse
+import logging
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.hyperopt.tasks import create_task
 
 
 def inspect_model(args):
-    print(f"🔬 Inspecting Model: {args.model}")
+    logger.info("🔬 Inspecting Model: %s", args.model)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Create Task
     task = create_task(args.task, device=device)
     task.setup()
-    print(f"Task: {args.task}, Input: {task.input_dim}, Output: {task.output_dim}")
+    logger.info(
+        "Task: %s, Input: %s, Output: %s", args.task, task.input_dim, task.output_dim
+    )
 
     # Create Model
     model_cls = Registry.get(ComponentCategory.MODEL, args.model)
     model = model_cls(input_dim=task.input_dim, output_dim=task.output_dim).to(device)
 
-    print(f"Model Created: {model.__class__.__name__}")
-    print(f"Parameters: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M")
+    logger.info("Model Created: %s", model.__class__.__name__)
+    logger.info("Parameters: %.2fM", sum(p.numel() for p in model.parameters()) / 1e6)
 
     # Run Dummy Forward
-    print("\nRunning Verification Inference...")
+    logger.info("Running Verification Inference...")
     x, y = task.get_batch("val")
     model.eval()
     with torch.no_grad():
@@ -53,10 +58,10 @@ def inspect_model(args):
 
             x = x.to(device)
             out = model(x)
-            print(f"✓ Forward pass successful. Output shape: {out.shape}")
+            logger.info("✓ Forward pass successful. Output shape: %s", out.shape)
 
         except Exception as e:
-            print(f"❌ Forward pass failed: {e}")
+            logger.error("Forward pass failed: %s", e)
             import traceback
 
             traceback.print_exc()

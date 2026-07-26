@@ -31,8 +31,6 @@ Examples
 >>> profiler.print_report()
 """
 
-from __future__ import annotations
-
 import time
 from collections import defaultdict
 from contextlib import contextmanager

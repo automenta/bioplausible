@@ -3,12 +3,15 @@ CLI Runner for Bioplausible Experiments
 """
 
 import argparse
+import logging
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.hyperopt import create_optuna_space, create_study
 from bioplausible.hyperopt.eval_tiers import PatientLevel, get_evaluation_config
 from bioplausible.hyperopt.experiment import run_single_trial_task
+
+logger = logging.getLogger(__name__)
 
 
 def run_training(args):
@@ -18,7 +21,7 @@ def run_training(args):
         run_from_yaml(args)
         return
 
-    print(f"🚀 Starting Headless Training: {args.model} on {args.task}")
+        logger.info("🚀 Starting Headless Training: %s on %s", args.model, args.task)
 
     config = TrainerConfig(
         model=args.model,
@@ -45,10 +48,10 @@ def run_training(args):
             pbar.set_postfix({"loss": epoch_metric.loss, "acc": epoch_metric.accuracy})
 
         pbar.close()
-        print("✅ Training Complete")
+        logger.info("✅ Training Complete")
 
     except KeyboardInterrupt:
-        print("\n🛑 Training Interrupted")
+        logger.warning("Training Interrupted")
 
 
 def run_search(args):
@@ -57,15 +60,17 @@ def run_search(args):
     try:
         tier = PatientLevel(tier_name)
     except ValueError:
-        print(
-            f"❌ Invalid tier: {tier_name}. Available: {[t.value for t in PatientLevel]}"
+        logger.error(
+            "❌ Invalid tier: %s. Available: %s",
+            tier_name,
+            [t.value for t in PatientLevel],
         )
         return
 
     config = get_evaluation_config(tier)
-    print(f"🧪 Starting {tier.name} Discovery Run")
-    print(f"   Models: {args.models}")
-    print(f"   Config: {config.epochs} epochs, {config.n_trials} trials")
+    logger.info("🧪 Starting %s Discovery Run", tier.name)
+    logger.info("   Models: %s", args.models)
+    logger.info("   Config: %d epochs, %d trials", config.epochs, config.n_trials)
 
     if args.models.lower() == "all":
         models = list(Registry._components.get(ComponentCategory.MODEL, {}).keys())
@@ -95,15 +100,17 @@ def run_search(args):
                     is_compat = True
 
                 if not is_compat:
-                    print(
-                        f"⚠️  Skipping {model}: Incompatible with task "
-                        f"'{args.task}' (Needs {domain_names})"
+                    logger.warning(
+                        "⚠️  Skipping %s: Incompatible with task '%s' (Needs %s)",
+                        model,
+                        args.task,
+                        domain_names,
                     )
                     continue
         except Exception:
-            pass  # Unknown model, let it try/fail naturally later
+            logger.warning("Unknown model '%s', letting it try naturally", model)
 
-        print(f"\n🔍 Exploring {model}...")
+        logger.info("🔍 Exploring %s...", model)
 
         study_name = f"{model}_{args.task}_{tier.value}"
         study = create_study(
@@ -141,7 +148,9 @@ def run_search(args):
             if metrics:
                 acc = metrics.get("accuracy", 0.0)
                 loss = metrics.get("loss", float("inf"))
-                print(f"   Trial {trial.number}: Acc={acc:.4f} | Params={trial_config}")
+                logger.info(
+                    "   Trial %s: Acc=%.4f | Params=%s", trial.number, acc, trial_config
+                )
                 return acc, loss
             else:
                 import optuna
@@ -151,10 +160,10 @@ def run_search(args):
         try:
             study.optimize(objective, n_trials=config.n_trials)
         except KeyboardInterrupt:
-            print("\n🛑 Search Interrupted")
+            logger.warning("Search Interrupted")
             break
         except Exception as e:
-            print(f"❌ Error optimizing {model}: {e}")
+            logger.error("❌ Error optimizing %s: %s", model, e)
 
 
 def run_core_train(args):
@@ -178,9 +187,10 @@ def run_core_train(args):
 
     if history:
         final = history[-1]
-        print(
-            f"\nResults: Train Acc={final.train_accuracy:.4f}, "
-            f"Val Acc={final.val_accuracy:.4f}"
+        logger.info(
+            "Results: Train Acc=%.4f, Val Acc=%.4f",
+            final.train_accuracy,
+            final.val_accuracy,
         )
 
 
@@ -193,9 +203,10 @@ def run_from_yaml(args):
 
     if history:
         final = history[-1]
-        print(
-            f"\nResults: Train Acc={final.train_accuracy:.4f}, "
-            f"Val Acc={final.val_accuracy:.4f}"
+        logger.info(
+            "Results: Train Acc=%.4f, Val Acc=%.4f",
+            final.train_accuracy,
+            final.val_accuracy,
         )
 
 
@@ -204,19 +215,19 @@ def list_models(args):
 
     models = Registry.list(ComponentCategory.MODEL)
     model_names = models.get("model", [])
-    print("Available Models (Zoo Registry):")
+    logger.info("Available Models (Zoo Registry):")
     for name in sorted(model_names):
         meta = Registry.get_metadata(ComponentCategory.MODEL, name)
         score = meta.bio_plausibility_score
         domains = ", ".join(d.value for d in meta.domains)
-        print(f"  {name:25s} bio={score:.1f}  domains=[{domains}]")
+        logger.info("  %-25s bio=%.1f  domains=[%s]", name, score, domains)
 
 
 def run_benchmark(args):
     """Run cross-domain benchmark suite."""
     from bioplausible.evaluation.cross_domain import CrossDomainBenchmarkSuite
 
-    print("🔬 Cross-Domain Benchmark Suite")
+    logger.info("🔬 Cross-Domain Benchmark Suite")
 
     models = None
     if args.models:
@@ -237,17 +248,17 @@ def run_benchmark(args):
     suite = CrossDomainBenchmarkSuite(output_dir=args.output_dir)
     result = suite.run_suite(config)
 
-    print("\nBenchmark Results:")
-    print(f"   Total time: {result.total_time_s:.1f}s")
-    print(f"   Results: {len(result.results)} benchmarks")
+    logger.info("Benchmark Results:")
+    logger.info("   Total time: %.1fs", result.total_time_s)
+    logger.info("   Results: %s benchmarks", len(result.results))
 
     if result.results:
         for r in result.results[:5]:
-            print(f"   - {r.model_name} on {r.task_name}: {r.metrics}")
+            logger.info("   - %s on %s: %s", r.model_name, r.task_name, r.metrics)
 
     suite.save_results(result)
     suite.generate_leaderboard()
-    print(f"\n📁 Results saved to {args.output_dir}")
+    logger.info("📁 Results saved to %s", args.output_dir)
 
 
 def main():

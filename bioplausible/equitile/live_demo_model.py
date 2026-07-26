@@ -11,9 +11,8 @@ model used in benchmarks, see:
 `bioplausible.models.equitile.lm_demo.fast_lm`
 """
 
-import os
-import pathlib
 import time
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
 
@@ -579,9 +578,7 @@ class FastLMEquiTile(OptimizedLMEquiTile):
     def save_checkpoint(self, path: str) -> None:
         """Save model checkpoint."""
         # Create directory if needed
-        pathlib.Path(os.path.dirname(os.path.abspath(path))).mkdir(
-            exist_ok=True, parents=True
-        )
+        Path(path).resolve().parent.mkdir(exist_ok=True, parents=True)
         torch.save(
             {
                 "model_state_dict": self.state_dict(),
@@ -595,7 +592,7 @@ class FastLMEquiTile(OptimizedLMEquiTile):
 
     def load_checkpoint(self, path: str) -> None:
         """Load model checkpoint."""
-        if not pathlib.Path(path).exists():
+        if not Path(path).exists():
             raise FileNotFoundError(f"Checkpoint not found: {path}")
 
         checkpoint = torch.load(path, map_location="cpu")

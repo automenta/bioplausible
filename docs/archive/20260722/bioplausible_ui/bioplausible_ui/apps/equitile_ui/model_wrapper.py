@@ -3,11 +3,10 @@ from typing import Any
 
 import numpy as np
 import torch
+from bioplausible.datasets import create_data_loaders, get_lm_dataset
 from bioplausible.models.factory import create_model
 from bioplausible.models.registry import get_model_spec
 from torch import nn, optim
-
-from bioplausible.datasets import create_data_loaders, get_lm_dataset
 
 
 class LiveModelWrapper:

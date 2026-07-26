@@ -38,8 +38,7 @@ Example
 >>> logits = model(input_ids)
 """
 
-from __future__ import annotations
-
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -48,6 +47,8 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.zoo.base import BioModel, ModelConfig
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from torch import Tensor
@@ -846,7 +847,7 @@ class FastLMEquiTile(BioModel):
                     self._forward_impl, mode=config.compile_mode
                 )
             except Exception:
-                pass
+                logger.warning("torch.compile failed, falling back to eager mode")
 
     def _init_weights(self) -> None:
         """Initialize weights.

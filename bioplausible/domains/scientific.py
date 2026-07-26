@@ -5,8 +5,6 @@ Toy scientific simulation environments for testing bio-plausible learning
 on physics-inspired problems.
 """
 
-from __future__ import annotations
-
 import numpy as np
 import torch
 from torch import nn

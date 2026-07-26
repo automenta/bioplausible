@@ -9,6 +9,8 @@ import time
 
 from bioplausible.p2p.node import Worker
 
+logger = logging.getLogger(__name__)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Bio-Plausible P2P Worker")
@@ -27,7 +29,7 @@ def main():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    print(f"Starting Worker connecting to {args.join}...")
+    logger.info("Starting Worker connecting to %s...", args.join)
 
     worker = Worker(args.join, client_id=args.client_id)
 
@@ -40,7 +42,7 @@ def main():
             time.sleep(1)
             # Maybe print status updates periodically
     except KeyboardInterrupt:
-        print("\nStopping worker...")
+        logger.info("Stopping worker...")
         worker.stop()
 
 

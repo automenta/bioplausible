@@ -15,8 +15,6 @@ This updates ACTIVITIES only, not weights.
 Uses gradient-based activity updates for non-feedforward topologies.
 """
 
-from __future__ import annotations
-
 import torch
 import torch.nn.functional as F
 

@@ -259,6 +259,7 @@ class MLAnalyzer:
                         for i, d_idx in enumerate(digitized):
                             groups[d_idx].append(accs[i])
                     except Exception:
+                        logger.warning("Binning failed for group, skipping")
                         continue
                 else:
                     for v, acc in zip(vals, accs):

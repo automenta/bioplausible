@@ -7,8 +7,6 @@ Supports incremental learning via .partial_fit().
 
 # ruff: noqa: N803, N806, PLR0913, PLR0917, TRY003 — sklearn convention uses uppercase X
 
-from __future__ import annotations
-
 from typing import Any
 
 import numpy as np

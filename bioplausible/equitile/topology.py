@@ -6,8 +6,6 @@ Defines the graph topology and state containers for EquiTile models.
 Moved from core.py to avoid circular dependencies and improve modularity.
 """
 
-from __future__ import annotations
-
 import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING

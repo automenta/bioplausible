@@ -18,7 +18,6 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
-# Re-export for backward compatibility with models importing from .base
 from bioplausible.core.registry import register_model  # noqa: F401
 
 

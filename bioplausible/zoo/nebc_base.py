@@ -9,10 +9,13 @@ This module provides:
 All NEBC algorithms test spectral normalization as a "stability unlock".
 """
 
+import logging
 from abc import ABC
 
 import torch
 import torch.nn.functional as F
+
+logger = logging.getLogger(__name__)
 
 from .base import BioModel
 
@@ -128,9 +131,14 @@ def train_nebc_model(
         if verbose and (epoch + 1) % max(1, epochs // 5) == 0:
             acc = (out.argmax(dim=1) == y).float().mean().item() * 100
             L = model.compute_lipschitz()
-            print(
-                f"  [{model.algorithm_name}] Epoch {epoch + 1}/{epochs}: "
-                f"loss={loss.item():.3f}, acc={acc:.1f}%, L={L:.3f}"
+            logger.info(
+                "  [%s] Epoch %d/%d: loss=%.3f, acc=%.1f%%, L=%.3f",
+                model.algorithm_name,
+                epoch + 1,
+                epochs,
+                loss.item(),
+                acc,
+                L,
             )
 
     return losses
@@ -177,7 +185,7 @@ def run_nebc_ablation(
     results = {}
     for use_sn in [True, False]:
         label = "with_sn" if use_sn else "without_sn"
-        print(f"\n  Training {algorithm_name} ({label})...")
+        logger.info("  Training %s (%s)...", algorithm_name, label)
 
         model = algorithm_cls(
             input_dim, hidden_dim, output_dim, use_spectral_norm=use_sn, **kwargs

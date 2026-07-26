@@ -5,10 +5,13 @@ Persists trials, configurations, and results to a SQLite database.
 """
 
 import json
+import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from .metrics import TrialMetrics
 
@@ -121,7 +124,7 @@ class HyperoptStorage:
         cursor.execute("PRAGMA table_info(training_checkpoints)")
         columns = [row["name"] for row in cursor.fetchall()]
         if "samples_seen" not in columns:
-            print("Migrating schema: Adding samples_seen column...")
+            logger.info("Migrating schema: Adding samples_seen column...")
             try:
                 cursor.execute(
                     "ALTER TABLE training_checkpoints"
@@ -377,7 +380,7 @@ class HyperoptStorage:
             self.conn.commit()
 
         except sqlite3.Error as e:
-            print(f"Database error saving trajectory: {e}")
+            logger.error("Database error saving trajectory: %s", e)
             # Don't crash training if logging fails, but maybe re-raise?
             # For now, just log error.
 

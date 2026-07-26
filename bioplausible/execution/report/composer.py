@@ -6,11 +6,14 @@ summary statistics, leaderboards, and detailed analysis into a single document.
 """
 
 import json
+import logging
 import sqlite3
 import traceback
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 import pandas as pd
@@ -137,7 +140,7 @@ class ReportComposer:
                 logs.append({"date_str": r[0], "event_type": r[1], "description": r[2]})
             return logs
         except Exception as e:
-            print(f"Error fetching logs: {e}")
+            logger.error("Error fetching logs: %s", e)
             return []
 
     def _aggregate_for_ranking(
@@ -302,7 +305,7 @@ class ReportComposer:
 
             return df
         except Exception as e:
-            print(f"Error querying trials: {e}")
+            logger.error("Error querying trials: %s", e)
             traceback.print_exc()
             return pd.DataFrame()
 
@@ -336,7 +339,7 @@ class ReportComposer:
 
             return df
         except Exception as e:
-            print(f"⚠️ Error loading convergence data: {e}")
+            logger.error("Error loading convergence data: %s", e)
             return pd.DataFrame()
 
     def _generate_visualizations(
@@ -529,9 +532,9 @@ class ReportComposer:
             })
 
         except ImportError:
-            print("⚠️  scipy not available, skipping significance matrix")
+            logger.warning("scipy not available, skipping significance matrix")
         except Exception as e:
-            print(f"⚠️  Error generating significance matrix: {e}")
+            logger.warning("Error generating significance matrix: %s", e)
 
     def _write_summary(self, path: Path, df: pd.DataFrame) -> None:
         """Write executive summary."""
@@ -539,7 +542,7 @@ class ReportComposer:
             best = df.iloc[0] if not df.empty else None
             total_trials = len(df)
         except Exception as e:
-            print(f"Report generation error in summary: {e}")
+            logger.error("Report generation error in summary: %s", e)
             best = None
             total_trials = 0
 

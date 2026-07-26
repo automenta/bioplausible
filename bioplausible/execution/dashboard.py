@@ -7,6 +7,7 @@ trial updates, resource usage, and historical performance logs.
 """
 
 import datetime
+import logging
 import shutil
 from typing import Any
 
@@ -23,6 +24,8 @@ try:
     import torch
 except ImportError:
     torch = None
+
+logger = logging.getLogger(__name__)
 
 
 class Dashboard:
@@ -200,7 +203,7 @@ class Dashboard:
                 used_ratio = (total - free) / total * 100.0
                 sys_text.append(f"GPU: {used_ratio:.1f}%\n")
             except Exception:
-                pass
+                logger.warning("Failed to get GPU memory info")
 
         # Disk
         total_disk, used_disk, free_disk = shutil.disk_usage(".")

@@ -5,6 +5,7 @@ Samples model names and optimizer names via Optuna to discover
 Pareto-optimal combinations for each task.
 """
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -13,6 +14,8 @@ from pytorch_lightning import Trainer
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.lightning_.module import BioLightningModule
+
+logger = logging.getLogger(__name__)
 
 
 def get_plausible_model_names() -> list[str]:
@@ -83,6 +86,7 @@ def create_nas_objective(
             trial.set_user_attr("optimizer_name", optimizer_name)
             return acc
         except Exception:
+            logger.warning("Fit failed for trial, returning 0.0")
             return 0.0
 
     return objective

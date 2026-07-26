@@ -9,8 +9,7 @@ A high-performance, scalable deep learning framework featuring:
 - Hardware-efficient design (GPU, TPU, edge accelerators)
 """
 
-from __future__ import annotations
-
+import logging
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 import torch
@@ -18,6 +17,8 @@ from torch import nn
 
 from bioplausible.core.registry import Domain, LocalityLevel
 from bioplausible.zoo.base import BioModel, ModelConfig, register_model
+
+logger = logging.getLogger(__name__)
 
 from .config import EquiTileConfig
 from .kernels import (
@@ -220,7 +221,6 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
     def __init__(
         self,
         config: EquiTileConfig | None = None,
-        # Legacy/Flat arguments (kept for backward compatibility)
         neurons_per_tile: int = 64,
         num_layers: int = 4,
         tiles_per_layer: int = 4,
@@ -1125,7 +1125,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
             try:
                 self._lr_scheduler.load_state_dict(state["lr_scheduler"])
             except Exception:
-                pass
+                logger.warning("Failed to load LR scheduler state, using default")
 
     def add_tile(
         self,

@@ -1,3 +1,4 @@
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -7,6 +8,8 @@ import torch
 
 from .notebook import VerificationNotebook
 from .tracks import track_registry
+
+logger = logging.getLogger(__name__)
 
 
 class Verifier:
@@ -97,21 +100,21 @@ class Verifier:
             "⚡" if self.quick_mode else ("📊" if self.intermediate_mode else "🔬")
         )
 
-        print("=" * 70)
-        print("       TOREQPROP COMPREHENSIVE VERIFICATION SUITE")
-        print("       Undeniable Evidence for All Research Claims")
-        print("=" * 70)
-        print("\n📋 Configuration:")
-        print(f"   Seed: {self.seed}")
-        print(f"   Mode: {mode_icon} {mode_name}")
-        print(f"   Evidence: {evidence_labels[self.evidence_level]}")
-        print(f"   Epochs: {self.epochs}")
-        print(f"   Samples: {self.n_samples}")
-        print(f"   Seeds: {self.n_seeds}")
-        print(f"   Tracks: {len(self.tracks)}")
+        logger.info("=" * 70)
+        logger.info("       TOREQPROP COMPREHENSIVE VERIFICATION SUITE")
+        logger.info("       Undeniable Evidence for All Research Claims")
+        logger.info("=" * 70)
+        logger.info("\n📋 Configuration:")
+        logger.info("   Seed: %s", self.seed)
+        logger.info("   Mode: %s %s", mode_icon, mode_name)
+        logger.info("   Evidence: %s", evidence_labels[self.evidence_level])
+        logger.info("   Epochs: %s", self.epochs)
+        logger.info("   Samples: %s", self.n_samples)
+        logger.info("   Seeds: %s", self.n_seeds)
+        logger.info("   Tracks: %s", len(self.tracks))
         if self.export_data:
-            print("   Export: Enabled (results/data.csv)")
-        print("=" * 70)
+            logger.info("   Export: Enabled (results/data.csv)")
+        logger.info("=" * 70)
 
     def record_metric(
         self, track_id: int, seed: int, step: int, metric_name: str, value: float
@@ -142,7 +145,7 @@ class Verifier:
         if self.n_seeds == 3 and not self.quick_mode:
             run_count = n_seeds
 
-        print(f"      Running robustness check ({run_count} seeds)...")
+        logger.info("      Running robustness check (%s seeds)...", run_count)
 
         for i in range(run_count):
             seed = self.seed + i * 100
@@ -165,7 +168,7 @@ class Verifier:
                         )  # Track ID 0 is generic/unknown here
 
             except Exception as e:
-                print(f"        Seed {seed}: Failed ({e})")
+                logger.warning("        Seed %s: Failed (%s)", seed, e)
                 import traceback
 
                 traceback.print_exc()
@@ -219,7 +222,7 @@ class Verifier:
 
         # Auto-run Track 0 (Framework Validation) in intermediate/full modes
         if (self.intermediate_mode or (not self.quick_mode)) and 0 not in track_ids:
-            print("\n⚙️  Running Track 0 (Framework Validation) automatically...")
+            logger.info("Running Track 0 (Framework Validation) automatically...")
             track_ids = [0] + track_ids
 
         results = {}
@@ -242,7 +245,7 @@ class Verifier:
         if parallel and len(track_ids) > 1:
             import concurrent.futures
 
-            print(f"🚀 Running {len(track_ids)} tracks in parallel...")
+            logger.info("Running %s tracks in parallel...", len(track_ids))
 
             # ThreadPoolExecutor: tracks are I/O or CPU bound
             # (PyTorch/CUDA releases GIL).
@@ -262,12 +265,9 @@ class Verifier:
                     tid, result, error = future.result()
 
                     if error:
-                        print(f"\n❌ Track {tid} error: {error}")
+                        logger.error("Track %s error: %s", tid, error)
                     elif result:
                         results[tid] = result
-                        # Note: notebook.add_track_result is not thread-safe by
-                        # default, but we are collecting results sequentially
-                        # here as they complete.
                         self.notebook.add_track_result(result)
 
                         icon = {
@@ -277,16 +277,23 @@ class Verifier:
                             "stub": "🔧",
                         }.get(result.status, "?")
                         name, _ = self.tracks[tid]
-                        detail = f"{result.status.upper()} ({result.score:.0f}/100)"
-                        print(f"\n{icon} Track {tid}: {name} - {detail}")
+                        logger.info(
+                            "%s Track %s: %s - %s (%.0f/100)",
+                            icon,
+                            tid,
+                            name,
+                            result.status.upper(),
+                            result.score,
+                        )
 
                     completed += 1
                     elapsed = time.time() - start_time
-                    prog = (
-                        f"Progress: {completed}/{len(track_ids)}"
-                        f" | Elapsed: {elapsed:.0f}s"
+                    logger.info(
+                        "   Progress: %s/%s | Elapsed: %.0fs",
+                        completed,
+                        len(track_ids),
+                        elapsed,
                     )
-                    print(f"   {prog}")
 
         else:
             # Sequential Execution
@@ -294,7 +301,7 @@ class Verifier:
                 tid, result, error = _execute_track(track_id)
 
                 if error:
-                    print(f"\n❌ Track {track_id} failed: {error}")
+                    logger.error("Track %s failed: %s", track_id, error)
                 elif result:
                     results[track_id] = result
                     self.notebook.add_track_result(result)
@@ -305,8 +312,14 @@ class Verifier:
                         "stub": "🔧",
                     }.get(result.status, "?")
                     name, _ = self.tracks[track_id]
-                    detail = f"{result.status.upper()} ({result.score:.0f}/100)"
-                    print(f"\n{icon} Track {track_id}: {name} - {detail}")
+                    logger.info(
+                        "%s Track %s: %s - %s (%.0f/100)",
+                        icon,
+                        track_id,
+                        name,
+                        result.status.upper(),
+                        result.score,
+                    )
 
                 # Progress
                 elapsed = time.time() - start_time
@@ -314,11 +327,13 @@ class Verifier:
                 remaining = len(track_ids) - completed
                 if remaining > 0:
                     eta = (elapsed / completed) * remaining
-                    prog = (
-                        f"Progress: {completed}/{len(track_ids)} | "
-                        f"Elapsed: {elapsed:.0f}s | ETA: {eta:.0f}s"
+                    logger.info(
+                        "   Progress: %s/%s | Elapsed: %.0fs | ETA: %.0fs",
+                        completed,
+                        len(track_ids),
+                        elapsed,
+                        eta,
                     )
-                    print(f"   {prog}")
 
         # Save
         total_time = time.time() - start_time
@@ -327,15 +342,15 @@ class Verifier:
         self.notebook.save(output_path)
 
         # Summary
-        print("\n" + "=" * 70)
-        print("🎉 VERIFICATION COMPLETE")
-        print("=" * 70)
-        print(f"⏱️  Total time: {total_time:.1f}s")
-        print(f"📓 Output: {output_path}")
+        logger.info("\n" + "=" * 70)
+        logger.info("🎉 VERIFICATION COMPLETE")
+        logger.info("=" * 70)
+        logger.info("⏱️  Total time: %.1fs", total_time)
+        logger.info("📓 Output: %s", output_path)
 
         passed = sum(1 for r in results.values() if r.status == "pass")
         total = len(results)
-        print(f"\n📊 Results: {passed}/{total} tracks passed")
+        logger.info("📊 Results: %s/%s tracks passed", passed, total)
 
         if self.export_data and self.data_records:
             import csv
@@ -346,14 +361,14 @@ class Verifier:
                 dict_writer = csv.DictWriter(f, keys)
                 dict_writer.writeheader()
                 dict_writer.writerows(self.data_records)
-            print(f"💾 Data exported to: {csv_path}")
+            logger.info("💾 Data exported to: %s", csv_path)
 
         return results
 
     def list_tracks(self):
         """Print all available tracks."""
-        print("\nAvailable Verification Tracks:")
-        print("-" * 60)
+        logger.info("\nAvailable Verification Tracks:")
+        logger.info("-" * 60)
         for tid, (name, _) in self.tracks.items():
-            print(f"  {tid:2d}. {name}")
-        print("-" * 60)
+            logger.info("  %2d. %s", tid, name)
+        logger.info("-" * 60)

@@ -6,8 +6,6 @@ Accepts a config dict/YAML/OmegaConf specifying model, propagator, optimizer, da
 and trainer_args. Uses Lightning for distributed but provides a clean local-first API.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import time
@@ -956,26 +954,6 @@ class CoreTrainer:
             return None
 
 
-# For backward compatibility
-def run_from_config(config: dict | str | TrainerConfig) -> dict[str, Any]:
-    """
-    Backward compatible function to run from config.
-    """
-    if isinstance(config, str):
-        trainer = CoreTrainer.from_yaml(config)
-    elif isinstance(config, dict):
-        trainer = CoreTrainer.from_dict(config)
-    else:
-        trainer = CoreTrainer(config)
-
-    history = trainer.fit()
-
-    return {
-        "history": [m.to_dict() for m in history],
-        "final_val_accuracy": history[-1].val_accuracy if history else 0.0,
-    }
-
-
 def _convert_dictconfig(obj):
     """Deeply convert OmegaConf DictConfig to native dicts."""
     if hasattr(obj, "_is_dict"):
@@ -1004,7 +982,6 @@ def run_from_runconfig(cfg) -> dict[str, Any]:
         ``final_val_accuracy``.
     """
     import json
-    import os
 
     from bioplausible.hyperopt.tasks import create_task
 
@@ -1091,7 +1068,7 @@ def run_from_runconfig(cfg) -> dict[str, Any]:
 
     Path(cfg.output_dir).mkdir(exist_ok=True, parents=True)
     clean_results = _convert_dictconfig(results)
-    with Path(os.path.join(cfg.output_dir, "results.json")).open("w") as f:
+    with (Path(cfg.output_dir) / "results.json").open("w") as f:
         json.dump(clean_results, f, indent=4)
 
     return {
@@ -1106,6 +1083,5 @@ __all__ = [
     "CoreTrainer",
     "TrainerConfig",
     "TrainingMetrics",
-    "run_from_config",
     "run_from_runconfig",
 ]

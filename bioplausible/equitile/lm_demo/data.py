@@ -27,10 +27,9 @@ Example
 ...     loss = model.train_step(batch)
 """
 
-from __future__ import annotations
-
 import hashlib
 import json
+import logging
 import pickle
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -39,6 +38,8 @@ from typing import TYPE_CHECKING
 
 import torch
 from torch.utils.data import DataLoader, Dataset, IterableDataset
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from torch import Tensor
@@ -819,7 +820,7 @@ def create_python_dataset(
         try:
             code_texts.append(f.read_text())
         except Exception:
-            pass
+            logger.warning("Failed to read file %s", f)
 
     text = "\n\n# === END OF FILE ===\n\n".join(code_texts)
 

@@ -5,8 +5,6 @@ AutoScientist proposes experiments; the Bridge translates proposals into
 ExperimentTask objects that the Scientist can execute.
 """
 
-from __future__ import annotations
-
 import logging
 from dataclasses import dataclass, field
 from typing import Any

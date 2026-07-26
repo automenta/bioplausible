@@ -5,8 +5,11 @@ Provides patience/depth control for hyperparameter optimization that scales
 epochs, model sizes, and trial counts based on available compute time.
 """
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 
 class PatientLevel(Enum):
@@ -117,7 +120,7 @@ EVALUATION_TIERS: dict[PatientLevel, EvaluationConfig] = {
 
 def get_evaluation_config(
     patience: PatientLevel = PatientLevel.SHALLOW,
-    model_family: str | None = None,  # Kept for API compatibility but not used
+    model_family: str | None = None,
 ) -> EvaluationConfig:
     """
     Get evaluation configuration for a given patience level.
@@ -205,27 +208,35 @@ def print_evaluation_summary(patience: PatientLevel, n_models: int = 1):
         PatientLevel.CROSS_VAL: "rigorous cross-validation",
     }
 
-    print(
-        f"\nEvaluation Tier: {patience.value.upper()} ({tier_descriptions[patience]})"
+    logger.info(
+        "\nEvaluation Tier: %s (%s)",
+        patience.value.upper(),
+        tier_descriptions[patience],
     )
-    print("=" * 60)
-    print(
-        f"Training: {config.epochs} epochs, up to {config.max_hidden_dim} hidden"
-        f" units, max {config.max_layers} layers"
+    logger.info("=" * 60)
+    logger.info(
+        "Training: %d epochs, up to %d hidden units, max %d layers",
+        config.epochs,
+        config.max_hidden_dim,
+        config.max_layers,
     )
 
     if config.train_samples:
-        print(
-            f"Dataset: {config.train_samples} train / {config.val_samples} val samples"
+        logger.info(
+            "Dataset: %d train / %d val samples",
+            config.train_samples,
+            config.val_samples,
         )
     else:
-        print("Dataset: Full dataset")
+        logger.info("Dataset: Full dataset")
 
-    print(f"Optimization: {config.n_trials} trials with TPE sampler")
-    print(f"Pruning: {'Enabled' if config.use_pruning else 'Disabled'}")
-    print(f"Estimated time: {time_est['estimated_completion']}", end="")
+    logger.info("Optimization: %d trials with TPE sampler", config.n_trials)
+    logger.info("Pruning: %s", "Enabled" if config.use_pruning else "Disabled")
     if n_models > 1:
-        print(f" ({n_models} models)")
+        logger.info(
+            "Estimated time: %s (%d models)",
+            time_est["estimated_completion"],
+            n_models,
+        )
     else:
-        print()
-    print()
+        logger.info("Estimated time: %s", time_est["estimated_completion"])

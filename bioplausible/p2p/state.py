@@ -5,9 +5,14 @@ Saves user contribution points and job counts.
 """
 
 import json
+import logging
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 STATE_FILE = Path("results/p2p_state.json")
+
+logger = logging.getLogger(__name__)
 
 
 def load_state():
@@ -18,6 +23,7 @@ def load_state():
         with Path(STATE_FILE).open("r") as f:
             return json.load(f)
     except Exception:
+        logger.warning("Failed to load P2P state, returning defaults")
         return {"points": 0, "jobs_done": 0}
 
 
@@ -27,4 +33,4 @@ def save_state(points, jobs_done):
         with Path(STATE_FILE).open("w") as f:
             json.dump({"points": points, "jobs_done": jobs_done}, f)
     except Exception as e:
-        print(f"Failed to save P2P state: {e}")
+        logger.error("Failed to save P2P state: %s", e)

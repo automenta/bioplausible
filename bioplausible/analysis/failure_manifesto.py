@@ -1,5 +1,4 @@
-import os
-import pathlib
+from pathlib import Path
 
 import pandas as pd
 
@@ -34,9 +33,9 @@ class FailureManifestoGenerator:
 
         df = pd.DataFrame(fail_data)
 
-        pathlib.Path(os.path.dirname(output_path)).mkdir(exist_ok=True, parents=True)
+        Path(output_path).parent.mkdir(exist_ok=True, parents=True)
 
-        with pathlib.Path(output_path).open("w") as f:
+        with Path(output_path).open("w") as f:
             f.write("# Failure Modes Manifesto\n\n")
             f.write(
                 "This document tracks the explicit failure modes encountered "

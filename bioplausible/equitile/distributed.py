@@ -29,8 +29,6 @@ Examples
 >>> stats = dist_model.train_step(X, y)
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
