@@ -135,10 +135,10 @@ class TrainingTrajectory:
         try:
             # New NumPy 2.0+
             if hasattr(np, "trapezoid"):
-                area = np.trapezoid(accs, epochs)  # type: ignore
+                area = np.trapezoid(accs, epochs)  # type: ignore[unknown]
             # Old NumPy < 2.0
             elif hasattr(np, "trapz"):
-                area = np.trapz(accs, epochs)  # type: ignore
+                area = np.trapz(accs, epochs)  # type: ignore[unknown]
             else:
                 raise AttributeError("No trapezoid function")
         except (AttributeError, TypeError):
@@ -280,8 +280,8 @@ class ContinuousTrainingSchedule:
                 weight_norm=w_norm,
                 learning_rate=config.get("lr", 0.0),  # Simplification
                 train_val_gap=gap,
-                perplexity=last_metrics.get("perplexity"),  # type: ignore
-                reward=last_metrics.get("reward"),  # type: ignore
+                perplexity=last_metrics.get("perplexity"),  # type: ignore[unknown]
+                reward=last_metrics.get("reward"),  # type: ignore[unknown]
                 wall_time_seconds=cumulative_time,
                 samples_seen=int(last_metrics.get("samples_seen", 0)),
             )
@@ -293,14 +293,18 @@ class ContinuousTrainingSchedule:
                 optuna_trial.report(v_acc, target_epoch)
                 if optuna_trial.should_prune():
                     trajectory.converged = False
-                    logger.info("[PRUNE]  Trial %s PRUNED at epoch %s", trial_id, target_epoch)
+                    logger.info(
+                        "[PRUNE]  Trial %s PRUNED at epoch %s", trial_id, target_epoch
+                    )
                     break
 
             elif pruning_callback and self.enable_pruning:
                 # Use generic callback if provided
                 if pruning_callback(trial_id, target_epoch, last_metrics):
                     trajectory.converged = False
-                    logger.info("[PRUNE]  Trial %s PRUNED at epoch %s", trial_id, target_epoch)
+                    logger.info(
+                        "[PRUNE]  Trial %s PRUNED at epoch %s", trial_id, target_epoch
+                    )
                     break
 
         # Post-training analysis

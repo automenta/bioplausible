@@ -12,7 +12,6 @@ from tqdm import tqdm
 from bioplausible.config.schema import RunConfig
 from bioplausible.core.trainer import run_from_runconfig as run_from_config
 
-
 # Maps dimension names to config attribute paths for dynamic resolution.
 _DIMENSION_MAP: dict[str, tuple[str, ...]] = {
     "learning_rate": ("optimizer", "lr"),

@@ -220,7 +220,6 @@ def _estimate_activation_memory(input_shape: tuple[int, ...], batch_size: int) -
     return batch_size * sum(input_shape) * 4 / 1e6  # 4 bytes per float32
 
 
-
 def create_model_preset(preset_name: str, **overrides) -> nn.Module:
     """
     Create a model from a preset configuration.

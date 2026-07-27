@@ -1,8 +1,8 @@
 """Tests for named default-config registry (bioplausible.config.defaults)."""
 
 import pytest
+
 from bioplausible.config import (
-    DEFAULT_CONFIGS,
     get_named_config,
     list_named_configs,
     register_default_config,
@@ -68,7 +68,10 @@ def test_register_default_config_overwrites_with_warning(caplog):
         "test_overwrite",
         {"model": {"name": "MLP", "kwargs": {"hidden_dim": 999}}},
     )
-    assert any("Overwriting default config preset 'test_overwrite'" in r.message for r in caplog.records)
+    assert any(
+        "Overwriting default config preset 'test_overwrite'" in r.message
+        for r in caplog.records
+    )
     cfg = get_named_config("test_overwrite")
     assert cfg.model.kwargs["hidden_dim"] == 999
 

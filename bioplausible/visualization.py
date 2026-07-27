@@ -905,7 +905,15 @@ class ResultVisualizer:
         thresh = cm.max() / 2.0
         for i in range(n_classes):
             for j in range(n_classes):
-                ax.text(j, i, str(cm[i, j]), ha="center", va="center", color="white" if cm[i, j] > thresh else "black", fontsize=12)
+                ax.text(
+                    j,
+                    i,
+                    str(cm[i, j]),
+                    ha="center",
+                    va="center",
+                    color="white" if cm[i, j] > thresh else "black",
+                    fontsize=12,
+                )
         plt.tight_layout()
         plt.savefig(save_path)
         plt.close()
@@ -971,7 +979,7 @@ class ResultsDashboard:
             <div class="card"><div class="card-label">Experiments</div><div class="card-value">{len(self.results)}</div><div>total runs</div></div>
         </div>
         """
-        table = '<h2>Detailed Results</h2><table><thead><tr><th>Model</th><th>Optimizer</th><th>Val Accuracy</th><th>Train Accuracy</th><th>Speed (steps/s)</th><th>Parameters</th></tr></thead><tbody>'
+        table = "<h2>Detailed Results</h2><table><thead><tr><th>Model</th><th>Optimizer</th><th>Val Accuracy</th><th>Train Accuracy</th><th>Speed (steps/s)</th><th>Parameters</th></tr></thead><tbody>"
         for r in sorted(self.results, key=lambda x: x.val_accuracy, reverse=True):
             table += f'<tr><td>{r.model_name}</td><td>{r.optimizer_name}</td><td class="metric">{r.val_accuracy:.2f}%</td><td>{r.train_accuracy:.2f}%</td><td>{r.steps_per_second:.1f}</td><td>{r.num_parameters:,}</td></tr>'
         table += "</tbody></table>"

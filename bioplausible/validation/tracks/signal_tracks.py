@@ -10,8 +10,10 @@ from typing import Any
 
 import torch
 
-from bioplausible.validation.tracks._signal_probe import run_signal_propagation_experiment
 from bioplausible.validation.notebook import ValidationTrack
+from bioplausible.validation.tracks._signal_probe import (
+    run_signal_propagation_experiment,
+)
 
 
 class SignalPropagationTrack(ValidationTrack):

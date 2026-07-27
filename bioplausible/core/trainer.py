@@ -811,9 +811,7 @@ class CoreTrainer:
         # Compute metrics — use task's compute_metrics when available
         if self.task_obj is not None and hasattr(self.task_obj, "compute_metrics"):
             with torch.no_grad():
-                metrics = self.task_obj.compute_metrics(
-                    logits.detach(), y, loss.item()
-                )
+                metrics = self.task_obj.compute_metrics(logits.detach(), y, loss.item())
         else:
             logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
             with torch.no_grad():
@@ -873,10 +871,10 @@ class CoreTrainer:
                 val_losses.append(loss.item())
 
                 # Use task's compute_metrics when available
-                if self.task_obj is not None and hasattr(self.task_obj, "compute_metrics"):
-                    step_metrics = self.task_obj.compute_metrics(
-                        logits, y, loss.item()
-                    )
+                if self.task_obj is not None and hasattr(
+                    self.task_obj, "compute_metrics"
+                ):
+                    step_metrics = self.task_obj.compute_metrics(logits, y, loss.item())
                     val_accs.append(step_metrics.get("accuracy", 0.0))
                 else:
                     logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)

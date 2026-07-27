@@ -2,7 +2,6 @@ import time
 import unittest
 
 import requests
-
 from bioplausible.p2p.node import Coordinator, Worker
 
 

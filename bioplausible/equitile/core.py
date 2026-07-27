@@ -10,7 +10,7 @@ A high-performance, scalable deep learning framework featuring:
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 from torch import nn
@@ -27,7 +27,7 @@ from .kernels import (
     compute_tile_prediction,
 )
 from .optimizer_mixin import EquiTileOptimizerMixin
-from .state_types import EquiTileStateDict, EquiTileTrainingState
+from .state_types import EquiTileStateDict
 from .task_handler import TaskHandler
 from .topology import TileGraph, TileState
 from .utils.init_utils import initialize_edge_weights, initialize_io_projections

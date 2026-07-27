@@ -393,9 +393,7 @@ class MultiGPUConfig:
     def __post_init__(self) -> None:
         valid_assignments = {"round_robin", "layered", "balanced"}
         if self.tile_assignment not in valid_assignments:
-            raise ValueError(
-                f"tile_assignment must be one of {valid_assignments}"
-            )
+            raise ValueError(f"tile_assignment must be one of {valid_assignments}")
 
 
 @dataclass

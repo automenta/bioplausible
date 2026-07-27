@@ -643,7 +643,7 @@ class ReportComposer:
         """Close database connection."""
         if self.conn:
             self.conn.close()
-            self.conn = None  # type: ignore
+            self.conn = None  # type: ignore[unknown]
 
     def __enter__(self) -> ReportComposer:
         return self

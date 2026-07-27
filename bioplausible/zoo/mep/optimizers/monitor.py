@@ -70,7 +70,7 @@ class EPMonitor:
         self.settling_history = []
         if torch.cuda.is_available():
             self._start_time = torch.cuda.Event(enable_timing=True)
-            self._start_time.record()  # type: ignore
+            self._start_time.record()  # type: ignore[unknown]
         else:
             self._start_time = None
 

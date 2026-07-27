@@ -186,7 +186,7 @@ class EPGradient:
         else:
             from contextlib import nullcontext
 
-            amp_context = nullcontext()  # type: ignore
+            amp_context = nullcontext()  # type: ignore[unknown]
 
         with torch.enable_grad(), amp_context:
             # Compute energies

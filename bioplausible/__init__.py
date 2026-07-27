@@ -20,6 +20,28 @@ Quick Start:
 Or from YAML:
     trainer = CoreTrainer.from_yaml("config.yaml")
     history = trainer.fit()
+
+Two-Tier Propagator/Model Architecture:
+--------------------------------------
+The zoo provides two complementary interfaces for bio-plausible learning:
+
+1. **Propagator side** (`bioplausible.zoo.propagators`): Learning rules implemented
+   as drop-in `torch.optim.Optimizer` subclasses (`BioOptimizer` /
+   `LearningRuleOptimizer`). These mutate parameters of *any* model:
+   Backprop, FeedbackAlignment, EqProp, ContrastiveHebbianLearning, MEP
+   presets (smep, sdmep, ...). Use via the Registry API:
+   `registry.make_optimizer("eq_prop", model.parameters(), model=model)`.
+
+2. **Model side** (`bioplausible.zoo.models`): Learning rules that require
+   *model-side* control of the forward/training loop (custom dual-phase passes,
+   learned inverse maps, settling dynamics with internal state). These expose
+   `train_step(x, y) -> dict[str, float]` instead of `optimizer.step()`.
+
+The propagator stubs for FF, PEPITA, TargetProp, DifferenceTargetProp, and PCN
+raise `NotImplementedError` with docstrings pointing to their working
+model-side implementations. These are re-exported from
+`bioplausible.zoo.propagators` alongside the stubs so registry consumers can
+reach them without crossing module boundaries.
 """
 
 # AutoScientist (LLM meta-reasoner)
@@ -150,9 +172,17 @@ from bioplausible.zoo import optimizers as zoo_optimizers
 from bioplausible.zoo import propagators as zoo_propagators
 from bioplausible.zoo import sparsity as zoo_sparsity
 
+# Re-export model-side classes from propagators package (two-tier arch)
+from bioplausible.zoo.propagators import (
+    DifferenceTargetProp,
+    FabricPCGraphPCN,
+    ForwardForwardNet,
+    PEPITA,
+    PredictiveCodingHybrid,
+)
+
 # Optimizers / Propagators
 from bioplausible.zoo.mep.presets import muon_backprop, smep, smep_fast
-
 from bioplausible.zoo.models.eqprop import (
     BackpropMLP,
     ConvEqProp,
@@ -266,4 +296,10 @@ __all__ = [
     "zoo_optimizers",
     "zoo_propagators",
     "zoo_sparsity",
+    # Model-side re-exports (two-tier propagator/model architecture)
+    "DifferenceTargetProp",
+    "FabricPCGraphPCN",
+    "ForwardForwardNet",
+    "PEPITA",
+    "PredictiveCodingHybrid",
 ]

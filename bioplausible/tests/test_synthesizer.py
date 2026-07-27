@@ -164,7 +164,6 @@ class TestResearchSynthesizer(unittest.TestCase):
         self.conn.commit()
 
         # Override synth's get_trials_df to use our memory connection
-        import pandas as pd
 
         def get_trials_df_mock(conn):
             return self.synth.__class__._get_trials_df(self.synth, self.conn)
@@ -175,7 +174,6 @@ class TestResearchSynthesizer(unittest.TestCase):
         self.conn.close()
 
     def _trials_df(self):
-        import pandas as pd
 
         return self.synth._get_trials_df(self.conn)
 

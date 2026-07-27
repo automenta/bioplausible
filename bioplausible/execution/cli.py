@@ -8,10 +8,9 @@ It supports two main modes:
 """
 
 import argparse
-import sys
 
-from bioplausible.execution.engine import ExecutionEngine
 from bioplausible.analysis.reporting import ReportOrchestrator
+from bioplausible.execution.engine import ExecutionEngine
 
 
 def main() -> None:

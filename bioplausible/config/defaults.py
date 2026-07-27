@@ -34,9 +34,7 @@ def register_default_config(name: str, overrides: dict) -> None:
             invalid ``ExperimentConfig`` (e.g., unknown field).
     """
     if not isinstance(overrides, dict):
-        raise ValueError(
-            f"overrides must be a dict, got {type(overrides).__name__}"
-        )
+        raise ValueError(f"overrides must be a dict, got {type(overrides).__name__}")
     if name in DEFAULT_CONFIGS:
         _logger.warning("Overwriting default config preset %r", name)
     base = OmegaConf.structured(ExperimentConfig)
@@ -62,8 +60,7 @@ def get_named_config(name: str) -> ExperimentConfig:
     except KeyError as e:
         available = ", ".join(sorted(DEFAULT_CONFIGS)) or "<none>"
         raise KeyError(
-            f"No default config preset named {name!r}. "
-            f"Available: {available}"
+            f"No default config preset named {name!r}. Available: {available}"
         ) from e
     return OmegaConf.to_object(OmegaConf.structured(cfg))
 

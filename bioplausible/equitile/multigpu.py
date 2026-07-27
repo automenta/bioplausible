@@ -53,7 +53,7 @@ from .kernels import (
 if TYPE_CHECKING:
     from .core import EquiTile
 
-from .config import MultiGPUConfig, NCCLConfig  # noqa: F401  -- canonical location
+from .config import MultiGPUConfig, NCCLConfig
 
 # =============================================================================
 # Configuration

@@ -154,17 +154,11 @@ class ExperimentRunner:
 
         opt_params = list(model.parameters())
         try:
-            opt_cls = Registry.get(
-                ComponentCategory.OPTIMIZER, optimizer_name
-            )
+            opt_cls = Registry.get(ComponentCategory.OPTIMIZER, optimizer_name)
         except ValueError:
-            opt_cls = Registry.get(
-                ComponentCategory.PROPAGATOR, optimizer_name
-            )
+            opt_cls = Registry.get(ComponentCategory.PROPAGATOR, optimizer_name)
         try:
-            optimizer = opt_cls(
-                opt_params, model=model, **optimizer_params
-            )
+            optimizer = opt_cls(opt_params, model=model, **optimizer_params)
         except TypeError:
             optimizer = opt_cls(opt_params, **optimizer_params)
 

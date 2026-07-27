@@ -174,6 +174,9 @@ from .enhanced import (
     create_enhanced_model,
 )
 
+# Fast LM (visualization variant)
+from .fast_lm import FastLMConfig, FastLMEquiTile
+
 # Graph Neural Networks
 from .graph import (
     GraphAttentionLayer,
@@ -201,9 +204,6 @@ from .language import (
     create_medium_lm,
     create_small_lm,
 )
-
-# Fast LM (visualization variant)
-from .fast_lm import FastLMConfig, FastLMEquiTile
 
 # Optimized Language Model
 from .language_optimized import (

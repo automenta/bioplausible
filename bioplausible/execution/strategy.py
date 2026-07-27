@@ -464,7 +464,7 @@ class ExecutionStrategy:
                     f"Scheduling Low-Data experiment"
                     f" ({ld_task.fixed_config['data_fraction']:.0%})"
                     f" for {model}."
-                ),  # type: ignore
+                ),  # type: ignore[unknown]
             )
             candidates.append(ld_task)
 

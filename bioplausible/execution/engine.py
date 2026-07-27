@@ -563,7 +563,7 @@ class ExecutionEngine:
 
     def _prepare_fixed_config(self, task: ExperimentTask) -> tuple[dict[str, Any], str]:
         """Prepare configuration for fixed tasks."""
-        config = task.fixed_config.copy()  # type: ignore
+        config = task.fixed_config.copy()  # type: ignore[reportOptionalMemberAccess]
 
         # Ensure fold is set for CV
         if task.fold_index is not None:

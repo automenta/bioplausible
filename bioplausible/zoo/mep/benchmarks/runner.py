@@ -327,7 +327,7 @@ def train_epoch(
         if is_ep:
             # EP mode
             # Type ignore because 'step' arguments vary
-            optimizer.step(x=x, target=y)  # type: ignore
+            optimizer.step(x=x, target=y)  # type: ignore[unknown]
 
             # Compute loss for logging (extra forward pass)
             with torch.no_grad():

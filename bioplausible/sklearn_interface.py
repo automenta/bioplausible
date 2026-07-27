@@ -12,15 +12,13 @@ from typing import Any
 import numpy as np
 import torch
 import torch.nn.functional as F
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.utils.multiclass import unique_labels
+from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from bioplausible.core.registry import ComponentCategory, Registry
-
-from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.utils.multiclass import unique_labels
-from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
-
 
 _MODEL_NAME_MAP: dict[str, str] = {
     "EqProp MLP": "eqprop_mlp",

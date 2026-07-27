@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
-from torch.utils.data import Dataset
-from torch.utils.data import TensorDataset
+from torch.utils.data import DataLoader, Dataset, TensorDataset
 
 
 def get_vision_dataset(

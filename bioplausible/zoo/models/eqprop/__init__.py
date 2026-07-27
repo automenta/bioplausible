@@ -1,7 +1,6 @@
 """Equilibrium Propagation Model Zoo Subpackage."""
 
-from ...base import BioModel as _BioModel_re_export  # noqa: F401  (used by siblings)
-
+from ...base import BioModel as _BioModel_re_export
 from .causal_transformer_eqprop import (
     CausalEqPropAttention,
     CausalTransformerEqProp,

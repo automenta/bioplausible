@@ -1,23 +1,12 @@
 """Equilibrium Propagation model variants."""
 
-import math
-from dataclasses import dataclass
 from typing import Any
 
 import torch
-import torch.nn.functional as F
 from torch import nn
-from torch.nn.utils.parametrizations import spectral_norm
-
-from bioplausible.acceleration.kernels import HAS_CUPY, EqPropKernel
-from bioplausible.acceleration.triton_kernels import TritonEqPropOps
-from bioplausible.core.registry import Domain, LocalityLevel
 
 from ....acceleration import compile_settling_loop
 from ...base import BioModel, ModelConfig, register_model
-from ...utils import spectral_conv2d, spectral_linear
-from ..base import EqPropModel
-
 
 
 @register_model(
@@ -251,5 +240,3 @@ class StandardEqProp(BioModel):
             "loss": loss,
             "accuracy": acc,
         }
-
-

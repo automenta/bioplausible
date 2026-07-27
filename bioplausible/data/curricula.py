@@ -6,8 +6,7 @@ Defines curriculum schedules for progressive training (easy to hard).
 
 from __future__ import annotations
 
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 
 
@@ -20,12 +19,10 @@ class Curriculum(ABC):
         Return difficulty level in [0.0, 1.0] for the given epoch.
         0.0 = easiest, 1.0 = hardest.
         """
-        pass
 
     @abstractmethod
     def description(self) -> str:
         """Human-readable description of this curriculum."""
-        pass
 
 
 class FixedCurriculum(Curriculum):

@@ -402,3 +402,47 @@ work that REFACTOR3 explicitly deferred or scoped out**:
 Where any item here appears to conflict with a REFACTOR3 decision, the
 REFACTOR3 decision wins (e.g., Kademlia P2P stays; HTTP P2P stays
 archived in `docs/archive/20260726/p2p_http/`).
+
+---
+
+## Session Progress (2026-07-27)
+
+### Completed Items
+
+| Phase | Item | Status | Notes |
+|-------|------|--------|-------|
+| A.2 | Legacy except syntax fix | ✅ | Fixed 16 files (backends.py, kernels.py, ablation.py, etc.) |
+| A.3 | PlausibleStep Protocol + StepInput alias | ✅ | Added to `zoo/propagators/base.py` with docstring |
+| A.4 | Propagator stub tests + model-side re-exports | ✅ | Created `tests/test_propagator_stubs.py` (10 tests); re-exported ForwardForwardNet, PEPITA, DifferenceTargetProp, FabricPCGraphPCN, PredictiveCodingHybrid |
+| C.1 | ruff format (47 files) | ✅ | 50 files reformatted |
+| C.2 | ruff check --fix | ✅ | 314 errors auto-fixed |
+| C.3 | noqa discipline (bare type: ignore) | ✅ | 14 bare `# type: ignore` comments now have codes |
+| B.4 | conftest.py torch mock removal | ✅ | Replaced mock scaffold with clean `import torch` |
+
+### Test Status
+- Before: 669 passed
+- After: 679 passed (+10 new)
+- All tests pass
+
+### Coverage
+- Before: ~19% (broken coverage config)
+- After: 50.37%
+- Gap to 85%: ~35 percentage points (~10K lines)
+
+### Remaining High-Impact Items
+
+| Phase | Item | Priority | Notes |
+|-------|------|----------|-------|
+| A.1 | pyright --strict | HIGH | 11,603 errors remain; triage by file recommended |
+| A.5 | MEP strategy tests | MEDIUM | smoke tests for gradient/update/constraint/feedback strategies |
+| D | Coverage to 85% | HIGH | Focus: `zoo/propagators/fa.py` (36%), `zoo/sparsity/methods.py` (27%) |
+| E.1 | Protocol-over-ABC | LOW | `BaseTask(ABC)` → `TaskProtocol` |
+| E.2 | lru_cache for globals | LOW | `_DATASET_CACHE` in `hyperopt/tasks.py` |
+| E.3 | match/case for create_task | LOW | 100-line if/elif chain in tasks.py:647-749 |
+| E.4 | Frozen dataclasses | LOW | Audit `KnowledgeEntry`, `FailureRecord`, etc. |
+| E.5 | t-strings for logging | LOW | Deferred; requires Python 3.14 preview |
+
+### Next Session Start
+1. Run `uv run pyright bioplausible/zoo/propagators/base.py` to validate Protocol
+2. Fix top 5 error-heavy files identified in A.1
+3. Add MEP strategy smoke tests

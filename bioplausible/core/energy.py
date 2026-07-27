@@ -128,7 +128,9 @@ class EnergyTracker:
         fwd_flops = 2 * params * batch_size
         bwd_flops = 2 * fwd_flops if self.requires_backward else 0
 
-        energy_proxy = (fwd_flops + bwd_flops) * (1 - activation_sparsity) / max(params, 1)
+        energy_proxy = (
+            (fwd_flops + bwd_flops) * (1 - activation_sparsity) / max(params, 1)
+        )
 
         self.profile = EnergyProfile(
             forward_flops=fwd_flops,

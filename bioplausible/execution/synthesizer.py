@@ -340,7 +340,7 @@ class ResearchSynthesizer:
                             "confidence": "High" if p_val < 0.01 else "Moderate",
                         })
 
-            results.sort(key=lambda x: x["p_value"])  # type: ignore
+            results.sort(key=lambda x: x["p_value"])  # type: ignore[unknown]
             return results
 
         except ImportError:
@@ -363,7 +363,7 @@ class ResearchSynthesizer:
 
             summary.columns = [
                 "_".join(col).strip()
-                for col in summary.columns.values  # type: ignore
+                for col in summary.columns.values  # type: ignore[unknown]
             ]
             summary = summary.rename(columns={"trial_id_count": "num_trials"})
             summary = summary.sort_values("accuracy_max", ascending=False)
@@ -428,7 +428,7 @@ class ResearchSynthesizer:
             trial_epochs = (
                 convergence_df.groupby("trial_id")["epoch"].max().reset_index()
             )
-            trial_epochs.columns = ["trial_id", "actual_epochs"]  # type: ignore
+            trial_epochs.columns = ["trial_id", "actual_epochs"]  # type: ignore[unknown]
 
             if "samples_seen" in convergence_df.columns:
                 trial_samples = (
@@ -437,7 +437,7 @@ class ResearchSynthesizer:
                     .max()
                     .reset_index()
                 )
-                trial_samples.columns = ["trial_id", "total_samples"]  # type: ignore
+                trial_samples.columns = ["trial_id", "total_samples"]  # type: ignore[unknown]
             else:
                 trial_samples = pd.DataFrame(columns=["trial_id", "total_samples"])
 

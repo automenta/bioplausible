@@ -298,6 +298,3 @@ def print_rankings(rankings: list[Any]):
             f"#{i:<5} {r.family:<20} "
             f"{r.best_value * 100:6.2f}%    {gap:<10} {r.n_trials:8d}"
         )
-
-
-

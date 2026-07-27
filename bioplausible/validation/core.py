@@ -103,7 +103,9 @@ class Verifier:
             else ("Intermediate" if self.intermediate_mode else "Full")
         )
         mode_icon = (
-            "[FAST] " if self.quick_mode else ("[DATA] " if self.intermediate_mode else "[LAB] ")
+            "[FAST] "
+            if self.quick_mode
+            else ("[DATA] " if self.intermediate_mode else "[LAB] ")
         )
 
         logger.info("=" * 70)

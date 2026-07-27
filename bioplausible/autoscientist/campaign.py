@@ -194,11 +194,13 @@ class AutoScientistCampaign:
                 tags=["experiment", proposal.task, proposal.model],
                 source="experiment",
                 metrics={
-                    k: v for k, v in result.items()
+                    k: v
+                    for k, v in result.items()
                     if isinstance(v, (int, float)) and v is not None
                 },
                 hyperparameters=(
-                    proposal.hyperparams if isinstance(proposal.hyperparams, dict)
+                    proposal.hyperparams
+                    if isinstance(proposal.hyperparams, dict)
                     else {"raw": str(proposal.hyperparams)}
                 ),
                 extra={"campaign_iteration": self._iteration},

@@ -6,9 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import torch
+from bioplausible.execution.report.orchestrator import ReportOrchestrator
 from torch import nn
 
-from bioplausible.execution.report.orchestrator import ReportOrchestrator
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel
 from bioplausible.zoo.base import BioModel

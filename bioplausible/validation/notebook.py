@@ -86,12 +86,17 @@ class VerificationNotebook:
         """Add a track result to the notebook."""
         self.track_results.append(result)
 
-        status_icon = {"pass": "[OK] ", "fail": "[FAIL] ", "partial": "[WARN] ", "stub": "[TODO] "}.get(
-            result.status, "❓"
-        )
-        evidence_icon = {"smoke": "[TEST] ", "directional": "[DATA] ", "conclusive": "[OK] "}.get(
-            result.evidence_level, "❓"
-        )
+        status_icon = {
+            "pass": "[OK] ",
+            "fail": "[FAIL] ",
+            "partial": "[WARN] ",
+            "stub": "[TODO] ",
+        }.get(result.status, "❓")
+        evidence_icon = {
+            "smoke": "[TEST] ",
+            "directional": "[DATA] ",
+            "conclusive": "[OK] ",
+        }.get(result.evidence_level, "❓")
         evidence_label = {
             "smoke": "Smoke Test",
             "directional": "Directional",
@@ -158,9 +163,12 @@ class VerificationNotebook:
 |---|-------|--------|-------|------|
 """
         for r in self.track_results:
-            icon = {"pass": "[OK] ", "fail": "[FAIL] ", "partial": "[WARN] ", "stub": "[TODO] "}.get(
-                r.status, "❓"
-            )
+            icon = {
+                "pass": "[OK] ",
+                "fail": "[FAIL] ",
+                "partial": "[WARN] ",
+                "stub": "[TODO] ",
+            }.get(r.status, "❓")
             summary += (
                 f"| {r.track_id} | {r.name} | {icon} | "
                 f"{r.score:.0f} | {r.time_seconds:.1f}s |\n"
