@@ -884,7 +884,7 @@ class ExecutionEngine:
         statistical tests, and high-level synthesis insights.
         """
         try:
-            from bioplausible.execution.report.orchestrator import ReportOrchestrator
+            from bioplausible.analysis.reporting import ReportOrchestrator
 
             orchestrator = ReportOrchestrator(self.db_path, output_dir)
             orchestrator.generate_reports()

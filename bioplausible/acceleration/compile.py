@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from bioplausible.acceleration.backends import TRITON_AVAILABLE
+from bioplausible.acceleration.backends import HAS_TRITON
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ def compile_model(
     if not _CompileCache.check():
         return model
 
-    if not TRITON_AVAILABLE:
+    if not HAS_TRITON:
         return model
 
     try:
@@ -140,7 +140,7 @@ def compile_settling_loop(settling_fn: Callable) -> Callable:
     if not _CompileCache.check():
         return settling_fn
 
-    if not TRITON_AVAILABLE:
+    if not HAS_TRITON:
         return settling_fn
 
     try:

@@ -2,9 +2,6 @@
 Execution Engine: Autonomous Discovery Execution Engine.
 
 This module manages continuous experiment execution for research automation.
-Per TODO.md:
-- ExecutionEngine = execution engine (task queuing, resource management, trial running)
-- AutoScientist = LLM-augmented meta-reasoner (separate module)
 
 Key Components:
     - ExecutionEngine: Main agent class running the discovery loop

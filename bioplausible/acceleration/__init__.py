@@ -40,7 +40,6 @@ from bioplausible.acceleration._array_ops import (
 from bioplausible.acceleration.backends import (
     HAS_CUPY,
     HAS_TRITON,
-    TRITON_AVAILABLE,
     BackendDetector,
     CupyChecker,
     TritonChecker,
@@ -54,7 +53,6 @@ from bioplausible.acceleration.compile import compile_model, compile_settling_lo
 __all__ = [
     "HAS_CUPY",
     "HAS_TRITON",
-    "TRITON_AVAILABLE",
     "BackendDetector",
     "CupyChecker",
     "TritonChecker",

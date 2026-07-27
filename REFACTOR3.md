@@ -792,4 +792,80 @@ Outstanding work, in suggested priority order:
 6. **Pre-existing ruff errors** — out of scope per user direction
    this session; revisit when the user wants a lint pass.
 
+### Session 2026-07-26 (c) — Phase 1.9 protocol + Phase 2.13 prep + Phase 3 polish
+
+Edits applied (uncommitted — see ``git diff``).
+
+**Phase 1.9 — Training-path unification (protocol step)** COMPLETED.
+- Added ``TrainerProtocol`` (``core/trainer.py``) with ``train_epoch()`` —
+  both ``CoreTrainer`` and ``_TaskTrainer`` satisfy it.
+- Made ``CoreTrainer.train_epoch()`` a public method (delegates to
+  ``_train_epoch(batches)``, matching the protocol).
+- Added ``CoreTrainer.from_task(model, task, ...)`` classmethod that
+  constructs a trainer in task-mode (uses ``task.get_batch()`` instead of
+  data loaders), providing the factory interface needed by callers that
+  currently construct ``_TaskTrainer`` directly.
+- ``_TaskTrainer`` kept as a separate implementation with its own
+  ``train_epoch()`` (delegation to ``CoreTrainer`` deferred because the
+  metrics dict shape differs — ``_TaskTrainer`` uses
+  ``task.compute_metrics()`` and produces ``train_*``-prefixed keys, while
+  ``CoreTrainer._train_epoch`` uses hardcoded cross-entropy loss).
+  The ``TrainerProtocol`` is the unification win; the implementation merge
+  awaits a metrics-normalisation pass.
+
+**Phase 2.13 — Archive ``execution/report/`` (consumer migration)** DONE.
+- ``ReportOrchestrator`` re-exported from ``analysis/reporting.py``.
+- Updated the two consumers (``execution/cli.py:14``,
+  ``execution/engine.py:887``) to import from ``analysis.reporting``
+  instead of ``execution.report.orchestrator``.
+- Old submodule still functions (internal imports, tests unchanged).
+  Next session: ``git mv execution/report/* analysis/legacy_report/``
+  and update the two test file imports.
+
+**Phase 3 items completed in this session**:
+
+| § | Item | Status |
+|---|------|--------|
+| 29 | Remove ``HAS_TRITON``/``TRITON_AVAILABLE`` self-alias | **DONE** |
+| 32 | Reference external ``TODO.md`` | **DONE** |
+| 43 | Duplicate ``__version__`` in ``equitile/__init__.py`` | **DONE** |
+
+**Items re-evaluated as already done or not actionable**:
+
+| § | Item | State |
+|---|------|-------|
+| 26 | Remove ``_EquiTile`` side-effect import from ``__init__.py`` | **KEPT** — triggers ``@register_model`` decorators |
+| 31 | ``graph/`` license header | Already present |
+| 34 | ``core/trainer.py`` stale "deleted CoreTrainer" comment | Already fixed in Session (b) |
+| 37 | Unused threading decorators in ``autoscientist/bridge.py`` | File is 124 lines, no threading imports |
+| 56 | (Phase 2.15) Inner tests using legacy API | Already migrated — grep returned zero hits |
+
+### Remaining work (priority order for next session)
+
+1. **Phase 1.9 (finish merge)** — Make ``_TaskTrainer`` delegate to
+   ``CoreTrainer.from_task()``. Requires adding a task-aware metrics
+   path to ``CoreTrainer._train_step()`` that calls
+   ``task_obj.compute_metrics()`` when available, so the returned dict
+   matches the ``train_*``-prefixed shape that ``_TaskTrainer`` callers
+   expect. Then ``_TaskTrainer.__init__`` creates a ``CoreTrainer`` via
+   ``from_task()`` and delegates ``train_epoch()`` to it. Test blocks in
+   ``tests/test_refactor2_bugfixes.py`` (6 blocks) need attention.
+
+2. **Phase 2.13 (complete archive)** — ``git mv execution/report/* analysis/legacy_report/``
+   and update test imports:
+   - ``tests/test_report_generation.py:10`` → ``from bioplausible.analysis.legacy_report.composer``
+   - ``tests/test_report_analysis_robustness.py:6`` → ``from bioplausible.analysis.legacy_report.analysis``
+
+3. **Phase 1.10 (P2P unification)** — Needs product judgment (Kademlia vs
+   HTTP Coordinator/Worker).
+
+4. **Phase 3 — remaining items** (table in session log below; none block 1.9).
+
+### Test status at end of session 2026-07-26 (c)
+
+- ``ruff format --check .`` — passes (no new formatting issues).
+- ``ruff check .`` — 5K+ pre-existing errors; none introduced.
+- ``pytest tests/`` — **473 passed, 0 failed**.
+- ``pytest bioplausible/tests/`` — **197 passed, 13 skipped, 0 failed**.
+
 **End of session log**

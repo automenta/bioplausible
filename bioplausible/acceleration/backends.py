@@ -102,7 +102,7 @@ def check_cupy_available() -> tuple[bool, str]:
     return CupyChecker.check_availability()
 
 
-TRITON_AVAILABLE = False
+HAS_TRITON = False
 try:
     import triton
     import triton.language as tl
@@ -112,15 +112,11 @@ try:
             "Triton detected but missing 'tanh'. Disabling Triton support.",
             RuntimeWarning,
         )
-        TRITON_AVAILABLE = False
     else:
-        TRITON_AVAILABLE = True
+        HAS_TRITON = True
 except ImportError:
     triton = None
     tl = None
-    TRITON_AVAILABLE = False
-
-HAS_TRITON = TRITON_AVAILABLE
 
 
 class TritonChecker:
@@ -129,7 +125,7 @@ class TritonChecker:
     @staticmethod
     def check_availability() -> tuple[bool, str]:
         """Check if Triton is available for custom kernels."""
-        if TRITON_AVAILABLE:
+        if HAS_TRITON:
             return True, "Triton available"
         return False, "Triton not installed. Install with: pip install triton"
 
@@ -150,7 +146,7 @@ try:
         HAS_CUPY = True
     else:
         cp = None
-except (ImportError, Exception):
+except ImportError, Exception:
     cp = None
     HAS_CUPY = False
 
@@ -158,7 +154,6 @@ except (ImportError, Exception):
 __all__ = [
     "HAS_CUPY",
     "HAS_TRITON",
-    "TRITON_AVAILABLE",
     "BackendDetector",
     "CupyChecker",
     "TritonChecker",

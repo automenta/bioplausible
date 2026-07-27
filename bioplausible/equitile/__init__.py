@@ -453,4 +453,4 @@ __all__ = [
     "LocalityLevel",
 ]
 
-__version__ = "1.0.0"
+# Version managed by top-level bioplausible package.

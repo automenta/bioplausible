@@ -11,7 +11,7 @@ import argparse
 import sys
 
 from bioplausible.execution.engine import ExecutionEngine
-from bioplausible.execution.report.orchestrator import ReportOrchestrator
+from bioplausible.analysis.reporting import ReportOrchestrator
 
 
 def main() -> None:

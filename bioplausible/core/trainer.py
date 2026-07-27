@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import torch
 from omegaconf import DictConfig, OmegaConf
@@ -47,6 +47,17 @@ def _reshape_logits_targets_for_ce(
     if y.dtype != torch.long:
         y = y.long()
     return logits, y
+
+
+class TrainerProtocol(Protocol):
+    """Protocol for training interfaces.
+
+    Both ``CoreTrainer`` and the legacy ``_TaskTrainer`` satisfy this
+    protocol, allowing callers to train via a uniform ``train_epoch()``
+    interface regardless of how the trainer was constructed.
+    """
+
+    def train_epoch(self) -> dict[str, float]: ...
 
 
 @dataclass
@@ -257,6 +268,56 @@ class CoreTrainer:
     def from_dict(cls, d: dict[str, Any]) -> CoreTrainer:
         """Create trainer from dict."""
         return cls(TrainerConfig.from_dict(d))
+
+    @classmethod
+    def from_task(
+        cls,
+        model: nn.Module,
+        task,
+        device: str = "cpu",
+        optimizer: torch.optim.Optimizer | None = None,
+        epochs: int = 1,
+        **kwargs,
+    ) -> CoreTrainer:
+        """Create a CoreTrainer from a pre-built model and task.
+
+        Bypasses the config-driven data/setup path. The returned trainer
+        uses ``task.get_batch()`` instead of data loaders, matching the
+        behaviour of the legacy ``_TaskTrainer``.
+
+        Args:
+            model: Already-initialized model.
+            task: ``BaseTask`` instance providing ``get_batch`` /
+                ``compute_metrics``.
+            device: Target device.
+            optimizer: Pre-built optimizer (or ``None``).
+            epochs: Training epochs (primarily for logging).
+            **kwargs: Additional fields for the internal ``TrainerConfig``
+                (e.g. ``grad_clip``, ``track_energy``, ``batches_per_epoch``,
+                ``output_dir``).
+
+        Returns:
+            Configured ``CoreTrainer`` ready to call ``train_epoch()``.
+        """
+        cfg_kw = {
+            "model": getattr(model, "algorithm_name", model.__class__.__name__),
+            "task": getattr(task, "name", "custom"),
+            "device": device,
+            "epochs": epochs,
+            "batch_size": kwargs.pop("batches_per_epoch", 64),
+            "grad_clip": kwargs.pop("grad_clip", 0.0),
+            "track_energy": kwargs.pop("track_energy", False),
+            "log_dir": kwargs.pop("output_dir", "/tmp/bioplausible"),
+        }
+        cfg_kw.update(kwargs)
+        config = TrainerConfig.from_dict(cfg_kw)
+        trainer = cls(config)
+        trainer.model = model.to(device)
+        trainer.optimizer = optimizer
+        trainer.task_obj = task
+        trainer.train_loader = None
+        trainer.val_loader = None
+        return trainer
 
     def _set_seed(self, seed: int) -> None:
         """Set random seeds for reproducibility."""
@@ -587,6 +648,19 @@ class CoreTrainer:
 
         logger.info("Training complete")
         return self.history
+
+    def train_epoch(self) -> dict[str, float]:
+        """Public single-epoch runner matching ``TrainerProtocol``.
+
+        Delegates to the internal ``_train_epoch``, using the configured
+        ``batches_per_epoch`` from ``self.config`` (fallback: 100).
+        """
+        batches = (
+            self.config.batches_per_epoch
+            if self.config.batches_per_epoch
+            else (len(self.train_loader) if self.train_loader else 100)
+        )
+        return self._train_epoch(batches)
 
     def _train_epoch(self, batches_per_epoch: int) -> dict[str, Any]:
         """Run one training epoch."""
@@ -1080,6 +1154,7 @@ def run_from_runconfig(cfg) -> dict[str, Any]:
 __all__ = [
     "CoreTrainer",
     "TrainerConfig",
+    "TrainerProtocol",
     "TrainingMetrics",
     "run_from_runconfig",
 ]
