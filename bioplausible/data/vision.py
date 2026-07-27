@@ -66,7 +66,12 @@ def get_vision_dataset(
     return dataset
 
 
-def _load_sklearn_digits(train: bool, flatten: bool) -> Dataset:
+def _load_sklearn_digits(
+    train: bool,
+    flatten: bool,
+    test_size: float = 0.2,
+    random_state: int = 42,
+) -> Dataset:
     """Load sklearn 8x8 digits dataset."""
     from sklearn.datasets import load_digits
     from sklearn.model_selection import train_test_split
@@ -77,7 +82,7 @@ def _load_sklearn_digits(train: bool, flatten: bool) -> Dataset:
     X /= 16.0
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, shuffle=True
+        X, y, test_size=test_size, random_state=random_state, shuffle=True
     )
     X_data = X_train if train else X_test
     y_data = y_train if train else y_test

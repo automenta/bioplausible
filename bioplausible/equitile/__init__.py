@@ -40,6 +40,7 @@ builder : Fluent builder API
 research : Research utilities
 vision : Vision (ConvEquiTile)
 language : Language modeling (LMEquiTile)
+fast_lm : Fast visualization variant (FastLMEquiTile)
 rl : Reinforcement learning (RLEquiTile)
 graph : Graph neural networks (GraphEquiTile)
 timeseries : Time series modeling
@@ -200,6 +201,9 @@ from .language import (
     create_medium_lm,
     create_small_lm,
 )
+
+# Fast LM (visualization variant)
+from .fast_lm import FastLMConfig, FastLMEquiTile
 
 # Optimized Language Model
 from .language_optimized import (
@@ -400,6 +404,9 @@ __all__ = [
     "create_small_lm",
     "create_medium_lm",
     "create_large_lm",
+    # Fast LM
+    "FastLMConfig",
+    "FastLMEquiTile",
     # Optimized Language
     "OptimizedLMEquiTile",
     "OptimizedTileAttention",

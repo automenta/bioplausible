@@ -21,6 +21,8 @@ class Verifier:
         intermediate_mode: bool = False,
         seed: int = 42,
         n_seeds_override: int | None = None,
+        n_samples_override: int | None = None,
+        n_epochs_override: int | None = None,
         export_data: bool = False,
         output_dir: str | None = None,
     ):
@@ -62,9 +64,13 @@ class Verifier:
             self.n_seeds = 5
             self.evidence_level = "full"
 
-        # Allow override of seeds
+        # Allow override of seeds, samples, and epochs
         if n_seeds_override is not None:
             self.n_seeds = n_seeds_override
+        if n_samples_override is not None:
+            self.n_samples = n_samples_override
+        if n_epochs_override is not None:
+            self.epochs = n_epochs_override
 
         self.data_records = []  # For CSV export
         self.current_seed = seed  # Track current seed for logging

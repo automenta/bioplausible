@@ -7,7 +7,7 @@ It includes advanced features like Mixture of Tiles (MoT), Flash Attention,
 and SwiGLU activations.
 
 NOTE: For the visualization-ready model used in the UI demo, see:
-`bioplausible.models.equitile.live_demo_model`
+`bioplausible.equitile.fast_lm`
 
 Implements EquiTile's unique architectural advantages:
 - Mixture of Tiles (MoT): Sparse tile activation for conditional computation

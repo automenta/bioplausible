@@ -5,13 +5,16 @@
 **Status**: IN PROGRESS — Phase 0, Phase 1.6/1.7/1.8/1.9, Phase 2.12/2.13/2.14/2.15
 complete; Phase 1.10 (P2P) deferred; Phase 3 ~16 of ~20 items done.
 See "Phase 0.5 Opportunistic Cleanup" log at the end of this document for
-per-session detail and next-session hints.
+per-session detail and next-session hints. All Phase 0, Phase 2, and 35 of 38
+Phase 3 items complete. Only Phase 1.10 (P2P), §38 (defaults extensibility),
+and §44 (deep_signal_probe) remain.
 
-**Last session**: 2026-07-26 (f) — Phase 3 polish: §24 (ablation.py dynamic
-dimension mapping), §30 (sklearn stub removal), §45 (stub tracks verified
-done), §46 (visualization consolidation), §26 (family/tags for 38+ models),
-§28 (hyperopt model-resolution re-evaluated), §20 (examples/scripts audit).
-See session log below.
+**Last session**: 2026-07-26 (g) — Phase 3 polish: §20 (orphaned
+examples/scripts moved to legacy/), §16 (live_demo_model.py →
+equitile/fast_lm.py), §17 (validation sample sizes configurable), §40
+(data/vision.py split configurable). See session log below.
+
+Phase × remaining: Phase 1.10 (P2P) deferred; Phase 3: §38, §44 only.
 
 ---
 
@@ -1115,20 +1118,62 @@ No change.
 - ``ruff check .`` — 5K+ pre-existing errors; none introduced.
 - ``pytest tests/`` + ``pytest bioplausible/tests/`` — **670 passed, 13 skipped, 0 failed**.
 
-### Hints for the next session
+### Session 2026-07-26 (g) — Phase 3 polish (remaining items wrap-up)
+
+**§20 — Move orphaned ``examples/`` and ``scripts/`` files** COMPLETED.
+Thorough audit via sub-agent: 21 of 23 example files and all 16 script
+files had zero active-code references (no imports, no string refs, no
+entry points). Only ``examples/shallow_benchmark.py`` (referenced by
+``cli/rank.py`` default DB path) and ``examples/tutorials.py`` (referenced
+by comment in ``zoo/__init__.py``) are kept in place. All orphaned files
+moved to ``examples/legacy/`` and ``scripts/legacy/``. ``pyproject.toml``
+per-file-ignores updated to cover the legacy subdirectories.
+
+**§16 — ``equitile/live_demo_model.py`` (610 LOC)** COMPLETED.
+``FastLMEquiTile`` is a legitimate model variant (``LMEquiTile`` subclass
+with visualization hooks), not a demo artifact. Moved to
+``bioplausible/equitile/fast_lm.py`` with proper package re-export
+via ``equitile/__init__.py``. Updated the sole test import in
+``tests/test_equitile_sparsity_robustness.py`` and a stale docstring
+reference in ``equitile/lm_demo/fast_lm.py``. Deleted
+``live_demo_model.py``.
+
+**§17 — Validation sample sizes configurable** COMPLETED.
+Added ``n_samples_override`` and ``n_epochs_override`` parameters to
+``Verifier.__init__()`` in ``validation/core.py``, matching the existing
+``n_seeds_override`` pattern. Overrides apply after mode-based defaults.
+
+**§40 — ``data/vision.py`` train/test split configurable** COMPLETED.
+Added ``test_size`` and ``random_state`` parameters to
+``_load_sklearn_digits()``. Defaults match previous hardcoded values
+(``0.2``, ``42``). Only internal caller (same file, line 42) unchanged.
+
+### Test status at end of session 2026-07-26 (g)
+
+- ``ruff format --check .`` — 38 files would be reformatted (pre-existing).
+- ``ruff check .`` — 5K+ pre-existing errors; none introduced.
+- ``pytest tests/`` — **473 passed, 0 failed**.
+- ``pytest bioplausible/tests/`` — **197 passed, 13 skipped, 0 failed**.
+
+### Remaining work for next session (suggested priority)
 
 1. **Phase 1.10 (P2P unification)** — last remaining Phase 1 item. Needs
-   product judgment (Kademlia vs HTTP Coordinator/Worker).
+   product judgment (Kademlia vs HTTP Coordinator/Worker). Bottleneck
+   only for Phase 1 closure, not for any structural refactors below.
 
 2. **Phase 3 polish — remaining low-priority items** (none block anything):
-   - §38: ``config/defaults.py`` extensibility (7 configs, low value).
+   - §38: ``config/defaults.py`` extensibility (7 configs, low value —
+     adding a registry pattern for 7 entries introduces abstraction
+     overhead without clear benefit).
    - §44: Archive ``experiments/deep_signal_probe.py`` (blocked by
-     ``signal_tracks.py`` import — needs consolidation).
-   - §20: Move orphaned ``examples/`` and ``scripts/`` files to
-     ``examples/legacy/`` and ``scripts/legacy/``.
+     ``validation/tracks/signal_tracks.py`` import — needs consolidation
+     or inlining of ``run_signal_propagation_experiment``).
 
 3. **Pre-existing ruff issues** — 38 files would be reformatted, 5K+ ruff
    check errors. At the user's request, run a dedicated lint pass:
    ``ruff format . && ruff check --fix .``
+
+All Phase 2 items and all but 3 Phase 3 items are complete.
+670 + 197 tests passing with zero new lint issues.
 
 **End of session log**
