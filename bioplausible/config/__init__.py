@@ -10,7 +10,12 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, Field, ValidationError
 
-from bioplausible.config.defaults import DEFAULT_CONFIGS
+from bioplausible.config.defaults import (
+    DEFAULT_CONFIGS,
+    get_named_config,
+    list_named_configs,
+    register_default_config,
+)
 from bioplausible.config.schema import (
     DatasetConfig,
     DomainConfig,
@@ -83,6 +88,9 @@ __all__ = [
     "get_default_config",
     "validate_config",
     "DEFAULT_CONFIGS",
+    "register_default_config",
+    "get_named_config",
+    "list_named_configs",
     # Merged from config_loader.py
     "ExperimentSchema",
     "load_config",

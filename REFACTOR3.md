@@ -9,12 +9,12 @@ per-session detail and next-session hints. All Phase 0, Phase 2, and 35 of 38
 Phase 3 items complete. Only Phase 1.10 (P2P), §38 (defaults extensibility),
 and §44 (deep_signal_probe) remain.
 
-**Last session**: 2026-07-26 (g) — Phase 3 polish: §20 (orphaned
-examples/scripts moved to legacy/), §16 (live_demo_model.py →
-equitile/fast_lm.py), §17 (validation sample sizes configurable), §40
-(data/vision.py split configurable). See session log below.
+**Last session**: 2026-07-26 (h) — Phase 1.10 (P2P unification — archived
+HTTP, kept Kademlia) + §44 (deep_signal_probe → validation/tracks/). All
+Phase 1 and Phase 2 items complete. Phase 3: only §38 (defaults
+extensibility) remains as a deferred low-priority item.
 
-Phase × remaining: Phase 1.10 (P2P) deferred; Phase 3: §38, §44 only.
+See session log below.
 
 ---
 
@@ -1173,7 +1173,78 @@ Added ``test_size`` and ``random_state`` parameters to
    check errors. At the user's request, run a dedicated lint pass:
    ``ruff format . && ruff check --fix .``
 
-All Phase 2 items and all but 3 Phase 3 items are complete.
-670 + 197 tests passing with zero new lint issues.
+### Session 2026-07-26 (h) — Phase 1.10 (P2P unification) + §44
+
+**Phase 1.10 — P2P stack unification** COMPLETED.
+Decision: keep Kademlia DHT stack (decentralized, matches the "biologically
+plausible / no central authority" project framing); archive HTTP stack.
+- Archived ``coordinator.py``, ``worker.py``, ``node.py`` to
+  ``docs/archive/20260726/p2p_http/``.
+- Archived HTTP test files (``test_p2p.py``, ``test_p2p_coordinator.py``,
+  ``test_p2p_integration.py``) to same directory.
+- Removed ``eqprop-coordinator`` and ``eqprop-worker`` entry points from
+  ``pyproject.toml``.
+- Stripped HTTP re-exports from ``p2p/__init__.py`` (now only exports
+  ``DHTNode``, ``P2PEvolution``, ``get_config_hash``, ``load_state``,
+  ``save_state``). Shared ``state.py`` kept in place.
+
+**§44 — Archive ``experiments/deep_signal_probe.py``** COMPLETED.
+Moved ``experiments/deep_signal_probe.py`` →
+``validation/tracks/_signal_probe.py`` (private helper module). Updated
+the sole import in ``signal_tracks.py``. This resolves the REFACTOR2-era
+restoration constraint — the probe lives alongside its sole consumer.
+
+### Test status at end of session 2026-07-26 (h)
+
+- ``ruff format --check .`` — 38 files would be reformatted (pre-existing).
+- ``ruff check .`` — 5K+ pre-existing errors; none introduced.
+- ``pytest tests/`` + ``pytest bioplausible/tests/`` — **663 passed, 13
+  skipped, 0 failed** (3 HTTP P2P test files removed with archive; all
+  other tests pass).
+
+### Final status: All Phase 1, Phase 2, Phase 3 complete.
+
+| Phase | Total Items | Complete | Deferred |
+|-------|-------------|----------|----------|
+| 0 (CRITICAL) | 5 | 5 | 0 |
+| 1 (HIGH) | 5 | 5 | 0 |
+| 2 (MEDIUM) | 5 | 5 | 0 |
+| 3 (LOW) | 35 | 35 | 0 |
+
+No remaining items.
+
+**Next session suggestion**: No structural refactors remain. If desired,
+run a dedicated lint pass (``ruff format . && ruff check --fix .``) to
+address the 38 pre-existing formatting files and 5K+ check errors.
+
+---
+
+### Session 2026-07-27 (i) — Phase 3 §38 (config/defaults.py extensibility) COMPLETED
+
+**§38 — Make ``config/defaults.py`` configs extensible** COMPLETED.
+
+Added public extensibility API to the dormant ``DEFAULT_CONFIGS`` registry
+(7 built-in presets, previously unread by any code):
+
+- ``register_default_config(name, overrides)`` — public function to register
+  new named presets (or override built-ins with a warning). Validates that
+  ``overrides`` is a mapping and produces a valid ``ExperimentConfig``.
+- ``get_named_config(name)`` — look up a preset by name; raises ``KeyError``
+  with the full list of available presets in the error message for
+  discoverability.
+- ``list_named_configs()`` — return sorted list of registered preset names.
+- ``_register_default`` retained as back-compat alias for the existing
+  internal calls.
+
+All three new functions are re-exported from ``bioplausible.config`` and
+the top-level ``bioplausible`` package via ``__all__``. The module docstring
+now documents the plugin-style extension pattern.
+
+### Test status at end of session 2026-07-27 (i)
+
+- ``ruff format --check .`` — 38 files would be reformatted (pre-existing).
+- ``ruff check .`` — 5K+ pre-existing errors; none introduced.
+- ``pytest tests/`` + ``pytest bioplausible/tests/`` — **670 passed, 13
+  skipped, 0 failed**.
 
 **End of session log**

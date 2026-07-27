@@ -1,6 +1,18 @@
 """
 Default experiment configurations for common scenarios.
+
+Named presets registered here extend the schema-level defaults returned by
+:func:`bioplausible.config.schema.get_default_config`. External code can
+register additional presets by calling :func:`register_default_config` at
+import time (e.g., in a plugin or site-customization module) and then look
+them up by name via :func:`get_named_config`.
+
+The :data:`DEFAULT_CONFIGS` dict remains exported for back-compat inspection
+but callers should prefer the accessors below so the registry can evolve
+without breaking direct-dict manipulation.
 """
+
+import logging
 
 from omegaconf import OmegaConf
 
@@ -8,12 +20,57 @@ from bioplausible.config.schema import ExperimentConfig
 
 DEFAULT_CONFIGS: dict[str, ExperimentConfig] = {}
 
+_logger = logging.getLogger(__name__)
 
-def _register_default(name: str, overrides: dict) -> None:
-    """Register a default config by merging overrides into the base config."""
+
+def register_default_config(name: str, overrides: dict) -> None:
+    """Register a named experiment preset by merging overrides into the base.
+
+    Re-registering an existing ``name`` overwrites the previous entry and
+    emits a warning, so plugins can override built-ins.
+
+    Raises:
+        ValueError: If ``overrides`` is not a mapping or produces an
+            invalid ``ExperimentConfig`` (e.g., unknown field).
+    """
+    if not isinstance(overrides, dict):
+        raise ValueError(
+            f"overrides must be a dict, got {type(overrides).__name__}"
+        )
+    if name in DEFAULT_CONFIGS:
+        _logger.warning("Overwriting default config preset %r", name)
     base = OmegaConf.structured(ExperimentConfig)
     merged = OmegaConf.merge(base, OmegaConf.create(overrides))
     DEFAULT_CONFIGS[name] = OmegaConf.to_object(merged)
+
+
+def _register_default(name: str, overrides: dict) -> None:
+    """Back-compat alias for :func:`register_default_config`."""
+    register_default_config(name, overrides)
+
+
+def get_named_config(name: str) -> ExperimentConfig:
+    """Look up a registered named preset.
+
+    Returns a deep copy: mutating the returned object does not affect the
+    registry entry. Raises ``KeyError`` with the list of available presets
+    if ``name`` is unknown (so callers see discoverable options in the
+    traceback).
+    """
+    try:
+        cfg = DEFAULT_CONFIGS[name]
+    except KeyError as e:
+        available = ", ".join(sorted(DEFAULT_CONFIGS)) or "<none>"
+        raise KeyError(
+            f"No default config preset named {name!r}. "
+            f"Available: {available}"
+        ) from e
+    return OmegaConf.to_object(OmegaConf.structured(cfg))
+
+
+def list_named_configs() -> list[str]:
+    """Return the preset names registered so far, sorted alphabetically."""
+    return sorted(DEFAULT_CONFIGS)
 
 
 # ---- Vision benchmarks ----

@@ -82,8 +82,6 @@ documentation = "https://bioplausible.readthedocs.io"
 
 [project.scripts]
 eqprop-verify = "bioplausible.cli:main"
-eqprop-coordinator = "bioplausible.p2p.coordinator:main"
-eqprop-worker = "bioplausible.p2p.worker:main"
 eqprop-p2p-worker = "bioplausible.p2p.p2p_worker:main"
 biopl-scientist = "bioplausible.execution.cli:main_scientist"
 biopl-report = "bioplausible.execution.cli:main_reporter"

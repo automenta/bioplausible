@@ -10,7 +10,7 @@ from typing import Any
 
 import torch
 
-from bioplausible.experiments.deep_signal_probe import run_signal_propagation_experiment
+from bioplausible.validation.tracks._signal_probe import run_signal_propagation_experiment
 from bioplausible.validation.notebook import ValidationTrack
 
 
