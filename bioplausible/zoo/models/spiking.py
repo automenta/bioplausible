@@ -19,7 +19,11 @@ except ImportError:
     HAS_SNN = False
 
 
-@register_model("spiking_stdp")
+@register_model(
+    "spiking_stdp",
+    family="spiking",
+    tags=["spiking", "stdp"],
+)
 class SpikingSTDP(nn.Module):
     """
     Leaky Integrate-and-Fire neurons with Spike-Timing-Dependent Plasticity.

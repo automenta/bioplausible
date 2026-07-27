@@ -20,7 +20,11 @@ from ..base import EqPropModel
 
 
 
-@register_model("directed_ep")
+@register_model(
+    "directed_ep",
+    family="eqprop",
+    tags=["eqprop", "directed"],
+)
 class DirectedEP(BioModel):
     """
     Directed EqProp (DEEP) with separate forward and feedback weights.

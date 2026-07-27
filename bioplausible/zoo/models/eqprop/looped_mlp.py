@@ -29,7 +29,7 @@ from ..base import EqPropModel
     requires_backward=False,
     memory_complexity="O(1)",
     family="eqprop",
-    tags=["eqprop", "looped_mlp"],
+    tags=["eqprop", "looped_mlp", "equilibrium"],
 )
 class LoopedMLP(EqPropModel):
     """
@@ -261,7 +261,11 @@ class LoopedMLP(EqPropModel):
         return super().forward(x, steps, return_trajectory, return_dynamics)
 
 
-@register_model("backprop_mlp")
+@register_model(
+    "backprop_mlp",
+    family="backprop",
+    tags=["backprop", "mlp"],
+)
 class BackpropMLP(nn.Module):
     """Standard feedforward MLP for comparison (no equilibrium dynamics)."""
 

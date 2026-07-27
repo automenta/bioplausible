@@ -17,33 +17,9 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from bioplausible.core.registry import ComponentCategory, Registry
 
-# Resilience against broken sklearn/pyarrow
-try:
-    from sklearn.base import BaseEstimator, ClassifierMixin
-    from sklearn.utils.multiclass import unique_labels
-    from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
-
-    SKLEARN_AVAILABLE = True
-except ImportError:
-    SKLEARN_AVAILABLE = False
-
-    class BaseEstimator:
-        pass
-
-    class ClassifierMixin:
-        pass
-
-    def unique_labels(*args):  # noqa: ARG001
-        return []
-
-    def check_array(X, **kwargs):  # noqa: ARG001
-        return X
-
-    def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
-        pass
-
-    def check_X_y(X, y, **kwargs):  # noqa: ARG001, N802
-        return X, y
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.utils.multiclass import unique_labels
+from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
 
 _MODEL_NAME_MAP: dict[str, str] = {

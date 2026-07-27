@@ -4,6 +4,7 @@ Automated Result Visualization
 Generates publication-quality plots for experiment results using matplotlib and seaborn.
 """
 
+import pathlib
 from pathlib import Path
 from typing import Any
 
@@ -871,3 +872,121 @@ class ResultVisualizer:
         plt.savefig(save_path)
         plt.close()
         return str(save_path)
+
+    def plot_confusion_matrix(
+        self,
+        y_true: list[int],
+        y_pred: list[int],
+        class_names: list[str] | None = None,
+        title: str = "Confusion Matrix",
+        save_name: str = "confusion_matrix.png",
+    ) -> str:
+        """Plot confusion matrix."""
+        classes = sorted(set(y_true) | set(y_pred))
+        n_classes = len(classes)
+        cm = np.zeros((n_classes, n_classes), dtype=int)
+        for t, p in zip(y_true, y_pred):
+            cm[classes.index(t), classes.index(p)] += 1
+        if class_names is None:
+            class_names = [str(c) for c in classes]
+        fig, ax = plt.subplots(figsize=(8, 8))
+        im = ax.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
+        ax.figure.colorbar(im, ax=ax)
+        ax.set(
+            xticks=np.arange(n_classes),
+            yticks=np.arange(n_classes),
+            xticklabels=class_names,
+            yticklabels=class_names,
+            title=title,
+            ylabel="True label",
+            xlabel="Predicted label",
+        )
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+        thresh = cm.max() / 2.0
+        for i in range(n_classes):
+            for j in range(n_classes):
+                ax.text(j, i, str(cm[i, j]), ha="center", va="center", color="white" if cm[i, j] > thresh else "black", fontsize=12)
+        plt.tight_layout()
+        plt.savefig(save_path)
+        plt.close()
+        return str(save_path)
+
+
+class ResultsDashboard:
+    """Generate HTML dashboard for experiment results."""
+
+    def __init__(self):
+        self.results: list[Any] = []
+        self.html_template = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bioplausible Experiment Results</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; background: #f5f5f5; }}
+        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        h1 {{ color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }}
+        h2 {{ color: #555; margin-top: 30px; }}
+        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
+        th {{ background: #4CAF50; color: white; }}
+        tr:hover {{ background: #f5f5f5; }}
+        .metric {{ font-weight: bold; color: #4CAF50; }}
+        .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }}
+        .card {{ background: #f9f9f9; padding: 20px; border-radius: 8px; border-left: 4px solid #4CAF50; }}
+        .card-value {{ font-size: 24px; font-weight: bold; color: #333; }}
+        .card-label {{ color: #666; font-size: 14px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bioplausible Experiment Results</h1>
+        {content}
+    </div>
+</body>
+</html>
+"""
+
+    def add_results(self, results: list[Any]) -> None:
+        self.results.extend(results)
+
+    def generate(self, output_path: str) -> str:
+        content = self._generate_content()
+        html = self.html_template.format(content=content)
+        path = pathlib.Path(output_path)
+        path.parent.mkdir(exist_ok=True, parents=True)
+        path.write_text(html)
+        return output_path
+
+    def _generate_content(self) -> str:
+        if not self.results:
+            return "<p>No results to display.</p>"
+        best = max(self.results, key=lambda r: r.val_accuracy)
+        fastest = max(self.results, key=lambda r: r.steps_per_second)
+        summary = f"""
+        <h2>Summary</h2>
+        <div class="summary">
+            <div class="card"><div class="card-label">Best Accuracy</div><div class="card-value">{best.val_accuracy:.2f}%</div><div>{best.optimizer_name}</div></div>
+            <div class="card"><div class="card-label">Fastest Training</div><div class="card-value">{fastest.steps_per_second:.1f}</div><div>steps/second</div></div>
+            <div class="card"><div class="card-label">Experiments</div><div class="card-value">{len(self.results)}</div><div>total runs</div></div>
+        </div>
+        """
+        table = '<h2>Detailed Results</h2><table><thead><tr><th>Model</th><th>Optimizer</th><th>Val Accuracy</th><th>Train Accuracy</th><th>Speed (steps/s)</th><th>Parameters</th></tr></thead><tbody>'
+        for r in sorted(self.results, key=lambda x: x.val_accuracy, reverse=True):
+            table += f'<tr><td>{r.model_name}</td><td>{r.optimizer_name}</td><td class="metric">{r.val_accuracy:.2f}%</td><td>{r.train_accuracy:.2f}%</td><td>{r.steps_per_second:.1f}</td><td>{r.num_parameters:,}</td></tr>'
+        table += "</tbody></table>"
+        return summary + table
+
+
+def visualize_results(
+    results: list[Any],
+    output_dir: str = "./visualizations",
+) -> dict[str, str]:
+    """Generate all visualizations for experiment results."""
+    viz = ResultVisualizer(output_dir)
+    paths: dict[str, str] = {}
+    paths["comparison"] = viz.plot_leaderboard(results)
+    dashboard = ResultsDashboard()
+    dashboard.add_results(results)
+    paths["dashboard"] = dashboard.generate(f"{output_dir}/dashboard.html")
+    return paths

@@ -548,7 +548,11 @@ def compare_variants(vocab_size: int = 65, seq_len: int = 64, batch_size: int = 
     return results
 
 
-@register_model("eqprop_transformer")
+@register_model(
+    "eqprop_transformer",
+    family="eqprop",
+    tags=["eqprop", "transformer"],
+)
 class EqPropLMWrapper(nn.Module):
     """
     Proxy class for EqProp LM variants.

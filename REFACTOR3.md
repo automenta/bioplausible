@@ -3,15 +3,15 @@
 **Generated**: 2026-07-26
 **Source**: Full codebase exploration via `codebase-memory` MCP + `explore` agent
 **Status**: IN PROGRESS — Phase 0, Phase 1.6/1.7/1.8/1.9, Phase 2.12/2.13/2.14/2.15
-complete; Phase 1.10 (P2P) deferred; Phase 3 partially complete (10 of ~20
-items done). See "Phase 0.5 Opportunistic Cleanup" log at the end of this
-document for per-session detail and next-session hints.
+complete; Phase 1.10 (P2P) deferred; Phase 3 ~16 of ~20 items done.
+See "Phase 0.5 Opportunistic Cleanup" log at the end of this document for
+per-session detail and next-session hints.
 
-**Last session**: 2026-07-26 (e) — Phase 3 polish: §43 (equitile/core.py split
-into 3 files), §19 (results.py CLI extraction), §31 (emoji removal from 17
-files), §35 (tier parsing cleanup), §39 (activation sparsity tracking),
-§36 (KB schema validation), §49 (generation.py merge into language.py),
-§47 (statistics.py dead code removal), §48 (tracking.py ownership eval).
+**Last session**: 2026-07-26 (f) — Phase 3 polish: §24 (ablation.py dynamic
+dimension mapping), §30 (sklearn stub removal), §45 (stub tracks verified
+done), §46 (visualization consolidation), §26 (family/tags for 38+ models),
+§28 (hyperopt model-resolution re-evaluated), §20 (examples/scripts audit).
+See session log below.
 
 ---
 
@@ -1029,6 +1029,103 @@ Outstanding work, in priority order:
 
 2. **Phase 3 items deferred from this session** (see table above) — all
    cosmetic or low-impact. None block structural refactors.
+
+3. **Pre-existing ruff issues** — 38 files would be reformatted, 5K+ ruff
+   check errors. At the user's request, run a dedicated lint pass:
+   ``ruff format . && ruff check --fix .``
+
+### Session 2026-07-26 (f) — Phase 3 polish (remaining items)
+
+**§24 — Refactor ``analysis/ablation.py`` dimension mapping** COMPLETED.
+Replaced the hardcoded ``if/elif`` chain (9 dimension names) with a
+data-driven ``_DIMENSION_MAP`` dict mapping names to attribute path tuples,
+and a ``_set_nested()`` helper that traverses ``getattr`` chain then falls
+back to dict-style assignment. ``_ensure_extra`` pre-initializes
+``cfg.model.extra`` before iteration so the ``eq_steps``/``sparsity_target``/
+``spectral_bound_gamma`` paths work. Adding a new dimension now requires
+only a single dict entry.
+
+**§30 — ``sklearn_interface.py`` stub classes** COMPLETED. Removed the
+``try/except ImportError`` fallback block (``BaseEstimator``, ``ClassifierMixin``,
+``unique_labels``, ``check_array``, ``check_is_fitted``, ``check_X_y`` stubs).
+``scikit-learn`` is a mandatory dependency (listed in ``pyproject.toml``
+``dependencies``). The ``SKLEARN_AVAILABLE`` flag (defined but never read)
+was also removed.
+
+**§45 — Validation stub tracks** ALREADY RESOLVED. ``notebook.py:152``
+originally had emoji ``🔧`` which was replaced with ``[TODO]`` in Session (e)
+§31 emoji cleanup. All 23 tracks are fully implemented — zero actual stubs
+exist. The stub counter is functional dead code (always shows 0).
+
+**§46 — Consolidate ``visualization.py`` & ``visualization_tools.py``**
+COMPLETED. ``visualization_tools.py`` had zero active importers (last session
+confirmed no Python code imports it). Moved unique functionality into
+``visualization.py``:
+- ``ResultVisualizer.plot_confusion_matrix()`` — added as new method.
+- ``ResultsDashboard`` class (HTML dashboard generation) — added.
+- ``visualize_results()`` convenience function — added.
+Deleted ``visualization_tools.py``.
+
+**§26 — Add ``family``/``tags`` metadata to registered models** COMPLETED.
+Added ``family`` and ``tags`` to all model registrations across the zoo:
+- EqProp subpackage (14 models): ``family="eqprop"``, tags per variant
+- Feedback Alignment (9 models): ``family="fa"``
+- Hebbian (2 models): ``family="hebbian"``
+- Backprop (2 models): ``family="backprop"``
+- Target Propagation (1 model): ``family="target_prop"``
+- Predictive Coding (2 models): ``family="predictive_coding"``
+- Spiking (1 model): ``family="spiking"``
+- ``backprop_mlp`` in looped_mlp.py: ``family="backprop"``
+Previously only 2 models (``eqprop_mlp``, ``forward_forward``) had ``tags``
+and 4 had ``family``. Now 38+ models carry both fields, usable by
+``Registry.query()`` filters in HPO and config resolution.
+
+**§28 — Centralize model-resolution logic in ``hyperopt/``** RE-EVALUATED.
+Model resolution via ``Registry.get()`` was already centralized in
+``hyperopt/experiment.py:_create_model_and_trainer()`` and
+``core/trainer.py:run_from_runconfig()``. The ``create_task()`` function in
+``tasks.py`` resolves **task classes** (not models) via heuristics that
+cannot be replaced with a simple registry lookup (dataset name parsing,
+class subset extraction from names like ``mnist_01``). Conclusion: model
+resolution IS already centralized; task resolution is a separate concern.
+No further work needed.
+
+**§44 — ``experiments/deep_signal_probe.py``** DEFERRED. Hard dependency:
+``validation/tracks/signal_tracks.py`` imports
+``run_signal_propagation_experiment`` from it. Moving to ``examples/`` would
+break ``signal_tracks.py``. Inlining into the track file would duplicate
+~375 LOC. Kept in place.
+
+**§20 — ``examples/`` and ``scripts/`` audit** COMPLETED (exploratory).
+Reference audit of all files in both directories found:
+- ``examples/``: 7 of 20 files referenced from archived docs; 13 orphaned.
+- ``scripts/``: 10 of 16 files referenced from REFACTOR2.md only; 6 orphaned.
+- No active source code or test imports from either directory.
+- ``pyproject.toml`` exempts both from type-checking/lint strictness.
+Decision: orphaned files are inert but not harmful. Move to ``examples/legacy/``
+and ``scripts/legacy/`` when a dedicated cleanup session is scheduled.
+
+**§38 — ``config/defaults.py`` extensibility** NOT DONE. Adding a registry
+pattern for 7 configs introduces abstraction overhead without clear benefit.
+No change.
+
+### Test status at end of session 2026-07-26 (f)
+
+- ``ruff format --check .`` — 38 files would be reformatted (pre-existing).
+- ``ruff check .`` — 5K+ pre-existing errors; none introduced.
+- ``pytest tests/`` + ``pytest bioplausible/tests/`` — **670 passed, 13 skipped, 0 failed**.
+
+### Hints for the next session
+
+1. **Phase 1.10 (P2P unification)** — last remaining Phase 1 item. Needs
+   product judgment (Kademlia vs HTTP Coordinator/Worker).
+
+2. **Phase 3 polish — remaining low-priority items** (none block anything):
+   - §38: ``config/defaults.py`` extensibility (7 configs, low value).
+   - §44: Archive ``experiments/deep_signal_probe.py`` (blocked by
+     ``signal_tracks.py`` import — needs consolidation).
+   - §20: Move orphaned ``examples/`` and ``scripts/`` files to
+     ``examples/legacy/`` and ``scripts/legacy/``.
 
 3. **Pre-existing ruff issues** — 38 files would be reformatted, 5K+ ruff
    check errors. At the user's request, run a dedicated lint pass:

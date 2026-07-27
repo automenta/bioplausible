@@ -21,7 +21,11 @@ from .modern_conv_eqprop import SimpleConvEqProp  # noqa: F401
 
 
 
-@register_model("eqprop_diffusion")
+@register_model(
+    "eqprop_diffusion",
+    family="eqprop",
+    tags=["eqprop", "diffusion"],
+)
 class EqPropDiffusion(nn.Module):
     """
     Equilibrium Propagation Diffusion Model.

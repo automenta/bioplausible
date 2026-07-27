@@ -21,7 +21,11 @@ from .standard_eqprop import StandardEqProp
 
 
 
-@register_model("finite_nudge_ep")
+@register_model(
+    "finite_nudge_ep",
+    family="eqprop",
+    tags=["eqprop", "finite-nudge"],
+)
 class FiniteNudgeEP(StandardEqProp):
     """
     Finite-Nudge EqProp.

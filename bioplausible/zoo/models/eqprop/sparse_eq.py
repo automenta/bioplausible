@@ -20,7 +20,11 @@ from ..base import EqPropModel
 
 
 
-@register_model("sparse_equilibrium")
+@register_model(
+    "sparse_equilibrium",
+    family="eqprop",
+    tags=["eqprop", "sparse"],
+)
 class SparseEquilibrium(BioModel):
     """EqProp with sparse (Top-K) updates."""
 

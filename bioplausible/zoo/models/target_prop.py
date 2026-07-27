@@ -26,7 +26,11 @@ class DTPLayer(nn.Module):
         self.opt_g = torch.optim.Adam(self.inverse_net.parameters(), lr=0.001)
 
 
-@register_model("diff_target_prop")
+@register_model(
+    "diff_target_prop",
+    family="target_prop",
+    tags=["target-prop", "diffprop"],
+)
 class DifferenceTargetProp(nn.Module):
     """
     Difference Target Propagation (Lee et al. 2015).

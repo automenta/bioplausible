@@ -20,7 +20,11 @@ from ..base import EqPropModel
 
 
 
-@register_model("neural_cube")
+@register_model(
+    "neural_cube",
+    family="eqprop",
+    tags=["eqprop", "neural-cube"],
+)
 class NeuralCube(nn.Module):
     """
     A 3D lattice neural network where neurons exist in 3D space.

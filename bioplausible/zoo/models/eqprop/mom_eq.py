@@ -20,7 +20,11 @@ from ..base import EqPropModel
 
 
 
-@register_model("momentum_equilibrium")
+@register_model(
+    "momentum_equilibrium",
+    family="eqprop",
+    tags=["eqprop", "momentum"],
+)
 class MomentumEquilibrium(BioModel):
     """EqProp with momentum in settling dynamics."""
 

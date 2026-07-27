@@ -13,6 +13,31 @@ from bioplausible.config.schema import RunConfig
 from bioplausible.core.trainer import run_from_runconfig as run_from_config
 
 
+# Maps dimension names to config attribute paths for dynamic resolution.
+_DIMENSION_MAP: dict[str, tuple[str, ...]] = {
+    "learning_rate": ("optimizer", "lr"),
+    "model_depth": ("model", "num_layers"),
+    "hidden_dim": ("model", "hidden_dim"),
+    "eq_steps": ("model", "extra", "max_steps"),
+    "beta": ("optimizer", "beta"),
+    "sparsity_target": ("model", "extra", "sparsity_target"),
+    "data_fraction": ("data", "data_fraction"),
+    "spectral_bound_gamma": ("model", "extra", "spectral_bound_gamma"),
+}
+
+
+def _set_nested(cfg: RunConfig, path: tuple[str, ...], value: Any) -> None:
+    """Set a value at a nested attribute/dict path on a RunConfig."""
+    obj: Any = cfg
+    for part in path[:-1]:
+        obj = getattr(obj, part)
+    final = path[-1]
+    try:
+        setattr(obj, final, value)
+    except (AttributeError, TypeError):
+        obj[final] = value
+
+
 class AblationStudy:
     """
     Systematic parameter sensitivity study framework.
@@ -28,37 +53,20 @@ class AblationStudy:
         keys = list(self.dimensions.keys())
         values = list(self.dimensions.values())
 
+        # Ensure cfg.model.extra exists for eq_steps / sparsity / spectral paths
+        base_extra = copy.deepcopy(self.base_cfg.model.extra) or {}
+
         configs = []
         for combo in product(*values):
             cfg = copy.deepcopy(self.base_cfg)
+            cfg.model.extra = copy.deepcopy(base_extra)
             params = dict(zip(keys, combo))
 
-            # Apply overrides based on parameter name
             for k, v in params.items():
-                if k == "learning_rate":
-                    cfg.optimizer.lr = v
-                elif k == "model_depth":
-                    cfg.model.num_layers = v
-                elif k == "hidden_dim":
-                    cfg.model.hidden_dim = v
-                elif k == "eq_steps":
-                    if not cfg.model.extra:
-                        cfg.model.extra = {}
-                    cfg.model.extra["max_steps"] = v
-                elif k == "beta":
-                    cfg.optimizer.beta = v
-                elif k == "sparsity_target":
-                    if not cfg.model.extra:
-                        cfg.model.extra = {}
-                    cfg.model.extra["sparsity_target"] = v
-                elif k == "data_fraction":
-                    cfg.data.data_fraction = v
-                elif k == "spectral_bound_gamma":
-                    if not cfg.model.extra:
-                        cfg.model.extra = {}
-                    cfg.model.extra["spectral_bound_gamma"] = v
-                else:
+                path = _DIMENSION_MAP.get(k)
+                if path is None:
                     raise ValueError(f"Unknown ablation dimension: {k}")
+                _set_nested(cfg, path, v)
 
             configs.append((params, cfg))
         return configs

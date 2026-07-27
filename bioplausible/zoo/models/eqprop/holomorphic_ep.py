@@ -20,7 +20,11 @@ from ..base import EqPropModel
 
 
 
-@register_model("holomorphic_ep")
+@register_model(
+    "holomorphic_ep",
+    family="eqprop",
+    tags=["eqprop", "holomorphic"],
+)
 class HolomorphicEP(BioModel):
     """
     Holomorphic EqProp with complex-valued weights and states.

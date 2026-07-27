@@ -63,7 +63,11 @@ class HebbianLayer(nn.Module):
                 target_weight.addcmul_(y_sq, self.weight, value=-self.learning_rate)
 
 
-@register_model("deep_hebbian")
+@register_model(
+    "deep_hebbian",
+    family="hebbian",
+    tags=["hebbian", "deep"],
+)
 @register_nebc("hebbian_chain")
 class DeepHebbianChain(NEBCBase):
     """
@@ -271,7 +275,11 @@ class HebbianCube(NEBCBase):
 # ============================================================================
 
 
-@register_model("three_factor_hebbian")
+@register_model(
+    "three_factor_hebbian",
+    family="hebbian",
+    tags=["hebbian", "three-factor"],
+)
 class ThreeFactorHebbian(nn.Module):
     """
     Three-Factor Learning: Delta w = eta * M * pre * post

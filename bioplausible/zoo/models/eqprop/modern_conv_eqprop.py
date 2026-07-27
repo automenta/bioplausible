@@ -20,7 +20,11 @@ from ..base import EqPropModel
 
 
 
-@register_model("modern_conv_eqprop")
+@register_model(
+    "modern_conv_eqprop",
+    family="eqprop",
+    tags=["eqprop", "conv"],
+)
 class ModernConvEqProp(EqPropModel):
     """
     Multi-stage ConvEqProp with equilibrium settling.

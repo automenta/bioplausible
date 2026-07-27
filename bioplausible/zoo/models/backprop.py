@@ -106,7 +106,11 @@ class BackpropTransformerBlock(nn.Module):
         return x
 
 
-@register_model("backprop_transformer_lm")
+@register_model(
+    "backprop_transformer_lm",
+    family="backprop",
+    tags=["backprop", "transformer"],
+)
 class BackpropTransformerLM(nn.Module):
     """
     Standard Causal Transformer LM (Backprop baseline).
@@ -312,7 +316,11 @@ def create_layer(config: dict[str, Any], in_features: int) -> tuple[nn.Module, i
     return layer, out_features
 
 
-@register_model("custom_stacked_model")
+@register_model(
+    "custom_stacked_model",
+    family="backprop",
+    tags=["backprop", "stacked"],
+)
 class CustomStackedModel(nn.Module):
     """
     A model built from a user-defined stack of layers.

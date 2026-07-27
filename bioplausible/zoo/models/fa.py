@@ -67,7 +67,11 @@ class FeedbackAlignmentLayer(nn.Module):
         return cos_sim.item()
 
 
-@register_model("feedback_alignment")
+@register_model(
+    "feedback_alignment",
+    family="fa",
+    tags=["fa", "feedback-alignment"],
+)
 class FeedbackAlignmentEqProp(BioModel):
     """
     Equilibrium Propagation with Feedback Alignment.
@@ -143,7 +147,11 @@ class FeedbackAlignmentEqProp(BioModel):
         return sum(angles.values()) / len(angles)
 
 
-@register_model("adaptive_feedback_alignment")
+@register_model(
+    "adaptive_feedback_alignment",
+    family="fa",
+    tags=["fa", "adaptive-feedback-alignment"],
+)
 class AdaptiveFeedbackAlignment(BioModel):
     """FA with slow adaptive feedback evolution."""
 
@@ -290,7 +298,11 @@ class AdaptiveFeedbackAlignment(BioModel):
         return cls(config=config).to(device)
 
 
-@register_model("stochastic_fa")
+@register_model(
+    "stochastic_fa",
+    family="fa",
+    tags=["fa", "stochastic"],
+)
 class StochasticFA(BioModel):
     """FA with dropout on feedback signals."""
 
@@ -402,7 +414,11 @@ class StochasticFA(BioModel):
         return cls(config=config).to(device)
 
 
-@register_model("contrastive_feedback_alignment")
+@register_model(
+    "contrastive_feedback_alignment",
+    family="fa",
+    tags=["fa", "contrastive"],
+)
 class ContrastiveFeedbackAlignment(BioModel):
     """Contrastive FA."""
 
@@ -610,7 +626,11 @@ class DeepDFAEqProp(DirectFeedbackAlignmentEqProp):
 # ============================================================================
 
 
-@register_model("standard_fa")
+@register_model(
+    "standard_fa",
+    family="fa",
+    tags=["fa", "standard"],
+)
 class StandardFA(BioModel):
     """Feedback Alignment with random fixed backward weights."""
 
@@ -722,7 +742,11 @@ class StandardFA(BioModel):
 # ============================================================================
 
 
-@register_model("energy_guided_fa")
+@register_model(
+    "energy_guided_fa",
+    family="fa",
+    tags=["fa", "energy-guided"],
+)
 class EnergyGuidedFA(BioModel):
     """Energy Guided FA."""
 
@@ -798,7 +822,11 @@ class EnergyGuidedFA(BioModel):
 # ============================================================================
 
 
-@register_model("energy_minimizing_fa")
+@register_model(
+    "energy_minimizing_fa",
+    family="fa",
+    tags=["fa", "energy-minimizing"],
+)
 class EnergyMinimizingFA(BioModel):
     """EqProp dynamics + FA updates."""
 
@@ -888,7 +916,11 @@ class EnergyMinimizingFA(BioModel):
 # ============================================================================
 
 
-@register_model("layerwise_equilibrium_fa")
+@register_model(
+    "layerwise_equilibrium_fa",
+    family="fa",
+    tags=["fa", "layerwise-equilibrium"],
+)
 class LayerwiseEquilibriumFA(BioModel):
     """Layerwise Equilibrium FA."""
 
@@ -964,7 +996,11 @@ class LayerwiseEquilibriumFA(BioModel):
 # ============================================================================
 
 
-@register_model("equilibrium_alignment")
+@register_model(
+    "equilibrium_alignment",
+    family="fa",
+    tags=["fa", "equilibrium-alignment"],
+)
 class EquilibriumAlignment(EqPropModel):
     """
     Equilibrium Alignment (EqAlign) - Native Implementation.

@@ -20,7 +20,11 @@ from ..base import EqPropModel
 
 
 
-@register_model("eqprop")
+@register_model(
+    "eqprop",
+    family="eqprop",
+    tags=["eqprop"],
+)
 class StandardEqProp(BioModel):
     """
     Standard EqProp with free/nudged phases and bidirectional relaxation.

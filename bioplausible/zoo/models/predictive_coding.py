@@ -15,7 +15,11 @@ from ..base import BioModel, ModelConfig, register_model
 # ============================================================================
 
 
-@register_model("fabricpc_graph_pcn")
+@register_model(
+    "fabricpc_graph_pcn",
+    family="predictive_coding",
+    tags=["predictive-coding", "fabricpc"],
+)
 class FabricPCGraphPCN(BioModel):
     """Predictive Coding model using FabricPC graph topology."""
 
@@ -160,7 +164,11 @@ class FabricPCGraphPCN(BioModel):
 # ============================================================================
 
 
-@register_model("predictive_coding_hybrid")
+@register_model(
+    "predictive_coding_hybrid",
+    family="predictive_coding",
+    tags=["predictive-coding", "hybrid"],
+)
 class PredictiveCodingHybrid(BioModel):
     """Layers predict inputs; FA propagates prediction errors."""
 

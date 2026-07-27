@@ -26,7 +26,11 @@ except ImportError:
     GCNConv = None
 
 
-@register_model("graph_eqprop")
+@register_model(
+    "graph_eqprop",
+    family="eqprop",
+    tags=["eqprop", "graph"],
+)
 class GraphEqProp(EqPropModel):
     def __init__(
         self, input_dim: int, hidden_dim: int, output_dim: int, max_steps: int = 30
