@@ -159,7 +159,7 @@ class MemoryProfiler:
                         and obj.device.type == self.device.type
                     ):
                         count += 1
-                except ReferenceError, AttributeError:
+                except (ReferenceError, AttributeError):
                     # Object was garbage collected or has no device
                     pass
         except RuntimeError:

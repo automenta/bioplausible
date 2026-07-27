@@ -177,11 +177,10 @@ def tutorial_4_export_deploy():
 
     from bioplausible import (
         InferenceEngine,
-        ModelZoo,
-        OptimizerZoo,
         export_model,
         load_model,
     )
+    from bioplausible.core.registry import ComponentCategory, Registry
     from bioplausible.data.vision import get_vision_dataset
 
     print("=" * 60)
@@ -197,8 +196,13 @@ def tutorial_4_export_deploy():
 
     # Create and train model
     print("\n1. Creating and training model...")
-    model = ModelZoo.get("looped_mlp", input_dim=784, hidden_dim=256, output_dim=10)
-    optimizer = OptimizerZoo.get("smep", model.parameters(), model=model)
+    model_cls = Registry.get(ComponentCategory.MODEL, "looped_mlp")
+    model = model_cls(input_dim=784, hidden_dim=256, output_dim=10)
+    try:
+        opt_cls = Registry.get(ComponentCategory.OPTIMIZER, "smep")
+    except ValueError:
+        opt_cls = Registry.get(ComponentCategory.PROPAGATOR, "smep")
+    optimizer = opt_cls(model.parameters(), model=model)
 
     # Quick training
     model.train()

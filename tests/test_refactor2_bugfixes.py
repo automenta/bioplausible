@@ -404,7 +404,7 @@ def test_ablation_run_single_experiment_does_not_reference_dead_branch():
 
 def test_all_bioplausible_lib_files_parse_without_syntaxerror():
     """Verify every ``.py`` file in ``bioplausible/`` parses cleanly
-    (covering the ``except X, Y:`` comma form which is legal Python
+    (covering the ``except (X, Y):`` comma form which is legal Python
     3.14+ as a tuple-of-exceptions, but not in Python 3.12-).
     """
     import ast
@@ -496,17 +496,17 @@ def test_core_trainer_validate_supports_3d_logits_model():
 
 
 # ---------------------------------------------------------------------------
-# Bug: Python 2-style `except X, Y:` syntax (broken in 3.14). All 22
+# Bug: Python 2-style `except (X, Y):` syntax (broken in 3.14). All 22
 # occurrences rewritten to `except (X, Y):`. Verify none remain in source.
 # ---------------------------------------------------------------------------
 
 
 def test_no_comma_except_syntax_remains():
     """Ruff (target-version=py314) normalises ``except (X, Y):`` to
-    ``except X, Y:``, which is the canonical form in Python 3.14+.
+    ``except (X, Y):``, which is the canonical form in Python 3.14+.
     This test is superseded by the formatter — ruff format enforces
     the correct form. We keep a lightweight smoke that the parser
-    is happy (i.e. no old Python-2-style ``except X, Y: y = ...``
+    is happy (i.e. no old Python-2-style ``except (X, Y): y = ...``
     semantics sneak in)."""
     import ast
     from pathlib import Path

@@ -608,7 +608,7 @@ class CoreTrainer:
             else:
                 try:
                     x, y = next(self._train_iter)
-                except AttributeError, StopIteration:
+                except (AttributeError, StopIteration):
                     self._train_iter = iter(self.train_loader)
                     x, y = next(self._train_iter)
 
@@ -736,7 +736,7 @@ class CoreTrainer:
                 else:
                     try:
                         x, y = next(self._val_iter)
-                    except AttributeError, StopIteration:
+                    except (AttributeError, StopIteration):
                         self._val_iter = iter(self.val_loader)
                         x, y = next(self._val_iter)
 

@@ -337,7 +337,7 @@ class ModelLoader:
         Returns:
             Tuple of (model, config dict).
         """
-        from bioplausible.zoo import ModelZoo
+        from bioplausible.core.registry import ComponentCategory, Registry
 
         with Path(config_path).open() as f:
             config = json.load(f)
@@ -345,7 +345,8 @@ class ModelLoader:
         model_name = config["model_name"]
         model_params = config["model_params"]
 
-        model = ModelZoo.get(model_name, **model_params)
+        model_cls = Registry.get(ComponentCategory.MODEL, model_name)
+        model = model_cls(**model_params)
         model = model.to(self.device)
 
         # Load state dict if available
@@ -683,8 +684,8 @@ import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-app = FastAPI(title="Bioplausible Inference API")
 model_instance = None
+_app: FastAPI | None = None
 
 
 class InferenceRequest(BaseModel):
@@ -692,37 +693,53 @@ class InferenceRequest(BaseModel):
     shape: list[int] | None = None
 
 
-@app.post("/predict")
-def predict(request: InferenceRequest):
-    if not model_instance:
-        return {"error": "No model loaded"}
-    try:
-        data = np.array(request.data, dtype=np.float32)
-        if request.shape:
-            data = data.reshape(request.shape)
-        elif hasattr(model_instance, "input_dim"):
-            if len(data.shape) == 1 and data.shape[0] == model_instance.input_dim:
-                data = data.reshape(1, -1)
-        elif "Conv" in type(model_instance).__name__:
-            pass
-        tensor = torch.from_numpy(data)
-        if tensor.dim() == 1:
-            tensor = tensor.unsqueeze(0)
-        device = next(model_instance.parameters()).device
-        tensor = tensor.to(device)
-        with torch.no_grad():
-            output = model_instance(tensor)
-        return {"output": output.cpu().tolist()}
-    except Exception as e:
-        return {"error": str(e)}
+def _build_app() -> FastAPI:
+    app = FastAPI(title="Bioplausible Inference API")
+
+    @app.post("/predict")
+    def predict(request: InferenceRequest):
+        if not model_instance:
+            return {"error": "No model loaded"}
+        try:
+            data = np.array(request.data, dtype=np.float32)
+            if request.shape:
+                data = data.reshape(request.shape)
+            elif hasattr(model_instance, "input_dim"):
+                if len(data.shape) == 1 and data.shape[0] == model_instance.input_dim:
+                    data = data.reshape(1, -1)
+            elif "Conv" in type(model_instance).__name__:
+                pass
+            tensor = torch.from_numpy(data)
+            if tensor.dim() == 1:
+                tensor = tensor.unsqueeze(0)
+            device = next(model_instance.parameters()).device
+            tensor = tensor.to(device)
+            with torch.no_grad():
+                output = model_instance(tensor)
+            return {"output": output.cpu().tolist()}
+        except Exception as e:
+            return {"error": str(e)}
+
+    @app.get("/health")
+    def health():
+        return {
+            "status": "ok",
+            "model": str(type(model_instance).__name__) if model_instance else "None",
+        }
+
+    return app
 
 
-@app.get("/health")
-def health():
-    return {
-        "status": "ok",
-        "model": str(type(model_instance).__name__) if model_instance else "None",
-    }
+def get_app() -> FastAPI:
+    """Lazy-initialized FastAPI app.
+
+    Importing this module should not bind to a port or perform any
+    I/O. The app is constructed on first access.
+    """
+    global _app
+    if _app is None:
+        _app = _build_app()
+    return _app
 
 
 def serve_model(model, host="0.0.0.0", port=8000):
@@ -730,7 +747,7 @@ def serve_model(model, host="0.0.0.0", port=8000):
     global model_instance
     model_instance = model
     model_instance.eval()
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    uvicorn.run(get_app(), host=host, port=port, log_level="info")
 
 
 __all__ = [
@@ -741,6 +758,7 @@ __all__ = [
     "export_model",
     "export_to_onnx",
     "export_to_torchscript",
+    "get_app",
     "load_model",
     "serve_model",
 ]

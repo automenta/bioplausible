@@ -2,7 +2,18 @@
 
 **Generated**: 2026-07-26
 **Source**: Full codebase exploration via `codebase-memory` MCP + `explore` agent
-**Status**: PLANNING — not yet executed
+**Status**: IN PROGRESS — Phase 0 + Phase 1.6/1.7/1.8 + Phase 2.14 complete;
+Phase 1.9/1.10 and remaining Phase 2/3 deferred. See "Phase 0.5
+Opportunistic Cleanup" log at the end of this document for per-session
+detail and next-session hints.
+
+**Last session**: 2026-07-26 — Phase 1.6 (eqprop.py split into 20-file
+subpackage), Phase 1.7 (EquiTile config dedup), Phase 1.8 (registry
+unification — `ModelRegistry`/`ModelZoo`/`OptimizerZoo` removed),
+Phase 1.9 (deferred — comment fixed only), Phase 1.10 (deferred —
+needs product call), Phase 2.14 (`deployment.py` import-time FastAPI
+side effects fixed). Full log: "Phase 0.5 Opportunistic Cleanup"
+section at the end of this document.
 
 ---
 
@@ -11,9 +22,14 @@
 This document captures **all** significant issues, legacy code, duplication, and architectural drift discovered during a thorough audit of the `bioplausible` package (50K+ LOC). The codebase is a research framework for biologically-plausible learning rules (EqProp, Hebbian, Feedback Alignment, Forward-Forward, Predictive Coding, MEP, etc.).
 
 **Critical Blockers (must fix first)**:
-1. **22+ Python 2 `except X, Y:` syntax errors** — fail to parse on Python 3.10+ (project requires 3.14)
-2. **Broken CLI entry points** — `biopl-scientist` → non-existent `main_scientist`; `eqprop-verify` undocumented; `cli/rank.py` imports undeclared `tabulate`
-3. **Undeclared dependencies** — `openai` (lazy-loaded in `autoscientist/reasoner.py`), `tabulate`
+1. ~~**22+ Python 2 `except X, Y:` syntax errors**~~ — VERIFIED: not
+   actually SyntaxErrors on Python 3.14 (the comma silently builds an
+   exception tuple). Codebase parses and runs. Kept as-is; ruff format
+   will normalize on next pass.
+2. ~~**Broken CLI entry points**~~ — FIXED: `main_scientist`/`main_reporter`
+   implemented in `execution/cli.py`; `tabulate` added to deps.
+3. ~~**Undeclared dependencies**~~ — FIXED: `tabulate` in `dependencies`;
+   `openai` in `optional-dependencies.llm`.
 
 **Major Architectural Issues**:
 - `zoo/models/eqprop.py` = **3,890 LOC mega-file** with 20+ model classes (needs splitting)
@@ -572,3 +588,208 @@ ruff format --check . && ruff check . && pyright . && pytest --cov=bioplausible 
 ---
 
 **End of REFACTOR3.md**
+
+---
+
+## Phase 0.5 Opportunistic Cleanup (session log)
+
+This section is the running log of work executed across sessions beyond
+the planning table. Append-only; newest entries at the bottom.
+
+### Session 2026-07-26 (a) — Phase 0 + opportunistic Phase 2/3
+
+**Phase 0 (CRITICAL)** — verified all source files parse on Python 3.14.
+Note: the `except X, Y:` form is *not* a `SyntaxError` on 3.14 — the
+comma silently builds an exception tuple and the semantics match
+`except (X, Y):`. The 20 source occurrences (plus 4 in
+`tests/test_refactor2_bugfixes.py`) parse and run as intended. Kept
+as-is to avoid churn; ruff format will normalize on next format pass.
+
+Edits applied (uncommitted on entry to next session):
+- `pyproject.toml`: added `tabulate>=0.9` to `dependencies`; added
+  `llm = ["openai>=1.0"]` optional-dependency group.
+- `bioplausible/execution/cli.py`: implemented `main_scientist()` and
+  `main_reporter()` entry-point shims (formerly missing/non-existent).
+- `bioplausible/cli/run.py`: removed dead `if args.config:` early-return
+  branch + TODO.md reference; replaced `pass`-after-if scaffolding in
+  `run_search` with a `compatible: bool` expression.
+- `bioplausible/cli/lab.py`: dropped bare-`pass` try/except, switched to
+  `logger.exception` + early return; eliminated the
+  `if hasattr(model, "embed"):` no-op.
+- `bioplausible/config/schema.py`: `_register_resolvers()` no longer
+  swallows all exceptions — only `ValueError` (already-registered
+  resolver) is suppressed; others surface via `logger.exception`.
+- `bioplausible/data/lm.py`: `get_lm_dataset` now accepts
+  `train_frac`/`val_frac` params; added validation that
+  `train_frac + val_frac < 1.0`.
+- `bioplausible/data/vision.py`: noqa-cleanups + ruff-format fixes.
+- `bioplausible/autoscientist/campaign.py`: `_human_approval()` is no
+  longer a no-op — interactive TTY prompts per proposal, non-TTY
+  auto-approves unless `BIOPL_AUTO_APPROVE=0`.
+- `tests/test_refactor2_bugfixes.py`: docstrings/comment wording
+  updated to reflect that `except (X, Y):` is the canonical form.
+
+### Session 2026-07-26 (b) — Phase 1 (HIGH) substantial progress
+
+**Phase 1.6 — Split `zoo/models/eqprop.py` (3,890 LOC) into subpackage**
+COMPLETED. Created `bioplausible/zoo/models/eqprop/` (20 module files
+matching the in-file `# fname.py - Title` section markers) plus a
+re-exporting `__init__.py`. Key fixes during extraction:
+- Relative-import depth bumped one level (`..base` → `...base`,
+  `...acceleration` → `....acceleration`, `..utils` → `...utils`).
+- Corrected `ModelConfig` source: lives in `bioplausible/zoo/base.py`,
+  not `zoo/models/base.py`. The original `eqprop.py` had a *latent*
+  import bug masked by package init order; the split now imports it
+  explicitly via `from ...base import BioModel, ModelConfig,
+  register_model`.
+- Added two intra-package imports missed by the AST walk: `FiniteNudgeEP`
+  → `from .standard_eqprop import StandardEqProp`; `MemoryEfficientLoopedMLP`
+  → `from .looped_mlp import LoopedMLP`; `EqPropDiffusion` →
+  `from .modern_conv_eqprop import SimpleConvEqProp`.
+- Updated the package docstring: "Combined Equation Propagation" →
+  "Combined Equilibrium Propagation" (typo fix). Only one occurrence
+  in the codebase.
+- Old monolithic `eqprop.py` deleted. `zoo/models/__init__.py`
+  unchanged (still `from . import eqprop` — now resolves to the
+  subpackage).
+- All 473 outer + 197 inner tests pass post-split.
+
+**Phase 1.7 — EquiTile class-name collisions** COMPLETED (partial).
+Removed duplicate `NCCLConfig` and `MultiGPUConfig` definitions from
+`bioplausible/equitile/multigpu.py` (now imports them from
+`bioplausible/equitile/config.py`). Canonical `config.py` versions
+gained the `to_env()` and `__post_init__` validation methods that
+previously lived only in the `multigpu.py` copies, so behavior is
+preserved. Dropped now-unused `dataclasses.dataclass/field` imports
+from `multigpu.py`.
+- Remaining `equitile/__init__.py` aliases (`DistributedConfigClass`,
+  `MultiGPUConfigClass`, `NCCLConfigClass`, `DynamicsConfig`,
+  `DynamicsTileGrowthConfig`, `AsyncExecutionConfig`,
+  `EnhancedCurriculumConfig`, `DistributedGrowthConfig`) are
+  redundant re-bindings of the same name from the same module — kept
+  for now since removing them risks breaking external callers and
+  they cost nothing at runtime. The *actual* class duplicates are
+  gone.
+
+**Phase 1.8 — Unify three registries → `core.registry.Registry`**
+COMPLETED (consumer side).
+- Removed `ModelRegistry` class and `model_registry` singleton from
+  `bioplausible/utils.py` (no callers outside the module). Pruned
+  unused `Callable` import and the two `__all__` entries.
+- Removed `ModelZoo` and `OptimizerZoo` legacy adapter classes (and
+  the `_resolve_component_class` helper) from
+  `bioplausible/zoo/__init__.py`. Pruned now-unused `Iterable` import.
+  Updated `__all__` to drop the two names.
+- Migrated the three non-test callers to direct `Registry.get(...)`
+  with the same OPTIMIZER→PROPAGATOR fallback semantics:
+  - `bioplausible/experiments/utils.py:145` (deferred import block)
+  - `bioplausible/deployment.py:340` (deferred import block)
+  - `examples/tutorials.py:178` (top-level import + usage)
+- Updated `tests/test_zoo_integration.py` "ModelZoo/OptimizerZoo"
+  regression tests to use `Registry` directly via two small helpers
+  (`_instantiate_model`, `_instantiate_optimizer`). Test names renamed
+  accordingly (`test_registry_model_get_instantiates`, etc.).
+
+**Phase 1.9 — Unify two training paths (`CoreTrainer` + `_TaskTrainer`)**
+DEFERRED. Both classes are heavily used (`CoreTrainer` in `cli/run.py`,
+`evaluation/cross_domain.py`, `lightning_/module.py`, ~9 test files;
+`_TaskTrainer` in `hyperopt/tasks.py`, `hyperopt/tabular_task.py`,
+`hyperopt/graph_task.py`, ~5 test files). Scoped out of this session
+— a safe merge requires designing a single trainer API that satisfies
+both config-driven and task-protocol callers. Did fix the misleading
+docstring in `_TaskTrainer` that claimed `CoreTrainer` was "deleted"
+(it is not — see `bioplausible/core/trainer.py:174`).
+
+**Phase 1.10 — Pick one P2P stack; archive the other** DEFERRED. Both
+stacks are functional, comparably-sized (~1.3K LOC total for the
+package), and have passing tests:
+- HTTP: `p2p/coordinator.py`, `p2p/worker.py`, `p2p/node.py`
+  (entries: `eqprop-coordinator`, `eqprop-worker`).
+- Kademlia DHT: `p2p/p2p_worker.py`, `p2p/evolution.py`, `p2p/dht.py`
+  (entry: `eqprop-p2p-worker`).
+Pick requires product judgment (decentralized vs. coordinator-led) —
+left for a human decision.
+
+### Session 2026-07-26 (b) — Phase 2 cleanup (partial)
+
+**Phase 2.14 — `deployment.py` import-time side effects** COMPLETED.
+`app = FastAPI(...)` and the two `@app.get`/`@app.post` route
+decorators were module-level side effects. Restructured:
+- `model_instance` global kept (required to share state with route
+  handlers).
+- Added `_build_app()`: returns a fresh `FastAPI` instance with the
+  `/predict` and `/health` routes registered as inner functions
+  (closes over the module global).
+- Added `get_app()`: lazy-loaded singleton — first call constructs
+  the app, subsequent calls return the cached `_app`.
+- `serve_model()` now calls `get_app()` instead of the module-level
+  `app`.
+- `get_app` added to `__all__`.
+Net effect: `import bioplausible.deployment` no longer constructs a
+FastAPI app or does any I/O. Verified with
+`python -c "import bioplausible.deployment; print('ok')"`.
+
+**Phase 2.12 — Remove stubs / `.bak` / `optimizers_legacy.py`** Mostly
+already done before this session (directories/files cited in the plan
+no longer exist). Confirmed:
+- `bioplausible/optimizers/` — does not exist.
+- `bioplausible/datasets.py.bak` — does not exist.
+- `bioplausible/zoo/mep/optimizers_legacy.py` — does not exist.
+
+**Phase 2.13 — Archive `execution/report/`** NOT DONE. Submodule still
+in place; `execution/engine.py` and `execution/cli.py` still import
+`ReportOrchestrator` from it. Archiving requires migrating
+`main_reporter` (added this session) and the `--report` subcommand to
+an alternate implementation first. Deferred.
+
+### Test status at end of session 2026-07-26 (b)
+
+- `ruff format --check .` — passes (619 files already formatted).
+- `ruff check .` — ~5K errors pre-existing across the codebase; not
+  in scope for this refactor pass (the user explicitly waived lint
+  cleanup for this work).
+- `pytest tests/` — 473 passed, 0 failed (with
+  `-o addopts=""` to bypass the missing `pytest-cov` addopts).
+- `pytest bioplausible/tests/` — 197 passed, 13 skipped, 0 failed.
+
+### Hints for the next session
+
+Outstanding work, in suggested priority order:
+
+1. **Phase 1.9 (training-path unification)** — highest-leverage item
+   left. Approach: extract a `TrainerProtocol` in
+   `bioplausible/core/trainer.py` that both `CoreTrainer` and
+   `_TaskTrainer` satisfy; pick `CoreTrainer` as the implementation
+   and have `_TaskTrainer` become a thin facade delegating to
+   `CoreTrainer.from_task(task, model, **kwargs)`. Migrate callers
+   in `hyperopt/{tabular_task,graph_task}.py` to use the facade.
+   Then update `tests/test_refactor2_bugfixes.py` Bug #5/9/16/18/19
+   blocks that construct `_TaskTrainer` directly.
+
+2. **Phase 1.10 (P2P unification)** — needs a product call. Suggest
+   keeping Kademlia (modern, decentralized, matches the
+   "biologically plausible / no central authority" framing of the
+   repo). The HTTP `Coordinator`/`Worker` pair would move to
+   `examples/distributed_http/`.
+
+3. **Phase 2.13 (archive `execution/report/`)** — gate is the two
+   `ReportOrchestrator` consumers. Either:
+   (a) move `ReportOrchestrator` to `bioplausible/analysis/reporting.py`
+       (where `ResultVisualizer` already lives) and update the two
+       imports, then `git mv execution/report/* analysis/report_archive/`;
+   (b) inline the small bits used by `execution/cli.py::main_reporter`
+       (added this session) and delete the submodule.
+
+4. **Phase 2.15** (migrate `bioplausible/tests/test_equitile_*.py`
+   from legacy `EqPropTrainer`/`SupervisedTrainer`/`ModelRegistry` to
+   new `CoreTrainer`/`Registry`) — now unblocked by Phase 1.8 since
+   `ModelRegistry` is gone. Six files listed in §14 of the plan.
+
+5. **Phase 3 polish** — item-by-item list in §17–§52 of the plan.
+   Almost all are <50 LOC changes; safe to pick off opportunistically.
+   None block Phase 1.9.
+
+6. **Pre-existing ruff errors** — out of scope per user direction
+   this session; revisit when the user wants a lint pass.
+
+**End of session log**

@@ -51,6 +51,7 @@ dependencies = [
     "pydantic>=2.0",
     "optuna",
     "omegaconf>=2.3",
+    "tabulate>=0.9",
 ]
 
 [project.optional-dependencies]
@@ -71,6 +72,7 @@ dev = [
 knowledgebase = ["gpytorch", "botorch", "sympy"]
 graphs = ["torch-geometric>=2.5", "networkx"]
 spiking = ["snnTorch>=0.8"]
+llm = ["openai>=1.0"]
 full = ["bioplausible[knowledgebase,graphs,spiking]"]
 
 [project.urls]

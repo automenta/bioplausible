@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 def run_training(args):
     """Run a single training session or training from YAML config."""
     if args.config:
-        # Training from YAML config (as specified in TODO.md)
+        # Training from YAML config (YAML support lives at run_from_yaml below)
         run_from_yaml(args)
         return
 
-        logger.info("🚀 Starting Headless Training: %s on %s", args.model, args.task)
+    logger.info("🚀 Starting Headless Training: %s on %s", args.model, args.task)
 
     config = TrainerConfig(
         model=args.model,
@@ -83,15 +83,16 @@ def run_search(args):
         try:
             meta = Registry.get_metadata(ComponentCategory.MODEL, model)
             domain_names: list[str] = [d.value for d in meta.domains]
-            if not domain_names:
-                pass
-            elif args.task in domain_names:
-                pass
-            elif args.task in {"mnist", "cifar10"} and "vision" in domain_names:
-                pass
-            elif args.task in {"tiny_shakespeare", "wikitext"} and "lm" in domain_names:
-                pass
-            else:
+            compatible = bool(
+                not domain_names
+                or args.task in domain_names
+                or (args.task in {"mnist", "cifar10"} and "vision" in domain_names)
+                or (
+                    args.task in {"tiny_shakespeare", "wikitext"}
+                    and "lm" in domain_names
+                )
+            )
+            if not compatible:
                 logger.warning(
                     "⚠️  Skipping %s: Incompatible with task '%s' (Needs %s)",
                     model,

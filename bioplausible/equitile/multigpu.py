@@ -38,7 +38,6 @@ import threading
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import torch
@@ -54,90 +53,11 @@ from .kernels import (
 if TYPE_CHECKING:
     from .core import EquiTile
 
+from .config import MultiGPUConfig, NCCLConfig  # noqa: F401  -- canonical location
 
 # =============================================================================
 # Configuration
 # =============================================================================
-
-
-@dataclass
-class NCCLConfig:
-    """Configuration for NCCL communication.
-
-    Attributes
-    ----------
-    world_size : int
-        Total number of processes
-    rank : int
-        This process's rank
-    master_addr : str
-        Master node address
-    master_port : str
-        Master node port
-    backend : str
-        Communication backend ('nccl', 'gloo', 'mpi')
-    timeout_minutes : int
-        Timeout for operations in minutes
-    init_method : str
-        Initialization method
-    """
-
-    world_size: int = 1
-    rank: int = 0
-    master_addr: str = "localhost"
-    master_port: str = "29500"
-    backend: str = "nccl"
-    timeout_minutes: int = 30
-    init_method: str = "env://"
-
-    def to_env(self) -> dict[str, str]:
-        """Convert to environment variables.
-
-        Returns
-        -------
-        dict
-            Environment variable mapping
-        """
-        return {
-            "MASTER_ADDR": self.master_addr,
-            "MASTER_PORT": self.master_port,
-            "WORLD_SIZE": str(self.world_size),
-            "RANK": str(self.rank),
-        }
-
-
-@dataclass
-class MultiGPUConfig:
-    """Configuration for multi-GPU training.
-
-    Attributes
-    ----------
-    device_ids : list of int
-        GPU device IDs to use
-    tile_assignment : str
-        Tile assignment strategy: 'round_robin', 'layered', 'balanced'
-    sync_frequency : int
-        Sync gradients every N steps
-    overlap_comm : bool
-        Overlap communication with computation
-    async_execution : bool
-        Enable true async execution
-    gradient_accumulation : int
-        Gradient accumulation steps
-    """
-
-    device_ids: list[int] = field(default_factory=list)
-    tile_assignment: str = "round_robin"
-    sync_frequency: int = 1
-    overlap_comm: bool = True
-    async_execution: bool = True
-    gradient_accumulation: int = 1
-
-    def __post_init__(self) -> None:
-        """Validate configuration."""
-        valid_assignments = {"round_robin", "layered", "balanced"}
-        if self.tile_assignment not in valid_assignments:
-            raise ValueError(f"tile_assignment must be one of {valid_assignments}")
 
 
 # =============================================================================

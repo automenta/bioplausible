@@ -15,6 +15,8 @@ def get_lm_dataset(
     name: str = "tiny_shakespeare",
     seq_len: int = 128,
     split: str = "train",
+    train_frac: float = 0.9,
+    val_frac: float = 0.05,
 ) -> CharDataset:
     """
     Load a language modeling dataset as a CharDataset.
@@ -48,16 +50,23 @@ def get_lm_dataset(
         except Exception as e:
             warnings.warn(f"HuggingFace dataset failed, using fallback: {e}")
             import urllib.request
+
             url = (
                 "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/"
                 "tinyshakespeare/input.txt"
             )
             with urllib.request.urlopen(url) as response:
                 full_text = response.read().decode("utf-8")
+            if train_frac + val_frac >= 1.0:
+                raise ValueError(
+                    "train_frac + val_frac must be < 1.0 to leave a test split."
+                )
             n = len(full_text)
-            train_data = full_text[: int(n * 0.9)]
-            val_data = full_text[int(n * 0.9): int(n * 0.95)]
-            test_data = full_text[int(n * 0.95):]
+            train_data = full_text[: int(n * train_frac)]
+            val_split = int(n * train_frac)
+            test_split = int(n * (train_frac + val_frac))
+            val_data = full_text[val_split:test_split]
+            test_data = full_text[test_split:]
             if split == "train":
                 text = train_data
             elif split == "validation":
@@ -72,8 +81,11 @@ def get_lm_dataset(
     elif name == "ptb":
         dataset = load_dataset("ptb_text_only")
         split_name = (
-            "train" if split == "train"
-            else "validation" if split == "validation" else "test"
+            "train"
+            if split == "train"
+            else "validation"
+            if split == "validation"
+            else "test"
         )
         text = " ".join(dataset[split_name]["sentence"])
 

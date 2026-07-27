@@ -34,37 +34,22 @@ def inspect_model(args):
 
     # Run Dummy Forward
     logger.info("Running Verification Inference...")
-    x, y = task.get_batch("val")
+    x, _ = task.get_batch("val")
     model.eval()
     with torch.no_grad():
-        # Prepare input same as trainer but quick manual
-        # Trainer logic handles embedding etc. Here we assume direct
-        # or we use trainer helper?
-        # Ideally we reuse trainer logic, but let's do a simple check.
-        if hasattr(model, "embed") and args.task == "lm":
-            # Manual embed if needed, or rely on model forward handling it if integrated
-            pass
+        # LM models that expose `embed` expect integer token ids — task.get_batch
+        # already returns those ids, so forward handles the embedding internally.
+        # Non-LM models may receive raw features; flatten spatially for MLPs.
+        if x.dim() > 2 and "Conv" not in args.model:
+            x = x.view(x.size(0), -1)
 
-        # Basic check: just call forward. If it fails, verification catches it.
-        # This is "headless lab" - verifying if model runs at all.
         try:
-            # We create a dummy trainer just to use its prepare_input
-            # logic/forward wrapper?
-            # Or just try/except raw forward
-
-            # Simple heuristic
-            if x.dim() > 2 and "Conv" not in args.model:
-                x = x.view(x.size(0), -1)
-
             x = x.to(device)
             out = model(x)
-            logger.info("✓ Forward pass successful. Output shape: %s", out.shape)
-
-        except Exception as e:
-            logger.error("Forward pass failed: %s", e)
-            import traceback
-
-            traceback.print_exc()
+        except Exception:
+            logger.exception("Forward pass failed for model %s", args.model)
+            return
+        logger.info("✓ Forward pass successful. Output shape: %s", out.shape)
 
 
 def main():

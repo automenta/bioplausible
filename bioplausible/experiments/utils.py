@@ -142,18 +142,31 @@ class ExperimentRunner:
         Returns:
             ExperimentResult with metrics.
         """
-        from bioplausible.zoo import ModelZoo, OptimizerZoo
+        from bioplausible.core.registry import ComponentCategory, Registry
 
         # Get model and optimizer
         model_params = model_params or {}
         optimizer_params = optimizer_params or {}
 
-        model = ModelZoo.get(model_name, **model_params)
+        model_cls = Registry.get(ComponentCategory.MODEL, model_name)
+        model = model_cls(**model_params)
         model = model.to(self.device)
 
-        optimizer = OptimizerZoo.get(
-            optimizer_name, model.parameters(), model=model, **optimizer_params
-        )
+        opt_params = list(model.parameters())
+        try:
+            opt_cls = Registry.get(
+                ComponentCategory.OPTIMIZER, optimizer_name
+            )
+        except ValueError:
+            opt_cls = Registry.get(
+                ComponentCategory.PROPAGATOR, optimizer_name
+            )
+        try:
+            optimizer = opt_cls(
+                opt_params, model=model, **optimizer_params
+            )
+        except TypeError:
+            optimizer = opt_cls(opt_params, **optimizer_params)
 
         # Count parameters
         num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

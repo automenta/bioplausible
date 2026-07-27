@@ -82,5 +82,21 @@ def _run_reporter(args: argparse.Namespace) -> None:
     print("Done.")
 
 
+def main_scientist() -> None:
+    """Entry point for ``biopl-scientist``: run the auto-scientist without arg parsing.
+
+    Mirrors the default branch of :func:`main` (``run`` subcommand) so a
+    bare ``biopl-scientist`` invocation starts the autonomous discovery loop.
+    """
+    engine = ExecutionEngine()
+    engine.run()
+
+
+def main_reporter() -> None:
+    """Entry point for ``biopl-report``: generate reports without arg parsing."""
+    orchestrator = ReportOrchestrator("bioplausible.db", "reports")
+    orchestrator.generate_reports()
+
+
 if __name__ == "__main__":
     main()

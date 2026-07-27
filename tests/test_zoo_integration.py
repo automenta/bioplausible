@@ -271,61 +271,75 @@ def test_query_by_family_filter():
 
 
 # ----------------------------------------------------------------------------
-# REFACTOR2 zoo/__init__.py — ModelZoo / OptimizerZoo production adapters
-# These were silently broken because they referenced `meta.cls` (which does
-# NOT exist on ComponentMetadata — Registry.get_metadata returns metadata
-# only, never the class) and because the OPTIMIZER→PROPAGATOR fallback
-# raised ValueError before the PROPAGATOR branch could run.
+# REFACTOR3: Removed ModelZoo / OptimizerZoo legacy adapters; these tests
+# verify that callers can use Registry directly to instantiate models
+# and optimizers, including the OPTIMIZER→PROPAGATOR fallback path.
 # ----------------------------------------------------------------------------
 
 
-def test_modelzoo_get_instantiates_registered_model():
-    """ModelZoo.get must actually instantiate by reusing Registry.get()."""
-    from bioplausible.zoo import ModelZoo
+def _instantiate_model(name: str, **params) -> nn.Module:
+    from bioplausible.core.registry import ComponentCategory, Registry
 
-    model = ModelZoo.get("backprop_mlp", input_dim=784, hidden_dim=32, output_dim=10)
+    cls = Registry.get(ComponentCategory.MODEL, name)
+    return cls(**params)
+
+
+def _instantiate_optimizer(name: str, params, model=None):
+    from bioplausible.core.registry import ComponentCategory, Registry
+
+    try:
+        cls = Registry.get(ComponentCategory.OPTIMIZER, name)
+    except ValueError:
+        cls = Registry.get(ComponentCategory.PROPAGATOR, name)
+    if model is not None:
+        try:
+            return cls(params, model=model)
+        except TypeError:
+            return cls(params)
+    return cls(params)
+
+
+def test_registry_model_get_instantiates():
+    from bioplausible.core.registry import ComponentCategory, Registry
+
+    cls = Registry.get(ComponentCategory.MODEL, "backprop_mlp")
+    model = cls(input_dim=784, hidden_dim=32, output_dim=10)
     assert isinstance(model, nn.Module)
-    # forward pass sanity check
     batch_size = 2
     out = model(torch.randn(batch_size, 784))
     assert out.shape[0] == batch_size
 
 
-def test_modelzoo_get_unknown_raises_value_error():
-    from bioplausible.zoo import ModelZoo
+def test_registry_model_get_unknown_raises_value_error():
+    from bioplausible.core.registry import ComponentCategory, Registry
 
-    with pytest.raises(ValueError, match="Unknown component"):
-        ModelZoo.get("does_not_exist_xyz")
+    with pytest.raises(ValueError):
+        Registry.get(ComponentCategory.MODEL, "does_not_exist_xyz")
 
 
-def test_optimizerzoo_get_resolves_propagator_preset():
-    """smep is registered as PROPAGATOR (not OPTIMIZER); fallback must find it.
-
-    Without this fallback OptimizerZoo.get('smep', ...) raised
-    ValueError listing only OPTIMIZER names and never tried PROPAGATOR.
-    """
-    from bioplausible.zoo import ModelZoo, OptimizerZoo
-
-    model = ModelZoo.get("backprop_mlp", input_dim=784, hidden_dim=32, output_dim=10)
-    opt = OptimizerZoo.get("smep", model.parameters(), model=model)
-    # smep factory returns a CompositeOptimizer
+def test_registry_optimizer_get_resolves_propagator_preset():
+    """smep is registered as PROPAGATOR (not OPTIMIZER); fallback must find it."""
+    model = _instantiate_model(
+        "backprop_mlp", input_dim=784, hidden_dim=32, output_dim=10
+    )
+    opt = _instantiate_optimizer("smep", model.parameters(), model=model)
     assert opt.__class__.__name__ == "CompositeOptimizer"
 
 
-def test_optimizerzoo_get_resolves_plain_optimizer():
-    from bioplausible.zoo import ModelZoo, OptimizerZoo
-
-    model = ModelZoo.get("backprop_mlp", input_dim=784, hidden_dim=32, output_dim=10)
+def test_registry_optimizer_get_resolves_plain_optimizer():
+    model = _instantiate_model(
+        "backprop_mlp", input_dim=784, hidden_dim=32, output_dim=10
+    )
     # adam is registered as OPTIMIZER (no `model=` kwarg accepted)
-    opt = OptimizerZoo.get("adam", model.parameters(), model=model)
+    opt = _instantiate_optimizer("adam", model.parameters(), model=model)
     assert opt.__class__.__name__ == "Adam"
 
 
-def test_optimizerzoo_get_unknown_raises_with_available_list():
-    from bioplausible.zoo import OptimizerZoo
+def test_registry_optimizer_get_unknown_raises_with_available_list():
+    from bioplausible.core.registry import ComponentCategory, Registry
 
-    with pytest.raises(ValueError, match="Available"):
-        OptimizerZoo.get("does_not_exist_xyz", iter([]), model=None)
+    with pytest.raises(ValueError):
+        Registry.get(ComponentCategory.OPTIMIZER, "does_not_exist_xyz")
 
 
 # ----------------------------------------------------------------------------

@@ -5,7 +5,6 @@ with rich metadata enabling AutoScientist composition.
 """
 
 import logging
-from collections.abc import Iterable
 from typing import Any
 
 import torch
@@ -182,70 +181,12 @@ def get_optimizers_for_propagator(
 
 
 # ============================================================================
-# Legacy adapter: ModelZoo / OptimizerZoo
+# Legacy adapters removed (REFACTOR3). Callers now use core.registry.Registry
+# and core.registry.ComponentCategory directly. See:
+#   - bioplausible.experiments.utils
+#   - bioplausible.deployment
+#   - examples/tutorials.py
 # ============================================================================
-
-
-def _resolve_component_class(
-    name: str, categories: tuple[ComponentCategory, ...]
-) -> tuple[Any, ComponentCategory]:
-    """Look up a registered component across multiple categories.
-
-    Iterates ``categories`` in order, returning the first match. Raises a
-    ValueError listing available names across all categories if absent.
-    """
-    available: list[str] = []
-    for cat in categories:
-        comps = Registry._components.get(cat, {})
-        if name in comps:
-            return comps[name]["class"], cat
-        available.extend(f"{cat.value}/{n}" for n in comps)
-    raise ValueError(
-        f"Unknown component '{name}' in categories {[c.value for c in categories]}. "
-        f"Available: {available}"
-    )
-
-
-class ModelZoo:
-    """Legacy adapter providing ``cls.get(name, **params)`` → model instance.
-
-    Used by ``experiments.utils.ExperimentRunner`` and ``deployment.py``.
-    """
-
-    @staticmethod
-    def get(name: str, **params: Any) -> nn.Module:
-        cls, _ = _resolve_component_class(name, (ComponentCategory.MODEL,))
-        return cls(**params)
-
-
-class OptimizerZoo:
-    """Legacy adapter providing ``cls.get(name, params, model=model, **kwargs)``.
-
-    Used by ``experiments.utils.ExperimentRunner``. Looks the name up in
-    OPTIMIZER first, then PROPAGATOR (since preset factories like ``smep``
-    are registered as propagators). ``params`` is forwarded as the first
-    positional argument — for torch.optim-style optimizers it should be
-    an iterable of parameters; for MEP preset factories it is also an
-    iterable of parameters and ``model`` is supplied as a keyword.
-    """
-
-    @staticmethod
-    def get(
-        name: str,
-        params: Iterable[Any],
-        model: nn.Module | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        cls, _ = _resolve_component_class(
-            name, (ComponentCategory.OPTIMIZER, ComponentCategory.PROPAGATOR)
-        )
-        if model is not None:
-            try:
-                return cls(params, model=model, **kwargs)
-            except TypeError:
-                # Plain torch.optim optimizers don't accept ``model=``.
-                return cls(params, **kwargs)
-        return cls(params, **kwargs)
 
 
 __all__ = [
@@ -254,8 +195,6 @@ __all__ = [
     "ComputeProfile",
     "Domain",
     "LocalityLevel",
-    "ModelZoo",
-    "OptimizerZoo",
     "Registry",
     "get_model_spec",
     "get_models_for_task",

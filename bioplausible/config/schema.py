@@ -5,19 +5,28 @@ Replaces the legacy config_schema.py and config_loader.py with
 a unified, validated configuration system.
 """
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from omegaconf import MISSING, OmegaConf
 
+logger = logging.getLogger(__name__)
+
 
 def _register_resolvers() -> None:
-    """Register OmegaConf custom resolvers. Safe to call multiple times."""
-    import contextlib
+    """Register OmegaConf custom resolvers. Safe to call multiple times.
 
-    with contextlib.suppress(Exception):
+    Only swallows ``ValueError`` raised when a resolver of the same name is
+    already registered; any other exception surfaces for debugging.
+    """
+    try:
         OmegaConf.register_new_resolver("now", time.strftime)
+    except ValueError:
+        pass
+    except Exception:
+        logger.exception("Failed to register OmegaConf resolver 'now'")
 
 
 _register_resolvers()

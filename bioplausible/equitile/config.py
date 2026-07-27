@@ -390,6 +390,13 @@ class MultiGPUConfig:
     async_execution: bool = True
     gradient_accumulation: int = 1
 
+    def __post_init__(self) -> None:
+        valid_assignments = {"round_robin", "layered", "balanced"}
+        if self.tile_assignment not in valid_assignments:
+            raise ValueError(
+                f"tile_assignment must be one of {valid_assignments}"
+            )
+
 
 @dataclass
 class NCCLConfig:
@@ -402,6 +409,14 @@ class NCCLConfig:
     backend: str = "nccl"
     timeout_minutes: int = 30
     init_method: str = "env://"
+
+    def to_env(self) -> dict[str, str]:
+        return {
+            "MASTER_ADDR": self.master_addr,
+            "MASTER_PORT": self.master_port,
+            "WORLD_SIZE": str(self.world_size),
+            "RANK": str(self.rank),
+        }
 
 
 # =============================================================================

@@ -60,6 +60,7 @@ def get_vision_dataset(
             targets = targets.tolist()
         indices = [i for i, t in enumerate(targets) if t in included_classes]
         from torch.utils.data import Subset
+
         return Subset(dataset, indices)
 
     return dataset
@@ -147,8 +148,8 @@ class CharDataset(Dataset):
         return max(0, len(self.data) - self.seq_len - 1)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        x = self.data[idx: idx + self.seq_len]
-        y = self.data[idx + 1: idx + self.seq_len + 1]
+        x = self.data[idx : idx + self.seq_len]
+        y = self.data[idx + 1 : idx + self.seq_len + 1]
         return x, y
 
     def decode(self, indices: torch.Tensor) -> str:
@@ -165,9 +166,15 @@ def create_data_loaders(
     train_data = get_vision_dataset(dataset_name, train=True, flatten=flatten)
     test_data = get_vision_dataset(dataset_name, train=False, flatten=flatten)
     train_loader = DataLoader(
-        train_data, batch_size=batch_size, shuffle=True, num_workers=num_workers,
+        train_data,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
     )
     test_loader = DataLoader(
-        test_data, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+        test_data,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
     )
     return train_loader, test_loader

@@ -12,6 +12,8 @@ into a continuous discovery loop with:
 
 import json
 import logging
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -236,14 +238,40 @@ class AutoScientistCampaign:
         self,
         proposals: list,
     ) -> list[int]:
-        """
-        Gate for human approval of expensive runs.
+        """Gate for human approval of expensive runs.
 
-        In real usage, this would prompt a human.
-        For now, approve all proposals.
+        When ``stdin`` is not a TTY (e.g. CI, batch jobs) the gate
+        auto-approves everything. Otherwise each proposal is presented and
+        the operator answers ``y/n``; non-``y`` answers reject that
+        proposal index.
         """
-        logger.info(f"Human approval gate: {len(proposals)} proposals pending")
-        return list(range(len(proposals)))
+        logger.info("Human approval gate: %d proposals pending", len(proposals))
+        if not proposals:
+            return []
+        if not sys.stdin.isatty():
+            auto_msg = (
+                "stdin is not a TTY; auto-approving all proposals. "
+                "Provide BIOPL_AUTO_APPROVE=0 to deny."
+            )
+            if os.environ.get("BIOPL_AUTO_APPROVE", "1") == "0":
+                logger.warning(auto_msg + " Denying all (BIOPL_AUTO_APPROVE=0).")
+                return []
+            logger.info(auto_msg)
+            return list(range(len(proposals)))
+        approved: list[int] = []
+        for idx, proposal in enumerate(proposals):
+            label = getattr(proposal, "name", None) or str(proposal)
+            try:
+                answer = (
+                    input(f"Approve proposal {idx} ({label})? [y/N] ").strip().lower()
+                )
+            except EOFError:
+                logger.warning("EOF on stdin; auto-approving remaining proposals")
+                approved.extend(range(idx, len(proposals)))
+                return approved
+            if answer == "y":
+                approved.append(idx)
+        return approved
 
     def get_summary(self) -> dict[str, Any]:
         """Get campaign summary statistics."""

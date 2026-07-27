@@ -8,7 +8,6 @@ import logging
 import os
 import random
 import time
-from collections.abc import Callable
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
@@ -221,60 +220,6 @@ def _estimate_activation_memory(input_shape: tuple[int, ...], batch_size: int) -
     return batch_size * sum(input_shape) * 4 / 1e6  # 4 bytes per float32
 
 
-class ModelRegistry:
-    """
-    Simple registry for model factories.
-
-    Example:
-        >>> registry = ModelRegistry()
-        >>> registry.register("my_mlp", lambda: LoopedMLP(784, 256, 10))
-        >>> model = registry.create("my_mlp")
-    """
-
-    def __init__(self) -> None:
-        self._factories = {}
-
-    def register(self, name: str, factory: Callable[[], nn.Module]) -> None:
-        """
-        Register a model factory function.
-
-        Args:
-            name: Name to register the model under
-            factory: Function that creates the model
-        """
-        self._factories[name] = factory
-
-    def create(self, name: str, **kwargs) -> nn.Module:
-        """
-        Create a model from the registry.
-
-        Args:
-            name: Name of the registered model
-            **kwargs: Additional arguments to pass to the factory function
-
-        Returns:
-            Created model instance
-        """
-        if name not in self._factories:
-            raise ValueError(
-                f"Model '{name}' not registered. "
-                f"Available: {list(self._factories.keys())}"
-            )
-        return self._factories[name](**kwargs)
-
-    def list_models(self) -> list[str]:
-        """
-        List all registered models.
-
-        Returns:
-            List of model names
-        """
-        return list(self._factories.keys())
-
-
-# Global registry instance
-model_registry = ModelRegistry()
-
 
 def create_model_preset(preset_name: str, **overrides) -> nn.Module:
     """
@@ -404,14 +349,12 @@ def spectral_conv2d(
 
 
 __all__ = [
-    "ModelRegistry",
     "SimpleProfiler",
     "compute_gradient_norm",
     "count_parameters",
     "create_model_preset",
     "estimate_memory_usage",
     "export_to_onnx",
-    "model_registry",
     "profile_model",
     "seed_everything",
     "spectral_conv2d",

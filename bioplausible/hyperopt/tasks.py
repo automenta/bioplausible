@@ -42,8 +42,9 @@ class _TaskTrainer:
     """Lightweight task-protocol trainer for run_from_runconfig.
 
     Drives training directly off the BaseTask API (get_batch /
-    compute_metrics) so we do not depend on the deleted
-    ``CoreTrainer`` class.  Used by ``BaseTask.create_trainer``
+    compute_metrics) without going through CoreTrainer's full
+    config-driven path — useful when the caller has direct access
+    to a constructed model and task.  Used by ``BaseTask.create_trainer``
     when called from ``CoreTrainer.run_from_runconfig``.
     """
 
