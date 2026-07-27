@@ -215,7 +215,7 @@ def track_11_deep_network(verifier) -> TrackResult:
 |--------|-------|
 | Effective Depth | {depth} layers |
 | Final Accuracy | {acc * 100:.1f}% |
-| Gradient Flow | {"✅ Present" if grad_exists else "❌ Missing"} |
+| Gradient Flow | {"[OK]  Present" if grad_exists else "[FAIL]  Missing"} |
 | Input Gradient Magnitude | {grad_mag:.6f} |
 
 **Key Finding**: Spectral normalization enables stable gradient propagation through {depth} layers.

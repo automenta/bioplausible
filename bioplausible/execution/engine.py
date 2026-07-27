@@ -132,7 +132,7 @@ class ExecutionEngine:
         )
 
         logger.info("\n" + "=" * 60)
-        logger.info("📋 RESUME CONTEXT")
+        logger.info("[CONFIG]  RESUME CONTEXT")
         logger.info("=" * 60)
         logger.info("Total trials completed: %s", total_trials)
 

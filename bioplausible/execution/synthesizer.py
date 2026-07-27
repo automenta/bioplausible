@@ -84,7 +84,7 @@ class ResearchSynthesizer:
 
             return df
         except Exception as e:
-            logger.warning("⚠️ Error loading convergence data: %s", e)
+            logger.warning("[WARN]  Error loading convergence data: %s", e)
             return pd.DataFrame()
 
     def synthesize_full_report(self) -> dict[str, Any]:
@@ -562,7 +562,7 @@ class ResearchSynthesizer:
                 ]
                 if len(nan_fails) > 5:
                     suggestions.append(
-                        f"🔥 {len(nan_fails)} NaN failures detected."
+                        f"[CRITICAL]  {len(nan_fails)} NaN failures detected."
                         f" Recommendation: Lower learning rates"
                         f" globally or add gradient clipping."
                     )
@@ -581,7 +581,7 @@ class ResearchSynthesizer:
                         rate = f_count / total
                         if rate > 0.5:
                             suggestions.append(
-                                f"⚠️ Model '{model}' has a {rate:.0%}"
+                                f"[WARN]  Model '{model}' has a {rate:.0%}"
                                 f" failure rate ({f_count}/{total})."
                                 f" Consider debugging initialization"
                                 f" or disabling."
@@ -591,7 +591,7 @@ class ResearchSynthesizer:
             tier_counts = trials["tier"].value_counts()
             if tier_counts.get("smoke", 0) > tier_counts.get("shallow", 0) * 2:
                 suggestions.append(
-                    "💡 Heavy smoke testing detected."
+                    "[TIP]  Heavy smoke testing detected."
                     " Consider promoting successful configs"
                     " to shallow/standard tiers."
                 )
@@ -601,7 +601,7 @@ class ResearchSynthesizer:
             underexplored = [m for m, c in model_counts.items() if c < 5]
             if underexplored:
                 suggestions.append(
-                    f"📊 Underexplored models:"
+                    f"[DATA]  Underexplored models:"
                     f" {', '.join(underexplored[:3])}."
                     f" Allocate more trials for statistical"
                     f" significance."

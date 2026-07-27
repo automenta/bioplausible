@@ -164,12 +164,12 @@ class P2PEvolution:
         tolerance = 0.05
         if abs(real_score - claimed_score) > tolerance and real_score < claimed_score:
             self._log(
-                f"❌ Verification FAILED! (Real: {real_score:.4f}"
+                f"[FAIL]  Verification FAILED! (Real: {real_score:.4f}"
                 f" vs Claimed: {claimed_score:.4f})"
             )
             return False
 
-        self._log(f"✅ Verification PASSED (Real: {real_score:.4f})")
+        self._log(f"[OK]  Verification PASSED (Real: {real_score:.4f})")
         return True
 
     def _evolution_loop(self):
@@ -388,7 +388,7 @@ class P2PEvolution:
                         self.dht.publish_best_model(self.task, target_config, acc)
                         self.points += 50
                         save_state(self.points, self.jobs_done)
-                        self._log(f"🎉 New Global Best Discovered! ({acc:.4f})")
+                        self._log(f"[SUCCESS]  New Global Best Discovered! ({acc:.4f})")
 
                 else:
                     self._log("Evaluation failed.")

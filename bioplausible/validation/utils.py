@@ -134,7 +134,7 @@ def format_value(v: Any) -> str:
             return f"{v:.2e}"
         return f"{v:.3f}"
     elif isinstance(v, bool):
-        return "✅ Yes" if v else "❌ No"
+        return "[OK]  Yes" if v else "[FAIL]  No"
     return str(v)
 
 
@@ -330,7 +330,7 @@ def format_claim_with_evidence(
 
     This creates undeniable, honest reporting that acknowledges constraints.
     """
-    level_icons = {"smoke": "🧪", "directional": "📊", "conclusive": "✅"}
+    level_icons = {"smoke": "[TEST] ", "directional": "[DATA] ", "conclusive": "[OK] "}
     level_labels = {
         "smoke": "Smoke Test (mechanics verified)",
         "directional": "Directional (trend observed)",

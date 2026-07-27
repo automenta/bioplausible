@@ -86,10 +86,10 @@ class VerificationNotebook:
         """Add a track result to the notebook."""
         self.track_results.append(result)
 
-        status_icon = {"pass": "✅", "fail": "❌", "partial": "⚠️", "stub": "🔧"}.get(
+        status_icon = {"pass": "[OK] ", "fail": "[FAIL] ", "partial": "[WARN] ", "stub": "[TODO] "}.get(
             result.status, "❓"
         )
-        evidence_icon = {"smoke": "🧪", "directional": "📊", "conclusive": "✅"}.get(
+        evidence_icon = {"smoke": "[TEST] ", "directional": "[DATA] ", "conclusive": "[OK] "}.get(
             result.evidence_level, "❓"
         )
         evidence_label = {
@@ -146,10 +146,10 @@ class VerificationNotebook:
 | Metric | Value |
 |--------|-------|
 | Tracks Verified | {total} |
-| Passed | {passed} ✅ |
-| Partial | {partial} ⚠️ |
-| Failed | {failed} ❌ |
-| Stubs (TODO) | {stubs} 🔧 |
+| Passed | {passed} [OK]  |
+| Partial | {partial} [WARN]  |
+| Failed | {failed} [FAIL]  |
+| Stubs (TODO) | {stubs} [TODO]  |
 | Average Score | {avg_score:.1f}/100 |
 
 ### Track Summary
@@ -158,7 +158,7 @@ class VerificationNotebook:
 |---|-------|--------|-------|------|
 """
         for r in self.track_results:
-            icon = {"pass": "✅", "fail": "❌", "partial": "⚠️", "stub": "🔧"}.get(
+            icon = {"pass": "[OK] ", "fail": "[FAIL] ", "partial": "[WARN] ", "stub": "[TODO] "}.get(
                 r.status, "❓"
             )
             summary += (
@@ -176,7 +176,7 @@ class VerificationNotebook:
         self.add_executive_summary()
         with Path(path).open("w") as f:
             f.write("\n".join(self.sections))
-        logger.info("📓 Notebook saved to: %s", path)
+        logger.info("[LOG]  Notebook saved to: %s", path)
 
 
 class ValidationTrack:

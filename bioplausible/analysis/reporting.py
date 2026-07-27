@@ -137,9 +137,9 @@ def generate_experiment_report(
                 # Highlight if beats baseline
                 base = baselines.get(task, 0) * 100
                 if base > 0 and val > base:
-                    cell = f"**{val:.2f}%** 🟢"
+                    cell = f"**{val:.2f}%** [GREEN]"
                 elif base > 0 and val > base - 1.0:  # within 1%
-                    cell = f"{val:.2f}% 🟡"
+                    cell = f"{val:.2f}% [YELLOW]"
                 else:
                     cell = f"{val:.2f}%"
             else:
@@ -151,7 +151,7 @@ def generate_experiment_report(
         lines.append("| " + " | ".join(row) + " |")
 
     lines.append(
-        "\n> **Legend**: 🟢 Beats Backprop Baseline | 🟡 Matches Baseline (within 1%)"
+        "\n> **Legend**: [GREEN] Beats Backprop Baseline | [YELLOW] Matches Baseline (within 1%)"
     )
 
     lines.append("\n## 3. Algorithm Insights")

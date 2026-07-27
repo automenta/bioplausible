@@ -11,7 +11,7 @@ from bioplausible.analysis.results import get_rankings, load_trials
 
 def view_rankings(args):
     db_path = args.db
-    print(f"📊 Loading rankings from {db_path}...")
+    print(f"[DATA]  Loading rankings from {db_path}...")
 
     trials = load_trials(db_path)
     if not trials:

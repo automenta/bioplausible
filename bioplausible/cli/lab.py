@@ -14,7 +14,7 @@ from bioplausible.hyperopt.tasks import create_task
 
 
 def inspect_model(args):
-    logger.info("🔬 Inspecting Model: %s", args.model)
+    logger.info("[LAB]  Inspecting Model: %s", args.model)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -49,7 +49,7 @@ def inspect_model(args):
         except Exception:
             logger.exception("Forward pass failed for model %s", args.model)
             return
-        logger.info("✓ Forward pass successful. Output shape: %s", out.shape)
+        logger.info("[OK]  Forward pass successful. Output shape: %s", out.shape)
 
 
 def main():

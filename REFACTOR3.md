@@ -2,18 +2,16 @@
 
 **Generated**: 2026-07-26
 **Source**: Full codebase exploration via `codebase-memory` MCP + `explore` agent
-**Status**: IN PROGRESS — Phase 0 + Phase 1.6/1.7/1.8 + Phase 2.14 complete;
-Phase 1.9/1.10 and remaining Phase 2/3 deferred. See "Phase 0.5
-Opportunistic Cleanup" log at the end of this document for per-session
-detail and next-session hints.
+**Status**: IN PROGRESS — Phase 0, Phase 1.6/1.7/1.8/1.9, Phase 2.12/2.13/2.14/2.15
+complete; Phase 1.10 (P2P) deferred; Phase 3 partially complete (10 of ~20
+items done). See "Phase 0.5 Opportunistic Cleanup" log at the end of this
+document for per-session detail and next-session hints.
 
-**Last session**: 2026-07-26 — Phase 1.6 (eqprop.py split into 20-file
-subpackage), Phase 1.7 (EquiTile config dedup), Phase 1.8 (registry
-unification — `ModelRegistry`/`ModelZoo`/`OptimizerZoo` removed),
-Phase 1.9 (deferred — comment fixed only), Phase 1.10 (deferred —
-needs product call), Phase 2.14 (`deployment.py` import-time FastAPI
-side effects fixed). Full log: "Phase 0.5 Opportunistic Cleanup"
-section at the end of this document.
+**Last session**: 2026-07-26 (e) — Phase 3 polish: §43 (equitile/core.py split
+into 3 files), §19 (results.py CLI extraction), §31 (emoji removal from 17
+files), §35 (tier parsing cleanup), §39 (activation sparsity tracking),
+§36 (KB schema validation), §49 (generation.py merge into language.py),
+§47 (statistics.py dead code removal), §48 (tracking.py ownership eval).
 
 ---
 
@@ -947,5 +945,93 @@ COMPLETED.
 
 3. **Phase 2.15** (migrate inner tests from legacy API) — already verified
    in session (c) that no inner tests use the legacy API. Confirmed.
+
+### Session 2026-07-26 (e) — Phase 3 polish (high-impact items)
+
+**§43 — Split ``equitile/core.py`` (1,367 LOC → 3 files)** COMPLETED.
+Extracted ``EquiTileTrainingState``/``EquiTileStateDict`` (TypedDicts) into
+``bioplausible/equitile/state_types.py`` (25 LOC) and
+``EquiTileOptimizerMixin`` into
+``bioplausible/equitile/optimizer_mixin.py`` (114 LOC). ``core.py`` now
+imports from these new modules instead of defining them inline (was 1,367
+→ 1,239 LOC). All 670 tests pass.
+
+**§19 — Extract ``analysis/results.py`` CLI to separate script** COMPLETED.
+Created ``bioplausible/analysis/results_cli.py`` with the ``main()`` entry
+point, ``_filter_trials()`` helper, and ``argparse`` setup. Removed the
+``if __name__ == "__main__":`` block from ``results.py``.
+
+**§31 — Remove emoji from log strings** COMPLETED. Replaced emoji in 17
+user-visible files (cli/ run.py, lab.py, rank.py; execution/ engine.py,
+synthesizer.py, dashboard.py, training_dynamics.py; validation/ core.py,
+notebook.py, utils.py, tracks/*.py; analysis/reporting.py,
+legacy_report/orchestrator.py; p2p/evolution.py; hyperopt/comparison.py).
+Used textual substitutes like ``[OK]``, ``[FAIL]``, ``[START]``, etc.
+
+**§35 — Hardcoded tier parsing in ``results.py``** COMPLETED. Tier fallback
+logic (study name suffix parsing) extracted into ``results_cli.py``,
+reducing the core analysis module's responsibility to pure data analysis.
+
+**§39 — Implement activation sparsity tracking in ``core/energy.py``**
+COMPLETED. Added ``_estimate_activation_sparsity()`` function using forward
+hooks on linear/conv/activation layers. Both ``profile_run()`` and
+``EnergyTracker.__exit__()`` now compute real activation sparsity instead
+of hardcoded ``0.0``. The ``energy_proxy`` formula now incorporates
+activation sparsity: ``(fwd_flops + bwd_flops) * (1 - sparsity) / params``.
+
+**§36 — Schema validation for ``autoscientist/campaign.py`` knowledge base**
+COMPLETED. ``_update_knowledge_base()`` now constructs a typed
+``KnowledgeEntry`` dataclass instance with proper field mapping instead of
+passing a raw dict. Validation of the entry structure is now implicit via
+the dataclass constructor.
+
+**§49 — ``generation.py`` → ``equitile/language.py``** COMPLETED. Appended
+``generate_text()`` and ``generate_from_dataset()`` from the standalone
+``bioplausible/generation.py`` to ``equitile/language.py``. Deleted the
+standalone file. Updated the importability test in
+``tests/test_refactor2_bugfixes.py`` to reference
+``bioplausible.equitile.language`` instead.
+
+**§47 — ``statistics.py`` dead code removal** COMPLETED.
+``bioplausible/statistics.py`` (``StatisticalAnalyzer`` class) had zero
+callers and duplicated functionality already present in
+``validation/utils.py``. Deleted. Per-project policy: no backwards
+compatibility, no dead code.
+
+**§48 — ``tracking.py`` ownership evaluation** COMPLETED. ``ExperimentTracker``
+(wandb wrapper with dummy fallback) is imported by ``hyperopt/experiment.py``
+and ``training/rl.py``. Integrating into ``ExecutionEngine`` would require
+API changes across both classes — disproportionate to benefit. Decision:
+keep as standalone, add integration note for future consideration.
+
+### Items deferred / not yet actionable this session
+
+| § | Item | Reason |
+|---|------|--------|
+| 44 | Archive ``experiments/deep_signal_probe.py`` | Imported by ``validation/tracks/signal_tracks.py`` — moving to ``examples/`` would break the import |
+| 46 | Consolidate ``visualization.py`` & ``visualization_tools.py`` | ``ResultVisualizer`` imported by ``legacy_report/composer.py`` — requires deeper analysis |
+| 20 | Clean ``examples/`` and ``scripts/`` at project root | Exploratory audit needed — unfamiliar files |
+| 38 | Make ``config/defaults.py`` configs extensible | Would require plugin system design |
+| 45 | Complete validation stub tracks | ``validation/notebook.py`` stub tracking — cosmetic |
+
+### Test status at end of session 2026-07-26 (e)
+
+- ``ruff format --check .`` — 38 files would be reformatted (pre-existing).
+- ``ruff check .`` — 5K+ pre-existing errors; none introduced.
+- ``pytest tests/`` + ``pytest bioplausible/tests/`` — **670 passed, 13 skipped, 0 failed**.
+
+### Hints for the next session
+
+Outstanding work, in priority order:
+
+1. **Phase 1.10 (P2P unification)** — still requires product judgment
+   (Kademlia vs HTTP Coordinator/Worker). Last remaining Phase 1 item.
+
+2. **Phase 3 items deferred from this session** (see table above) — all
+   cosmetic or low-impact. None block structural refactors.
+
+3. **Pre-existing ruff issues** — 38 files would be reformatted, 5K+ ruff
+   check errors. At the user's request, run a dedicated lint pass:
+   ``ruff format . && ruff check --fix .``
 
 **End of session log**

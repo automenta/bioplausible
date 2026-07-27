@@ -21,7 +21,7 @@ def run_training(args):
         run_from_yaml(args)
         return
 
-    logger.info("🚀 Starting Headless Training: %s on %s", args.model, args.task)
+    logger.info("[START]  Starting Headless Training: %s on %s", args.model, args.task)
 
     config = TrainerConfig(
         model=args.model,
@@ -48,7 +48,7 @@ def run_training(args):
             pbar.set_postfix({"loss": epoch_metric.loss, "acc": epoch_metric.accuracy})
 
         pbar.close()
-        logger.info("✅ Training Complete")
+        logger.info("[OK]  Training Complete")
 
     except KeyboardInterrupt:
         logger.warning("Training Interrupted")
@@ -61,14 +61,14 @@ def run_search(args):
         tier = PatientLevel(tier_name)
     except ValueError:
         logger.error(
-            "❌ Invalid tier: %s. Available: %s",
+            "[FAIL]  Invalid tier: %s. Available: %s",
             tier_name,
             [t.value for t in PatientLevel],
         )
         return
 
     config = get_evaluation_config(tier)
-    logger.info("🧪 Starting %s Discovery Run", tier.name)
+    logger.info("[TEST]  Starting %s Discovery Run", tier.name)
     logger.info("   Models: %s", args.models)
     logger.info("   Config: %d epochs, %d trials", config.epochs, config.n_trials)
 
@@ -94,7 +94,7 @@ def run_search(args):
             )
             if not compatible:
                 logger.warning(
-                    "⚠️  Skipping %s: Incompatible with task '%s' (Needs %s)",
+                    "[WARN]   Skipping %s: Incompatible with task '%s' (Needs %s)",
                     model,
                     args.task,
                     domain_names,
@@ -103,7 +103,7 @@ def run_search(args):
         except Exception:
             logger.warning("Unknown model '%s', letting it try naturally", model)
 
-        logger.info("🔍 Exploring %s...", model)
+        logger.info("[SEARCH]  Exploring %s...", model)
 
         study_name = f"{model}_{args.task}_{tier.value}"
         study = create_study(
@@ -156,7 +156,7 @@ def run_search(args):
             logger.warning("Search Interrupted")
             break
         except Exception as e:
-            logger.error("❌ Error optimizing %s: %s", model, e)
+            logger.error("[FAIL]  Error optimizing %s: %s", model, e)
 
 
 def run_core_train(args):
@@ -220,7 +220,7 @@ def run_benchmark(args):
     """Run cross-domain benchmark suite."""
     from bioplausible.evaluation.cross_domain import CrossDomainBenchmarkSuite
 
-    logger.info("🔬 Cross-Domain Benchmark Suite")
+    logger.info("[LAB]  Cross-Domain Benchmark Suite")
 
     models = None
     if args.models:
@@ -251,7 +251,7 @@ def run_benchmark(args):
 
     suite.save_results(result)
     suite.generate_leaderboard()
-    logger.info("📁 Results saved to %s", args.output_dir)
+    logger.info("[FILE]  Results saved to %s", args.output_dir)
 
 
 def main():

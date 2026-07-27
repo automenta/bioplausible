@@ -66,9 +66,9 @@ def track_1_spectral_norm(verifier) -> TrackResult:
 
 | Configuration | L (before) | L (after) | Δ | Constrained? |
 |---------------|------------|-----------|---|--------------|
-| Without SN | {L_before_no:.3f} | {L_after_no:.3f} | {l_diff_no:+.2f} | ❌ No |
+| Without SN | {L_before_no:.3f} | {L_after_no:.3f} | {l_diff_no:+.2f} | [FAIL]  No |
 | With SN | {L_before_sn:.3f} | {L_after_sn:.3f} | {l_diff_sn:+.2f} |
-| | | | | {"✅ Yes" if sn_constrained else "❌ No"} |
+| | | | | {"[OK]  Yes" if sn_constrained else "[FAIL]  No"} |
 
 **Key Difference**: L(no_sn) - L(sn) = {l_difference:.3f}
 
@@ -164,7 +164,7 @@ on synthetic classification.
 | Backprop MLP | {bp_acc * 100:.1f}% | — |
 | EqProp (LoopedMLP) | {eq_acc * 100:.1f}% | {gap:+.1f}% |
 
-**Verdict**: {"✅ PARITY" if abs(gap) < 5 else "⚠️ Gap"} (gap = {abs(gap):.1f}%)
+**Verdict**: {"[OK]  PARITY" if abs(gap) < 5 else "[WARN]  Gap"} (gap = {abs(gap):.1f}%)
 
 **Note**: Small datasets may show variance; run with --full for 5-seed validation.
 """

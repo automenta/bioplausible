@@ -87,9 +87,9 @@ class Verifier:
 
     def print_header(self):
         evidence_labels = {
-            "smoke": "🧪 Smoke Test (mechanics only)",
-            "intermediate": "📊 Intermediate (directional)",
-            "full": "✅ Full Validation (statistically significant)",
+            "smoke": "[TEST]  Smoke Test (mechanics only)",
+            "intermediate": "[DATA]  Intermediate (directional)",
+            "full": "[OK]  Full Validation (statistically significant)",
         }
         mode_name = (
             "Quick"
@@ -97,14 +97,14 @@ class Verifier:
             else ("Intermediate" if self.intermediate_mode else "Full")
         )
         mode_icon = (
-            "⚡" if self.quick_mode else ("📊" if self.intermediate_mode else "🔬")
+            "[FAST] " if self.quick_mode else ("[DATA] " if self.intermediate_mode else "[LAB] ")
         )
 
         logger.info("=" * 70)
         logger.info("       TOREQPROP COMPREHENSIVE VERIFICATION SUITE")
         logger.info("       Undeniable Evidence for All Research Claims")
         logger.info("=" * 70)
-        logger.info("\n📋 Configuration:")
+        logger.info("\n[CONFIG]  Configuration:")
         logger.info("   Seed: %s", self.seed)
         logger.info("   Mode: %s %s", mode_icon, mode_name)
         logger.info("   Evidence: %s", evidence_labels[self.evidence_level])
@@ -271,10 +271,10 @@ class Verifier:
                         self.notebook.add_track_result(result)
 
                         icon = {
-                            "pass": "✅",
-                            "fail": "❌",
-                            "partial": "⚠️",
-                            "stub": "🔧",
+                            "pass": "[OK] ",
+                            "fail": "[FAIL] ",
+                            "partial": "[WARN] ",
+                            "stub": "[TODO] ",
                         }.get(result.status, "?")
                         name, _ = self.tracks[tid]
                         logger.info(
@@ -306,10 +306,10 @@ class Verifier:
                     results[track_id] = result
                     self.notebook.add_track_result(result)
                     icon = {
-                        "pass": "✅",
-                        "fail": "❌",
-                        "partial": "⚠️",
-                        "stub": "🔧",
+                        "pass": "[OK] ",
+                        "fail": "[FAIL] ",
+                        "partial": "[WARN] ",
+                        "stub": "[TODO] ",
                     }.get(result.status, "?")
                     name, _ = self.tracks[track_id]
                     logger.info(
@@ -343,14 +343,14 @@ class Verifier:
 
         # Summary
         logger.info("\n" + "=" * 70)
-        logger.info("🎉 VERIFICATION COMPLETE")
+        logger.info("[SUCCESS]  VERIFICATION COMPLETE")
         logger.info("=" * 70)
         logger.info("⏱️  Total time: %.1fs", total_time)
-        logger.info("📓 Output: %s", output_path)
+        logger.info("[LOG]  Output: %s", output_path)
 
         passed = sum(1 for r in results.values() if r.status == "pass")
         total = len(results)
-        logger.info("📊 Results: %s/%s tracks passed", passed, total)
+        logger.info("[DATA]  Results: %s/%s tracks passed", passed, total)
 
         if self.export_data and self.data_records:
             import csv
@@ -361,7 +361,7 @@ class Verifier:
                 dict_writer = csv.DictWriter(f, keys)
                 dict_writer.writeheader()
                 dict_writer.writerows(self.data_records)
-            logger.info("💾 Data exported to: %s", csv_path)
+            logger.info("[SAVE]  Data exported to: %s", csv_path)
 
         return results
 

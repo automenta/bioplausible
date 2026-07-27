@@ -92,8 +92,8 @@ def track_42_holomorphic_ep(verifier) -> TrackResult:
 **Results**:
 - Initial Loss: {initial_loss:.4f}
 - Final Loss: {final_loss:.4f}
-- Complex Weights: {"✅ Yes" if is_complex else "❌ No"}
-- Learning: {"✅ Yes" if learned else "❌ No"}
+- Complex Weights: {"[OK]  Yes" if is_complex else "[FAIL]  No"}
+- Learning: {"[OK]  Yes" if learned else "[FAIL]  No"}
 """
 
     return TrackResult(
@@ -175,7 +175,7 @@ def track_43_directed_ep(verifier) -> TrackResult:
 **Claim**: Directed EP learns with asymmetric forward/feedback weights.
 
 **Results**:
-- Asymmetric: {"✅ Yes" if not is_tied else "❌ No"}
+- Asymmetric: {"[OK]  Yes" if not is_tied else "[FAIL]  No"}
 - Initial Loss: {initial_loss:.4f}
 - Final Loss: {final_loss:.4f}
 """
@@ -250,7 +250,7 @@ def track_44_finite_nudge_ep(verifier) -> TrackResult:
 **Results**:
 - Initial Loss: {initial_loss:.4f}
 - Final Loss: {final_loss:.4f}
-- Stability: {"✅ Stable" if final_loss < 100 else "❌ Unstable"}
+- Stability: {"[OK]  Stable" if final_loss < 100 else "[FAIL]  Unstable"}
 """
 
     return TrackResult(

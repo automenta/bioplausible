@@ -89,7 +89,7 @@ class ReportOrchestrator:
                 synthesis_path / "SYNTHESIS.md", synthesis_result, timestamp
             )
 
-            logger.info("✓ Research synthesis generated (synthesis/)")
+            logger.info("[OK]  Research synthesis generated (synthesis/)")
         except Exception as e:
             logger.error(f"Failed to generate synthesis: {e}", exc_info=True)
 
@@ -109,7 +109,7 @@ class ReportOrchestrator:
             f.write(f"Generated: {timestamp}\n\n")
 
             # Cross-Algorithm Rankings
-            f.write("## 🏆 Cross-Algorithm Performance Rankings\n\n")
+            f.write("## [BEST]  Cross-Algorithm Performance Rankings\n\n")
             insights = synthesis_result.get("cross_algorithm_insights", {})
             if isinstance(insights, dict) and "rankings" in insights:
                 f.write("| Rank | Model | Best Acc | Mean Acc | Std Dev | Trials |\n")
@@ -133,7 +133,7 @@ class ReportOrchestrator:
                 and isinstance(sig[0], dict)
                 and "winner" in sig[0]
             ):
-                f.write("## 📏 Statistical Significance\n\n")
+                f.write("## [STATS]  Statistical Significance\n\n")
                 f.write("| Winner | Loser | Mean Diff | P-Value | Confidence |\n")
                 f.write("|--------|-------|-----------|---------|------------|\n")
                 for s in sig[:10]:
@@ -148,7 +148,7 @@ class ReportOrchestrator:
             # Ablation Analysis
             ablations = synthesis_result.get("ablation_analysis", [])
             if ablations and isinstance(ablations, list):
-                f.write("## 🔧 Ablation Studies (Mechanistic Insights)\n\n")
+                f.write("## [TODO]  Ablation Studies (Mechanistic Insights)\n\n")
                 f.write("| Model | Ablation | Value | Delta | Result |\n")
                 f.write("|-------|----------|-------|-------|--------|\n")
                 for a in ablations:
@@ -161,7 +161,7 @@ class ReportOrchestrator:
                 f.write("\n")
 
             # Task-Specific Winners
-            f.write("## 📊 Task-Specific Winners\n\n")
+            f.write("## [DATA]  Task-Specific Winners\n\n")
             task_winners = synthesis_result.get("task_specific_winners", {})
             if isinstance(task_winners, dict):
                 for task, winners in task_winners.items():
@@ -174,7 +174,7 @@ class ReportOrchestrator:
                     f.write("\n")
 
             # Efficiency Analysis
-            f.write("## ⚡ Efficiency Analysis\n\n")
+            f.write("## [FAST]  Efficiency Analysis\n\n")
             efficiency = synthesis_result.get("efficiency_analysis", {})
 
             if efficiency.get("top_epoch_efficient"):
@@ -220,7 +220,7 @@ class ReportOrchestrator:
                     )
                 f.write("\n")
 
-            f.write("## ⚠️ Failure Analysis\n")
+            f.write("## [WARN]  Failure Analysis\n")
             fails = synthesis_result.get("failure_analysis", {})
             if isinstance(fails, dict):
                 if fails.get("patterns"):
@@ -235,7 +235,7 @@ class ReportOrchestrator:
             else:
                 f.write(f"{fails}\n\n")
 
-            f.write("\n## 💡 Quick Wins & Suggestions\n\n")
+            f.write("\n## [TIP]  Quick Wins & Suggestions\n\n")
             wins = synthesis_result.get("quick_wins", [])
             if isinstance(wins, list) and wins:
                 for win in wins:
@@ -243,7 +243,7 @@ class ReportOrchestrator:
             else:
                 f.write("All systems running smoothly. Continue exploration.\n")
 
-            f.write("\n## 🔬 Research Gaps\n\n")
+            f.write("\n## [LAB]  Research Gaps\n\n")
             gaps = synthesis_result.get("research_gaps", [])
             if isinstance(gaps, list) and gaps:
                 for gap in gaps:
@@ -253,7 +253,7 @@ class ReportOrchestrator:
 
             backprop_gap = synthesis_result.get("backprop_gap_analysis", {})
             if backprop_gap and backprop_gap.get("summary"):
-                f.write("\n## 🎯 Backprop Baseline Comparison\n\n")
+                f.write("\n## [TARGET]  Backprop Baseline Comparison\n\n")
 
                 summary = backprop_gap.get("summary", {})
                 bio_wins = summary.get("bio_wins_on_tasks", 0)
@@ -309,7 +309,7 @@ class ReportOrchestrator:
                 composer.generate_report()
 
             logger.info(
-                "✓ Modular report generated"
+                "[OK]  Modular report generated"
                 " (01_summary.md, 03_leaderboards.md, FULL_REPORT.md)"
             )
         except Exception as e:

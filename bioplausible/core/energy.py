@@ -18,6 +18,42 @@ class EnergyProfile:
     requires_backward: bool  # from ModelSpec
 
 
+def _estimate_activation_sparsity(
+    model: nn.Module,
+    sample_input: torch.Tensor,
+    threshold: float = 1e-5,
+) -> float:
+    """Run a forward pass with hooks to estimate activation sparsity."""
+    activations: list[torch.Tensor] = []
+
+    def _hook(_module, _input, output):
+        if isinstance(output, torch.Tensor):
+            activations.append(output.detach().flatten())
+        elif isinstance(output, (tuple, list)):
+            for t in output:
+                if isinstance(t, torch.Tensor):
+                    activations.append(t.detach().flatten())
+
+    hooks = []
+    for module in model.modules():
+        if isinstance(module, (nn.Linear, nn.Conv2d, nn.ReLU, nn.GELU)):
+            hooks.append(module.register_forward_hook(_hook))
+
+    try:
+        with torch.no_grad():
+            model(sample_input)
+    finally:
+        for h in hooks:
+            h.remove()
+
+    if not activations:
+        return 0.0
+
+    all_acts = torch.cat(activations)
+    zero_frac = (all_acts.abs() < threshold).float().mean().item()
+    return zero_frac
+
+
 def count_flops(model, input_shape):
     batch_size = input_shape[0] if input_shape else 1
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -32,13 +68,17 @@ def profile_run(model, input_shape, requires_backward=True) -> EnergyProfile:
     zero_weights = sum((p.abs() < 1e-5).sum().item() for p in model.parameters())
     weight_sparsity = zero_weights / max(params, 1)
 
-    energy_proxy = (fwd_flops + bwd_flops) / max(params, 1)
+    device = next(model.parameters()).device
+    sample_input = torch.zeros(*input_shape, device=device)
+    activation_sparsity = _estimate_activation_sparsity(model, sample_input)
+
+    energy_proxy = (fwd_flops + bwd_flops) * (1 - activation_sparsity) / max(params, 1)
 
     return EnergyProfile(
         forward_flops=fwd_flops,
         backward_flops=bwd_flops,
         param_count=params,
-        activation_sparsity=0.0,
+        activation_sparsity=activation_sparsity,
         weight_sparsity=weight_sparsity,
         wall_time_ms=0.0,
         peak_memory_mb=0.0,
@@ -74,17 +114,27 @@ class EnergyTracker:
         )
         weight_sparsity = zero_weights / max(params, 1)
 
+        device = next(self.model.parameters()).device
+        # Estimate activation sparsity — try to infer input dim from first Linear layer
+        inp_dim = 64
+        for m in self.model.modules():
+            if isinstance(m, nn.Linear):
+                inp_dim = m.in_features
+                break
+        dummy_input = torch.zeros(1, inp_dim, device=device)
+        activation_sparsity = _estimate_activation_sparsity(self.model, dummy_input)
+
         batch_size = 64
         fwd_flops = 2 * params * batch_size
         bwd_flops = 2 * fwd_flops if self.requires_backward else 0
 
-        energy_proxy = (fwd_flops + bwd_flops) / max(params, 1)
+        energy_proxy = (fwd_flops + bwd_flops) * (1 - activation_sparsity) / max(params, 1)
 
         self.profile = EnergyProfile(
             forward_flops=fwd_flops,
             backward_flops=bwd_flops,
             param_count=params,
-            activation_sparsity=0.0,
+            activation_sparsity=activation_sparsity,
             weight_sparsity=weight_sparsity,
             wall_time_ms=self.wall_time_ms,
             peak_memory_mb=peak_mem,

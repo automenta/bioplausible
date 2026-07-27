@@ -230,8 +230,8 @@ def track_56_depth_architecture_comparison(verifier) -> TrackResult:
         table_rows.append(
             f"| {name} | {with_sn.get('ratio', 0):.4f} | "
             f"{without_sn.get('ratio', 0):.4f} | "
-            f"{'✅' if r.get('viable', False) else '❌'} | "
-            f"{'✅' if r.get('sn_beneficial', False) else '—'} |"
+            f"{'[OK] ' if r.get('viable', False) else '[FAIL] '} | "
+            f"{'[OK] ' if r.get('sn_beneficial', False) else '—'} |"
         )
 
     evidence = f"""

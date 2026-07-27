@@ -145,7 +145,7 @@ class Dashboard:
             )
 
         self.layout["current_trial"].update(
-            Panel(self.progress, title="🔬 Current Experiment", subtitle=trial_text)
+            Panel(self.progress, title="[LAB]  Current Experiment", subtitle=trial_text)
         )
 
         # Update History Table
@@ -175,7 +175,7 @@ class Dashboard:
                 f"[{status_style}]{t['status']}[/]",
             )
 
-        self.layout["history"].update(Panel(table, title="🧪 Experiment History"))
+        self.layout["history"].update(Panel(table, title="[TEST]  Experiment History"))
 
         # Best Model
         best_text = Text()
@@ -185,7 +185,7 @@ class Dashboard:
             best_text.append(f"on {self.best_model['task']}", style="magenta")
         else:
             best_text.append("No data yet...", style="dim")
-        self.layout["best_model"].update(Panel(best_text, title="🏆 SOTA Model"))
+        self.layout["best_model"].update(Panel(best_text, title="[BEST]  SOTA Model"))
 
         # Update System
         cpu = psutil.cpu_percent()
@@ -210,7 +210,7 @@ class Dashboard:
         disk_percent = (used_disk / total_disk) * 100.0
         sys_text.append(f"DSK: {disk_percent:.1f}%\n")
 
-        self.layout["system"].update(Panel(sys_text, title="💻 System"))
+        self.layout["system"].update(Panel(sys_text, title="[SYS]  System"))
 
         # Update Log & Insight
         log_text = Text()
@@ -220,12 +220,12 @@ class Dashboard:
         # Footer with insight
         self.layout["footer"].update(
             Panel(
-                Text(f"🧠 Insight: {self.insight_text}", style="italic cyan"),
+                Text(f"[AI]  Insight: {self.insight_text}", style="italic cyan"),
                 style="blue",
             )
         )
 
-        self.layout["log"].update(Panel(log_text, title="📜 Event Log"))
+        self.layout["log"].update(Panel(log_text, title="[LOG]  Event Log"))
 
     def log(self, message: str, style: str = "") -> None:
         """

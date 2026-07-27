@@ -293,14 +293,14 @@ class ContinuousTrainingSchedule:
                 optuna_trial.report(v_acc, target_epoch)
                 if optuna_trial.should_prune():
                     trajectory.converged = False
-                    logger.info("✂️ Trial %s PRUNED at epoch %s", trial_id, target_epoch)
+                    logger.info("[PRUNE]  Trial %s PRUNED at epoch %s", trial_id, target_epoch)
                     break
 
             elif pruning_callback and self.enable_pruning:
                 # Use generic callback if provided
                 if pruning_callback(trial_id, target_epoch, last_metrics):
                     trajectory.converged = False
-                    logger.info("✂️ Trial %s PRUNED at epoch %s", trial_id, target_epoch)
+                    logger.info("[PRUNE]  Trial %s PRUNED at epoch %s", trial_id, target_epoch)
                     break
 
         # Post-training analysis

@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,7 @@ from typing import Any
 from bioplausible.autoscientist.proposer import ExperimentProposer
 from bioplausible.autoscientist.reasoner import HypothesisReasoner
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
-from bioplausible.knowledge import KnowledgeBase
+from bioplausible.knowledge import KnowledgeBase, KnowledgeEntry
 
 logger = logging.getLogger(__name__)
 
@@ -172,30 +173,39 @@ class AutoScientistCampaign:
         }
 
     def _update_knowledge_base(self, proposal, result: dict[str, Any]) -> None:
-        """Store experiment result in KnowledgeBase."""
-        entry = {
-            "experiment": {
-                "hypothesis": proposal.hypothesis,
-                "model": proposal.model,
-                "task": proposal.task,
-                "propagator": proposal.propagator,
-                "optimizer": proposal.optimizer,
-                "config": proposal.hyperparams,
-            },
-            "results": {
-                "final_accuracy": result.get("final_accuracy"),
-                "final_loss": result.get("final_loss"),
-                "train_accuracy": result.get("train_accuracy"),
-                "epochs_completed": result.get("epochs_completed"),
-            },
-            "timestamp": datetime.now().isoformat(),
-            "campaign_iteration": self._iteration,
-        }
-
+        """Store experiment result in KnowledgeBase with schema validation."""
         try:
+            entry = KnowledgeEntry(
+                id=f"campaign_{self._iteration}_{int(time.time())}",
+                topic=f"experiment:{proposal.task}",
+                model_family=proposal.model,
+                finding=(
+                    f"Accuracy: {result.get('final_accuracy', 'N/A'):.4f}, "
+                    f"Loss: {result.get('final_loss', 'N/A'):.4f}"
+                ),
+                details=(
+                    f"Hypothesis: {proposal.hypothesis}\n"
+                    f"Propagator: {proposal.propagator}\n"
+                    f"Optimizer: {proposal.optimizer}\n"
+                    f"Config: {proposal.hyperparams}\n"
+                    f"Epochs: {result.get('epochs_completed', 'N/A')}"
+                ),
+                confidence=float(result.get("final_accuracy", 0.0) or 0.0),
+                tags=["experiment", proposal.task, proposal.model],
+                source="experiment",
+                metrics={
+                    k: v for k, v in result.items()
+                    if isinstance(v, (int, float)) and v is not None
+                },
+                hyperparameters=(
+                    proposal.hyperparams if isinstance(proposal.hyperparams, dict)
+                    else {"raw": str(proposal.hyperparams)}
+                ),
+                extra={"campaign_iteration": self._iteration},
+            )
             self.knowledge_base.add_entry(entry)
         except Exception as e:
-            logger.warning(f"Failed to update KnowledgeBase: {e}")
+            logger.warning("Failed to update KnowledgeBase: %s", e)
 
     def _log_iteration(
         self,

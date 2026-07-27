@@ -157,7 +157,7 @@ def track_55_negative_linear_chain(verifier) -> TrackResult:
             f"| {depth} | {r['with_sn']['ratio']:.6f} | "
             f"{r['without_sn']['ratio']:.6f} | "
             f"{r['with_sn']['death_layer']} | "
-            f"{'✅' if r['both_vanish'] else '❌'} |"
+            f"{'[OK] ' if r['both_vanish'] else '[FAIL] '} |"
         )
 
     evidence = f"""
