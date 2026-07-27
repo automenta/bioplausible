@@ -41,11 +41,13 @@ def _resolve_task_loss(task: BaseTask) -> nn.Module:
 class _TaskTrainer:
     """Lightweight task-protocol trainer for run_from_runconfig.
 
-    Drives training directly off the BaseTask API (get_batch /
-    compute_metrics) without going through CoreTrainer's full
-    config-driven path — useful when the caller has direct access
-    to a constructed model and task.  Used by ``BaseTask.create_trainer``
-    when called from ``CoreTrainer.run_from_runconfig``.
+    Thin wrapper around ``CoreTrainer`` that delegates training to
+    ``CoreTrainer.from_task()``.  The wrapper exists to preserve the
+    ``train_*``-prefixed metric shape and inline validation behaviour
+    expected by ``hyperopt`` callers.
+
+    Used by ``BaseTask.create_trainer`` when called from
+    ``CoreTrainer.run_from_runconfig``.
     """
 
     def __init__(
@@ -63,143 +65,69 @@ class _TaskTrainer:
         output_dir: str = "",
         **kwargs,
     ):
+        from bioplausible.core.trainer import CoreTrainer
+
+        self._trainer = CoreTrainer.from_task(
+            model=model,
+            task=task,
+            device=device,
+            optimizer=optimizer,
+            epochs=epochs,
+            batches_per_epoch=batches_per_epoch,
+            grad_clip=grad_clip,
+            use_compile=use_compile,
+            track_energy=track_energy,
+            ablation_tags=ablation_tags or {},
+            output_dir=output_dir,
+            batch_size=kwargs.pop("batch_size", 32),
+            # NOTE: unknown **kwargs intentionally NOT forwarded — they may
+            # contain non-config objects (tracker, safety_config, etc.) that
+            # Crash OmegaConf. The old _TaskTrainer silently dropped them.
+        )
+        # Keep direct references for introspection / backward compat.
         self.model = model
         self.task = task
-        self.device = device
-        self.optimizer = optimizer
         self.epochs = epochs
-        self.batches_per_epoch = batches_per_epoch
-        self.grad_clip = grad_clip
-        self.track_energy = track_energy
-        self.output_dir = output_dir
-        self.ablation_tags = ablation_tags or {}
-
-        # Choose a loss matched to the task's output geometry. Regression
-        # tasks (tabular with output_dim==1) require MSE; classification
-        # (vision/lm/tabular-binary) uses CrossEntropy; RL uses MSE over
-        # advantage/returns when the action space is continuous, and
-        # CrossEntropy over logits when discrete. ``task.task_type`` plus
-        # ``task.output_dim`` are the only uniform signals the BaseTask
-        # protocol exposes, so they drive the choice here.
-        self.loss_fn = _resolve_task_loss(task)
-
-        self.model.to(self.device)
-        self.model.train()
 
     def train_epoch(self) -> dict[str, float]:
-        """Run one epoch of training and return aggregated metrics."""
+        """Run one epoch of training and return aggregated metrics.
+
+        Delegates to ``CoreTrainer.train_epoch()`` then wraps the result
+        with ``train_*`` metric prefixes and inline validation (matching
+        the historical ``_TaskTrainer`` output shape).
+        """
         import time
-        from collections import defaultdict
 
-        import numpy as np
-
-        from bioplausible.core.energy import EnergyTracker
-
-        agg = defaultdict(list)
         epoch_t0 = time.time()
-        for _ in range(self.batches_per_epoch):
-            x, y = self.task.get_batch("train")
-            x = x.to(self.device)
-            y = y.to(self.device)
 
-            if x.dim() > 2:
-                x = x.view(x.size(0), -1)
+        raw = self._trainer.train_epoch()
 
-            if self.optimizer is not None:
-                self.optimizer.zero_grad()
-
-            def _step(x, y):
-                logits = self.model(x)
-                if logits.dim() == 3:
-                    logits = logits[:, -1, :]
-                # Match loss geometry to targets (see val block comment).
-                if isinstance(self.loss_fn, nn.CrossEntropyLoss):
-                    if y.dim() > 1 and y.size(-1) == 1:
-                        y = y.squeeze(-1).long()
-                    elif y.dtype != torch.long:
-                        y = y.long()
-                loss = self.loss_fn(logits, y)
-                if self.optimizer is not None:
-                    loss.backward()
-                    if self.grad_clip is not None:
-                        torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(), self.grad_clip
-                        )
-                    self.optimizer.step()
-                return logits, loss
-
-            if self.track_energy:
-                with EnergyTracker(self.model) as et:
-                    logits, loss = _step(x, y)
-                if et.profile:
-                    agg["energy_proxy"].append(et.profile.energy_proxy)
-                    agg["forward_flops"].append(et.profile.forward_flops)
-                    agg["backward_flops"].append(et.profile.backward_flops)
-                    agg["wall_time_ms"].append(et.profile.wall_time_ms)
-                    agg["peak_memory_mb"].append(et.profile.peak_memory_mb)
+        # Prefix train metrics to match historical _TaskTrainer shape.
+        metrics: dict[str, float] = {}
+        for k, v in raw.items():
+            if k in ("loss", "accuracy"):
+                metrics[f"train_{k}"] = v
+            elif k == "samples_seen":
+                continue
             else:
-                logits, loss = _step(x, y)
-
-            step = self.task.compute_metrics(logits.detach(), y, loss.item())
-            for k, v in step.items():
-                agg[k].append(v)
-
-        metrics = {f"train_{k}": float(np.mean(v)) for k, v in agg.items() if v}
-        # Unprefixed energy aliases (mirror CoreTrainer per-step dict shape).
-        if agg.get("energy_proxy"):
-            metrics["energy_proxy"] = float(np.mean(agg["energy_proxy"]))
-        if agg.get("forward_flops"):
-            metrics["forward_flops"] = float(np.mean(agg["forward_flops"]))
-        if agg.get("backward_flops"):
-            metrics["backward_flops"] = float(np.mean(agg["backward_flops"]))
-        if agg.get("wall_time_ms"):
-            metrics["wall_time_ms"] = float(np.mean(agg["wall_time_ms"]))
-        if agg.get("peak_memory_mb"):
-            metrics["peak_memory_mb"] = float(np.mean(agg["peak_memory_mb"]))
+                metrics[k] = v
         metrics["loss"] = metrics.get("train_loss", 0.0)
         metrics["accuracy"] = metrics.get("train_accuracy", 0.0)
-        # Initialize validation metrics to NaN so a failed validation pass is
-        # explicitly distinguishable from a 0.0 answer — auto-promotion and
-        # hyperopt comparisons read `val_loss`/`val_accuracy` and would
-        # otherwise mistake a swallowed exception for a real result.
-        metrics["val_accuracy"] = float("nan")
-        metrics["val_loss"] = float("nan")
 
+        # Inline validation — same contract as the original implementation:
+        # NaN on failure, real values on success.
+        metrics["val_loss"] = float("nan")
+        metrics["val_accuracy"] = float("nan")
         try:
-            val_x, val_y = self.task.get_batch("val")
-            val_x = val_x.to(self.device)
-            val_y = val_y.to(self.device)
-            if val_x.dim() > 2:
-                val_x = val_x.view(val_x.size(0), -1)
-            self.model.eval()
-            with torch.no_grad():
-                val_logits = self.model(val_x)
-                if val_logits.dim() == 3:
-                    val_logits = val_logits[:, -1, :]
-                # Match loss geometry to targets: CrossEntropy takes long
-                # class indices (squeeze singleton channel dim if needed);
-                # MSE takes float targets as-is.
-                if isinstance(self.loss_fn, nn.CrossEntropyLoss):
-                    if val_y.dim() > 1 and val_y.size(-1) == 1:
-                        val_y = val_y.squeeze(-1).long()
-                    elif val_y.dtype != torch.long:
-                        val_y = val_y.long()
-                val_metrics = self.task.compute_metrics(
-                    val_logits, val_y, self.loss_fn(val_logits, val_y).item()
-                )
-            metrics["val_accuracy"] = float(val_metrics.get("accuracy", 0.0))
-            metrics["val_loss"] = float(val_metrics.get("loss", 0.0))
+            val_raw = self._trainer._validate(1)
+            metrics["val_loss"] = val_raw.get("val_loss", float("nan"))
+            metrics["val_accuracy"] = val_raw.get("val_accuracy", float("nan"))
+            if "val_perplexity" in val_raw:
+                metrics["val_perplexity"] = val_raw["val_perplexity"]
         except (NotImplementedError, RuntimeError) as e:
-            # Validation is optional but a silent ``except Exception: pass``
-            # here previously hid shape/loss/OOM bugs. Only swallow the
-            # expected "task has no val split" cases; everything else
-            # propagates so callers see real failures.
             logger.warning("Validation skipped for %s: %s", self.task.name, e)
-        finally:
-            self.model.train()
 
         metrics["time"] = time.time() - epoch_t0
-
         return metrics
 
 

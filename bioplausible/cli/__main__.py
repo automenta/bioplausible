@@ -1,6 +1,17 @@
 """
 Bioplausible CLI Entry Point
-Usage: python -m bioplausible.cli <command> [args]
+
+Usage::
+
+    python -m bioplausible.cli <command> [args]
+
+Supported commands:
+
+- ``run`` — run a training experiment from config
+- ``rank`` — rank completed experiments
+- ``lab`` — interactive model inspection
+
+Also serves as the ``eqprop-verify`` console-script entry point.
 """
 
 import sys

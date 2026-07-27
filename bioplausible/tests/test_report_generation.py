@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from bioplausible.execution.report.composer import ReportComposer
+from bioplausible.analysis.legacy_report.composer import ReportComposer
 
 
 class TestReportGeneration(unittest.TestCase):
@@ -139,10 +139,10 @@ class TestReportGeneration(unittest.TestCase):
 
         self.conn.commit()
 
-    @patch("bioplausible.execution.report.composer.ResultVisualizer")
-    @patch("bioplausible.execution.report.composer.MLAnalyzer")
-    @patch("bioplausible.execution.report.composer.BayesianRanker")
-    @patch("bioplausible.execution.report.composer.LatexGenerator")
+    @patch("bioplausible.analysis.legacy_report.composer.ResultVisualizer")
+    @patch("bioplausible.analysis.legacy_report.composer.MLAnalyzer")
+    @patch("bioplausible.analysis.legacy_report.composer.BayesianRanker")
+    @patch("bioplausible.analysis.legacy_report.composer.LatexGenerator")
     def test_report_generation_flow(self, mock_latex, mock_ranker, mock_ml, mock_viz):
         """Test the end-to-end report generation flow."""
 

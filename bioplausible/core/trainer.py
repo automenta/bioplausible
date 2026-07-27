@@ -233,6 +233,7 @@ class CoreTrainer:
         self.train_loader = None
         self.val_loader = None
         self.task_obj = None
+        self.loss_fn: nn.Module | None = None
         self.scheduler: torch.optim.lr_scheduler.LRScheduler | None = None
 
         # Training state
@@ -294,20 +295,31 @@ class CoreTrainer:
             epochs: Training epochs (primarily for logging).
             **kwargs: Additional fields for the internal ``TrainerConfig``
                 (e.g. ``grad_clip``, ``track_energy``, ``batches_per_epoch``,
-                ``output_dir``).
+                ``output_dir``, ``batch_size``, ``use_compile``, ``ablation_tags``).
 
         Returns:
             Configured ``CoreTrainer`` ready to call ``train_epoch()``.
         """
+        # Resolve loss function matching the task's output geometry.
+        task_type = getattr(task, "task_type", "vision")
+        output_dim = getattr(task, "output_dim", 0)
+        if task_type == "tabular" and output_dim == 1:
+            loss_fn = nn.MSELoss()
+        else:
+            loss_fn = nn.CrossEntropyLoss()
+
         cfg_kw = {
             "model": getattr(model, "algorithm_name", model.__class__.__name__),
             "task": getattr(task, "name", "custom"),
             "device": device,
             "epochs": epochs,
-            "batch_size": kwargs.pop("batches_per_epoch", 64),
+            "batch_size": kwargs.pop("batch_size", 64),
+            "batches_per_epoch": kwargs.pop("batches_per_epoch", 100),
             "grad_clip": kwargs.pop("grad_clip", 0.0),
             "track_energy": kwargs.pop("track_energy", False),
             "log_dir": kwargs.pop("output_dir", "/tmp/bioplausible"),
+            "use_compile": kwargs.pop("use_compile", False),
+            "tags": kwargs.pop("ablation_tags", {}),
         }
         cfg_kw.update(kwargs)
         config = TrainerConfig.from_dict(cfg_kw)
@@ -315,6 +327,7 @@ class CoreTrainer:
         trainer.model = model.to(device)
         trainer.optimizer = optimizer
         trainer.task_obj = task
+        trainer.loss_fn = loss_fn
         trainer.train_loader = None
         trainer.val_loader = None
         return trainer
@@ -767,8 +780,23 @@ class CoreTrainer:
             self.optimizer.zero_grad()
 
         logits = self.model(x)
-        logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
-        loss = torch.nn.functional.cross_entropy(logits_ce, y_ce)
+
+        # Compute loss with task-aware loss function when available
+        if self.loss_fn is not None:
+            loss_input = logits
+            loss_target = y
+            if logits.dim() == 3:
+                loss_input = logits[:, -1, :]
+            if isinstance(self.loss_fn, nn.CrossEntropyLoss):
+                if y.dim() > 1 and y.size(-1) == 1:
+                    loss_target = y.squeeze(-1).long()
+                elif y.dtype != torch.long:
+                    loss_target = y.long()
+            loss = self.loss_fn(loss_input, loss_target)
+        else:
+            logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
+            loss = torch.nn.functional.cross_entropy(logits_ce, y_ce)
+
         loss.backward()
 
         # Gradient clipping
@@ -780,11 +808,19 @@ class CoreTrainer:
         if self.optimizer:
             self.optimizer.step()
 
-        # Compute accuracy
-        with torch.no_grad():
-            accuracy = (logits_ce.argmax(1) == y_ce).float().mean().item()
+        # Compute metrics — use task's compute_metrics when available
+        if self.task_obj is not None and hasattr(self.task_obj, "compute_metrics"):
+            with torch.no_grad():
+                metrics = self.task_obj.compute_metrics(
+                    logits.detach(), y, loss.item()
+                )
+        else:
+            logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
+            with torch.no_grad():
+                accuracy = (logits_ce.argmax(1) == y_ce).float().mean().item()
+            metrics = {"loss": loss.item(), "accuracy": accuracy}
 
-        return {"loss": loss.item(), "accuracy": accuracy}
+        return metrics
 
     def _validate(self, val_batches: int) -> dict[str, Any]:
         """Run validation."""
@@ -817,12 +853,35 @@ class CoreTrainer:
                 x, y = x.to(self.device), y.to(self.device)
 
                 logits = self.model(x)
-                logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
-                loss = torch.nn.functional.cross_entropy(logits_ce, y_ce)
+
+                # Compute loss with task-aware loss function when available
+                if self.loss_fn is not None:
+                    loss_input = logits
+                    loss_target = y
+                    if logits.dim() == 3:
+                        loss_input = logits[:, -1, :]
+                    if isinstance(self.loss_fn, nn.CrossEntropyLoss):
+                        if y.dim() > 1 and y.size(-1) == 1:
+                            loss_target = y.squeeze(-1).long()
+                        elif y.dtype != torch.long:
+                            loss_target = y.long()
+                    loss = self.loss_fn(loss_input, loss_target)
+                else:
+                    logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
+                    loss = torch.nn.functional.cross_entropy(logits_ce, y_ce)
 
                 val_losses.append(loss.item())
-                accuracy = (logits_ce.argmax(1) == y_ce).float().mean().item()
-                val_accs.append(accuracy)
+
+                # Use task's compute_metrics when available
+                if self.task_obj is not None and hasattr(self.task_obj, "compute_metrics"):
+                    step_metrics = self.task_obj.compute_metrics(
+                        logits, y, loss.item()
+                    )
+                    val_accs.append(step_metrics.get("accuracy", 0.0))
+                else:
+                    logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
+                    accuracy = (logits_ce.argmax(1) == y_ce).float().mean().item()
+                    val_accs.append(accuracy)
 
                 # Perplexity for LM
                 if self.task_obj and self.task_obj.task_type == "lm":

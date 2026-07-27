@@ -42,7 +42,10 @@ class TestScientistRefactor(unittest.TestCase):
         """Test that smoke tests are generated when no progress exists."""
         self.mock_state.get_progress.return_value = {}
 
-        with patch("bioplausible.execution.strategy._MODEL_SPECS", self.mock_registry):
+        with patch(
+            "bioplausible.execution.strategy._model_specs",
+            return_value=self.mock_registry,
+        ):
             candidates = self.strategy.generate_candidates()
 
         # Expect Smoke tests for ModelA (digits) and ModelB (char_ngram)

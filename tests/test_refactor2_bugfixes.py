@@ -486,6 +486,14 @@ def test_core_trainer_validate_supports_3d_logits_model():
         return torch.randn(4, 4), torch.randint(0, 7, (4,))
 
     fake_task.get_batch = get_batch
+
+    def compute_metrics(logits, y, loss):
+        logits_ce = logits[:, -1, :] if logits.dim() == 3 else logits
+        y_ce = y.squeeze(-1).long() if y.dim() > 1 and y.size(-1) == 1 else y.long()
+        acc = (logits_ce.argmax(1) == y_ce).float().mean().item()
+        return {"loss": loss, "accuracy": acc}
+
+    fake_task.compute_metrics = compute_metrics
     trainer.task_obj = fake_task
 
     result = trainer._validate(val_batches=1)
@@ -765,7 +773,7 @@ def test_fixed_modules_import_without_error():
         "bioplausible.execution.algorithm_constraints",
         "bioplausible.execution.synthesizer",
         "bioplausible.execution.failure_tracker",
-        "bioplausible.execution.report.composer",
+        "bioplausible.analysis.legacy_report.composer",
         "bioplausible.execution.training_dynamics",
         "bioplausible.zoo.mep.optimizers.energy",
     ]

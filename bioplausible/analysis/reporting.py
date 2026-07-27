@@ -189,7 +189,6 @@ def generate_experiment_report(
     return "\n".join(lines)
 
 
-# Legacy re-export — ReportOrchestrator lives in execution/report/orchestrator.py;
-# moved import here so consumers can migrate to using analysis.reporting instead.
-# TODO(next session): git mv execution/report/* analysis/legacy_report/
-from bioplausible.execution.report.orchestrator import ReportOrchestrator  # noqa: F401
+# Legacy re-export — ReportOrchestrator lives in analysis/legacy_report/;
+# re-exported here so consumers import from analysis.reporting instead.
+from bioplausible.analysis.legacy_report.orchestrator import ReportOrchestrator  # noqa: F401

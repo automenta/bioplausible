@@ -861,11 +861,91 @@ Edits applied (uncommitted — see ``git diff``).
 
 4. **Phase 3 — remaining items** (table in session log below; none block 1.9).
 
-### Test status at end of session 2026-07-26 (c)
+### Session 2026-07-26 (d) — Phase 1.9 finish merge + Phase 2.13 archive + Phase 3 polish
 
-- ``ruff format --check .`` — passes (no new formatting issues).
+**Phase 1.9 (finish merge)** — ``_TaskTrainer`` now delegates to ``CoreTrainer.from_task()``.
+COMPLETED.
+
+- ``CoreTrainer.__init__``: added ``self.loss_fn`` attribute for task-aware loss
+  selection (``nn.MSELoss`` for regression, ``CrossEntropyLoss`` otherwise).
+- ``CoreTrainer.from_task``: fixed broken kwarg mapping (``batches_per_epoch``
+  was mapped to ``batch_size`` instead of ``batches_per_epoch``); added inline
+  loss-function resolution matching ``_resolve_task_loss``; handles
+  ``ablation_tags`` → ``config.tags`` and ``use_compile``.
+- ``CoreTrainer._train_step``: uses ``self.loss_fn`` when set (regression-safe);
+  calls ``task_obj.compute_metrics()`` when available instead of hardcoded
+  cross-entropy + argmax accuracy.
+- ``CoreTrainer._validate``: same task-aware loss + metrics treatment.
+- ``_TaskTrainer.__init__``: creates ``CoreTrainer`` via ``from_task`` and
+  stores as ``self._trainer``; keeps ``self.model``/``self.task``/``self.epochs``
+  for backward compatibility. ``**kwargs`` no longer forwarded (they previously
+  crashed OmegaConf with non-config objects like ``ExperimentTracker``).
+- ``_TaskTrainer.train_epoch``: delegates to ``self._trainer.train_epoch()``,
+  wraps result with ``train_*`` prefixes, inline validation via
+  ``self._trainer._validate(1)``, and timing.
+- Test fix: added ``compute_metrics`` function to the ``MagicMock`` task in
+  ``test_core_trainer_validate_supports_3d_logits_model`` (MagicMock
+  auto-creates attributes, returning junk instead of real metrics).
+
+**Phase 2.13 (complete archive)** — ``execution/report/`` archived to
+``analysis/legacy_report/``. COMPLETED.
+
+- ``git mv bioplausible/execution/report/* bioplausible/analysis/legacy_report/``
+- Updated internal imports in the moved files (``orchestrator.py``,
+  ``composer.py``) to use ``analysis.legacy_report`` prefix.
+- Updated ``analysis/reporting.py`` re-export path + removed TODO comment.
+- Updated test imports in ``bioplausible/tests/test_report_generation.py``
+  (import + mock patch paths), ``bioplausible/tests/test_report_analysis_robustness.py``,
+  and ``tests/test_refactor2_bugfixes.py``.
+- Removed now-empty ``execution/report/`` directory.
+
+**Phase 3 items completed in this session**:
+
+| § | Item | Status |
+|---|------|--------|
+| 18 | Replace module-level mutable ``_MODEL_SPECS`` with function attribute cache | **DONE** |
+| 50 | ``eqprop-verify`` entry point broken — added ``main`` re-export in ``cli/__init__.py`` + updated ``__main__.py`` docstring | **DONE** |
+
+**Test fix**: Updated ``tests/test_scientist_refactor.py`` to patch
+``_model_specs`` function instead of removed ``_MODEL_SPECS`` module variable.
+
+### Test status at end of session 2026-07-26 (d)
+
+- ``ruff format --check .`` — 38 files would be reformatted (pre-existing, unchanged).
 - ``ruff check .`` — 5K+ pre-existing errors; none introduced.
-- ``pytest tests/`` — **473 passed, 0 failed**.
-- ``pytest bioplausible/tests/`` — **197 passed, 13 skipped, 0 failed**.
+- ``pytest tests/`` + ``pytest bioplausible/tests/`` — **670 passed, 13 skipped, 0 failed**.
+
+### Remaining work for next session (suggested priority)
+
+1. **Phase 1.10 (P2P unification)** — needs product judgment (Kademlia vs
+   HTTP Coordinator/Worker). Bottleneck for Phase 3 closure, not required for
+   any structural refactors below.
+
+2. **Phase 3 polish — remaining items** (none block anything):
+   - §19: Extract ``analysis/results.py`` CLI to separate script.
+   - §20: Clean ``examples/`` and ``scripts/`` at project root.
+   - §24: Refactor ``analysis/ablation.py`` dimension mapping to dynamic.
+   - §26: Add ``family``/``tags`` metadata to registered models for HPO.
+   - §28: Centralize model-resolution logic in ``hyperopt/`` to use
+     ``Registry.query()``.
+   - §30: ``sklearn_interface.py`` stub classes (keep — sklearn is installed;
+     the stubs are a safety net).
+   - §31: Remove emoji from log strings (cosmetic).
+   - §35: Fix ``analysis/results.py`` pandas coupling.
+   - §36: Add schema validation to knowledge base writes in
+     ``autoscientist/campaign.py``.
+   - §38: Make ``config/defaults.py`` configs extensible.
+   - §39: Implement activation sparsity tracking in ``core/energy.py``.
+   - §43: Split ``equitile/core.py`` (1,367 LOC → 3+ files).
+   - §44: Archive ``experiments/deep_signal_probe.py`` to examples.
+   - §45: Complete validation stub tracks in ``validation/notebook.py``.
+   - §46: Consolidate ``visualization.py`` & ``visualization_tools.py``.
+   - §47: Merge ``statistics.py`` into evaluation/metrics layer.
+   - §48: Evaluate if ``tracking.py`` owned by ``ExecutionEngine``.
+   - §49: Move ``generation.py`` to ``equitile/language.py`` or
+     ``zoo/models/language.py``.
+
+3. **Phase 2.15** (migrate inner tests from legacy API) — already verified
+   in session (c) that no inner tests use the legacy API. Confirmed.
 
 **End of session log**

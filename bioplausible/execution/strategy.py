@@ -34,18 +34,14 @@ class _ModelSpec:
         self.task_compat = task_compat
 
 
-# Module-level list of model specs. Populated lazily from the new Registry; tests
-# may patch this list directly to inject mock specs. Each spec exposes ``name``
-# and ``task_compat`` matching the contract documented in the legacy
-# ``bioplausible.models.registry.ModelSpec``.
-_MODEL_SPECS: list[_ModelSpec] | None = None
-
-
 def _model_specs() -> list[_ModelSpec]:
-    """Return the patchable list of model specs, lazily built from Registry."""
-    global _MODEL_SPECS
-    if _MODEL_SPECS is not None:
-        return _MODEL_SPECS
+    """Return the cached list of model specs, lazily built from Registry.
+
+    Cache lives on the function object so it can be reset by tests via
+    ``_model_specs.cache = None``.
+    """
+    if getattr(_model_specs, "cache", None) is not None:
+        return _model_specs.cache
     specs: list[_ModelSpec] = []
     try:
         from bioplausible.core.registry import ComponentCategory
@@ -62,7 +58,7 @@ def _model_specs() -> list[_ModelSpec]:
             specs.append(_ModelSpec(entry["name"], task_compat))
     except Exception:  # pragma: no cover - registry not populated
         logger.exception("Failed to enumerate models from Registry")
-    _MODEL_SPECS = specs
+    _model_specs.cache = specs
     return specs
 
 
