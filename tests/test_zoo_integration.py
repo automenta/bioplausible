@@ -352,7 +352,7 @@ def test_registry_optimizer_get_unknown_raises_with_available_list():
 
 def test_register_accepts_factory_function():
     """A bare function (no class) can be registered and retrieved."""
-    from bioplausible.core.registry import Registry, register_optimizer
+    from bioplausible.core.registry import Registry, ComponentCategory, register_optimizer
 
     Registry.clear()
 
@@ -360,7 +360,7 @@ def test_register_accepts_factory_function():
         return ("called", params, model)
 
     register_optimizer("factory_test")(factory)
-    retrieved = Registry.get("optimizer", "factory_test")
+    retrieved = Registry.get(ComponentCategory.OPTIMIZER, "factory_test")
     assert retrieved is factory
     assert retrieved("p", model="m") == ("called", "p", "m")
 
@@ -378,4 +378,4 @@ def test_register_attaches_metadata_to_factory():
     meta = Registry.get_metadata("optimizer", "factory_with_meta")
     assert meta.bio_plausibility_score == pytest.approx(0.95)
     # The function must remain callable (not rewrapped).
-    assert Registry.get("optimizer", "factory_with_meta")("p") == "p"
+    assert Registry.get(ComponentCategory.OPTIMIZER, "factory_with_meta")("p") == "p"

@@ -158,7 +158,7 @@ class AdaptiveFeedbackAlignment(BioModel):
     def __init__(self, config: ModelConfig | None = None, **kwargs):
         super().__init__(config, **kwargs)
 
-        if not hasattr(self, "layers") or len(self.layers) == 0:
+        if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
             hidden_dims = (
                 self.config.hidden_dims
@@ -309,7 +309,7 @@ class StochasticFA(BioModel):
     def __init__(self, config: ModelConfig | None = None, **kwargs):
         super().__init__(config, **kwargs)
 
-        if not hasattr(self, "layers") or len(self.layers) == 0:
+        if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
             hidden_dims = (
                 self.config.hidden_dims
@@ -425,7 +425,7 @@ class ContrastiveFeedbackAlignment(BioModel):
     def __init__(self, config: ModelConfig | None = None, **kwargs):
         super().__init__(config, **kwargs)
 
-        if not hasattr(self, "layers") or len(self.layers) == 0:
+        if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
             hidden_dims = (
                 self.config.hidden_dims
@@ -753,7 +753,7 @@ class EnergyGuidedFA(BioModel):
     def __init__(self, config: ModelConfig | None = None, **kwargs):
         super().__init__(config, **kwargs)
 
-        if not hasattr(self, "layers") or len(self.layers) == 0:
+        if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
             hidden_dims = (
                 self.config.hidden_dims
@@ -833,7 +833,7 @@ class EnergyMinimizingFA(BioModel):
     def __init__(self, config: ModelConfig | None = None, **kwargs):
         super().__init__(config, **kwargs)
 
-        if not hasattr(self, "layers") or len(self.layers) == 0:
+        if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
             hidden_dims = (
                 self.config.hidden_dims
@@ -927,7 +927,7 @@ class LayerwiseEquilibriumFA(BioModel):
     def __init__(self, config: ModelConfig | None = None, **kwargs):
         super().__init__(config, **kwargs)
 
-        if not hasattr(self, "layers") or len(self.layers) == 0:
+        if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
             hidden_dims = (
                 self.config.hidden_dims

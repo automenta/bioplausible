@@ -9,7 +9,7 @@ from torch import nn
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class HomeostasisMetrics:
     avg_velocity: float
     lipschitz_estimate: float

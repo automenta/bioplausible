@@ -25,7 +25,8 @@ class GraphTask(BaseTask):
         except ImportError:
             raise ImportError("torch-geometric required. pip install torch-geometric")
 
-        dataset = Planetoid(root="/tmp/" + self.name, name=self.name.capitalize())
+        cache_dir = os.environ.get("XDG_CACHE_HOME", os.path.join(os.path.expanduser("~"), ".cache"))
+        dataset = Planetoid(root=os.path.join(cache_dir, "bioplausible", "datasets", self.name), name=self.name.capitalize())
         self.data = dataset[0].to(self.device)
         self._input_dim = dataset.num_node_features
         self._output_dim = dataset.num_classes

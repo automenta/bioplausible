@@ -88,7 +88,7 @@ class TransformerEqProp(EqPropModel):
 
     def __init__(
         self,
-        vocab_size: int = None,
+        vocab_size: int | None = None,
         hidden_dim: int = 256,
         output_dim: int = 27,
         num_layers: int = 2,

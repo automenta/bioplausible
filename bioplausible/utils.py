@@ -262,12 +262,13 @@ def create_model_preset(preset_name: str, **overrides) -> nn.Module:
 
 
 @contextmanager
-def SimpleProfiler(name: str):
+def simple_profiler(name: str):
     """
     Context manager for simple time profiling.
 
     Example:
-        >>> with SimpleProfiler("Training Step"):
+
+        >>> with simple_profiler("Training Step"):
         >>>     train_step()
     """
     if torch.cuda.is_available():
@@ -356,7 +357,7 @@ def spectral_conv2d(
 
 
 __all__ = [
-    "SimpleProfiler",
+    "simple_profiler",
     "compute_gradient_norm",
     "count_parameters",
     "create_model_preset",

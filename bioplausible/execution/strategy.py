@@ -1038,10 +1038,7 @@ class ExecutionStrategy:
         if not tiers_run:
             return False
 
-        if PromotionGate.check_promotion(prev_task, best_metrics):
-            return True
-        else:
-            return False
+        return PromotionGate.check_promotion(prev_task, best_metrics)
 
     def _get_stats(self, progress, model, task, tier):
         return get_stats(progress, model, task, tier)

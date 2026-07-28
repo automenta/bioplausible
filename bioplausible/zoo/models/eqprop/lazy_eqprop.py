@@ -11,7 +11,7 @@ from bioplausible.zoo.models.transitions import TransitionGraphMixin
 from ...base import register_model
 
 
-@dataclass
+@dataclass(slots=True)
 class LazyStats:
     """Statistics for lazy execution."""
 

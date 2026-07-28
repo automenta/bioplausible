@@ -501,27 +501,17 @@ class ExecutionEngine:
 
         return None
 
-    def _run_asi_evolve(self, task: ExperimentTask) -> dict[str, float] | None:
-        """
-        ASI-Evolve integration removed in REFACTOR2 (asi_evolve/ package deleted).
-        """
-        logger.warning(
-            "ASI-Evolve integration removed. Skipping evolve task: %s",
-            task.study_name,
-        )
-        DASHBOARD.log(
-            f"ASI-Evolve no longer available (task: {task.study_name})",
-            style="bold yellow",
-        )
-        return None
-
     def _process_task(self, task: ExperimentTask) -> dict[str, float] | None:
         """
         Prepare configuration and execute the task.
         Returns metrics if successful, None otherwise.
         """
         if task.is_evolve:
-            return self._run_asi_evolve(task)
+            logger.warning(
+                "ASI-Evolve integration removed. Skipping evolve task: %s",
+                task.study_name,
+            )
+            return None
 
         # Load Optuna Study
         study = self.state.get_optuna_study(task.study_name)
@@ -626,11 +616,11 @@ class ExecutionEngine:
         """Attempt to warm-start the study from best previous trials."""
         if random.random() < 0.2:  # 20% chance to warm start
             try:
-                if len(study.trials) > 0:
+                if study.trials:
                     best_trial = study.best_trial
                     if best_trial:
                         logger.info(
-                            "  > Warm-starting from Trial #%d (Acc: %.2%%)",
+                            "  > Warm-starting from Trial #%d (Acc: %.2f%%)",
                             best_trial.number,
                             best_trial.value,
                         )

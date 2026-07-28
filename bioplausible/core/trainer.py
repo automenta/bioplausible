@@ -336,7 +336,7 @@ class CoreTrainer:
             "batches_per_epoch": kwargs.pop("batches_per_epoch", 100),
             "grad_clip": kwargs.pop("grad_clip", 0.0),
             "track_energy": kwargs.pop("track_energy", False),
-            "log_dir": kwargs.pop("output_dir", "/tmp/bioplausible"),
+            "log_dir": kwargs.pop("output_dir", os.path.join(tempfile.gettempdir(), "bioplausible")),
             "use_compile": kwargs.pop("use_compile", False),
             "tags": kwargs.pop("ablation_tags", {}),
         }

@@ -59,6 +59,25 @@ def test_query_by_id(tmp_db_path):
     assert retrieved.finding == "Test finding 2"
 
 
+def test_add_entry_auto_embed_true(tmp_db_path):
+    """add_entry with auto_embed=True should not crash even without sentence-transformers."""
+    kb = KnowledgeBase(db_path=tmp_db_path, auto_embed=True)
+    entry = KnowledgeEntry(
+        id="TEST-EMBED",
+        topic="Test",
+        model_family="test_model",
+        finding="Auto-embed test",
+        details="Testing auto-embed path",
+        confidence=0.5,
+    )
+    entry_id = kb.add_entry(entry)
+    assert entry_id == "TEST-EMBED"
+    retrieved = kb.get_by_id("TEST-EMBED")
+    assert retrieved is not None
+    # Embedding should be None if no sentence-transformers available
+    assert retrieved.embedding is None
+
+
 def test_query_by_model_family(tmp_db_path):
     """Test querying by model family."""
     kb = KnowledgeBase(db_path=tmp_db_path)

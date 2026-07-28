@@ -86,11 +86,6 @@ eqprop-p2p-worker = "bioplausible.p2p.p2p_worker:main"
 biopl-scientist = "bioplausible.execution.cli:main_scientist"
 biopl-report = "bioplausible.execution.cli:main_reporter"
 
-[dependency-groups]
-dev = [
-    "pyright>=1.1.411",
-]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: marks tests as slow (e.g. MNIST full epoch)"]

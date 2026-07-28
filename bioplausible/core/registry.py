@@ -222,17 +222,16 @@ class Registry:
         if category not in cls._components:
             cls._components[category] = {}
 
-        def decorator(component: Component) -> Component:
-            nonlocal name
-            if name is None:
-                name = getattr(component, "__name__", repr(component))
-            if name in cls._components[category]:
-                logger.warning("Overwriting component %s/%s", category.value, name)
+        def decorator(component: Component, _name: str = name) -> Component:
+            if _name is None:
+                _name = getattr(component, "__name__", repr(component))
+            if _name in cls._components[category]:
+                logger.warning("Overwriting component %s/%s", category.value, _name)
             metadata = ComponentMetadata(
-                name=name, category=category, **metadata_kwargs
+                name=_name, category=category, **metadata_kwargs
             )
             cls._infer_metadata(component, metadata)
-            cls._components[category][name] = {
+            cls._components[category][_name] = {
                 "class": component,
                 "metadata": metadata,
             }

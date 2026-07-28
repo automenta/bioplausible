@@ -27,7 +27,7 @@ class CausalEqPropAttention(nn.Module):
         self.W_o = spectral_linear(hidden_dim, hidden_dim, use_sn=use_sn)
 
     def forward(
-        self, h: torch.Tensor, causal_mask: torch.Tensor = None
+        self, h: torch.Tensor, causal_mask: torch.Tensor | None = None
     ) -> torch.Tensor:
         batch_size, seq_len, _ = h.shape
 

@@ -4,6 +4,15 @@ Preset optimizer configurations.
 Factory functions for common optimizer combinations.
 """
 
+__all__ = [
+    "smep",
+    "sdmep",
+    "local_ep",
+    "natural_ep",
+    "muon_backprop",
+    "smep_fast",
+]
+
 from collections.abc import Iterable
 from typing import Any
 

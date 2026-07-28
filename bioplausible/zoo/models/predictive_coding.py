@@ -199,7 +199,7 @@ class PredictiveCodingHybrid(BioModel):
     def __init__(self, config: ModelConfig | None = None, **kwargs):
         super().__init__(config, **kwargs)
 
-        if not hasattr(self, "layers") or len(self.layers) == 0:
+        if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
             hidden_dims = (
                 self.config.hidden_dims

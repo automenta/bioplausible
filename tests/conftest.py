@@ -1,3 +1,5 @@
+"""Shared test fixtures and configuration."""
+
 import os
 import shutil
 import sys
@@ -16,6 +18,47 @@ import gymnasium  # noqa: E402
 from unittest.mock import MagicMock  # noqa: E402
 
 sys.modules["cupy"] = MagicMock()
+
+import pytest
+import torch
+from torch import nn
+
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
+
+
+# --- Shared Model Fixtures ---
+
+
+class SimpleMLP(TransitionGraphMixin, nn.Module):
+    """Minimal 2-layer MLP for eqprop tests."""
+
+    def __init__(self, input_dim: int = 10, hidden_dim: int = 20, output_dim: int = 5):
+        super().__init__()
+        self.layers = nn.ModuleList([
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim),
+        ])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = x
+        for layer in self.layers:
+            h = layer(h)
+        return h
+
+
+@pytest.fixture
+def simple_mlp() -> SimpleMLP:
+    return SimpleMLP()
+
+
+@pytest.fixture
+def sample_batch() -> tuple[torch.Tensor, torch.Tensor]:
+    x = torch.randn(4, 10)
+    y = torch.randint(0, 5, (4,))
+    return x, y
 
 
 def pytest_unconfigure(config: object) -> None:
