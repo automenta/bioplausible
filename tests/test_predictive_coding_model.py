@@ -28,7 +28,12 @@ class TestFabricPCGraphPCN:
 
     def test_construction_extra_kwargs(self):
         model = FabricPCGraphPCN(
-            input_dim=10, hidden_dim=8, output_dim=3, infer_steps=10, eta_infer=0.1, mode="backprop"
+            input_dim=10,
+            hidden_dim=8,
+            output_dim=3,
+            infer_steps=10,
+            eta_infer=0.1,
+            mode="backprop",
         )
         assert model._mode == "backprop"
         assert model.config.extra.get("infer_steps") == 10
@@ -47,10 +52,14 @@ class TestFabricPCGraphPCN:
         # Verify params are on cpu
         for node_name in model._params:
             for param_name in model._params[node_name]:
-                assert model._params[node_name][param_name].device == torch.device("cpu")
+                assert model._params[node_name][param_name].device == torch.device(
+                    "cpu"
+                )
 
     def test_train_step_pcn_mode(self):
-        model = FabricPCGraphPCN(input_dim=10, hidden_dim=8, output_dim=3, infer_steps=5, eta_infer=0.01)
+        model = FabricPCGraphPCN(
+            input_dim=10, hidden_dim=8, output_dim=3, infer_steps=5, eta_infer=0.01
+        )
         x = torch.randn(4, 10)
         y = torch.randint(0, 3, (4,))
         result = model.train_step(x, y)
@@ -93,7 +102,13 @@ class TestFabricPCGraphPCN:
             default_lr = 0.001
 
         model = FabricPCGraphPCN.build(
-            MockSpec(), input_dim=10, output_dim=3, hidden_dim=8, num_layers=10, device="cpu", task_type="vision"
+            MockSpec(),
+            input_dim=10,
+            output_dim=3,
+            hidden_dim=8,
+            num_layers=10,
+            device="cpu",
+            task_type="vision",
         )
         assert len(model.config.hidden_dims) == 5  # capped at 5
 
@@ -160,7 +175,13 @@ class TestPredictiveCodingHybrid:
             name = "test"
 
         model = PredictiveCodingHybrid.build(
-            MockSpec(), input_dim=50, output_dim=5, hidden_dim=30, num_layers=2, device="cpu", task_type="vision"
+            MockSpec(),
+            input_dim=50,
+            output_dim=5,
+            hidden_dim=30,
+            num_layers=2,
+            device="cpu",
+            task_type="vision",
         )
         assert isinstance(model, PredictiveCodingHybrid)
         assert model.config.input_dim == 50

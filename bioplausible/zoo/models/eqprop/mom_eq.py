@@ -36,7 +36,6 @@ class MomentumEquilibrium(BioModel):
             self.to(kwargs.get("device", "cpu"))
 
         self.momentum = 0.5
-        self.criterion = nn.CrossEntropyLoss()
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
         activations = [x]
@@ -65,20 +64,6 @@ class MomentumEquilibrium(BioModel):
             activations = new_acts
 
         return activations[-1]
-
-    def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.config.learning_rate)
-        optimizer.zero_grad()
-
-        output = self.forward(x)
-        loss = self.criterion(output, y)
-        loss.backward()
-        optimizer.step()
-
-        return {
-            "loss": loss.item(),
-            "accuracy": (output.argmax(1) == y).float().mean().item(),
-        }
 
     @classmethod
     def build(

@@ -33,7 +33,9 @@ class TestDTPLayer:
 
 class TestDifferenceTargetProp:
     def test_construction_int_input(self):
-        model = DifferenceTargetProp(input_dim=784, hidden_dim=256, output_dim=10, num_layers=3)
+        model = DifferenceTargetProp(
+            input_dim=784, hidden_dim=256, output_dim=10, num_layers=3
+        )
         assert model.input_dim == 784
         assert model.output_dim == 10
         assert len(model.layers) == 3
@@ -87,7 +89,9 @@ class TestDifferenceTargetProp:
         assert len(model.layers) == 2
 
     def test_train_step_returns_dict(self):
-        model = DifferenceTargetProp(input_dim=20, hidden_dim=16, output_dim=3, num_layers=2)
+        model = DifferenceTargetProp(
+            input_dim=20, hidden_dim=16, output_dim=3, num_layers=2
+        )
         x = torch.randn(8, 20)
         y = torch.randint(0, 3, (8,))
         result = model.train_step(x, y)
@@ -98,7 +102,9 @@ class TestDifferenceTargetProp:
         assert isinstance(result["accuracy"], float)
 
     def test_train_step_loss_decreases(self):
-        model = DifferenceTargetProp(input_dim=20, hidden_dim=16, output_dim=3, num_layers=2)
+        model = DifferenceTargetProp(
+            input_dim=20, hidden_dim=16, output_dim=3, num_layers=2
+        )
         x = torch.randn(16, 20)
         y = torch.randint(0, 3, (16,))
         losses = []
@@ -109,14 +115,18 @@ class TestDifferenceTargetProp:
         assert losses[-1] <= losses[0] + 0.1  # allow slight noise
 
     def test_train_step_accuracy_range(self):
-        model = DifferenceTargetProp(input_dim=20, hidden_dim=16, output_dim=3, num_layers=2)
+        model = DifferenceTargetProp(
+            input_dim=20, hidden_dim=16, output_dim=3, num_layers=2
+        )
         x = torch.randn(8, 20)
         y = torch.randint(0, 3, (8,))
         result = model.train_step(x, y)
         assert 0.0 <= result["accuracy"] <= 1.0
 
     def test_train_step_forward_pass_preserves_params(self):
-        model = DifferenceTargetProp(input_dim=20, hidden_dim=16, output_dim=3, num_layers=2)
+        model = DifferenceTargetProp(
+            input_dim=20, hidden_dim=16, output_dim=3, num_layers=2
+        )
         x = torch.randn(8, 20)
         y = torch.randint(0, 3, (8,))
         # Before train_step, after forward
@@ -128,7 +138,9 @@ class TestDifferenceTargetProp:
 
     def test_gradient_target_computation(self):
         """Verify the gradient-based target at output is computed correctly."""
-        model = DifferenceTargetProp(input_dim=10, hidden_dim=8, output_dim=2, num_layers=1)
+        model = DifferenceTargetProp(
+            input_dim=10, hidden_dim=8, output_dim=2, num_layers=1
+        )
         x = torch.randn(4, 10)
         y = torch.randint(0, 2, (4,))
         # Run train_step - main goal is no crash

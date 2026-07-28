@@ -1,0 +1,2 @@
+- Address PyTorch's `torch.jit.script` (and other functions) deprecation
+- Apply this fix to our Predictive Coding implementation, if relevant: https://github.com/trueagi-io/FabricPC/compare/main...matthewbehrend/mupc_output_fix

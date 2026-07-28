@@ -194,7 +194,7 @@ class DionUpdate:
 
             return update
 
-        except (RuntimeError, torch.linalg.LinAlgError):
+        except RuntimeError, torch.linalg.LinAlgError:
             # Fallback to Muon
             return self.muon_fallback.transform_gradient(
                 param, gradient, state, group_config

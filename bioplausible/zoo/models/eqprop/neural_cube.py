@@ -5,8 +5,29 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 from ...base import register_model
+
+
+class LocalUpdateModule(nn.Module):
+    """Wraps NeuralCube's W_local + neighbor logic into a callable module."""
+
+    def __init__(
+        self, W_local: nn.Parameter, neighbor_indices: torch.Tensor, cube_size: int
+    ):
+        super().__init__()
+        self.W_local = W_local
+        self.register_buffer("neighbor_indices", neighbor_indices)
+        self.cube_size = cube_size
+
+    def forward(self, h: torch.Tensor, x: torch.Tensor | None = None) -> torch.Tensor:
+        batch_size, n_neurons = h.shape[0], self.neighbor_indices.shape[0]
+        h_padded = torch.nn.functional.pad(h, (0, 1))
+        indices_expanded = self.neighbor_indices.unsqueeze(0).expand(batch_size, -1, -1)
+        h_expanded = h_padded.unsqueeze(1).expand(-1, n_neurons, -1)
+        neighbor_activations = torch.gather(h_expanded, 2, indices_expanded)
+        return (neighbor_activations * self.W_local.unsqueeze(0)).sum(dim=2)
 
 
 @register_model(
@@ -14,7 +35,7 @@ from ...base import register_model
     family="eqprop",
     tags=["eqprop", "neural-cube"],
 )
-class NeuralCube(nn.Module):
+class NeuralCube(TransitionGraphMixin, nn.Module):
     """
     A 3D lattice neural network where neurons exist in 3D space.
 
@@ -43,8 +64,18 @@ class NeuralCube(nn.Module):
         self.W_out = nn.Linear(self.n_neurons, output_dim)
 
         self.register_buffer("neighbor_indices", self._build_neighbor_indices())
+        self.local_update_mod = LocalUpdateModule(
+            self.W_local, self.neighbor_indices, self.cube_size
+        )
 
         self._init_weights()
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Modules called in order during one forward step.
+
+        :returns: ``[self.W_in, self.local_update_mod, self.W_out]``
+        """
+        return [self.W_in, self.local_update_mod, self.W_out]
 
     @classmethod
     def build(

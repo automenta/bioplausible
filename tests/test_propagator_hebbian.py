@@ -7,6 +7,7 @@ import pytest
 import torch
 from torch import nn
 
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 from bioplausible.zoo.propagators.hebbian import ContrastiveHebbianLearning
 
 
@@ -15,14 +16,20 @@ from bioplausible.zoo.propagators.hebbian import ContrastiveHebbianLearning
 # =============================================================================
 
 
+class SimpleMLP(TransitionGraphMixin, nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(8, 16)
+        self.fc2 = nn.Linear(16, 4)
+
+    def forward(self, x):
+        return self.fc2(torch.relu(self.fc1(x)))
+
+
 @pytest.fixture
 def model():
     torch.manual_seed(42)
-    return nn.Sequential(
-        nn.Linear(8, 16),
-        nn.ReLU(),
-        nn.Linear(16, 4),
-    )
+    return SimpleMLP()
 
 
 @pytest.fixture
@@ -74,7 +81,7 @@ class TestContrastiveHebbianLearning:
 
     def test_get_layers_returns_weighted_only(self, params, model):
         opt = ContrastiveHebbianLearning(params, model)
-        layers = opt._get_layers()
+        layers = opt._get_transitions()
         assert len(layers) == 2  # Linear(8,16), Linear(16,4)
         assert all(isinstance(l, (nn.Linear, nn.Conv2d)) for l in layers)
 
@@ -86,7 +93,7 @@ class TestContrastiveHebbianLearning:
         free = opt._forward_capture(x)
         clamped = opt._forward_capture(x)
         opt._hebbian_update(free, clamped)
-        weight_layers = [l for l in opt._get_layers() if hasattr(l, "weight")]
+        weight_layers = [l for l in opt._get_transitions() if hasattr(l, "weight")]
         for l in weight_layers:
             assert l.weight.grad is not None, f"weight.grad should be set for layer {l}"
             assert l.weight.grad.shape == l.weight.shape

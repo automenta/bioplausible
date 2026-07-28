@@ -168,27 +168,32 @@ class VisionTask(DomainTask):
         split: TaskSplit = TaskSplit.VAL,
         max_batches: int | None = None,
     ) -> Metrics:
+        was_training = model.training
         model.eval()
-        loader = self.get_dataloader(split)
+        try:
+            loader = self.get_dataloader(split)
 
-        total_loss = 0.0
-        total_correct = 0
-        total_samples = 0
+            total_loss = 0.0
+            total_correct = 0
+            total_samples = 0
 
-        with torch.no_grad():
-            for i, (inputs, targets) in enumerate(loader):
-                if max_batches and i >= max_batches:
-                    break
+            with torch.no_grad():
+                for i, (inputs, targets) in enumerate(loader):
+                    if max_batches and i >= max_batches:
+                        break
 
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
-                outputs = model(inputs)
-                loss = self.compute_loss(outputs, targets)
+                    inputs, targets = inputs.to(self.device), targets.to(self.device)
+                    outputs = model(inputs)
+                    loss = self.compute_loss(outputs, targets)
 
-                total_loss += loss.item() * inputs.size(0)
-                total_correct += (outputs.argmax(1) == targets).sum().item()
-                total_samples += inputs.size(0)
+                    total_loss += loss.item() * inputs.size(0)
+                    total_correct += (outputs.argmax(1) == targets).sum().item()
+                    total_samples += inputs.size(0)
 
-        avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
-        accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+            avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+            accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+        finally:
+            if was_training:
+                model.train()
 
         return Metrics(loss=avg_loss, accuracy=accuracy)

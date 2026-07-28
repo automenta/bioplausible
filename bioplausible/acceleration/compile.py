@@ -112,7 +112,6 @@ def compile_model(
         return model
     else:
         return compiled
-        return model
 
 
 def compile_settling_loop(settling_fn: Callable) -> Callable:

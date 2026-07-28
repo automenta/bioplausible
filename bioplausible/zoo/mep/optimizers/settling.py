@@ -92,6 +92,59 @@ class Settler:
         self.step_size_growth = 1.1
         self.step_size_decay = 0.5
 
+    def _resolve_transition_modules(
+        self,
+        model: nn.Module,
+        structure: list[dict[str, Any]] | None = None,
+    ) -> list[nn.Module]:
+        """Resolve transition modules from model.transition_modules() or structure.
+
+        Prefers ``model.transition_modules()`` when available. Falls back to
+        extracting layer/attention modules from the inspector structure for
+        backward compatibility.
+        """
+        if hasattr(model, "transition_modules"):
+            try:
+                return model.transition_modules()
+            except NotImplementedError:
+                pass
+        if structure is not None:
+            return [
+                item["module"]
+                for item in structure
+                if item["type"] in ("layer", "attention")
+            ]
+        return []
+
+    def _capture_states_from_transitions(
+        self,
+        model: nn.Module,
+        x: torch.Tensor,
+        transition_modules: list[nn.Module],
+    ) -> list[torch.Tensor]:
+        """Capture initial states from transition modules."""
+        states: list[torch.Tensor] = []
+        handles: list[Any] = []
+
+        def capture_hook(module: nn.Module, inp: Any, output: Any) -> None:
+            if isinstance(output, tuple):
+                s = output[0].detach().float().clone().requires_grad_(True)
+            else:
+                s = output.detach().float().clone().requires_grad_(True)
+            states.append(s)
+
+        for module in transition_modules:
+            handles.append(module.register_forward_hook(capture_hook))
+
+        try:
+            with torch.no_grad():
+                model(x)
+        finally:
+            for h in handles:
+                h.remove()
+
+        return states
+
     def settle(
         self,
         model: nn.Module,
@@ -99,7 +152,7 @@ class Settler:
         target: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
-        structure: list[dict[str, Any]],
+        structure: list[dict[str, Any]] | None = None,
     ) -> list[torch.Tensor]:
         """
         Settle network activations to energy minimum.
@@ -110,7 +163,8 @@ class Settler:
             target: Target tensor (None for free phase).
             beta: Nudging strength.
             energy_fn: Function to compute energy.
-            structure: Model structure from inspector.
+            structure: Model structure from inspector (deprecated: use
+                ``transition_modules()`` on the model instead).
 
         Returns:
             List of settled state tensors for each layer.
@@ -124,20 +178,29 @@ class Settler:
         if beta < 0 or beta > 1:
             raise ValueError(f"Beta must be in [0, 1], got {beta}")
 
+        # Determine transition modules — prefer transition_modules() over structure.
+        transition_modules = self._resolve_transition_modules(model, structure)
+
         # Capture initial states
-        states = self._capture_states(model, x, structure)
+        states = self._capture_states_from_transitions(model, x, transition_modules)
 
         if not states:
-            layer_count = sum(
-                1 for item in structure if item["type"] in ("layer", "attention")
-            )
-            if layer_count > 0:
+            if transition_modules:
                 raise RuntimeError(
-                    f"No activations captured. Expected {layer_count} layer(s).\n"
-                    f"Model: {type(model).__name__}, Structure: {len(structure)} items"
+                    f"No activations captured. Expected {len(transition_modules)} "
+                    f"transition module(s), got 0.\n"
+                    f"Model: {type(model).__name__}"
                 )
             else:
                 return []  # No states to settle
+
+        # Build compat structure for energy_fn (backward compat).
+        if structure is None:
+            compat_structure = [
+                {"type": "layer", "module": m} for m in transition_modules
+            ]
+        else:
+            compat_structure = structure
 
         # Prepare target
         target_vec = None
@@ -160,7 +223,7 @@ class Settler:
 
         for step in range(self.steps):
             with torch.enable_grad():
-                E = energy_fn(model, x, states, structure, target_vec, beta)
+                E = energy_fn(model, x, states, compat_structure, target_vec, beta)
 
                 # Check for divergence
                 if torch.isnan(E) or torch.isinf(E):
@@ -268,7 +331,7 @@ class Settler:
         target: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
-        structure: list[dict[str, Any]],
+        structure: list[dict[str, Any]] | None = None,
     ) -> list[torch.Tensor]:
         """
         Settle network keeping computation graph intact for gradient flow.
@@ -278,16 +341,23 @@ class Settler:
         if beta < 0 or beta > 1:
             raise ValueError(f"Beta must be in [0, 1], got {beta}")
 
+        # Resolve transition modules.
+        transition_modules = self._resolve_transition_modules(model, structure)
+        if structure is None:
+            compat_structure = [
+                {"type": "layer", "module": m} for m in transition_modules
+            ]
+        else:
+            compat_structure = structure
+
         # Capture initial states
-        states = self._capture_states_fresh(model, x, structure)
+        states = self._capture_states_from_transitions(model, x, transition_modules)
 
         if not states:
-            layer_count = sum(
-                1 for item in structure if item["type"] in ("layer", "attention")
-            )
-            if layer_count > 0:
+            if transition_modules:
                 raise RuntimeError(
-                    f"No activations captured. Expected {layer_count} layer(s)."
+                    f"No activations captured. Expected {len(transition_modules)} "
+                    f"transition module(s)."
                 )
             else:
                 return []
@@ -317,7 +387,7 @@ class Settler:
         for step in range(self.steps):
             working_states = [s.detach().requires_grad_(True) for s in states]
 
-            E = energy_fn(model, x, working_states, structure, target_vec, beta)
+            E = energy_fn(model, x, working_states, compat_structure, target_vec, beta)
 
             if torch.isnan(E) or torch.isinf(E):
                 raise RuntimeError(f"Energy diverged at step {step}: E={E.item()}")
@@ -356,7 +426,7 @@ class Settler:
 
         return [s.detach() for s in states]
 
-    def _capture_states_fresh(
+    def _capture_states_from_transitions_without_grad(
         self, model: nn.Module, x: torch.Tensor, structure: list[dict[str, Any]]
     ) -> list[torch.Tensor]:
         """Capture states as fresh tensors."""
@@ -432,7 +502,7 @@ class Settler:
         target: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
-        structure: list[dict[str, Any]],
+        structure: list[dict[str, Any]] | None = None,
     ) -> list[torch.Tensor]:
         """
         Settle network activations using torch.compile for acceleration.
@@ -447,7 +517,7 @@ class Settler:
             target: Target tensor (None for free phase).
             beta: Nudging strength.
             energy_fn: Function to compute energy.
-            structure: Model structure from inspector.
+            structure: Model structure from inspector (deprecated).
 
         Returns:
             List of settled state tensors for each layer.
@@ -462,16 +532,23 @@ class Settler:
         if beta < 0 or beta > 1:
             raise ValueError(f"Beta must be in [0, 1], got {beta}")
 
+        # Resolve transition modules.
+        transition_modules = self._resolve_transition_modules(model, structure)
+        if structure is None:
+            compat_structure = [
+                {"type": "layer", "module": m} for m in transition_modules
+            ]
+        else:
+            compat_structure = structure
+
         # Capture initial states
-        states = self._capture_states(model, x, structure)
+        states = self._capture_states_from_transitions(model, x, transition_modules)
 
         if not states:
-            layer_count = sum(
-                1 for item in structure if item["type"] in ("layer", "attention")
-            )
-            if layer_count > 0:
+            if transition_modules:
                 raise RuntimeError(
-                    f"No activations captured. Expected {layer_count} layer(s)."
+                    f"No activations captured. Expected {len(transition_modules)} "
+                    f"transition module(s)."
                 )
             else:
                 return []
@@ -495,7 +572,7 @@ class Settler:
             target_vec,
             beta,
             energy_fn,
-            structure,
+            compat_structure,
             self.steps,
             self.lr,
         )

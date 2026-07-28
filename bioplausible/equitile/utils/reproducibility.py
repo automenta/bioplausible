@@ -116,7 +116,7 @@ class ReproducibilityTracker:
                 .strip()
             )
         except Exception:
-            pass
+            logger.warning("Failed to get git branch name")
 
         # GPU info
         gpu_info = []

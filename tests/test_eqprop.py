@@ -5,6 +5,7 @@ import torch
 from torch import nn
 
 from bioplausible.zoo.propagators.eqprop import (
+    AdamEqProp,
     EqProp,
     HolomorphicEqProp,
     FiniteNudgeEqProp,
@@ -13,7 +14,10 @@ from bioplausible.zoo.propagators.eqprop import (
 from bioplausible.zoo.propagators.base import LearningRuleOptimizer
 
 
-class SimpleMLP(nn.Module):
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
+
+
+class SimpleMLP(TransitionGraphMixin, nn.Module):
     """Minimal MLP for eqprop tests.
 
     NOTE: All layers must have the same hidden dim to match EqProp's
@@ -92,7 +96,7 @@ class TestEqProp:
 
         opt.step(x, target)
 
-        layers = opt._get_layers()
+        layers = opt._get_transitions()
         reachable_weights = [
             p for i, p in enumerate(params) if p.ndim >= 2 and i < len(layers)
         ]
@@ -110,19 +114,19 @@ class TestEqProp:
 
     def test_get_layers_linear(self, model):
         opt = EqProp(list(model.parameters()), model)
-        layers = opt._get_layers()
+        layers = opt._get_transitions()
         assert all(isinstance(l, (nn.Linear, nn.Conv2d)) for l in layers)
         assert len(layers) == 3  # fc1, fc2, fc3
 
     def test_get_layers_no_linear(self):
-        """Model with no Linear/Conv2d returns empty list."""
+        """Model without transition_modules raises a clear TypeError."""
         model = nn.Sequential(nn.ReLU(), nn.Dropout(0.5))
-        # Register a single float param so optimizer accepts it
         dummy = nn.Parameter(torch.tensor(1.0))
         model.register_parameter("dummy", dummy)
         params = [dummy]
         opt = EqProp(params, model)
-        assert opt._get_layers() == []
+        with pytest.raises(TypeError, match="transition_modules"):
+            opt._get_transitions()
 
     def test_settle_output_shape(self, params, model, x):
         opt = EqProp(params, model, settle_lr=0.1)
@@ -143,7 +147,7 @@ class TestEqProp:
         pairs_nudged = opt._settle(x, target=torch.randint(0, 8, (4,)), beta=0.5)
         opt._compute_ep_gradient(pairs_free, pairs_nudged)
 
-        layers = opt._get_layers()
+        layers = opt._get_transitions()
         for i, p in enumerate(params):
             if p.ndim >= 2 and i < len(layers):
                 assert p.grad is not None, (
@@ -336,4 +340,34 @@ class TestLazyEqProp:
 
     def test_is_learning_rule_optimizer(self, params, model):
         opt = LazyEqProp(params, model)
+        assert isinstance(opt, LearningRuleOptimizer)
+
+
+class TestAdamEqProp:
+    """Tests for Adam-flavored Equilibrium Propagation."""
+
+    def test_init(self, params, model):
+        opt = AdamEqProp(params, model, lr=0.001, betas=(0.9, 0.999))
+        assert opt.beta == 0.5
+        assert opt.settle_steps == 30
+        assert opt._adam is not None
+
+    def test_step_sets_gradients(self, params, model, x, target):
+        """AdamEqProp computes contrastive gradients like EqProp."""
+        opt = AdamEqProp(params, model, lr=0.01, beta=0.5, settle_steps=5, settle_lr=0.1)
+
+        for p in params:
+            p.grad = None
+
+        opt.step(x, target)
+
+        # At least 2D params reachable by EP gradient should have .grad set
+        layers = opt._get_transitions()
+        reachable = [p for i, p in enumerate(params) if p.ndim >= 2 and i < len(layers)]
+        assert all(p.grad is not None for p in reachable)
+        for p in reachable:
+            assert p.grad.shape == p.shape
+
+    def test_is_learning_rule_optimizer(self, params, model):
+        opt = AdamEqProp(params, model)
         assert isinstance(opt, LearningRuleOptimizer)

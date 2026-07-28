@@ -270,7 +270,7 @@ class KnowledgeBase:
             text = f"{entry.topic} {entry.finding} {entry.details}"
             embedding = self._embed_text(text)
             if embedding is not None:
-                entry.embedding = embedding.tolist()
+                object.__setattr__(entry, "embedding", embedding.tolist())
 
         # Store in SQLite
         with sqlite3.connect(self.db_path) as conn:

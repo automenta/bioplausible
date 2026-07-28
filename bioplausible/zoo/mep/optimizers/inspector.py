@@ -2,6 +2,10 @@
 Model structure inspection utilities.
 
 Extracts layer structure from PyTorch models for EP state tracking.
+
+REFACTOR3: Layer discovery now delegates to the model's ``transition_modules()``
+where available. The recursive fallback is retained for models that do not
+implement the ``TransitionGraph`` protocol.
 """
 
 from typing import Any
@@ -14,10 +18,9 @@ class ModelInspector:
     Extracts sequence of layers and activations from a model.
 
     Caches structure to avoid repeated introspection.
-    Uses recursive inspection to handle nested modules correctly,
-    treating complex modules (like MultiheadAttention) as atomic units
-    if they are explicitly handled, preventing duplicate structure entries
-    for their submodules.
+    Prefers the model's ``transition_modules()`` for authoritative layer
+    discovery, falling back to a recursive scan of ``children()`` when the
+    protocol is not implemented.
     """
 
     def __init__(self) -> None:
@@ -37,6 +40,19 @@ class ModelInspector:
         if model_id in self._cache:
             return self._cache[model_id]
 
+        # 1. Prefer TransitionGraph protocol (REFACTOR3).
+        if hasattr(model, "transition_modules"):
+            try:
+                structure = [
+                    {"type": self._get_module_type(m) or "layer", "module": m}
+                    for m in model.transition_modules()
+                ]
+                self._cache[model_id] = structure
+                return structure
+            except NotImplementedError:
+                pass
+
+        # 2. Fallback: recursive scan.
         structure: list[dict[str, Any]] = []
         self._inspect_recursive(model, structure)
 

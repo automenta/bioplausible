@@ -534,7 +534,7 @@ def test_comma_except_syntax_at_runtime_catches_both_types():
     # Should catch ValueError
     try:
         int("not_a_number")
-    except (RuntimeError, ValueError):
+    except RuntimeError, ValueError:
         pass  # Must catch ValueError
     else:
         pytest.fail("except (RuntimeError, ValueError): did not catch ValueError")
@@ -542,7 +542,7 @@ def test_comma_except_syntax_at_runtime_catches_both_types():
     # Should catch ImportError
     try:
         import nonexistent_module_xyz  # noqa: F401
-    except (ImportError, OSError):
+    except ImportError, OSError:
         pass  # Must catch ImportError
     else:
         pytest.fail("except (ImportError, OSError): did not catch ImportError")
@@ -551,7 +551,7 @@ def test_comma_except_syntax_at_runtime_catches_both_types():
     try:
         msg: str = "hello"
         msg + 1  # type: ignore[operator]  # raises TypeError
-    except (RuntimeError, ValueError):
+    except RuntimeError, ValueError:
         pytest.fail("(RuntimeError, ValueError) should NOT catch TypeError")
     except TypeError:
         pass  # Expected — TypeError should propagate out
@@ -562,7 +562,7 @@ def test_comma_except_syntax_at_runtime_catches_both_types():
     def raise_triple(exc_type: type[BaseException]) -> None:
         try:
             raise exc_type("test")
-        except (RuntimeError, ValueError, IndexError):
+        except RuntimeError, ValueError, IndexError:
             results.append("caught")
 
     raise_triple(RuntimeError)

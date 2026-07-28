@@ -94,6 +94,13 @@ class LoopedMLP(EqPropModel):
 
         self._init_weights()
 
+    def transition_modules(self) -> list[nn.Module]:
+        """Modules called in order during one forward step.
+
+        :returns: ``[self.W_in, self.W_rec, self.W_out]``
+        """
+        return [self.W_in, self.W_rec, self.W_out]
+
     def __repr__(self) -> str:
         backend_str = f", backend={self.backend}" if self.backend != "pytorch" else ""
         return (

@@ -596,6 +596,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
         beta = self.equitile_config.beta * (
             self.equitile_config.beta_anneal**self._step_count
         )
+        beta = max(beta, 1e-8)
 
         activities_free, activities_nudged, loss, logits = self._compute_ep_components(
             input_proj, y, batch, x.device

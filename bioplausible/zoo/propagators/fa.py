@@ -37,12 +37,13 @@ class FeedbackAlignment(LearningRuleOptimizer):
         self.feedback_weights = self._create_feedback_weights(feedback_seed)
 
     def _create_feedback_weights(self, seed: int) -> list[torch.Tensor]:
-        torch.manual_seed(seed)
+        gen = torch.Generator()
+        gen.manual_seed(seed)
         feedback = []
 
         for param in self.params:
             if param.ndim >= 2:
-                fb = torch.randn_like(param) * 0.1
+                fb = torch.randn_like(param, generator=gen) * 0.1
                 feedback.append(fb)
             else:
                 feedback.append(None)
@@ -95,7 +96,8 @@ class DirectFA(LearningRuleOptimizer):
         self.feedback_weights = self._create_direct_feedback(feedback_seed)
 
     def _create_direct_feedback(self, seed: int) -> list[torch.Tensor]:
-        torch.manual_seed(seed)
+        gen = torch.Generator()
+        gen.manual_seed(seed)
         feedback = []
 
         output_dim = None
@@ -106,7 +108,12 @@ class DirectFA(LearningRuleOptimizer):
         for param in self.params:
             if param.ndim >= 2 and output_dim is not None:
                 input_dim = param.shape[1]
-                fb = torch.randn(output_dim, input_dim, device=param.device) * 0.1
+                fb = (
+                    torch.randn(
+                        output_dim, input_dim, device=param.device, generator=gen
+                    )
+                    * 0.1
+                )
                 feedback.append(fb)
             else:
                 feedback.append(None)

@@ -61,14 +61,15 @@ def export_to_onnx(
     # Handle compiled models
     model = _get_model_for_processing(model)
 
+    was_training = model.training
     model.eval()
-    model = model.to(device)
-    dummy_input = torch.randn(*input_shape, device=device)
-
-    if dynamic_axes is None:
-        dynamic_axes = {"input": {0: "batch"}, "output": {0: "batch"}}
-
     try:
+        model = model.to(device)
+        dummy_input = torch.randn(*input_shape, device=device)
+
+        if dynamic_axes is None:
+            dynamic_axes = {"input": {0: "batch"}, "output": {0: "batch"}}
+
         torch.onnx.export(
             model,
             dummy_input,
@@ -79,9 +80,12 @@ def export_to_onnx(
             dynamic_axes=dynamic_axes,
             do_constant_folding=True,
         )
-        logger.info("✓ Model exported to %s", output_path)
+        logger.info("Model exported to %s", output_path)
     except Exception as e:
         raise RuntimeError(f"ONNX export failed: {e}")
+    finally:
+        if was_training:
+            model.train()
 
 
 def count_parameters(model: nn.Module, trainable_only: bool = True) -> int:
@@ -294,31 +298,36 @@ def profile_model(
         Dictionary with 'avg_ms' and 'std_ms'
     """
     model = model.to(device)
+    was_training = model.training
     model.eval()
-    x = torch.randn(*input_shape, device=device)
+    try:
+        x = torch.randn(*input_shape, device=device)
 
-    # Warmup
-    for _ in range(3):
+        # Warmup
+        for _ in range(3):
+            with torch.no_grad():
+                _ = model(x)
+
+        times = []
         with torch.no_grad():
-            _ = model(x)
+            for _ in range(runs):
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                start = time.perf_counter()
 
-    times = []
-    with torch.no_grad():
-        for _ in range(runs):
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
-            start = time.perf_counter()
+                _ = model(x)
 
-            _ = model(x)
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                times.append((time.perf_counter() - start) * 1000)
 
-            if torch.cuda.is_available():
-                torch.cuda.synchronize()
-            times.append((time.perf_counter() - start) * 1000)
+        avg_ms = sum(times) / len(times)
+        std_ms = (sum((t - avg_ms) ** 2 for t in times) / len(times)) ** 0.5
 
-    avg_ms = sum(times) / len(times)
-    std_ms = (sum((t - avg_ms) ** 2 for t in times) / len(times)) ** 0.5
-
-    return {"avg_ms": avg_ms, "std_ms": std_ms}
+        return {"avg_ms": avg_ms, "std_ms": std_ms}
+    finally:
+        if was_training:
+            model.train()
 
 
 # Missing utils imported by models

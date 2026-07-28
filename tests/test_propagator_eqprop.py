@@ -8,6 +8,7 @@ import pytest
 import torch
 from torch import nn
 
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 from bioplausible.zoo.propagators.eqprop import (
     EqProp,
     FiniteNudgeEqProp,
@@ -21,7 +22,7 @@ from bioplausible.zoo.propagators.eqprop import (
 # =============================================================================
 
 
-class SameDimMLP(nn.Module):
+class SameDimMLP(TransitionGraphMixin, nn.Module):
     """Equal-dim MLP so _compute_ep_gradient can reach all weight params."""
 
     def __init__(self, dim: int = 8):
@@ -89,7 +90,7 @@ class TestEqProp:
 
     def test_get_layers_returns_weighted_only(self, params, model):
         opt = EqProp(params, model)
-        layers = opt._get_layers()
+        layers = opt._get_transitions()
         assert len(layers) == 2
         assert all(isinstance(l, (nn.Linear, nn.Conv2d)) for l in layers)
 

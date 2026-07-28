@@ -23,8 +23,17 @@ class EqPropDiffusion(nn.Module):
     This model predicts the clean image x_0 from x_t.
     """
 
-    def __init__(self, img_channels=1, hidden_channels=64, gradient_method="bptt"):
+    def __init__(
+        self,
+        img_channels=1,
+        hidden_channels=64,
+        gradient_method="bptt",
+        optimizer_class=torch.optim.Adam,
+        optimizer_kwargs: dict | None = None,
+    ):
         super().__init__()
+        self.optimizer_class = optimizer_class
+        self.optimizer_kwargs = optimizer_kwargs or {"lr": 1e-3}
         self.denoiser = SimpleConvEqProp(
             input_channels=img_channels + 1,
             hidden_channels=hidden_channels,
@@ -94,8 +103,10 @@ class EqPropDiffusion(nn.Module):
 
         loss = F.mse_loss(pred, x)
 
-        if not hasattr(self, "optimizer"):
-            self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        if not hasattr(self, "optimizer") or not self.optimizer:
+            self.optimizer = self.optimizer_class(
+                self.parameters(), **self.optimizer_kwargs
+            )
 
         if self.training:
             self.optimizer.zero_grad()

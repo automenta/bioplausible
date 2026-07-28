@@ -6,6 +6,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
+
 
 @dataclass
 class HomeostasisMetrics:
@@ -17,7 +19,7 @@ class HomeostasisMetrics:
     layers_boosted: int
 
 
-class HomeostaticEqProp(nn.Module):
+class HomeostaticEqProp(TransitionGraphMixin, nn.Module):
     """
     EqProp with Dynamic Lipschitz Scaling for autonomous stability.
     """
@@ -41,7 +43,6 @@ class HomeostaticEqProp(nn.Module):
         self.output_dim = output_dim
         self.num_layers = num_layers
         self.alpha = alpha
-
         self.target_lipschitz = target_lipschitz
         self.velocity_threshold_high = velocity_threshold_high
         self.velocity_threshold_low = velocity_threshold_low
@@ -63,6 +64,13 @@ class HomeostaticEqProp(nn.Module):
 
         self.last_velocities: dict[int, float] = {}
         self.homeostasis_history: list[HomeostasisMetrics] = []
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Modules called in order during one forward step.
+
+        :returns: ``[self.W_in, *self.layers, self.head]``
+        """
+        return [self.W_in, *self.layers, self.head]
 
     def _estimate_layer_lipschitz(self, layer_idx: int) -> float:
         original_weight = self.layers[layer_idx].weight

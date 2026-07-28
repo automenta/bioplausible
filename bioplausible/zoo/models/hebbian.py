@@ -95,6 +95,13 @@ class DeepHebbianChain(NEBCBase):
             input_dim, hidden_dim, output_dim, num_layers, use_spectral_norm, max_steps
         )
 
+    def transition_modules(self) -> list[nn.Module]:
+        """Modules called in order during one forward step.
+
+        :returns: ``list(self.chain)``
+        """
+        return list(self.chain)
+
     @classmethod
     def build(
         cls,

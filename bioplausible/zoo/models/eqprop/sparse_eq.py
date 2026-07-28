@@ -70,9 +70,6 @@ class SparseEquilibrium(BioModel):
 
         return activations[-1]
 
-    def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        return None
-
     @classmethod
     def build(
         cls,

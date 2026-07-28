@@ -46,7 +46,9 @@ class StandardEqProp(BioModel):
 
         self.to(kwargs.get("device", "cpu"))
 
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        opt_cls = kwargs.pop("optimizer_class", torch.optim.SGD)
+        opt_kw = kwargs.pop("optimizer_kwargs", {"lr": self.lr, "momentum": 0.9})
+        self.optimizer = opt_cls(self.parameters(), **opt_kw)
 
     def _get_spectral_normalized_weight(self, layer: nn.Module) -> torch.Tensor:
         if not self.training and hasattr(layer, "_cached_sn_weight"):

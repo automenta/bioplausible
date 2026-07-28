@@ -5,7 +5,6 @@ Classes: ContrastiveHebbianLearning (CHL)
 """
 
 import torch
-import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import LocalityLevel, register_propagator
@@ -61,9 +60,8 @@ class ContrastiveHebbianLearning(LearningRuleOptimizer):
     def _forward_capture(self, x: torch.Tensor) -> list[torch.Tensor]:
         states = [x]
         h = x
-        for layer in self._get_layers():
+        for layer in self._get_transitions():
             h = layer(h)
-            h = F.relu(h)
             states.append(h)
         return states
 
@@ -74,25 +72,28 @@ class ContrastiveHebbianLearning(LearningRuleOptimizer):
     ) -> list[torch.Tensor]:
         states = [x]
         h = x
-        for i, layer in enumerate(self._get_layers()):
+        for layer in self._get_transitions():
             h = layer(h)
-            h = F.relu(h)
             states.append(h)
         return states
 
-    def _get_layers(self) -> list[nn.Module]:
-        layers = []
-        for module in self.model.modules():
-            if isinstance(module, (nn.Linear, nn.Conv2d)):
-                layers.append(module)
-        return layers
+    def _get_transitions(self) -> list[nn.Module]:
+        if not hasattr(self.model, "transition_modules"):
+            raise TypeError(
+                f"CHL requires a model implementing TransitionGraph. "
+                f"{type(self.model).__name__} does not implement "
+                f"transition_modules(). "
+                f"Either implement transition_modules() on your model, "
+                f"or use a whole-model propagator (Backprop, FeedbackAlignment)."
+            )
+        return self.model.transition_modules()
 
     def _hebbian_update(
         self,
         free_states: list[torch.Tensor],
         clamped_states: list[torch.Tensor],
     ) -> None:
-        layers = self._get_layers()
+        layers = self._get_transitions()
 
         for i, layer in enumerate(layers):
             if i + 1 < len(free_states):

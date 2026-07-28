@@ -46,7 +46,9 @@ class DirectedEP(BioModel):
             self.feedback_layers.append(bwd)
 
         self.to(kwargs.get("device", "cpu"))
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        opt_cls = kwargs.pop("optimizer_class", torch.optim.SGD)
+        opt_kw = kwargs.pop("optimizer_kwargs", {"lr": self.lr, "momentum": 0.9})
+        self.optimizer = opt_cls(self.parameters(), **opt_kw)
 
     def forward_dynamics(
         self,

@@ -73,7 +73,7 @@ def run_search(args):
     logger.info("   Config: %d epochs, %d trials", config.epochs, config.n_trials)
 
     if args.models.lower() == "all":
-        models = list(Registry._components.get(ComponentCategory.MODEL, {}).keys())
+        models = Registry.list(ComponentCategory.MODEL).get("model", [])
     else:
         models = args.models.split(",")
         models = [m.strip() for m in models if m.strip()]

@@ -30,7 +30,7 @@ The zoo provides two complementary interfaces for bio-plausible learning:
    `LearningRuleOptimizer`). These mutate parameters of *any* model:
    Backprop, FeedbackAlignment, EqProp, ContrastiveHebbianLearning, MEP
    presets (smep, sdmep, ...). Use via the Registry API:
-   `registry.make_optimizer("eq_prop", model.parameters(), model=model)`.
+   `Registry.get(ComponentCategory.OPTIMIZER, "eq_prop")`.
 
 2. **Model side** (`bioplausible.zoo.models`): Learning rules that require
    *model-side* control of the forward/training loop (custom dual-phase passes,

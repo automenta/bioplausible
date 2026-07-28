@@ -159,7 +159,7 @@ def reproduce():
         acc = metrics.get('accuracy', 0.0)
         loss = metrics['loss']
         print(
-            f"Epoch {{epoch+1}}/{{epochs}}: Acc={{acc:.4f}} Loss={{loss:.4f}}"
+            f"Epoch {epoch + 1}/{epochs}: Acc={acc:.4f} Loss={loss:.4f}"
         )
 
 if __name__ == "__main__":

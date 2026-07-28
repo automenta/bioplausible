@@ -6,6 +6,8 @@ import torch
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
+
 from ...base import register_model
 
 
@@ -38,7 +40,7 @@ class LazyStats:
     family="eqprop",
     tags=["eqprop", "lazy"],
 )
-class LazyEqProp(nn.Module):
+class LazyEqProp(TransitionGraphMixin, nn.Module):
     """
     Event-driven Equilibrium Propagation with lazy updates.
 
@@ -87,6 +89,13 @@ class LazyEqProp(nn.Module):
                 weight.mul_(0.8)
 
         self.stats = LazyStats()
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Modules called in order during one forward step.
+
+        :returns: ``[self.embed, *self.layers, self.head]``
+        """
+        return [self.embed, *self.layers, self.head]
 
     def lazy_forward_step(
         self,

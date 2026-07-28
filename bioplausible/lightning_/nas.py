@@ -20,17 +20,14 @@ logger = logging.getLogger(__name__)
 
 def get_plausible_model_names() -> list[str]:
     """Return bio-plausible model names."""
-    models = Registry._components.get(ComponentCategory.MODEL, {})
-    return list(models.keys())
+    return Registry.list(ComponentCategory.MODEL).get("model", [])
 
 
 def get_bio_optimizer_names() -> list[str]:
     """Return bio-plausible optimizer names."""
     keywords = ("eqprop", "smep", "hebbian", "fa", "chl")
-    optimizers = Registry._components.get(ComponentCategory.OPTIMIZER, {})
-    return [
-        name for name in optimizers.keys() if any(kw in name.lower() for kw in keywords)
-    ]
+    optimizers = Registry.list(ComponentCategory.OPTIMIZER).get("optimizer", [])
+    return [name for name in optimizers if any(kw in name.lower() for kw in keywords)]
 
 
 def create_nas_objective(

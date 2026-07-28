@@ -564,7 +564,7 @@ class OptimizedLMEquiTile(LMEquiTile):
 
         # Compute perplexity
         with torch.no_grad():
-            perplexity = torch.exp(loss).item()
+            perplexity = torch.exp(torch.clamp(loss, max=80)).item()
 
         return {
             "loss": loss.item(),

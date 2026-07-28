@@ -12,30 +12,13 @@ The `step` signature split is intentional:
 - `LearningRuleOptimizer.step(x, target)` owns the forward+backward pass internally
   (or uses a local learning rule that does not require autograd backward).
   It CANNOT be driven by the `loss.backward(); optimizer.step()` idiom.
-
-Use the `PlausibleStep` protocol for static checking of learning-rule-style steppers.
 """
 
 from collections.abc import Callable
-from typing import Protocol
 
 import torch
 from torch import nn
 from torch.optim import Optimizer
-
-# PEP 695 type alias: the input shape for learning-rule step()
-type StepInput = torch.Tensor | tuple[torch.Tensor, torch.Tensor | None]
-
-
-class PlausibleStep(Protocol):
-    """Protocol for learning-rule optimizers that own their backward pass.
-
-    Classes implementing this protocol must provide a `step(x, target=None)`
-    method. They are NOT compatible with the standard PyTorch
-    `loss.backward(); optimizer.step()` pattern.
-    """
-
-    def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None: ...
 
 
 class BioOptimizer(Optimizer):
@@ -75,7 +58,6 @@ class LearningRuleOptimizer(BioOptimizer):
     WARNING: This class's `step(x, target=None)` signature is INCOMPATIBLE
     with the PyTorch `Optimizer.step(closure=None)` contract. It owns the
     forward/backward pass and cannot be used as `loss.backward(); opt.step()`.
-    Static type checkers will flag misuse via the `PlausibleStep` protocol.
     """
 
     def __init__(

@@ -8,6 +8,7 @@ Aggregates all forward-only learning models into a single module for the model z
 import math
 
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import LocalityLevel, register_model
@@ -123,11 +124,8 @@ class ForwardForwardNet(nn.Module):
             h_neg = layer(h_neg)
             g_neg = (h_neg**2).mean(dim=1)
 
-            loss = torch.log(
-                1
-                + torch.exp(
-                    torch.cat([-g_pos + self.threshold, g_neg - self.threshold])
-                )
+            loss = F.softplus(
+                torch.cat([-g_pos + self.threshold, g_neg - self.threshold])
             ).mean()
 
             layer.opt.zero_grad()

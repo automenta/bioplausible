@@ -92,7 +92,7 @@ class NEBCRegistry:
     def list_all(cls) -> list[str]:
         from bioplausible.core.registry import ComponentCategory, Registry
 
-        return list(Registry._components.get(ComponentCategory.MODEL, {}).keys())
+        return Registry.list(ComponentCategory.MODEL).get("model", [])
 
     @classmethod
     def create(cls, name: str, *args, **kwargs) -> NEBCBase:
@@ -152,13 +152,17 @@ def evaluate_nebc_model(
     """
     Evaluate an NEBC model and return comprehensive metrics.
     """
+    was_training = model.training
     model.eval()
-    with torch.no_grad():
-        out = model(X)
-        loss = F.cross_entropy(out, y).item()
-        acc = (out.argmax(dim=1) == y).float().mean().item()
-        L = model.compute_lipschitz()
-    model.train()
+    try:
+        with torch.no_grad():
+            out = model(X)
+            loss = F.cross_entropy(out, y).item()
+            acc = (out.argmax(dim=1) == y).float().mean().item()
+            L = model.compute_lipschitz()
+    finally:
+        if was_training:
+            model.train()
 
     return {"accuracy": acc, "loss": loss, "lipschitz": L, **model.get_stats()}
 

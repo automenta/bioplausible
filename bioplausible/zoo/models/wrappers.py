@@ -72,13 +72,23 @@ class RecurrentWrapper(EqPropModel):
         batch_size = x.shape[0]
 
         # Initialize hidden state
-        h = torch.zeros(batch_size, self.hidden_dim, device=x.device, dtype=x.dtype)
+        h: torch.Tensor | tuple[torch.Tensor, torch.Tensor] = torch.zeros(
+            batch_size, self.hidden_dim, device=x.device, dtype=x.dtype
+        )
+
+        # LSTMCell expects (h, c) tuple; RNNCell/GRUCell expect single tensor
+        if isinstance(self.cell, nn.LSTMCell):
+            c = torch.zeros(batch_size, self.hidden_dim, device=x.device, dtype=x.dtype)
+            h = (h, c)
 
         # Settle to equilibrium
         for _ in range(steps):
             h = self.cell(x, h)
 
-        # Output from final hidden state
+        # Output from final hidden state: extract hidden part if tuple
+        if isinstance(h, tuple):
+            h = h[0]
+        return self.output_layer(h)
         return self.output_layer(h)
 
 

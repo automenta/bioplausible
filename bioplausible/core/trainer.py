@@ -21,7 +21,12 @@ from omegaconf import DictConfig, OmegaConf
 from torch import nn
 
 from bioplausible.core.energy import EnergyTracker
-from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.registry import (
+    Capability,
+    ComponentCategory,
+    IncompatibilityError,
+    Registry,
+)
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.data.vision import create_data_loaders
 
@@ -478,16 +483,14 @@ class CoreTrainer:
         logger.info("Creating model: %s", self.config.model)
 
         # Check if model is registered in new registry
-        if Registry._components.get(ComponentCategory.MODEL, {}).get(self.config.model):
+        try:
             model_cls = Registry.get(ComponentCategory.MODEL, self.config.model)
-            self.model = model_cls(**self.config.model_kwargs)
-        else:
-            available = list(
-                Registry._components.get(ComponentCategory.MODEL, {}).keys()
-            )
+        except ValueError:
+            available = Registry.list(ComponentCategory.MODEL).get("model", [])
             raise ValueError(
                 f"Model '{self.config.model}' not registered. Available: {available}"
             )
+        self.model = model_cls(**self.config.model_kwargs)
 
         logger.info("Model created: %s", self.model.__class__.__name__)
         logger.info("Parameters: %s", sum(p.numel() for p in self.model.parameters()))
@@ -503,26 +506,44 @@ class CoreTrainer:
 
         logger.info("Creating propagator: %s", self.config.propagator)
 
-        if Registry._components.get(ComponentCategory.PROPAGATOR, {}).get(
-            self.config.propagator
-        ):
+        # Check capability compatibility (REFACTOR3 §4-5).
+        prop_name = self.config.propagator
+        model_name = self.config.model
+
+        try:
+            prop_meta = Registry.get_metadata(ComponentCategory.PROPAGATOR, prop_name)
+            model_meta = Registry.get_metadata(ComponentCategory.MODEL, model_name)
+            required = set(prop_meta.requires)
+            provided = set(model_meta.provides)
+            missing = required - provided
+            if missing:
+                raise IncompatibilityError(
+                    f"Propagator '{prop_name}' requires capabilities {missing}, "
+                    f"but model '{model_name}' only provides {provided}. "
+                    f"Fix: implement transition_modules() on your model, "
+                    f"or use a compatible propagator (e.g., 'backprop', 'fa')."
+                )
+        except ValueError:
+            # If metadata not found, fall through to try creating anyway.
+            pass
+
+        try:
             prop_cls = Registry.get(
                 ComponentCategory.PROPAGATOR, self.config.propagator
             )
-            self.propagator = prop_cls(self.model, **self.config.propagator_kwargs)
-        else:
+        except ValueError:
             logger.warning(
                 "Propagator %s not in registry, skipping", self.config.propagator
             )
+            return
+        self.propagator = prop_cls(self.model, **self.config.propagator_kwargs)
 
     def _create_optimizer(self) -> None:
         """Create optimizer."""
         logger.info("Creating optimizer: %s", self.config.optimizer)
 
         # Check if optimizer is in new registry
-        if Registry._components.get(ComponentCategory.OPTIMIZER, {}).get(
-            self.config.optimizer
-        ):
+        try:
             opt_cls = Registry.get(ComponentCategory.OPTIMIZER, self.config.optimizer)
 
             # Check if it's a learning rule optimizer (needs model)
@@ -545,7 +566,7 @@ class CoreTrainer:
                 self.optimizer = opt_cls(
                     self.model.parameters(), **self.config.optimizer_kwargs
                 )
-        else:
+        except ValueError:
             # Fall back to torch.optim
             opt_cls = getattr(torch.optim, self.config.optimizer, None)
             if opt_cls is None:
@@ -709,7 +730,7 @@ class CoreTrainer:
             else:
                 try:
                     x, y = next(self._train_iter)
-                except (AttributeError, StopIteration):
+                except AttributeError, StopIteration:
                     self._train_iter = iter(self.train_loader)
                     x, y = next(self._train_iter)
 
@@ -858,7 +879,7 @@ class CoreTrainer:
                 else:
                     try:
                         x, y = next(self._val_iter)
-                    except (AttributeError, StopIteration):
+                    except AttributeError, StopIteration:
                         self._val_iter = iter(self.val_loader)
                         x, y = next(self._val_iter)
 

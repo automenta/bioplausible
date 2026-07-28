@@ -686,7 +686,7 @@ class LMEquiTile(BioModel):
 
         # Compute perplexity
         with torch.no_grad():
-            perplexity = torch.exp(loss).item()
+            perplexity = torch.exp(torch.clamp(loss, max=80)).item()
 
         return {
             "loss": loss.item(),
@@ -1127,7 +1127,7 @@ def generate_text(
                         logits = logits[0, -1, :]
                     elif logits.dim() == 2:
                         logits = logits[0]
-                except (RuntimeError, ValueError, IndexError):
+                except RuntimeError, ValueError, IndexError:
                     break
 
             # Apply temperature

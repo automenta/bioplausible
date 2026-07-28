@@ -21,6 +21,7 @@ from bioplausible.zoo.models.fa import (
 
 # ─── FeedbackAlignmentLayer ─────────────────────────────────────────────────────
 
+
 class TestFeedbackAlignmentLayer:
     def test_construction_random(self):
         layer = FeedbackAlignmentLayer(10, 20, feedback_mode="random")
@@ -67,6 +68,7 @@ class TestFeedbackAlignmentLayer:
 
 # ─── FeedbackAlignmentEqProp ────────────────────────────────────────────────────
 
+
 class TestFeedbackAlignmentEqProp:
     def test_construction(self):
         model = FeedbackAlignmentEqProp(
@@ -95,6 +97,7 @@ class TestFeedbackAlignmentEqProp:
 
 
 # ─── AdaptiveFeedbackAlignment ──────────────────────────────────────────────────
+
 
 class TestAdaptiveFeedbackAlignment:
     def test_construction(self):
@@ -135,33 +138,33 @@ class TestAdaptiveFeedbackAlignment:
             name = "test_fa"
 
         model = AdaptiveFeedbackAlignment.build(
-            MockSpec(), input_dim=50, output_dim=5, hidden_dim=30,
-            num_layers=2, device="cpu", task_type="vision"
+            MockSpec(),
+            input_dim=50,
+            output_dim=5,
+            hidden_dim=30,
+            num_layers=2,
+            device="cpu",
+            task_type="vision",
         )
         assert isinstance(model, AdaptiveFeedbackAlignment)
 
 
 # ─── StochasticFA ───────────────────────────────────────────────────────────────
 
+
 class TestStochasticFA:
     def test_construction(self):
-        model = StochasticFA(
-            input_dim=10, hidden_dim=20, output_dim=3, num_layers=2
-        )
+        model = StochasticFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
         assert isinstance(model, StochasticFA)
 
     def test_forward_shape(self):
-        model = StochasticFA(
-            input_dim=10, hidden_dim=20, output_dim=3, num_layers=2
-        )
+        model = StochasticFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
         x = torch.randn(4, 10)
         out = model(x)
         assert out.shape == (4, 3)
 
     def test_train_step_returns_dict(self):
-        model = StochasticFA(
-            input_dim=10, hidden_dim=20, output_dim=3, num_layers=2
-        )
+        model = StochasticFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
         x = torch.randn(8, 10)
         y = torch.randint(0, 3, (8,))
         result = model.train_step(x, y)
@@ -173,13 +176,19 @@ class TestStochasticFA:
             name = "stochastic"
 
         model = StochasticFA.build(
-            MockSpec(), input_dim=50, output_dim=5, hidden_dim=30,
-            num_layers=2, device="cpu", task_type="vision"
+            MockSpec(),
+            input_dim=50,
+            output_dim=5,
+            hidden_dim=30,
+            num_layers=2,
+            device="cpu",
+            task_type="vision",
         )
         assert isinstance(model, StochasticFA)
 
 
 # ─── ContrastiveFeedbackAlignment ───────────────────────────────────────────────
+
 
 class TestContrastiveFeedbackAlignment:
     def test_construction(self):
@@ -209,6 +218,7 @@ class TestContrastiveFeedbackAlignment:
 
 # ─── DirectFeedbackAlignmentEqProp ──────────────────────────────────────────────
 
+
 class TestDirectFeedbackAlignmentEqProp:
     def test_construction(self):
         model = DirectFeedbackAlignmentEqProp(
@@ -236,6 +246,7 @@ class TestDirectFeedbackAlignmentEqProp:
 
 # ─── DeepDFAEqProp ──────────────────────────────────────────────────────────────
 
+
 class TestDeepDFAEqProp:
     def test_construction(self):
         model = DeepDFAEqProp(10, 20, 3, num_layers=2)
@@ -254,25 +265,20 @@ class TestDeepDFAEqProp:
 
 # ─── StandardFA ─────────────────────────────────────────────────────────────────
 
+
 class TestStandardFA:
     def test_construction(self):
-        model = StandardFA(
-            input_dim=10, hidden_dim=20, output_dim=3, num_layers=2
-        )
+        model = StandardFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
         assert isinstance(model, StandardFA)
 
     def test_forward_shape(self):
-        model = StandardFA(
-            input_dim=10, hidden_dim=20, output_dim=3, num_layers=2
-        )
+        model = StandardFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
         x = torch.randn(4, 10)
         out = model(x)
         assert out.shape == (4, 3)
 
     def test_train_step_returns_dict(self):
-        model = StandardFA(
-            input_dim=10, hidden_dim=20, output_dim=3, num_layers=2
-        )
+        model = StandardFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
         x = torch.randn(8, 10)
         y = torch.randint(0, 3, (8,))
         result = model.train_step(x, y)
@@ -280,9 +286,7 @@ class TestStandardFA:
         assert "accuracy" in result
 
     def test_train_step_loss_decreases(self):
-        model = StandardFA(
-            input_dim=10, hidden_dim=20, output_dim=3, num_layers=2
-        )
+        model = StandardFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
         x = torch.randn(16, 10)
         y = torch.randint(0, 3, (16,))
         losses = [model.train_step(x, y)["loss"] for _ in range(3)]
@@ -291,25 +295,20 @@ class TestStandardFA:
 
 # ─── EnergyGuidedFA ─────────────────────────────────────────────────────────────
 
+
 class TestEnergyGuidedFA:
     def test_construction(self):
-        model = EnergyGuidedFA(
-            input_dim=10, hidden_dim=20, output_dim=3, num_layers=2
-        )
+        model = EnergyGuidedFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
         assert isinstance(model, EnergyGuidedFA)
 
     def test_forward_shape(self):
-        model = EnergyGuidedFA(
-            input_dim=10, hidden_dim=20, output_dim=3, num_layers=2
-        )
+        model = EnergyGuidedFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
         x = torch.randn(4, 10)
         out = model(x)
         assert out.shape == (4, 3)
 
     def test_train_step_returns_dict(self):
-        model = EnergyGuidedFA(
-            input_dim=10, hidden_dim=20, output_dim=3, num_layers=2
-        )
+        model = EnergyGuidedFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
         x = torch.randn(8, 10)
         y = torch.randint(0, 3, (8,))
         result = model.train_step(x, y)
@@ -321,13 +320,19 @@ class TestEnergyGuidedFA:
             name = "guided"
 
         model = EnergyGuidedFA.build(
-            MockSpec(), input_dim=50, output_dim=5, hidden_dim=30,
-            num_layers=2, device="cpu", task_type="vision"
+            MockSpec(),
+            input_dim=50,
+            output_dim=5,
+            hidden_dim=30,
+            num_layers=2,
+            device="cpu",
+            task_type="vision",
         )
         assert isinstance(model, EnergyGuidedFA)
 
 
 # ─── EnergyMinimizingFA ─────────────────────────────────────────────────────────
+
 
 class TestEnergyMinimizingFA:
     def test_construction(self):
@@ -359,13 +364,19 @@ class TestEnergyMinimizingFA:
             name = "minimizing"
 
         model = EnergyMinimizingFA.build(
-            MockSpec(), input_dim=50, output_dim=5, hidden_dim=30,
-            num_layers=2, device="cpu", task_type="vision"
+            MockSpec(),
+            input_dim=50,
+            output_dim=5,
+            hidden_dim=30,
+            num_layers=2,
+            device="cpu",
+            task_type="vision",
         )
         assert isinstance(model, EnergyMinimizingFA)
 
 
 # ─── LayerwiseEquilibriumFA ─────────────────────────────────────────────────────
+
 
 class TestLayerwiseEquilibriumFA:
     def test_construction(self):
@@ -397,13 +408,19 @@ class TestLayerwiseEquilibriumFA:
             name = "layerwise"
 
         model = LayerwiseEquilibriumFA.build(
-            MockSpec(), input_dim=50, output_dim=5, hidden_dim=30,
-            num_layers=2, device="cpu", task_type="vision"
+            MockSpec(),
+            input_dim=50,
+            output_dim=5,
+            hidden_dim=30,
+            num_layers=2,
+            device="cpu",
+            task_type="vision",
         )
         assert isinstance(model, LayerwiseEquilibriumFA)
 
 
 # ─── EquilibriumAlignment ───────────────────────────────────────────────────────
+
 
 class TestEquilibriumAlignment:
     def test_construction(self):
@@ -437,8 +454,13 @@ class TestEquilibriumAlignment:
             default_lr = 0.001
 
         model = EquilibriumAlignment.build(
-            MockSpec(), input_dim=50, output_dim=5, hidden_dim=30,
-            num_layers=2, device="cpu", task_type="vision"
+            MockSpec(),
+            input_dim=50,
+            output_dim=5,
+            hidden_dim=30,
+            num_layers=2,
+            device="cpu",
+            task_type="vision",
         )
         assert isinstance(model, EquilibriumAlignment)
 

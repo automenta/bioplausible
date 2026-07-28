@@ -328,7 +328,7 @@ class FastLMEquiTile(OptimizedLMEquiTile):
         loss = self.compute_loss(logits, target_ids)
 
         # Compute perplexity
-        perplexity = torch.exp(loss).item()
+        perplexity = torch.exp(torch.clamp(loss, max=80)).item()
 
         # Compute training accuracy
         with torch.no_grad():

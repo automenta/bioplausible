@@ -52,8 +52,10 @@ class ModelConfig:
             import math
 
             self.input_dim = math.prod(self.input_dim)
-        assert self.input_dim >= 0
-        assert self.output_dim > 0
+        if self.input_dim < 0:
+            raise ValueError(f"input_dim must be >= 0, got {self.input_dim}")
+        if self.output_dim <= 0:
+            raise ValueError(f"output_dim must be > 0, got {self.output_dim}")
 
         # Sync steps if one is changed
         if self.equilibrium_steps != 30 and self.max_steps == 30:
@@ -312,3 +314,58 @@ class BioModel(nn.Module, ABC):
 
         model = cls(config=config).to(device)
         return model
+
+    # ------------------------------------------------------------------
+    # TransitionGraph protocol (REFACTOR3 §1)
+    # ------------------------------------------------------------------
+    def transition_modules(self) -> list[nn.Module]:
+        """Modules called in order during one forward step.
+
+        Auto-discovers from common patterns:
+        ``self.layers: nn.ModuleList``, ``self.forward_layers: nn.ModuleList``,
+        or a fallback scan of direct ``nn.Linear``/``nn.Conv*`` children.
+
+        Subclasses with non-standard structure (e.g. ``LoopedMLP``,
+        ``HomeostaticEqProp``, ``NeuralCube``) MUST override this method.
+        """
+        # 1. Explicit ModuleList (most common).
+        layers = getattr(self, "layers", None)
+        if isinstance(layers, nn.ModuleList):
+            return list(layers)
+        # 2. Forward layers (DirectedEP).
+        forward_layers = getattr(self, "forward_layers", None)
+        if isinstance(forward_layers, nn.ModuleList):
+            return list(forward_layers)
+        # 3. Fallback: scan direct children for Linear/Conv (backward compat).
+        modules = [
+            m
+            for m in self.children()
+            if isinstance(
+                m,
+                (
+                    nn.Linear,
+                    nn.Conv1d,
+                    nn.Conv2d,
+                    nn.Conv3d,
+                ),
+            )
+        ]
+        if modules:
+            return modules
+        raise NotImplementedError(
+            f"{type(self).__name__} has no transition_modules(). "
+            "Define `self.layers: nn.ModuleList[nn.Module]` or implement "
+            "transition_modules()."
+        )
+
+    def initial_state(self, x: torch.Tensor) -> torch.Tensor:
+        """Default: use the input as the initial state."""
+        return x
+
+    def readout(self, final_state: torch.Tensor) -> torch.Tensor:
+        """Default: return the final state as the output."""
+        return final_state
+
+    def num_settling_steps(self) -> int:
+        """Default: 1 (feedforward). Override for settling-based models."""
+        return 1

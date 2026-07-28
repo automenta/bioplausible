@@ -28,8 +28,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from .inspector import ModelInspector
-
 
 @dataclass
 class EPConfig:
@@ -230,13 +228,12 @@ class EPOptimizer:
 
         self.model = model
         self.params = list(params)
-        self.inspector = ModelInspector()
 
         # Structure only needed for EP mode
         if mode == "ep":
             if model is None:
                 raise ValueError("model is required for EP mode")
-            self.structure = self.inspector.inspect(model)
+            self.structure = self._build_structure_from_model(model)
 
             # Pre-compute structure info
             self._state_indices = []
@@ -315,6 +312,58 @@ class EPOptimizer:
                     p.grad = None
                 else:
                     p.grad.zero_()
+
+    @staticmethod
+    def _build_structure_from_model(model: nn.Module) -> list[dict[str, Any]]:
+        """Build structure list from model.transition_modules() or fallback scan.
+
+        Returns a list of ``{"type": "layer", "module": m}`` dicts compatible
+        with the MEP energy computation functions. Prefers the model's
+        ``transition_modules()`` for authoritative layer discovery, falling
+        back to a direct-children scan for ``nn.Linear``/``nn.Conv*``.
+        """
+        # 1. Prefer TransitionGraph protocol.
+        if hasattr(model, "transition_modules"):
+            try:
+                return [
+                    {"type": "layer", "module": m}
+                    for m in model.transition_modules()
+                ]
+            except NotImplementedError:
+                pass
+
+        # 2. Fallback: scan direct children for Linear/Conv.
+        modules = [
+            m
+            for m in model.children()
+            if isinstance(
+                m,
+                (
+                    nn.Linear,
+                    nn.Conv1d,
+                    nn.Conv2d,
+                    nn.Conv3d,
+                ),
+            )
+        ]
+        if modules:
+            return [{"type": "layer", "module": m} for m in modules]
+
+        # 3. Last resort: scan all descendants.
+        modules = [
+            m
+            for m in model.modules()
+            if isinstance(
+                m,
+                (
+                    nn.Linear,
+                    nn.Conv1d,
+                    nn.Conv2d,
+                    nn.Conv3d,
+                ),
+            )
+        ]
+        return [{"type": "layer", "module": m} for m in modules]
 
     def _ep_step(self, x: torch.Tensor, target: torch.Tensor | None):
         """EP step with configurable gradient method."""

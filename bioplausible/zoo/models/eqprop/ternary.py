@@ -4,6 +4,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
+
 
 class TernaryQuantize(torch.autograd.Function):
     """
@@ -65,7 +67,7 @@ class TernaryLinear(nn.Module):
         }
 
 
-class TernaryEqProp(nn.Module):
+class TernaryEqProp(TransitionGraphMixin, nn.Module):
     """
     Equilibrium Propagation with Ternary Weights.
 
@@ -90,6 +92,13 @@ class TernaryEqProp(nn.Module):
         self.W_in = TernaryLinear(input_dim, hidden_dim, threshold)
         self.W_rec = TernaryLinear(hidden_dim, hidden_dim, threshold)
         self.W_out = TernaryLinear(hidden_dim, output_dim, threshold)
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Modules called in order during one forward step.
+
+        :returns: ``[self.W_in, self.W_rec, self.W_out]``
+        """
+        return [self.W_in, self.W_rec, self.W_out]
 
     def forward(
         self,

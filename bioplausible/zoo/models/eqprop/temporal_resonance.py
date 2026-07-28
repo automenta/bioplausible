@@ -7,10 +7,12 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
+
 from ...utils import spectral_linear
 
 
-class TemporalResonanceEqProp(nn.Module):
+class TemporalResonanceEqProp(TransitionGraphMixin, nn.Module):
     """
     EqProp network that converges to a stable oscillation (limit cycle)
     instead of a fixed point.
@@ -49,6 +51,13 @@ class TemporalResonanceEqProp(nn.Module):
         self.head = nn.Linear(hidden_dim, output_dim)
 
         self._init_oscillatory_weights()
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Modules called in order during one forward step.
+
+        :returns: ``[self.W_in, *self.layers, self.osc_coupling, self.head]``
+        """
+        return [self.W_in, *self.layers, self.osc_coupling, self.head]
 
     def _init_oscillatory_weights(self):
         with torch.no_grad():

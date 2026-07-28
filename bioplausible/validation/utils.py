@@ -107,11 +107,15 @@ def train_model(
 
 
 def evaluate_accuracy(model: nn.Module, X: torch.Tensor, y: torch.Tensor) -> float:
+    was_training = model.training
     model.eval()
-    with torch.no_grad():
-        out = model(X)
-        acc = (out.argmax(dim=1) == y).float().mean().item()
-    model.train()
+    try:
+        with torch.no_grad():
+            out = model(X)
+            acc = (out.argmax(dim=1) == y).float().mean().item()
+    finally:
+        if was_training:
+            model.train()
     return acc
 
 

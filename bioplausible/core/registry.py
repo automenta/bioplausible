@@ -9,12 +9,19 @@ import logging
 import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass, field, fields
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
 Component = TypeVar("Component")  # registered class or factory callable
+
+
+class IncompatibilityError(TypeError):
+    """Raised when a propagator requires capabilities the model does not provide.
+
+    This is a hard error — no fallback, no silent discovery.
+    """
 
 
 class ComponentCategory(str, Enum):
@@ -63,6 +70,14 @@ class ComputeProfile(str, Enum):
     DISTRIBUTED = "distributed"
 
 
+class Capability(StrEnum):
+    """Capabilities a model can provide or a propagator can require."""
+
+    TRANSITION_GRAPH = "transition_graph"  # Model implements transition_modules()
+    STANDARD_AUTOGRAD = "standard_autograd"  # Standard forward + loss.backward()
+    CONTRASTIVE = "contrastive"  # Implements get_hebbian_pairs()
+
+
 @dataclass(frozen=True, slots=True)
 class ComponentMetadata:
     """Metadata for registered components enabling intelligent composition."""
@@ -94,6 +109,9 @@ class ComponentMetadata:
     # "mep", "equitile", etc. Directory layout mirrors this but `family` is the
     # canonical searchable attribute for grouping in the README/Registry queries.
     family: str = ""
+    # Required and provided capabilities (per REFACTOR3 §4)
+    requires: list[str] = field(default_factory=list)
+    provides: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -225,7 +243,7 @@ class Registry:
                 component._registry_metadata = metadata  # type: ignore[attr-defined]
                 component._registry_name = name  # type: ignore[attr-defined]
                 component._registry_category = category  # type: ignore[attr-defined]
-            except (AttributeError, TypeError):
+            except AttributeError, TypeError:
                 pass
             logger.info("Registered %s: %s", category.value, name)
             return component
@@ -356,6 +374,15 @@ class Registry:
         return compat
 
     @classmethod
+    def check_compatibility(cls, propagator_name: str, model_name: str) -> bool:
+        """Return True if the model provides all capabilities the propagator requires."""
+        prop_meta = cls.get_metadata(ComponentCategory.PROPAGATOR, propagator_name)
+        model_meta = cls.get_metadata(ComponentCategory.MODEL, model_name)
+        required = set(prop_meta.requires)
+        provided = set(model_meta.provides)
+        return required.issubset(provided)
+
+    @classmethod
     def clear(cls) -> None:
         """Clear the registry (mainly for testing)."""
         cls._components.clear()
@@ -427,10 +454,12 @@ def list_models() -> list[str]:
 
 
 __all__ = [
+    "Capability",
     "ComponentCategory",
     "ComponentMetadata",
     "ComputeProfile",
     "Domain",
+    "IncompatibilityError",
     "LocalityLevel",
     "Registry",
     "list_models",
