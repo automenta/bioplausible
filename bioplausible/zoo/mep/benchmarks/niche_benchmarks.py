@@ -35,19 +35,19 @@ def benchmark_regression(
     This is EP's natural domain - the energy function directly matches
     the regression objective.
     """
-    device = torch.device(device if torch.cuda.is_available() else "cpu")
+    _device = torch.device(device if torch.cuda.is_available() else "cpu")
 
     # Generate synthetic regression data
     torch.manual_seed(42)
-    X_train = torch.randn(n_train, n_features, device=device)
+    X_train = torch.randn(n_train, n_features, device=_device)
     # Target: sum of features + noise
     y_train = X_train.sum(dim=1, keepdim=True) + 0.1 * torch.randn(
-        n_train, 1, device=device
+        n_train, 1, device=_device
     )
 
-    X_test = torch.randn(n_test, n_features, device=device)
+    X_test = torch.randn(n_test, n_features, device=_device)
     y_test = X_test.sum(dim=1, keepdim=True) + 0.1 * torch.randn(
-        n_test, 1, device=device
+        n_test, 1, device=_device
     )
 
     # Normalize
@@ -170,19 +170,19 @@ def benchmark_continual_learning(
 
     Each task uses different output dimensions. Measure forgetting on previous tasks.
     """
-    device = torch.device(device if torch.cuda.is_available() else "cpu")
+    _device = torch.device(device if torch.cuda.is_available() else "cpu")
 
     torch.manual_seed(42)
 
     # Generate tasks: each task predicts different feature combinations
     tasks = []
     for t in range(n_tasks):
-        X = torch.randn(samples_per_task, n_features, device=device)
+        X = torch.randn(samples_per_task, n_features, device=_device)
         # Each task uses different subset of features
         start_idx = (t * 4) % n_features
         y = X[:, start_idx : start_idx + 4].sum(
             dim=1, keepdim=True
-        ) + 0.1 * torch.randn(samples_per_task, 1, device=device)
+        ) + 0.1 * torch.randn(samples_per_task, 1, device=_device)
         tasks.append((X, y, start_idx))
 
     def make_model() -> nn.Module:
@@ -294,7 +294,7 @@ def benchmark_adaptive_settling(
 
     This can save computation by using fewer settle steps when possible.
     """
-    device = torch.device(device if torch.cuda.is_available() else "cpu")
+    _device = torch.device(device if torch.cuda.is_available() else "cpu")
 
     # Load MNIST
     transform = transforms.Compose([

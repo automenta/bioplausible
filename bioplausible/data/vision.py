@@ -17,7 +17,7 @@ def get_vision_dataset(
     train: bool = True,
     download: bool = True,
     flatten: bool = False,
-    included_classes: Optional[list] = None,
+    included_classes: list[int] | None = None,
     augment: bool = False,
 ) -> Dataset:
     """
@@ -150,7 +150,7 @@ class CharDataset(Dataset):
     def __len__(self) -> int:
         return max(0, len(self.data) - self.seq_len - 1)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         x = self.data[idx : idx + self.seq_len]
         y = self.data[idx + 1 : idx + self.seq_len + 1]
         return x, y
@@ -164,7 +164,7 @@ def create_data_loaders(
     batch_size: int = 64,
     num_workers: int = 0,
     flatten: bool = False,
-) -> Tuple[DataLoader, DataLoader]:
+) -> tuple[DataLoader, DataLoader]:
     """Create train and test data loaders for a vision dataset."""
     train_data = get_vision_dataset(dataset_name, train=True, flatten=flatten)
     test_data = get_vision_dataset(dataset_name, train=False, flatten=flatten)

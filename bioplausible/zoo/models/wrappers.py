@@ -11,7 +11,9 @@ import torch
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
-from .base import EqPropModel
+from bioplausible.zoo.base import (
+    BioModel as EqPropModel,
+)  # alias: wrappers expose forward-only API, not EqProp settling
 
 
 class RecurrentWrapper(EqPropModel):
@@ -52,6 +54,7 @@ class RecurrentWrapper(EqPropModel):
         )
 
         self.cell = cell
+        self.output_layer = nn.Linear(hidden_dim, output_dim)
 
         # Apply spectral norm if requested
         if use_spectral_norm:
@@ -123,6 +126,8 @@ class StackedRecurrentWrapper(EqPropModel):
             cell_class(input_dim if i == 0 else hidden_dim, hidden_dim)
             for i in range(num_layers)
         ])
+
+        self.output_layer = nn.Linear(hidden_dim, output_dim)
 
         # Apply spectral norm
         if use_spectral_norm:
@@ -197,6 +202,9 @@ class TransformerEqPropWrapper(EqPropModel):
 
         # Input projection
         self.input_projection = nn.Linear(input_dim, hidden_dim)
+
+        # Output projection
+        self.output_layer = nn.Linear(hidden_dim, output_dim)
 
         # Transformer encoder layers
         encoder_layer = nn.TransformerEncoderLayer(

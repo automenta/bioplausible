@@ -59,8 +59,7 @@ def export_to_onnx(
         >>> export_to_onnx(model, "model.onnx", (1, 784))
     """
     # Handle compiled models
-    if hasattr(model, "_orig_mod"):
-        model = model._orig_mod
+    model = _get_model_for_processing(model)
 
     model.eval()
     model = model.to(device)
@@ -113,8 +112,7 @@ def verify_spectral_norm(model: nn.Module) -> dict[str, float]:
     Returns:
         Dict mapping layer names to their Lipschitz constants
     """
-    if hasattr(model, "_orig_mod"):
-        model = model._orig_mod
+    model = _get_model_for_processing(model)
 
     lipschitz_values = {}
 
@@ -234,7 +232,8 @@ def create_model_preset(preset_name: str, **overrides) -> nn.Module:
     Example:
         >>> model = create_model_preset("mnist_small", hidden_dim=512)
     """
-    from .models import ConvEqProp, LoopedMLP
+    from bioplausible.zoo.models.eqprop.conv_eqprop import ConvEqProp  # noqa: PLC0415
+    from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP  # noqa: PLC0415
 
     presets = {
         "mnist_small": lambda: LoopedMLP(784, 128, 10, use_spectral_norm=True),

@@ -882,6 +882,7 @@ class ResultVisualizer:
         save_name: str = "confusion_matrix.png",
     ) -> str:
         """Plot confusion matrix."""
+        save_path = self.output_dir / save_name
         classes = sorted(set(y_true) | set(y_pred))
         n_classes = len(classes)
         cm = np.zeros((n_classes, n_classes), dtype=int)

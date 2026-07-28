@@ -27,7 +27,7 @@ def _worker_process_task(args: dict[str, Any]) -> dict[str, float] | None:
     db_path = args["db_path"]
 
     try:
-        task: ExperimentTask = task_data
+        task: ExperimentTask = task_data  # type: ignore[assignment]  # task_data is complex/task/None from worker payload
 
         # Ensure config has minimal fields if not already populated
         if not config and task.fixed_config:

@@ -450,6 +450,150 @@ def test_all_task_types():
     return True
 
 
+def test_backprop_mode_basic():
+    """Test backprop mode basic functionality."""
+    model = EquiTile(
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
+        output_dim=4,
+        mode="backprop",
+        inference_steps=2,
+    )
+
+    x = torch.randn(4, 8)
+    y = torch.randint(0, 4, (4,))
+
+    stats = model.train_step(x, y)
+
+    assert stats["mode"] == "backprop", (
+        f"Expected mode='backprop', got {stats.get('mode')}"
+    )
+    assert "loss" in stats
+    assert "accuracy" in stats
+    assert not torch.isnan(torch.tensor(stats["loss"])), "Loss is NaN"
+
+    print(f"  ✓ Backprop mode: loss={stats['loss']:.4f}, acc={stats['accuracy']:.4f}")
+    return True
+
+
+def test_backprop_mode_learning():
+    """Verify backprop mode decreases loss over multiple steps."""
+    model = EquiTile(
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
+        output_dim=4,
+        mode="backprop",
+        inference_steps=2,
+        learning_rate=0.05,
+    )
+
+    X = torch.randn(64, 8)
+    y = torch.randint(0, 4, (64,))
+
+    losses = []
+    for _ in range(3):
+        stats = model.train_step(X, y)
+        losses.append(stats["loss"])
+
+    assert losses[-1] < losses[0], (
+        f"Backprop should learn: {losses[0]:.4f} -> {losses[-1]:.4f}"
+    )
+    print(f"  ✓ Backprop learning: {losses[0]:.4f} -> {losses[-1]:.4f}")
+    return True
+
+
+def test_forward_return_states():
+    """Test forward with return_states=True."""
+    model = EquiTile(
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
+        output_dim=4,
+        mode="pc",
+        inference_steps=2,
+    )
+
+    x = torch.randn(4, 8)
+    result = model(x, return_states=True)
+
+    assert isinstance(result, tuple), "Should return tuple when return_states=True"
+    assert len(result) == 2, "Should return (logits, states)"
+    logits, states = result
+    assert logits.shape == (4, 4), f"Expected (4, 4), got {logits.shape}"
+    assert isinstance(states, dict), "States should be a dict"
+
+    print("  ✓ Forward with return_states works")
+    return True
+
+
+def test_get_stats():
+    """Test get_stats returns correct shape."""
+    model = EquiTile(
+        neurons_per_tile=8,
+        num_layers=2,
+        tiles_per_layer=1,
+        input_dim=8,
+        output_dim=4,
+        mode="pc",
+        inference_steps=2,
+    )
+
+    # Train one step first so stats are populated
+    x = torch.randn(4, 8)
+    y = torch.randint(0, 4, (4,))
+    model.train_step(x, y)
+
+    stats = model.get_stats()
+    assert isinstance(stats, dict)
+    assert "num_params" in stats
+    assert "importance_mean" in stats
+    assert "total_tiles" in stats
+    assert "total_edges" in stats
+
+    summary = model.summarize()
+    assert isinstance(summary, str)
+    assert len(summary) > 0
+
+    print("  ✓ get_stats and summarize work")
+    return True
+
+
+def test_build_classmethod():
+    """Test the build classmethod factory."""
+
+    class MockSpec:
+        def __init__(self):
+            self.default_lr = 0.01
+            self.custom_hyperparams = {}
+
+    model = EquiTile.build(
+        spec=MockSpec(),
+        input_dim=8,
+        output_dim=4,
+        hidden_dim=16,
+        num_layers=2,
+        device="cpu",
+        task_type="classification",
+        mode="pc",
+        neurons_per_tile=8,
+        tiles_per_layer=1,
+    )
+
+    assert isinstance(model, EquiTile)
+    x = torch.randn(4, 8)
+    logits = model(x)
+    assert logits.shape == (4, 4)
+    assert not logits.isnan().any()
+
+    print("  ✓ Build classmethod works")
+    return True
+
+
 def run_all_tests():
     """Run all tests and report results."""
     print("=" * 60)
@@ -468,6 +612,11 @@ def run_all_tests():
         ("Early Stopping", test_early_stopping),
         ("Mode Comparison Learning", test_mode_comparison_learning),
         ("All Task Types", test_all_task_types),
+        ("Backprop Mode Basic", test_backprop_mode_basic),
+        ("Backprop Mode Learning", test_backprop_mode_learning),
+        ("Forward Return States", test_forward_return_states),
+        ("Get Stats", test_get_stats),
+        ("Build Classmethod", test_build_classmethod),
     ]
 
     passed = 0

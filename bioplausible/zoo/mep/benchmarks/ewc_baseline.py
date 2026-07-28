@@ -16,6 +16,8 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader
 
+from .continual_learning import ContinualLearningResult
+
 
 class EWC:
     """

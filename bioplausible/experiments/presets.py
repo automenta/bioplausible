@@ -33,7 +33,7 @@ class ResearchPreset:
     use_case: str
     expected_accuracy: str | None = None
     expected_speed: str | None = None
-    tags: list[str] = None
+    tags: list[str] | None = None
 
     def __post_init__(self):
         if self.tags is None:

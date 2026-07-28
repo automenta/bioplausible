@@ -1,11 +1,3 @@
-# pyright: reportUntypedClassDecorator=false, reportUnknownMemberType=false
-# pyright: reportUnknownParameterType=false, reportMissingParameterType=false
-# pyright: reportUnknownVariableType=false, reportOptionalCall=false
-# pyright: reportOptionalMemberAccess=false, reportUnknownArgumentType=false
-# pyright: reportMissingTypeArgument=false, reportIncompatibleMethodOverride=false
-# pyright: reportPossiblyUnboundVariable=false, reportCallIssue=false
-# pyright: reportReturnType=false
-
 """
 Bio-Plausible Model Base Classes
 
@@ -265,7 +257,7 @@ class BioModel(nn.Module, ABC):
         return with_sn, without_sn
 
     @abstractmethod
-    def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, *args: object, **kwargs: object) -> torch.Tensor:
         """Forward pass."""
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:

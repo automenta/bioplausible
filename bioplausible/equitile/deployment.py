@@ -48,9 +48,9 @@ class ExportConfig:
 
     opset_version: int = 14
     do_constant_folding: bool = True
-    input_names: list[str] = None
-    output_names: list[str] = None
-    dynamic_axes: dict[str, dict[int, str]] = None
+    input_names: list[str] | None = None
+    output_names: list[str] | None = None
+    dynamic_axes: dict[str, dict[int, str]] | None = None
 
     def __post_init__(self) -> None:
         """Set defaults."""

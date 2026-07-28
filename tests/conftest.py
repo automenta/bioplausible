@@ -1,4 +1,7 @@
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 # Add project root to path
@@ -34,7 +37,19 @@ except ImportError:
     sys.modules["gymnasium.spaces"] = gymnasium.spaces
 
 # bioplausible.acceleration checks for cupy
-import sys
 from unittest.mock import MagicMock
 
 sys.modules["cupy"] = MagicMock()
+
+
+def pytest_unconfigure(config: object) -> None:
+    """Clean up test artifacts after session ends."""
+    kb_tmp = Path(tempfile.gettempdir()) / "bioplausible-knowledgebase.json"
+    if kb_tmp.exists():
+        kb_tmp.unlink()
+    kb_tmp_dir = Path(tempfile.gettempdir()) / "bioplausible_kb"
+    if kb_tmp_dir.exists():
+        shutil.rmtree(kb_tmp_dir, ignore_errors=True)
+    cwd_kb = Path.cwd() / "knowledgebase.json"
+    if cwd_kb.exists():
+        cwd_kb.unlink()

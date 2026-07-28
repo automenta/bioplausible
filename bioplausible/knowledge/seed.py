@@ -1,5 +1,7 @@
 import json
+import os
 import pathlib
+import tempfile
 from typing import Any
 
 # Statically seeded knowledge base containing key findings and empirical rules
@@ -44,15 +46,22 @@ KNOWLEDGE_BASE_SEED = [
 ]
 
 
+def _default_storage_path() -> str:
+    """Get default storage path, using tempdir during pytest runs."""
+    if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in os.environ.get("_", ""):
+        return str(pathlib.Path(tempfile.gettempdir()) / "bioplausible-knowledgebase.json")
+    return "knowledgebase.json"
+
+
 class KnowledgeBase:
     """
     Structured repository of findings across experiments.
     """
 
     def __init__(
-        self, storage_path: str = "knowledgebase.json", load_seed: bool = False
+        self, storage_path: str | None = None, load_seed: bool = False
     ):
-        self.storage_path = storage_path
+        self.storage_path = storage_path or _default_storage_path()
         self.load_seed = load_seed
         self.findings = []
         self._load()

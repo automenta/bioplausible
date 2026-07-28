@@ -1,9 +1,3 @@
-# pyright: reportUntypedClassDecorator=false, reportUnknownMemberType=false
-# pyright: reportUnknownParameterType=false, reportMissingParameterType=false
-# pyright: reportUnknownVariableType=false, reportOptionalCall=false
-# pyright: reportOptionalMemberAccess=false, reportUnknownArgumentType=false
-# pyright: reportMissingTypeArgument=false, reportIncompatibleMethodOverride=false
-
 """
 Base classes for all Bioplausible propagators (learning rules).
 

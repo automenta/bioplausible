@@ -6,6 +6,7 @@ Encapsulates data loading, batch generation, and evaluation logic for different 
 
 import logging
 from abc import ABC, abstractmethod
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 import torch
@@ -21,7 +22,42 @@ logger = logging.getLogger(__name__)
 _DATASET_CACHE = {}
 
 
-def _resolve_task_loss(task: BaseTask) -> nn.Module:
+@runtime_checkable
+class TaskProtocol(Protocol):
+    """Structural interface for experiment tasks.
+
+    All task classes (whether they inherit from ``BaseTask`` or not) should
+    satisfy this protocol.  Type annotations should use ``TaskProtocol``
+    instead of ``BaseTask`` to allow duck-typed task implementations.
+    """
+
+    name: str
+    device: str
+    quick_mode: bool
+
+    @property
+    def input_dim(self) -> int | None: ...
+
+    @property
+    def output_dim(self) -> int: ...
+
+    @property
+    def task_type(self) -> str: ...
+
+    def setup(self) -> None: ...
+
+    def get_batch(
+        self, split: str = "train", batch_size: int = 32
+    ) -> tuple[torch.Tensor, torch.Tensor]: ...
+
+    def create_trainer(self, model: nn.Module, **kwargs) -> object: ...
+
+    def compute_metrics(
+        self, logits: torch.Tensor, y: torch.Tensor, loss: float
+    ) -> dict[str, float]: ...
+
+
+def _resolve_task_loss(task: TaskProtocol) -> nn.Module:
     """Pick a torch loss module matching the task's output geometry.
 
     The `_TaskTrainer` codepath is the generic Protocol-based trainer used
@@ -53,7 +89,7 @@ class _TaskTrainer:
     def __init__(
         self,
         model: nn.Module,
-        task: BaseTask,
+        task: TaskProtocol,
         device: str = "cpu",
         optimizer=None,
         epochs: int = 1,
@@ -698,7 +734,7 @@ def _normalize_vision_name(base_name: str) -> str:
 
 def create_task(
     task_name: str, device: str = "cpu", quick_mode: bool = False, **kwargs
-) -> BaseTask:
+) -> TaskProtocol:
     """Factory function for tasks. Maps string names to Task classes via heuristics."""
     match task_name:
         case "char_ngram":

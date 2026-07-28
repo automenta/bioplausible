@@ -147,7 +147,7 @@ def scatter_mean(
 ) -> Tensor:
     """Scatter mean aggregation."""
     if dim_size is None:
-        dim_size = index.max().item() + 1
+        dim_size = int(index.max().item()) + 1
 
     out = src.new_zeros((dim_size,) + src.shape[1:])
     count = src.new_zeros(dim_size)
@@ -165,7 +165,7 @@ def scatter_sum(
 ) -> Tensor:
     """Scatter sum aggregation."""
     if dim_size is None:
-        dim_size = index.max().item() + 1
+        dim_size = int(index.max().item()) + 1
 
     out = src.new_zeros((dim_size,) + src.shape[1:])
     out.index_add_(dim, index, src)
@@ -177,7 +177,7 @@ def scatter_max(
 ) -> Tensor:
     """Scatter max aggregation."""
     if dim_size is None:
-        dim_size = index.max().item() + 1
+        dim_size = int(index.max().item()) + 1
 
     out = src.new_full((dim_size,) + src.shape[1:], float("-inf"))
     out.index_reduce_(dim, index, src, reduce="amax")
@@ -642,7 +642,7 @@ def create_graph_from_edges(
         (node_features, edge_index, num_nodes)
     """
     if num_nodes is None:
-        num_nodes = edge_index.max().item() + 1
+        num_nodes = int(edge_index.max().item()) + 1
 
     if node_features is None:
         node_features = torch.randn(num_nodes, 10)  # Default features
@@ -669,7 +669,7 @@ def add_self_loops(
         Edge indices with self-loops
     """
     if num_nodes is None:
-        num_nodes = edge_index.max().item() + 1
+        num_nodes = int(edge_index.max().item()) + 1
 
     # Create self-loop indices
     self_loop = (

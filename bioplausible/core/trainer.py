@@ -8,11 +8,13 @@ and trainer_args. Uses Lightning for distributed but provides a clean local-firs
 
 import json
 import logging
+import os
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import torch
 from omegaconf import DictConfig, OmegaConf
@@ -23,7 +25,19 @@ from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.data.vision import create_data_loaders
 
+if TYPE_CHECKING:
+    from bioplausible.hyperopt.tasks import TaskProtocol
+
 logger = logging.getLogger(__name__)
+
+
+def _default_output_base() -> Path:
+    """Get base output directory. Uses unique tempdir during pytest runs."""
+    if env_dir := os.environ.get("BIOPL_OUTPUT_DIR"):
+        return Path(env_dir)
+    if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in os.environ.get("_", ""):
+        return Path(tempfile.mkdtemp(prefix="biopl-runs-"))
+    return Path("logs")
 
 
 def _reshape_logits_targets_for_ce(
@@ -245,9 +259,9 @@ class CoreTrainer:
         self.patience_counter = 0
         self.history: list[TrainingMetrics] = []
 
-        # Output directory
+        # Output directory (session-scoped tempdir when pytest is detected)
         self.output_dir = (
-            Path(self.config.log_dir) / f"run_{time.strftime('%Y%m%d_%H%M%S')}"
+            _default_output_base() / f"run_{time.strftime('%Y%m%d_%H%M%S')}"
         )
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -274,7 +288,7 @@ class CoreTrainer:
     def from_task(
         cls,
         model: nn.Module,
-        task,
+        task: "TaskProtocol",
         device: str = "cpu",
         optimizer: torch.optim.Optimizer | None = None,
         epochs: int = 1,
