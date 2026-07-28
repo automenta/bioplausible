@@ -598,3 +598,97 @@ archived in `docs/archive/20260726/p2p_http/`).
 | E.5 | t-strings for logging | LOW | Search for `logger.*(f"` patterns in `execution/`, `hyperopt/`, `autoscientist/`. |
 | - | Residual ruff check errors | LOW | 5,052 errors remain (style: magic-value-comparison, relative-imports). Not recommended for bulk fix. |
 | - | LSTM compatibility in wrappers | LOW | `StackedRecurrentWrapper` drops LSTM cell state. Fix: detect LSTM and store cell state separately. |
+
+## Session Progress (2026-07-28) -- Session 6
+
+### Completed Items
+
+| Phase | Item | Status | Notes |
+|-------|------|--------|-------|
+| - | LSTM cell state fix in StackedRecurrentWrapper | ✅ | `StackedRecurrentWrapper.forward()` now detects LSTMCell, stores (h, c) tuples for initial/settling state, and extracts h[0] for output. Fixes `test_stacked_recurrent_wrapper_lstm` TypeError. |
+| D | Hebbian model coverage (43% -> 98%) | ✅ | Created `tests/test_hebbian_models.py` (39 tests) covering HebbianLayer, DeepHebbianChain, HebbianCube, ThreeFactorHebbian. |
+| D | NEBC base coverage (40% -> 100%) | ✅ | Created `tests/test_nebc_base.py` (19 tests) covering NEBCBase, NEBCRegistry, train_nebc_model, evaluate_nebc_model, run_nebc_ablation. |
+| D | Spiking model coverage (21% -> 37%) | ✅ | Created `tests/test_spiking_model.py` (8 tests) covering SpikingSTDP fallback path (snnTorch not installed). |
+| - | Test pollution fix | ✅ | `test_signal_decay_ratio` was flaky when run after other tests (random weight init causing amplification). Fixed by adding `torch.manual_seed(42)` and `use_spectral_norm=True`. |
+
+### Module Coverage Improvements
+
+| Module | Before | After | Delta |
+|--------|--------|-------|-------|
+| `zoo/models/hebbian.py` | 43% | **98%** | +55pp |
+| `zoo/nebc_base.py` | 40% | **100%** | +60pp |
+| `zoo/models/spiking.py` | 21% | **37%** | +16pp |
+| `zoo/models/wrappers.py` | 97% | **98%** | +1pp |
+
+### Test Status
+- Before (Session 5 end): 810 passed, 0 failed, 14 skipped
+- After: **884 passed**, 0 failed, 14 skipped (+74 tests, stable)
+
+### Coverage
+- Before: 52.02%
+- After: **52.57%** (+0.55pp)
+- Gap to 85%: ~32.5pp
+
+### Pyright
+- 0 errors, 1415 warnings (stable)
+
+### Discovered Issues
+1. **`test_signal_decay_ratio` test pollution**: Test passed in isolation but failed in full suite. Root cause: random weight init in `DeepHebbianChain` (no spectral norm) can produce signal amplification depending on torch RNG state (which changed based on prior test execution). Fixed by using `use_spectral_norm=True` + seeded RNG.
+2. **Coverage caching**: `.coverage` files can report stale data. Must `rm -rf .coverage*` between measurement runs for accurate per-module numbers. The `--co` flag reads a different (incorrect) config path; always use `--cov=bioplausible`.
+3. **`SpikingSTDP` snnTorch gap**: 63% of spiking.py is snnTorch-dependent code paths. Cannot test without `snntorch` package installed. Candidate: add `snntorch` to optional deps or mock.
+4. **Wrappers.py uncovered lines 67, 137**: Line 67 is spectral norm on Linear modules, line 137 is spectral norm on cell Linear modules. Both require actual spectral_norm module wrapping to trigger (the `isinstance(module, nn.Linear)` check doesn't match the nn.Module wrapper).
+5. **Hebbian.py line 54 uncovered**: `weight_orig` path only triggers when `spectral_norm()` has been applied to the module directly (not via the layer-level spectral_norm that wraps HebbianLayer). Dead code path.
+6. **Hebbian.py lines 262-263 uncovered**: `F.pad` branch in HebbianCube when `hidden_dim < cube_neurons`. Requires specific dimension mismatch to trigger.
+
+### Key Lessons for Next Session
+1. **Best ROI coverage targets**: `zoo/propagators/backprop.py` (33%, 27 LOC — tiny!), `zoo/propagators/eqprop.py` (25%, 101 LOC), `zoo/propagators/hebbian.py` (25%, 52 LOC). These are small modules in the propagator layer that have real logic but need basic forward+step tests.
+2. **EquiTile core.py (14%)** is the largest uncovered module but also 531 LOC — would need 50+ tests to move the needle. Lower priority than propagators.
+3. **E.2 _DATASET_CACHE -> lru_cache** is self-contained to `hyperopt/tasks.py` and moderate effort. Worth doing for cleanliness but doesn't impact coverage.
+4. **E.5 t-strings** needs a sweep of `execution/`, `hyperopt/`, `autoscientist/` for `logger.*(f"` patterns. Purely cosmetic.
+5. **Coverage floor is 50%** — CI passes. The 85% target is a long-term aspiration. The most practical next step is cleaning up the small propagator modules.
+
+## Session Progress (2026-07-28) -- Session 7
+
+### Completed Items
+
+| Phase | Item | Status | Notes |
+|-------|------|--------|-------|
+| D | Backprop propagator coverage (33% -> 100%) | ✅ | Created `tests/test_propagator_backprop.py` (10 tests) covering all loss fns, target=None, unknown loss, zero_grad. |
+| D | EqProp propagator coverage (25% -> 100%) | ✅ | Created `tests/test_propagator_eqprop.py` (14 tests) covering all 4 classes: EqProp, HolomorphicEqProp, FiniteNudgeEqProp, LazyEqProp. |
+| D | Hebbian propagator coverage (25% -> 100%) | ✅ | Created `tests/test_propagator_hebbian.py` (5 tests) covering ContrastiveHebbianLearning step, forward_capture, get_layers, hebbian_update. |
+| E.2 | _DATASET_CACHE -> lru_cache | ✅ | Replaced module-level `_DATASET_CACHE = {}` dict with `@functools.lru_cache(maxsize=64)`-decorated `_load_vision_dataset_cached()` factory in `hyperopt/tasks.py`. `VisionTask.setup()` now calls factory instead of maintaining hand-rolled dict. |
+| E.5 | t-strings for logging | 🔲 Deferred | Codebase uses `%s`-style logging (correct and safe). T-strings (PEP 750) still experimental; no f-strings in logging found. Marked deferred until toolchain support matures. |
+
+### Module Coverage Improvements
+
+| Module | Before | After | Delta |
+|--------|--------|-------|-------|
+| `zoo/propagators/backprop.py` | 33% | **100%** | +67pp |
+| `zoo/propagators/eqprop.py` | 25% | **100%** | +75pp |
+| `zoo/propagators/hebbian.py` | 25% | **100%** | +75pp |
+
+All propagator modules now at 100% coverage.
+
+### Test Status
+- Before (Session 6 end): 884 passed, 0 failed, 14 skipped
+- After: **908 passed**, 0 failed, 14 skipped (+24 tests, stable)
+
+### Coverage
+- Before: 52.57%
+- After: **52.57%** (stable — propagator modules are small, ~180 LOC total added)
+- All propagator modules now at 100%
+- Gap to 85%: ~32.5pp
+
+### Pyright
+- 0 errors, 1415 warnings (stable)
+
+### Discovered Issues
+1. **`_DATASET_CACHE` None-handling**: The original code used `if self.data_fraction is not None and 0.0 < self.data_fraction < 1.0:` but the extracted factory had `if data_fraction < 1.0:` which crashed when `data_fraction=None`. Fixed by preserving the None guard.
+2. **Indentation corruption during large edit**: The edit tool can de-indent class methods when replacing large blocks. Always verify with `ast.parse()` after such edits.
+3. **`__pycache__` + coverage artifacts**: Many `*.py,cover` untracked files generated by coverage. Add `*.py,cover` to `.gitignore` or clean up manually.
+
+### Remaining Work
+- **E.2 is done** — `_DATASET_CACHE` refactored to `@lru_cache`
+- **E.5 deferred** — t-strings not yet viable with current toolchain
+- **Coverage gap remains large** (~32pp to 85%). Biggest untested modules are `equitile/core.py` (14%, 531 LOC), `execution/strategy.py` (11%, 517 LOC), `core/trainer.py` (21%, 578 LOC). These require dedicated multi-session effort.
+- **Ruff errors (5,000+)** — stylistic only, not recommended for bulk fix.

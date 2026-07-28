@@ -93,7 +93,9 @@ class TestEqProp:
         opt.step(x, target)
 
         layers = opt._get_layers()
-        reachable_weights = [p for i, p in enumerate(params) if p.ndim >= 2 and i < len(layers)]
+        reachable_weights = [
+            p for i, p in enumerate(params) if p.ndim >= 2 and i < len(layers)
+        ]
         assert all(p.grad is not None for p in reachable_weights), (
             "Weight params reachable by EP gradient should have grads"
         )
@@ -144,7 +146,9 @@ class TestEqProp:
         layers = opt._get_layers()
         for i, p in enumerate(params):
             if p.ndim >= 2 and i < len(layers):
-                assert p.grad is not None, f"Grad should be set for weight {p.shape} at i={i}"
+                assert p.grad is not None, (
+                    f"Grad should be set for weight {p.shape} at i={i}"
+                )
                 assert p.grad.shape == p.shape, (
                     f"Gradient shape {p.grad.shape} != param shape {p.shape} at i={i}"
                 )

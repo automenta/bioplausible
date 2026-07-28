@@ -1,0 +1,38 @@
+> """
+> Spectral constraint optimizers.
+  
+> Wraps spectral normalization as a post-step constraint.
+> """
+  
+> import torch
+  
+> from bioplausible.core.registry import register_optimizer
+  
+  
+> @register_optimizer("spectral")
+> class SpectralConstraint:
+>     """Spectral constraint on weights.
+  
+>     Projects each parameter's spectral norm to be at most max_norm.
+>     """
+  
+>     def __init__(self, params, lr=0.01, max_norm=1.0):
+>         self.params = list(params)
+>         self.lr = lr
+>         self.max_norm = max_norm
+  
+>     def step(self):
+>         with torch.no_grad():
+>             for p in self.params:
+>                 if p.ndim < 2:
+!                     continue
+>                 u, s, vh = torch.linalg.svd(
+>                     p.reshape(p.shape[0], -1), full_matrices=False
+>                 )
+>                 s.clamp_(max=self.max_norm)
+>                 p.data.copy_((u * s).mm(vh).reshape(p.shape))
+  
+>     def zero_grad(self):
+!         for p in self.params:
+!             if p.grad is not None:
+!                 p.grad.zero_()

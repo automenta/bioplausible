@@ -4,6 +4,7 @@ Task Abstraction for Hyperopt and Experiments
 Encapsulates data loading, batch generation, and evaluation logic for different tasks.
 """
 
+import functools
 import logging
 from abc import ABC, abstractmethod
 from typing import Protocol, runtime_checkable
@@ -18,8 +19,131 @@ from bioplausible.data.vision import get_vision_dataset
 
 logger = logging.getLogger(__name__)
 
-# Global dataset cache to avoid reloading for every trial
-_DATASET_CACHE = {}
+
+@functools.lru_cache(maxsize=64)
+def _load_vision_dataset_cached(
+    name: str,
+    device_str: str,
+    quick_mode: bool,
+    included_classes_tuple: tuple[int, ...] | None,
+    fold: int | None,
+    num_folds: int,
+    data_fraction: float | None,
+    augment: bool,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, tuple | int, int]:
+    """Load and preprocess a vision dataset, cached to avoid reloading per trial."""
+    device = torch.device(device_str)
+    dataset = get_vision_dataset(
+        name,
+        train=True,
+        flatten=False,
+        included_classes=included_classes_tuple,
+        augment=augment,
+    )
+    test_dataset = get_vision_dataset(
+        name,
+        train=False,
+        flatten=False,
+        included_classes=included_classes_tuple,
+    )
+
+    def load_to_tensor(ds):
+        has_data_targets = hasattr(ds, "data") and hasattr(ds, "targets")
+        has_data_labels = hasattr(ds, "data") and hasattr(ds, "labels")
+        has_tensors = hasattr(ds, "tensors")
+
+        use_bulk = included_classes_tuple is None and (
+            has_data_targets or has_data_labels or has_tensors
+        )
+
+        if use_bulk:
+            if has_tensors:
+                raw_x, raw_y = ds.tensors
+            else:
+                raw_x = ds.data
+                raw_y = ds.targets if has_data_targets else ds.labels
+
+            if isinstance(raw_y, list):
+                raw_y = torch.tensor(raw_y)
+            if isinstance(raw_x, np.ndarray):
+                raw_x = torch.from_numpy(raw_x)
+
+            if raw_x.dtype == torch.uint8 or raw_x.dtype == np.uint8:
+                raw_x = raw_x.float() / 255.0
+            elif raw_x.dtype in [torch.float32, torch.float64, np.float32, np.float64]:
+                if raw_x.max() > 1.0:
+                    raw_x = raw_x / 255.0
+
+            if raw_x.dim() == 3:
+                raw_x = raw_x.unsqueeze(1)
+                is_nhwc = False
+            elif raw_x.dim() == 4:
+                is_nhwc = raw_x.shape[3] in [1, 3] and raw_x.shape[1] not in [1, 3]
+            else:
+                is_nhwc = False
+
+            if is_nhwc and not has_tensors:
+                raw_x = raw_x.permute(0, 3, 1, 2).contiguous()
+
+            raw_x = (raw_x - 0.5) / 0.5
+
+            if not raw_x.is_contiguous():
+                raw_x = raw_x.contiguous()
+
+            if not isinstance(raw_y, torch.Tensor):
+                raw_y = torch.tensor(raw_y)
+
+            return raw_x.to(device), raw_y.to(device)
+        else:
+            loader = torch.utils.data.DataLoader(ds, batch_size=512, shuffle=False)
+            xs, ys = [], []
+            for x, y in loader:
+                xs.append(x)
+                ys.append(y)
+            return torch.cat(xs).to(device), torch.cat(ys).to(device)
+
+    full_train_x, full_train_y = load_to_tensor(dataset)
+    full_test_x, full_test_y = load_to_tensor(test_dataset)
+
+    if fold is not None:
+        kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
+        splits = list(kf.split(full_train_x))
+        train_idx, val_idx = splits[fold]
+        train_x = full_train_x[train_idx]
+        train_y = full_train_y[train_idx]
+        val_x = full_train_x[val_idx]
+        val_y = full_train_y[val_idx]
+    else:
+        train_x = full_train_x
+        train_y = full_train_y
+        val_x = full_test_x
+        val_y = full_test_y
+
+    if quick_mode:
+        n = min(100, len(train_x))
+        train_x = train_x[:n]
+        train_y = train_y[:n]
+        val_x = val_x[:n]
+        val_y = val_y[:n]
+
+    if data_fraction is not None and 0.0 < data_fraction < 1.0:
+        n = int(len(train_x) * data_fraction)
+        train_x = train_x[:n]
+        train_y = train_y[:n]
+        val_x = val_x[:n]
+        val_y = val_y[:n]
+
+    if included_classes_tuple:
+        output_dim = len(included_classes_tuple)
+    else:
+        output_dim = int(train_y.max().item() + 1)
+
+    if train_x.dim() > 2:
+        input_dim = tuple(train_x.shape[1:])
+    else:
+        input_dim = train_x.shape[1]
+
+    return train_x, train_y, val_x, val_y, input_dim, output_dim
 
 
 @runtime_checkable
@@ -315,219 +439,31 @@ class VisionTask(BaseTask):
         return "vision"
 
     def setup(self):
-        # Check cache first
-        cache_key = (
-            self.name,
-            str(self.device),
-            self.quick_mode,
-            tuple(self.included_classes) if self.included_classes else None,
-            self.fold,
-            self.num_folds,
-            self.data_fraction,
+        included_tuple = tuple(self.included_classes) if self.included_classes else None
+        result = _load_vision_dataset_cached(
+            name=self.name,
+            device_str=str(self.device),
+            quick_mode=self.quick_mode,
+            included_classes_tuple=included_tuple,
+            fold=self.fold,
+            num_folds=self.num_folds,
+            data_fraction=self.data_fraction,
+            augment=self.augment,
         )
-        if cache_key in _DATASET_CACHE:
-            cached = _DATASET_CACHE[cache_key]
-            self.train_x = cached["train_x"]
-            self.train_y = cached["train_y"]
-            self.val_x = cached["val_x"]
-            self.val_y = cached["val_y"]
-            self._output_dim = cached["output_dim"]
-            self._input_dim = cached["input_dim"]
-            logger.info(
-                "Using cached Vision dataset: %s (Fold=%s, Frac=%s)",
-                self.name,
-                self.fold,
-                self.data_fraction,
-            )
-            return
-
+        (
+            self.train_x,
+            self.train_y,
+            self.val_x,
+            self.val_y,
+            self._input_dim,
+            self._output_dim,
+        ) = result
         logger.info(
-            "Loading Vision dataset: %s (Fold=%s, Frac=%s)...",
+            "Loaded Vision dataset: %s (Fold=%s, Frac=%s)",
             self.name,
             self.fold,
             self.data_fraction,
         )
-        try:
-            # We first load the full training set (and test set)
-            dataset = get_vision_dataset(
-                self.name,
-                train=True,
-                flatten=False,
-                included_classes=self.included_classes,
-                augment=self.augment,
-            )
-            test_dataset = get_vision_dataset(
-                self.name,
-                train=False,
-                flatten=False,
-                included_classes=self.included_classes,
-            )
-
-            # --- Preprocessing and Loading Data to Tensors ---
-            # Helper to process dataset into tensors
-            def load_to_tensor(ds):
-                # Check for various dataset formats
-                has_data_targets = hasattr(ds, "data") and hasattr(ds, "targets")
-                has_data_labels = hasattr(ds, "data") and hasattr(ds, "labels")  # SVHN
-                has_tensors = hasattr(ds, "tensors")  # TensorDataset
-
-                use_bulk = self.included_classes is None and (
-                    has_data_targets or has_data_labels or has_tensors
-                )
-
-                if use_bulk:
-                    if has_tensors:
-                        raw_x, raw_y = ds.tensors
-                    else:
-                        raw_x = ds.data
-                        raw_y = ds.targets if has_data_targets else ds.labels
-
-                    if isinstance(raw_y, list):
-                        raw_y = torch.tensor(raw_y)
-                    if isinstance(raw_x, np.ndarray):
-                        raw_x = torch.from_numpy(raw_x)
-
-                    # Preprocess X in bulk
-                    if raw_x.dtype == torch.uint8 or raw_x.dtype == np.uint8:
-                        raw_x = raw_x.float() / 255.0
-                    elif raw_x.dtype in [
-                        torch.float32,
-                        torch.float64,
-                        np.float32,
-                        np.float64,
-                    ]:
-                        # Check if data is unscaled (0-255) despite being float
-                        if raw_x.max() > 1.0:
-                            raw_x = raw_x / 255.0
-
-                    if raw_x.dim() == 3:  # (N, H, W)
-                        raw_x = raw_x.unsqueeze(1)
-                        is_nhwc = False
-                    elif raw_x.dim() == 4:  # (N, H, W, C)
-                        # Assume NCHW if channels are last (e.g. from NumPy),
-                        # but only if not already NCHW. Heuristic: Check if
-                        # channel dim is small (1 or 3) and not already in dim 1
-                        is_nhwc = raw_x.shape[3] in [1, 3] and raw_x.shape[1] not in [
-                            1,
-                            3,
-                        ]
-                    else:
-                        is_nhwc = False
-
-                    if is_nhwc and not has_tensors:
-                        # TensorDataset likely already NCHW
-                        raw_x = raw_x.permute(0, 3, 1, 2).contiguous()
-
-                    # Normalize
-                    raw_x = (raw_x - 0.5) / 0.5
-
-                    # Ensure contiguous memory layout (critical for SVHN and others)
-                    if not raw_x.is_contiguous():
-                        raw_x = raw_x.contiguous()
-
-                    if not isinstance(raw_y, torch.Tensor):
-                        raw_y = torch.tensor(raw_y)
-
-                    return raw_x.to(self.device), raw_y.to(self.device)
-                else:
-                    # Fallback
-                    loader = torch.utils.data.DataLoader(
-                        ds, batch_size=512, shuffle=False
-                    )
-                    xs, ys = [], []
-                    for x, y in loader:
-                        xs.append(x)
-                        ys.append(y)
-                    return torch.cat(xs).to(self.device), torch.cat(ys).to(self.device)
-
-            full_train_x, full_train_y = load_to_tensor(dataset)
-            full_test_x, full_test_y = load_to_tensor(test_dataset)
-
-            # --- Splitting Logic ---
-            if self.fold is not None:
-                # K-Fold Cross Validation
-                # We merge train and test (or just use train?)
-                # Standard practice: Use Training Set for CV, keep Test Set separate.
-                # Here we will perform CV on the TRAINING set.
-
-                kf = KFold(n_splits=self.num_folds, shuffle=True, random_state=42)
-                splits = list(kf.split(full_train_x))
-                train_idx, val_idx = splits[self.fold]
-
-                self.train_x = full_train_x[train_idx]
-                self.train_y = full_train_y[train_idx]
-                self.val_x = full_train_x[val_idx]
-                self.val_y = full_train_y[val_idx]
-
-                # We can also use full_test_x for final test if needed, but
-                # for CV usually Val is the metric. However, our system logs
-                # `accuracy` (val) and `final_loss` (train).
-
-            else:
-                # Standard Split
-                self.train_x = full_train_x
-                self.train_y = full_train_y
-
-            # Quick Mode Truncation
-            if self.quick_mode:
-                n_quick = min(len(self.train_x), 1000)
-                self.train_x = self.train_x[:n_quick].clone()
-                self.train_y = self.train_y[:n_quick].clone()
-
-                # Apply Data Fraction (Low Data Regime)
-                if self.data_fraction is not None and 0.0 < self.data_fraction < 1.0:
-                    n_samples = int(len(self.train_x) * self.data_fraction)
-                    # Shuffle
-                    perm = torch.randperm(len(self.train_x))[:n_samples]
-                    self.train_x = self.train_x[perm]
-                    self.train_y = self.train_y[perm]
-                    logger.info(
-                        "Subsampled dataset to %d samples (%.0f%%)",
-                        n_samples,
-                        self.data_fraction * 100,
-                    )
-
-                # Validation Set (Subset of Test Set for speed if quick_mode)
-                val_size = 1000
-                self.val_x = full_test_x[: min(len(full_test_x), val_size)]
-                self.val_y = full_test_y[: min(len(full_test_y), val_size)]
-            elif self.fold is None:
-                # Standard Mode (Full Test Set for Validation)
-                self.val_x = full_test_x
-                self.val_y = full_test_y
-
-            # Metadata
-            if self.name == "mnist":
-                self._output_dim = 10
-                self._input_dim = (1, 28, 28)
-            elif self.name == "cifar10":
-                self._output_dim = 10
-                self._input_dim = (3, 32, 32)
-            else:
-                # Fallback heuristics
-                if self.train_x.dim() > 2:
-                    self._input_dim = tuple(self.train_x.shape[1:])
-                else:
-                    self._input_dim = self.train_x.shape[1]
-
-                if self.included_classes:
-                    self._output_dim = len(self.included_classes)
-                else:
-                    self._output_dim = int(self.train_y.max().item() + 1)
-
-            # Cache for future trials
-            _DATASET_CACHE[cache_key] = {
-                "train_x": self.train_x,
-                "train_y": self.train_y,
-                "val_x": self.val_x,
-                "val_y": self.val_y,
-                "output_dim": self._output_dim,
-                "input_dim": self._input_dim,
-            }
-            logger.info("Cached dataset for future trials")
-        except Exception:
-            logger.exception("Failed to load dataset %s", self.name)
-            raise
 
     def get_batch(
         self, split: str = "train", batch_size: int = 32

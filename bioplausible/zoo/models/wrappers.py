@@ -144,24 +144,51 @@ class StackedRecurrentWrapper(EqPropModel):
         batch_size = x.shape[0]
 
         # Initialize hidden states for all layers
-        states = [
+        states: list[torch.Tensor | tuple[torch.Tensor, torch.Tensor]] = [
             torch.zeros(batch_size, self.hidden_dim, device=x.device, dtype=x.dtype)
             for _ in range(self.num_layers)
         ]
 
+        # Detect if any cell is an LSTMCell (needs (h, c) tuples)
+        is_lstm = any(isinstance(c, nn.LSTMCell) for c in self.cells)
+
+        if is_lstm:
+            # LSTM cells need (hidden, cell) state pairs
+            c_initial = [
+                torch.zeros(batch_size, self.hidden_dim, device=x.device, dtype=x.dtype)
+                for _ in range(self.num_layers)
+            ]
+            for i in range(self.num_layers):
+                states[i] = (states[i], c_initial[i])
+
         # Joint settling
         for _ in range(steps):
-            # Layer 0
-            h = self.cells[0](x, states[0])
-            states[0] = h if isinstance(h, torch.Tensor) else h[0]
+            if is_lstm:
+                states_out: list = list(states)
+                # Layer 0
+                h, c = self.cells[0](x, states[0])
+                states_out[0] = (h, c)
+                # Layers 1..N
+                for i in range(1, self.num_layers):
+                    h, c = self.cells[i](states[i - 1][0], states[i])
+                    states_out[i] = (h, c)
+                states = states_out
+            else:
+                # Layer 0
+                h = self.cells[0](x, states[0])
+                states[0] = h if isinstance(h, torch.Tensor) else h[0]
+                # Layers 1..N
+                for i in range(1, self.num_layers):
+                    h = self.cells[i](states[i - 1], states[i])
+                    states[i] = h if isinstance(h, torch.Tensor) else h[0]
 
-            # Layers 1..N
-            for i in range(1, self.num_layers):
-                h = self.cells[i](states[i - 1], states[i])
-                states[i] = h if isinstance(h, torch.Tensor) else h[0]
-
-        # Output from final layer
-        return self.output_layer(states[-1])
+        # Output from final layer: extract hidden state (first element of tuple for LSTM)
+        final_hidden: torch.Tensor
+        if isinstance(states[-1], tuple):
+            final_hidden = states[-1][0]
+        else:
+            final_hidden = states[-1]
+        return self.output_layer(final_hidden)
 
 
 class TransformerEqPropWrapper(EqPropModel):
