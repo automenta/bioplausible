@@ -13,6 +13,7 @@ No autograd required - just tensor subtraction!
 
 Author: Phase 2 Implementation
 Created: 2026-02-18 (v2: 2026-02-25)
+Refactored: 2026-07-28 to use TransitionGraph protocol (transition_modules())
 """
 
 from typing import Any
@@ -22,11 +23,40 @@ import torch.nn.functional as F
 from torch import nn
 
 
+def _capture_states_no_grad(
+    model: nn.Module,
+    x: torch.Tensor,
+    transition_modules: list[nn.Module],
+) -> list[torch.Tensor]:
+    """Capture initial layer states without autograd using hooks on transition modules."""
+    states: list[torch.Tensor] = []
+    handles: list[Any] = []
+
+    def capture_hook(module: nn.Module, inp: Any, output: Any) -> None:
+        if isinstance(output, tuple):
+            s = output[0].detach().float().clone()
+        else:
+            s = output.detach().float().clone()
+        states.append(s)
+
+    for module in transition_modules:
+        handles.append(module.register_forward_hook(capture_hook))
+
+    try:
+        with torch.no_grad():
+            model(x)
+    finally:
+        for h in handles:
+            h.remove()
+
+    return states
+
+
 def analytic_state_gradients(
     model: nn.Module,
     x: torch.Tensor,
     states: list[torch.Tensor],
-    structure: list[dict[str, Any]],
+    transition_modules: list[nn.Module],
     target_vec: torch.Tensor | None,
     beta: float,
     loss_type: str = "cross_entropy",
@@ -46,7 +76,7 @@ def analytic_state_gradients(
         model: Neural network module.
         x: Input tensor.
         states: Current settled states.
-        structure: Model structure.
+        transition_modules: Modules from model.transition_modules().
         target_vec: Target for nudge term.
         beta: Nudging strength.
         loss_type: 'mse' or 'cross_entropy'.
@@ -61,74 +91,34 @@ def analytic_state_gradients(
     prev = x
     state_idx = 0
 
-    # Count state-producing modules
-    state_producing = [
-        item for item in structure if item["type"] in ("layer", "attention")
-    ]
-    num_states = len(state_producing)
-
     use_classification = loss_type == "cross_entropy"
+    num_states = len(states)
 
     with torch.no_grad():
-        for item in structure:
-            item_type = item["type"]
-            module = item["module"]
+        for i, (module, state) in enumerate(zip(transition_modules, states)):
+            is_last_state = i == num_states - 1
 
-            if item_type == "layer":
-                if state_idx >= len(states):
-                    break
+            # Forward pass to get h (no grad needed)
+            h = module(prev)
 
-                state = states[state_idx]
-                is_last_state = state_idx == num_states - 1
+            # Analytic gradient: dE/dstate = state - h (for MSE)
+            if use_classification and is_last_state:
+                # For KL divergence: grad ≈ (softmax(state) - softmax(h)) / T
+                state_sm = F.softmax(state / softmax_temperature, dim=1)
+                h_sm = F.softmax(h / softmax_temperature, dim=1)
+                grad = (state_sm - h_sm) / softmax_temperature
+            else:
+                # For MSE: grad = state - h
+                grad = state - h
 
-                # Forward pass to get h (no grad needed)
-                h = module(prev)
+            # Normalize by batch size (matching energy formula)
+            grad = grad / batch_size
 
-                # Analytic gradient: dE/dstate = state - h
-                if use_classification and is_last_state:
-                    # For KL divergence: grad ≈ (softmax(state) - softmax(h)) / T
-                    state_sm = F.softmax(state / softmax_temperature, dim=1)
-                    h_sm = F.softmax(h / softmax_temperature, dim=1)
-                    grad = (state_sm - h_sm) / softmax_temperature
-                else:
-                    # For MSE: grad = state - h
-                    grad = state - h
+            grads.append(grad)
 
-                # Normalize by batch size (matching energy formula)
-                grad = grad / batch_size
-
-                grads.append(grad)
-
-                # Input to next layer is the current state
-                prev = state.to(x.dtype)
-                state_idx += 1
-
-            elif item_type == "norm" or item_type == "pool" or item_type == "flatten":
-                prev = module(prev)
-
-            elif item_type == "dropout":
-                pass
-
-            elif item_type == "attention":
-                if state_idx >= len(states):
-                    break
-
-                state = states[state_idx]
-
-                if isinstance(module, nn.MultiheadAttention):
-                    h = module(prev, prev, prev, need_weights=False)[0]
-                else:
-                    h = module(prev)
-
-                # Analytic gradient for attention
-                grad = (state - h) / batch_size
-                grads.append(grad)
-
-                prev = state.to(x.dtype)
-                state_idx += 1
-
-            elif item_type == "act":
-                prev = module(prev)
+            # Input to next layer is the current state
+            prev = state.to(x.dtype)
+            state_idx += 1
 
         # Handle nudge term gradient for last state
         if target_vec is not None and beta > 0 and grads:
@@ -167,7 +157,7 @@ def settle_manual_o1(
     x: torch.Tensor,
     target: torch.Tensor | None,
     beta: float,
-    structure: list[dict[str, Any]],
+    transition_modules: list[nn.Module],
     steps: int = 30,
     lr: float = 0.15,
     momentum: float = 0.5,
@@ -185,7 +175,7 @@ def settle_manual_o1(
         x: Input tensor.
         target: Target tensor (None for free phase).
         beta: Nudging strength.
-        structure: Model structure from inspector.
+        transition_modules: Modules from model.transition_modules().
         steps: Number of settling iterations.
         lr: Settling learning rate.
         momentum: Momentum factor.
@@ -198,15 +188,12 @@ def settle_manual_o1(
 
     # Capture initial states (no_grad)
     with torch.no_grad():
-        states = _capture_states_no_grad(model, x, structure)
+        states = _capture_states_no_grad(model, x, transition_modules)
 
     if not states:
-        layer_count = sum(
-            1 for item in structure if item["type"] in ("layer", "attention")
-        )
-        if layer_count > 0:
+        if len(transition_modules) > 0:
             raise RuntimeError(
-                f"No activations captured. Expected {layer_count} layer(s)."
+                f"No activations captured. Expected {len(transition_modules)} layer(s)."
             )
         else:
             return []
@@ -235,7 +222,7 @@ def settle_manual_o1(
             model,
             x,
             states,
-            structure,
+            transition_modules,
             target_vec,
             beta,
             loss_type=loss_type,
@@ -249,136 +236,6 @@ def settle_manual_o1(
                 state.sub_(buf, alpha=lr)
 
     return [s.detach() for s in states]
-
-
-def _capture_states_no_grad(
-    model: nn.Module,
-    x: torch.Tensor,
-    structure: list[dict[str, Any]],
-) -> list[torch.Tensor]:
-    """Capture initial layer states without autograd."""
-    states: list[torch.Tensor] = []
-    handles: list[Any] = []
-
-    def capture_hook(module: nn.Module, inp: Any, output: Any) -> None:
-        if isinstance(output, tuple):
-            s = output[0].detach().float().clone()
-        else:
-            s = output.detach().float().clone()
-        states.append(s)
-
-    for item in structure:
-        if item["type"] in ("layer", "attention"):
-            handles.append(item["module"].register_forward_hook(capture_hook))
-
-    try:
-        with torch.no_grad():
-            model(x)
-    finally:
-        for h in handles:
-            h.remove()
-
-    return states
-
-
-def manual_energy_compute_o1(
-    model: nn.Module,
-    x: torch.Tensor,
-    states: list[torch.Tensor],
-    structure: list[dict[str, Any]],
-    target_vec: torch.Tensor | None,
-    beta: float,
-    loss_type: str = "cross_entropy",
-    softmax_temperature: float = 1.0,
-) -> torch.Tensor:
-    """
-    Compute EP energy without any autograd overhead.
-
-    This version uses direct tensor operations with no grad tracking.
-    Use for settling iterations where we only need the energy value.
-
-    Args:
-        model: Neural network module.
-        x: Input tensor.
-        states: List of layer states.
-        structure: Model structure.
-        target_vec: Target for nudge term.
-        beta: Nudging strength.
-        loss_type: 'mse' or 'cross_entropy'.
-        softmax_temperature: Temperature for softmax.
-
-    Returns:
-        Scalar energy tensor (no gradient history).
-    """
-    batch_size = x.shape[0]
-    device = x.device
-
-    E = torch.tensor(0.0, device=device, dtype=torch.float32)
-    prev = x
-    state_idx = 0
-
-    state_producing = [
-        item for item in structure if item["type"] in ("layer", "attention")
-    ]
-    num_states = len(state_producing)
-
-    use_classification = loss_type == "cross_entropy"
-
-    with torch.no_grad():
-        for item in structure:
-            item_type = item["type"]
-            module = item["module"]
-
-            if item_type == "layer":
-                if state_idx >= len(states):
-                    break
-
-                state = states[state_idx]
-                is_last_state = state_idx == num_states - 1
-
-                # Forward pass
-                h = module(prev)
-
-                # Compute energy
-                if use_classification and is_last_state:
-                    E = E + _kl_energy_no_grad(
-                        state, h, batch_size, softmax_temperature
-                    )
-                else:
-                    E = E + 0.5 * _mse_no_grad(h, state) / batch_size
-
-                prev = state.to(x.dtype)
-                state_idx += 1
-
-            elif item_type == "norm" or item_type == "pool" or item_type == "flatten":
-                prev = module(prev)
-
-            elif item_type == "dropout":
-                pass
-
-            elif item_type == "attention":
-                if state_idx >= len(states):
-                    break
-
-                state = states[state_idx]
-
-                if isinstance(module, nn.MultiheadAttention):
-                    h = module(prev, prev, prev, need_weights=False)[0]
-                else:
-                    h = module(prev)
-
-                E = E + 0.5 * _mse_no_grad(h, state) / batch_size
-                prev = state.to(x.dtype)
-                state_idx += 1
-
-            elif item_type == "act":
-                prev = module(prev)
-
-        # Nudge term
-        if target_vec is not None and beta > 0:
-            E = E + _nudge_term_no_grad(prev, target_vec, beta, batch_size, loss_type)
-
-    return E
 
 
 def _mse_no_grad(input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -420,104 +277,63 @@ def _nudge_term_no_grad(
         return beta * F.mse_loss(output, target_vec, reduction="sum") / batch_size
 
 
-def energy_from_states_minimal(
+def manual_energy_compute_o1(
     model: nn.Module,
     x: torch.Tensor,
     states: list[torch.Tensor],
-    structure: list[dict[str, Any]],
+    transition_modules: list[nn.Module],
     target_vec: torch.Tensor | None,
     beta: float,
     loss_type: str = "cross_entropy",
+    softmax_temperature: float = 1.0,
 ) -> torch.Tensor:
     """
-    Compute energy from states with MINIMAL autograd for parameter gradients.
+    Compute EP energy without any autograd overhead.
 
-    This builds the smallest possible graph for computing dE/dW.
-    Uses gradient checkpointing for the forward pass.
+    This version uses direct tensor operations with no grad tracking.
+    Use for settling iterations where we only need the energy value.
 
     Args:
         model: Neural network module.
         x: Input tensor.
-        states: List of settled states.
-        structure: Model structure.
+        states: List of layer states.
+        transition_modules: Modules from model.transition_modules().
         target_vec: Target for nudge term.
         beta: Nudging strength.
         loss_type: 'mse' or 'cross_entropy'.
+        softmax_temperature: Temperature for softmax.
 
     Returns:
-        Energy tensor with gradient history for parameter gradients.
+        Scalar energy tensor (no gradient history).
     """
     batch_size = x.shape[0]
     device = x.device
 
     E = torch.tensor(0.0, device=device, dtype=torch.float32)
     prev = x
-    state_idx = 0
-
-    state_producing = [
-        item for item in structure if item["type"] in ("layer", "attention")
-    ]
-    num_states = len(state_producing)
 
     use_classification = loss_type == "cross_entropy"
 
-    # Use gradient checkpointing for the forward pass
-    for item in structure:
-        item_type = item["type"]
-        module = item["module"]
+    with torch.no_grad():
+        for i, (module, state) in enumerate(zip(transition_modules, states)):
+            is_last_state = i == len(states) - 1
 
-        if item_type == "layer":
-            if state_idx >= len(states):
-                break
+            # Forward pass
+            h = module(prev)
 
-            state = states[state_idx]
-            is_last_state = state_idx == num_states - 1
-
-            # Forward pass with checkpointing
-            if state_idx < num_states - 1:
-                # Checkpoint hidden layers
-                h = torch.utils.checkpoint.checkpoint(module, prev, use_reentrant=False)
-            else:
-                # Don't checkpoint last layer (needed for output)
-                h = module(prev)
-
+            # Compute energy
             if use_classification and is_last_state:
-                E = E + _kl_energy_autograd(state.float(), h.float(), batch_size)
+                E = E + _kl_energy_no_grad(
+                    state, h, batch_size, softmax_temperature
+                )
             else:
-                E = E + 0.5 * _mse_autograd(h.float(), state.float()) / batch_size
+                E = E + 0.5 * _mse_no_grad(h, state) / batch_size
 
             prev = state.to(x.dtype)
-            state_idx += 1
 
-        elif item_type == "norm" or item_type == "pool" or item_type == "flatten":
-            prev = module(prev)
-
-        elif item_type == "dropout":
-            pass
-
-        elif item_type == "attention":
-            if state_idx >= len(states):
-                break
-
-            state = states[state_idx]
-
-            if isinstance(module, nn.MultiheadAttention):
-                h = module(prev, prev, prev, need_weights=False)[0]
-            else:
-                h = module(prev)
-
-            E = E + 0.5 * _mse_autograd(h.float(), state.float()) / batch_size
-            prev = state.to(x.dtype)
-            state_idx += 1
-
-        elif item_type == "act":
-            prev = module(prev)
-
-    # Nudge term
-    if target_vec is not None and beta > 0:
-        E = E + _nudge_term_autograd(
-            prev.float(), target_vec, beta, batch_size, loss_type
-        )
+        # Nudge term
+        if target_vec is not None and beta > 0:
+            E = E + _nudge_term_no_grad(prev, target_vec, beta, batch_size, loss_type)
 
     return E
 
@@ -560,6 +376,69 @@ def _nudge_term_autograd(
         return beta * F.mse_loss(output, target_vec, reduction="sum") / batch_size
 
 
+def energy_from_states_minimal(
+    model: nn.Module,
+    x: torch.Tensor,
+    states: list[torch.Tensor],
+    transition_modules: list[nn.Module],
+    target_vec: torch.Tensor | None,
+    beta: float,
+    loss_type: str = "cross_entropy",
+) -> torch.Tensor:
+    """
+    Compute energy from states with MINIMAL autograd for parameter gradients.
+
+    This builds the smallest possible graph for computing dE/dW.
+    Uses gradient checkpointing for the forward pass.
+
+    Args:
+        model: Neural network module.
+        x: Input tensor.
+        states: List of settled states.
+        transition_modules: Modules from model.transition_modules().
+        target_vec: Target for nudge term.
+        beta: Nudging strength.
+        loss_type: 'mse' or 'cross_entropy'.
+
+    Returns:
+        Energy tensor with gradient history for parameter gradients.
+    """
+    batch_size = x.shape[0]
+    device = x.device
+
+    E = torch.tensor(0.0, device=device, dtype=torch.float32)
+    prev = x
+
+    use_classification = loss_type == "cross_entropy"
+
+    # Use gradient checkpointing for the forward pass
+    for i, (module, state) in enumerate(zip(transition_modules, states)):
+        is_last_state = i == len(states) - 1
+
+        # Forward pass with checkpointing
+        if i < len(states) - 1:
+            # Checkpoint hidden layers
+            h = torch.utils.checkpoint.checkpoint(module, prev, use_reentrant=False)
+        else:
+            # Don't checkpoint last layer (needed for output)
+            h = module(prev)
+
+        if use_classification and is_last_state:
+            E = E + _kl_energy_autograd(state.float(), h.float(), batch_size)
+        else:
+            E = E + 0.5 * _mse_autograd(h.float(), state.float()) / batch_size
+
+        prev = state.to(x.dtype)
+
+    # Nudge term
+    if target_vec is not None and beta > 0:
+        E = E + _nudge_term_autograd(
+            prev.float(), target_vec, beta, batch_size, loss_type
+        )
+
+    return E
+
+
 class O1MemoryEPv2:
     """
     O(1) Memory EP optimizer v2 with analytic gradients.
@@ -594,10 +473,13 @@ class O1MemoryEPv2:
         self.beta = beta
         self.loss_type = loss_type
 
-        from bioplausible.zoo.mep.optimizers import ModelInspector
-
-        self.inspector = ModelInspector()
-        self.structure = self.inspector.inspect(model)
+        # Get transition modules directly from model (TransitionGraph protocol)
+        if not hasattr(model, "transition_modules"):
+            raise TypeError(
+                f"O1MemoryEPv2 requires a model implementing TransitionGraph. "
+                f"{type(model).__name__} does not implement transition_modules()."
+            )
+        self.transition_modules = model.transition_modules()
 
         # Momentum buffers for parameter updates
         self.buffers = [torch.zeros_like(p) for p in self.params]
@@ -610,7 +492,7 @@ class O1MemoryEPv2:
             x,
             None,
             beta=0.0,
-            structure=self.structure,
+            transition_modules=self.transition_modules,
             steps=self.settle_steps,
             lr=self.settle_lr,
             loss_type=self.loss_type,
@@ -622,7 +504,7 @@ class O1MemoryEPv2:
             x,
             target,
             beta=self.beta,
-            structure=self.structure,
+            transition_modules=self.transition_modules,
             steps=self.settle_steps,
             lr=self.settle_lr,
             loss_type=self.loss_type,
@@ -633,7 +515,7 @@ class O1MemoryEPv2:
             self.model,
             x,
             states_free,
-            self.structure,
+            self.transition_modules,
             None,
             0.0,
             loss_type=self.loss_type,
@@ -643,7 +525,7 @@ class O1MemoryEPv2:
             self.model,
             x,
             states_nudged,
-            self.structure,
+            self.transition_modules,
             target,
             self.beta,
             loss_type=self.loss_type,

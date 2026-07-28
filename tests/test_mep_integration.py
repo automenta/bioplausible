@@ -15,20 +15,22 @@ import torch
 from torch import nn
 
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 
-class TinyMLP(nn.Module):
-    """Tiny MLP for smoke testing."""
+class TinyMLP(TransitionGraphMixin, nn.Module):
+    """Tiny MLP for smoke testing with TransitionGraph support."""
 
     def __init__(self):
         super().__init__()
-        self.net = nn.Sequential(
+        self.layers = nn.ModuleList([
             nn.Linear(784, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU(),
             nn.Linear(128, 10),
-        )
+        ])
+        self.net = nn.Sequential(*self.layers)
 
     def forward(self, x):
         return self.net(x)

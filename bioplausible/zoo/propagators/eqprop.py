@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import register_propagator
+from bioplausible.zoo.mep.optimizers.strategies import UpdateStrategy
 
 from .base import LearningRuleOptimizer
 
@@ -35,12 +36,14 @@ class EqProp(LearningRuleOptimizer):
         settle_steps: int = 30,
         settle_lr: float = 0.15,
         loss_type: str = "mse",
+        update_strategy: UpdateStrategy | None = None,
     ):
         super().__init__(params, model, lr, momentum, weight_decay)
         self.beta = beta
         self.settle_steps = settle_steps
         self.settle_lr = settle_lr
         self.loss_type = loss_type
+        self.update_strategy = update_strategy
 
     def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None:
         if target is None:
@@ -89,7 +92,12 @@ class EqProp(LearningRuleOptimizer):
 
         for param, buffer in zip(self.params, self.buffers):
             if param.grad is not None:
-                self._apply_update(param.grad, param, buffer)
+                grad = param.grad
+                if self.update_strategy is not None:
+                    grad = self.update_strategy.transform_gradient(
+                        param, grad, self.state.get(param, {}), self.param_groups[0]
+                    )
+                self._apply_update(grad, param, buffer)
 
     def _settle(
         self,

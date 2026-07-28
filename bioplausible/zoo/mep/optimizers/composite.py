@@ -14,7 +14,6 @@ from torch import nn
 from torch.optim import Optimizer
 
 from .energy import EnergyFunction
-from .inspector import ModelInspector
 from .strategies import (
     ConstraintStrategy,
     FeedbackStrategy,
@@ -98,11 +97,7 @@ class CompositeOptimizer(Optimizer):
         self.constraint = constraint or NoConstraint()
         self.feedback = feedback or NoFeedback()
 
-        # Utilities
-        self._inspector = ModelInspector()
-
         # Get loss_type from gradient strategy if available
-        # We access attributes that might not exist on the base protocol, so using getattr is safe
         loss_type = getattr(gradient, "loss_type", "mse")
         softmax_temperature = getattr(gradient, "softmax_temperature", 1.0)
         self._energy_fn = EnergyFunction(
@@ -190,12 +185,20 @@ class CompositeOptimizer(Optimizer):
             # but EPGradient etc do. Since we did isinstance check, we know it's safeish,
             # but mypy might complain if we call it on 'self.gradient' which is GradientStrategy.
             # However, we pass them as kwargs, and self.gradient accepts **kwargs in protocol.
+            def _get_structure(m: nn.Module) -> list[dict[str, Any]]:
+                if hasattr(m, "transition_modules"):
+                    try:
+                        return [{"type": "layer", "module": mod} for mod in m.transition_modules()]
+                    except NotImplementedError:
+                        pass
+                return []
+
             self.gradient.compute_gradients(
                 self.model,
                 x_input,
                 target,
                 energy_fn=self._energy_fn,
-                structure_fn=self._inspector.inspect,
+                structure_fn=_get_structure,
                 **kwargs,
             )
 

@@ -92,8 +92,6 @@ __all__ = [
     # Utilities
     "EnergyFunction",
     "Settler",
-    # Internal utilities (not part of public API)
-    "ModelInspector",
     # Unified EP optimizer (recommended)
     "EPOptimizer",
     "EPConfig",
