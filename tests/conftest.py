@@ -8,36 +8,12 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent.parent
 sys.path.append(str(ROOT_DIR))
 
-# torch is a hard dependency (pyproject.toml) — no mock needed
-
-try:
-    import torchvision
-except ImportError:
-    import sys
-    import types
-
-    torchvision = types.ModuleType("torchvision")
-    sys.modules["torchvision"] = torchvision
-    torchvision.transforms = types.ModuleType("torchvision.transforms")
-    torchvision.datasets = types.ModuleType("torchvision.datasets")
-    torchvision.utils = types.ModuleType("torchvision.utils")
-    sys.modules["torchvision.transforms"] = torchvision.transforms
-    sys.modules["torchvision.datasets"] = torchvision.datasets
-    sys.modules["torchvision.utils"] = torchvision.utils
-
-try:
-    import gymnasium
-except ImportError:
-    import sys
-    import types
-
-    gymnasium = types.ModuleType("gymnasium")
-    sys.modules["gymnasium"] = gymnasium
-    gymnasium.spaces = types.ModuleType("gymnasium.spaces")
-    sys.modules["gymnasium.spaces"] = gymnasium.spaces
+# Hard dependencies — no mock stubs needed
+import torchvision  # noqa: E402
+import gymnasium  # noqa: E402
 
 # bioplausible.acceleration checks for cupy
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock  # noqa: E402
 
 sys.modules["cupy"] = MagicMock()
 

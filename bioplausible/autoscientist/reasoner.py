@@ -15,7 +15,7 @@ from bioplausible.knowledge import KnowledgeBase, KnowledgeEntry
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Hypothesis:
     """A scientific hypothesis about what might work and why."""
 

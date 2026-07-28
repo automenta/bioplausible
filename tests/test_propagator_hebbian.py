@@ -53,9 +53,9 @@ class TestContrastiveHebbianLearning:
         opt = ContrastiveHebbianLearning(params, model, lr=0.1)
         old = [p.clone() for p in params]
         opt.step(x, target)
-        assert any(
-            not torch.equal(o, p) for o, p in zip(old, params)
-        ), "CHL step should update params"
+        assert any(not torch.equal(o, p) for o, p in zip(old, params)), (
+            "CHL step should update params"
+        )
 
     def test_step_raises_no_target(self, params, model, x):
         opt = ContrastiveHebbianLearning(params, model)
@@ -88,7 +88,5 @@ class TestContrastiveHebbianLearning:
         opt._hebbian_update(free, clamped)
         weight_layers = [l for l in opt._get_layers() if hasattr(l, "weight")]
         for l in weight_layers:
-            assert l.weight.grad is not None, (
-                f"weight.grad should be set for layer {l}"
-            )
+            assert l.weight.grad is not None, f"weight.grad should be set for layer {l}"
             assert l.weight.grad.shape == l.weight.shape

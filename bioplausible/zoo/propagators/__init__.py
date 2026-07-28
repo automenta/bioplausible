@@ -7,6 +7,11 @@ This package also re-exports model-side implementations for propagators
 that require model-level control (e.g., ForwardForwardNet, PEPITA,
 DifferenceTargetProp, FabricPCGraphPCN, PredictiveCodingHybrid).
 See bioplausible/__init__.py for the two-tier architecture overview.
+
+Some propagator names (ff, pepita, target_prop, difference_target_prop,
+predictive_coding) are not registered directly as propagators because they
+require model-level control. The Registry provides cross-references to the
+model-side implementations via its error messages when these are queried.
 """
 
 from bioplausible.core.registry import register_propagator
@@ -25,29 +30,13 @@ from . import (
     base,  # noqa: F401
     eqprop,  # noqa: F401
     fa,  # noqa: F401
-    forward_only,  # noqa: F401
     hebbian,  # noqa: F401
     mep,  # noqa: F401
-    predictive_coding,  # noqa: F401
     spiking,  # noqa: F401
-    target_prop,  # noqa: F401
 )
-
-# Import stub classes with distinct names so they don't shadow model-side
-from .forward_only import FF as FFStub
-from .forward_only import PEPITA as PEPITAStub
-from .predictive_coding import PCN as PCNStub
-from .target_prop import DifferenceTargetProp as DTPStub
-from .target_prop import TargetProp as TargetPropStub
 
 __all__ = [
     "register_propagator",
-    # Stub classes (propagator side) - distinct names
-    "FFStub",
-    "PEPITAStub",
-    "TargetPropStub",
-    "DTPStub",
-    "PCNStub",
     # Model-side re-exports (original names)
     "ForwardForwardNet",
     "PEPITA",

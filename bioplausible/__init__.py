@@ -37,11 +37,13 @@ The zoo provides two complementary interfaces for bio-plausible learning:
    learned inverse maps, settling dynamics with internal state). These expose
    `train_step(x, y) -> dict[str, float]` instead of `optimizer.step()`.
 
-The propagator stubs for FF, PEPITA, TargetProp, DifferenceTargetProp, and PCN
-raise `NotImplementedError` with docstrings pointing to their working
-model-side implementations. These are re-exported from
-`bioplausible.zoo.propagators` alongside the stubs so registry consumers can
-reach them without crossing module boundaries.
+Some algorithms (FF, PEPITA, TargetProp, PCN) inherently require model-level
+control and are registered as models, not propagators. Querying them via
+`Registry.get(ComponentCategory.PROPAGATOR, "pepita")` raises a
+`ValueError` with a cross-reference to the correct model-side registration.
+The model-side classes are re-exported from `bioplausible.zoo.propagators`
+alongside working propagators so registry consumers can reach them without
+crossing module boundaries.
 """
 
 # AutoScientist (LLM meta-reasoner)

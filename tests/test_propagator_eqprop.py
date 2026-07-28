@@ -67,9 +67,9 @@ class TestEqProp:
         opt = EqProp(params, model, lr=0.01, beta=0.5, settle_steps=2, settle_lr=0.01)
         old = [p.clone() for p in params]
         opt.step(x, target)
-        assert any(
-            not torch.equal(o, p) for o, p in zip(old, params)
-        ), "EqProp step should update params"
+        assert any(not torch.equal(o, p) for o, p in zip(old, params)), (
+            "EqProp step should update params"
+        )
 
     def test_step_raises_no_target(self, params, model, x):
         opt = EqProp(params, model)
@@ -122,9 +122,9 @@ class TestHolomorphicEqProp:
         opt = HolomorphicEqProp(params, model, lr=0.1)
         old = [p.clone() for p in params]
         opt.step(x, target)
-        assert any(
-            not torch.equal(o, p) for o, p in zip(old, params)
-        ), "HolomorphicEqProp step should update params"
+        assert any(not torch.equal(o, p) for o, p in zip(old, params)), (
+            "HolomorphicEqProp step should update params"
+        )
 
     def test_step_raises_no_target(self, params, model, x):
         opt = HolomorphicEqProp(params, model)
@@ -147,9 +147,9 @@ class TestFiniteNudgeEqProp:
         opt = FiniteNudgeEqProp(params, model, lr=0.1, beta=2.0)
         old = [p.clone() for p in params]
         opt.step(x, target)
-        assert any(
-            not torch.equal(o, p) for o, p in zip(old, params)
-        ), "FiniteNudgeEqProp step should update params"
+        assert any(not torch.equal(o, p) for o, p in zip(old, params)), (
+            "FiniteNudgeEqProp step should update params"
+        )
 
     def test_step_scales_grad_by_beta(self, params, model, x, target):
         torch.manual_seed(42)
@@ -183,9 +183,9 @@ class TestLazyEqProp:
         old = [p.clone() for p in params]
         opt.step(x, target)
         assert opt.last_inputs is not None
-        assert any(
-            not torch.equal(o, p) for o, p in zip(old, params)
-        ), "LazyEqProp should update on first call"
+        assert any(not torch.equal(o, p) for o, p in zip(old, params)), (
+            "LazyEqProp should update on first call"
+        )
 
     def test_should_update_returns_true_large_change(self, params, model):
         opt = LazyEqProp(params, model, threshold=0.01)
@@ -204,6 +204,6 @@ class TestLazyEqProp:
         old = [p.clone() for p in params]
         opt.step(x)
         assert opt.last_inputs is not None
-        assert all(
-            torch.equal(o, p) for o, p in zip(old, params)
-        ), "params should not change when target is None"
+        assert all(torch.equal(o, p) for o, p in zip(old, params)), (
+            "params should not change when target is None"
+        )

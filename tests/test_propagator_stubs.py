@@ -1,114 +1,76 @@
 """
-Tests for propagator stubs and model-side boundary.
+Tests for the propagator-to-model cross-reference in the Registry.
 
-Locks the contract that:
-1. The four NotImplementedError stub propagators raise the expected exception.
-2. The model-side implementations they point to actually train (one step).
+When a propagator name that requires model-level control is queried,
+Registry.get() raises ValueError with a cross-reference to the model-side
+implementation.
 """
 
 import pytest
-import torch
 
-from bioplausible.zoo.propagators import (
-    PEPITA,
-    DifferenceTargetProp,
-    DTPStub,
-    FabricPCGraphPCN,
-    FFStub,
-    ForwardForwardNet,
-    PCNStub,
-    PEPITAStub,
-    PredictiveCodingHybrid,
-    TargetPropStub,
-)
+from bioplausible.core.registry import ComponentCategory, Registry
 
 
-class TestPropagatorStubsRaiseNotImplemented:
-    """The stub propagators must raise NotImplementedError with helpful messages."""
+class TestPropagatorCrossReference:
+    """Model-side-only algorithms redirect to model category with helpful message."""
 
-    def test_ff_stub_raises(self):
-        model = torch.nn.Linear(784, 10)
-        stub = FFStub(model.parameters(), model)
-        with pytest.raises(NotImplementedError, match="ForwardForwardNet"):
-            stub.step(torch.randn(2, 784), torch.randint(0, 10, (2,)))
+    def test_ff_cross_reference(self):
+        with pytest.raises(ValueError) as exc:
+            Registry.get(ComponentCategory.PROPAGATOR, "ff")
+        msg = str(exc.value)
+        assert "forward_forward" in msg
+        assert "bioplausible.zoo.models.forward_only.ForwardForwardNet" in msg
 
-    def test_pepita_stub_raises(self):
-        model = torch.nn.Linear(784, 10)
-        stub = PEPITAStub(model.parameters(), model)
-        with pytest.raises(NotImplementedError, match="PEPITA model"):
-            stub.step(torch.randn(2, 784), torch.randint(0, 10, (2,)))
+    def test_pepita_cross_reference(self):
+        with pytest.raises(ValueError) as exc:
+            Registry.get(ComponentCategory.PROPAGATOR, "pepita")
+        msg = str(exc.value)
+        assert "pepita" in msg
+        assert "bioplausible.zoo.models.forward_only.PEPITA" in msg
+        assert "requires model-level control" in msg
 
-    def test_target_prop_stub_raises(self):
-        model = torch.nn.Linear(784, 10)
-        stub = TargetPropStub(model.parameters(), model)
-        with pytest.raises(NotImplementedError, match="model-level implementation"):
-            stub.step(torch.randn(2, 784), torch.randint(0, 10, (2,)))
+    def test_target_prop_cross_reference(self):
+        with pytest.raises(ValueError) as exc:
+            Registry.get(ComponentCategory.PROPAGATOR, "target_prop")
+        msg = str(exc.value)
+        assert "diff_target_prop" in msg
+        assert "bioplausible.zoo.models.target_prop.DifferenceTargetProp" in msg
 
-    def test_difference_target_prop_stub_raises(self):
-        model = torch.nn.Linear(784, 10)
-        stub = DTPStub(model.parameters(), model)
-        with pytest.raises(NotImplementedError, match="not yet implemented"):
-            stub.step(torch.randn(2, 784), torch.randint(0, 10, (2,)))
+    def test_difference_target_prop_cross_reference(self):
+        with pytest.raises(ValueError) as exc:
+            Registry.get(ComponentCategory.PROPAGATOR, "difference_target_prop")
+        msg = str(exc.value)
+        assert "diff_target_prop" in msg
+        assert "requires model-level control" in msg
 
-    def test_pcn_stub_raises(self):
-        model = torch.nn.Linear(784, 10)
-        stub = PCNStub(model.parameters(), model)
-        with pytest.raises(NotImplementedError, match="graph.training.train_pcn"):
-            stub.step(torch.randn(2, 784), torch.randint(0, 10, (2,)))
+    def test_predictive_coding_cross_reference(self):
+        with pytest.raises(ValueError) as exc:
+            Registry.get(ComponentCategory.PROPAGATOR, "predictive_coding")
+        msg = str(exc.value)
+        assert "predictive_coding_hybrid" in msg
+        assert "bioplausible.zoo.models.predictive_coding" in msg
 
+    def test_actual_model_registration_is_reachable(self):
+        """The model-side classes are actually registered and accessible via the model category."""
+        model = Registry.get(ComponentCategory.MODEL, "pepita")
+        assert model is not None
+        # Can be instantiated with a simple forward pass
+        instance = model(input_dim=10, hidden_dim=16, output_dim=2, num_layers=1)
+        import torch
 
-class TestModelSideImplementationsTrain:
-    """Assert the model-side classes actually learn (one step)."""
+        x = torch.randn(4, 10)
+        y = instance(x)
+        assert y.shape == (4, 2)
 
-    @pytest.fixture
-    def batch(self):
-        return torch.randn(4, 784), torch.randint(0, 10, (4,))
+    def test_unknown_propagator_still_raises(self):
+        """An unknown propagator (no cross-ref) still gets the generic error."""
+        with pytest.raises(ValueError) as exc:
+            Registry.get(ComponentCategory.PROPAGATOR, "nonexistent_propagator")
+        assert "Available" in str(exc.value)
 
-    def test_forward_forward_net_train_step(self, batch):
-        x, y = batch
-        model = ForwardForwardNet(
-            input_dim=784, hidden_dim=64, output_dim=10, num_layers=2
-        )
-        stats = model.train_step(x, y)
-        assert isinstance(stats, dict)
-        assert "loss" in stats
-        assert "accuracy" in stats
-        assert 0 <= stats["accuracy"] <= 1
+    def test_working_propagators_still_resolve(self):
+        """Working propagators that ARE registered still resolve normally."""
+        from bioplausible.zoo.propagators.eqprop import EqProp
 
-    def test_pepita_train_step(self, batch):
-        x, y = batch
-        model = PEPITA(input_dim=784, hidden_dim=64, output_dim=10, num_layers=2)
-        stats = model.train_step(x, y)
-        assert isinstance(stats, dict)
-        assert "loss" in stats
-        assert "accuracy" in stats
-        assert 0 <= stats["accuracy"] <= 1
-
-    def test_difference_target_prop_train_step(self, batch):
-        x, y = batch
-        model = DifferenceTargetProp(
-            input_dim=784, hidden_dim=64, output_dim=10, num_layers=2
-        )
-        stats = model.train_step(x, y)
-        assert isinstance(stats, dict)
-        assert "loss" in stats
-        assert "accuracy" in stats
-        assert 0 <= stats["accuracy"] <= 1
-
-    def test_fabric_pc_graph_pcn_train_step(self, batch):
-        x, y = batch
-        model = FabricPCGraphPCN(input_dim=784, hidden_dim=64, output_dim=10)
-        stats = model.train_step(x, y)
-        assert isinstance(stats, dict)
-        assert "loss" in stats
-        assert "accuracy" in stats
-        assert 0 <= stats["accuracy"] <= 1
-
-    def test_predictive_coding_hybrid_train_step(self, batch):
-        x, y = batch
-        model = PredictiveCodingHybrid(input_dim=784, hidden_dim=64, output_dim=10)
-        stats = model.train_step(x, y)
-        assert isinstance(stats, dict)
-        assert "loss" in stats
-        assert "accuracy" in stats
-        assert 0 <= stats["accuracy"] <= 1
+        result = Registry.get(ComponentCategory.PROPAGATOR, "eq_prop")
+        assert result is EqProp

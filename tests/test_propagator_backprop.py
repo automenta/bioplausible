@@ -74,18 +74,18 @@ class TestBackprop:
         opt = Backprop(params, model, lr=0.1)
         old = [p.clone() for p in params]
         opt.step(x, target_cls)
-        assert all(
-            not torch.equal(o, p) for o, p in zip(old, params)
-        ), "params should change after step"
+        assert all(not torch.equal(o, p) for o, p in zip(old, params)), (
+            "params should change after step"
+        )
 
     def test_step_mse(self, params, model, x, target_mse):
         torch.manual_seed(42)
         opt = Backprop(params, model, lr=0.1, loss_fn="mse")
         old = [p.clone() for p in params]
         opt.step(x, target_mse)
-        assert all(
-            not torch.equal(o, p) for o, p in zip(old, params)
-        ), "params should change after step (mse)"
+        assert all(not torch.equal(o, p) for o, p in zip(old, params)), (
+            "params should change after step (mse)"
+        )
 
     def test_step_binary_cross_entropy(self, model_sigmoid, x, target_bce):
         torch.manual_seed(42)
@@ -93,9 +93,9 @@ class TestBackprop:
         opt = Backprop(params, model_sigmoid, lr=0.1, loss_fn="binary_cross_entropy")
         old = [p.clone() for p in params]
         opt.step(x, target_bce)
-        assert all(
-            not torch.equal(o, p) for o, p in zip(old, params)
-        ), "params should change after step (bce)"
+        assert all(not torch.equal(o, p) for o, p in zip(old, params)), (
+            "params should change after step (bce)"
+        )
 
     def test_step_raises_no_target(self, params, model, x):
         opt = Backprop(params, model, lr=0.1)
@@ -120,9 +120,9 @@ class TestBackprop:
             p.grad = None
         opt = Backprop(params, model, lr=0.1)
         opt.step(x, target_cls)
-        assert any(
-            p.grad is not None for p in params
-        ), "step should compute gradients internally"
+        assert any(p.grad is not None for p in params), (
+            "step should compute gradients internally"
+        )
 
     @pytest.mark.parametrize(
         ("loss_fn", "model_fixture", "tgt_fixture"),

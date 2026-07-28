@@ -15,7 +15,7 @@ from bioplausible.core.registry import ComponentCategory, Domain, Registry
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ExperimentProposal:
     """A proposed experiment from AutoScientist."""
 

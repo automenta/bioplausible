@@ -105,7 +105,7 @@ _REGRESSION_METRICS = [
 ]
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class MetricSuite:
     """
     Composable collection of metrics.
@@ -171,7 +171,7 @@ class MetricSuite:
         return "maximize"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class BenchmarkResult:
     """Result of a benchmark evaluation."""
 

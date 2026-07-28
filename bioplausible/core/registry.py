@@ -63,7 +63,7 @@ class ComputeProfile(str, Enum):
     DISTRIBUTED = "distributed"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ComponentMetadata:
     """Metadata for registered components enabling intelligent composition."""
 
@@ -150,11 +150,39 @@ class Registry:
 
     Supports decorator-based registration, querying by capability
     metadata, and constraint satisfaction for AutoScientist composition.
+
+    Some learning rules (FF, PEPITA, TargetProp, PCN) require model-level
+    control and are registered as models, not propagators. When queried as
+    propagators, ``get()`` raises with a cross-reference to the model-side
+    implementation.
     """
 
     _components: dict[
         str, dict[str, dict[str, Any]]
     ] = {}  # category -> {name: {cls, metadata}}
+
+    # Cross-reference: propagator names that map to model-side implementations.
+    # These are not registered directly as propagators because they require
+    # model-level control of the forward/training loop.
+    _PROPAGATOR_TO_MODEL: dict[str, tuple[str, str]] = {
+        "ff": (
+            "forward_forward",
+            "bioplausible.zoo.models.forward_only.ForwardForwardNet",
+        ),
+        "pepita": ("pepita", "bioplausible.zoo.models.forward_only.PEPITA"),
+        "target_prop": (
+            "diff_target_prop",
+            "bioplausible.zoo.models.target_prop.DifferenceTargetProp",
+        ),
+        "difference_target_prop": (
+            "diff_target_prop",
+            "bioplausible.zoo.models.target_prop.DifferenceTargetProp",
+        ),
+        "predictive_coding": (
+            "predictive_coding_hybrid",
+            "bioplausible.zoo.models.predictive_coding.PredictiveCodingHybrid",
+        ),
+    }
 
     @staticmethod
     def _resolve_category(category: ComponentCategory | str) -> ComponentCategory:
@@ -197,7 +225,7 @@ class Registry:
                 component._registry_metadata = metadata  # type: ignore[attr-defined]
                 component._registry_name = name  # type: ignore[attr-defined]
                 component._registry_category = category  # type: ignore[attr-defined]
-            except AttributeError, TypeError:
+            except (AttributeError, TypeError):
                 pass
             logger.info("Registered %s: %s", category.value, name)
             return component
@@ -221,6 +249,17 @@ class Registry:
         if cat not in cls._components:
             raise ValueError(f"Unknown category: {cat}")
         if name not in cls._components[cat]:
+            # Check cross-reference for propagator→model mappings.
+            cross_ref = cls._PROPAGATOR_TO_MODEL.get(name)
+            if cross_ref is not None and cat == ComponentCategory.PROPAGATOR:
+                model_name, model_path = cross_ref
+                raise ValueError(
+                    f"Propagator {name!r} is not registered as a propagator "
+                    f"because it requires model-level control of the "
+                    f"forward/training loop.\n"
+                    f"Use Registry.get(ComponentCategory.MODEL, {model_name!r}) instead.\n"
+                    f"Model-side class: {model_path}"
+                )
             available = list(cls._components[cat].keys())
             raise ValueError(f"Unknown {cat.value}: {name}. Available: {available}")
         return cls._components[cat][name]["class"]

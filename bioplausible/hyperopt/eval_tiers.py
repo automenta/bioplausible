@@ -30,7 +30,7 @@ class PatientLevel(Enum):
     CROSS_VAL = "cross_val"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class EvaluationConfig:
     """Configuration for algorithm evaluation at a given patience level."""
 
