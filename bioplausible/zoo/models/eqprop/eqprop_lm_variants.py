@@ -10,6 +10,7 @@ from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 
 from ...base import register_model
 from ...utils import spectral_linear
+from ..transitions import TransitionGraphMixin
 
 EQPROP_LM_REGISTRY: dict[str, type[nn.Module]] = {}
 
@@ -113,7 +114,7 @@ class CausalMask:
 
 
 @register_eqprop_lm("full")
-class FullEqPropLM(nn.Module):
+class FullEqPropLM(TransitionGraphMixin, nn.Module):
     """
     Full Transformer with all layers participating in equilibrium settling.
     """
@@ -162,6 +163,14 @@ class FullEqPropLM(nn.Module):
         ])
 
         self.lm_head = nn.Linear(hidden_dim, vocab_size)
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Interleaved attention and FFN modules per layer."""
+        modules: list[nn.Module] = []
+        for i in range(self.num_layers):
+            modules.append(self.attentions[i])
+            modules.append(self.ffns[i])
+        return modules
 
     def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
         steps = steps or self.eq_steps
@@ -212,7 +221,7 @@ class FullEqPropLM(nn.Module):
 
 
 @register_eqprop_lm("attention_only")
-class EqPropAttentionOnlyLM(nn.Module):
+class EqPropAttentionOnlyLM(TransitionGraphMixin, nn.Module):
     """
     Only attention uses equilibrium settling, FFN is standard feedforward.
     """
@@ -262,6 +271,10 @@ class EqPropAttentionOnlyLM(nn.Module):
 
         self.lm_head = nn.Linear(hidden_dim, vocab_size)
 
+    def transition_modules(self) -> list[nn.Module]:
+        """Return attention modules (FFNs are standard feedforward)."""
+        return list(self.attentions)
+
     def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
         steps = steps or self.eq_steps
         batch_size, seq_len = x.shape
@@ -294,7 +307,7 @@ class EqPropAttentionOnlyLM(nn.Module):
 
 
 @register_eqprop_lm("recurrent_core")
-class RecurrentEqPropLM(nn.Module):
+class RecurrentEqPropLM(TransitionGraphMixin, nn.Module):
     """
     Single recurrent block that iterates to equilibrium.
     """
@@ -331,6 +344,9 @@ class RecurrentEqPropLM(nn.Module):
 
         self.lm_head = nn.Linear(hidden_dim, vocab_size)
 
+    def transition_modules(self) -> list[nn.Module]:
+        return [self.attention, self.ffn]
+
     def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
         steps = steps or self.eq_steps
         batch_size, seq_len = x.shape
@@ -360,7 +376,7 @@ class RecurrentEqPropLM(nn.Module):
 
 
 @register_eqprop_lm("hybrid")
-class HybridEqPropLM(nn.Module):
+class HybridEqPropLM(TransitionGraphMixin, nn.Module):
     """
     First N-1 layers are standard, final layer uses equilibrium.
     """
@@ -414,6 +430,9 @@ class HybridEqPropLM(nn.Module):
 
         self.lm_head = nn.Linear(hidden_dim, vocab_size)
 
+    def transition_modules(self) -> list[nn.Module]:
+        return [self.eq_attention, self.eq_ffn]
+
     def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
         steps = steps or self.eq_steps
         batch_size, seq_len = x.shape
@@ -446,7 +465,7 @@ class HybridEqPropLM(nn.Module):
 
 
 @register_eqprop_lm("looped_mlp")
-class LoopedMLPForLM(nn.Module):
+class LoopedMLPForLM(TransitionGraphMixin, nn.Module):
     """
     MLP-based LM using the core LoopedMLP architecture.
     """
@@ -473,6 +492,9 @@ class LoopedMLPForLM(nn.Module):
         self.W_rec = spectral_linear(hidden_dim, hidden_dim, use_sn)
 
         self.lm_head = nn.Linear(hidden_dim, vocab_size)
+
+    def transition_modules(self) -> list[nn.Module]:
+        return [self.W_in, self.W_rec]
 
     def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
         steps = steps or self.eq_steps

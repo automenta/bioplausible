@@ -14,6 +14,7 @@ from bioplausible.core.registry import Domain, LocalityLevel
 from ....acceleration import compile_settling_loop
 from ...base import register_model
 from ..base import EqPropModel
+from ..transitions import TransitionGraphMixin
 
 
 @register_model(
@@ -269,7 +270,7 @@ class LoopedMLP(EqPropModel):
     family="backprop",
     tags=["backprop", "mlp"],
 )
-class BackpropMLP(nn.Module):
+class BackpropMLP(TransitionGraphMixin, nn.Module):
     """Standard feedforward MLP for comparison (no equilibrium dynamics)."""
 
     def __init__(
@@ -310,6 +311,10 @@ class BackpropMLP(nn.Module):
             )
 
         return self.net(x)
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Return Linear layers from self.net in order."""
+        return [m for m in self.net if isinstance(m, nn.Linear)]
 
     @classmethod
     def build(

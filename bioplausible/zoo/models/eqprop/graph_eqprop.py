@@ -7,6 +7,7 @@ from torch import nn
 
 from ...base import register_model
 from ..base import EqPropModel
+from ..transitions import TransitionGraphMixin
 
 try:
     from torch_geometric.nn import GCNConv
@@ -58,6 +59,9 @@ class GraphEqProp(EqPropModel):
             return (u, x.edge_index)
         else:
             return self.W_in(x)
+
+    def transition_modules(self) -> list[nn.Module]:
+        return [self.conv]
 
     def forward_step(self, h: torch.Tensor, x_transformed: Any) -> torch.Tensor:
         if isinstance(x_transformed, tuple):

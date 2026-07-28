@@ -11,6 +11,7 @@ from ....acceleration import compile_settling_loop
 from ...base import register_model
 from ...utils import spectral_conv2d
 from ..base import EqPropModel
+from ..transitions import TransitionGraphMixin
 
 
 @register_model(
@@ -176,6 +177,9 @@ class ModernConvEqProp(EqPropModel):
         h = self.stage3(h)
         return h
 
+    def transition_modules(self) -> list[nn.Module]:
+        return [self.eq_conv]
+
     def _forward_step_impl(
         self, h: torch.Tensor, x_transformed: torch.Tensor
     ) -> torch.Tensor:
@@ -300,6 +304,9 @@ class SimpleConvEqProp(EqPropModel):
 
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         return self.embed(x)
+
+    def transition_modules(self) -> list[nn.Module]:
+        return [self.W_rec]
 
     def _forward_step_impl(
         self, h: torch.Tensor, x_transformed: torch.Tensor

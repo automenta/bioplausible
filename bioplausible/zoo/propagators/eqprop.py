@@ -13,7 +13,7 @@ from bioplausible.core.registry import register_propagator
 from .base import LearningRuleOptimizer
 
 
-@register_propagator("eq_prop")
+@register_propagator("eq_prop", requires=["transition_graph"])
 class EqProp(LearningRuleOptimizer):
     """
     Standard Equilibrium Propagation.
@@ -247,6 +247,7 @@ class EqProp(LearningRuleOptimizer):
 
 @register_propagator(
     "adam_eq_prop",
+    requires=["transition_graph"],
     description=(
         "Adam-flavored Equilibrium Propagation: EP contrastive gradients "
         "applied via the Adam optimizer instead of SGD+momentum."
@@ -303,7 +304,7 @@ class AdamEqProp(EqProp):
         self._adam.step()
 
 
-@register_propagator("holomorphic_eq_prop")
+@register_propagator("holomorphic_eq_prop", requires=["transition_graph"])
 class HolomorphicEqProp(LearningRuleOptimizer):
     """
     Holomorphic EqProp: Complex-valued EqProp for exact gradients.
@@ -342,7 +343,7 @@ class HolomorphicEqProp(LearningRuleOptimizer):
                 self._apply_update(param.grad, param, buffer)
 
 
-@register_propagator("finite_nudge_eq_prop")
+@register_propagator("finite_nudge_eq_prop", requires=["transition_graph"])
 class FiniteNudgeEqProp(LearningRuleOptimizer):
     """
     Finite Nudge EqProp: Large beta for noise robustness.
@@ -380,7 +381,7 @@ class FiniteNudgeEqProp(LearningRuleOptimizer):
                 self._apply_update(param.grad, param, buffer)
 
 
-@register_propagator("lazy_eq_prop")
+@register_propagator("lazy_eq_prop", requires=["transition_graph"])
 class LazyEqProp(LearningRuleOptimizer):
     """
     Lazy EqProp: Event-driven updates.

@@ -15,6 +15,7 @@ from torch.nn.utils.parametrizations import spectral_norm
 from bioplausible.core.registry import register_model
 
 from ..nebc_base import NEBCBase, register_nebc
+from ..models.transitions import TransitionGraphMixin
 
 # ============================================================================
 # hebbian_chain.py - DeepHebbianChain, HebbianLayer, HebbianCube
@@ -287,7 +288,7 @@ class HebbianCube(NEBCBase):
     family="hebbian",
     tags=["hebbian", "three-factor"],
 )
-class ThreeFactorHebbian(nn.Module):
+class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):
     """
     Three-Factor Learning: Delta w = eta * M * pre * post
     where M is a neuromodulatory signal (dopamine-like global reward).

@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 from bioplausible.core.registry import register_model
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 try:
     import snntorch as snn
@@ -24,7 +25,7 @@ except ImportError:
     family="spiking",
     tags=["spiking", "stdp"],
 )
-class SpikingSTDP(nn.Module):
+class SpikingSTDP(TransitionGraphMixin, nn.Module):
     """
     Leaky Integrate-and-Fire neurons with Spike-Timing-Dependent Plasticity.
     Uses snnTorch for LIF dynamics; custom STDP learning rule overlaid.
@@ -62,6 +63,16 @@ class SpikingSTDP(nn.Module):
         return cls(
             input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim
         ).to(device)
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Return weight layers in order: fc1, fc2."""
+        modules: list[nn.Module] = [self.fc1]
+        if HAS_SNN:
+            modules.append(self.lif1)
+        modules.append(self.fc2)
+        if HAS_SNN:
+            modules.append(self.lif2)
+        return modules
 
     def forward(self, x):
         if not HAS_SNN:

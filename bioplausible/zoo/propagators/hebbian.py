@@ -18,6 +18,7 @@ from .base import LearningRuleOptimizer
     bio_plausibility_score=0.85,
     credit_assignment_type="hebbian",
     requires_backward=False,
+    requires=["transition_graph"],
     tags=["hebbian", "contrastive", "local"],
     description=(
         "Contrastive Hebbian Learning (CHL): local weight update from the"

@@ -8,6 +8,7 @@ from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 from ....acceleration import compile_settling_loop
 from ...utils import spectral_conv2d
 from ..base import EqPropModel
+from ..transitions import TransitionGraphMixin
 
 
 class ConvEqProp(EqPropModel):
@@ -92,6 +93,9 @@ class ConvEqProp(EqPropModel):
 
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         return self.embed(x)
+
+    def transition_modules(self) -> list[nn.Module]:
+        return [self.W1, self.W2]
 
     def _forward_step_impl(
         self, h: torch.Tensor, x_transformed: torch.Tensor

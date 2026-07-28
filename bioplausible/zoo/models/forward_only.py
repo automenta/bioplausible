@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import LocalityLevel, register_model
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 # ============================================================================
 # forward_forward.py - ForwardForwardNet
@@ -38,7 +39,7 @@ class FFLayer(nn.Linear):
     tags=["forward-forward", "forward-only", "local"],
     description="Forward-Forward network: trained with local goodness function.",
 )
-class ForwardForwardNet(nn.Module):
+class ForwardForwardNet(TransitionGraphMixin, nn.Module):
     """
     Hinton's Forward-Forward (2022).
     Two forward passes (positive/negative), layer-local goodness objective.
@@ -175,7 +176,7 @@ class ForwardForwardNet(nn.Module):
     tags=["pepita", "forward-only", "local"],
     description="PEPITA: Present the Error to Perturb the Input To modulate Activity.",
 )
-class PEPITA(nn.Module):
+class PEPITA(TransitionGraphMixin, nn.Module):
     """
     PEPITA: Present the Error to Perturb the Input To modulate Activity.
     Two forward passes; error-modulated input; no backward pass through network.

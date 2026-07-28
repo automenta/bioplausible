@@ -10,6 +10,7 @@ from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 
 from ....acceleration import compile_settling_loop
 from ...utils import spectral_linear
+from ..transitions import TransitionGraphMixin
 from ..base import EqPropModel
 
 
@@ -167,6 +168,14 @@ class TransformerEqProp(EqPropModel):
         positions = torch.arange(seq_len, device=x.device).unsqueeze(0)
         x_emb = self.token_emb(x) + self.pos_emb(positions)
         return x_emb
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Interleaved attention and FFN modules per layer."""
+        modules: list[nn.Module] = []
+        for i in range(self.num_layers):
+            modules.append(self.attentions[i])
+            modules.append(self.ffns[i])
+        return modules
 
     def _forward_step_impl(
         self, h: torch.Tensor, x_transformed: torch.Tensor

@@ -11,6 +11,7 @@ import torch
 from torch import nn
 
 from bioplausible.core.registry import register_model
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 
 class DTPLayer(nn.Module):
@@ -31,7 +32,7 @@ class DTPLayer(nn.Module):
     family="target_prop",
     tags=["target-prop", "diffprop"],
 )
-class DifferenceTargetProp(nn.Module):
+class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
     """
     Difference Target Propagation (Lee et al. 2015).
     Propagates targets (not gradients) backward using learned approximate inverses.

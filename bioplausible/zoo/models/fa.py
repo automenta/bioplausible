@@ -1066,6 +1066,9 @@ class EquilibriumAlignment(EqPropModel):
             torch.randn(self.output_dim, self.hidden_dim) * 0.1, requires_grad=False
         )
 
+    def transition_modules(self) -> list[nn.Module]:
+        return [self.W_in, self.W_rec, self.W_out]
+
     def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
         batch_size = x.shape[0]
         return torch.zeros(

@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import register_model
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 # ============================================================================
 # backprop_transformer_lm.py - BackpropTransformerLM
@@ -111,7 +112,7 @@ class BackpropTransformerBlock(nn.Module):
     family="backprop",
     tags=["backprop", "transformer"],
 )
-class BackpropTransformerLM(nn.Module):
+class BackpropTransformerLM(TransitionGraphMixin, nn.Module):
     """
     Standard Causal Transformer LM (Backprop baseline).
 
@@ -139,7 +140,7 @@ class BackpropTransformerLM(nn.Module):
         self.pos_emb = nn.Embedding(max_seq_len, hidden_dim)
         self.dropout = nn.Dropout(dropout)
 
-        self.blocks = nn.ModuleList([
+        self.layers = nn.ModuleList([
             BackpropTransformerBlock(hidden_dim, num_heads, ffn_mult, dropout)
             for _ in range(num_layers)
         ])
@@ -181,7 +182,7 @@ class BackpropTransformerLM(nn.Module):
             else None
         )
 
-        for block in self.blocks:
+        for block in self.layers:
             h = block(h, causal_mask)
 
         h = self.norm_f(h)
@@ -321,7 +322,7 @@ def create_layer(config: dict[str, Any], in_features: int) -> tuple[nn.Module, i
     family="backprop",
     tags=["backprop", "stacked"],
 )
-class CustomStackedModel(nn.Module):
+class CustomStackedModel(TransitionGraphMixin, nn.Module):
     """
     A model built from a user-defined stack of layers.
     Allows mixing Linear, Conv, EquiTile-like layers.

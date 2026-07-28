@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from ...base import register_model
+from ..transitions import TransitionGraphMixin
 from .modern_conv_eqprop import SimpleConvEqProp
 
 
@@ -13,7 +14,7 @@ from .modern_conv_eqprop import SimpleConvEqProp
     family="eqprop",
     tags=["eqprop", "diffusion"],
 )
-class EqPropDiffusion(nn.Module):
+class EqPropDiffusion(TransitionGraphMixin, nn.Module):
     """
     Equilibrium Propagation Diffusion Model.
 
@@ -162,6 +163,10 @@ class EqPropDiffusion(nn.Module):
             raise ValueError("t must be provided for diffusion forward pass")
 
         return self.predict_x0(x, t)
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Delegate to the internal denoiser's transition modules."""
+        return self.denoiser.transition_modules()
 
     @torch.no_grad()
     def sample(self, num_samples=16, img_size=(1, 28, 28), device="cpu", steps=None):
