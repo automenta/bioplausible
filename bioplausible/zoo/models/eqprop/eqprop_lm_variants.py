@@ -565,6 +565,7 @@ def compare_variants(vocab_size: int = 65, seq_len: int = 64, batch_size: int = 
     "eqprop_transformer",
     family="eqprop",
     tags=["eqprop", "transformer"],
+    provides=["transition_graph", "standard_autograd"],
 )
 class EqPropLMWrapper(nn.Module):
     """

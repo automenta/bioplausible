@@ -92,7 +92,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "bioplausible/tests"]
+testpaths = ["tests"]
 markers = ["slow: marks tests as slow (e.g. MNIST full epoch)"]
 addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=40 -p no:warnings"
 

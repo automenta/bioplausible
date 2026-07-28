@@ -407,6 +407,7 @@ class TileSplitter:
     requires_backward=False,
     credit_assignment_type="hebbian",
     family="equitile",
+    provides=["standard_autograd"],
 )
 class DynamicEquiTile:
     """EquiTile with dynamic tile architecture.

@@ -1,11 +1,15 @@
 """
-Model structure inspection utilities.
+Model structure inspection utilities (internal).
 
 Extracts layer structure from PyTorch models for EP state tracking.
 
-REFACTOR3: Layer discovery now delegates to the model's ``transition_modules()``
-where available. The recursive fallback is retained for models that do not
-implement the ``TransitionGraph`` protocol.
+REFACTOR3: Layer discovery primarily delegates to ``transition_modules()``.
+The recursive fallback is retained for O1 memory modules that need the full
+module structure (including activations, norms, dropout) to perform manual
+forward passes during energy computation.
+
+This is an **internal utility** — not part of the public API. New code should
+use ``model.transition_modules()`` directly.
 """
 
 from typing import Any

@@ -29,7 +29,7 @@ from .ep_optimizer import (
     EWCState,
 )
 from .ewc import EPOptimizerWithEWC, EWCRegularizer, TaskMemory
-from .inspector import ModelInspector
+from .inspector import ModelInspector  # Internal utility
 from .o1_memory import (
     O1MemoryEP,
     energy_from_states,
@@ -92,6 +92,7 @@ __all__ = [
     # Utilities
     "EnergyFunction",
     "Settler",
+    # Internal utilities (not part of public API)
     "ModelInspector",
     # Unified EP optimizer (recommended)
     "EPOptimizer",

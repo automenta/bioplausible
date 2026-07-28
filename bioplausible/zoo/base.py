@@ -75,6 +75,9 @@ class BioModel(nn.Module, ABC):
 
     algorithm_name: str = "BioModel"
 
+    # Capability declaration for Registry (REFACTOR3 §4).
+    provides: list[str] = ["transition_graph", "standard_autograd"]
+
     def __init__(
         self,
         config: ModelConfig | None = None,

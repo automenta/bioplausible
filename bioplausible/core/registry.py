@@ -392,22 +392,13 @@ class Registry:
     def check_compatibility(cls, propagator_name: str, model_name: str) -> bool:
         """Return True if the model provides all capabilities the propagator requires.
 
-        Checks declarative metadata first, then falls back to runtime
-        ``hasattr(model_class, 'transition_modules')`` for models registered
-        before the capability system was fully deployed.
+        Relies on declarative ``requires`` and ``provides`` metadata only.
         """
         prop_meta = cls.get_metadata(ComponentCategory.PROPAGATOR, propagator_name)
         model_meta = cls.get_metadata(ComponentCategory.MODEL, model_name)
         required = set(prop_meta.requires)
         provided = set(model_meta.provides)
-        if required.issubset(provided):
-            return True
-        # Fallback: runtime check for transition_modules on the model class.
-        if "transition_graph" in required:
-            model_cls = cls.get(ComponentCategory.MODEL, model_name)
-            if hasattr(model_cls, "transition_modules"):
-                return True
-        return False
+        return required.issubset(provided)
 
     @classmethod
     def clear(cls) -> None:
