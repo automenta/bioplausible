@@ -115,20 +115,30 @@ class FabricPCGraphPCN(BioModel):
 
         if self._mode == "backprop":
             from bioplausible.graph.training import train_backprop as trainer
+
+            extra = self.config.extra or {}
+            results = trainer(
+                self.structure,
+                self._params,
+                loader,
+                epochs=1,
+                lr=self.config.learning_rate,
+                device=self._device,
+            )
         else:
             from bioplausible.graph.training import train_pcn as trainer
 
-        extra = self.config.extra or {}
-        results = trainer(
-            self.structure,
-            self._params,
-            loader,
-            epochs=1,
-            lr=self.config.learning_rate,
-            device=self._device,
-            infer_steps=extra.get("infer_steps", 20),
-            eta_infer=extra.get("eta_infer", 0.05),
-        )
+            extra = self.config.extra or {}
+            results = trainer(
+                self.structure,
+                self._params,
+                loader,
+                epochs=1,
+                lr=self.config.learning_rate,
+                device=self._device,
+                infer_steps=extra.get("infer_steps", 20),
+                eta_infer=extra.get("eta_infer", 0.05),
+            )
 
         return {
             "loss": results["train_loss"],
