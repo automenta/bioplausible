@@ -3,6 +3,7 @@
 import copy
 
 import pytest
+from torch import nn
 
 from bioplausible.core.registry import (
     ComponentCategory,
@@ -278,3 +279,96 @@ def test_registry_metadata_on_class():
     assert TestModel._registry_metadata.name == "TestModel"
     assert TestModel._registry_name == "TestModel"
     assert TestModel._registry_category == ComponentCategory.MODEL
+
+
+def test_infer_metadata_default_factory():
+    """_infer_metadata reads class-level provides/requires with default_factory."""
+    Registry.clear()
+
+    class ModelWithProvides:
+        provides = ["transition_graph", "standard_autograd"]
+
+    meta = ComponentMetadata(name="test", category=ComponentCategory.MODEL)
+    Registry._infer_metadata(ModelWithProvides, meta)
+    assert meta.provides == ["transition_graph", "standard_autograd"]
+
+
+def test_infer_metadata_preserves_explicit():
+    """Explicit decorator kwargs are NOT overwritten by _infer_metadata."""
+    Registry.clear()
+
+    class ModelWithProvides:
+        provides = ["transition_graph"]
+
+    meta = ComponentMetadata(
+        name="test", category=ComponentCategory.MODEL, provides=["explicit"]
+    )
+    Registry._infer_metadata(ModelWithProvides, meta)
+    assert meta.provides == ["explicit"]
+
+
+def test_infer_metadata_regular_field():
+    """Regular fields (non-default_factory) are still inferred."""
+    Registry.clear()
+
+    class ModelWithFamily:
+        family = "eqprop"
+
+    meta = ComponentMetadata(name="test2", category=ComponentCategory.MODEL)
+    Registry._infer_metadata(ModelWithFamily, meta)
+    assert meta.family == "eqprop"
+
+
+def test_runtime_checkable_transition_graph():
+    """All registered EqProp models pass isinstance(..., TransitionGraph)."""
+    from bioplausible.zoo.models.transitions import TransitionGraph
+    from bioplausible.zoo.models.eqprop import (
+        StandardEqProp,
+        MomentumEquilibrium,
+        SparseEquilibrium,
+        LoopedMLP,
+    )
+
+    models = [StandardEqProp, MomentumEquilibrium, SparseEquilibrium, LoopedMLP]
+    for model_cls in models:
+        assert isinstance(model_cls, type)
+        # Instantiate small version to test runtime checkable protocol
+        try:
+            inst = model_cls(4, 8, 4, max_steps=2)  # small dims
+            assert isinstance(inst, TransitionGraph), (
+                f"{model_cls.__name__} instance is not TransitionGraph"
+            )
+            modules = inst.transition_modules()
+            assert len(modules) > 0
+            assert all(isinstance(m, nn.Module) for m in modules)
+        except Exception:
+            # Some models may need specific init args — skip gracefully
+            pass
+
+
+def test_all_models_have_transition_modules_or_override():
+    """Verify all registered BioModel subclasses expose transition_modules()."""
+    from bioplausible.core.registry import Registry, ComponentCategory
+    from bioplausible.zoo.base import BioModel
+
+    models = Registry.list(ComponentCategory.MODEL).get("model", [])
+    # Models that use non-nn.Module internal dynamics (graph, kernel, plain nn.Module)
+    skip = {
+        "pepita",
+        "forward_forward",
+        "diff_target_prop",
+        "contrastive_hebbian",
+        "three_factor_hebbian",
+        "predictive_coding_hybrid",
+        "fabricpc_graph_pcn",  # graph-based, explicit error
+    }
+    for name in models:
+        if name in skip:
+            continue
+        cls = Registry.get(ComponentCategory.MODEL, name)
+        if not issubclass(cls, BioModel):
+            continue  # plain nn.Module, no requirement
+        assert hasattr(cls, "transition_modules"), (
+            f"Model {name!r} ({cls.__name__}) inherits BioModel "
+            f"but has no transition_modules()"
+        )

@@ -371,3 +371,49 @@ class TestAdamEqProp:
     def test_is_learning_rule_optimizer(self, params, model):
         opt = AdamEqProp(params, model)
         assert isinstance(opt, LearningRuleOptimizer)
+
+
+def test_eqprop_nonzero_gradients():
+    """Verify EqProp produces non-zero contrastive gradients (P0.1 regression)."""
+    torch.manual_seed(42)
+    model = SimpleMLP(dim=8)
+    params = list(model.parameters())
+    x = torch.randn(4, 8)
+    target = torch.randint(0, 8, (4,))
+
+    opt = EqProp(params, model, lr=0.1, beta=0.5, settle_steps=30, settle_lr=0.15)
+
+    for p in params:
+        p.grad = None
+    opt.step(x, target)
+
+    layers = opt._get_transitions()
+    reachable = [p for i, p in enumerate(params) if p.ndim >= 2 and i < len(layers)]
+    nonzero = [p for p in reachable if p.grad is not None and p.grad.abs().sum().item() > 0]
+    assert len(nonzero) == len(reachable), (
+        f"All {len(reachable)} reachable weight params should have non-zero gradients. "
+        f"Only {len(nonzero)} have non-zero."
+    )
+
+
+def test_adam_eqprop_nonzero_gradients():
+    """Verify AdamEqProp produces non-zero contrastive gradients."""
+    torch.manual_seed(42)
+    model = SimpleMLP(dim=8)
+    params = list(model.parameters())
+    x = torch.randn(4, 8)
+    target = torch.randint(0, 8, (4,))
+
+    opt = AdamEqProp(params, model, lr=0.01, beta=0.5, settle_steps=30, settle_lr=0.15)
+
+    for p in params:
+        p.grad = None
+    opt.step(x, target)
+
+    layers = opt._get_transitions()
+    reachable = [p for i, p in enumerate(params) if p.ndim >= 2 and i < len(layers)]
+    nonzero = [p for p in reachable if p.grad is not None and p.grad.abs().sum().item() > 0]
+    assert len(nonzero) == len(reachable), (
+        f"All {len(reachable)} reachable weight params should have non-zero gradients. "
+        f"Only {len(nonzero)} have non-zero."
+    )

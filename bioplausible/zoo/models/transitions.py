@@ -67,6 +67,9 @@ class TransitionGraphMixin:
     free. Custom models override ``transition_modules()``.
     """
 
+    # Declarative capability — automatically read by Registry._infer_metadata.
+    provides: list[str] = ["transition_graph", "standard_autograd"]
+
     def transition_modules(self) -> list[nn.Module]:
         # 1. Explicit ModuleList (most common: StandardEqProp, MomentumEquilibrium, ...)
         layers = getattr(self, "layers", None)

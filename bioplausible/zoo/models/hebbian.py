@@ -15,6 +15,7 @@ from torch.nn.utils.parametrizations import spectral_norm
 from bioplausible.core.registry import register_model
 
 from ..nebc_base import NEBCBase, register_nebc
+from .transitions import TransitionGraphMixin
 from ..models.transitions import TransitionGraphMixin
 
 # ============================================================================
@@ -213,7 +214,7 @@ class DeepHebbianChain(NEBCBase):
 
 
 @register_nebc("hebbian_3d")
-class HebbianCube(NEBCBase):
+class HebbianCube(TransitionGraphMixin, NEBCBase):
     """
     3D Hebbian lattice for testing spatial organization.
     """
@@ -234,6 +235,10 @@ class HebbianCube(NEBCBase):
         super().__init__(
             input_dim, hidden_dim, output_dim, num_layers, use_spectral_norm, max_steps
         )
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Return transition modules in forward order."""
+        return [self.input_proj, *self.conv_layers, self.head]
 
     def _build_layers(self):
         cube_neurons = self.cube_size**3

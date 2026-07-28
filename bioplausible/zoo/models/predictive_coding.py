@@ -25,6 +25,20 @@ class FabricPCGraphPCN(BioModel):
 
     algorithm_name = "FabricPC Graph PCN"
 
+    def transition_modules(self) -> list[nn.Module]:
+        """FabricPC uses graph-internal parameters, not nn.Module chains.
+
+        The transition dynamics are handled by ``self.structure`` (a graph
+        topology), not by an ordered list of nn.Module submodules. Parameters
+        live in ``self._params: dict[str, dict[str, Tensor]]``, not as
+        ``nn.Module.parameters()``.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} uses FabricPC graph topology, not "
+            f"nn.Module transitions. Use a per-graph propagator (e.g. "
+            f"'predictive_coding_hybrid') instead of EqProp/CHL/MEP."
+        )
+
     def __init__(
         self,
         config: ModelConfig | None = None,

@@ -14,9 +14,10 @@ from torch.nn.utils.parametrizations import spectral_norm
 from bioplausible.zoo.base import (
     BioModel as EqPropModel,
 )  # alias: wrappers expose forward-only API, not EqProp settling
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 
-class RecurrentWrapper(EqPropModel):
+class RecurrentWrapper(TransitionGraphMixin, EqPropModel):
     """
     Wrapper that converts any recurrent cell into an EqProp model.
 
@@ -59,6 +60,15 @@ class RecurrentWrapper(EqPropModel):
         # Apply spectral norm if requested
         if use_spectral_norm:
             self._apply_spectral_norm()
+
+    def transition_modules(self) -> list[nn.Module]:
+        """The recurrent cell is the single transition module.
+
+        Note: LSTM cells produce (h, c) tuples; EqProp settling expects
+        single-tensor states. For now this returns *only* the cell as the
+        transition module — the callers must handle the (h, c) unpacking.
+        """
+        return [self.cell]
 
     def _apply_spectral_norm(self):
         """Apply spectral normalization to cell weights."""
@@ -147,6 +157,10 @@ class StackedRecurrentWrapper(EqPropModel):
                         spectral_norm(module)
 
         self.num_layers = num_layers
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Stacked cells are the transition modules, called in sequence."""
+        return list(self.cells)
 
     def forward(self, x: torch.Tensor, steps: int | None = None) -> torch.Tensor:
         """Forward pass with joint settling dynamics."""
@@ -260,6 +274,10 @@ class TransformerEqPropWrapper(EqPropModel):
                     spectral_norm(module)
 
         self.num_layers = num_layers
+
+    def transition_modules(self) -> list[nn.Module]:
+        """The transformer encoder is the single transition module."""
+        return [self.transformer]
 
     def forward(self, x: torch.Tensor, steps: int | None = None) -> torch.Tensor:
         """Forward pass with equilibrium dynamics."""

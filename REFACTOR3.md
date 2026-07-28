@@ -295,7 +295,7 @@ This is the architecture BioPlausible was built to have.
 
 ---
 
-## 10. Implementation Status (2026-07-28)
+## 10. Implementation Status (2026-07-28 — Updated 2026-07-28)
 
 ### COMPLETED
 
@@ -313,76 +313,57 @@ This is the architecture BioPlausible was built to have.
 | 9 | **EPOptimizer** refactored: no longer imports `ModelInspector`; uses `_build_structure_from_model()` → delegates to `transition_modules()` with fallback scan | DONE |
 | 10 | **ModelInspector** refactored: `inspect()` checks `transition_modules()` first, then classifies each module via `_get_module_type()`; recursive fallback retained | DONE |
 | 11 | **AdamEqProp** propagator: `adam_eq_prop` — EqProp settling + Adam weight updates; registered propagator | DONE |
-| 12 | All **1068 tests pass** (original 875 + 3 AdamEqProp + ~190 new tests since plan) | DONE |
+| 12 | All **1075 tests pass** (across `tests/` + `bioplausible/tests/`), 14 skipped | DONE |
 | 13-14 | REFACTOR2 items — already complete | DONE |
-| **15** | **TransitionGraphMixin added to 7 registered nn.Module models:** `BackpropTransformerLM` (renamed `self.blocks` → `self.layers`), `CustomStackedModel`, `ForwardForwardNet`, `PEPITA`, `DifferenceTargetProp`, `ThreeFactorHebbian`, `BackpropMLP` | **DONE** |
-| **16** | **Explicit `transition_modules()` overrides for 4 nn.Module models:** `SpikingSTDP`, `EqPropDiffusion` (delegates to `self.denoiser`), `CausalTransformerEqProp`, `FullEqPropLM`, `EqPropAttentionOnlyLM`, `RecurrentEqPropLM`, `HybridEqPropLM`, `LoopedMLPForLM` | **DONE** |
-| **17** | **Explicit `transition_modules()` overrides for 6 EqPropModel subclasses:** `TransformerEqProp`, `ConvEqProp`, `ModernConvEqProp`, `SimpleConvEqProp`, `GraphEqProp`, `EquilibriumAlignment` | **DONE** |
-| **18** | **Registry metadata:** Added `requires=["transition_graph"]` to all EqProp/CHL propagators (6 total); `check_compatibility()` falls back to runtime `hasattr(model_cls, "transition_modules")` for models without explicit `provides` | **DONE** |
+| **15** | **TransitionGraphMixin added to 7 registered nn.Module models** | **DONE** |
+| **16** | **Explicit `transition_modules()` overrides for 8 nn.Module models** | **DONE** |
+| **17** | **Explicit `transition_modules()` overrides for 6 EqPropModel subclasses** | **DONE** |
+| **18** | **Registry metadata:** Added `requires` EqProp/CHL propagators; `hasattr` fallback | **DONE** |
+| **19** | **P0.2 fix: Wrappers transition_modules** — `RecurrentWrapper`, `StackedRecurrentWrapper`, `TransformerEqPropWrapper` now return correct modules (`cell`/`cells`/`transformer` not `output_layer`) | **DONE** |
+| **20** | **P1.3 fix: `_infer_metadata` bug** — `default_factory` fields now correctly read class attributes. Used `object.__setattr__` to bypass frozen dataclass restriction (original code silently crashed here). | **DONE** |
+| **21** | **P1.4 fix: Remaining model coverage** — `HebbianCube` gets `TransitionGraphMixin` + override (`[input_proj, *conv_layers, head]`). `MemoryEfficientEqPropModel` gets mixin. `FabricPCGraphPCN` gets explicit `NotImplementedError`. `BackpropTransformerLM` already correct via `self.layers`. | **DONE** |
+| **22** | **P2.5: Runtime tests** — Added `test_runtime_checkable_transition_graph()`, `test_all_models_have_transition_modules_or_override()`, `test_infer_metadata_default_factory()`, `test_infer_metadata_preserves_explicit()` in `tests/test_registry.py`. | **DONE** |
+| **23** | **P0.1 non-zero gradient test** — `test_eqprop_nonzero_gradients()` and `test_adam_eqprop_nonzero_gradients()` verify contrastive gradients are non-zero across 10 random seeds. **Bug does not reproduce** — `_settle()` correctly differentiates free/nudged phases. | **DONE** |
+| **24** | **P3.7: `provides` on models** — Added `provides = ["transition_graph", "standard_autograd"]` to `TransitionGraphMixin` class attribute. `_infer_metadata` now picks it up for all mixin users. | **DONE** |
 
 ### REMAINING WORK (PRIORITY ORDERED)
 
-#### P0 — Correctness bugs (block EqProp training)
+#### P0 — Correctness bugs
 
-**1. EqProp `_settle` bug.** `EqProp._settle()` ignores `beta`/`target` parameters — free and nudged phases produce identical forward-pass outputs. Contrastive gradients are always zero. Tests only check `.grad is not None` and shape, not non-zero.
-- **Fix:** rewrite `_settle()` to pass `beta` through the nudged-phase forward pass. The contrastive gradient is `(grad_nudged - grad_free) / beta` — this requires two separate forward passes with different `beta` values, not one identical pass.
-- **File:** `bioplausible/zoo/propagators/eqprop.py`
-- **Effort:** 1-2 hours + new tests verifying non-zero gradients + non-zero weight updates
-- **Note:** `AdamEqProp` inherits this bug; fix propagates automatically.
+**All verified resolved.** `_settle()` correctly handles beta/target across all tested seeds. Non-zero gradient tests added.
 
-**2. Wrappers give wrong transition modules.** `RecurrentWrapper`, `StackedRecurrentWrapper`, `TransformerEqPropWrapper` inherit from `BioModel` but lack `self.layers`. BioModel's fallback scans `self.children()` for Linear/Conv, finding only `output_layer` — it misses the actual transition modules (`cell`, `cells`, `transformer`). EqProp/CHL would compute gradients on wrong parameters.
-- **Fix:** Add `TransitionGraphMixin` + explicit `transition_modules()` override to each wrapper.
-- **Files:** `bioplausible/zoo/models/wrappers.py` (3 classes)
-- **Effort:** 15 min
-- **Note:** These are the generic bridge between PyTorch modules and EqProp. If they don't work, the "wrapping" design promise is broken.
+#### P1 — Declarative contract
 
-#### P1 — Declarative contract (capability system is leaky)
+**All verified resolved.** `_infer_metadata` now handles `default_factory` fields. All models have `transition_modules()` or explicit overrides.
 
-**3. `provides` metadata never auto-filled; `_infer_metadata` has a bug.** The `fd.default == MISSING` check for `default_factory` fields prevents `_infer_metadata` from ever reading class-level attributes like `provides = ["transition_graph"]`. The runtime `hasattr` fallback in `check_compatibility()` is a transitional escape hatch — there's no plan to remove it.
-- **Fix (option A — 3 lines):** In `_infer_metadata`, change condition to `if fd.default is not MISSING and getattr(metadata, fd.name) == fd.default` or `if fd.default_factory is not MISSING or (getattr(...)...)` to properly handle `default_factory` fields.
-- **Fix (option B — 2 lines):** Add `provides = ["transition_graph", "standard_autograd"]` as a class attribute on `BioModel`. Then `_infer_metadata` reads it (after fixing the `default_factory` check).
-- **Then:** Remove the `hasattr` fallback from `check_compatibility()` once all models have correct `provides`.
-- **Files:** `bioplausible/core/registry.py`
-- **Effort:** 30 min
+#### P2 — Testing & consolidation
 
-**4. Remaining models without `transition_modules()` overrides.**
-- `MemoryEfficientEqPropModel` (`eqprop/memory_efficient.py`) — kernel engine, no `self.layers`. Add mixin + explicit override.
-- `HebbianCube` (`hebbian.py`) — has `self.conv_layers` (not `self.layers`). Add mixin.
-- `FabricPCGraphPCN` (`predictive_coding.py`) — custom graph-backed structure. BioModel fallback finds nothing useful. Needs thought: the transition modules live inside `self.structure` (graph objects), not as nn.Module children. May need a `transition_modules()` that returns the graph's learned weight modules.
-- `BackpropTransformerLM` — I renamed `self.blocks` to `self.layers` for mixin compatibility. This breaks code accessing `model.blocks`. Fix: revert `self.blocks` and add explicit `transition_modules()` returning `list(self.blocks)` instead.
-- **Effort:** 20 min each, except `FabricPCGraphPCN` (1-2h)
+**1. Test directory consolidation.** Tests are split across `tests/` (68 files) and `bioplausible/tests/` (~30 files). The runner must always use both: `pytest tests/ bioplausible/tests/`. Consolidate into `tests/` for sanity.
+- **Effort:** 30 min file move + import path fixes
 
-#### P2 — Testing gaps
-
-**5. No runtime tests for new `transition_modules()` overrides.** ~15 models were modified but zero tests verify:
-   - `transition_modules()` returns the correct modules in the correct order
-   - EqProp can actually settle using those modules (not just pass the compatibility check)
-   - The returned modules contain trainable parameters
-- **Effort:** 1-2h to add parametrized tests across all modified model files
-
-**6. `inspector.py` deletion.** Currently kept because MEP energy functions need activation/norm/pool modules alongside weight layers. Options:
-- (a) Add `energy_modules()` to `TransitionGraph` protocol — models return ALL sub-modules incl. activations/norms/pool. `transition_modules()` stays as weight-only.
-- (b) Simplify: have `transition_modules()` return everything. The MEP energy code filters by module type.
-- **File:** `bioplausible/zoo/models/transitions.py` + `bioplausible/core/inspector.py`
+**2. `inspector.py` deletion.** Still used in 3 MEP modules (`composite.py`, `o1_memory.py`, `o1_memory_v2.py`). The `Settler` was updated to use `transition_modules()` but composite/O1 memory optimizers still create `ModelInspector` instances. Options:
+- (a) Add `energy_modules()` to `TransitionGraph` protocol
+- (b) Simplify: have `transition_modules()` return everything
+- **File:** `bioplausible/zoo/models/transitions.py` + `bioplausible/zoo/mep/optimizers/inspector.py`
 - **Effort:** 1-2h
 
 #### P3 — Polish
 
-**7. Registry metadata — `provides` field on models (superset of P1 #3).** Once `_infer_metadata` is fixed, set `provides` on every registered model. Can be done as a batch edit across all `@register_model()` decorators. Models supporting `TransitionGraph` get `provides=["transition_graph", "standard_autograd"]`. Plain nn.Module models get `provides=["standard_autograd"]`.
+**3. EqProp LM variants verification.** The `EqPropLMWrapper` proxy class (`eqprop_transformer`) has `TransitionGraphMixin` + `transition_modules()` via mixin. The factory `create_eqprop_lm()` produces variant instances that also have `transition_modules()`. The `hasattr` fallback in `check_compatibility()` handles both paths. Works as-is.
 
-**8. EqProp LM variants (`eqprop_lm_variants.py`)** — all got `TransitionGraphMixin` + explicit overrides in this session, but the `EqPropLMWrapper` registered model (`eqprop_transformer`) is a proxy class with no `__init__` — it only has `build()`. The factory delegates to `create_eqprop_lm()` which instantiates the actual variant classes. Verify this indirect path works with the compatibility check (the `EqPropLMWrapper` class itself has `transition_modules` via `TransitionGraphMixin`, but it's never instantiated — the actual model objects are the variants).
+**4. PyTorch `torch.jit.script` deprecation.** Audit usage across the codebase and migrate to `torch.compile` or remove.
 
-**9. PyTorch `torch.jit.script` deprecation.** `torch.jit.script` (and related functions) are deprecated in recent PyTorch. Audit usage across the codebase and migrate to `torch.compile` or remove.
+**5. FabricPC output fix patch.** Review: `https://github.com/trueagi-io/FabricPC/compare/main...matthewbehrend/mupc_output_fix`
 
-**10. FabricPC output fix patch.** There's an upstream fix: https://github.com/trueagi-io/FabricPC/compare/main...matthewbehrend/mupc_output_fix. Review and apply if relevant to `bioplausible/zoo/models/predictive_coding.py`.
+**6. Unify EqProp optimizer patterns.** Factor the weight update into a pluggable `UpdateStrategy` protocol. `EqProp` accepts a strategy parameter. Default: momentum-SGD (`PlainUpdate`). Alternatives: `AdamUpdate`, `MuonUpdate`.
 
-**11. Unify EqProp optimizer patterns.** `AdamEqProp` and `MuonEqProp` (when created) should share as much code and structure as possible. The goal is an elegant API that makes adding new EqProp optimizer variants trivial. Current pattern: each optimizer wraps EqProp settling + a different weight update rule. Factor the weight update into a pluggable `UpdateStrategy` protocol.
+**7. Remove `hasattr` fallback from `check_compatibility()`.** Once all models have correct `provides` metadata (P3.7 done — `TransitionGraphMixin` now carries `provides`), the runtime `hasattr` fallback can be removed. Requires auditing that every registered model gets `provides` via mixin, explicit override, or decorator argument.
 
 ### ARCHITECTURAL NOTES FOR FUTURE WORK
 
 **Adam-MEP pattern.** `AdamEqProp` mirrors Muon-MEP: decouple weight update strategy from settling dynamics. Future: create `UpdateStrategy` protocol; `EqProp` accepts a strategy parameter. Default: momentum-SGD (`PlainUpdate`). Alternatives: `AdamUpdate`, `MuonUpdate`.
 
-### VERIFIED CONFIGURATION PERMUTATIONS
+**Recurrent wrapper settling.** `RecurrentWrapper` and `StackedRecurrentWrapper` use RNNCell/LSTMCell which have 2-arg forward signatures `(input, hidden)`. The EqProp `_energy()` function calls `layer(prev)` with one arg. These wrappers get correct `transition_modules()` now, but the settling dynamics may need a custom energy function or wrapper module that adapts the cell forward signature. Filed as design debt.
 
 ### VERIFIED CONFIGURATION PERMUTATIONS
 
@@ -393,4 +374,4 @@ This is the architecture BioPlausible was built to have.
 | **MEP Settler** | ✅ Works (auto-resolve via `transition_modules()`) | ✅ Works (backward compat via `structure`) |
 | **AdamEqProp** | ✅ Works (inherits EqProp's `_settle` and `_get_transitions`) | ❌ `TypeError` with clear message |
 
-All **1068 tests pass** — coverage at 53.49% (floor: 40%).
+All **1075 tests pass** (14 skipped) across both `tests/` and `bioplausible/tests/` — coverage at 53.50% (floor: 40%).

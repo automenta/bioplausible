@@ -7,6 +7,7 @@ import torch
 from bioplausible.acceleration.kernels import HAS_CUPY, EqPropKernel
 
 from ..base import EqPropModel
+from ..transitions import TransitionGraphMixin
 from .looped_mlp import LoopedMLP
 
 
@@ -61,7 +62,7 @@ class MemoryEfficientLoopedMLP(LoopedMLP):
         )
 
 
-class MemoryEfficientEqPropModel(EqPropModel):
+class MemoryEfficientEqPropModel(TransitionGraphMixin, EqPropModel):
     """
     Base class for memory-efficient EqProp models that can leverage kernel backend.
     """

@@ -8,7 +8,7 @@ import builtins
 import logging
 import pathlib
 from collections.abc import Callable
-from dataclasses import dataclass, field, fields
+from dataclasses import MISSING, dataclass, field, fields
 from enum import Enum, StrEnum
 from typing import Any, TypeVar
 
@@ -252,13 +252,28 @@ class Registry:
 
     @classmethod
     def _infer_metadata(cls, component: Any, metadata: ComponentMetadata) -> None:
-        """Infer metadata from component attributes if not explicitly provided."""
+        """Infer metadata from component attributes if not explicitly provided.
+
+        Uses ``object.__setattr__`` to bypass the frozen dataclass restriction
+        — this is an internal initialisation helper, not user-facing mutation.
+        """
         overrides = getattr(component, "_registry_metadata_overrides", {})
         for fd in fields(ComponentMetadata):
             if fd.name in overrides:
                 continue
-            if hasattr(component, fd.name) and getattr(metadata, fd.name) == fd.default:
-                setattr(metadata, fd.name, getattr(component, fd.name))
+            if not hasattr(component, fd.name):
+                continue
+            current = getattr(metadata, fd.name)
+            default = fd.default
+            if default is not MISSING and current == default:
+                object.__setattr__(metadata, fd.name, getattr(component, fd.name))
+            elif default is MISSING and fd.default_factory is not MISSING:
+                # Fields with default_factory (e.g. provides=[], requires=[])
+                # start empty. Only infer if the component attribute differs
+                # from the factory-produced default.
+                factory_default = fd.default_factory()
+                if current == factory_default:
+                    object.__setattr__(metadata, fd.name, getattr(component, fd.name))
 
     @classmethod
     def get(cls, category: ComponentCategory | str, name: str) -> Any:
