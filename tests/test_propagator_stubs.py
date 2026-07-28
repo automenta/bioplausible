@@ -10,16 +10,16 @@ import pytest
 import torch
 
 from bioplausible.zoo.propagators import (
-    FFStub,
-    PEPITAStub,
-    TargetPropStub,
-    DTPStub,
-    PCNStub,
-    ForwardForwardNet,
     PEPITA,
     DifferenceTargetProp,
+    DTPStub,
     FabricPCGraphPCN,
+    FFStub,
+    ForwardForwardNet,
+    PCNStub,
+    PEPITAStub,
     PredictiveCodingHybrid,
+    TargetPropStub,
 )
 
 
@@ -66,7 +66,9 @@ class TestModelSideImplementationsTrain:
 
     def test_forward_forward_net_train_step(self, batch):
         x, y = batch
-        model = ForwardForwardNet(input_dim=784, hidden_dim=64, output_dim=10, num_layers=2)
+        model = ForwardForwardNet(
+            input_dim=784, hidden_dim=64, output_dim=10, num_layers=2
+        )
         stats = model.train_step(x, y)
         assert isinstance(stats, dict)
         assert "loss" in stats
@@ -84,7 +86,9 @@ class TestModelSideImplementationsTrain:
 
     def test_difference_target_prop_train_step(self, batch):
         x, y = batch
-        model = DifferenceTargetProp(input_dim=784, hidden_dim=64, output_dim=10, num_layers=2)
+        model = DifferenceTargetProp(
+            input_dim=784, hidden_dim=64, output_dim=10, num_layers=2
+        )
         stats = model.train_step(x, y)
         assert isinstance(stats, dict)
         assert "loss" in stats

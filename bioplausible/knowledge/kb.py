@@ -34,7 +34,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class KnowledgeEntry:
     """A single knowledge entry with metadata and optional embedding."""
 

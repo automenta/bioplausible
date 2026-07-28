@@ -644,87 +644,82 @@ class RLTask(BaseTask):
         return RLTrainer(model, self.env_name, device=self.device, **rl_args)
 
 
+def _parse_split_digits(task_name: str) -> tuple[list[int] | None, str]:
+    """Parse 'mnist_01' into ([0, 1], 'mnist'). Returns (None, task_name) if no digits."""
+    if "_" not in task_name or not any(c.isdigit() for c in task_name):
+        return None, task_name
+
+    parts = task_name.split("_")
+    digits: list[int] = []
+    clean_name_parts: list[str] = []
+    for p in parts:
+        if p.isdigit():
+            for d in p:
+                digits.append(int(d))
+        elif p == "split":
+            continue
+        else:
+            clean_name_parts.append(p)
+
+    if not digits:
+        return None, task_name
+
+    included_classes = sorted(set(digits))
+    base_name = "_".join(clean_name_parts)
+    # Handle special case where base name might be empty or partial
+    if "mnist" in task_name and "mnist" not in base_name:
+        base_name = "mnist"
+    elif "cifar" in task_name and "cifar" not in base_name:
+        base_name = "cifar10"
+
+    return included_classes, base_name
+
+
+def _normalize_vision_name(base_name: str) -> str:
+    """Normalize a vision dataset name to the canonical key."""
+    match base_name:
+        case n if "kmnist" in n or "kuzushiji" in n:
+            return "kmnist"
+        case n if "cifar" in n:
+            return "cifar100" if "100" in n else "cifar10"
+        case n if "fashion" in n:
+            return "fashion_mnist"
+        case n if "digits" in n:
+            return "digits"
+        case n if "usps" in n:
+            return "usps"
+        case n if "svhn" in n:
+            return "svhn"
+        case n if "mnist" in n:
+            return "mnist"
+        case _:
+            return base_name
+
+
 def create_task(
     task_name: str, device: str = "cpu", quick_mode: bool = False, **kwargs
 ) -> BaseTask:
     """Factory function for tasks. Maps string names to Task classes via heuristics."""
-    if task_name == "char_ngram":
-        return CharNGramTask(name=task_name, device=device, quick_mode=quick_mode)
+    match task_name:
+        case "char_ngram":
+            return CharNGramTask(name=task_name, device=device, quick_mode=quick_mode)
+        case "pendulum":
+            return RLTask("Pendulum-v1", device, quick_mode)
+        case "acrobot":
+            return RLTask("Acrobot-v1", device, quick_mode)
+        case "cartpole" | "rl":
+            return RLTask("CartPole-v1", device, quick_mode)
+        case "shakespeare" | "tiny_shakespeare":
+            return LMTask(task_name, device, quick_mode)
+        case _:
+            included_classes, base_name = _parse_split_digits(task_name)
 
-    # RL Tasks
-    if task_name == "pendulum":
-        return RLTask("Pendulum-v1", device, quick_mode)
-    if task_name == "acrobot":
-        return RLTask("Acrobot-v1", device, quick_mode)
-    if task_name in ["cartpole", "rl"]:
-        return RLTask("CartPole-v1", device, quick_mode)
+    VISION_KEYWORDS = {"vision", "mnist", "cifar", "fashion", "digits", "usps", "svhn"}
 
-    if task_name in ["shakespeare", "tiny_shakespeare"]:
-        return LMTask(task_name, device, quick_mode)
-
-    # Check for Split/Continual Learning Tasks e.g. "mnist_01"
-    included_classes = None
-    base_name = task_name
-
-    # Parse "mnist_01" -> [0, 1]
-    # Match pattern like "mnist_01" or "cifar_0_1_2"
-    if "_" in task_name and any(c.isdigit() for c in task_name):
-        # Try to extract digits
-        parts = task_name.split("_")
-        digits = []
-        clean_name_parts = []
-        for p in parts:
-            if p.isdigit():
-                # "01" -> 0, 1
-                for d in p:
-                    digits.append(int(d))
-            elif p == "split":
-                continue  # ignore 'split' keyword
-            else:
-                clean_name_parts.append(p)
-
-        if digits:
-            included_classes = sorted(list(set(digits)))
-            base_name = "_".join(clean_name_parts)
-            # Handle special case where base name might be empty or partial
-            if "mnist" in task_name and "mnist" not in base_name:
-                base_name = "mnist"
-            elif "cifar" in task_name and "cifar" not in base_name:
-                base_name = "cifar10"
-
-    if (
-        "vision" in base_name
-        or "mnist" in base_name
-        or "cifar" in base_name
-        or "fashion" in base_name
-        or "digits" in base_name
-        or "usps" in base_name
-        or "svhn" in base_name
-    ):
-        # Normalize name
-        name = base_name
-        if "cifar" in base_name:
-            if "100" in base_name:
-                name = "cifar100"
-            else:
-                name = "cifar10"
-        elif "fashion" in base_name:
-            name = "fashion_mnist"
-        elif "kmnist" in base_name or "kuzushiji" in base_name:
-            name = "kmnist"
-        elif "digits" in base_name:
-            name = "digits"
-        elif "usps" in base_name:
-            name = "usps"
-        elif "svhn" in base_name:
-            name = "svhn"
-        elif "mnist" in base_name:
-            name = "mnist"
-
-        # Extract fold and data_fraction from kwargs
+    if any(kw in base_name for kw in VISION_KEYWORDS):
+        name = _normalize_vision_name(base_name)
         fold = kwargs.get("fold")
         data_fraction = kwargs.get("data_fraction")
-
         return VisionTask(
             name,
             device,
@@ -734,16 +729,17 @@ def create_task(
             data_fraction=data_fraction,
         )
 
-    if base_name in ["cora", "pubmed", "citeseer"]:
-        from bioplausible.hyperopt.graph_task import GraphTask
+    match base_name:
+        case "cora" | "pubmed" | "citeseer":
+            from bioplausible.hyperopt.graph_task import GraphTask
 
-        return GraphTask(base_name, device, quick_mode)
+            return GraphTask(base_name, device, quick_mode)
+        case "breast_cancer" | "california_housing":
+            from bioplausible.hyperopt.tabular_task import TabularTask
 
-    if base_name in ["breast_cancer", "california_housing"]:
-        from bioplausible.hyperopt.tabular_task import TabularTask
-
-        return TabularTask(base_name, device, quick_mode)
-
-    # Default to LM
-    logger.warning("Unknown task '%s', defaulting to tiny_shakespeare LM", task_name)
-    return LMTask("tiny_shakespeare", device, quick_mode)
+            return TabularTask(base_name, device, quick_mode)
+        case _:
+            logger.warning(
+                "Unknown task '%s', defaulting to tiny_shakespeare LM", task_name
+            )
+            return LMTask("tiny_shakespeare", device, quick_mode)

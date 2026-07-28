@@ -1,6 +1,5 @@
 """Equilibrium Propagation model variants."""
 
-
 import torch
 from torch import nn
 

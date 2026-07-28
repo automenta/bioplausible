@@ -1,6 +1,5 @@
 """Equilibrium Propagation model variants."""
 
-
 import torch
 
 from ...base import ModelConfig, register_model

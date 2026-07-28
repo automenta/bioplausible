@@ -11,6 +11,15 @@ See bioplausible/__init__.py for the two-tier architecture overview.
 
 from bioplausible.core.registry import register_propagator
 
+# Re-export model-side implementations (the "model side" of the two-tier architecture).
+# See bioplausible/__init__.py docstring for the architectural rationale.
+from bioplausible.zoo.models.forward_only import PEPITA, ForwardForwardNet
+from bioplausible.zoo.models.predictive_coding import (
+    FabricPCGraphPCN,
+    PredictiveCodingHybrid,
+)
+from bioplausible.zoo.models.target_prop import DifferenceTargetProp
+
 from . import (
     backprop,  # noqa: F401
     base,  # noqa: F401
@@ -25,18 +34,11 @@ from . import (
 )
 
 # Import stub classes with distinct names so they don't shadow model-side
-from .forward_only import FF as FFStub, PEPITA as PEPITAStub  # noqa: F401
-from .target_prop import TargetProp as TargetPropStub, DifferenceTargetProp as DTPStub  # noqa: F401
-from .predictive_coding import PCN as PCNStub  # noqa: F401
-
-# Re-export model-side implementations (the "model side" of the two-tier architecture).
-# See bioplausible/__init__.py docstring for the architectural rationale.
-from bioplausible.zoo.models.forward_only import ForwardForwardNet, PEPITA
-from bioplausible.zoo.models.target_prop import DifferenceTargetProp
-from bioplausible.zoo.models.predictive_coding import (
-    FabricPCGraphPCN,
-    PredictiveCodingHybrid,
-)
+from .forward_only import FF as FFStub
+from .forward_only import PEPITA as PEPITAStub
+from .predictive_coding import PCN as PCNStub
+from .target_prop import DifferenceTargetProp as DTPStub
+from .target_prop import TargetProp as TargetPropStub
 
 __all__ = [
     "register_propagator",

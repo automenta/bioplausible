@@ -1,6 +1,5 @@
 """Tests for the CoreTrainer."""
 
-
 from bioplausible.core.trainer import (
     CoreTrainer,
     TrainerConfig,

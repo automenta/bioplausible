@@ -33,7 +33,7 @@ def _set_nested(cfg: RunConfig, path: tuple[str, ...], value: Any) -> None:
     final = path[-1]
     try:
         setattr(obj, final, value)
-    except (AttributeError, TypeError):
+    except AttributeError, TypeError:
         obj[final] = value
 
 

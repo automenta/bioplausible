@@ -172,15 +172,6 @@ from bioplausible.zoo import optimizers as zoo_optimizers
 from bioplausible.zoo import propagators as zoo_propagators
 from bioplausible.zoo import sparsity as zoo_sparsity
 
-# Re-export model-side classes from propagators package (two-tier arch)
-from bioplausible.zoo.propagators import (
-    DifferenceTargetProp,
-    FabricPCGraphPCN,
-    ForwardForwardNet,
-    PEPITA,
-    PredictiveCodingHybrid,
-)
-
 # Optimizers / Propagators
 from bioplausible.zoo.mep.presets import muon_backprop, smep, smep_fast
 from bioplausible.zoo.models.eqprop import (
@@ -189,6 +180,15 @@ from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
     MemoryEfficientLoopedMLP,
     TransformerEqProp,
+)
+
+# Re-export model-side classes from propagators package (two-tier arch)
+from bioplausible.zoo.propagators import (
+    PEPITA,
+    DifferenceTargetProp,
+    FabricPCGraphPCN,
+    ForwardForwardNet,
+    PredictiveCodingHybrid,
 )
 from bioplausible.zoo.propagators.eqprop import EqProp
 from bioplausible.zoo.propagators.fa import DirectFA, FeedbackAlignment

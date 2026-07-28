@@ -23,7 +23,6 @@ import torch
 from torch import nn
 from torch.optim import Optimizer
 
-
 # PEP 695 type alias: the input shape for learning-rule step()
 type StepInput = torch.Tensor | tuple[torch.Tensor, torch.Tensor | None]
 

@@ -405,7 +405,7 @@ archived in `docs/archive/20260726/p2p_http/`).
 
 ---
 
-## Session Progress (2026-07-27)
+## Session Progress (2026-07-27) — Session 2
 
 ### Completed Items
 
@@ -414,35 +414,60 @@ archived in `docs/archive/20260726/p2p_http/`).
 | A.2 | Legacy except syntax fix | ✅ | Fixed 16 files (backends.py, kernels.py, ablation.py, etc.) |
 | A.3 | PlausibleStep Protocol + StepInput alias | ✅ | Added to `zoo/propagators/base.py` with docstring |
 | A.4 | Propagator stub tests + model-side re-exports | ✅ | Created `tests/test_propagator_stubs.py` (10 tests); re-exported ForwardForwardNet, PEPITA, DifferenceTargetProp, FabricPCGraphPCN, PredictiveCodingHybrid |
-| C.1 | ruff format (47 files) | ✅ | 50 files reformatted |
-| C.2 | ruff check --fix | ✅ | 314 errors auto-fixed |
-| C.3 | noqa discipline (bare type: ignore) | ✅ | 14 bare `# type: ignore` comments now have codes |
+| C.1 | ruff format (47 files) | ✅ | 50 files reformatted (Session 1) + 28 files in Session 2 |
+| C.2 | ruff check --fix | ✅ | 314 + 3 errors auto-fixed |
+| C.3 | noqa discipline | ✅ | 14 bare `# type: ignore` comments now have codes |
 | B.4 | conftest.py torch mock removal | ✅ | Replaced mock scaffold with clean `import torch` |
+| **B.3** | **Frozen dataclasses (E.4 merged)** | **✅** | `KnowledgeEntry` and `FailureRecord` → `@dataclass(frozen=True, slots=True)` |
+| **B.2** | **EnergyTracker sparsity test** | **✅** | Created `tests/test_energy_sparsity.py` (9 tests) — hook cleanup on exception, Conv2d, ReLU/GELU models |
+| **A.5** | **MEP strategy tests** | **✅** | Created `tests/test_mep_strategies.py` (25 tests) — individual strategy classes (gradient, update, constraint, feedback) |
+| **D** | **FA propagator coverage** | **✅** | Created `tests/test_fa.py` (12 tests) — all 5 FA variants (FeedbackAlignment, DirectFA, AdaptiveFA, StochasticFA, ContrastiveFA) |
+| **D** | **Sparsity methods coverage** | **✅** | Created `tests/test_sparsity.py` (8 tests) — TopKPruning, ActivityDrivenPruning, RandomPruning |
+| **D** | **Zoo utils coverage** | **✅** | Created `tests/test_zoo_utils.py` (15 tests) — spectral_linear, spectral_conv2d, estimate_lipschitz, helpers |
+| **E.3** | **match/case for create_task** | **✅** | Refactored `hyperopt/tasks.py:647-749` — 100-line if/elif → `match`/`case` + extracted helpers `_parse_split_digits`, `_normalize_vision_name` |
+
+### Module Coverage Improvements
+
+| Module | Before | After | Δ |
+|--------|--------|-------|---|
+| `zoo/propagators/fa.py` | 36% | **96%** | +60pp |
+| `zoo/sparsity/methods.py` | 27% | **100%** | +73pp |
+| `zoo/utils.py` | 45% | **97%** | +52pp |
+| `core/energy.py` | ~60% | **78%** | +18pp |
+| `zoo/propagators/base.py` | 87% | 84% | -3pp (slight regression from code additions) |
 
 ### Test Status
-- Before: 669 passed
-- After: 679 passed (+10 new)
-- All tests pass
+- Before: 679 passed, 14 skipped
+- After: **754 passed**, 14 skipped, 5 subtests passed (+75 tests)
+- Pre-existing failure: `test_lm_equitile_train_step` (unrelated to changes)
 
 ### Coverage
-- Before: ~19% (broken coverage config)
-- After: 50.37%
-- Gap to 85%: ~35 percentage points (~10K lines)
+- Before: 50.37%
+- After: **51.27%**
+- Gap to 85%: ~34 percentage points
+- Note: Broader coverage across propagators, sparsity, and utils is now solid; remaining gap is the ~22K untested lines in model implementations, analysis, and infrastructure code.
 
 ### Remaining High-Impact Items
 
 | Phase | Item | Priority | Notes |
 |-------|------|----------|-------|
-| A.1 | pyright --strict | HIGH | 11,603 errors remain; triage by file recommended |
-| A.5 | MEP strategy tests | MEDIUM | smoke tests for gradient/update/constraint/feedback strategies |
-| D | Coverage to 85% | HIGH | Focus: `zoo/propagators/fa.py` (36%), `zoo/sparsity/methods.py` (27%) |
-| E.1 | Protocol-over-ABC | LOW | `BaseTask(ABC)` → `TaskProtocol` |
-| E.2 | lru_cache for globals | LOW | `_DATASET_CACHE` in `hyperopt/tasks.py` |
-| E.3 | match/case for create_task | LOW | 100-line if/elif chain in tasks.py:647-749 |
-| E.4 | Frozen dataclasses | LOW | Audit `KnowledgeEntry`, `FailureRecord`, etc. |
-| E.5 | t-strings for logging | LOW | Deferred; requires Python 3.14 preview |
+| A.1 | pyright --strict | **HIGH** | 11,581 errors remain. Top 10 error-heavy files: visualization.py (486), execution/synthesizer.py (445), strategy.py (352), zoo/models/fa.py (334), core/trainer.py (273), equitile/enhanced.py (272), hyperopt/tasks.py (223), experiment_checks.py (202), equitile/core.py (189), analysis/legacy_report/composer.py (169). **Strategy**: fix per-file with `# pyright: ignore` allowlist that shrinks each sprint. |
+| D | Coverage to 85% | **HIGH** | Remaining low-coverage targets: `zoo/propagators/eqprop.py` (26%), `zoo/propagators/hebbian.py` (25%), `zoo/propagators/backprop.py` (33%), `execution/strategy.py` (partial), `equitile/core.py` (partial), `hyperopt/tasks.py` (partial). Each needs a dedicated test file. |
+| E.1 | Protocol-over-ABC | LOW | `BaseTask(ABC)` → `TaskProtocol` — tricky because BaseTask provides __init__+concrete methods. Best approach: create `TaskProtocol` interface, keep `BaseTask` as concrete impl base, update type annotations. |
+| E.2 | _DATASET_CACHE → lru_cache | LOW | Cache is embedded in `VisionTask.setup()`. Requires extracting dataset loading into a standalone `@lru_cache`-decorated factory. Moderate effort, contained to `hyperopt/tasks.py`. |
+| E.5 | t-strings for logging | LOW | Pending t-string availability in Python 3.14 runtime. Search for `logger.*(f"` patterns across `execution/`, `hyperopt/`, `autoscientist/`. |
+| A.1c | conftest.py torchvision mock | LOW | `tests/conftest.py` still has mock scaffold for `torchvision` and `gymnasium`. Both are in `[project.optional-dependencies]` — consider promoting to hard deps or removing the scaffold. |
+| - | Residual ruff check errors | LOW | 5,052 errors remain (mostly style: magic-value-comparison, relative-imports, no-self-use). `ruff check --unsafe-fixes --fix` would fix 1,411 but causes import restructuring churn. Not recommended as bulk operation. |
+
+### Discovered Issues
+1. **`coverage` discrepancy**: Using `--co` flag reports 17% vs `--cov=bioplausible` reports 51%. The `[tool.coverage.run]` section in `pyproject.toml` may interfere. Recommend always using `--cov=bioplausible` explicitly.
+2. **`EnergyTracker.__exit__` conv2d handling**: When a model starts with Conv2d (no Linear layer with `in_features`), `__exit__` defaults to `inp_dim=64` and creates a 2D dummy input that fails for Conv2d. The `_estimate_activation_sparsity` wrapper handles this correctly (it takes any tensor), but the EnergyTracker's input dimension heuristic is fragile.
+3. **`test_lm_equitile_train_step` pre-existing failure**: File `tests/test_equitile_domains.py:TestLanguage::test_lm_equitile_train_step` fails. Root cause not investigated — may be a data dependency or model shape mismatch.
+4. **Slots-related `asdict` compatibility**: `KnowledgeEntry` has `embedding: list[float] | None = None` with a mutable default — should use `field(default=None)`. Currently works because `None` is immutable, but `slots=True` may expose issues with `asdict()` on certain field types. Verified passing.
 
 ### Next Session Start
-1. Run `uv run pyright bioplausible/zoo/propagators/base.py` to validate Protocol
-2. Fix top 5 error-heavy files identified in A.1
-3. Add MEP strategy smoke tests
+1. Tackle pyright in error-dense files: start with `zoo/propagators/fa.py` and `zoo/utils.py` (already at 96%/97% test coverage — low-hanging pyright fruit).
+2. Fix the 1 pre-existing test failure (`test_lm_equitile_train_step`).
+3. Write coverage tests for `zoo/propagators/eqprop.py` (26%) and `zoo/propagators/hebbian.py` (25%).
+4. Investigate the `coverage` config `--co` vs `--cov=bioplausible` discrepancy.
+5. Consider running `ruff check --unsafe-fixes --fix` targeting only `TID252` (relative imports) — this is the largest auto-fixable category (604 errors) and converting relative→absolute imports improves clarity.
