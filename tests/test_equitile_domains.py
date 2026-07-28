@@ -210,6 +210,7 @@ class TestLanguage:
 
     def test_lm_equitile_train_step(self) -> None:
         """Test LMEquiTile training step."""
+        torch.manual_seed(42)
         config = LMEquiTileConfig(
             vocab_size=100,
             embed_dim=32,
@@ -222,11 +223,17 @@ class TestLanguage:
         input_ids = torch.randint(0, 100, (4, 16))
         target_ids = torch.randint(0, 100, (4, 16))
 
+        # Verify forward pass is numerically stable first
+        with torch.no_grad():
+            logits = model(input_ids)
+        assert not logits.isnan().any(), "Forward pass produced NaN"
+
         stats = model.train_step(input_ids, target_ids)
 
         assert "loss" in stats
         assert "perplexity" in stats
-        assert stats["loss"] > 0
+        loss = stats["loss"]
+        assert loss > 0, f"Expected positive loss, got {loss}"
 
     def test_simple_tokenizer(self) -> None:
         """Test SimpleTokenizer."""

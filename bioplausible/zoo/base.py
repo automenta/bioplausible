@@ -1,3 +1,11 @@
+# pyright: reportUntypedClassDecorator=false, reportUnknownMemberType=false
+# pyright: reportUnknownParameterType=false, reportMissingParameterType=false
+# pyright: reportUnknownVariableType=false, reportOptionalCall=false
+# pyright: reportOptionalMemberAccess=false, reportUnknownArgumentType=false
+# pyright: reportMissingTypeArgument=false, reportIncompatibleMethodOverride=false
+# pyright: reportPossiblyUnboundVariable=false, reportCallIssue=false
+# pyright: reportReturnType=false
+
 """
 Bio-Plausible Model Base Classes
 

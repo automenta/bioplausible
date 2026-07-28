@@ -48,10 +48,10 @@ class EqProp(LearningRuleOptimizer):
 
         self.model.train()
 
-        states_free = self._settle(x, target=None, beta=0.0)
-        states_nudged = self._settle(x, target=target, beta=self.beta)
+        pairs_free = self._settle(x, target=None, beta=0.0)
+        pairs_nudged = self._settle(x, target=target, beta=self.beta)
 
-        self._compute_ep_gradient(states_free, states_nudged)
+        self._compute_ep_gradient(pairs_free, pairs_nudged)
 
         for param, buffer in zip(self.params, self.buffers):
             if param.grad is not None:
@@ -62,14 +62,15 @@ class EqProp(LearningRuleOptimizer):
         x: torch.Tensor,
         target: torch.Tensor | None,
         beta: float,
-    ) -> list[torch.Tensor]:
+    ) -> list[tuple[torch.Tensor, torch.Tensor]]:
         with torch.no_grad():
-            states = []
+            pairs: list[tuple[torch.Tensor, torch.Tensor]] = []
             h = x
             for layer in self._get_layers():
+                layer_input = h
                 h = layer(h)
-                states.append(h.clone())
-        return states
+                pairs.append((layer_input, h.clone()))
+        return pairs
 
     def _get_layers(self) -> list[nn.Module]:
         layers = []
@@ -80,13 +81,17 @@ class EqProp(LearningRuleOptimizer):
 
     def _compute_ep_gradient(
         self,
-        states_free: list[torch.Tensor],
-        states_nudged: list[torch.Tensor],
+        pairs_free: list[tuple[torch.Tensor, torch.Tensor]],
+        pairs_nudged: list[tuple[torch.Tensor, torch.Tensor]],
     ) -> None:
         for i, param in enumerate(self.params):
-            if param.ndim >= 2 and i < len(states_free):
-                contrast = (states_nudged[i] - states_free[i]) / self.beta
-                param.grad = contrast.mean(dim=0, keepdim=True).T
+            if param.ndim >= 2 and i < len(pairs_free):
+                inp, _ = pairs_free[i]
+                _, out_free = pairs_free[i]
+                _, out_nudged = pairs_nudged[i]
+                contrast = (out_nudged - out_free) / self.beta
+                batch_size = inp.shape[0]
+                param.grad = (inp.T @ contrast) / batch_size
 
 
 @register_propagator("holomorphic_eq_prop")

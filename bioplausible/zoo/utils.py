@@ -33,7 +33,8 @@ def _get_layer_weight(layer: nn.Module) -> torch.Tensor | None:
     if (
         hasattr(layer, "parametrizations") and hasattr(layer.parametrizations, "weight")
     ) or hasattr(layer, "weight"):
-        return layer.weight
+        w: object = layer.weight
+        return w if isinstance(w, torch.Tensor) else None
     return None
 
 
@@ -56,6 +57,7 @@ def estimate_lipschitz(layer: nn.Module, iterations: int = 3) -> float:
 
     with torch.no_grad():
         u = F.normalize(torch.randn(W.shape[1], device=device), dim=0)
+        v = torch.zeros_like(u)
 
         for _ in range(iterations):
             v = F.normalize(torch.mv(W, u), dim=0)
