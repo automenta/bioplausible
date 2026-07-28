@@ -16,6 +16,7 @@ dist/
 .mypy_cache/
 .hypothesis/
 .coverage*
+*.py,cover
 htmlcov/
 results/
 logs/
