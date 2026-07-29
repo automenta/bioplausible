@@ -8,7 +8,13 @@ Aggregates all predictive coding models into a single module for the model zoo.
 import torch
 from torch import nn
 
-from ..base import BioModel, ModelConfig, register_model
+from ..base import (
+    BioModel,
+    ModelConfig,
+    compute_hidden_dims,
+    register_model,
+    resolve_hidden_dims,
+)
 
 # ============================================================================
 # fabricpc_graph_pcn.py - FabricPCGraphPCN
@@ -175,7 +181,7 @@ class FabricPCGraphPCN(BioModel):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             learning_rate=getattr(spec, "default_lr", 0.001),
             extra=kwargs,
         )
@@ -201,13 +207,7 @@ class PredictiveCodingHybrid(BioModel):
 
         if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
-            hidden_dims = (
-                self.config.hidden_dims
-                if self.config.hidden_dims
-                else [self.hidden_dim]
-                if hasattr(self, "hidden_dim")
-                else []
-            )
+            hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
             for i in range(len(dims) - 1):
@@ -220,13 +220,7 @@ class PredictiveCodingHybrid(BioModel):
         self.criterion = nn.CrossEntropyLoss()
 
         self.top_down = nn.ModuleList()
-        hidden_dims = (
-            self.config.hidden_dims
-            if self.config.hidden_dims
-            else [self.hidden_dim]
-            if hasattr(self, "hidden_dim")
-            else []
-        )
+        hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
         dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
         for i in range(len(dims) - 1):
@@ -292,7 +286,7 @@ class PredictiveCodingHybrid(BioModel):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             extra=kwargs,
         )
         return cls(config=config).to(device)

@@ -10,7 +10,13 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
-from ..base import BioModel, ModelConfig, register_model
+from ..base import (
+    BioModel,
+    ModelConfig,
+    compute_hidden_dims,
+    register_model,
+    resolve_hidden_dims,
+)
 from ..nebc_base import NEBCBase
 from .base import EqPropModel
 
@@ -160,13 +166,7 @@ class AdaptiveFeedbackAlignment(BioModel):
 
         if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
-            hidden_dims = (
-                self.config.hidden_dims
-                if self.config.hidden_dims
-                else [self.hidden_dim]
-                if hasattr(self, "hidden_dim")
-                else []
-            )
+            hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
             for i in range(len(dims) - 1):
@@ -180,13 +180,7 @@ class AdaptiveFeedbackAlignment(BioModel):
         if config is None:
             config = self.config
 
-        hidden_dims = (
-            config.hidden_dims
-            if config.hidden_dims
-            else [self.hidden_dim]
-            if hasattr(self, "hidden_dim")
-            else []
-        )
+        hidden_dims = resolve_hidden_dims(config, self.hidden_dim)
         dims = [config.input_dim] + hidden_dims + [config.output_dim]
 
         for i in range(len(dims) - 1):
@@ -292,7 +286,7 @@ class AdaptiveFeedbackAlignment(BioModel):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             extra=kwargs,
         )
         return cls(config=config).to(device)
@@ -311,13 +305,7 @@ class StochasticFA(BioModel):
 
         if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
-            hidden_dims = (
-                self.config.hidden_dims
-                if self.config.hidden_dims
-                else [self.hidden_dim]
-                if hasattr(self, "hidden_dim")
-                else []
-            )
+            hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
             for i in range(len(dims) - 1):
@@ -408,7 +396,7 @@ class StochasticFA(BioModel):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             extra=kwargs,
         )
         return cls(config=config).to(device)
@@ -427,13 +415,7 @@ class ContrastiveFeedbackAlignment(BioModel):
 
         if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
-            hidden_dims = (
-                self.config.hidden_dims
-                if self.config.hidden_dims
-                else [self.hidden_dim]
-                if hasattr(self, "hidden_dim")
-                else []
-            )
+            hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
             for i in range(len(dims) - 1):
@@ -446,13 +428,7 @@ class ContrastiveFeedbackAlignment(BioModel):
         self.criterion = nn.CrossEntropyLoss()
 
         self.feedback_weights = nn.ParameterList()
-        hidden_dims = (
-            self.config.hidden_dims
-            if self.config.hidden_dims
-            else [self.hidden_dim]
-            if hasattr(self, "hidden_dim")
-            else []
-        )
+        hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
         dims = [self.input_dim] + hidden_dims + [self.output_dim]
         for i in range(len(dims) - 1):
             B = torch.randn(dims[i + 1], dims[i]) * 0.1
@@ -638,9 +614,7 @@ class StandardFA(BioModel):
         super().__init__(config, **kwargs)
 
         self.feedback_weights = nn.ParameterList()
-        hidden_dims = (
-            self.config.hidden_dims if self.config.hidden_dims else [self.hidden_dim]
-        )
+        hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
         dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
         self.layers = nn.ModuleList()
@@ -755,13 +729,7 @@ class EnergyGuidedFA(BioModel):
 
         if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
-            hidden_dims = (
-                self.config.hidden_dims
-                if self.config.hidden_dims
-                else [self.hidden_dim]
-                if hasattr(self, "hidden_dim")
-                else []
-            )
+            hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
             for i in range(len(dims) - 1):
@@ -811,7 +779,7 @@ class EnergyGuidedFA(BioModel):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             extra=kwargs,
         )
         return cls(config=config).to(device)
@@ -835,13 +803,7 @@ class EnergyMinimizingFA(BioModel):
 
         if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
-            hidden_dims = (
-                self.config.hidden_dims
-                if self.config.hidden_dims
-                else [self.hidden_dim]
-                if hasattr(self, "hidden_dim")
-                else []
-            )
+            hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
             for i in range(len(dims) - 1):
@@ -905,7 +867,7 @@ class EnergyMinimizingFA(BioModel):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             extra=kwargs,
         )
         return cls(config=config).to(device)
@@ -929,13 +891,7 @@ class LayerwiseEquilibriumFA(BioModel):
 
         if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
-            hidden_dims = (
-                self.config.hidden_dims
-                if self.config.hidden_dims
-                else [self.hidden_dim]
-                if hasattr(self, "hidden_dim")
-                else []
-            )
+            hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
             for i in range(len(dims) - 1):
@@ -985,7 +941,7 @@ class LayerwiseEquilibriumFA(BioModel):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             extra=kwargs,
         )
         return cls(config=config).to(device)

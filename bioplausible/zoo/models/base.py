@@ -5,179 +5,10 @@ import torch
 import torch.nn.functional as F
 from torch import autograd, nn
 
+from .._settling import EquilibriumFunction, settle_single_state
 from ..base import BioModel
 
 logger = logging.getLogger(__name__)
-
-
-class EquilibriumFunction(autograd.Function):
-    """
-    Implicit differentiation for Equilibrium Propagation models.
-
-    Implements O(1) memory backpropagation using the equilibrium property:
-    dL/dtheta = dL/dh * dh/dtheta
-    where dh/dtheta = (I - J)^-1 * df/dtheta
-
-    The backward pass solves for the adjoint state delta:
-    delta = (I - J^T)^-1 * dL/dh
-    via fixed-point iteration:
-    delta_{t+1} = J^T * delta_t + dL/dh
-    """
-
-    @staticmethod
-    def forward(
-        ctx: object,
-        model: nn.Module,
-        x_transformed: torch.Tensor,
-        h_init: torch.Tensor,
-        *params: torch.Tensor,
-    ) -> torch.Tensor:
-        ctx.model = model
-
-        # Optimization: Freeze Spectral Norm during loop
-        should_freeze_sn = getattr(model, "use_spectral_norm", False) and model.training
-        remaining_steps = model.max_steps
-
-        # 1. Find fixed point (no gradient tracking needed for the loop itself)
-        # Assume h_init is close to fixed point if continuing from previous state,
-        # or we iterate enough steps to converge.
-        with torch.no_grad():
-            h = h_init
-
-            if should_freeze_sn and remaining_steps > 0:
-                # Warmup step
-                h = model.forward_step(h, x_transformed)
-                remaining_steps -= 1
-                model.eval()
-
-            try:
-                for _ in range(remaining_steps):
-                    h = model.forward_step(h, x_transformed)
-            finally:
-                if should_freeze_sn:
-                    model.train()
-
-        # Save tensors for backward
-        # Save params so autograd knows they participate in the graph
-        ctx.save_for_backward(h, x_transformed, *params)
-        return h
-
-    @staticmethod
-    def backward(
-        ctx: object, grad_output: torch.Tensor
-    ) -> tuple[torch.Tensor | None, ...]:
-        h_star, x_transformed, *params = ctx.saved_tensors
-        model = ctx.model
-
-        # Capture training state
-        was_training = model.training
-        # Set to eval to prevent buffer updates (e.g. Spectral Norm) during
-        # backward fixed-point. Critical: Spectral Norm updates 'u' and 'v'
-        # buffers in .train() mode, which would cause in-place modification
-        # errors or incorrect gradients during backward loop.
-        model.eval()
-
-        try:
-            # 2. Compute adjoint state (delta) via fixed-point iteration
-            # Initial guess for delta is dL/dh (grad_output)
-            # OPTIMIZATION: Remove unnecessary clone (grad_output is read-only here)
-            delta = grad_output
-
-            # Use detached X for VJP to avoid graph entanglement
-            # with input gradients yet
-            x_transformed_detached = x_transformed.detach()
-
-            # Check for _forward_step_impl (uncompiled) to avoid
-            # torch.compile overhead in loop
-            forward_fn = getattr(model, "_forward_step_impl", model.forward_step)
-
-            # Iterate to equilibrium for the backward pass (solving for delta)
-            # delta_{t+1} = (df/dh)^T * delta_t + grad_output
-            # OPTIMIZATION: Early convergence check for the adjoint
-            delta_prev = None
-            for _ in range(model.max_steps):
-                with torch.enable_grad():
-                    # Create a new leaf for h_star at each step for local VJP calc
-                    h_star_loop = h_star.detach().requires_grad_(True)
-
-                    # Compute f(h, x)
-                    f_h = forward_fn(h_star_loop, x_transformed_detached)
-
-                    # VJP: v = (df/dh)^T @ delta
-                    # retain_graph=False ensures we free the f_h graph immediately.
-                    # Detach delta because for the VJP, delta is a constant vector.
-                    vjp = autograd.grad(
-                        f_h,
-                        h_star_loop,
-                        grad_outputs=delta.detach(),
-                        retain_graph=False,
-                        create_graph=False,
-                    )[0]
-
-                    delta_next = (vjp + grad_output).detach()
-
-                # Check for convergence in adjoint: break early if stable
-                if delta_prev is not None and _ > 3:
-                    with torch.no_grad():
-                        if (
-                            torch.dist(delta_next, delta_prev, p=float("inf")).item()
-                            < 1e-4
-                        ):
-                            delta = delta_next
-                            break
-                delta_prev = delta_next
-                delta = delta_next
-
-            # 3. Compute gradients for parameters and input using the converged delta
-            delta = delta.detach()
-
-            with torch.enable_grad():
-                h_star_detached = h_star.detach()
-
-                # A. Compute gradients for parameters
-                # dL/dtheta = (df/dtheta)^T @ delta
-
-                # CRITICAL: Detach x_transformed here.
-                # If we don't detach, autograd will trace d(f_h)/d(x) * d(x)/d(theta)
-                # effectively double-counting the gradient for params affecting
-                # x_transformed.
-                x_detached = x_transformed.detach()
-
-                params_with_grad = [p for p in params if p.requires_grad]
-                grads_params_list = [None] * len(params)
-
-                if params_with_grad:
-                    # Re-run forward step to build graph from params to f_h
-                    # Use uncompiled function here too for consistency.
-                    f_h_params = forward_fn(h_star_detached, x_detached)
-
-                    computed_grads = autograd.grad(
-                        f_h_params,
-                        params,
-                        grad_outputs=delta,
-                        allow_unused=True,
-                        retain_graph=False,
-                    )
-                    grads_params_list = list(computed_grads)
-
-                # B. Compute gradients for input (x_transformed)
-                # dL/dx = (df/dx)^T @ delta
-                grad_x = None
-                if x_transformed.requires_grad:
-                    # Use attached x_transformed to get gradients w.r.t input
-                    f_h_x = model.forward_step(h_star_detached, x_transformed)
-                    grad_x = autograd.grad(
-                        f_h_x, x_transformed, grad_outputs=delta, retain_graph=False
-                    )[0]
-
-        finally:
-            # Restore original training state
-            model.train(was_training)
-
-        # Return gradients corresponding to inputs of forward:
-        # ctx, model, x_transformed, h_init, *params
-        # model and h_init don't get gradients
-        return (None, grad_x, None, *grads_params_list)
 
 
 class EqPropModel(BioModel):
@@ -479,78 +310,22 @@ class EqPropModel(BioModel):
             or self.gradient_method in ["bptt", "contrastive"]
         ):
             # Standard unrolling (BPTT, Analysis, or Contrastive Inference)
-            # OPTIMIZATION: Preallocate trajectory buffer
-            if return_trajectory:
-                trajectory = [None] * (steps + 1)
-                trajectory[0] = h
-            else:
-                trajectory = None
-            deltas = [] if return_dynamics else None
-
-            # Optimization: Freeze Spectral Norm during loop to prevent graph breaks
-            should_freeze_sn = (
-                getattr(self, "use_spectral_norm", False) and self.training
+            h, trajectory, dynamics = settle_single_state(
+                h_0=h,
+                forward_step=self.forward_step,
+                x_transformed=x_transformed,
+                steps=steps,
+                model=self,
+                return_trajectory=return_trajectory,
+                return_dynamics=return_dynamics,
             )
-            remaining_steps = steps
-            current_steps = 1  # Start at 1 because index 0 is initial state
-
-            if should_freeze_sn and remaining_steps > 0:
-                # Warmup step (update SN stats)
-                h_new = self.forward_step(h, x_transformed)
-                if return_dynamics:
-                    # OPTIMIZATION: Use torch.dist for consistency with
-                    # main loop (max norm)
-                    deltas.append(torch.dist(h_new, h, p=float("inf")).item())
-                h = h_new
-                if return_trajectory:
-                    trajectory[current_steps] = h
-                    current_steps += 1
-                remaining_steps -= 1
-                # Switch to eval for the rest of the loop
-                self.eval()
-
-            try:
-                for step_idx in range(remaining_steps):
-                    h_new = self.forward_step(h, x_transformed)
-
-                    if return_dynamics:
-                        delta = torch.dist(h_new, h, p=float("inf")).item()
-                        deltas.append(delta)
-
-                    if step_idx > 5:
-                        convergence_threshold = 1e-4 if step_idx > 10 else 2e-4
-                        if return_dynamics:
-                            dist_val = delta
-                        else:
-                            dist_val = torch.dist(h_new, h, p=float("inf")).item()
-                        if dist_val < convergence_threshold:
-                            h = h_new
-                            if return_trajectory:
-                                trajectory[current_steps] = h
-                            current_steps += 1
-                            break
-
-                    h = h_new
-                    if return_trajectory:
-                        trajectory[current_steps] = h
-                        current_steps += 1
-            finally:
-                if should_freeze_sn:
-                    self.train()
 
             out = self._output_projection(h)
 
             if return_dynamics:
-                return out, {
-                    "trajectory": (
-                        trajectory[:current_steps] if return_trajectory else None
-                    ),
-                    "deltas": deltas,
-                    "final_delta": deltas[-1] if deltas else 0.0,
-                }
-
+                return out, dynamics
             if return_trajectory:
-                return out, trajectory[:current_steps]
+                return out, trajectory
             return out
 
         elif self.gradient_method == "equilibrium":

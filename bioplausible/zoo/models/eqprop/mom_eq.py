@@ -3,7 +3,13 @@
 import torch
 from torch import nn
 
-from ...base import BioModel, ModelConfig, register_model
+from ...base import (
+    BioModel,
+    ModelConfig,
+    compute_hidden_dims,
+    register_model,
+    resolve_hidden_dims,
+)
 
 
 @register_model(
@@ -19,13 +25,7 @@ class MomentumEquilibrium(BioModel):
 
         if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
-            hidden_dims = (
-                self.config.hidden_dims
-                if self.config.hidden_dims
-                else [self.hidden_dim]
-                if hasattr(self, "hidden_dim")
-                else []
-            )
+            hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
             for i in range(len(dims) - 1):
@@ -81,7 +81,7 @@ class MomentumEquilibrium(BioModel):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             extra=kwargs,
         )
         return cls(config=config).to(device)

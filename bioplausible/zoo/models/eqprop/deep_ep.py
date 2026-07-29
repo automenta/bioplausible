@@ -5,7 +5,14 @@ from typing import Any
 import torch
 from torch import nn
 
-from ...base import BioModel, ModelConfig, register_model
+from ....zoo._settling import settle_activations_list
+from ...base import (
+    BioModel,
+    ModelConfig,
+    compute_hidden_dims,
+    register_model,
+    resolve_hidden_dims,
+)
 
 
 @register_model(
@@ -26,13 +33,7 @@ class DirectedEP(BioModel):
         self.eq_steps = self.config.equilibrium_steps
         self.lr = self.config.learning_rate
 
-        hidden_dims = (
-            self.config.hidden_dims
-            if self.config.hidden_dims
-            else [self.hidden_dim]
-            if hasattr(self, "hidden_dim")
-            else []
-        )
+        hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
         dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
         self.forward_layers = nn.ModuleList()
@@ -102,40 +103,30 @@ class DirectedEP(BioModel):
                 h = self.activation(h)
             activations.append(h)
 
-        trajectory = []
-        deltas = []
-
-        if return_trajectory:
-            trajectory.append([a.detach().cpu() for a in activations])
-
-        for _ in range(eq_steps):
-            prev_activations = activations
-            activations = self.forward_dynamics(activations, beta, target)
-
-            if return_dynamics:
-                delta = 0.0
-                for k in range(1, len(activations)):
-                    delta += torch.dist(
-                        activations[k], prev_activations[k], p=float("inf")
-                    ).item()
-                deltas.append(delta)
-
-            if return_trajectory:
-                trajectory.append([a.detach().cpu() for a in activations])
+        # No early convergence for DirectedEP — always run full steps
+        activations, trajectory, dynamics = settle_activations_list(
+            activations_0=activations,
+            forward_dynamics=self.forward_dynamics,
+            steps=eq_steps,
+            beta=beta,
+            target=target,
+            return_trajectory=return_trajectory,
+            return_dynamics=return_dynamics,
+            convergence_norm=float("inf"),
+            convergence_threshold=1e-3,
+            convergence_start=eq_steps,  # never triggers early stop
+        )
 
         self._last_activations = activations
         out = activations[-1]
 
         if return_dynamics:
-            return out, {
-                "trajectory": trajectory if return_trajectory else None,
-                "deltas": deltas,
-                "final_delta": deltas[-1] if deltas else 0.0,
-            }
-
+            # Rebuild full dynamics dict with trajectory
+            if trajectory is not None:
+                dynamics["trajectory"] = trajectory  # type: ignore[typeddict-item]
+            return out, dynamics
         if return_trajectory:
             return out, trajectory
-
         return out
 
     def train_step(
@@ -214,7 +205,7 @@ class DirectedEP(BioModel):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             extra=kwargs,
         )
         return cls(config=config).to(device)

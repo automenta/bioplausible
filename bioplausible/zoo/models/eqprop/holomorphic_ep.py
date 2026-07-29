@@ -3,7 +3,14 @@
 import torch
 from torch import nn
 
-from ...base import BioModel, ModelConfig, register_model
+from ....zoo._settling import settle_activations_list
+from ...base import (
+    BioModel,
+    ModelConfig,
+    compute_hidden_dims,
+    register_model,
+    resolve_hidden_dims,
+)
 
 
 @register_model(
@@ -25,13 +32,7 @@ class HolomorphicEP(BioModel):
         self.lr = self.config.learning_rate
 
         self.layers = nn.ModuleList()
-        hidden_dims = (
-            self.config.hidden_dims
-            if self.config.hidden_dims
-            else [self.hidden_dim]
-            if hasattr(self, "hidden_dim")
-            else []
-        )
+        hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
         dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
         for i in range(len(dims) - 1):
@@ -113,8 +114,15 @@ class HolomorphicEP(BioModel):
 
         num_steps = steps if steps is not None else self.eq_steps
 
-        for _ in range(num_steps):
-            activations = self.forward_dynamics(activations, beta, target)
+        activations, _, _ = settle_activations_list(
+            activations_0=activations,
+            forward_dynamics=self.forward_dynamics,
+            steps=num_steps,
+            beta=beta,
+            target=target,
+            return_trajectory=False,
+            return_dynamics=False,
+        )
 
         self._last_activations = activations
 
@@ -195,7 +203,7 @@ class HolomorphicEP(BioModel):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             extra=kwargs,
         )
         return cls(config=config).to(device)

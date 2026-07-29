@@ -67,6 +67,34 @@ class ModelConfig:
             object.__setattr__(self, "equilibrium_steps", self.max_steps)
 
 
+def resolve_hidden_dims(
+    config: ModelConfig | None, hidden_dim: int | None
+) -> list[int]:
+    """Resolve the ``hidden_dims`` list from a ``ModelConfig`` or fallback.
+
+    Returns ``config.hidden_dims`` if non-empty; otherwise falls back to
+    ``[hidden_dim]`` if set; otherwise ``[]``.
+    """
+    if config is not None and config.hidden_dims:
+        return config.hidden_dims
+    if hidden_dim is not None:
+        return [hidden_dim]
+    return []
+
+
+def compute_hidden_dims(
+    hidden_dim: int | None, num_layers: int, max_layers: int = 5
+) -> list[int]:
+    """Compute a ``hidden_dims`` list for a ``build`` classmethod.
+
+    Returns ``[hidden_dim] * min(num_layers, max_layers)`` when
+    ``hidden_dim`` is set, else ``[]``.
+    """
+    if hidden_dim is None:
+        return []
+    return [hidden_dim] * min(num_layers, max_layers)
+
+
 class BioModel(nn.Module, ABC):
     """
     Abstract base class for all bio-plausible models/algorithms.

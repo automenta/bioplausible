@@ -6,7 +6,8 @@ import torch
 from torch import nn
 
 from ....acceleration import compile_settling_loop
-from ...base import BioModel, ModelConfig, register_model
+from ....zoo._settling import settle_activations_list
+from ...base import BioModel, ModelConfig, register_model, resolve_hidden_dims
 
 
 @register_model(
@@ -30,13 +31,7 @@ class StandardEqProp(BioModel):
         self.lr = self.config.learning_rate
 
         self.layers = nn.ModuleList()
-        hidden_dims = (
-            self.config.hidden_dims
-            if self.config.hidden_dims
-            else [self.hidden_dim]
-            if hasattr(self, "hidden_dim")
-            else []
-        )
+        hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
         dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
         for i in range(len(dims) - 1):
@@ -135,44 +130,26 @@ class StandardEqProp(BioModel):
                 h = self.activation(h)
             activations.append(h)
 
-        if return_trajectory:
-            trajectory = [None] * (eq_steps + 1)
-            trajectory[0] = [a.detach().cpu() for a in activations]
-        else:
-            trajectory = None
-
-        deltas = [] if return_dynamics else None
-
-        for step_idx in range(eq_steps):
-            prev_activations = activations
-            activations = self.forward_dynamics(activations, beta, target)
-
-            delta = 0.0
-            for k in range(1, len(activations)):
-                delta += torch.dist(activations[k], prev_activations[k], p=2).item()
-
-            if return_dynamics:
-                deltas.append(delta)
-
-            if step_idx > 5 and delta < 1e-3:
-                break
-
-            if return_trajectory:
-                trajectory[step_idx + 1] = [a.detach().cpu() for a in activations]
+        activations, trajectory, dynamics = settle_activations_list(
+            activations_0=activations,
+            forward_dynamics=self.forward_dynamics,
+            steps=eq_steps,
+            beta=beta,
+            target=target,
+            return_trajectory=return_trajectory,
+            return_dynamics=return_dynamics,
+            convergence_norm=2,
+            convergence_threshold=1e-3,
+            convergence_start=5,
+        )
 
         self._last_activations = activations
         out = activations[-1]
 
         if return_dynamics:
-            return out, {
-                "trajectory": trajectory if return_trajectory else None,
-                "deltas": deltas,
-                "final_delta": deltas[-1] if deltas else 0.0,
-            }
-
+            return out, dynamics
         if return_trajectory:
             return out, trajectory
-
         return out
 
     def train_step(

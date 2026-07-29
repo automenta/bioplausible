@@ -1,6 +1,6 @@
 """Equilibrium Propagation model variants."""
 
-from ...base import ModelConfig, register_model
+from ...base import ModelConfig, compute_hidden_dims, register_model
 from .standard_eqprop import StandardEqProp
 
 
@@ -44,7 +44,7 @@ class FiniteNudgeEP(StandardEqProp):
             name=spec.name,
             input_dim=input_dim,
             output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
             extra=kwargs,
         )
 
