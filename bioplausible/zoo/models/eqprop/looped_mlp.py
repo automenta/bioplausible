@@ -17,6 +17,25 @@ from ..base import EqPropModel
 from ..transitions import TransitionGraphMixin
 
 
+def _kernel_backend_step(
+    engine: object,
+    x: torch.Tensor,
+    y: torch.Tensor,
+) -> dict[str, float] | None:
+    """Run a train step via the NumPy/CuPy kernel engine.
+
+    Returns ``None`` when the engine is unavailable (caller falls back to
+    the PyTorch implementation).
+    """
+    if engine is None:
+        return None
+    x_np = x.detach().cpu().numpy() if isinstance(x, torch.Tensor) else x
+    y_np = y.detach().cpu().numpy() if isinstance(y, torch.Tensor) else y
+    if x_np.ndim > 2:
+        x_np = x_np.reshape(x_np.shape[0], -1)
+    return engine.train_step(x_np, y_np)
+
+
 @register_model(
     "eqprop_mlp",
     domains=[Domain.VISION, Domain.LM, Domain.RL, Domain.TABULAR],
@@ -213,22 +232,10 @@ class LoopedMLP(EqPropModel):
         return [(self.W_in, x, h), (self.W_rec, h, h)]
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        if self.backend == "kernel" and self._engine is not None:
-            if isinstance(x, torch.Tensor):
-                x_np = x.detach().cpu().numpy()
-            else:
-                x_np = x
-
-            if isinstance(y, torch.Tensor):
-                y_np = y.detach().cpu().numpy()
-            else:
-                y_np = y
-
-            if x_np.ndim > 2:
-                x_np = x_np.reshape(x_np.shape[0], -1)
-
-            metrics = self._engine.train_step(x_np, y_np)
-            return metrics
+        if self.backend == "kernel":
+            metrics = _kernel_backend_step(self._engine, x, y)
+            if metrics is not None:
+                return metrics
 
         return super().train_step(x, y)
 

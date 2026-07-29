@@ -8,7 +8,7 @@ from bioplausible.acceleration.kernels import HAS_CUPY, EqPropKernel
 
 from ..base import EqPropModel
 from ..transitions import TransitionGraphMixin
-from .looped_mlp import LoopedMLP
+from .looped_mlp import LoopedMLP, _kernel_backend_step
 
 
 class MemoryEfficientLoopedMLP(LoopedMLP):
@@ -108,19 +108,10 @@ class MemoryEfficientEqPropModel(TransitionGraphMixin, EqPropModel):
             self._engine = None
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float] | None:
-        if self.backend == "kernel" and self._engine is not None:
-            if isinstance(x, torch.Tensor):
-                x_np = x.detach().cpu().numpy()
-            else:
-                x_np = x
-
-            if isinstance(y, torch.Tensor):
-                y_np = y.detach().cpu().numpy()
-            else:
-                y_np = y
-
-            metrics = self._engine.train_step(x_np, y_np)
-            return metrics
+        if self.backend == "kernel":
+            metrics = _kernel_backend_step(self._engine, x, y)
+            if metrics is not None:
+                return metrics
 
         return super().train_step(x, y)
 

@@ -146,6 +146,108 @@ def _autograd_fa_train_step(
     }
 
 
+def _fa_train_step_body(
+    model: nn.Module, x: torch.Tensor, y: torch.Tensor, *, dropout_prob: float = 0.0
+) -> tuple[
+    list[torch.Tensor],
+    torch.Tensor,
+    torch.Tensor,
+    list[torch.Tensor],
+    list[torch.Tensor | None],
+]:
+    """Forward, loss, error, and backward loop shared by FA classes.
+
+    Returns ``(activations, output, loss, wgrads, bgrads)``.
+    """
+    activations = _fa_forward(model, x)
+    output = activations[-1]
+    loss = model.criterion(output, y)  # type: ignore[attr-defined]
+    error = output - F.one_hot(y, model.config.output_dim).float()  # type: ignore[attr-defined]
+    wgrads, bgrads = _fa_backward_loop(
+        activations,
+        error,
+        model.feedback_weights,  # type: ignore[attr-defined]
+        model.activation,  # type: ignore[attr-defined]
+        len(model.layers),
+        x.size(0),
+        dropout_prob=dropout_prob,
+    )
+    return activations, output, loss, wgrads, bgrads
+
+
+def _apply_fa_grads_to_optim(
+    layers: nn.ModuleList,
+    wgrads: list[torch.Tensor],
+    bgrads: list[torch.Tensor | None],
+    *,
+    feedback_evolution: dict[str, list[nn.Module]] | None = None,
+) -> None:
+    """Set ``.grad`` buffers on layers from FA backward-loop output.
+
+    Used by classes that step an optimizer after setting gradients.
+
+    Parameters
+    ----------
+    feedback_evolution:
+        If provided, expects keys ``"feedback"`` and ``"forward"`` for
+        evolution toward the forward weight transpose.
+    """
+    for i, layer in enumerate(layers):
+        if wgrads[i] is not None:
+            if layer.weight.grad is None:
+                layer.weight.grad = wgrads[i]
+            else:
+                layer.weight.grad += wgrads[i]
+        if layer.bias is not None and bgrads[i] is not None:
+            if layer.bias.grad is None:
+                layer.bias.grad = bgrads[i]
+            else:
+                layer.bias.grad += bgrads[i]
+
+    if feedback_evolution is not None:
+        fwd_list = feedback_evolution.get("forward")
+        fb_list = feedback_evolution.get("feedback")
+        if fwd_list is not None and fb_list is not None:
+            for i in range(len(layers)):
+                if i < len(fb_list) - 1 and i + 1 < len(fwd_list):
+                    target_B = fwd_list[i + 1].weight.data
+                    current_B = fb_list[i + 1].data
+                    grad_B = -(target_B - current_B)
+                    if fb_list[i + 1].grad is None:
+                        fb_list[i + 1].grad = grad_B
+                    else:
+                        fb_list[i + 1].grad += grad_B
+
+
+def _apply_fa_grads_inplace(
+    layers: nn.ModuleList,
+    wgrads: list[torch.Tensor],
+    bgrads: list[torch.Tensor | None],
+    lr: float,
+) -> None:
+    """Apply FA gradients as in-place SGD update (no optimizer)."""
+    for i, layer in enumerate(layers):
+        if wgrads[i] is not None:
+            layer.weight.data -= lr * wgrads[i]
+        if layer.bias is not None and bgrads[i] is not None:
+            layer.bias.data -= lr * bgrads[i]
+
+
+def _ensure_optimizer(model: nn.Module, lr: float) -> torch.optim.Optimizer:
+    """Return ``model.optimizer``, creating it on first call.
+
+    Fixes the bug where ``StandardFA``, ``EnergyMinimizingFA``, and
+    ``LayerwiseEquilibriumFA`` created a new ``torch.optim.Adam`` on every
+    ``train_step`` call (losing momentum between steps).
+    """
+    if not hasattr(model, "optimizer") or model.optimizer is None:  # type: ignore[attr-defined]
+        model.optimizer = torch.optim.Adam(  # type: ignore[attr-defined]
+            [p for p in model.parameters() if p.requires_grad],
+            lr=lr,
+        )
+    return model.optimizer  # type: ignore[attr-defined]
+
+
 # ============================================================================
 # feedback_alignment.py - All FA variants
 # ============================================================================
@@ -334,44 +436,18 @@ class AdaptiveFeedbackAlignment(BioModel):
         self.w_optimizer.zero_grad()
         self.b_optimizer.zero_grad()
 
-        activations = _fa_forward(self, x)
-        output = activations[-1]
-        loss = self.criterion(output, y)
-
-        error = output - torch.nn.functional.one_hot(y, self.config.output_dim).float()
+        _, output, loss, wgrads, bgrads = _fa_train_step_body(self, x, y)
 
         with torch.no_grad():
-            wgrads, bgrads = _fa_backward_loop(
-                activations,
-                error,
-                self.feedback_weights,
-                self.activation,
-                len(self.layers),
-                x.size(0),
+            _apply_fa_grads_to_optim(
+                self.layers,
+                wgrads,
+                bgrads,
+                feedback_evolution={
+                    "forward": list(self.layers),
+                    "feedback": list(self.feedback_weights),
+                },
             )
-
-            for i in range(len(self.layers)):
-                if wgrads[i] is not None:
-                    if self.layers[i].weight.grad is None:
-                        self.layers[i].weight.grad = wgrads[i]
-                    else:
-                        self.layers[i].weight.grad += wgrads[i]
-
-                if self.layers[i].bias is not None and bgrads[i] is not None:
-                    if self.layers[i].bias.grad is None:
-                        self.layers[i].bias.grad = bgrads[i]
-                    else:
-                        self.layers[i].bias.grad += bgrads[i]
-
-                # Evolve feedback weights toward transpose of forward weights
-                if i < len(self.layers) - 1:
-                    target_B = self.layers[i + 1].weight.data
-                    current_B = self.feedback_weights[i + 1].data
-                    grad_B = -(target_B - current_B)
-                    if self.feedback_weights[i + 1].grad is None:
-                        self.feedback_weights[i + 1].grad = grad_B
-                    else:
-                        self.feedback_weights[i + 1].grad += grad_B
 
         self.w_optimizer.step()
         self.b_optimizer.step()
@@ -451,27 +527,19 @@ class StochasticFA(BioModel):
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         self.zero_grad()
 
-        activations = _fa_forward(self, x)
-        output = activations[-1]
-        loss = self.criterion(output, y)
-        error = output - torch.nn.functional.one_hot(y, self.config.output_dim).float()
-
-        wgrads, bgrads = _fa_backward_loop(
-            activations,
-            error,
-            self.feedback_weights,
-            self.activation,
-            len(self.layers),
-            x.size(0),
+        _, output, loss, wgrads, bgrads = _fa_train_step_body(
+            self,
+            x,
+            y,
             dropout_prob=self.drop_prob,
         )
 
-        lr = self.config.learning_rate
-        for i in range(len(self.layers)):
-            if wgrads[i] is not None:
-                self.layers[i].weight.data -= lr * wgrads[i]
-            if self.layers[i].bias is not None and bgrads[i] is not None:
-                self.layers[i].bias.data -= lr * bgrads[i]
+        _apply_fa_grads_inplace(
+            self.layers,
+            wgrads,
+            bgrads,
+            self.config.learning_rate,
+        )
 
         return {
             "loss": loss.item(),
@@ -731,41 +799,16 @@ class StandardFA(BioModel):
     ) -> dict[str, float]:
         self.optimizer.zero_grad()
 
-        activations = _fa_forward(self, x)
-        output = activations[-1]
-        loss = self.criterion(output, y)
+        _, output, loss, wgrads, bgrads = _fa_train_step_body(self, x, y)
 
-        error = output - torch.nn.functional.one_hot(y, self.config.output_dim).float()
-
-        wgrads, bgrads = _fa_backward_loop(
-            activations,
-            error,
-            self.feedback_weights,
-            self.activation,
-            len(self.layers),
-            x.size(0),
-        )
-
-        for i in range(len(self.layers)):
-            if wgrads[i] is not None:
-                if self.layers[i].weight.grad is None:
-                    self.layers[i].weight.grad = wgrads[i]
-                else:
-                    self.layers[i].weight.grad += wgrads[i]
-            if self.layers[i].bias is not None and bgrads[i] is not None:
-                if self.layers[i].bias.grad is None:
-                    self.layers[i].bias.grad = bgrads[i]
-                else:
-                    self.layers[i].bias.grad += bgrads[i]
+        with torch.no_grad():
+            _apply_fa_grads_to_optim(self.layers, wgrads, bgrads)
 
         self.optimizer.step()
 
-        pred = output.argmax(dim=1)
-        acc = (pred == y).float().mean().item()
-
         return {
             "loss": loss.item(),
-            "accuracy": acc,
+            "accuracy": (output.argmax(1) == y).float().mean().item(),
         }
 
 
@@ -808,7 +851,7 @@ class EnergyGuidedFA(BioModel):
         return h
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.config.learning_rate)
+        optimizer = _ensure_optimizer(self, self.config.learning_rate)
         return _autograd_fa_train_step(self, x, y, optimizer)
 
     @classmethod
@@ -883,7 +926,7 @@ class EnergyMinimizingFA(BioModel):
         return h
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.config.learning_rate)
+        optimizer = _ensure_optimizer(self, self.config.learning_rate)
         return _autograd_fa_train_step(self, x, y, optimizer)
 
     @classmethod
@@ -944,7 +987,7 @@ class LayerwiseEquilibriumFA(BioModel):
         return h
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.config.learning_rate)
+        optimizer = _ensure_optimizer(self, self.config.learning_rate)
         optimizer.zero_grad()
 
         output = self.forward(x)
