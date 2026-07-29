@@ -684,70 +684,79 @@ import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-model_instance = None
-_app: FastAPI | None = None
+
+class _AppState:
+    """Encapsulates module-level state to avoid global keyword."""
+
+    def __init__(self) -> None:
+        self.app: FastAPI | None = None
+        self.model_instance: object | None = None
+
+    def get_app(self) -> FastAPI:
+        """Lazy-initialized FastAPI app.
+
+        Importing this module should not bind to a port or perform any
+        I/O. The app is constructed on first access.
+        """
+        if self.app is None:
+            self.app = self._build_app()
+        return self.app
+
+    def serve_model(self, model: object, host: str = "0.0.0.0", port: int = 8000) -> None:
+        """Run a FastAPI server for the model."""
+        self.model_instance = model
+        if hasattr(model, "eval"):
+            model.eval()
+        uvicorn.run(self.get_app(), host=host, port=port, log_level="info")
+
+    def _build_app(self) -> FastAPI:
+        app = FastAPI(title="Bioplausible Inference API")
+
+        @app.post("/predict")
+        def predict(request: InferenceRequest):
+            if not self.model_instance:
+                return {"error": "No model loaded"}
+            try:
+                data = np.array(request.data, dtype=np.float32)
+                if request.shape:
+                    data = data.reshape(request.shape)
+                elif hasattr(self.model_instance, "input_dim"):
+                    if len(data.shape) == 1 and data.shape[0] == self.model_instance.input_dim:
+                        data = data.reshape(1, -1)
+                elif "Conv" in type(self.model_instance).__name__:
+                    pass
+                tensor = torch.from_numpy(data)
+                if tensor.dim() == 1:
+                    tensor = tensor.unsqueeze(0)
+                device = next(self.model_instance.parameters()).device
+                tensor = tensor.to(device)
+                with torch.no_grad():
+                    output = self.model_instance(tensor)
+                return {"output": output.cpu().tolist()}
+            except Exception as e:
+                return {"error": str(e)}
+
+        @app.get("/health")
+        def health():
+            return {
+                "status": "ok",
+                "model": str(type(self.model_instance).__name__) if self.model_instance else "None",
+            }
+
+        return app
 
 
-class InferenceRequest(BaseModel):
-    data: list[float]
-    shape: list[int] | None = None
-
-
-def _build_app() -> FastAPI:
-    app = FastAPI(title="Bioplausible Inference API")
-
-    @app.post("/predict")
-    def predict(request: InferenceRequest):
-        if not model_instance:
-            return {"error": "No model loaded"}
-        try:
-            data = np.array(request.data, dtype=np.float32)
-            if request.shape:
-                data = data.reshape(request.shape)
-            elif hasattr(model_instance, "input_dim"):
-                if len(data.shape) == 1 and data.shape[0] == model_instance.input_dim:
-                    data = data.reshape(1, -1)
-            elif "Conv" in type(model_instance).__name__:
-                pass
-            tensor = torch.from_numpy(data)
-            if tensor.dim() == 1:
-                tensor = tensor.unsqueeze(0)
-            device = next(model_instance.parameters()).device
-            tensor = tensor.to(device)
-            with torch.no_grad():
-                output = model_instance(tensor)
-            return {"output": output.cpu().tolist()}
-        except Exception as e:
-            return {"error": str(e)}
-
-    @app.get("/health")
-    def health():
-        return {
-            "status": "ok",
-            "model": str(type(model_instance).__name__) if model_instance else "None",
-        }
-
-    return app
+_app_state = _AppState()
 
 
 def get_app() -> FastAPI:
-    """Lazy-initialized FastAPI app.
-
-    Importing this module should not bind to a port or perform any
-    I/O. The app is constructed on first access.
-    """
-    global _app
-    if _app is None:
-        _app = _build_app()
-    return _app
+    """Get the FastAPI app instance (lazy-initialized)."""
+    return _app_state.get_app()
 
 
-def serve_model(model, host="0.0.0.0", port=8000):
+def serve_model(model: object, host: str = "0.0.0.0", port: int = 8000) -> None:
     """Run a FastAPI server for the model."""
-    global model_instance
-    model_instance = model
-    model_instance.eval()
-    uvicorn.run(get_app(), host=host, port=port, log_level="info")
+    _app_state.serve_model(model, host=host, port=port)
 
 
 __all__ = [

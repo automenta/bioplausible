@@ -928,8 +928,22 @@ def create_knowledge_base(
     return KnowledgeBase(db_path=db_path, **kwargs)
 
 
-# Default instance
-DEFAULT_KB = KnowledgeBase()
+# Default instance (lazy — created on first access)
+_DEFAULT_KB: KnowledgeBase | None = None
+
+
+def _get_default_kb() -> KnowledgeBase:
+    global _DEFAULT_KB
+    if _DEFAULT_KB is None:
+        _DEFAULT_KB = KnowledgeBase()
+    return _DEFAULT_KB
+
+
+# Make DEFAULT_KB accessible as a module attribute
+def __getattr__(name: str) -> object:
+    if name == "DEFAULT_KB":
+        return _get_default_kb()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [

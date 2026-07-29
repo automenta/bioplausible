@@ -139,9 +139,8 @@ from bioplausible.evaluation import (
 from bioplausible.execution.engine import ExecutionEngine
 from bioplausible.execution.task import ExperimentTask
 
-# Knowledge Base
+# Knowledge Base (DEFAULT_KB lazy — avoid SQLite at import time)
 from bioplausible.knowledge import (
-    DEFAULT_KB,
     KnowledgeBase,
     KnowledgeEntry,
     create_knowledge_base,

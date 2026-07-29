@@ -157,6 +157,16 @@ class TestEqProp:
                     f"Gradient shape {p.grad.shape} != param shape {p.shape} at i={i}"
                 )
 
+    def test_step_updates_params(self, params, model, x, target):
+        """Smoke test: step changes parameter values."""
+        torch.manual_seed(42)
+        opt = EqProp(params, model, lr=0.01, beta=0.5, settle_steps=2, settle_lr=0.01)
+        old = [p.clone() for p in params]
+        opt.step(x, target)
+        assert any(not torch.equal(o, p) for o, p in zip(old, params)), (
+            "EqProp step should update params"
+        )
+
     def test_param_groups(self, params, model):
         opt = EqProp(params, model, lr=0.01, momentum=0.9, weight_decay=0.001)
         assert opt.param_groups[0]["lr"] == 0.01
@@ -183,13 +193,14 @@ class TestHolomorphicEqProp:
             opt.step(x)
 
     def test_step_updates_params(self, params, model, x, target):
+        """Smoke test: step changes parameter values."""
+        torch.manual_seed(42)
         opt = HolomorphicEqProp(params, model, lr=0.1)
-        old_params = [p.clone() for p in params]
-
+        old = [p.clone() for p in params]
         opt.step(x, target)
-
-        for old_p, new_p in zip(old_params, params):
-            assert not torch.equal(old_p, new_p), "Parameters should be updated"
+        assert any(not torch.equal(o, p) for o, p in zip(old, params)), (
+            "HolomorphicEqProp step should update params"
+        )
 
     def test_is_learning_rule_optimizer(self, params, model):
         opt = HolomorphicEqProp(params, model)

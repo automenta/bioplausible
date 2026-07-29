@@ -113,5 +113,19 @@ class KnowledgeBase:
         return results
 
 
-# Singleton instance
-DEFAULT_KB = KnowledgeBase()
+# Singleton instance (lazy — created on first access)
+_SEED_DEFAULT_KB: KnowledgeBase | None = None
+
+
+def get_default_kb() -> KnowledgeBase:
+    global _SEED_DEFAULT_KB
+    if _SEED_DEFAULT_KB is None:
+        _SEED_DEFAULT_KB = KnowledgeBase()
+    return _SEED_DEFAULT_KB
+
+
+# Make DEFAULT_KB accessible as a module attribute
+def __getattr__(name: str) -> object:
+    if name == "DEFAULT_KB":
+        return get_default_kb()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
