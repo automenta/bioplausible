@@ -5,35 +5,95 @@
 
 ---
 
-## Phase 0: Quick Wins — Delete Noise & Fix Syntax (1–2 days)
+## 0. Survey Summary (Updated)
+
+### Newly Discovered Dead Code (Additional ~3000+ lines)
+
+| Item | Lines | Status |
+|------|-------|--------|
+| `examples/legacy/` (17 files) | ~2800 | Not imported anywhere |
+| `scripts/legacy/` (16 files) | ~1076 | Not imported anywhere |
+| `docs/archive/20260722/` (~100 files) | massive | Archived, not part of active code |
+| `zoo/mep/optimizers/o1_memory.py` | 435 | Superseded by `o1_memory_v2.py` |
+| `zoo/mep/optimizers/inspector.py` | 167 | `ModelInspector` exported but never used |
+| `zoo/mep/optimizers/monitor.py` | 262 | `EPMonitor`/`monitor_ep_training` exported but never used |
+| `equitile/lm_demo/profiling.py` | 508 | Only imports itself in docstring; never actually used |
+
+### Newly Discovered Duplications
+
+| Pattern | Count | Files |
+|---------|-------|-------|
+| `train_step` implementations | **26** | zoo/models/* |
+| `forward_step` implementations | **11** | zoo/models/eqprop/* |
+| `_build_layers` implementations | **12** | zoo/models/* |
+| `build` classmethods | **18+** | zoo/models/* |
+| `hidden_dims = [...]` computation | **17** | zoo/models/* |
+| `CurriculumScheduler` class (name collision!) | **2** | `equitile/enhanced.py` and `data/curricula.py` |
+| `DynamicsConfig` class (name collision!) | **2** | `equitile/config.py` and `equitile/builder.py` |
+| `MemoryProfiler` class | **2** | `equitile/profiler.py` and `equitile/lm_demo/profiling.py` |
+| `ProfileResult` class | **2** | `equitile/profiler.py` and `equitile/lm_demo/profiling.py` |
+| Tile communicator classes | **2** | `TileCommunicator` (distributed.py) vs `NCCLCommunicator` (multigpu.py) |
+
+---
+
+## Phase 0: Quick Wins — Delete Noise & Fix Syntax (2–3 days)
 
 *Immediate code reduction, clarifies what's actually used.*
 
-### 0.1 Delete Dead Code
+### 0.1 Delete Dead Code in `bioplausible/` Package
+
+**Confirmed dead code (~1400 lines in package):**
 
 | Item | Files/Lines | Action |
 |------|-------------|--------|
-| `analysis/legacy_report/` | Entire directory (5 files + `__pycache__`) | **Delete** — superseded by `analysis/reporting.py` |
+| `analysis/legacy_report/` | 4 files, ~1777 lines | **Delete** — superseded by `analysis/reporting.py` |
+| `zoo/mep/optimizers/o1_memory.py` | 435 lines | **Delete** — `O1MemoryEP` superseded by `O1MemoryEPv2`; `energy_from_states`/`manual_energy_compute`/`settle_manual` never used |
+| `zoo/mep/optimizers/inspector.py` | 167 lines | **Delete** — `ModelInspector` exported in `__init__.py` but never called |
+| `zoo/mep/optimizers/monitor.py` | 262 lines | **Delete** — `EPMonitor`/`monitor_ep_training` exported but never called |
+| `equitile/lm_demo/profiling.py` | 508 lines | **Delete** — only imported in its own docstring; duplicates `equitile/profiler.py` |
 | `HolomorphicEqProp` | `zoo/propagators/eqprop.py:315-351` | **Delete** — stub, just calls `loss.backward()` |
 | `FiniteNudgeEqProp` | `zoo/propagators/eqprop.py:354-389` | **Delete** — stub, just scales gradients |
 | `LazyEqProp` | `zoo/propagators/eqprop.py:392-432` | **Delete** — stub, just backprop with threshold |
 | `_apply_feedback_alignment()` | `zoo/propagators/fa.py:71-72` | **Delete** — empty `pass` |
 | `_apply_direct_feedback()` | `zoo/propagators/fa.py:140-141` | **Delete** — empty `pass` |
-| `_settle()` wrapper | `zoo/propagators/eqprop.py:102-113` | **Delete** — trivial delegate to `_settle_phase_direct` |
+| `_settle()` wrapper | `zoo/propagators/eqprop.py:102-113` | **Delete** — trivial delegate |
 | `EqPropLMWrapper` | `zoo/models/eqprop/eqprop_lm_variants.py:564-594` | **Delete** — proxy class, no behavior |
 | `train_step` no-op | `zoo/models/eqprop/finite_nudge_ep.py:33-40` | **Delete** — just calls `super()` |
-| Duplicate `return` | `zoo/models/wrappers.py:102` | **Delete** line 102 (unreachable) |
-| Commented code | `zoo/models/base.py:428` | **Delete** `# logits_nudged = ...` |
-| Duplicate import | `zoo/models/hebbian.py:19` | **Delete** line 19 (already imported line 18) |
+| Duplicate `return` | `zoo/models/wrappers.py:102` | **Delete** (unreachable) |
+| Commented code | `zoo/models/base.py:428` | **Delete** |
+| Duplicate import | `zoo/models/hebbian.py:19` | **Delete** |
 
-### 0.2 Fix Type Syntax Errors
+**Net savings: ~3500 lines**
+
+### 0.2 Delete Dead Code Outside Package
+
+| Item | Files/Lines | Action |
+|------|-------------|--------|
+| `examples/legacy/` | 17 files, ~2800 lines | **Delete** — not imported anywhere |
+| `scripts/legacy/` | 16 files, ~1076 lines | **Delete** — not imported anywhere |
+| `docs/archive/20260722/` | ~100 files | **Move out of repo** or **delete** — archived, not active |
+
+**Net savings: ~5000+ lines**
+
+### 0.3 Delete Dead Demo/Config Classes
+
+| Item | Location | Action |
+|------|----------|--------|
+| `ArchitectureConfig` (config.py) | `equitile/config.py:16-23` | **Delete** — never used outside config.py |
+| `OptimizationConfig` (config.py) | `equitile/config.py:26-38` | **Delete** — never used outside config.py |
+| `DynamicsConfig` (config.py) | `equitile/config.py:42-58` | **Delete** — duplicates `builder.py:DynamicsConfig`; name collides with `DynamicEquiTileConfig as DynamicsConfig` in `__init__.py:167` |
+| `LearningConfig` (builder.py) | `equitile/builder.py:80-101` | **Delete** — duplicates fields in `EquiTileConfig` |
+| `CurriculumScheduler` (enhanced.py) | `equitile/enhanced.py:39` | **Delete** — `get_sample_weights` always returns `torch.ones(n_samples)` (dead logic); name collides with `data/curricula.py:CurriculumScheduler` |
+| `enable_curriculum()` | `equitile/builder.py:672` | **Delete** — uses dead `CurriculumScheduler` |
+
+### 0.4 Fix Type Syntax Errors
 
 | Issue | Files | Fix |
 |-------|-------|-----|
 | `steps: int = None` → `int \| None = None` | `zoo/models/eqprop/ternary.py:106`, `causal_transformer_eqprop.py:128`, `neural_cube.py:152`, `eqprop_lm_variants.py:61,175,278,350,436,499`, `eqprop_diffusion.py:28` | Change annotation |
 | Legacy `except X, Y:` → `except (X, Y):` | `core/trainer.py:733`, `core/registry.py:245` | Fix syntax |
 
-### 0.3 Replace `print()` with `logging` in Demos
+### 0.5 Replace `print()` with `logging`
 
 | Files | Lines |
 |-------|-------|
@@ -44,219 +104,140 @@
 | `cli/rank.py` | 14, 18, 40 |
 | `experiments/__init__.py` | 30, 31 |
 
-**Action**: Add `logger = logging.getLogger(__name__)`; replace `print()` → `logger.info()`.
-
 ---
 
 ## Phase 1: Foundational Architecture (2–3 days)
-
-*Fix structural duplication that propagates through the codebase.*
 
 ### 1.1 Unify 4 Registries → 1
 
 | Registry | File | Action |
 |----------|------|--------|
-| `NEBCRegistry` | `zoo/nebc_base.py:73-104` | **Delete** — replace `NEBCRegistry.register` → `register_model`, `NEBCRegistry.get` → `Registry.get(ComponentCategory.MODEL, ...)` |
-| `TaskRegistry` | `hyperopt/task_registry.py` | **Delete** — add `ComponentCategory.TASK` to `Registry`, register `LMTask`, `VisionTask`, `RLTask` there |
-| `track_registry` | `validation/tracks/track_registry.py` | **Refactor** — keep as-is but add `ComponentCategory.TRACK` to `Registry` for consistency; or migrate to `Registry` |
+| `NEBCRegistry` | `zoo/nebc_base.py:73-104` | **Delete** — replace with `register_model` + `Registry.get` |
+| `TaskRegistry` | `hyperopt/task_registry.py` | **Delete** — add `ComponentCategory.TASK`, register there |
+| `track_registry` | `validation/tracks/track_registry.py` | **Refactor** — add `ComponentCategory.TRACK` |
 | `register_nebc` decorator | `zoo/nebc_base.py:104` | **Delete** |
-
-**Files to modify**: `core/registry.py` (add categories), `zoo/nebc_base.py`, `hyperopt/task_registry.py`, `validation/tracks/track_registry.py`, all call sites.
 
 ### 1.2 Unify Config Dataclasses
 
-| Duplicate | Canonical Location | Action |
-|-----------|-------------------|--------|
-| `ArchitectureConfig` | `equitile/config.py:16-23` | Keep in `config.py`; `builder.py` imports from `config.py` |
-| `DynamicsConfig` | `equitile/config.py:42-58` | Keep in `config.py`; `builder.py` imports from `config.py` |
-| `LearningConfig` (builder) | `equitile/builder.py:80-101` | **Merge** into `OptimizationConfig` (`config.py:26-38`) |
-| `IOConfig` (builder) | `equitile/builder.py:64-77` | Keep in `builder.py` (builder-specific) |
-
-**Also**: Add `frozen=True, slots=True` to all config dataclasses in `config.py` and `builder.py` (AGENTS.md).
+After Phase 0 deletions, only one config per concern remains. Add `frozen=True, slots=True`.
 
 ### 1.3 Add `frozen=True, slots=True` to Core Dataclasses
 
-**Files**: `zoo/base.py` (`ModelConfig`), `core/trainer.py` (`TrainerConfig`, `TrainingMetrics`), `core/registry.py` (`ComponentMetadata`, `_QueryFilter`), `equitile/config.py`, `equitile/builder.py`.
+**Files**: `zoo/base.py`, `core/trainer.py`, `core/registry.py`, `equitile/config.py`, `equitile/builder.py`, `data/curricula.py`.
 
 ---
 
 ## Phase 2: Core Type Safety (3–4 days)
 
-*Type-safety on the most-imported files first (registry, trainer, base models).*
-
 ### 2.1 Eliminate `Any` from Core Files
-
-**Priority order** (most imported first):
 
 | File | Lines | Strategy |
 |------|-------|----------|
-| `core/registry.py` | 13, 113, 253, 263, 269, 275, 419 | `ComponentMetadata.extra: dict[str, object]`; `Component: TypeVar`; `Any` → `object` in `_infer_metadata` |
-| `core/trainer.py` | 17, 88, 92, 96, 100, 145, 148, 336, 343, 854, 1067, 1072, 1083, 1086, 1089, 1130, 1134 | `dict[str, object]`, `TypedDict` for config sections |
+| `core/registry.py` | 13, 113, 253, 263, 269, 275, 419 | `dict[str, object]`, `Component: TypeVar`, `Any` → `object` |
+| `core/trainer.py` | 17, 88, 92, 96, 100, 145, 148 | `dict[str, object]`, `TypedDict` |
 | `zoo/base.py` | 14, 46 | `ModelConfig.extra: dict[str, object]` |
-| `zoo/models/base.py` | 3, 30, 68, 454 | `ctx: object` in autograd; `dict[str, object]` returns |
-| `zoo/propagators/base.py` | 31 | `params: Iterable[nn.Parameter] \| list[nn.Parameter]` |
-| `acceleration/_array_ops.py` | 7, 14, 23, 38, 47, 59, 86, 96 | `xp: object` for array lib; return `type[Protocol]` |
+| `zoo/models/base.py` | 3, 30, 68, 454 | `ctx: object`, `dict[str, object]` |
+| `zoo/propagators/base.py` | 31 | `params: Iterable[nn.Parameter]` |
+| `acceleration/_array_ops.py` | 7, 14, 23, 38, 47, 59, 86, 96 | `xp: object`, `type[Protocol]` |
 | `equitile/state_types.py` | 3 | `Any` in `TypedDict` → `object` |
-
-**Strategy per pattern**:
-- `dict[str, Any]` → `dict[str, object]` or `TypedDict`
-- `type[Any]` → `type[Protocol]` or concrete type
-- `Any` in autograd `ctx` → `object`
-- `Any` in config `extra` → `dict[str, object]`
 
 ### 2.2 Add Type Annotations to Propagator `params`
 
-**Files**: All `zoo/propagators/*.py` `__init__` methods — add `params: Iterable[nn.Parameter] \| list[nn.Parameter]`.
-
 ### 2.3 Replace f-string Logging with t-strings (Core First)
-
-**Priority files** (core infrastructure):
-- `core/trainer.py` (lines 941-955, 963)
-- `core/registry.py` (line 247)
-- `execution/engine.py` (11 occurrences)
-- `hyperopt/parallel_runner.py` (2)
-- `knowledge/kb.py` (12)
-- `autoscientist/campaign.py` (6)
-
-**Then**: remaining 80+ occurrences across execution, evaluation, p2p, etc.
 
 ---
 
 ## Phase 3: Algorithmic Deduplication (5–7 days)
 
-*Heavy lifting — now easier because noise is gone.*
+*Now easier because Phase 0 removed ~5000 lines of noise.*
 
 ### 3.1 Extract Settling Loop Helper
 
-**New module**: `bioplausible/zoo/_settling.py` (or `models/_settling.py`)
+**New module**: `bioplausible/zoo/_settling.py`
 
-**Shared logic**:
-- Spectral norm freeze/warmup pattern
-- Convergence checking (delta threshold, early exit)
-- Trajectory/dynamics tracking
-- Step counting
-
-**Refactor targets** (12+ classes):
-| Class | File | Method |
-|-------|------|--------|
-| `EqPropModel` | `zoo/models/base.py:445-566` | `forward()` |
-| `StandardEqProp` | `zoo/models/eqprop/standard_eqprop.py:178-244` | `train_step()` |
-| `DirectedEP` | `zoo/models/eqprop/deep_ep.py:141-199` | `train_step()` |
-| `HolomorphicEP` | `zoo/models/eqprop/holomorphic_ep.py:123-180` | `train_step()` |
-| `GraphEqProp` | `zoo/models/eqprop/graph_eqprop.py:76-142` | `train_step()` |
-| `LoopedMLP` | `zoo/models/eqprop/looped_mlp.py:31-273` | `forward()` + settling |
-| `MemoryEfficientLoopedMLP` | `zoo/models/eqprop/memory_efficient.py:14-65` | `forward()` |
-| `EqPropLM` variants | `zoo/models/eqprop/eqprop_lm_variants.py` | multiple `forward()` |
-| `EqPropDiffusion` | `zoo/models/eqprop/eqprop_diffusion.py:17-172` | `forward()` + `sample()` |
-| `NeuralCube` | `zoo/models/eqprop/neural_cube.py:38-120` | `forward()` |
-| `TemporalResonanceEqProp` | `zoo/models/eqprop/temporal_resonance.py:15-80` | `forward()` |
-| `HomeostaticEqProp` | `zoo/models/eqprop/homeostatic.py:22-200` | `forward()` |
-| `LazyEqProp` | `zoo/models/eqprop/lazy_eqprop.py:43-120` | `forward()` |
+**Refactor targets (13+ classes)**: `EqPropModel`, `StandardEqProp`, `DirectedEP`, `HolomorphicEP`, `GraphEqProp`, `LoopedMLP`, `MemoryEfficientLoopedMLP`, EqProp LM variants, `EqPropDiffusion`, `NeuralCube`, `TemporalResonanceEqProp`, `HomeostaticEqProp`, `LazyEqProp`.
 
 ### 3.2 Extract Long Functions (>50 lines)
 
-| Function | Lines | Split Into |
-|----------|-------|------------|
-| `EqPropModel.forward()` | 122 | `_forward_bptt()`, `_forward_equilibrium()`, `_forward_contrastive()` |
-| `EqPropModel.contrastive_update()` | 89 | `_compute_hebbian_gradients()` |
-| `EqPropModel.train_step()` | 93 | `_free_phase()`, `_nudged_phase()`, `_apply_contrastive_update()` |
-| `EquilibriumFunction.backward()` | 115 | `_compute_adjoint_state()`, `_compute_param_gradients()` |
-| `CoreTrainer._train_step()` | 70 | `_compute_loss()`, `_compute_metrics()` |
-| `CoreTrainer._validate()` | 74 | `_validate_batch()` |
-| `CoreTrainer._train_epoch()` | 73 | `_fetch_batch()`, `_track_energy()` |
-| `StandardEqProp.train_step()` | 67 | `_compute_contrastive_gradients()` |
-| `DirectedEP.train_step()` | 59 | `_compute_feedback_gradients()` |
-| `HolomorphicEP.train_step()` | 58 | `_compute_complex_gradients()` |
-| `GraphEqProp.train_step()` | 67 | `_compute_graph_gradients()` |
-| `AdaptiveFeedbackAlignment.train_step()` | 65 | `_compute_fa_gradients()` |
-| `StandardFA.train_step()` | 70 | `_compute_fa_backward()` |
+13 functions: `EqPropModel.forward()` (122), `.contrastive_update()` (89), `.train_step()` (93), `EquilibriumFunction.backward()` (115), `CoreTrainer._train_step()` (70), `._validate()` (74), `._train_epoch()` (73), `StandardEqProp.train_step()` (67), `DirectedEP.train_step()` (59), `HolomorphicEP.train_step()` (58), `GraphEqProp.train_step()` (67), `AdaptiveFeedbackAlignment.train_step()` (65), `StandardFA.train_step()` (70).
 
 ### 3.3 Unify Feedback Alignment Backward Passes
 
-**File**: `zoo/models/fa.py` — 3 nearly identical `train_step` implementations:
-- `AdaptiveFeedbackAlignment` (213-277)
-- `StandardFA` (668-737)
-- `StochasticFA` (355-393)
-
-**Extract**: `_fa_backward(activation_derivative_fn)` helper taking the derivative function as parameter.
+**File**: `zoo/models/fa.py` — 9 classes with similar `train_step`. Extract `_fa_backward(activation_derivative_fn)` helper.
 
 ### 3.4 Consolidate Language Model Files
 
-**Files**: `equitile/language.py` (1192), `language_optimized.py` (687), `fast_lm.py` (613)
+**Files**: `equitile/language.py` (1192), `language_optimized.py` (687), `fast_lm.py` (613) = **2492 lines total**
 
 **Plan**:
 1. Create `equitile/_components.py` with shared: `TileAttention`, `TileFeedForward`, `PositionalEncoding`, `CausalMask`
-2. `language_optimized.py` already imports from `language.py` — extend this
+2. `language_optimized.py` already imports from `language.py` — extend
 3. Move `FastLMConfig` → `equitile/config.py`
-4. `fast_lm.py` imports from `_components.py` and `config.py`
+4. `fast_lm.py` imports from `_components.py`
 
-### 3.5 Unify Hidden Dims Computation
+**Estimated savings: ~800–1000 lines**
 
-**Pattern** (10+ occurrences): `hidden_dims = [hidden_dim] * num_layers` with variations
+### 3.5 Unify Hidden Dims Computation (17 occurrences)
 
-**Extract**: `_compute_hidden_dims(hidden_dim: int, num_layers: int, max_layers: int = 5) -> list[int]` in `zoo/base.py` or `zoo/models/base.py`.
+**Extract**: `_compute_hidden_dims(hidden_dim, num_layers, max_layers=5) -> list[int]`
 
-**Occurrences**: `fa.py` (6), `standard_eqprop.py`, `holomorphic_ep.py`, `deep_ep.py`, `mom_eq.py`, `sparse_eq.py`.
+### 3.6 Consolidate Duplicate `build` Classmethods (18+)
 
-### 3.6 Consolidate Duplicate `build` Classmethods
+**New helper**: `_build_from_spec(cls, spec, ...)` in `zoo/models/base.py`.
 
-**New helper**: `_build_from_spec(cls, spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type, **kwargs)` in `zoo/models/base.py`.
+### 3.7 Consolidate Duplicate `_build_layers` (12)
 
-**Refactor**: 15+ `build` classmethods across `fa.py`, `standard_eqprop.py`, `holomorphic_ep.py`, `deep_ep.py`, `graph_eqprop.py`, `modern_conv_eqprop.py`, `eqprop_lm_variants.py`, `causal_transformer_eqprop.py`, `neural_cube.py`, `ternary.py`, `eqprop_diffusion.py`, `forward_only.py`, `target_prop.py`, `predictive_coding.py`, `spiking.py`, `backprop.py`.
+### 3.8 Unify Profiling Code
 
-**Also**: Add return type annotations to all `build` methods.
+**Files**: `equitile/profiler.py` (1076) and `equitile/lm_demo/profiling.py` (508 = removed in Phase 0)
+After Phase 0, focus on deduplication within remaining profiler.
+
+### 3.9 Unify Distributed/Multi-GPU Code
+
+**Files**: `equitile/distributed.py` (994) and `equitile/multigpu.py` (950) = **1944 lines**
+
+Investigate if `TileCommunicator` (distributed.py) and `NCCLCommunicator` (multigpu.py) can be unified. Same for `DistributedEquiTile` vs `MultiGPUEquiTile`.
 
 ---
 
 ## Phase 4: Type System Hardening (3–5 days)
 
-*Complete the type-safety sweep.*
-
 ### 4.1 Eliminate Remaining `Any` (All Files)
-
-**Remaining packages**: `execution/`, `hyperopt/`, `analysis/`, `evaluation/`, `knowledge/`, `validation/`, `lightning_/`, `p2p/`, `config/`, `autoscientist/`, `tracking.py`, `deployment.py`, `sklearn_interface.py`, `visualization.py`, `training/`, `experiments/`, `leaderboard/`, `zoo/mep/`, `equitile/` (non-core), `acceleration/kernels.py`.
-
-**Pattern**: Mechanical replacement per Phase 2.1 strategy.
 
 ### 4.2 Replace `dict[str, Any]` with `TypedDict` or `dict[str, object]`
 
-**Define `TypedDict` for structured configs**:
-- `TrainerConfigDict` for `core/trainer.py`
-- `OptimizerConfigDict` for hyperopt
-- `ModelConfigDict` for zoo models
-
 ### 4.3 Add `__all__` to All Modules
-
-**Files**: Every `__init__.py` and public module — export only public API; internal modules stay `_`-prefixed.
 
 ---
 
 ## Verification Gates
 
-After **each phase**:
+After each phase:
 ```bash
 ruff format . && ruff check --fix .
 pyright .
 pytest --cov
 ```
 
-**Phase-specific checks**:
-- Phase 0: `git diff --stat` should show significant line reduction
-- Phase 1: `grep -r "NEBCRegistry\|TaskRegistry" --include="*.py" | grep -v test` → empty
+**Phase-specific**:
+- Phase 0: `git diff --stat` → -8500+ lines
+- Phase 1: `grep -r "NEBCRegistry\|TaskRegistry\|O1MemoryEP\b\|ModelInspector\|EPMonitor" --include="*.py" | grep -v test` → empty
 - Phase 2: `pyright` zero errors on core files
-- Phase 3: `grep -r "forward_step.*settle" --include="*.py" zoo/` → uses shared helper
-- Phase 4: `grep -r "from typing import Any" --include="*.py" bioplausible/` → only in tests/compat
+- Phase 3: Settling loops use shared helper
+- Phase 4: `grep -r "from typing import Any" --include="*.py" bioplausible/` → only tests
 
 ---
 
-## Effort Summary
+## Effort Summary (Updated)
 
 | Phase | Focus | Est. Days | Code Delta |
 |-------|-------|-----------|------------|
-| 0 | Delete noise, fix syntax | 1–2 | **-2000+ lines** (dead code removal) |
-| 1 | Registries, configs, frozen dataclasses | 2–3 | -500 lines (dedup) |
-| 2 | Core type safety | 3–4 | +200 lines (type annotations) |
-| 3 | Algorithmic dedup | 5–7 | -3000+ lines (shared helpers) |
+| **0** | Delete dead code & fix syntax | **2–3** | **−8500 lines** (Phase 0.1: ~3500 + Phase 0.2: ~5000) |
+| 1 | Registries, configs, frozen dataclasses | 2–3 | −200 lines (dedup) |
+| 2 | Core type safety | 3–4 | +200 lines (annotations) |
+| 3 | Algorithmic dedup | 5–7 | **−3000+ lines** (settling loop, FA, LM, hidden dims, build, build_layers) |
 | 4 | Full type hardening | 3–5 | +500 lines (TypedDict, exports) |
 
-**Total**: ~14–21 days for full plan. Phases 0–1 are high-impact, low-risk, and unblock everything else.
+**Total**: ~15–22 days. **Phases 0–1 alone remove ~9000 lines** with minimal risk, unblocking everything else.
+
+**Total potential reduction: ~12,000+ lines** (from ~81,500 to ~69,500 — ~15% smaller).
