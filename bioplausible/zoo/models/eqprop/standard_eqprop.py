@@ -8,6 +8,7 @@ from torch import nn
 from ....acceleration import compile_settling_loop
 from ....zoo._settling import settle_activations_list
 from ...base import BioModel, ModelConfig, register_model, resolve_hidden_dims
+from ._contrastive import _contrastive_step
 
 
 @register_model(
@@ -157,65 +158,10 @@ class StandardEqProp(BioModel):
         x: torch.Tensor,
         y: torch.Tensor,
     ) -> dict[str, float]:
-        target = torch.zeros(y.size(0), self.config.output_dim, device=y.device)
-        target.scatter_(1, y.unsqueeze(1), 1.0)
-
-        with torch.no_grad():
-            self.forward(x, beta=0.0)
-            free_activations = self._last_activations
-            output_free = free_activations[-1]
-
-        with torch.no_grad():
-            self.forward(x, beta=self.beta, target=target)
-            nudged_activations = self._last_activations
-
-        self.optimizer.zero_grad()
-
-        with torch.no_grad():
-            for i, layer in enumerate(self.layers):
-                h_prev_free = free_activations[i]
-                h_post_free = free_activations[i + 1]
-
-                h_prev_nudged = nudged_activations[i]
-                h_post_nudged = nudged_activations[i + 1]
-
-                prod_nudged = torch.matmul(h_post_nudged.T, h_prev_nudged)
-                prod_free = torch.matmul(h_post_free.T, h_prev_free)
-
-                dW = (prod_nudged - prod_free) / self.beta
-                dW = dW / x.size(0)
-
-                param_container = layer
-                weight_name = "weight"
-
-                if hasattr(layer, "parametrizations") and hasattr(
-                    layer.parametrizations, "weight"
-                ):
-                    param_container = layer.parametrizations.weight
-                    weight_name = "original"
-
-                w_param = getattr(param_container, weight_name)
-
-                if w_param.grad is None:
-                    w_param.grad = -dW
-                else:
-                    w_param.grad += -dW
-
-                if layer.bias is not None:
-                    db = (h_post_nudged - h_post_free).sum(0) / self.beta
-                    db = db / x.size(0)
-                    if layer.bias.grad is None:
-                        layer.bias.grad = -db
-                    else:
-                        layer.bias.grad += -db
-
-        self.optimizer.step()
-
-        pred = output_free.argmax(dim=1)
-        acc = (pred == y).float().mean().item()
-        loss = nn.functional.cross_entropy(output_free, y).item()
-
-        return {
-            "loss": loss,
-            "accuracy": acc,
-        }
+        return _contrastive_step(
+            self,
+            x,
+            y,
+            layer_list=self.layers,
+            beta=self.beta,
+        )

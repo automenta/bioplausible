@@ -13,6 +13,7 @@ from ...base import (
     register_model,
     resolve_hidden_dims,
 )
+from ._contrastive import _contrastive_step
 
 
 @register_model(
@@ -134,60 +135,14 @@ class DirectedEP(BioModel):
         x: torch.Tensor,
         y: torch.Tensor,
     ) -> dict[str, float]:
-        target = torch.zeros(y.size(0), self.config.output_dim, device=y.device)
-        target.scatter_(1, y.unsqueeze(1), 1.0)
-
-        with torch.no_grad():
-            self.forward(x, beta=0.0)
-            free = self._last_activations
-
-        with torch.no_grad():
-            self.forward(x, beta=self.beta, target=target)
-            nudged = self._last_activations
-
-        self.optimizer.zero_grad()
-
-        with torch.no_grad():
-            for i in range(len(self.forward_layers)):
-                h_prev_free, h_post_free = free[i], free[i + 1]
-                h_prev_nudge, h_post_nudge = nudged[i], nudged[i + 1]
-
-                prod_nudged = torch.matmul(h_post_nudge.T, h_prev_nudge)
-                prod_free = torch.matmul(h_post_free.T, h_prev_free)
-
-                dW = (prod_nudged - prod_free) / self.beta
-                dW /= x.size(0)
-
-                if self.forward_layers[i].weight.grad is None:
-                    self.forward_layers[i].weight.grad = -dW
-                else:
-                    self.forward_layers[i].weight.grad += -dW
-
-                if self.forward_layers[i].bias is not None:
-                    db = (h_post_nudge - h_post_free).sum(0) / self.beta
-                    db /= x.size(0)
-                    if self.forward_layers[i].bias.grad is None:
-                        self.forward_layers[i].bias.grad = -db
-                    else:
-                        self.forward_layers[i].bias.grad += -db
-
-                prod_nudged_b = torch.matmul(h_prev_nudge.T, h_post_nudge)
-                prod_free_b = torch.matmul(h_prev_free.T, h_post_free)
-
-                dB = (prod_nudged_b - prod_free_b) / self.beta
-                dB /= x.size(0)
-
-                if self.feedback_layers[i].weight.grad is None:
-                    self.feedback_layers[i].weight.grad = -dB
-                else:
-                    self.feedback_layers[i].weight.grad += -dB
-
-        self.optimizer.step()
-
-        loss = nn.functional.cross_entropy(free[-1], y).item()
-        acc = (free[-1].argmax(dim=1) == y).float().mean().item()
-
-        return {"loss": loss, "accuracy": acc}
+        return _contrastive_step(
+            self,
+            x,
+            y,
+            layer_list=self.forward_layers,
+            beta=self.beta,
+            feedback_layer_list=self.feedback_layers,
+        )
 
     @classmethod
     def build(
