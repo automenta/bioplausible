@@ -10,7 +10,6 @@ from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 
 from ....acceleration import compile_settling_loop
 from ...utils import spectral_linear
-from ..transitions import TransitionGraphMixin
 from ..base import EqPropModel
 
 

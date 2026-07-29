@@ -325,7 +325,9 @@ class ExperimentRunner:
 
         for opt_name in optimizer_names:
             if verbose:
-                logger.info("\n%s\nTesting optimizer: %s\n%s", "=" * 60, opt_name, "=" * 60)
+                logger.info(
+                    "\n%s\nTesting optimizer: %s\n%s", "=" * 60, opt_name, "=" * 60
+                )
 
             result = self.run(
                 model_name=model_name,
@@ -342,7 +344,11 @@ class ExperimentRunner:
         results.sort(key=lambda r: r.val_accuracy, reverse=True)
 
         if verbose:
-            logger.info("\n%s\nCOMPARISON RESULTS (sorted by val accuracy)\n%s", "=" * 60, "=" * 60)
+            logger.info(
+                "\n%s\nCOMPARISON RESULTS (sorted by val accuracy)\n%s",
+                "=" * 60,
+                "=" * 60,
+            )
             for i, r in enumerate(results):
                 logger.info("%d. %s: %.2f%%", i + 1, r.optimizer_name, r.val_accuracy)
 
@@ -377,7 +383,9 @@ class ExperimentRunner:
 
         for model_name in model_names:
             if verbose:
-                logger.info("\n%s\nTesting model: %s\n%s", "=" * 60, model_name, "=" * 60)
+                logger.info(
+                    "\n%s\nTesting model: %s\n%s", "=" * 60, model_name, "=" * 60
+                )
 
             result = self.run(
                 model_name=model_name,
@@ -394,7 +402,11 @@ class ExperimentRunner:
         results.sort(key=lambda r: r.val_accuracy, reverse=True)
 
         if verbose:
-            logger.info("\n%s\nCOMPARISON RESULTS (sorted by val accuracy)\n%s", "=" * 60, "=" * 60)
+            logger.info(
+                "\n%s\nCOMPARISON RESULTS (sorted by val accuracy)\n%s",
+                "=" * 60,
+                "=" * 60,
+            )
             for i, r in enumerate(results):
                 logger.info("%d. %s: %.2f%%", i + 1, r.model_name, r.val_accuracy)
 

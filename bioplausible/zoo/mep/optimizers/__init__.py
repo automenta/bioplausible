@@ -29,13 +29,6 @@ from .ep_optimizer import (
     EWCState,
 )
 from .ewc import EPOptimizerWithEWC, EWCRegularizer, TaskMemory
-from .inspector import ModelInspector  # Internal utility
-from .o1_memory import (
-    O1MemoryEP,
-    energy_from_states,
-    manual_energy_compute,
-    settle_manual,
-)
 from .o1_memory_v2 import (
     O1MemoryEPv2,
     analytic_state_gradients,
@@ -66,7 +59,6 @@ from .strategies import (
 
 __all__ = [
     # Core optimizer
-    "CompositeOptimizer",
     # Strategy interfaces
     "GradientStrategy",
     "UpdateStrategy",
@@ -96,11 +88,6 @@ __all__ = [
     "EPOptimizer",
     "EPConfig",
     "EWCState",
-    # O(1) memory implementation used by EPOptimizerWithEWC
-    "manual_energy_compute",
-    "settle_manual",
-    "energy_from_states",
-    "O1MemoryEP",
     # O(1) memory v2 implementation used by EPOptimizerWithEWC
     "analytic_state_gradients",
     "settle_manual_o1",
@@ -111,4 +98,5 @@ __all__ = [
     "EWCRegularizer",
     "EPOptimizerWithEWC",
     "TaskMemory",
+    "CompositeOptimizer",
 ]

@@ -5,9 +5,10 @@ Uses DeepHebbianChain as the concrete NEBCBase implementation.
 
 from abc import ABC
 
-import torch
 import pytest
+import torch
 
+from bioplausible.zoo.models.hebbian import DeepHebbianChain
 from bioplausible.zoo.nebc_base import (
     NEBCBase,
     NEBCRegistry,
@@ -15,8 +16,6 @@ from bioplausible.zoo.nebc_base import (
     run_nebc_ablation,
     train_nebc_model,
 )
-from bioplausible.zoo.models.hebbian import DeepHebbianChain
-
 
 NUM_CLASSES = 4
 
@@ -300,7 +299,6 @@ class TestNEBCBaseAbstract:
             NEBCBase(input_dim=8, hidden_dim=16, output_dim=4)  # type: ignore[abstract]
 
     def test_is_abstract(self):
-        import abc
 
         assert issubclass(NEBCBase, ABC)
         assert ABC in NEBCBase.__mro__

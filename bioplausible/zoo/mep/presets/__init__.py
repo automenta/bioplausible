@@ -5,11 +5,11 @@ Factory functions for common optimizer combinations.
 """
 
 __all__ = [
-    "smep",
-    "sdmep",
     "local_ep",
-    "natural_ep",
     "muon_backprop",
+    "natural_ep",
+    "sdmep",
+    "smep",
     "smep_fast",
 ]
 

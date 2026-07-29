@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 from bioplausible.execution.strategy import (
     ExecutionStrategy,
-    _ModelSpec,
     _model_specs,
+    _ModelSpec,
 )
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel

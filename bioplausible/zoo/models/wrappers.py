@@ -99,7 +99,6 @@ class RecurrentWrapper(TransitionGraphMixin, EqPropModel):
         if isinstance(h, tuple):
             h = h[0]
         return self.output_layer(h)
-        return self.output_layer(h)
 
 
 class StackedRecurrentWrapper(EqPropModel):

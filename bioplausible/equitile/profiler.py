@@ -477,8 +477,12 @@ class EquiTileProfiler:
 
         lines.append("Summary:")
         lines.append(f"  Total time: {total_time:.2f} ms")
-        lines.append(f"  Predict time: {summary['predict_time_ms']:.2f} ms ({summary['predict_pct']:.1f}%)")
-        lines.append(f"  Update time: {summary['update_time_ms']:.2f} ms ({summary['update_pct']:.1f}%)")
+        lines.append(
+            f"  Predict time: {summary['predict_time_ms']:.2f} ms ({summary['predict_pct']:.1f}%)"
+        )
+        lines.append(
+            f"  Update time: {summary['update_time_ms']:.2f} ms ({summary['update_pct']:.1f}%)"
+        )
         lines.append(f"  Batch size: {summary['batch_size']}")
         lines.append(f"  Tiles: {summary['n_tiles']}, Edges: {summary['n_edges']}")
         lines.append("")
@@ -494,11 +498,15 @@ class EquiTileProfiler:
             result.tile_stats.values(), key=lambda s: s.total_time, reverse=True
         )[:5]
 
-        lines.append(f"  {'ID':>4} {'Layer':>6} {'Time(ms)':>10} {'Error':>10} {'Importance':>10}")
+        lines.append(
+            f"  {'ID':>4} {'Layer':>6} {'Time(ms)':>10} {'Error':>10} {'Importance':>10}"
+        )
         lines.append(f"  {'-' * 4} {'-' * 6} {'-' * 10} {'-' * 10} {'-' * 10}")
 
         for tile in sorted_tiles:
-            lines.append(f"  {tile.tile_id:>4} {tile.layer_id:>6} {tile.total_time * 1000:>10.2f} {tile.error_norm:>10.2f} {tile.importance:>10.3f}")
+            lines.append(
+                f"  {tile.tile_id:>4} {tile.layer_id:>6} {tile.total_time * 1000:>10.2f} {tile.error_norm:>10.2f} {tile.importance:>10.3f}"
+            )
 
         lines.append("")
 
@@ -510,7 +518,9 @@ class EquiTileProfiler:
 
         if activities:
             lines.append(f"  Activity mean: {sum(activities) / len(activities):.4f}")
-            lines.append(f"  Activity max: {max(s.activity_max for s in result.tile_stats.values()):.4f}")
+            lines.append(
+                f"  Activity max: {max(s.activity_max for s in result.tile_stats.values()):.4f}"
+            )
         if errors:
             lines.append(f"  Error mean: {sum(errors) / len(errors):.4f}")
             lines.append(f"  Error max: {max(errors):.4f}")
@@ -671,11 +681,15 @@ class LearningMonitor:
             logger.warning("No data recorded yet.")
             return
 
-        logger.info("\nLearning Status:\n  Loss: %s (%s)\n  Accuracy: %s (%s)\n  Mean Importance: %s%s\n",
-                     f"{summary['loss_mean']:.4f}", summary['loss_trend'],
-                     f"{summary['accuracy_mean']:.4f}", summary['accuracy_trend'],
-                     f"{summary['importance_mean']:.4f}",
-                     f"\n  Hot Tiles: {summary['hot_tiles']}" if summary["hot_tiles"] else "")
+        logger.info(
+            "\nLearning Status:\n  Loss: %s (%s)\n  Accuracy: %s (%s)\n  Mean Importance: %s%s\n",
+            f"{summary['loss_mean']:.4f}",
+            summary["loss_trend"],
+            f"{summary['accuracy_mean']:.4f}",
+            summary["accuracy_trend"],
+            f"{summary['importance_mean']:.4f}",
+            f"\n  Hot Tiles: {summary['hot_tiles']}" if summary["hot_tiles"] else "",
+        )
 
 
 # =============================================================================
@@ -985,11 +999,15 @@ class BenchmarkRunner:
         lines.append("Performance Benchmark Report")
         lines.append("=" * 70)
         lines.append("")
-        lines.append(f"  {'Batch Size':>10} {'Mean (ms)':>12} {'Std (ms)':>10} {'Throughput':>15}")
+        lines.append(
+            f"  {'Batch Size':>10} {'Mean (ms)':>12} {'Std (ms)':>10} {'Throughput':>15}"
+        )
         lines.append(f"  {'-' * 10} {'-' * 12} {'-' * 10} {'-' * 15}")
 
         for result in self._results:
-            lines.append(f"  {result.batch_size:>10} {result.mean_time_ms:>12.2f} {result.std_time_ms:>10.2f} {result.throughput_samples_per_sec:>15.1f}")
+            lines.append(
+                f"  {result.batch_size:>10} {result.mean_time_ms:>12.2f} {result.std_time_ms:>10.2f} {result.throughput_samples_per_sec:>15.1f}"
+            )
 
         lines.append("")
         lines.append("=" * 70)

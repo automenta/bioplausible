@@ -16,7 +16,6 @@ from bioplausible.core.registry import register_model
 
 from ..nebc_base import NEBCBase, register_nebc
 from .transitions import TransitionGraphMixin
-from ..models.transitions import TransitionGraphMixin
 
 # ============================================================================
 # hebbian_chain.py - DeepHebbianChain, HebbianLayer, HebbianCube

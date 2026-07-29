@@ -8,7 +8,6 @@ from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 
-from ...base import register_model
 from ...utils import spectral_linear
 from ..transitions import TransitionGraphMixin
 
@@ -172,7 +171,7 @@ class FullEqPropLM(TransitionGraphMixin, nn.Module):
             modules.append(self.ffns[i])
         return modules
 
-    def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, steps: int | None = None) -> torch.Tensor:
         steps = steps or self.eq_steps
         batch_size, seq_len = x.shape
 
@@ -275,7 +274,7 @@ class EqPropAttentionOnlyLM(TransitionGraphMixin, nn.Module):
         """Return attention modules (FFNs are standard feedforward)."""
         return list(self.attentions)
 
-    def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, steps: int | None = None) -> torch.Tensor:
         steps = steps or self.eq_steps
         batch_size, seq_len = x.shape
 
@@ -347,7 +346,7 @@ class RecurrentEqPropLM(TransitionGraphMixin, nn.Module):
     def transition_modules(self) -> list[nn.Module]:
         return [self.attention, self.ffn]
 
-    def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, steps: int | None = None) -> torch.Tensor:
         steps = steps or self.eq_steps
         batch_size, seq_len = x.shape
 
@@ -433,7 +432,7 @@ class HybridEqPropLM(TransitionGraphMixin, nn.Module):
     def transition_modules(self) -> list[nn.Module]:
         return [self.eq_attention, self.eq_ffn]
 
-    def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, steps: int | None = None) -> torch.Tensor:
         steps = steps or self.eq_steps
         batch_size, seq_len = x.shape
 
@@ -496,7 +495,7 @@ class LoopedMLPForLM(TransitionGraphMixin, nn.Module):
     def transition_modules(self) -> list[nn.Module]:
         return [self.W_in, self.W_rec]
 
-    def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, steps: int | None = None) -> torch.Tensor:
         steps = steps or self.eq_steps
         batch_size, seq_len = x.shape
 
@@ -559,36 +558,3 @@ def compare_variants(vocab_size: int = 65, seq_len: int = 64, batch_size: int = 
         })
 
     return results
-
-
-@register_model(
-    "eqprop_transformer",
-    family="eqprop",
-    tags=["eqprop", "transformer"],
-    provides=["transition_graph", "standard_autograd"],
-)
-class EqPropLMWrapper(nn.Module):
-    """
-    Proxy class for EqProp LM variants.
-    Delegates to create_eqprop_lm via build().
-    """
-
-    @classmethod
-    def build(
-        cls,
-        spec,
-        input_dim,
-        output_dim,
-        hidden_dim,
-        num_layers,
-        device,
-        task_type,
-        **kwargs,
-    ):
-        return create_eqprop_lm(
-            variant=spec.variant,
-            vocab_size=output_dim,
-            hidden_dim=hidden_dim,
-            num_layers=num_layers,
-            use_sn=True,
-        ).to(device)

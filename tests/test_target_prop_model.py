@@ -1,9 +1,8 @@
 """Tests for zoo/models/target_prop.py — DifferenceTargetProp + DTPLayer."""
 
 import torch
-import pytest
 
-from bioplausible.zoo.models.target_prop import DTPLayer, DifferenceTargetProp
+from bioplausible.zoo.models.target_prop import DifferenceTargetProp, DTPLayer
 
 
 class TestDTPLayer:

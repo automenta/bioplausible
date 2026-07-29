@@ -1157,7 +1157,9 @@ The test count drop (-14 passed, +1 skipped) is **not a regression** — it's th
 5. **`DEFAULT_KB` SQLite-at-import-time is fixed via lazy module `__getattr__`** (PEP 562). The pattern:
    ```python
    _DEFAULT_KB: KnowledgeBase | None = None
-   def __getattr__(name): 
+
+
+   def __getattr__(name):
        if name == "DEFAULT_KB":
            return _get_default_kb()
        raise AttributeError(...)

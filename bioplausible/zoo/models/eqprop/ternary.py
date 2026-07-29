@@ -103,7 +103,7 @@ class TernaryEqProp(TransitionGraphMixin, nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        steps: int = None,
+        steps: int | None = None,
     ) -> torch.Tensor:
         steps = steps or self.max_steps
         batch_size = x.shape[0]

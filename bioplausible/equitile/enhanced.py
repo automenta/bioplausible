@@ -26,7 +26,7 @@ from torch import nn
 from bioplausible.core.registry import Domain, LocalityLevel
 from bioplausible.zoo.base import ModelConfig, register_model
 
-from .config import CurriculumConfig, EnhancedEquiTileConfig
+from .config import EnhancedEquiTileConfig
 from .core import EquiTile
 from .kernels import compute_activity_update, compute_hebbian_update
 from .topology import TileState
@@ -34,69 +34,6 @@ from .utils.init_utils import initialize_edge_weights, initialize_io_projections
 
 if TYPE_CHECKING:
     from torch import Tensor
-
-
-class CurriculumScheduler:
-    """Curriculum learning scheduler for EP.
-
-    Starts with easy examples and gradually increases difficulty.
-    This helps EP converge better by providing cleaner learning signals early.
-    """
-
-    def __init__(self, config: CurriculumConfig | None = None):
-        self.config = config or CurriculumConfig()
-        self.current_stage = 0
-        self.samples_seen = 0
-        self.stage_losses: list[float] = []
-        self._difficulty_cache: dict[int, float] = {}
-
-    def get_sample_weights(
-        self,
-        X: torch.Tensor,
-        y: torch.Tensor,
-        model: EquiTile,
-    ) -> torch.Tensor:
-        if not self.config.enabled:
-            return torch.ones(len(X))
-
-        n_samples = len(X)
-
-        # Estimate difficulty from prediction error
-        # Note: This might be expensive, so we cache or use heuristics
-        # For now, return ones if not using active selection
-        return torch.ones(n_samples)
-
-    def step(self, loss: float):
-        """Update curriculum based on loss."""
-        self.stage_losses.append(loss)
-        self.samples_seen += 1
-
-        if not self.config.auto_progress:
-            return
-
-        # Check if we should progress to next stage
-        if self.samples_seen >= self.config.samples_per_stage:
-            if len(self.stage_losses) >= 10:
-                recent_improvement = (
-                    sum(self.stage_losses[-10:-5]) - sum(self.stage_losses[-5:])
-                ) / 5
-
-                if recent_improvement < self.config.progress_threshold:
-                    self.progress_stage()
-
-            self.samples_seen = 0
-
-    def progress_stage(self):
-        """Progress to next curriculum stage."""
-        if self.current_stage < self.config.n_stages - 1:
-            self.current_stage += 1
-
-    def reset(self):
-        """Reset curriculum."""
-        self.current_stage = 0
-        self.samples_seen = 0
-        self.stage_losses = []
-        self._difficulty_cache = {}
 
 
 class TileLayerNorm(nn.Module):
@@ -227,16 +164,6 @@ class EnhancedEquiTile(EquiTile):
         # Error momentum buffers
         if self.equitile_config.use_error_momentum:
             self._error_momentum_buffer: dict[int, Tensor] = {}
-
-        # Curriculum Scheduler
-        self.curriculum = None
-        if self.equitile_config.use_curriculum:
-            self.curriculum = CurriculumScheduler(
-                CurriculumConfig(
-                    enabled=True,
-                    n_stages=self.equitile_config.curriculum_stages,
-                )
-            )
 
         # Tile statistics (for monitoring)
         if self.equitile_config.track_tile_statistics:
@@ -668,9 +595,6 @@ class EnhancedEquiTile(EquiTile):
                         bias.data = bias.data - lr * bias_update
 
         self._update_importance()
-
-        if self.curriculum is not None:
-            self.curriculum.step(loss.item())
 
         active_tiles = 0
         mean_error = 0.0

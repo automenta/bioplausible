@@ -9,6 +9,7 @@ Reference:
     neural networks. PNAS, 114(13), 3521-3526.
 """
 
+import logging
 from collections import OrderedDict
 
 import torch
@@ -17,8 +18,6 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from .continual_learning import ContinualLearningResult
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +260,7 @@ def run_ewc_benchmark(
     ewc_lambda: float = 1.0,
     device: torch.device | None = None,
     seed: int = 42,
-) -> ContinualLearningResult:  # noqa: F821 — forward-reference str annotation, false positive on ruff 0.15
+) -> ContinualLearningResult:
     """
     Run EWC baseline for Permuted MNIST benchmark.
 
@@ -348,7 +347,10 @@ def run_ewc_benchmark(
 
         logger.info(
             "    Task %d: Accuracy = %.4f, Avg = %.4f, Forgetting = %.4f",
-            task_id + 1, current_acc, avg_acc, avg_forgetting,
+            task_id + 1,
+            current_acc,
+            avg_acc,
+            avg_forgetting,
         )
 
     # Compute Fisher information after each task (for next task's EWC)

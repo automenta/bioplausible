@@ -39,11 +39,14 @@ Resume training:
 
 import argparse
 import json
+import logging
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import torch
 
@@ -198,17 +201,22 @@ class MetricsDashboard:
             ppl_str += f" ({torch.exp(torch.tensor(val_loss)).item():.2f})"
 
         # Print status line
-        print(
-            f"[{elapsed_str}] Epoch {epoch} | Step {step} | "
-            f"Loss: {loss_str} | PPL: {ppl_str} | "
-            f"LR: {learning_rate:.2e} | Throughput: {tokens_per_sec:.0f} tok/s"
+        logger.info(
+            "[%s] Epoch %d | Step %d | Loss: %s | PPL: %s | LR: %.2e | Throughput: %.0f tok/s",
+            elapsed_str,
+            epoch,
+            step,
+            loss_str,
+            ppl_str,
+            learning_rate,
+            tokens_per_sec,
         )
 
         # Print generation
         if generated_text:
             # Clean up text for display
             clean_text = generated_text.replace("\n", "\\n")[:80]
-            print(f"  Generated: {clean_text}...")
+            logger.info("  Generated: %s...", clean_text)
 
         # Flush
         with Path(self.log_file).open("a") as f:
@@ -257,7 +265,9 @@ class MetricsDashboard:
         try:
             import matplotlib.pyplot as plt
         except ImportError:
-            print("Matplotlib not available. Install with: pip install matplotlib")
+            logger.warning(
+                "Matplotlib not available. Install with: pip install matplotlib"
+            )
             return
 
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
@@ -324,7 +334,7 @@ class MetricsDashboard:
 
         if save_path:
             plt.savefig(save_path, dpi=150)
-            print(f"Plots saved to {save_path}")
+            logger.info("Plots saved to %s", save_path)
         else:
             plt.savefig(self.log_dir / "training_plots.png", dpi=150)
 
@@ -492,36 +502,36 @@ def run_training(
     config: DemoConfig,
 ) -> tuple[FastLMEquiTile, TrainingMetrics, Tokenizer]:
     """Run training with the given configuration."""
-    print("=" * 60)
-    print("FastLMEquiTile Training Demo")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("FastLMEquiTile Training Demo")
+    logger.info("=" * 60)
 
     # Auto-detect device
     if config.device == "auto":
         config.device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Device: {config.device}")
+    logger.info("Device: %s", config.device)
 
     # Create dataset
-    print(f"\nLoading dataset: {config.task}")
+    logger.info("\nLoading dataset: %s", config.task)
     train_loader, val_loader, tokenizer = create_dataset(config)
-    print(f"Vocabulary size: {tokenizer.vocab_size}")
-    print(f"Train batches: {len(train_loader)}")
-    print(f"Val batches: {len(val_loader)}")
+    logger.info("Vocabulary size: %d", tokenizer.vocab_size)
+    logger.info("Train batches: %d", len(train_loader))
+    logger.info("Val batches: %d", len(val_loader))
 
     # Create model
-    print("\nCreating model...")
+    logger.info("\nCreating model...")
     model = create_model(config, tokenizer.vocab_size)
     param_count = model.get_parameter_count()
-    print(f"Parameters: {param_count:,} ({param_count / 1e6:.2f}M)")
+    logger.info("Parameters: %s (%sM)", f"{param_count:,}", f"{param_count / 1e6:.2f}")
 
     # Print model architecture summary
-    print("\nModel Architecture:")
-    print(f"  Embed dim: {config.embed_dim}")
-    print(f"  Layers: {config.num_layers}")
-    print(f"  Tiles per layer: {config.tiles_per_layer}")
-    print(f"  Active tiles (MoT-k): {config.mot_k}")
-    print(f"  Attention heads: {model.config.num_heads}")
-    print(f"  KV heads (GQA): {model.config.num_kv_heads}")
+    logger.info("\nModel Architecture:")
+    logger.info("  Embed dim: %d", config.embed_dim)
+    logger.info("  Layers: %d", config.num_layers)
+    logger.info("  Tiles per layer: %d", config.tiles_per_layer)
+    logger.info("  Active tiles (MoT-k): %d", config.mot_k)
+    logger.info("  Attention heads: %d", model.config.num_heads)
+    logger.info("  KV heads (GQA): %d", model.config.num_kv_heads)
 
     # Create training config
     training_config = TrainingConfig(
@@ -580,15 +590,15 @@ def run_training(
     resume_from = None
     checkpoint_path = Path(config.checkpoint_dir) / "final_model.pt"
     if checkpoint_path.exists():
-        print(f"\nFound existing checkpoint: {checkpoint_path}")
-        response = input("Resume training? (y/n): ")
-        if response.lower() == "y":
+        logger.info("\nFound existing checkpoint: %s", checkpoint_path)
+        response_input = input("Resume training? (y/n): ")
+        if response_input.lower() == "y":
             resume_from = str(checkpoint_path)
 
     # Train
-    print("\n" + "=" * 60)
-    print("Starting training...")
-    print("=" * 60 + "\n")
+    logger.info("\n" + "=" * 60)
+    logger.info("Starting training...")
+    logger.info("=" * 60 + "\n")
 
     start_time = time.time()
     metrics = trainer.train(train_loader, val_loader, resume_from=resume_from)
@@ -599,28 +609,29 @@ def run_training(
 
     # Save final sample
     if config.generate_samples:
-        print("\n" + "=" * 60)
-        print("Final Generation Sample")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("Final Generation Sample")
+        logger.info("=" * 60)
         sample = trainer.generate_sample(max_length=300, temperature=0.8)
-        print(sample)
+        logger.info(sample)
 
     # Summary
-    print("\n" + "=" * 60)
-    print("Training Complete")
-    print("=" * 60)
-    print(f"Total time: {total_time / 60:.1f} minutes")
-    print(f"Best validation loss: {metrics.best_val_loss:.4f}")
-    print(f"Best validation step: {metrics.best_val_step}")
-    print(f"Final training loss: {metrics.train_loss[-1]:.4f}")
-    print(f"Final training perplexity: {metrics.train_perplexity[-1]:.2f}")
-    print(
-        f"Average throughput: {sum(metrics.tokens_per_second) / len(metrics.tokens_per_second):.0f} tok/s"
+    logger.info("\n" + "=" * 60)
+    logger.info("Training Complete")
+    logger.info("=" * 60)
+    logger.info("Total time: %.1f minutes", total_time / 60)
+    logger.info("Best validation loss: %.4f", metrics.best_val_loss)
+    logger.info("Best validation step: %d", metrics.best_val_step)
+    logger.info("Final training loss: %.4f", metrics.train_loss[-1])
+    logger.info("Final training perplexity: %.2f", metrics.train_perplexity[-1])
+    logger.info(
+        "Average throughput: %.0f tok/s",
+        sum(metrics.tokens_per_second) / len(metrics.tokens_per_second),
     )
-    print("\nOutputs saved to:")
-    print(f"  Checkpoints: {config.checkpoint_dir}/")
-    print(f"  Logs: {config.log_dir}/")
-    print(f"  Plots: {config.log_dir}/training_plots.png")
+    logger.info("\nOutputs saved to:")
+    logger.info("  Checkpoints: %s/", config.checkpoint_dir)
+    logger.info("  Logs: %s/", config.log_dir)
+    logger.info("  Plots: %s/training_plots.png", config.log_dir)
 
     return model, metrics, tokenizer
 
@@ -632,14 +643,16 @@ def run_training(
 
 def run_comparison(config: DemoConfig) -> None:
     """Run comparison between EquiTile and baseline."""
-    print("=" * 60)
-    print("EquiTile vs Baseline Comparison")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("EquiTile vs Baseline Comparison")
+    logger.info("=" * 60)
 
     # For now, just run standard training
     # Full comparison would include NanoGPT baseline
-    print("\nNote: Full comparison mode requires NanoGPT baseline implementation.")
-    print("Running standard training for benchmarking...\n")
+    logger.info(
+        "\nNote: Full comparison mode requires NanoGPT baseline implementation."
+    )
+    logger.info("Running standard training for benchmarking...\n")
 
     run_training(config)
 
@@ -661,7 +674,7 @@ def run_inference(
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print(f"Loading model from {checkpoint_path}...")
+    logger.info("Loading model from %s...", checkpoint_path)
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
     # Recreate model from config
@@ -679,8 +692,8 @@ def run_inference(
     input_tensor = torch.tensor([input_ids], dtype=torch.long).to(device)
 
     # Generate
-    print(f"\nPrompt: {prompt}")
-    print("-" * 40)
+    logger.info("\nPrompt: %s", prompt)
+    logger.info("-" * 40)
 
     with torch.no_grad():
         output_ids = model.generate(
@@ -691,7 +704,7 @@ def run_inference(
         )
 
     generated = tokenizer.decode(output_ids[0].tolist())
-    print(generated)
+    logger.info(generated)
 
 
 # =============================================================================

@@ -7,7 +7,6 @@ from torch import nn
 
 from ...base import register_model
 from ..base import EqPropModel
-from ..transitions import TransitionGraphMixin
 
 try:
     from torch_geometric.nn import GCNConv

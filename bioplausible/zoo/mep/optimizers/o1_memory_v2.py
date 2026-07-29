@@ -323,9 +323,7 @@ def manual_energy_compute_o1(
 
             # Compute energy
             if use_classification and is_last_state:
-                E = E + _kl_energy_no_grad(
-                    state, h, batch_size, softmax_temperature
-                )
+                E = E + _kl_energy_no_grad(state, h, batch_size, softmax_temperature)
             else:
                 E = E + 0.5 * _mse_no_grad(h, state) / batch_size
 

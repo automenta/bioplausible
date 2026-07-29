@@ -142,7 +142,7 @@ class MemoryEfficientEqPropModel(TransitionGraphMixin, EqPropModel):
 def create_memory_efficient_model(
     model_type: str, input_dim: int, hidden_dim: int, output_dim: int, **kwargs
 ) -> Any:
-    if model_type.lower() in ["loopedmlp", "memory_efficient", "o1_memory"]:
+    if model_type.lower() in ["loopedmlp", "memory_efficient"]:
         return MemoryEfficientLoopedMLP(
             input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, **kwargs
         )

@@ -682,7 +682,6 @@ def export_to_torchscript(model, input_sample, path):
 import numpy as np
 import uvicorn
 from fastapi import FastAPI
-from pydantic import BaseModel
 
 
 class _AppState:
@@ -702,7 +701,9 @@ class _AppState:
             self.app = self._build_app()
         return self.app
 
-    def serve_model(self, model: object, host: str = "0.0.0.0", port: int = 8000) -> None:
+    def serve_model(
+        self, model: object, host: str = "0.0.0.0", port: int = 8000
+    ) -> None:
         """Run a FastAPI server for the model."""
         self.model_instance = model
         if hasattr(model, "eval"):
@@ -721,7 +722,10 @@ class _AppState:
                 if request.shape:
                     data = data.reshape(request.shape)
                 elif hasattr(self.model_instance, "input_dim"):
-                    if len(data.shape) == 1 and data.shape[0] == self.model_instance.input_dim:
+                    if (
+                        len(data.shape) == 1
+                        and data.shape[0] == self.model_instance.input_dim
+                    ):
                         data = data.reshape(1, -1)
                 elif "Conv" in type(self.model_instance).__name__:
                     pass
@@ -740,7 +744,9 @@ class _AppState:
         def health():
             return {
                 "status": "ok",
-                "model": str(type(self.model_instance).__name__) if self.model_instance else "None",
+                "model": str(type(self.model_instance).__name__)
+                if self.model_instance
+                else "None",
             }
 
         return app

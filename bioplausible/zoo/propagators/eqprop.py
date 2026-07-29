@@ -65,14 +65,24 @@ class EqProp(LearningRuleOptimizer):
 
         # Free phase
         states_free = self._settle_phase(
-            x, layers, initial_states, target=None, beta=0.0,
-            settle_steps=self.settle_steps, settle_lr=self.settle_lr
+            x,
+            layers,
+            initial_states,
+            target=None,
+            beta=0.0,
+            settle_steps=self.settle_steps,
+            settle_lr=self.settle_lr,
         )
 
         # Nudged phase
         states_nudged = self._settle_phase(
-            x, layers, initial_states, target=target, beta=self.beta,
-            settle_steps=self.settle_steps, settle_lr=self.settle_lr
+            x,
+            layers,
+            initial_states,
+            target=target,
+            beta=self.beta,
+            settle_steps=self.settle_steps,
+            settle_lr=self.settle_lr,
         )
 
         # Build pairs
@@ -99,19 +109,6 @@ class EqProp(LearningRuleOptimizer):
                     )
                 self._apply_update(grad, param, buffer)
 
-    def _settle(
-        self,
-        x: torch.Tensor,
-        target: torch.Tensor | None,
-        beta: float,
-    ) -> list[tuple[torch.Tensor, torch.Tensor]]:
-        """
-        Run one phase of settling (free or nudged).
-
-        Returns list of (layer_input, layer_output) for each transition module.
-        """
-        return self._settle_phase_direct(x, target, beta)
-
     def _settle_phase_direct(
         self,
         x: torch.Tensor,
@@ -133,8 +130,13 @@ class EqProp(LearningRuleOptimizer):
 
         # Run settling
         states = self._settle_phase(
-            x, layers, initial_states, target, beta,
-            settle_steps=self.settle_steps, settle_lr=self.settle_lr
+            x,
+            layers,
+            initial_states,
+            target,
+            beta,
+            settle_steps=self.settle_steps,
+            settle_lr=self.settle_lr,
         )
 
         # Build (input, output) pairs
@@ -171,7 +173,9 @@ class EqProp(LearningRuleOptimizer):
                 raise RuntimeError(f"Energy diverged at step {step}: E={E.item()}")
 
             # Compute gradients w.r.t states
-            grads = torch.autograd.grad(E, states, retain_graph=False, allow_unused=True)
+            grads = torch.autograd.grad(
+                E, states, retain_graph=False, allow_unused=True
+            )
 
             # SGD with momentum on states
             with torch.no_grad():
@@ -198,9 +202,14 @@ class EqProp(LearningRuleOptimizer):
         prev = x
         for i, (layer, state) in enumerate(zip(layers, states)):
             pred = layer(prev)
-            E = E + 0.5 * torch.nn.functional.mse_loss(
-                pred.float(), state.float(), reduction="sum"
-            ) / batch_size
+            E = (
+                E
+                + 0.5
+                * torch.nn.functional.mse_loss(
+                    pred.float(), state.float(), reduction="sum"
+                )
+                / batch_size
+            )
             prev = state
 
         # Nudging term on output layer
@@ -212,16 +221,26 @@ class EqProp(LearningRuleOptimizer):
                     target_vec = torch.nn.functional.one_hot(
                         target, num_classes=output.shape[1]
                     ).float()
-                E = E + beta * torch.nn.functional.mse_loss(
-                    output.float(), target_vec.float(), reduction="sum"
-                ) / batch_size
+                E = (
+                    E
+                    + beta
+                    * torch.nn.functional.mse_loss(
+                        output.float(), target_vec.float(), reduction="sum"
+                    )
+                    / batch_size
+                )
             else:  # cross_entropy
                 target_vec = target
                 if target.dim() > 1 and target.shape[1] > 1:
                     target_vec = target.argmax(dim=1)
-                E = E + beta * torch.nn.functional.cross_entropy(
-                    output.float(), target_vec, reduction="sum"
-                ) / batch_size
+                E = (
+                    E
+                    + beta
+                    * torch.nn.functional.cross_entropy(
+                        output.float(), target_vec, reduction="sum"
+                    )
+                    / batch_size
+                )
 
         return E
 
@@ -294,7 +313,17 @@ class AdamEqProp(EqProp):
             "weight_decay": weight_decay,
         }
         # Pass momentum=0 to base (we use Adam, not momentum-SGD).
-        super().__init__(params, model, lr=lr, momentum=0, weight_decay=0, beta=beta, settle_steps=settle_steps, settle_lr=settle_lr, loss_type=loss_type)
+        super().__init__(
+            params,
+            model,
+            lr=lr,
+            momentum=0,
+            weight_decay=0,
+            beta=beta,
+            settle_steps=settle_steps,
+            settle_lr=settle_lr,
+            loss_type=loss_type,
+        )
         self._adam = torch.optim.Adam(self.params, **self._adam_kwargs)
 
     def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None:
@@ -303,8 +332,8 @@ class AdamEqProp(EqProp):
 
         self.model.train()
 
-        pairs_free = self._settle(x, target=None, beta=0.0)
-        pairs_nudged = self._settle(x, target=target, beta=self.beta)
+        pairs_free = self._settle_phase_direct(x, target=None, beta=0.0)
+        pairs_nudged = self._settle_phase_direct(x, target=target, beta=self.beta)
 
         self._compute_ep_gradient(pairs_free, pairs_nudged)
 

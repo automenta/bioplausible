@@ -62,14 +62,9 @@ class FeedbackAlignment(LearningRuleOptimizer):
 
         loss.backward()
 
-        self._apply_feedback_alignment()
-
         for param, buffer in zip(self.params, self.buffers):
             if param.grad is not None:
                 self._apply_update(param.grad, param, buffer)
-
-    def _apply_feedback_alignment(self) -> None:
-        pass
 
 
 @register_propagator("direct_fa")
@@ -131,14 +126,9 @@ class DirectFA(LearningRuleOptimizer):
         loss = F.cross_entropy(output, target)
         loss.backward()
 
-        self._apply_direct_feedback(x, target)
-
         for param, buffer in zip(self.params, self.buffers):
             if param.grad is not None:
                 self._apply_update(param.grad, param, buffer)
-
-    def _apply_direct_feedback(self, x: torch.Tensor, target: torch.Tensor) -> None:
-        pass
 
 
 @register_propagator("adaptive_fa")

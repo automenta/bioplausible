@@ -188,7 +188,10 @@ class CompositeOptimizer(Optimizer):
             def _get_structure(m: nn.Module) -> list[dict[str, Any]]:
                 if hasattr(m, "transition_modules"):
                     try:
-                        return [{"type": "layer", "module": mod} for mod in m.transition_modules()]
+                        return [
+                            {"type": "layer", "module": mod}
+                            for mod in m.transition_modules()
+                        ]
                     except NotImplementedError:
                         pass
                 return []

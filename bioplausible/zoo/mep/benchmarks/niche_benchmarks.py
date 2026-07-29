@@ -7,6 +7,7 @@ Explores application domains where EP-based optimizers excel:
 3. Low-memory scenarios (O(1) memory vs O(depth) for backprop)
 """
 
+import logging
 import time
 
 import torch
@@ -16,8 +17,6 @@ from torch.utils.data import DataLoader, Subset, TensorDataset
 from torchvision import datasets, transforms
 
 from bioplausible.zoo.mep.presets import smep
-
-import logging
 
 logger = logging.getLogger(__name__)
 

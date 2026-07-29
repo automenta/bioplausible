@@ -326,8 +326,7 @@ class EPOptimizer:
         if hasattr(model, "transition_modules"):
             try:
                 return [
-                    {"type": "layer", "module": m}
-                    for m in model.transition_modules()
+                    {"type": "layer", "module": m} for m in model.transition_modules()
                 ]
             except NotImplementedError:
                 pass

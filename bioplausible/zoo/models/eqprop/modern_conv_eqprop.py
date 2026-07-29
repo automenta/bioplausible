@@ -11,7 +11,6 @@ from ....acceleration import compile_settling_loop
 from ...base import register_model
 from ...utils import spectral_conv2d
 from ..base import EqPropModel
-from ..transitions import TransitionGraphMixin
 
 
 @register_model(

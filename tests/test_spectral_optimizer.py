@@ -1,6 +1,7 @@
 """Coverage tests for Spectral constraint optimizer."""
 
 import torch
+
 from bioplausible.zoo.optimizers.spectral import SpectralConstraint
 
 

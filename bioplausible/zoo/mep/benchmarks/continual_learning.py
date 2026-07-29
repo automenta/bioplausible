@@ -15,6 +15,7 @@ Metrics:
 """
 
 import json
+import logging
 import pathlib
 import random
 from dataclasses import asdict, dataclass
@@ -36,8 +37,6 @@ from bioplausible.zoo.mep.optimizers.strategies.gradient import (
     EPGradient,
 )
 from bioplausible.zoo.mep.optimizers.strategies.update import DionUpdate
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -342,7 +341,10 @@ def run_permuted_mnist_benchmark(
 
         logger.info(
             "  Task %d: Accuracy = %.4f, Avg Accuracy = %.4f, Forgetting = %.4f",
-            task_id + 1, current_acc, avg_acc, avg_forgetting,
+            task_id + 1,
+            current_acc,
+            avg_acc,
+            avg_forgetting,
         )
 
     # Final evaluation on all tasks
@@ -432,13 +434,18 @@ def print_comparison(results: dict[str, ContinualLearningResult]) -> None:
     logger.info("\n%s", "=" * 60)
     logger.info("COMPARISON RESULTS")
     logger.info("%s", "=" * 60)
-    logger.info("%-30s %-12s %-12s %-12s", "Method", "Avg Acc", "Forgetting", "Final Acc")
+    logger.info(
+        "%-30s %-12s %-12s %-12s", "Method", "Avg Acc", "Forgetting", "Final Acc"
+    )
     logger.info("%s", "-" * 60)
 
     for name, result in results.items():
         logger.info(
             "%-30s %-12.4f %-12.4f %-12.4f",
-            name, result.average_accuracy, result.average_forgetting, result.final_accuracy,
+            name,
+            result.average_accuracy,
+            result.average_forgetting,
+            result.final_accuracy,
         )
 
     logger.info("%s", "=" * 60)
@@ -449,10 +456,12 @@ def print_comparison(results: dict[str, ContinualLearningResult]) -> None:
 
     if mep and bp:
         logger.info(
-            "MEP reduces forgetting by: %.4f", bp.average_forgetting - mep.average_forgetting
+            "MEP reduces forgetting by: %.4f",
+            bp.average_forgetting - mep.average_forgetting,
         )
         logger.info(
-            "MEP avg accuracy improvement: %.4f", mep.average_accuracy - bp.average_accuracy
+            "MEP avg accuracy improvement: %.4f",
+            mep.average_accuracy - bp.average_accuracy,
         )
 
 

@@ -321,13 +321,13 @@ def test_infer_metadata_regular_field():
 
 def test_runtime_checkable_transition_graph():
     """All registered EqProp models pass isinstance(..., TransitionGraph)."""
-    from bioplausible.zoo.models.transitions import TransitionGraph
     from bioplausible.zoo.models.eqprop import (
-        StandardEqProp,
+        LoopedMLP,
         MomentumEquilibrium,
         SparseEquilibrium,
-        LoopedMLP,
+        StandardEqProp,
     )
+    from bioplausible.zoo.models.transitions import TransitionGraph
 
     models = [StandardEqProp, MomentumEquilibrium, SparseEquilibrium, LoopedMLP]
     for model_cls in models:
@@ -348,7 +348,7 @@ def test_runtime_checkable_transition_graph():
 
 def test_all_models_have_transition_modules_or_override():
     """Verify all registered BioModel subclasses expose transition_modules()."""
-    from bioplausible.core.registry import Registry, ComponentCategory
+    from bioplausible.core.registry import ComponentCategory, Registry
     from bioplausible.zoo.base import BioModel
 
     models = Registry.list(ComponentCategory.MODEL).get("model", [])

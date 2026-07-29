@@ -236,8 +236,8 @@ def create_model_preset(preset_name: str, **overrides) -> nn.Module:
     Example:
         >>> model = create_model_preset("mnist_small", hidden_dim=512)
     """
-    from bioplausible.zoo.models.eqprop.conv_eqprop import ConvEqProp  # noqa: PLC0415
-    from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP  # noqa: PLC0415
+    from bioplausible.zoo.models.eqprop.conv_eqprop import ConvEqProp
+    from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
 
     presets = {
         "mnist_small": lambda: LoopedMLP(784, 128, 10, use_spectral_norm=True),
@@ -357,7 +357,6 @@ def spectral_conv2d(
 
 
 __all__ = [
-    "simple_profiler",
     "compute_gradient_norm",
     "count_parameters",
     "create_model_preset",
@@ -365,6 +364,7 @@ __all__ = [
     "export_to_onnx",
     "profile_model",
     "seed_everything",
+    "simple_profiler",
     "spectral_conv2d",
     "spectral_linear",
     "verify_spectral_norm",

@@ -25,12 +25,15 @@ Example
 """
 
 import json
+import logging
 import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 import torch
 
@@ -661,7 +664,7 @@ class LMTrainer:
         # Resume if requested
         if resume_from:
             self.load_checkpoint(resume_from)
-            print(f"Resumed from checkpoint: {resume_from}")
+            logger.info("Resumed from checkpoint: %s", resume_from)
 
         # Setup
         self.model.train()
@@ -721,14 +724,16 @@ class LMTrainer:
                     # Logging
                     if self.metrics.global_step % self.config.log_every == 0:
                         elapsed_epoch = time.time() - epoch_start
-                        print(
-                            f"Epoch {epoch + 1}/{self.config.epochs} | "
-                            f"Step {self.metrics.global_step} | "
-                            f"Loss: {loss:.4f} | "
-                            f"PPL: {math.exp(loss):.2f} | "
-                            f"LR: {lr:.2e} | "
-                            f"Tok/s: {tokens_per_sec:.0f} | "
-                            f"Time: {elapsed_epoch:.1f}s"
+                        logger.info(
+                            "Epoch %d/%d | Step %d | Loss: %.4f | PPL: %.2f | LR: %.2e | Tok/s: %.0f | Time: %.1fs",
+                            epoch + 1,
+                            self.config.epochs,
+                            self.metrics.global_step,
+                            loss,
+                            math.exp(loss),
+                            lr,
+                            tokens_per_sec,
+                            elapsed_epoch,
                         )
 
                     # Validation
@@ -738,8 +743,10 @@ class LMTrainer:
                     ):
                         val_loss = self.evaluate(val_loader)
                         self.metrics.update(val_loss=val_loss)
-                        print(
-                            f"  Validation Loss: {val_loss:.4f} | PPL: {math.exp(val_loss):.2f}"
+                        logger.info(
+                            "  Validation Loss: %.4f | PPL: %.2f",
+                            val_loss,
+                            math.exp(val_loss),
                         )
 
                         # Save best checkpoint
@@ -758,7 +765,7 @@ class LMTrainer:
                             self.gen_prompt,
                             max_length=100,
                         )
-                        print(f"  Generated: {generated[:80]}...")
+                        logger.info("  Generated: %s...", generated[:80])
 
                     # Checkpoint
                     if self.metrics.global_step % self.config.save_every == 0:
@@ -774,10 +781,11 @@ class LMTrainer:
             # Epoch summary
             avg_loss = epoch_loss / max(1, n_steps)
             epoch_time = time.time() - epoch_start
-            print(
-                f"Epoch {epoch + 1} complete | "
-                f"Avg Loss: {avg_loss:.4f} | "
-                f"Time: {epoch_time:.1f}s"
+            logger.info(
+                "Epoch %d complete | Avg Loss: %.4f | Time: %.1fs",
+                epoch + 1,
+                avg_loss,
+                epoch_time,
             )
 
             # Epoch callbacks
@@ -791,9 +799,11 @@ class LMTrainer:
         self.metrics.save(checkpoint_dir / "metrics.json")
 
         total_time = time.time() - start_time
-        print(f"\nTraining complete in {total_time / 60:.1f} minutes")
-        print(
-            f"Best validation loss: {self.metrics.best_val_loss:.4f} (step {self.metrics.best_val_step})"
+        logger.info("\nTraining complete in %.1f minutes", total_time / 60)
+        logger.info(
+            "Best validation loss: %.4f (step %d)",
+            self.metrics.best_val_loss,
+            self.metrics.best_val_step,
         )
 
         return self.metrics

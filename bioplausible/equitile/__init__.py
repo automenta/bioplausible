@@ -166,9 +166,7 @@ from .dynamics import (
 )
 from .dynamics import DynamicEquiTileConfig as DynamicsConfig
 from .dynamics import TileGrowthConfig as DynamicsTileGrowthConfig
-from .enhanced import CurriculumConfig as EnhancedCurriculumConfig
 from .enhanced import (
-    CurriculumScheduler,
     EnhancedEquiTile,
     TileLayerNorm,
     create_enhanced_model,
@@ -318,8 +316,6 @@ __all__ = [
     "DynamicEquiTileConfig",
     # Enhanced
     "TileLayerNorm",
-    "EnhancedCurriculumConfig",
-    "CurriculumScheduler",
     "EnhancedEquiTile",
     "create_enhanced_model",
     # Dynamics

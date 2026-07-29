@@ -199,7 +199,9 @@ class FastLMEquiTile(OptimizedLMEquiTile):
             # Use simple random sampling for the demo loop
             # We don't need a full DataLoader overhead for single steps
         except Exception as e:
-            logger.warning("Failed to load dataset %s: %s. Falling back to Random.", name, e)
+            logger.warning(
+                "Failed to load dataset %s: %s. Falling back to Random.", name, e
+            )
             self.dataset = None
 
     def update_params(self, params: dict[str, Any]):

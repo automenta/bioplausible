@@ -1,14 +1,13 @@
 """Coverage tests for ExecutionStrategy -- plan_next, plan_batch, tier logic."""
 
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from bioplausible.execution.strategy import (
     ExecutionStrategy,
-    _ModelSpec,
     _model_specs,
+    _ModelSpec,
 )
-from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel
 
 

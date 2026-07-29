@@ -8,7 +8,6 @@ from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 from ....acceleration import compile_settling_loop
 from ...utils import spectral_conv2d
 from ..base import EqPropModel
-from ..transitions import TransitionGraphMixin
 
 
 class ConvEqProp(EqPropModel):

@@ -353,8 +353,8 @@ def test_registry_optimizer_get_unknown_raises_with_available_list():
 def test_register_accepts_factory_function():
     """A bare function (no class) can be registered and retrieved."""
     from bioplausible.core.registry import (
-        Registry,
         ComponentCategory,
+        Registry,
         register_optimizer,
     )
 

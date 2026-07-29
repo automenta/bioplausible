@@ -4,18 +4,17 @@ Covers models in bioplausible.zoo.models.eqprop that define train_step.
 Tests are model-specific due to varying constructor signatures.
 """
 
-import pytest
 import torch
 from torch import nn
 
 from bioplausible.zoo.base import ModelConfig
-from bioplausible.zoo.models.eqprop.standard_eqprop import StandardEqProp
 from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
-from bioplausible.zoo.models.eqprop.holomorphic_ep import HolomorphicEP
-from bioplausible.zoo.models.eqprop.finite_nudge_ep import FiniteNudgeEP
-from bioplausible.zoo.models.eqprop.sparse_eq import SparseEquilibrium
-from bioplausible.zoo.models.eqprop.mom_eq import MomentumEquilibrium
 from bioplausible.zoo.models.eqprop.eqprop_diffusion import EqPropDiffusion
+from bioplausible.zoo.models.eqprop.finite_nudge_ep import FiniteNudgeEP
+from bioplausible.zoo.models.eqprop.holomorphic_ep import HolomorphicEP
+from bioplausible.zoo.models.eqprop.mom_eq import MomentumEquilibrium
+from bioplausible.zoo.models.eqprop.sparse_eq import SparseEquilibrium
+from bioplausible.zoo.models.eqprop.standard_eqprop import StandardEqProp
 
 
 def _check_train_step(

@@ -4,17 +4,15 @@ import pytest
 import torch
 from torch import nn
 
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
+from bioplausible.zoo.propagators.base import LearningRuleOptimizer
 from bioplausible.zoo.propagators.eqprop import (
     AdamEqProp,
     EqProp,
-    HolomorphicEqProp,
     FiniteNudgeEqProp,
+    HolomorphicEqProp,
     LazyEqProp,
 )
-from bioplausible.zoo.propagators.base import LearningRuleOptimizer
-
-
-from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 
 class SimpleMLP(TransitionGraphMixin, nn.Module):
@@ -130,7 +128,7 @@ class TestEqProp:
 
     def test_settle_output_shape(self, params, model, x):
         opt = EqProp(params, model, settle_lr=0.1)
-        pairs = opt._settle(x, target=None, beta=0.0)
+        pairs = opt._settle_phase_direct(x, target=None, beta=0.0)
         assert len(pairs) == 3
         for i, (inp, out) in enumerate(pairs):
             assert isinstance(inp, torch.Tensor), f"Input {i} is not a tensor"
@@ -143,8 +141,10 @@ class TestEqProp:
         for p in params:
             p.grad = None
 
-        pairs_free = opt._settle(x, target=None, beta=0.0)
-        pairs_nudged = opt._settle(x, target=torch.randint(0, 8, (4,)), beta=0.5)
+        pairs_free = opt._settle_phase_direct(x, target=None, beta=0.0)
+        pairs_nudged = opt._settle_phase_direct(
+            x, target=torch.randint(0, 8, (4,)), beta=0.5
+        )
         opt._compute_ep_gradient(pairs_free, pairs_nudged)
 
         layers = opt._get_transitions()
@@ -275,7 +275,7 @@ class TestFiniteNudgeEqProp:
             if p.grad is not None:
                 expected = gb * 3.0
                 assert torch.allclose(p.grad, expected, atol=1e-6), (
-                    f"Gradient should be scaled by beta=3"
+                    "Gradient should be scaled by beta=3"
                 )
 
     def test_is_learning_rule_optimizer(self, params, model):

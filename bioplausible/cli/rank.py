@@ -3,19 +3,22 @@ CLI Leaderboard Viewer
 """
 
 import argparse
+import logging
 
 from tabulate import tabulate  # Assuming installed, or use simple formatter
 
 from bioplausible.analysis.results import get_rankings, load_trials
 
+logger = logging.getLogger(__name__)
+
 
 def view_rankings(args):
     db_path = args.db
-    print(f"[DATA]  Loading rankings from {db_path}...")
+    logger.info("[DATA]  Loading rankings from %s...", db_path)
 
     trials = load_trials(db_path)
     if not trials:
-        print("No trials found.")
+        logger.warning("No trials found.")
         return
 
     rankings = get_rankings(trials)
@@ -37,7 +40,7 @@ def view_rankings(args):
             r.n_trials,
         ])
 
-    print(tabulate(data, headers=headers, tablefmt="simple"))
+    logger.info("\n" + tabulate(data, headers=headers, tablefmt="simple"))
 
 
 def main():

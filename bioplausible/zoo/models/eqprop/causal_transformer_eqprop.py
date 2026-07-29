@@ -125,7 +125,7 @@ class CausalTransformerEqProp(nn.Module):
         mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1).bool()
         self.register_buffer("causal_mask", mask)
 
-    def forward(self, x: torch.Tensor, steps: int = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, steps: int | None = None) -> torch.Tensor:
         steps = steps or self.eq_steps
         batch_size, seq_len = x.shape
 

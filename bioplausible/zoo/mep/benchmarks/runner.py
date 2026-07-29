@@ -34,9 +34,9 @@ try:
 except ImportError:
     VIS_AVAILABLE = False
 
-from bioplausible.zoo.mep.presets import sdmep, smep
-
 import logging
+
+from bioplausible.zoo.mep.presets import sdmep, smep
 
 logger = logging.getLogger(__name__)
 
@@ -468,7 +468,11 @@ def run_benchmark(
         if verbose:
             logger.info(
                 "  Epoch %d/%d: Train Acc: %.2f%%, Val Acc: %.2f%%, Time: %.2fs",
-                epoch + 1, epochs, train_acc, val_acc, epoch_time,
+                epoch + 1,
+                epochs,
+                train_acc,
+                val_acc,
+                epoch_time,
             )
 
     result.total_time = time.time() - start_time

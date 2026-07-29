@@ -2,13 +2,12 @@
 
 import json
 import os
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 from bioplausible.core.trainer import (
     CoreTrainer,
@@ -318,7 +317,7 @@ def test_save_history_creates_json(tmp_path):
     assert (tmp_path / "history.jsonl").exists()
 
     # Verify content
-    with open(tmp_path / "history.json") as f:
+    with Path(tmp_path / "history.json").open() as f:
         data = json.load(f)
     assert len(data) == 1
     assert data[0]["epoch"] == 0
@@ -352,7 +351,7 @@ def test_core_trainer_from_yaml(tmp_path):
     yaml_path = tmp_path / "config.yaml"
     import yaml
 
-    with open(yaml_path, "w") as f:
+    with Path(yaml_path).open("w") as f:
         yaml.dump(
             {"model": "test", "epochs": 1, "task": "mnist", "track_energy": False}, f
         )

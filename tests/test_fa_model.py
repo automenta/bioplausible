@@ -1,23 +1,21 @@
 """Tests for zoo/models/fa.py — Feedback Alignment model variants."""
 
 import torch
-import pytest
 
 from bioplausible.zoo.models.fa import (
-    FeedbackAlignmentLayer,
-    FeedbackAlignmentEqProp,
     AdaptiveFeedbackAlignment,
-    StochasticFA,
     ContrastiveFeedbackAlignment,
-    DirectFeedbackAlignmentEqProp,
     DeepDFAEqProp,
-    StandardFA,
+    DirectFeedbackAlignmentEqProp,
     EnergyGuidedFA,
     EnergyMinimizingFA,
-    LayerwiseEquilibriumFA,
     EquilibriumAlignment,
+    FeedbackAlignmentEqProp,
+    FeedbackAlignmentLayer,
+    LayerwiseEquilibriumFA,
+    StandardFA,
+    StochasticFA,
 )
-
 
 # ─── FeedbackAlignmentLayer ─────────────────────────────────────────────────────
 

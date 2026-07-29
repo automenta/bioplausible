@@ -29,8 +29,11 @@ python -m bioplausible.models.equitile.lm_demo.train_tinystories \
 
 import argparse
 import json
+import logging
 import time
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 import torch
 import torch.nn.functional as F
@@ -71,7 +74,7 @@ class TinyStoriesDataset(Dataset):
         self.seq_length = seq_length
 
         # Load and tokenize stories
-        print(f"Loading TinyStories from {data_path}...")
+        logger.info("Loading TinyStories from %s...", data_path)
         self.tokens = []
 
         count = 0
@@ -88,7 +91,7 @@ class TinyStoriesDataset(Dataset):
                     self.tokens.extend(tokens)
                     count += 1
 
-        print(f"Loaded {count} stories, {len(self.tokens):,} tokens")
+        logger.info("Loaded %d stories, %s tokens", count, f"{len(self.tokens):,}")
 
         # Calculate number of sequences
         self.n_sequences = max(0, len(self.tokens) // seq_length)
@@ -122,16 +125,16 @@ def download_tinystories(data_dir: str = "data") -> str:
     if train_file.exists():
         return str(train_file)
 
-    print(f"TinyStories not found at {train_file}")
-    print(
+    logger.warning("TinyStories not found at %s", train_file)
+    logger.warning(
         "Please download from: https://huggingface.co/datasets/roneneldan/TinyStories"
     )
-    print(f"Then extract to {data_path}")
+    logger.warning("Then extract to %s", data_path)
 
     # Create dummy data for testing
     data_path.mkdir(parents=True, exist_ok=True)
 
-    print("Creating dummy dataset for testing...")
+    logger.info("Creating dummy dataset for testing...")
     dummy_stories = [
         {"story": "Once upon a time, there was a little cat named Whiskers. " * 100},
         {"story": "A brave knight fought a dragon and saved the princess. " * 100},
@@ -264,8 +267,7 @@ def create_equitile_model(vocab_size: int, device: torch.device) -> nn.Module:
 
     model = FastLMEquiTile(config).to(device)
     param_count = sum(p.numel() for p in model.parameters())
-    print(f"EquiTile parameters: {param_count:,}")
-
+    logger.info("EquiTile parameters: %s", f"{param_count:,}")
     return model
 
 
@@ -283,7 +285,7 @@ def create_nanogpt_model(vocab_size: int, device: torch.device) -> nn.Module:
 
     model = NanoGPTModel(config).to(device)
     param_count = sum(p.numel() for p in model.parameters())
-    print(f"NanoGPT parameters: {param_count:,}")
+    logger.info("NanoGPT parameters: %s", f"{param_count:,}")
 
     return model
 
@@ -332,16 +334,18 @@ def train_model(
         }
         history.append(record)
 
-        print(
-            f"Epoch {epoch + 1}/{epochs} | "
-            f"Train Loss: {train_metrics['train_loss']:.4f} | "
-            f"Val PPL: {val_metrics['val_ppl']:.2f} | "
-            f"Tok/s: {tokens_per_sec:,.0f} | "
-            f"Time: {epoch_time:.1f}s"
+        logger.info(
+            "Epoch %d/%d | Train Loss: %.4f | Val PPL: %.2f | Tok/s: %s | Time: %.1fs",
+            epoch + 1,
+            epochs,
+            train_metrics["train_loss"],
+            val_metrics["val_ppl"],
+            f"{tokens_per_sec:,.0f}",
+            epoch_time,
         )
 
     total_time = time.time() - total_start
-    print(f"\nTotal training time: {total_time / 60:.1f} minutes")
+    logger.info("\nTotal training time: %.1f minutes", total_time / 60)
 
     return history
 
@@ -416,13 +420,13 @@ def main():
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
         device = torch.device(args.device)
-    print(f"Using device: {device}")
+    logger.info("Using device: %s", device)
 
     # Download/load dataset
     data_file = download_tinystories(args.data_dir)
 
     # Train tokenizer
-    print(f"\nTraining BPE tokenizer (vocab_size={args.vocab_size})...")
+    logger.info("\nTraining BPE tokenizer (vocab_size=%d)...", args.vocab_size)
     tokenizer = BPETokenizer(vocab_size=args.vocab_size)
 
     # Load a subset for tokenizer training
@@ -436,10 +440,10 @@ def main():
 
     tokenizer.train(sample_texts)
     vocab_size = len(tokenizer.vocab)
-    print(f"Actual vocab size: {vocab_size}")
+    logger.info("Actual vocab size: %d", vocab_size)
 
     # Create datasets
-    print("\nCreating datasets...")
+    logger.info("\nCreating datasets...")
     train_dataset = TinyStoriesDataset(
         data_file, tokenizer, args.seq_length, args.max_samples
     )
@@ -466,16 +470,16 @@ def main():
         pin_memory=True,
     )
 
-    print(f"Train batches: {len(train_loader)}")
-    print(f"Val batches: {len(val_loader)}")
+    logger.info("Train batches: %d", len(train_loader))
+    logger.info("Val batches: %d", len(val_loader))
 
     # Train models
     results = {}
 
     if args.model in ["equitile", "both"]:
-        print("\n" + "=" * 70)
-        print("Training EquiTile")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info("Training EquiTile")
+        logger.info("=" * 70)
 
         model = create_equitile_model(vocab_size, device)
         history = train_model(
@@ -490,9 +494,9 @@ def main():
         results["equitile"] = history
 
     if args.model in ["nanogpt", "both"]:
-        print("\n" + "=" * 70)
-        print("Training NanoGPT")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info("Training NanoGPT")
+        logger.info("=" * 70)
 
         model = create_nanogpt_model(vocab_size, device)
         history = train_model(
@@ -524,29 +528,31 @@ def main():
             indent=2,
         )
 
-    print(f"\nResults saved to {results_file}")
+    logger.info("\nResults saved to %s", results_file)
 
     # Summary
     if "equitile" in results and "nanogpt" in results:
-        print("\n" + "=" * 70)
-        print("FINAL COMPARISON")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info("FINAL COMPARISON")
+        logger.info("=" * 70)
 
         eq_final = results["equitile"][-1]
         ng_final = results["nanogpt"][-1]
 
-        print(f"EquiTile Val PPL: {eq_final['val_ppl']:.2f}")
-        print(f"NanoGPT Val PPL:  {ng_final['val_ppl']:.2f}")
-        print(f"EquiTile Tok/s:   {eq_final['tokens_per_sec']:,.0f}")
-        print(f"NanoGPT Tok/s:    {ng_final['tokens_per_sec']:,.0f}")
+        logger.info("EquiTile Val PPL: %.2f", eq_final["val_ppl"])
+        logger.info("NanoGPT Val PPL:  %.2f", ng_final["val_ppl"])
+        logger.info("EquiTile Tok/s:   %s", f"{eq_final['tokens_per_sec']:,.0f}")
+        logger.info("NanoGPT Tok/s:    %s", f"{ng_final['tokens_per_sec']:,.0f}")
 
         ppl_ratio = ng_final["val_ppl"] / eq_final["val_ppl"]
         speed_ratio = eq_final["tokens_per_sec"] / ng_final["tokens_per_sec"]
 
-        print(
-            f"\nPPL Improvement: {ppl_ratio:.2f}x {'(EquiTile better)' if ppl_ratio > 1 else '(NanoGPT better)'}"
+        logger.info(
+            "\nPPL Improvement: %.2fx %s",
+            ppl_ratio,
+            "(EquiTile better)" if ppl_ratio > 1 else "(NanoGPT better)",
         )
-        print(f"Speedup: {speed_ratio:.2f}x")
+        logger.info("Speedup: %.2fx", speed_ratio)
 
 
 if __name__ == "__main__":

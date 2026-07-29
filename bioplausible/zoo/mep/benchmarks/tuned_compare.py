@@ -7,6 +7,7 @@ EP methods need different hyperparameters than backprop methods.
 
 import argparse
 import json
+import logging
 import pathlib
 import time
 from dataclasses import asdict, dataclass
@@ -19,8 +20,6 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
 from bioplausible.zoo.mep.benchmarks.baselines import get_optimizer
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -373,7 +372,12 @@ def run_benchmark(optimizer_name: str, config: BenchmarkConfig) -> OptimizerResu
 
         logger.info(
             "  %s Epoch %d/%d: Train Acc=%.4f, Val Acc=%.4f, Time=%.2fs",
-            optimizer_name, epoch + 1, config.epochs, train_acc, val_acc, epoch_time,
+            optimizer_name,
+            epoch + 1,
+            config.epochs,
+            train_acc,
+            val_acc,
+            epoch_time,
         )
 
     total_time = time.time() - start_time
@@ -398,7 +402,9 @@ def run_all_benchmarks(
     for opt_name in optimizers:
         logger.info("\n%s", "=" * 60)
         logger.info(
-            "Benchmarking: %s (LR=%s)", opt_name.upper(), OPTIMIZER_CONFIGS[opt_name].lr,
+            "Benchmarking: %s (LR=%s)",
+            opt_name.upper(),
+            OPTIMIZER_CONFIGS[opt_name].lr,
         )
         logger.info("%s", "=" * 60)
 
@@ -414,7 +420,11 @@ def print_summary(results: dict[str, OptimizerResult]) -> None:
     logger.info("%s", "=" * 90)
     logger.info(
         "%-15s %-15s %-18s %-15s %-10s",
-        "Optimizer", "Best Val Acc", "Final Train Acc", "Total Time (s)", "LR",
+        "Optimizer",
+        "Best Val Acc",
+        "Final Train Acc",
+        "Total Time (s)",
+        "LR",
     )
     logger.info("%s", "-" * 90)
 
@@ -426,7 +436,11 @@ def print_summary(results: dict[str, OptimizerResult]) -> None:
         lr = OPTIMIZER_CONFIGS.get(name, OptimizerConfig(lr=0.01)).lr
         logger.info(
             "%-15s %-15.4f %-18.4f %-15.2f %-10.5f",
-            name, result.best_val_acc, result.final_train_acc, result.total_time, lr,
+            name,
+            result.best_val_acc,
+            result.final_train_acc,
+            result.total_time,
+            lr,
         )
 
     logger.info("%s", "=" * 90)
@@ -434,7 +448,8 @@ def print_summary(results: dict[str, OptimizerResult]) -> None:
     best = sorted_results[0]
     logger.info(
         "\U0001f3c6 Best performer: %s with %.2f%% validation accuracy",
-        best[0].upper(), best[1].best_val_acc * 100,
+        best[0].upper(),
+        best[1].best_val_acc * 100,
     )
 
     # Show EP vs backprop comparison
@@ -449,9 +464,19 @@ def print_summary(results: dict[str, OptimizerResult]) -> None:
         best_ep = ep_opts[0]
         best_bp = bp_opts[0]
         logger.info("\n\U0001f4ca EP vs Backprop:")
-        logger.info("   Best EP:     %s: %.2f%%", best_ep[0].upper(), best_ep[1].best_val_acc * 100)
-        logger.info("   Best Backprop: %s: %.2f%%", best_bp[0].upper(), best_bp[1].best_val_acc * 100)
-        logger.info("   Gap: %.2f%%", (best_bp[1].best_val_acc - best_ep[1].best_val_acc) * 100)
+        logger.info(
+            "   Best EP:     %s: %.2f%%",
+            best_ep[0].upper(),
+            best_ep[1].best_val_acc * 100,
+        )
+        logger.info(
+            "   Best Backprop: %s: %.2f%%",
+            best_bp[0].upper(),
+            best_bp[1].best_val_acc * 100,
+        )
+        logger.info(
+            "   Gap: %.2f%%", (best_bp[1].best_val_acc - best_ep[1].best_val_acc) * 100
+        )
 
 
 def save_results(results: dict[str, OptimizerResult], output_path: str) -> None:

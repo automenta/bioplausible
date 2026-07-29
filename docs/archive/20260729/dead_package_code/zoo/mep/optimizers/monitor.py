@@ -41,23 +41,23 @@ class EpochMetrics:
 
 class EPMonitor:
     """
-    Monitor for EP training dynamics.
+        Monitor for EP training dynamics.
 
-    Tracks:
-    - Energy convergence during settling
-    - Free vs nudged energy gap
-    - Gradient norms
-    - Weight updates
+        Tracks:
+        - Energy convergence during settling
+        - Free vs nudged energy gap
+        - Gradient norms
+        - Weight updates
 
-Usage:
-            monitor = EPMonitor()
-            optimizer = smep(..., model=model)
+    Usage:
+                monitor = EPMonitor()
+                optimizer = smep(..., model=model)
 
-            for epoch in range(epochs):
-                monitor.start_epoch()
-                optimizer.step(x=x, target=y)
-                metrics = monitor.end_epoch(model, optimizer)
-                logger.info("Epoch %d: Energy gap = %.4f", epoch, metrics.energy_gap)
+                for epoch in range(epochs):
+                    monitor.start_epoch()
+                    optimizer.step(x=x, target=y)
+                    metrics = monitor.end_epoch(model, optimizer)
+                    logger.info("Epoch %d: Energy gap = %.4f", epoch, metrics.energy_gap)
     """
 
     def __init__(self) -> None:

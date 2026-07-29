@@ -1,7 +1,7 @@
 """Smoke tests for zoo/models/wrappers.py (RecurrentWrapper, StackedRecurrentWrapper, TransformerEqPropWrapper)."""
 
-import torch
 import pytest
+import torch
 
 from bioplausible.zoo.models.wrappers import (
     RecurrentWrapper,

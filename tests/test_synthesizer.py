@@ -1,14 +1,12 @@
 """Tests for ResearchSynthesizer."""
 
-import json
-import os
+import pathlib
 import sqlite3
 import tempfile
 
 import pytest
 
 from bioplausible.execution.synthesizer import ResearchSynthesizer
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -23,7 +21,7 @@ def synth_db_path() -> str:
     _create_schema(tmp.name)
     _populate_test_data(tmp.name)
     yield tmp.name
-    os.unlink(tmp.name)
+    pathlib.Path(tmp.name).unlink()
 
 
 def _create_schema(path: str) -> None:
@@ -247,7 +245,7 @@ def empty_db_path() -> str:
     tmp.close()
     _create_schema(tmp.name)
     yield tmp.name
-    os.unlink(tmp.name)
+    pathlib.Path(tmp.name).unlink()
 
 
 def test_get_trials_df_empty(empty_db_path: str) -> None:

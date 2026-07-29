@@ -1,6 +1,5 @@
 """Shared test fixtures and configuration."""
 
-import os
 import shutil
 import sys
 import tempfile
@@ -11,9 +10,6 @@ ROOT_DIR = Path(__file__).parent.parent
 sys.path.append(str(ROOT_DIR))
 
 # Hard dependencies — no mock stubs needed
-import torchvision  # noqa: E402
-import gymnasium  # noqa: E402
-
 # bioplausible.acceleration checks for cupy
 from unittest.mock import MagicMock  # noqa: E402
 
@@ -24,7 +20,6 @@ import torch
 from torch import nn
 
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
-
 
 # --- Shared Model Fixtures ---
 

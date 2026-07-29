@@ -300,5 +300,9 @@ def print_rankings(rankings: list[Any]):
 
         logger.info(
             "#%d %-20s %6.2f%%    %-10s %8d",
-            i, r.family, r.best_value * 100, gap, r.n_trials,
+            i,
+            r.family,
+            r.best_value * 100,
+            gap,
+            r.n_trials,
         )

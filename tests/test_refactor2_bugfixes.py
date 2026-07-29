@@ -773,7 +773,6 @@ def test_fixed_modules_import_without_error():
         "bioplausible.execution.algorithm_constraints",
         "bioplausible.execution.synthesizer",
         "bioplausible.execution.failure_tracker",
-        "bioplausible.analysis.legacy_report.composer",
         "bioplausible.execution.training_dynamics",
         "bioplausible.zoo.mep.optimizers.energy",
     ]

@@ -149,7 +149,7 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        steps: int = None,
+        steps: int | None = None,
         return_trajectory: bool = False,
     ) -> torch.Tensor:
         steps = steps or self.max_steps

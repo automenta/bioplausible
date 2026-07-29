@@ -103,7 +103,9 @@ class ValidationPipeline:
         passed = sum(1 for r in self.results if r.passed and category in r.name.lower())
         total = sum(1 for r in self.results if category in r.name.lower())
 
-        logger.info("%s tests: %d/%d passed (%.1fs)", category.upper(), passed, total, elapsed)
+        logger.info(
+            "%s tests: %d/%d passed (%.1fs)", category.upper(), passed, total, elapsed
+        )
 
     def _add_result(self, result: ValidationResult) -> None:
         """Add a validation result."""

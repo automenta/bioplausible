@@ -7,9 +7,8 @@ import sys
 import unittest
 from pathlib import Path
 
-import torch
-
 import pytest
+import torch
 
 # Add parent to path for in-package testing
 parent_dir = Path(__file__).parent.parent.parent

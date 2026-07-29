@@ -9,7 +9,6 @@ from torch import nn
 
 from bioplausible.zoo.propagators.backprop import Backprop
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

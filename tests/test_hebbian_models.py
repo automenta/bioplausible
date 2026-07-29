@@ -1,15 +1,14 @@
 """Tests for zoo/models/hebbian.py (HebbianLayer, DeepHebbianChain, HebbianCube, ThreeFactorHebbian)."""
 
-import torch
 import pytest
+import torch
 
 from bioplausible.zoo.models.hebbian import (
-    HebbianLayer,
     DeepHebbianChain,
     HebbianCube,
+    HebbianLayer,
     ThreeFactorHebbian,
 )
-
 
 NUM_CLASSES = 4
 

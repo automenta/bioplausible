@@ -38,7 +38,6 @@ from .optimizers import (
     ErrorFeedback,
     FisherUpdate,
     LocalEPGradient,
-    ModelInspector,
     MuonUpdate,
     NaturalGradient,
     NoConstraint,
@@ -47,7 +46,6 @@ from .optimizers import (
     Settler,
     SpectralConstraint,
 )
-from .optimizers.monitor import EPMonitor, monitor_ep_training
 from .presets import local_ep, muon_backprop, natural_ep, sdmep, smep, smep_fast
 
 __version__ = "0.3.0"
@@ -57,14 +55,12 @@ __all__ = [
     "DionUpdate",
     "Domain",
     "EPGradient",
-    "EPMonitor",
     "EPOptimizer",
     "EnergyFunction",
     "ErrorFeedback",
     "FisherUpdate",
     "LocalEPGradient",
     "LocalityLevel",
-    "ModelInspector",
     "MuonUpdate",
     "NaturalGradient",
     "NoConstraint",
@@ -73,7 +69,6 @@ __all__ = [
     "Settler",
     "SpectralConstraint",
     "local_ep",
-    "monitor_ep_training",
     "muon_backprop",
     "natural_ep",
     "register_optimizer",

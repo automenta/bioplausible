@@ -42,13 +42,6 @@ from .fast_lm import (
     SwiGLUFeedForward,
     TileLocalAttention,
 )
-from .profiling import (
-    BandwidthAnalyzer,
-    MemoryProfiler,
-    MemorySnapshot,
-    ProfileResult,
-    profile_memory,
-)
 from .training import LMTrainer, TrainingConfig, TrainingMetrics, train_model
 
 __all__ = [
@@ -76,10 +69,4 @@ __all__ = [
     "TrainingConfig",
     "TrainingMetrics",
     "train_model",
-    # Profiling
-    "MemoryProfiler",
-    "BandwidthAnalyzer",
-    "profile_memory",
-    "MemorySnapshot",
-    "ProfileResult",
 ]

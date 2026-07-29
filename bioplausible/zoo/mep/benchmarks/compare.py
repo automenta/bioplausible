@@ -7,6 +7,7 @@ on various tasks and datasets.
 
 import argparse
 import json
+import logging
 import pathlib
 import time
 from dataclasses import asdict, dataclass
@@ -18,8 +19,6 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
 from bioplausible.zoo.mep.benchmarks.baselines import get_optimizer
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +306,12 @@ def run_benchmark(optimizer_name: str, config: BenchmarkConfig) -> OptimizerResu
 
         logger.info(
             "  %s Epoch %d/%d: Train Acc=%.4f, Val Acc=%.4f, Time=%.2fs",
-            optimizer_name, epoch + 1, config.epochs, train_acc, val_acc, epoch_time,
+            optimizer_name,
+            epoch + 1,
+            config.epochs,
+            train_acc,
+            val_acc,
+            epoch_time,
         )
 
     total_time = time.time() - start_time
@@ -342,7 +346,11 @@ def print_summary(results: dict[str, OptimizerResult]) -> None:
     logger.info("BENCHMARK SUMMARY")
     logger.info("%s", "=" * 80)
     logger.info(
-        "%-15s %-15s %-18s %-15s", "Optimizer", "Best Val Acc", "Final Train Acc", "Total Time (s)"
+        "%-15s %-15s %-18s %-15s",
+        "Optimizer",
+        "Best Val Acc",
+        "Final Train Acc",
+        "Total Time (s)",
     )
     logger.info("%s", "-" * 80)
 
@@ -354,7 +362,10 @@ def print_summary(results: dict[str, OptimizerResult]) -> None:
     for name, result in sorted_results:
         logger.info(
             "%-15s %-15.4f %-18.4f %-15.2f",
-            name, result.best_val_acc, result.final_train_acc, result.total_time,
+            name,
+            result.best_val_acc,
+            result.final_train_acc,
+            result.total_time,
         )
 
     logger.info("%s", "=" * 80)
@@ -363,7 +374,8 @@ def print_summary(results: dict[str, OptimizerResult]) -> None:
     best = sorted_results[0]
     logger.info(
         "\U0001f3c6 Best performer: %s with %.2f%% validation accuracy",
-        best[0].upper(), best[1].best_val_acc * 100,
+        best[0].upper(),
+        best[1].best_val_acc * 100,
     )
 
 

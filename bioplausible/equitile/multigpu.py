@@ -126,7 +126,9 @@ class NCCLCommunicator:
 
             logger.info(
                 "NCCL initialized: rank %d/%d, device %s",
-                self.config.rank, self.config.world_size, self.device,
+                self.config.rank,
+                self.config.world_size,
+                self.device,
             )
         except Exception as e:
             logger.warning("NCCL initialization failed: %s", e)

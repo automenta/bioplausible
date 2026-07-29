@@ -6,17 +6,17 @@ EqPropModel or nn.Module. Each test verifies construction + forward pass.
 
 import torch
 
-from bioplausible.zoo.models.eqprop.lazy_eqprop import LazyEqProp
-from bioplausible.zoo.models.eqprop.conv_eqprop import ConvEqProp
-from bioplausible.zoo.models.eqprop.modern_conv_eqprop import ModernConvEqProp
-from bioplausible.zoo.models.eqprop.transformer_eqprop import TransformerEqProp
 from bioplausible.zoo.models.eqprop.causal_transformer_eqprop import (
     CausalTransformerEqProp,
 )
+from bioplausible.zoo.models.eqprop.conv_eqprop import ConvEqProp
 from bioplausible.zoo.models.eqprop.homeostatic import HomeostaticEqProp
-from bioplausible.zoo.models.eqprop.temporal_resonance import TemporalResonanceEqProp
+from bioplausible.zoo.models.eqprop.lazy_eqprop import LazyEqProp
+from bioplausible.zoo.models.eqprop.modern_conv_eqprop import ModernConvEqProp
 from bioplausible.zoo.models.eqprop.neural_cube import NeuralCube
+from bioplausible.zoo.models.eqprop.temporal_resonance import TemporalResonanceEqProp
 from bioplausible.zoo.models.eqprop.ternary import TernaryEqProp
+from bioplausible.zoo.models.eqprop.transformer_eqprop import TransformerEqProp
 
 
 def _img_input() -> torch.Tensor:

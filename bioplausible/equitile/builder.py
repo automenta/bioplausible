@@ -24,15 +24,14 @@ Examples
 ...     .with_architecture(neurons_per_tile=64, tiles_per_layer=4)
 ...     .with_io(784, 10)
 ...     .enable_layer_norm()
-...     .enable_curriculum()
 ...     .build()
 ... )
 """
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-import logging
 import torch
 
 if TYPE_CHECKING:
@@ -154,7 +153,6 @@ class EquiTileBuilder:
     ...         output_dim=10,
     ...     )
     ...     .enable_layer_norm()
-    ...     .enable_curriculum()
     ...     .build()
     ... )
     """
@@ -639,8 +637,6 @@ class EnhancedEquiTileBuilder(EquiTileBuilder):
         self._use_layer_norm: bool = False
         self._layer_norm_eps: float = 1e-5
         self._layer_norm_affine: bool = True
-        self._use_curriculum: bool = False
-        self._curriculum_stages: int = 5
         self._use_weight_norm: bool = False
         self._init_scheme: Literal["xavier", "kaiming", "orthogonal"] = "xavier"
         self._init_gain: float = 1.0
@@ -667,26 +663,6 @@ class EnhancedEquiTileBuilder(EquiTileBuilder):
         self._use_layer_norm = True
         self._layer_norm_eps = eps
         self._layer_norm_affine = affine
-        return self
-
-    def enable_curriculum(
-        self,
-        n_stages: int = 5,
-    ) -> EnhancedEquiTileBuilder:
-        """Enable curriculum learning.
-
-        Parameters
-        ----------
-        n_stages : int
-            Number of curriculum stages
-
-        Returns
-        -------
-        EnhancedEquiTileBuilder
-            Self for chaining
-        """
-        self._use_curriculum = True
-        self._curriculum_stages = n_stages
         return self
 
     def enable_weight_norm(self) -> EnhancedEquiTileBuilder:
@@ -754,8 +730,6 @@ class EnhancedEquiTileBuilder(EquiTileBuilder):
             # Enhanced parameters
             use_layer_norm=self._use_layer_norm,
             norm_eps=self._layer_norm_eps,
-            use_curriculum=self._use_curriculum,
-            curriculum_stages=self._curriculum_stages,
             # Kwargs mappings
             sparsity_threshold=self._extra_kwargs.get("sparsity_threshold", 0.01),
             importance_decay=self._extra_kwargs.get("importance_decay", 0.95),
@@ -865,7 +839,9 @@ class TrainingContext:
         """
         loss = stats.get("loss", 0.0)
         accuracy = stats.get("accuracy", 0.0)
-        logger.debug("Step %d: loss=%.4f, accuracy=%.4f", self._step_count, loss, accuracy)
+        logger.debug(
+            "Step %d: loss=%.4f, accuracy=%.4f", self._step_count, loss, accuracy
+        )
 
     def should_checkpoint(self, epoch: int) -> bool:
         """Check if should save checkpoint.
@@ -1080,7 +1056,6 @@ def build_enhanced_model(
     input_dim: int = 784,
     output_dim: int = 10,
     enable_layer_norm: bool = True,
-    enable_curriculum: bool = False,
     **kwargs: Any,
 ) -> Any:
     """Build Enhanced EquiTile model.
@@ -1093,8 +1068,6 @@ def build_enhanced_model(
         Output dimension
     enable_layer_norm : bool
         Enable layer normalization
-    enable_curriculum : bool
-        Enable curriculum learning
     **kwargs
         Additional arguments
 
@@ -1107,7 +1080,5 @@ def build_enhanced_model(
 
     if enable_layer_norm:
         builder.enable_layer_norm()
-    if enable_curriculum:
-        builder.enable_curriculum()
 
     return builder.with_kwargs(**kwargs).build()

@@ -1,13 +1,13 @@
 """Tests for zoo/models/predictive_coding.py — FabricPCGraphPCN + PredictiveCodingHybrid."""
 
-import torch
 import pytest
+import torch
 
+from bioplausible.zoo.base import ModelConfig
 from bioplausible.zoo.models.predictive_coding import (
     FabricPCGraphPCN,
     PredictiveCodingHybrid,
 )
-from bioplausible.zoo.base import ModelConfig
 
 
 class TestFabricPCGraphPCN:

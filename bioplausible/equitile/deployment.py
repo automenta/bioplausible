@@ -285,7 +285,9 @@ class EquiTileExporter:
             info = summary(self.model, input_size=input_shape, device=device, verbose=0)
             return info.total_mult_adds
         except ImportError:
-            logger.warning("torchinfo not installed. Install with: pip install torchinfo")
+            logger.warning(
+                "torchinfo not installed. Install with: pip install torchinfo"
+            )
             return -1
 
     def profile_memory(

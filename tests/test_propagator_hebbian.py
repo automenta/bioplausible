@@ -10,7 +10,6 @@ from torch import nn
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 from bioplausible.zoo.propagators.hebbian import ContrastiveHebbianLearning
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

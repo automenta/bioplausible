@@ -7,34 +7,68 @@
 
 ## 0. Survey Summary (Updated)
 
-### Confirmed Dead Code (Package — ~1400 lines)
+### Completed Dead Code Removal (Package — ~1800 lines removed)
 
 | Item | Lines | Status |
 |------|-------|--------|
-| `analysis/legacy_report/` | 4 files, ~1777 | Superseded by `analysis/reporting.py` |
-| `zoo/mep/optimizers/o1_memory.py` | 435 | Superseded by `o1_memory_v2.py` |
-| `zoo/mep/optimizers/inspector.py` | 167 | `ModelInspector` exported but never used |
-| `zoo/mep/optimizers/monitor.py` | 262 | `EPMonitor`/`monitor_ep_training` exported but never used |
-| `equitile/lm_demo/profiling.py` | 508 | Only imports itself in docstring; duplicates `equitile/profiler.py` |
-| `EqPropLMWrapper` | 31 | Proxy class, no behavior, never used |
-| `_apply_feedback_alignment()` | 2 | Empty `pass` in `fa.py:71` |
-| `_apply_direct_feedback()` | 2 | Empty `pass` in `fa.py:140` |
-| `_settle()` wrapper | 12 | Trivial delegate in `eqprop.py:102` |
-| `train_step` no-op | 8 | Just calls `super()` in `finite_nudge_ep.py:33` |
-| Duplicate `return` | 1 | Unreachable in `wrappers.py:102` |
-| Commented code | 1 | `# logits_nudged = ...` in `base.py:428` |
-| Duplicate import | 1 | Already imported line 18 in `hebbian.py:19` |
+| `analysis/legacy_report/` | 4 files, ~1777 | **ARCHIVED** → `docs/archive/20260729/dead_package_code/analysis/legacy_report/` |
+| `zoo/mep/optimizers/o1_memory.py` | 435 | **ARCHIVED** → `docs/archive/20260729/dead_package_code/zoo/mep/optimizers/` |
+| `zoo/mep/optimizers/inspector.py` | 167 | **ARCHIVED** — `ModelInspector` removed from exports |
+| `zoo/mep/optimizers/monitor.py` | 262 | **ARCHIVED** — `EPMonitor`/`monitor_ep_training` removed from exports |
+| `equitile/lm_demo/profiling.py` | 508 | **ARCHIVED** — duplicates `equitile/profiler.py` |
+| `EqPropLMWrapper` | 31 | **REMOVED** from `eqprop_lm_variants.py` + `__init__.py` |
+| `_apply_feedback_alignment()` + call | 2 | **REMOVED** empty `pass` in `fa.py:71` and call site |
+| `_apply_direct_feedback()` + call | 2 | **REMOVED** empty `pass` in `fa.py:140` and call site |
+| `_settle()` wrapper | 12 | **REMOVED** trivial delegate in `eqprop.py:102` → direct calls updated |
+| `train_step` no-op | 8 | **REMOVED** just calls `super()` in `finite_nudge_ep.py:33` |
+| Duplicate `return` | 1 | **REMOVED** unreachable in `wrappers.py:102` |
+| Commented code | 1 | **REMOVED** `# logits_nudged = ...` in `base.py:428` |
+| Duplicate import | 1 | **REMOVED** already imported in `hebbian.py:19` |
 
-**NOT dead (used in tests):** `HolomorphicEqProp`, `FiniteNudgeEqProp`, `LazyEqProp` — keep.
+**Net: ~1800 lines removed from package** (archived for history)
 
-### Confirmed Dead Code (Outside Package — ~5000 lines)
+### Completed Dead Code Removal (Outside Package — ~4000 lines)
 
 | Item | Lines | Status |
 |------|-------|--------|
-| `examples/legacy/` | 17 files, ~2800 | Not imported anywhere |
-| `scripts/legacy/` | 16 files, ~1076 | Not imported anywhere |
+| `examples/legacy/` | 17 files, ~2800 | **ARCHIVED** → `docs/archive/20260729/legacy_examples/` |
+| `scripts/legacy/` | 16 files, ~1076 | **ARCHIVED** → `docs/archive/20260729/legacy_scripts/` |
+| `tests/test_report_generation.py` | 191 | **ARCHIVED** → `docs/archive/20260729/legacy_tests/` (tested dead code) |
+| `tests/test_report_analysis_robustness.py` | 77 | **ARCHIVED** (tested dead code) |
 
-### Duplications Identified
+### Completed Dead Demo/Config Class Removal
+
+| Item | Status |
+|------|--------|
+| `ArchitectureConfig` (config.py) | **REMOVED** — never used outside config.py |
+| `OptimizationConfig` (config.py) | **REMOVED** — never used outside config.py |
+| `DynamicsConfig` (config.py) | **REMOVED** — duplicated builder.py version; collided with `DynamicEquiTileConfig as DynamicsConfig` |
+| `to_architecture_config/to_optimization_config/to_dynamics_config` (config.py) | **REMOVED** — unused methods referencing removed classes |
+| `CurriculumScheduler` (enhanced.py) | **REMOVED** — `get_sample_weights()` always returns `torch.ones()` (dead logic); name collides with `data/curricula.py` |
+| `enable_curriculum()` (builder.py) | **REMOVED** — used dead `CurriculumScheduler` |
+| `build_enhanced_model` `enable_curriculum` param | **REMOVED** |
+
+### Completed Syntax Fixes
+
+| Issue | Files Fixed |
+|-------|-------------|
+| `steps: int = None` → `int \| None = None` | `ternary.py:106`, `causal_transformer_eqprop.py:128`, `neural_cube.py:152`, `eqprop_lm_variants.py:175,278,350,436,499` |
+| Legacy `except X, Y:` → `except (X, Y):` | `core/trainer.py:733,882`, `core/registry.py:245` |
+
+### Completed `print()` → `logging` Migration
+
+| File | Replacements |
+|------|-------------|
+| `equitile/lm_demo/training.py` | 7 |
+| `equitile/lm_demo/train_tinystories.py` | 22 |
+| `equitile/lm_demo/demo.py` | 43 |
+| `equitile/lm_demo/data_advanced.py` | 6 |
+| `cli/rank.py` | 3 |
+| `experiments/__init__.py` | 0 (print() only in docstring examples) |
+
+**Total: 81 `print()` → `logger.info()` / `logger.warning()` replacements across 5 files.**
+
+### Remaining Duplications (Not Yet Tackled)
 
 | Pattern | Count | Files |
 |---------|-------|-------|
@@ -43,79 +77,28 @@
 | `_build_layers` implementations | **12** | `zoo/models/*` |
 | `build` classmethods | **18+** | `zoo/models/*` |
 | `hidden_dims = [...]` computation | **17** | `zoo/models/*` |
-| `CurriculumScheduler` name collision | **2** | `equitile/enhanced.py`, `data/curricula.py` |
-| `DynamicsConfig` name collision | **2** | `equitile/config.py`, `equitile/builder.py` |
-| `MemoryProfiler` class | **2** | `equitile/profiler.py`, `lm_demo/profiling.py` |
-| `ProfileResult` class | **2** | `equitile/profiler.py`, `lm_demo/profiling.py` |
+| `DynamicsConfig` name collision (builder.py) | **2** | builder.py `DynamicsConfig` vs `DynamicEquiTileConfig as DynamicsConfig` |
+| `MemoryProfiler` class | **2** | `equitile/profiler.py` (the `lm_demo/profiling.py` was archived) |
+| `ProfileResult` class | **2** | `equitile/profiler.py` (the `lm_demo/profiling.py` was archived) |
 | Tile communicator classes | **2** | `TileCommunicator` vs `NCCLCommunicator` |
+| `LearningConfig` (builder.py) | **1** | Deeply integrated into builder — deferred to Phase 1 |
 
 ---
 
-## Phase 0: Quick Wins — Archive Noise & Fix Syntax (2–3 days)
+## Phase 0: Quick Wins — **COMPLETED** ✅
 
-*Immediate code reduction, clarifies what's actually used.*
+*All items in Phase 0 are complete. Net result:*
 
-### 0.1 Archive Dead Code in `bioplausible/` Package
-
-**Action**: Move to `docs/archive/YYYYMMDD/dead_package_code/` preserving directory structure.
-
-| Item | Source | Archive Target |
-|------|--------|----------------|
-| `analysis/legacy_report/` | `bioplausible/analysis/legacy_report/` | `dead_package_code/analysis/legacy_report/` |
-| `o1_memory.py` | `bioplausible/zoo/mep/optimizers/o1_memory.py` | `dead_package_code/zoo/mep/optimizers/o1_memory.py` |
-| `inspector.py` | `bioplausible/zoo/mep/optimizers/inspector.py` | `dead_package_code/zoo/mep/optimizers/inspector.py` |
-| `monitor.py` | `bioplausible/zoo/mep/optimizers/monitor.py` | `dead_package_code/zoo/mep/optimizers/monitor.py` |
-| `profiling.py` (lm_demo) | `bioplausible/equitile/lm_demo/profiling.py` | `dead_package_code/equitile/lm_demo/profiling.py` |
-| `EqPropLMWrapper` class | `bioplausible/zoo/models/eqprop/eqprop_lm_variants.py:564-594` | Remove from file; archive original file version |
-| `_apply_feedback_alignment()` | `bioplausible/zoo/propagators/fa.py:71-72` | Remove lines |
-| `_apply_direct_feedback()` | `bioplausible/zoo/propagators/fa.py:140-141` | Remove lines |
-| `_settle()` wrapper | `bioplausible/zoo/propagators/eqprop.py:102-113` | Remove lines |
-| `train_step` no-op | `bioplausible/zoo/models/eqprop/finite_nudge_ep.py:33-40` | Remove lines |
-| Duplicate `return` | `bioplausible/zoo/models/wrappers.py:102` | Remove line |
-| Commented code | `bioplausible/zoo/models/base.py:428` | Remove line |
-| Duplicate import | `bioplausible/zoo/models/hebbian.py:19` | Remove line |
-
-**Net savings: ~1400 lines removed from package** (archived for history)
-
-### 0.2 Archive Dead Code Outside Package
-
-**Action**: Move to `docs/archive/YYYYMMDD/legacy_examples/` and `legacy_scripts/`.
-
-| Item | Source | Archive Target |
-|------|--------|----------------|
-| `examples/legacy/` | `examples/legacy/*` | `docs/archive/YYYYMMDD/legacy_examples/` |
-| `scripts/legacy/` | `scripts/legacy/*` | `docs/archive/YYYYMMDD/legacy_scripts/` |
-
-**Net savings: ~4000 lines removed from working tree** (archived for history)
-
-### 0.3 Remove Dead Demo/Config Classes
-
-| Item | Location | Action |
-|------|----------|--------|
-| `ArchitectureConfig` | `equitile/config.py:16-23` | **Remove** — never used outside config.py |
-| `OptimizationConfig` | `equitile/config.py:26-38` | **Remove** — never used outside config.py |
-| `DynamicsConfig` | `equitile/config.py:42-58` | **Remove** — duplicates `builder.py:DynamicsConfig`; name collides with `DynamicEquiTileConfig as DynamicsConfig` in `__init__.py:167` |
-| `LearningConfig` | `equitile/builder.py:80-101` | **Remove** — duplicates fields in `EquiTileConfig` |
-| `CurriculumScheduler` (enhanced.py) | `equitile/enhanced.py:39-100` | **Remove** — `get_sample_weights` always returns `torch.ones(n_samples)` (dead logic); name collides with `data/curricula.py:CurriculumScheduler` |
-| `enable_curriculum()` | `equitile/builder.py:672` | **Remove** — uses dead `CurriculumScheduler` |
-
-### 0.4 Fix Type Syntax Errors
-
-| Issue | Files | Fix |
-|-------|-------|-----|
-| `steps: int = None` → `int \| None = None` | `zoo/models/eqprop/ternary.py:106`, `causal_transformer_eqprop.py:128`, `neural_cube.py:152`, `eqprop_lm_variants.py:61,175,278,350,436,499`, `eqprop_diffusion.py:28` | Change annotation |
-| Legacy `except X, Y:` → `except (X, Y):` | `core/trainer.py:733`, `core/registry.py:245` | Fix syntax |
-
-### 0.5 Replace `print()` with `logging`
-
-| Files | Lines |
-|-------|-------|
-| `equitile/lm_demo/training.py` | 664, 724, 741, 761, 777, 794, 795 |
-| `equitile/lm_demo/train_tinystories.py` | 74, 91, 125-129, 267, 286, 335, 344, 419, 425, 439, 442, 469-470, 476-478, 493-495, 527, 531-541, 546, 549 |
-| `equitile/lm_demo/demo.py` | 201, 211, 260, 327, 495-623, 635-642, 664, 682-683, 694 |
-| `equitile/lm_demo/data_advanced.py` | 147, 356, 459, 473, 480 |
-| `cli/rank.py` | 14, 18, 40 |
-| `experiments/__init__.py` | 30, 31 |
+| Metric | Value |
+|--------|-------|
+| Files changed | **121** |
+| Lines inserted | **+623** |
+| Lines deleted | **-8532** |
+| Net reduction | **-7909 lines** |
+| Archives created | `docs/archive/20260729/` (dead code preserved for history) |
+| Archives line count | **~5800 lines** in 4 subdirs |
+| Tests passing | **1117 passed**, 15 skipped (55% coverage) |
+| pyright errors | **5 pre-existing** (no new errors introduced) |
 
 ---
 
@@ -125,12 +108,12 @@
 
 | Registry | File | Action |
 |----------|------|--------|
-| `NEBCRegistry` | `zoo/nebc_base.py:73-104` | **Archive** — replace with `register_model` + `Registry.get` |
-| `TaskRegistry` | `hyperopt/task_registry.py` | **Archive** — add `ComponentCategory.TASK`, register there |
+| `NEBCRegistry` | `zoo/nebc_base.py:73-104` | **Replace** with `register_model` + `Registry.get` |
+| `TaskRegistry` | `hyperopt/task_registry.py` | **Replace** — add `ComponentCategory.TASK`, register there |
 | `track_registry` | `validation/tracks/track_registry.py` | **Refactor** — add `ComponentCategory.TRACK` |
 | `register_nebc` decorator | `zoo/nebc_base.py:104` | **Remove** |
 
-**Archive location**: `docs/archive/YYYYMMDD/registries/`
+**Archive location**: `docs/archive/20260729/registries/`
 
 ### 1.2 Unify Config Dataclasses
 
@@ -139,6 +122,8 @@ After Phase 0 removals, only one config per concern remains. Add `frozen=True, s
 ### 1.3 Add `frozen=True, slots=True` to Core Dataclasses
 
 **Files**: `zoo/base.py`, `core/trainer.py`, `core/registry.py`, `equitile/config.py`, `equitile/builder.py`, `data/curricula.py`.
+
+**Note**: `LearningConfig` in `builder.py:80-101` is still present — it's deeply wired into the builder's internal state. Defer removal to Phase 1 (or skip — it's a simple internal dataclass with no duplication cost).
 
 ---
 
@@ -164,7 +149,7 @@ After Phase 0 removals, only one config per concern remains. Add `frozen=True, s
 
 ## Phase 3: Algorithmic Deduplication (5–7 days)
 
-*Now easier because Phase 0 removed ~5000 lines of noise.*
+*Now easier because Phase 0 removed ~6000 lines of noise.*
 
 ### 3.1 Extract Settling Loop Helper
 
@@ -234,20 +219,26 @@ pytest --cov
 ```
 
 **Phase-specific**:
-- Phase 0: `git diff --stat` → ~-5500 lines in working tree (archived ~5500 to docs/archive/)
-- Phase 1: `grep -r "NEBCRegistry\|TaskRegistry\|O1MemoryEP\b\|ModelInspector\|EPMonitor" --include="*.py" | grep -v test` → empty
-- Phase 2: `pyright` zero errors on core files
-- Phase 3: Settling loops use shared helper
-- Phase 4: `grep -r "from typing import Any" --include="*.py" bioplausible/` → only tests
+- [x] Phase 0: `git diff --stat` → **-8532 lines** in working tree (archived ~5800 to docs/archive/)
+- [x] Phase 0: All syntax errors fixed; print() migrated to logging (81 replacements)
+- [ ] Phase 1: `grep -r "NEBCRegistry\|TaskRegistry\|O1MemoryEP\b\|ModelInspector\|EPMonitor" --include="*.py" | grep -v test` → empty
+- [ ] Phase 2: `pyright` zero errors on core files
+- [ ] Phase 3: Settling loops use shared helper
+- [ ] Phase 4: `grep -r "from typing import Any" --include="*.py" bioplausible/` → only tests
+
+**Known pre-existing issues** (not caused by refactoring):
+- `deployment.py:717` — `InferenceRequest` undefined (missing import)
+- `hyperopt/graph_task.py:28-32` — `os` undefined (missing import)
+- `equitile/async_execution.py:325`, `distributed.py:684`, `multigpu.py:674` — `lambda_error` attribute access on `ModelConfig`
 
 ---
 
 ## Archive Structure
 
-All archived code goes to `docs/archive/YYYYMMDD/` following existing pattern:
+All archived code lives at `docs/archive/20260729/`:
 
 ```
-docs/archive/20260729/          # or current date
+docs/archive/20260729/
 ├── dead_package_code/          # From bioplausible/ package
 │   ├── analysis/legacy_report/
 │   ├── zoo/mep/optimizers/o1_memory.py
@@ -256,23 +247,85 @@ docs/archive/20260729/          # or current date
 │   └── equitile/lm_demo/profiling.py
 ├── legacy_examples/            # From examples/legacy/
 ├── legacy_scripts/             # From scripts/legacy/
-└── registries/                 # NEBCRegistry, TaskRegistry
+├── legacy_tests/               # Tests for removed dead code
+└── registries/                 # (Future: NEBCRegistry, TaskRegistry)
+```
+
+**Note**: Archive contains ~53 files. Some `.cover` and `__pycache__` artifacts snuck in — can clean with:
+```bash
+find docs/archive/20260729/ -name "*,cover" -delete
+find docs/archive/20260729/ -name "__pycache__" -exec rm -rf {} + 2>/dev/null
 ```
 
 This preserves history while cleaning the working tree.
 
 ---
 
-## Effort Summary (Corrected)
+## Effort Summary (Updated)
 
-| Phase | Focus | Est. Days | Working Tree Delta |
-|-------|-------|-----------|--------------------|
-| **0** | Archive dead code & fix syntax | **2–3** | **−5500 lines** (archived ~5500) |
-| 1 | Registries, configs, frozen dataclasses | 2–3 | −200 lines (dedup) |
-| 2 | Core type safety | 3–4 | +200 lines (annotations) |
-| 3 | Algorithmic dedup | 5–7 | **−3000+ lines** (shared helpers) |
-| 4 | Full type hardening | 3–5 | +500 lines (TypedDict, exports) |
+| Phase | Focus | Est. Days | Working Tree Delta | Status |
+|-------|-------|-----------|--------------------|--------|
+| **0** | Archive dead code & fix syntax | **2–3** | **−7909 lines** (archived ~5800) | **DONE** ✅ |
+| 1 | Registries, configs, frozen dataclasses | 2–3 | −200 lines (dedup) | ⏳ NEXT |
+| 2 | Core type safety | 3–4 | +200 lines (annotations) | |
+| 3 | Algorithmic dedup | 5–7 | **−3000+ lines** (shared helpers) | |
+| 4 | Full type hardening | 3–5 | +500 lines (TypedDict, exports) | |
 
-**Total**: ~15–22 days. **Phase 0 alone removes ~5500 lines from working tree** (archived for history), unblocking everything else.
+**Total**: ~15–22 days. **Phase 0 complete**: ~7909 lines removed from working tree (archived for history).
 
-**Total potential reduction: ~8,500+ lines from working tree** (from ~81,500 to ~73,000 — ~10% smaller; ~5500 archived separately).
+**Next recommended step**: Phase 1.1 — Unify 4 registries into 1. The `NEBCRegistry` and `TaskRegistry` are small, self-contained modules ideal for starting Phase 1.
+
+---
+
+## Session Wrap-Up (2026-07-29)
+
+### What Was Done This Session
+
+All Phase 0 work is **complete in the working tree** (121 files changed, +623/-8532) but **NOT committed**. The 3 latest git commits (90984b6, 436c99a, d434cb9) are plan-documentation-only. To commit:
+
+```bash
+git add -A && git commit -m "refactor: Phase 0 — archive dead code, fix syntax, migrate print()->logging"
+```
+
+### Verification Results (Current Working Tree)
+
+| Gate | Result |
+|------|--------|
+| `ruff format --check .` | 659 files already formatted — **PASS** |
+| `ruff check --select I .` | All checks passed — **PASS** |
+| `ruff check --fix .` | 5316 `@typing.override` suggestions (style-only, not actionable) |
+| `pyright` | 5 errors (all pre-existing), 1388 warnings — **no new errors** |
+| `pytest -q` | 1117 passed, 15 skipped, **55% coverage** (floor=40%) |
+
+### New Discoveries / Issues
+
+1. **pyright error count fixed**: TODO previously claimed "8 pre-existing errors". Actual count is **5** — the earlier count may have included warnings. Corrected.
+
+2. **Archive has `.cover` + `__pycache__` cruft**: The `docs/archive/20260729/` directory preserved `.py,cover` files and `.pyc` caches from the original file tree. Cleanup commands added above.
+
+3. **`ruff check --fix` is noisy**: It flags 5316 missing `@typing.override` decorators. These are style-only suggestions from a new ruff rule. Ignore unless the team explicitly adopts this convention.
+
+4. **Phase 0 work is in working tree, not HEAD**: All refactoring is uncommitted. A future session should `git add -A && git commit` first, then proceed to Phase 1.
+
+### Pointers for Future Sessions
+
+- **Starting Phase 1**: The small registries to tackle first are `TaskRegistry` (hyperopt/task_registry.py — 1 file, ~80 lines) and `NEBCRegistry` (zoo/nebc_base.py:73-104). Archive originals to `docs/archive/20260729/registries/`.
+- **Phase 1.2 (frozen dataclasses)**: After registry unification, add `frozen=True, slots=True` to all core dataclasses. This may break some internal mutation code — test aggressively.
+- **`LearningConfig` in builder.py**: The 2026-07-29 session confirmed this is deeply wired (40+ `self._learning.*` refs). Consider keeping it as an internal detail; the cost of extraction may exceed the benefit.
+- **`EquiTileBuilder` mutation patterns**: The builder mutates `self._learning.*` fields during construction. If you make `LearningConfig` frozen, you'll need to switch to a builder pattern or a mutable proxy.
+- **Test coverage is 55%**: The minimum is 40%, so there's headroom. But Phase 3 algorithmic dedup has high refactoring risk — consider writing additional unit tests for the settling loop and FA backward helpers *before* extracting them.
+- **Pyright `reportOptionalMemberAccess` warnings**: Propagators (`eqprop.py`, `fa.py`, `hebbian.py`) have ~40 warnings about `.train()` called on `None` (the `_solver` attribute). These are not errors but indicate `None`-guarding could be improved across the board — worth a Phase 2 or 4 sweep.
+
+---
+
+## Discoveries During Phase 0 Work
+
+1. **`builder.py:LearningConfig` kept**: The TODO says to remove `LearningConfig` because it duplicates `EquiTileConfig` fields, but removing it requires significant refactoring of `EquiTileBuilder` internals (40+ references to `self._learning.*`). Deferred to Phase 1 or may be kept as-is since it's an internal implementation detail with no external cost.
+
+2. **`eqprop_diffusion.py` line 28**: The TODO listed `steps: int = None` at `eqprop_diffusion.py:28` but this file's `__init__` signature doesn't have that pattern. The file was verified and no fix was needed.
+
+3. **`.cover` files**: The repo has stale `.cover` copies (e.g., `__init__.py,cover`, `deployment.py,cover`) from a previous coverage run. These can be cleaned up with `find . -name "*,cover" -delete`.
+
+4. **`_settle()` was called from production code**: The `AdamEqProp` class in `eqprop.py:335-336` called `self._settle()`. These calls had to be updated to `self._settle_phase_direct()` alongside the test updates.
+
+5. **Test file deletion**: Two test files (`test_report_generation.py`, `test_report_analysis_robustness.py`) imported the removed `legacy_report` module and had to be archived. The `test_refactor2_bugfixes.py` module-import test also referenced `legacy_report` and was updated.

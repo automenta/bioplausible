@@ -9,56 +9,6 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 # =============================================================================
-# Sub-Configurations (Structured)
-# =============================================================================
-
-
-@dataclass
-class ArchitectureConfig:
-    """Architecture hyperparameters."""
-
-    neurons_per_tile: int = 64
-    num_layers: int = 4
-    tiles_per_layer: int = 4
-
-
-@dataclass
-class OptimizationConfig:
-    """Optimization hyperparameters."""
-
-    learning_rate: float = 0.01
-    importance_lr: float = 0.001
-    weight_decay: float = 1e-4
-    gradient_clip: float = 1.0
-    dropout: float = 0.1
-    importance_decay: float = 0.95
-    importance_reg_coef: float = 0.01
-    sparsity_penalty_coef: float = 0.05
-    sparsity_threshold: float = 0.01
-    min_active_fraction: float = 0.1
-
-
-@dataclass
-class DynamicsConfig:
-    """Dynamics and Inference hyperparameters."""
-
-    mode: Literal["pc", "ep", "backprop"] = "pc"
-    inference_steps: int = 10
-    step_size: float = 0.1
-    lambda_error: float = 0.1
-    beta: float = 0.1
-    beta_anneal: float = 1.0
-    inference_steps_free: int | None = None
-    inference_steps_nudged: int | None = None
-    use_symmetric_weights: bool = False
-    clamp_activities: bool = True
-    activity_clamp_min: float = -5.0
-    activity_clamp_max: float = 5.0
-    ep_init_scale: float = 0.1
-    relaxation_tolerance: float = 1e-4
-
-
-# =============================================================================
 # Core Configuration
 # =============================================================================
 
@@ -197,45 +147,6 @@ class EquiTileConfig:
             raise ValueError(
                 f"Invalid mode {self.mode}, must be one of 'pc', 'ep', 'backprop'"
             )
-
-    def to_architecture_config(self) -> ArchitectureConfig:
-        return ArchitectureConfig(
-            neurons_per_tile=self.neurons_per_tile,
-            num_layers=self.num_layers,
-            tiles_per_layer=self.tiles_per_layer,
-        )
-
-    def to_optimization_config(self) -> OptimizationConfig:
-        return OptimizationConfig(
-            learning_rate=self.learning_rate,
-            importance_lr=self.importance_lr,
-            weight_decay=self.weight_decay,
-            gradient_clip=self.gradient_clip,
-            dropout=self.dropout,
-            importance_decay=self.importance_decay,
-            importance_reg_coef=self.importance_reg_coef,
-            sparsity_penalty_coef=self.sparsity_penalty_coef,
-            sparsity_threshold=self.sparsity_threshold,
-            min_active_fraction=self.min_active_fraction,
-        )
-
-    def to_dynamics_config(self) -> DynamicsConfig:
-        return DynamicsConfig(
-            mode=self.mode,
-            inference_steps=self.inference_steps,
-            step_size=self.step_size,
-            lambda_error=self.lambda_error,
-            beta=self.beta,
-            beta_anneal=self.beta_anneal,
-            inference_steps_free=self.inference_steps_free,
-            inference_steps_nudged=self.inference_steps_nudged,
-            use_symmetric_weights=self.use_symmetric_weights,
-            clamp_activities=self.clamp_activities,
-            activity_clamp_min=self.activity_clamp_min,
-            activity_clamp_max=self.activity_clamp_max,
-            ep_init_scale=self.ep_init_scale,
-            relaxation_tolerance=self.relaxation_tolerance,
-        )
 
 
 @dataclass

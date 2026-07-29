@@ -1,7 +1,5 @@
 """Equilibrium Propagation model variants."""
 
-import torch
-
 from ...base import ModelConfig, register_model
 from .standard_eqprop import StandardEqProp
 
@@ -29,15 +27,6 @@ class FiniteNudgeEP(StandardEqProp):
 
         if self.beta < 0.5:
             self.beta = 1.0
-
-    def train_step(
-        self,
-        x: torch.Tensor,
-        y: torch.Tensor,
-    ) -> dict[str, float]:
-        metrics = super().train_step(x, y)
-
-        return metrics
 
     @classmethod
     def build(

@@ -16,11 +16,14 @@ Example
 """
 
 import json
+import logging
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # BPE Tokenizer (GPT-2 style)
@@ -144,8 +147,10 @@ class BPETokenizer:
                     new_chars.append(chars[-1])
                 word_splits[word] = new_chars
 
-        print(
-            f"BPE training complete: {len(self.vocab)} tokens, {len(self.merges)} merges"
+        logger.info(
+            "BPE training complete: %d tokens, %d merges",
+            len(self.vocab),
+            len(self.merges),
         )
 
     def encode(self, text: str) -> list[int]:
@@ -353,7 +358,7 @@ class WordPieceTokenizer:
             if subword not in self.vocab:
                 self.vocab[subword] = len(self.vocab)
 
-        print(f"WordPiece training complete: {len(self.vocab)} tokens")
+        logger.info("WordPiece training complete: %d tokens", len(self.vocab))
 
     def encode(self, text: str) -> list[int]:
         """Encode text to token IDs."""
@@ -456,7 +461,7 @@ def create_tokenizer(
         Trained tokenizer
     """
     if cache_path and Path(cache_path).exists():
-        print(f"Loading tokenizer from {cache_path}")
+        logger.info("Loading tokenizer from %s", cache_path)
         if tokenizer_type == "bpe":
             return BPETokenizer.load(cache_path)
         else:
@@ -470,14 +475,14 @@ def create_tokenizer(
 
     # Train if texts provided
     if texts:
-        print(f"Training {tokenizer_type} tokenizer on {len(texts)} texts...")
+        logger.info("Training %s tokenizer on %d texts...", tokenizer_type, len(texts))
         tokenizer.train(texts)
 
         # Save if cache path provided
         if cache_path:
             Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
             tokenizer.save(cache_path)
-            print(f"Tokenizer saved to {cache_path}")
+            logger.info("Tokenizer saved to %s", cache_path)
 
     return tokenizer
 

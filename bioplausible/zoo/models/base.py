@@ -394,7 +394,9 @@ class EqPropModel(BioModel):
 
         # Stability Check 1: Gradients
         if torch.isnan(grads_h).any() or torch.isinf(grads_h).any():
-            raise RuntimeError("EqProp divergence detected (NaN/Inf gradients) — training unstable, check learning rate/beta")
+            raise RuntimeError(
+                "EqProp divergence detected (NaN/Inf gradients) — training unstable, check learning rate/beta"
+            )
 
         # Nudged dynamics: h <- forward_step(h) - beta * dL/dh
         # Note: In continuous time, dot_h = -h + sigma(...)
@@ -425,8 +427,6 @@ class EqPropModel(BioModel):
                 h_next = self.forward_step(h_nudged, x_transformed)
                 h_nudged = h_next + nudge_vec
 
-            # logits_nudged = self._output_projection(h_nudged)  # unused
-
         # 3. Weight Update
         self.contrastive_update(h_free, h_nudged, x, y)
 
@@ -435,7 +435,9 @@ class EqPropModel(BioModel):
         # Compute metrics
         with torch.no_grad():
             if torch.isnan(logits_free).any():
-                raise RuntimeError("Model collapse (NaN logits) — check weight initialization or gradient clipping")
+                raise RuntimeError(
+                    "Model collapse (NaN logits) — check weight initialization or gradient clipping"
+                )
             else:
                 acc = (logits_free.argmax(dim=1) == y).float().mean().item()
                 loss_val = F.cross_entropy(logits_free, y).item()
