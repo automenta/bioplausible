@@ -1,18 +1,26 @@
-"""
-Failure tracking and analysis system.
+"""State management for AutoScientist execution.
 
-Records why trials fail and provides diagnostics to help the scientist
-adapt its strategy (e.g., reducing learning rates if NaNs are detected).
+Consolidates database-adjacent state tracking:
+- ExperimentState: Progress queries and Optuna study management
+- DecisionLogger: Auditable scientific decision trail
+- FailureTracker: Failure logging and pattern analysis
 """
 
 import json
 import logging
 import sqlite3
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 
+import optuna
+
+from bioplausible.hyperopt.storage import HyperoptStorage
+
 __all__ = [
+    "DecisionLogger",
+    "ExperimentState",
     "FailureCategory",
     "FailureRecord",
     "FailureTracker",
@@ -21,44 +29,34 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Failure Tracking
+# =============================================================================
+
+
 class FailureCategory(Enum):
     CONVERGENCE_FAILURE = "convergence_failure"
     GRADIENT_EXPLOSION = "gradient_explosion"
-    SETTLING_DIVERGENCE = "settling_divergence"  # EP-specific: states don't converge
-    SPECTRAL_INSTABILITY = "spectral_instability"  # σ(W) exceeds bound
+    SETTLING_DIVERGENCE = "settling_divergence"
+    SPECTRAL_INSTABILITY = "spectral_instability"
     MEMORY_OOM = "memory_oom"
     TASK_INCOMPATIBILITY = "task_incompatibility"
-    SLOW_CONVERGENCE = "slow_convergence"  # >3× baseline wall time
+    SLOW_CONVERGENCE = "slow_convergence"
     NEGATIVE_TRANSFER = "negative_transfer"
-    GOODNESS_COLLAPSE = "goodness_collapse"  # FF-specific: all goodness → 0
-    SPIKE_SILENCING = "spike_silencing"  # STDP: all neurons go silent
+    GOODNESS_COLLAPSE = "goodness_collapse"
+    SPIKE_SILENCING = "spike_silencing"
 
 
 @dataclass(frozen=True, slots=True)
 class FailureRecord:
-    """
-    Records why a trial failed.
-
-    Attributes:
-        timestamp: ISO formatted timestamp.
-        model_name: Name of the failing model.
-        task_name: Task being attempted.
-        tier: Experiment tier.
-        trial_id: Optuna trial ID (if available).
-        failure_type: Category (e.g., "grad_nan", "oom").
-        failure_epoch: Epoch where failure occurred.
-        failure_batch: Batch index where failure occurred.
-        config: Hyperparameters used.
-        last_metrics: Last recorded metrics before failure.
-        stack_trace: Traceback string if an exception occurred.
-    """
+    """Record of a single training failure."""
 
     timestamp: str
     model_name: str
     task_name: str
     tier: str
     trial_id: int | None
-    failure_type: str  # e.g. FailureCategory.GRADIENT_EXPLOSION.value
+    failure_type: str
     failure_epoch: int | None
     failure_batch: int | None
     config: dict[str, object]
@@ -66,34 +64,20 @@ class FailureRecord:
     stack_trace: str | None = None
 
     def to_dict(self) -> dict[str, object]:
-        """Convert record to dictionary."""
         return asdict(self)
 
 
 class FailureTracker:
-    """
-    Tracks and analyzes training failures.
-
-    Persists failure data to SQLite and provides analysis methods to detect
-    patterns (e.g., specific models prone to gradient explosions).
-    """
+    """Tracks and analyzes training failures persisted to SQLite."""
 
     def __init__(self, db_path: str) -> None:
-        """
-        Initialize the FailureTracker.
-
-        Args:
-            db_path (str): Path to the SQLite database.
-        """
         self.db_path = db_path
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
-        """Returns a connection to the database."""
         return sqlite3.connect(self.db_path)
 
     def _init_db(self) -> None:
-        """Initialize failures table if it doesn't exist."""
         conn = self._get_connection()
         try:
             conn.execute("""
@@ -128,12 +112,6 @@ class FailureTracker:
             conn.close()
 
     def log_failure(self, record: FailureRecord) -> None:
-        """
-        Record a failure to the database.
-
-        Args:
-            record (FailureRecord): The failure event details.
-        """
         conn = self._get_connection()
         try:
             conn.execute(
@@ -166,59 +144,37 @@ class FailureTracker:
             conn.close()
 
     def get_failure_stats(self, hours: int | None = None) -> dict[str, object]:
-        """
-        Get aggregate failure statistics.
-
-        Args:
-            hours: If provided, only count failures in the last N hours.
-
-        Returns:
-            Dict[str, object]: Statistics including counts by type, model, and task.
-        """
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
-
-            # Build WHERE clause for time filtering
             where_clause = ""
             if hours:
-                cutoff = datetime.now().isoformat()[:19]  # Truncate microseconds
+                cutoff = datetime.now().isoformat()[:19]
                 where_clause = (
                     f"WHERE timestamp >= datetime('{cutoff}', '-{hours} hours')"
                 )
 
-            # Failures by type
             cursor.execute(f"""
                 SELECT failure_type, COUNT(*) as count
-                FROM failures
-                {where_clause}
-                GROUP BY failure_type
-                ORDER BY count DESC
+                FROM failures {where_clause}
+                GROUP BY failure_type ORDER BY count DESC
             """)
             by_type = dict(cursor.fetchall())
 
-            # Failures by model
             cursor.execute(f"""
                 SELECT model_name, COUNT(*) as count
-                FROM failures
-                {where_clause}
-                GROUP BY model_name
-                ORDER BY count DESC
-                LIMIT 10
+                FROM failures {where_clause}
+                GROUP BY model_name ORDER BY count DESC LIMIT 10
             """)
             by_model = dict(cursor.fetchall())
 
-            # Failures by task
             cursor.execute(f"""
                 SELECT task_name, COUNT(*) as count
-                FROM failures
-                {where_clause}
-                GROUP BY task_name
-                ORDER BY count DESC
+                FROM failures {where_clause}
+                GROUP BY task_name ORDER BY count DESC
             """)
             by_task = dict(cursor.fetchall())
 
-            # Total count
             cursor.execute(f"SELECT COUNT(*) FROM failures {where_clause}")
             total_failures = cursor.fetchone()[0]
 
@@ -233,31 +189,18 @@ class FailureTracker:
             conn.close()
 
     def get_recent_failures(self, limit: int = 50) -> list[FailureRecord]:
-        """
-        Get recent failure records.
-
-        Args:
-            limit (int): Max number of records to retrieve.
-
-        Returns:
-            List[FailureRecord]: List of recent failures.
-        """
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
-
             cursor.execute(
                 """
                 SELECT timestamp, model_name, task_name, tier, trial_id,
                        failure_type, failure_epoch, failure_batch,
                        config, last_metrics, stack_trace
-                FROM failures
-                ORDER BY id DESC
-                LIMIT ?
+                FROM failures ORDER BY id DESC LIMIT ?
             """,
                 (limit,),
             )
-
             records = []
             for row in cursor.fetchall():
                 records.append(
@@ -280,21 +223,9 @@ class FailureTracker:
             conn.close()
 
     def analyze_failure_patterns(self) -> dict[str, object]:
-        """
-        Analyze failure patterns to suggest fixes.
-
-        Includes advanced diagnostics:
-        1. Divergence Detection (Early vs Late)
-        2. Hyperparameter Correlation (vs Successful trials)
-        3. Common failure signatures
-
-        Returns:
-            Dict[str, object]: Analysis results and recommendations.
-        """
         stats = self.get_failure_stats()
         recommendations: list[dict[str, object]] = []
 
-        # 1. NaN/Inf Analysis
         nan_count = stats["by_type"].get("grad_nan", 0) + stats["by_type"].get(
             "loss_nan_or_inf", 0
         )
@@ -303,12 +234,10 @@ class FailureTracker:
         )
 
         if pct_nan > 0.3:
-            # Check if likely due to high LR
             high_lr_risk = self._check_hyperparam_correlation("lr", "grad_nan")
             msg = "Reduce learning rate ranges"
             if high_lr_risk:
                 msg += f" (High LR detected in failures: mean={high_lr_risk:.2e})"
-
             recommendations.append({
                 "issue": "High NaN failure rate",
                 "severity": "critical",
@@ -316,7 +245,6 @@ class FailureTracker:
                 "affected_models": list(stats["by_model"].keys())[:3],
             })
 
-        # 2. OOM Analysis
         oom_count = stats["by_type"].get("oom", 0)
         if oom_count > 5:
             recommendations.append({
@@ -326,7 +254,6 @@ class FailureTracker:
                 "count": oom_count,
             })
 
-        # 3. Timeout Analysis
         timeout_count = stats["by_type"].get("timeout", 0)
         if timeout_count > 3:
             recommendations.append({
@@ -337,9 +264,7 @@ class FailureTracker:
                 "affected_models": list(stats["by_model"].keys())[:3],
             })
 
-        # 4. Divergence Analysis
-        divergence_recs = self._detect_divergence_signatures()
-        recommendations.extend(divergence_recs)
+        recommendations.extend(self._detect_divergence_signatures())
 
         return {
             "stats": stats,
@@ -350,21 +275,12 @@ class FailureTracker:
     def _check_hyperparam_correlation(
         self, param: str, failure_type: str
     ) -> float | None:
-        """
-        Compare param value in failed vs successful trials.
-
-        Args:
-            param: Hyperparameter name.
-            failure_type: Failure type to correlate with.
-
-        Returns:
-            Optional[float]: Average value of param in failed trials, or None.
-        """
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT config FROM failures WHERE failure_type=?", (failure_type,)
+                    "SELECT config FROM failures WHERE failure_type=?",
+                    (failure_type,),
                 )
                 failed_vals = []
                 for row in cursor.fetchall():
@@ -374,28 +290,17 @@ class FailureTracker:
                             failed_vals.append(float(cfg[param]))
                     except ValueError, TypeError, json.JSONDecodeError:
                         pass
-
                 if not failed_vals:
                     return None
-
-                avg_fail = sum(failed_vals) / len(failed_vals)
-                return avg_fail
-
+                return sum(failed_vals) / len(failed_vals)
         except Exception as e:
             logger.warning("Correlation check failed: %s", e)
             return None
 
     def _detect_divergence_signatures(self) -> list[dict[str, object]]:
-        """
-        Identify if failures happen early (instability) or late (collapse).
-
-        Returns:
-            List[Dict]: List of diagnostic findings.
-        """
         recs = []
         try:
             with self._get_connection() as conn:
-                # Early failures (< epoch 2)
                 cursor = conn.cursor()
                 cursor.execute("SELECT COUNT(*) FROM failures WHERE failure_epoch < 2")
                 res = cursor.fetchone()
@@ -414,8 +319,218 @@ class FailureTracker:
                             f"{early_fails}/{total} failures occurred in first 2 epochs"
                         ),
                     })
-
         except Exception as e:
             logger.warning("Divergence check failed: %s", e)
-
         return recs
+
+
+# =============================================================================
+# Decision Logger
+# =============================================================================
+
+
+class DecisionLogger:
+    """Logs high-level scientific decisions to a persistent SQLite database."""
+
+    def __init__(self, db_path: str = "bioplausible.db") -> None:
+        self.db_path = db_path
+        self._init_db()
+
+    def _init_db(self) -> None:
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS decision_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp REAL,
+                        event_type TEXT,
+                        description TEXT,
+                        metadata TEXT
+                    )
+                """)
+                conn.commit()
+        except sqlite3.Error as e:
+            logger.error("Failed to init decision log DB: %s", e)
+
+    def log_decision(
+        self,
+        event_type: str,
+        description: str,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        try:
+            meta_json = json.dumps(metadata) if metadata else "{}"
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO decision_log"
+                    " (timestamp, event_type, description, metadata)"
+                    " VALUES (?, ?, ?, ?)",
+                    (time.time(), event_type, description, meta_json),
+                )
+                conn.commit()
+            logger.info("Decision Logged: [%s] %s", event_type, description)
+        except sqlite3.Error as e:
+            logger.error("Failed to log decision: %s", e)
+        except Exception as e:
+            logger.error("Unexpected error logging decision: %s", e, exc_info=True)
+
+    def get_log(self, limit: int = 1000) -> list[dict[str, object]]:
+        entries = []
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT * FROM decision_log ORDER BY timestamp ASC LIMIT ?",
+                    (limit,),
+                )
+                for row in cursor.fetchall():
+                    entries.append({
+                        "id": row["id"],
+                        "timestamp": row["timestamp"],
+                        "date_str": datetime.fromtimestamp(row["timestamp"]).strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
+                        "event_type": row["event_type"],
+                        "description": row["description"],
+                        "metadata": json.loads(row["metadata"]),
+                    })
+        except sqlite3.Error as e:
+            logger.error("Failed to read decision log: %s", e)
+        except Exception as e:
+            logger.error("Unexpected error reading decision log: %s", e, exc_info=True)
+        return entries
+
+
+# =============================================================================
+# Experiment State
+# =============================================================================
+
+
+class ExperimentState:
+    """Analyzes the current state of research by querying the database."""
+
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.storage = HyperoptStorage(db_path)
+        self.failure_tracker = FailureTracker(db_path)
+
+    def get_failure_analysis(self) -> dict[str, object]:
+        return self.failure_tracker.analyze_failure_patterns()
+
+    def get_progress(self) -> dict[str, dict[str, dict[str, object]]]:
+        trials = self.storage.get_all_trials()
+        progress: dict[str, dict[str, dict[str, object]]] = {}
+
+        for t in trials:
+            if t.status != "completed":
+                continue
+            model = t.model_name
+            task = t.config.get("task")
+            tier_val = t.config.get("tier")
+
+            if not tier_val:
+                epochs = t.config.get("epochs")
+                if epochs:
+                    if epochs <= 3:
+                        tier_val = "smoke"
+                    elif epochs <= 7:
+                        tier_val = "shallow"
+                    elif epochs <= 15:
+                        tier_val = "standard"
+                    else:
+                        tier_val = "deep"
+
+            if not task or not tier_val:
+                continue
+
+            if model not in progress:
+                progress[model] = {}
+            if task not in progress[model]:
+                progress[model][task] = {}
+            if tier_val not in progress[model][task]:
+                progress[model][task][tier_val] = {
+                    "count": 0,
+                    "best_acc": -1.0,
+                    "trials": [],
+                    "last_run_ts": 0.0,
+                }
+
+            entry = progress[model][task][tier_val]
+            entry["count"] += 1
+            entry["trials"].append(t)
+            entry["best_acc"] = max(entry["best_acc"], t.accuracy)
+
+        return progress
+
+    def get_optuna_study(self, study_name: str) -> optuna.Study:
+        return optuna.create_study(
+            study_name=study_name,
+            storage=f"sqlite:///{self.db_path}",
+            direction="maximize",
+            load_if_exists=True,
+            sampler=optuna.samplers.TPESampler(),
+        )
+
+    def get_recent_tasks(self, limit: int = 10) -> list[str]:
+        try:
+            cursor = self.storage.conn.cursor()
+            cursor.execute(
+                "SELECT config_json FROM hyperopt_logs ORDER BY timestamp DESC LIMIT ?",
+                (limit,),
+            )
+            recent_tasks = []
+            for row in cursor.fetchall():
+                try:
+                    config = json.loads(row[0])
+                    if "task" in config:
+                        recent_tasks.append(config["task"])
+                except Exception:
+                    logger.warning("Failed to deserialize recent task entry")
+            return recent_tasks
+        except Exception as e:
+            logger.error("Error fetching recent tasks: %s", e)
+            return []
+
+    def get_recent_models(self, limit: int = 10) -> list[str]:
+        try:
+            cursor = self.storage.conn.cursor()
+            cursor.execute(
+                "SELECT model_name FROM hyperopt_logs ORDER BY timestamp DESC LIMIT ?",
+                (limit,),
+            )
+            return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error("Error fetching recent models: %s", e)
+            return []
+
+    def get_fragile_models(
+        self, acc_threshold: float = 0.80, robust_threshold: float = 0.40
+    ) -> dict[str, object]:
+        fragile_models: dict[str, object] = {}
+        try:
+            cursor = self.storage.conn.cursor()
+            cursor.execute(
+                """
+                SELECT t.model_name,
+                       AVG(t.accuracy) as avg_acc,
+                       AVG(CASE WHEN ua.key = 'robustness_score'
+                           THEN CAST(ua.value_json as REAL) END) as avg_rob
+                FROM hyperopt_logs t
+                JOIN trial_user_attributes ua ON t.trial_id = ua.trial_id
+                WHERE t.status = 'completed'
+                GROUP BY t.model_name
+                HAVING avg_acc > ? AND avg_rob < ? AND avg_rob > 0
+            """,
+                (acc_threshold, robust_threshold),
+            )
+            for row in cursor.fetchall():
+                fragile_models[row["model_name"]] = row["avg_rob"]
+        except Exception:
+            logger.warning("Failed to query fragile models")
+        return fragile_models
+
+    def close(self) -> None:
+        self.storage.close()

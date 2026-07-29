@@ -24,7 +24,7 @@ __all__ = [
 ]
 
 
-class BackpropGradient:
+class BackpropGradient(GradientStrategy):
     """
     Standard backpropagation via .backward().
 
@@ -60,7 +60,7 @@ class BackpropGradient:
         loss.backward()
 
 
-class EPGradient:
+class EPGradient(GradientStrategy):
     """
     Equilibrium Propagation via free/nudged phase contrast.
 

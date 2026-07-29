@@ -1,23 +1,28 @@
-"""
-Experiment Check Functions for ExecutionStrategy.
+"""Guard and validation logic for AutoScientist execution.
 
-Contains helper methods that check if various experiment types are needed:
-- Verification trials
-- Cross-validation
-- Ablation studies
-- Transfer learning
-- Continual learning
-- Low-data regime tests
-- Robustness checks
+Consolidates safety and validation concerns:
+- SafetyWrapper: NaN/Inf/gradient explosion protection during training
+- Algorithm constraints: Hyperparameter bounds per algorithm family
+- Experiment checks: Decision helpers for verification/CV/ablation/transfer/continual/low-data/robustness
 """
+
+from __future__ import annotations
 
 import hashlib
 import json
+import logging
+from dataclasses import dataclass
+
+import torch
 
 from bioplausible.execution.task import ExperimentTask
-from bioplausible.hyperopt import PatientLevel
+from bioplausible.hyperopt.eval_tiers import PatientLevel
+from bioplausible.zoo import get_model_spec
 
 __all__ = [
+    "ALGORITHM_FAMILY_CONSTRAINTS",
+    "SafetyConfig",
+    "SafetyWrapper",
     "check_ablation_needed",
     "check_continual_learning_needed",
     "check_cv_needed",
@@ -25,14 +30,266 @@ __all__ = [
     "check_robustness_needed",
     "check_transfer_needed",
     "check_verification_needed",
+    "create_constrained_optuna_config",
+    "get_constrained_search_space",
     "get_stats",
+    "logger",
+    "suggest_hyperparam",
 ]
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Safety
+# =============================================================================
+
+
+@dataclass
+class SafetyConfig:
+    """Safety configuration for training."""
+
+    max_grad_norm: float = 10.0
+    nan_check_frequency: int = 10
+    lr_reduction_on_nan: float = 0.5
+    max_nan_retries: int = 3
+    enable_anomaly_detection: bool = False
+
+
+class SafetyWrapper:
+    """Wraps training to catch and handle numerical instabilities."""
+
+    def __init__(self, config: SafetyConfig | None = None):
+        self.config = config or SafetyConfig()
+        self.consecutive_failures = 0
+        self.total_failures = 0
+        self.step_count = 0
+
+        if self.config.enable_anomaly_detection:
+            torch.autograd.set_detect_anomaly(True)
+
+    def safe_backward_and_step(
+        self,
+        loss: torch.Tensor,
+        optimizer: torch.optim.Optimizer,
+        model: torch.nn.Module,
+        clip_norm: float | None = None,
+    ) -> tuple[bool, dict[str, object]]:
+        self.step_count += 1
+
+        if not torch.isfinite(loss):
+            self.consecutive_failures += 1
+            self.total_failures += 1
+            return False, {
+                "error": "loss_nan_or_inf",
+                "loss_value": float(loss),
+                "step": self.step_count,
+            }
+
+        try:
+            loss.backward()
+        except RuntimeError as e:
+            self.consecutive_failures += 1
+            self.total_failures += 1
+            optimizer.zero_grad()
+            return False, {
+                "error": "backward_failed",
+                "exception": str(e),
+                "step": self.step_count,
+            }
+
+        total_norm = 0.0
+        has_nan = False
+        nan_param_names: list[str] = []
+
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                param_norm = param.grad.data.norm(2)
+                if not torch.isfinite(param_norm):
+                    has_nan = True
+                    nan_param_names.append(name)
+                    break
+                total_norm += param_norm.item() ** 2
+
+        if has_nan:
+            self.consecutive_failures += 1
+            self.total_failures += 1
+            optimizer.zero_grad()
+            logger.warning("NaN gradient detected in parameters: %s", nan_param_names)
+            return False, {
+                "error": "grad_nan",
+                "grad_norm": float("nan"),
+                "nan_params": nan_param_names,
+                "step": self.step_count,
+            }
+
+        total_norm = total_norm**0.5
+
+        clip_value = clip_norm if clip_norm is not None else self.config.max_grad_norm
+        torch.nn.utils.clip_grad_norm_(model.parameters(), clip_value)
+
+        try:
+            optimizer.step()
+            optimizer.zero_grad()
+        except RuntimeError as e:
+            self.consecutive_failures += 1
+            self.total_failures += 1
+            return False, {
+                "error": "optimizer_step_failed",
+                "exception": str(e),
+                "step": self.step_count,
+            }
+
+        self.consecutive_failures = 0
+        return True, {
+            "grad_norm": total_norm,
+            "loss": float(loss),
+            "step": self.step_count,
+        }
+
+    def should_abort(self) -> bool:
+        return self.consecutive_failures >= self.config.max_nan_retries
+
+    def handle_failure(self, optimizer: torch.optim.Optimizer) -> None:
+        for param_group in optimizer.param_groups:
+            old_lr = param_group["lr"]
+            new_lr = old_lr * self.config.lr_reduction_on_nan
+            param_group["lr"] = new_lr
+            logger.warning(
+                f"Reduced LR from {old_lr:.2e} to {new_lr:.2e} (failure {self.consecutive_failures}/{self.config.max_nan_retries})"
+            )
+
+    def get_stats(self) -> dict[str, object]:
+        return {
+            "total_steps": self.step_count,
+            "total_failures": self.total_failures,
+            "consecutive_failures": self.consecutive_failures,
+            "failure_rate": (
+                self.total_failures / self.step_count if self.step_count > 0 else 0.0
+            ),
+        }
+
+
+# =============================================================================
+# Algorithm-Specific Hyperparameter Constraints
+# =============================================================================
+
+
+ALGORITHM_FAMILY_CONSTRAINTS: dict[str, dict[str, object]] = {
+    "baseline": {
+        "lr": (1e-5, 1e-2, "log"),
+        "grad_clip": (0.5, 10.0, "linear"),
+        "weight_decay": (0.0, 1e-2, "log"),
+        "dropout": (0.0, 0.5, "linear"),
+        "momentum": (0.0, 0.99, "linear"),
+        "optimizer": ["sgd", "adam", "adamw", "rmsprop"],
+        "hidden_dim": [32, 64, 128, 256, 512],
+        "num_layers": (1, 4, "int"),
+    },
+    "eqprop": {
+        "lr": (1e-6, 5e-4, "log"),
+        "beta": (0.01, 0.5, "linear"),
+        "steps": (10, 40, "int"),
+        "grad_clip": (1.0, 5.0, "linear"),
+        "nudge_type": ["output_clamping", "energy_based", "symmetric"],
+        "hidden_dim": [32, 64, 128],
+        "num_layers": (2, 6, "int"),
+    },
+    "hebbian": {
+        "lr": (1e-5, 1e-3, "log"),
+        "contrastive_steps": (5, 30, "int"),
+        "grad_clip": (1.0, 10.0, "linear"),
+        "hidden_dim": [64, 128],
+        "num_layers": (2, 4, "int"),
+    },
+    "hybrid": {
+        "lr": (1e-5, 5e-3, "log"),
+        "grad_clip": (0.5, 10.0, "linear"),
+        "fa_scale": (0.5, 2.0, "linear"),
+        "adapt_rate": (1e-4, 1e-1, "log"),
+        "hidden_dim": [64, 128, 256],
+        "num_layers": (2, 5, "int"),
+    },
+}
+
+
+def get_constrained_search_space(model_name: str) -> dict[str, object]:
+    try:
+        model_spec = get_model_spec(model_name)
+        family = model_spec.family.lower()
+    except KeyError, AttributeError, ValueError:
+        logger.warning(
+            "Could not determine family for %s, using baseline constraints",
+            model_name,
+        )
+        family = "baseline"
+
+    constraints = ALGORITHM_FAMILY_CONSTRAINTS.get(
+        family, ALGORITHM_FAMILY_CONSTRAINTS["baseline"]
+    )
+    logger.info("Using %s constraints for %s", family, model_name)
+    return constraints
+
+
+def suggest_hyperparam(
+    trial, param_name: str, constraint, prefix: str = ""
+) -> float | int | str:
+    full_name = f"{prefix}{param_name}" if prefix else param_name
+
+    if isinstance(constraint, list):
+        return trial.suggest_categorical(full_name, constraint)
+    if isinstance(constraint, tuple) and len(constraint) == 3:
+        min_val, max_val, scale = constraint
+        if scale == "log":
+            return trial.suggest_float(full_name, min_val, max_val, log=True)
+        if scale == "int":
+            return trial.suggest_int(full_name, int(min_val), int(max_val))
+        return trial.suggest_float(full_name, min_val, max_val, log=False)
+    raise ValueError(f"Invalid constraint format for {param_name}: {constraint}")
+
+
+def create_constrained_optuna_config(
+    trial,
+    model_name: str,
+    custom_constraints: dict[str, object] | None = None,
+    task_name: str | None = None,
+) -> dict[str, object]:
+    from bioplausible.hyperopt.optuna_bridge import create_optuna_space
+
+    final_constraints = custom_constraints.copy() if custom_constraints else {}
+
+    if task_name == "cifar100":
+        if "hidden_dim" not in final_constraints:
+            final_constraints["hidden_dim"] = [128, 256, 512, 1024]
+        if "num_layers" not in final_constraints:
+            final_constraints["min_num_layers"] = 3
+            final_constraints["max_num_layers"] = 8
+
+    if "max_hidden_dim" in final_constraints:
+        max_dim = final_constraints["max_hidden_dim"]
+        if "hidden_dim" in final_constraints and isinstance(
+            final_constraints["hidden_dim"], list
+        ):
+            filtered = [d for d in final_constraints["hidden_dim"] if d <= max_dim]
+            if not filtered:
+                filtered = [max_dim]
+            final_constraints["hidden_dim"] = filtered
+
+    return create_optuna_space(
+        trial=trial,
+        model_name=model_name,
+        constraints=final_constraints,
+        task_name=task_name,
+    )
+
+
+# =============================================================================
+# Experiment Check Functions
+# =============================================================================
 
 
 def get_stats(
     progress: dict, model: str, task: str, tier: PatientLevel
 ) -> dict[str, object]:
-    """Extract stats from progress dict for a given model/task/tier."""
     try:
         return progress[model][task][tier.value]
     except KeyError:
@@ -103,6 +360,12 @@ def check_verification_needed(
         )
 
     return None
+
+
+def _compute_config_hash(config: dict) -> str:
+    """Compute a hash of the experiment config for dedup."""
+    config_str = json.dumps(config, sort_keys=True)
+    return hashlib.md5(config_str.encode()).hexdigest()
 
 
 def check_cv_needed(
@@ -220,7 +483,7 @@ def check_continual_learning_needed(
         step_stats = get_stats(progress, model, step_task, PatientLevel.STANDARD)
 
         if step_stats["count"] == 0:
-            config_copy = {}
+            config_copy: dict[str, object] = {}
 
             if step_idx > 0:
                 if previous_trial_id is None:
@@ -425,14 +688,12 @@ def check_ablation_needed(
             config_copy["is_ablation"] = True
             config_copy["ablation_param"] = param
 
-            priority = 80.0
-
             return ExperimentTask(
                 model_name=model,
                 task_name=task,
                 tier=PatientLevel.STANDARD,
                 study_name=f"{model}_{task}_{PatientLevel.STANDARD.value}",
-                priority=priority,
+                priority=80.0,
                 fixed_config=config_copy,
                 verification_of_trial_id=best_trial.trial_id,
                 is_ablation=True,

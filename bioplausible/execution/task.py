@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from bioplausible.hyperopt import PatientLevel
+from bioplausible.hyperopt.eval_tiers import PatientLevel
 
 __all__ = [
     "ExperimentTask",

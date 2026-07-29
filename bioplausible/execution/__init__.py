@@ -17,9 +17,8 @@ Usage:
     engine.run()  # Start continuous discovery
 """
 
-from bioplausible.execution.decisions import DecisionLogger
+from bioplausible.execution._state import DecisionLogger, ExperimentState
 from bioplausible.execution.engine import ExecutionEngine
-from bioplausible.execution.state import ExperimentState
 from bioplausible.execution.strategy import ExecutionStrategy
 from bioplausible.execution.task import ExperimentTask
 

@@ -2,10 +2,7 @@ import logging
 import random
 
 from bioplausible.core.registry import Registry
-from bioplausible.execution.curriculum import CurriculumManager
-from bioplausible.execution.dashboard import DASHBOARD
-from bioplausible.execution.decisions import DecisionLogger
-from bioplausible.execution.experiment_checks import (
+from bioplausible.execution._guards import (
     check_ablation_needed,
     check_continual_learning_needed,
     check_cv_needed,
@@ -15,8 +12,10 @@ from bioplausible.execution.experiment_checks import (
     check_verification_needed,
     get_stats,
 )
+from bioplausible.execution._state import DecisionLogger, ExperimentState
+from bioplausible.execution.curriculum import CurriculumManager
+from bioplausible.execution.dashboard import DASHBOARD
 from bioplausible.execution.promotion import PromotionGate
-from bioplausible.execution.state import ExperimentState
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel
 

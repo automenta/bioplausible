@@ -769,9 +769,9 @@ def test_fixed_modules_import_without_error():
         "bioplausible.equitile.language.canonical",
         "bioplausible.hyperopt.comparison",
         "bioplausible.hyperopt.storage",
-        "bioplausible.execution.algorithm_constraints",
+        "bioplausible.execution._guards",
+        "bioplausible.execution._state",
         "bioplausible.execution.synthesizer",
-        "bioplausible.execution.failure_tracker",
         "bioplausible.execution.training_dynamics",
         "bioplausible.zoo.mep.optimizers.energy",
     ]

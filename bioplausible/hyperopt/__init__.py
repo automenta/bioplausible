@@ -4,7 +4,7 @@ Hyperparameter Optimization Package for Bio-Plausible Learning Research
 Powered by Optuna for multi-objective optimization.
 """
 
-from bioplausible.execution.algorithm_constraints import (
+from bioplausible.execution._guards import (
     create_constrained_optuna_config,
     get_constrained_search_space,
 )

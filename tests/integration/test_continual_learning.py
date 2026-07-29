@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bioplausible.execution.state import ExperimentState
+from bioplausible.execution._state import ExperimentState
 from bioplausible.execution.strategy import ExecutionStrategy
 
 

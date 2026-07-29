@@ -26,12 +26,10 @@ from pathlib import Path
 import optuna
 import torch
 
+from bioplausible.execution._state import DecisionLogger, ExperimentState, FailureRecord
 from bioplausible.execution.dashboard import DASHBOARD
-from bioplausible.execution.decisions import DecisionLogger
-from bioplausible.execution.failure_tracker import FailureRecord
 from bioplausible.execution.resources import ResourceMonitor
 from bioplausible.execution.robustness import run_robustness_check
-from bioplausible.execution.state import ExperimentState
 from bioplausible.execution.strategy import ExecutionStrategy
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import (

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from bioplausible.execution.failure_tracker import FailureTracker
+from bioplausible.execution._state import FailureTracker
 
 __all__ = [
     "FailureManifestoGenerator",

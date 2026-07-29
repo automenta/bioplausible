@@ -10,9 +10,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.execution._state import ExperimentState
 from bioplausible.execution.engine import ExecutionEngine
 from bioplausible.execution.resources import ResourceMonitor
-from bioplausible.execution.state import ExperimentState
 from bioplausible.execution.strategy import ExecutionStrategy
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel

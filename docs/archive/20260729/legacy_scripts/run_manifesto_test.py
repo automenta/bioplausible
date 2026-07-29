@@ -1,12 +1,13 @@
 import pathlib
 from datetime import datetime
 
-from bioplausible.analysis.failure_manifesto import FailureManifestoGenerator
 from bioplausible.execution.failure_tracker import (
     FailureCategory,
     FailureRecord,
     FailureTracker,
 )
+
+from bioplausible.analysis.failure_manifesto import FailureManifestoGenerator
 
 
 def main():

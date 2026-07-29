@@ -20,8 +20,8 @@ class MockExperimentTask:
 
 # Patching before importing core to handle dependencies
 with (
-    patch("bioplausible.execution.state.HyperoptStorage"),
-    patch("bioplausible.execution.state.optuna"),
+    patch("bioplausible.execution._state.HyperoptStorage"),
+    patch("bioplausible.execution._state.optuna"),
 ):
     from bioplausible.execution.strategy import ExecutionStrategy
     from bioplausible.hyperopt import PatientLevel

@@ -1,6 +1,6 @@
 """Tests for algorithm constraints module — validates get_model_spec import fix."""
 
-from bioplausible.execution.algorithm_constraints import (
+from bioplausible.execution._guards import (
     ALGORITHM_FAMILY_CONSTRAINTS,
     get_constrained_search_space,
 )
