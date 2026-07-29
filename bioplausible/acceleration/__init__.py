@@ -19,7 +19,8 @@ Usage:
     )
 
     # Check available backends
-    print(f"CuPy: {HAS_CUPY}, Triton: {HAS_TRITON}")
+    >>> import logging
+    >>> logging.getLogger(__name__).info("CuPy: %s, Triton: %s", HAS_CUPY, HAS_TRITON)
 
     # Use optimal backend
     device = get_optimal_backend()

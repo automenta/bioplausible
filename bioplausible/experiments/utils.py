@@ -11,6 +11,7 @@ Features:
 - Validation and benchmarking tools
 """
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -19,6 +20,8 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -217,7 +220,7 @@ class ExperimentRunner:
 
             if verbose:
                 avg_loss = epoch_loss / max(1, epoch_steps)
-                print(f"Epoch {epoch + 1}/{epochs} - Loss: {avg_loss:.4f}")
+                logger.info("Epoch %d/%d - Loss: %.4f", epoch + 1, epochs, avg_loss)
 
         training_time = time.time() - start_time
 
@@ -249,7 +252,7 @@ class ExperimentRunner:
         )
 
         if verbose:
-            print(result.summary())
+            logger.info(result.summary())
 
         return result
 
@@ -322,9 +325,7 @@ class ExperimentRunner:
 
         for opt_name in optimizer_names:
             if verbose:
-                print(f"\n{'=' * 60}")
-                print(f"Testing optimizer: {opt_name}")
-                print(f"{'=' * 60}")
+                logger.info("\n%s\nTesting optimizer: %s\n%s", "=" * 60, opt_name, "=" * 60)
 
             result = self.run(
                 model_name=model_name,
@@ -341,11 +342,9 @@ class ExperimentRunner:
         results.sort(key=lambda r: r.val_accuracy, reverse=True)
 
         if verbose:
-            print(f"\n{'=' * 60}")
-            print("COMPARISON RESULTS (sorted by val accuracy)")
-            print(f"{'=' * 60}")
+            logger.info("\n%s\nCOMPARISON RESULTS (sorted by val accuracy)\n%s", "=" * 60, "=" * 60)
             for i, r in enumerate(results):
-                print(f"{i + 1}. {r.optimizer_name}: {r.val_accuracy:.2f}%")
+                logger.info("%d. %s: %.2f%%", i + 1, r.optimizer_name, r.val_accuracy)
 
         return results
 
@@ -378,9 +377,7 @@ class ExperimentRunner:
 
         for model_name in model_names:
             if verbose:
-                print(f"\n{'=' * 60}")
-                print(f"Testing model: {model_name}")
-                print(f"{'=' * 60}")
+                logger.info("\n%s\nTesting model: %s\n%s", "=" * 60, model_name, "=" * 60)
 
             result = self.run(
                 model_name=model_name,
@@ -397,11 +394,9 @@ class ExperimentRunner:
         results.sort(key=lambda r: r.val_accuracy, reverse=True)
 
         if verbose:
-            print(f"\n{'=' * 60}")
-            print("COMPARISON RESULTS (sorted by val accuracy)")
-            print(f"{'=' * 60}")
+            logger.info("\n%s\nCOMPARISON RESULTS (sorted by val accuracy)\n%s", "=" * 60, "=" * 60)
             for i, r in enumerate(results):
-                print(f"{i + 1}. {r.model_name}: {r.val_accuracy:.2f}%")
+                logger.info("%d. %s: %.2f%%", i + 1, r.model_name, r.val_accuracy)
 
         return results
 

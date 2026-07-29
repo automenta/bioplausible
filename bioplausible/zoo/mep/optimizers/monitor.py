@@ -4,11 +4,14 @@ EP Debugging Utilities
 Tools for monitoring and debugging Equilibrium Propagation training.
 """
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 import torch
 from torch import nn
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -46,15 +49,15 @@ class EPMonitor:
     - Gradient norms
     - Weight updates
 
-    Usage:
-        monitor = EPMonitor()
-        optimizer = smep(..., model=model)
+Usage:
+            monitor = EPMonitor()
+            optimizer = smep(..., model=model)
 
-        for epoch in range(epochs):
-            monitor.start_epoch()
-            optimizer.step(x=x, target=y)
-            metrics = monitor.end_epoch(model, optimizer)
-            print(f"Epoch {epoch}: Energy gap = {metrics.energy_gap:.4f}")
+            for epoch in range(epochs):
+                monitor.start_epoch()
+                optimizer.step(x=x, target=y)
+                metrics = monitor.end_epoch(model, optimizer)
+                logger.info("Epoch %d: Energy gap = %.4f", epoch, metrics.energy_gap)
     """
 
     def __init__(self) -> None:
@@ -254,6 +257,6 @@ def monitor_ep_training(
         monitor.end_epoch(model, optimizer)
 
         if verbose:
-            print(f"Epoch {epoch + 1}/{epochs} completed")
+            logger.info("Epoch %d/%d completed", epoch + 1, epochs)
 
     return monitor

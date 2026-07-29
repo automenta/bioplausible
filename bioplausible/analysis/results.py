@@ -4,12 +4,15 @@ Analysis Core Logic
 Decoupled from UI to enable headless CLI usage.
 """
 
+import logging
 import sqlite3
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from bioplausible.hyperopt.comparison import (
     ComparisonMetric,
@@ -286,15 +289,16 @@ def load_trials_timeseries(db_path: str) -> dict[int, list[dict[str, Any]]]:
 
 def print_rankings(rankings: list[Any]):
     """Print rankings table."""
-    print(f"{'Rank':<6} {'Family':<20} {'Best Acc':<10} {'Gap':<10} {'Trials':>8}")
-    print(f"{'-' * 6} {'-' * 20} {'-' * 10} {'-' * 10} {'-' * 8}")
+    header = f"{'Rank':<6} {'Family':<20} {'Best Acc':<10} {'Gap':<10} {'Trials':>8}"
+    separator = f"{'-' * 6} {'-' * 20} {'-' * 10} {'-' * 10} {'-' * 8}"
+    logger.info("\n%s\n%s", header, separator)
 
     for i, r in enumerate(rankings, 1):
         gap = f"{r.gap_to_baseline:+.1f}%" if r.gap_to_baseline is not None else "Base"
         if r.gap_to_baseline is None and i > 1:
             gap = "N/A"
 
-        print(
-            f"#{i:<5} {r.family:<20} "
-            f"{r.best_value * 100:6.2f}%    {gap:<10} {r.n_trials:8d}"
+        logger.info(
+            "#%d %-20s %6.2f%%    %-10s %8d",
+            i, r.family, r.best_value * 100, gap, r.n_trials,
         )

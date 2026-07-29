@@ -1,7 +1,11 @@
+import logging
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
+
+logger = logging.getLogger(__name__)
 
 
 def _power_law(N: np.ndarray, a: float, b: float) -> np.ndarray:
@@ -25,7 +29,7 @@ def fit_power_law(param_counts: list[int], losses: list[float]) -> tuple[float, 
         a, b = popt
         return a, b
     except Exception as e:
-        print(f"Failed to fit power law: {e}")
+        logger.warning("Failed to fit power law: %s", e)
         return float("nan"), float("nan")
 
 

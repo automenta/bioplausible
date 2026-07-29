@@ -18,6 +18,7 @@ Example
 
 import hashlib
 import json
+import logging
 import os
 import random
 import sys
@@ -28,6 +29,8 @@ from typing import Any
 
 import numpy as np
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -216,7 +219,7 @@ class ReproducibilityTracker:
         with Path(latest_path).open("w") as f:
             json.dump(bundle, f, indent=2, default=str)
 
-        print(f"Results saved to {filepath}")
+        logger.info("Results saved to %s", filepath)
         return filepath
 
     def load_results(self, experiment_id: str) -> dict[str, Any]:

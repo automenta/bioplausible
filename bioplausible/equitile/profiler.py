@@ -31,6 +31,7 @@ Examples
 >>> profiler.print_report()
 """
 
+import logging
 import time
 from collections import defaultdict
 from contextlib import contextmanager
@@ -41,6 +42,8 @@ import torch
 
 if TYPE_CHECKING:
     from .core import EquiTile
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -448,7 +451,7 @@ class EquiTileProfiler:
             Number of recent profiles to report
         """
         if not self._history:
-            print("No profiling data available.")
+            logger.warning("No profiling data available.")
             return
 
         for result in self._history[-last_n:]:
@@ -462,73 +465,61 @@ class EquiTileProfiler:
         result : ProfileResult
             Profile result
         """
-        print()
-        print("=" * 70)
-        print("EquiTile Profiling Report")
-        print("=" * 70)
-        print()
+        lines: list[str] = []
+        lines.append("")
+        lines.append("=" * 70)
+        lines.append("EquiTile Profiling Report")
+        lines.append("=" * 70)
+        lines.append("")
 
-        # Summary
         summary = result.summary()
         total_time = summary["total_time_ms"] if summary["total_time_ms"] > 0 else 0.001
 
-        print("Summary:")
-        print(f"  Total time: {total_time:.2f} ms")
-        print(
-            f"  Predict time: {summary['predict_time_ms']:.2f} ms ({summary['predict_pct']:.1f}%)"
-        )
-        print(
-            f"  Update time: {summary['update_time_ms']:.2f} ms ({summary['update_pct']:.1f}%)"
-        )
-        print(f"  Batch size: {summary['batch_size']}")
-        print(f"  Tiles: {summary['n_tiles']}, Edges: {summary['n_edges']}")
-        print()
+        lines.append("Summary:")
+        lines.append(f"  Total time: {total_time:.2f} ms")
+        lines.append(f"  Predict time: {summary['predict_time_ms']:.2f} ms ({summary['predict_pct']:.1f}%)")
+        lines.append(f"  Update time: {summary['update_time_ms']:.2f} ms ({summary['update_pct']:.1f}%)")
+        lines.append(f"  Batch size: {summary['batch_size']}")
+        lines.append(f"  Tiles: {summary['n_tiles']}, Edges: {summary['n_edges']}")
+        lines.append("")
 
-        # Memory
-        print("Memory:")
-        print(f"  Parameters: {summary['param_memory_mb']:.2f} MB")
-        print(f"  Activations: {summary['activation_memory_mb']:.2f} MB")
-        print(f"  Total: {summary['total_memory_mb']:.2f} MB")
-        print()
+        lines.append("Memory:")
+        lines.append(f"  Parameters: {summary['param_memory_mb']:.2f} MB")
+        lines.append(f"  Activations: {summary['activation_memory_mb']:.2f} MB")
+        lines.append(f"  Total: {summary['total_memory_mb']:.2f} MB")
+        lines.append("")
 
-        # Tile breakdown
-        print("Tile Breakdown (top 5 by time):")
+        lines.append("Tile Breakdown (top 5 by time):")
         sorted_tiles = sorted(
             result.tile_stats.values(), key=lambda s: s.total_time, reverse=True
         )[:5]
 
-        print(
-            f"  {'ID':>4} {'Layer':>6} {'Time(ms)':>10} {'Error':>10} {'Importance':>10}"
-        )
-        print(f"  {'-' * 4} {'-' * 6} {'-' * 10} {'-' * 10} {'-' * 10}")
+        lines.append(f"  {'ID':>4} {'Layer':>6} {'Time(ms)':>10} {'Error':>10} {'Importance':>10}")
+        lines.append(f"  {'-' * 4} {'-' * 6} {'-' * 10} {'-' * 10} {'-' * 10}")
 
         for tile in sorted_tiles:
-            print(
-                f"  {tile.tile_id:>4} {tile.layer_id:>6} "
-                f"{tile.total_time * 1000:>10.2f} {tile.error_norm:>10.2f} "
-                f"{tile.importance:>10.3f}"
-            )
+            lines.append(f"  {tile.tile_id:>4} {tile.layer_id:>6} {tile.total_time * 1000:>10.2f} {tile.error_norm:>10.2f} {tile.importance:>10.3f}")
 
-        print()
+        lines.append("")
 
-        # Activity stats
-        print("Activity Statistics:")
+        lines.append("Activity Statistics:")
         activities = [
             s.activity_mean for s in result.tile_stats.values() if not s.is_input
         ]
         errors = [s.error_norm for s in result.tile_stats.values() if not s.is_input]
 
         if activities:
-            print(f"  Activity mean: {sum(activities) / len(activities):.4f}")
-            print(
-                f"  Activity max: {max(s.activity_max for s in result.tile_stats.values()):.4f}"
-            )
+            lines.append(f"  Activity mean: {sum(activities) / len(activities):.4f}")
+            lines.append(f"  Activity max: {max(s.activity_max for s in result.tile_stats.values()):.4f}")
         if errors:
-            print(f"  Error mean: {sum(errors) / len(errors):.4f}")
-            print(f"  Error max: {max(errors):.4f}")
+            lines.append(f"  Error mean: {sum(errors) / len(errors):.4f}")
+            lines.append(f"  Error max: {max(errors):.4f}")
 
-        print()
-        print("=" * 70)
+        lines.append("")
+        lines.append("=" * 70)
+
+        for line in lines:
+            logger.info(line)
 
     def get_history(self) -> list[ProfileResult]:
         """Get profiling history.
@@ -677,21 +668,14 @@ class LearningMonitor:
         summary = self.get_summary()
 
         if not summary:
-            print("No data recorded yet.")
+            logger.warning("No data recorded yet.")
             return
 
-        print()
-        print("Learning Status:")
-        print(f"  Loss: {summary['loss_mean']:.4f} ({summary['loss_trend']})")
-        print(
-            f"  Accuracy: {summary['accuracy_mean']:.4f} ({summary['accuracy_trend']})"
-        )
-        print(f"  Mean Importance: {summary['importance_mean']:.4f}")
-
-        if summary["hot_tiles"]:
-            print(f"  Hot Tiles: {summary['hot_tiles']}")
-
-        print()
+        logger.info("\nLearning Status:\n  Loss: %s (%s)\n  Accuracy: %s (%s)\n  Mean Importance: %s%s\n",
+                     f"{summary['loss_mean']:.4f}", summary['loss_trend'],
+                     f"{summary['accuracy_mean']:.4f}", summary['accuracy_trend'],
+                     f"{summary['importance_mean']:.4f}",
+                     f"\n  Hot Tiles: {summary['hot_tiles']}" if summary["hot_tiles"] else "")
 
 
 # =============================================================================
@@ -793,36 +777,40 @@ class MemoryProfiler:
     def print_report(self) -> None:
         """Print memory profiling report."""
         if not self._history:
-            print("No memory profiling data available.")
+            logger.warning("No memory profiling data available.")
             return
 
         latest = self._history[-1]
         peak = self.get_peak_memory()
         average = self.get_average_memory()
 
-        print()
-        print("=" * 70)
-        print("Memory Profiling Report")
-        print("=" * 70)
-        print()
-        print(f"  Current Total: {latest['total_memory_mb']:.2f} MB")
-        print(f"  Peak Total: {peak:.2f} MB")
-        print(f"  Average Total: {average:.2f} MB")
-        print()
-        print("  Breakdown:")
-        print(f"    Parameters: {latest['param_memory_mb']:.2f} MB")
-        print(f"    Edges: {latest['edge_memory_mb']:.2f} MB")
-        print(f"    Activations: {latest['activation_memory_mb']:.2f} MB")
+        lines: list[str] = []
+        lines.append("")
+        lines.append("=" * 70)
+        lines.append("Memory Profiling Report")
+        lines.append("=" * 70)
+        lines.append("")
+        lines.append(f"  Current Total: {latest['total_memory_mb']:.2f} MB")
+        lines.append(f"  Peak Total: {peak:.2f} MB")
+        lines.append(f"  Average Total: {average:.2f} MB")
+        lines.append("")
+        lines.append("  Breakdown:")
+        lines.append(f"    Parameters: {latest['param_memory_mb']:.2f} MB")
+        lines.append(f"    Edges: {latest['edge_memory_mb']:.2f} MB")
+        lines.append(f"    Activations: {latest['activation_memory_mb']:.2f} MB")
 
         if "gpu_allocated" in latest:
-            print()
-            print("  GPU Memory:")
-            print(f"    Allocated: {latest['gpu_allocated']:.2f} MB")
-            print(f"    Reserved: {latest['gpu_reserved']:.2f} MB")
-            print(f"    Peak Allocated: {latest['gpu_max_allocated']:.2f} MB")
+            lines.append("")
+            lines.append("  GPU Memory:")
+            lines.append(f"    Allocated: {latest['gpu_allocated']:.2f} MB")
+            lines.append(f"    Reserved: {latest['gpu_reserved']:.2f} MB")
+            lines.append(f"    Peak Allocated: {latest['gpu_max_allocated']:.2f} MB")
 
-        print()
-        print("=" * 70)
+        lines.append("")
+        lines.append("=" * 70)
+
+        for line in lines:
+            logger.info(line)
 
     def clear_history(self) -> None:
         """Clear memory profiling history."""
@@ -988,27 +976,26 @@ class BenchmarkRunner:
     def print_report(self) -> None:
         """Print benchmark report."""
         if not self._results:
-            print("No benchmark results available.")
+            logger.warning("No benchmark results available.")
             return
 
-        print()
-        print("=" * 70)
-        print("Performance Benchmark Report")
-        print("=" * 70)
-        print()
-        print(
-            f"  {'Batch Size':>10} {'Mean (ms)':>12} {'Std (ms)':>10} {'Throughput':>15}"
-        )
-        print(f"  {'-' * 10} {'-' * 12} {'-' * 10} {'-' * 15}")
+        lines: list[str] = []
+        lines.append("")
+        lines.append("=" * 70)
+        lines.append("Performance Benchmark Report")
+        lines.append("=" * 70)
+        lines.append("")
+        lines.append(f"  {'Batch Size':>10} {'Mean (ms)':>12} {'Std (ms)':>10} {'Throughput':>15}")
+        lines.append(f"  {'-' * 10} {'-' * 12} {'-' * 10} {'-' * 15}")
 
         for result in self._results:
-            print(
-                f"  {result.batch_size:>10} {result.mean_time_ms:>12.2f} "
-                f"{result.std_time_ms:>10.2f} {result.throughput_samples_per_sec:>15.1f}"
-            )
+            lines.append(f"  {result.batch_size:>10} {result.mean_time_ms:>12.2f} {result.std_time_ms:>10.2f} {result.throughput_samples_per_sec:>15.1f}")
 
-        print()
-        print("=" * 70)
+        lines.append("")
+        lines.append("=" * 70)
+
+        for line in lines:
+            logger.info(line)
 
     def get_results(self) -> list[BenchmarkResult]:
         """Get benchmark results.
