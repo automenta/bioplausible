@@ -529,3 +529,48 @@ Both commits are on `main`. Working tree is clean.
 - **Pyright errors still at 5** — all pre-existing. No new errors introduced by Phase 3 work.
 
 - **`find . -name "*,cover" -delete`** — clean stale coverage artifacts if they bother you.
+---
+
+## Session Wrap-Up (2026-07-29 — Session 5)
+
+### What Was Done This Session
+
+**Phase 3.6: Consolidate `build` Classmethods (Done)** — Extracted `_build_model_config()` helper in `zoo/base.py`. Refactored 12 `build` classmethods (11 model files + base class): `AdaptiveFeedbackAlignment`, `StochasticFA`, `EnergyGuidedFA`, `EnergyMinimizingFA`, `LayerwiseEquilibriumFA`, `DirectedEP`, `HolomorphicEP`, `MomentumEquilibrium`, `SparseEquilibrium`, `FabricPCGraphPCN`, `PredictiveCodingHybrid`, `FiniteNudgeEP`, plus `BioModel.build` base.
+
+**Phase 3.4: LM Config Consolidation (Partial)** — Moved `LMEquiTileConfig` from `language.py` to `equitile/config.py`. Updated imports in `language_optimized.py` and `fast_lm.py`.
+
+### Verification Results
+
+| Gate | Result |
+|------|--------|
+| `ruff format --check .` | 660 files formatted — PASS |
+| `ruff check --select I .` | All checks passed — PASS |
+| `pyright` | 5 errors (all pre-existing), 1474 warnings — no new errors |
+| `pytest -q` | 1117 passed, 15 skipped, 5 subtests — all passing |
+| Working tree delta | 11 files changed, +245/-224 = +21 lines |
+
+### New Discoveries
+
+1. **Frozen dataclass mutation was silently broken**: Original `BioModel.build` had `config.beta = kwargs["beta"]` which would raise `FrozenInstanceError` on `ModelConfig` (frozen+slots). Never triggered in tests. Fixed with `object.__setattr__`.
+
+2. **LM files are not duplicated — they're divergent**: `language.py`, `language_optimized.py`, `fast_lm.py` implement three different architectures (canonical EquiTile, fused-performance, demo-with-training-loop). The estimated 800-1000 line savings was too optimistic. Real savings: ~50-100 lines from config/helpers.
+
+3. **16 of 27 `build` methods are too diverse for helper**: Only config-based `build` methods (11 of 27) could use the helper. The rest (direct `cls(...).to(device)` calls) have unique constructor signatures.
+
+### Remaining Duplications (Priority-Ordered)
+
+| Pattern | Count | Priority |
+|---------|-------|----------|
+| `train_step` implementations | 26 | **HIGH** — biggest impact |
+| `forward_step` implementations | 11 | HIGH — see train_step |
+| `_build_layers` implementations | 12 | MEDIUM |
+| CoreTrainer long functions | 3 | MEDIUM — `_train_step`, `_validate`, `_train_epoch` |
+| Profiling/Distributed code | 4 classes | LOW |
+
+### Pointers for Future Sessions
+
+- **Phase 3.2 (Extract long functions)** is the next practical step — CoreTrainer's `_train_step` (70 lines), `_validate` (74 lines), `_train_epoch` (73 lines) in `core/trainer.py` are self-contained and refactorable.
+- **`train_step` deduplication (26 impls)** is highest-impact but requires deep algorithm knowledge. Start with the 6-8 most similar FA/EqProp implementations.
+- **`_build_model_config`** is ready for new `build` classmethods. Use `object.__setattr__` for frozen dataclass overrides.
+- **Pyright errors: 5 pre-existing** (`deployment.py:717`, `hyperopt/graph_task.py:28-32`, `equitile/async_execution.py:325`, `equitile/distributed.py:684`, `equitile/multigpu.py:674`).
+- **Stale `.cover` files**: `find . -name "*,cover" -delete`.

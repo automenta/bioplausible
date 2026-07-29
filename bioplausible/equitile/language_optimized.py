@@ -22,9 +22,10 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.equitile.config import LMEquiTileConfig
 from bioplausible.zoo.base import ModelConfig
 
-from .language import LMEquiTile, LMEquiTileConfig, PositionalEncoding
+from .language import LMEquiTile, PositionalEncoding
 
 if TYPE_CHECKING:
     from torch import Tensor

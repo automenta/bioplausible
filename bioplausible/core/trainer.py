@@ -67,6 +67,38 @@ def _reshape_logits_targets_for_ce(
     return logits, y
 
 
+def _compute_loss(
+    loss_fn: Callable[..., torch.Tensor] | None,
+    logits: torch.Tensor,
+    y: torch.Tensor,
+) -> torch.Tensor:
+    """Compute loss using ``loss_fn`` or fallback cross-entropy.
+
+    Handles 3-D logits (LM autoregressive heads), 2-D targets with
+    singleton dimension, and non-long targets.
+    """
+    if loss_fn is not None:
+        loss_input = logits
+        loss_target = y
+        if logits.dim() == 3:
+            loss_input = logits[:, -1, :]
+        if isinstance(loss_fn, nn.CrossEntropyLoss):
+            if y.dim() > 1 and y.size(-1) == 1:
+                loss_target = y.squeeze(-1).long()
+            elif y.dtype != torch.long:
+                loss_target = y.long()
+        return loss_fn(loss_input, loss_target)
+    logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
+    return torch.nn.functional.cross_entropy(logits_ce, y_ce)
+
+
+def _compute_accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
+    """Accuracy via argmax over logits vs reshaped targets."""
+    logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
+    with torch.no_grad():
+        return (logits_ce.argmax(1) == y_ce).float().mean().item()
+
+
 class TrainerProtocol(Protocol):
     """Protocol for training interfaces.
 
@@ -711,6 +743,23 @@ class CoreTrainer:
         )
         return self._train_epoch(batches)
 
+    def _get_batch_data(
+        self, loader: str, batch_size: int
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Fetch a training/validation batch from ``task_obj`` or DataLoader iterator."""
+        if self.task_obj is not None:
+            return self.task_obj.get_batch(loader, batch_size)
+        iter_name = f"_{loader}_iter"
+        loader_name = f"{loader}_loader"
+        try:
+            return next(getattr(self, iter_name))
+        except AttributeError:
+            setattr(self, iter_name, iter(getattr(self, loader_name)))
+            return next(getattr(self, iter_name))
+        except StopIteration:
+            setattr(self, iter_name, iter(getattr(self, loader_name)))
+            return next(getattr(self, iter_name))
+
     def _train_epoch(self, batches_per_epoch: int) -> dict[str, object]:
         """Run one training epoch."""
         self.model.train()
@@ -719,22 +768,17 @@ class CoreTrainer:
 
         import numpy as np
 
-        metrics_agg = defaultdict(list)
+        metrics_agg: defaultdict[str, list[float]] = defaultdict(list)
         samples_seen = 0
-
-        # Determine if we use task.get_batch or DataLoader
-        use_task = self.train_loader is None and self.task_obj is not None
+        batch_size = self.config.batch_size
+        use_task = self.task_obj is not None
 
         for batch_idx in range(batches_per_epoch):
-            if use_task:
-                x, y = self.task_obj.get_batch("train", self.config.batch_size)
-            else:
-                try:
-                    x, y = next(self._train_iter)
-                except AttributeError, StopIteration:
-                    self._train_iter = iter(self.train_loader)
-                    x, y = next(self._train_iter)
-
+            x, y = (
+                self._get_batch_data("train", batch_size)
+                if use_task
+                else self._get_batch_data("train", batch_size)
+            )
             x, y = x.to(self.device), y.to(self.device)
             samples_seen += x.shape[0]
 
@@ -781,7 +825,9 @@ class CoreTrainer:
                 self._log_step(step_metrics, batch_idx, batches_per_epoch)
 
         # Average metrics
-        avg_metrics = {k: np.mean(v) for k, v in metrics_agg.items() if v}
+        avg_metrics: dict[str, object] = {
+            k: np.mean(v) for k, v in metrics_agg.items() if v
+        }
         avg_metrics["samples_seen"] = samples_seen
         return avg_metrics
 
@@ -790,8 +836,6 @@ class CoreTrainer:
         # Check if model has custom train_step (for bio-plausible models)
         if hasattr(self.model, "train_step"):
             metrics = self.model.train_step(x, y)
-            # A bio-plausible model may return None when it wants the standard
-            # forward/backward path to run instead (e.g. non-contrastive modes).
             if metrics is not None:
                 return metrics
 
@@ -801,38 +845,18 @@ class CoreTrainer:
 
             sig = inspect.signature(self.optimizer.step)
             if "target" in sig.parameters or "y" in sig.parameters:
-                # Learning rule optimizer
                 if "target" in sig.parameters:
                     metrics = self.optimizer.step(x=x, target=y)
                 else:
                     metrics = self.optimizer.step(x=x, y=y)
-
-                if metrics is None:
-                    metrics = {}
-                return metrics
+                return metrics if metrics is not None else {}
 
         # Standard forward/backward
         if self.optimizer:
             self.optimizer.zero_grad()
 
         logits = self.model(x)
-
-        # Compute loss with task-aware loss function when available
-        if self.loss_fn is not None:
-            loss_input = logits
-            loss_target = y
-            if logits.dim() == 3:
-                loss_input = logits[:, -1, :]
-            if isinstance(self.loss_fn, nn.CrossEntropyLoss):
-                if y.dim() > 1 and y.size(-1) == 1:
-                    loss_target = y.squeeze(-1).long()
-                elif y.dtype != torch.long:
-                    loss_target = y.long()
-            loss = self.loss_fn(loss_input, loss_target)
-        else:
-            logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
-            loss = torch.nn.functional.cross_entropy(logits_ce, y_ce)
-
+        loss = _compute_loss(self.loss_fn, logits, y)
         loss.backward()
 
         # Gradient clipping
@@ -844,15 +868,16 @@ class CoreTrainer:
         if self.optimizer:
             self.optimizer.step()
 
-        # Compute metrics — use task's compute_metrics when available
+        # Compute metrics
+        metrics: dict[str, float] = {"loss": loss.item()}
         if self.task_obj is not None and hasattr(self.task_obj, "compute_metrics"):
             with torch.no_grad():
-                metrics = self.task_obj.compute_metrics(logits.detach(), y, loss.item())
+                task_metrics = self.task_obj.compute_metrics(
+                    logits.detach(), y, loss.item()
+                )
+                metrics.update(task_metrics)
         else:
-            logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
-            with torch.no_grad():
-                accuracy = (logits_ce.argmax(1) == y_ce).float().mean().item()
-            metrics = {"loss": loss.item(), "accuracy": accuracy}
+            metrics["accuracy"] = _compute_accuracy(logits, y)
 
         return metrics
 
@@ -865,63 +890,35 @@ class CoreTrainer:
 
         import numpy as np
 
-        val_losses = []
-        val_accs = []
-        val_perplexities = []
-
-        use_task = self.val_loader is None and self.task_obj is not None
+        val_losses: list[float] = []
+        val_accs: list[float] = []
+        val_perplexities: list[float] = []
+        batch_size = self.config.val_batch_size or self.config.batch_size
+        use_task = self.task_obj is not None
 
         with torch.no_grad():
             for _ in range(val_batches):
-                if use_task:
-                    x, y = self.task_obj.get_batch(
-                        "val", self.config.val_batch_size or self.config.batch_size
-                    )
-                else:
-                    try:
-                        x, y = next(self._val_iter)
-                    except AttributeError, StopIteration:
-                        self._val_iter = iter(self.val_loader)
-                        x, y = next(self._val_iter)
-
+                x, y = self._get_batch_data("val", batch_size)
                 x, y = x.to(self.device), y.to(self.device)
 
                 logits = self.model(x)
-
-                # Compute loss with task-aware loss function when available
-                if self.loss_fn is not None:
-                    loss_input = logits
-                    loss_target = y
-                    if logits.dim() == 3:
-                        loss_input = logits[:, -1, :]
-                    if isinstance(self.loss_fn, nn.CrossEntropyLoss):
-                        if y.dim() > 1 and y.size(-1) == 1:
-                            loss_target = y.squeeze(-1).long()
-                        elif y.dtype != torch.long:
-                            loss_target = y.long()
-                    loss = self.loss_fn(loss_input, loss_target)
-                else:
-                    logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
-                    loss = torch.nn.functional.cross_entropy(logits_ce, y_ce)
-
+                loss = _compute_loss(self.loss_fn, logits, y)
                 val_losses.append(loss.item())
 
-                # Use task's compute_metrics when available
+                # Accuracy from task or fallback
                 if self.task_obj is not None and hasattr(
                     self.task_obj, "compute_metrics"
                 ):
                     step_metrics = self.task_obj.compute_metrics(logits, y, loss.item())
                     val_accs.append(step_metrics.get("accuracy", 0.0))
                 else:
-                    logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
-                    accuracy = (logits_ce.argmax(1) == y_ce).float().mean().item()
-                    val_accs.append(accuracy)
+                    val_accs.append(_compute_accuracy(logits, y))
 
                 # Perplexity for LM
                 if self.task_obj and self.task_obj.task_type == "lm":
                     val_perplexities.append(np.exp(min(loss.item(), 10)))
 
-        result = {
+        result: dict[str, object] = {
             "val_loss": float(np.mean(val_losses)) if val_losses else float("nan"),
             "val_accuracy": float(np.mean(val_accs)) if val_accs else float("nan"),
         }

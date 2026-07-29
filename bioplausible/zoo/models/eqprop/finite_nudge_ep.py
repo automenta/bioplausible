@@ -1,6 +1,10 @@
 """Equilibrium Propagation model variants."""
 
-from ...base import ModelConfig, compute_hidden_dims, register_model
+from ...base import (
+    ModelConfig,
+    _build_model_config,
+    register_model,
+)
 from .standard_eqprop import StandardEqProp
 
 
@@ -40,18 +44,8 @@ class FiniteNudgeEP(StandardEqProp):
         task_type,
         **kwargs,
     ):
-        config = ModelConfig(
-            name=spec.name,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
-            extra=kwargs,
-        )
-
-        if "equilibrium_steps" in kwargs:
-            config.equilibrium_steps = kwargs["equilibrium_steps"]
-            config.max_steps = kwargs["equilibrium_steps"]
-        if "beta" in kwargs:
-            config.beta = kwargs["beta"]
-
-        return cls(config=config).to(device)
+        return cls(
+            config=_build_model_config(
+                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
+            )
+        ).to(device)

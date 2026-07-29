@@ -13,13 +13,12 @@ from torch.nn.utils.parametrizations import spectral_norm
 from ..base import (
     BioModel,
     ModelConfig,
-    compute_hidden_dims,
+    _build_model_config,
     register_model,
     resolve_hidden_dims,
 )
 from ..nebc_base import NEBCBase
 from .base import EqPropModel
-
 
 # ---------------------------------------------------------------------------
 # Shared FA helpers
@@ -108,7 +107,10 @@ def _fa_backward_loop(
                 B_eff = B_device * mask * (1.0 / (1.0 - dropout_prob))
                 grad_h = torch.mm(propagated_error, B_eff)
             else:
-                grad_h = torch.mm(propagated_error, B.to(propagated_error.device) if hasattr(B, "to") else B)  # type: ignore[attr-defined]
+                grad_h = torch.mm(
+                    propagated_error,
+                    B.to(propagated_error.device) if hasattr(B, "to") else B,
+                )  # type: ignore[attr-defined]
 
             h_curr = activations[i + 1]
             grad_h = _fa_apply_activation_derivative(grad_h, h_curr, activation)
@@ -340,8 +342,12 @@ class AdaptiveFeedbackAlignment(BioModel):
 
         with torch.no_grad():
             wgrads, bgrads = _fa_backward_loop(
-                activations, error, self.feedback_weights, self.activation,
-                len(self.layers), x.size(0),
+                activations,
+                error,
+                self.feedback_weights,
+                self.activation,
+                len(self.layers),
+                x.size(0),
             )
 
             for i in range(len(self.layers)):
@@ -387,14 +393,11 @@ class AdaptiveFeedbackAlignment(BioModel):
         task_type,
         **kwargs,
     ):
-        config = ModelConfig(
-            name=spec.name,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
-            extra=kwargs,
-        )
-        return cls(config=config).to(device)
+        return cls(
+            config=_build_model_config(
+                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
+            )
+        ).to(device)
 
 
 @register_model(
@@ -454,8 +457,13 @@ class StochasticFA(BioModel):
         error = output - torch.nn.functional.one_hot(y, self.config.output_dim).float()
 
         wgrads, bgrads = _fa_backward_loop(
-            activations, error, self.feedback_weights, self.activation,
-            len(self.layers), x.size(0), dropout_prob=self.drop_prob,
+            activations,
+            error,
+            self.feedback_weights,
+            self.activation,
+            len(self.layers),
+            x.size(0),
+            dropout_prob=self.drop_prob,
         )
 
         lr = self.config.learning_rate
@@ -482,14 +490,11 @@ class StochasticFA(BioModel):
         task_type,
         **kwargs,
     ):
-        config = ModelConfig(
-            name=spec.name,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
-            extra=kwargs,
-        )
-        return cls(config=config).to(device)
+        return cls(
+            config=_build_model_config(
+                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
+            )
+        ).to(device)
 
 
 @register_model(
@@ -733,8 +738,12 @@ class StandardFA(BioModel):
         error = output - torch.nn.functional.one_hot(y, self.config.output_dim).float()
 
         wgrads, bgrads = _fa_backward_loop(
-            activations, error, self.feedback_weights, self.activation,
-            len(self.layers), x.size(0),
+            activations,
+            error,
+            self.feedback_weights,
+            self.activation,
+            len(self.layers),
+            x.size(0),
         )
 
         for i in range(len(self.layers)):
@@ -814,14 +823,11 @@ class EnergyGuidedFA(BioModel):
         task_type,
         **kwargs,
     ):
-        config = ModelConfig(
-            name=spec.name,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
-            extra=kwargs,
-        )
-        return cls(config=config).to(device)
+        return cls(
+            config=_build_model_config(
+                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
+            )
+        ).to(device)
 
 
 # ============================================================================
@@ -892,14 +898,11 @@ class EnergyMinimizingFA(BioModel):
         task_type,
         **kwargs,
     ):
-        config = ModelConfig(
-            name=spec.name,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
-            extra=kwargs,
-        )
-        return cls(config=config).to(device)
+        return cls(
+            config=_build_model_config(
+                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
+            )
+        ).to(device)
 
 
 # ============================================================================
@@ -966,14 +969,11 @@ class LayerwiseEquilibriumFA(BioModel):
         task_type,
         **kwargs,
     ):
-        config = ModelConfig(
-            name=spec.name,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
-            extra=kwargs,
-        )
-        return cls(config=config).to(device)
+        return cls(
+            config=_build_model_config(
+                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
+            )
+        ).to(device)
 
 
 # ============================================================================

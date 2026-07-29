@@ -24,15 +24,14 @@ Examples
 """
 
 import math
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import Domain, LocalityLevel
-from bioplausible.equitile.config import EquiTileConfig
+from bioplausible.equitile.config import EquiTileConfig, LMEquiTileConfig
 from bioplausible.equitile.core import EquiTile
 from bioplausible.zoo.base import BioModel, ModelConfig, register_model
 
@@ -43,83 +42,6 @@ if TYPE_CHECKING:
 # =============================================================================
 # Configuration
 # =============================================================================
-
-
-@dataclass
-class LMEquiTileConfig:
-    """Configuration for Language Model EquiTile.
-
-    Vocabulary
-    ----------
-    vocab_size : int
-        Vocabulary size
-    pad_token_id : int
-        Padding token ID
-
-    Embedding
-    ---------
-    embed_dim : int
-        Embedding dimension
-    dropout : float
-        Embedding dropout
-
-    Architecture
-    ------------
-    num_heads : int
-        Number of attention heads
-    num_layers : int
-        Number of transformer layers
-    hidden_dim : int
-        Hidden dimension in feedforward
-    max_seq_len : int
-        Maximum sequence length
-
-    Tile Settings
-    -------------
-    neurons_per_tile : int
-        Neurons per tile
-    tiles_per_layer : int
-        Tiles per layer
-
-    Learning
-    --------
-    learning_rate : float
-        Base learning rate
-    weight_decay : float
-        Weight decay
-    mode : str
-        Learning mode ('pc' or 'ep')
-    """
-
-    # Vocabulary
-    vocab_size: int = 50257
-    pad_token_id: int = 0
-
-    # Embedding
-    embed_dim: int = 256
-    dropout: float = 0.1
-
-    # Architecture
-    num_heads: int = 4
-    num_layers: int = 4
-    hidden_dim: int = 512
-    max_seq_len: int = 128
-
-    # Tile settings
-    neurons_per_tile: int = 64
-    tiles_per_layer: int = 4
-
-    # Learning
-    learning_rate: float = 1e-4
-    weight_decay: float = 0.01
-    mode: Literal["pc", "ep", "backprop"] = (
-        "backprop"  # Default to backprop for Transformers
-    )
-    inference_steps: int = 5
-    step_size: float = 0.1
-    beta: float = 0.1
-    activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu"
-    equitile_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================

@@ -9,7 +9,7 @@ from ....zoo._settling import settle_activations_list
 from ...base import (
     BioModel,
     ModelConfig,
-    compute_hidden_dims,
+    _build_model_config,
     register_model,
     resolve_hidden_dims,
 )
@@ -201,11 +201,8 @@ class DirectedEP(BioModel):
         task_type,
         **kwargs,
     ):
-        config = ModelConfig(
-            name=spec.name,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
-            extra=kwargs,
-        )
-        return cls(config=config).to(device)
+        return cls(
+            config=_build_model_config(
+                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
+            )
+        ).to(device)

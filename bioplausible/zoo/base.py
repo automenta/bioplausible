@@ -95,6 +95,61 @@ def compute_hidden_dims(
     return [hidden_dim] * min(num_layers, max_layers)
 
 
+def _build_model_config(
+    spec,
+    input_dim: int,
+    output_dim: int,
+    hidden_dim: int | None,
+    num_layers: int,
+    kwargs: dict[str, object],
+    *,
+    learning_rate: float | None = None,
+    beta: float | None = None,
+    equilibrium_steps: int | None = None,
+    use_spectral_norm: bool | None = None,
+) -> ModelConfig:
+    """Construct a ``ModelConfig`` from the standard ``build`` classmethod parameters.
+
+    Handles the common ``spec.name``, ``compute_hidden_dims``, and
+    ``kwargs`` wiring. Optional overrides are passed through to the
+    ``ModelConfig`` constructor; if *not* provided, the corresponding
+    ``ModelConfig`` defaults apply.
+    """
+    # Extract kwargs overrides that match ModelConfig fields, so we can
+    # pass them in the constructor (ModelConfig is frozen).
+    effective_lr = learning_rate
+    effective_beta = beta
+    effective_eq_steps = equilibrium_steps
+
+    kw_beta = kwargs.get("beta")
+    if isinstance(kw_beta, float | int):
+        effective_beta = kw_beta  # type: ignore[assignment]
+
+    kw_eq_steps = kwargs.get("equilibrium_steps")
+    if isinstance(kw_eq_steps, int):
+        effective_eq_steps = kw_eq_steps
+
+    config = ModelConfig(
+        name=spec.name,
+        input_dim=input_dim if input_dim is not None else 0,
+        output_dim=output_dim,
+        hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
+        extra=kwargs,
+    )
+    # Apply overrides after construction (frozen — use object.__setattr__).
+    if effective_lr is not None:
+        object.__setattr__(config, "learning_rate", effective_lr)
+    if effective_beta is not None:
+        object.__setattr__(config, "beta", effective_beta)
+    if effective_eq_steps is not None:
+        object.__setattr__(config, "equilibrium_steps", effective_eq_steps)
+        object.__setattr__(config, "max_steps", effective_eq_steps)
+    if use_spectral_norm is not None:
+        object.__setattr__(config, "use_spectral_norm", use_spectral_norm)
+
+    return config
+
+
 class BioModel(nn.Module, ABC):
     """
     Abstract base class for all bio-plausible models/algorithms.
@@ -322,32 +377,19 @@ class BioModel(nn.Module, ABC):
         task_type,
         **kwargs,
     ):
-        """
-        Generic build method for BioModels.
-        Creates a ModelConfig from spec and args, then instantiates the model.
-        """
-        # Construct config
-        config = ModelConfig(
-            name=spec.name,
-            input_dim=input_dim if input_dim is not None else 0,
-            output_dim=output_dim,
-            hidden_dims=[hidden_dim] * min(num_layers, 5),
+        config = _build_model_config(
+            spec,
+            input_dim,
+            output_dim,
+            hidden_dim,
+            num_layers,
+            kwargs,
             learning_rate=getattr(spec, "default_lr", 0.001),
-            beta=0.1,  # Default, overridden by kwargs if needed
-            equilibrium_steps=20,  # Default
+            beta=0.1,
+            equilibrium_steps=20,
             use_spectral_norm=True,
-            extra=kwargs,
         )
-
-        # Allow kwargs to override config defaults if they match config fields
-        if "beta" in kwargs:
-            config.beta = kwargs["beta"]
-        if "equilibrium_steps" in kwargs:
-            config.equilibrium_steps = kwargs["equilibrium_steps"]
-            config.max_steps = kwargs["equilibrium_steps"]
-
-        model = cls(config=config).to(device)
-        return model
+        return cls(config=config).to(device)
 
     # ------------------------------------------------------------------
     # TransitionGraph protocol (REFACTOR3 §1)
