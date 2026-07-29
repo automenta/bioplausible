@@ -1,5 +1,5 @@
 """
-MEP (Memory-Efficient Propagation) presets registered as propagators.
+MEP (Muon Equilibrium Propagation) presets registered as propagators.
 
 Re-exports the MEP composite presets (smep, sdmep, local_ep, natural_ep,
 muon_backprop) so they are discoverable under ``zoo.propagators``.
