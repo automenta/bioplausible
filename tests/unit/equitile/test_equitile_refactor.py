@@ -1,16 +1,16 @@
 import torch
 from torch import nn
 
-from bioplausible.equitile.async_execution import AsyncEquiTile
+from bioplausible.equitile._internal.enhanced import EnhancedEquiTile
 from bioplausible.equitile.core import EquiTile
-from bioplausible.equitile.distributed import DistributedEquiTile
-from bioplausible.equitile.enhanced import EnhancedEquiTile
-from bioplausible.equitile.task_handler import TaskHandler
+from bioplausible.equitile.deployments.vision import ConvEquiTile, ConvEquiTileConfig
+from bioplausible.equitile.training.async_execution import AsyncEquiTile
+from bioplausible.equitile.training.distributed import DistributedEquiTile
+from bioplausible.equitile.training.task_handler import TaskHandler
 from bioplausible.equitile.utils.init_utils import (
     initialize_edge_weights,
     initialize_io_projections,
 )
-from bioplausible.equitile.vision import ConvEquiTile, ConvEquiTileConfig
 
 
 def test_task_handler_classification():

@@ -1,9 +1,15 @@
 import unittest
 
-from bioplausible.equitile.builder import EnhancedEquiTileBuilder, EquiTileBuilder
-from bioplausible.equitile.enhanced import EnhancedEquiTile
-from bioplausible.equitile.graph import GraphEquiTile, GraphEquiTileConfig
-from bioplausible.equitile.timeseries import TimeSeriesConfig, TimeSeriesEquiTile
+from bioplausible.equitile._internal.builder import (
+    EnhancedEquiTileBuilder,
+    EquiTileBuilder,
+)
+from bioplausible.equitile._internal.enhanced import EnhancedEquiTile
+from bioplausible.equitile.deployments.graph import GraphEquiTile, GraphEquiTileConfig
+from bioplausible.equitile.deployments.timeseries import (
+    TimeSeriesConfig,
+    TimeSeriesEquiTile,
+)
 
 
 class TestBuilderCleanup(unittest.TestCase):

@@ -1,7 +1,10 @@
 import unittest
 from dataclasses import dataclass
 
-from bioplausible.equitile.distributed import DeviceAssignment, TileCommunicator
+from bioplausible.equitile.training.distributed import (
+    DeviceAssignment,
+    TileCommunicator,
+)
 
 
 # Mock TileGraph and TileState

@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    from .core import EquiTile
+    from bioplausible.equitile.core import EquiTile
 
 logger = logging.getLogger(__name__)
 

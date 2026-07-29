@@ -1,5 +1,5 @@
 from bioplausible.equitile import EnhancedEquiTileConfig
-from bioplausible.equitile.enhanced import EnhancedEquiTile, TileLayerNorm
+from bioplausible.equitile._internal.enhanced import EnhancedEquiTile, TileLayerNorm
 
 
 def test_enhanced_config():

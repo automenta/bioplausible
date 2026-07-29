@@ -118,7 +118,7 @@ from bioplausible.domains import (
 )
 
 # EquiTile top-level package — importing registers all variants
-from bioplausible.equitile import EquiTile as _EquiTile  # ruff: ignore[unused-import]
+from bioplausible.equitile import EquiTile as _EquiTile
 
 # Evaluation
 from bioplausible.evaluation import (

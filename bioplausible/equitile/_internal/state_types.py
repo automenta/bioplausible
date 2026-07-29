@@ -2,7 +2,7 @@
 
 from typing import TypedDict
 
-from .config import EquiTileConfig
+from bioplausible.equitile.core.config import EquiTileConfig
 
 
 class EquiTileTrainingState(TypedDict, total=False):

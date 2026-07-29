@@ -25,55 +25,94 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
+    # Core ML framework
     "torch>=2.0.0",
-    "pytorch-lightning>=2.0.0",
-    "torchvision",
+
+    # Numerical
     "numpy",
-    "scipy",
-    "matplotlib",
-    "seaborn",
-    "pandas",
+
+    # CLI / progress / output
     "tqdm",
     "rich",
-    "gymnasium",
-    "scikit-learn",
-    "transformers",
-    "datasets",
-    "tokenizers",
-    "onnx",
-    "onnxscript",
-    "psutil",
-    "PyQt6",
-    "pyqtgraph",
-    "kademlia",
-    "uvicorn",
-    "fastapi",
+
+    # Configuration & validation
     "pydantic>=2.0",
-    "optuna",
     "omegaconf>=2.3",
-    "tabulate>=0.9",
 ]
 
 [project.optional-dependencies]
+# --- Development tools ---
 dev = [
+    # Test framework
     "pytest>=8.0",
     "pytest-cov>=4.0",
     "pytest-xdist",
-    "pytest-qt",
     "pytest-mock",
     "hypothesis>=6.0",
+    # Code quality
     "ruff>=0.6",
     "pyright>=1.1",
     "pre-commit",
     "build",
     "twine",
     "pip-audit",
+    # All packages needed by test suite (domain imports cascade widely)
+    "pytorch-lightning>=2.0.0",
+    "torchvision",
+    "scikit-learn",
+    "scipy",
+    "matplotlib",
+    "seaborn",
+    "pandas",
+    "optuna",
+    "tabulate>=0.9",
+    "psutil",
+    "gymnasium",
+    "fastapi",
+    "uvicorn",
+    "kademlia",
+    "onnxruntime",
+    "datasets",
 ]
+
+# --- Domain / data ---
+vision = ["torchvision"]
+lm = ["transformers", "datasets", "tokenizers"]
+rl = ["gymnasium"]
+
+# --- Training infrastructure ---
+lightning = ["pytorch-lightning>=2.0.0"]
+analysis = ["optuna", "tabulate>=0.9"]
+
+# --- ML/data utilities ---
+ml = ["scikit-learn", "pandas", "scipy"]
+
+# --- Plotting & visualization ---
+plot = ["matplotlib", "seaborn"]
+
+# --- Deployment & serving ---
+deploy = ["fastapi", "uvicorn", "onnxruntime"]
+export = ["onnx", "onnxscript"]
+
+# --- Networking ---
+p2p = ["kademlia"]
+
+# --- Desktop UI ---
+ui = ["PyQt6", "pyqtgraph"]
+
+# --- System monitoring ---
+monitoring = ["psutil"]
+
+# --- Existing optional groups ---
 knowledgebase = ["gpytorch", "botorch", "sympy"]
 graphs = ["torch-geometric>=2.5", "networkx"]
 spiking = ["snnTorch>=0.8"]
 llm = ["openai>=1.0"]
-full = ["bioplausible[knowledgebase,graphs,spiking]"]
+
+# --- Full install ---
+full = [
+    "bioplausible[vision,lm,rl,lightning,analysis,ml,plot,deploy,export,p2p,ui,monitoring,knowledgebase,graphs,spiking,llm]",
+]
 
 [project.urls]
 homepage = "https://github.com/bioplausible/bioplausible"
@@ -89,7 +128,7 @@ biopl-report = "bioplausible.execution.cli:main_reporter"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: marks tests as slow (e.g. MNIST full epoch)"]
-addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=40 -p no:warnings"
+addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=50 -p no:warnings"
 
 [tool.coverage.run]
 source = ["bioplausible"]

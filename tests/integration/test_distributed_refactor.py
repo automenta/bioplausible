@@ -3,7 +3,10 @@ import unittest
 import torch
 
 from bioplausible.equitile.core import EquiTile, EquiTileConfig
-from bioplausible.equitile.distributed import DistributedConfig, DistributedEquiTile
+from bioplausible.equitile.training.distributed import (
+    DistributedConfig,
+    DistributedEquiTile,
+)
 
 
 class TestDistributedEquiTile(unittest.TestCase):

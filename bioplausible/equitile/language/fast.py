@@ -22,8 +22,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.data.lm import get_lm_dataset
-
-from .language_optimized import (
+from bioplausible.equitile.language.optimized import (
     LMEquiTileConfig,
     OptimizedEquiTileTransformerLayer,
     OptimizedLMEquiTile,

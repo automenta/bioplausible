@@ -3,9 +3,9 @@ import unittest
 import torch
 
 from bioplausible.equitile.core import EquiTile
-from bioplausible.equitile.language import LMEquiTile
-from bioplausible.equitile.rl import RLEquiTile
-from bioplausible.equitile.vision import ConvEquiTile
+from bioplausible.equitile.deployments.rl import RLEquiTile
+from bioplausible.equitile.deployments.vision import ConvEquiTile
+from bioplausible.equitile.language.canonical import LMEquiTile
 
 
 class TestEquiTileRefactor(unittest.TestCase):

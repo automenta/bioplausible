@@ -9,13 +9,11 @@ unified distributed module and any other code that needs NCCL primitives.
 
 import logging
 import os
-from typing import TYPE_CHECKING
 
 import torch
 import torch.distributed as dist
 
-if TYPE_CHECKING:
-    from .config import NCCLConfig
+from bioplausible.equitile.core.config import NCCLConfig
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +34,6 @@ class NCCLCommunicator:
     """
 
     def __init__(self, config: NCCLConfig | None = None) -> None:
-        from .config import NCCLConfig
 
         self.config = config or NCCLConfig()
         self.initialized = False

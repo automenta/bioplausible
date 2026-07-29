@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Literal
 import torch
 
 if TYPE_CHECKING:
-    from .core import EquiTile
+    from bioplausible.equitile.core import EquiTile
 
 logger = logging.getLogger(__name__)
 
@@ -579,8 +579,8 @@ class EquiTileBuilder:
         EquiTile
             Constructed model
         """
-        from .config import EquiTileConfig
-        from .core import EquiTile
+        from bioplausible.equitile.core import EquiTile
+        from bioplausible.equitile.core.config import EquiTileConfig
 
         config = EquiTileConfig(
             neurons_per_tile=self._arch.neurons_per_tile,
@@ -707,7 +707,10 @@ class EnhancedEquiTileBuilder(EquiTileBuilder):
         EnhancedEquiTile
             Constructed enhanced model
         """
-        from .enhanced import EnhancedEquiTile, EnhancedEquiTileConfig
+        from bioplausible.equitile._internal.enhanced import (
+            EnhancedEquiTile,
+            EnhancedEquiTileConfig,
+        )
 
         # Create enhanced config
         # Note: We combine base config parameters into the enhanced config

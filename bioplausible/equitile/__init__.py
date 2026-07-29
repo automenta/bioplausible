@@ -98,22 +98,8 @@ from bioplausible.core.registry import (
     register_model,
 )
 
-# Distributed
-from ._nccl import NCCLCommunicator
-
-# Async execution
-from .async_execution import AsyncConfig as AsyncExecutionConfig
-from .async_execution import (
-    AsyncEquiTile,
-    TileProcessor,
-    TileResult,
-    TileScheduler,
-    TileTask,
-    create_async_model,
-)
-
-# Builder
-from .builder import (
+# Internal: builder + enhanced
+from bioplausible.equitile._internal.builder import (
     EnhancedEquiTileBuilder,
     EquiTileBuilder,
     InferenceContext,
@@ -121,101 +107,26 @@ from .builder import (
     build_enhanced_model,
     build_model,
 )
-from .config import (
-    AsyncConfig,  # Distributed configs; Enhanced configs; Dynamics configs
-    CurriculumConfig,
-    DistributedConfig,
-    DynamicEquiTileConfig,
-    EnhancedEquiTileConfig,
-    EquiTileConfig,
-    TileGrowthConfig,
-    create_dynamic_config,
-    create_enhanced_config,
-    create_fast_config,
-    create_production_config,
-    create_research_config,
-)
-from .core import EquiTile, EquiTileEP
-
-# Deployment
-from .deployment import (
-    DeploymentChecker,
-    EquiTileExporter,
-    ExportConfig,
-    ModelPruner,
-    check_deployment,
-    export_model,
-    prune_model,
-    quantize_model,
-)
-from .distributed import (
-    AsyncTileExecutor,
-    DeviceAssignment,
-    DistributedEquiTile,
-    MixedPrecisionTrainer,
-    TileCommunicator,
-    create_distributed_model,
-    spawn_distributed_worker,
-)
-from .distributed import DistributedConfig as DistributedConfigClass
-from .distributed import TileGrowthConfig as DistributedGrowthConfig
-from .dynamics import (
-    DynamicEquiTile,
-    TileGrowthManager,
-    TileMetrics,
-    create_dynamic_model,
-)
-from .dynamics import DynamicEquiTileConfig as DynamicsConfig
-from .dynamics import TileGrowthConfig as DynamicsTileGrowthConfig
-from .enhanced import (
+from bioplausible.equitile._internal.enhanced import (
     EnhancedEquiTile,
     TileLayerNorm,
     create_enhanced_model,
 )
 
-# Fast LM (visualization variant)
-from .fast_lm import FastLMConfig, FastLMEquiTile
-
-# Graph Neural Networks
-from .graph import (
-    GraphAttentionLayer,
-    GraphEquiTile,
-    GraphEquiTileConfig,
-    GraphEquiTileLayer,
-    aggregate_messages,
-    create_graph_model,
-    create_molecule_model,
-    create_social_graph_model,
-    scatter_max,
-    scatter_mean,
-    scatter_sum,
+# Analysis: dynamics + profiler + research
+from bioplausible.equitile.analysis.dynamics import (
+    DynamicEquiTile,
+    TileGrowthManager,
+    TileMetrics,
+    create_dynamic_model,
 )
-from .language import (
-    EquiTileTransformerLayer,
-    LMEquiTile,
-    LMEquiTileConfig,
-    PositionalEncoding,
-    SimpleTokenizer,
-    TileAttention,
-    TileFeedForward,
-    create_large_lm,
-    create_lm_model,
-    create_medium_lm,
-    create_small_lm,
+from bioplausible.equitile.analysis.dynamics import (
+    DynamicEquiTileConfig as DynamicsConfig,
 )
-
-# Optimized Language Model
-from .language_optimized import (
-    OptimizedEquiTileTransformerLayer,
-    OptimizedLMEquiTile,
-    OptimizedTileAttention,
-    OptimizedTileFeedForward,
-    create_optimized_lm,
-    create_optimized_small_lm,
+from bioplausible.equitile.analysis.dynamics import (
+    TileGrowthConfig as DynamicsTileGrowthConfig,
 )
-
-# Profiler
-from .profiler import (
+from bioplausible.equitile.analysis.profiler import (
     BenchmarkConfig,
     BenchmarkResult,
     BenchmarkRunner,
@@ -227,9 +138,7 @@ from .profiler import (
     create_profiler,
     run_benchmark,
 )
-
-# Research utilities
-from .research import (
+from bioplausible.equitile.analysis.research import (
     AblationConfig,
     AblationStudy,
     ExperimentConfig,
@@ -242,7 +151,50 @@ from .research import (
     create_tracker,
     create_visualization_helper,
 )
-from .rl import (
+
+# Core
+from bioplausible.equitile.core import EquiTile, EquiTileEP
+from bioplausible.equitile.core.config import (
+    AsyncConfig,
+    CurriculumConfig,
+    DistributedConfig,
+    DynamicEquiTileConfig,
+    EnhancedEquiTileConfig,
+    EquiTileConfig,
+    TileGrowthConfig,
+    create_dynamic_config,
+    create_enhanced_config,
+    create_fast_config,
+    create_production_config,
+    create_research_config,
+)
+from bioplausible.equitile.core.topology import TileGraph, TileState
+
+# Deployments
+from bioplausible.equitile.deployments.deployment import (
+    DeploymentChecker,
+    EquiTileExporter,
+    ExportConfig,
+    ModelPruner,
+    check_deployment,
+    export_model,
+    prune_model,
+    quantize_model,
+)
+from bioplausible.equitile.deployments.graph import (
+    GraphAttentionLayer,
+    GraphEquiTile,
+    GraphEquiTileConfig,
+    GraphEquiTileLayer,
+    aggregate_messages,
+    create_graph_model,
+    create_molecule_model,
+    create_social_graph_model,
+    scatter_max,
+    scatter_mean,
+    scatter_sum,
+)
+from bioplausible.equitile.deployments.rl import (
     RecurrentRLEquiTile,
     RLEquiTile,
     RLEquiTileConfig,
@@ -253,9 +205,7 @@ from .rl import (
     create_recurrent_rl_model,
     create_rl_model,
 )
-
-# Time Series
-from .timeseries import (
+from bioplausible.equitile.deployments.timeseries import (
     TemporalAttentionLayer,
     TemporalPositionalEncoding,
     TimeSeriesConfig,
@@ -265,10 +215,7 @@ from .timeseries import (
     create_classification_model,
     create_forecasting_model,
 )
-from .topology import TileGraph, TileState
-
-# Domain-specific modules
-from .vision import (
+from bioplausible.equitile.deployments.vision import (
     ConvEquiTile,
     ConvEquiTileConfig,
     ConvFeatureExtractor,
@@ -277,6 +224,59 @@ from .vision import (
     create_imagenet_model,
     create_mnist_model,
     create_vision_model,
+)
+from bioplausible.equitile.language import (
+    OptimizedEquiTileTransformerLayer,
+    OptimizedLMEquiTile,
+    OptimizedTileAttention,
+    OptimizedTileFeedForward,
+    create_optimized_lm,
+    create_optimized_small_lm,
+)
+
+# Language models
+from bioplausible.equitile.language.canonical import (
+    EquiTileTransformerLayer,
+    LMEquiTile,
+    LMEquiTileConfig,
+    PositionalEncoding,
+    SimpleTokenizer,
+    TileAttention,
+    TileFeedForward,
+    create_large_lm,
+    create_lm_model,
+    create_medium_lm,
+    create_small_lm,
+)
+from bioplausible.equitile.language.fast import FastLMConfig, FastLMEquiTile
+
+# Training: async + distributed
+from bioplausible.equitile.training import NCCLCommunicator
+from bioplausible.equitile.training.async_execution import (
+    AsyncConfig as AsyncExecutionConfig,
+)
+from bioplausible.equitile.training.async_execution import (
+    AsyncEquiTile,
+    TileProcessor,
+    TileResult,
+    TileScheduler,
+    TileTask,
+    create_async_model,
+)
+from bioplausible.equitile.training.distributed import (
+    AsyncTileExecutor,
+    DeviceAssignment,
+    DistributedEquiTile,
+    MixedPrecisionTrainer,
+    TileCommunicator,
+    create_distributed_model,
+    spawn_distributed_worker,
+)
+from bioplausible.equitile.training.distributed import (
+    DistributedConfig as DistributedConfigClass,
+)
+from bioplausible.equitile.training.distributed import (
+    TileGrowthConfig as DistributedGrowthConfig,
 )
 
 __all__ = [

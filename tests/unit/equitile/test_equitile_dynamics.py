@@ -1,11 +1,11 @@
 import unittest
 
-from bioplausible.equitile.core import EquiTile, EquiTileConfig
-from bioplausible.equitile.dynamics import (
+from bioplausible.equitile.analysis.dynamics import (
     DynamicEquiTile,
     DynamicEquiTileConfig,
     TileGrowthConfig,
 )
+from bioplausible.equitile.core import EquiTile, EquiTileConfig
 
 
 class TestEquiTileDynamics(unittest.TestCase):

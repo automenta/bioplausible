@@ -29,8 +29,8 @@ from torch import nn
 from torch.distributions import Categorical, Normal
 
 from bioplausible.core.registry import Domain, LocalityLevel
-from bioplausible.equitile.config import EquiTileConfig
 from bioplausible.equitile.core import EquiTile
+from bioplausible.equitile.core.config import EquiTileConfig
 from bioplausible.zoo.base import BioModel, ModelConfig, register_model
 
 if TYPE_CHECKING:

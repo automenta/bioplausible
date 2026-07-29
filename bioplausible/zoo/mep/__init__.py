@@ -27,7 +27,7 @@ from bioplausible.core.registry import (
 )
 
 # Trigger registry registration (side-effect import)
-from . import _registration  # ruff: ignore[unused-import]
+from . import _registration
 from .optimizers import (
     BackpropGradient,
     CompositeOptimizer,

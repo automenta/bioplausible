@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING
 import torch
 
 if TYPE_CHECKING:
-    from .core import EquiTile
+    from bioplausible.equitile.core import EquiTile
 
 
 # =============================================================================

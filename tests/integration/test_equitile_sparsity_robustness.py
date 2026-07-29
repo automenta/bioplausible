@@ -29,7 +29,7 @@ from bioplausible.equitile import (
     create_mnist_model,
     create_rl_model,
 )
-from bioplausible.equitile.fast_lm import FastLMConfig, FastLMEquiTile
+from bioplausible.equitile.language.fast import FastLMConfig, FastLMEquiTile
 
 # =============================================================================
 # Sparsity Enhancement Tests

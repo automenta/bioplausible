@@ -35,15 +35,15 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from .kernels import (
+from bioplausible.equitile.core.kernels import (
     compute_activity_update,
     compute_hebbian_update,
     compute_tile_prediction,
 )
 
 if TYPE_CHECKING:
-    from .core import EquiTile
-    from .topology import TileState
+    from bioplausible.equitile.core import EquiTile
+    from bioplausible.equitile.core.topology import TileState
 
 
 # =============================================================================
@@ -880,7 +880,7 @@ def create_async_model(
     tuple of (EquiTile, AsyncEquiTile)
         Base model and async wrapper
     """
-    from .core import EquiTile
+    from bioplausible.equitile.core import EquiTile
 
     model = EquiTile(
         neurons_per_tile=neurons_per_tile,

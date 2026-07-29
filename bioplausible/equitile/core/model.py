@@ -19,18 +19,20 @@ from bioplausible.core.registry import Domain, LocalityLevel
 from bioplausible.zoo.base import BioModel, ModelConfig, register_model
 
 logger = logging.getLogger(__name__)
-
-from .config import EquiTileConfig
-from .kernels import (
+from bioplausible.equitile._internal.state_types import EquiTileStateDict
+from bioplausible.equitile.core.config import EquiTileConfig
+from bioplausible.equitile.core.kernels import (
     compute_activity_update,
     compute_hebbian_update,
     compute_tile_prediction,
 )
-from .optimizer_mixin import EquiTileOptimizerMixin
-from .state_types import EquiTileStateDict
-from .task_handler import TaskHandler
-from .topology import TileGraph, TileState
-from .utils.init_utils import initialize_edge_weights, initialize_io_projections
+from bioplausible.equitile.core.topology import TileGraph, TileState
+from bioplausible.equitile.training.optimizer_mixin import EquiTileOptimizerMixin
+from bioplausible.equitile.training.task_handler import TaskHandler
+from bioplausible.equitile.utils.init_utils import (
+    initialize_edge_weights,
+    initialize_io_projections,
+)
 
 if TYPE_CHECKING:
     from torch import Tensor

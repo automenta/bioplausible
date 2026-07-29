@@ -19,7 +19,7 @@ from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
 # Backward-compat re-export: register_model was moved to core/registry.py
-from bioplausible.core.registry import register_model  # noqa: F401  # backward compat
+from bioplausible.core.registry import register_model  # noqa: F401
 
 LayerRole = Literal["hidden", "output"]
 

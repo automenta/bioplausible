@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    from .config import EquiTileConfig
+    from bioplausible.equitile.core.config import EquiTileConfig
 
 
 class EquiTileOptimizerMixin:

@@ -3,10 +3,10 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import torch
+from bioplausible.equitile.rl import RolloutBuffer
 from gymnasium.spaces import Box
 from torch import nn
 
-from bioplausible.equitile.rl import RolloutBuffer
 from bioplausible.training.rl import RLTrainer
 
 

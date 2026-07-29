@@ -48,16 +48,16 @@ from typing import TYPE_CHECKING
 import torch
 import torch.multiprocessing as mp
 
-from ._nccl import NCCLCommunicator
-from .config import DistributedConfig, TileGrowthConfig
-from .kernels import (
+from bioplausible.equitile.core.config import DistributedConfig, TileGrowthConfig
+from bioplausible.equitile.core.kernels import (
     compute_activity_update,
     compute_hebbian_update,
     compute_tile_prediction,
 )
+from bioplausible.equitile.training._nccl import NCCLCommunicator
 
 if TYPE_CHECKING:
-    from .core import EquiTile
+    from bioplausible.equitile.core import EquiTile
 
 logger = logging.getLogger(__name__)
 
@@ -1246,7 +1246,7 @@ def create_distributed_model(
     tuple of (EquiTile, DistributedEquiTile)
         Base model and distributed wrapper
     """
-    from .core import EquiTile
+    from bioplausible.equitile.core import EquiTile
 
     model = EquiTile(
         neurons_per_tile=neurons_per_tile,

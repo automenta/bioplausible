@@ -25,11 +25,10 @@ import torch
 import torch.nn.functional as F
 
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
-
-from .config import DynamicEquiTileConfig, TileGrowthConfig
+from bioplausible.equitile.core.config import DynamicEquiTileConfig, TileGrowthConfig
 
 if TYPE_CHECKING:
-    from .core import EquiTile
+    from bioplausible.equitile.core import EquiTile
 
 logger = logging.getLogger(__name__)
 
@@ -535,7 +534,7 @@ def create_dynamic_model(
             prune_enabled=True,
         )
     """
-    from .core import EquiTile
+    from bioplausible.equitile.core import EquiTile
 
     model = EquiTile(
         neurons_per_tile=neurons_per_tile,

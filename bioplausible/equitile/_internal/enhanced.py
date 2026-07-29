@@ -24,13 +24,18 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import Domain, LocalityLevel
+from bioplausible.equitile.core import EquiTile
+from bioplausible.equitile.core.config import EnhancedEquiTileConfig
+from bioplausible.equitile.core.kernels import (
+    compute_activity_update,
+    compute_hebbian_update,
+)
+from bioplausible.equitile.core.topology import TileState
+from bioplausible.equitile.utils.init_utils import (
+    initialize_edge_weights,
+    initialize_io_projections,
+)
 from bioplausible.zoo.base import ModelConfig, register_model
-
-from .config import EnhancedEquiTileConfig
-from .core import EquiTile
-from .kernels import compute_activity_update, compute_hebbian_update
-from .topology import TileState
-from .utils.init_utils import initialize_edge_weights, initialize_io_projections
 
 if TYPE_CHECKING:
     from torch import Tensor

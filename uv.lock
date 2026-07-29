@@ -151,57 +151,87 @@ name = "bioplausible"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "datasets" },
-    { name = "fastapi" },
-    { name = "gymnasium" },
-    { name = "kademlia" },
-    { name = "matplotlib" },
     { name = "numpy" },
     { name = "omegaconf" },
-    { name = "onnx" },
-    { name = "onnxscript" },
-    { name = "optuna" },
-    { name = "pandas" },
-    { name = "psutil" },
     { name = "pydantic" },
-    { name = "pyqt6" },
-    { name = "pyqtgraph" },
-    { name = "pytorch-lightning" },
     { name = "rich" },
-    { name = "scikit-learn" },
-    { name = "scipy" },
-    { name = "seaborn" },
-    { name = "tabulate" },
-    { name = "tokenizers" },
     { name = "torch" },
-    { name = "torchvision" },
     { name = "tqdm" },
-    { name = "transformers" },
-    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
+analysis = [
+    { name = "optuna" },
+    { name = "tabulate" },
+]
+deploy = [
+    { name = "fastapi" },
+    { name = "onnxruntime" },
+    { name = "uvicorn" },
+]
 dev = [
     { name = "build" },
+    { name = "datasets" },
+    { name = "fastapi" },
+    { name = "gymnasium" },
     { name = "hypothesis" },
+    { name = "kademlia" },
+    { name = "matplotlib" },
+    { name = "onnxruntime" },
+    { name = "optuna" },
+    { name = "pandas" },
     { name = "pip-audit" },
     { name = "pre-commit" },
+    { name = "psutil" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
-    { name = "pytest-qt" },
     { name = "pytest-xdist" },
+    { name = "pytorch-lightning" },
     { name = "ruff" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "seaborn" },
+    { name = "tabulate" },
+    { name = "torchvision" },
     { name = "twine" },
+    { name = "uvicorn" },
+]
+export = [
+    { name = "onnx" },
+    { name = "onnxscript" },
 ]
 full = [
     { name = "botorch" },
+    { name = "datasets" },
+    { name = "fastapi" },
     { name = "gpytorch" },
+    { name = "gymnasium" },
+    { name = "kademlia" },
+    { name = "matplotlib" },
     { name = "networkx" },
+    { name = "onnx" },
+    { name = "onnxruntime" },
+    { name = "onnxscript" },
+    { name = "openai" },
+    { name = "optuna" },
+    { name = "pandas" },
+    { name = "psutil" },
+    { name = "pyqt6" },
+    { name = "pyqtgraph" },
+    { name = "pytorch-lightning" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "seaborn" },
     { name = "snntorch" },
     { name = "sympy" },
+    { name = "tabulate" },
+    { name = "tokenizers" },
     { name = "torch-geometric" },
+    { name = "torchvision" },
+    { name = "transformers" },
+    { name = "uvicorn" },
 ]
 graphs = [
     { name = "networkx" },
@@ -212,62 +242,111 @@ knowledgebase = [
     { name = "gpytorch" },
     { name = "sympy" },
 ]
+lightning = [
+    { name = "pytorch-lightning" },
+]
 llm = [
     { name = "openai" },
+]
+lm = [
+    { name = "datasets" },
+    { name = "tokenizers" },
+    { name = "transformers" },
+]
+ml = [
+    { name = "pandas" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+]
+monitoring = [
+    { name = "psutil" },
+]
+p2p = [
+    { name = "kademlia" },
+]
+plot = [
+    { name = "matplotlib" },
+    { name = "seaborn" },
+]
+rl = [
+    { name = "gymnasium" },
 ]
 spiking = [
     { name = "snntorch" },
 ]
+ui = [
+    { name = "pyqt6" },
+    { name = "pyqtgraph" },
+]
+vision = [
+    { name = "torchvision" },
+]
 
 [package.metadata]
 requires-dist = [
-    { name = "bioplausible", extras = ["knowledgebase", "graphs", "spiking"], marker = "extra == 'full'" },
+    { name = "bioplausible", extras = ["vision", "lm", "rl", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "spiking", "llm"], marker = "extra == 'full'" },
     { name = "botorch", marker = "extra == 'knowledgebase'" },
     { name = "build", marker = "extra == 'dev'" },
-    { name = "datasets" },
-    { name = "fastapi" },
+    { name = "datasets", marker = "extra == 'dev'" },
+    { name = "datasets", marker = "extra == 'lm'" },
+    { name = "fastapi", marker = "extra == 'deploy'" },
+    { name = "fastapi", marker = "extra == 'dev'" },
     { name = "gpytorch", marker = "extra == 'knowledgebase'" },
-    { name = "gymnasium" },
+    { name = "gymnasium", marker = "extra == 'dev'" },
+    { name = "gymnasium", marker = "extra == 'rl'" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0" },
-    { name = "kademlia" },
-    { name = "matplotlib" },
+    { name = "kademlia", marker = "extra == 'dev'" },
+    { name = "kademlia", marker = "extra == 'p2p'" },
+    { name = "matplotlib", marker = "extra == 'dev'" },
+    { name = "matplotlib", marker = "extra == 'plot'" },
     { name = "networkx", marker = "extra == 'graphs'" },
     { name = "numpy" },
     { name = "omegaconf", specifier = ">=2.3" },
-    { name = "onnx" },
-    { name = "onnxscript" },
+    { name = "onnx", marker = "extra == 'export'" },
+    { name = "onnxruntime", marker = "extra == 'deploy'" },
+    { name = "onnxruntime", marker = "extra == 'dev'" },
+    { name = "onnxscript", marker = "extra == 'export'" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.0" },
-    { name = "optuna" },
-    { name = "pandas" },
+    { name = "optuna", marker = "extra == 'analysis'" },
+    { name = "optuna", marker = "extra == 'dev'" },
+    { name = "pandas", marker = "extra == 'dev'" },
+    { name = "pandas", marker = "extra == 'ml'" },
     { name = "pip-audit", marker = "extra == 'dev'" },
     { name = "pre-commit", marker = "extra == 'dev'" },
-    { name = "psutil" },
+    { name = "psutil", marker = "extra == 'dev'" },
+    { name = "psutil", marker = "extra == 'monitoring'" },
     { name = "pydantic", specifier = ">=2.0" },
-    { name = "pyqt6" },
-    { name = "pyqtgraph" },
+    { name = "pyqt6", marker = "extra == 'ui'" },
+    { name = "pyqtgraph", marker = "extra == 'ui'" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pytest-mock", marker = "extra == 'dev'" },
-    { name = "pytest-qt", marker = "extra == 'dev'" },
     { name = "pytest-xdist", marker = "extra == 'dev'" },
-    { name = "pytorch-lightning", specifier = ">=2.0.0" },
+    { name = "pytorch-lightning", marker = "extra == 'dev'", specifier = ">=2.0.0" },
+    { name = "pytorch-lightning", marker = "extra == 'lightning'", specifier = ">=2.0.0" },
     { name = "rich" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
-    { name = "scikit-learn" },
-    { name = "scipy" },
-    { name = "seaborn" },
+    { name = "scikit-learn", marker = "extra == 'dev'" },
+    { name = "scikit-learn", marker = "extra == 'ml'" },
+    { name = "scipy", marker = "extra == 'dev'" },
+    { name = "scipy", marker = "extra == 'ml'" },
+    { name = "seaborn", marker = "extra == 'dev'" },
+    { name = "seaborn", marker = "extra == 'plot'" },
     { name = "snntorch", marker = "extra == 'spiking'", specifier = ">=0.8" },
     { name = "sympy", marker = "extra == 'knowledgebase'" },
-    { name = "tabulate", specifier = ">=0.9" },
-    { name = "tokenizers" },
+    { name = "tabulate", marker = "extra == 'analysis'", specifier = ">=0.9" },
+    { name = "tabulate", marker = "extra == 'dev'", specifier = ">=0.9" },
+    { name = "tokenizers", marker = "extra == 'lm'" },
     { name = "torch", specifier = ">=2.0.0" },
     { name = "torch-geometric", marker = "extra == 'graphs'", specifier = ">=2.5" },
-    { name = "torchvision" },
+    { name = "torchvision", marker = "extra == 'dev'" },
+    { name = "torchvision", marker = "extra == 'vision'" },
     { name = "tqdm" },
-    { name = "transformers" },
+    { name = "transformers", marker = "extra == 'lm'" },
     { name = "twine", marker = "extra == 'dev'" },
-    { name = "uvicorn" },
+    { name = "uvicorn", marker = "extra == 'deploy'" },
+    { name = "uvicorn", marker = "extra == 'dev'" },
 ]
 
 [[package]]
@@ -787,6 +866,14 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c0/80/8232b582c4b318b817cf1274ba74976b07b34d35ef439b3eb948f98645a1/filelock-3.32.0.tar.gz", hash = "sha256:7be2ad23a14607ccc71808e68fe30848aeace7058ace17852f68e2a68e310402", size = 213757 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/06/79/b4c714bef36bc4ec2beeae1e0c124f0223888cd8c6feb1cdc56038116920/filelock-3.32.0-py3-none-any.whl", hash = "sha256:d396bea984af47333ef05e50eae7eff88c84256de6112aea0ec48a233c064fe3", size = 97732 },
+]
+
+[[package]]
+name = "flatbuffers"
+version = "25.12.19"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e8/2d/d2a548598be01649e2d46231d151a6c56d10b964d94043a335ae56ea2d92/flatbuffers-25.12.19-py2.py3-none-any.whl", hash = "sha256:7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4", size = 26661 },
 ]
 
 [[package]]
@@ -1888,6 +1975,26 @@ wheels = [
 ]
 
 [[package]]
+name = "onnxruntime"
+version = "1.28.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flatbuffers" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "protobuf" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4e/eb/952314c451d9463e5c9aed9978eec76cf32930d407d9ab8700dd0f4ea1ea/onnxruntime-1.28.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:8adff67a3f28257b37cfe945a7e952e4122666aa8c91a0380862e9fd4c2ed19f", size = 19143748 },
+    { url = "https://files.pythonhosted.org/packages/3f/e9/139180b4dd810329aaa42c238b4e6383c906202d98609ae29d66eb7c32b1/onnxruntime-1.28.0-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:bc2565e487b4896fb988d6383577d875d958e071fc5f6c3550bd5d02ae98264b", size = 17051950 },
+    { url = "https://files.pythonhosted.org/packages/03/88/9432428273356ad3c8aa01f52c1b3e7f53c4c0192748f41ad983872b436b/onnxruntime-1.28.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:6afdc83f1317c136e92fc29f5ee9f058de59d87c0b22cee3fdbfbaa0ccc2098a", size = 19214924 },
+    { url = "https://files.pythonhosted.org/packages/bb/e2/6feb3a43517aaf2b1bf7e46897ba5eb81a29717f7d7901420614d5ee4653/onnxruntime-1.28.0-cp314-cp314-win_amd64.whl", hash = "sha256:f2a3b9e30ce880d4ca54999cb313569e36da4f62eefe25f87be18f43e9a3a4d5", size = 14093738 },
+    { url = "https://files.pythonhosted.org/packages/fc/8f/83974a1e201dc2e58e5e7111bcaeb1ca2413e9c41f505d26419ee9e3dddf/onnxruntime-1.28.0-cp314-cp314-win_arm64.whl", hash = "sha256:07fb3cbe990d6bf0ab3c22bfbbfb0e314151266046ea6edb4a07f556b4258c5f", size = 13821117 },
+    { url = "https://files.pythonhosted.org/packages/0d/83/00e606bc25c756d76a267370c39b7516ad52f9cf134d7ff2bff8b6108bc4/onnxruntime-1.28.0-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e562d6e36a749f6764481c0ddb0f2af3d0b5a3c164291361d08803c557f369af", size = 17055518 },
+    { url = "https://files.pythonhosted.org/packages/94/a9/68707e1ce345cbdbcd4df65932ebc82a673e917d63eda0007ebcff948691/onnxruntime-1.28.0-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:4f6e92367ddce1e4d33cf295024f40192be6c6171a09208f515ba169ced06c8e", size = 19222976 },
+]
+
+[[package]]
 name = "onnxscript"
 version = "0.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2462,20 +2569,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/68/14/eb014d26be205d38ad5ad20d9a80f7d201472e08167f0bb4361e251084a9/pytest_mock-3.15.1.tar.gz", hash = "sha256:1849a238f6f396da19762269de72cb1814ab44416fa73a8686deac10b0d87a0f", size = 34036 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5a/cc/06253936f4a7fa2e0f48dfe6d851d9c56df896a9ab09ac019d70b760619c/pytest_mock-3.15.1-py3-none-any.whl", hash = "sha256:0a25e2eb88fe5168d535041d09a4529a188176ae608a6d249ee65abc0949630d", size = 10095 },
-]
-
-[[package]]
-name = "pytest-qt"
-version = "4.5.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pluggy" },
-    { name = "pytest" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/61/8bdec02663c18bf5016709b909411dce04a868710477dc9b9844ffcf8dd2/pytest_qt-4.5.0.tar.gz", hash = "sha256:51620e01c488f065d2036425cbc1cbcf8a6972295105fd285321eb47e66a319f", size = 128702 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cc/d0/8339b888ad64a3d4e508fed8245a402b503846e1972c10ad60955883dcbb/pytest_qt-4.5.0-py3-none-any.whl", hash = "sha256:ed21ea9b861247f7d18090a26bfbda8fb51d7a8a7b6f776157426ff2ccf26eff", size = 37214 },
 ]
 
 [[package]]
