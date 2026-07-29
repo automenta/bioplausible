@@ -13,7 +13,9 @@ from torchvision import datasets, transforms
 root_path = Path(__file__).parent.parent
 sys.path.append(str(root_path))
 
-from models.hebbian_chain import DeepHebbianChain  # noqa: E402
+from models.hebbian_chain import (
+    DeepHebbianChain,
+)
 
 
 def train_linear_probe(features, targets, epochs=100, lr=0.01, device="cuda"):

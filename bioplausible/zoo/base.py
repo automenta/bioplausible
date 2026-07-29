@@ -11,13 +11,16 @@ Combines functionality for:
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Literal
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
-from bioplausible.core.registry import register_model  # noqa: F401
+from bioplausible.core.registry import register_model  # ruff: ignore[unused-import]
+
+LayerRole = Literal["hidden", "output"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +43,11 @@ class ModelConfig:
     use_spectral_norm: bool = True
     activation: str = "silu"
     lipschitz_mode: str = "power_iteration"  # "power_iteration" or "svd"
+
+    # μPC (Maximal Update Parameterization) output-node scaling
+    # "mupc": output layer skips the √L scaling factor applied to hidden layers
+    # "uniform": all layers get the same scaling (backward compat / ablation)
+    output_scaling_mode: Literal["uniform", "mupc"] = "mupc"
 
     # Additional kwargs
     extra: dict[str, object] = field(default_factory=dict)
@@ -231,10 +239,47 @@ class BioModel(nn.Module, ABC):
             return nn.GELU()
         return nn.ReLU()
 
-    def apply_spectral_norm(self, layer: nn.Module) -> nn.Module:
-        """Apply spectral normalization to a layer if enabled."""
+    def apply_spectral_norm(
+        self,
+        layer: nn.Module,
+        layer_role: LayerRole = "hidden",
+    ) -> nn.Module:
+        """Apply spectral normalization to a layer if enabled.
+
+        Parameters
+        ----------
+        layer : nn.Module
+            The layer to normalize.
+        layer_role : LayerRole
+            Whether this is a ``"hidden"`` or ``"output"`` layer.
+            When ``output_scaling_mode == "mupc"`` and ``layer_role == "output"``,
+            the weight is rescaled to remove the √L fan-in factor that is
+            present in the default kaiming initialization but should not
+            apply to output nodes under μPC.
+
+        Returns
+        -------
+        nn.Module
+            The normalized layer (wrapped or as-is).
+        """
         if self.use_spectral_norm and isinstance(layer, (nn.Linear, nn.Conv2d)):
-            return spectral_norm(layer, n_power_iterations=5)
+            layer = spectral_norm(layer, n_power_iterations=5)
+            if (
+                self.config.output_scaling_mode == "mupc"
+                and layer_role == "output"
+                and isinstance(layer, nn.Linear)
+            ):
+                fan_in = layer.weight.size(1)
+                if fan_in > 0:
+                    with torch.no_grad():
+                        # μPC: output layer weights should NOT include the √L factor.
+                        # Default kaiming init sets std = gain * √(2 / fan_in).
+                        # For μPC output, we rescale to std = gain (no fan_in denom).
+                        gain = nn.init.calculate_gain("linear")
+                        std = gain * (2.0 / fan_in) ** 0.5
+                        target_std = gain  # no √L factor
+                        layer.weight.mul_(target_std / max(std, 1e-12))
+            return layer
         return layer
 
     def _get_spectral_normalized_weight(self, layer: nn.Module) -> torch.Tensor:

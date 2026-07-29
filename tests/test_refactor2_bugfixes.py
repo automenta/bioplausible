@@ -15,7 +15,7 @@ import pytest
 import torch
 from torch import nn
 
-import bioplausible  # noqa: F401  # triggers full registration
+import bioplausible  # ruff: ignore[unused-import]  # triggers full registration
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import (
     CoreTrainer,
@@ -541,7 +541,7 @@ def test_comma_except_syntax_at_runtime_catches_both_types():
 
     # Should catch ImportError
     try:
-        import nonexistent_module_xyz  # noqa: F401
+        import nonexistent_module_xyz  # ruff: ignore[unused-import]
     except ImportError, OSError:
         pass  # Must catch ImportError
     else:

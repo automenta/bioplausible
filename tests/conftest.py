@@ -11,7 +11,7 @@ sys.path.append(str(ROOT_DIR))
 
 # Hard dependencies — no mock stubs needed
 # bioplausible.acceleration checks for cupy
-from unittest.mock import MagicMock  # noqa: E402
+from unittest.mock import MagicMock  # ruff: ignore[module-import-not-at-top-of-file]
 
 sys.modules["cupy"] = MagicMock()
 

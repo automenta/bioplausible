@@ -164,9 +164,8 @@ def create_optuna_space(
                     param_name, int(min_val), int(max_val)
                 )
 
-        elif spec.param_type == "categorical":
-            if spec.choices:
-                config[param_name] = trial.suggest_categorical(param_name, spec.choices)
+        elif spec.param_type == "categorical" and spec.choices:
+            config[param_name] = trial.suggest_categorical(param_name, spec.choices)
 
     # Validate final config
     errors = HYPERPARAM_METAMODEL.validate_config(model_spec, config)

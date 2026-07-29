@@ -21,9 +21,8 @@ def _filter_trials(trials, tier=None, task=None):
             if trial_tier != tier:
                 continue
 
-        if task:
-            if task not in t["study_name"]:
-                continue
+        if task and task not in t["study_name"]:
+            continue
 
         filtered.append(t)
     return filtered

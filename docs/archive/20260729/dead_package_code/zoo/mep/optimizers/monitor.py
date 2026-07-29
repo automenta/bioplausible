@@ -124,11 +124,10 @@ class EPMonitor:
         # Compute weight change
         weight_change_sq = 0.0
         for name, param in model.named_parameters():
-            if param.grad is not None:
-                if name in self._prev_weights:
-                    weight_change_sq += (
-                        param.data - self._prev_weights[name]
-                    ).norm().item() ** 2
+            if param.grad is not None and name in self._prev_weights:
+                weight_change_sq += (
+                    param.data - self._prev_weights[name]
+                ).norm().item() ** 2
             self._prev_weights[name] = param.data.clone()
         weight_change = float(weight_change_sq) ** 0.5
 

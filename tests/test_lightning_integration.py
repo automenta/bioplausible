@@ -133,7 +133,7 @@ class TestBuildTrainer:
     def test_build_trainer_with_wandb(self):
         """Test trainer can be configured with W&B logger."""
         try:
-            import wandb  # noqa: F401
+            import wandb  # ruff: ignore[unused-import]
         except ModuleNotFoundError:
             import pytest
 

@@ -5,7 +5,7 @@ Allows using EqProp models in Scikit-Learn pipelines with .fit() and .predict().
 Supports incremental learning via .partial_fit().
 """
 
-# ruff: noqa: N803, N806, PLR0913, PLR0917, TRY003 — sklearn convention uses uppercase X
+# ruff: file-ignore[invalid-argument-name, non-lowercase-variable-in-function, too-many-arguments, too-many-positional-arguments, raise-vanilla-args] — sklearn convention uses uppercase X
 
 from typing import Any
 

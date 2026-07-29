@@ -51,7 +51,7 @@ def cross_entropy(logits: np.ndarray, targets: np.ndarray, xp: object = None) ->
 
 
 def spectral_normalize(
-    W: np.ndarray,  # noqa: N803 - mathematical weight-matrix convention
+    W: np.ndarray,  # ruff: ignore[invalid-argument-name] - mathematical weight-matrix convention
     num_iters: int = 5,
     u: np.ndarray | None = None,
     xp: object = None,

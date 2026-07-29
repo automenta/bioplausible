@@ -170,12 +170,11 @@ def test_ep_contrastive_property():
         # Check that weights changed
         weights_changed = False
         for edge_key, edge in edges_iter.items():
-            if edge.weight is not None:
-                if not torch.allclose(
-                    initial_weights[edge_key], edge.weight.data, atol=1e-6
-                ):
-                    weights_changed = True
-                    break
+            if edge.weight is not None and not torch.allclose(
+                initial_weights[edge_key], edge.weight.data, atol=1e-6
+            ):
+                weights_changed = True
+                break
 
     assert weights_changed, "EP should update weights via contrastive learning"
 
@@ -236,12 +235,11 @@ def test_pc_local_hebbian_property():
         # Check that weights changed
         weights_changed = False
         for edge_key, edge in edges_iter.items():
-            if edge.weight is not None:
-                if not torch.allclose(
-                    initial_weights[edge_key], edge.weight.data, atol=1e-6
-                ):
-                    weights_changed = True
-                    break
+            if edge.weight is not None and not torch.allclose(
+                initial_weights[edge_key], edge.weight.data, atol=1e-6
+            ):
+                weights_changed = True
+                break
 
     assert weights_changed, "PC should update weights via local Hebbian learning"
 

@@ -9,7 +9,9 @@ from torch.utils.data import DataLoader, TensorDataset
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from bioplausible.zoo.models.eqprop import LoopedMLP  # noqa: E402
+from bioplausible.zoo.models.eqprop import (
+    LoopedMLP,
+)
 
 
 class TestModelKernelAPI(unittest.TestCase):

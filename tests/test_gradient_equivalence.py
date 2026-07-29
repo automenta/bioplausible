@@ -29,13 +29,12 @@ def test_contrastive_gradients():
     # Verify gradients exist and are valid (no NaNs)
     has_grads = False
     for name, param in model.named_parameters():
-        if param.requires_grad:
-            if param.grad is not None:
-                has_grads = True
-                assert not torch.isnan(param.grad).any(), f"NaN gradient for {name}"
-                assert not torch.isinf(param.grad).any(), f"Inf gradient for {name}"
-                # Check magnitude is reasonable
-                grad_norm = param.grad.norm().item()
-                assert grad_norm <= 100.0, f"High gradient norm for {name}: {grad_norm}"
+        if param.requires_grad and param.grad is not None:
+            has_grads = True
+            assert not torch.isnan(param.grad).any(), f"NaN gradient for {name}"
+            assert not torch.isinf(param.grad).any(), f"Inf gradient for {name}"
+            # Check magnitude is reasonable
+            grad_norm = param.grad.norm().item()
+            assert grad_norm <= 100.0, f"High gradient norm for {name}: {grad_norm}"
 
     assert has_grads, "No gradients computed for any parameter."

@@ -26,13 +26,13 @@ from bioplausible.zoo.models.predictive_coding import (
 from bioplausible.zoo.models.target_prop import DifferenceTargetProp
 
 from . import (
-    backprop,  # noqa: F401
-    base,  # noqa: F401
-    eqprop,  # noqa: F401
-    fa,  # noqa: F401
-    hebbian,  # noqa: F401
-    mep,  # noqa: F401
-    spiking,  # noqa: F401
+    backprop,  # ruff: ignore[unused-import]
+    base,  # ruff: ignore[unused-import]
+    eqprop,  # ruff: ignore[unused-import]
+    fa,  # ruff: ignore[unused-import]
+    hebbian,  # ruff: ignore[unused-import]
+    mep,  # ruff: ignore[unused-import]
+    spiking,  # ruff: ignore[unused-import]
 )
 
 __all__ = [

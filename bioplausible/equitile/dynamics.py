@@ -192,10 +192,9 @@ class TileGrowthManager:
 
         # Check for pruning
         prune_id = self.should_prune(model)
-        if prune_id is not None:
-            if self.prune_tile(model, prune_id):
-                stats["pruned"] = 1
-                self._last_prune_step = self._step_count
+        if prune_id is not None and self.prune_tile(model, prune_id):
+            stats["pruned"] = 1
+            self._last_prune_step = self._step_count
 
         return stats
 

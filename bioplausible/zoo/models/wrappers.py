@@ -54,12 +54,15 @@ class RecurrentWrapper(TransitionGraphMixin, EqPropModel):
             use_spectral_norm=use_spectral_norm,
         )
 
-        self.cell = cell
         self.output_layer = nn.Linear(hidden_dim, output_dim)
+        self.cell = cell
 
         # Apply spectral norm if requested
         if use_spectral_norm:
             self._apply_spectral_norm()
+            self.output_layer = self.apply_spectral_norm(
+                self.output_layer, layer_role="output"
+            )
 
     def transition_modules(self) -> list[nn.Module]:
         """The recurrent cell is the single transition module.

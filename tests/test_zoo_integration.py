@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 # Import zoo modules to trigger registration
-import bioplausible.zoo  # noqa: F401
+import bioplausible.zoo  # ruff: ignore[unused-import]
 from bioplausible.core.registry import (
     ComponentCategory,
     Domain,
@@ -375,7 +375,7 @@ def test_register_attaches_metadata_to_factory():
 
     Registry.clear()
 
-    def smep_like(params, model=None):  # noqa: ARG001
+    def smep_like(params, model=None):  # ruff: ignore[unused-function-argument]
         return params
 
     register_optimizer("factory_with_meta", bio_plausibility_score=0.95)(smep_like)

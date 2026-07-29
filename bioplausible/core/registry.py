@@ -309,7 +309,7 @@ class Registry:
         if name not in cls._components[cat]:
             available = list(cls._components[cat].keys())
             raise ValueError(f"Unknown {cat.value}: {name}. Available: {available}")
-        return cast(ComponentMetadata, cls._components[cat][name]["metadata"])
+        return cast("ComponentMetadata", cls._components[cat][name]["metadata"])
 
     @classmethod
     def list(
@@ -362,7 +362,7 @@ class Registry:
             if cat not in cls._components:
                 continue
             for name, info in cls._components[cat].items():
-                meta = cast(ComponentMetadata, info["metadata"])
+                meta = cast("ComponentMetadata", info["metadata"])
                 if flt.matches(meta):
                     results.append({
                         "name": name,
@@ -416,7 +416,7 @@ class Registry:
             cat_name = category.value
             export_data[cat_name] = {}
             for name, info in comps.items():
-                meta = cast(ComponentMetadata, info["metadata"])
+                meta = cast("ComponentMetadata", info["metadata"])
                 export_data[cat_name][name] = {
                     "name": meta.name,
                     "category": meta.category.value,

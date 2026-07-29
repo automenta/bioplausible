@@ -1,4 +1,4 @@
-# ruff: noqa: N806 — test fixture names follow camelCase convention
+# ruff: file-ignore[non-lowercase-variable-in-function] — test fixture names follow camelCase convention
 
 import unittest
 from unittest.mock import MagicMock

@@ -17,6 +17,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+
+@dataclass
+class InferenceRequest:
+    """Request body for deployment prediction endpoint."""
+
+    data: list[list[float]] | list[float]
+    shape: list[int] | None = None
+
+
 logger = logging.getLogger(__name__)
 
 import torch

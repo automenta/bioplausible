@@ -8,8 +8,6 @@ StandardEqProp, DirectedEP, HolomorphicEP all follow the same pattern:
 5. Apply gradients and step optimizer
 """
 
-from typing import Protocol
-
 import torch
 import torch.nn.functional as F
 from torch import nn

@@ -10,7 +10,9 @@ from torch.utils.data import DataLoader, TensorDataset
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from bioplausible.acceleration.kernels import EqPropKernel  # noqa: E402
+from bioplausible.acceleration.kernels import (
+    EqPropKernel,
+)
 
 
 class TestEqPropKernel(unittest.TestCase):

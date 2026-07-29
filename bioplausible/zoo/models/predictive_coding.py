@@ -211,9 +211,11 @@ class PredictiveCodingHybrid(BioModel):
             hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
             dims = [self.input_dim] + hidden_dims + [self.output_dim]
 
-            for i in range(len(dims) - 1):
+            n_layers = len(dims) - 1
+            for i in range(n_layers):
                 layer = nn.Linear(dims[i], dims[i + 1])
-                layer = self.apply_spectral_norm(layer)
+                role = "output" if i == n_layers - 1 else "hidden"
+                layer = self.apply_spectral_norm(layer, layer_role=role)
                 self.layers.append(layer)
 
             self.to(kwargs.get("device", "cpu"))

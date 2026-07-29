@@ -28,7 +28,19 @@
 | 3 | Algorithmic dedup | 🟡 partial | +81 |
 | 4 | Full type hardening | ⏳ | — |
 
-**Tests**: 1,117 passed, 15 skipped · **Coverage**: 55% (floor=40%) · **Pyright**: 5 pre-existing errors, 0 new.
+**Tests**: 1,117 passed, 15 skipped · **Coverage**: 55% (floor=40%) · **Pyright**: 0 errors, 0 new.
+
+### Session 7 Progress (2026-07-29)
+
+| Item | Status | Details |
+|------|--------|---------|
+| **A.4 μPC output scaling fix** | ✅ | `ModelConfig.output_scaling_mode`, `BioModel.apply_spectral_norm(layer_role=...)`, updated 10+ callers across zoo/models/ |
+| **A.1 EnergyModel protocol** | ✅ | `core/energy_model.py` — `EnergyModel` Protocol + `EBMTrainer` |
+| **A.3 Energy function library** | ✅ | `core/energies.py` — 6 shared energy functions |
+| **F.2 Pyright errors** | ✅ | Fixed `deployment.py:717` (missing `InferenceRequest` def) + `hyperopt/graph_task.py:28-32` (missing `import os`) |
+| **CI gate** | ✅ | `ruff format` — clean · `ruff check` — 5447 pre-existing warnings (all `@typing.override` / PLR6301, not new) · `pyright` — **0 errors** (was 5) · `pytest` — 1,117 passed, 15 skipped |
+
+**Key diff**: +3 new files (`core/energy_model.py`, `core/energies.py`, `InferenceRequest` fix), ~10 modified. Zero test regressions.
 
 ---
 
@@ -61,11 +73,15 @@ class EnergyModel(Protocol):
         """Total free energy at current state."""
         ...
 
-    def settle(self, x: Tensor, steps: int, beta: float = 0.0, y: Tensor | None = None) -> None:
+    def settle(
+        self, x: Tensor, steps: int, beta: float = 0.0, y: Tensor | None = None
+    ) -> None:
         """Iterate internal states toward equilibrium (free or nudged)."""
         ...
 
-    def contrastive_update(self, free_state: State, nudged_state: State, beta: float, lr: float) -> None:
+    def contrastive_update(
+        self, free_state: State, nudged_state: State, beta: float, lr: float
+    ) -> None:
         """Apply weight update from free/nudged state difference."""
         ...
 ```
@@ -280,6 +296,7 @@ class Trainer:
     - Has train_step → delegate to model
     - Else → standard forward + loss.backward()
     """
+
     def train_epoch(self) -> dict[str, float]:
         match self.model:
             case EnergyModel():
@@ -455,15 +472,18 @@ def synthetic_classification():
     y = (X.sum(dim=1) > 0).long() % 10
     return X, y
 
+
 @pytest.fixture
 def equitile_small(synthetic_classification) -> EquiTile:
     """Minimal 2-layer EquiTile for fast unit tests."""
     return EquiTile(input_dim=64, output_dim=10, num_layers=2, tiles_per_layer=2)
 
+
 @pytest.fixture
 def mnist_quick_task() -> VisionTask:
     """MNIST task in quick_mode (100 samples, no download)."""
     return VisionTask("mnist", quick_mode=True)
+
 
 @pytest.fixture
 def eqprop_model() -> StandardEqProp:
@@ -613,24 +633,24 @@ D.1 (Any codemod) ──► D.2 (__all__ script) ──► D.3 (t-string migrati
 E.1 (test reorg) ──► E.2 (fixtures) ──► E.3 (property tests) ──► E.4 (coverage 85%)
 ```
 
-### Recommended Session Order
+### Session Log & Remaining Work
 
-| Session | Focus | Est. Days | Impact |
-|---------|-------|-----------|--------|
-| **1** | **A.4** — μPC output scaling fix (correctness) | 0.5 | **Critical correctness fix** |
-| **2** | **A.1 + A.3** — `EnergyModel` protocol + energy function library | 2–3 | **Eliminates deepest duplication; aligns with theory** |
-| **3** | **C.1** — Unified Trainer using `EnergyModel` | 1–2 | **Simplifies all training paths** |
-| **4** | **B.2** — Merge distributed/multigpu | 1 | −400 lines |
-| **5** | **D.1** — `Any` → `object` codemod (automated) | 0.5 | Type safety |
-| **6** | **E.1 + E.2** — Test reorg + fixtures | 1 | Test velocity |
-| **7** | **A.2** — Unify graph/ with settling | 0.5 | Completes A |
-| **8** | **B.1** — equitile/ reorganization | 1–2 | Navigation clarity |
-| **9** | **E.3 + E.4** — Property tests + coverage 85% | 1–2 | Quality gate |
-| **10** | **C.2 + C.3** — Pydantic config + checkpoint std. | 1 | I/O robustness |
-| **11** | **F.1** — Optional deps split | 0.5 | Install footprint |
-| **12** | **D.2 + D.3 + G.1** — `__all__`, t-strings, ADRs | 1 | Polish |
+| Session | Focus | Status | Est. Days | Impact |
+|---------|-------|--------|-----------|--------|
+| **1** | **A.4** — μPC output scaling fix | ✅ Done | 0.5 | **Critical correctness fix** |
+| **2** | **A.1 + A.3** — EnergyModel + energies | ✅ Done | 2–3 | **Eliminates deepest duplication** |
+| **3** | **C.1** — Unified Trainer using `EnergyModel` | ⏳ Next | 1–2 | **Simplifies all training paths** |
+| **4** | **B.2** — Merge distributed/multigpu | 🔲 | 1 | −400 lines |
+| **5** | **D.1** — `Any` → `object` codemod | 🔲 | 0.5 | Type safety |
+| **6** | **E.1 + E.2** — Test reorg + fixtures | 🔲 | 1 | Test velocity |
+| **7** | **A.2** — Unify `graph/` with `zoo/_settling.py` | 🔲 | 0.5 | Completes A |
+| **8** | **B.1** — equitile/ reorganization | 🔲 | 1–2 | Navigation clarity |
+| **9** | **E.3 + E.4** — Property tests + coverage 85% | 🔲 | 1–2 | Quality gate |
+| **10** | **C.2 + C.3** — Pydantic config + checkpoint std. | 🔲 | 1 | I/O robustness |
+| **11** | **F.1** — Optional deps split | 🔲 | 0.5 | Install footprint |
+| **12** | **D.2 + D.3 + G.1** — `__all__`, t-strings, ADRs | 🔲 | 1 | Polish |
 
-**Total**: ~11–16 days. Highest-impact sessions are **1–3** (correctness + architectural unification).
+**Total remaining**: ~9–13 days. Next critical session is **#3 (C.1)** — wiring the `EnergyModel` protocol into `CoreTrainer`.
 
 ---
 
@@ -666,3 +686,69 @@ pip-audit                                    # security
 ---
 
 *This plan supersedes TODO0.md Phases 3–4. Phases 0–2 (completed) remain the foundation.*
+
+---
+
+## Session 7 Handoff Notes (2026-07-29)
+
+### What Was Done
+
+1. **Phase A.4** (`zoo/base.py` + 10+ callers in `zoo/models/`):
+   - Added `output_scaling_mode: Literal["uniform", "mupc"]` to `ModelConfig` (default `"mupc"`)
+   - Added `layer_role: LayerRole = "hidden"` parameter to `BioModel.apply_spectral_norm()`
+   - Output layers with `output_scaling_mode="mupc"` rescale weights to remove the √L fan-in factor
+   - Updated all layer-build loops in `standard_eqprop.py`, `mom_eq.py`, `sparse_eq.py`, `predictive_coding.py`, `fa.py` (6 classes), and `wrappers.py`
+
+2. **Phase A.1** — Created `core/energy_model.py`:
+   - `EnergyModel` Protocol with `energy()`, `settle()`, `contrastive_update()`
+   - `EBMTrainer` class with free/nudge/contrastive loop and BPTT fallback
+   - Runtime-checkable (`@runtime_checkable`) — models satisfy structurally, no inheritance needed
+
+3. **Phase A.3** — Created `core/energies.py`:
+   - `prediction_error_energy`, `supervised_energy`, `hybrid_energy`, `contrastive_energy`, `mse_energy`, `node_energy`
+
+4. **Phase F.2** — Fixed 5 pre-existing Pyright errors:
+   - `deployment.py:717` — defined missing `InferenceRequest` dataclass
+   - `hyperopt/graph_task.py:28-32` — added `import os`
+
+### What's Blocking Session 3 (C.1 — Unified Trainer)
+
+The `EnergyModel` protocol and `EBMTrainer` exist but are **not wired** into `CoreTrainer`. The current `_train_step` in `core/trainer.py` (line 834) still uses:
+```python
+if hasattr(self.model, "train_step"): ...
+elif inspect.signature(...): ...
+else: ...
+```
+
+**Next step**: Add a `match/case` dispatch before the existing checks:
+```python
+match self.model:
+    case EnergyModel():
+        return EBMTrainer(...).train_step(x, y)
+```
+
+This is ~10 lines of code. The complexity is deciding how `EBMTrainer` gets its hyperparams (lr, free_steps, beta, etc.) — either from `TrainerConfig` or from the model's config.
+
+### A.2 (graph/ unification) Is Simplified
+
+Since we already have `zoo/_settling.py` with `settle_single_state()` and `settle_activations_list()`, and `graph/inference.py` has its own `InferenceSGD.settle()`, Phase A.2 is now just:
+1. Have `InferenceSGD` implement `EnergyModel.settle()` by delegating to `zoo/_settling.settle_activations_list()`
+2. Delete the duplicated loop in `graph/inference.py`
+
+### Ruff Warnings to Ignore
+
+The 5,447 remaining `ruff check` warnings are all `@typing.override` suggestions (PLE, PLC, PLR) — **not actionable**. They come from a `ruff` rule (`PLE`?) that flags every method override as needing `@typing.override`, inflating the count. If quieting them is desired, add `"PLE", "PLC", "PLR"` exclusions for the specific patterns.
+
+### Pre-Existing Issues (Unrelated to Refactoring)
+
+1. **`test_onnx.py` warnings**: Tensor attributes assigned during export should be registered as buffers. This is a real issue in `equitile/core.py` and `equitile/kernels.py` but is out of scope.
+2. **`torch.jit.script` deprecation**: 14 warnings across `zoo/_settling.py` and `graph/`. Python 3.14+ compatibility requires migrating to `torch.compile`.
+3. **`sklearn.datasets` NumPy 2.5 deprecation**: In `test_new_domains.py` — Python 3.14 / NumPy 2.5 changed `.shape` assignment behavior. Pre-existing, not blocking.
+
+### Test Coverage Gap for A.1/A.3
+
+New code (`core/energy_model.py`, `core/energies.py`) has **zero tests**. Before raising coverage to 85% (E.4), add:
+- `tests/unit/core/test_energy_model.py` — Test `EnergyModel` protocol structural typing, `EBMTrainer` fallback
+- `tests/unit/core/test_energies.py` — Test each energy function with known inputs/outputs, verify non-negativity
+
+These are quick to write and would add ~2% coverage by themselves.

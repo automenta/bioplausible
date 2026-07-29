@@ -18,7 +18,7 @@ from torch.optim import Optimizer
 try:
     from .cuda.kernels import (
         dion_update_cuda,
-        enforce_spectral_constraint_cuda,  # noqa: F401
+        enforce_spectral_constraint_cuda,  # ruff: ignore[unused-import]
         newton_schulz_cuda,
         spectral_norm_power_iteration_cuda,
     )
@@ -1735,6 +1735,5 @@ class NaturalEPMuon(SMEPOptimizer):
         )
 
         for p, g_free in zip(params_list, grads_free):
-            if g_free is not None:
-                if p.ndim >= 2:
-                    self.state[p]["grad_free"] = g_free.detach()
+            if g_free is not None and p.ndim >= 2:
+                self.state[p]["grad_free"] = g_free.detach()

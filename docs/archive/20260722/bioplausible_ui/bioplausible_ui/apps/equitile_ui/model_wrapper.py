@@ -384,19 +384,20 @@ class LiveModelWrapper:
 
         # 4. Text Generation (if LM)
         gen_text = ""
-        if self.task_type == "lm" and (
-            self.step_counter == 1 or self.step_counter % 10 == 0
+        if (
+            self.task_type == "lm"
+            and (self.step_counter == 1 or self.step_counter % 10 == 0)
+            and hasattr(self.model, "generate")
         ):
-            if hasattr(self.model, "generate"):
-                # Use model's generate
-                try:
-                    seed = x[0, :5].unsqueeze(0)
-                    gen_ids = self.model.generate(seed, max_length=20)
-                    if isinstance(gen_ids, torch.Tensor):
-                        decoded = self.dataset.decode(gen_ids[0])
-                        gen_text = f"Step {self.step_counter}:\n{decoded}"
-                except Exception as e:
-                    gen_text = f"Gen Error: {e!s}"
+            # Use model's generate
+            try:
+                seed = x[0, :5].unsqueeze(0)
+                gen_ids = self.model.generate(seed, max_length=20)
+                if isinstance(gen_ids, torch.Tensor):
+                    decoded = self.dataset.decode(gen_ids[0])
+                    gen_text = f"Step {self.step_counter}:\n{decoded}"
+            except Exception as e:
+                gen_text = f"Gen Error: {e!s}"
 
         # 5. Collect Visualization Data
         # Sort by layer index
