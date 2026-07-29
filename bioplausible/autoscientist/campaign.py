@@ -17,7 +17,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from bioplausible.autoscientist.proposer import ExperimentProposer
 from bioplausible.autoscientist.reasoner import HypothesisReasoner
@@ -52,7 +51,7 @@ class AutoScientistCampaign:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.max_concurrent = max_concurrent
         self.human_approval_gate = human_approval_gate
-        self.campaign_log: list[dict[str, Any]] = []
+        self.campaign_log: list[dict[str, object]] = []
         self._iteration = 0
 
     def run_iteration(
@@ -60,7 +59,7 @@ class AutoScientistCampaign:
         domain: str | None = None,
         n_experiments: int = 5,
         dry_run: bool = False,
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, object]]:
         """
         Run one iteration of the discovery loop.
 
@@ -128,7 +127,7 @@ class AutoScientistCampaign:
 
         return results
 
-    def _execute_proposal(self, proposal) -> dict[str, Any]:
+    def _execute_proposal(self, proposal) -> dict[str, object]:
         """Execute a single experiment proposal via CoreTrainer."""
         config = TrainerConfig(
             model=proposal.model,
@@ -172,7 +171,7 @@ class AutoScientistCampaign:
             "epochs_completed": len(history),
         }
 
-    def _update_knowledge_base(self, proposal, result: dict[str, Any]) -> None:
+    def _update_knowledge_base(self, proposal, result: dict[str, object]) -> None:
         """Store experiment result in KnowledgeBase with schema validation."""
         try:
             entry = KnowledgeEntry(
@@ -212,7 +211,7 @@ class AutoScientistCampaign:
     def _log_iteration(
         self,
         proposals: list,
-        results: list[dict[str, Any]],
+        results: list[dict[str, object]],
     ) -> None:
         """Log campaign iteration to disk."""
         iteration_log = {
@@ -285,7 +284,7 @@ class AutoScientistCampaign:
                 approved.append(idx)
         return approved
 
-    def get_summary(self) -> dict[str, Any]:
+    def get_summary(self) -> dict[str, object]:
         """Get campaign summary statistics."""
         completed = []
         for entry in self.campaign_log:

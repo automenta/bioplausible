@@ -11,7 +11,6 @@ import sqlite3
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -56,11 +55,11 @@ class FailureRecord:
     failure_type: str  # e.g. FailureCategory.GRADIENT_EXPLOSION.value
     failure_epoch: int | None
     failure_batch: int | None
-    config: dict[str, Any]
-    last_metrics: dict[str, Any]
+    config: dict[str, object]
+    last_metrics: dict[str, object]
     stack_trace: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """Convert record to dictionary."""
         return asdict(self)
 
@@ -158,7 +157,7 @@ class FailureTracker:
         finally:
             conn.close()
 
-    def get_failure_stats(self, hours: int | None = None) -> dict[str, Any]:
+    def get_failure_stats(self, hours: int | None = None) -> dict[str, object]:
         """
         Get aggregate failure statistics.
 
@@ -166,7 +165,7 @@ class FailureTracker:
             hours: If provided, only count failures in the last N hours.
 
         Returns:
-            Dict[str, Any]: Statistics including counts by type, model, and task.
+            Dict[str, object]: Statistics including counts by type, model, and task.
         """
         conn = self._get_connection()
         try:
@@ -272,7 +271,7 @@ class FailureTracker:
         finally:
             conn.close()
 
-    def analyze_failure_patterns(self) -> dict[str, Any]:
+    def analyze_failure_patterns(self) -> dict[str, object]:
         """
         Analyze failure patterns to suggest fixes.
 
@@ -282,10 +281,10 @@ class FailureTracker:
         3. Common failure signatures
 
         Returns:
-            Dict[str, Any]: Analysis results and recommendations.
+            Dict[str, object]: Analysis results and recommendations.
         """
         stats = self.get_failure_stats()
-        recommendations: list[dict[str, Any]] = []
+        recommendations: list[dict[str, object]] = []
 
         # 1. NaN/Inf Analysis
         nan_count = stats["by_type"].get("grad_nan", 0) + stats["by_type"].get(
@@ -378,7 +377,7 @@ class FailureTracker:
             logger.warning(f"Correlation check failed: {e}")
             return None
 
-    def _detect_divergence_signatures(self) -> list[dict[str, Any]]:
+    def _detect_divergence_signatures(self) -> list[dict[str, object]]:
         """
         Identify if failures happen early (instability) or late (collapse).
 

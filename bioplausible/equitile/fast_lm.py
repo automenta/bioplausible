@@ -15,7 +15,6 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import torch
@@ -204,7 +203,7 @@ class FastLMEquiTile(OptimizedLMEquiTile):
             )
             self.dataset = None
 
-    def update_params(self, params: dict[str, Any]):
+    def update_params(self, params: dict[str, object]):
         if "learning_rate" in params:
             for g in self.optimizer.param_groups:
                 if "tile_importance" not in g.get(

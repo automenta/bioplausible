@@ -31,7 +31,7 @@ import time
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -61,7 +61,7 @@ class TileTask:
         Tile identifier
     phase : str
         Processing phase: 'predict', 'update', or 'learn'
-    input_data : Optional[Dict[str, Any]]
+    input_data : Optional[Dict[str, object]]
         Additional input data for the task
     priority : float
         Task priority (higher = more urgent)
@@ -72,7 +72,7 @@ class TileTask:
     priority: float
     tile_id: int = field(compare=False)
     phase: str = field(compare=False)
-    input_data: dict[str, Any] | None = field(default_factory=dict, compare=False)
+    input_data: dict[str, object] | None = field(default_factory=dict, compare=False)
     created_at: float = field(default_factory=time.perf_counter, compare=False)
 
     @classmethod
@@ -81,7 +81,7 @@ class TileTask:
         tile_id: int,
         phase: str,
         priority: float = 0.0,
-        input_data: dict[str, Any] | None = None,
+        input_data: dict[str, object] | None = None,
     ) -> TileTask:
         """Factory method for creating TileTask.
 
@@ -121,7 +121,7 @@ class TileResult:
         Processing phase
     success : bool
         Whether processing succeeded
-    data : Optional[Dict[str, Any]]
+    data : Optional[Dict[str, object]]
         Result data if successful
     error : Optional[Exception]
         Exception if failed
@@ -132,7 +132,7 @@ class TileResult:
     tile_id: int
     phase: str
     success: bool
-    data: dict[str, Any] | None = None
+    data: dict[str, object] | None = None
     error: Exception | None = None
     elapsed_time: float = 0.0
 
@@ -223,8 +223,8 @@ class TileProcessor:
         self,
         model: EquiTile,
         tile: TileState,
-        input_data: dict[str, Any],
-    ) -> dict[str, Any]:
+        input_data: dict[str, object],
+    ) -> dict[str, object]:
         """Compute prediction for a tile.
 
         Parameters
@@ -281,8 +281,8 @@ class TileProcessor:
         self,
         model: EquiTile,
         tile: TileState,
-        input_data: dict[str, Any],
-    ) -> dict[str, Any]:
+        input_data: dict[str, object],
+    ) -> dict[str, object]:
         """Update tile activity.
 
         Parameters
@@ -334,8 +334,8 @@ class TileProcessor:
         self,
         model: EquiTile,
         tile: TileState,
-        input_data: dict[str, Any],
-    ) -> dict[str, Any]:
+        input_data: dict[str, object],
+    ) -> dict[str, object]:
         """Compute weight updates for edges connected to this tile.
 
         Parameters

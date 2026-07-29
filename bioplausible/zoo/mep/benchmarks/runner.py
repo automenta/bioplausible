@@ -11,7 +11,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import torch
 import torch.nn.functional as F
@@ -60,7 +60,7 @@ class BenchmarkMetrics:
 class BenchmarkResult:
     """Container for complete benchmark results."""
 
-    config: dict[str, Any]
+    config: dict[str, object]
     optimizer_name: str
     metrics: list[BenchmarkMetrics] = field(default_factory=list)
     total_time: float = 0.0
@@ -68,7 +68,7 @@ class BenchmarkResult:
     final_val_acc: float = 0.0
     best_val_acc: float = 0.0
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """Convert to dictionary for JSON serialization."""
         return {
             "config": self.config,
@@ -81,7 +81,7 @@ class BenchmarkResult:
         }
 
 
-def load_config(config_path: str) -> dict[str, Any]:
+def load_config(config_path: str) -> dict[str, object]:
     """Load configuration from YAML file."""
     if not YAML_AVAILABLE:
         raise ImportError(
@@ -93,7 +93,7 @@ def load_config(config_path: str) -> dict[str, Any]:
 
     # Handle defaults inheritance
     if "defaults" in config:
-        base_config: dict[str, Any] = {}
+        base_config: dict[str, object] = {}
         for default in config["defaults"]:
             if isinstance(default, dict):
                 for key, value in default.items():
@@ -109,7 +109,7 @@ def load_config(config_path: str) -> dict[str, Any]:
         config = _merge_configs(base_config, config)
         del config["defaults"]
 
-    return cast("dict[str, Any]", config)
+    return cast("dict[str, object]", config)
 
 
 def _merge_configs(base: dict, override: dict) -> dict:
@@ -123,7 +123,9 @@ def _merge_configs(base: dict, override: dict) -> dict:
     return result
 
 
-def create_model(architecture: list[dict[str, Any]], device: torch.device) -> nn.Module:
+def create_model(
+    architecture: list[dict[str, object]], device: torch.device
+) -> nn.Module:
     """Create model from architecture specification."""
     layers: list[nn.Module] = []
 
@@ -234,7 +236,7 @@ def get_dataloader(
 
 
 def create_optimizer(
-    optimizer_name: str, model: nn.Module, config: dict[str, Any]
+    optimizer_name: str, model: nn.Module, config: dict[str, object]
 ) -> torch.optim.Optimizer:
     """Create optimizer from name and config."""
 
@@ -404,7 +406,7 @@ def get_spectral_norm(model: nn.Module, device: torch.device) -> float:
 
 def run_benchmark(
     optimizer_name: str,
-    config: dict[str, Any],
+    config: dict[str, object],
     device: torch.device,
     verbose: bool = True,
 ) -> BenchmarkResult:
@@ -481,7 +483,7 @@ def run_benchmark(
 
 
 def plot_results(
-    results: list[BenchmarkResult], save_dir: str, config: dict[str, Any]
+    results: list[BenchmarkResult], save_dir: str, config: dict[str, object]
 ) -> None:
     """Generate comparison plots from benchmark results."""
 
@@ -618,7 +620,7 @@ def plot_results(
 
 
 def save_results(
-    results: list[BenchmarkResult], save_dir: str, config: dict[str, Any]
+    results: list[BenchmarkResult], save_dir: str, config: dict[str, object]
 ) -> None:
     """Save results to JSON file."""
     save_path = Path(save_dir) / "results.json"
@@ -635,7 +637,7 @@ def save_results(
     logger.info("Results saved to %s", save_path)
 
 
-def run_all_benchmarks(config: dict[str, Any]) -> list[BenchmarkResult]:
+def run_all_benchmarks(config: dict[str, object]) -> list[BenchmarkResult]:
     """Run benchmarks for all specified optimizers."""
 
     # Determine device

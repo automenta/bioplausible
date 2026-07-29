@@ -10,7 +10,6 @@ import json
 import logging
 import sqlite3
 import traceback
-from typing import Any
 
 import pandas as pd
 
@@ -87,12 +86,12 @@ class ResearchSynthesizer:
             logger.warning("[WARN]  Error loading convergence data: %s", e)
             return pd.DataFrame()
 
-    def synthesize_full_report(self) -> dict[str, Any]:
+    def synthesize_full_report(self) -> dict[str, object]:
         """
         Generate comprehensive research insights.
 
         Returns:
-            Dict[str, Any]: Structured insights dictionary.
+            Dict[str, object]: Structured insights dictionary.
         """
         try:
             conn = sqlite3.connect(self.db_path)
@@ -245,7 +244,7 @@ class ResearchSynthesizer:
 
         return l_int * (h_int * h_int) + (h_int * 10)
 
-    def _analyze_ablations(self, df: pd.DataFrame) -> list[dict[str, Any]]:
+    def _analyze_ablations(self, df: pd.DataFrame) -> list[dict[str, object]]:
         """Analyze results from ablation studies."""
         if df.empty:
             return []
@@ -348,7 +347,7 @@ class ResearchSynthesizer:
         except Exception as e:
             return [{"error": f"Significance analysis error: {e}"}]
 
-    def _analyze_cross_algo(self, df: pd.DataFrame) -> str | dict[str, Any]:
+    def _analyze_cross_algo(self, df: pd.DataFrame) -> str | dict[str, object]:
         """Cross-algorithm performance comparison."""
         if df.empty or "model_name" not in df.columns:
             return "No model data available."
@@ -382,7 +381,7 @@ class ResearchSynthesizer:
         except Exception as e:
             return f"Analysis failed: {e}"
 
-    def _analyze_by_task(self, df: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    def _analyze_by_task(self, df: pd.DataFrame) -> dict[str, list[dict[str, object]]]:
         """Task-specific winners."""
         if df.empty or "task_name" not in df.columns:
             return {}
@@ -406,7 +405,7 @@ class ResearchSynthesizer:
 
     def _analyze_efficiency(
         self, df: pd.DataFrame, convergence_df: pd.DataFrame
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> dict[str, list[dict[str, object]]]:
         """Analyze parameter efficiency (Acc/Param) and epoch efficiency (Acc/Epoch)."""
         if df.empty:
             return {}
@@ -520,7 +519,7 @@ class ResearchSynthesizer:
 
         return analysis
 
-    def _analyze_failures(self, df: pd.DataFrame) -> str | dict[str, Any]:
+    def _analyze_failures(self, df: pd.DataFrame) -> str | dict[str, object]:
         """Failure pattern analysis."""
         if df.empty:
             return "No failures recorded."
@@ -636,7 +635,7 @@ class ResearchSynthesizer:
 
         return gaps
 
-    def _analyze_backprop_gap(self, df: pd.DataFrame) -> dict[str, Any]:
+    def _analyze_backprop_gap(self, df: pd.DataFrame) -> dict[str, object]:
         """
         Analyze performance gap between bio-plausible models and Backprop Baseline.
 

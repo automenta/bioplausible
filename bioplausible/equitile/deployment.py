@@ -20,7 +20,7 @@ Examples
 import logging
 import pathlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 from torch import nn
@@ -454,7 +454,7 @@ class DeploymentChecker:
         self.model.eval()
         self.issues: list[str] = []
 
-    def check(self) -> dict[str, Any]:
+    def check(self) -> dict[str, object]:
         """Run all checks.
 
         Returns

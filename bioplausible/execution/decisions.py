@@ -11,7 +11,6 @@ import logging
 import sqlite3
 import time
 from datetime import datetime
-from typing import Any
 
 logger = logging.getLogger("DecisionLogger")
 
@@ -56,7 +55,7 @@ class DecisionLogger:
         self,
         event_type: str,
         description: str,
-        metadata: dict[str, Any] | None = None,
+        metadata: dict[str, object] | None = None,
     ) -> None:
         """
         Record a decision in the database.
@@ -83,7 +82,7 @@ class DecisionLogger:
         except Exception as e:
             logger.error(f"Unexpected error logging decision: {e}", exc_info=True)
 
-    def get_log(self, limit: int = 1000) -> list[dict[str, Any]]:
+    def get_log(self, limit: int = 1000) -> list[dict[str, object]]:
         """
         Retrieve the recent decision log entries.
 

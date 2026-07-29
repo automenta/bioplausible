@@ -22,7 +22,6 @@ Usage:
 """
 
 from dataclasses import dataclass
-from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -63,7 +62,7 @@ class EWCState:
     def __init__(self, model: nn.Module, fisher_damping: float = 1e-3):
         self.model = model
         self.fisher_damping = fisher_damping
-        self.task_memories: dict[int, dict[str, Any]] = {}
+        self.task_memories: dict[int, dict[str, object]] = {}
         self._current_task: int | None = None
 
     def update_fisher(self, data_loader, task_id: int, device: str, loss_type: str):
@@ -314,7 +313,7 @@ class EPOptimizer:
                     p.grad.zero_()
 
     @staticmethod
-    def _build_structure_from_model(model: nn.Module) -> list[dict[str, Any]]:
+    def _build_structure_from_model(model: nn.Module) -> list[dict[str, object]]:
         """Build structure list from model.transition_modules() or fallback scan.
 
         Returns a list of ``{"type": "layer", "module": m}`` dicts compatible
@@ -710,7 +709,7 @@ class EPOptimizer:
             "ewc_penalty": weighted_drift * self.config.ewc_lambda * 0.5,
         }
 
-    def state_dict(self) -> dict[str, Any]:
+    def state_dict(self) -> dict[str, object]:
         """Get optimizer state."""
         return {
             "config": self.config,
@@ -718,7 +717,7 @@ class EPOptimizer:
             "ewc_state": self.ewc_state.state_dict() if self.ewc_state else None,
         }
 
-    def load_state_dict(self, state: dict[str, Any]):
+    def load_state_dict(self, state: dict[str, object]):
         """Load optimizer state."""
         self.config = state["config"]
         self.buffers = state["buffers"]

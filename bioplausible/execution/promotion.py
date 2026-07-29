@@ -5,8 +5,6 @@ Defines the criteria and logic for promoting a model to a higher tier of
 difficulty or complexity within the experimental curriculum.
 """
 
-from typing import Any
-
 # Minimum success criteria for each task
 PROMOTION_THRESHOLDS: dict[str, dict[str, float]] = {
     "char_ngram": {"accuracy": 0.95},  # Should be trivial
@@ -28,7 +26,7 @@ class PromotionGate:
     """Checks if model performance warrants promotion."""
 
     @staticmethod
-    def check_promotion(task_name: str, metrics: dict[str, Any]) -> bool:
+    def check_promotion(task_name: str, metrics: dict[str, object]) -> bool:
         """
         Check if metrics satisfy promotion criteria for task.
 

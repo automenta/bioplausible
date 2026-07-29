@@ -4,7 +4,6 @@ Prevents applying inappropriate hyperparameters to different algorithm families.
 """
 
 import logging
-from typing import Any
 
 from bioplausible.zoo import get_model_spec
 
@@ -51,7 +50,7 @@ ALGORITHM_FAMILY_CONSTRAINTS = {
 }
 
 
-def get_constrained_search_space(model_name: str) -> dict[str, Any]:
+def get_constrained_search_space(model_name: str) -> dict[str, object]:
     """
     Returns algorithm-specific hyperparameter constraints.
 
@@ -123,9 +122,9 @@ def suggest_hyperparam(trial, param_name: str, constraint, prefix: str = ""):
 def create_constrained_optuna_config(
     trial,
     model_name: str,
-    custom_constraints: dict[str, Any] = None,
+    custom_constraints: dict[str, object] = None,
     task_name: str = None,
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """
     Create a configuration dict using algorithm-specific constraints.
 

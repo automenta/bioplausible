@@ -18,7 +18,6 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import torch
 
@@ -64,7 +63,7 @@ class BenchmarkSuiteResult:
     leaderboard_entries: list[LeaderboardEntry] = field(default_factory=list)
     total_time_s: float = 0.0
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "config": self.config.__dict__,
             "n_results": len(self.results),
@@ -92,7 +91,7 @@ class CrossDomainBenchmarkSuite:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def get_benchmark_tasks(self) -> dict[str, Any]:
+    def get_benchmark_tasks(self) -> dict[str, object]:
         """Get all available benchmark tasks by domain."""
         tasks = {
             "vision": ["mnist", "fashion_mnist"],
@@ -105,7 +104,7 @@ class CrossDomainBenchmarkSuite:
         }
         return tasks
 
-    def create_task(self, domain: str, name: str, **kwargs) -> Any | None:
+    def create_task(self, domain: str, name: str, **kwargs) -> object | None:
         """Create a domain task by name."""
         task_map = {
             "vision": VisionTask,

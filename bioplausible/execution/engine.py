@@ -22,7 +22,6 @@ import traceback
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import optuna
 import torch
@@ -116,7 +115,7 @@ class ExecutionEngine:
 
         signal.signal(signal.SIGINT, self._signal_handler)
 
-    def _signal_handler(self, sig: int, frame: Any) -> None:
+    def _signal_handler(self, sig: int, frame: object) -> None:
         logger.info("Interrupt received. Finishing current trial...")
         self.running = False
 
@@ -551,7 +550,9 @@ class ExecutionEngine:
 
         return metrics
 
-    def _prepare_fixed_config(self, task: ExperimentTask) -> tuple[dict[str, Any], str]:
+    def _prepare_fixed_config(
+        self, task: ExperimentTask
+    ) -> tuple[dict[str, object], str]:
         """Prepare configuration for fixed tasks."""
         config = task.fixed_config.copy()  # type: ignore[reportOptionalMemberAccess]
 
@@ -577,7 +578,7 @@ class ExecutionEngine:
 
     def _prepare_optuna_config(
         self, task: ExperimentTask, study: optuna.Study
-    ) -> tuple[optuna.trial.Trial, dict[str, Any], str]:
+    ) -> tuple[optuna.trial.Trial, dict[str, object], str]:
         """Prepare configuration using Optuna."""
         # Warm-Start Logic
         self._attempt_warm_start(study, task)
@@ -628,7 +629,9 @@ class ExecutionEngine:
             except Exception as e:
                 logger.warning(f"Warm start failed: {e}")
 
-    def _inject_tier_config(self, config: dict[str, Any], task: ExperimentTask) -> None:
+    def _inject_tier_config(
+        self, config: dict[str, object], task: ExperimentTask
+    ) -> None:
         """Inject tier-specific configuration and metadata."""
         tier_config = get_evaluation_config(task.tier)
         config["epochs"] = tier_config.epochs
@@ -665,7 +668,7 @@ class ExecutionEngine:
                 config["transfer_from"] = task.transfer_from_trial
 
     def _update_dashboard_with_config(
-        self, config: dict[str, Any], job_id: str, task: ExperimentTask
+        self, config: dict[str, object], job_id: str, task: ExperimentTask
     ) -> None:
         """Update the dashboard with the current trial configuration."""
         ignore_keys = {
@@ -725,7 +728,7 @@ class ExecutionEngine:
             torch.cuda.empty_cache()
 
     def _execute_robustness_check(
-        self, task: ExperimentTask, config: dict[str, Any]
+        self, task: ExperimentTask, config: dict[str, object]
     ) -> dict[str, float]:
         """Run robustness suite and return metrics."""
         DASHBOARD.log("Running Robustness Suite...")
@@ -806,7 +809,7 @@ class ExecutionEngine:
     def _execute_standard_trial(
         self,
         task: ExperimentTask,
-        config: dict[str, Any],
+        config: dict[str, object],
         trial: optuna.trial.Trial | None,
         job_id: str,
     ) -> dict[str, float] | None:

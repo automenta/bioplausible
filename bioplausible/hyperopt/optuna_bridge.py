@@ -6,7 +6,6 @@ Replaces custom evolution code with Optuna's proven algorithms.
 """
 
 from collections.abc import Callable
-from typing import Any
 
 import optuna
 from optuna.pruners import HyperbandPruner, MedianPruner
@@ -43,10 +42,10 @@ def scalarize_objectives(
 def create_optuna_space(
     trial: optuna.Trial,
     model_name: str,
-    constraints: dict[str, Any] | None = None,
-    evaluation_config: Any | None = None,  # EvaluationConfig
+    constraints: dict[str, object] | None = None,
+    evaluation_config: object | None = None,  # EvaluationConfig
     task_name: str | None = None,
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """
     Create Optuna hyperparameter space using Hyperparameter Metamodel.
 
@@ -183,7 +182,7 @@ def create_study(
     study_name: str | None = None,
     use_pruning: bool = True,
     sampler_name: str = "tpe",
-    evaluation_config: Any | None = None,  # EvaluationConfig from eval_tiers
+    evaluation_config: object | None = None,  # EvaluationConfig from eval_tiers
     mode: str = "pareto",  # "pareto" or "scalarized"
 ) -> optuna.Study:
     """
@@ -272,7 +271,7 @@ def get_pareto_trials(study: optuna.Study) -> list[optuna.trial.FrozenTrial]:
     return study.best_trials
 
 
-def trial_to_metrics(trial: optuna.trial.FrozenTrial) -> dict[str, Any]:
+def trial_to_metrics(trial: optuna.trial.FrozenTrial) -> dict[str, object]:
     """
     Convert Optuna trial to metrics format compatible with existing code.
 

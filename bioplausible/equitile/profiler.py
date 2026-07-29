@@ -36,7 +36,7 @@ import time
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -173,7 +173,7 @@ class ProfileResult:
     n_edges: int = 0
     timestamp: float = field(default_factory=time.time)
 
-    def summary(self) -> dict[str, Any]:
+    def summary(self) -> dict[str, object]:
         """Get summary statistics.
 
         Returns
@@ -606,7 +606,7 @@ class LearningMonitor:
             if len(self._error_history[tile_id]) > self.window_size:
                 self._error_history[tile_id].pop(0)
 
-    def get_summary(self) -> dict[str, Any]:
+    def get_summary(self) -> dict[str, object]:
         """Get learning summary.
 
         Returns

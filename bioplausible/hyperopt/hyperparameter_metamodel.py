@@ -1,7 +1,6 @@
 import copy
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 
 
 class HyperparamScope(Enum):
@@ -29,7 +28,7 @@ class HyperparamSpec:
     scale: str | None = None  # "log", "linear", "int"
 
     # For categorical
-    choices: list[Any] | None = None
+    choices: list[object] | None = None
 
     # Conditional dependencies
     requires: list[str] | None = None  # Other hyperparams that must exist
@@ -37,7 +36,7 @@ class HyperparamSpec:
 
     # Metadata
     description: str = ""
-    default: Any = None
+    default: object = None
 
 
 # Universal hyperparameters (apply to ALL algorithms)
@@ -249,7 +248,7 @@ class HyperparameterMetamodel:
         self._spec_dict = {spec.name: spec for spec in self.all_specs}
 
     def get_search_space_for_model(
-        self, model_spec: Any, task_name: str | None = None
+        self, model_spec: object, task_name: str | None = None
     ) -> dict[str, HyperparamSpec]:
         """
         Return the appropriate hyperparameters for a given model and task.
@@ -436,7 +435,9 @@ class HyperparameterMetamodel:
 
         return search_space
 
-    def validate_config(self, model_spec: Any, config: dict[str, Any]) -> list[str]:
+    def validate_config(
+        self, model_spec: object, config: dict[str, object]
+    ) -> list[str]:
         """
         Validate that a config is compatible with a model.
         Returns list of error messages (empty if valid).

@@ -8,7 +8,6 @@ Supports both rule-based reasoning and optional LLM integration.
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any
 
 from bioplausible.knowledge import KnowledgeBase, KnowledgeEntry
 
@@ -49,7 +48,7 @@ class HypothesisReasoner:
 
     def generate_hypotheses(
         self,
-        recent_results: list[dict[str, Any]] | None = None,
+        recent_results: list[dict[str, object]] | None = None,
     ) -> list[Hypothesis]:
         """
         Generate hypotheses based on recent results and knowledge.
@@ -80,7 +79,7 @@ class HypothesisReasoner:
 
     def _cross_domain_transfer_hypotheses(
         self,
-        recent_results: list[dict[str, Any]] | None = None,
+        recent_results: list[dict[str, object]] | None = None,
     ) -> list[Hypothesis]:
         """Hypothesis: transfer successful methods across domains."""
         hypotheses = []
@@ -117,7 +116,7 @@ class HypothesisReasoner:
 
     def _bio_accuracy_tradeoff_hypotheses(
         self,
-        recent_results: list[dict[str, Any]] | None = None,
+        recent_results: list[dict[str, object]] | None = None,
     ) -> list[Hypothesis]:
         """Hypothesis: hybrid models balance bio-plausibility and accuracy."""
         hypotheses = []
@@ -149,7 +148,7 @@ class HypothesisReasoner:
 
     def _mep_variant_hypotheses(
         self,
-        recent_results: list[dict[str, Any]] | None = None,
+        recent_results: list[dict[str, object]] | None = None,
     ) -> list[Hypothesis]:
         """Hypothesis: different MEP variants have different strengths."""
         from bioplausible.core.registry import ComponentCategory, Registry
@@ -178,7 +177,7 @@ class HypothesisReasoner:
 
     def _llm_hypotheses(
         self,
-        recent_results: list[dict[str, Any]] | None = None,
+        recent_results: list[dict[str, object]] | None = None,
     ) -> list[Hypothesis]:
         """
         Generate hypotheses using LLM (optional, local-first).

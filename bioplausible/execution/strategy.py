@@ -1,6 +1,5 @@
 import logging
 import random
-from typing import Any
 
 from bioplausible.core.registry import Registry
 from bioplausible.execution.curriculum import CurriculumManager
@@ -134,7 +133,7 @@ class ExecutionStrategy:
         key: str,
         event_type: str,
         desc: str,
-        meta: dict[str, Any] | None = None,
+        meta: dict[str, object] | None = None,
     ) -> None:
         if key not in self._logged_events:
             if self.decision_logger:
@@ -738,7 +737,7 @@ class ExecutionStrategy:
 
     def _refine_search_space(
         self, progress, model, task, source_tier
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, object] | None:
         """
         Analyze successful trials from source_tier to refine search space for next tier.
         """
@@ -777,7 +776,7 @@ class ExecutionStrategy:
 
         return constraints
 
-    def _analyze_fragility(self) -> dict[str, dict[str, Any]]:
+    def _analyze_fragility(self) -> dict[str, dict[str, object]]:
         """
         Identify models that perform well but break easily, and suggest constraints.
         """
@@ -792,7 +791,7 @@ class ExecutionStrategy:
                 }
         return constraints
 
-    def _analyze_failures(self, progress) -> dict[str, dict[str, Any]]:
+    def _analyze_failures(self, progress) -> dict[str, dict[str, object]]:
         """
         Analyze failure rates to suggest constraints.
         Returns: Dict[model_name, constraint_dict]

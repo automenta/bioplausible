@@ -2,7 +2,6 @@ import json
 import os
 import pathlib
 import tempfile
-from typing import Any
 
 # Statically seeded knowledge base containing key findings and empirical rules
 KNOWLEDGE_BASE_SEED = [
@@ -104,7 +103,9 @@ class KnowledgeBase:
         self._save()
         return new_id
 
-    def query(self, tag: str = None, model_family: str = None) -> list[dict[str, Any]]:
+    def query(
+        self, tag: str = None, model_family: str = None
+    ) -> list[dict[str, object]]:
         results = self.findings
         if tag:
             results = [r for r in results if tag in r.get("tags", [])]

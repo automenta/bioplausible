@@ -15,7 +15,6 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 
 @dataclass
@@ -37,9 +36,9 @@ class ModelInfo:
     """Metadata about an exported model."""
 
     model_name: str
-    model_params: dict[str, Any]
+    model_params: dict[str, object]
     optimizer_name: str | None
-    optimizer_params: dict[str, Any] | None
+    optimizer_params: dict[str, object] | None
     training_metrics: dict[str, float]
     input_shape: tuple[int, ...]
     output_shape: tuple[int, ...]
@@ -78,12 +77,12 @@ class ModelExporter:
         self,
         model: nn.Module,
         model_name: str,
-        model_params: dict[str, Any],
+        model_params: dict[str, object],
         output_dir: str = "./exports",
         formats: list[str] = None,
-        optimizer: Any | None = None,
+        optimizer: object | None = None,
         optimizer_name: str | None = None,
-        optimizer_params: dict[str, Any] | None = None,
+        optimizer_params: dict[str, object] | None = None,
         training_metrics: dict[str, float] | None = None,
         input_shape: tuple[int, ...] = (1, 784),
         verbose: bool = True,
@@ -245,9 +244,9 @@ class ModelExporter:
     def _export_config(
         self,
         model_name: str,
-        model_params: dict[str, Any],
+        model_params: dict[str, object],
         optimizer_name: str | None,
-        optimizer_params: dict[str, Any] | None,
+        optimizer_params: dict[str, object] | None,
         training_metrics: dict[str, float] | None,
         input_shape: tuple[int, ...],
         output_dir: str,
@@ -277,7 +276,7 @@ class ModelExporter:
     def _export_state(
         self,
         model: nn.Module,
-        optimizer: Any | None,
+        optimizer: object | None,
         output_dir: str,
         verbose: bool,
     ) -> str:
@@ -336,7 +335,7 @@ class ModelLoader:
     def load_from_config(
         self,
         config_path: str,
-    ) -> tuple[nn.Module, dict[str, Any]]:
+    ) -> tuple[nn.Module, dict[str, object]]:
         """
         Load model from config file.
 
@@ -372,7 +371,7 @@ class ModelLoader:
         self,
         checkpoint_path: str,
         model_class: type,
-        model_params: dict[str, Any],
+        model_params: dict[str, object],
     ) -> nn.Module:
         """
         Load model from checkpoint.
@@ -398,7 +397,7 @@ class ModelLoader:
     def load_onnx(
         self,
         onnx_path: str,
-    ) -> Any:
+    ) -> object:
         """
         Load ONNX model for inference.
 
@@ -443,7 +442,7 @@ class InferenceEngine:
     def __init__(
         self,
         model: nn.Module,
-        config: dict[str, Any],
+        config: dict[str, object],
         device: str = "auto",
     ):
         self.model = model
@@ -586,10 +585,10 @@ class InferenceEngine:
 def export_model(
     model: nn.Module,
     model_name: str,
-    model_params: dict[str, Any],
+    model_params: dict[str, object],
     output_dir: str = "./exports",
     formats: list[str] = None,
-    optimizer: Any | None = None,
+    optimizer: object | None = None,
     training_metrics: dict[str, float] | None = None,
     verbose: bool = True,
 ) -> ModelInfo:
@@ -626,7 +625,7 @@ def export_model(
 def load_model(
     export_dir: str,
     device: str = "auto",
-) -> tuple[nn.Module, dict[str, Any]]:
+) -> tuple[nn.Module, dict[str, object]]:
     """
     Convenience function to load a model.
 

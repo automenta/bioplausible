@@ -21,7 +21,6 @@ import pathlib
 import shutil
 import sys
 from ctypes.util import find_library
-from typing import Any
 
 import numpy as np
 
@@ -205,14 +204,14 @@ except ImportError:
     HAS_TRITON_OPS = False
 
 
-def get_backend(use_gpu: bool) -> Any:
+def get_backend(use_gpu: bool) -> object:
     """Return appropriate array library (CuPy or NumPy)."""
     if use_gpu and HAS_CUPY:
         return cp
     return np
 
 
-def to_numpy(arr: Any) -> np.ndarray:
+def to_numpy(arr: object) -> np.ndarray:
     """Convert array to NumPy (handles both NumPy and CuPy arrays)."""
     if HAS_CUPY:
         try:
@@ -228,14 +227,14 @@ def to_numpy(arr: Any) -> np.ndarray:
 logger = logging.getLogger(__name__)
 
 
-def softmax(x: np.ndarray, xp: Any = np) -> np.ndarray:
+def softmax(x: np.ndarray, xp: object = np) -> np.ndarray:
     """Stable softmax."""
     x_max = xp.max(x, axis=-1, keepdims=True)
     exp_x = xp.exp(x - x_max)
     return exp_x / xp.sum(exp_x, axis=-1, keepdims=True)
 
 
-def cross_entropy(logits: np.ndarray, targets: np.ndarray, xp: Any = np) -> float:
+def cross_entropy(logits: np.ndarray, targets: np.ndarray, xp: object = np) -> float:
     """Cross-entropy loss from logits."""
     batch_size = logits.shape[0]
     probs = softmax(logits, xp)
@@ -245,13 +244,13 @@ def cross_entropy(logits: np.ndarray, targets: np.ndarray, xp: Any = np) -> floa
     return loss
 
 
-def tanh_deriv(x: np.ndarray, xp: Any = np) -> np.ndarray:
+def tanh_deriv(x: np.ndarray, xp: object = np) -> np.ndarray:
     """Derivative of tanh: 1 - tanh(x)^2"""
     return 1 - xp.tanh(x) ** 2
 
 
 def spectral_normalize(
-    W: np.ndarray, num_iters: int = 1, u: np.ndarray | None = None, xp: Any = np
+    W: np.ndarray, num_iters: int = 1, u: np.ndarray | None = None, xp: object = np
 ) -> tuple[np.ndarray, np.ndarray | None, float]:
     """Power iteration spectral normalization.
 
@@ -289,7 +288,7 @@ def _add_epsilon(value: float, epsilon: float = 1e-12) -> float:
 
 
 def _initialize_u_vector(
-    u: np.ndarray | None, out_dim: int, dtype: np.dtype, xp: Any
+    u: np.ndarray | None, out_dim: int, dtype: np.dtype, xp: object
 ) -> np.ndarray:
     """Initialize or validate the u vector for power iteration."""
     if u is None:
@@ -297,14 +296,14 @@ def _initialize_u_vector(
     return u / xp.linalg.norm(u)
 
 
-def _compute_v_vector(W: np.ndarray, u: np.ndarray, xp: Any) -> np.ndarray:
+def _compute_v_vector(W: np.ndarray, u: np.ndarray, xp: object) -> np.ndarray:
     """Compute v vector in power iteration: v = W.T @ u, normalized."""
     v = W.T @ u
     norm = xp.linalg.norm(v)
     return v / _add_epsilon(norm)
 
 
-def _compute_u_vector(W: np.ndarray, v: np.ndarray, xp: Any) -> np.ndarray:
+def _compute_u_vector(W: np.ndarray, v: np.ndarray, xp: object) -> np.ndarray:
     """Compute u vector in power iteration: u = W @ v, normalized."""
     u = W @ v
     norm = xp.linalg.norm(u)
@@ -519,7 +518,7 @@ class EqPropKernel:
         x: np.ndarray,
         nudge_grad: np.ndarray | None = None,
         store_trajectory: bool = False,
-    ) -> tuple[np.ndarray, list[dict[str, np.ndarray]], dict[str, Any]]:
+    ) -> tuple[np.ndarray, list[dict[str, np.ndarray]], dict[str, object]]:
         """Find equilibrium state h* via fixed-point iteration."""
         xp = self.xp
         batch_size = x.shape[0]
@@ -723,7 +722,7 @@ class EqPropKernel:
         return x, y
 
     def _compute_gradients_for_nudging(
-        self, h_free: np.ndarray, y: np.ndarray, xp: Any
+        self, h_free: np.ndarray, y: np.ndarray, xp: object
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Compute gradients needed for the nudging phase."""
         logits = self.compute_output(h_free)
@@ -749,9 +748,9 @@ class EqPropKernel:
         self,
         logits: np.ndarray,
         y: np.ndarray,
-        info_free: dict[str, Any],
-        info_nudged: dict[str, Any],
-        xp: Any,
+        info_free: dict[str, object],
+        info_nudged: dict[str, object],
+        xp: object,
     ) -> dict[str, float]:
         """Compute training metrics."""
         loss = cross_entropy(logits, y, xp)

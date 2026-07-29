@@ -14,7 +14,6 @@ Features:
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
 
 import numpy as np
 import torch
@@ -30,8 +29,8 @@ class ExperimentResult:
 
     model_name: str
     optimizer_name: str
-    model_params: dict[str, Any]
-    optimizer_params: dict[str, Any]
+    model_params: dict[str, object]
+    optimizer_params: dict[str, object]
 
     # Performance metrics
     train_accuracy: float = 0.0
@@ -49,7 +48,7 @@ class ExperimentResult:
     memory_peak_mb: float = 0.0
 
     # Additional metrics
-    extra_metrics: dict[str, Any] = field(default_factory=dict)
+    extra_metrics: dict[str, object] = field(default_factory=dict)
 
     def summary(self) -> str:
         """Get a summary string."""
@@ -69,8 +68,8 @@ class ExperimentConfig:
 
     model_name: str
     optimizer_name: str
-    model_params: dict[str, Any] = field(default_factory=dict)
-    optimizer_params: dict[str, Any] = field(default_factory=dict)
+    model_params: dict[str, object] = field(default_factory=dict)
+    optimizer_params: dict[str, object] = field(default_factory=dict)
 
     # Training config
     epochs: int = 10
@@ -119,8 +118,8 @@ class ExperimentRunner:
         train_loader: DataLoader,
         val_loader: DataLoader | None = None,
         test_loader: DataLoader | None = None,
-        model_params: dict[str, Any] | None = None,
-        optimizer_params: dict[str, Any] | None = None,
+        model_params: dict[str, object] | None = None,
+        optimizer_params: dict[str, object] | None = None,
         epochs: int = 10,
         batches_per_epoch: int = 100,
         eval_batches: int = 20,
@@ -302,7 +301,7 @@ class ExperimentRunner:
         optimizer_names: list[str],
         train_loader: DataLoader,
         val_loader: DataLoader | None = None,
-        model_params: dict[str, Any] | None = None,
+        model_params: dict[str, object] | None = None,
         epochs: int = 5,
         verbose: bool = True,
     ) -> list[ExperimentResult]:
@@ -360,7 +359,7 @@ class ExperimentRunner:
         optimizer_name: str,
         train_loader: DataLoader,
         val_loader: DataLoader | None = None,
-        optimizer_params: dict[str, Any] | None = None,
+        optimizer_params: dict[str, object] | None = None,
         epochs: int = 5,
         verbose: bool = True,
     ) -> list[ExperimentResult]:

@@ -6,7 +6,6 @@ concrete experiment proposals with configurations.
 """
 
 import logging
-from typing import Any
 
 from bioplausible.autoscientist.bridge import AutoScientistBridge, ExperimentProposal
 from bioplausible.autoscientist.reasoner import Hypothesis, HypothesisReasoner
@@ -149,9 +148,9 @@ class ExperimentProposer:
     def propose_ablation(
         self,
         model: str,
-        base_config: dict[str, Any],
+        base_config: dict[str, object],
         parameters: list[str],
-        values: list[list[Any]],
+        values: list[list[object]],
     ) -> list[ExperimentProposal]:
         """
         Propose ablation studies varying specific parameters.

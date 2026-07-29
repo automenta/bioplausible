@@ -5,8 +5,6 @@ Provides factory function to get optimizer instances by name.
 Includes both standard PyTorch optimizers (baselines) and EP-based optimizers.
 """
 
-from typing import Any
-
 from torch import nn, optim
 
 from bioplausible.zoo.mep.presets import (
@@ -24,8 +22,8 @@ def get_optimizer(
     lr: float = 0.01,
     momentum: float = 0.9,
     weight_decay: float = 0.0005,
-    **kwargs: Any,
-) -> tuple[Any, bool]:
+    **kwargs: object,
+) -> tuple[object, bool]:
     """
     Get optimizer by name.
 

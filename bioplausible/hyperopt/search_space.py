@@ -4,8 +4,6 @@ Search Space Definitions
 Defines the hyperparameter search spaces for each model type in the registry.
 """
 
-from typing import Any
-
 import numpy as np
 
 from bioplausible.zoo import get_model_spec
@@ -30,7 +28,7 @@ class SearchSpace:
         self.name = name
         self.params = params
 
-    def sample(self) -> dict[str, Any]:
+    def sample(self) -> dict[str, object]:
         """Sample a random configuration from the search space."""
         config = {}
         for name, space in self.params.items():
@@ -55,7 +53,7 @@ class SearchSpace:
                     config[name] = float(np.random.uniform(min_val, max_val))
         return config
 
-    def apply_constraints(self, constraints: dict[str, Any]) -> SearchSpace:
+    def apply_constraints(self, constraints: dict[str, object]) -> SearchSpace:
         """
         Return a new constrained search space based on constraints dictionary.
         Supports max_hidden, max_layers, max_steps.

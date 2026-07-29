@@ -1,5 +1,4 @@
 import logging
-from typing import Any
 
 import torch
 from torch import nn
@@ -24,7 +23,7 @@ def _get_mock_data(input_dim=784, output_dim=10, batch_size=32):
     return x, y
 
 
-def track_50_nebc_eqprop_variants(verifier: Any) -> TrackResult:
+def track_50_nebc_eqprop_variants(verifier: object) -> TrackResult:
     """Verify newly migrated NEBC EqProp variants (LM and others)."""
     logger.info("    Running NEBC EqProp Variants check...")
 
@@ -76,7 +75,7 @@ def track_50_nebc_eqprop_variants(verifier: Any) -> TrackResult:
     )
 
 
-def track_51_nebc_feedback_alignment(verifier: Any) -> TrackResult:
+def track_51_nebc_feedback_alignment(verifier: object) -> TrackResult:
     """Verify Adaptive Feedback Alignment (Native)."""
     logger.info("    Running AdaptiveFeedbackAlignment check...")
 
@@ -112,7 +111,7 @@ def track_51_nebc_feedback_alignment(verifier: Any) -> TrackResult:
     )
 
 
-def track_52_nebc_direct_feedback_alignment(verifier: Any) -> TrackResult:
+def track_52_nebc_direct_feedback_alignment(verifier: object) -> TrackResult:
     """Verify Equilibrium Alignment (Native)."""
     logger.info("    Running Equilibrium Alignment check...")
 
@@ -149,7 +148,7 @@ from bioplausible.zoo.propagators.hebbian import (
 )
 
 
-def track_53_nebc_contrastive_hebbian(verifier: Any) -> TrackResult:
+def track_53_nebc_contrastive_hebbian(verifier: object) -> TrackResult:
     """Verify Contrastive Hebbian Learning."""
     logger.info("    Running Contrastive Hebbian Learning check...")
 
@@ -185,7 +184,7 @@ def track_53_nebc_contrastive_hebbian(verifier: Any) -> TrackResult:
     )
 
 
-def track_54_nebc_deep_hebbian_chain(verifier: Any) -> TrackResult:
+def track_54_nebc_deep_hebbian_chain(verifier: object) -> TrackResult:
     """Verify Deep Hebbian Chain signal propagation."""
     logger.info("    Running Deep Hebbian Chain check...")
 

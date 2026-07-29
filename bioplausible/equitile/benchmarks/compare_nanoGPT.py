@@ -23,7 +23,6 @@ Example
 
 import time
 from dataclasses import dataclass
-from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -508,7 +507,7 @@ def compare_nanoGPT(
     batch_size: int = 32,
     seq_length: int = 256,
     device: str = "auto",
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """Compare EquiTile vs NanoGPT.
 
     Parameters
@@ -652,7 +651,7 @@ def compare_nanoGPT(
 
 
 def run_benchmark_comparison(
-    model_configs: list[dict[str, Any]],
+    model_configs: list[dict[str, object]],
     train_loader: torch.utils.data.DataLoader,
     val_loader: torch.utils.data.DataLoader,
     epochs: int = 5,

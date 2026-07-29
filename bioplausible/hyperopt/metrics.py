@@ -5,7 +5,6 @@ Implements Pareto dominance, non-dominated sorting, and composite scoring.
 """
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
 
@@ -16,7 +15,7 @@ class TrialMetrics:
 
     trial_id: int
     model_name: str
-    config: dict[str, Any]
+    config: dict[str, object]
 
     # Objectives (4D)
     accuracy: float  # Maximize (0-1)

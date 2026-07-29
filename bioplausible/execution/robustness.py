@@ -8,7 +8,6 @@ data, and adversarial attacks.
 
 import logging
 from pathlib import Path
-from typing import Any
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -70,7 +69,7 @@ class RobustnessEvaluator:
         self,
         model_name: str,
         task_name: str,
-        config: dict[str, Any],
+        config: dict[str, object],
         weights_path: str | None = None,
         output_dir: str | None = None,
     ) -> None:
@@ -185,7 +184,7 @@ class RobustnessEvaluator:
             logger.error(f"Robustness evaluation failed: {e}", exc_info=True)
             return {"robustness_score": 0.0}
 
-    def _test_noise_injection(self, model: nn.Module, task: Any) -> float:
+    def _test_noise_injection(self, model: nn.Module, task: object) -> float:
         """
         Inject noise into hidden states and measure recovery/accuracy.
 
@@ -231,7 +230,7 @@ class RobustnessEvaluator:
 
         return acc_base  # Fallback to accuracy if no specific noise API
 
-    def _test_input_perturbation(self, model: nn.Module, task: Any) -> float:
+    def _test_input_perturbation(self, model: nn.Module, task: object) -> float:
         """
         Test resilience to input noise.
 
@@ -266,7 +265,7 @@ class RobustnessEvaluator:
 
         return consistency
 
-    def _test_ood_detection(self, model: nn.Module, task: Any) -> float:
+    def _test_ood_detection(self, model: nn.Module, task: object) -> float:
         """
         Test Out-of-Distribution detection capability.
 
@@ -306,7 +305,7 @@ class RobustnessEvaluator:
         return max(0.0, msp_in - msp_ood)
 
     def _test_adversarial_attack(
-        self, model: nn.Module, task: Any, epsilon: float = 0.1
+        self, model: nn.Module, task: object, epsilon: float = 0.1
     ) -> float:
         """
         Test FGSM Adversarial Robustness.
@@ -324,7 +323,7 @@ class RobustnessEvaluator:
     def _test_pgd_attack(
         self,
         model: nn.Module,
-        task: Any,
+        task: object,
         epsilon: float = 0.1,
         alpha: float = 0.02,
         steps: int = 7,
@@ -349,7 +348,7 @@ class RobustnessEvaluator:
     def _run_attack(
         self,
         model: nn.Module,
-        task: Any,
+        task: object,
         attack_type: str,
         epsilon: float = 0.1,
         alpha: float = 0.02,
@@ -430,7 +429,7 @@ class RobustnessEvaluator:
             )
             return 0.0
 
-    def _generate_saliency_maps(self, model: nn.Module, task: Any) -> None:
+    def _generate_saliency_maps(self, model: nn.Module, task: object) -> None:
         """
         Generate and save saliency maps for interpretation.
         """
@@ -490,7 +489,7 @@ class RobustnessEvaluator:
 def run_robustness_check(
     model_name: str,
     task: str,
-    config: dict[str, Any],
+    config: dict[str, object],
     weights_path: str | None = None,
     output_dir: str | None = None,
 ) -> dict[str, float]:

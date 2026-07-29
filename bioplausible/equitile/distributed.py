@@ -43,7 +43,7 @@ import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import torch
 import torch.multiprocessing as mp
@@ -112,7 +112,7 @@ class TileCommunicator:
     def __init__(
         self,
         assignments: list[DeviceAssignment],
-        graph: Any,
+        graph: object,
     ) -> None:
         self.assignments = assignments
         self.graph = graph

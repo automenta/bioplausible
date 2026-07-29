@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Any
 
 from bioplausible.hyperopt import PatientLevel
 
@@ -35,7 +34,7 @@ class ExperimentTask:
     tier: PatientLevel
     study_name: str
     priority: float
-    fixed_config: dict[str, Any] | None = None
+    fixed_config: dict[str, object] | None = None
     verification_of_trial_id: int | None = None
     fold_index: int | None = None
     last_run_timestamp: str | None = None
@@ -46,6 +45,6 @@ class ExperimentTask:
     transfer_from_trial: int | None = None
     is_continual: bool = False
     continual_step: int = 0
-    constraints: dict[str, Any] | None = None
+    constraints: dict[str, object] | None = None
     is_evolve: bool = False
     evolve_problem: str | None = None

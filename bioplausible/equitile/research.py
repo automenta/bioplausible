@@ -24,7 +24,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -92,12 +92,12 @@ class ExperimentTracker:
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # Tracking state
-        self._params: dict[str, Any] = {}
-        self._metrics: list[dict[str, Any]] = []
+        self._params: dict[str, object] = {}
+        self._metrics: list[dict[str, object]] = []
         self._artifacts: list[str] = []
         self._start_time = time.time()
 
-    def log_params(self, params: dict[str, Any]) -> None:
+    def log_params(self, params: dict[str, object]) -> None:
         """Log experiment parameters.
 
         Parameters
@@ -124,7 +124,7 @@ class ExperimentTracker:
         epoch : int, optional
             Epoch number
         """
-        entry: dict[str, Any] = {
+        entry: dict[str, object] = {
             "timestamp": time.time(),
             "step": step,
             "epoch": epoch,
@@ -215,7 +215,7 @@ class ExperimentTracker:
         self,
         metric_name: str,
         as_array: bool = True,
-    ) -> list[float] | list[dict[str, Any]]:
+    ) -> list[float] | list[dict[str, object]]:
         """Get logged metrics.
 
         Parameters
@@ -234,7 +234,7 @@ class ExperimentTracker:
             return [m.get(metric_name) for m in self._metrics if metric_name in m]
         return [m for m in self._metrics if metric_name in m]
 
-    def get_summary(self) -> dict[str, Any]:
+    def get_summary(self) -> dict[str, object]:
         """Get experiment summary.
 
         Returns
@@ -246,7 +246,7 @@ class ExperimentTracker:
             return {}
 
         # Compute summary statistics for numeric metrics
-        summary: dict[str, Any] = {
+        summary: dict[str, object] = {
             "experiment_name": self.experiment_name,
             "n_steps": len(self._metrics),
             "duration_seconds": time.time() - self._start_time,
@@ -587,7 +587,7 @@ class VisualizationHelper:
 
         return heatmap
 
-    def get_graph_data(self) -> dict[str, Any]:
+    def get_graph_data(self) -> dict[str, object]:
         """Get graph data for visualization.
 
         Returns
@@ -717,8 +717,8 @@ class AblationConfig:
     """
 
     name: str
-    baseline_params: dict[str, Any]
-    variants: list[dict[str, Any]]
+    baseline_params: dict[str, object]
+    variants: list[dict[str, object]]
 
 
 class AblationStudy:
@@ -743,14 +743,14 @@ class AblationStudy:
         )
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-        self._results: dict[str, dict[str, Any]] = {}
+        self._results: dict[str, dict[str, object]] = {}
 
     def run_variant(
         self,
         variant_id: str,
-        variant_params: dict[str, Any],
-        train_fn: Callable[[dict[str, Any]], dict[str, Any]],
-    ) -> dict[str, Any]:
+        variant_params: dict[str, object],
+        train_fn: Callable[[dict[str, object]], dict[str, object]],
+    ) -> dict[str, object]:
         """Run a single variant.
 
         Parameters
@@ -789,8 +789,8 @@ class AblationStudy:
 
     def run_all(
         self,
-        train_fn: Callable[[dict[str, Any]], dict[str, Any]],
-    ) -> dict[str, dict[str, Any]]:
+        train_fn: Callable[[dict[str, object]], dict[str, object]],
+    ) -> dict[str, dict[str, object]]:
         """Run all variants.
 
         Parameters
@@ -822,7 +822,7 @@ class AblationStudy:
 
         return self._results
 
-    def get_comparison(self) -> dict[str, Any]:
+    def get_comparison(self) -> dict[str, object]:
         """Get comparison of all variants.
 
         Returns
@@ -945,8 +945,8 @@ def create_visualization_helper(model: EquiTile) -> VisualizationHelper:
 
 def create_ablation_study(
     name: str,
-    baseline_params: dict[str, Any],
-    variants: list[dict[str, Any]],
+    baseline_params: dict[str, object],
+    variants: list[dict[str, object]],
     log_dir: str | None = None,
 ) -> AblationStudy:
     """Create an ablation study.

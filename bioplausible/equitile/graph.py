@@ -22,7 +22,7 @@ Examples
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn.functional as F
@@ -100,7 +100,7 @@ class GraphEquiTileConfig:
     learning_rate: float = 1e-3
     dropout: float = 0.1
     activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu"
-    equitile_kwargs: dict[str, Any] = field(default_factory=dict)
+    equitile_kwargs: dict[str, object] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -418,7 +418,7 @@ class GraphEquiTile(BioModel):
     def __init__(
         self,
         config: GraphEquiTileConfig | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         if config is None:
             config = GraphEquiTileConfig(**kwargs)
@@ -690,7 +690,7 @@ def create_graph_model(
     num_classes: int,
     hidden_dim: int = 64,
     num_layers: int = 3,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> GraphEquiTile:
     """Create GraphEquiTile model.
 
@@ -725,7 +725,7 @@ def create_graph_model(
 def create_molecule_model(
     atom_features: int = 9,
     num_classes: int = 2,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> GraphEquiTile:
     """Create GraphEquiTile for molecular property prediction.
 
@@ -756,7 +756,7 @@ def create_molecule_model(
 def create_social_graph_model(
     user_features: int = 16,
     num_classes: int = 2,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> GraphEquiTile:
     """Create GraphEquiTile for social network analysis.
 

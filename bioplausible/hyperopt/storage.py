@@ -9,7 +9,6 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +124,7 @@ class HyperoptStorage:
     def create_trial(
         self,
         model_name: str,
-        config: dict[str, Any],
+        config: dict[str, object],
     ) -> int:
         """
         Create a new trial log.

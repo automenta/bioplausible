@@ -8,7 +8,6 @@ import logging
 import sqlite3
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
@@ -21,7 +20,7 @@ from bioplausible.hyperopt.comparison import (
 )
 
 
-def load_trials(db_path: str) -> list[dict[str, Any]]:
+def load_trials(db_path: str) -> list[dict[str, object]]:
     """
     Load all trials from Optuna SQLite database.
     """
@@ -163,7 +162,7 @@ def load_trials(db_path: str) -> list[dict[str, Any]]:
     return trials
 
 
-def compute_statistics(trials: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
+def compute_statistics(trials: list[dict[str, object]]) -> dict[str, dict[str, float]]:
     """Compute statistics per model."""
     stats = defaultdict(
         lambda: {
@@ -194,7 +193,7 @@ def compute_statistics(trials: list[dict[str, Any]]) -> dict[str, dict[str, floa
     return result
 
 
-def compute_pareto_frontier(trials: list[dict[str, Any]]) -> list[int]:
+def compute_pareto_frontier(trials: list[dict[str, object]]) -> list[int]:
     """Compute Pareto frontier trial IDs."""
     if not trials:
         return []
@@ -228,7 +227,7 @@ def compute_pareto_frontier(trials: list[dict[str, Any]]) -> list[int]:
     return pareto_ids
 
 
-def get_rankings(trials: list[dict[str, Any]]) -> list[Any]:
+def get_rankings(trials: list[dict[str, object]]) -> list[object]:
     """Compute comprehensive rankings with gap analysis."""
     trials_by_family = group_trials_by_family(trials)
     rankings = compute_algorithm_rankings(
@@ -251,7 +250,7 @@ def get_rankings(trials: list[dict[str, Any]]) -> list[Any]:
     return rankings
 
 
-def load_trials_timeseries(db_path: str) -> dict[int, list[dict[str, Any]]]:
+def load_trials_timeseries(db_path: str) -> dict[int, list[dict[str, object]]]:
     """
     Load epoch-by-epoch metrics for all trials.
     Returns a dictionary mapping trial_id to a list of epoch metrics.
@@ -287,7 +286,7 @@ def load_trials_timeseries(db_path: str) -> dict[int, list[dict[str, Any]]]:
     return dict(timeseries)
 
 
-def print_rankings(rankings: list[Any]):
+def print_rankings(rankings: list[object]):
     """Print rankings table."""
     header = f"{'Rank':<6} {'Family':<20} {'Best Acc':<10} {'Gap':<10} {'Trials':>8}"
     separator = f"{'-' * 6} {'-' * 20} {'-' * 10} {'-' * 10} {'-' * 8}"

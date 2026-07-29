@@ -6,7 +6,6 @@ Generate publication-quality plots for benchmark results.
 
 import os
 import pathlib
-from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -44,7 +43,7 @@ class BenchmarkVisualizer:
         return formatting_map.get(name, name)
 
     def plot_optimizer_comparison_with_stats(
-        self, results: dict[str, Any], metric: str = "final_test_accuracy"
+        self, results: dict[str, object], metric: str = "final_test_accuracy"
     ) -> None:
         """
         Compare optimizers with error bars and statistical significance.
@@ -145,7 +144,7 @@ class BenchmarkVisualizer:
         )
         plt.close()
 
-    def plot_training_curves_all(self, results: dict[str, Any]) -> None:
+    def plot_training_curves_all(self, results: dict[str, object]) -> None:
         """
         Plot training curves for all optimizers across all repeats.
 
@@ -226,7 +225,7 @@ class BenchmarkVisualizer:
         )
         plt.close()
 
-    def plot_test_accuracy_comparison(self, results: dict[str, Any]) -> None:
+    def plot_test_accuracy_comparison(self, results: dict[str, object]) -> None:
         """
         Plot test accuracy over epochs for all optimizers.
         """
@@ -282,7 +281,7 @@ class BenchmarkVisualizer:
         )
         plt.close()
 
-    def plot_time_analysis(self, results: dict[str, Any]) -> None:
+    def plot_time_analysis(self, results: dict[str, object]) -> None:
         """
         Plot time per epoch and time per step analysis.
         """
@@ -405,7 +404,7 @@ class BenchmarkVisualizer:
             )
             plt.close()
 
-    def generate_summary_report(self, results: dict[str, Any]) -> str:
+    def generate_summary_report(self, results: dict[str, object]) -> str:
         """
         Generate a markdown summary report.
 

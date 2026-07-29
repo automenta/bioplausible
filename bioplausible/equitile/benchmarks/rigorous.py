@@ -24,7 +24,6 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 try:
     from scipy import stats
@@ -228,7 +227,7 @@ class BenchmarkConfig:
     # Statistical
     confidence_level: float = 0.95
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """Convert to dictionary for logging."""
         return asdict(self)
 
@@ -243,7 +242,7 @@ class BenchmarkResult:
     """Results from a rigorous benchmark run."""
 
     model_name: str
-    config: dict[str, Any]
+    config: dict[str, object]
 
     # Performance metrics (with statistics)
     throughput_stats: StatisticalMetrics

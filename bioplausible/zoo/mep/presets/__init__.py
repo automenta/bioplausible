@@ -14,7 +14,6 @@ __all__ = [
 ]
 
 from collections.abc import Iterable
-from typing import Any
 
 from torch import nn
 
@@ -52,7 +51,7 @@ def smep(
     use_error_feedback: bool = False,  # Disabled by default - only for Dion/CL
     loss_type: str = "mse",  # MSE for stable EP energy
     softmax_temperature: float = 1.0,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> CompositeOptimizer:
     """
     SMEP: Spectral Muon Equilibrium Propagation.
@@ -152,7 +151,7 @@ def sdmep(
     use_error_feedback: bool = True,  # Enabled for Dion (recovers lost info)
     loss_type: str = "cross_entropy",
     softmax_temperature: float = 1.0,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> CompositeOptimizer:
     """
     SDMEP: Spectral Dion-Muon Equilibrium Propagation.
@@ -228,7 +227,7 @@ def local_ep(
     settle_lr: float = 0.05,
     gamma: float = 0.95,
     loss_type: str = "mse",
-    **kwargs: Any,
+    **kwargs: object,
 ) -> CompositeOptimizer:
     """
     LocalEPMuon: Layer-local EP with Muon orthogonalization.
@@ -291,7 +290,7 @@ def natural_ep(
     fisher_damping: float = 1e-3,
     use_diagonal_fisher: bool = False,
     loss_type: str = "mse",
-    **kwargs: Any,
+    **kwargs: object,
 ) -> CompositeOptimizer:
     """
     NaturalEPMuon: Natural gradient EP with Fisher whitening.
@@ -361,7 +360,7 @@ def muon_backprop(
     ns_steps: int = 5,
     gamma: float = 0.95,
     use_spectral: bool = True,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> CompositeOptimizer:
     """
     Muon optimizer with standard backpropagation.
@@ -414,7 +413,7 @@ def smep_fast(
     use_error_feedback: bool = False,
     loss_type: str = "mse",
     softmax_temperature: float = 1.0,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> CompositeOptimizer:
     """
     SMEP-Fast: Optimized SMEP for faster training.

@@ -8,7 +8,6 @@ to analyze convergence behavior, detect overfitting, and measure sample efficien
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +84,7 @@ class TrainingTrajectory:
     trial_id: int
     model_name: str
     task_name: str
-    config: dict[str, Any]
+    config: dict[str, object]
     checkpoints: list[TrainingCheckpoint] = field(default_factory=list)
 
     # Derived metrics (computed from checkpoints)
@@ -196,12 +195,12 @@ class ContinuousTrainingSchedule:
 
     def train_with_checkpoints(
         self,
-        trainer: Any,  # The training object (e.g. from bioplausible.training.Trainer)
+        trainer: object,  # The training object (e.g. from bioplausible.training.Trainer)
         trial_id: int,
         model_name: str,
         task_name: str,
-        config: dict[str, Any],
-        optuna_trial: Any | None = None,
+        config: dict[str, object],
+        optuna_trial: object | None = None,
         pruning_callback: Callable[[int, int, dict[str, float]], bool] | None = None,
         on_epoch_end: Callable[[int, dict[str, float]], None] | None = None,
     ) -> TrainingTrajectory:

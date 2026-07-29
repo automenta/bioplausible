@@ -24,7 +24,7 @@ Examples
 """
 
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
@@ -457,7 +457,7 @@ class LMEquiTile(BioModel):
     def __init__(
         self,
         config: LMEquiTileConfig | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         if config is None:
             config = LMEquiTileConfig(**kwargs)
@@ -847,7 +847,7 @@ def create_lm_model(
     num_heads: int = 4,
     num_layers: int = 4,
     max_seq_len: int = 128,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> LMEquiTile:
     """Create LMEquiTile model.
 
@@ -884,7 +884,7 @@ def create_lm_model(
 
 def create_small_lm(
     vocab_size: int = 1000,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> LMEquiTile:
     """Create small LMEquiTile for prototyping.
 
@@ -912,7 +912,7 @@ def create_small_lm(
 
 def create_medium_lm(
     vocab_size: int = 50257,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> LMEquiTile:
     """Create medium LMEquiTile.
 
@@ -940,7 +940,7 @@ def create_medium_lm(
 
 def create_large_lm(
     vocab_size: int = 50257,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> LMEquiTile:
     """Create large LMEquiTile.
 
@@ -987,10 +987,10 @@ def generate_text(
     Works with:
     - EqProp LM variants (have built-in generate)
     - Research algorithms (need this wrapper)
-    - Any model that outputs logits
+    - object model that outputs logits
 
     Args:
-        model: Any torch.nn.Module that outputs logits
+        model: object torch.nn.Module that outputs logits
         char_to_idx: Character to index mapping
         idx_to_char: Index to character mapping
         prompt: Starting text
@@ -1075,7 +1075,7 @@ def generate_text(
 
 def generate_from_dataset(
     model: torch.nn.Module,
-    dataset: Any,
+    dataset: object,
     prompt: str = "",
     max_new_tokens: int = 100,
     temperature: float = 1.0,

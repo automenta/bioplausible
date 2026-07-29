@@ -6,7 +6,6 @@ in bioplausible.scientist.core.AutoScientist.
 """
 
 import logging
-from typing import Any
 
 from pytorch_lightning import Trainer
 
@@ -19,9 +18,9 @@ logger = logging.getLogger("AutoScientist.PL")
 def run_pl_trial(
     model_name: str,
     optimizer_name: str,
-    config: dict[str, Any],
-    train_loader: Any,
-    val_loader: Any,
+    config: dict[str, object],
+    train_loader: object,
+    val_loader: object,
     quick_mode: bool = True,
 ) -> dict[str, float] | None:
     """
@@ -77,9 +76,9 @@ def run_pl_trial(
 def run_pl_trial_with_wandb(
     model_name: str,
     optimizer_name: str,
-    config: dict[str, Any],
-    train_loader: Any,
-    val_loader: Any,
+    config: dict[str, object],
+    train_loader: object,
+    val_loader: object,
     run_name: str | None = None,
 ) -> dict[str, float] | None:
     """

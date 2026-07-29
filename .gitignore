@@ -29,3 +29,4 @@ artifacts/
 reports/
 checkpoints/
 lightning_logs/
+scripts

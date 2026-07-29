@@ -13,7 +13,6 @@ import time
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -395,7 +394,7 @@ class TrialRunner:
 def run_single_trial_task(
     task: str,
     model_name: str,
-    config: dict[str, Any],
+    config: dict[str, object],
     storage_path: str | None = None,
     quick_mode: bool = True,
     verbose: bool = False,

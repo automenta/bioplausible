@@ -13,7 +13,6 @@ Contains helper methods that check if various experiment types are needed:
 
 import hashlib
 import json
-from typing import Any
 
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel
@@ -21,7 +20,7 @@ from bioplausible.hyperopt import PatientLevel
 
 def get_stats(
     progress: dict, model: str, task: str, tier: PatientLevel
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """Extract stats from progress dict for a given model/task/tier."""
     try:
         return progress[model][task][tier.value]

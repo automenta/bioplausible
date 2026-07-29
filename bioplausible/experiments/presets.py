@@ -14,7 +14,6 @@ Categories:
 """
 
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass
@@ -26,9 +25,9 @@ class ResearchPreset:
         str  # performance, speed, efficiency, bioplausible, robustness, exploratory
     )
     model_name: str
-    model_params: dict[str, Any]
+    model_params: dict[str, object]
     optimizer_name: str
-    optimizer_params: dict[str, Any]
+    optimizer_params: dict[str, object]
     description: str
     use_case: str
     expected_accuracy: str | None = None
@@ -465,7 +464,7 @@ def run_preset(
     val_loader=None,
     epochs: int = 10,
     verbose: bool = True,
-) -> Any:
+) -> object:
     """
     Run a research preset.
 

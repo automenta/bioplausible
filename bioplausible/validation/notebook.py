@@ -2,7 +2,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +205,7 @@ class ValidationTrack:
         self.priority = priority
         self.tags = tags or []
 
-    def validate(self) -> dict[str, Any]:
+    def validate(self) -> dict[str, object]:
         """
         Execute the validation logic.
 

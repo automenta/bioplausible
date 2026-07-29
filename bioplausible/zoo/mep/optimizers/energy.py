@@ -9,8 +9,6 @@ where:
     E_external = β * L(s_last, y)                 (task loss)
 """
 
-from typing import Any
-
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -38,7 +36,7 @@ class EnergyFunction:
         model: nn.Module,
         x: torch.Tensor,
         states: list[torch.Tensor],
-        structure: list[dict[str, Any]],
+        structure: list[dict[str, object]],
         target_vec: torch.Tensor | None = None,
         beta: float = 0.0,
     ) -> torch.Tensor:

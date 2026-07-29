@@ -8,7 +8,6 @@ analysis paths with idiomatic Lightning hooks.
 import json
 import logging
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -86,14 +85,14 @@ class BioPredictionWriter(Callback):
         super().__init__()
         self.output_dir = output_dir
         Path(output_dir).mkdir(exist_ok=True, parents=True)
-        self._buffer: list[dict[str, Any]] = []
+        self._buffer: list[dict[str, object]] = []
 
     def on_validation_batch_end(
         self,
         trainer: pl.Trainer,
         pl_module: pl.LightningModule,
-        outputs: Any,
-        batch: Any,
+        outputs: object,
+        batch: object,
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> None:

@@ -12,7 +12,6 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
 
 import torch
 from torch import nn
@@ -183,7 +182,7 @@ class BenchmarkResult:
     energy_proxy: float | None = None
     wall_time_s: float | None = None
     peak_memory_mb: float | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
     def summary(self) -> str:
         """Human-readable summary."""
@@ -194,7 +193,7 @@ class BenchmarkResult:
             parts.append(f"  params: {self.params_count:,}")
         return "\n".join(parts)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "model_name": self.model_name,
             "task_name": self.task_name,

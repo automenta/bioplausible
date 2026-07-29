@@ -30,7 +30,7 @@ Examples
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 
@@ -169,7 +169,7 @@ class EquiTileBuilder:
             "classification", "regression", "binary", "multilabel"
         ] = "classification"
         self._gradient_clip: float = 1.0
-        self._extra_kwargs: dict[str, Any] = {}
+        self._extra_kwargs: dict[str, object] = {}
 
     @classmethod
     def production(cls, input_dim: int = 784, output_dim: int = 10) -> EquiTileBuilder:
@@ -555,7 +555,7 @@ class EquiTileBuilder:
         self._dynamics.clamp_activities = enabled
         return self
 
-    def with_kwargs(self, **kwargs: Any) -> EquiTileBuilder:
+    def with_kwargs(self, **kwargs: object) -> EquiTileBuilder:
         """Add extra keyword arguments.
 
         Parameters
@@ -864,7 +864,7 @@ class TrainingContext:
         return False
 
     def save_checkpoint(
-        self, epoch: int, metadata: dict[str, Any] | None = None
+        self, epoch: int, metadata: dict[str, object] | None = None
     ) -> str:
         """Save checkpoint.
 
@@ -1020,7 +1020,7 @@ def build_model(
     input_dim: int = 784,
     output_dim: int = 10,
     preset: Literal["production", "research", "fast"] = "production",
-    **kwargs: Any,
+    **kwargs: object,
 ) -> EquiTile:
     """Build EquiTile model using preset.
 
@@ -1056,8 +1056,8 @@ def build_enhanced_model(
     input_dim: int = 784,
     output_dim: int = 10,
     enable_layer_norm: bool = True,
-    **kwargs: Any,
-) -> Any:
+    **kwargs: object,
+) -> object:
     """Build Enhanced EquiTile model.
 
     Parameters

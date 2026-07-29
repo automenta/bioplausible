@@ -21,7 +21,7 @@ Examples
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn.functional as F
@@ -115,7 +115,7 @@ class RLEquiTileConfig:
     )
     inference_steps: int = 5
     activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu"
-    equitile_kwargs: dict[str, Any] = field(default_factory=dict)
+    equitile_kwargs: dict[str, object] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -200,7 +200,7 @@ class RLEquiTile(BioModel):
     def __init__(
         self,
         config: RLEquiTileConfig | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         if config is None:
             config = RLEquiTileConfig(**kwargs)
@@ -877,7 +877,7 @@ def create_rl_model(
     action_dim: int,
     action_type: Literal["discrete", "continuous"] = "discrete",
     hidden_dim: int = 128,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> RLEquiTile:
     """Create RLEquiTile model.
 
@@ -914,7 +914,7 @@ def create_recurrent_rl_model(
     action_dim: int,
     action_type: Literal["discrete", "continuous"] = "discrete",
     rnn_hidden_dim: int = 128,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> RecurrentRLEquiTile:
     """Create RecurrentRLEquiTile model.
 
@@ -948,7 +948,7 @@ def create_recurrent_rl_model(
 def create_atari_model(
     obs_shape: tuple[int, int, int] = (4, 84, 84),
     action_dim: int = 4,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> RLEquiTile:
     """Create RLEquiTile for Atari games.
 
@@ -982,7 +982,7 @@ def create_atari_model(
 def create_mujoco_model(
     obs_dim: int,
     action_dim: int,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> RLEquiTile:
     """Create RLEquiTile for MuJoCo environments (continuous action space).
 

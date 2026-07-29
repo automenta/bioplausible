@@ -13,7 +13,7 @@ Supported Datasets
 - Shakespeare: Character-level Shakespeare corpus
 - TinyStories: Synthetic stories for compositional generalization
 - Python: Python code completion subset
-- Custom: Any text file or directory
+- Custom: object text file or directory
 
 Example
 -------

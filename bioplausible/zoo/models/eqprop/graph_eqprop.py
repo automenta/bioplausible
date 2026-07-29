@@ -1,7 +1,5 @@
 """Equilibrium Propagation model variants."""
 
-from typing import Any
-
 import torch
 from torch import nn
 
@@ -41,7 +39,7 @@ class GraphEqProp(EqPropModel):
         self.conv = GCNConv(self.hidden_dim, self.hidden_dim)
         self.W_out = nn.Linear(self.hidden_dim, self.output_dim)
 
-    def _initialize_hidden_state(self, x: Any) -> torch.Tensor:
+    def _initialize_hidden_state(self, x: object) -> torch.Tensor:
         if hasattr(x, "x"):
             num_nodes = x.x.size(0)
             return torch.zeros(
@@ -52,7 +50,7 @@ class GraphEqProp(EqPropModel):
                 (x.size(0), self.hidden_dim), device=x.device, dtype=x.dtype
             )
 
-    def _transform_input(self, x: Any) -> Any:
+    def _transform_input(self, x: object) -> object:
         if hasattr(x, "x"):
             u = self.W_in(x.x)
             return (u, x.edge_index)
@@ -62,7 +60,7 @@ class GraphEqProp(EqPropModel):
     def transition_modules(self) -> list[nn.Module]:
         return [self.conv]
 
-    def forward_step(self, h: torch.Tensor, x_transformed: Any) -> torch.Tensor:
+    def forward_step(self, h: torch.Tensor, x_transformed: object) -> torch.Tensor:
         if isinstance(x_transformed, tuple):
             u, edge_index = x_transformed
             if GCNConv is not None:
@@ -72,7 +70,7 @@ class GraphEqProp(EqPropModel):
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         return self.W_out(h)
 
-    def train_step(self, x: Any, y: torch.Tensor) -> dict[str, float]:
+    def train_step(self, x: object, y: torch.Tensor) -> dict[str, float]:
         if not hasattr(x, "train_mask"):
             return super().train_step(x, y)
 

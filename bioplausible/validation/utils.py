@@ -15,7 +15,6 @@ Scientific Rigor Features:
 """
 
 import logging
-from typing import Any
 
 import numpy as np
 import torch
@@ -120,7 +119,7 @@ def evaluate_accuracy(model: nn.Module, X: torch.Tensor, y: torch.Tensor) -> flo
 
 
 def format_metrics_table(
-    metrics: dict[str, Any], headers: tuple[str, str] = ("Metric", "Value")
+    metrics: dict[str, object], headers: tuple[str, str] = ("Metric", "Value")
 ) -> str:
     """Format a dict of metrics as a markdown table."""
     rows = [f"| {k} | {format_value(v)} |" for k, v in metrics.items()]
@@ -131,7 +130,7 @@ def format_metrics_table(
     return "\n".join([header, separator] + rows)
 
 
-def format_value(v: Any) -> str:
+def format_value(v: object) -> str:
     """Format a value for display in a table."""
     if isinstance(v, float):
         if abs(v) < 0.01 or abs(v) > 1000:

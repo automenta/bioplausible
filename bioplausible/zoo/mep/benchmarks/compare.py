@@ -11,7 +11,6 @@ import logging
 import pathlib
 import time
 from dataclasses import asdict, dataclass
-from typing import Any
 
 import torch
 from torch import nn
@@ -186,7 +185,7 @@ def get_num_classes(config: BenchmarkConfig) -> int:
 
 def train_epoch(
     model: nn.Module,
-    optimizer: Any,
+    optimizer: object,
     train_loader: DataLoader,
     device: torch.device,
     is_ep: bool,

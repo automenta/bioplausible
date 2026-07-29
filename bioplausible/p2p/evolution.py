@@ -11,7 +11,6 @@ import os
 import random
 import threading
 import time
-from typing import Any
 
 from bioplausible.hyperopt.experiment import run_single_trial_task
 from bioplausible.hyperopt.search_space import SEARCH_SPACES, get_search_space
@@ -42,7 +41,7 @@ class P2PEvolution:
         bootstrap_ip: str = None,
         bootstrap_port: int = 8468,
         discovery_mode: str = "quick",
-        constraints: dict[str, Any] = None,
+        constraints: dict[str, object] = None,
         task: str = "shakespeare",
     ):
         self.bootstrap_nodes = [(bootstrap_ip, bootstrap_port)] if bootstrap_ip else []

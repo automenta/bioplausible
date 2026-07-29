@@ -7,7 +7,7 @@ constraints, and error feedback.
 """
 
 from collections.abc import Callable, Iterable
-from typing import Any, cast
+from typing import cast
 
 import torch
 from torch import nn
@@ -83,7 +83,7 @@ class CompositeOptimizer(Optimizer):
         if weight_decay < 0:
             raise ValueError(f"Weight decay must be non-negative, got {weight_decay}")
 
-        defaults: dict[str, Any] = dict(
+        defaults: dict[str, object] = dict(
             lr=lr,
             momentum=momentum,
             weight_decay=weight_decay,
@@ -118,7 +118,7 @@ class CompositeOptimizer(Optimizer):
         closure: Callable[[], float] | None = None,
         x: torch.Tensor | None = None,
         target: torch.Tensor | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> float | None:
         """
         Perform optimization step.
@@ -185,7 +185,7 @@ class CompositeOptimizer(Optimizer):
             # but EPGradient etc do. Since we did isinstance check, we know it's safeish,
             # but mypy might complain if we call it on 'self.gradient' which is GradientStrategy.
             # However, we pass them as kwargs, and self.gradient accepts **kwargs in protocol.
-            def _get_structure(m: nn.Module) -> list[dict[str, Any]]:
+            def _get_structure(m: nn.Module) -> list[dict[str, object]]:
                 if hasattr(m, "transition_modules"):
                     try:
                         return [
@@ -262,7 +262,7 @@ class CompositeOptimizer(Optimizer):
                         else:
                             p.grad.zero_()
 
-    def state_dict(self) -> dict[str, Any]:
+    def state_dict(self) -> dict[str, object]:
         """Get optimizer state dict."""
         state = super().state_dict()
         state["strategy_config"] = {
@@ -271,7 +271,7 @@ class CompositeOptimizer(Optimizer):
             "constraint": type(self.constraint).__name__,
             "feedback": type(self.feedback).__name__,
         }
-        return cast("dict[str, Any]", state)
+        return cast("dict[str, object]", state)
 
 
 # Import after class definition to avoid circular imports

@@ -22,7 +22,7 @@ Examples
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn.functional as F
@@ -110,7 +110,7 @@ class TimeSeriesConfig:
     # Learning
     learning_rate: float = 1e-3
     dropout: float = 0.1
-    equitile_kwargs: dict[str, Any] = field(default_factory=dict)
+    equitile_kwargs: dict[str, object] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -418,7 +418,7 @@ class TimeSeriesEquiTile(BioModel):
     def __init__(
         self,
         config: TimeSeriesConfig | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         if config is None:
             config = TimeSeriesConfig(**kwargs)
@@ -673,7 +673,7 @@ def create_forecasting_model(
     input_dim: int,
     seq_len: int,
     pred_len: int,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> TimeSeriesEquiTile:
     """Create forecasting model.
 
@@ -708,7 +708,7 @@ def create_classification_model(
     input_dim: int,
     seq_len: int,
     num_classes: int,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> TimeSeriesEquiTile:
     """Create classification model.
 
@@ -741,7 +741,7 @@ def create_classification_model(
 def create_anomaly_detection_model(
     input_dim: int,
     seq_len: int,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> TimeSeriesEquiTile:
     """Create anomaly detection model.
 

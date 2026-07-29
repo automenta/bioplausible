@@ -15,7 +15,7 @@ Examples
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn.functional as F
@@ -380,7 +380,7 @@ class OptimizedLMEquiTile(LMEquiTile):
         compile_mode: Literal[
             "default", "reduce-overhead", "max-autotune"
         ] = "reduce-overhead",
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         if config is None:
             config = LMEquiTileConfig(**kwargs)
@@ -619,7 +619,7 @@ def create_optimized_lm(
     num_layers: int = 4,
     max_seq_len: int = 128,
     use_compile: bool = True,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> OptimizedLMEquiTile:
     """Create optimized LMEquiTile model.
 
@@ -659,7 +659,7 @@ def create_optimized_lm(
 def create_optimized_small_lm(
     vocab_size: int = 1000,
     use_compile: bool = True,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> OptimizedLMEquiTile:
     """Create optimized small LMEquiTile for prototyping.
 

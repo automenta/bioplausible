@@ -5,7 +5,6 @@ with rich metadata enabling AutoScientist composition.
 """
 
 import logging
-from typing import Any
 
 import torch
 from torch import nn
@@ -147,7 +146,7 @@ def get_models_for_task(
     domain: Domain,
     locality: LocalityLevel | None = None,
     requires_backward: bool | None = None,
-) -> list[dict[str, Any]]:
+) -> list[dict[str, object]]:
     """Return all models compatible with a task (domain + locality + backward)."""
     return Registry.query(
         category=ComponentCategory.MODEL,
@@ -159,7 +158,7 @@ def get_models_for_task(
 
 def get_propagators_for_model(
     model_name: str,
-) -> list[dict[str, Any]]:
+) -> list[dict[str, object]]:
     """Return propagators compatible with a model's locality + backward flag."""
     model_meta = Registry.get_metadata(ComponentCategory.MODEL, model_name)
     return Registry.query(
@@ -171,7 +170,7 @@ def get_propagators_for_model(
 
 def get_optimizers_for_propagator(
     propagator_name: str,
-) -> list[dict[str, Any]]:
+) -> list[dict[str, object]]:
     """Return optimizers compatible with a propagator's backward flag."""
     prop_meta = Registry.get_metadata(ComponentCategory.PROPAGATOR, propagator_name)
     return Registry.query(

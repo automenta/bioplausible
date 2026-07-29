@@ -1,7 +1,6 @@
 """Equilibrium Propagation model variants."""
 
 import math
-from typing import Any
 
 import torch
 from torch import nn
@@ -248,7 +247,7 @@ class LoopedMLP(EqPropModel):
     ) -> (
         torch.Tensor
         | tuple[torch.Tensor, list[torch.Tensor]]
-        | tuple[torch.Tensor, dict[str, Any]]
+        | tuple[torch.Tensor, dict[str, object]]
     ):
         if self.backend == "kernel" and self._engine is not None:
             if isinstance(x, torch.Tensor):

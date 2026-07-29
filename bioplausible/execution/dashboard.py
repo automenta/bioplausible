@@ -9,7 +9,6 @@ trial updates, resource usage, and historical performance logs.
 import datetime
 import logging
 import shutil
-from typing import Any
 
 import psutil
 from rich.console import Console
@@ -38,9 +37,9 @@ class Dashboard:
         progress (Progress): Progress bar instance.
         epoch_task (TaskID): ID for the epoch progress task.
         status_log (List[str]): Log of recent status messages.
-        recent_trials (List[Dict[str, Any]]): History of recent trials.
-        current_trial_info (Dict[str, Any]): Details of the currently running trial.
-        best_model (Optional[Dict[str, Any]]):
+        recent_trials (List[Dict[str, object]]): History of recent trials.
+        current_trial_info (Dict[str, object]): Details of the currently running trial.
+        best_model (Optional[Dict[str, object]]):
             Information about the best performing model.
         insight_text (str): Current scientific insight message.
         live (Live): The live display manager.
@@ -61,9 +60,9 @@ class Dashboard:
         self.epoch_task = self.progress.add_task("Epoch", total=100)
 
         self.status_log: list[str] = []
-        self.recent_trials: list[dict[str, Any]] = []
-        self.current_trial_info: dict[str, Any] = {}
-        self.best_model: dict[str, Any] | None = None
+        self.recent_trials: list[dict[str, object]] = []
+        self.current_trial_info: dict[str, object] = {}
+        self.best_model: dict[str, object] | None = None
         self.insight_text: str = "Initializing analysis modules..."
 
         self.system_status: str = "Initializing"
@@ -248,7 +247,7 @@ class Dashboard:
         model: str,
         task: str,
         tier: str,
-        params: dict[str, Any],
+        params: dict[str, object],
     ) -> None:
         """
         Set the details for the currently running trial.
@@ -285,7 +284,7 @@ class Dashboard:
         self.current_trial_info["metrics"] = metrics
         self.update()
 
-    def complete_trial(self, status: str, metrics: dict[str, Any]) -> None:
+    def complete_trial(self, status: str, metrics: dict[str, object]) -> None:
         """
         Mark the current trial as completed and update history.
 

@@ -8,7 +8,6 @@ import json
 import logging
 import threading
 import time
-from typing import Any
 
 try:
     from kademlia.network import Server
@@ -89,7 +88,7 @@ class DHTNode:
             self.server.stop()
             self.loop.close()
 
-    def get(self, key: str) -> Any | None:
+    def get(self, key: str) -> object | None:
         """Synchronous get wrapper."""
         if not self.running:
             return None
@@ -103,7 +102,7 @@ class DHTNode:
             logger.debug(f"DHT Get Error ({key}): {e}")
             return None
 
-    def set(self, key: str, value: Any):
+    def set(self, key: str, value: object):
         """Synchronous set wrapper."""
         if not self.running:
             return

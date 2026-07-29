@@ -9,7 +9,6 @@ Implements various methods for computing gradients:
 """
 
 from collections.abc import Callable
-from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -34,7 +33,7 @@ class BackpropGradient:
         x: torch.Tensor,
         target: torch.Tensor | None,
         loss_fn: nn.Module | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         """
         Compute gradients via standard backpropagation.
@@ -99,7 +98,7 @@ class EPGradient:
         target: torch.Tensor | None,
         energy_fn: Callable | None = None,
         structure_fn: Callable | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         """
         Compute EP gradients via free/nudged contrast.
@@ -147,7 +146,7 @@ class EPGradient:
         target: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
-        structure: list[dict[str, Any]],
+        structure: list[dict[str, object]],
     ) -> list[torch.Tensor]:
         """Settle network to energy minimum."""
         from ..settling import Settler
@@ -171,7 +170,7 @@ class EPGradient:
         states_free: list[torch.Tensor],
         states_nudged: list[torch.Tensor],
         energy_fn: Callable,
-        structure: list[dict[str, Any]],
+        structure: list[dict[str, object]],
     ) -> None:
         """Apply EP gradient: (E_nudged - E_free) / beta."""
         # Prepare target
@@ -263,7 +262,7 @@ class LocalEPGradient:
         target: torch.Tensor | None,
         energy_fn: Callable | None = None,
         structure_fn: Callable | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         """Compute layer-local EP gradients."""
         if target is None:
@@ -317,7 +316,7 @@ class LocalEPGradient:
         target: torch.Tensor,
         states_free: list[torch.Tensor],
         states_nudged: list[torch.Tensor],
-        structure: list[dict[str, Any]],
+        structure: list[dict[str, object]],
     ) -> None:
         """Apply EP contrast independently per layer."""
         # Extract layer I/O
@@ -389,7 +388,7 @@ class LocalEPGradient:
         params: list[nn.Parameter],
         last_state: torch.Tensor,
         target: torch.Tensor,
-        structure: list[dict[str, Any]],
+        structure: list[dict[str, object]],
         dtype: torch.dtype,
     ) -> None:
         """Update parameters of modules after the last layer."""
@@ -459,8 +458,8 @@ class LocalEPGradient:
         self,
         x: torch.Tensor,
         states: list[torch.Tensor],
-        structure: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
+        structure: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
         """Extract layer inputs and outputs."""
         io_list = []
         prev = x
@@ -514,7 +513,7 @@ class NaturalGradient:
         target: torch.Tensor | None,
         energy_fn: Callable | None = None,
         structure_fn: Callable | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         """
         Compute natural gradients with Fisher whitening.
@@ -544,7 +543,7 @@ class NaturalGradient:
         x: torch.Tensor,
         target: torch.Tensor | None,
         energy_fn: Callable | None,
-        structure: list[dict[str, Any]] | None,
+        structure: list[dict[str, object]] | None,
     ) -> None:
         """
         Compute Fisher Information Matrix blocks.

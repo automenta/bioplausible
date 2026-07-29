@@ -7,7 +7,6 @@ than traditional backprop through deep layers.
 """
 
 import logging
-from typing import Any
 
 import torch
 
@@ -37,7 +36,7 @@ class SignalPropagationTrack(ValidationTrack):
             tags=["signal", "propagation", "deep", "equilibrium"],
         )
 
-    def validate(self) -> dict[str, Any]:
+    def validate(self) -> dict[str, object]:
         """
         Validate signal propagation in deep networks.
 

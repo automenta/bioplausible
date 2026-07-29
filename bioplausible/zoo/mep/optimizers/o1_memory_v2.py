@@ -16,8 +16,6 @@ Created: 2026-02-18 (v2: 2026-02-25)
 Refactored: 2026-07-28 to use TransitionGraph protocol (transition_modules())
 """
 
-from typing import Any
-
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -30,9 +28,9 @@ def _capture_states_no_grad(
 ) -> list[torch.Tensor]:
     """Capture initial layer states without autograd using hooks on transition modules."""
     states: list[torch.Tensor] = []
-    handles: list[Any] = []
+    handles: list[object] = []
 
-    def capture_hook(module: nn.Module, inp: Any, output: Any) -> None:
+    def capture_hook(module: nn.Module, inp: object, output: object) -> None:
         if isinstance(output, tuple):
             s = output[0].detach().float().clone()
         else:

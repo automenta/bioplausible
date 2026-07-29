@@ -21,7 +21,7 @@ Examples
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 from torch import nn
@@ -113,7 +113,7 @@ class ConvEquiTileConfig:
     task_type: Literal["classification", "regression", "binary", "multilabel"] = (
         "classification"
     )
-    equitile_kwargs: dict[str, Any] = field(default_factory=dict)
+    equitile_kwargs: dict[str, object] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -299,7 +299,7 @@ class ConvEquiTile(BioModel):
     def __init__(
         self,
         config: ConvEquiTileConfig | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ) -> None:
         if config is None:
             config = ConvEquiTileConfig(**kwargs)
@@ -572,7 +572,7 @@ def create_vision_model(
     conv_channels: list[int] | None = None,
     neurons_per_tile: int = 64,
     mode: Literal["pc", "ep"] = "pc",
-    **kwargs: Any,
+    **kwargs: object,
 ) -> ConvEquiTile:
     """Create a ConvEquiTile model for vision tasks.
 
@@ -612,7 +612,7 @@ def create_vision_model(
 
 def create_mnist_model(
     neurons_per_tile: int = 64,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> ConvEquiTile:
     """Create ConvEquiTile for MNIST.
 
@@ -640,7 +640,7 @@ def create_mnist_model(
 
 def create_cifar_model(
     neurons_per_tile: int = 128,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> ConvEquiTile:
     """Create ConvEquiTile for CIFAR-10/100.
 
@@ -670,7 +670,7 @@ def create_cifar_model(
 def create_imagenet_model(
     neurons_per_tile: int = 256,
     num_classes: int = 1000,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> ConvEquiTile:
     """Create ConvEquiTile for ImageNet.
 

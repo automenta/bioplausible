@@ -6,7 +6,6 @@ Generates publication-quality plots for experiment results using matplotlib and 
 
 import pathlib
 from pathlib import Path
-from typing import Any
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -176,7 +175,7 @@ class ResultVisualizer:
         return str(save_path)
 
     def plot_convergence_curves(
-        self, trajectories: list[Any], save_name: str = "convergence_curves.png"
+        self, trajectories: list[object], save_name: str = "convergence_curves.png"
     ):
         """
         Plot Accuracy vs Epoch for top trajectories.
@@ -231,7 +230,7 @@ class ResultVisualizer:
         return saved_files
 
     def plot_learning_dynamics(
-        self, trajectories: list[Any], save_name: str = "learning_dynamics.png"
+        self, trajectories: list[object], save_name: str = "learning_dynamics.png"
     ):
         """
         Plot Learning Rate vs Epoch for top trajectories.
@@ -292,7 +291,7 @@ class ResultVisualizer:
         return saved_files
 
     def plot_sample_complexity(
-        self, trajectories: list[Any], save_name: str = "sample_complexity.png"
+        self, trajectories: list[object], save_name: str = "sample_complexity.png"
     ):
         """
         Plot Accuracy vs Samples Seen.
@@ -925,7 +924,7 @@ class ResultsDashboard:
     """Generate HTML dashboard for experiment results."""
 
     def __init__(self):
-        self.results: list[Any] = []
+        self.results: list[object] = []
         self.html_template = """
 <!DOCTYPE html>
 <html>
@@ -956,7 +955,7 @@ class ResultsDashboard:
 </html>
 """
 
-    def add_results(self, results: list[Any]) -> None:
+    def add_results(self, results: list[object]) -> None:
         self.results.extend(results)
 
     def generate(self, output_path: str) -> str:
@@ -988,7 +987,7 @@ class ResultsDashboard:
 
 
 def visualize_results(
-    results: list[Any],
+    results: list[object],
     output_dir: str = "./visualizations",
 ) -> dict[str, str]:
     """Generate all visualizations for experiment results."""

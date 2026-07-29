@@ -1,7 +1,5 @@
 """Equilibrium Propagation model variants."""
 
-from typing import Any
-
 import torch
 from torch import nn
 
@@ -122,7 +120,7 @@ class StandardEqProp(BioModel):
         steps: int | None = None,
         return_trajectory: bool = False,
         return_dynamics: bool = False,
-    ) -> torch.Tensor | tuple[torch.Tensor, Any]:
+    ) -> torch.Tensor | tuple[torch.Tensor, object]:
         eq_steps = steps if steps is not None else self.eq_steps
 
         activations = [x]

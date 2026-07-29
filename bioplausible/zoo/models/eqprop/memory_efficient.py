@@ -1,7 +1,5 @@
 """Equilibrium Propagation model variants."""
 
-from typing import Any
-
 import torch
 
 from bioplausible.acceleration.kernels import HAS_CUPY, EqPropKernel
@@ -132,7 +130,7 @@ class MemoryEfficientEqPropModel(TransitionGraphMixin, EqPropModel):
 
 def create_memory_efficient_model(
     model_type: str, input_dim: int, hidden_dim: int, output_dim: int, **kwargs
-) -> Any:
+) -> object:
     if model_type.lower() in ["loopedmlp", "memory_efficient"]:
         return MemoryEfficientLoopedMLP(
             input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, **kwargs

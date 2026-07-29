@@ -1,5 +1,4 @@
 import time
-from typing import Any
 
 import gymnasium as gym
 import numpy as np
@@ -32,7 +31,7 @@ class RLTrainer:
         seed: int = 42,
         episodes_per_epoch: int = 10,
         tracker: ExperimentTracker | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ):
         self.model = model.to(device)
         self.device = device
@@ -104,7 +103,7 @@ class RLTrainer:
             # Fallback for older gym
             return self.env.reset()
 
-    def _step_env(self, action: Any) -> tuple[np.ndarray, float, bool, bool]:
+    def _step_env(self, action: object) -> tuple[np.ndarray, float, bool, bool]:
         """Step environment and return (obs, reward, terminated, truncated)."""
         step_result = self.env.step(action)
         if len(step_result) == 5:
@@ -114,7 +113,7 @@ class RLTrainer:
             obs, reward, terminated, _ = step_result
             return obs, float(reward), terminated, False
 
-    def _get_action(self, logits: torch.Tensor) -> tuple[Any, torch.Tensor]:
+    def _get_action(self, logits: torch.Tensor) -> tuple[object, torch.Tensor]:
         """Sample action from logits and return (env_action, log_prob)."""
         if self.is_continuous:
             # Continuous Action Space (Gaussian Policy)

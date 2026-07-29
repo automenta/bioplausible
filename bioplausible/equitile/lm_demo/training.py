@@ -31,7 +31,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +214,7 @@ class TrainingMetrics:
         if samples_per_sec is not None:
             self.samples_per_second.append(samples_per_sec)
 
-    def get_summary(self) -> dict[str, Any]:
+    def get_summary(self) -> dict[str, object]:
         """Get summary statistics."""
         return {
             "global_step": self.global_step,

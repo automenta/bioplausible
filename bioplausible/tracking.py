@@ -7,7 +7,6 @@ or other backends (MLflow, TensorBoard - future).
 
 import os
 import warnings
-from typing import Any
 
 try:
     import wandb
@@ -34,7 +33,7 @@ class ExperimentTracker:
         self,
         project: str = "bioplausible",
         name: str | None = None,
-        config: dict[str, Any] | None = None,
+        config: dict[str, object] | None = None,
         backend: str = "wandb",
     ):
         self.backend = backend
@@ -72,7 +71,7 @@ class ExperimentTracker:
         else:
             raise ValueError(f"Unknown backend: {backend}")
 
-    def log_hyperparams(self, config: dict[str, Any]):
+    def log_hyperparams(self, config: dict[str, object]):
         """Log hyperparameters/config."""
         if self.backend == "wandb" and self.run:
             wandb.config.update(config, allow_val_change=True)
@@ -94,7 +93,7 @@ class ExperimentTracker:
         metrics = {"lipschitz_constant": L, "is_contractive": float(L < 1.0)}
         self.log_metrics(metrics, step=step)
 
-    def log_validation_track(self, track_id: int, results: dict[str, Any]):
+    def log_validation_track(self, track_id: int, results: dict[str, object]):
         """
         Log results from a specific verification track.
         """
@@ -110,11 +109,11 @@ class ExperimentTracker:
         if self.backend == "wandb" and self.run:
             wandb.log({key: wandb.Image(image_path, caption=caption)})
 
-    def log_config(self, cfg: dict[str, Any]):
+    def log_config(self, cfg: dict[str, object]):
         """Log the entire RunConfig dictionary."""
         self.log_hyperparams(cfg)
 
-    def log_energy(self, profile: Any, step: int | None = None):
+    def log_energy(self, profile: object, step: int | None = None):
         """Log an EnergyProfile."""
         metrics = {
             "energy/forward_flops": profile.forward_flops,

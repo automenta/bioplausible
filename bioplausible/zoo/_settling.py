@@ -8,14 +8,14 @@ Provides reusable helpers for the three common settling patterns:
 
 import logging
 from collections.abc import Callable
-from typing import Any, cast
+from typing import cast
 
 import torch
 from torch import autograd, nn
 
 logger = logging.getLogger(__name__)
 
-_DynamicsDict = dict[str, Any]
+_DynamicsDict = dict[str, object]
 
 
 # ---------------------------------------------------------------------------

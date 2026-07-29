@@ -44,7 +44,6 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +112,7 @@ class MetricsDashboard:
         }
 
         # Generated samples
-        self.generations: list[dict[str, Any]] = []
+        self.generations: list[dict[str, object]] = []
 
         # Tile importance
         self.tile_importance: list[list[float]] = []
@@ -238,7 +237,7 @@ class MetricsDashboard:
         with Path(metrics_path).open("w") as f:
             json.dump(data, f, indent=2)
 
-    def get_summary(self) -> dict[str, Any]:
+    def get_summary(self) -> dict[str, object]:
         """Get summary statistics."""
         if not self.history["step"]:
             return {}

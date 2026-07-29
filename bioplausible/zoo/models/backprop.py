@@ -6,7 +6,6 @@ Aggregates all standard backprop-based models into a single module for the model
 """
 
 import math
-from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -270,7 +269,7 @@ def create_scaled_model(
 # ============================================================================
 
 
-def create_layer(config: dict[str, Any], in_features: int) -> tuple[nn.Module, int]:
+def create_layer(config: dict[str, object], in_features: int) -> tuple[nn.Module, int]:
     layer_type = config.get("type", "linear").lower()
     out_features = config.get("size", 64)
 
@@ -329,7 +328,7 @@ class CustomStackedModel(TransitionGraphMixin, nn.Module):
     """
 
     def __init__(
-        self, input_dim: int, output_dim: int, layers_config: list[dict[str, Any]]
+        self, input_dim: int, output_dim: int, layers_config: list[dict[str, object]]
     ):
         super().__init__()
         self.input_dim = input_dim

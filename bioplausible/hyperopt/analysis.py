@@ -4,7 +4,6 @@ Includes encoding and dimensionality reduction.
 """
 
 import logging
-from typing import Any
 
 import numpy as np
 
@@ -21,7 +20,7 @@ except ImportError:
     logger.warning("scikit-learn not found. Analysis features disabled.")
 
 
-def flatten_config(config: dict[str, Any], prefix="") -> dict[str, Any]:
+def flatten_config(config: dict[str, object], prefix="") -> dict[str, object]:
     """Recursively flatten dictionary."""
     items = []
     for k, v in config.items():
@@ -33,7 +32,7 @@ def flatten_config(config: dict[str, Any], prefix="") -> dict[str, Any]:
     return dict(items)
 
 
-def encode_configs(configs: list[dict[str, Any]]) -> np.ndarray:
+def encode_configs(configs: list[dict[str, object]]) -> np.ndarray:
     """
     Convert a list of configuration dictionaries into a numerical matrix.
     Handles numerical and categorical data.

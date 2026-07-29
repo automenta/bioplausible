@@ -10,7 +10,6 @@ import logging
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Any
 
 import torch
 
@@ -32,8 +31,8 @@ class ExperimentArchiver:
         self,
         trial_id: int,
         model: torch.nn.Module,
-        config: dict[str, Any],
-        metrics: dict[str, Any],
+        config: dict[str, object],
+        metrics: dict[str, object],
         extra_files: dict[str, str] | None = None,
     ) -> str | None:
         """
@@ -96,7 +95,7 @@ class ExperimentArchiver:
             return None
 
     def _generate_reproduction_script(
-        self, model_name: str, config: dict[str, Any], metrics: dict[str, Any]
+        self, model_name: str, config: dict[str, object], metrics: dict[str, object]
     ) -> str:
         """
         Generates a standalone Python script to reproduce this specific trial.

@@ -1,6 +1,5 @@
 import json
 import logging
-from typing import Any
 
 import optuna
 
@@ -21,13 +20,13 @@ class ExperimentState:
         self.storage = HyperoptStorage(db_path)
         self.failure_tracker = FailureTracker(db_path)
 
-    def get_failure_analysis(self) -> dict[str, Any]:
+    def get_failure_analysis(self) -> dict[str, object]:
         """
         Analyze failure patterns to detect systemic issues.
         """
         return self.failure_tracker.analyze_failure_patterns()
 
-    def get_progress(self) -> dict[str, dict[str, dict[str, Any]]]:
+    def get_progress(self) -> dict[str, dict[str, dict[str, object]]]:
         """
         Returns a nested dictionary with stats about completed experiments.
 
@@ -40,7 +39,7 @@ class ExperimentState:
         }
         """
         trials = self.storage.get_all_trials()
-        progress: dict[str, dict[str, dict[str, Any]]] = {}
+        progress: dict[str, dict[str, dict[str, object]]] = {}
 
         for t in trials:
             if t.status != "completed":
@@ -154,7 +153,7 @@ class ExperimentState:
 
     def get_fragile_models(
         self, acc_threshold: float = 0.80, robust_threshold: float = 0.40
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """
         Identify models that have high accuracy but low robustness.
 

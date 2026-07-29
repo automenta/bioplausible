@@ -9,7 +9,6 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class LeaderboardEntry:
     params: int = 0
     energy_proxy: float | None = None
     timestamp: str = ""
-    config: dict[str, Any] = field(default_factory=dict)
+    config: dict[str, object] = field(default_factory=dict)
 
 
 class LeaderboardGenerator:
@@ -133,7 +132,7 @@ class LeaderboardGenerator:
             self._entries.append(LeaderboardEntry(**item))
         logger.info(f"Loaded {len(data)} entries from {path}")
 
-    def summary(self) -> dict[str, Any]:
+    def summary(self) -> dict[str, object]:
         """Get summary statistics."""
         if not self._entries:
             return {"total": 0}

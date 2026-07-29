@@ -1,7 +1,6 @@
 import copy
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import product
-from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,9 +24,9 @@ _DIMENSION_MAP: dict[str, tuple[str, ...]] = {
 }
 
 
-def _set_nested(cfg: RunConfig, path: tuple[str, ...], value: Any) -> None:
+def _set_nested(cfg: RunConfig, path: tuple[str, ...], value: object) -> None:
     """Set a value at a nested attribute/dict path on a RunConfig."""
-    obj: Any = cfg
+    obj: object = cfg
     for part in path[:-1]:
         obj = getattr(obj, part)
     final = path[-1]
@@ -42,7 +41,7 @@ class AblationStudy:
     Systematic parameter sensitivity study framework.
     """
 
-    def __init__(self, base_cfg: RunConfig, dimensions: dict[str, list[Any]]):
+    def __init__(self, base_cfg: RunConfig, dimensions: dict[str, list[object]]):
         self.base_cfg = base_cfg
         self.dimensions = dimensions
         self.results = None

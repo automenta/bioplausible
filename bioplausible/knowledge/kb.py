@@ -12,7 +12,6 @@ import sqlite3
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from typing import Any
 
 import numpy as np
 
@@ -49,18 +48,18 @@ class KnowledgeEntry:
     source: str = "manual"  # "manual", "experiment", "surrogate", "causal"
     experiment_id: str | None = None
     metrics: dict[str, float] = field(default_factory=dict)
-    hyperparameters: dict[str, Any] = field(default_factory=dict)
+    hyperparameters: dict[str, object] = field(default_factory=dict)
     embedding: list[float] | None = None
-    extra: dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, object] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         d = asdict(self)
         # Don't store embedding in JSON
         d.pop("embedding", None)
         return d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> KnowledgeEntry:
+    def from_dict(cls, d: dict[str, object]) -> KnowledgeEntry:
         return cls(**{k: v for k, v in d.items() if k in cls.__annotations__})
 
 
@@ -313,7 +312,7 @@ class KnowledgeBase:
         name: str,
         model_family: str,
         task: str,
-        config: dict[str, Any],
+        config: dict[str, object],
         metrics: dict[str, float],
         experiment_id: str | None = None,
         artifacts: dict[str, str] | None = None,
@@ -435,7 +434,7 @@ class KnowledgeBase:
         query: str,
         k: int = 10,
         min_similarity: float = 0.5,
-        filters: dict[str, Any] | None = None,
+        filters: dict[str, object] | None = None,
     ) -> list[tuple[KnowledgeEntry, float]]:
         """
         Semantic search using vector embeddings.
@@ -477,7 +476,9 @@ class KnowledgeBase:
 
         return results
 
-    def _matches_filters(self, entry: KnowledgeEntry, filters: dict[str, Any]) -> bool:
+    def _matches_filters(
+        self, entry: KnowledgeEntry, filters: dict[str, object]
+    ) -> bool:
         """Check if entry matches filter criteria."""
         for key, value in filters.items():
             if key == "model_family" and entry.model_family != value:
@@ -494,7 +495,7 @@ class KnowledgeBase:
         self,
         query: str,
         k: int,
-        filters: dict[str, Any] | None = None,
+        filters: dict[str, object] | None = None,
     ) -> list[tuple[KnowledgeEntry, float]]:
         """Fallback keyword search."""
         if not query:
@@ -540,7 +541,7 @@ class KnowledgeBase:
             return self._row_to_entry(row)
         return None
 
-    def get_experiment(self, experiment_id: str) -> dict[str, Any] | None:
+    def get_experiment(self, experiment_id: str) -> dict[str, object] | None:
         """Get experiment by ID."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -558,7 +559,7 @@ class KnowledgeBase:
         model_family: str | None = None,
         task: str | None = None,
         limit: int = 50,
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, object]]:
         """List experiments with optional filters."""
         conditions = []
         params = []
@@ -581,7 +582,7 @@ class KnowledgeBase:
             cursor = conn.execute(sql, params + [limit])
             return [dict(row) for row in cursor]
 
-    def get_surrogate(self, name: str) -> dict[str, Any] | None:
+    def get_surrogate(self, name: str) -> dict[str, object] | None:
         """Get surrogate model by name."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -625,7 +626,7 @@ class KnowledgeBase:
 
         return surrogate_id
 
-    def list_surrogates(self) -> list[dict[str, Any]]:
+    def list_surrogates(self) -> list[dict[str, object]]:
         """List all registered surrogate models."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -654,7 +655,7 @@ class KnowledgeBase:
 
         return "\n".join(answer_parts)
 
-    def get_stats(self) -> dict[str, Any]:
+    def get_stats(self) -> dict[str, object]:
         """Get knowledge base statistics."""
         with sqlite3.connect(self.db_path) as conn:
             total = conn.execute("SELECT COUNT(*) FROM knowledge").fetchone()[0]
@@ -833,7 +834,7 @@ class KnowledgeBase:
 
     def predict_outcome(
         self,
-        config: dict[str, Any],
+        config: dict[str, object],
         target_metric: str = "val_accuracy",
     ) -> float:
         """
@@ -861,7 +862,7 @@ class KnowledgeBase:
     def run_causal_analysis(
         self,
         outcome: str = "val_accuracy",
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """
         Run causal discovery analysis on experiment data.
 

@@ -25,7 +25,6 @@ import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import torch
@@ -40,7 +39,7 @@ class EnvironmentInfo:
     python_version: str
     torch_version: str
     cuda_version: str | None
-    gpu_info: list[dict[str, Any]]
+    gpu_info: list[dict[str, object]]
     os_name: str
     cpu_count: int
     timestamp: str
@@ -54,10 +53,10 @@ class ExperimentConfig:
     """Experiment configuration for reproducibility."""
 
     seed: int
-    model_config: dict[str, Any]
-    training_config: dict[str, Any]
-    data_config: dict[str, Any]
-    hardware_config: dict[str, Any]
+    model_config: dict[str, object]
+    training_config: dict[str, object]
+    data_config: dict[str, object]
+    hardware_config: dict[str, object]
 
 
 class ReproducibilityTracker:
@@ -84,7 +83,7 @@ class ReproducibilityTracker:
 
         # Experiment tracking
         self.experiment_id = self._generate_experiment_id()
-        self.config_log: list[dict[str, Any]] = []
+        self.config_log: list[dict[str, object]] = []
 
     def _set_seeds(self) -> None:
         """Set all random seeds."""
@@ -154,12 +153,12 @@ class ReproducibilityTracker:
         hash_id = hashlib.md5(hash_input.encode()).hexdigest()[:8]
         return f"exp_{timestamp}_{hash_id}"
 
-    def log_config(self, config: Any, name: str = "config") -> None:
+    def log_config(self, config: object, name: str = "config") -> None:
         """Log configuration for reproducibility.
 
         Parameters
         ----------
-        config : Any
+        config : object
             Configuration object (dataclass, dict, etc.)
         name : str
             Configuration name
@@ -181,7 +180,7 @@ class ReproducibilityTracker:
 
     def save_results(
         self,
-        results: dict[str, Any],
+        results: dict[str, object],
         metrics: dict[str, float] | None = None,
     ) -> Path:
         """Save results with full reproducibility information.
@@ -222,7 +221,7 @@ class ReproducibilityTracker:
         logger.info("Results saved to %s", filepath)
         return filepath
 
-    def load_results(self, experiment_id: str) -> dict[str, Any]:
+    def load_results(self, experiment_id: str) -> dict[str, object]:
         """Load results from a previous experiment.
 
         Parameters
@@ -305,7 +304,7 @@ class ReproducibleConfig:
 
     seed: int = 42
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """Convert to dictionary."""
         return asdict(self)
 

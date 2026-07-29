@@ -7,8 +7,6 @@ Supports incremental learning via .partial_fit().
 
 # ruff: file-ignore[invalid-argument-name, non-lowercase-variable-in-function, too-many-arguments, too-many-positional-arguments, raise-vanilla-args] — sklearn convention uses uppercase X
 
-from typing import Any
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -71,7 +69,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         use_spectral_norm: bool = True,
         device: str | None = None,
         random_state: int | None = None,
-        **kwargs: Any,
+        **kwargs: object,
     ):
         self.model_name = model_name
         self.hidden_dim = hidden_dim
@@ -95,7 +93,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         return _MODEL_NAME_MAP.get(self.model_name, self.model_name)
 
     def _initialize(
-        self, X: np.ndarray, y: np.ndarray | None = None, classes: Any = None
+        self, X: np.ndarray, y: np.ndarray | None = None, classes: object = None
     ) -> None:
         """Initialize the model and optimizer if not already initialized."""
         if self.model_ is not None:
@@ -197,7 +195,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         return self
 
     def partial_fit(
-        self, X: np.ndarray, y: np.ndarray, classes: Any = None
+        self, X: np.ndarray, y: np.ndarray, classes: object = None
     ) -> EqPropClassifier:
         """
         Incremental fit on a batch of samples.

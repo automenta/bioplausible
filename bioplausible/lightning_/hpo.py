@@ -4,8 +4,6 @@ HPO Integration: Optuna + PyTorch Lightning
 Scalable, pruning-aware hyperparameter optimisation via PyTorch Lightning.
 """
 
-from typing import Any
-
 from pytorch_lightning import Trainer
 
 from bioplausible.lightning_.module import BioLightningModule
@@ -37,11 +35,11 @@ class BioOptunaPruner:
 
     def search(
         self,
-        train_loader: Any,
-        val_loader: Any,
+        train_loader: object,
+        val_loader: object,
         n_trials: int = 50,
         pruner_type: str = "median",
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """
         Run Optuna search.
 
@@ -81,7 +79,7 @@ class BioOptunaPruner:
         study.optimize(objective, n_trials=n_trials)
         return dict(study.best_trial.params)
 
-    def _sample(self, trial) -> dict[str, Any]:
+    def _sample(self, trial) -> dict[str, object]:
         """Sample hyperparameters using the hyperparameter metamodel."""
         from bioplausible.hyperopt.optuna_bridge import create_optuna_space
 
@@ -115,11 +113,11 @@ class BioRayTuneSearch:
 
     def search(
         self,
-        train_loader: Any,
-        val_loader: Any,
+        train_loader: object,
+        val_loader: object,
         num_samples: int = 50,
         gpus_per_trial: int = 1,
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """
         Run Ray Tune ASHA search.
 
@@ -148,7 +146,7 @@ class BioRayTuneSearch:
             reduction_factor=self.reduction_factor,
         )
 
-        def train_func(cfg: dict[str, Any]) -> None:
+        def train_func(cfg: dict[str, object]) -> None:
             module = BioLightningModule(self.model_name, self.optimizer_name, **cfg)
             callback = TuneReportCallback({"val_acc": "val_acc"}, on="validation_end")
             trainer = Trainer(

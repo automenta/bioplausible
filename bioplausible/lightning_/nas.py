@@ -7,7 +7,6 @@ Pareto-optimal combinations for each task.
 
 import logging
 from collections.abc import Callable
-from typing import Any
 
 import optuna
 from pytorch_lightning import Trainer
@@ -95,7 +94,7 @@ def run_nas_search(
     n_trials: int = 50,
     max_epochs: int = 10,
     task_name: str | None = None,
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """
     Run a NAS search over model + optimizer combinations.
 

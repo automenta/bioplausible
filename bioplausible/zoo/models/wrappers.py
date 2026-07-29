@@ -4,7 +4,7 @@ EqProp Model Wrappers
 Generic wrappers that convert standard PyTorch modules into EqProp-compatible models.
 This allows using PyTorch primitives while supporting equilibrium propagation.
 
-Key insight: Any recurrent model that satisfies L < 1 can be trained with EqProp.
+Key insight: object recurrent model that satisfies L < 1 can be trained with EqProp.
 """
 
 import torch

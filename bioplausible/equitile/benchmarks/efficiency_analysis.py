@@ -16,7 +16,6 @@ Example
 """
 
 from dataclasses import dataclass
-from typing import Any
 
 import torch
 from torch import nn
@@ -473,7 +472,7 @@ def compare_efficiency(
     models: list[tuple[str, nn.Module]],
     val_loader: torch.utils.data.DataLoader,
     device: str = "auto",
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """Compare efficiency across multiple models.
 
     Parameters

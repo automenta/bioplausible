@@ -6,7 +6,6 @@ to minimize the energy function during free and nudged phases.
 """
 
 from collections.abc import Callable
-from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -95,7 +94,7 @@ class Settler:
     def _resolve_transition_modules(
         self,
         model: nn.Module,
-        structure: list[dict[str, Any]] | None = None,
+        structure: list[dict[str, object]] | None = None,
     ) -> list[nn.Module]:
         """Resolve transition modules from model.transition_modules() or structure.
 
@@ -124,9 +123,9 @@ class Settler:
     ) -> list[torch.Tensor]:
         """Capture initial states from transition modules."""
         states: list[torch.Tensor] = []
-        handles: list[Any] = []
+        handles: list[object] = []
 
-        def capture_hook(module: nn.Module, inp: Any, output: Any) -> None:
+        def capture_hook(module: nn.Module, inp: object, output: object) -> None:
             if isinstance(output, tuple):
                 s = output[0].detach().float().clone().requires_grad_(True)
             else:
@@ -152,7 +151,7 @@ class Settler:
         target: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
-        structure: list[dict[str, Any]] | None = None,
+        structure: list[dict[str, object]] | None = None,
     ) -> list[torch.Tensor]:
         """
         Settle network activations to energy minimum.
@@ -331,7 +330,7 @@ class Settler:
         target: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
-        structure: list[dict[str, Any]] | None = None,
+        structure: list[dict[str, object]] | None = None,
     ) -> list[torch.Tensor]:
         """
         Settle network keeping computation graph intact for gradient flow.
@@ -427,13 +426,13 @@ class Settler:
         return [s.detach() for s in states]
 
     def _capture_states_from_transitions_without_grad(
-        self, model: nn.Module, x: torch.Tensor, structure: list[dict[str, Any]]
+        self, model: nn.Module, x: torch.Tensor, structure: list[dict[str, object]]
     ) -> list[torch.Tensor]:
         """Capture states as fresh tensors."""
         states: list[torch.Tensor] = []
-        handles: list[Any] = []
+        handles: list[object] = []
 
-        def capture_hook(module: nn.Module, inp: Any, output: Any) -> None:
+        def capture_hook(module: nn.Module, inp: object, output: object) -> None:
             # Capture state in float32 for stability
             if isinstance(output, tuple):
                 s = output[0].detach().float().clone()
@@ -455,13 +454,13 @@ class Settler:
         return states
 
     def _capture_states(
-        self, model: nn.Module, x: torch.Tensor, structure: list[dict[str, Any]]
+        self, model: nn.Module, x: torch.Tensor, structure: list[dict[str, object]]
     ) -> list[torch.Tensor]:
         """Capture initial layer states."""
         states: list[torch.Tensor] = []
-        handles: list[Any] = []
+        handles: list[object] = []
 
-        def capture_hook(module: nn.Module, inp: Any, output: Any) -> None:
+        def capture_hook(module: nn.Module, inp: object, output: object) -> None:
             # Capture state in float32 for stability during settling updates
             if isinstance(output, tuple):
                 s = output[0].detach().float().clone().requires_grad_(True)
@@ -502,7 +501,7 @@ class Settler:
         target: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
-        structure: list[dict[str, Any]] | None = None,
+        structure: list[dict[str, object]] | None = None,
     ) -> list[torch.Tensor]:
         """
         Settle network activations using torch.compile for acceleration.
@@ -588,7 +587,7 @@ class Settler:
         target_vec: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
-        structure: list[dict[str, Any]],
+        structure: list[dict[str, object]],
         steps: int,
         lr: float,
     ) -> list[torch.Tensor]:
@@ -627,7 +626,7 @@ def _compiled_settle_step(
     target_vec: torch.Tensor | None,
     beta: float,
     energy_fn: Callable,
-    structure: list[dict[str, Any]],
+    structure: list[dict[str, object]],
     lr: float,
     momentum: float = 0.5,
 ) -> tuple[list[torch.Tensor], list[torch.Tensor]]:

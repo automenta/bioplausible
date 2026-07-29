@@ -8,7 +8,6 @@ AutoScientist proposes experiments; the Bridge packages them as
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
 
 from bioplausible.core.registry import ComponentCategory, Domain, Registry
 
@@ -24,7 +23,7 @@ class ExperimentProposal:
     task: str
     propagator: str | None = None
     optimizer: str = "adam"
-    hyperparams: dict[str, Any] = field(default_factory=dict)
+    hyperparams: dict[str, object] = field(default_factory=dict)
     justification: str = ""
     expected_outcome: str = ""
     priority: float = 0.5
@@ -39,7 +38,7 @@ class AutoScientistBridge:
     def __init__(self):
         self._proposals: list[ExperimentProposal] = []
 
-    def proposal_to_task(self, proposal: ExperimentProposal) -> dict[str, Any]:
+    def proposal_to_task(self, proposal: ExperimentProposal) -> dict[str, object]:
         """Convert an ExperimentProposal to a config dict for CoreTrainer."""
         config = {
             "model": proposal.model,
@@ -61,7 +60,7 @@ class AutoScientistBridge:
         self,
         domain: Domain | None = None,
         min_bio_score: float = 0.0,
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, object]]:
         """
         Discover all viable model+propagator+optimizer combinations.
 
