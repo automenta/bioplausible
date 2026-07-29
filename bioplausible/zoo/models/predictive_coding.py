@@ -21,6 +21,12 @@ from ..base import (
 # ============================================================================
 
 
+__all__ = [
+    "FabricPCGraphPCN",
+    "PredictiveCodingHybrid",
+]
+
+
 @register_model(
     "fabricpc_graph_pcn",
     family="predictive_coding",

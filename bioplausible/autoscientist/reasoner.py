@@ -71,10 +71,10 @@ class HypothesisReasoner:
             try:
                 hypotheses.extend(self._llm_hypotheses(recent_results))
             except Exception as e:
-                logger.warning(f"LLM hypothesis generation failed: {e}")
+                logger.warning("LLM hypothesis generation failed: %s", e)
 
         self._hypotheses.extend(hypotheses)
-        logger.info(f"Generated {len(hypotheses)} hypotheses")
+        logger.info("Generated %s hypotheses", len(hypotheses))
         return hypotheses
 
     def _cross_domain_transfer_hypotheses(
@@ -211,7 +211,7 @@ class HypothesisReasoner:
             llm_hypotheses = generator.generate(prompt)
             hypotheses.extend(llm_hypotheses)
         except Exception as e:
-            logger.warning(f"Could not initialize LLM backend: {e}")
+            logger.warning("Could not initialize LLM backend: %s", e)
 
         return hypotheses
 
@@ -329,7 +329,7 @@ class LLMHypothesisGenerator:
                     )
                 return hypotheses
         except Exception as e:
-            logger.warning(f"OpenAI hypothesis generation failed: {e}")
+            logger.warning("OpenAI hypothesis generation failed: %s", e)
 
         return []
 

@@ -8,6 +8,10 @@ import torch
 
 from bioplausible.core.registry import register_optimizer
 
+__all__ = [
+    "SpectralConstraint",
+]
+
 
 @register_optimizer("spectral")
 class SpectralConstraint:

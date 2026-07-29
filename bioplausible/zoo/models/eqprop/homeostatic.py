@@ -8,6 +8,11 @@ from torch import nn
 
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
+__all__ = [
+    "HomeostasisMetrics",
+    "HomeostaticEqProp",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class HomeostasisMetrics:

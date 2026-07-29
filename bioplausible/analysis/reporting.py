@@ -13,6 +13,10 @@ import numpy as np
 
 from bioplausible.analysis.results import load_trials
 
+__all__ = [
+    "generate_experiment_report",
+]
+
 
 def generate_experiment_report(
     db_path: str, tier: str, output_path: str = "experiment_report.md"

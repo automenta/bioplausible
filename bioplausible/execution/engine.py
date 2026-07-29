@@ -150,7 +150,7 @@ class ExecutionEngine:
 
         logger.info("=" * 60)
 
-        logger.info(f"Resuming from trial #{total_trials}")
+        logger.info("Resuming from trial #%s", total_trials)
 
     def run(self) -> None:
         """
@@ -229,7 +229,7 @@ class ExecutionEngine:
                     self.generate_reports()
                     self.last_report_trial = self.trial_count
                 except Exception as e:
-                    logger.error(f"Periodic reporting failed: {e}")
+                    logger.error("Periodic reporting failed: %s", e)
 
             if self.num_workers > 1 and self.parallel_runner:
                 # Parallel Execution
@@ -269,7 +269,7 @@ class ExecutionEngine:
                     self.trial_count += len(results)
 
                 except Exception as e:
-                    logger.error(f"Parallel batch failed: {e}", exc_info=True)
+                    logger.error("Parallel batch failed: %s", e, exc_info=True)
                     self.consecutive_failures += 1
             else:
                 # Sequential Execution
@@ -299,7 +299,7 @@ class ExecutionEngine:
                 self.CIRCUIT_BREAKER_RESET_INTERVAL
                 - (time.time() - self._circuit_tripped_at)
             )
-            logger.warning(f"Circuit breaker open. Cooling down for {remaining}s")
+            logger.warning("Circuit breaker open. Cooling down for %ss", remaining)
             DASHBOARD.set_system_status(
                 f"Circuit Breaker - Cooldown {remaining}s", "yellow"
             )
@@ -368,7 +368,7 @@ class ExecutionEngine:
             metrics = self._process_task(task)
             return metrics is not None
         except Exception as e:
-            logger.error(f"Diagnostic failed: {e}")
+            logger.error("Diagnostic failed: %s", e)
             return False
 
     def _handle_no_task(self, task: ExperimentTask | None) -> bool:
@@ -480,7 +480,7 @@ class ExecutionEngine:
                         break
 
                 if attempt < self.MAX_RETRIES - 1:
-                    logger.warning(f"Transient failure (attempt {attempt + 1}): {e}")
+                    logger.warning("Transient failure (attempt %s): %s", attempt + 1, e)
                 else:
                     logger.error(
                         "All %d retries exhausted for %s/%s: %s",
@@ -589,7 +589,7 @@ class ExecutionEngine:
         constraints = {}
         if task.constraints:
             constraints.update(task.constraints)
-            logger.info(f"  > Applying intelligent constraints: {constraints}")
+            logger.info("  > Applying intelligent constraints: %s", constraints)
 
         config = create_constrained_optuna_config(
             trial,
@@ -627,7 +627,7 @@ class ExecutionEngine:
                         )
                         study.enqueue_trial(best_trial.params)
             except Exception as e:
-                logger.warning(f"Warm start failed: {e}")
+                logger.warning("Warm start failed: %s", e)
 
     def _inject_tier_config(
         self, config: dict[str, object], task: ExperimentTask
@@ -716,7 +716,7 @@ class ExecutionEngine:
 
     def _handle_error(self, e: Exception) -> None:
         """Handle exceptions during trial execution."""
-        logger.error(f"Error executing trial: {e}", exc_info=True)
+        logger.error("Error executing trial: %s", e, exc_info=True)
         DASHBOARD.log(f"Error: {e}", style="bold red")
         self.consecutive_failures += 1
         time.sleep(5)
@@ -797,7 +797,7 @@ class ExecutionEngine:
                                 zf.extract("model.pt", temp_dir)
                                 found_path = str(Path(temp_dir) / "model.pt")
                         except Exception as e:
-                            logger.warning(f"Failed to extract artifact: {e}")
+                            logger.warning("Failed to extract artifact: %s", e)
                         break
 
         try:
@@ -882,7 +882,7 @@ class ExecutionEngine:
             orchestrator = ReportOrchestrator(self.db_path, output_dir)
             orchestrator.generate_reports()
         except Exception as e:
-            logger.error(f"Failed to generate reports: {e}", exc_info=True)
+            logger.error("Failed to generate reports: %s", e, exc_info=True)
 
 
 if __name__ == "__main__":

@@ -19,6 +19,23 @@ from torchvision import datasets, transforms
 
 from bioplausible.zoo.mep.benchmarks.baselines import get_optimizer
 
+__all__ = [
+    "BenchmarkConfig",
+    "EpochMetrics",
+    "OptimizerResult",
+    "evaluate",
+    "get_dataloaders",
+    "get_input_dim",
+    "get_model",
+    "get_num_classes",
+    "logger",
+    "main",
+    "print_summary",
+    "run_all_benchmarks",
+    "run_benchmark",
+    "save_results",
+    "train_epoch",
+]
 logger = logging.getLogger(__name__)
 
 

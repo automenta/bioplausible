@@ -56,6 +56,16 @@ from bioplausible.equitile.core.kernels import (
 )
 from bioplausible.equitile.training._nccl import NCCLCommunicator
 
+__all__ = [
+    "AsyncTileExecutor",
+    "DeviceAssignment",
+    "DistributedEquiTile",
+    "MixedPrecisionTrainer",
+    "TileCommunicator",
+    "create_distributed_model",
+    "logger",
+    "spawn_distributed_worker",
+]
 if TYPE_CHECKING:
     from bioplausible.equitile.core import EquiTile
 

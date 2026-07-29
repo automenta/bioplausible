@@ -10,6 +10,11 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+__all__ = [
+    "LeaderboardEntry",
+    "LeaderboardGenerator",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 
@@ -121,7 +126,7 @@ class LeaderboardGenerator:
         ]
         with Path(save_path).open("w") as f:
             json.dump(data, f, indent=2, default=str)
-        logger.info(f"Leaderboard saved: {save_path}")
+        logger.info("Leaderboard saved: %s", save_path)
         return str(save_path)
 
     def load(self, path: str) -> None:
@@ -130,7 +135,7 @@ class LeaderboardGenerator:
             data = json.load(f)
         for item in data:
             self._entries.append(LeaderboardEntry(**item))
-        logger.info(f"Loaded {len(data)} entries from {path}")
+        logger.info("Loaded %s entries from %s", len(data), path)
 
     def summary(self) -> dict[str, object]:
         """Get summary statistics."""

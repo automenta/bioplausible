@@ -15,6 +15,10 @@ from bioplausible.domains.base import (
     TaskSplit,
 )
 
+__all__ = [
+    "GraphTask",
+]
+
 
 class GraphTask(DomainTask):
     """Graph domain tasks."""

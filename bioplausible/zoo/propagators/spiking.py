@@ -8,6 +8,10 @@ from bioplausible.core.registry import register_propagator
 
 from .base import LearningRuleOptimizer
 
+__all__ = [
+    "STDP",
+]
+
 
 @register_propagator("stdp")
 class STDP(LearningRuleOptimizer):

@@ -20,6 +20,14 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+__all__ = [
+    "O1MemoryEPv2",
+    "analytic_state_gradients",
+    "energy_from_states_minimal",
+    "manual_energy_compute_o1",
+    "settle_manual_o1",
+]
+
 
 def _capture_states_no_grad(
     model: nn.Module,

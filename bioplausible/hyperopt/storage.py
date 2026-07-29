@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 from .metrics import TrialMetrics
 
+__all__ = [
+    "HyperoptStorage",
+    "logger",
+]
+
 
 class HyperoptStorage:
     """Storage backend for hyperparameter optimization trials."""

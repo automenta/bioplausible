@@ -13,6 +13,14 @@ from bioplausible.zoo.mep.optimizers.strategies import UpdateStrategy
 
 from .base import LearningRuleOptimizer
 
+__all__ = [
+    "AdamEqProp",
+    "EqProp",
+    "FiniteNudgeEqProp",
+    "HolomorphicEqProp",
+    "LazyEqProp",
+]
+
 
 @register_propagator("eq_prop", requires=["transition_graph"])
 class EqProp(LearningRuleOptimizer):

@@ -19,6 +19,13 @@ from torch.utils.data import DataLoader
 
 from .continual_learning import ContinualLearningResult
 
+__all__ = [
+    "EWC",
+    "evaluate_continual_learning",
+    "logger",
+    "run_ewc_benchmark",
+    "train_with_ewc",
+]
 logger = logging.getLogger(__name__)
 
 

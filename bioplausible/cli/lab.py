@@ -12,6 +12,12 @@ logger = logging.getLogger(__name__)
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.hyperopt.tasks import create_task
 
+__all__ = [
+    "inspect_model",
+    "logger",
+    "main",
+]
+
 
 def inspect_model(args):
     logger.info("[LAB]  Inspecting Model: %s", args.model)

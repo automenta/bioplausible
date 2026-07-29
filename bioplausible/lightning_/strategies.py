@@ -9,6 +9,11 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, RichProgressBar
 from pytorch_lightning.loggers import WandbLogger
 
+__all__ = [
+    "BioPrecisionMixin",
+    "build_trainer",
+]
+
 
 class BioPrecisionMixin:
     """

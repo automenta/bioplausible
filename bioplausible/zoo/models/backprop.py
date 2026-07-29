@@ -19,6 +19,16 @@ from bioplausible.zoo.models.transitions import TransitionGraphMixin
 # ============================================================================
 
 
+__all__ = [
+    "BackpropCausalAttention",
+    "BackpropTransformerBlock",
+    "BackpropTransformerLM",
+    "CustomStackedModel",
+    "create_layer",
+    "create_scaled_model",
+]
+
+
 class BackpropCausalAttention(nn.Module):
     """Standard causal self-attention (no equilibrium settling)."""
 

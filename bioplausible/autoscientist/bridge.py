@@ -11,6 +11,11 @@ from dataclasses import dataclass, field
 
 from bioplausible.core.registry import ComponentCategory, Domain, Registry
 
+__all__ = [
+    "AutoScientistBridge",
+    "ExperimentProposal",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 

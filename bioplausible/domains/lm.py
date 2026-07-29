@@ -16,6 +16,10 @@ from bioplausible.domains.base import (
     TaskSplit,
 )
 
+__all__ = [
+    "LMTask",
+]
+
 
 class LMTask(DomainTask):
     """Language modeling domain tasks."""

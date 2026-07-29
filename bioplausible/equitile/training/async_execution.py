@@ -41,6 +41,15 @@ from bioplausible.equitile.core.kernels import (
     compute_tile_prediction,
 )
 
+__all__ = [
+    "AsyncConfig",
+    "AsyncEquiTile",
+    "TileProcessor",
+    "TileResult",
+    "TileScheduler",
+    "TileTask",
+    "create_async_model",
+]
 if TYPE_CHECKING:
     from bioplausible.equitile.core import EquiTile
     from bioplausible.equitile.core.topology import TileState

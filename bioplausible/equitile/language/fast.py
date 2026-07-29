@@ -28,6 +28,12 @@ from bioplausible.equitile.language.optimized import (
     OptimizedLMEquiTile,
 )
 
+__all__ = [
+    "DemoEquiTileLayer",
+    "FastLMConfig",
+    "FastLMEquiTile",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 

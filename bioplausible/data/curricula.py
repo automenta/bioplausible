@@ -9,6 +9,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 
+__all__ = [
+    "CURRICULA",
+    "AntiCurriculum",
+    "Curriculum",
+    "CurriculumScheduler",
+    "FixedCurriculum",
+    "ProgressiveCurriculum",
+]
+
 
 class Curriculum(ABC):
     """Base class for curriculum schedules."""

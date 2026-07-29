@@ -19,6 +19,11 @@ from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 from rich.table import Table
 from rich.text import Text
 
+__all__ = [
+    "DASHBOARD",
+    "Dashboard",
+    "logger",
+]
 try:
     import torch
 except ImportError:

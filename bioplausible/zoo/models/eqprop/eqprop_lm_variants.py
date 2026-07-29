@@ -11,6 +11,21 @@ from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 from ...utils import spectral_linear
 from ..transitions import TransitionGraphMixin
 
+__all__ = [
+    "EQPROP_LM_REGISTRY",
+    "CausalMask",
+    "EqPropAttentionLM",
+    "EqPropAttentionOnlyLM",
+    "FullEqPropLM",
+    "HybridEqPropLM",
+    "LoopedMLPForLM",
+    "RecurrentEqPropLM",
+    "compare_variants",
+    "create_eqprop_lm",
+    "get_eqprop_lm",
+    "list_eqprop_lm_variants",
+    "register_eqprop_lm",
+]
 EQPROP_LM_REGISTRY: dict[str, type[nn.Module]] = {}
 
 

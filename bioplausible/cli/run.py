@@ -11,6 +11,16 @@ from bioplausible.hyperopt import create_optuna_space, create_study
 from bioplausible.hyperopt.eval_tiers import PatientLevel, get_evaluation_config
 from bioplausible.hyperopt.experiment import run_single_trial_task
 
+__all__ = [
+    "list_models",
+    "logger",
+    "main",
+    "run_benchmark",
+    "run_core_train",
+    "run_from_yaml",
+    "run_search",
+    "run_training",
+]
 logger = logging.getLogger(__name__)
 
 

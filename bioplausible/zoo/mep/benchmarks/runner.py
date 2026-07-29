@@ -38,6 +38,23 @@ import logging
 
 from bioplausible.zoo.mep.presets import sdmep, smep
 
+__all__ = [
+    "BenchmarkMetrics",
+    "BenchmarkResult",
+    "create_model",
+    "create_optimizer",
+    "evaluate",
+    "get_dataloader",
+    "get_spectral_norm",
+    "load_config",
+    "logger",
+    "main",
+    "plot_results",
+    "run_all_benchmarks",
+    "run_benchmark",
+    "save_results",
+    "train_epoch",
+]
 logger = logging.getLogger(__name__)
 
 

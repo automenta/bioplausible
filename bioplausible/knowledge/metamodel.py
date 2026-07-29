@@ -8,6 +8,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeRegressor, export_text
 
+__all__ = [
+    "KnowledgebaseMetamodel",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 
@@ -58,14 +62,14 @@ class KnowledgebaseMetamodel:
                     }
                     records.append(record)
                 except Exception as e:
-                    logger.warning(f"Failed to parse config row for metamodel: {e}")
+                    logger.warning("Failed to parse config row for metamodel: %s", e)
 
             self.df = pd.DataFrame(records)
             self.fitted = True
-            logger.info(f"Metamodel successfully fitted to {len(self.df)} records.")
+            logger.info("Metamodel successfully fitted to %s records.", len(self.df))
 
         except Exception as e:
-            logger.error(f"Metamodel fit failed: {e}")
+            logger.error("Metamodel fit failed: %s", e)
             self.fitted = False
 
     def extract_symbolic_rules(

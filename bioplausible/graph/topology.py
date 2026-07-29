@@ -13,6 +13,12 @@ from typing import TYPE_CHECKING
 
 from bioplausible.graph.nodes import NodeBase, Slot
 
+__all__ = [
+    "Edge",
+    "GraphStructure",
+    "TaskMap",
+    "graph",
+]
 if TYPE_CHECKING:
     from bioplausible.graph.inference import InferenceSGD
 

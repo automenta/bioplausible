@@ -17,6 +17,16 @@ from torch import nn
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.data.vision import get_vision_dataset
 
+__all__ = [
+    "BaseTask",
+    "CharNGramTask",
+    "LMTask",
+    "RLTask",
+    "TaskProtocol",
+    "VisionTask",
+    "create_task",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 

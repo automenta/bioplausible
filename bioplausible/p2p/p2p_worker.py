@@ -13,6 +13,12 @@ import time
 from bioplausible.p2p.evolution import P2PEvolution
 
 # Configure logging
+
+__all__ = [
+    "logger",
+    "main",
+    "signal_handler",
+]
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -60,7 +66,7 @@ def main():
     if args.max_layers:
         constraints["max_layers"] = args.max_layers
 
-    logger.info(f"Starting P2P Worker (Mode: {args.mode}, Task: {args.task})")
+    logger.info("Starting P2P Worker (Mode: %s, Task: %s)", args.mode, args.task)
 
     worker = P2PEvolution(
         bootstrap_ip=args.bootstrap_ip,

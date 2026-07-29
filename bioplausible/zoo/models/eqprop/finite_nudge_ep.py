@@ -7,6 +7,10 @@ from ...base import (
 )
 from .standard_eqprop import StandardEqProp
 
+__all__ = [
+    "FiniteNudgeEP",
+]
+
 
 @register_model(
     "finite_nudge_ep",

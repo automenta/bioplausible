@@ -117,14 +117,14 @@ class CrossDomainBenchmarkSuite:
         }
         task_cls = task_map.get(domain)
         if task_cls is None:
-            logger.warning(f"Unknown domain: {domain}")
+            logger.warning("Unknown domain: %s", domain)
             return None
         try:
             task = task_cls(name=name, **kwargs)
             task.setup()
             return task
         except Exception as e:
-            logger.warning(f"Failed to create task {domain}/{name}: {e}")
+            logger.warning("Failed to create task %s/%s: %s", domain, name, e)
             return None
 
     def get_models_for_domain(self, domain: str) -> list[str]:
@@ -199,7 +199,7 @@ class CrossDomainBenchmarkSuite:
                 return result
 
         except Exception as e:
-            logger.error(f"Failed to run {model_name} on {task.name}: {e}")
+            logger.error("Failed to run %s on %s: %s", model_name, task.name, e)
 
         return None
 
@@ -218,9 +218,9 @@ class CrossDomainBenchmarkSuite:
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
         for domain in tasks:
-            logger.info(f"\n{'=' * 60}")
-            logger.info(f"Running benchmarks for {domain.upper()} domain")
-            logger.info(f"{'=' * 60}")
+            logger.info("\n%s", "=" * 60)
+            logger.info("Running benchmarks for %s domain", domain.upper())
+            logger.info("%s", "=" * 60)
 
             task_names = self.get_benchmark_tasks().get(domain, [])
             for task_name in task_names:
@@ -231,7 +231,7 @@ class CrossDomainBenchmarkSuite:
                 model_names = config.models or self.get_models_for_domain(domain)
 
                 for model_name in model_names:
-                    logger.info(f"  Testing {model_name} on {task_name}...")
+                    logger.info("  Testing %s on %s...", model_name, task_name)
 
                     result = self.run_model_on_task(
                         model_name=model_name,
@@ -267,7 +267,7 @@ class CrossDomainBenchmarkSuite:
 
                             self._store_in_kb(model_name, task_name, result)
                         except Exception as e:
-                            logger.warning(f"Failed to create leaderboard entry: {e}")
+                            logger.warning("Failed to create leaderboard entry: %s", e)
 
         total_time = time.time() - start_time
 
@@ -302,7 +302,7 @@ class CrossDomainBenchmarkSuite:
         save_path = Path(path or self.output_dir / "suite_results.json")
         with Path(save_path).open("w") as f:
             json.dump(suite_result.to_dict(), f, indent=2, default=str)
-        logger.info(f"Results saved: {save_path}")
+        logger.info("Results saved: %s", save_path)
         return str(save_path)
 
     def generate_leaderboard(self, path: str | None = None) -> str:

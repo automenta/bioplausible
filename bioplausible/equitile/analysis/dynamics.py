@@ -27,6 +27,15 @@ import torch.nn.functional as F
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.equitile.core.config import DynamicEquiTileConfig, TileGrowthConfig
 
+__all__ = [
+    "DynamicEquiTile",
+    "TileGrowthManager",
+    "TileMerger",
+    "TileMetrics",
+    "TileSplitter",
+    "create_dynamic_model",
+    "logger",
+]
 if TYPE_CHECKING:
     from bioplausible.equitile.core import EquiTile
 

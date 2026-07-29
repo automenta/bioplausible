@@ -7,6 +7,11 @@ from dataclasses import dataclass
 
 import torch
 
+__all__ = [
+    "SafetyConfig",
+    "SafetyWrapper",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 
@@ -109,7 +114,7 @@ class SafetyWrapper:
             self.consecutive_failures += 1
             self.total_failures += 1
             optimizer.zero_grad()
-            logger.warning(f"NaN gradient detected in parameters: {nan_param_names}")
+            logger.warning("NaN gradient detected in parameters: %s", nan_param_names)
             return False, {
                 "error": "grad_nan",
                 "grad_norm": float("nan"),

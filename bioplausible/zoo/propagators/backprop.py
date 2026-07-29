@@ -12,6 +12,10 @@ from bioplausible.core.registry import LocalityLevel, register_propagator
 
 from .base import LearningRuleOptimizer
 
+__all__ = [
+    "Backprop",
+]
+
 
 @register_propagator(
     "backprop",

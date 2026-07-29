@@ -15,6 +15,11 @@ from ...base import register_model
 from ..base import EqPropModel
 from ..transitions import TransitionGraphMixin
 
+__all__ = [
+    "BackpropMLP",
+    "LoopedMLP",
+]
+
 
 def _kernel_backend_step(
     engine: object,

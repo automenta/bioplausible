@@ -34,6 +34,11 @@ from bioplausible.equitile.utils.init_utils import (
     initialize_io_projections,
 )
 
+__all__ = [
+    "EquiTile",
+    "EquiTileEP",
+    "logger",
+]
 if TYPE_CHECKING:
     from torch import Tensor
 

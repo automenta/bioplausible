@@ -8,6 +8,12 @@ from ..base import EqPropModel
 from ..transitions import TransitionGraphMixin
 from .looped_mlp import LoopedMLP, _kernel_backend_step
 
+__all__ = [
+    "MemoryEfficientEqPropModel",
+    "MemoryEfficientLoopedMLP",
+    "create_memory_efficient_model",
+]
+
 
 class MemoryEfficientLoopedMLP(LoopedMLP):
     """

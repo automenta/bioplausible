@@ -9,6 +9,11 @@ from torch import nn, optim
 from bioplausible.tracking import ExperimentTracker
 
 # Constants
+
+__all__ = [
+    "MAX_STEPS",
+    "RLTrainer",
+]
 MAX_STEPS = 1000
 
 

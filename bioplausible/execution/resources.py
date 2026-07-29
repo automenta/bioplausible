@@ -9,6 +9,11 @@ import logging
 import shutil
 
 # psutil needed for resource monitoring
+
+__all__ = [
+    "ResourceMonitor",
+    "logger",
+]
 try:
     import psutil
 except ImportError:
@@ -65,11 +70,11 @@ class ResourceMonitor:
         mem = psutil.virtual_memory().percent
 
         if cpu > self.cpu_limit:
-            logger.warning(f"System Load High: CPU={cpu}%. Pausing...")
+            logger.warning("System Load High: CPU=%s%%. Pausing...", cpu)
             return True
 
         if mem > self.mem_limit:
-            logger.warning(f"System Load High: Mem={mem}%. Pausing...")
+            logger.warning("System Load High: Mem=%s%%. Pausing...", mem)
             return True
 
         # GPU Check
@@ -110,6 +115,6 @@ class ResourceMonitor:
         total, used, free = shutil.disk_usage(".")
         disk_percent = (used / total) * 100.0
         if disk_percent > self.disk_limit:
-            logger.warning(f"Disk Space Low: Used={disk_percent:.1f}%. Pausing...")
+            logger.warning("Disk Space Low: Used=%s%%. Pausing...", disk_percent)
             return True
         return False

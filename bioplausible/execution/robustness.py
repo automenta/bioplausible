@@ -20,6 +20,13 @@ from bioplausible.execution.interpretability import FeatureAttribution
 from bioplausible.hyperopt.tasks import create_task
 from bioplausible.zoo import get_model_spec
 
+__all__ = [
+    "RobustnessEvaluator",
+    "create_model",
+    "logger",
+    "run_robustness_check",
+]
+
 
 def create_model(
     spec,
@@ -117,7 +124,7 @@ class RobustnessEvaluator:
 
             # Load weights if provided, else train briefly
             if self.weights_path:
-                logger.info(f"Loading weights from {self.weights_path}")
+                logger.info("Loading weights from %s", self.weights_path)
                 checkpoint = torch.load(self.weights_path, map_location=self.device)
                 # Handle full checkpoint vs state_dict
                 if "model_state_dict" in checkpoint:
@@ -145,7 +152,7 @@ class RobustnessEvaluator:
             noise_score = self._test_noise_injection(model, task)
             scores.append(noise_score)
             metrics["noise_score"] = noise_score
-            logger.info(f"Noise Score: {noise_score:.2f}")
+            logger.info("Noise Score: %s", noise_score)
 
             # Test B: Input Perturbation (Random Noise)
             # Only for vision/continuous inputs
@@ -153,25 +160,25 @@ class RobustnessEvaluator:
                 perturb_score = self._test_input_perturbation(model, task)
                 scores.append(perturb_score)
                 metrics["perturbation_score"] = perturb_score
-                logger.info(f"Perturbation Score: {perturb_score:.2f}")
+                logger.info("Perturbation Score: %s", perturb_score)
 
                 # Test C: OOD Detection (Phase 6.2)
                 ood_score = self._test_ood_detection(model, task)
                 scores.append(ood_score)
                 metrics["ood_score"] = ood_score
-                logger.info(f"OOD Detection Score: {ood_score:.2f}")
+                logger.info("OOD Detection Score: %s", ood_score)
 
                 # Test D: Adversarial Attack (FGSM) (Phase 6.2)
                 adv_score = self._test_adversarial_attack(model, task)
                 scores.append(adv_score)
                 metrics["adversarial_fgsm"] = adv_score
-                logger.info(f"Adversarial Score (FGSM): {adv_score:.2f}")
+                logger.info("Adversarial Score (FGSM): %s", adv_score)
 
                 # Test E: PGD Attack (Phase 6.3)
                 pgd_score = self._test_pgd_attack(model, task)
                 scores.append(pgd_score)
                 metrics["adversarial_pgd"] = pgd_score
-                logger.info(f"Adversarial Score (PGD): {pgd_score:.2f}")
+                logger.info("Adversarial Score (PGD): %s", pgd_score)
 
                 # Optional: Interpretability Check
                 if self.output_dir:
@@ -181,7 +188,7 @@ class RobustnessEvaluator:
             return metrics
 
         except Exception as e:
-            logger.error(f"Robustness evaluation failed: {e}", exc_info=True)
+            logger.error("Robustness evaluation failed: %s", e, exc_info=True)
             return {"robustness_score": 0.0}
 
     def _test_noise_injection(self, model: nn.Module, task: object) -> float:
@@ -480,10 +487,10 @@ class RobustnessEvaluator:
                 plt.savefig(save_path, bbox_inches="tight")
                 plt.close()
 
-            logger.info(f"Saved saliency maps to {out_path}")
+            logger.info("Saved saliency maps to %s", out_path)
 
         except Exception as e:
-            logger.warning(f"Failed to generate saliency maps: {e}")
+            logger.warning("Failed to generate saliency maps: %s", e)
 
 
 def run_robustness_check(

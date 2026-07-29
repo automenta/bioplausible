@@ -6,6 +6,9 @@ from torch import nn
 from ...base import register_model
 from ..base import EqPropModel
 
+__all__ = [
+    "GraphEqProp",
+]
 try:
     from torch_geometric.nn import GCNConv
 except ImportError:

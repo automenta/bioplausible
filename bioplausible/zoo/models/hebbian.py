@@ -22,6 +22,14 @@ from .transitions import TransitionGraphMixin
 # ============================================================================
 
 
+__all__ = [
+    "DeepHebbianChain",
+    "HebbianCube",
+    "HebbianLayer",
+    "ThreeFactorHebbian",
+]
+
+
 class HebbianLayer(nn.Module):
     """
     Single Hebbian layer with Oja's normalization rule.

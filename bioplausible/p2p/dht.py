@@ -9,6 +9,10 @@ import logging
 import threading
 import time
 
+__all__ = [
+    "DHTNode",
+    "logger",
+]
 try:
     from kademlia.network import Server
 except ImportError:
@@ -60,7 +64,7 @@ class DHTNode:
 
     def _run_loop(self):
         """Internal asyncio loop runner."""
-        logger.info(f"DHT Node starting on port {self.port}...")
+        logger.info("DHT Node starting on port %s...", self.port)
 
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
@@ -69,13 +73,13 @@ class DHTNode:
         self.loop.run_until_complete(self.server.listen(self.port))
 
         if self.bootstrap_nodes:
-            logger.info(f"Bootstrapping from {self.bootstrap_nodes}...")
+            logger.info("Bootstrapping from %s...", self.bootstrap_nodes)
             try:
                 self.loop.run_until_complete(
                     self.server.bootstrap(self.bootstrap_nodes)
                 )
             except Exception as e:
-                logger.warning(f"Bootstrap failed: {e}")
+                logger.warning("Bootstrap failed: %s", e)
 
         self._ready_event.set()
         logger.info("DHT Node Ready")
@@ -83,7 +87,7 @@ class DHTNode:
         try:
             self.loop.run_forever()
         except Exception as e:
-            logger.error(f"DHT Loop Error: {e}")
+            logger.error("DHT Loop Error: %s", e)
         finally:
             self.server.stop()
             self.loop.close()
@@ -99,7 +103,7 @@ class DHTNode:
                 return json.loads(result)
             return None
         except Exception as e:
-            logger.debug(f"DHT Get Error ({key}): {e}")
+            logger.debug("DHT Get Error (%s): %s", key, e)
             return None
 
     def set(self, key: str, value: object):
@@ -113,7 +117,7 @@ class DHTNode:
             )
             future.result(timeout=5)
         except Exception as e:
-            logger.error(f"DHT Set Error ({key}): {e}")
+            logger.error("DHT Set Error (%s): %s", key, e)
 
     def get_best_model(self, task: str) -> dict | None:
         """Retrieve the best model for a task."""
@@ -136,7 +140,7 @@ class DHTNode:
             "author": "anonymous",  # or self.id
         }
         self.set(key, data)
-        logger.info(f"Published new best model for {task} (Score: {score:.4f})")
+        logger.info("Published new best model for %s (Score: %s)", task, score)
 
     def get_known_peers(self) -> list[dict]:
         """
@@ -168,6 +172,6 @@ class DHTNode:
             future = asyncio.run_coroutine_threadsafe(_get_peers(), self.loop)
             peers = future.result(timeout=2)
         except Exception as e:
-            logger.debug(f"Error getting peers: {e}")
+            logger.debug("Error getting peers: %s", e)
 
         return peers

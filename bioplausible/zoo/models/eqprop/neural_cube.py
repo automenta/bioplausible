@@ -9,6 +9,11 @@ from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 from ...base import register_model
 
+__all__ = [
+    "LocalUpdateModule",
+    "NeuralCube",
+]
+
 
 class LocalUpdateModule(nn.Module):
     """Wraps NeuralCube's W_local + neighbor logic into a callable module."""

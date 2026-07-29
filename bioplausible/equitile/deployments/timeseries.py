@@ -33,6 +33,16 @@ from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig
 from bioplausible.zoo.base import BioModel, ModelConfig, register_model
 
+__all__ = [
+    "TemporalAttentionLayer",
+    "TemporalPositionalEncoding",
+    "TimeSeriesConfig",
+    "TimeSeriesEquiTile",
+    "TimeSeriesEquiTileLayer",
+    "create_anomaly_detection_model",
+    "create_classification_model",
+    "create_forecasting_model",
+]
 if TYPE_CHECKING:
     from torch import Tensor
 

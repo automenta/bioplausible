@@ -5,6 +5,10 @@ import os
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt.experiment import run_single_trial_task
 
+__all__ = [
+    "ParallelTrialRunner",
+]
+
 
 def _worker_process_task(args: dict[str, object]) -> dict[str, float] | None:
     """
@@ -51,14 +55,14 @@ def _worker_process_task(args: dict[str, object]) -> dict[str, float] | None:
         )
 
         if metrics:
-            logger.info(f"Trial completed. Acc: {metrics.get('accuracy', 0.0):.2%}")
+            logger.info("Trial completed. Acc: %s", metrics.get("accuracy", 0.0))
         else:
             logger.warning("Trial returned no metrics (Failed).")
 
         return metrics
 
     except Exception as e:
-        logger.error(f"Worker process failed: {e}", exc_info=True)
+        logger.error("Worker process failed: %s", e, exc_info=True)
         return None
 
 

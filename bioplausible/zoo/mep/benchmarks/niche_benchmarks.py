@@ -18,6 +18,13 @@ from torchvision import datasets, transforms
 
 from bioplausible.zoo.mep.presets import smep
 
+__all__ = [
+    "benchmark_adaptive_settling",
+    "benchmark_continual_learning",
+    "benchmark_regression",
+    "logger",
+    "run_all_niche_benchmarks",
+]
 logger = logging.getLogger(__name__)
 
 # ============================================================================

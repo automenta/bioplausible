@@ -18,6 +18,12 @@ from omegaconf import OmegaConf
 
 from bioplausible.config.schema import ExperimentConfig
 
+__all__ = [
+    "DEFAULT_CONFIGS",
+    "get_named_config",
+    "list_named_configs",
+    "register_default_config",
+]
 DEFAULT_CONFIGS: dict[str, ExperimentConfig] = {}
 
 _logger = logging.getLogger(__name__)

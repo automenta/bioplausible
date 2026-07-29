@@ -9,6 +9,11 @@ import numpy as np
 import torch
 from torch import nn
 
+__all__ = [
+    "FeatureAttribution",
+    "visualize_decision_boundary",
+]
+
 
 class FeatureAttribution:
     """

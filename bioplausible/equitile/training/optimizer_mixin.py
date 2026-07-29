@@ -5,6 +5,9 @@ from typing import TYPE_CHECKING
 import torch
 from torch import nn
 
+__all__ = [
+    "EquiTileOptimizerMixin",
+]
 if TYPE_CHECKING:
     from bioplausible.equitile.core.config import EquiTileConfig
 

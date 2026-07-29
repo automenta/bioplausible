@@ -19,6 +19,14 @@ logger = logging.getLogger(__name__)
 
 from .base import BioModel
 
+__all__ = [
+    "NEBCBase",
+    "evaluate_nebc_model",
+    "logger",
+    "run_nebc_ablation",
+    "train_nebc_model",
+]
+
 
 class NEBCBase(BioModel, ABC):
     """

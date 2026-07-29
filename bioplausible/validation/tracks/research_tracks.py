@@ -16,6 +16,12 @@ from bioplausible.zoo.models.eqprop import DirectedEP, FiniteNudgeEP, Holomorphi
 
 from ..notebook import TrackResult
 
+__all__ = [
+    "logger",
+    "track_42_holomorphic_ep",
+    "track_43_directed_ep",
+    "track_44_finite_nudge_ep",
+]
 logger = logging.getLogger(__name__)
 
 

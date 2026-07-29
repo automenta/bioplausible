@@ -12,6 +12,12 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 
+__all__ = [
+    "FailureCategory",
+    "FailureRecord",
+    "FailureTracker",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 
@@ -153,7 +159,9 @@ class FailureTracker:
                 ),
             )
             conn.commit()
-            logger.info(f"Logged {record.failure_type} failure for {record.model_name}")
+            logger.info(
+                "Logged %s failure for %s", record.failure_type, record.model_name
+            )
         finally:
             conn.close()
 
@@ -374,7 +382,7 @@ class FailureTracker:
                 return avg_fail
 
         except Exception as e:
-            logger.warning(f"Correlation check failed: {e}")
+            logger.warning("Correlation check failed: %s", e)
             return None
 
     def _detect_divergence_signatures(self) -> list[dict[str, object]]:
@@ -408,6 +416,6 @@ class FailureTracker:
                     })
 
         except Exception as e:
-            logger.warning(f"Divergence check failed: {e}")
+            logger.warning("Divergence check failed: %s", e)
 
         return recs

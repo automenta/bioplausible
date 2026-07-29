@@ -11,6 +11,10 @@ from ...base import (
     resolve_hidden_dims,
 )
 
+__all__ = [
+    "SparseEquilibrium",
+]
+
 
 @register_model(
     "sparse_equilibrium",

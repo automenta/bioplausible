@@ -11,6 +11,10 @@ from ...base import (
     resolve_hidden_dims,
 )
 
+__all__ = [
+    "MomentumEquilibrium",
+]
+
 
 @register_model(
     "momentum_equilibrium",

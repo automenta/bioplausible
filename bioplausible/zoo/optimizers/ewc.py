@@ -8,6 +8,10 @@ import torch
 
 from bioplausible.core.registry import register_optimizer
 
+__all__ = [
+    "EWC",
+]
+
 
 @register_optimizer("ewc")
 class EWC:

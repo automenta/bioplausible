@@ -20,6 +20,17 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
+__all__ = [
+    "EfficiencyAnalyzer",
+    "FLOPEfficiencyResult",
+    "MemoryEfficiencyResult",
+    "ParameterEfficiencyResult",
+    "analyze_flop_efficiency",
+    "analyze_memory_efficiency",
+    "analyze_parameter_efficiency",
+    "compare_efficiency",
+]
+
 
 @dataclass
 class ParameterEfficiencyResult:

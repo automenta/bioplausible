@@ -10,6 +10,11 @@ from typing import cast
 
 import torch
 
+__all__ = [
+    "ErrorFeedback",
+    "NoFeedback",
+]
+
 
 class NoFeedback:
     """

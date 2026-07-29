@@ -9,6 +9,14 @@ import numpy as np
 from bioplausible.zoo import get_model_spec
 
 # Type aliases
+
+__all__ = [
+    "SEARCH_SPACES",
+    "DiscreteChoice",
+    "NumberRange",
+    "SearchSpace",
+    "get_search_space",
+]
 NumberRange = tuple[
     float, float, str
 ]  # (min, max, scale) where scale in ['log', 'linear', 'int']

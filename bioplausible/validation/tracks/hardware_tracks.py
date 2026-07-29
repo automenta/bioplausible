@@ -18,6 +18,15 @@ from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
 )
 
+__all__ = [
+    "NoisyLoopedMLP",
+    "QuantizedLoopedMLP",
+    "logger",
+    "root_path",
+    "track_16_fpga_quantization",
+    "track_17_analog_photonics",
+    "track_18_thermodynamic_dna",
+]
 logger = logging.getLogger(__name__)
 
 

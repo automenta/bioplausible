@@ -33,6 +33,17 @@ from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig
 from bioplausible.zoo.base import BioModel, ModelConfig, register_model
 
+__all__ = [
+    "RLEquiTile",
+    "RLEquiTileConfig",
+    "RecurrentRLEquiTile",
+    "RolloutBuffer",
+    "compute_gae",
+    "create_atari_model",
+    "create_mujoco_model",
+    "create_recurrent_rl_model",
+    "create_rl_model",
+]
 if TYPE_CHECKING:
     from torch import Tensor
 

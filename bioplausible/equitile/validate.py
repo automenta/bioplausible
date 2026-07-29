@@ -39,6 +39,12 @@ from bioplausible.equitile.lm_demo import (
 )
 from bioplausible.equitile.utils import ReproducibilityTracker, set_reproducible_mode
 
+__all__ = [
+    "ValidationPipeline",
+    "ValidationResult",
+    "logger",
+    "main",
+]
 logger = logging.getLogger(__name__)
 
 

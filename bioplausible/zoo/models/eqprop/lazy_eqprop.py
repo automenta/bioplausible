@@ -10,6 +10,11 @@ from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 from ...base import register_model
 
+__all__ = [
+    "LazyEqProp",
+    "LazyStats",
+]
+
 
 @dataclass(slots=True)
 class LazyStats:

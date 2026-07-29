@@ -18,6 +18,22 @@ from torch import nn
 
 from bioplausible.domains.base import DomainTask, TaskSplit
 
+__all__ = [
+    "BenchmarkResult",
+    "EvaluatorBase",
+    "MetricFn",
+    "MetricSuite",
+    "accuracy_fn",
+    "cross_validate",
+    "evaluate_model_on_task",
+    "f1_fn",
+    "logger",
+    "mae_fn",
+    "mse_fn",
+    "perplexity_fn",
+    "registry_evaluator",
+    "top5_accuracy_fn",
+]
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -153,7 +169,7 @@ class MetricSuite:
             if name in registry:
                 metrics.append(registry[name])
             else:
-                logger.warning(f"Unknown metric: {name}")
+                logger.warning("Unknown metric: %s", name)
         return cls(metrics)
 
     def evaluate(
@@ -340,7 +356,7 @@ def cross_validate(
     all_fold_metrics: dict[str, dict[str, float]] = {}
 
     for fold in range(n_folds):
-        logger.info(f"Cross-validation fold {fold + 1}/{n_folds}")
+        logger.info("Cross-validation fold %s/%s", fold + 1, n_folds)
         model = model_factory()
         config = TrainerConfig(
             model=model.__class__.__name__,

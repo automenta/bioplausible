@@ -12,6 +12,14 @@ from bioplausible.core.registry import register_propagator
 
 from .base import LearningRuleOptimizer
 
+__all__ = [
+    "AdaptiveFA",
+    "ContrastiveFA",
+    "DirectFA",
+    "FeedbackAlignment",
+    "StochasticFA",
+]
+
 
 @register_propagator("feedback_alignment")
 class FeedbackAlignment(LearningRuleOptimizer):

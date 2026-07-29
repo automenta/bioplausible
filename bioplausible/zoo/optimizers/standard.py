@@ -8,6 +8,12 @@ from torch.optim import AdamW as TorchAdamW
 
 from bioplausible.core.registry import register_optimizer
 
+__all__ = [
+    "SGD",
+    "Adam",
+    "AdamW",
+]
+
 
 @register_optimizer("sgd")
 class SGD(TorchSGD):

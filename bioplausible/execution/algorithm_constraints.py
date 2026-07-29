@@ -7,6 +7,13 @@ import logging
 
 from bioplausible.zoo import get_model_spec
 
+__all__ = [
+    "ALGORITHM_FAMILY_CONSTRAINTS",
+    "create_constrained_optuna_config",
+    "get_constrained_search_space",
+    "logger",
+    "suggest_hyperparam",
+]
 logger = logging.getLogger(__name__)
 
 
@@ -82,8 +89,8 @@ def get_constrained_search_space(model_name: str) -> dict[str, object]:
         family, ALGORITHM_FAMILY_CONSTRAINTS["baseline"]
     )
 
-    logger.info(f"Using {family} constraints for {model_name}")
-    logger.debug(f"Constraints: {list(constraints.keys())}")
+    logger.info("Using %s constraints for %s", family, model_name)
+    logger.debug("Constraints: %s", list(constraints.keys()))
 
     return constraints
 

@@ -8,6 +8,11 @@ from pytorch_lightning import Trainer
 
 from bioplausible.lightning_.module import BioLightningModule
 
+__all__ = [
+    "BioOptunaPruner",
+    "BioRayTuneSearch",
+]
+
 
 class BioOptunaPruner:
     """

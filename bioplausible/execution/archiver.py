@@ -13,6 +13,11 @@ from pathlib import Path
 
 import torch
 
+__all__ = [
+    "ARTIFACTS_DIR",
+    "ExperimentArchiver",
+    "logger",
+]
 logger = logging.getLogger("Archiver")
 
 ARTIFACTS_DIR = Path("artifacts")
@@ -87,11 +92,11 @@ class ExperimentArchiver:
             # Cleanup directory
             shutil.rmtree(trial_dir)
 
-            logger.info(f"Archived trial {trial_id} to {zip_path}")
+            logger.info("Archived trial %s to %s", trial_id, zip_path)
             return str(zip_path)
 
         except Exception as e:
-            logger.error(f"Failed to archive trial {trial_id}: {e}")
+            logger.error("Failed to archive trial %s: %s", trial_id, e)
             return None
 
     def _generate_reproduction_script(

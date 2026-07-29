@@ -8,6 +8,10 @@ import argparse
 
 from bioplausible.analysis.results import get_rankings, load_trials, print_rankings
 
+__all__ = [
+    "main",
+]
+
 
 def _filter_trials(trials, tier=None, task=None):
     """Filter trials by tier and/or task."""

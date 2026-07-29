@@ -12,6 +12,10 @@ import sqlite3
 import time
 from datetime import datetime
 
+__all__ = [
+    "DecisionLogger",
+    "logger",
+]
 logger = logging.getLogger("DecisionLogger")
 
 
@@ -49,7 +53,7 @@ class DecisionLogger:
                 """)
                 conn.commit()
         except sqlite3.Error as e:
-            logger.error(f"Failed to init decision log DB: {e}")
+            logger.error("Failed to init decision log DB: %s", e)
 
     def log_decision(
         self,
@@ -76,11 +80,11 @@ class DecisionLogger:
                     (time.time(), event_type, description, meta_json),
                 )
                 conn.commit()
-            logger.info(f"Decision Logged: [{event_type}] {description}")
+            logger.info("Decision Logged: [%s] %s", event_type, description)
         except sqlite3.Error as e:
-            logger.error(f"Failed to log decision: {e}")
+            logger.error("Failed to log decision: %s", e)
         except Exception as e:
-            logger.error(f"Unexpected error logging decision: {e}", exc_info=True)
+            logger.error("Unexpected error logging decision: %s", e, exc_info=True)
 
     def get_log(self, limit: int = 1000) -> list[dict[str, object]]:
         """
@@ -115,8 +119,8 @@ class DecisionLogger:
                         "metadata": json.loads(row["metadata"]),
                     })
         except sqlite3.Error as e:
-            logger.error(f"Failed to read decision log: {e}")
+            logger.error("Failed to read decision log: %s", e)
         except Exception as e:
-            logger.error(f"Unexpected error reading decision log: {e}", exc_info=True)
+            logger.error("Unexpected error reading decision log: %s", e, exc_info=True)
 
         return entries

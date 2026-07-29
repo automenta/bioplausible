@@ -12,6 +12,11 @@ from ....acceleration import compile_settling_loop
 from ...utils import spectral_linear
 from ..base import EqPropModel
 
+__all__ = [
+    "EqPropAttention",
+    "TransformerEqProp",
+]
+
 
 class EqPropAttention(nn.Module):
     """Self-attention that participates in equilibrium dynamics."""

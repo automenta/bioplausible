@@ -15,6 +15,10 @@ from bioplausible.zoo.mep.presets import (
     smep,
 )
 
+__all__ = [
+    "get_optimizer",
+]
+
 
 def get_optimizer(
     name: str,

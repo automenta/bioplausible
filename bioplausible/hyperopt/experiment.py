@@ -31,6 +31,12 @@ from bioplausible.hyperopt.tasks import create_task
 from bioplausible.tracking import ExperimentTracker
 from bioplausible.zoo import load_weights
 
+__all__ = [
+    "TrialRunner",
+    "logger",
+    "run_single_trial_task",
+]
+
 
 class TrialRunner:
     """Runs individual hyperparameter optimization trials."""

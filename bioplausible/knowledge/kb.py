@@ -97,9 +97,9 @@ class KnowledgeBase:
         if auto_embed and HAS_SENTENCE_TRANSFORMERS:
             try:
                 self.embedding_model = SentenceTransformer(embedding_model)
-                logger.info(f"Loaded embedding model: {embedding_model}")
+                logger.info("Loaded embedding model: %s", embedding_model)
             except Exception as e:
-                logger.warning(f"Failed to load embedding model: {e}")
+                logger.warning("Failed to load embedding model: %s", e)
 
         # Load seed data if empty
         self._load_seed_if_empty()
@@ -249,7 +249,7 @@ class KnowledgeBase:
         for entry in seed_entries:
             self.add_entry(entry)
 
-        logger.info(f"Loaded {len(seed_entries)} seed knowledge entries")
+        logger.info("Loaded %s seed knowledge entries", len(seed_entries))
 
     def _embed_text(self, text: str) -> np.ndarray | None:
         """Generate embedding for text."""
@@ -259,7 +259,7 @@ class KnowledgeBase:
             embedding = self.embedding_model.encode(text, normalize_embeddings=True)
             return embedding.astype(np.float32)
         except Exception as e:
-            logger.warning(f"Embedding failed: {e}")
+            logger.warning("Embedding failed: %s", e)
             return None
 
     def add_entry(self, entry: KnowledgeEntry) -> str:
@@ -304,7 +304,7 @@ class KnowledgeBase:
             self.vector_index.add(embedding)
             self.vector_ids.append(entry.id)
 
-        logger.debug(f"Added knowledge entry: {entry.id}")
+        logger.debug("Added knowledge entry: %s", entry.id)
         return entry.id
 
     def add_experiment(
@@ -740,7 +740,7 @@ class KnowledgeBase:
                 target_metric=target_metric, focus_model=focus_model
             )
         except Exception as e:
-            logger.warning(f"Symbolic rule extraction failed: {e}")
+            logger.warning("Symbolic rule extraction failed: %s", e)
             return [f"Symbolic analysis unavailable: {e}"]
 
     def compute_algorithm_similarity(self) -> dict[str, dict[str, float]]:
@@ -761,7 +761,7 @@ class KnowledgeBase:
                 return {}
             return sim_df.to_dict()
         except Exception as e:
-            logger.warning(f"Algorithm similarity failed: {e}")
+            logger.warning("Algorithm similarity failed: %s", e)
             return {}
 
     def train_surrogate(
@@ -806,7 +806,7 @@ class KnowledgeBase:
                     records.append(record)
 
             if len(records) < 10:
-                logger.warning(f"Not enough records with {target_metric}")
+                logger.warning("Not enough records with %s", target_metric)
                 return None
 
             df = pd.DataFrame(records)
@@ -825,11 +825,11 @@ class KnowledgeBase:
                 features=feature_cols,
                 performance={"r2": float(score), "n_samples": len(records)},
             )
-            logger.info(f"Trained surrogate {surrogate_id} with R2={score:.4f}")
+            logger.info("Trained surrogate %s with R2=%s", surrogate_id, score)
             return surrogate_id
 
         except Exception as e:
-            logger.warning(f"Surrogate training failed: {e}")
+            logger.warning("Surrogate training failed: %s", e)
             return None
 
     def predict_outcome(
@@ -856,7 +856,7 @@ class KnowledgeBase:
             # we'd load the actual saved model
             return float(surrogate.get("performance", {}).get("r2", 0.0))
         except Exception as e:
-            logger.warning(f"Prediction failed: {e}")
+            logger.warning("Prediction failed: %s", e)
             return 0.0
 
     def run_causal_analysis(
@@ -919,7 +919,7 @@ class KnowledgeBase:
                 "n_samples": len(records),
             }
         except Exception as e:
-            logger.warning(f"Causal analysis failed: {e}")
+            logger.warning("Causal analysis failed: %s", e)
             return {"error": str(e)}
 
 

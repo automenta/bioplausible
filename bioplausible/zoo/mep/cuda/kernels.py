@@ -12,6 +12,17 @@ from typing import cast
 
 import torch
 
+__all__ = [
+    "batched_newton_schulz_cuda",
+    "dion_update_cuda",
+    "enforce_spectral_constraint_cuda",
+    "fused_settle_step",
+    "fused_settle_step_inplace",
+    "lowrank_svd_cuda",
+    "newton_schulz_cuda",
+    "spectral_norm_power_iteration_cuda",
+]
+
 
 def lowrank_svd_cuda(
     G: torch.Tensor, rank: int, q: int | None = None

@@ -12,6 +12,10 @@ from bioplausible.autoscientist.reasoner import Hypothesis, HypothesisReasoner
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.knowledge import KnowledgeBase
 
+__all__ = [
+    "ExperimentProposer",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 

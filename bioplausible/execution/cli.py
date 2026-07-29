@@ -13,6 +13,12 @@ import logging
 from bioplausible.analysis.reporting import ReportOrchestrator
 from bioplausible.execution.engine import ExecutionEngine
 
+__all__ = [
+    "logger",
+    "main",
+    "main_reporter",
+    "main_scientist",
+]
 logger = logging.getLogger(__name__)
 
 

@@ -8,6 +8,10 @@ from ...base import register_model
 from ..transitions import TransitionGraphMixin
 from .modern_conv_eqprop import SimpleConvEqProp
 
+__all__ = [
+    "EqPropDiffusion",
+]
+
 
 @register_model(
     "eqprop_diffusion",

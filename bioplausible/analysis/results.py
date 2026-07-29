@@ -19,6 +19,16 @@ from bioplausible.hyperopt.comparison import (
     group_trials_by_family,
 )
 
+__all__ = [
+    "compute_pareto_frontier",
+    "compute_statistics",
+    "get_rankings",
+    "load_trials",
+    "load_trials_timeseries",
+    "logger",
+    "print_rankings",
+]
+
 
 def load_trials(db_path: str) -> list[dict[str, object]]:
     """

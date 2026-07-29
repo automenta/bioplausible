@@ -11,6 +11,10 @@ from bioplausible.core.registry import LocalityLevel, register_propagator
 
 from .base import LearningRuleOptimizer
 
+__all__ = [
+    "ContrastiveHebbianLearning",
+]
+
 
 @register_propagator(
     "contrastive_hebbian_learning",

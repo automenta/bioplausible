@@ -10,6 +10,15 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
+__all__ = [
+    "Batch",
+    "DomainSpec",
+    "DomainTask",
+    "DomainType",
+    "Metrics",
+    "TaskSplit",
+]
+
 
 class DomainType(str, Enum):
     """Supported domain types."""

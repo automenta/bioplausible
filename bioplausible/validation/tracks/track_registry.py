@@ -90,6 +90,14 @@ register_tracks_from_module(signal_tracks)
 # Sync into core Registry under ComponentCategory.TRACK for unified discovery.
 from bioplausible.core.registry import ComponentCategory, Registry
 
+__all__ = [
+    "ALL_TRACKS",
+    "get_track",
+    "get_track_metadata",
+    "list_tracks",
+    "logger",
+    "register_tracks_from_module",
+]
 for track_id, track_fn in ALL_TRACKS.items():
     Registry.register(ComponentCategory.TRACK, name=f"track_{track_id}")(track_fn)
 

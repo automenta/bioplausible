@@ -5,6 +5,12 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
 
+__all__ = [
+    "compute_compute_optimal",
+    "fit_power_law",
+    "logger",
+    "plot_scaling_curves",
+]
 logger = logging.getLogger(__name__)
 
 

@@ -14,6 +14,13 @@ import torch
 from torch import nn
 
 # Import CUDA kernels if available
+
+__all__ = [
+    "DionUpdate",
+    "FisherUpdate",
+    "MuonUpdate",
+    "PlainUpdate",
+]
 try:
     from ...cuda.kernels import dion_update_cuda, newton_schulz_cuda
 

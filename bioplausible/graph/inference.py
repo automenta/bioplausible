@@ -21,6 +21,10 @@ import torch.nn.functional as F
 from bioplausible.graph.topology import GraphStructure
 from bioplausible.zoo._settling import _inf_norm_converged
 
+__all__ = [
+    "InferenceSGD",
+]
+
 
 class InferenceSGD:
     """Energy-minimization settling for predictive coding.

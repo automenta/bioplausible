@@ -31,6 +31,16 @@ from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig
 from bioplausible.zoo.base import BioModel, ModelConfig, register_model
 
+__all__ = [
+    "ConvEquiTile",
+    "ConvEquiTileConfig",
+    "ConvFeatureExtractor",
+    "VisionAugmentation",
+    "create_cifar_model",
+    "create_imagenet_model",
+    "create_mnist_model",
+    "create_vision_model",
+]
 if TYPE_CHECKING:
     from torch import Tensor
 

@@ -11,6 +11,15 @@ from collections.abc import Callable
 import torch
 import torch.nn.functional as F
 
+__all__ = [
+    "contrastive_energy",
+    "hybrid_energy",
+    "mse_energy",
+    "node_energy",
+    "prediction_error_energy",
+    "supervised_energy",
+]
+
 
 def prediction_error_energy(
     activities: list[torch.Tensor],

@@ -14,6 +14,13 @@ from pytorch_lightning import Trainer
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.lightning_.module import BioLightningModule
 
+__all__ = [
+    "create_nas_objective",
+    "get_bio_optimizer_names",
+    "get_plausible_model_names",
+    "logger",
+    "run_nas_search",
+]
 logger = logging.getLogger(__name__)
 
 

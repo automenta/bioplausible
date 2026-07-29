@@ -28,6 +28,14 @@ from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
 )
 
+__all__ = [
+    "LinearChain",
+    "ReluChain",
+    "TanhChain",
+    "logger",
+    "root_path",
+    "track_56_depth_architecture_comparison",
+]
 logger = logging.getLogger(__name__)
 
 

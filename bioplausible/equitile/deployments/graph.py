@@ -33,6 +33,21 @@ from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig
 from bioplausible.zoo.base import BioModel, ModelConfig, register_model
 
+__all__ = [
+    "GraphAttentionLayer",
+    "GraphEquiTile",
+    "GraphEquiTileConfig",
+    "GraphEquiTileLayer",
+    "add_self_loops",
+    "aggregate_messages",
+    "create_graph_from_edges",
+    "create_graph_model",
+    "create_molecule_model",
+    "create_social_graph_model",
+    "scatter_max",
+    "scatter_mean",
+    "scatter_sum",
+]
 if TYPE_CHECKING:
     from torch import Tensor
 

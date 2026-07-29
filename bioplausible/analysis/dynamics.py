@@ -11,6 +11,9 @@ import numpy as np
 import torch
 from torch import nn
 
+__all__ = [
+    "DynamicsAnalyzer",
+]
 try:
     import matplotlib.pyplot as plt
 

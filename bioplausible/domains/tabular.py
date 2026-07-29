@@ -17,6 +17,10 @@ from bioplausible.domains.base import (
     TaskSplit,
 )
 
+__all__ = [
+    "TabularTask",
+]
+
 
 class TabularTask(DomainTask):
     """Tabular/structured data domain tasks."""

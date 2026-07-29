@@ -10,6 +10,10 @@ import os
 import threading
 import time
 
+__all__ = [
+    "InterferenceMonitor",
+    "logger",
+]
 try:
     import psutil
 except ImportError:
@@ -96,7 +100,7 @@ class InterferenceMonitor:
             p.cpu_percent()
             psutil.cpu_percent()
         except Exception as e:
-            logger.error(f"Failed to initialize monitor process: {e}")
+            logger.error("Failed to initialize monitor process: %s", e)
             return
 
         while not self._stop_event.is_set():
@@ -137,4 +141,4 @@ class InterferenceMonitor:
                     violation_start_time = None
 
             except Exception as e:
-                logger.error(f"Monitor error: {e}")
+                logger.error("Monitor error: %s", e)

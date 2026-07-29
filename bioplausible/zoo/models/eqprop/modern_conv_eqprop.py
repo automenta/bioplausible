@@ -12,6 +12,11 @@ from ...base import register_model
 from ...utils import spectral_conv2d
 from ..base import EqPropModel
 
+__all__ = [
+    "ModernConvEqProp",
+    "SimpleConvEqProp",
+]
+
 
 @register_model(
     "modern_conv_eqprop",

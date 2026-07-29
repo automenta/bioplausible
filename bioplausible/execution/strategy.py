@@ -20,6 +20,10 @@ from bioplausible.execution.state import ExperimentState
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel
 
+__all__ = [
+    "ExecutionStrategy",
+    "logger",
+]
 logger = logging.getLogger("AutoScientist")
 
 
@@ -849,7 +853,7 @@ class ExecutionStrategy:
                         pass
 
             except Exception as e:
-                logger.warning(f"Failed to query failure analysis: {e}")
+                logger.warning("Failed to query failure analysis: %s", e)
 
         # 2. Analyze Progress for Soft Failures (Divergence/No Learning)
         for model, task_data in progress.items():

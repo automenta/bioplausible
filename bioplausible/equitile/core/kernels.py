@@ -14,6 +14,13 @@ Consolidating these operations ensures consistency across different execution mo
 import torch
 from torch import Tensor
 
+__all__ = [
+    "compute_activity_update",
+    "compute_contrastive_hebbian_update",
+    "compute_hebbian_update",
+    "compute_tile_prediction",
+]
+
 
 def compute_tile_prediction(
     inputs: list[Tensor],

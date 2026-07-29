@@ -29,6 +29,18 @@ import torch.nn.functional as F
 from torch import nn
 
 # Use new torch.amp API (2.0+) or fallback
+
+__all__ = [
+    "MLP",
+    "BenchmarkResult",
+    "Block",
+    "CausalSelfAttention",
+    "NanoGPTConfig",
+    "NanoGPTModel",
+    "benchmark_model",
+    "compare_nanoGPT",
+    "run_benchmark_comparison",
+]
 try:
     from torch.amp import GradScaler, autocast
 except ImportError:

@@ -1,4 +1,8 @@
 """
+
+__all__ = [
+    "CurriculumManager",
+]
 Curriculum Learning Manager.
 
 Manages the progression of tasks from simple to complex, allowing models

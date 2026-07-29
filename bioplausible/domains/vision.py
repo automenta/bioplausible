@@ -17,6 +17,10 @@ from bioplausible.domains.base import (
     TaskSplit,
 )
 
+__all__ = [
+    "VisionTask",
+]
+
 
 class VisionTask(DomainTask):
     """Vision domain tasks (MNIST, CIFAR, ImageNet, etc.)."""

@@ -5,6 +5,10 @@ from torch import nn
 
 from bioplausible.hyperopt.tasks import BaseTask, _TaskTrainer
 
+__all__ = [
+    "GraphTask",
+]
+
 
 class GraphTask(BaseTask):
     """Node classification on Cora / Citeseer / PubMed via torch-geometric."""

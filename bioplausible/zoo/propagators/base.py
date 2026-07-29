@@ -20,6 +20,11 @@ import torch
 from torch import nn
 from torch.optim import Optimizer
 
+__all__ = [
+    "BioOptimizer",
+    "LearningRuleOptimizer",
+]
+
 
 class BioOptimizer(Optimizer):
     """

@@ -8,6 +8,10 @@ from ....zoo._settling import settle_activations_list
 from ...base import BioModel, ModelConfig, register_model, resolve_hidden_dims
 from ._contrastive import _contrastive_step
 
+__all__ = [
+    "StandardEqProp",
+]
+
 
 @register_model(
     "eqprop",

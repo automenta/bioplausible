@@ -9,6 +9,10 @@ from ....acceleration import compile_settling_loop
 from ...utils import spectral_conv2d
 from ..base import EqPropModel
 
+__all__ = [
+    "ConvEqProp",
+]
+
 
 class ConvEqProp(EqPropModel):
     """

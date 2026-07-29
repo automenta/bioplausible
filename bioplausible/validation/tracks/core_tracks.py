@@ -17,6 +17,13 @@ from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
 )
 
+__all__ = [
+    "logger",
+    "root_path",
+    "track_1_spectral_norm",
+    "track_2_backprop_parity",
+    "track_3_adversarial_healing",
+]
 logger = logging.getLogger(__name__)
 
 

@@ -9,6 +9,13 @@ from typing import Protocol
 import torch
 from torch import nn
 
+__all__ = [
+    "ConstraintStrategy",
+    "FeedbackStrategy",
+    "GradientStrategy",
+    "UpdateStrategy",
+]
+
 
 class GradientStrategy(Protocol):
     """

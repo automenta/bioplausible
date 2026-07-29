@@ -16,6 +16,11 @@ import traceback
 from bioplausible.core.registry import register_model
 from bioplausible.hyperopt.experiment import run_single_trial_task
 
+__all__ = [
+    "evaluate_candidate",
+    "load_candidate_model",
+    "logger",
+]
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("evolve_evaluator")
 
@@ -92,7 +97,7 @@ def evaluate_candidate(
         }
 
     except Exception as e:
-        logger.error(f"Evaluation failed: {e}")
+        logger.error("Evaluation failed: %s", e)
         traceback.print_exc()
         return {"eval_score": 0.0, "success": False, "error": str(e)}
 

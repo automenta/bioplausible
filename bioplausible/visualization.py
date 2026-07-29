@@ -12,6 +12,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
+__all__ = [
+    "ResultVisualizer",
+    "ResultsDashboard",
+    "visualize_results",
+]
 matplotlib.use("Agg")
 
 

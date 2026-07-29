@@ -43,6 +43,14 @@ from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
 )
 
+__all__ = [
+    "count_parameters",
+    "get_memory_usage",
+    "logger",
+    "root_path",
+    "track_57_honest_tradeoff_analysis",
+    "train_and_measure",
+]
 logger = logging.getLogger(__name__)
 
 

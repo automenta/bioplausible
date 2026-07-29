@@ -2,6 +2,10 @@ from dataclasses import dataclass
 
 from bioplausible.hyperopt import PatientLevel
 
+__all__ = [
+    "ExperimentTask",
+]
+
 
 @dataclass
 class ExperimentTask:

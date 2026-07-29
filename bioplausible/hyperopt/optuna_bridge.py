@@ -13,6 +13,15 @@ from optuna.samplers import NSGAIISampler, TPESampler
 
 from bioplausible.zoo import get_model_spec
 
+__all__ = [
+    "create_optuna_space",
+    "create_study",
+    "get_pareto_trials",
+    "optimize_with_callback",
+    "scalarize_objectives",
+    "trial_to_metrics",
+]
+
 
 def scalarize_objectives(
     accuracy: float, param_count: float, iteration_time: float

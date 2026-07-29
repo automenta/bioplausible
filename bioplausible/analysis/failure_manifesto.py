@@ -4,6 +4,10 @@ import pandas as pd
 
 from bioplausible.execution.failure_tracker import FailureTracker
 
+__all__ = [
+    "FailureManifestoGenerator",
+]
+
 
 class FailureManifestoGenerator:
     """

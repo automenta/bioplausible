@@ -12,6 +12,11 @@ from pytorch_lightning import Trainer
 from bioplausible.lightning_.module import BioLightningModule
 from bioplausible.lightning_.strategies import build_trainer
 
+__all__ = [
+    "logger",
+    "run_pl_trial",
+    "run_pl_trial_with_wandb",
+]
 logger = logging.getLogger("AutoScientist.PL")
 
 
@@ -69,7 +74,7 @@ def run_pl_trial(
             }
         return {"accuracy": 0.0, "loss": 0.0}
     except Exception as e:
-        logger.error(f"PL trial failed: {e}", exc_info=True)
+        logger.error("PL trial failed: %s", e, exc_info=True)
         return None
 
 
@@ -125,5 +130,5 @@ def run_pl_trial_with_wandb(
             }
         return {"accuracy": 0.0, "loss": 0.0}
     except Exception as e:
-        logger.error(f"PL+W&B trial failed: {e}", exc_info=True)
+        logger.error("PL+W&B trial failed: %s", e, exc_info=True)
         return None

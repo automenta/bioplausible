@@ -23,6 +23,10 @@ from bioplausible.autoscientist.reasoner import HypothesisReasoner
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.knowledge import KnowledgeBase, KnowledgeEntry
 
+__all__ = [
+    "AutoScientistCampaign",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 
@@ -72,14 +76,14 @@ class AutoScientistCampaign:
             List of experiment results.
         """
         self._iteration += 1
-        logger.info(f"=== Campaign Iteration {self._iteration} ===")
+        logger.info("=== Campaign Iteration %s ===", self._iteration)
 
         # Step 1: Analyze KnowledgeBase
         insights = self.reasoner.analyze_knowledge_base()
         if insights:
-            logger.info(f"KnowledgeBase insights ({len(insights)}):")
+            logger.info("KnowledgeBase insights (%s):", len(insights))
             for insight in insights[:3]:
-                logger.info(f"  - {insight}")
+                logger.info("  - %s", insight)
 
         # Step 2: Propose experiments
         proposals = self.proposer.propose_batch(
@@ -91,7 +95,7 @@ class AutoScientistCampaign:
             logger.warning("No proposals generated. Skipping iteration.")
             return []
 
-        logger.info(f"Proposed {len(proposals)} experiments")
+        logger.info("Proposed %s experiments", len(proposals))
 
         # Step 3: Human approval gate
         if self.human_approval_gate:
@@ -115,7 +119,7 @@ class AutoScientistCampaign:
                     # Update KnowledgeBase
                     self._update_knowledge_base(proposal, result)
                 except Exception as e:
-                    logger.error(f"Proposal {i} failed: {e}", exc_info=True)
+                    logger.error("Proposal %s failed: %s", i, e, exc_info=True)
                     results.append({
                         "proposal": proposal,
                         "status": "failed",
@@ -243,7 +247,7 @@ class AutoScientistCampaign:
         with Path(log_path).open("w") as f:
             json.dump(iteration_log, f, indent=2, default=str)
 
-        logger.info(f"Iteration log saved: {log_path}")
+        logger.info("Iteration log saved: %s", log_path)
 
     def _human_approval(
         self,

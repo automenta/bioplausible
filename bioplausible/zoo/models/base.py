@@ -8,6 +8,10 @@ from torch import autograd, nn
 from .._settling import EquilibriumFunction, settle_single_state
 from ..base import BioModel
 
+__all__ = [
+    "EqPropModel",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 

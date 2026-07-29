@@ -2,6 +2,19 @@ import copy
 from dataclasses import dataclass
 from enum import Enum
 
+__all__ = [
+    "EQUILIBRIUM_HYPERPARAMS",
+    "FA_HYPERPARAMS",
+    "GRADIENT_HYPERPARAMS",
+    "HEBBIAN_HYPERPARAMS",
+    "HYPERPARAM_METAMODEL",
+    "TRANSFORMER_HYPERPARAMS",
+    "UNIVERSAL_HYPERPARAMS",
+    "HyperparamScope",
+    "HyperparamSpec",
+    "HyperparameterMetamodel",
+]
+
 
 class HyperparamScope(Enum):
     """Defines which algorithms a hyperparameter applies to."""

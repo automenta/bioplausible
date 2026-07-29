@@ -25,6 +25,22 @@ from .base import EqPropModel
 # ---------------------------------------------------------------------------
 
 
+__all__ = [
+    "AdaptiveFeedbackAlignment",
+    "ContrastiveFeedbackAlignment",
+    "DeepDFAEqProp",
+    "DirectFeedbackAlignmentEqProp",
+    "EnergyGuidedFA",
+    "EnergyMinimizingFA",
+    "EquilibriumAlignment",
+    "FeedbackAlignmentEqProp",
+    "FeedbackAlignmentLayer",
+    "LayerwiseEquilibriumFA",
+    "StandardFA",
+    "StochasticFA",
+]
+
+
 def _fa_apply_activation_derivative(
     grad_h: torch.Tensor,
     h_curr: torch.Tensor,

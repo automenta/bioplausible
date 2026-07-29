@@ -10,6 +10,8 @@ from bioplausible.hyperopt.tasks import LMTask, RLTask, VisionTask
 
 # Register core task types via decorator syntax.
 # Instantiation logic (parsing 'mnist_01') lives in the task factory.
+
+__all__ = []
 register_task("lm")(LMTask)
 register_task("vision")(VisionTask)
 register_task("rl")(RLTask)

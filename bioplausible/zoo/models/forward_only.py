@@ -19,6 +19,13 @@ from bioplausible.zoo.models.transitions import TransitionGraphMixin
 # ============================================================================
 
 
+__all__ = [
+    "PEPITA",
+    "FFLayer",
+    "ForwardForwardNet",
+]
+
+
 class FFLayer(nn.Linear):
     def __init__(self, in_features, out_features, bias=True, device=None, dtype=None):
         super().__init__(in_features, out_features, bias=bias)

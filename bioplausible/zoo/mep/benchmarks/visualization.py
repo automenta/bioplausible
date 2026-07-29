@@ -11,6 +11,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
+__all__ = [
+    "BenchmarkVisualizer",
+]
+
 
 class BenchmarkVisualizer:
     """Generate visualizations for benchmark results."""

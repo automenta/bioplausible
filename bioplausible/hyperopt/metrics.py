@@ -8,6 +8,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
+__all__ = [
+    "TrialMetrics",
+    "crowding_distance",
+    "get_pareto_frontier",
+    "non_dominated_sort",
+    "rank_trials",
+]
+
 
 @dataclass
 class TrialMetrics:

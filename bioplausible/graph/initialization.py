@@ -11,6 +11,10 @@ import torch
 
 from bioplausible.graph.topology import GraphStructure
 
+__all__ = [
+    "initialize_params",
+]
+
 
 def initialize_params(
     structure: GraphStructure,

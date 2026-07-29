@@ -276,3 +276,7 @@ class CompositeOptimizer(Optimizer):
 
 # Import after class definition to avoid circular imports
 from .strategies.gradient import EPGradient, LocalEPGradient, NaturalGradient
+
+__all__ = [
+    "CompositeOptimizer",
+]

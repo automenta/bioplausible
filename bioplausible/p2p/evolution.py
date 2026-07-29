@@ -17,6 +17,11 @@ from bioplausible.hyperopt.search_space import SEARCH_SPACES, get_search_space
 from bioplausible.p2p.dht import DHTNode
 from bioplausible.p2p.state import load_state, save_state
 
+__all__ = [
+    "P2PEvolution",
+    "get_config_hash",
+    "logger",
+]
 logger = logging.getLogger("P2PEvolution")
 
 

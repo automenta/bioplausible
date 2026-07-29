@@ -18,6 +18,9 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from bioplausible.core.registry import ComponentCategory, Registry
 
+__all__ = [
+    "EqPropClassifier",
+]
 _MODEL_NAME_MAP: dict[str, str] = {
     "EqProp MLP": "eqprop_mlp",
     "StandardEqProp": "eqprop",

@@ -10,6 +10,11 @@ from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 
 from ...utils import spectral_linear
 
+__all__ = [
+    "CausalEqPropAttention",
+    "CausalTransformerEqProp",
+]
+
 
 class CausalEqPropAttention(nn.Module):
     """Self-attention with causal masking for autoregressive generation."""

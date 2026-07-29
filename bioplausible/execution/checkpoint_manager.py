@@ -2,6 +2,11 @@ import logging
 import sqlite3
 from dataclasses import asdict, dataclass
 
+__all__ = [
+    "CheckpointManager",
+    "CheckpointRecord",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 

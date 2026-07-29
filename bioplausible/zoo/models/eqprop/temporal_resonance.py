@@ -11,6 +11,10 @@ from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 from ...utils import spectral_linear
 
+__all__ = [
+    "TemporalResonanceEqProp",
+]
+
 
 class TemporalResonanceEqProp(TransitionGraphMixin, nn.Module):
     """

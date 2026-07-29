@@ -15,6 +15,12 @@ from bioplausible.validation.tracks._signal_probe import (
     run_signal_propagation_experiment,
 )
 
+__all__ = [
+    "SignalPropagationTrack",
+    "logger",
+    "register_signal_tracks",
+    "test_signal_propagation",
+]
 logger = logging.getLogger(__name__)
 
 

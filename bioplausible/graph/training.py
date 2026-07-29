@@ -16,6 +16,11 @@ from torch.utils.data import DataLoader
 
 from bioplausible.graph.topology import GraphStructure
 
+__all__ = [
+    "train_backprop",
+    "train_pcn",
+]
+
 
 def _compute_accuracy(logits: torch.Tensor, targets: torch.Tensor) -> float:
     """Compute classification accuracy."""

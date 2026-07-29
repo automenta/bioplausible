@@ -16,6 +16,13 @@ from torch import nn
 
 from .base import GradientStrategy
 
+__all__ = [
+    "BackpropGradient",
+    "EPGradient",
+    "LocalEPGradient",
+    "NaturalGradient",
+]
+
 
 class BackpropGradient:
     """

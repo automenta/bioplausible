@@ -38,6 +38,21 @@ from bioplausible.zoo.mep.optimizers.strategies.gradient import (
 )
 from bioplausible.zoo.mep.optimizers.strategies.update import DionUpdate
 
+__all__ = [
+    "MLP",
+    "ContinualLearningResult",
+    "PermutedMNIST",
+    "TaskResult",
+    "create_mep_optimizer",
+    "evaluate",
+    "logger",
+    "main",
+    "print_comparison",
+    "run_comparison_benchmark",
+    "run_permuted_mnist_benchmark",
+    "save_results",
+    "train_epoch",
+]
 logger = logging.getLogger(__name__)
 
 

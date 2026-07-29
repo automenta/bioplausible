@@ -147,6 +147,15 @@ from bioplausible.zoo.propagators.hebbian import (
     ContrastiveHebbianLearning,
 )
 
+__all__ = [
+    "logger",
+    "track_50_nebc_eqprop_variants",
+    "track_51_nebc_feedback_alignment",
+    "track_52_nebc_direct_feedback_alignment",
+    "track_53_nebc_contrastive_hebbian",
+    "track_54_nebc_deep_hebbian_chain",
+]
+
 
 def track_53_nebc_contrastive_hebbian(verifier: object) -> TrackResult:
     """Verify Contrastive Hebbian Learning."""

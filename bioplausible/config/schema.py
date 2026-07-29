@@ -12,6 +12,26 @@ from typing import Any
 
 from omegaconf import MISSING, OmegaConf
 
+__all__ = [
+    "DatasetConfig",
+    "DomainConfig",
+    "ExperimentConfig",
+    "LightningConfig",
+    "ModelConfig",
+    "OptimizerConfig",
+    "PropagatorConfig",
+    "RunConfig",
+    "RunConfigData",
+    "RunConfigModel",
+    "RunConfigOptimizer",
+    "RunConfigTrainer",
+    "ScientistConfig",
+    "SparsityConfig",
+    "TrainingConfig",
+    "get_default_config",
+    "logger",
+    "validate_config",
+]
 logger = logging.getLogger(__name__)
 
 

@@ -6,6 +6,10 @@ import optuna
 from bioplausible.execution.failure_tracker import FailureTracker
 from bioplausible.hyperopt.storage import HyperoptStorage
 
+__all__ = [
+    "ExperimentState",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 

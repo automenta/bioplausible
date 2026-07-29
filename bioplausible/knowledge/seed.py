@@ -4,6 +4,12 @@ import pathlib
 import tempfile
 
 # Statically seeded knowledge base containing key findings and empirical rules
+
+__all__ = [
+    "KNOWLEDGE_BASE_SEED",
+    "KnowledgeBase",
+    "get_default_kb",
+]
 KNOWLEDGE_BASE_SEED = [
     {
         "id": "KB-001",

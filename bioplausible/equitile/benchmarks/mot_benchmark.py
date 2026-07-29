@@ -21,6 +21,11 @@ import torch
 # =============================================================================
 
 
+__all__ = [
+    "benchmark_mot",
+]
+
+
 def benchmark_mot(
     batch_size: int = 32,
     seq_len: int = 128,

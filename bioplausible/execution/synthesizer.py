@@ -13,6 +13,10 @@ import traceback
 
 import pandas as pd
 
+__all__ = [
+    "ResearchSynthesizer",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 

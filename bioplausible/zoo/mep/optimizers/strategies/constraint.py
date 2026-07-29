@@ -11,6 +11,12 @@ import torch
 from torch import nn
 
 # Import CUDA kernels if available
+
+__all__ = [
+    "NoConstraint",
+    "SettlingSpectralPenalty",
+    "SpectralConstraint",
+]
 try:
     from ...cuda.kernels import spectral_norm_power_iteration_cuda
 

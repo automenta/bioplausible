@@ -3,6 +3,9 @@ from torch import nn
 
 from bioplausible.hyperopt.tasks import BaseTask, _TaskTrainer
 
+__all__ = [
+    "TabularTask",
+]
 try:
     from sklearn.datasets import fetch_california_housing, load_breast_cancer
     from sklearn.model_selection import train_test_split

@@ -11,6 +11,9 @@ from torch import nn
 from bioplausible.core.registry import register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
+__all__ = [
+    "SpikingSTDP",
+]
 try:
     import snntorch as snn
     from snntorch import surrogate

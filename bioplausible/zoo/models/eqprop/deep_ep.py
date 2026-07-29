@@ -13,6 +13,10 @@ from ...base import (
 )
 from ._contrastive import _contrastive_step
 
+__all__ = [
+    "DirectedEP",
+]
+
 
 @register_model(
     "directed_ep",

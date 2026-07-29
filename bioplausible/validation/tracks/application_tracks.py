@@ -18,6 +18,12 @@ from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
 )
 
+__all__ = [
+    "logger",
+    "root_path",
+    "track_20_transfer_learning",
+    "track_21_continual_learning",
+]
 logger = logging.getLogger(__name__)
 
 

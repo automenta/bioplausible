@@ -9,6 +9,10 @@ import torch
 from .notebook import VerificationNotebook
 from .tracks import track_registry
 
+__all__ = [
+    "Verifier",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 

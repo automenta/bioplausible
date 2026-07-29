@@ -17,6 +17,17 @@ import json
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel
 
+__all__ = [
+    "check_ablation_needed",
+    "check_continual_learning_needed",
+    "check_cv_needed",
+    "check_low_data_needed",
+    "check_robustness_needed",
+    "check_transfer_needed",
+    "check_verification_needed",
+    "get_stats",
+]
+
 
 def get_stats(
     progress: dict, model: str, task: str, tier: PatientLevel

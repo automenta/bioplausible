@@ -26,6 +26,15 @@ from bioplausible.equitile.core.config import LMEquiTileConfig
 from bioplausible.equitile.language.canonical import LMEquiTile, PositionalEncoding
 from bioplausible.zoo.base import ModelConfig
 
+__all__ = [
+    "OptimizedEquiTileTransformerLayer",
+    "OptimizedLMEquiTile",
+    "OptimizedTileAttention",
+    "OptimizedTileFeedForward",
+    "create_optimized_lm",
+    "create_optimized_small_lm",
+    "logger",
+]
 if TYPE_CHECKING:
     from torch import Tensor
 

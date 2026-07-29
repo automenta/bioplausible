@@ -15,6 +15,10 @@ from bioplausible.domains.base import (
     TaskSplit,
 )
 
+__all__ = [
+    "RLTask",
+]
+
 
 class RLTask(DomainTask):
     """Reinforcement learning domain tasks."""

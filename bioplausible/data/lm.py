@@ -10,6 +10,10 @@ import warnings
 
 from bioplausible.data.vision import CharDataset
 
+__all__ = [
+    "get_lm_dataset",
+]
+
 
 def get_lm_dataset(
     name: str = "tiny_shakespeare",

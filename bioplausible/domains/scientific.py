@@ -18,6 +18,10 @@ from bioplausible.domains.base import (
     TaskSplit,
 )
 
+__all__ = [
+    "ScientificTask",
+]
+
 
 class ScientificTask(DomainTask):
     """Scientific simulation domain tasks."""

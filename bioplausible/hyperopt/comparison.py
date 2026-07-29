@@ -12,6 +12,17 @@ from scipy import stats
 
 from bioplausible.zoo import get_model_spec
 
+__all__ = [
+    "AlgorithmRanking",
+    "ComparisonMetric",
+    "ComparisonStudy",
+    "compute_algorithm_rankings",
+    "compute_statistical_significance",
+    "generate_comparison_summary",
+    "group_trials_by_family",
+    "is_bio_plausible",
+]
+
 
 class ComparisonMetric(Enum):
     """Primary metrics for algorithm comparison."""

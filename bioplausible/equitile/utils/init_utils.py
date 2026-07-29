@@ -3,6 +3,11 @@ import math
 import torch
 from torch import Tensor, nn
 
+__all__ = [
+    "initialize_edge_weights",
+    "initialize_io_projections",
+]
+
 
 def initialize_edge_weights(
     weight: Tensor,

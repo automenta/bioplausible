@@ -1,4 +1,9 @@
 """
+
+__all__ = [
+    "PROMOTION_THRESHOLDS",
+    "PromotionGate",
+]
 Task promotion logic.
 
 Defines the criteria and logic for promoting a model to a higher tier of

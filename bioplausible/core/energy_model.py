@@ -19,6 +19,11 @@ from typing import Protocol, runtime_checkable
 import torch
 from torch import nn
 
+__all__ = [
+    "EBMTrainer",
+    "EnergyModel",
+    "logger",
+]
 logger = logging.getLogger(__name__)
 
 

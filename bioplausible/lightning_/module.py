@@ -12,6 +12,12 @@ from torch import nn
 
 from bioplausible.core.registry import ComponentCategory, Registry
 
+__all__ = [
+    "STANDARD_OPTIMIZERS",
+    "BioLightningModule",
+    "create_model",
+]
+
 
 def create_model(
     name: str, input_dim: int | None = None, output_dim: int | None = None, **kwargs

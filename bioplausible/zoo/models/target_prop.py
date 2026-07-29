@@ -13,6 +13,11 @@ from torch import nn
 from bioplausible.core.registry import register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
+__all__ = [
+    "DTPLayer",
+    "DifferenceTargetProp",
+]
+
 
 class DTPLayer(nn.Module):
     def __init__(self, in_features, out_features):

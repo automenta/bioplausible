@@ -9,6 +9,11 @@ from tabulate import tabulate  # Assuming installed, or use simple formatter
 
 from bioplausible.analysis.results import get_rankings, load_trials
 
+__all__ = [
+    "logger",
+    "main",
+    "view_rankings",
+]
 logger = logging.getLogger(__name__)
 
 

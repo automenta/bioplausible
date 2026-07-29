@@ -8,6 +8,9 @@ or other backends (MLflow, TensorBoard - future).
 import os
 import warnings
 
+__all__ = [
+    "ExperimentTracker",
+]
 try:
     import wandb
 

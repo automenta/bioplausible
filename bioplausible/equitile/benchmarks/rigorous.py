@@ -42,6 +42,18 @@ from bioplausible.equitile.lm_demo.fast_lm import FastLMConfig, FastLMEquiTile
 # =============================================================================
 
 
+__all__ = [
+    "BenchmarkConfig",
+    "BenchmarkResult",
+    "RigorousBenchmark",
+    "StatisticalMetrics",
+    "compute_speedup_with_uncertainty",
+    "get_system_info",
+    "run_rigorous_benchmark",
+    "set_all_seeds",
+]
+
+
 def set_all_seeds(seed: int = 42) -> None:
     """Set all random seeds for reproducibility."""
     random.seed(seed)

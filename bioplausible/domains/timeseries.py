@@ -17,6 +17,10 @@ from bioplausible.domains.base import (
     TaskSplit,
 )
 
+__all__ = [
+    "TimeSeriesTask",
+]
+
 
 class TimeSeriesTask(DomainTask):
     """Time series domain tasks."""

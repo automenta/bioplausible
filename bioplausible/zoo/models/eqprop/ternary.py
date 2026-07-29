@@ -6,6 +6,12 @@ from torch import nn
 
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
+__all__ = [
+    "TernaryEqProp",
+    "TernaryLinear",
+    "TernaryQuantize",
+]
+
 
 class TernaryQuantize(torch.autograd.Function):
     """
