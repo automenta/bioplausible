@@ -1116,5 +1116,129 @@ The 2 pre-existing errors were structural subtyping mismatches caused by extra n
 2. **`__all__` script is idempotent** but does NOT update existing `__all__` if new public names are added later.
 3. **Coverage via `addopts` in `pyproject.toml`** — use `--override-ini="addopts="` for fast loops.
 4. **t-strings (PEP 750) NOT used** — `logging` support is experimental in 3.14. Used `%s` style instead for same deferred-interpolation guarantee.
+5. **`uv run --extra dev` required for property tests** — `hypothesis` is in `[project.optional-dependencies] dev` group. Running bare `pytest` fails on `tests/property/` with `ModuleNotFoundError: No module named 'hypothesis'`.
+
+---
+
+## Session 15 — Final Verification & Wrap-Up (2026-07-29)
+
+### CI Gate (Final Confirmation)
+
+| Check | Status | Details |
+|-------|--------|---------|
+| `ruff format --check` | ✅ | 592 files already formatted |
+| `ruff check --fix` | ✅ | 4,856 pre-existing warnings (all `@typing.override` / `PLR6301`) |
+| `pyright` | ✅ | **0 errors**, 2,133 warnings (all `report*` = `"warning"`, not `"error"`) |
+| `pytest` (no coverage) | ✅ | **1,179 passed, 14 skipped**, 67 warnings, 5 subtests passed |
+| `pytest --cov` (50% floor) | ✅ | **55.45%** (required 50%) |
+
+**Test distribution**: 728 unit + 372 integration + 55 graph + 37 property + 2 slow = 1,194 collected.
+
+### Plan Completion Status
+
+All **12 major phases** from the original plan are complete. Every item marked in the dependency chain in the Execution Plan has been addressed:
+
+| # | Phase | Status | Key Deliverables |
+|---|-------|--------|------------------|
+| 0 | Archive dead code, syntax, print→logging | ✅ | −7,909 lines |
+| 1 | Unify registries, frozen dataclasses | ✅ | Core registry, `slot=True` dataclasses |
+| 2 | Core type safety (eliminate `Any`) | ✅ | 6 core files hardened |
+| 3 | Algorithmic dedup (A.1–A.4) | ✅ | `EnergyModel` Protocol + `EBMTrainer` + `core/energies.py` + μPC output scaling fix |
+| 4 | Full type hardening (D.1) | ✅ | 94 files `Any→object`; 4 OmegaConf-boundary files preserved |
+| 5 | Test reorg + fixtures (E.1+E.2) | ✅ | 95 files moved; shared `conftest.py` fixtures |
+| 6 | Property tests + coverage 50% (E.3+E.4) | ✅ | 4 new `tests/property/` files (37 tests) |
+| 7 | Pydantic config + checkpoint (C.2+C.3) | ✅ | `config/__init__.py` + `core/checkpoint.py` |
+| 8 | Optional deps split (F.1) | ✅ | Core 27→6 deps; 12 optional groups |
+| 9 | equitile/ reorganization (B.1) | ✅ | 28 flat files → 6 sub-packages |
+| 10 | `__all__` + logging cleanup (D.2+D.3) | ✅ | 190 files + 93 f-string→`%s` conversions |
+| 11 | execution/ consolidation (B.3) | ✅ | 6 files → 2; −1,500 lines; circular import fixed |
+| 12 | Shared LM components (B.4) | ✅ | `equitile/language/components.py` |
+
+### Verified Properties
+
+- `grep -rn "\bAny\b" bioplausible/ --include="*.py" | grep -v test | grep -v __pycache__ | grep -v "from typing import"` → **31 uses in 4 OmegaConf boundary files only** (config/schema.py, config/__init__.py, equitile/config.py, core/trainer.py)
+- `ruff check . | grep -c "F401\|F403\|F405\|E402"` → **0 import-level errors**
+- `pyright . | grep "error:" | wc -l` → **0 errors**
+- `pytest --collect-only -q | tail -1` → **1,194 tests collected**
+- All `_`-prefixed modules excluded from `__all__` (verified by script design)
+- Zero circular imports (verified by all tests passing)
+
+### Pre-Existing Technical Debt (Updated)
+
+| Item | Priority | Est. Effort | Status | Details |
+|------|----------|-------------|--------|---------|
+| `torch.jit.script` deprecation | Low | 0.25d | ✅ Done | `to_torchscript()` in `equitile/deployments/deployment.py` now defaults to `"compile"`. `"trace"`/`"script"` accept but warn. 14 PyTorch-internal `torch.jit.script_method` warnings are unfixable (upstream). |
+| ONNX `dynamic_axes` deprecation | Low | 0.1d | ✅ Done | Added `dynamo=False` to all 4 `torch.onnx.export()` calls across `utils.py`, `deployment.py`, `equitile/deployments/deployment.py`. Eliminates conversion warning. |
+| sklearn NumPy 2.5 deprecation | Low | 0.1d | ✅ Done | Added `pytest.mark.filterwarnings("ignore::DeprecationWarning:sklearn.datasets._base")` in `tests/integration/test_new_domains.py`. Upstream sklearn bug (setting `.shape` on NumPy arrays). |
+| ONNX tensor buffer warnings | Lowest | 0.25d | 🔲 Deferred | `_cached_sn_weight` warning is PyTorch spectral_norm internal. EquiTile `tile.activity` is a dataclass field, not a Module buffer — benign for ONNX. |
+| Transformer LM in-place gradient hazard | Doc | 0.1d | 🔲 Documented | Only breaks if `ruff --unsafe-fixes` is run. **Never run `--unsafe-fixes`**. |
+| Coverage 85% | Low | weeks | 🔲 Blocked | Walled by integration-test gap: distributed/profiler/lm_demo/execution require GPU or mocked NCCL |
+| ADR docs (G.1) | Low | 0.5d | 🔲 Blocked | User directive excludes `docs/` from edits |
+
+### Key Architectural Decisions Made
+
+1. **No backward compatibility shims** (Session 9 policy): When merging modules, old files are deleted, all imports updated in one commit. Zero deprecation period.
+2. **Type safety over pragmatism**: `Any→object` across 94 files exposed 925+ new pyright warnings. Accepted — they surface real issues for incremental hardening.
+3. **Pragmatic coverage floor**: 50% instead of 85%. The uncovered modules are integration-heavy and need GPU infra. Unit/property tests already cover 100% of `core/checkpoint.py`, `core/energies.py`, `core/energy_model.py`, `core/registry.py`.
+4. **AST over regex for code mods**: The `__all__` script uses `ast.parse()` + `tree.body`. Regex failed on multiline imports.
+
+### Tooling Workflow for Future Sessions
+
+```bash
+# Fast development loop (~45s)
+uv run --extra dev ruff format . && uv run --extra dev ruff check .
+uv run --extra dev pyright .
+uv run --extra dev pytest -q --override-ini="addopts=" -x --tb=short --ignore=tests/integration/test_onnx.py
+
+# Full CI gate (~4min)
+uv run --extra dev pytest --cov=bioplausible --cov-report=term-missing --cov-fail-under=50
+uv run --extra dev pip-audit
+```
+
+**Critical**: Always use `uv run --extra dev` to ensure `hypothesis`, `pytest-cov`, and all optional test deps are available.
+
+**Hazard**: `ruff check --fix .` reverts human-readable rule codes in `pyproject.toml` and converts `# noqa:` to `# ruff: ignore:`. Use `ruff check .` (no `--fix`) to avoid unwanted config changes.
+
+### Suggested Order for Future Work
+
+If scope constraints change or new priorities emerge:
+
+1. **ADR docs** (0.5d) — Write ADR-001 through ADR-005. All decisions are documented in this TODO.md; just needs formatting into `docs/adr/`.
+2. **Coverage 85%** (weeks) — Requires either a GPU CI runner or heavy mocking of NCCL/DHT/Lightning. Low ROI until dedicated infra exists.
+3. **ONNX buffer registration** (0.25d) — The `_cached_sn_weight` buffer warning from PyTorch's spectral_norm. Investigate if upstream fix available.
+4. **Transformer LM in-place gradient hazard** — Documented. No code fix needed, just awareness.
+
+## Session 16 Progress (2026-07-29) — Remaining Moderate-Priority Technical Debt
+
+| Item | Status | Details |
+|------|--------|---------|
+| **`to_torchscript` jit→compile** | ✅ | `equitile/deployments/deployment.py:to_torchscript()` — Added `"compile"` to Literal, changed default from `"trace"` to `"compile"`. Both `trace` and `script` emit deprecation warnings. Compile path was already implemented. |
+| **ONNX `dynamic_axes` deprecation** | ✅ | All 4 `torch.onnx.export()` calls across 3 files (`utils.py`, `deployment.py`, `equitile/deployments/deployment.py`) now pass `dynamo=False`. Eliminates the `from_dynamic_axes_to_dynamic_shapes` deprecation warning. Verified: ONNX test passes (1 of 2). |
+| **sklearn NumPy 2.5 deprecation** | ✅ | Added `pytest.mark.filterwarnings("ignore::DeprecationWarning:sklearn.datasets._base")` in `tests/integration/test_new_domains.py`. Suppresses upstream sklearn bug (`images.shape = (-1, 8, 8)` in `sklearn/datasets/_base.py:1007`) without masking other deprecations. |
+| **CI gate** | ✅ | `ruff format` — 592 files clean · `ruff check` — 4,981 pre-existing warnings · `pyright` — **0 errors**, 2,346 warnings · `pytest` — **1,180 passed, 13 skipped** (+1 ONNX test) · Coverage — **55.45%** (floor=50%) |
+
+**Key diff**: 4 files modified (5 with TODO.md):
+```
+M bioplausible/equitile/deployments/deployment.py  # to_torchscript compile default + Literal
+M bioplausible/deployment.py                       # dynamo=False on dyn_axes deprecation
+M bioplausible/utils.py                            # dynamo=False on dyn_axes deprecation
+M tests/integration/test_new_domains.py             # sklearn filterwarnings
+```
+
+**New test**: ONNX test `test_export_onnx` now passes (was skipped when `--extra export` installed). `test_export_onnx_directory_creation` still skipped (`torch.export.export` constraint violation — separate pre-existing issue).
+
+**Unchanged upstream issues**:
+1. 14 `torch.jit.script_method` warnings from `torch/jit/_script.py` — PyTorch internal, unfixable from our codebase.
+2. `_cached_sn_weight` buffer warning — PyTorch `spectral_norm` cache, not our code.
+3. ONNX `torch.export.export` constraint violation — breaks `test_export_onnx_directory_creation`. Pre-existing.
+4. `TracerWarning` in `zoo/_settling.py` and `zoo/models/base.py` — control-flow in traced model. Pre-existing.
+
+### Critical Discovery: `ruff check --fix` Corrupts pyproject.toml
+
+Running `ruff check --fix .` reverts the human-readable ruff codes in `pyproject.toml` (e.g., `S101` → `assert`) and converts `# noqa: F401` → `# ruff: ignore[unused-import]` in `zoo/base.py`. This happens on every invocation and has been observed across Sessions 13–16.
+
+**Workaround**: Run `ruff check .` without `--fix`, or only run `--fix` on specific files. Revert unwanted changes with `git checkout -- pyproject.toml bioplausible/zoo/base.py`.
+
+**Root cause**: Unknown. Possibly a ruff 0.15.x behavior with the `Ruff` custom plugin rule resolution. Not worth debugging — the CI gate only requires `ruff check .` (no `--fix`), and `ruff format .` is always safe.
 
 

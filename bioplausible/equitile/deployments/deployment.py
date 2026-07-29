@@ -130,17 +130,24 @@ class EquiTileExporter:
             path += ".onnx"
 
         # Export
-        torch.onnx.export(
-            self.model,
-            dummy_input,
-            path,
-            export_params=True,
-            opset_version=self.config.opset_version,
-            do_constant_folding=self.config.do_constant_folding,
-            input_names=self.config.input_names,
-            output_names=self.config.output_names,
-            dynamic_axes=self.config.dynamic_axes,
-        )
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=r".*cached_sn_weight.*assigned during export.*"
+            )
+            torch.onnx.export(
+                self.model,
+                dummy_input,
+                path,
+                export_params=True,
+                opset_version=self.config.opset_version,
+                do_constant_folding=self.config.do_constant_folding,
+                input_names=self.config.input_names,
+                output_names=self.config.output_names,
+                dynamic_axes=self.config.dynamic_axes,
+                dynamo=False,
+            )
 
         logger.info("Model exported to %s", path)
         return path
@@ -149,10 +156,10 @@ class EquiTileExporter:
         self,
         path: str,
         input_shape: tuple[int, ...],
-        method: Literal["trace", "script"] = "trace",
+        method: Literal["trace", "script", "compile"] = "compile",
         device: str = "cpu",
     ) -> str:
-        """Export to TorchScript format.
+        """Export to TorchScript or torch.compile format.
 
         Parameters
         ----------
@@ -161,7 +168,7 @@ class EquiTileExporter:
         input_shape : tuple
             Input tensor shape
         method : str
-            Export method: 'trace', 'script', or 'compile'
+            Export method: 'compile' (recommended), 'trace', or 'script'
         device : str
             Device for export
 
@@ -172,9 +179,9 @@ class EquiTileExporter:
 
         Notes
         -----
-        - 'trace': Uses torch.jit.trace, good for fixed computation graphs
-        - 'script': Uses torch.jit.script (deprecated in Python 3.14+)
         - 'compile': Uses torch.compile (recommended for Python 3.14+)
+        - 'trace': Uses torch.jit.trace (deprecated in Python 3.14+)
+        - 'script': Uses torch.jit.script (deprecated in Python 3.14+)
         """
         self.model.to(device)
         self.model.eval()
@@ -188,9 +195,7 @@ class EquiTileExporter:
             path += ".pt"
 
         # Export
-        if method == "trace":
-            scripted_model = torch.jit.trace(self.model, dummy_input)
-        elif method == "compile":
+        if method == "compile":
             # torch.compile returns an optimized module, save state dict instead
             compiled_model = torch.compile(self.model, mode="reduce-overhead")
             # Run once to trigger compilation
@@ -208,10 +213,20 @@ class EquiTileExporter:
             )
             logger.info("Compiled model saved to %s", path)
             return path
-        else:
-            # script method - use torch.jit.script with deprecation warning
-            import warnings
 
+        # Deprecated jit paths
+        import warnings
+
+        if method == "trace":
+            warnings.warn(
+                "torch.jit.trace is deprecated in Python 3.14+. "
+                "Use method='compile' to use torch.compile instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            scripted_model = torch.jit.trace(self.model, dummy_input)
+        else:
+            # script method
             warnings.warn(
                 "torch.jit.script is deprecated in Python 3.14+. "
                 "Use method='compile' to use torch.compile instead.",

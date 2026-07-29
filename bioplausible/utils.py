@@ -70,16 +70,24 @@ def export_to_onnx(
         if dynamic_axes is None:
             dynamic_axes = {"input": {0: "batch"}, "output": {0: "batch"}}
 
-        torch.onnx.export(
-            model,
-            dummy_input,
-            output_path,
-            opset_version=opset_version,
-            input_names=["input"],
-            output_names=["output"],
-            dynamic_axes=dynamic_axes,
-            do_constant_folding=True,
-        )
+        # Suppress PyTorch-internal buffer warnings from spectral_norm
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=r".*cached_sn_weight.*assigned during export.*"
+            )
+            torch.onnx.export(
+                model,
+                dummy_input,
+                output_path,
+                opset_version=opset_version,
+                input_names=["input"],
+                output_names=["output"],
+                dynamic_axes=dynamic_axes,
+                do_constant_folding=True,
+                dynamo=False,
+            )
         logger.info("Model exported to %s", output_path)
     except Exception as e:
         raise RuntimeError(f"ONNX export failed: {e}")

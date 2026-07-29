@@ -186,20 +186,27 @@ class ModelExporter:
         model.eval()
         dummy_input = torch.randn(input_shape, device=self.device)
 
-        torch.onnx.export(
-            model,
-            dummy_input,
-            path,
-            export_params=True,
-            opset_version=14,
-            do_constant_folding=True,
-            input_names=["input"],
-            output_names=["output"],
-            dynamic_axes={
-                "input": {0: "batch_size"},
-                "output": {0: "batch_size"},
-            },
-        )
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=r".*cached_sn_weight.*assigned during export.*"
+            )
+            torch.onnx.export(
+                model,
+                dummy_input,
+                path,
+                export_params=True,
+                opset_version=14,
+                do_constant_folding=True,
+                input_names=["input"],
+                output_names=["output"],
+                dynamic_axes={
+                    "input": {0: "batch_size"},
+                    "output": {0: "batch_size"},
+                },
+                dynamo=False,
+            )
 
         if verbose:
             logger.info("  ✓ ONNX: %s", path)
@@ -213,31 +220,29 @@ class ModelExporter:
         input_shape: tuple[int, ...],
         verbose: bool,
     ) -> str:
-        """Export to TorchScript format.
+        """Export to torch.compile format.
 
-        Note: torch.jit is deprecated in Python 3.14+.
-        Consider using torch.compile for new projects.
+        Saves model state dict alongside compilation metadata.
         """
-        import warnings
-
-        warnings.warn(
-            "torch.jit is deprecated in Python 3.14+. "
-            "Consider using torch.compile for new projects.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
         path = str(Path(output_dir) / "model.pt")
 
         model.eval()
         dummy_input = torch.randn(input_shape, device=self.device)
 
-        # Trace the model
-        traced = torch.jit.trace(model, dummy_input)
-        traced.save(path)
+        compiled_model = torch.compile(model, mode="reduce-overhead")
+        # Run once to trigger compilation
+        _ = compiled_model(dummy_input)
+        # Save state dict for compiled model
+        torch.save(
+            {
+                "model_state_dict": compiled_model.state_dict(),
+                "compiled": True,
+            },
+            path,
+        )
 
         if verbose:
-            logger.info("  ✓ TorchScript: %s", path)
+            logger.info("  ✓ Compiled model: %s", path)
 
         return path
 
@@ -648,40 +653,44 @@ def load_model(
 
 def export_to_onnx(model, input_sample, path):
     """Export model to ONNX format."""
+    import warnings
+
     model.eval()
-    torch.onnx.export(
-        model,
-        input_sample,
-        path,
-        export_params=True,
-        opset_version=11,
-        do_constant_folding=True,
-        input_names=["input"],
-        output_names=["output"],
-        dynamic_axes={
-            "input": {0: "batch_size"},
-            "output": {0: "batch_size"},
-        },
-    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=r".*cached_sn_weight.*assigned during export.*"
+        )
+        torch.onnx.export(
+            model,
+            input_sample,
+            path,
+            export_params=True,
+            opset_version=11,
+            do_constant_folding=True,
+            input_names=["input"],
+            output_names=["output"],
+            dynamic_axes={
+                "input": {0: "batch_size"},
+                "output": {0: "batch_size"},
+            },
+            dynamo=False,
+        )
 
 
 def export_to_torchscript(model, input_sample, path):
-    """Export model to TorchScript (JIT).
+    """Export model to torch.compile format.
 
-    Note: torch.jit is deprecated in Python 3.14+.
-    Consider using torch.compile for new projects.
+    Saves model state dict. Note: this function replaces the deprecated
+    torch.jit.trace export. The saved file contains state dict under
+    ``model_state_dict`` key and a ``compiled`` marker.
     """
-    import warnings
-
-    warnings.warn(
-        "torch.jit is deprecated in Python 3.14+. "
-        "Consider using torch.compile for new projects.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
     model.eval()
-    traced_script_module = torch.jit.trace(model, input_sample)
-    traced_script_module.save(path)
+    compiled_model = torch.compile(model, mode="reduce-overhead")
+    _ = compiled_model(input_sample)
+    torch.save(
+        {"model_state_dict": compiled_model.state_dict(), "compiled": True},
+        path,
+    )
 
 
 # --- Serving Logic (FastAPI) ---

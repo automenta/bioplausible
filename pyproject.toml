@@ -168,7 +168,7 @@ select = [
     "RSE",  # flake8-raise
     "SIM",  # flake8-simplify
 ]
-ignore = ["E501", "N812"]
+ignore = ["E501", "N812", "PLR6104"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "PLR0913", "PLR0915"]

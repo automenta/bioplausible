@@ -12,6 +12,11 @@ from bioplausible.domains import (
     list_domains,
 )
 
+# Suppress upstream sklearn.datasets._base numpy shape deprecation (sklearn bug, not ours)
+pytestmark = pytest.mark.filterwarnings(
+    "ignore::DeprecationWarning:sklearn.datasets._base"
+)
+
 
 class SimpleMLP(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim=64):
