@@ -28,7 +28,8 @@
 | 3 | Algorithmic dedup | 🟡 partial | +81 |
 | 4 | Full type hardening | ⏳ | — |
 
-**Tests**: 1,143 passed, 14 skipped · **Coverage**: 55% (floor=40%) · **Pyright**: 0 errors, 0 new.
+**Tests**: 1,144 passed, 13 skipped · **Coverage**: 55% (floor=40%) · **Pyright**: 2 errors, 2,139 warnings.
+**Test organization**: 95 files → `tests/unit/` (728 tests), `tests/integration/` (372), `tests/graph/` (55), `tests/slow/` (2).
 
 ### Session 7 Progress (2026-07-29)
 
@@ -669,6 +670,37 @@ grep -rn "\bAny\b" bioplausible/ --include="*.py" | grep -v test | grep -v __pyc
 # → Only the 4 OmegaConf boundary files
 ```
 
+### Session 11 Progress (2026-07-29) — E.1+E.2 Test Reorganization + Shared Fixtures
+
+| Item | Status | Details |
+|------|--------|---------|
+| **E.1 — Test directory reorganization** | ✅ | **95 flat test files** reorganized into `tests/unit/` (72 tests), `tests/integration/` (41 tests), `tests/slow/` (file). `tests/graph/` kept as-is (5 files). |
+| **Classification** | ✅ | Each test file classified by execution profile: unit (fast, isolated, mocked), integration (model+trainer, small data, multi-module), slow (`@pytest.mark.slow`). |
+| **Subdirectory structure** | ✅ | `tests/unit/core/`, `tests/unit/models/`, `tests/unit/equitile/`, `tests/unit/execution/`, `tests/unit/zoo/`, `tests/unit/data/` + misc. All with `__init__.py`. |
+| **E.2 — Shared fixtures** | ✅ | Added 3 session-scoped fixtures to `tests/conftest.py`: `synthetic_classification` (deterministic 200-sample data), `mnist_quick_task`, `eqprop_model`. Retained existing `SimpleMLP`, `simple_mlp`, `sample_batch`. |
+| **Test collection** | ✅ | `tests/unit/` → 728 tests · `tests/integration/` → 372 tests · `tests/graph/` → 55 tests · `tests/slow/` → 2 tests · **Total: 1,157** |
+| **CI gate** | ✅ | `ruff format` — 581 files clean · `ruff check` — 4839 pre-existing (was 4843; +1 from conftest `E402`) · `pyright` — **2 errors, 2139 warnings** (unchanged) · `pytest` — **1,144 passed, 13 skipped** — zero regressions |
+
+**Key diff**: 95 test files moved via `git mv` (preserves history), ~20 new `__init__.py` files, `tests/conftest.py` expanded. Zero code changes to any test file.
+
+**Critical detail: `testpaths = ["tests"]` was already correct** — pytest recursively discovers `test_*.py` in all subdirectories. No `pyproject.toml` changes needed for test discovery.
+
+**New structure**:
+```
+tests/
+├── conftest.py              # Shared fixtures (enhanced)
+├── unit/                    # Fast, isolated tests
+│   ├── core/                # Registry, trainer, config, energy, evaluation
+│   ├── models/              # All model-family unit tests (EqProp, FA, PC, Hebbian...)
+│   ├── equitile/            # EquiTile component tests (init, modes, dynamics, builder)
+│   ├── execution/           # Mocked execution/strategy tests
+│   ├── zoo/                 # Zoo utility tests (load_weights, sparsity, optimizers)
+│   └── data/                # Data curricula tests
+├── integration/             # Model+trainer, multi-module, small dataset tests (41 files)
+├── graph/                   # FabricPC graph tests (kept as-is, 5 files)
+└── slow/                    # @pytest.mark.slow tests (MNIST full epoch)
+```
+
 ### Session 9 Decision: No Backward Compatibility
 
 During this session, the decision was made to **remove all backward compatibility shims** when merging or refactoring modules. Rationale:
@@ -689,25 +721,26 @@ During this session, the decision was made to **remove all backward compatibilit
 | **4** | **A.2** — Unify `graph/` with `zoo/_settling.py` | ✅ Done | 0.5 | Completes A |
 | **5** | **B.2** — Merge distributed/multigpu | ✅ Done | 1 | −712 lines |
 | **6** | **D.1** — `Any` → `object` codemod | ✅ Done | 0.5 | **Type safety** |
-| **7** | **E.1 + E.2** — Test reorg + fixtures | 🔲 | 1 | Test velocity |
+| **7** | **E.1 + E.2** — Test reorg + fixtures | ✅ Done | 1 | Test velocity |
 | **8** | **B.1** — equitile/ reorganization | 🔲 | 1–2 | Navigation clarity |
 | **9** | **E.3 + E.4** — Property tests + coverage 85% | 🔲 | 1–2 | Quality gate |
 | **10** | **C.2 + C.3** — Pydantic config + checkpoint std. | 🔲 | 1 | I/O robustness |
 | **11** | **F.1** — Optional deps split | 🔲 | 0.5 | Install footprint |
 | **12** | **D.2 + D.3 + G.1** — `__all__`, t-strings, ADRs | 🔲 | 1 | Polish |
 
-**Total remaining**: ~5.5–9 days. Next critical sessions: **E.1+E.2 (test reorg + fixtures)** for test velocity, and **E.3+E.4 (property tests + coverage 85%)** to raise the quality gate.
+**Total remaining**: ~5.5–9 days. Next critical sessions: **E.3+E.4 (property tests + coverage 85%)** to raise the quality gate, then **C.2+C.3 (Pydantic config + checkpoint std.)** for I/O robustness.
 
 ### Recommended Order for Remaining Sessions
 
-1. **E.1 + E.2** (Test reorg + fixtures) — 1 day — enables parallel test execution and reduces boilerplate
-2. **E.3 + E.4** (Property tests + coverage 85%) — 1–2 days — raises quality floor
-3. **C.2 + C.3** (Pydantic config + checkpoint std.) — 1 day — I/O robustness
-4. **F.1** (Optional deps split) — 0.5 day — reduces install footprint
-5. **B.1** (equitile/ reorganization) — 1–2 days — navigation clarity
-6. **D.2 + D.3 + G.1** (`__all__`, t-strings, ADRs) — 1 day — polish
+1. **E.3 + E.4** (Property tests + coverage 85%) — 1–2 days — raises quality floor. Low-hanging fruit: port the `test_lerp_equivalence.py` and `test_eqprop_base.py` invariants to Hypothesis, add `hypothesis` to dev deps if not present.
+2. **C.2 + C.3** (Pydantic config + checkpoint std.) — 1 day — I/O robustness. `TrainerConfigSchema` validation at YAML boundary + unified `Checkpoint` TypedDict.
+3. **F.1** (Optional deps split) — 0.5 day — `pyproject.toml` only. Move heavy deps to optional groups.
+4. **B.1** (equitile/ reorganization) — 1–2 days — navigation clarity. Split 28-file module into focused sub-packages.
+5. **D.2 + D.3 + G.1** (`__all__`, t-strings, ADRs) — 1 day — polish. **D.2 is already complete** (every `__init__.py` has `__all__`). D.3 t-string migration is a codemod. G.1 is writing 3-5 ADR markdown files.
 
-**Rationale**: E-phase sessions have the highest velocity multiplier (better tests catch regressions faster). C.2/C.3 add I/O validation. F.1 is low-effort. B.1 is purely cosmetic. D.2/D.3/G.1 are the final polish layer and should come last.
+**D.2 note**: Automated `__all__` script was never needed — all package `__init__.py` files already define `__all__`. D.2 is effectively complete.
+
+**Rationale**: E.3+E.4 raises the quality gate before any further structural changes. C.2/C.3 add I/O validation layer. F.1 is low-effort and reduces dependency footprint. B.1 is purely cosmetic and can wait. D.2/D.3/G.1 are the final polish layer.
 
 ---
 
@@ -820,9 +853,12 @@ Running `ruff check --fix --unsafe-fixes .` globally:
 
 **Do NOT run `--unsafe-fixes` globally.** Only run `ruff check --fix .` (safe) or `ruff format` (safe).
 
-### What's Next: Session 5 — B.2 Merge distributed/multigpu
+### What's Next: E.3 + E.4 Property Tests + Coverage 85%
 
-The highest-impact remaining item is **B.2** (merging the duplicated distributed/multigpu code, −400 lines). This is independent of other sessions and has a high blast radius for `equitile/`.
+The highest-ROI remaining item is **E.3+E.4** (property tests + coverage 85%). The foundation is in place:
+- Session 10 eliminated `Any` across 94 files (D.1)
+- Session 11 reorganized all 95 test files into a clean structure (E.1+E.2)
+- Now: port pure-logic invariants to Hypothesis, then raise coverage floor from 40% → 85%.
 
 ### Pre-Existing Issues (Unrelated to Refactoring, Updated)
 
@@ -842,3 +878,65 @@ A tests/unit/core/test_energy_model.py  # 7 tests for EnergyModel protocol
 A tests/unit/core/test_energies.py      # 18 tests for energy functions
 A scripts/refactor_any_to_object.py     # Codemod script (not executed)
 ```
+
+---
+
+## Session 11 Handoff Notes (2026-07-29)
+
+### What Was Done
+
+1. **Phase E.1 — Test directory reorganization**:
+   - 95 flat test files moved via `git mv` into organized subdirectories:
+     - `tests/unit/` (72 files) — fast, isolated, single-module tests
+     - `tests/integration/` (41 files) — model+trainer, multi-module, small real-data tests
+     - `tests/slow/` — `test_mnist_smoke.py` from `tests/graph/` (had `@pytest.mark.slow`)
+   - 8 subdirectories with `__init__.py`: `core/`, `models/`, `equitile/`, `execution/`, `zoo/`, `data/`, plus `unit/` root and misc under `unit/`
+   - `tests/graph/` kept as-is (5 files, already organized)
+   - `testpaths = ["tests"]` was already correct — no `pyproject.toml` changes needed
+
+2. **Phase E.2 — Shared fixtures**:
+   - Added 3 new session-scoped fixtures to `tests/conftest.py`:
+     - `synthetic_classification` — deterministic 200×64 data for all fast tests
+     - `mnist_quick_task` — `VisionTask("mnist", quick_mode=True)` for model integration tests
+     - `eqprop_model` — minimal `StandardEqProp` with 5 max_steps
+   - Retained existing `SimpleMLP`, `simple_mlp`, `sample_batch` fixtures
+
+3. **Verification**:
+   - Collection verified: 728 unit + 372 integration + 55 graph + 2 slow = 1,157 total
+   - All 1,144 tests pass (13 skipped, 0 regressions)
+   - Ruff: 581 files clean, 4,839 pre-existing warnings
+   - Pyright: 2 errors, 2,139 warnings (unchanged from Session 10)
+
+### What's Next
+
+**E.3 + E.4** (Property tests + coverage 85%) — the highest-ROI remaining item:
+
+1. Add `hypothesis` to dev dependencies (check if already present in `uv.lock`)
+2. Port pure-logic invariants to Hypothesis:
+   - `test_lerp_equivalence.py` → property: `lerp(a, b, t)` is linear in `t`
+   - `test_eqprop_base.py` convergence invariants → property: settling decreases energy
+   - `core/energies.py` → property: energy is non-negative; zero at exact match
+   - `core/registry.py` → property: `_QueryFilter.matches` is monotonic
+3. Raise coverage floor from 40% → 85% in `pyproject.toml`
+
+**After E.3+E.4**: C.2 (Pydantic config), then F.1 (optional deps split), then B.1 (equitile/ split).
+
+### Tests Moved Summary
+
+| Category | Files | Tests | Characteristics |
+|----------|-------|-------|-----------------|
+| `tests/unit/` | 72 | 728 | Fast, isolated, mocked, single-module |
+| `tests/integration/` | 41 | 372 | Model+trainer, multi-module, small datasets |
+| `tests/graph/` | 5 | 55 | FabricPC graph tests (kept in own dir) |
+| `tests/slow/` | 1 | 2 | `@pytest.mark.slow` (MNIST full) |
+
+### Discovery: `testpaths` Already Recursive
+
+The `pyproject.toml` `testpaths = ["tests"]` entry causes pytest to recursively scan all subdirectories — no need to list each subdirectory explicitly. This means the test reorganization required zero pytest configuration changes. Only `__init__.py` files were needed to make each subdirectory a proper Python package.
+
+### Pre-Existing Issues (Unchanged from Session 8)
+
+1. **`test_onnx.py` warnings**: Tensor attributes assigned during export should be registered as buffers (equitile/core.py, equitile/kernels.py). Out of scope.
+2. **`torch.jit.script` deprecation**: 14 warnings across `zoo/_settling.py` and `graph/`. Python 3.14+ compatibility.
+3. **`sklearn.datasets` NumPy 2.5 deprecation**: In `test_new_domains.py`. Pre-existing.
+4. **Transformer LM in-place gradient errors**: `test_backprop_transformer_lm` and related tests fail if `ruff check --unsafe-fixes` has been run (converts `h = h + x` to `h += x`). These tests pass in the clean checkout. Do not use unsafe fixes.

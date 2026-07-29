@@ -67,3 +67,36 @@ def pytest_unconfigure(config: object) -> None:
     cwd_kb = Path.cwd() / "knowledgebase.json"
     if cwd_kb.exists():
         cwd_kb.unlink()
+
+
+# --- E.2 Shared Fixtures (test reorg) ---
+
+
+@pytest.fixture(scope="session")
+def synthetic_classification() -> tuple[torch.Tensor, torch.Tensor]:
+    """Deterministic synthetic classification data for all fast tests."""
+    torch.manual_seed(42)
+    X = torch.randn(200, 64)
+    y = (X.sum(dim=1) > 0).long() % 10
+    return X, y
+
+
+@pytest.fixture
+def mnist_quick_task():
+    """MNIST task in quick_mode (small subset, no download).
+
+    Returns a VisionTask configured for quick test runs.
+    """
+    from bioplausible.tasks.vision import VisionTask
+
+    return VisionTask("mnist", quick_mode=True)
+
+
+@pytest.fixture
+def eqprop_model():
+    """Minimal StandardEqProp for settling/contrastive tests."""
+    from bioplausible.zoo.base import ModelConfig
+    from bioplausible.zoo.models.eqprop import StandardEqProp
+
+    config = ModelConfig(name="test", input_dim=64, output_dim=10, max_steps=5)
+    return StandardEqProp(config=config)
