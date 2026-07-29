@@ -70,18 +70,18 @@
 
 ### Remaining Duplications (Not Yet Tackled)
 
-| Pattern | Count | Files |
-|---------|-------|-------|
-| `train_step` implementations | **26** | `zoo/models/*` |
-| `forward_step` implementations | **11** | `zoo/models/eqprop/*` |
-| `_build_layers` implementations | **12** | `zoo/models/*` |
-| `build` classmethods | **18+** | `zoo/models/*` |
-| `hidden_dims = [...]` computation | **17** | `zoo/models/*` |
-| `DynamicsConfig` name collision (builder.py) | **2** | builder.py `DynamicsConfig` vs `DynamicEquiTileConfig as DynamicsConfig` |
-| `MemoryProfiler` class | **2** | `equitile/profiler.py` (the `lm_demo/profiling.py` was archived) |
-| `ProfileResult` class | **2** | `equitile/profiler.py` (the `lm_demo/profiling.py` was archived) |
-| Tile communicator classes | **2** | `TileCommunicator` vs `NCCLCommunicator` |
-| `LearningConfig` (builder.py) | **1** | Deeply integrated into builder — deferred to Phase 1 |
+| Pattern | Count | Files | Status |
+|---------|-------|-------|--------|
+| `train_step` implementations | **26** | `zoo/models/*` | ⏳ |
+| `forward_step` implementations | **11** | `zoo/models/eqprop/*` | ⏳ |
+| `_build_layers` implementations | **12** | `zoo/models/*` | ⏳ |
+| `build` classmethods | **18+** | `zoo/models/*` | ⏳ NEXT |
+| `hidden_dims = [...]` computation | ~~**17**~~ | ~~`zoo/models/*`~~ | **DONE** ✅ |
+| `DynamicsConfig` name collision (builder.py) | **2** | builder.py `DynamicsConfig` vs `DynamicEquiTileConfig as DynamicsConfig` | ⏳ |
+| `MemoryProfiler` class | **2** | `equitile/profiler.py` | ⏳ |
+| `ProfileResult` class | **2** | `equitile/profiler.py` | ⏳ |
+| Tile communicator classes | **2** | `TileCommunicator` vs `NCCLCommunicator` | ⏳ |
+| `LearningConfig` (builder.py) | **1** | Deeply integrated into builder — deferred to Phase 1 | ⏳ |
 
 ---
 
@@ -281,12 +281,26 @@ This preserves history while cleaning the working tree.
 | **0** | Archive dead code & fix syntax | **2–3** | **−7909 lines** (archived ~5800) | **DONE** ✅ |
 | **1** | Registries, configs, frozen dataclasses | **2–3** | **−41 lines** (2 commits) | **DONE** ✅ |
 | **2** | Core type safety | **3–4** | **+40 lines** (annotations, 6 files) | **DONE** ✅ |
-| 3 | Algorithmic dedup | 5–7 | **−3000+ lines** (shared helpers) | ⏳ NEXT |
+| 3 | Algorithmic dedup | 5–7 | **+161 lines** (shared infrastructure, −271 existing) | ⏳ **IN PROGRESS** |
 | 4 | Full type hardening | 3–5 | +500 lines (TypedDict, exports) | |
 
-**Total**: ~15–22 days. **Phases 0–2 complete**.
+**Total**: ~15–22 days. **Phases 0–2 complete, Phase 3 partially done**.
 
-**Next recommended step**: Phase 3.1 — Extract Settling Loop Helper. This is the most impactful remaining work (~3000 line reduction potential). 13+ classes in `zoo/models/eqprop/` and `zoo/models/base.py` share the same settling pattern. The helper goes in `bioplausible/zoo/_settling.py`. After dedup, move to Phase 3.2 (extract long functions).
+**Progress breakdown**:
+
+| Sub-phase | Status | Lines Changed |
+|-----------|--------|---------------|
+| 3.1 Extract settling helper | **DONE** ✅ | +432 new, −247 from base.py |
+| 3.5 Unify hidden dims | **DONE** ✅ | −174 from 7 model files |
+| 3.3 FA backward passes | ⏳ NEXT | Estimated −350 |
+| 3.6 Build classmethods | ⏳ NEXT | Estimated −250 |
+| 3.4 LM file consolidation | ⏳ | Estimated −900 |
+| 3.2 Extract long functions | ⏳ | Estimated −200 |
+| 3.7-3.9 Profiling/distributed/etc. | ⏳ | Estimated −400 |
+
+**Next recommended step**: Phase 3.6 (Consolidate `build` classmethods) — it's mechanical, low-risk, and touches 18+ files. Use the same pattern as Phase 3.5: extract a shared `_build_from_spec` helper into `zoo/models/base.py`, then refactor each `@classmethod def build` to call it.
+
+Alternatively, Phase 3.3 (FA backward pass unification) if you want higher line savings per file touched.
 
 ---
 
@@ -436,3 +450,90 @@ Both commits are on `main`. Working tree is clean.
 - **Pyright errors remain at 5** — all pre-existing (`deployment.py:717` missing import, `hyperopt/graph_task.py:28-32` missing import). Not caused by any refactoring session.
 
 - **Clean up stale coverage artifacts**: `find . -name "*,cover" -delete` — from a previous coverage run.
+
+---
+
+## Session Wrap-Up (2026-07-29 — Session 4)
+
+### What Was Done This Session
+
+**Commit 3** (2e94a3a): Phase 3 — extract settling helpers, unify hidden dims computation.
+
+### Phase 3.1: Settling Loop Helper (`bioplausible/zoo/_settling.py`)
+
+| Item | Detail |
+|------|--------|
+| **New module** | `bioplausible/zoo/_settling.py` (432 lines) |
+| **Classes/functions created** | `settle_single_state()`, `settle_activations_list()`, `EquilibriumFunction`, `_run_with_sn_freeze()`, `_inf_norm_converged()` |
+| **Models refactored to use `settle_single_state`** | `EqPropModel.forward()` (BPTT branch) — replaces ~80 lines of inline settling with 6-line helper call |
+| **Models refactored to use `settle_activations_list`** | `StandardEqProp.forward()`, `DirectedEP.forward()`, `HolomorphicEP.forward()` — 3 models now share same loop structure |
+| **`EquilibriumFunction` moved** | From `zoo/models/base.py` to `zoo/_settling.py` (no code changes, better modularity) |
+
+**Skipped** (loops too unique to benefit): `NeuralCube`, `TemporalResonanceEqProp`, `HomeostaticEqProp`, `LazyEqProp`, `MomentumEquilibrium`.
+
+### Phase 3.5: Hidden Dims Computation
+
+| Item | Detail |
+|------|--------|
+| **Helper functions added** to `zoo/base.py` | `resolve_hidden_dims(config, hidden_dim)` and `compute_hidden_dims(hidden_dim, num_layers, max_layers=5)` |
+| **Ternary pattern refactored** (`hidden_dims = (ternary)`) | 16 sites across 7 files → `resolve_hidden_dims()` |
+| **Build pattern refactored** (`hidden_dims=[hd]*min(n,5)`) | 11 sites across 7 files → `compute_hidden_dims()` |
+| **Net lines removed** from existing files | **−271 lines** (from 10 files) |
+| **New code added** | `_settling.py` (+432) + helpers in `zoo/base.py` (+28) |
+| **Total working tree delta** | **+585/-424 = +161 lines** (one-time cost for shared infrastructure) |
+
+### Verification Results (HEAD = 2e94a3a)
+
+| Gate | Result |
+|------|--------|
+| `ruff format --check .` | 653 files formatted — **PASS** |
+| `ruff check --fix .` | 5338 `@typing.override` suggestions (style-only, not actionable) |
+| `pyright` | 5 errors (all pre-existing — same as Sessions 2/3), 1477 warnings — **no new errors** |
+| `pytest -q` | 1117 passed, 15 skipped, 5 subtests — **all passing** |
+
+### New Discoveries / Issues
+
+1. **`_spectral_norm_freezer` context manager complexity**: The warmup-step-inside-eval-mode pattern was subtly wrong on the first attempt — the remaining steps counter wasn't decremented inside the closure, causing trajectory IndexError. Fixed by making `remaining` a `nonlocal` variable mutated by both `warmup()` and `main_loop()`.
+
+2. **`[None] * (steps + 1)` type inference**: Pyright infers `list[None]` from `[None] * N`. When assigned to `list[torch.Tensor] | None`, it's a type error. Fixed with `cast("list[torch.Tensor]", ...)`.
+
+3. **Convergence delta computation overhead**: `settle_activations_list` always computes the per-step delta (used for convergence checking), but for models like `DirectedEP` that don't do early stopping, this is wasted compute. Optimization: only compute delta when `return_dynamics=True` or `convergence_start < steps`.
+
+4. **`settle_activations_list` trajectory format**: Returns `list[list[Tensor]]` (append-based). The original `DirectedEP` code used the same format. `StandardEqProp` originally used pre-allocated `[None] * (eq_steps+1)` with index assignment. Both produce equivalent sequence of snapshots.
+
+5. **`settle_single_state` trajectory format**: Uses pre-allocated `list[torch.Tensor]` of length `steps+1` with index assignment, then slices to actual length. Matches original `EqPropModel.forward()` behavior exactly.
+
+### Remaining Duplications (Still Need Refactoring)
+
+| Pattern | Count | Files |
+|---------|-------|-------|
+| `train_step` implementations | **26** | `zoo/models/*` |
+| `forward_step` implementations | **11** | `zoo/models/eqprop/*` |
+| `_build_layers` implementations | **12** | `zoo/models/*` |
+| `build` classmethods | **18+** | `zoo/models/*` |
+| `MemoryProfiler` class | **2** | `equitile/profiler.py` |
+| `ProfileResult` class | **2** | `equitile/profiler.py` |
+| Tile communicator classes | **2** | `TileCommunicator` vs `NCCLCommunicator` |
+| `LearningConfig` (builder.py) | **1** | Deferred to future session |
+
+### Pointers for Future Sessions
+
+- **Phase 3.6 (Consolidate `build` classmethods)** is the natural next step. 18+ `@classmethod def build(...)` methods in `zoo/models/*` share the same pattern:
+  ```python
+  config = ModelConfig(name=spec.name, input_dim=input_dim, output_dim=output_dim,
+                       hidden_dims=compute_hidden_dims(hidden_dim, num_layers), extra=kwargs)
+  return cls(config=config).to(device)
+  ```
+  Extract a shared `_build_from_spec(cls, spec, input_dim, output_dim, hidden_dim, num_layers, device, **kwargs)` in `zoo/models/base.py`. Estimated savings: **~200–300 lines**.
+
+- **Phase 3.3 (Unify FA backward passes)** — 9 classes in `fa.py` with nearly identical `train_step` methods (each ~65–70 lines). Extract `_fa_backward(activation_derivative_fn)` helper. Estimated savings: **~300–400 lines**.
+
+- **Phase 3.4 (Consolidate LM files)** — `language.py` (1192) + `language_optimized.py` (687) + `fast_lm.py` (613) = 2492 lines. Create `_components.py` for shared `TileAttention`, `TileFeedForward`, etc. Estimated savings: **~800–1000 lines**.
+
+- **Phase 3.3 or 3.4** are higher-impact than 3.6 (more line savings). Prioritize whichever is more familiar.
+
+- **Phase 3.2 (Extract long functions)** — 13 functions >50 lines across settling code. Much of this was already addressed by Phase 3.1 (the `EqPropModel.forward()` BPTT branch was 80→6 lines). Remaining targets: `CoreTrainer` methods in `core/trainer.py`.
+
+- **Pyright errors still at 5** — all pre-existing. No new errors introduced by Phase 3 work.
+
+- **`find . -name "*,cover" -delete`** — clean stale coverage artifacts if they bother you.
