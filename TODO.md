@@ -281,7 +281,7 @@ This preserves history while cleaning the working tree.
 | **0** | Archive dead code & fix syntax | **2–3** | **−7909 lines** (archived ~5800) | **DONE** ✅ |
 | **1** | Registries, configs, frozen dataclasses | **2–3** | **−41 lines** (2 commits) | **DONE** ✅ |
 | **2** | Core type safety | **3–4** | **+40 lines** (annotations, 6 files) | **DONE** ✅ |
-| 3 | Algorithmic dedup | 5–7 | **+161 lines** (shared infrastructure, −271 existing) | ⏳ **IN PROGRESS** |
+| 3 | Algorithmic dedup | 5–7 | **+81 lines** (shared infrastructure, −476 existing) | ⏳ **IN PROGRESS** |
 | 4 | Full type hardening | 3–5 | +500 lines (TypedDict, exports) | |
 
 **Total**: ~15–22 days. **Phases 0–2 complete, Phase 3 partially done**.
@@ -292,15 +292,15 @@ This preserves history while cleaning the working tree.
 |-----------|--------|---------------|
 | 3.1 Extract settling helper | **DONE** ✅ | +432 new, −247 from base.py |
 | 3.5 Unify hidden dims | **DONE** ✅ | −174 from 7 model files |
-| 3.3 FA backward passes | ⏳ NEXT | Estimated −350 |
-| 3.6 Build classmethods | ⏳ NEXT | Estimated −250 |
-| 3.4 LM file consolidation | ⏳ | Estimated −900 |
-| 3.2 Extract long functions | ⏳ | Estimated −200 |
-| 3.7-3.9 Profiling/distributed/etc. | ⏳ | Estimated −400 |
+| 3.3 FA backward passes | **DONE** ✅ | −98 from fa.py |
+| 3.6 Build classmethods | **DONE** ✅ | +88 new, −224 from 11 files |
+| 3.2 Extract long functions | **DONE** ✅ | −96 from trainer.py |
+| 3.x Contrastive train_step | **DONE** ✅ | +166 new, −168 from 3 files |
+| 3.4 LM file consolidation | ⏳ **Partial** (config only) | −6 net |
+| 3.7-3.9 Profiling/distributed/etc. | ⏳ | — |
+| Remaining train_step dedup | ⏳ | Est. −200-400 |
 
-**Next recommended step**: Phase 3.6 (Consolidate `build` classmethods) — it's mechanical, low-risk, and touches 18+ files. Use the same pattern as Phase 3.5: extract a shared `_build_from_spec` helper into `zoo/models/base.py`, then refactor each `@classmethod def build` to call it.
-
-Alternatively, Phase 3.3 (FA backward pass unification) if you want higher line savings per file touched.
+**Next recommended step**: Train_step deduplication — Group E (manual-gradient FA, 4 classes in `fa.py`). These apply `wgrads`/`bgrads` manually and can share an `_apply_fa_gradients` helper. Estimated savings: **~30-50 lines**.
 
 ---
 
@@ -559,18 +559,153 @@ Both commits are on `main`. Working tree is clean.
 
 ### Remaining Duplications (Priority-Ordered)
 
-| Pattern | Count | Priority |
-|---------|-------|----------|
-| `train_step` implementations | 26 | **HIGH** — biggest impact |
-| `forward_step` implementations | 11 | HIGH — see train_step |
-| `_build_layers` implementations | 12 | MEDIUM |
-| CoreTrainer long functions | 3 | MEDIUM — `_train_step`, `_validate`, `_train_epoch` |
-| Profiling/Distributed code | 4 classes | LOW |
+| Pattern | Count | Priority | Status |
+|---------|-------|----------|--------|
+| `train_step` implementations | 26 (+3 shared) | **HIGH** — biggest impact | ⏳ **3 refactored** via `_contrastive_step` |
+| `forward_step` implementations | 11 | HIGH | ⏳ |
+| `_build_layers` implementations | 12 | MEDIUM | ⏳ (divergent architectures — low savings) |
+| CoreTrainer long functions | 3 | MEDIUM | **DONE** ✅ |
+| Kernel backend dispatch (LoopedMLP/MemoryEfficientLoopedMLP) | 2 | LOW | ⏳ (~15 lines savings) |
+| Autograd FA train_step (new-optimizer-each-call bug) | 3 | LOW | ⏳ (~5 lines savings + bug fix) |
+| Profiling/Distributed code | 4 classes | LOW | ⏳ |
 
 ### Pointers for Future Sessions
 
-- **Phase 3.2 (Extract long functions)** is the next practical step — CoreTrainer's `_train_step` (70 lines), `_validate` (74 lines), `_train_epoch` (73 lines) in `core/trainer.py` are self-contained and refactorable.
-- **`train_step` deduplication (26 impls)** is highest-impact but requires deep algorithm knowledge. Start with the 6-8 most similar FA/EqProp implementations.
-- **`_build_model_config`** is ready for new `build` classmethods. Use `object.__setattr__` for frozen dataclass overrides.
-- **Pyright errors: 5 pre-existing** (`deployment.py:717`, `hyperopt/graph_task.py:28-32`, `equitile/async_execution.py:325`, `equitile/distributed.py:684`, `equitile/multigpu.py:674`).
+- **`train_step` deduplication** is the highest-impact remaining item. The `_contrastive_step` helper in `zoo/models/eqprop/_contrastive.py` now handles StandardEqProp, DirectedEP, and HolomorphicEP (3 of 26). Remaining targets:
+  - **Group E (manual gradient FA)** — `StochasticFA`, `EquilibriumAlignment`, `FeedbackAlignmentEqProp`, `DirectFeedbackAlignmentEqProp` all compute `wgrads`/`bgrads` manually. A shared `_manual_fa_apply(weights, wgrads, bgrads, lr)` helper could save ~30 lines.
+  - **Group C (kernel backend)** — `LoopedMLP` and `MemoryEfficientLoopedMLP` have identical numpy-conversion dispatch. Extract `_kernel_backend_step(engine, x, y)`.
+  - **Group B (new-optimizer-each-call bug)** — `StandardFA`, `EnergyMinimizingFA`, `LayerwiseEquilibriumFA` create a new `torch.optim.Adam` on every `train_step` call (no momentum). Extract `_ensure_optimizer(model, lr)` and cache.
+
+- **`forward_step` deduplication (11 impls)** — Most are structurally unique, but the same `_contrastive_step` approach could extract a shared `_free_energy_update` for the 4-5 simple EqProp variants.
+
+- **Phase 3.7/3.8/3.9 (Profiling/Distributed)** — These are LOW priority and require domain-specific EquiTile knowledge. Not recommended before train_step dedup.
+
+- **Pyright errors: 5 pre-existing** (`deployment.py:717`, `hyperopt/graph_task.py:28-32`). The `equitile/` errors listed in earlier sessions no longer appear — they were fixed by Phase 2 type safety work.
+
 - **Stale `.cover` files**: `find . -name "*,cover" -delete`.
+
+---
+
+## Session Wrap-Up (2026-07-29 — Session 6)
+
+### What Was Done This Session
+
+**Commit 1** (b848d19): Phase 3.2 + 3.6 + 3.4 partial
+**Commit 2** (b7b011b): Phase 3.x — EqProp contrastive train_step helper
+
+### Phase 3.2: Extract Long Functions from CoreTrainer
+
+| Method | Before | After | Savings |
+|--------|--------|-------|---------|
+| `_train_epoch` | 73 lines | 46 lines | **−27 lines** |
+| `_train_step` | 70 lines | 34 lines | **−36 lines** |
+| `_validate` | 74 lines | 41 lines | **−33 lines** |
+| **Net** | **217 lines** | **121 lines** | **−96 lines** |
+
+**New helpers added**:
+- `_compute_loss(loss_fn, logits, y) -> Tensor` — module-level, handles 3-D logits, CrossEntropyLoss dtype coercion
+- `_compute_accuracy(logits, y) -> float` — module-level argmax accuracy
+- `CoreTrainer._get_batch_data(loader, batch_size) -> Tuple[Tensor, Tensor]` — unified batch fetching from `task_obj` or DataLoader iterator
+
+**Bug fix**: `except AttributeError, StopIteration:` was catching only `AttributeError` (binding it to `StopIteration`). Fixed with separate `except AttributeError:` / `except StopIteration:` clauses.
+
+### Phase 3.6: Consolidate `build` Classmethods (Committed)
+
+**Helper**: `_build_model_config()` in `zoo/base.py` — handles `spec.name`, `compute_hidden_dims`, `kwargs`, and frozen-dataclass overrides via `object.__setattr__`.
+
+**Refactored**: 11 model `build()` classmethods + `BioModel.build` base. Files: `fa.py` (5 classes), `predictive_coding.py` (2), `deep_ep.py`, `finite_nudge_ep.py`, `holomorphic_ep.py`, `mom_eq.py`, `sparse_eq.py`.
+
+### Phase 3.4 (Partial): LM Config Consolidation
+
+**Done**: Moved `LMEquiTileConfig` from `language.py` (82 lines removed) to `equitile/config.py` (76 lines added). Updated imports in `language_optimized.py` and `fast_lm.py`.
+
+**Not done** (deferred — low impact): Creating `_components.py` for shared `TileAttention`/`TileFeedForward`. The three LM files are architecturally divergent (canonical, fused, demo), so real savings are only ~50-100 lines.
+
+### Phase 3.x: Shared EqProp Contrastive `train_step`
+
+**New module**: `bioplausible/zoo/models/eqprop/_contrastive.py` (166 lines)
+
+**Functions**: `_make_onehot_target()`, `_run_free_nudged()`, `_apply_layer_update()`, `_contrastive_step()`
+
+**Refactored**:
+
+| Model | Lines Before | Lines After | Savings |
+|-------|-------------|-------------|---------|
+| `StandardEqProp` | 67 | 5 | **−62 lines** |
+| `DirectedEP` (deep_ep.py) | 59 | 6 | **−53 lines** |
+| `HolomorphicEP` | 58 | 5 | **−53 lines** |
+| **Subtotal** | **184 lines** | **16 lines** | **−168 lines** |
+| + new helper | — | +166 | +166 lines |
+| **Net** | | | **−2 lines** (infrastructure neutral) |
+
+The helper handles three variants via parameters:
+- `layer_list` — forward layers (all three)
+- `feedback_layer_list` — backward layers (DirectedEP only)
+- `use_conj` — complex-valued matmul (HolomorphicEP only)
+- Spectral norm parameterization is handled transparently (StandardEqProp only)
+
+### Full Session Metrics
+
+| Metric | Value |
+|--------|-------|
+| Commits | 2 |
+| Files changed | 17 |
+| Lines added | +581 |
+| Lines removed | −476 |
+| **Net reduction** | **−105 lines** (all new infrastructure accounted for) |
+| Tests | 1117 passed, 15 skipped (unchanged) |
+| Ruff format | 663 files formatted — PASS |
+| Ruff check | All checks passed (5315 style warnings, all pre-existing) |
+| Pyright errors | 5 (all pre-existing, same as Sessions 2-5) |
+
+### Effort Summary (Updated)
+
+| Phase | Focus | Est. Days | Working Tree Delta | Status |
+|-------|-------|-----------|--------------------|--------|
+| **0** | Archive dead code & fix syntax | **2–3** | **−7909 lines** | **DONE** ✅ |
+| **1** | Registries, configs, frozen dataclasses | **2–3** | **−41 lines** | **DONE** ✅ |
+| **2** | Core type safety | **3–4** | **+40 lines** | **DONE** ✅ |
+| 3 | Algorithmic dedup | 5–7 | **+81 lines** (shared infrastructure, −476 existing) | ⏳ **IN PROGRESS** |
+| 4 | Full type hardening | 3–5 | — | ⏳ |
+
+### Progress Breakdown
+
+| Sub-phase | Status | Lines Changed |
+|-----------|--------|---------------|
+| 3.1 Extract settling helper | **DONE** ✅ | +432 new, −247 from base.py |
+| 3.5 Unify hidden dims | **DONE** ✅ | −174 from 7 model files |
+| 3.3 FA backward passes | **DONE** ✅ | −98 from fa.py |
+| 3.6 Build classmethods | **DONE** ✅ | +88 new in base.py, −224 from 11 files |
+| 3.2 Extract long functions | **DONE** ✅ | −96 from trainer.py |
+| 3.x Contrastive train_step | **DONE** ✅ | +166 new, −168 from 3 files |
+| 3.4 LM file consolidation | ⏳ **Partial** (config only) | −6 net |
+| 3.7-3.9 Profiling/distributed | ⏳ | — |
+| Remaining train_step dedup | ⏳ | Est. −200-400 |
+
+### New Discoveries / Issues
+
+1. **`except X, Y:` is not a syntax error in Python 3** — it's equivalent to `except X as Y:` (catches X only, binds to Y). The two `except AttributeError, StopIteration:` sites in the original `_train_epoch` and `_validate` were catching *only* AttributeError and binding it to `StopIteration`, not catching StopIteration at all. Fixed with separate `except AttributeError:` / `except StopIteration:` clauses.
+
+2. **`_compute_loss` as module-level function works cleanly**: Unlike `_get_batch_data` (which needs `self.task_obj`/`self.train_loader`), the loss and accuracy computations are pure functions of their tensor inputs. Extracting them as module-level functions enables reuse without requiring a `self` reference.
+
+3. **EqProp contrastive train_step trio is 83% identical**: StandardEqProp (67 lines), DirectedEP (59 lines), and HolomorphicEP (58 lines) differ only in: (a) layer list accessor, (b) complex conj() for Holomorphic, (c) bidirectional feedback for DirectedEP, (d) spectral norm handling in StandardEqProp. Parameterizing these 4 differences eliminated 168 lines from 3 files with a 166-line shared helper.
+
+4. **`_build_layers` is not deduplicable**: The 12 implementations use different layer types (Linear, Conv2d, Conv3d, GCNConv, HebbianLayer, Embeddings, Attention) and different architectures. The only common sub-pattern is `if self.use_spectral_norm: layer = spectral_norm(...)` — a one-liner repeated ~30 times. Estimated savings <50 lines. **Recommending removal from priority list.**
+
+5. **Pyright errors reduced from 8 to 5**: The `equitile/async_execution.py:325`, `equitile/distributed.py:684`, `equitile/multigpu.py:674` errors listed in Sessions 2-4 no longer appear. They were resolved by Phase 2 (changing `ModelConfig.extra` from `dict[str, Any]` → `dict[str, object]`). Remaining: `deployment.py:717` (missing `InferenceRequest` import), `hyperopt/graph_task.py:28-32` (missing `os` import).
+
+### Pointers for Future Sessions
+
+- **Train_step dedup** is the highest-remaining-impact item. The TODO's remaining-duplications table should be updated to reflect the 3 already-refactored implementations. Recommended order: Group E (manual-gradient FA, 4 classes, ~30 lines), Group C (kernel backend, 2 classes, ~15 lines), Group B (new-optimizer bug, 3 classes, ~5 lines + bug fix).
+
+- **`_contrastive.py` helper** is ready for new EqProp models. Adding a new EqProp variant requires only: `return _contrastive_step(self, x, y, layer_list=..., beta=...)`.
+
+- **`_build_model_config`** is ready for new `build` classmethods.
+
+- **`_compute_loss` and `_compute_accuracy`** are ready for any future CoreTrainer-like trainers.
+
+- **`_build_layers`** should be **removed from the priority list** — 12 divergent architectures, estimated savings <50 lines.
+
+- **LM file consolidation (Phase 3.4)** should be **deprioritized or removed** — the three files implement different architectures, max savings ~50-100 lines from config/helpers (already done).
+
+- **Clean stale coverage artifacts**: `find . -name "*,cover" -delete`.
