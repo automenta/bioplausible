@@ -1,17 +1,11 @@
-"""Array utilities for acceleration backends (CuPy/NumPy interop).
-
-These helpers live apart from ``bioplausible.acceleration.__init__`` so the
-package init stays limited to docstrings and re-exports (RUF067).
-"""
-
-from typing import Any
+"""Array utilities for acceleration backends (CuPy/NumPy interop)."""
 
 import numpy as np
 
 from bioplausible.acceleration.backends import HAS_CUPY
 
 
-def get_backend(use_gpu: bool) -> Any:
+def get_backend(use_gpu: bool) -> object:
     """Return appropriate array library (CuPy or NumPy)."""
     if use_gpu and HAS_CUPY:
         import cupy as cp
@@ -20,7 +14,7 @@ def get_backend(use_gpu: bool) -> Any:
     return np
 
 
-def to_numpy(arr: Any) -> np.ndarray:
+def to_numpy(arr: object) -> np.ndarray:
     """Convert array to NumPy (handles both NumPy and CuPy arrays)."""
     if HAS_CUPY:
         try:
@@ -35,7 +29,7 @@ def to_numpy(arr: Any) -> np.ndarray:
     return arr
 
 
-def softmax(x: np.ndarray, xp: Any = None) -> np.ndarray:
+def softmax(x: np.ndarray, xp: object = None) -> np.ndarray:
     """Stable softmax."""
     if xp is None:
         xp = np
@@ -44,7 +38,7 @@ def softmax(x: np.ndarray, xp: Any = None) -> np.ndarray:
     return exp_x / xp.sum(exp_x, axis=-1, keepdims=True)
 
 
-def cross_entropy(logits: np.ndarray, targets: np.ndarray, xp: Any = None) -> float:
+def cross_entropy(logits: np.ndarray, targets: np.ndarray, xp: object = None) -> float:
     """Cross-entropy loss from logits."""
     if xp is None:
         xp = np
@@ -60,7 +54,7 @@ def spectral_normalize(
     W: np.ndarray,  # noqa: N803 - mathematical weight-matrix convention
     num_iters: int = 5,
     u: np.ndarray | None = None,
-    xp: Any = None,
+    xp: object = None,
 ) -> tuple[np.ndarray, np.ndarray, float]:
     """Power iteration spectral normalization."""
     if xp is None:
@@ -83,7 +77,7 @@ def spectral_normalize(
     return w_normalized, u, sigma
 
 
-def get_kernel_classes() -> tuple[type[Any], type[Any]]:
+def get_kernel_classes() -> tuple[type[object], type[object]]:
     """Lazily import kernel classes to avoid circular imports."""
     from bioplausible.acceleration.kernels import EqPropKernel as _EqPropKernel
     from bioplausible.acceleration.kernels import (
@@ -93,7 +87,7 @@ def get_kernel_classes() -> tuple[type[Any], type[Any]]:
     return _EqPropKernel, _EqPropKernelBPTT
 
 
-def get_triton_ops() -> type[Any] | None:
+def get_triton_ops() -> type[object] | None:
     """Lazily import Triton ops, returning None if unavailable."""
     try:
         from bioplausible.acceleration.triton_kernels import (

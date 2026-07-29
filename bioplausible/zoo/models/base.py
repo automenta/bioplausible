@@ -1,6 +1,5 @@
 import logging
 from abc import abstractmethod
-from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -27,7 +26,7 @@ class EquilibriumFunction(autograd.Function):
 
     @staticmethod
     def forward(
-        ctx: Any,
+        ctx: object,
         model: nn.Module,
         x_transformed: torch.Tensor,
         h_init: torch.Tensor,
@@ -65,7 +64,7 @@ class EquilibriumFunction(autograd.Function):
 
     @staticmethod
     def backward(
-        ctx: Any, grad_output: torch.Tensor
+        ctx: object, grad_output: torch.Tensor
     ) -> tuple[torch.Tensor | None, ...]:
         h_star, x_transformed, *params = ctx.saved_tensors
         model = ctx.model
@@ -453,7 +452,7 @@ class EqPropModel(BioModel):
     ) -> (
         torch.Tensor
         | tuple[torch.Tensor, list[torch.Tensor]]
-        | tuple[torch.Tensor, dict[str, Any]]
+        | tuple[torch.Tensor, dict[str, object]]
     ):
         """
         Forward pass: iterate to equilibrium.

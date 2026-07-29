@@ -10,7 +10,7 @@ import pathlib
 from collections.abc import Callable
 from dataclasses import MISSING, dataclass, field, fields
 from enum import Enum, StrEnum
-from typing import Any, TypeVar
+from typing import TypeVar, cast
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ class ComponentMetadata:
     # Required and provided capabilities (per REFACTOR3 §4)
     requires: list[str] = field(default_factory=list)
     provides: list[str] = field(default_factory=list)
-    extra: dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,7 +178,7 @@ class Registry:
     """
 
     _components: dict[
-        str, dict[str, dict[str, Any]]
+        str, dict[str, dict[str, object]]
     ] = {}  # category -> {name: {cls, metadata}}
 
     # Cross-reference: propagator names that map to model-side implementations.
@@ -252,7 +252,7 @@ class Registry:
         return decorator
 
     @classmethod
-    def _infer_metadata(cls, component: Any, metadata: ComponentMetadata) -> None:
+    def _infer_metadata(cls, component: object, metadata: ComponentMetadata) -> None:
         """Infer metadata from component attributes if not explicitly provided.
 
         Uses ``object.__setattr__`` to bypass the frozen dataclass restriction
@@ -277,7 +277,7 @@ class Registry:
                     object.__setattr__(metadata, fd.name, getattr(component, fd.name))
 
     @classmethod
-    def get(cls, category: ComponentCategory | str, name: str) -> Any:
+    def get(cls, category: ComponentCategory | str, name: str) -> object:
         """Get a registered component (class or factory callable) by name."""
         cat = cls._resolve_category(category)
         if cat not in cls._components:
@@ -309,7 +309,7 @@ class Registry:
         if name not in cls._components[cat]:
             available = list(cls._components[cat].keys())
             raise ValueError(f"Unknown {cat.value}: {name}. Available: {available}")
-        return cls._components[cat][name]["metadata"]
+        return cast(ComponentMetadata, cls._components[cat][name]["metadata"])
 
     @classmethod
     def list(
@@ -336,7 +336,7 @@ class Registry:
         tags: builtins.list[str] | None = None,
         credit_type: str | None = None,
         family: str | None = None,
-    ) -> builtins.list[dict[str, Any]]:
+    ) -> builtins.list[dict[str, object]]:
         """Query registry with capability constraints.
 
         Returns list of ``{name, category, class, metadata}`` dict
@@ -357,12 +357,12 @@ class Registry:
         cats = [category] if category else list(cls._components.keys())
         categories = [cls._resolve_category(c) for c in cats]
 
-        results: builtins.list[dict[str, Any]] = []
+        results: builtins.list[dict[str, object]] = []
         for cat in categories:
             if cat not in cls._components:
                 continue
             for name, info in cls._components[cat].items():
-                meta: ComponentMetadata = info["metadata"]
+                meta = cast(ComponentMetadata, info["metadata"])
                 if flt.matches(meta):
                     results.append({
                         "name": name,
@@ -377,12 +377,12 @@ class Registry:
         cls,
         model_name: str,
         model_category: ComponentCategory = ComponentCategory.MODEL,
-    ) -> dict[str, builtins.list[dict[str, Any]]]:
+    ) -> dict[str, builtins.list[dict[str, object]]]:
         """Get components compatible with a given model."""
         model_meta = cls.get_metadata(model_category, model_name)
         primary_domain = model_meta.domains[0] if model_meta.domains else None
 
-        compat: dict[str, builtins.list[dict[str, Any]]] = {}
+        compat: dict[str, builtins.list[dict[str, object]]] = {}
         for cat in ComponentCategory:
             if cat == model_category:
                 continue
@@ -411,12 +411,12 @@ class Registry:
         """Export all registered component metadata to a YAML file."""
         import yaml  # local import: keep module import cheap (AGENTS.md)
 
-        export_data: dict[str, dict[str, dict[str, Any]]] = {}
+        export_data: dict[str, dict[str, dict[str, object]]] = {}
         for category, comps in cls._components.items():
             cat_name = category.value
             export_data[cat_name] = {}
             for name, info in comps.items():
-                meta = info["metadata"]
+                meta = cast(ComponentMetadata, info["metadata"])
                 export_data[cat_name][name] = {
                     "name": meta.name,
                     "category": meta.category.value,

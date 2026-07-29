@@ -194,9 +194,9 @@ class TrainingMetrics:
     requires_backward: bool | None = None
 
     # Extra metrics
-    extra: dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, object] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         return {k: v for k, v in self.__dict__.items() if v is not None}
 
 
@@ -711,7 +711,7 @@ class CoreTrainer:
         )
         return self._train_epoch(batches)
 
-    def _train_epoch(self, batches_per_epoch: int) -> dict[str, Any]:
+    def _train_epoch(self, batches_per_epoch: int) -> dict[str, object]:
         """Run one training epoch."""
         self.model.train()
 
@@ -856,7 +856,7 @@ class CoreTrainer:
 
         return metrics
 
-    def _validate(self, val_batches: int) -> dict[str, Any]:
+    def _validate(self, val_batches: int) -> dict[str, object]:
         """Run validation."""
         if self.val_loader is None and self.task_obj is None:
             return {"val_loss": float("nan"), "val_accuracy": float("nan")}
@@ -1065,7 +1065,9 @@ class CoreTrainer:
         self.history = [TrainingMetrics(**m) for m in checkpoint.get("metrics", [])]
         logger.info("Loaded checkpoint from epoch %d", self.current_epoch)
 
-    def search(self, param_space: dict[str, Any], n_trials: int = 20) -> dict[str, Any]:
+    def search(
+        self, param_space: dict[str, object], n_trials: int = 20
+    ) -> dict[str, object]:
         """
         Run hyperparameter search using Optuna.
 
@@ -1132,7 +1134,7 @@ def _convert_dictconfig(obj):
     return obj
 
 
-def run_from_runconfig(cfg) -> dict[str, Any]:
+def run_from_runconfig(cfg: object) -> dict[str, object]:
     """Run an experiment from an OmegaConf-based ``RunConfig``.
 
     Accepts a ``RunConfig`` (defined in :mod:`bioplausible.config.schema`)

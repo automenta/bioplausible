@@ -14,7 +14,7 @@ The `step` signature split is intentional:
   It CANNOT be driven by the `loss.backward(); optimizer.step()` idiom.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 import torch
 from torch import nn
@@ -28,7 +28,9 @@ class BioOptimizer(Optimizer):
     Extends PyTorch's Optimizer to support biologically plausible learning.
     """
 
-    def __init__(self, params, model: nn.Module | None = None, **defaults):
+    def __init__(
+        self, params: Iterable[nn.Parameter], model: nn.Module | None = None, **defaults
+    ):
         params = list(params)
         super().__init__(params, defaults)
         self.model = model
@@ -62,7 +64,7 @@ class LearningRuleOptimizer(BioOptimizer):
 
     def __init__(
         self,
-        params,
+        params: Iterable[nn.Parameter],
         model: nn.Module,
         lr: float = 0.01,
         momentum: float = 0.9,
