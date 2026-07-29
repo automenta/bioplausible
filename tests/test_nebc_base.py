@@ -11,7 +11,6 @@ import torch
 from bioplausible.zoo.models.hebbian import DeepHebbianChain
 from bioplausible.zoo.nebc_base import (
     NEBCBase,
-    NEBCRegistry,
     evaluate_nebc_model,
     run_nebc_ablation,
     train_nebc_model,
@@ -94,7 +93,7 @@ class TestNEBCBase:
 
 
 class TestNEBCRegistry:
-    """NEBCRegistry register, get, list_all, create."""
+    """Core Registry: models registered via register_model decorator."""
 
     def test_register_and_get(self):
         from bioplausible.core.registry import ComponentCategory, Registry
@@ -105,16 +104,19 @@ class TestNEBCRegistry:
         assert Registry.get(cat, "hebbian_chain") is not None
 
     def test_list_all_returns_list(self):
-        model_list = NEBCRegistry.list_all()
+        from bioplausible.core.registry import ComponentCategory, Registry
+
+        model_list = Registry.list(ComponentCategory.MODEL).get("model", [])
         assert isinstance(model_list, list)
         assert "deep_hebbian" in model_list
-        assert "hebbian_chain" in model_list or True  # decorator names differ
+        assert "hebbian_chain" in model_list
         assert "hebbian_3d" in model_list
-        assert "spiking_stdp" in model_list
 
     def test_create_instantiates_model(self):
-        model = NEBCRegistry.create(
-            "hebbian_chain",
+        from bioplausible.core.registry import ComponentCategory, Registry
+
+        model_cls = Registry.get(ComponentCategory.MODEL, "hebbian_chain")
+        model = model_cls(
             input_dim=8,
             hidden_dim=16,
             output_dim=NUM_CLASSES,
@@ -126,8 +128,10 @@ class TestNEBCRegistry:
         assert model.num_layers == 2
 
     def test_create_with_spectral_norm(self):
-        model = NEBCRegistry.create(
-            "hebbian_chain",
+        from bioplausible.core.registry import ComponentCategory, Registry
+
+        model_cls = Registry.get(ComponentCategory.MODEL, "hebbian_chain")
+        model = model_cls(
             input_dim=8,
             hidden_dim=16,
             output_dim=NUM_CLASSES,

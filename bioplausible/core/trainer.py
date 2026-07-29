@@ -171,7 +171,7 @@ class TrainerConfig:
         return OmegaConf.to_container(OmegaConf.structured(self), resolve=True)
 
 
-@dataclass
+@dataclass(frozen=True)
 class TrainingMetrics:
     """Metrics from a training step/epoch."""
 

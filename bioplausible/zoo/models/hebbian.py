@@ -14,7 +14,7 @@ from torch.nn.utils.parametrizations import spectral_norm
 
 from bioplausible.core.registry import register_model
 
-from ..nebc_base import NEBCBase, register_nebc
+from ..nebc_base import NEBCBase
 from .transitions import TransitionGraphMixin
 
 # ============================================================================
@@ -69,7 +69,7 @@ class HebbianLayer(nn.Module):
     family="hebbian",
     tags=["hebbian", "deep"],
 )
-@register_nebc("hebbian_chain")
+@register_model("hebbian_chain")
 class DeepHebbianChain(NEBCBase):
     """
     Deep Hebbian Chain with spectral normalization.
@@ -212,7 +212,7 @@ class DeepHebbianChain(NEBCBase):
         return None
 
 
-@register_nebc("hebbian_3d")
+@register_model("hebbian_3d")
 class HebbianCube(TransitionGraphMixin, NEBCBase):
     """
     3D Hebbian lattice for testing spatial organization.

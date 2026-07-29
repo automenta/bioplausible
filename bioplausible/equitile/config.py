@@ -13,7 +13,7 @@ from typing import Any, Literal
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class EquiTileConfig:
     """Main EquiTile configuration.
 
@@ -149,7 +149,7 @@ class EquiTileConfig:
             )
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class EnhancedEquiTileConfig(EquiTileConfig):
     """
     Enhanced configuration for EquiTile with all improvements.
@@ -307,7 +307,7 @@ class MultiGPUConfig:
             raise ValueError(f"tile_assignment must be one of {valid_assignments}")
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class NCCLConfig:
     """NCCL communication configuration."""
 
@@ -333,7 +333,7 @@ class NCCLConfig:
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class AsyncConfig:
     """Configuration for async tile execution."""
 
@@ -351,7 +351,7 @@ class AsyncConfig:
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class CurriculumConfig:
     """Curriculum learning configuration."""
 

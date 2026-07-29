@@ -11,7 +11,6 @@ Combines functionality for:
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -21,7 +20,7 @@ from torch.nn.utils.parametrizations import spectral_norm
 from bioplausible.core.registry import register_model  # noqa: F401
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ModelConfig:
     """Configuration for a bio-plausible model."""
 
@@ -43,25 +42,29 @@ class ModelConfig:
     lipschitz_mode: str = "power_iteration"  # "power_iteration" or "svd"
 
     # Additional kwargs
-    extra: dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self):
         """Validate configuration."""
         # input_dim can be 0 for Conv models (placeholder)
-        if isinstance(self.input_dim, tuple):
+        val = self.input_dim
+        if isinstance(val, tuple):
             import math
 
-            self.input_dim = math.prod(self.input_dim)
-        if self.input_dim < 0:
-            raise ValueError(f"input_dim must be >= 0, got {self.input_dim}")
+            val = math.prod(val)
+        if val < 0:
+            raise ValueError(f"input_dim must be >= 0, got {val}")
+        # Use object.__setattr__ because frozen=True
+        if isinstance(self.input_dim, tuple):
+            object.__setattr__(self, "input_dim", val)
         if self.output_dim <= 0:
             raise ValueError(f"output_dim must be > 0, got {self.output_dim}")
 
         # Sync steps if one is changed
         if self.equilibrium_steps != 30 and self.max_steps == 30:
-            self.max_steps = self.equilibrium_steps
+            object.__setattr__(self, "max_steps", self.equilibrium_steps)
         elif self.max_steps != 30 and self.equilibrium_steps == 30:
-            self.equilibrium_steps = self.max_steps
+            object.__setattr__(self, "equilibrium_steps", self.max_steps)
 
 
 class BioModel(nn.Module, ABC):

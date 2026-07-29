@@ -32,6 +32,8 @@ class ComponentCategory(str, Enum):
     OPTIMIZER = "optimizer"
     SPARSITY = "sparsity"
     METRIC = "metric"
+    TASK = "task"
+    TRACK = "track"
 
 
 class Domain(str, Enum):
@@ -465,6 +467,11 @@ def register_metric(name: str | None = None, **kwargs) -> Callable:
     return Registry.register(ComponentCategory.METRIC, name, **kwargs)
 
 
+def register_task(name: str | None = None, **kwargs) -> Callable:
+    """Register a task component."""
+    return Registry.register(ComponentCategory.TASK, name, **kwargs)
+
+
 def list_models() -> list[str]:
     """Convenience: list all registered model names."""
     return list(Registry._components.get(ComponentCategory.MODEL, {}).keys())
@@ -485,4 +492,5 @@ __all__ = [
     "register_optimizer",
     "register_propagator",
     "register_sparsity",
+    "register_task",
 ]

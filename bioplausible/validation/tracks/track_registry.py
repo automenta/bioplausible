@@ -87,6 +87,12 @@ register_tracks_from_module(research_tracks)
 # 6. Signal Propagation
 register_tracks_from_module(signal_tracks)
 
+# Sync into core Registry under ComponentCategory.TRACK for unified discovery.
+from bioplausible.core.registry import ComponentCategory, Registry
+
+for track_id, track_fn in ALL_TRACKS.items():
+    Registry.register(ComponentCategory.TRACK, name=f"track_{track_id}")(track_fn)
+
 
 def get_track(track_id: int) -> Callable:
     """Get a track function by ID."""

@@ -1,44 +1,15 @@
 """
-Task Registry
+Task Registration
 
-Centralized registry for Experiment Tasks.
+Tasks are registered directly into the core Registry under
+``ComponentCategory.TASK`` via the ``register_task`` convenience decorator.
 """
 
-from bioplausible.hyperopt.tasks import LMTask, RLTask, TaskProtocol, VisionTask
+from bioplausible.core.registry import register_task
+from bioplausible.hyperopt.tasks import LMTask, RLTask, VisionTask
 
-
-class TaskRegistry:
-    """Registry for task classes."""
-
-    _tasks: dict[str, type[TaskProtocol]] = {}
-
-    @classmethod
-    def register(cls, name: str, task_cls: type[TaskProtocol]):
-        """Register a task class."""
-        cls._tasks[name] = task_cls
-
-    @classmethod
-    def get(cls, name: str) -> type[TaskProtocol]:
-        """Get a task class by name."""
-        if name not in cls._tasks:
-            raise ValueError(f"Task '{name}' not found in registry.")
-        return cls._tasks[name]
-
-    @classmethod
-    def list_tasks(cls):
-        """List registered tasks."""
-        return list(cls._tasks.keys())
-
-
-# Register core tasks
-# We map generic names to classes. Instantiation logic (like parsing 'mnist_01')
-# might still need a factory, or we can make the factory use this registry.
-
-# For now, we register base types and let the factory decide which one to
-# instantiate based on string analysis.
-# Or better: The factory `create_task` logic should eventually move here or use this.
-
-# Let's start simple: Register the classes so they can be looked up if needed.
-TaskRegistry.register("lm", LMTask)
-TaskRegistry.register("vision", VisionTask)
-TaskRegistry.register("rl", RLTask)
+# Register core task types via decorator syntax.
+# Instantiation logic (parsing 'mnist_01') lives in the task factory.
+register_task("lm")(LMTask)
+register_task("vision")(VisionTask)
+register_task("rl")(RLTask)

@@ -70,40 +70,6 @@ class NEBCBase(BioModel, ABC):
         return super().create_pair(input_dim, hidden_dim, output_dim, **kwargs)
 
 
-class NEBCRegistry:
-    """
-    Registry for NEBC algorithms.
-    Wraps the core Registry for NEBC-specific registration.
-    """
-
-    @classmethod
-    def register(cls, name: str):
-        from bioplausible.core.registry import register_model
-
-        return register_model(name=name)
-
-    @classmethod
-    def get(cls, name: str) -> type:
-        from bioplausible.core.registry import ComponentCategory, Registry
-
-        return Registry.get(ComponentCategory.MODEL, name)
-
-    @classmethod
-    def list_all(cls) -> list[str]:
-        from bioplausible.core.registry import ComponentCategory, Registry
-
-        return Registry.list(ComponentCategory.MODEL).get("model", [])
-
-    @classmethod
-    def create(cls, name: str, *args, **kwargs) -> NEBCBase:
-        algorithm_cls = cls.get(name)
-        return algorithm_cls(*args, **kwargs)
-
-
-# Convenience decorator
-register_nebc = NEBCRegistry.register
-
-
 def train_nebc_model(
     model: NEBCBase,
     X: torch.Tensor,
@@ -179,12 +145,13 @@ def run_nebc_ablation(
     epochs: int = 50,
     **kwargs,
 ) -> dict[str, dict]:
-    """
-    Run ablation study comparing algorithm with/without spectral norm.
+    """Run ablation study comparing algorithm with/without spectral norm.
 
     Returns dict with 'with_sn' and 'without_sn' results.
     """
-    algorithm_cls = NEBCRegistry.get(algorithm_name)
+    from bioplausible.core.registry import ComponentCategory, Registry
+
+    algorithm_cls = Registry.get(ComponentCategory.MODEL, algorithm_name)
 
     results = {}
     for use_sn in [True, False]:
