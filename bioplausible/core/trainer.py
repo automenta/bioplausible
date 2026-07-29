@@ -21,6 +21,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch import nn
 
 from bioplausible.core.energy import EnergyTracker
+from bioplausible.core.energy_model import EBMTrainer, EnergyModel
 from bioplausible.core.registry import (
     ComponentCategory,
     IncompatibilityError,
@@ -833,6 +834,22 @@ class CoreTrainer:
 
     def _train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Single training step."""
+        # EnergyModel dispatch (Phase A.1): settle + contrastive update
+        if isinstance(self.model, EnergyModel):
+            ebm_lr = self.config.optimizer_kwargs.get("lr", 0.01)
+            ebm_free_steps = self.config.extra.get("free_steps", 30)
+            ebm_nudged_steps = self.config.extra.get("nudged_steps")
+            ebm_beta = self.config.extra.get("beta", 0.1)
+            trainer = EBMTrainer(
+                self.model,
+                lr=ebm_lr,
+                free_steps=ebm_free_steps,
+                nudged_steps=ebm_nudged_steps,
+                beta=ebm_beta,
+                clip_grad_norm=self.config.grad_clip,
+            )
+            return trainer.train_step(x, y)
+
         # Check if model has custom train_step (for bio-plausible models)
         if hasattr(self.model, "train_step"):
             metrics = self.model.train_step(x, y)

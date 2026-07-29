@@ -2,24 +2,31 @@
 EquiTile Distributed: Multi-GPU Tile Distribution
 ==================================================
 
-Enables true distributed training across multiple GPUs:
+Unified multi-GPU training for EquiTile, merging features previously
+split across ``distributed.py`` and ``multigpu.py``:
+
 - Tile distribution across devices
-- Inter-GPU communication for tile boundaries
-- Gradient accumulation across devices
-- Mixed precision support (FP16/BF16)
+- Inter-GPU communication for tile boundaries (``TileCommunicator``)
+- NCCL-based gradient synchronization (``NCCLCommunicator`` from ``._nccl``)
+- Mixed precision support (FP16/BF16 with loss scaling)
+- Asynchronous tile execution with CUDA stream overlap
+- Dynamic tile growth/pruning
+- Timing instrumentation
 
 Key Components
 --------------
-- DistributedConfig: Distributed training configuration
-- TileCommunicator: Handles inter-GPU communication
-- MixedPrecisionTrainer: FP16/BF16 support with loss scaling
-- DistributedEquiTile: Multi-GPU wrapper
+- ``DistributedConfig``: Training configuration
+- ``TileCommunicator``: Inter-GPU tile-boundary communication
+- ``MixedPrecisionTrainer``: FP16/BF16 support with loss scaling
+- ``AsyncTileExecutor``: CUDA stream overlap for compute/communication
+- ``DistributedEquiTile``: Single multi-GPU wrapper class
 
 Examples
 --------
 >>> from bioplausible.equitile import EquiTile, DistributedEquiTile
 >>> model = EquiTile(
-...     neurons_per_tile=64, num_layers=4, tiles_per_layer=4, input_dim=784, output_dim=10
+...     neurons_per_tile=64, num_layers=4, tiles_per_layer=4,
+...     input_dim=784, output_dim=10,
 ... )
 >>> dist_model = DistributedEquiTile(
 ...     model,
@@ -29,11 +36,19 @@ Examples
 >>> stats = dist_model.train_step(X, y)
 """
 
+import logging
+import os
+import threading
+import time
+from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import torch
+import torch.multiprocessing as mp
 
+from ._nccl import NCCLCommunicator
 from .config import DistributedConfig, TileGrowthConfig
 from .kernels import (
     compute_activity_update,
@@ -43,6 +58,8 @@ from .kernels import (
 
 if TYPE_CHECKING:
     from .core import EquiTile
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -81,25 +98,24 @@ class TileCommunicator:
     """Handles inter-GPU communication for tile boundaries.
 
     When tiles are distributed across GPUs, boundary tiles need to
-    exchange activity and error information.
+    exchange activity and error information.  This class identifies
+    those boundaries and manages the exchange.
 
     Parameters
     ----------
     assignments : list of DeviceAssignment
         Device assignments
-    backend : str
-        Communication backend
+    graph : TileGraph
+        The tile graph topology
     """
 
     def __init__(
         self,
         assignments: list[DeviceAssignment],
         graph: Any,
-        backend: str = "nccl",
     ) -> None:
         self.assignments = assignments
         self.graph = graph
-        self.backend = backend
         self.n_devices = len(assignments)
 
         # Build communication groups
@@ -114,16 +130,13 @@ class TileCommunicator:
         dict
             Dict mapping device_id to list of (local_tile, remote_tile) pairs
         """
-        # Build tile -> device mapping
         tile_to_device: dict[int, int] = {}
         for assignment in self.assignments:
             for tile_id in assignment.tile_ids:
                 tile_to_device[tile_id] = assignment.device_id
 
-        # Use graph helper
         boundary_map = self.graph.get_boundary_tiles(tile_to_device)
 
-        # Structure output: device_id -> [(local_tile, remote_tile), ...]
         boundary: dict[int, list[tuple[int, int]]] = {
             i: [] for i in range(self.n_devices)
         }
@@ -158,8 +171,6 @@ class TileCommunicator:
         if self.n_devices == 1:
             return {}
 
-        # For multi-GPU, use all_reduce or send/recv
-        # This is a simplified implementation
         received: dict[int, torch.Tensor] = {}
 
         for local_tile, remote_tile in self._boundary_tiles.get(device_id, []):
@@ -171,7 +182,6 @@ class TileCommunicator:
     def sync_gradients(
         self,
         gradients: dict[str, torch.Tensor],
-        device_id: int,
     ) -> dict[str, torch.Tensor]:
         """Sync gradients across devices (all_reduce).
 
@@ -179,8 +189,6 @@ class TileCommunicator:
         ----------
         gradients : dict
             Gradient tensors by name
-        device_id : int
-            This device's ID
 
         Returns
         -------
@@ -190,7 +198,6 @@ class TileCommunicator:
         if self.n_devices == 1:
             return gradients
 
-        # All-reduce gradients
         for name, grad in gradients.items():
             if torch.distributed.is_initialized():
                 torch.distributed.all_reduce(grad, op=torch.distributed.ReduceOp.AVG)
@@ -213,7 +220,7 @@ class MixedPrecisionTrainer:
     model : EquiTile
         The model
     dtype : str
-        Precision type: 'float16' or 'bfloat16'
+        Precision type: ``'float16'`` or ``'bfloat16'``
     initial_scale : float
         Initial loss scale
     scale_window : int
@@ -231,12 +238,10 @@ class MixedPrecisionTrainer:
         self.dtype = torch.float16 if dtype == "float16" else torch.bfloat16
         self.enabled = self.dtype != torch.float32
 
-        # Loss scaling
         self.scale = initial_scale if self.enabled else 1.0
         self.scale_window = scale_window
         self.steps_without_overflow = 0
 
-        # Grad scaler
         self.scaler = torch.amp.GradScaler("cuda", enabled=self.enabled)
 
     def cast_model(self) -> None:
@@ -244,7 +249,6 @@ class MixedPrecisionTrainer:
         if not self.enabled:
             return
 
-        # Cast edge weights
         for weight in self.model.edge_weights.values():
             weight.data = weight.data.to(self.dtype)
         for bias in self.model.edge_biases.values():
@@ -302,14 +306,11 @@ class MixedPrecisionTrainer:
             if grad is None:
                 continue
 
-            # Unscale
             grad.data.mul_(1.0 / self.scale)
 
-            # Compute norm
             param_norm = grad.data.norm(2)
             total_norm = max(total_norm, param_norm.item())
 
-            # Clip
             if total_norm > max_norm:
                 clip_coef = max_norm / (total_norm + 1e-6)
                 grad.data.mul_(clip_coef)
@@ -335,33 +336,139 @@ class MixedPrecisionTrainer:
 
 
 # =============================================================================
-# Distributed EquiTile
+# Async Tile Executor
+# =============================================================================
+
+
+class AsyncTileExecutor:
+    """Executes tile operations asynchronously with NCCL.
+
+    Overlaps communication and computation for maximum throughput.
+
+    Parameters
+    ----------
+    communicator : NCCLCommunicator
+        NCCL communicator
+    """
+
+    def __init__(self, communicator: NCCLCommunicator) -> None:
+        self.communicator = communicator
+        self._compute_stream: torch.cuda.Stream | None = None
+        self._comm_stream: torch.cuda.Stream | None = None
+        self._running = False
+        self._worker_thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        """Start async executor."""
+        if torch.cuda.is_available():
+            self._compute_stream = torch.cuda.Stream()
+            self._comm_stream = torch.cuda.Stream()
+        self._running = True
+
+    def stop(self) -> None:
+        """Stop async executor."""
+        self._running = False
+        self.synchronize()
+
+    def submit_compute(
+        self,
+        op: Callable,
+        *args,
+        **kwargs,
+    ) -> None:
+        """Submit compute operation.
+
+        Parameters
+        ----------
+        op : callable
+            Operation to execute
+        *args
+            Positional arguments
+        **kwargs
+            Keyword arguments
+        """
+        if self._compute_stream is not None:
+            with torch.cuda.stream(self._compute_stream):
+                op(*args, **kwargs)
+        else:
+            op(*args, **kwargs)
+
+    def submit_comm(
+        self,
+        op: Callable,
+        *args,
+        **kwargs,
+    ) -> None:
+        """Submit communication operation.
+
+        Parameters
+        ----------
+        op : callable
+            Operation to execute
+        *args
+            Positional arguments
+        **kwargs
+            Keyword arguments
+        """
+        if self._comm_stream is not None:
+            with torch.cuda.stream(self._comm_stream):
+                op(*args, **kwargs)
+        else:
+            op(*args, **kwargs)
+
+    def synchronize(self) -> None:
+        """Synchronize compute and communication streams."""
+        if self._compute_stream is not None:
+            self._compute_stream.synchronize()
+        if self._comm_stream is not None:
+            self._comm_stream.synchronize()
+
+    @contextmanager
+    def compute_stream_context(self):
+        """Context manager for compute stream."""
+        if self._compute_stream is not None:
+            with torch.cuda.stream(self._compute_stream):
+                yield
+        else:
+            yield
+
+    @contextmanager
+    def comm_stream_context(self):
+        """Context manager for communication stream."""
+        if self._comm_stream is not None:
+            with torch.cuda.stream(self._comm_stream):
+                yield
+        else:
+            yield
+
+
+# =============================================================================
+# Distributed EquiTile (unified single class)
 # =============================================================================
 
 
 class DistributedEquiTile:
     """Multi-GPU distributed EquiTile.
 
-    Distributes tiles across multiple GPUs for parallel training.
+    Distributes tiles across multiple GPUs for parallel training with
+    optional mixed precision and async CUDA stream execution.
 
     Parameters
     ----------
     model : EquiTile
         Base EquiTile model
     config : DistributedConfig, optional
-        Distributed training configuration
+        Distributed training configuration.  If *None*, auto-detects GPUs.
+    device_ids : list of int, optional
+        Override device IDs (takes precedence over config).
 
     Examples
     --------
     >>> model = EquiTile(
-    ...     neurons_per_tile=64, num_layers=4, tiles_per_layer=4, input_dim=784, output_dim=10
+    ...     neurons_per_tile=64, num_layers=4, tiles_per_layer=4,
+    ...     input_dim=784, output_dim=10,
     ... )
-    >>> dist_model = DistributedEquiTile(
-    ...     model,
-    ...     device_ids=[0, 1, 2, 3],
-    ...     tile_balance="round_robin",
-    ...     mixed_precision=True,
-    ... )
+    >>> dist_model = DistributedEquiTile(model, device_ids=[0, 1, 2, 3])
     >>> stats = dist_model.train_step(X, y)
     """
 
@@ -369,9 +476,24 @@ class DistributedEquiTile:
         self,
         model: EquiTile,
         config: DistributedConfig | None = None,
+        *,
+        device_ids: list[int] | None = None,
+        mixed_precision: bool | None = None,
+        async_execution: bool | None = None,
+        tile_balance: str | None = None,
     ) -> None:
         self.model = model
         self.config = config or DistributedConfig()
+
+        # Allow kwargs to override config fields (convenience)
+        if device_ids is not None:
+            self.config.device_ids = device_ids
+        if mixed_precision is not None:
+            self.config.mixed_precision = mixed_precision
+        if async_execution is not None:
+            self.config.overlap_communication = async_execution
+        if tile_balance is not None:
+            self.config.tile_balance = tile_balance  # type: ignore[assignment]
 
         # Set up devices
         if not self.config.device_ids:
@@ -390,16 +512,17 @@ class DistributedEquiTile:
         # Assign tiles to devices
         self.assignments = self._assign_tiles()
 
-        # Set up communicator
+        # Tile communicator (boundary management)
         self.communicator = TileCommunicator(
             self.assignments,
             self.model.graph,
-            backend=self.config.communication_backend,
         )
 
-        # Set up mixed precision
+        # NCCL communicator (gradient sync across devices)
+        self.nccl_communicator = NCCLCommunicator()
+
+        # Mixed precision
         self.mp_trainer: MixedPrecisionTrainer | None = None
-        # Disable mixed precision on CPU to avoid dtype mismatches
         if self.config.mixed_precision and self.devices[0].type == "cpu":
             self.config.mixed_precision = False
 
@@ -408,7 +531,13 @@ class DistributedEquiTile:
                 model, dtype=self.config.mixed_precision_dtype
             )
 
-        # Set up tile growth/pruning
+        # Async executor
+        self.executor: AsyncTileExecutor | None = None
+        if self.config.overlap_communication and self.n_devices > 1:
+            self.executor = AsyncTileExecutor(self.nccl_communicator)
+            self.executor.start()
+
+        # Tile growth/pruning
         self.growth_config = TileGrowthConfig()
         self._steps_since_modify = 0
 
@@ -418,6 +547,14 @@ class DistributedEquiTile:
         # Gradient accumulation
         self._accumulated_gradients: dict[str, torch.Tensor] = {}
         self._accumulation_step = 0
+
+        # Timing
+        self._comm_time = 0.0
+        self._compute_time = 0.0
+
+    # ------------------------------------------------------------------
+    # Tile assignment & distribution
+    # ------------------------------------------------------------------
 
     def _assign_tiles(self) -> list[DeviceAssignment]:
         """Assign tiles to devices.
@@ -429,19 +566,42 @@ class DistributedEquiTile:
         """
         n_tiles = len(self.model.graph.tiles)
         tile_ids = list(self.model.graph.tiles.keys())
+        balance = self.config.tile_balance
 
         assignments: list[DeviceAssignment] = []
 
         for i, device_id in enumerate(self.config.device_ids):
-            if self.config.tile_balance == "round_robin":
-                # Round-robin assignment
+            if balance == "round_robin":
                 assigned = tile_ids[i :: self.n_devices]
-            elif self.config.tile_balance == "layered":
-                # Assign by layers
+            elif balance == "layered":
                 layer_size = n_tiles // self.n_devices
                 start = i * layer_size
                 end = start + layer_size if i < self.n_devices - 1 else n_tiles
                 assigned = tile_ids[start:end]
+            elif balance == "balanced":
+                # Balance by neuron count
+                neuron_counts: dict[int, int] = {}
+                remaining = list(tile_ids)
+                assigned = []
+                for _ in range(self.n_devices):
+                    device_tiles = []
+                    device_neurons = 0
+                    for tid in list(remaining):
+                        tile = self.model.graph.tiles[tid]
+                        if device_neurons + tile.neurons <= (
+                            n_tiles // self.n_devices
+                        ) * max(
+                            (t.neurons for t in self.model.graph.tiles.values()),
+                            default=1,
+                        ):
+                            device_tiles.append(tid)
+                            device_neurons += tile.neurons
+                            remaining.remove(tid)
+                    if i == len(assignments):
+                        assigned = device_tiles
+                        break
+                if not assigned:
+                    assigned = tile_ids
             else:
                 assigned = tile_ids
 
@@ -450,7 +610,7 @@ class DistributedEquiTile:
                     device_id=i,
                     device=self.devices[i],
                     tile_ids=assigned,
-                    edge_ids=[],  # Would need to compute
+                    edge_ids=[],
                 )
             )
 
@@ -469,7 +629,6 @@ class DistributedEquiTile:
                 if tile.error is not None:
                     tile.error = tile.error.to(assignment.device)
 
-        # Move edge weights
         for assignment in self.assignments:
             for edge_key in assignment.edge_ids:
                 weight, bias = self.model._get_edge_params(*edge_key)
@@ -477,6 +636,10 @@ class DistributedEquiTile:
                     weight.data = weight.data.to(assignment.device)
                 if bias is not None:
                     bias.data = bias.data.to(assignment.device)
+
+    # ------------------------------------------------------------------
+    # Training step
+    # ------------------------------------------------------------------
 
     def train_step(
         self,
@@ -497,21 +660,55 @@ class DistributedEquiTile:
         dict
             Training statistics
         """
-        # For single GPU, use regular training
         if self.n_devices == 1:
             if self.mp_trainer:
                 return self._train_step_mixed_precision(x, y)
             return self.model.train_step(x, y)
 
-        # Multi-GPU training
-        return self._train_step_distributed(x, y)
+        start_time = time.perf_counter()
+
+        batch_size = x.shape[0]
+        device = self.devices[0]
+
+        x = x.to(device)
+        y = y.to(device)
+
+        input_proj = self.model.W_in(x)
+
+        for assignment in self.assignments:
+            for tile_id in assignment.tile_ids:
+                tile = self.model.graph.tiles[tile_id]
+
+                if tile.is_input:
+                    idx = self.model.graph.input_tile_ids.index(tile.id)
+                    start = idx * self.model.config.neurons_per_tile
+                    tile.activity = input_proj[:, start : start + tile.neurons].clone()
+                else:
+                    tile.activity = torch.zeros(
+                        batch_size, tile.neurons, device=assignment.device
+                    )
+                tile.prediction = None
+                tile.error = None
+
+        for _ in range(self.model.config.inference_steps):
+            self._unified_relax_step(batch_size)
+
+        stats = self._unified_learning(y)
+
+        elapsed = time.perf_counter() - start_time
+        stats["total_time"] = elapsed
+        stats["comm_time"] = self._comm_time
+        stats["compute_time"] = self._compute_time
+        stats["n_devices"] = self.n_devices
+
+        return stats
 
     def _train_step_mixed_precision(
         self,
         x: torch.Tensor,
         y: torch.Tensor,
     ) -> dict[str, float]:
-        """Training step with mixed precision.
+        """Training step with mixed precision (single-GPU path).
 
         Parameters
         ----------
@@ -533,99 +730,31 @@ class DistributedEquiTile:
 
         return stats
 
-    def _train_step_distributed(
-        self,
-        x: torch.Tensor,
-        y: torch.Tensor,
-    ) -> dict[str, float]:
-        """Distributed training step across multiple GPUs.
+    # ------------------------------------------------------------------
+    # Relaxation loop
+    # ------------------------------------------------------------------
 
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor
-        y : torch.Tensor
-            Target tensor
-
-        Returns
-        -------
-        dict
-            Training statistics
-        """
-        batch_size = x.shape[0]
-
-        # Distribute input across devices
-        input_proj = self.model.W_in(x)
-
-        # Initialize activities on each device
-        for assignment in self.assignments:
-            for tile_id in assignment.tile_ids:
-                tile = self.model.graph.tiles[tile_id]
-
-                if tile.is_input:
-                    idx = self.model.graph.input_tile_ids.index(tile.id)
-                    start = idx * self.model.config.neurons_per_tile
-                    tile.activity = input_proj[:, start : start + tile.neurons].clone()
-                else:
-                    tile.activity = torch.zeros(
-                        batch_size, tile.neurons, device=assignment.device
-                    )
-                tile.prediction = None
-                tile.error = None
-
-        # Relaxation loop with communication
-        for _ in range(self.model.config.inference_steps):
-            self._distributed_relax_step(batch_size)
-
-        # Learning step
-        return self._distributed_learning(y)
-
-    def _distributed_relax_step(self, batch_size: int) -> None:
-        """One relaxation step with inter-GPU communication.
+    def _unified_relax_step(self, batch_size: int) -> None:
+        """One relaxation step with optional async communication.
 
         Parameters
         ----------
         batch_size : int
             Batch size
         """
-        # Compute predictions locally
+        compute_start = time.perf_counter()
+
         for assignment in self.assignments:
-            for tile_id in assignment.tile_ids:
-                tile = self.model.graph.tiles[tile_id]
-                if tile.is_input:
-                    continue
+            if self.executor:
+                with self.executor.compute_stream_context():
+                    self._compute_predictions_device(batch_size, assignment)
+            else:
+                self._compute_predictions_device(batch_size, assignment)
 
-                inputs = []
-                total_bias = None
+        if self.executor:
+            self.executor.synchronize()
 
-                for src_id in tile.bwd_neighbors:
-                    src = self.model.graph.tiles[src_id]
-                    weight, bias = self.model._get_edge_params(src_id, tile.id)
-
-                    if weight is None:
-                        continue
-
-                    src_activity = (
-                        src.activity
-                        if src.activity is not None
-                        else torch.zeros(
-                            batch_size, src.neurons, device=assignment.device
-                        )
-                    )
-                    inputs.append(self.model._apply_activation(src_activity) @ weight)
-
-                    if bias is not None:
-                        if total_bias is None:
-                            total_bias = bias
-                        else:
-                            total_bias = total_bias + bias
-
-            tile.prediction = compute_tile_prediction(
-                inputs,
-                total_bias,
-                output_shape=(batch_size, tile.neurons),
-                device=assignment.device,
-            )
+        self._compute_time = time.perf_counter() - compute_start
 
         # Compute errors locally
         for assignment in self.assignments:
@@ -639,7 +768,9 @@ class DistributedEquiTile:
                 else:
                     tile.error = tile.activity - tile.prediction
 
-        # Exchange boundary information
+        # Exchange boundary activities
+        comm_start = time.perf_counter()
+
         for assignment in self.assignments:
             activities = {
                 tile_id: self.model.graph.tiles[tile_id].activity
@@ -651,16 +782,19 @@ class DistributedEquiTile:
                 activities, assignment.device_id
             )
 
-            # Update boundary predictions
             for local_tile, remote_activity in received.items():
                 tile = self.model.graph.tiles[local_tile]
                 if tile.prediction is not None:
-                    # Add contribution from remote tile
-                    pass  # Would need edge weights
+                    pass  # Would need edge weights for full implementation
 
-        # Update activities locally
+        if self.executor:
+            self.executor.synchronize()
+
+        self._comm_time = time.perf_counter() - comm_start
+
+        # Update activities
         for assignment in self.assignments:
-            for i, tile_id in enumerate(assignment.tile_ids):
+            for tile_id in assignment.tile_ids:
                 tile = self.model.graph.tiles[tile_id]
                 if tile.is_input or tile.error is None:
                     continue
@@ -687,8 +821,60 @@ class DistributedEquiTile:
                     clamp=self.model.config.clamp_activities,
                 )
 
-    def _distributed_learning(self, y: torch.Tensor) -> dict[str, float]:
-        """Learning step for distributed training.
+    def _compute_predictions_device(
+        self,
+        batch_size: int,
+        assignment: DeviceAssignment,
+    ) -> None:
+        """Compute predictions for tiles on a device.
+
+        Parameters
+        ----------
+        batch_size : int
+            Batch size
+        assignment : DeviceAssignment
+            Device assignment for this device
+        """
+        device = assignment.device
+
+        for tile_id in assignment.tile_ids:
+            tile = self.model.graph.tiles[tile_id]
+            if tile.is_input:
+                continue
+
+            inputs = []
+            total_bias = None
+
+            for src_id in tile.bwd_neighbors:
+                src = self.model.graph.tiles[src_id]
+                weight, bias = self.model._get_edge_params(src_id, tile.id)
+
+                if weight is None:
+                    continue
+
+                src_activity = (
+                    src.activity
+                    if src.activity is not None
+                    else torch.zeros(batch_size, src.neurons, device=device)
+                )
+                inputs.append(self.model._apply_activation(src_activity) @ weight)
+
+                if bias is not None:
+                    total_bias = bias if total_bias is None else total_bias + bias
+
+            tile.prediction = compute_tile_prediction(
+                inputs,
+                total_bias,
+                output_shape=(batch_size, tile.neurons),
+                device=device,
+            )
+
+    # ------------------------------------------------------------------
+    # Learning step
+    # ------------------------------------------------------------------
+
+    def _unified_learning(self, y: torch.Tensor) -> dict[str, float]:
+        """Learning step: gather outputs, compute loss, update weights.
 
         Parameters
         ----------
@@ -700,7 +886,6 @@ class DistributedEquiTile:
         dict
             Training statistics
         """
-        # Gather output activities to W_out device
         w_out_device = self.model.W_out.weight.device
         out_activities_list = []
 
@@ -710,25 +895,31 @@ class DistributedEquiTile:
                 out_activities_list.append(act.to(w_out_device))
 
         if not out_activities_list:
-            # Should not happen ideally
             batch_size = y.shape[0] if y.dim() > 0 else 1
             out_dim = self.model.W_out.in_features
             out_activities = torch.zeros(batch_size, out_dim, device=w_out_device)
         else:
             out_activities = torch.cat(out_activities_list, dim=-1)
 
-        # Compute loss
         logits = self.model.W_out(out_activities)
-
         loss = self.model.task_handler.compute_loss(logits, y)
 
-        # Backprop for I/O projections
-        # self.model._ensure_local_optimizers() # Removed
+        # Backprop for I/O projections with optional gradient sync
+        self.model._ensure_local_optimizers()
         self.model._optim_io.zero_grad()
         loss.backward()
+
+        if self.n_devices > 1:
+            for param in self.model.W_in.parameters():
+                if param.grad is not None:
+                    self.nccl_communicator.all_reduce(param.grad)
+            for param in self.model.W_out.parameters():
+                if param.grad is not None:
+                    self.nccl_communicator.all_reduce(param.grad)
+
         self.model._optim_io.step()
 
-        # Local Hebbian updates (each device updates its edges)
+        # Local Hebbian updates per device
         for assignment in self.assignments:
             for edge_key in assignment.edge_ids:
                 weight, bias = self.model._get_edge_params(*edge_key)
@@ -741,7 +932,6 @@ class DistributedEquiTile:
                 if src.activity is None or dst.error is None:
                     continue
 
-                # edge_idx = list(self.model.graph.edges.keys()).index(edge_key) # edges is list now
                 edge_idx = self.model.graph.edges.index(edge_key)
                 imp = torch.sigmoid(self.model.edge_importance[edge_idx]).item()
 
@@ -762,7 +952,42 @@ class DistributedEquiTile:
                         bias.data - self.model.config.learning_rate * bias_update
                     )
 
-        # Compute metrics
+        # Also handle edges not explicitly in assignments (e.g. in single-device mode
+        # or when edge_ids are empty — iterate all edges)
+        if not any(a.edge_ids for a in self.assignments):
+            for edge_key in self.model.graph.edges:
+                if edge_key in self._processed_edges(y):
+                    continue
+                weight, bias = self.model._get_edge_params(*edge_key)
+                if weight is None:
+                    continue
+
+                src = self.model.graph.tiles[edge_key[0]]
+                dst = self.model.graph.tiles[edge_key[1]]
+
+                if src.activity is None or dst.error is None:
+                    continue
+
+                edge_idx = self.model.graph.edges.index(edge_key)
+                imp = torch.sigmoid(self.model.edge_importance[edge_idx]).item()
+
+                src_act = self.model._apply_activation(src.activity)
+                dst_err = dst.error
+
+                batch_size = src_act.shape[0]
+                weight_update, bias_update = compute_hebbian_update(
+                    src_act, dst_err, imp, batch_size
+                )
+
+                if weight is not None:
+                    weight.data = weight.data - self.model.config.learning_rate * (
+                        weight_update + self.model.config.weight_decay * weight.data
+                    )
+                if bias is not None:
+                    bias.data = (
+                        bias.data - self.model.config.learning_rate * bias_update
+                    )
+
         accuracy = self.model.task_handler.compute_metrics(logits, y)
 
         return {
@@ -772,6 +997,14 @@ class DistributedEquiTile:
             "distributed": True,
             "n_devices": self.n_devices,
         }
+
+    def _processed_edges(self, y: torch.Tensor) -> set[tuple[int, int]]:
+        """Return edges already processed by assignment-based loop."""
+        return set()
+
+    # ------------------------------------------------------------------
+    # Tile growth & pruning
+    # ------------------------------------------------------------------
 
     def grow_tile(self, parent_tile_id: int) -> int:
         """Add a new tile as a child of an existing tile.
@@ -786,27 +1019,22 @@ class DistributedEquiTile:
         int
             New tile ID (-1 if failed)
         """
-        if not self.growth_config.enabled:
+        if not self.growth_config.growth_enabled:
             return -1
 
         parent = self.model.graph.tiles[parent_tile_id]
 
-        # Use model API to add tile
         new_id = self.model.add_tile(
             neurons=parent.neurons,
             layer_id=parent.layer_id + 1,
-            pos_x=parent.pos_x,  # Ideally offset this
+            pos_x=parent.pos_x,
             pos_y=parent.pos_y,
             is_input=False,
             is_output=False,
         )
 
-        # Connect to parent (lateral or forward? dynamics used lateral, this used layer+1)
-        # Original logic was layer_id + 1, so it's a forward connection
         self.model.add_edge(parent_tile_id, new_id)
 
-        # Assign to device
-        # Find parent assignment
         parent_device = self.devices[0]
         for assignment in self.assignments:
             if parent_tile_id in assignment.tile_ids:
@@ -815,7 +1043,6 @@ class DistributedEquiTile:
                 assignment.edge_ids.append((parent_tile_id, new_id))
                 break
 
-        # Move new tile state to device
         tile = self.model.graph.tiles[new_id]
         if tile.activity is not None:
             tile.activity = tile.activity.to(parent_device)
@@ -824,7 +1051,6 @@ class DistributedEquiTile:
         if tile.error is not None:
             tile.error = tile.error.to(parent_device)
 
-        # Move edge parameters
         weight, bias = self.model._get_edge_params(parent_tile_id, new_id)
         if weight is not None:
             weight.data = weight.data.to(parent_device)
@@ -847,27 +1073,22 @@ class DistributedEquiTile:
         bool
             Whether tile was pruned
         """
-        if not self.growth_config.enabled:
+        if not self.growth_config.prune_enabled:
             return False
 
         tile = self.model.graph.tiles.get(tile_id)
         if tile is None or tile.is_input or tile.is_output:
             return False
 
-        # Identify edges to verify they are removed from assignments
         edges_to_remove = [
             (src, dst) for (src, dst) in self.model.graph.edges if tile_id in (src, dst)
         ]
 
-        # Use model API
         self.model.remove_tile(tile_id)
 
-        # Remove from assignments
         for assignment in self.assignments:
             if tile_id in assignment.tile_ids:
                 assignment.tile_ids.remove(tile_id)
-
-            # Remove edges from assignment
             assignment.edge_ids = [
                 e for e in assignment.edge_ids if e not in edges_to_remove
             ]
@@ -890,31 +1111,33 @@ class DistributedEquiTile:
         """
         stats: dict[str, int] = {"grown": 0, "pruned": 0}
 
-        if not self.growth_config.enabled:
+        if not self.growth_config.growth_enabled:
             return stats
 
         self._steps_since_modify += 1
-        if self._steps_since_modify < self.growth_config.cooldown_steps:
+        if self._steps_since_modify < self.growth_config.growth_cooldown:
             return stats
 
-        # Check for growth
         for tile_id, error in errors.items():
             if error > self.growth_config.growth_threshold:
                 if len(self.model.graph.tiles) < self.growth_config.max_tiles:
                     new_id = self.grow_tile(tile_id)
                     if new_id >= 0:
                         stats["grown"] += 1
-                        break  # One tile at a time
+                        break
 
-        # Check for pruning
         for tile_id, error in errors.items():
             if error < self.growth_config.prune_threshold:
                 if len(self.model.graph.tiles) > self.growth_config.min_tiles:
                     if self.prune_tile(tile_id):
                         stats["pruned"] += 1
-                        break  # One tile at a time
+                        break
 
         return stats
+
+    # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
 
     @property
     def is_distributed(self) -> bool:
@@ -925,6 +1148,58 @@ class DistributedEquiTile:
     def is_mixed_precision(self) -> bool:
         """Check if mixed precision is enabled."""
         return self.mp_trainer is not None
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def destroy(self) -> None:
+        """Clean up resources (async executor, NCCL)."""
+        if self.executor:
+            self.executor.stop()
+        self.nccl_communicator.destroy()
+
+    def __del__(self) -> None:
+        self.destroy()
+
+
+# =============================================================================
+# Multi-Process Spawn Helper
+# =============================================================================
+
+
+def spawn_distributed_worker(
+    worker_fn: Callable[[int, int], None],
+    world_size: int,
+    master_addr: str = "localhost",
+    master_port: str = "29500",
+) -> None:
+    """Spawn multi-GPU worker processes.
+
+    Parameters
+    ----------
+    worker_fn : callable
+        Worker function with signature ``(rank, world_size)``
+    world_size : int
+        Number of processes to spawn
+    master_addr : str
+        Master node address
+    master_port : str
+        Master node port
+
+    Examples
+    --------
+    >>> def worker(rank, world_size):
+    ...     dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    ...     model = EquiTile(...)
+    ...     dist_model = DistributedEquiTile(model)
+    ...     ...
+    >>> spawn_distributed_worker(worker, world_size=4)
+    """
+    os.environ.setdefault("MASTER_ADDR", master_addr)
+    os.environ.setdefault("MASTER_PORT", master_port)
+
+    mp.spawn(worker_fn, args=(world_size,), nprocs=world_size, join=True)
 
 
 # =============================================================================

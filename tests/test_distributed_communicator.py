@@ -49,7 +49,7 @@ class TestTileCommunicator(unittest.TestCase):
             DeviceAssignment(device_id=1, device="cpu", tile_ids=[1, 2], edge_ids=[]),
         ]
 
-        comm = TileCommunicator(assignments, graph, backend="gloo")
+        comm = TileCommunicator(assignments, graph)
         boundary = comm._boundary_tiles
 
         # Check Device 0 boundary

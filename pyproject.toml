@@ -99,6 +99,7 @@ omit = ["*/tests/*", "*/test_*.py"]
 target-version = "py314"
 line-length = 88
 preview = true
+exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = [
@@ -123,27 +124,23 @@ select = [
     "PD",   # pandas-vet
     "PGH",  # pygrep-hooks
     "PIE",  # flake8-pie
-    "TID",  # flake8-tidy-imports
     "PYI",  # flake8-pyi
-    "bad-quotes-inline-string", # flake8-quotes
+    "Q",    # flake8-quotes
     "RSE",  # flake8-raise
     "SIM",  # flake8-simplify
 ]
-ignore = ["whitespace-before-punctuation", "line-too-long", "lowercase-imported-as-non-lowercase", "ambiguous-unicode-character-comment"]
+ignore = ["E501", "N812"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["assert", "hardcoded-password-func-arg", "too-many-arguments", "too-many-statements", "raise-vanilla-args"]
-"tests/**/conftest.py" = ["too-many-arguments", "too-many-statements"]
-"examples/legacy/**/*.py" = ["assert", "hardcoded-password-func-arg", "too-many-arguments", "too-many-statements"]
-"examples/**/*.py" = ["assert", "hardcoded-password-func-arg", "too-many-arguments", "too-many-statements"]
-"scripts/legacy/**/*.py" = ["assert", "hardcoded-password-func-arg", "too-many-arguments", "too-many-statements", "raise-vanilla-args"]
-"scripts/**/*.py" = ["assert", "hardcoded-password-func-arg", "too-many-arguments", "too-many-statements", "raise-vanilla-args"]
-"docs/**/*.py" = ["assert", "hardcoded-password-func-arg", "too-many-arguments", "too-many-statements", "raise-vanilla-args"]
+"tests/**/*.py" = ["S101", "PLR0913", "PLR0915"]
+"tests/**/conftest.py" = ["PLR0913", "PLR0915"]
+"examples/legacy/**/*.py" = ["S101", "PLR0913", "PLR0915"]
+"examples/**/*.py" = ["S101", "PLR0913", "PLR0915"]
+"scripts/legacy/**/*.py" = ["S101", "PLR0913", "PLR0915"]
+"scripts/**/*.py" = ["S101", "PLR0913", "PLR0915"]
+"docs/**/*.py" = ["S101", "PLR0913", "PLR0915"]
 
 [tool.ruff.lint.flake8-type-checking]
-
-[tool.ruff.lint.flake8-tidy-imports]
-ban-relative-imports = "all"
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -163,8 +160,6 @@ preview = true
 indent-style = "space"
 line-ending = "lf"
 quote-style = "double"
-docstring-code-format = true
-docstring-code-line-length = 88
 
 [tool.pyright]
 # Relaxed from `strict = true` to a per-rule config: noisy inference-by-flow

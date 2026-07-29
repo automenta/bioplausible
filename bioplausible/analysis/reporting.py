@@ -191,6 +191,3 @@ def generate_experiment_report(
 
 # Legacy re-export — ReportOrchestrator lives in analysis/legacy_report/;
 # re-exported here so consumers import from analysis.reporting instead.
-from bioplausible.analysis.legacy_report.orchestrator import (
-    ReportOrchestrator,  # ruff: ignore[unused-import]
-)

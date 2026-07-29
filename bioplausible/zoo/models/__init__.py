@@ -21,5 +21,13 @@ __all__: list[str] = [
     "Domain",
     "LocalityLevel",
     "Registry",
+    "backprop",
+    "eqprop",
+    "fa",
+    "forward_only",
+    "hebbian",
+    "predictive_coding",
     "register_model",
+    "spiking",
+    "target_prop",
 ]

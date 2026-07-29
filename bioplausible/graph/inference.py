@@ -19,6 +19,7 @@ import torch
 import torch.nn.functional as F
 
 from bioplausible.graph.topology import GraphStructure
+from bioplausible.zoo._settling import _inf_norm_converged
 
 
 class InferenceSGD:
@@ -141,7 +142,21 @@ class InferenceSGD:
                     if total_pred is not None:
                         error = activities[node.name] - total_pred
                         new_activities[node.name] = activities[node.name] - eta * error
+
+                # Early convergence via shared utility (zoo/_settling.py)
+                all_converged = True
+                for node_name in new_activities:
+                    if node_name == structure.task_map.x.name:
+                        continue
+                    old_val = activities.get(node_name)
+                    if old_val is None or not _inf_norm_converged(
+                        new_activities[node_name], old_val, step
+                    ):
+                        all_converged = False
+                        break
                 activities = new_activities
+                if all_converged:
+                    break
 
         # Clamp output toward target if provided
         if y is not None:

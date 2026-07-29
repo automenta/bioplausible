@@ -303,4 +303,5 @@ __all__ = [
     "ForwardForwardNet",
     "PEPITA",
     "PredictiveCodingHybrid",
+    "_EquiTile",
 ]

@@ -33,7 +33,7 @@ config : Configuration classes
 enhanced : Enhanced EP features
 dynamics : Tile growth/pruning
 async_execution : Async tile processing
-multigpu : Multi-GPU training
+distributed : Multi-GPU training (merged with distributed)
 distributed : Distributed training
 profiler : Performance profiling
 builder : Fluent builder API
@@ -69,8 +69,8 @@ Builder pattern:
 ... )
 
 Multi-GPU:
->>> from bioplausible.equitile import MultiGPUEquiTile, MultiGPUConfig
->>> multi_gpu = MultiGPUEquiTile(model, device_ids=[0, 1, 2, 3])
+>>> from bioplausible.equitile import DistributedEquiTile, DistributedConfig
+>>> multi_gpu = DistributedEquiTile(model, device_ids=[0, 1, 2, 3])
 
 Async execution:
 >>> from bioplausible.equitile import AsyncEquiTile, AsyncConfig
@@ -97,6 +97,9 @@ from bioplausible.core.registry import (
     LocalityLevel,
     register_model,
 )
+
+# Distributed
+from ._nccl import NCCLCommunicator
 
 # Async execution
 from .async_execution import AsyncConfig as AsyncExecutionConfig
@@ -125,8 +128,6 @@ from .config import (
     DynamicEquiTileConfig,
     EnhancedEquiTileConfig,
     EquiTileConfig,
-    MultiGPUConfig,
-    NCCLConfig,
     TileGrowthConfig,
     create_dynamic_config,
     create_enhanced_config,
@@ -147,14 +148,14 @@ from .deployment import (
     prune_model,
     quantize_model,
 )
-
-# Distributed
 from .distributed import (
+    AsyncTileExecutor,
     DeviceAssignment,
     DistributedEquiTile,
     MixedPrecisionTrainer,
     TileCommunicator,
     create_distributed_model,
+    spawn_distributed_worker,
 )
 from .distributed import DistributedConfig as DistributedConfigClass
 from .distributed import TileGrowthConfig as DistributedGrowthConfig
@@ -212,17 +213,6 @@ from .language_optimized import (
     create_optimized_lm,
     create_optimized_small_lm,
 )
-
-# Multi-GPU
-from .multigpu import (
-    AsyncTileExecutor,
-    MultiGPUEquiTile,
-    NCCLCommunicator,
-    create_multigpu_model,
-    spawn_multi_gpu_worker,
-)
-from .multigpu import MultiGPUConfig as MultiGPUConfigClass
-from .multigpu import NCCLConfig as NCCLConfigClass
 
 # Profiler
 from .profiler import (
@@ -305,7 +295,6 @@ __all__ = [
     "create_dynamic_config",
     # Distributed configs
     "DistributedConfig",
-    "MultiGPUConfig",
     "NCCLConfig",
     "AsyncConfig",
     # Enhanced configs
@@ -333,14 +322,6 @@ __all__ = [
     "AsyncExecutionConfig",
     "AsyncEquiTile",
     "create_async_model",
-    # Multi-GPU
-    "NCCLConfigClass",
-    "NCCLCommunicator",
-    "MultiGPUConfigClass",
-    "MultiGPUEquiTile",
-    "AsyncTileExecutor",
-    "spawn_multi_gpu_worker",
-    "create_multigpu_model",
     # Distributed
     "DeviceAssignment",
     "DistributedConfigClass",
@@ -348,6 +329,9 @@ __all__ = [
     "MixedPrecisionTrainer",
     "DistributedGrowthConfig",
     "DistributedEquiTile",
+    "NCCLCommunicator",
+    "AsyncTileExecutor",
+    "spawn_distributed_worker",
     "create_distributed_model",
     # Profiler
     "TileStats",

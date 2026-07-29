@@ -43,4 +43,11 @@ __all__ = [
     "DifferenceTargetProp",
     "FabricPCGraphPCN",
     "PredictiveCodingHybrid",
+    "backprop",
+    "base",
+    "eqprop",
+    "fa",
+    "hebbian",
+    "mep",
+    "spiking",
 ]

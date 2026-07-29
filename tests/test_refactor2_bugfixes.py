@@ -15,7 +15,6 @@ import pytest
 import torch
 from torch import nn
 
-import bioplausible  # ruff: ignore[unused-import]  # triggers full registration
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import (
     CoreTrainer,

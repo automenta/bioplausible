@@ -11,7 +11,6 @@ import torch
 from torch import nn
 
 # Import zoo modules to trigger registration
-import bioplausible.zoo  # ruff: ignore[unused-import]
 from bioplausible.core.registry import (
     ComponentCategory,
     Domain,

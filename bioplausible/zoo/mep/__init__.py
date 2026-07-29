@@ -68,6 +68,7 @@ __all__ = [
     "PlainUpdate",
     "Settler",
     "SpectralConstraint",
+    "_registration",
     "local_ep",
     "muon_backprop",
     "natural_ep",
