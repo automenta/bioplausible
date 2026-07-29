@@ -36,6 +36,10 @@ except ImportError:
 
 from bioplausible.zoo.mep.presets import sdmep, smep
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class BenchmarkMetrics:
@@ -462,10 +466,9 @@ def run_benchmark(
         result.best_val_acc = max(result.best_val_acc, val_acc)
 
         if verbose:
-            print(
-                f"  Epoch {epoch + 1}/{epochs}: "
-                f"Train Acc: {train_acc:.2f}%, Val Acc: {val_acc:.2f}%, "
-                f"Time: {epoch_time:.2f}s"
+            logger.info(
+                "  Epoch %d/%d: Train Acc: %.2f%%, Val Acc: %.2f%%, Time: %.2fs",
+                epoch + 1, epochs, train_acc, val_acc, epoch_time,
             )
 
     result.total_time = time.time() - start_time
@@ -479,7 +482,7 @@ def plot_results(
     """Generate comparison plots from benchmark results."""
 
     if not VIS_AVAILABLE:
-        print("matplotlib/seaborn not available. Skipping plots.")
+        logger.warning("matplotlib/seaborn not available. Skipping plots.")
         return
 
     # Set style
@@ -607,7 +610,7 @@ def plot_results(
     plt.savefig(plot_path, dpi=150, bbox_inches="tight")
     plt.close()
 
-    print(f"Plots saved to {save_dir}/")
+    logger.info("Plots saved to %s/", save_dir)
 
 
 def save_results(
@@ -625,7 +628,7 @@ def save_results(
     with Path(save_path).open("w") as f:
         json.dump(data, f, indent=2)
 
-    print(f"Results saved to {save_path}")
+    logger.info("Results saved to %s", save_path)
 
 
 def run_all_benchmarks(config: dict[str, Any]) -> list[BenchmarkResult]:
@@ -638,16 +641,16 @@ def run_all_benchmarks(config: dict[str, Any]) -> list[BenchmarkResult]:
     else:
         device = torch.device(device_str)
 
-    print(f"Running benchmarks on {device}")
-    print(f"Dataset: {config['dataset']['name']}")
-    print(f"Optimizers: {list(config.get('optimizers', {}).keys())}")
+    logger.info("Running benchmarks on %s", device)
+    logger.info("Dataset: %s", config["dataset"]["name"])
+    logger.info("Optimizers: %s", list(config.get("optimizers", {}).keys()))
 
     results = []
 
     for optimizer_name in config.get("optimizers", {}).keys():
-        print(f"\n{'=' * 50}")
-        print(f"Benchmarking: {optimizer_name}")
-        print("=" * 50)
+        logger.info("\n%s", "=" * 50)
+        logger.info("Benchmarking: %s", optimizer_name)
+        logger.info("%s", "=" * 50)
 
         result = run_benchmark(
             optimizer_name=optimizer_name,
@@ -705,9 +708,9 @@ def main() -> None:
     repeats = config.get("experiment", {}).get("repeats", 1)
 
     for repeat in range(repeats):
-        print(f"\n{'#' * 60}")
-        print(f"# Repeat {repeat + 1}/{repeats}")
-        print("#" * 60)
+        logger.info("\n%s", "#" * 60)
+        logger.info("# Repeat %d/%d", repeat + 1, repeats)
+        logger.info("%s", "#" * 60)
 
         results = run_all_benchmarks(config)
         all_results.extend(results)
@@ -728,14 +731,14 @@ def main() -> None:
         plot_results(final_results, save_dir, config)
 
     # Print summary
-    print("\n" + "=" * 60)
-    print("BENCHMARK SUMMARY")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("BENCHMARK SUMMARY")
+    logger.info("%s", "=" * 60)
 
     for result in final_results:
-        print(f"\n{result.optimizer_name}:")
-        print(f"  Best Val Accuracy: {result.best_val_acc:.2f}%")
-        print(f"  Total Time: {result.total_time:.2f}s")
+        logger.info("\n%s:", result.optimizer_name)
+        logger.info("  Best Val Accuracy: %.2f%%", result.best_val_acc)
+        logger.info("  Total Time: %.2fs", result.total_time)
 
 
 if __name__ == "__main__":

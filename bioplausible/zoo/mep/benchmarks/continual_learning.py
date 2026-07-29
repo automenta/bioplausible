@@ -37,6 +37,10 @@ from bioplausible.zoo.mep.optimizers.strategies.gradient import (
 )
 from bioplausible.zoo.mep.optimizers.strategies.update import DionUpdate
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class TaskResult:
@@ -291,7 +295,7 @@ def run_permuted_mnist_benchmark(
     task_results: list[TaskResult] = []
 
     for task_id in range(num_tasks):
-        print(f"Training on task {task_id + 1}/{num_tasks}...")
+        logger.info("Training on task %d/%d...", task_id + 1, num_tasks)
 
         train_loader, test_loader = benchmark.get_task_dataloaders(task_id)
 
@@ -336,9 +340,9 @@ def run_permuted_mnist_benchmark(
             )
         )
 
-        print(
-            f"  Task {task_id + 1}: Accuracy = {current_acc:.4f}, "
-            f"Avg Accuracy = {avg_acc:.4f}, Forgetting = {avg_forgetting:.4f}"
+        logger.info(
+            "  Task %d: Accuracy = %.4f, Avg Accuracy = %.4f, Forgetting = %.4f",
+            task_id + 1, current_acc, avg_acc, avg_forgetting,
         )
 
     # Final evaluation on all tasks
@@ -376,13 +380,13 @@ def run_comparison_benchmark(
     """
     results = {}
 
-    print("=" * 60)
-    print("Continual Learning Benchmark: Permuted MNIST")
-    print(f"Tasks: {num_tasks}, Epochs per task: {epochs_per_task}")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("Continual Learning Benchmark: Permuted MNIST")
+    logger.info("Tasks: %d, Epochs per task: %d", num_tasks, epochs_per_task)
+    logger.info("=" * 60)
 
     # MEP with error feedback
-    print("\n[1/3] Running MEP with Error Feedback...")
+    logger.info("\n[1/3] Running MEP with Error Feedback...")
     results["mep_error_feedback"] = run_permuted_mnist_benchmark(
         num_tasks=num_tasks,
         epochs_per_task=epochs_per_task,
@@ -394,7 +398,7 @@ def run_comparison_benchmark(
     )
 
     # Backprop baseline (no error feedback)
-    print("\n[2/3] Running Backprop Baseline...")
+    logger.info("\n[2/3] Running Backprop Baseline...")
     results["backprop_baseline"] = run_permuted_mnist_benchmark(
         num_tasks=num_tasks,
         epochs_per_task=epochs_per_task,
@@ -406,7 +410,7 @@ def run_comparison_benchmark(
     )
 
     # EWC baseline
-    print("\n[3/3] Running EWC Baseline...")
+    logger.info("\n[3/3] Running EWC Baseline...")
     try:
         from .ewc_baseline import run_ewc_benchmark
 
@@ -418,37 +422,37 @@ def run_comparison_benchmark(
             seed=seed,
         )
     except ImportError:
-        print("  Warning: EWC baseline not available, skipping...")
+        logger.warning("EWC baseline not available, skipping...")
 
     return results
 
 
 def print_comparison(results: dict[str, ContinualLearningResult]) -> None:
     """Print comparison table."""
-    print("\n" + "=" * 60)
-    print("COMPARISON RESULTS")
-    print("=" * 60)
-    print(f"{'Method':<30} {'Avg Acc':<12} {'Forgetting':<12} {'Final Acc':<12}")
-    print("-" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("COMPARISON RESULTS")
+    logger.info("%s", "=" * 60)
+    logger.info("%-30s %-12s %-12s %-12s", "Method", "Avg Acc", "Forgetting", "Final Acc")
+    logger.info("%s", "-" * 60)
 
     for name, result in results.items():
-        print(
-            f"{name:<30} {result.average_accuracy:<12.4f} "
-            f"{result.average_forgetting:<12.4f} {result.final_accuracy:<12.4f}"
+        logger.info(
+            "%-30s %-12.4f %-12.4f %-12.4f",
+            name, result.average_accuracy, result.average_forgetting, result.final_accuracy,
         )
 
-    print("=" * 60)
+    logger.info("%s", "=" * 60)
 
     # Summary
     mep = results.get("mep_error_feedback")
     bp = results.get("backprop_baseline")
 
     if mep and bp:
-        print(
-            f"\nMEP reduces forgetting by: {(bp.average_forgetting - mep.average_forgetting):.4f}"
+        logger.info(
+            "MEP reduces forgetting by: %.4f", bp.average_forgetting - mep.average_forgetting
         )
-        print(
-            f"MEP avg accuracy improvement: {(mep.average_accuracy - bp.average_accuracy):.4f}"
+        logger.info(
+            "MEP avg accuracy improvement: %.4f", mep.average_accuracy - bp.average_accuracy
         )
 
 
@@ -462,7 +466,7 @@ def save_results(
     with pathlib.Path(output_path).open("w") as f:
         json.dump(data, f, indent=2)
 
-    print(f"\nResults saved to: {output_path}")
+    logger.info("Results saved to: %s", output_path)
 
 
 def main():
@@ -484,7 +488,7 @@ def main():
     args = parser.parse_args()
 
     device = torch.device("cpu" if args.cpu else "cuda")
-    print(f"Using device: {device}")
+    logger.info("Using device: %s", device)
 
     results = run_comparison_benchmark(
         num_tasks=args.tasks,

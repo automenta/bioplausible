@@ -1,5 +1,5 @@
 # Tracks package - Phase 2 consolidated to 11 kept files + TrackRegistry
-from . import (  # noqa: F401  # Track 56 - depth architecture comparison
+from . import (  # ruff: ignore[unused-import]  # Track 56 - depth architecture comparison
     application_tracks,
     architecture_comparison,
     core_tracks,

@@ -17,6 +17,7 @@ Examples
 >>> exporter.to_torchscript("model.pt")
 """
 
+import logging
 import pathlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
@@ -26,6 +27,8 @@ from torch import nn
 
 if TYPE_CHECKING:
     from .core import EquiTile
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -128,7 +131,7 @@ class EquiTileExporter:
             dynamic_axes=self.config.dynamic_axes,
         )
 
-        print(f"Model exported to {path}")
+        logger.info("Model exported to %s", path)
         return path
 
     def to_torchscript(
@@ -192,7 +195,7 @@ class EquiTileExporter:
                 },
                 path,
             )
-            print(f"Compiled model saved to {path}")
+            logger.info("Compiled model saved to %s", path)
             return path
         else:
             # script method - use torch.jit.script with deprecation warning
@@ -207,7 +210,7 @@ class EquiTileExporter:
             scripted_model = torch.jit.script(self.model)
 
         scripted_model.save(path)
-        print(f"Model exported to {path}")
+        logger.info("Model exported to %s", path)
         return path
 
     def quantize_dynamic(
@@ -233,7 +236,7 @@ class EquiTileExporter:
             dtype=getattr(torch, dtype),
         )
 
-        print(f"Model quantized to {dtype}")
+        logger.info("Model quantized to %s", dtype)
         return quantized_model
 
     def get_model_size(self, path: str | None = None) -> int:
@@ -282,7 +285,7 @@ class EquiTileExporter:
             info = summary(self.model, input_size=input_shape, device=device, verbose=0)
             return info.total_mult_adds
         except ImportError:
-            print("torchinfo not installed. Install with: pip install torchinfo")
+            logger.warning("torchinfo not installed. Install with: pip install torchinfo")
             return -1
 
     def profile_memory(
@@ -375,7 +378,7 @@ class ModelPruner:
                     # Apply pruning
                     module.weight.data = module.weight.data * mask.float()
 
-        print(f"Pruned {pruned_count} weights")
+        logger.info("Pruned %d weights", pruned_count)
         return pruned_count
 
     def prune_by_importance(
@@ -395,7 +398,7 @@ class ModelPruner:
             Number of pruned weights
         """
         if not hasattr(self.model, "tile_importance"):
-            print("Model has no tile_importance attribute")
+            logger.info("Model has no tile_importance attribute")
             return 0
 
         # Get importance scores
@@ -412,7 +415,7 @@ class ModelPruner:
                     self.model.tile_importance[i] = 0.0
                     pruned_count += 1
 
-        print(f"Pruned {pruned_count} tiles")
+        logger.info("Pruned %d tiles", pruned_count)
         return pruned_count
 
     def get_sparsity(self) -> dict[str, float]:

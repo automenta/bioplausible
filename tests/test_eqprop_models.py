@@ -14,6 +14,9 @@ from bioplausible.zoo.models.eqprop.standard_eqprop import StandardEqProp
 from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
 from bioplausible.zoo.models.eqprop.holomorphic_ep import HolomorphicEP
 from bioplausible.zoo.models.eqprop.finite_nudge_ep import FiniteNudgeEP
+from bioplausible.zoo.models.eqprop.sparse_eq import SparseEquilibrium
+from bioplausible.zoo.models.eqprop.mom_eq import MomentumEquilibrium
+from bioplausible.zoo.models.eqprop.eqprop_diffusion import EqPropDiffusion
 
 
 def _check_train_step(model: nn.Module, input_dim: int = 10, output_dim: int = 5) -> dict:
@@ -31,6 +34,17 @@ def _check_train_step(model: nn.Module, input_dim: int = 10, output_dim: int = 5
         f"loss should be float, got {type(result['loss'])}"
     )
     return result
+
+
+def _check_forward(model: nn.Module, input_tensor: torch.Tensor) -> torch.Tensor:
+    """Verify forward returns a tensor with valid shape."""
+    model.eval()
+    with torch.no_grad():
+        output = model(input_tensor)
+    assert isinstance(output, torch.Tensor), (
+        f"forward should return tensor, got {type(output)}"
+    )
+    return output
 
 
 def _make_config(**overrides) -> ModelConfig:
@@ -84,3 +98,54 @@ def test_finite_nudge_ep_train_step():
     model = FiniteNudgeEP(config=_make_config())
     result = _check_train_step(model)
     assert result["loss"] >= 0
+
+
+# --- SparseEquilibrium (config-based, BioModel) ---
+
+
+def test_sparse_equilibrium_build():
+    """SparseEquilibrium can be built with config."""
+    model = SparseEquilibrium(config=_make_config())
+    x = torch.randn(4, 10)
+    out = _check_forward(model, x)
+    assert out.shape == (4, 5)
+
+
+def test_sparse_equilibrium_forward_extra_steps():
+    """SparseEquilibrium.forward accepts steps parameter."""
+    model = SparseEquilibrium(config=_make_config())
+    x = torch.randn(4, 10)
+    out = model(x, steps=5)
+    assert out.shape == (4, 5)
+
+
+# --- MomentumEquilibrium (config-based, BioModel) ---
+
+
+def test_momentum_equilibrium_build():
+    """MomentumEquilibrium can be built with config."""
+    model = MomentumEquilibrium(config=_make_config())
+    x = torch.randn(4, 10)
+    out = _check_forward(model, x)
+    assert out.shape == (4, 5)
+
+
+# --- EqPropDiffusion (own train_step, positional args) ---
+
+
+def test_eqprop_diffusion_build():
+    """EqPropDiffusion can be built with positional args."""
+    model = EqPropDiffusion(img_channels=1, hidden_channels=16)
+    x = torch.randn(4, 1, 28, 28)
+    t = torch.randint(0, 10, (4,))
+    out = model(x, t)
+    assert out.shape == (4, 1, 28, 28)
+
+
+def test_eqprop_diffusion_train_step():
+    """EqPropDiffusion.train_step returns dict with loss."""
+    model = EqPropDiffusion(img_channels=1, hidden_channels=16)
+    x = torch.randn(4, 1, 28, 28)
+    result = model.train_step(x)
+    assert isinstance(result, dict)
+    assert "loss" in result

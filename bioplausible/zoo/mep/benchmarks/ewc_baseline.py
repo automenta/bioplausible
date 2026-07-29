@@ -18,6 +18,10 @@ from torch.utils.data import DataLoader
 
 from .continual_learning import ContinualLearningResult
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class EWC:
     """
@@ -296,7 +300,7 @@ def run_ewc_benchmark(
     task_results: list[TaskResult] = []
 
     for task_id in range(num_tasks):
-        print(f"  Training task {task_id + 1}/{num_tasks} with EWC...")
+        logger.info("  Training task %d/%d with EWC...", task_id + 1, num_tasks)
 
         train_loader, test_loader = benchmark.get_task_dataloaders(task_id)
 
@@ -342,9 +346,9 @@ def run_ewc_benchmark(
             )
         )
 
-        print(
-            f"    Task {task_id + 1}: Accuracy = {current_acc:.4f}, "
-            f"Avg = {avg_acc:.4f}, Forgetting = {avg_forgetting:.4f}"
+        logger.info(
+            "    Task %d: Accuracy = %.4f, Avg = %.4f, Forgetting = %.4f",
+            task_id + 1, current_acc, avg_acc, avg_forgetting,
         )
 
     # Compute Fisher information after each task (for next task's EWC)

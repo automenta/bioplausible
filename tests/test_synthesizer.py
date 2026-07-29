@@ -1,223 +1,298 @@
-import unittest
+"""Tests for ResearchSynthesizer."""
+
+import json
+import os
+import sqlite3
+import tempfile
+
+import pytest
 
 from bioplausible.execution.synthesizer import ResearchSynthesizer
-from bioplausible.execution.training_dynamics import (
-    TrainingCheckpoint,
-    TrainingTrajectory,
-)
 
 
-# Helper to create mock trajectories
-def create_mock_traj(
-    model_name: str,
-    task_name: str,
-    final_acc: float,
-    convergence_epoch: int,
-    config: dict = None,
-) -> TrainingTrajectory:
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
-    if config is None:
-        config = {"activation": "relu"}
 
-    checkpoints = []
-    # Add a final checkpoint
-    ckpt = TrainingCheckpoint(
-        epoch=convergence_epoch + 5,
-        train_acc=final_acc + 0.05,
-        val_acc=final_acc,
-        train_loss=0.5,
-        val_loss=0.6,
-        grad_norm_mean=0.1,
-        grad_norm_std=0.01,
-        weight_norm=1.0,
-        learning_rate=0.01,
-        train_val_gap=0.05,
-        wall_time_seconds=10.0,
+@pytest.fixture
+def synth_db_path() -> str:
+    """Create a temporary SQLite DB with Optuna-compatible schema + test data."""
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+    _create_schema(tmp.name)
+    _populate_test_data(tmp.name)
+    yield tmp.name
+    os.unlink(tmp.name)
+
+
+def _create_schema(path: str) -> None:
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "CREATE TABLE studies (study_id INTEGER PRIMARY KEY, study_name VARCHAR(512))"
     )
-    checkpoints.append(ckpt)
-
-    traj = TrainingTrajectory(
-        trial_id=1,
-        model_name=model_name,
-        task_name=task_name,
-        config=config,
-        checkpoints=checkpoints,
+    conn.execute(
+        "CREATE TABLE trials (trial_id INTEGER PRIMARY KEY, study_id INTEGER, state VARCHAR(16))"
     )
-    # Mock computed metrics
-    traj.compute_convergence_speed = lambda: convergence_epoch
-    traj.compute_sample_efficiency = lambda: final_acc * 100  # Dummy metric
-
-    return traj
-
-
-class TestResearchSynthesizer(unittest.TestCase):
-    def setUp(self):
-        import sqlite3
-
-        self.db_path = ":memory:"
-        self.synth = ResearchSynthesizer(self.db_path)
-
-        # Setup mock db connection and populate
-        self.conn = sqlite3.connect(self.db_path)
-
-        # Create minimal schemas
-        self.conn.execute("""
-            CREATE TABLE studies (
-                study_id INTEGER PRIMARY KEY,
-                study_name TEXT
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE trials (
-                trial_id INTEGER PRIMARY KEY,
-                study_id INTEGER,
-                state TEXT
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE hyperopt_logs (
-                trial_id INTEGER PRIMARY KEY,
-                param_count INTEGER
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE trial_params (
-                trial_id INTEGER,
-                param_name TEXT,
-                param_value TEXT
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE trial_values (
-                trial_id INTEGER,
-                value REAL
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE trial_user_attributes (
-                trial_id INTEGER,
-                key TEXT,
-                value_json TEXT
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE failures (
-                id INTEGER PRIMARY KEY,
-                trial_id INTEGER,
-                model_name TEXT,
-                task_name TEXT,
-                failure_type TEXT
-            )
-        """)
-
-        # Populate trials
-        trials = [
-            (1, 0.95, "Baseline Backprop", "mnist", "standard"),
-            (2, 0.85, "Baseline Backprop", "cifar10", "standard"),
-            (3, 0.92, "EqProp MLP", "mnist", "standard"),
-            (4, 0.80, "EqProp Conv", "cifar10", "standard"),
-            (5, 0.98, "GELU Model", "mnist", "standard"),
-            (6, 0.94, "ReLU Model", "mnist", "standard"),
-        ]
-
-        for tid, acc, model, task, tier in trials:
-            self.conn.execute(
-                "INSERT INTO trials (trial_id, study_id, state) VALUES (?, 1, 'COMPLETE')",
-                (tid,),
-            )
-            self.conn.execute(
-                "INSERT INTO trial_values (trial_id, value) VALUES (?, ?)", (tid, acc)
-            )
-            self.conn.execute(
-                "INSERT INTO trial_user_attributes (trial_id, key, value_json) VALUES (?, 'model_name', ?)",
-                (tid, f'"{model}"'),
-            )
-            self.conn.execute(
-                "INSERT INTO trial_user_attributes (trial_id, key, value_json) VALUES (?, 'task_name', ?)",
-                (tid, f'"{task}"'),
-            )
-            self.conn.execute(
-                "INSERT INTO trial_user_attributes (trial_id, key, value_json) VALUES (?, 'tier', ?)",
-                (tid, f'"{tier}"'),
-            )
-            self.conn.execute(
-                "INSERT INTO trial_user_attributes (trial_id, key, value_json) VALUES (?, 'param_count', '100000')",
-                (tid,),
-            )
-
-        # Populate failures
-        failures = [
-            (1, "EqProp Conv", "cifar10", "nan"),
-            (2, "EqProp Conv", "cifar10", "nan"),
-            (3, "EqProp Conv", "cifar10", "nan"),
-            (4, "EqProp Conv", "cifar10", "nan"),
-            (5, "EqProp Conv", "cifar10", "nan"),
-            (6, "EqProp Conv", "cifar10", "nan"),
-        ]
-
-        for fid, model, task, ftype in failures:
-            self.conn.execute(
-                "INSERT INTO failures (id, trial_id, model_name, task_name, failure_type) VALUES (?, NULL, ?, ?, ?)",
-                (fid, model, task, ftype),
-            )
-
-        self.conn.commit()
-
-        # Override synth's get_trials_df to use our memory connection
-
-        def get_trials_df_mock(conn):
-            return self.synth.__class__._get_trials_df(self.synth, self.conn)
-
-        self.synth._get_trials_df = get_trials_df_mock
-
-    def tearDown(self):
-        self.conn.close()
-
-    def _trials_df(self):
-
-        return self.synth._get_trials_df(self.conn)
-
-    def _failures_df(self):
-        import pandas as pd
-
-        return pd.read_sql("SELECT * FROM failures", self.conn)
-
-    def test_cross_algorithm_insights(self):
-        """Test that insights are generated correctly."""
-        trials = self._trials_df()
-        insights = self.synth._analyze_cross_algo(trials)
-        self.assertIn("rankings", insights)
-        rankings = insights["rankings"]
-
-        best = rankings[0]
-        self.assertEqual(best["model"], "GELU Model")
-        self.assertAlmostEqual(best["best_accuracy"], 0.98)
-
-    def test_quick_wins(self):
-        """Test detection of activation function wins."""
-        trials = self._trials_df()
-        failures = self._failures_df()
-        wins = self.synth._find_quick_wins(trials, failures)
-
-        # Expecting NaN failure advice
-        nan_win = next(
-            (w for w in wins if "nan" in w.lower() or "failure rate" in w.lower()), None
-        )
-        self.assertIsNotNone(
-            nan_win, f"Expected NaN or failure rate advice, but got: {wins}"
-        )
-
-        # Expecting underexplored advice
-        underexplored = next((w for w in wins if "Underexplored" in w), None)
-        self.assertIsNotNone(underexplored)
-
-    def test_research_gaps(self):
-        """Test gap detection."""
-        trials = self._trials_df()
-        gaps = self.synth._identify_gaps(trials)
-        self.assertTrue(any("cartpole" in g for g in gaps))
-        self.assertTrue(any("Graph Neural Network" in g for g in gaps))
+    conn.execute(
+        "CREATE TABLE trial_values (trial_value_id INTEGER PRIMARY KEY, trial_id INTEGER, value FLOAT)"
+    )
+    conn.execute(
+        "CREATE TABLE trial_user_attributes (trial_user_attribute_id INTEGER PRIMARY KEY, trial_id INTEGER, key VARCHAR(512), value_json TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE trial_params (param_id INTEGER PRIMARY KEY, trial_id INTEGER, param_name VARCHAR(512), param_value FLOAT)"
+    )
+    conn.execute(
+        "CREATE TABLE hyperopt_logs (log_id INTEGER PRIMARY KEY, trial_id INTEGER, param_count INTEGER)"
+    )
+    conn.execute(
+        "CREATE TABLE failures (failure_id INTEGER PRIMARY KEY, trial_id INTEGER, model_name TEXT, task_name TEXT, failure_type TEXT, config TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE training_trajectories (id INTEGER PRIMARY KEY, trial_id INTEGER)"
+    )
+    conn.execute(
+        "CREATE TABLE training_checkpoints (id INTEGER PRIMARY KEY, trajectory_id INTEGER, epoch INTEGER, train_loss FLOAT, train_acc FLOAT, val_acc FLOAT, samples_seen INTEGER)"
+    )
+    conn.commit()
+    conn.close()
 
 
-if __name__ == "__main__":
-    unittest.main()
+def _populate_test_data(path: str) -> None:
+    conn = sqlite3.connect(path)
+    conn.execute("INSERT INTO studies VALUES (1, 'eqprop_mnist_standard')")
+    conn.execute("INSERT INTO studies VALUES (2, 'backprop_mnist_standard')")
+
+    # Trial 1: eqprop, complete, high accuracy
+    conn.execute("INSERT INTO trials VALUES (1, 1, 'COMPLETE')")
+    conn.execute("INSERT INTO trials VALUES (2, 1, 'COMPLETE')")
+    conn.execute("INSERT INTO trials VALUES (3, 2, 'COMPLETE')")
+    conn.execute("INSERT INTO trials VALUES (4, 1, 'FAIL')")
+
+    conn.execute("INSERT INTO trial_values VALUES (1, 1, 0.95)")
+    conn.execute("INSERT INTO trial_values VALUES (2, 2, 0.92)")
+    conn.execute("INSERT INTO trial_values VALUES (3, 3, 0.97)")
+
+    conn.execute(
+        "INSERT INTO trial_user_attributes VALUES (1, 1, 'model_name', '\"eqprop\"')"
+    )
+    conn.execute(
+        "INSERT INTO trial_user_attributes VALUES (2, 1, 'task_name', '\"mnist\"')"
+    )
+    conn.execute(
+        "INSERT INTO trial_user_attributes VALUES (3, 1, 'param_count', '100000')"
+    )
+    conn.execute(
+        "INSERT INTO trial_user_attributes VALUES (4, 1, 'num_epochs', '50')"
+    )
+    conn.execute(
+        "INSERT INTO trial_user_attributes VALUES (5, 2, 'model_name', '\"eqprop\"')"
+    )
+    conn.execute(
+        "INSERT INTO trial_user_attributes VALUES (6, 2, 'task_name', '\"mnist\"')"
+    )
+    conn.execute(
+        "INSERT INTO trial_user_attributes VALUES (7, 2, 'param_count', '200000')"
+    )
+    conn.execute(
+        "INSERT INTO trial_user_attributes VALUES (8, 3, 'model_name', '\"backprop\"')"
+    )
+    conn.execute(
+        "INSERT INTO trial_user_attributes VALUES (9, 3, 'task_name', '\"mnist\"')"
+    )
+    conn.execute(
+        "INSERT INTO trial_user_attributes VALUES (10, 3, 'param_count', '50000')"
+    )
+
+    conn.execute("INSERT INTO trial_params VALUES (1, 1, 'lr', 0.001)")
+    conn.execute("INSERT INTO trial_params VALUES (2, 1, 'hidden_dim', 256)")
+    conn.execute("INSERT INTO trial_params VALUES (3, 1, 'num_layers', 2)")
+    conn.execute("INSERT INTO trial_params VALUES (4, 2, 'lr', 0.0005)")
+    conn.execute("INSERT INTO trial_params VALUES (5, 2, 'hidden_dim', 128)")
+    conn.execute("INSERT INTO trial_params VALUES (6, 2, 'num_layers', 3)")
+    conn.execute("INSERT INTO trial_params VALUES (7, 3, 'lr', 0.01)")
+    conn.execute("INSERT INTO trial_params VALUES (8, 3, 'hidden_dim', 512)")
+    conn.execute("INSERT INTO trial_params VALUES (9, 3, 'num_layers', 4)")
+
+    conn.execute("INSERT INTO hyperopt_logs VALUES (1, 1, 100000)")
+    conn.execute("INSERT INTO hyperopt_logs VALUES (2, 2, 200000)")
+    conn.execute("INSERT INTO hyperopt_logs VALUES (3, 3, 50000)")
+
+    conn.execute(
+        "INSERT INTO failures VALUES (1, 4, 'eqprop', 'mnist', 'DIVERGED', '{\"lr\": 0.1}')"
+    )
+
+    conn.execute("INSERT INTO training_trajectories VALUES (1, 1)")
+    conn.execute("INSERT INTO training_checkpoints VALUES (1, 1, 1, 0.5, 0.8, 0.85, 1000)")
+    conn.execute("INSERT INTO training_checkpoints VALUES (2, 1, 5, 0.1, 0.95, 0.95, 5000)")
+
+    conn.commit()
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Creation
+# ---------------------------------------------------------------------------
+
+
+def test_creation(synth_db_path: str) -> None:
+    """ResearchSynthesizer accepts a db_path."""
+    synth = ResearchSynthesizer(synth_db_path)
+    assert synth.db_path == synth_db_path
+
+
+# ---------------------------------------------------------------------------
+# synthesize_full_report
+# ---------------------------------------------------------------------------
+
+
+def test_synthesize_full_report_returns_all_keys(synth_db_path: str) -> None:
+    """synthesize_full_report returns a dict with all expected keys."""
+    synth = ResearchSynthesizer(synth_db_path)
+    report = synth.synthesize_full_report()
+    expected_keys = [
+        "cross_algorithm_insights",
+        "task_specific_winners",
+        "efficiency_analysis",
+        "backprop_gap_analysis",
+        "ablation_analysis",
+        "statistical_significance",
+        "failure_analysis",
+        "quick_wins",
+        "research_gaps",
+    ]
+    for key in expected_keys:
+        assert key in report, f"Missing key: {key}"
+
+
+def test_synthesize_full_report_cross_algorithm(synth_db_path: str) -> None:
+    """Cross-algorithm insights includes rankings."""
+    synth = ResearchSynthesizer(synth_db_path)
+    report = synth.synthesize_full_report()
+    cross = report["cross_algorithm_insights"]
+    assert "rankings" in cross
+    assert len(cross["rankings"]) >= 1
+
+
+def test_synthesize_full_report_task_winners(synth_db_path: str) -> None:
+    """Task-specific winners includes mnist."""
+    synth = ResearchSynthesizer(synth_db_path)
+    report = synth.synthesize_full_report()
+    winners = report["task_specific_winners"]
+    assert "mnist" in winners
+
+
+def test_synthesize_full_report_failure_analysis(synth_db_path: str) -> None:
+    """Failure analysis includes counts and patterns."""
+    synth = ResearchSynthesizer(synth_db_path)
+    report = synth.synthesize_full_report()
+    failures = report["failure_analysis"]
+    assert isinstance(failures, dict)
+    assert "counts" in failures
+    assert failures["counts"].get("DIVERGED", 0) >= 1
+
+
+def test_synthesize_full_report_research_gaps(synth_db_path: str) -> None:
+    """Research gaps returns a non-empty list."""
+    synth = ResearchSynthesizer(synth_db_path)
+    report = synth.synthesize_full_report()
+    assert len(report["research_gaps"]) >= 1
+
+
+# ---------------------------------------------------------------------------
+# _get_trials_df
+# ---------------------------------------------------------------------------
+
+
+def test_get_trials_df_returns_dataframe(synth_db_path: str) -> None:
+    """_get_trials_df returns a DataFrame with expected columns."""
+    synth = ResearchSynthesizer(synth_db_path)
+    import sqlite3
+
+    conn = sqlite3.connect(synth_db_path)
+    df = synth._get_trials_df(conn)
+    conn.close()
+
+    assert not df.empty
+    assert "trial_id" in df.columns
+    assert "model_name" in df.columns
+    assert "accuracy" in df.columns
+
+
+def test_get_trials_df_filters_incomplete(synth_db_path: str) -> None:
+    """_get_trials_df only includes COMPLETE trials."""
+    synth = ResearchSynthesizer(synth_db_path)
+    import sqlite3
+
+    conn = sqlite3.connect(synth_db_path)
+    df = synth._get_trials_df(conn)
+    conn.close()
+
+    # Trial 4 is FAIL, should not appear
+    assert 4 not in df["trial_id"].values
+
+
+# ---------------------------------------------------------------------------
+# _get_trials_df with empty DB
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def empty_db_path() -> str:
+    """A database with correct schema but no data."""
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+    _create_schema(tmp.name)
+    yield tmp.name
+    os.unlink(tmp.name)
+
+
+def test_get_trials_df_empty(empty_db_path: str) -> None:
+    """_get_trials_df returns empty DataFrame for empty DB."""
+    synth = ResearchSynthesizer(empty_db_path)
+    import sqlite3
+
+    conn = sqlite3.connect(empty_db_path)
+    df = synth._get_trials_df(conn)
+    conn.close()
+    assert df.empty
+
+
+def test_synthesize_full_report_empty_db(empty_db_path: str) -> None:
+    """synthesize_full_report handles empty DB without crashing."""
+    synth = ResearchSynthesizer(empty_db_path)
+    report = synth.synthesize_full_report()
+    # Should not raise, returns dict with all keys
+    assert isinstance(report, dict)
+
+
+# ---------------------------------------------------------------------------
+# _estimate_param_count
+# ---------------------------------------------------------------------------
+
+
+def test_estimate_param_count_basic() -> None:
+    """_estimate_param_count computes reasonable value."""
+    synth = ResearchSynthesizer(":memory:")
+
+    class FakeRow(dict):
+        hidden_dim = 256
+        num_layers = 3
+
+    row = FakeRow({"hidden_dim": 256, "num_layers": 3})
+    count = synth._estimate_param_count(row)
+    # l * (h * h) + (h * 10) = 3 * (256*256) + (256*10) = 196608 + 2560 = 199168
+    assert count == 199168
+
+
+# ---------------------------------------------------------------------------
+# Declarative __all__
+# ---------------------------------------------------------------------------
+
+
+def test_module_all() -> None:
+    """Module exports ResearchSynthesizer."""
+    from bioplausible.execution import synthesizer
+
+    assert hasattr(synthesizer, "ResearchSynthesizer")

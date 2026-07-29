@@ -20,6 +20,10 @@ from torchvision import datasets, transforms
 
 from bioplausible.zoo.mep.benchmarks.baselines import get_optimizer
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class OptimizerConfig:
@@ -367,9 +371,9 @@ def run_benchmark(optimizer_name: str, config: BenchmarkConfig) -> OptimizerResu
             )
         )
 
-        print(
-            f"  {optimizer_name} Epoch {epoch + 1}/{config.epochs}: "
-            f"Train Acc={train_acc:.4f}, Val Acc={val_acc:.4f}, Time={epoch_time:.2f}s"
+        logger.info(
+            "  %s Epoch %d/%d: Train Acc=%.4f, Val Acc=%.4f, Time=%.2fs",
+            optimizer_name, epoch + 1, config.epochs, train_acc, val_acc, epoch_time,
         )
 
     total_time = time.time() - start_time
@@ -392,9 +396,11 @@ def run_all_benchmarks(
 
     results: dict[str, OptimizerResult] = {}
     for opt_name in optimizers:
-        print(f"\n{'=' * 60}")
-        print(f"Benchmarking: {opt_name.upper()} (LR={OPTIMIZER_CONFIGS[opt_name].lr})")
-        print(f"{'=' * 60}")
+        logger.info("\n%s", "=" * 60)
+        logger.info(
+            "Benchmarking: %s (LR=%s)", opt_name.upper(), OPTIMIZER_CONFIGS[opt_name].lr,
+        )
+        logger.info("%s", "=" * 60)
 
         results[opt_name] = run_benchmark(opt_name, config)
 
@@ -403,13 +409,14 @@ def run_all_benchmarks(
 
 def print_summary(results: dict[str, OptimizerResult]) -> None:
     """Print summary table of results."""
-    print("\n" + "=" * 90)
-    print("BENCHMARK SUMMARY (Tuned Hyperparameters)")
-    print("=" * 90)
-    print(
-        f"{'Optimizer':<15} {'Best Val Acc':<15} {'Final Train Acc':<18} {'Total Time (s)':<15} {'LR':<10}"
+    logger.info("\n%s", "=" * 90)
+    logger.info("BENCHMARK SUMMARY (Tuned Hyperparameters)")
+    logger.info("%s", "=" * 90)
+    logger.info(
+        "%-15s %-15s %-18s %-15s %-10s",
+        "Optimizer", "Best Val Acc", "Final Train Acc", "Total Time (s)", "LR",
     )
-    print("-" * 90)
+    logger.info("%s", "-" * 90)
 
     sorted_results = sorted(
         results.items(), key=lambda x: x[1].best_val_acc, reverse=True
@@ -417,15 +424,17 @@ def print_summary(results: dict[str, OptimizerResult]) -> None:
 
     for name, result in sorted_results:
         lr = OPTIMIZER_CONFIGS.get(name, OptimizerConfig(lr=0.01)).lr
-        print(
-            f"{name:<15} {result.best_val_acc:<15.4f} {result.final_train_acc:<18.4f} {result.total_time:<15.2f} {lr:<10.5f}"
+        logger.info(
+            "%-15s %-15.4f %-18.4f %-15.2f %-10.5f",
+            name, result.best_val_acc, result.final_train_acc, result.total_time, lr,
         )
 
-    print("=" * 90)
+    logger.info("%s", "=" * 90)
 
     best = sorted_results[0]
-    print(
-        f"\n🏆 Best performer: {best[0].upper()} with {best[1].best_val_acc:.2%} validation accuracy"
+    logger.info(
+        "\U0001f3c6 Best performer: %s with %.2f%% validation accuracy",
+        best[0].upper(), best[1].best_val_acc * 100,
     )
 
     # Show EP vs backprop comparison
@@ -439,10 +448,10 @@ def print_summary(results: dict[str, OptimizerResult]) -> None:
     if ep_opts and bp_opts:
         best_ep = ep_opts[0]
         best_bp = bp_opts[0]
-        print("\n📊 EP vs Backprop:")
-        print(f"   Best EP:     {best_ep[0].upper()}: {best_ep[1].best_val_acc:.2%}")
-        print(f"   Best Backprop: {best_bp[0].upper()}: {best_bp[1].best_val_acc:.2%}")
-        print(f"   Gap: {best_bp[1].best_val_acc - best_ep[1].best_val_acc:.2%}")
+        logger.info("\n\U0001f4ca EP vs Backprop:")
+        logger.info("   Best EP:     %s: %.2f%%", best_ep[0].upper(), best_ep[1].best_val_acc * 100)
+        logger.info("   Best Backprop: %s: %.2f%%", best_bp[0].upper(), best_bp[1].best_val_acc * 100)
+        logger.info("   Gap: %.2f%%", (best_bp[1].best_val_acc - best_ep[1].best_val_acc) * 100)
 
 
 def save_results(results: dict[str, OptimizerResult], output_path: str) -> None:
@@ -462,7 +471,7 @@ def save_results(results: dict[str, OptimizerResult], output_path: str) -> None:
     with pathlib.Path(output_path).open("w") as f:
         json.dump(data, f, indent=2)
 
-    print(f"\nResults saved to: {output_path}")
+    logger.info("Results saved to: %s", output_path)
 
 
 def main() -> None:
@@ -499,14 +508,14 @@ def main() -> None:
         device=args.device,
     )
 
-    print("=" * 60)
-    print("TUNED MEP BENCHMARK SUITE")
-    print("=" * 60)
-    print(f"Dataset: {config.dataset}")
-    print(f"Model: {config.model}")
-    print(f"Epochs: {config.epochs}")
-    print(f"Device: {config.device}")
-    print("=" * 60)
+    logger.info("%s", "=" * 60)
+    logger.info("TUNED MEP BENCHMARK SUITE")
+    logger.info("%s", "=" * 60)
+    logger.info("Dataset: %s", config.dataset)
+    logger.info("Model: %s", config.model)
+    logger.info("Epochs: %s", config.epochs)
+    logger.info("Device: %s", config.device)
+    logger.info("%s", "=" * 60)
 
     results = run_all_benchmarks(config, args.optimizers)
     print_summary(results)

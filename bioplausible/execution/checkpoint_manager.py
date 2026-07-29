@@ -1,5 +1,8 @@
+import logging
 import sqlite3
 from dataclasses import asdict, dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -94,7 +97,7 @@ class CheckpointManager:
             conn.commit()
             self.buffer = []
         except Exception as e:
-            print(f"Warning: Failed to flush checkpoints: {e}")
+            logger.warning("Failed to flush checkpoints: %s", e)
         finally:
             conn.close()
 

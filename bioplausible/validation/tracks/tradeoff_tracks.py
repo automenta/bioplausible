@@ -21,6 +21,7 @@ Honest verdict:
 - If EqProp wins on key metric → VALIDATE value proposition
 """
 
+import logging
 import os
 import sys
 import time
@@ -41,6 +42,8 @@ from bioplausible.zoo.models.eqprop import (
     BackpropMLP,
     LoopedMLP,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_memory_usage():
@@ -123,10 +126,17 @@ def train_and_measure(
         test_accs.append(test_acc)
 
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            print(
-                f"    [{name}] Epoch {epoch + 1}/{epochs}: "
-                f"loss={train_loss:.4f}, train_acc={train_acc:.3f}, "
-                f"test_acc={test_acc:.3f}, time={epoch_time:.2f}s"
+            logger.info(
+                "    [%s] Epoch %d/%d: "
+                "loss=%.4f, train_acc=%.3f, "
+                "test_acc=%.3f, time=%.2fs",
+                name,
+                epoch + 1,
+                epochs,
+                train_loss,
+                train_acc,
+                test_acc,
+                epoch_time,
             )
 
     total_time = time.time() - start_time
@@ -164,10 +174,10 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
     Direct comparison of EqProp vs Backprop on SAME task.
     Measures EVERYTHING that matters for practical use.
     """
-    print("\n" + "=" * 70)
-    print("TRACK 57: HONEST TRADE-OFF ANALYSIS - EqProp vs Backprop")
-    print("=" * 70)
-    print(
+    logger.info("\n%s", "=" * 70)
+    logger.info("TRACK 57: HONEST TRADE-OFF ANALYSIS - EqProp vs Backprop")
+    logger.info("%s", "=" * 70)
+    logger.info(
         "\n\u26a0\ufe0f  CRITICAL REALITY CHECK - Determines if research should continue\n"
     )
 
@@ -204,7 +214,9 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
     train_loader = DataLoader(train_subset, batch_size=64, shuffle=True)
     test_loader = DataLoader(test_subset, batch_size=64, shuffle=False)
 
-    print(f"[57] Configuration: {n_train} train, {n_test} test, {epochs} epochs\n")
+    logger.info(
+        "[57] Configuration: %d train, %d test, %d epochs\n", n_train, n_test, epochs
+    )
 
     results = {}
 
@@ -218,12 +230,14 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
         scenarios.append(("Deep (500 steps)", 128, 100))
 
     for scenario_name, hidden_dim, max_steps in scenarios:
-        print(f"\n{'=' * 70}")
-        print(f"Scenario: {scenario_name}")
-        print(f"{'=' * 70}\n")
+        logger.info("\n%s", "=" * 70)
+        logger.info("Scenario: %s", scenario_name)
+        logger.info("%s", "=" * 70)
 
         # EqProp
-        print(f"[57a] Training EqProp ({hidden_dim} hidden, {max_steps} steps)...")
+        logger.info(
+            "[57a] Training EqProp (%d hidden, %d steps)...", hidden_dim, max_steps
+        )
         eqprop_model = LoopedMLP(
             input_dim=784,
             hidden_dim=hidden_dim,
@@ -246,7 +260,7 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
         )
 
         # Backprop (same capacity)
-        print(f"\n[57b] Training Backprop ({hidden_dim} hidden)...")
+        logger.info("\n[57b] Training Backprop (%d hidden)...", hidden_dim)
         backprop_model = BackpropMLP(
             input_dim=784, hidden_dim=hidden_dim, output_dim=10
         ).to(device)
@@ -285,34 +299,38 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
             "acc_gap_percent": acc_gap,
         }
 
-        print(f"\n{'=' * 70}")
-        print(f"COMPARISON: {scenario_name}")
-        print(f"{'=' * 70}")
-        print(
-            f"  Parameters:   EqProp={eqprop_params:,} vs Backprop={backprop_params:,}"
+        logger.info("\n%s", "=" * 70)
+        logger.info("COMPARISON: %s", scenario_name)
+        logger.info("%s", "=" * 70)
+        logger.info(
+            "  Parameters:   EqProp=%s vs Backprop=%s",
+            f"{eqprop_params:,}",
+            f"{backprop_params:,}",
         )
         eq_a = f"EqProp={eqprop_results['final_test_acc']:.3f}"
         bp_a = f"Backprop={backprop_results['final_test_acc']:.3f}"
-        print(f"  Final Acc:    {eq_a} vs {bp_a}")
+        logger.info("  Final Acc:    %s vs %s", eq_a, bp_a)
         gap_str = "EqProp worse" if acc_gap > 0 else "EqProp better"
-        print(f"  Accuracy Gap: {acc_gap:+.2f}% ({gap_str})")
+        logger.info("  Accuracy Gap: %+.2f%% (%s)", acc_gap, gap_str)
         eq_t = f"EqProp={eqprop_results['total_time_sec']:.1f}s"
         bp_t = f"Backprop={backprop_results['total_time_sec']:.1f}s"
-        print(f"  Total Time:   {eq_t} vs {bp_t}")
-        print(
-            f"  Time Ratio:   {time_ratio:.2f}\u00d7 ({'SLOWER' if time_ratio > 1 else 'FASTER'})"
+        logger.info("  Total Time:   %s vs %s", eq_t, bp_t)
+        logger.info(
+            "  Time Ratio:   %.2f\u00d7 (%s)",
+            time_ratio,
+            "SLOWER" if time_ratio > 1 else "FASTER",
         )
         eq_m = f"EqProp={eqprop_results['memory_mb']:.1f}MB"
         bp_m = f"Backprop={backprop_results['memory_mb']:.1f}MB"
-        print(f"  Memory Used:  {eq_m} vs {bp_m}")
+        logger.info("  Memory Used:  %s vs %s", eq_m, bp_m)
         eq_c = f"EqProp={eqprop_results['convergence_epoch']}"
         bp_c = f"Backprop={backprop_results['convergence_epoch']}"
-        print(f"  Convergence:  {eq_c} epochs vs {bp_c} epochs")
+        logger.info("  Convergence:  %s epochs vs %s epochs", eq_c, bp_c)
 
     # Overall verdict
-    print(f"\n{'=' * 70}")
-    print("OVERALL VERDICT")
-    print(f"{'=' * 70}\n")
+    logger.info("\n%s", "=" * 70)
+    logger.info("OVERALL VERDICT")
+    logger.info("%s", "=" * 70)
 
     avg_time_ratio = sum(r["time_ratio"] for r in results.values()) / len(results)
     avg_acc_gap = sum(r["acc_gap_percent"] for r in results.values()) / len(results)
@@ -323,10 +341,11 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
     is_worse_accuracy = avg_acc_gap > 3.0
     is_competitive = abs(avg_acc_gap) < 5.0 and avg_time_ratio < 3.0
 
-    print(f"Average time ratio:     {avg_time_ratio:.2f}\u00d7 (EqProp vs Backprop)")
-    print(f"Average accuracy gap:   {avg_acc_gap:+.2f}%")
-    print(f"Max accuracy gap:       {max_acc_gap:+.2f}%")
-    print()
+    logger.info(
+        "Average time ratio:     %.2f\u00d7 (EqProp vs Backprop)", avg_time_ratio
+    )
+    logger.info("Average accuracy gap:   %+.2f%%", avg_acc_gap)
+    logger.info("Max accuracy gap:       %+.2f%%", max_acc_gap)
 
     if is_much_slower and is_worse_accuracy:
         verdict = "\u274c STOP RESEARCH: EqProp is both slower AND less accurate"
@@ -358,9 +377,8 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
         score = 70
         status = "partial"
 
-    print(verdict)
-    print()
-    print(f"Recommendation: {recommendation}")
+    logger.info(verdict)
+    logger.info("Recommendation: %s", recommendation)
 
     # Build evidence table
     table_rows = []

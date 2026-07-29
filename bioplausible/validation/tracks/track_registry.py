@@ -59,7 +59,9 @@ def register_tracks_from_module(module):
                     except Exception:
                         logger.warning("Failed to parse track name '%s'", name)
     except Exception as e:
-        print(f"Warning: Failed to register tracks from module {module.__name__}: {e}")
+        logger.warning(
+            "Failed to register tracks from module %s: %s", module.__name__, e
+        )
 
 
 # Register all tracks (only kept modules)

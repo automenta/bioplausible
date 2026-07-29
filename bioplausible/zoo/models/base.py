@@ -1,3 +1,4 @@
+import logging
 from abc import abstractmethod
 from typing import Any
 
@@ -6,6 +7,8 @@ import torch.nn.functional as F
 from torch import autograd, nn
 
 from ..base import BioModel
+
+logger = logging.getLogger(__name__)
 
 
 class EquilibriumFunction(autograd.Function):
@@ -391,8 +394,7 @@ class EqPropModel(BioModel):
 
         # Stability Check 1: Gradients
         if torch.isnan(grads_h).any() or torch.isinf(grads_h).any():
-            print("Warning: EqProp divergence detected (NaN gradients). Skipping step.")
-            return {"loss": 100.0, "accuracy": 0.1}
+            raise RuntimeError("EqProp divergence detected (NaN/Inf gradients) — training unstable, check learning rate/beta")
 
         # Nudged dynamics: h <- forward_step(h) - beta * dL/dh
         # Note: In continuous time, dot_h = -h + sigma(...)
@@ -433,9 +435,7 @@ class EqPropModel(BioModel):
         # Compute metrics
         with torch.no_grad():
             if torch.isnan(logits_free).any():
-                print("Warning: Model collapse (NaN logits).")
-                acc = 0.1
-                loss_val = 100.0
+                raise RuntimeError("Model collapse (NaN logits) — check weight initialization or gradient clipping")
             else:
                 acc = (logits_free.argmax(dim=1) == y).float().mean().item()
                 loss_val = F.cross_entropy(logits_free, y).item()

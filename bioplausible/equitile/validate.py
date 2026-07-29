@@ -24,6 +24,7 @@ python -m bioplausible.models.equitile.validate --quick
 
 import argparse
 import json
+import logging
 import sys
 import time
 from dataclasses import dataclass
@@ -37,6 +38,8 @@ from bioplausible.equitile.lm_demo import (
     create_shakespeare_dataset,
 )
 from bioplausible.equitile.utils import ReproducibilityTracker, set_reproducible_mode
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -60,14 +63,13 @@ class ValidationPipeline:
 
         # Device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"Validation device: {self.device}")
+        logger.info("Validation device: %s", self.device)
 
     def run_all(self) -> bool:
         """Run all validation tests."""
-        print("=" * 70)
-        print("EQUITILE VALIDATION PIPELINE")
-        print("=" * 70)
-        print()
+        logger.info("=" * 70)
+        logger.info("EQUITILE VALIDATION PIPELINE")
+        logger.info("=" * 70)
 
         # Unit tests
         self._run_category("unit", self._run_unit_tests)
@@ -90,9 +92,9 @@ class ValidationPipeline:
 
     def _run_category(self, category: str, test_func) -> None:
         """Run a category of tests."""
-        print(f"\n{'=' * 70}")
-        print(f"Running {category.upper()} tests...")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("Running %s tests...", category.upper())
+        logger.info("=" * 70)
 
         start = time.time()
         test_func()
@@ -101,16 +103,16 @@ class ValidationPipeline:
         passed = sum(1 for r in self.results if r.passed and category in r.name.lower())
         total = sum(1 for r in self.results if category in r.name.lower())
 
-        print(f"\n{category.upper()} tests: {passed}/{total} passed ({elapsed:.1f}s)")
+        logger.info("%s tests: %d/%d passed (%.1fs)", category.upper(), passed, total, elapsed)
 
     def _add_result(self, result: ValidationResult) -> None:
         """Add a validation result."""
         self.results.append(result)
         status = "✓ PASS" if result.passed else "✗ FAIL"
-        print(f"  [{status}] {result.name}: {result.message}")
+        logger.info("  [%s] %s: %s", status, result.name, result.message)
         if result.metrics:
             for key, value in result.metrics.items():
-                print(f"           {key}: {value}")
+                logger.info("           %s: %s", key, value)
 
     # -------------------------------------------------------------------------
     # Unit Tests
@@ -542,30 +544,27 @@ class ValidationPipeline:
 
     def _print_summary(self) -> None:
         """Print validation summary."""
-        print()
-        print("=" * 70)
-        print("VALIDATION SUMMARY")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("VALIDATION SUMMARY")
+        logger.info("=" * 70)
 
         total = len(self.results)
         passed = sum(1 for r in self.results if r.passed)
         failed = total - passed
 
-        print(f"Total tests: {total}")
-        print(f"Passed: {passed}")
-        print(f"Failed: {failed}")
-        print()
+        logger.info("Total tests: %d", total)
+        logger.info("Passed: %d", passed)
+        logger.info("Failed: %d", failed)
 
         if failed > 0:
-            print("FAILED TESTS:")
+            logger.info("FAILED TESTS:")
             for r in self.results:
                 if not r.passed:
-                    print(f"  ✗ {r.name}: {r.message}")
+                    logger.info("  ✗ %s: %s", r.name, r.message)
 
-        print()
         overall = "✓ ALL TESTS PASSED" if failed == 0 else "✗ SOME TESTS FAILED"
-        print(f"OVERALL: {overall}")
-        print("=" * 70)
+        logger.info("OVERALL: %s", overall)
+        logger.info("=" * 70)
 
         # Save results
         results_data = {
@@ -589,7 +588,7 @@ class ValidationPipeline:
         with Path(results_path).open("w") as f:
             json.dump(results_data, f, indent=2)
 
-        print(f"\nResults saved to {results_path}")
+        logger.info("Results saved to %s", results_path)
 
 
 def main():

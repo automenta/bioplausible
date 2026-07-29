@@ -8,6 +8,7 @@ Track 55: Pure Linear Chain Failure
   - Pure linear layers vanish even with spectral normalization
 """
 
+import logging
 import sys
 import time
 from pathlib import Path
@@ -16,6 +17,8 @@ import torch
 from torch import nn
 
 from ..notebook import TrackResult
+
+logger = logging.getLogger(__name__)
 
 root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
@@ -70,24 +73,24 @@ def track_55_negative_linear_chain(verifier) -> TrackResult:
 
     This is a NEGATIVE RESULT demonstrating architectural requirements.
     """
-    print("\n" + "=" * 60)
-    print("TRACK 55: NEGATIVE RESULT - Pure Linear Chain Failure")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 55: NEGATIVE RESULT - Pure Linear Chain Failure")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
 
     depths = [50, 100, 200] if verifier.quick_mode else [50, 100, 200, 500]
     dim = 64
 
-    print(f"\n[55] Testing pure linear chains at depths: {depths}")
-    print("     Purpose: Prove that activations are REQUIRED for depth")
+    logger.info("\n[55] Testing pure linear chains at depths: %s", depths)
+    logger.info("     Purpose: Prove that activations are REQUIRED for depth")
 
     x = torch.randn(8, dim) * 0.1
 
     results = {}
 
     for depth in depths:
-        print(f"\n[55a] Depth {depth}...")
+        logger.info("\n[55a] Depth %d...", depth)
 
         depth_results = {}
         for use_sn in [True, False]:
@@ -116,9 +119,13 @@ def track_55_negative_linear_chain(verifier) -> TrackResult:
                 "death_layer": death_layer,
             }
 
-            print(
-                f"    {label}: initial={initial:.4f}, final={final:.6f}, "
-                f"ratio={ratio:.6f}, dies at layer {death_layer}"
+            logger.info(
+                "    %s: initial=%.4f, final=%.6f, ratio=%.6f, dies at layer %d",
+                label,
+                initial,
+                final,
+                ratio,
+                death_layer,
             )
 
         # Key insight: BOTH fail

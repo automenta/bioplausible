@@ -32,10 +32,13 @@ Examples
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+import logging
 import torch
 
 if TYPE_CHECKING:
     from .core import EquiTile
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -862,7 +865,7 @@ class TrainingContext:
         """
         loss = stats.get("loss", 0.0)
         accuracy = stats.get("accuracy", 0.0)
-        print(f"Step {self._step_count}: loss={loss:.4f}, accuracy={accuracy:.4f}")
+        logger.debug("Step %d: loss=%.4f, accuracy=%.4f", self._step_count, loss, accuracy)
 
     def should_checkpoint(self, epoch: int) -> bool:
         """Check if should save checkpoint.

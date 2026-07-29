@@ -6,6 +6,7 @@ Tests the hypothesis that EqProp maintains better signal flow
 than traditional backprop through deep layers.
 """
 
+import logging
 from typing import Any
 
 import torch
@@ -14,6 +15,8 @@ from bioplausible.validation.notebook import ValidationTrack
 from bioplausible.validation.tracks._signal_probe import (
     run_signal_propagation_experiment,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SignalPropagationTrack(ValidationTrack):
@@ -43,7 +46,7 @@ class SignalPropagationTrack(ValidationTrack):
         - Stable signal propagation across depths
         - Better performance than naive approaches
         """
-        print(f"Running {self.name} (Track {self.track_id})...")
+        logger.info("Running %s (Track %s)...", self.name, self.track_id)
 
         # Test with moderate depths first to avoid excessive computation
         depths = [10, 50, 100]
@@ -168,11 +171,15 @@ def test_signal_propagation():
     track = SignalPropagationTrack()
     result = track.validate()
 
-    print(f"Track {track.track_id} - {track.name}:")
-    print(f"  Success: {result['success']}")
+    logger.info("Track %s - %s:", track.track_id, track.name)
+    logger.info("  Success: %s", result["success"])
     if "metrics" in result:
-        print(f"  Signal at max depth: {result['metrics']['max_depth_signal']:.6f}")
-        print(f"  Signal at depth 100: {result['metrics']['signal_retention_100']:.6f}")
+        logger.info(
+            "  Signal at max depth: %.6f", result["metrics"]["max_depth_signal"]
+        )
+        logger.info(
+            "  Signal at depth 100: %.6f", result["metrics"]["signal_retention_100"]
+        )
 
     return result
 

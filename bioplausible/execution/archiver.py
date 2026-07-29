@@ -120,17 +120,17 @@ def reproduce():
     # 1. Configuration
     config = {config_repr}
 
-    print(f"Reproducing model: {{config['model']}}")
+    logger.info("Reproducing model: %s", config['model'])
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # 2. Setup Task
     task_name = config.get("task", "mnist")
-    print(f"Loading task: {{task_name}}...")
+    logger.info("Loading task: %s...", task_name)
     task = create_task(task_name, device=device, quick_mode=False)
     task.setup()
 
     # 3. Create Model
-    print("Creating model...")
+    logger.info("Creating model...")
     model_cls = Registry.get(ComponentCategory.MODEL, config["model"])
     model = model_cls(
         input_dim=task.input_dim,
@@ -144,7 +144,7 @@ def reproduce():
         model.beta = config["beta"]
 
     # 4. Train
-    print("Starting training...")
+    logger.info("Starting training...")
     trainer = task.create_trainer(
         model,
         lr=config.get("lr", 0.001),
@@ -158,8 +158,8 @@ def reproduce():
         metrics = trainer.train_epoch()
         acc = metrics.get('accuracy', 0.0)
         loss = metrics['loss']
-        print(
-            f"Epoch {epoch + 1}/{epochs}: Acc={acc:.4f} Loss={loss:.4f}"
+        logger.info(
+            "Epoch %d/%d: Acc=%.4f Loss=%.4f", epoch + 1, epochs, acc, loss
         )
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 import torch
@@ -14,6 +15,8 @@ from bioplausible.zoo.models.fa import AdaptiveFeedbackAlignment, EquilibriumAli
 
 from ..notebook import TrackResult
 
+logger = logging.getLogger(__name__)
+
 
 def _get_mock_data(input_dim=784, output_dim=10, batch_size=32):
     x = torch.randn(batch_size, input_dim)
@@ -23,7 +26,7 @@ def _get_mock_data(input_dim=784, output_dim=10, batch_size=32):
 
 def track_50_nebc_eqprop_variants(verifier: Any) -> TrackResult:
     """Verify newly migrated NEBC EqProp variants (LM and others)."""
-    print("    Running NEBC EqProp Variants check...")
+    logger.info("    Running NEBC EqProp Variants check...")
 
     variants = [
         ("FullEqPropLM", FullEqPropLM),
@@ -52,9 +55,9 @@ def track_50_nebc_eqprop_variants(verifier: Any) -> TrackResult:
             loss.backward()
 
             passed_variants += 1
-            print(f"      - {name}: OK")
+            logger.info("      - %s: OK", name)
         except Exception as e:
-            print(f"      - {name}: FAILED ({e})")
+            logger.info("      - %s: FAILED (%s)", name, e)
             import traceback
 
             traceback.print_exc()
@@ -75,7 +78,7 @@ def track_50_nebc_eqprop_variants(verifier: Any) -> TrackResult:
 
 def track_51_nebc_feedback_alignment(verifier: Any) -> TrackResult:
     """Verify Adaptive Feedback Alignment (Native)."""
-    print("    Running AdaptiveFeedbackAlignment check...")
+    logger.info("    Running AdaptiveFeedbackAlignment check...")
 
     def run_check():
         x, y = _get_mock_data()
@@ -111,7 +114,7 @@ def track_51_nebc_feedback_alignment(verifier: Any) -> TrackResult:
 
 def track_52_nebc_direct_feedback_alignment(verifier: Any) -> TrackResult:
     """Verify Equilibrium Alignment (Native)."""
-    print("    Running Equilibrium Alignment check...")
+    logger.info("    Running Equilibrium Alignment check...")
 
     def run_check():
         x, y = _get_mock_data()
@@ -148,7 +151,7 @@ from bioplausible.zoo.propagators.hebbian import (
 
 def track_53_nebc_contrastive_hebbian(verifier: Any) -> TrackResult:
     """Verify Contrastive Hebbian Learning."""
-    print("    Running Contrastive Hebbian Learning check...")
+    logger.info("    Running Contrastive Hebbian Learning check...")
 
     def run_check():
         x, y = _get_mock_data()
@@ -184,7 +187,7 @@ def track_53_nebc_contrastive_hebbian(verifier: Any) -> TrackResult:
 
 def track_54_nebc_deep_hebbian_chain(verifier: Any) -> TrackResult:
     """Verify Deep Hebbian Chain signal propagation."""
-    print("    Running Deep Hebbian Chain check...")
+    logger.info("    Running Deep Hebbian Chain check...")
 
     def run_check():
         x, _ = _get_mock_data(batch_size=4)

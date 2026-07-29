@@ -8,9 +8,12 @@ It supports two main modes:
 """
 
 import argparse
+import logging
 
 from bioplausible.analysis.reporting import ReportOrchestrator
 from bioplausible.execution.engine import ExecutionEngine
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -61,8 +64,10 @@ def main() -> None:
 
 def _run_scientist(args: argparse.Namespace) -> None:
     """Execute the scientist runner."""
-    print(
-        f"Initializing AutoScientist (Task Filter: {args.task}, Workers: {args.workers})..."
+    logger.info(
+        "Initializing AutoScientist (Task Filter: %s, Workers: %d)...",
+        args.task,
+        args.workers,
     )
     engine = ExecutionEngine(
         db_path=args.db,
@@ -75,10 +80,10 @@ def _run_scientist(args: argparse.Namespace) -> None:
 
 def _run_reporter(args: argparse.Namespace) -> None:
     """Execute the report generator."""
-    print(f"Generating report from {args.db} to {args.out}...")
+    logger.info("Generating report from %s to %s...", args.db, args.out)
     orchestrator = ReportOrchestrator(args.db, args.out)
     orchestrator.generate_reports()
-    print("Done.")
+    logger.info("Done.")
 
 
 def main_scientist() -> None:

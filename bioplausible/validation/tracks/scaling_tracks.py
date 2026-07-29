@@ -1,3 +1,4 @@
+import logging
 import sys
 import time
 from pathlib import Path
@@ -19,12 +20,14 @@ from bioplausible.zoo.models.eqprop import (
     NeuralCube,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def track_5_neural_cube(verifier) -> TrackResult:
     """Track 3 (README): 3D Neural Cube with local connectivity."""
-    print("\n" + "=" * 60)
-    print("TRACK 5: Neural Cube 3D Topology")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 5: Neural Cube 3D Topology")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     cube_size = 6
@@ -32,16 +35,21 @@ def track_5_neural_cube(verifier) -> TrackResult:
 
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
 
-    print(f"\n[5a] Training {cube_size}×{cube_size}×{cube_size} Neural Cube...")
+    logger.info(
+        "\n[5a] Training %d\u00d7%d\u00d7%d Neural Cube...",
+        cube_size,
+        cube_size,
+        cube_size,
+    )
     cube = NeuralCube(cube_size=cube_size, input_dim=input_dim, output_dim=output_dim)
 
     topo = cube.get_topology_stats()
     train_model(cube, X, y, epochs=verifier.epochs, lr=0.01, name="3D Cube")
     acc = evaluate_accuracy(cube, X, y)
 
-    print(f"\n  Neurons: {topo['n_neurons']}")
-    print(f"  Connection reduction: {topo['connection_reduction'] * 100:.1f}%")
-    print(f"  Accuracy: {acc * 100:.1f}%")
+    logger.info("\n  Neurons: %d", topo["n_neurons"])
+    logger.info("  Connection reduction: %.1f%%", topo["connection_reduction"] * 100)
+    logger.info("  Accuracy: %.1f%%", acc * 100)
 
     # Visualize
     with torch.no_grad():
@@ -93,15 +101,15 @@ def track_5_neural_cube(verifier) -> TrackResult:
 
 def track_10_memory_scaling(verifier) -> TrackResult:
     """Scaling: O(1) memory with depth."""
-    print("\n" + "=" * 60)
-    print("TRACK 10: O(1) Memory Scaling")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 10: O(1) Memory Scaling")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 64, 10
     depths = [10, 25, 50, 100] if not verifier.quick_mode else [10, 25, 50]
 
-    print("\n[10a] Measuring memory vs depth...")
+    logger.info("\n[10a] Measuring memory vs depth...")
     results = {}
 
     for depth in depths:
@@ -120,10 +128,12 @@ def track_10_memory_scaling(verifier) -> TrackResult:
             "ratio": (param_mem + bp_act_mem) / (param_mem + eqprop_act_mem),
         }
 
-        print(
-            f"  Depth {depth:3d}: EqProp={results[depth]['eqprop']:.2f}MB, "
-            f"Backprop={results[depth]['backprop']:.2f}MB, "
-            f"Ratio={results[depth]['ratio']:.1f}×"
+        logger.info(
+            "  Depth %3d: EqProp=%.2fMB, Backprop=%.2fMB, Ratio=%.1f\u00d7",
+            depth,
+            results[depth]["eqprop"],
+            results[depth]["backprop"],
+            results[depth]["ratio"],
         )
 
     max_ratio = max(r["ratio"] for r in results.values())
@@ -163,9 +173,9 @@ def track_10_memory_scaling(verifier) -> TrackResult:
 
 def track_11_deep_network(verifier) -> TrackResult:
     """Scaling: 100-layer network with gradient flow."""
-    print("\n" + "=" * 60)
-    print("TRACK 11: Deep Network (100 layers)")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 11: Deep Network (100 layers)")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
 
@@ -173,14 +183,14 @@ def track_11_deep_network(verifier) -> TrackResult:
     depth = 50 if verifier.quick_mode else 100
     input_dim, hidden_dim, output_dim = 64, 64, 10
 
-    print(f"\n[11a] Creating {depth}-step model...")
+    logger.info("\n[11a] Creating %d-step model...", depth)
     model = LoopedMLP(
         input_dim, hidden_dim, output_dim, use_spectral_norm=True, max_steps=depth
     )
 
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
 
-    print("[11b] Training...")
+    logger.info("[11b] Training...")
     train_model(model, X, y, epochs=verifier.epochs, name=f"{depth}-deep")
     acc = evaluate_accuracy(model, X, y)
 
@@ -241,9 +251,9 @@ def track_11_deep_network(verifier) -> TrackResult:
 
 def track_12_lazy_updates(verifier) -> TrackResult:
     """Scaling: Lazy/Event-driven updates for FLOP savings."""
-    print("\n" + "=" * 60)
-    print("TRACK 12: Lazy Event-Driven Updates")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 12: Lazy Event-Driven Updates")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 128, 10
@@ -260,15 +270,15 @@ def track_12_lazy_updates(verifier) -> TrackResult:
     results = {}
 
     # First, train standard model for accuracy baseline
-    print("\n[12a] Training standard EqProp (baseline)...")
+    logger.info("\n[12a] Training standard EqProp (baseline)...")
     baseline = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
     train_model(
         baseline, X_train, y_train, epochs=verifier.epochs, lr=0.01, name="Standard"
     )
     baseline_acc = evaluate_accuracy(baseline, X_test, y_test)
-    print(f"  Baseline accuracy: {baseline_acc * 100:.1f}%")
+    logger.info("  Baseline accuracy: %.1f%%", baseline_acc * 100)
 
-    print("\n[12b] Testing lazy models with different thresholds...")
+    logger.info("\n[12b] Testing lazy models with different thresholds...")
     for eps in epsilons:
         model = LazyEqProp(
             input_dim, hidden_dim, output_dim, epsilon=eps, use_spectral_norm=True
@@ -292,7 +302,9 @@ def track_12_lazy_updates(verifier) -> TrackResult:
             "acc_gap": baseline_acc - acc,
         }
 
-        print(f"  ε={eps}: acc={acc * 100:.1f}% | savings={savings:.1f}%")
+        logger.info(
+            "  epsilon=%s: acc=%.1f%% | savings=%.1f%%", eps, acc * 100, savings
+        )
 
     # Best result: highest savings with minimal acc loss
     best_eps = max(

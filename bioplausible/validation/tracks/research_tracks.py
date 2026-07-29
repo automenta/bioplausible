@@ -7,6 +7,7 @@ Validates new research directions:
 - Finite-Nudge EP (Large beta)
 """
 
+import logging
 import time
 
 import torch
@@ -14,6 +15,8 @@ import torch
 from bioplausible.zoo.models.eqprop import DirectedEP, FiniteNudgeEP, HolomorphicEP
 
 from ..notebook import TrackResult
+
+logger = logging.getLogger(__name__)
 
 
 def _get_synthetic_data(n=32, input_dim=64, output_dim=10):
@@ -24,9 +27,9 @@ def _get_synthetic_data(n=32, input_dim=64, output_dim=10):
 
 def track_42_holomorphic_ep(verifier) -> TrackResult:
     """Track 42: Holomorphic Equilibrium Propagation."""
-    print("\n" + "=" * 60)
-    print("TRACK 42: Holomorphic EP (Complex)")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 42: Holomorphic EP (Complex)")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
 
@@ -51,10 +54,10 @@ def track_42_holomorphic_ep(verifier) -> TrackResult:
     )
 
     # 3. Training Loop
-    print("\n[42a] Training HolomorphicEP...")
+    logger.info("\n[42a] Training HolomorphicEP...")
     initial_metrics = model.train_step(x[:32], y[:32])
     initial_loss = initial_metrics["loss"]
-    print(f"  Initial Loss: {initial_loss:.4f}")
+    logger.info("  Initial Loss: %.4f", initial_loss)
 
     losses = []
     epochs = 30 if verifier.quick_mode else 50
@@ -73,7 +76,7 @@ def track_42_holomorphic_ep(verifier) -> TrackResult:
         avg_loss = epoch_loss / batches
         losses.append(avg_loss)
         if (epoch + 1) % 5 == 0:
-            print(f"  Epoch {epoch + 1}: Loss {avg_loss:.4f}")
+            logger.info("  Epoch %d: Loss %.4f", epoch + 1, avg_loss)
 
     final_loss = losses[-1]
 
@@ -109,9 +112,9 @@ def track_42_holomorphic_ep(verifier) -> TrackResult:
 
 def track_43_directed_ep(verifier) -> TrackResult:
     """Track 43: Directed Equilibrium Propagation."""
-    print("\n" + "=" * 60)
-    print("TRACK 43: Directed EP (Asymmetric)")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 43: Directed EP (Asymmetric)")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
 
@@ -140,18 +143,18 @@ def track_43_directed_ep(verifier) -> TrackResult:
     # forward_layers[0] connects input -> h1 (dim 0 -> 1)
     # feedback_layers[0] connects h1 -> input (dim 1 -> 0)
     # Check shapes
-    print(f"  Forward W shape: {w_fwd.shape}")
-    print(f"  Feedback B shape: {w_bwd.shape}")
+    logger.info("  Forward W shape: %s", w_fwd.shape)
+    logger.info("  Feedback B shape: %s", w_bwd.shape)
 
     # Check if tied (should NOT be tied/shared memory)
     is_tied = w_fwd.data_ptr() == w_bwd.data_ptr()
-    print(f"  Weights Tied: {is_tied}")
+    logger.info("  Weights Tied: %s", is_tied)
 
     # Train
-    print("\n[43a] Training DirectedEP...")
+    logger.info("\n[43a] Training DirectedEP...")
     metrics = model.train_step(x[:32], y[:32])
     initial_loss = metrics["loss"]
-    print(f"  Initial Loss: {initial_loss:.4f}")
+    logger.info("  Initial Loss: %.4f", initial_loss)
 
     epochs = 30 if verifier.quick_mode else 50
     batch_size = 32
@@ -164,7 +167,7 @@ def track_43_directed_ep(verifier) -> TrackResult:
 
     metrics = model.train_step(x[:32], y[:32])
     final_loss = metrics["loss"]
-    print(f"  Final Loss: {final_loss:.4f}")
+    logger.info("  Final Loss: %.4f", final_loss)
 
     learned = final_loss < initial_loss * 0.95
 
@@ -193,9 +196,9 @@ def track_43_directed_ep(verifier) -> TrackResult:
 
 def track_44_finite_nudge_ep(verifier) -> TrackResult:
     """Track 44: Finite-Nudge Equilibrium Propagation."""
-    print("\n" + "=" * 60)
-    print("TRACK 44: Finite-Nudge EP (Large Beta)")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 44: Finite-Nudge EP (Large Beta)")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
 
@@ -218,13 +221,13 @@ def track_44_finite_nudge_ep(verifier) -> TrackResult:
         eq_steps=10,
         learning_rate=0.01,
     )
-    print(f"  Using Beta: {model.beta}")
+    logger.info("  Using Beta: %s", model.beta)
 
     # Train
-    print("\n[44a] Training FiniteNudgeEP...")
+    logger.info("\n[44a] Training FiniteNudgeEP...")
     metrics = model.train_step(x[:32], y[:32])
     initial_loss = metrics["loss"]
-    print(f"  Initial Loss: {initial_loss:.4f}")
+    logger.info("  Initial Loss: %.4f", initial_loss)
 
     epochs = 30 if verifier.quick_mode else 50
     batch_size = 32
@@ -237,7 +240,7 @@ def track_44_finite_nudge_ep(verifier) -> TrackResult:
 
     metrics = model.train_step(x[:32], y[:32])
     final_loss = metrics["loss"]
-    print(f"  Final Loss: {final_loss:.4f}")
+    logger.info("  Final Loss: %.4f", final_loss)
 
     learned = final_loss < initial_loss * 0.95
 

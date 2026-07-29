@@ -17,6 +17,7 @@ Key Components
 - DynamicEquiTile: Full dynamic architecture
 """
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -29,6 +30,8 @@ from .config import DynamicEquiTileConfig, TileGrowthConfig
 
 if TYPE_CHECKING:
     from .core import EquiTile
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -224,7 +227,7 @@ class TileGrowthManager:
         # Lateral connection
         model.add_edge(parent_id, new_id)
 
-        print(f"  Grew tile {new_id} from parent {parent_id}")
+        logger.info("  Grew tile %s from parent %s", new_id, parent_id)
         return new_id
 
     def prune_tile(self, model: EquiTile, tile_id: int) -> bool:
@@ -242,7 +245,7 @@ class TileGrowthManager:
         if tile_id in self.error_ema:
             del self.error_ema[tile_id]
 
-        print(f"  Pruned tile {tile_id}")
+        logger.info("  Pruned tile %s", tile_id)
         return True
 
     def reset(self):
@@ -424,7 +427,7 @@ class DynamicEquiTile:
             dynamic.step()  # Check for growth/pruning
 
             if dynamic.tile_modified:
-                print(f"Tiles: {len(model.graph.tiles)}")
+                logger.info("Tiles: %d", len(model.graph.tiles))
     """
 
     def __init__(

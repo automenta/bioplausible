@@ -1,3 +1,4 @@
+import logging
 import sys
 import time
 from pathlib import Path
@@ -15,12 +16,14 @@ if str(root_path) not in sys.path:
 
 from bioplausible.zoo.models.eqprop import LoopedMLP  # noqa: E402
 
+logger = logging.getLogger(__name__)
+
 
 def track_20_transfer_learning(verifier) -> TrackResult:
     """Track 20: Transfer Learning Efficacy."""
-    print("\n" + "=" * 60)
-    print("TRACK 20: Transfer Learning Efficacy")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 20: Transfer Learning Efficacy")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     input_dim, hidden_dim = 64, 128
@@ -41,14 +44,13 @@ def track_20_transfer_learning(verifier) -> TrackResult:
     # We will use the same model but re-initialize readout for Task B.
 
     # 1. Pre-train on Task A
-    print("\n[20a] Pre-training on Task A (Classes 0-4)...")
+    logger.info("\n[20a] Pre-training on Task A (Classes 0-4)...")
     model = LoopedMLP(input_dim, hidden_dim, 5, use_spectral_norm=True)
     train_model(model, X_A, y_A, epochs=verifier.epochs, lr=0.01, name="Pretrain")
     acc_A = evaluate_accuracy(model, X_A, y_A)
-    print(f"  Task A Accuracy: {acc_A * 100:.1f}%")
+    logger.info("  Task A Accuracy: %.1f%%", acc_A * 100)
 
-    # 2. Transfer to Task B (Few-shot / Fine-tune)
-    print("\n[20b] Transferring to Task B (Classes 5-9)...")
+    logger.info("\n[20b] Transferring to Task B (Classes 5-9)...")
 
     # Create new model for B, copy weights from A (except readout)
     model_B = LoopedMLP(input_dim, hidden_dim, 5, use_spectral_norm=True)
@@ -71,8 +73,8 @@ def track_20_transfer_learning(verifier) -> TrackResult:
     acc_transfer = evaluate_accuracy(model_B, X_B, y_B)
     acc_scratch = evaluate_accuracy(model_scratch, X_B, y_B)
 
-    print(f"  Transfer Accuracy: {acc_transfer * 100:.1f}%")
-    print(f"  Scratch Accuracy:  {acc_scratch * 100:.1f}%")
+    logger.info("  Transfer Accuracy: %.1f%%", acc_transfer * 100)
+    logger.info("  Scratch Accuracy:  %.1f%%", acc_scratch * 100)
 
     # Expect transfer to be better or faster
     improvement = acc_transfer - acc_scratch
@@ -113,9 +115,9 @@ Compare against training from scratch on Task B.
 
 def track_21_continual_learning(verifier) -> TrackResult:
     """Track 21: Continual Learning Robustness with EWC."""
-    print("\n" + "=" * 60)
-    print("TRACK 21: Continual Learning Robustness (EWC)")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 21: Continual Learning Robustness (EWC)")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     input_dim, hidden_dim = 64, 128
@@ -132,13 +134,12 @@ def track_21_continual_learning(verifier) -> TrackResult:
     model = LoopedMLP(input_dim, hidden_dim, 10, use_spectral_norm=True)
 
     # 1. Train Task A
-    print("\n[21a] Learning Task A...")
+    logger.info("\n[21a] Learning Task A...")
     train_model(model, X_A, y_A, epochs=verifier.epochs, lr=0.01, name="TaskA")
     acc_A_initial = evaluate_accuracy(model, X_A, y_A)
-    print(f"  Task A Initial: {acc_A_initial * 100:.1f}%")
+    logger.info("  Task A Initial: %.1f%%", acc_A_initial * 100)
 
-    # 2. Compute Fisher Information for EWC
-    print("\n[21b] Computing Fisher Information Matrix...")
+    logger.info("\n[21b] Computing Fisher Information Matrix...")
     fisher_dict = {}
     optpar_dict = {}
 
@@ -164,7 +165,7 @@ def track_21_continual_learning(verifier) -> TrackResult:
     model.zero_grad()
 
     # 3. Train Task B with EWC regularization
-    print("\n[21c] Learning Task B with EWC regularization...")
+    logger.info("\n[21c] Learning Task B with EWC regularization...")
     ewc_lambda = 1000.0  # EWC regularization strength
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
@@ -184,13 +185,11 @@ def track_21_continual_learning(verifier) -> TrackResult:
         optimizer.step()
 
         acc = (out.argmax(dim=1) == y_B).float().mean().item() * 100
-        msg = (
+        log_msg = (
             f"\r  TaskB+EWC: [{epoch + 1}/{verifier.epochs}] "
             f"ce={ce_loss.item():.3f} ewc={ewc_loss:.4f} acc={acc:.1f}%"
         )
-        print(msg, end="", flush=True)
-
-    print()
+        logger.info(log_msg)
 
     # 4. Assess Forgetting
     acc_A_final = evaluate_accuracy(model, X_A, y_A)
@@ -198,8 +197,10 @@ def track_21_continual_learning(verifier) -> TrackResult:
     forgetting = (acc_A_initial - acc_A_final) * 100
     retention = acc_A_final / acc_A_initial if acc_A_initial > 0 else 0
 
-    print(f"  Task A Final: {acc_A_final * 100:.1f}% (Forgetting: {forgetting:.1f}%)")
-    print(f"  Task B Final: {acc_B_final * 100:.1f}%")
+    logger.info(
+        "  Task A Final: %.1f%% (Forgetting: %.1f%%)", acc_A_final * 100, forgetting
+    )
+    logger.info("  Task B Final: %.1f%%", acc_B_final * 100)
 
     # Score based on forgetting: <20% = pass, <50% = partial, else fail
     if forgetting < 20:

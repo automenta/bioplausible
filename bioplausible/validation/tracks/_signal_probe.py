@@ -9,6 +9,7 @@ Key insight: EqProp should maintain better signal propagation than
 traditional backprop due to bidirectional equilibrium dynamics.
 """
 
+import logging
 import time
 
 import matplotlib.pyplot as plt
@@ -18,6 +19,8 @@ from tqdm import tqdm
 
 from bioplausible.data.vision import get_vision_dataset
 from bioplausible.zoo.models.eqprop import LoopedMLP, MemoryEfficientLoopedMLP
+
+logger = logging.getLogger(__name__)
 
 
 def measure_layer_signals(model, h_perturbed, x_input=None):
@@ -152,10 +155,10 @@ def run_signal_propagation_experiment(
     Returns:
         Dictionary with experimental results
     """
-    print("Starting 1000-Layer Signal Probe Experiment")
-    print(f"Testing depths: {depths}")
-    print(f"Backend: {backend}")
-    print(f"Use residual: {use_residual}")
+    logger.info("Starting 1000-Layer Signal Probe Experiment")
+    logger.info("Testing depths: %s", depths)
+    logger.info("Backend: %s", backend)
+    logger.info("Use residual: %s", use_residual)
 
     results = {
         "depths": depths,
@@ -172,7 +175,7 @@ def run_signal_propagation_experiment(
     sample_x, sample_y = next(iter(dataloader))
 
     for depth in tqdm(depths, desc="Testing depths"):
-        print(f"\nTesting depth {depth}...")
+        logger.info("\nTesting depth %d...", depth)
 
         # Create model with specified depth
         model = create_deep_model(
@@ -204,8 +207,8 @@ def run_signal_propagation_experiment(
 
         # Report signal at the end (after full propagation)
         final_signal = signals[-1] if signals else 0.0
-        print(f"  Depth {depth}: Final signal = {final_signal:.6f}")
-        print(f"  Time taken: {end_time - start_time:.2f}s")
+        logger.info("  Depth %d: Final signal = %.6f", depth, final_signal)
+        logger.info("  Time taken: %.2fs", end_time - start_time)
 
     return results
 
@@ -216,7 +219,7 @@ def compare_with_skip_connections(
     """
     Compare signal propagation with and without skip connections.
     """
-    print("\nComparing with skip connections...")
+    logger.info("\nComparing with skip connections...")
 
     results_normal = run_signal_propagation_experiment(
         depths=depths, perturbation_strength=perturbation_strength, use_residual=False
@@ -296,16 +299,16 @@ def visualize_signal_propagation(
         plt.show()
 
     except ImportError:
-        print("Matplotlib not available, skipping visualization")
+        logger.info("Matplotlib not available, skipping visualization")
 
 
 def run_complete_signal_probe():
     """
     Run the complete 1000-layer signal probe experiment.
     """
-    print("=" * 60)
-    print("1000-Layer Signal Probe Experiment (Track 42)")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("1000-Layer Signal Probe Experiment (Track 42)")
+    logger.info("=" * 60)
 
     # Test different depths
     depths = [10, 50, 100, 200, 500]  # Start with smaller depths for testing
@@ -324,22 +327,23 @@ def run_complete_signal_probe():
     all_results = {}
 
     for backend in backends_to_test:
-        print(f"\nTesting with {backend.upper()} backend...")
+        logger.info("\nTesting with %s backend...", backend.upper())
         results = run_signal_propagation_experiment(
             depths=depths, perturbation_strength=0.1, backend=backend
         )
         all_results[backend] = results
 
-        # Print summary
-        print(f"\nResults for {backend} backend:")
+        logger.info("\nResults for %s backend:", backend)
         for depth in depths:
             final_signal = (
                 results["signals"][depth][-1] if results["signals"][depth] else 0.0
             )
             time_taken = results["times"][depth]
-        print(
-            f"  Depth {depth:3d}: Final signal = {final_signal:.6f},"
-            f" Time = {time_taken:.2f}s"
+        logger.info(
+            "  Depth %3d: Final signal = %.6f, Time = %.2fs",
+            depth,
+            final_signal,
+            time_taken,
         )
 
     # Visualize results for the primary backend
@@ -353,10 +357,10 @@ def run_complete_signal_probe():
             all_results["kernel"], "Signal Propagation - Kernel Backend (O(1) Memory)"
         )
 
-    print("\n" + "=" * 60)
-    print("Experiment Complete!")
-    print("Success metric: Signal > 1% at depth 1000")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("Experiment Complete!")
+    logger.info("Success metric: Signal > 1%% at depth 1000")
+    logger.info("%s", "=" * 60)
 
     # Check success criteria
     for backend, results in all_results.items():
@@ -366,9 +370,11 @@ def run_complete_signal_probe():
             )
             success = final_signal > 0.01  # > 1%
             status = "SUCCESS" if success else "FAILED"
-            print(
-                f"{backend.capitalize()} backend signal at depth 1000:"
-                f" {final_signal:.6f} ({status})"
+            logger.info(
+                "%s backend signal at depth 1000: %.6f (%s)",
+                backend.capitalize(),
+                final_signal,
+                status,
             )
 
     return all_results

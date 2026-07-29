@@ -14,6 +14,7 @@ Examples
 >>> logits = model(input_ids)
 """
 
+import logging
 from typing import TYPE_CHECKING, Any, Literal
 
 import torch
@@ -27,6 +28,8 @@ from .language import LMEquiTile, LMEquiTileConfig, PositionalEncoding
 
 if TYPE_CHECKING:
     from torch import Tensor
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -430,9 +433,9 @@ class OptimizedLMEquiTile(LMEquiTile):
                 self._compiled_call = torch.compile(
                     self._forward_impl, mode=compile_mode
                 )
-                print(f"LMEquiTile compiled with mode='{compile_mode}'")
+                logger.info("LMEquiTile compiled with mode='%s'", compile_mode)
             except Exception as e:
-                print(f"torch.compile failed: {e}")
+                logger.warning("torch.compile failed: %s", e)
                 self._compiled_call = None
         else:
             self._compiled_call = None

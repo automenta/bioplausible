@@ -497,6 +497,8 @@ class KnowledgeBase:
         filters: dict[str, Any] | None = None,
     ) -> list[tuple[KnowledgeEntry, float]]:
         """Fallback keyword search."""
+        if not query:
+            return []
         query_lower = query.lower()
         results = []
 

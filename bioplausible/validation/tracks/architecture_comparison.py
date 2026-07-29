@@ -10,6 +10,7 @@ Compares signal propagation through different architectures:
 This provides definitive evidence about what architectures work for deep EqProp.
 """
 
+import logging
 import sys
 import time
 from pathlib import Path
@@ -23,7 +24,11 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.zoo.models.eqprop import LoopedMLP  # noqa: E402
+from bioplausible.zoo.models.eqprop import (
+    LoopedMLP,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class LinearChain(nn.Module):
@@ -96,16 +101,16 @@ def track_56_depth_architecture_comparison(verifier) -> TrackResult:
     Compares signal propagation with different activation functions.
     Answers: What architectures actually work for deep EqProp?
     """
-    print("\n" + "=" * 60)
-    print("TRACK 56: Depth Architecture Comparison")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 56: Depth Architecture Comparison")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
 
     depth = 100 if verifier.quick_mode else 200
     dim = 64
 
-    print(f"\n[56] Testing {depth}-layer chains with different activations")
+    logger.info("\n[56] Testing %d-layer chains with different activations", depth)
 
     x = torch.randn(8, dim) * 0.5  # Moderate initial signal
 
@@ -118,7 +123,7 @@ def track_56_depth_architecture_comparison(verifier) -> TrackResult:
     results = {}
 
     for name, arch_class in architectures.items():
-        print(f"\n[56a] {name}...")
+        logger.info("\n[56a] %s...", name)
 
         arch_results = {}
         for use_sn in [True, False]:
@@ -147,7 +152,9 @@ def track_56_depth_architecture_comparison(verifier) -> TrackResult:
                 "survival_depth": survival_depth,
             }
 
-            print(f"    {label}: ratio={ratio:.4f}, survives to layer {survival_depth}")
+            logger.info(
+                "    %s: ratio=%.4f, survives to layer %d", label, ratio, survival_depth
+            )
 
         # Is SN beneficial for this architecture?
         sn_better = (
@@ -160,7 +167,7 @@ def track_56_depth_architecture_comparison(verifier) -> TrackResult:
         results[name] = arch_results
 
     # Test LoopedMLP (the actual EqProp model) - use gradient flow instead
-    print("\n[56b] LoopedMLP (EqProp architecture)...")
+    logger.info("\n[56b] LoopedMLP (EqProp architecture)...")
 
     looped_results = {}
     for use_sn in [True, False]:
@@ -191,7 +198,7 @@ def track_56_depth_architecture_comparison(verifier) -> TrackResult:
             "stable": L <= 1.05,
         }
 
-        print(f"    {label}: grad_norm={grad_norm:.4f}, L={L:.4f}")
+        logger.info("    %s: grad_norm=%.4f, L=%.4f", label, grad_norm, L)
 
     looped_results["sn_beneficial"] = (
         looped_results["with_sn"]["stable"]

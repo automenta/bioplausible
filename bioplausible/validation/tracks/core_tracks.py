@@ -1,3 +1,4 @@
+import logging
 import sys
 import time
 from pathlib import Path
@@ -16,19 +17,21 @@ from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def track_1_spectral_norm(verifier) -> TrackResult:
     """Core: Spectral Normalization maintains L < 1."""
-    print("\n" + "=" * 60)
-    print("TRACK 1: Spectral Normalization Stability")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 1: Spectral Normalization Stability")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 128, 10
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
 
     # Without SN - use higher LR to show instability
-    print("\n[1a] Without spectral norm (aggressive training)...")
+    logger.info("\n[1a] Without spectral norm (aggressive training)...")
     model_no_sn = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=False)
     L_before_no = model_no_sn.compute_lipschitz()
     # Higher LR causes L to grow more
@@ -36,7 +39,7 @@ def track_1_spectral_norm(verifier) -> TrackResult:
     L_after_no = model_no_sn.compute_lipschitz()
 
     # With SN
-    print("[1b] With spectral norm...")
+    logger.info("[1b] With spectral norm...")
     model_sn = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
     L_before_sn = model_sn.compute_lipschitz()
     train_model(model_sn, X, y, epochs=verifier.epochs, lr=0.05, name="With SN")
@@ -109,9 +112,9 @@ track_1_spectral_norm.category = "Core Stability"
 
 def track_2_backprop_parity(verifier) -> TrackResult:
     """Core: EqProp achieves accuracy parity with Backprop."""
-    print("\n" + "=" * 60)
-    print("TRACK 2: EqProp vs Backprop Parity")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 2: EqProp vs Backprop Parity")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 128, 10
@@ -126,13 +129,13 @@ def track_2_backprop_parity(verifier) -> TrackResult:
     X_test, y_test = X_all[split:], y_all[split:]
 
     # Backprop
-    print("\n[2a] Backprop MLP...")
+    logger.info("\n[2a] Backprop MLP...")
     bp_model = BackpropMLP(input_dim, hidden_dim, output_dim)
     train_model(bp_model, X_train, y_train, epochs=verifier.epochs, name="Backprop")
     bp_acc = evaluate_accuracy(bp_model, X_test, y_test)
 
     # EqProp
-    print("[2b] EqProp (LoopedMLP)...")
+    logger.info("[2b] EqProp (LoopedMLP)...")
     eq_model = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
     train_model(eq_model, X_train, y_train, epochs=verifier.epochs, name="EqProp")
     eq_acc = evaluate_accuracy(eq_model, X_test, y_test)
@@ -198,9 +201,9 @@ track_2_backprop_parity.category = "Performance"
 
 def track_3_adversarial_healing(verifier) -> TrackResult:
     """Track 1 (README): Adversarial Self-Healing via noise damping."""
-    print("\n" + "=" * 60)
-    print("TRACK 3: Adversarial Self-Healing")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 3: Adversarial Self-Healing")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 128, 10
@@ -208,17 +211,17 @@ def track_3_adversarial_healing(verifier) -> TrackResult:
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
     model = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
 
-    print("\n[3a] Pre-training model...")
+    logger.info("\n[3a] Pre-training model...")
     train_model(model, X, y, epochs=verifier.epochs, name="Pre-train")
 
-    print("[3b] Testing noise damping...")
+    logger.info("[3b] Testing noise damping...")
     noise_levels = [0.5, 1.0, 2.0]
     results = {}
 
     for noise in noise_levels:
         damping = model.inject_noise_and_relax(X[:32], noise_level=noise)
         results[noise] = damping
-        print(f"  σ={noise}: damping={damping['damping_percent']:.1f}%")
+        logger.info("  sigma=%s: damping=%.1f%%", noise, damping["damping_percent"])
 
     avg_damping = np.mean([r["damping_percent"] for r in results.values()])
     score = min(100, avg_damping)

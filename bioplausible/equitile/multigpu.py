@@ -33,6 +33,7 @@ Multi-process (spawn):
 >>> spawn_multi_gpu_worker(worker, world_size=4)
 """
 
+import logging
 import os
 import threading
 import time
@@ -43,6 +44,8 @@ from typing import TYPE_CHECKING
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
+
+logger = logging.getLogger(__name__)
 
 from .kernels import (
     compute_activity_update,
@@ -121,12 +124,12 @@ class NCCLCommunicator:
             torch.cuda.set_device(self.device)
             self.initialized = True
 
-            print(
-                f"NCCL initialized: rank {self.config.rank}/{self.config.world_size}, "
-                f"device {self.device}"
+            logger.info(
+                "NCCL initialized: rank %d/%d, device %s",
+                self.config.rank, self.config.world_size, self.device,
             )
         except Exception as e:
-            print(f"Warning: NCCL initialization failed: {e}")
+            logger.warning("NCCL initialization failed: %s", e)
             self.device = torch.device("cpu")
 
     def destroy(self) -> None:

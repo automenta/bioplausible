@@ -172,7 +172,7 @@ class ResearchSynthesizer:
             df = df.join(params_pivot, on="trial_id")
 
         # JSON deserialization
-        for col in ["model_name", "task_name", "tier"]:
+        for col in ["model_name", "task_name", "tier", "num_epochs"]:
             if col in df.columns:
                 df[col] = df[col].apply(
                     lambda x: json.loads(x) if x and isinstance(x, str) else x

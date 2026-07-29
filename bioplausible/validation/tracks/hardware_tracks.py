@@ -1,3 +1,4 @@
+import logging
 import sys
 import time
 from pathlib import Path
@@ -13,7 +14,11 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.zoo.models.eqprop import LoopedMLP  # noqa: E402
+from bioplausible.zoo.models.eqprop import (
+    LoopedMLP,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class QuantizedLoopedMLP(LoopedMLP):
@@ -37,9 +42,9 @@ class QuantizedLoopedMLP(LoopedMLP):
 
 def track_16_fpga_quantization(verifier) -> TrackResult:
     """Track 16: FPGA / Bit Precision - INT8 Quantization."""
-    print("\n" + "=" * 60)
-    print("TRACK 16: FPGA Bit Precision (INT8)")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 16: FPGA Bit Precision (INT8)")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 128, 10
@@ -47,7 +52,7 @@ def track_16_fpga_quantization(verifier) -> TrackResult:
 
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
 
-    print(f"\n[16a] Training with {bits}-bit simulated quantization...")
+    logger.info("\n[16a] Training with %d-bit simulated quantization...", bits)
     # We use a custom subclass that quantizes hidden states during forward pass
     # Gradients are still float (simulating high-precision accumulation or surrogate gradient)
     model = QuantizedLoopedMLP(
@@ -57,7 +62,7 @@ def track_16_fpga_quantization(verifier) -> TrackResult:
     train_model(model, X, y, epochs=verifier.epochs, lr=0.01, name=f"INT{bits}")
     acc = evaluate_accuracy(model, X, y)
 
-    print(f"  Final Accuracy: {acc * 100:.1f}%")
+    logger.info("  Final Accuracy: %.1f%%", acc * 100)
 
     # Validation constraint: Must perform nearly as well as float32
     # Baseline usually ~100% on this task
@@ -106,9 +111,9 @@ class NoisyLoopedMLP(LoopedMLP):
 
 def track_17_analog_photonics(verifier) -> TrackResult:
     """Track 17: Analog/Photonics - Noise Robustness."""
-    print("\n" + "=" * 60)
-    print("TRACK 17: Analog/Photonics Noise Robustness")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 17: Analog/Photonics Noise Robustness")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 128, 10
@@ -116,7 +121,9 @@ def track_17_analog_photonics(verifier) -> TrackResult:
 
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
 
-    print(f"\n[17a] Training with {noise_level * 100:.1f}% analog noise injection...")
+    logger.info(
+        "\n[17a] Training with %.1f%% analog noise injection...", noise_level * 100
+    )
     model = NoisyLoopedMLP(
         input_dim,
         hidden_dim,
@@ -130,7 +137,7 @@ def track_17_analog_photonics(verifier) -> TrackResult:
     )
     acc = evaluate_accuracy(model, X, y)
 
-    print(f"  Final Accuracy: {acc * 100:.1f}%")
+    logger.info("  Final Accuracy: %.1f%%", acc * 100)
 
     score = min(100, acc * 105)
     status = "pass" if acc > 0.9 else ("partial" if acc > 0.7 else "fail")
@@ -163,9 +170,9 @@ def track_17_analog_photonics(verifier) -> TrackResult:
 
 def track_18_thermodynamic_dna(verifier) -> TrackResult:
     """Track 18: DNA/Chemical - Thermodynamic Efficiency."""
-    print("\n" + "=" * 60)
-    print("TRACK 18: DNA/Thermodynamic Constraints")
-    print("=" * 60)
+    logger.info("\n%s", "=" * 60)
+    logger.info("TRACK 18: DNA/Thermodynamic Constraints")
+    logger.info("%s", "=" * 60)
 
     start = time.time()
     input_dim, hidden_dim, output_dim = 64, 128, 10
@@ -179,7 +186,7 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:
     T_start = 1.0
     T_end = 0.1
 
-    print("\n[18a] Measuring energy vs error reduction (Simulated Annealing)...")
+    logger.info("\n[18a] Measuring energy vs error reduction (Simulated Annealing)...")
 
     energy_history = []
     loss_history = []
@@ -235,7 +242,9 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:
         loss_history.append(loss.item())
 
         if epoch % (verifier.epochs // 5) == 0:
-            print(f"  Epoch {epoch}: Loss={loss.item():.4f} Energy={total_energy:.4f}")
+            logger.info(
+                "  Epoch %d: Loss=%.4f Energy=%.4f", epoch, loss.item(), total_energy
+            )
 
     # Compute correlation between energy usage and learning progress
     # In thermodynamics, minimizing free energy should correlate with minimizing error

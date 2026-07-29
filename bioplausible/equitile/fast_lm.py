@@ -11,6 +11,7 @@ model used in benchmarks, see:
 `bioplausible.models.equitile.lm_demo.fast_lm`
 """
 
+import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +29,8 @@ from .language_optimized import (
     OptimizedEquiTileTransformerLayer,
     OptimizedLMEquiTile,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -191,12 +194,12 @@ class FastLMEquiTile(OptimizedLMEquiTile):
                 ds_name = "wikitext-2"
 
             self.dataset = get_lm_dataset(ds_name, seq_len=self._seq_len)
-            print(f"Loaded dataset: {name} ({len(self.dataset)} samples)")
+            logger.info("Loaded dataset: %s (%d samples)", name, len(self.dataset))
 
             # Use simple random sampling for the demo loop
             # We don't need a full DataLoader overhead for single steps
         except Exception as e:
-            print(f"Failed to load dataset {name}: {e}. Falling back to Random.")
+            logger.warning("Failed to load dataset %s: %s. Falling back to Random.", name, e)
             self.dataset = None
 
     def update_params(self, params: dict[str, Any]):
@@ -588,7 +591,7 @@ class FastLMEquiTile(OptimizedLMEquiTile):
             },
             path,
         )
-        print(f"Model saved to {path}")
+        logger.info("Model saved to %s", path)
 
     def load_checkpoint(self, path: str) -> None:
         """Load model checkpoint."""
@@ -602,9 +605,9 @@ class FastLMEquiTile(OptimizedLMEquiTile):
             try:
                 self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             except Exception as e:
-                print(f"Warning: Could not load optimizer state: {e}")
+                logger.warning("Could not load optimizer state: %s", e)
 
         if "step" in checkpoint:
             self._step_counter = checkpoint["step"]
 
-        print(f"Model loaded from {path}")
+        logger.info("Model loaded from %s", path)

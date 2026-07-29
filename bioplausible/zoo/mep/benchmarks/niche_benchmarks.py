@@ -17,6 +17,10 @@ from torchvision import datasets, transforms
 
 from bioplausible.zoo.mep.presets import smep
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # ============================================================================
 # NICHE 1: REGRESSION (EP's Natural Domain)
 # ============================================================================
@@ -112,9 +116,9 @@ def benchmark_regression(
         ),
     ]
 
-    print("=" * 60)
-    print("NICHE 1: REGRESSION (EP's Natural Domain)")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("NICHE 1: REGRESSION (EP's Natural Domain)")
+    logger.info("=" * 60)
 
     for name, opt_fn in configs:
         model = make_model()
@@ -144,12 +148,11 @@ def benchmark_regression(
 
             mse = total_mse / len(test_dataset)
             mse_history.append(mse)
-            print(f"  {name:12} Epoch {epoch + 1:2d}: MSE = {mse:.6f}")
+            logger.info("  %12s Epoch %2d: MSE = %.6f", name, epoch + 1, mse)
 
         results[name] = mse_history
-        print(f"  → Final MSE: {mse_history[-1]:.6f}")
+        logger.info("  \u2192 Final MSE: %.6f", mse_history[-1])
 
-    print()
     return results
 
 
@@ -225,9 +228,9 @@ def benchmark_continual_learning(
         ),
     ]
 
-    print("=" * 60)
-    print("NICHE 2: CONTINUAL LEARNING (Error Feedback Helps)")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("NICHE 2: CONTINUAL LEARNING (Error Feedback Helps)")
+    logger.info("=" * 60)
 
     for name, opt_fn in configs:
         model = make_model()
@@ -258,10 +261,10 @@ def benchmark_continual_learning(
                     mse = F.mse_loss(output, y_eval).item()
                     task_accuracies[f"Task {eval_id}"].append(mse)
 
-            print(f"  {name:15} After Task {task_id + 1}:")
+            logger.info("  %-15s After Task %d:", name, task_id + 1)
             for eval_id in range(task_id + 1):
                 mse = task_accuracies[f"Task {eval_id}"][-1]
-                print(f"    Task {eval_id + 1} MSE: {mse:.4f}")
+                logger.info("    Task %d MSE: %.4f", eval_id + 1, mse)
 
         # Compute forgetting metric
         forgetting = []
@@ -275,8 +278,7 @@ def benchmark_continual_learning(
             "avg_forgetting": avg_forgetting,
             "final_task_mse": task_accuracies[f"Task {n_tasks - 1}"][-1],
         }
-        print(f"  → Average Forgetting: {avg_forgetting:.4f}")
-        print()
+        logger.info("  \u2192 Average Forgetting: %.4f", avg_forgetting)
 
     return results
 
@@ -312,12 +314,12 @@ def benchmark_adaptive_settling(
             nn.Flatten(), nn.Linear(784, 128), nn.ReLU(), nn.Linear(128, 10)
         ).to(device)
 
-    print("=" * 60)
-    print("NICHE 3: ADAPTIVE SETTLING (Energy Monitoring)")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("NICHE 3: ADAPTIVE SETTLING (Energy Monitoring)")
+    logger.info("=" * 60)
 
     # Fixed settling (baseline)
-    print("\n--- Fixed Settling (10 steps) ---")
+    logger.info("\n--- Fixed Settling (10 steps) ---")
     model1 = make_model()
     opt1 = smep(
         model1.parameters(),
@@ -338,12 +340,12 @@ def benchmark_adaptive_settling(
             x, y = x.to(device), y.to(device)
             opt1.step(x=x, target=y)
     fixed_time = time.time() - start
-    print(f"  Time: {fixed_time:.2f}s")
+    logger.info("  Time: %.2fs", fixed_time)
 
     # Note: Full adaptive settling would require modifying the Settler class
     # to monitor energy convergence. This is a placeholder for future work.
-    print("\n  [Note: Adaptive settling requires Settler modification]")
-    print("  Potential speedup: 30-50% by early stopping")
+    logger.info("\n  [Note: Adaptive settling requires Settler modification]")
+    logger.info("  Potential speedup: 30-50%% by early stopping")
 
     return {"fixed_settling_time": fixed_time, "potential_speedup": "30-50%"}
 
@@ -355,10 +357,10 @@ def benchmark_adaptive_settling(
 
 def run_all_niche_benchmarks() -> dict:
     """Run all niche benchmarks."""
-    print("\n" + "=" * 70)
-    print("MEP NICHE BENCHMARK SUITE")
-    print("Exploring where EP-based optimizers excel")
-    print("=" * 70 + "\n")
+    logger.info("\n%s", "=" * 70)
+    logger.info("MEP NICHE BENCHMARK SUITE")
+    logger.info("Exploring where EP-based optimizers excel")
+    logger.info("%s\n", "=" * 70)
 
     # Run benchmarks
     regression_results = benchmark_regression(epochs=15)
@@ -366,10 +368,10 @@ def run_all_niche_benchmarks() -> dict:
     adaptive_results = benchmark_adaptive_settling(epochs=5)
 
     # Summary
-    print("\n" + "=" * 70)
-    print("SUMMARY: EP's Sweet Spots")
-    print("=" * 70)
-    print("""
+    logger.info("\n%s", "=" * 70)
+    logger.info("SUMMARY: EP's Sweet Spots")
+    logger.info("%s", "=" * 70)
+    logger.info("""
 1. REGRESSION: EP performs competitively when energy = objective
    - Energy function naturally matches MSE loss
    - No objective mismatch like classification
