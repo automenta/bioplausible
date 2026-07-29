@@ -168,7 +168,7 @@ class TestCallbacks:
         # Simulate energy not improving
         cb.on_validation_epoch_end(mock_trainer, mock_module)
         assert cb._counter == 0
-        assert cb._best == 0.5
+        assert cb._best == pytest.approx(0.5)
 
         # Second call - still same energy
         mock_trainer.callback_metrics = {"train_energy": 0.6}

@@ -204,7 +204,7 @@ class TestExperimentProposer:
         assert proposal is not None
         assert proposal.model == "test_model"
         assert proposal.task == "mnist"
-        assert proposal.priority == 0.8
+        assert proposal.priority == pytest.approx(0.8)
 
     def test_propose_ablation(self, tmp_db_path):
         """Test ablation study proposal generation."""
@@ -255,7 +255,7 @@ class TestAutoScientistBridge:
         assert config["task"] == "mnist"
         assert config["optimizer"] == "adam"
         assert config["propagator"] == "eqprop"
-        assert config["lr"] == 0.01
+        assert config["lr"] == pytest.approx(0.01)
 
     def test_submit_and_pending_proposals(self):
         """Test proposal submission and retrieval."""

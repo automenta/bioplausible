@@ -83,9 +83,7 @@ def _populate_test_data(path: str) -> None:
     conn.execute(
         "INSERT INTO trial_user_attributes VALUES (3, 1, 'param_count', '100000')"
     )
-    conn.execute(
-        "INSERT INTO trial_user_attributes VALUES (4, 1, 'num_epochs', '50')"
-    )
+    conn.execute("INSERT INTO trial_user_attributes VALUES (4, 1, 'num_epochs', '50')")
     conn.execute(
         "INSERT INTO trial_user_attributes VALUES (5, 2, 'model_name', '\"eqprop\"')"
     )
@@ -124,8 +122,12 @@ def _populate_test_data(path: str) -> None:
     )
 
     conn.execute("INSERT INTO training_trajectories VALUES (1, 1)")
-    conn.execute("INSERT INTO training_checkpoints VALUES (1, 1, 1, 0.5, 0.8, 0.85, 1000)")
-    conn.execute("INSERT INTO training_checkpoints VALUES (2, 1, 5, 0.1, 0.95, 0.95, 5000)")
+    conn.execute(
+        "INSERT INTO training_checkpoints VALUES (1, 1, 1, 0.5, 0.8, 0.85, 1000)"
+    )
+    conn.execute(
+        "INSERT INTO training_checkpoints VALUES (2, 1, 5, 0.1, 0.95, 0.95, 5000)"
+    )
 
     conn.commit()
     conn.close()

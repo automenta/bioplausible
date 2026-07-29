@@ -123,7 +123,7 @@ def test_strategy_verification_scheduling(temp_db):
 
     assert task is not None
     assert task.fixed_config is not None
-    assert task.fixed_config["learning_rate"] == 0.01
+    assert task.fixed_config["learning_rate"] == pytest.approx(0.01)
     assert task.priority > 90.0  # High priority
 
 

@@ -2,6 +2,8 @@ import logging
 import time
 import unittest
 
+import pytest
+
 from bioplausible.p2p.dht import DHTNode
 
 # Configure logging to see output during tests
@@ -47,6 +49,7 @@ class TestDHT(unittest.TestCase):
         except ImportError:
             self.skipTest("kademlia not installed")
 
+    @pytest.mark.slow
     def test_dht_connectivity(self):
         # Create two nodes
         node1 = DHTNode(port=8470)
@@ -71,6 +74,7 @@ class TestDHT(unittest.TestCase):
             node2.stop()
             node1.stop()
 
+    @pytest.mark.slow
     def test_best_model_propagation(self):
         node1 = DHTNode(port=8472)
         node2 = DHTNode(port=8473, bootstrap_nodes=[("127.0.0.1", 8472)])

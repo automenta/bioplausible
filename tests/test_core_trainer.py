@@ -1,5 +1,7 @@
 """Tests for the CoreTrainer."""
 
+import pytest
+
 from bioplausible.core.trainer import (
     CoreTrainer,
     TrainerConfig,
@@ -42,13 +44,13 @@ def test_training_metrics():
         val_accuracy=0.85,
         epoch_time=1.0,
     )
-    assert metrics.train_loss == 0.5
-    assert metrics.val_accuracy == 0.85
+    assert metrics.train_loss == pytest.approx(0.5)
+    assert metrics.val_accuracy == pytest.approx(0.85)
 
     d = metrics.to_dict()
     assert d["epoch"] == 0
-    assert d["train_loss"] == 0.5
-    assert d["val_accuracy"] == 0.85
+    assert d["train_loss"] == pytest.approx(0.5)
+    assert d["val_accuracy"] == pytest.approx(0.85)
 
 
 def test_training_metrics_partial():

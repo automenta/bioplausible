@@ -1,5 +1,6 @@
 """Tests for the Domain abstraction layer."""
 
+import pytest
 import torch
 
 from bioplausible.domains.base import (
@@ -16,19 +17,19 @@ def test_metrics_to_dict():
     """Test Metrics serialization."""
     m = Metrics(loss=0.5, accuracy=0.8, perplexity=2.0)
     d = m.to_dict()
-    assert d["loss"] == 0.5
-    assert d["accuracy"] == 0.8
-    assert d["perplexity"] == 2.0
+    assert d["loss"] == pytest.approx(0.5)
+    assert d["accuracy"] == pytest.approx(0.8)
+    assert d["perplexity"] == pytest.approx(2.0)
 
 
 def test_metrics_from_dict():
     """Test Metrics deserialization."""
     d = {"loss": 0.5, "accuracy": 0.8, "perplexity": 2.0, "custom_metric": 0.9}
     m = Metrics.from_dict(d)
-    assert m.loss == 0.5
-    assert m.accuracy == 0.8
-    assert m.perplexity == 2.0
-    assert m.custom["custom_metric"] == 0.9
+    assert m.loss == pytest.approx(0.5)
+    assert m.accuracy == pytest.approx(0.8)
+    assert m.perplexity == pytest.approx(2.0)
+    assert m.custom["custom_metric"] == pytest.approx(0.9)
 
 
 def test_metrics_default():
@@ -59,7 +60,7 @@ def test_domain_spec_defaults():
     """Test DomainSpec default values."""
     spec = DomainSpec(name="test", domain_type=DomainType.CUSTOM)
     assert spec.default_batch_size == 32
-    assert spec.default_lr == 1e-3
+    assert spec.default_lr == pytest.approx(1e-3)
     assert spec.requires_sequence is False
     assert spec.requires_spatial is False
     assert spec.tags == []
@@ -165,11 +166,11 @@ def test_metrics_computation():
     targets = torch.tensor([0, 1])
 
     metrics = task.compute_metrics(outputs, targets, 0.5)
-    assert metrics.loss == 0.5
-    assert metrics.accuracy == 1.0  # Both predictions correct
+    assert metrics.loss == pytest.approx(0.5)
+    assert metrics.accuracy == pytest.approx(1.0)  # Both predictions correct
 
     # Test with wrong predictions
     outputs_wrong = torch.tensor([[0.0, 2.0], [3.0, 0.0]])
     metrics_wrong = task.compute_metrics(outputs_wrong, targets, 1.0)
-    assert metrics_wrong.loss == 1.0
-    assert metrics_wrong.accuracy == 0.0
+    assert metrics_wrong.loss == pytest.approx(1.0)
+    assert metrics_wrong.accuracy == pytest.approx(0.0)

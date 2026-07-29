@@ -83,7 +83,7 @@ class TestGradientStrategies:
 
     def test_ep_gradient_constructs(self):
         strategy = EPGradient(beta=0.5, settle_steps=5, settle_lr=0.1)
-        assert strategy.beta == 0.5
+        assert strategy.beta == pytest.approx(0.5)
         assert strategy.settle_steps == 5
 
     def test_local_ep_gradient_constructs(self):

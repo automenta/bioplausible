@@ -4,7 +4,9 @@ from unittest.mock import patch
 import pytest
 
 
-@pytest.mark.skip(reason="Pre-existing test: _MODEL_SPECS attribute removed during refactoring")
+@pytest.mark.skip(
+    reason="Pre-existing test: _MODEL_SPECS attribute removed during refactoring"
+)
 class TestBias(unittest.TestCase):
     def setUp(self):
         from bioplausible.execution.strategy import ExecutionStrategy

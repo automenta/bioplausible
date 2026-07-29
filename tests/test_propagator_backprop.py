@@ -112,7 +112,9 @@ class TestBackprop:
         opt.step(x, target_cls)
         assert all(p.grad is not None for p in params if p.requires_grad)
         opt.zero_grad()
-        assert all(p.grad is None or p.grad.sum().item() == 0.0 for p in params)
+        assert all(
+            p.grad is None or p.grad.sum().item() == pytest.approx(0.0) for p in params
+        )
 
     def test_step_owns_backward(self, params, model, x, target_cls):
         """Step() owns the backward pass — no loss.backward() needed."""

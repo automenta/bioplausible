@@ -1,11 +1,14 @@
 import time
 import unittest
 
+import pytest
+
 from bioplausible.validation.core import Verifier
 from bioplausible.validation.notebook import TrackResult
 
 
 class TestParallelValidation(unittest.TestCase):
+    @pytest.mark.slow
     def test_parallel_execution(self):
         """Test that parallel execution is faster than sequential for blocking tasks."""
 

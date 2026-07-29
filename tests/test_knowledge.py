@@ -306,7 +306,7 @@ def test_knowledge_entry_from_dict():
     }
     entry = KnowledgeEntry.from_dict(d)
     assert entry.id == "UTIL-002"
-    assert entry.confidence == 0.75
+    assert entry.confidence == pytest.approx(0.75)
     assert entry.tags == ["tag1"]
 
 
@@ -399,14 +399,22 @@ def test_keyword_search_with_filters(tmp_db_path):
     kb = KnowledgeBase(db_path=tmp_db_path)
     kb.add_entry(
         KnowledgeEntry(
-            id="SRCH-F1", topic="A", model_family="m1",
-            finding="alpha beta gamma", details="", confidence=0.5,
+            id="SRCH-F1",
+            topic="A",
+            model_family="m1",
+            finding="alpha beta gamma",
+            details="",
+            confidence=0.5,
         )
     )
     kb.add_entry(
         KnowledgeEntry(
-            id="SRCH-F2", topic="B", model_family="m2",
-            finding="alpha beta delta", details="", confidence=0.5,
+            id="SRCH-F2",
+            topic="B",
+            model_family="m2",
+            finding="alpha beta delta",
+            details="",
+            confidence=0.5,
         )
     )
 
@@ -421,8 +429,12 @@ def test_keyword_search_empty_query(tmp_db_path):
     kb = KnowledgeBase(db_path=tmp_db_path)
     kb.add_entry(
         KnowledgeEntry(
-            id="SRCH-E", topic="T", model_family="m",
-            finding="test", details="", confidence=0.5,
+            id="SRCH-E",
+            topic="T",
+            model_family="m",
+            finding="test",
+            details="",
+            confidence=0.5,
         )
     )
     results = kb.search("", k=5)
@@ -434,8 +446,12 @@ def test_keyword_search_no_match(tmp_db_path):
     kb = KnowledgeBase(db_path=tmp_db_path)
     kb.add_entry(
         KnowledgeEntry(
-            id="SRCH-NO", topic="T", model_family="m",
-            finding="unique finding text", details="", confidence=0.5,
+            id="SRCH-NO",
+            topic="T",
+            model_family="m",
+            finding="unique finding text",
+            details="",
+            confidence=0.5,
         )
     )
     results = kb.search("zzzzzzyxwvutsrqponmlkjihgfedcba", k=5)
@@ -449,7 +465,7 @@ def test_predict_outcome_no_surrogate(tmp_db_path):
     """predict_outcome returns 0.0 when no surrogate is trained."""
     kb = KnowledgeBase(db_path=tmp_db_path)
     result = kb.predict_outcome({"lr": 0.01})
-    assert result == 0.0
+    assert result == pytest.approx(0.0)
 
 
 # --- Causal analysis edge cases ---
@@ -490,12 +506,20 @@ def test_duplicate_id_overwrites(tmp_db_path):
     """Adding an entry with duplicate ID overwrites via INSERT OR REPLACE."""
     kb = KnowledgeBase(db_path=tmp_db_path)
     entry1 = KnowledgeEntry(
-        id="DUP-001", topic="A", model_family="m",
-        finding="original", details="", confidence=0.5,
+        id="DUP-001",
+        topic="A",
+        model_family="m",
+        finding="original",
+        details="",
+        confidence=0.5,
     )
     entry2 = KnowledgeEntry(
-        id="DUP-001", topic="B", model_family="m",
-        finding="replacement", details="", confidence=0.9,
+        id="DUP-001",
+        topic="B",
+        model_family="m",
+        finding="replacement",
+        details="",
+        confidence=0.9,
     )
     kb.add_entry(entry1)
     kb.add_entry(entry2)
@@ -503,7 +527,7 @@ def test_duplicate_id_overwrites(tmp_db_path):
     retrieved = kb.get_by_id("DUP-001")
     assert retrieved is not None
     assert retrieved.finding == "replacement"
-    assert retrieved.confidence == 0.9
+    assert retrieved.confidence == pytest.approx(0.9)
 
 
 def test_get_by_id_nonexistent(tmp_db_path):
@@ -522,8 +546,14 @@ def test_query_with_multiple_filters(tmp_db_path):
     """query with combined model_family + min_confidence + topic."""
     kb = KnowledgeBase(db_path=tmp_db_path)
     entries = [
-        KnowledgeEntry(id=f"MF-{i:02d}", topic="A", model_family="m1",
-                       finding=f"f{i}", details="", confidence=0.5 + i * 0.2)
+        KnowledgeEntry(
+            id=f"MF-{i:02d}",
+            topic="A",
+            model_family="m1",
+            finding=f"f{i}",
+            details="",
+            confidence=0.5 + i * 0.2,
+        )
         for i in range(5)
     ]
     for e in entries:
@@ -537,14 +567,26 @@ def test_query_by_source(tmp_db_path):
     """query filters by source field."""
     kb = KnowledgeBase(db_path=tmp_db_path)
     kb.add_entry(
-        KnowledgeEntry(id="SRC-1", topic="T", model_family="m",
-                       finding="from experiment", details="", confidence=0.5,
-                       source="experiment")
+        KnowledgeEntry(
+            id="SRC-1",
+            topic="T",
+            model_family="m",
+            finding="from experiment",
+            details="",
+            confidence=0.5,
+            source="experiment",
+        )
     )
     kb.add_entry(
-        KnowledgeEntry(id="SRC-2", topic="T", model_family="m",
-                       finding="from literature", details="", confidence=0.5,
-                       source="literature")
+        KnowledgeEntry(
+            id="SRC-2",
+            topic="T",
+            model_family="m",
+            finding="from literature",
+            details="",
+            confidence=0.5,
+            source="literature",
+        )
     )
     results = kb.query(source="experiment")
     assert len(results) == 1
@@ -555,13 +597,25 @@ def test_query_by_experiment_id(tmp_db_path):
     """query filters by experiment_id."""
     kb = KnowledgeBase(db_path=tmp_db_path)
     kb.add_entry(
-        KnowledgeEntry(id="EXP-Q1", topic="T", model_family="m",
-                       finding="exp result", details="", confidence=0.5,
-                       experiment_id="exp-123")
+        KnowledgeEntry(
+            id="EXP-Q1",
+            topic="T",
+            model_family="m",
+            finding="exp result",
+            details="",
+            confidence=0.5,
+            experiment_id="exp-123",
+        )
     )
     kb.add_entry(
-        KnowledgeEntry(id="EXP-Q2", topic="T", model_family="m",
-                       finding="not linked", details="", confidence=0.5)
+        KnowledgeEntry(
+            id="EXP-Q2",
+            topic="T",
+            model_family="m",
+            finding="not linked",
+            details="",
+            confidence=0.5,
+        )
     )
     results = kb.query(experiment_id="exp-123")
     assert len(results) == 1
@@ -573,8 +627,14 @@ def test_query_limit(tmp_db_path):
     kb = KnowledgeBase(db_path=tmp_db_path)
     for i in range(20):
         kb.add_entry(
-            KnowledgeEntry(id=f"LIM-{i:02d}", topic="T", model_family="m",
-                           finding=f"entry {i}", details="", confidence=0.5)
+            KnowledgeEntry(
+                id=f"LIM-{i:02d}",
+                topic="T",
+                model_family="m",
+                finding=f"entry {i}",
+                details="",
+                confidence=0.5,
+            )
         )
     results = kb.query(limit=5)
     assert len(results) == 5
@@ -627,6 +687,7 @@ def test_add_entry_with_embedding_preserved(tmp_db_path):
 def test_knowledge_entry_all_fields_populated(tmp_db_path):
     """KnowledgeEntry with all optional fields set stores and retrieves correctly."""
     import time
+
     now = time.time()
     entry = KnowledgeEntry(
         id="ALL-FIELDS",

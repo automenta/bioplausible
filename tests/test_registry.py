@@ -260,7 +260,7 @@ def test_query_category():
 def test_component_metadata_defaults():
     """Test ComponentMetadata default values."""
     meta = ComponentMetadata(name="Test", category=ComponentCategory.MODEL)
-    assert meta.bio_plausibility_score == 0.5
+    assert meta.bio_plausibility_score == pytest.approx(0.5)
     assert meta.requires_backward is True
     assert meta.locality_level == LocalityLevel.GLOBAL
     assert Domain.VISION in meta.domains

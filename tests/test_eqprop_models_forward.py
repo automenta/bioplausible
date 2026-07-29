@@ -4,14 +4,15 @@ These models do not define their own train_step — they inherit from
 EqPropModel or nn.Module. Each test verifies construction + forward pass.
 """
 
-
 import torch
 
 from bioplausible.zoo.models.eqprop.lazy_eqprop import LazyEqProp
 from bioplausible.zoo.models.eqprop.conv_eqprop import ConvEqProp
 from bioplausible.zoo.models.eqprop.modern_conv_eqprop import ModernConvEqProp
 from bioplausible.zoo.models.eqprop.transformer_eqprop import TransformerEqProp
-from bioplausible.zoo.models.eqprop.causal_transformer_eqprop import CausalTransformerEqProp
+from bioplausible.zoo.models.eqprop.causal_transformer_eqprop import (
+    CausalTransformerEqProp,
+)
 from bioplausible.zoo.models.eqprop.homeostatic import HomeostaticEqProp
 from bioplausible.zoo.models.eqprop.temporal_resonance import TemporalResonanceEqProp
 from bioplausible.zoo.models.eqprop.neural_cube import NeuralCube
@@ -61,7 +62,9 @@ def test_modern_conv_eqprop_forward():
 
 
 def test_transformer_eqprop_forward():
-    m = TransformerEqProp(vocab_size=50, hidden_dim=32, output_dim=27, num_layers=2, num_heads=2)
+    m = TransformerEqProp(
+        vocab_size=50, hidden_dim=32, output_dim=27, num_layers=2, num_heads=2
+    )
     out = m(_seq_input())
     assert out.shape == (2, 27)
 

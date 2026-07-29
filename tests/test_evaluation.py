@@ -93,7 +93,7 @@ class TestBenchmarkResult:
             params_count=1000,
         )
         assert result.model_name == "test"
-        assert result.metrics["accuracy"] == 0.95
+        assert result.metrics["accuracy"] == pytest.approx(0.95)
 
     def test_summary(self):
         result = BenchmarkResult(
@@ -113,7 +113,7 @@ class TestBenchmarkResult:
         )
         d = result.to_dict()
         assert d["model_name"] == "MLP"
-        assert d["metrics"]["accuracy"] == 0.95
+        assert d["metrics"]["accuracy"] == pytest.approx(0.95)
 
 
 class TestBenchmarkRegistry:

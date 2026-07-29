@@ -72,14 +72,14 @@ class TestEqProp:
 
     def test_init(self, params, model):
         opt = EqProp(params, model, lr=0.01, beta=0.5, settle_steps=30)
-        assert opt.beta == 0.5
+        assert opt.beta == pytest.approx(0.5)
         assert opt.settle_steps == 30
-        assert opt.settle_lr == 0.15
+        assert opt.settle_lr == pytest.approx(0.15)
         assert opt.loss_type == "mse"
 
     def test_init_defaults(self, params, model):
         opt = EqProp(params, model)
-        assert opt.beta == 0.5
+        assert opt.beta == pytest.approx(0.5)
         assert opt.settle_steps == 30
         assert opt.loss_type == "mse"
 
@@ -169,9 +169,9 @@ class TestEqProp:
 
     def test_param_groups(self, params, model):
         opt = EqProp(params, model, lr=0.01, momentum=0.9, weight_decay=0.001)
-        assert opt.param_groups[0]["lr"] == 0.01
-        assert opt.param_groups[0]["momentum"] == 0.9
-        assert opt.param_groups[0]["weight_decay"] == 0.001
+        assert opt.param_groups[0]["lr"] == pytest.approx(0.01)
+        assert opt.param_groups[0]["momentum"] == pytest.approx(0.9)
+        assert opt.param_groups[0]["weight_decay"] == pytest.approx(0.001)
 
 
 # =============================================================================
@@ -184,7 +184,7 @@ class TestHolomorphicEqProp:
 
     def test_init(self, params, model):
         opt = HolomorphicEqProp(params, model, lr=0.01, beta=0.5)
-        assert opt.beta == 0.5
+        assert opt.beta == pytest.approx(0.5)
         assert opt.settle_steps == 30
 
     def test_step_requires_target(self, params, model, x):
@@ -227,7 +227,7 @@ class TestFiniteNudgeEqProp:
 
     def test_init(self, params, model):
         opt = FiniteNudgeEqProp(params, model, lr=0.01, beta=1.0)
-        assert opt.beta == 1.0
+        assert opt.beta == pytest.approx(1.0)
         assert opt.settle_steps == 20
 
     def test_step_requires_target(self, params, model, x):
@@ -293,7 +293,7 @@ class TestLazyEqProp:
 
     def test_init(self, params, model):
         opt = LazyEqProp(params, model, lr=0.01, threshold=0.05)
-        assert opt.threshold == 0.05
+        assert opt.threshold == pytest.approx(0.05)
         assert opt.last_inputs is None
 
     def test_should_update_on_first_call(self, params, model, x):
@@ -359,13 +359,15 @@ class TestAdamEqProp:
 
     def test_init(self, params, model):
         opt = AdamEqProp(params, model, lr=0.001, betas=(0.9, 0.999))
-        assert opt.beta == 0.5
+        assert opt.beta == pytest.approx(0.5)
         assert opt.settle_steps == 30
         assert opt._adam is not None
 
     def test_step_sets_gradients(self, params, model, x, target):
         """AdamEqProp computes contrastive gradients like EqProp."""
-        opt = AdamEqProp(params, model, lr=0.01, beta=0.5, settle_steps=5, settle_lr=0.1)
+        opt = AdamEqProp(
+            params, model, lr=0.01, beta=0.5, settle_steps=5, settle_lr=0.1
+        )
 
         for p in params:
             p.grad = None
@@ -400,7 +402,9 @@ def test_eqprop_nonzero_gradients():
 
     layers = opt._get_transitions()
     reachable = [p for i, p in enumerate(params) if p.ndim >= 2 and i < len(layers)]
-    nonzero = [p for p in reachable if p.grad is not None and p.grad.abs().sum().item() > 0]
+    nonzero = [
+        p for p in reachable if p.grad is not None and p.grad.abs().sum().item() > 0
+    ]
     assert len(nonzero) == len(reachable), (
         f"All {len(reachable)} reachable weight params should have non-zero gradients. "
         f"Only {len(nonzero)} have non-zero."
@@ -423,7 +427,9 @@ def test_adam_eqprop_nonzero_gradients():
 
     layers = opt._get_transitions()
     reachable = [p for i, p in enumerate(params) if p.ndim >= 2 and i < len(layers)]
-    nonzero = [p for p in reachable if p.grad is not None and p.grad.abs().sum().item() > 0]
+    nonzero = [
+        p for p in reachable if p.grad is not None and p.grad.abs().sum().item() > 0
+    ]
     assert len(nonzero) == len(reachable), (
         f"All {len(reachable)} reachable weight params should have non-zero gradients. "
         f"Only {len(nonzero)} have non-zero."

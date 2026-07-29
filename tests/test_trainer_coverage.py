@@ -345,7 +345,7 @@ def test_get_history_dataframe_with_history():
     df = trainer.get_history_dataframe()
     assert len(df) == 2
     assert "train_loss" in df.columns
-    assert df.iloc[1]["train_loss"] == 0.4
+    assert df.iloc[1]["train_loss"] == pytest.approx(0.4)
 
 
 def test_core_trainer_from_yaml(tmp_path):
@@ -367,7 +367,7 @@ def test_trainer_get_lr_with_optimizer():
     trainer.model = _SimpleModel()
     trainer.optimizer = torch.optim.SGD(trainer.model.parameters(), lr=0.05)
     lr = trainer._get_lr()
-    assert lr == 0.05
+    assert lr == pytest.approx(0.05)
 
 
 def test_trainer_get_lr_no_optimizer():
@@ -376,4 +376,4 @@ def test_trainer_get_lr_no_optimizer():
     trainer.optimizer = None
     lr = trainer._get_lr()
     # _get_lr returns None when no optimizer; verify it doesn't crash
-    assert lr is None or lr == 0.0
+    assert lr is None or lr == pytest.approx(0.0)

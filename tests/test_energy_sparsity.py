@@ -39,7 +39,7 @@ class TestActivationSparsity:
 
         model = NoOpModel()
         sparsity = _estimate_activation_sparsity(model, torch.randn(4, 10))
-        assert sparsity == 0.0
+        assert sparsity == pytest.approx(0.0)
 
     def test_hook_cleanup_on_forward_exception(self):
         """Hooks are removed even when forward pass raises."""

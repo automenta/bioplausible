@@ -447,7 +447,7 @@ class TestTrainingConfig:
         config = TrainingConfig()
 
         assert config.epochs == 10
-        assert config.learning_rate == 3e-4
+        assert config.learning_rate == pytest.approx(3e-4)
         assert config.use_amp is True
 
     def test_auto_device(self):
@@ -472,7 +472,7 @@ class TestTrainingMetrics:
         )
 
         assert len(metrics.train_loss) == 1
-        assert metrics.train_loss[0] == 2.0
+        assert metrics.train_loss[0] == pytest.approx(2.0)
         assert len(metrics.learning_rates) == 1
 
     def test_metrics_summary(self):
@@ -484,8 +484,8 @@ class TestTrainingMetrics:
 
         summary = metrics.get_summary()
 
-        assert summary["best_val_loss"] == 2.0
-        assert summary["current_train_loss"] == 1.5
+        assert summary["best_val_loss"] == pytest.approx(2.0)
+        assert summary["current_train_loss"] == pytest.approx(1.5)
 
 
 class TestLRScheduler:

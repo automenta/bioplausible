@@ -9,6 +9,8 @@ from pathlib import Path
 
 import torch
 
+import pytest
+
 # Add parent to path for in-package testing
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
@@ -156,7 +158,7 @@ class TestAllModels(unittest.TestCase):
         y = torch.randint(0, 5, (2,)).to(self.device)
         # Step signature requires (x, target).
         chl.step(x=x, target=y)
-        self.assertTrue(chl.clamp_strength == 1.0)
+        self.assertTrue(chl.clamp_strength == pytest.approx(1.0))
 
     def test_homeostatic(self):
         model = HomeostaticEqProp(input_dim=10, hidden_dim=20, output_dim=5).to(

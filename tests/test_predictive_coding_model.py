@@ -37,7 +37,7 @@ class TestFabricPCGraphPCN:
         )
         assert model._mode == "backprop"
         assert model.config.extra.get("infer_steps") == 10
-        assert model.config.extra.get("eta_infer") == 0.1
+        assert model.config.extra.get("eta_infer") == pytest.approx(0.1)
 
     def test_forward_shape(self):
         model = FabricPCGraphPCN(input_dim=10, hidden_dim=8, output_dim=3)

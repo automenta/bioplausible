@@ -102,11 +102,11 @@ def test_inference_repr():
 
 def test_inference_defaults():
     infer = InferenceSGD()
-    assert infer.eta_infer == 0.05
+    assert infer.eta_infer == pytest.approx(0.05)
     assert infer.infer_steps == 20
 
 
 def test_different_eta():
     infer = InferenceSGD(eta_infer=0.01, infer_steps=50)
-    assert infer.eta_infer == 0.01
+    assert infer.eta_infer == pytest.approx(0.01)
     assert infer.infer_steps == 50

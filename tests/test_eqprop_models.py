@@ -4,7 +4,6 @@ Covers models in bioplausible.zoo.models.eqprop that define train_step.
 Tests are model-specific due to varying constructor signatures.
 """
 
-
 import pytest
 import torch
 from torch import nn
@@ -19,7 +18,9 @@ from bioplausible.zoo.models.eqprop.mom_eq import MomentumEquilibrium
 from bioplausible.zoo.models.eqprop.eqprop_diffusion import EqPropDiffusion
 
 
-def _check_train_step(model: nn.Module, input_dim: int = 10, output_dim: int = 5) -> dict:
+def _check_train_step(
+    model: nn.Module, input_dim: int = 10, output_dim: int = 5
+) -> dict:
     """Verify train_step returns a valid dict with expected keys."""
     x = torch.randn(4, input_dim)
     y = torch.randint(0, output_dim, (4,))
@@ -27,9 +28,7 @@ def _check_train_step(model: nn.Module, input_dim: int = 10, output_dim: int = 5
     assert isinstance(result, dict), (
         f"train_step should return dict, got {type(result)}"
     )
-    assert "loss" in result, (
-        f"train_step result missing 'loss': {result.keys()}"
-    )
+    assert "loss" in result, f"train_step result missing 'loss': {result.keys()}"
     assert isinstance(result["loss"], float), (
         f"loss should be float, got {type(result['loss'])}"
     )

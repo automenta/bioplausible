@@ -199,7 +199,7 @@ class TestDeepHebbianChain:
             use_oja=False,
         )
         stats = model.get_stats()
-        assert stats["hebbian_lr"] == 0.005
+        assert stats["hebbian_lr"] == pytest.approx(0.005)
         assert stats["use_oja"] is False
 
     def test_get_stats_includes_base_keys(self):
@@ -244,7 +244,7 @@ class TestDeepHebbianChain:
             task_type="vision",
         )
         assert isinstance(model, DeepHebbianChain)
-        assert model.hebbian_lr == 0.001
+        assert model.hebbian_lr == pytest.approx(0.001)
         assert model.use_oja is True
 
     def test_forward_no_spectral_norm_train(self):

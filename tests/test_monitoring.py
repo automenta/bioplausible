@@ -1,6 +1,8 @@
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from bioplausible.execution.monitoring import InterferenceMonitor
 
 
@@ -12,6 +14,7 @@ def test_interference_monitor_init():
     assert not monitor.check_interference()
 
 
+@pytest.mark.slow
 @patch("bioplausible.execution.monitoring.psutil")
 @patch("bioplausible.execution.monitoring.os")
 def test_monitor_detection(mock_os, mock_psutil):
@@ -51,6 +54,7 @@ def test_monitor_detection(mock_os, mock_psutil):
     assert monitor.check_interference() is True
 
 
+@pytest.mark.slow
 @patch("bioplausible.execution.monitoring.psutil")
 @patch("bioplausible.execution.monitoring.os")
 def test_monitor_no_interference(mock_os, mock_psutil):

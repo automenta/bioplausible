@@ -70,7 +70,7 @@ def test_cl_start_step0(mock_strategy):
     assert task.is_continual is True
     assert task.continual_step == 0
     # Step 0 copies config but doesn't transfer weights (fresh start on subset)
-    assert task.fixed_config["lr"] == 0.01
+    assert task.fixed_config["lr"] == pytest.approx(0.01)
 
 
 def test_cl_step1_transfer(mock_strategy):

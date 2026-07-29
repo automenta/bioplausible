@@ -90,7 +90,7 @@ class TestNEBCBase:
         for model in (with_sn, without_sn):
             assert model.num_layers == 4
             assert model.max_steps == 2
-            assert model.hebbian_lr == 0.01
+            assert model.hebbian_lr == pytest.approx(0.01)
             assert model.use_oja is False
 
 
