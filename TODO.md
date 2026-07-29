@@ -518,21 +518,13 @@ Both commits are on `main`. Working tree is clean.
 
 ### Pointers for Future Sessions
 
-- **Phase 3.6 (Consolidate `build` classmethods)** is the natural next step. 18+ `@classmethod def build(...)` methods in `zoo/models/*` share the same pattern:
-  ```python
-  config = ModelConfig(name=spec.name, input_dim=input_dim, output_dim=output_dim,
-                       hidden_dims=compute_hidden_dims(hidden_dim, num_layers), extra=kwargs)
-  return cls(config=config).to(device)
-  ```
-  Extract a shared `_build_from_spec(cls, spec, input_dim, output_dim, hidden_dim, num_layers, device, **kwargs)` in `zoo/models/base.py`. Estimated savings: **~200–300 lines**.
+- **Phase 3.3 (Unify FA backward passes)** — 9 classes in `fa.py` with nearly identical `train_step` methods. **DONE** — extracted `_fa_forward()`, `_fa_apply_activation_derivative()`, `_fa_backward_loop()`, `_autograd_fa_train_step()`. Refactored 3 manual-FA classes (AdaptiveFeedbackAlignment, StochasticFA, StandardFA) + 4 autograd classes. Remaining: `EquilibriumAlignment` (totally different EqProp-style, keep separate) and `FeedbackAlignmentEqProp`/`DirectFeedbackAlignmentEqProp`/`DeepDFAEqProp` (no standard train_step).
 
-- **Phase 3.3 (Unify FA backward passes)** — 9 classes in `fa.py` with nearly identical `train_step` methods (each ~65–70 lines). Extract `_fa_backward(activation_derivative_fn)` helper. Estimated savings: **~300–400 lines**.
+- **Phase 3.6 (Consolidate `build` classmethods)** is the highest-remaining-impact item. 18+ `@classmethod def build(...)` methods in `zoo/models/*` share the same pattern. Extract a shared `_build_from_spec()` helper. Estimated savings: **~200–300 lines**.
 
-- **Phase 3.4 (Consolidate LM files)** — `language.py` (1192) + `language_optimized.py` (687) + `fast_lm.py` (613) = 2492 lines. Create `_components.py` for shared `TileAttention`, `TileFeedForward`, etc. Estimated savings: **~800–1000 lines**.
+- **Phase 3.4 (Consolidate LM files)** — `language.py` (1192) + `language_optimized.py` (687) + `fast_lm.py` (613) = 2492 lines. Create `_components.py` for shared `TileAttention`, `TileFeedForward`, etc. Estimated savings: **~800–1000 lines**. This is the single highest-saving remaining item.
 
-- **Phase 3.3 or 3.4** are higher-impact than 3.6 (more line savings). Prioritize whichever is more familiar.
-
-- **Phase 3.2 (Extract long functions)** — 13 functions >50 lines across settling code. Much of this was already addressed by Phase 3.1 (the `EqPropModel.forward()` BPTT branch was 80→6 lines). Remaining targets: `CoreTrainer` methods in `core/trainer.py`.
+- **Phase 3.2 (Extract long functions)** — Remaining targets: `CoreTrainer` methods in `core/trainer.py` (`_train_step` at 70 lines, `_validate` at 74 lines, `_train_epoch` at 73 lines).
 
 - **Pyright errors still at 5** — all pre-existing. No new errors introduced by Phase 3 work.
 
