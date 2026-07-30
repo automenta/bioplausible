@@ -222,23 +222,69 @@ All three call sites import from `core/losses.py`. ~80 lines removed.
 layering:
 
 - It imports from `zoo/` (37 calls) and even `docs/archive/` (7 calls).
-- It duplicates `fast_lm.py` vs `lm_demo/fast_lm.py` (`FastLMEquiTile` /
-  `FastLMConfig` each defined twice).
+- It **duplicates `FastLMEquiTile` 4 ways** with **TWO** `FastLMConfig` classes (see
+  detailed finding below).
 - `equitile/deployment.py:ModelPruner` vs `deployment.py:ModelExporter` — two
   deployment paths.
 - `equitile/optimizer_mixin.py:EquiTileOptimizerMixin` is a Mixin that the
   `AGENTS.md` "composition over inheritance" rule discourages.
 
-### 4.1 One `fast_lm.py`, not two
+### 4.1 ONE `FastLMEquiTile` — the 4-way consolidation (HIGH IMPACT)
 
-- `equitile/lm_demo/fast_lm.py` and `equitile/fast_lm.py` both define `FastLMConfig` +
-  `FastLMEquiTile`. The `lm_demo` version has 28-degree fan-in (the live one); the
-  top-level one has degree 1 (near-dead).
-- **Action**: delete `equitile/fast_lm.py`; re-export from `equitile/lm_demo/fast_lm`
-  for any external import. Mark re-export as deprecated with a TODO to remove after
-  `lm_demo/` is folded (§4.3).
+There are **FOUR** `LMEquiTile`/`FastLMEquiTile` implementations with **TWO** `FastLMConfig` classes:
 
-### 4.2 Make `equitile/` depend only on `core/`, not `zoo/`
+| File | Class | Base | Registers as | Notes |
+|---|---|---|---|---|
+| `equitile/language/canonical.py` | `LMEquiTile` | `BioModel` | `lm_equitile` | Canonical base |
+| `equitile/language/optimized.py` | `OptimizedLMEquiTile` | `LMEquiTile` | `optimized_lm_equitile` | Adds torch.compile, fused attention |
+| `equitile/language/fast.py` | `FastLMEquiTile` | `OptimizedLMEquiTile` | — (not registered) | Demo visualization variant; extends `FastLMConfig(LMEquiTileConfig)` |
+| `equitile/lm_demo/fast_lm.py` | `FastLMEquiTile` | `BioModel` | — (not registered) | **COMPLETELY SEPARATE** impl with MoT, TileLocalAttention, SwiGLU, Flash Attention — has its own `FastLMConfig` dataclass, `MixtureOfTiles`, `TileLocalAttention`, `SwiGLUFeedForward`, `FastEquiTileLayer` |
+
+**The `lm_demo/fast_lm.py` implementation is ~600 LOC of unique architecture code
+(MoT, local attention, SwiGLU, weight-tied embeddings, output scaling) that exists
+NOWHERE else.** The docstrings even point to each other:
+- `lm_demo/fast_lm.py:10` → "see `bioplausible.equitile.fast_lm`" (doesn't exist)
+- `language/fast.py:11` → "see `bioplausible.models.equitile.lm_demo.fast_lm`" (exists)
+
+**Action:**
+
+1. **Canonicalize the LM EquiTile architecture** — pick ONE implementation as the
+   rigorous one. The `lm_demo/fast_lm.py` version is more complete (MoT, local
+   attention, SwiGLU, Flash Attention, gradient checkpointing, weight tying with
+   output scaling). The `language/fast.py` version is a visualization variant on top
+   of `OptimizedLMEquiTile` which is a simpler pre-norm + tile block architecture.
+
+2. **Consolidate into `equitile/lm/fast_lm.py`** (per §4.3):
+   - Keep the `lm_demo/fast_lm.py` architecture as the canonical `FastLMEquiTile`.
+   - Move its `MixtureOfTiles`, `TileLocalAttention`, `SwiGLUFeedForward`,
+     `FastEquiTileLayer` to `equitile/lm/components.py` (shared components).
+   - The `language/fast.py` `FastLMEquiTile` (visualization variant) becomes a thin
+     subclass adding demo-specific gates/activity EMA — or if the visualization
+     features are valuable, merge them as optional config flags in the canonical
+     `FastLMConfig`.
+   - Delete the separate `FastLMConfig` in `language/fast.py` (it just extended
+     `LMEquiTileConfig`); the canonical config is the one in `lm_demo/fast_lm.py`
+     (which has all necessary fields: `mot_k`, `sliding_window`, `num_kv_heads`,
+     `attention_type`, `compile_mode`, etc.).
+
+3. **Register the canonical `FastLMEquiTile`** in the Registry (currently neither
+   registers). Add `@register_model("fast_lm_equitile", ...)` with appropriate
+   metadata.
+
+4. **Delete `equitile/language/fast.py`** (or keep as a thin demo-only variant if
+   the visualization gates are needed — but mark clearly as such).
+
+5. **Fix docstring cross-references** — both files point to non-existent import paths.
+
+### 4.2 One `fast_lm.py`, not two (resolves alongside 4.1)
+
+- `equitile/lm_demo/fast_lm.py` and (previously) `equitile/fast_lm.py` both defined
+  `FastLMConfig` + `FastLMEquiTile`. The `lm_demo` version has 28-degree fan-in (the
+  live one); the top-level one had degree 1 (near-dead, now deleted).
+- **Action**: Already deleted `equitile/fast_lm.py` in Session 9; the canonical
+  location becomes `equitile/lm/fast_lm.py` after §4.3 rename.
+
+### 4.3 Make `equitile/` depend only on `core/`, not `zoo/`
 
 `equitile → zoo` (37 edges) couples the model implementations to the learning-rule
 implementations. Invert:
@@ -251,7 +297,7 @@ implementations. Invert:
 **Verification**: `codebase-memory-mcp_get_architecture` shows
 `equitile → zoo` edge count drops to 0.
 
-### 4.3 Fold `lm_demo/` into `equitile/` proper
+### 4.4 Fold `lm_demo/` into `equitile/` proper
 
 `equitile/lm_demo/` (8 files, 3,300+ LOC) is no longer a "demo" — it's the production LM
 path with `LMTrainer`, `FastLMEquiTile`, tokenizer integration. The `demo/` prefix is
@@ -262,14 +308,14 @@ misleading.
   `equitile/lm/fast_lm.py` (resolving §4.1).
 - Consolidate `LMTrainer` per §2.2.
 
-### 4.4 Replace `EquiTileOptimizerMixin` with composition
+### 4.5 Replace `EquiTileOptimizerMixin` with composition
 
 `EquiTileOptimizerMixin` adds `.optimizer`/`.scheduler` attributes via mixin. Replace
 with a small `OptimizerContainer` frozen dataclass injected at construction.
 
 ---
 
-## Phase 5 — `execution/` Slim-Down (MEDIUM IMPACT)
+## Phase 5 — `execution/` Slim-Down (MEDIUM IMPORT)
 
 `execution/` has 23 files — many are single-class modules (`failure_tracker.py`,
 `promotion.py`, `robustness.py`, `safety.py`, `interpretability.py`). Several have
@@ -401,7 +447,7 @@ complex flows; no reliance on GIL.
 
 ---
 
-## Phase 10 — Static Analysis Suite (LOW IMPACT, hygiene)
+## Phase 10 — Static Analysis Suite (LOW IMPORT, hygiene)
 
 ### 10.1 Add `pip-audit` to CI per `AGENTS.md`
 
@@ -430,9 +476,9 @@ $ rg -n "# pyright: ignore" bioplausible/ | xargs -I{} verify-still-needed
 **Sprint 1 — DRY foundation (Phases 1–2)**: highest-impact duplication removal.
 Risk: behavior change in EP settling. Mitigated by §1 parity tests.
 
-**Sprint 2 — Layering (Phases 3–4)**: task hierarchy merge + equitile decoupling.
-Risk: import-graph breakage; mitigated by `codebase-memory` architecture comparison
-per change.
+**Sprint 2 — Layering (Phases 3–4)**: task hierarchy merge + equitile decoupling +
+LM EquiTile consolidation (NEW). Risk: import-graph breakage; mitigated by
+`codebase-memory` architecture comparison per change.
 
 **Sprint 3 — Slim-down (Phase 5)**: execution grouping. Mechanical, contained.
 
@@ -452,7 +498,8 @@ if re-enabled; satisfies immutability rule.
 - **NEW**: gradient parity test (§1.1 verification) green — EP grads identical before/after consolidation.
 - **NEW**: architecture-graph `equitile → zoo` edge count = 0 (after Phase 4.2).
 - **NEW**: no two classes share a name-with-purpose (`LMTrainer`, `FastLMEquiTile`,
-  `ModelConfig`, `VisionTask`, `LMTask`, `RLTask`) — single definition each.
+  `FastLMConfig`, `ModelConfig`, `VisionTask`, `LMTask`, `RLTask`) — single definition each.
+- **NEW**: exactly one `FastLMEquiTile` registered in Registry (after Phase 4 LM consolidation).
 
 ---
 
