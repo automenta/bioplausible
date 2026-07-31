@@ -12,7 +12,7 @@ Implements state-of-the-art training optimizations:
 
 Example
 -------
->>> from bioplausible.equitile.lm_demo import LMTrainer, TrainingConfig
+>>> from bioplausible.equitile.lm import LMTrainer, TrainingConfig
 >>> config = TrainingConfig(
 ...     epochs=10,
 ...     learning_rate=3e-4,
@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING
 logger = logging.getLogger(__name__)
 
 import torch
+import torch.nn.functional as F
 
 # Use new torch.amp API (2.0+) or fallback to deprecated cuda.amp
 try:
@@ -437,6 +438,19 @@ class LMTrainer:
             min_lr_ratio=self.config.min_lr_ratio,
         )
 
+    def _compute_loss(
+        self,
+        logits: Tensor,
+        target_ids: Tensor,
+    ) -> Tensor:
+        """Compute loss, falling back to cross-entropy if model lacks compute_loss."""
+        if hasattr(self.model, "compute_loss"):
+            return self.model.compute_loss(logits, target_ids)
+        return F.cross_entropy(
+            logits.view(-1, logits.size(-1)),
+            target_ids.view(-1),
+        )
+
     @torch.no_grad()
     def evaluate(
         self,
@@ -472,10 +486,10 @@ class LMTrainer:
             if self.use_amp:
                 with autocast():
                     logits = self.model(input_ids)
-                    loss = self.model.compute_loss(logits, target_ids)
+                    loss = self._compute_loss(logits, target_ids)
             else:
                 logits = self.model(input_ids)
-                loss = self.model.compute_loss(logits, target_ids)
+                loss = self._compute_loss(logits, target_ids)
 
             total_loss += loss.item()
             n_batches += 1
@@ -555,7 +569,7 @@ class LMTrainer:
         if self.use_amp:
             with autocast():
                 logits = self.model(input_ids)
-                loss = self.model.compute_loss(logits, target_ids)
+                loss = self._compute_loss(logits, target_ids)
                 # Scale loss for gradient accumulation
                 loss = loss / self.config.gradient_accumulation_steps
 
@@ -563,7 +577,7 @@ class LMTrainer:
             self.scaler.scale(loss).backward()
         else:
             logits = self.model(input_ids)
-            loss = self.model.compute_loss(logits, target_ids)
+            loss = self._compute_loss(logits, target_ids)
             loss = loss / self.config.gradient_accumulation_steps
             loss.backward()
 

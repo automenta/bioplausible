@@ -13,14 +13,14 @@ TinyStories: Synthetic stories dataset demonstrating compositional generalizatio
 Usage
 -----
 # Train EquiTile
-python -m bioplausible.models.equitile.lm_demo.train_tinystories \
+python -m bioplausible.equitile.lm.train_tinystories \
     --model equitile \
     --epochs 10 \
     --batch-size 64 \
     --device cuda
 
 # Train NanoGPT baseline
-python -m bioplausible.models.equitile.lm_demo.train_tinystories \
+python -m bioplausible.equitile.lm.train_tinystories \
     --model nanogpt \
     --epochs 10 \
     --batch-size 64 \
@@ -33,15 +33,22 @@ import logging
 import time
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 import torch
-import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 from bioplausible.equitile.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
-from bioplausible.equitile.lm_demo import BPETokenizer, FastLMConfig, FastLMEquiTile
+from bioplausible.equitile.lm import (
+    BPETokenizer,
+    FastLMConfig,
+    FastLMEquiTile,
+)
+from bioplausible.equitile.lm.training import (
+    create_training_config,
+    train_model as train_lm_model,
+)
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # TinyStories Dataset
@@ -153,101 +160,6 @@ def download_tinystories(data_dir: str = "data") -> str:
 # =============================================================================
 
 
-class LMTrainer:
-    """Simple LM trainer for comparison studies."""
-
-    def __init__(
-        self,
-        model: nn.Module,
-        optimizer: torch.optim.Optimizer,
-        device: torch.device,
-        name: str = "model",
-    ) -> None:
-        self.model = model
-        self.optimizer = optimizer
-        self.device = device
-        self.name = name
-
-    def train_epoch(
-        self,
-        train_loader: DataLoader,
-    ) -> dict[str, float]:
-        """Train for one epoch."""
-        self.model.train()
-        total_loss = 0.0
-        n_batches = 0
-        total_tokens = 0
-
-        for input_ids, target_ids in train_loader:
-            input_ids = input_ids.to(self.device)
-            target_ids = target_ids.to(self.device)
-
-            self.optimizer.zero_grad()
-
-            # Forward pass
-            output = self.model(input_ids)
-            if isinstance(output, tuple):
-                logits = output[0]
-            else:
-                logits = output
-
-            # Compute loss
-            loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)),
-                target_ids.view(-1),
-            )
-
-            # Backward pass
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-            self.optimizer.step()
-
-            total_loss += loss.item()
-            n_batches += 1
-            total_tokens += input_ids.numel()
-
-        return {
-            "train_loss": total_loss / max(1, n_batches),
-            "tokens": total_tokens,
-        }
-
-    @torch.no_grad()
-    def evaluate(
-        self,
-        val_loader: DataLoader,
-    ) -> dict[str, float]:
-        """Evaluate on validation set."""
-        self.model.eval()
-        total_loss = 0.0
-        n_batches = 0
-
-        for input_ids, target_ids in val_loader:
-            input_ids = input_ids.to(self.device)
-            target_ids = target_ids.to(self.device)
-
-            output = self.model(input_ids)
-            if isinstance(output, tuple):
-                logits = output[0]
-            else:
-                logits = output
-
-            loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)),
-                target_ids.view(-1),
-            )
-
-            total_loss += loss.item()
-            n_batches += 1
-
-        val_loss = total_loss / max(1, n_batches)
-        val_ppl = torch.exp(torch.tensor(val_loss)).item()
-
-        return {
-            "val_loss": val_loss,
-            "val_ppl": val_ppl,
-        }
-
-
 def create_equitile_model(vocab_size: int, device: torch.device) -> nn.Module:
     """Create EquiTile model with optimized config."""
     config = FastLMConfig(
@@ -291,7 +203,7 @@ def create_nanogpt_model(vocab_size: int, device: torch.device) -> nn.Module:
 
 
 def train_model(
-    model_name: str,
+    _model_name: str,
     model: nn.Module,
     train_loader: DataLoader,
     val_loader: DataLoader,
@@ -299,54 +211,37 @@ def train_model(
     learning_rate: float,
     device: torch.device,
 ) -> list[dict[str, float]]:
-    """Train model and track metrics."""
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=learning_rate,
-        betas=(0.9, 0.95),
-        weight_decay=0.1,
+    """Train model using production LMTrainer."""
+    config = create_training_config(
+        epochs=epochs,
+        learning_rate=learning_rate,
+        use_amp=False,
+        log_every=50,
+    )
+    config.device = (
+        device.type
+        if device.type != "auto"
+        else "cuda"
+        if torch.cuda.is_available()
+        else "cpu"
     )
 
-    trainer = LMTrainer(model, optimizer, device, name=model_name)
+    metrics = train_lm_model(model, train_loader, val_loader, config=config)
 
     history = []
-    total_start = time.time()
-
-    for epoch in range(epochs):
-        epoch_start = time.time()
-
-        # Train
-        train_metrics = trainer.train_epoch(train_loader)
-
-        # Evaluate
-        val_metrics = trainer.evaluate(val_loader)
-
-        epoch_time = time.time() - epoch_start
-        tokens_per_sec = train_metrics["tokens"] / epoch_time
-
-        record = {
-            "epoch": epoch + 1,
-            "train_loss": train_metrics["train_loss"],
-            "val_loss": val_metrics["val_loss"],
-            "val_ppl": val_metrics["val_ppl"],
-            "tokens_per_sec": tokens_per_sec,
-            "epoch_time": epoch_time,
-        }
-        history.append(record)
-
-        logger.info(
-            "Epoch %d/%d | Train Loss: %.4f | Val PPL: %.2f | Tok/s: %s | Time: %.1fs",
-            epoch + 1,
-            epochs,
-            train_metrics["train_loss"],
-            val_metrics["val_ppl"],
-            f"{tokens_per_sec:,.0f}",
-            epoch_time,
-        )
-
-    total_time = time.time() - total_start
-    logger.info("\nTotal training time: %.1f minutes", total_time / 60)
-
+    for i in range(len(metrics.train_loss)):
+        history.append({
+            "epoch": i + 1,
+            "train_loss": metrics.train_loss[i],
+            "val_loss": metrics.val_loss[i] if i < len(metrics.val_loss) else 0.0,
+            "val_ppl": metrics.val_perplexity[i]
+            if i < len(metrics.val_perplexity)
+            else 0.0,
+            "tokens_per_sec": metrics.tokens_per_second[i]
+            if i < len(metrics.tokens_per_second)
+            else 0.0,
+            "epoch_time": 0.0,
+        })
     return history
 
 

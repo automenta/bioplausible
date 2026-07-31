@@ -5,10 +5,10 @@ Tests for EquiTile LM Demo
 Comprehensive tests for FastLMEquiTile and related components.
 
 Run tests:
-    pytest tests/test_lm_demo.py -v
+    pytest tests/integration/test_lm_demo.py -v
 
 Run specific test:
-    pytest tests/test_lm_demo.py::test_fast_lm_forward -v
+    pytest tests/integration/test_lm_demo.py::test_fast_lm_forward -v
 """
 
 import pathlib
@@ -16,22 +16,26 @@ import pathlib
 import pytest
 import torch
 
-from bioplausible.equitile.lm_demo.data import (
+from bioplausible.equitile.lm.data import (
     CharacterTokenizer,
     LMDataset,
     create_shakespeare_dataset,
 )
-from bioplausible.equitile.lm_demo.fast_lm import (
+from bioplausible.equitile.lm.components import (
     FastEquiTileLayer,
     FastLMConfig,
-    FastLMEquiTile,
     MixtureOfTiles,
     SwiGLUFeedForward,
     TileLocalAttention,
+)
+from bioplausible.equitile.lm.fast_lm import (
+    FastLMEquiTile,
+    create_fast_lm_medium,
+    create_fast_lm_shakespeare,
     create_fast_lm_small,
     create_fast_lm_tiny,
 )
-from bioplausible.equitile.lm_demo.training import (
+from bioplausible.equitile.lm.training import (
     LMTrainer,
     LRScheduler,
     TrainingConfig,

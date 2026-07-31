@@ -9,7 +9,7 @@ Provides production-ready tokenizers:
 
 Example
 -------
->>> from bioplausible.equitile.lm_demo.data_advanced import BPETokenizer
+>>> from bioplausible.equitile.lm.data_advanced import BPETokenizer
 >>> tokenizer = BPETokenizer()
 >>> ids = tokenizer.encode("Hello, world!")
 >>> text = tokenizer.decode(ids)

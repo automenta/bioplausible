@@ -31,6 +31,7 @@ from bioplausible.core.registry import (
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.data.vision import create_data_loaders
 from bioplausible.domains.base import DomainType
+from bioplausible.zoo.propagators.base import is_learning_rule_optimizer
 
 if TYPE_CHECKING:
     from bioplausible.domains import TaskProtocol
@@ -56,6 +57,18 @@ class TrainerProtocol(Protocol):
     """
 
     def train_epoch(self) -> dict[str, float]: ...
+
+
+def _make_ebm_trainer(config: TrainerConfig, model: nn.Module) -> EBMTrainer:
+    """Create an EBMTrainer from trainer config."""
+    return EBMTrainer(
+        model,
+        lr=config.optimizer_kwargs.get("lr", 0.01),
+        free_steps=config.extra.get("free_steps", 30),
+        nudged_steps=config.extra.get("nudged_steps"),
+        beta=config.extra.get("beta", 0.1),
+        clip_grad_norm=config.grad_clip,
+    )
 
 
 @dataclass
@@ -772,42 +785,36 @@ class CoreTrainer:
         return avg_metrics
 
     def _train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        """Single training step."""
-        # EnergyModel dispatch (Phase A.1): settle + contrastive update
-        if isinstance(self.model, EnergyModel):
-            ebm_lr = self.config.optimizer_kwargs.get("lr", 0.01)
-            ebm_free_steps = self.config.extra.get("free_steps", 30)
-            ebm_nudged_steps = self.config.extra.get("nudged_steps")
-            ebm_beta = self.config.extra.get("beta", 0.1)
-            trainer = EBMTrainer(
-                self.model,
-                lr=ebm_lr,
-                free_steps=ebm_free_steps,
-                nudged_steps=ebm_nudged_steps,
-                beta=ebm_beta,
-                clip_grad_norm=self.config.grad_clip,
-            )
-            return trainer.train_step(x, y)
+        """Single training step.
 
-        # Check if model has custom train_step (for bio-plausible models)
+        Dispatches to the appropriate training algorithm via:
+        1. EnergyModel protocol (structural match/case).
+        2. Model-side ``train_step`` (probe with real data).
+        3. Learning-rule optimizer (TypeIs narrowing).
+        4. Standard BPTT fallback.
+        """
+        # Phase 1: EnergyModel — clean structural dispatch
+        match self.model:
+            case EnergyModel():
+                return _make_ebm_trainer(self.config, self.model).train_step(x, y)
+
+        # Phase 2: Model-side custom train_step (bio-plausible models)
+        # Probe with real data — the only reliable way to verify
+        # that train_step returns meaningful metrics vs NotImplementedError/None.
         if hasattr(self.model, "train_step"):
             metrics = self.model.train_step(x, y)
             if metrics is not None:
                 return metrics
 
-        # Check if optimizer has custom step (MEP, learning rules)
-        if self.optimizer and hasattr(self.optimizer, "step"):
-            import inspect
+        # Phase 3: Learning-rule optimizer (owns forward+backward)
+        if self.optimizer is not None and is_learning_rule_optimizer(self.optimizer):
+            return self.optimizer.step(x=x, target=y) or {}
 
-            sig = inspect.signature(self.optimizer.step)
-            if "target" in sig.parameters or "y" in sig.parameters:
-                if "target" in sig.parameters:
-                    metrics = self.optimizer.step(x=x, target=y)
-                else:
-                    metrics = self.optimizer.step(x=x, y=y)
-                return metrics if metrics is not None else {}
+        # Phase 4: Standard forward/backward
+        return self._bptt_step(x, y)
 
-        # Standard forward/backward
+    def _bptt_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        """Standard backpropagation training step."""
         if self.optimizer:
             self.optimizer.zero_grad()
 

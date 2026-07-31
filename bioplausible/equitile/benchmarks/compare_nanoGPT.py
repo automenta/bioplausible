@@ -540,8 +540,8 @@ def compare_nanoGPT(
     dict
         Comparison results
     """
-    from bioplausible.equitile.lm_demo.data import create_shakespeare_dataset
-    from bioplausible.equitile.lm_demo.fast_lm import FastLMConfig, FastLMEquiTile
+    from bioplausible.equitile.lm.data import create_shakespeare_dataset
+    from bioplausible.equitile.lm.fast_lm import FastLMConfig, FastLMEquiTile
 
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -704,7 +704,7 @@ def run_benchmark_comparison(
             )
             model = NanoGPTModel(nanogpt_config)
         elif model_type == "equitile":
-            from bioplausible.equitile.lm_demo.fast_lm import (
+            from bioplausible.equitile.lm.fast_lm import (
                 FastLMConfig,
                 FastLMEquiTile,
             )

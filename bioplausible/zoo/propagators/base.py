@@ -15,6 +15,7 @@ The `step` signature split is intentional:
 """
 
 from collections.abc import Callable, Iterable
+from typing import TypeIs
 
 import torch
 from torch import nn
@@ -23,6 +24,7 @@ from torch.optim import Optimizer
 __all__ = [
     "BioOptimizer",
     "LearningRuleOptimizer",
+    "is_learning_rule_optimizer",
 ]
 
 
@@ -108,3 +110,13 @@ class LearningRuleOptimizer(BioOptimizer):
             param.data.mul_(1 - weight_decay * lr)
 
         param.data.add_(buffer, alpha=-lr)
+
+
+def is_learning_rule_optimizer(o: object) -> TypeIs[LearningRuleOptimizer]:
+    """Narrowing check: is this optimizer a learning-rule optimizer?
+
+    LearningRuleOptimizer owns the forward/backward pass internally and
+    exposes ``step(x, target)``, unlike standard PyTorch optimizers which
+    expect ``loss.backward(); optimizer.step()``.
+    """
+    return isinstance(o, LearningRuleOptimizer)

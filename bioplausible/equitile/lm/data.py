@@ -17,7 +17,7 @@ Supported Datasets
 
 Example
 -------
->>> from bioplausible.equitile.lm_demo.data import create_shakespeare_dataset
+>>> from bioplausible.equitile.lm.data import create_shakespeare_dataset
 >>> train_loader, val_loader, tokenizer = create_shakespeare_dataset(
 ...     batch_size=32,
 ...     seq_length=256,

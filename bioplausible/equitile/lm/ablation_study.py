@@ -19,7 +19,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.equitile.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
-from bioplausible.equitile.lm_demo import FastLMConfig, FastLMEquiTile
+from bioplausible.equitile.lm import FastLMConfig, FastLMEquiTile
 
 # =============================================================================
 # Test Harness

@@ -8,7 +8,7 @@ Exposes internal states (relaxation, importance, activity) for visualization.
 NOTE: This is a VISUALIZATION variant of EquiTile, distinct from the
 rigorous research implementation. For the canonical, high-performance
 model used in benchmarks, see:
-`bioplausible.models.equitile.lm_demo.fast_lm`
+`bioplausible.equitile.lm.fast_lm`
 """
 
 import logging

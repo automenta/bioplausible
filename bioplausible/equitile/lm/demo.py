@@ -15,10 +15,10 @@ Features:
 Usage
 -----
 Basic training:
-    python -m bioplausible.models.equitile.lm_demo.demo --task shakespeare --epochs 5
+    python -m bioplausible.equitile.lm.demo --task shakespeare --epochs 5
 
 With custom settings:
-    python -m bioplausible.models.equitile.lm_demo.demo \
+    python -m bioplausible.equitile.lm.demo \
         --task shakespeare \
         --epochs 10 \
         --batch-size 64 \
@@ -26,13 +26,13 @@ With custom settings:
         --device cuda
 
 Comparison mode:
-    python -m bioplausible.models.equitile.lm_demo.demo \
+    python -m bioplausible.equitile.lm.demo \
         --task shakespeare \
         --compare \
         --epochs 5
 
 Resume training:
-    python -m bioplausible.models.equitile.lm_demo.demo \
+    python -m bioplausible.equitile.lm.demo \
         --task shakespeare \
         --resume checkpoints/checkpoint_500.pt
 """
@@ -52,20 +52,20 @@ import torch
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from bioplausible.equitile.lm_demo.data import (
+from bioplausible.equitile.lm.data import (
     CharacterTokenizer,
     Tokenizer,
     create_custom_dataset,
     create_shakespeare_dataset,
 )
-from bioplausible.equitile.lm_demo.fast_lm import (
+from bioplausible.equitile.lm.fast_lm import (
     FastLMConfig,
     FastLMEquiTile,
     create_fast_lm_shakespeare,
     create_fast_lm_small,
     create_fast_lm_tiny,
 )
-from bioplausible.equitile.lm_demo.training import (
+from bioplausible.equitile.lm.training import (
     LMTrainer,
     TrainingConfig,
     TrainingMetrics,

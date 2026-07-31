@@ -32,7 +32,7 @@ from pathlib import Path
 
 import torch
 
-from bioplausible.equitile.lm_demo import (
+from bioplausible.equitile.lm import (
     FastLMConfig,
     FastLMEquiTile,
     create_shakespeare_dataset,

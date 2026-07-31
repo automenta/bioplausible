@@ -14,7 +14,7 @@ linearized gradient of the energy at free-phase equilibrium.
 from __future__ import annotations
 
 import logging
-from typing import Protocol, runtime_checkable
+from typing import Protocol, TypeIs, runtime_checkable
 
 import torch
 from torch import nn
@@ -22,6 +22,7 @@ from torch import nn
 __all__ = [
     "EBMTrainer",
     "EnergyModel",
+    "is_energy_model",
     "logger",
 ]
 logger = logging.getLogger(__name__)
@@ -108,6 +109,14 @@ class EnergyModel(Protocol):
         ...
 
 
+def is_energy_model(model: object) -> TypeIs[EnergyModel]:
+    """Check if a model satisfies the ``EnergyModel`` protocol.
+
+    Uses ``isinstance`` with the ``@runtime_checkable`` protocol.
+    """
+    return isinstance(model, EnergyModel)
+
+
 class EBMTrainer:
     """Training loop for any model satisfying the ``EnergyModel`` protocol.
 
@@ -148,7 +157,7 @@ class EBMTrainer:
         dict[str, float]
             Metrics dict with at least ``"loss"`` and ``"accuracy"``.
         """
-        if not isinstance(self.model, EnergyModel):
+        if not is_energy_model(self.model):
             return self._fallback_bptt(x, y)
 
         # Free phase: settle to equilibrium without nudging

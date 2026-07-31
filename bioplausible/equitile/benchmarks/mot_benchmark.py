@@ -9,7 +9,7 @@ highly optimized. This module provides documentation and utilities.
 
 Usage
 -----
->>> from bioplausible.equitile.lm_demo.fast_lm import MixtureOfTiles
+>>> from bioplausible.equitile.lm.components import MixtureOfTiles
 >>> mot = MixtureOfTiles(embed_dim=192, neurons_per_tile=48, tiles_per_layer=4, mot_k=2)
 >>> output, tile_importance = mot(x)
 """
@@ -48,8 +48,8 @@ def benchmark_mot(
 
     results = {}
 
-    # Standard (from fast_lm.py)
-    from bioplausible.equitile.lm_demo.fast_lm import MixtureOfTiles
+    # Standard (from lm.components)
+    from bioplausible.equitile.lm.components import MixtureOfTiles
 
     mot_standard = MixtureOfTiles(
         embed_dim=embed_dim,

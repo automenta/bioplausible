@@ -1,8 +1,8 @@
 """
-EquiTile Fast LM Demo
-=====================
+EquiTile Fast LM
+================
 
-High-performance language modeling demo showcasing EquiTile's unique advantages:
+High-performance language modeling showcasing EquiTile's unique advantages:
 - Mixture of Tiles (MoT) for conditional computation
 - Tile-local attention for O(n) complexity
 - Parameter efficiency (< 10M parameters)
@@ -10,16 +10,23 @@ High-performance language modeling demo showcasing EquiTile's unique advantages:
 
 Quick Start
 -----------
->>> from bioplausible.equitile.lm_demo import FastLMEquiTile, FastLMConfig
+>>> from bioplausible.equitile.lm import FastLMEquiTile, FastLMConfig
 >>> config = FastLMConfig(vocab_size=1000, embed_dim=192, num_layers=6)
 >>> model = FastLMEquiTile(config)
 >>> logits = model(input_ids)
 
 Demo Usage
 ----------
-$ python -m bioplausible.models.equitile.lm_demo.demo --task shakespeare --epochs 5
+$ python -m bioplausible.equitile.lm.demo --task shakespeare --epochs 5
 """
 
+from .components import (
+    FastEquiTileLayer,
+    FastLMConfig,
+    MixtureOfTiles,
+    SwiGLUFeedForward,
+    TileLocalAttention,
+)
 from .data import (
     CharacterTokenizer,
     LMDataset,
@@ -35,12 +42,11 @@ from .data_advanced import (
     load_shakespeare_tokenizer,
 )
 from .fast_lm import (
-    FastEquiTileLayer,
-    FastLMConfig,
     FastLMEquiTile,
-    MixtureOfTiles,
-    SwiGLUFeedForward,
-    TileLocalAttention,
+    create_fast_lm_medium,
+    create_fast_lm_shakespeare,
+    create_fast_lm_small,
+    create_fast_lm_tiny,
 )
 from .training import LMTrainer, TrainingConfig, TrainingMetrics, train_model
 
@@ -48,10 +54,15 @@ __all__ = [
     # Model
     "FastLMEquiTile",
     "FastLMConfig",
+    "FastEquiTileLayer",
     "MixtureOfTiles",
     "TileLocalAttention",
     "SwiGLUFeedForward",
-    "FastEquiTileLayer",
+    # Factory
+    "create_fast_lm_tiny",
+    "create_fast_lm_small",
+    "create_fast_lm_medium",
+    "create_fast_lm_shakespeare",
     # Data
     "LMDataset",
     "create_shakespeare_dataset",
