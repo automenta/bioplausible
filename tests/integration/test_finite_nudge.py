@@ -19,7 +19,7 @@ class TestFiniteNudge(unittest.TestCase):
             output_dim=2,
             learning_rate=0.01,
             beta=1.0,
-            equilibrium_steps=5,
+            max_steps=5,
         )
         model = FiniteNudgeEP(config)
 

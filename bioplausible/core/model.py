@@ -66,9 +66,6 @@ class BioModel(nn.Module, ABC):
             )
         else:
             self.config = config
-            if "max_steps" in kwargs:
-                self.config.max_steps = kwargs["max_steps"]
-                self.config.equilibrium_steps = kwargs["max_steps"]
 
         # Shortcuts for convenience
         self.input_dim = self.config.input_dim
@@ -300,8 +297,7 @@ class BioModel(nn.Module, ABC):
         """Modules called in order during one forward step.
 
         Auto-discovers from common patterns:
-        ``self.layers: nn.ModuleList``, ``self.forward_layers: nn.ModuleList``,
-        or a fallback scan of direct ``nn.Linear``/``nn.Conv*`` children.
+        ``self.layers: nn.ModuleList`` or ``self.forward_layers: nn.ModuleList``.
 
         Subclasses with non-standard structure (e.g. ``LoopedMLP``,
         ``HomeostaticEqProp``, ``NeuralCube``) MUST override this method.
@@ -314,22 +310,7 @@ class BioModel(nn.Module, ABC):
         forward_layers = getattr(self, "forward_layers", None)
         if isinstance(forward_layers, nn.ModuleList):
             return list(forward_layers)
-        # 3. Fallback: scan direct children for Linear/Conv (backward compat).
-        modules = [
-            m
-            for m in self.children()
-            if isinstance(
-                m,
-                (
-                    nn.Linear,
-                    nn.Conv1d,
-                    nn.Conv2d,
-                    nn.Conv3d,
-                ),
-            )
-        ]
-        if modules:
-            return modules
+
         raise NotImplementedError(
             f"{type(self).__name__} has no transition_modules(). "
             "Define `self.layers: nn.ModuleList[nn.Module]` or implement "

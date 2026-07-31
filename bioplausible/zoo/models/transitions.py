@@ -79,22 +79,7 @@ class TransitionGraphMixin:
         forward_layers = getattr(self, "forward_layers", None)
         if isinstance(forward_layers, nn.ModuleList):
             return list(forward_layers)
-        # 3. Fallback: scan direct children for Linear/Conv (backward compat).
-        modules = [
-            m
-            for m in self.children()
-            if isinstance(
-                m,
-                (
-                    nn.Linear,
-                    nn.Conv1d,
-                    nn.Conv2d,
-                    nn.Conv3d,
-                ),
-            )
-        ]
-        if modules:
-            return modules
+
         raise NotImplementedError(
             f"{type(self).__name__} has no transition_modules(). "
             "Define `self.layers: nn.ModuleList[nn.Module]` or implement "

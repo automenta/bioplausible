@@ -30,9 +30,8 @@ class ModelConfig:
     # Training hyperparameters
     learning_rate: float = 0.001
     beta: float = 0.2  # For EqProp
-    # Equilibrium Steps (also known as max_steps)
-    equilibrium_steps: int = 30
-    max_steps: int = 30  # Alias for equilibrium_steps to match NEBCBase
+    # Maximum number of equilibrium steps
+    max_steps: int = 30
 
     # Architecture
     use_spectral_norm: bool = True
@@ -62,12 +61,6 @@ class ModelConfig:
             object.__setattr__(self, "input_dim", val)
         if self.output_dim <= 0:
             raise ValueError(f"output_dim must be > 0, got {self.output_dim}")
-
-        # Sync steps if one is changed
-        if self.equilibrium_steps != 30 and self.max_steps == 30:
-            object.__setattr__(self, "max_steps", self.equilibrium_steps)
-        elif self.max_steps != 30 and self.equilibrium_steps == 30:
-            object.__setattr__(self, "equilibrium_steps", self.max_steps)
 
 
 def resolve_hidden_dims(
@@ -108,7 +101,7 @@ def _build_model_config(
     *,
     learning_rate: float | None = None,
     beta: float | None = None,
-    equilibrium_steps: int | None = None,
+    max_steps: int | None = None,
     use_spectral_norm: bool | None = None,
 ) -> ModelConfig:
     """Construct a ``ModelConfig`` from the standard ``build`` classmethod parameters.
@@ -122,15 +115,15 @@ def _build_model_config(
     # pass them in the constructor (ModelConfig is frozen).
     effective_lr = learning_rate
     effective_beta = beta
-    effective_eq_steps = equilibrium_steps
+    effective_max_steps = max_steps
 
     kw_beta = kwargs.get("beta")
     if isinstance(kw_beta, float | int):
         effective_beta = kw_beta  # type: ignore[assignment]
 
-    kw_eq_steps = kwargs.get("equilibrium_steps")
-    if isinstance(kw_eq_steps, int):
-        effective_eq_steps = kw_eq_steps
+    kw_max_steps = kwargs.get("max_steps")
+    if isinstance(kw_max_steps, int):
+        effective_max_steps = kw_max_steps
 
     config = ModelConfig(
         name=spec.name,
@@ -144,9 +137,8 @@ def _build_model_config(
         object.__setattr__(config, "learning_rate", effective_lr)
     if effective_beta is not None:
         object.__setattr__(config, "beta", effective_beta)
-    if effective_eq_steps is not None:
-        object.__setattr__(config, "equilibrium_steps", effective_eq_steps)
-        object.__setattr__(config, "max_steps", effective_eq_steps)
+    if effective_max_steps is not None:
+        object.__setattr__(config, "max_steps", effective_max_steps)
     if use_spectral_norm is not None:
         object.__setattr__(config, "use_spectral_norm", use_spectral_norm)
 

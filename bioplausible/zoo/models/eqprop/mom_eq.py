@@ -54,7 +54,7 @@ class MomentumEquilibrium(BioModel):
 
         velocities = [torch.zeros_like(a) for a in activations]
 
-        for _ in range(self.config.equilibrium_steps):
+        for _ in range(self.config.max_steps):
             new_acts = [activations[0]]
             h = activations[0]
 

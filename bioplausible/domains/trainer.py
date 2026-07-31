@@ -14,8 +14,8 @@ from bioplausible.domains.base import DomainType
 
 __all__ = [
     "TaskProtocol",
-    "_resolve_task_loss",
     "_TaskTrainer",
+    "_resolve_task_loss",
 ]
 
 logger = logging.getLogger(__name__)

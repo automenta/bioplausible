@@ -21,7 +21,7 @@ def test_eqprop_algorithm_integration():
         hidden_dims=[hidden_dim],
         output_dim=output_dim,
         learning_rate=0.01,
-        equilibrium_steps=5,
+        max_steps=5,
         beta=0.1,
     )
 
@@ -83,7 +83,7 @@ def test_eqprop_dynamics_shapes():
         input_dim=5,
         hidden_dims=[10, 8],
         output_dim=3,
-        equilibrium_steps=2,
+        max_steps=2,
     )
     model = StandardEqProp(config)
 

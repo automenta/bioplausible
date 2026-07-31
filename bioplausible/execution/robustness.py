@@ -16,9 +16,9 @@ import torch
 from torch import nn
 
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.domains import create_task
 from bioplausible.domains.base import DomainType
 from bioplausible.execution.interpretability import FeatureAttribution
-from bioplausible.domains import create_task
 from bioplausible.zoo import get_model_spec
 
 __all__ = [

@@ -54,32 +54,9 @@ class ModelSpec:
         "version",
     )
 
-    _FAMILY_TAGS = frozenset((
-        "eqprop",
-        "fa",
-        "forward-only",
-        "forward_only",
-        "hebbian",
-        "predictive_coding",
-        "spiking",
-        "target_prop",
-        "backprop",
-    ))
-
     def __init__(self, meta: ComponentMetadata) -> None:
         self.name = meta.name
-        # Prefer the explicit `family` metadata field; fall back to a tag.
-        # Normalize hyphenated tags (e.g. "forward-only") to underscore form
-        # (e.g. "forward_only") so downstream metamodel comparisons against
-        # `family == "forward_only"` match consistently.
-        self.family = meta.family or next(
-            (
-                t.replace("-", "_")
-                for t in meta.tags
-                if t.replace("-", "_") in self._FAMILY_TAGS
-            ),
-            "experimental",
-        )
+        self.family = meta.family if meta.family else "experimental"
         self.task_compat = [d.value for d in meta.domains]
         self.model_type = meta.credit_assignment_type
         self.credit_assignment_type = meta.credit_assignment_type

@@ -20,6 +20,7 @@ class SimpleMLP(TransitionGraphMixin, nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(8, 16)
         self.fc2 = nn.Linear(16, 4)
+        self.layers = nn.ModuleList([self.fc1, self.fc2])
 
     def forward(self, x):
         return self.fc2(torch.relu(self.fc1(x)))

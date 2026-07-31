@@ -10,7 +10,6 @@ A high-performance, scalable deep learning framework featuring:
 """
 
 import logging
-import pickle  # ruff: ignore[suspicious-pickle-import] -- UnpicklingError needed for torch.load weights_only fallback
 from typing import TYPE_CHECKING, Literal
 
 import torch
@@ -54,6 +53,7 @@ if TYPE_CHECKING:
     requires_backward=False,
     credit_assignment_type="hebbian",
     family="equitile",
+    typical_lr_range=(0.01, 0.1),
 )
 class EquiTile(BioModel, EquiTileOptimizerMixin):
     """EquiTile: Scalable Local-Learning Architecture."""
@@ -1276,14 +1276,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
         if device is None:
             device = next(self.parameters()).device
 
-        try:
-            state = torch.load(path, map_location=device, weights_only=True)
-        except (RuntimeError, pickle.UnpicklingError) as e:
-            logger.warning("weights_only=True load failed (%s); retrying legacy", e)
-            try:
-                state = torch.load(path, map_location=device, weights_only=False)
-            except (RuntimeError, pickle.UnpicklingError) as e2:
-                raise LoadStateError(f"Failed to load checkpoint from {path}") from e2
+        state = torch.load(path, map_location=device, weights_only=True)
 
         try:
             self.load_state(state)

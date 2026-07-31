@@ -191,7 +191,3 @@ def generate_experiment_report(
         f.write("\n".join(lines))
 
     return "\n".join(lines)
-
-
-# Legacy re-export — ReportOrchestrator lives in analysis/legacy_report/;
-# re-exported here so consumers import from analysis.reporting instead.

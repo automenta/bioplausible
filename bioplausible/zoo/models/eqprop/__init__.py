@@ -1,7 +1,5 @@
 """Equilibrium Propagation Model Zoo Subpackage."""
 
-from bioplausible.core.model import BioModel as _BioModel_re_export
-
 from .causal_transformer_eqprop import (
     CausalEqPropAttention,
     CausalTransformerEqProp,
@@ -42,9 +40,6 @@ from .standard_eqprop import StandardEqProp
 from .temporal_resonance import TemporalResonanceEqProp
 from .ternary import TernaryEqProp, TernaryLinear, TernaryQuantize
 from .transformer_eqprop import EqPropAttention, TransformerEqProp
-
-_bio = _BioModel_re_export
-del _BioModel_re_export
 
 __all__: list[str] = [
     "BackpropMLP",

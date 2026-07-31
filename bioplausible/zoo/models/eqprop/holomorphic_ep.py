@@ -34,7 +34,7 @@ class HolomorphicEP(BioModel):
         super().__init__(config, **kwargs)
 
         self.beta = self.config.beta
-        self.eq_steps = self.config.equilibrium_steps
+        self.eq_steps = self.config.max_steps
         self.lr = self.config.learning_rate
 
         self.layers = nn.ModuleList()

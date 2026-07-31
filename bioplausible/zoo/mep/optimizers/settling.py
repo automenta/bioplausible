@@ -100,25 +100,10 @@ class Settler:
     def _resolve_transition_modules(
         self,
         model: nn.Module,
-        structure: list[dict[str, object]] | None = None,
     ) -> list[nn.Module]:
-        """Resolve transition modules from model.transition_modules() or structure.
-
-        Prefers ``model.transition_modules()`` when available. Falls back to
-        extracting layer/attention modules from the inspector structure for
-        backward compatibility.
-        """
+        """Resolve transition modules from model.transition_modules()."""
         if hasattr(model, "transition_modules"):
-            try:
-                return model.transition_modules()
-            except NotImplementedError:
-                pass
-        if structure is not None:
-            return [
-                item["module"]
-                for item in structure
-                if item["type"] in ("layer", "attention")
-            ]
+            return model.transition_modules()
         return []
 
     def _capture_states_from_transitions(
@@ -157,7 +142,6 @@ class Settler:
         target: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
-        structure: list[dict[str, object]] | None = None,
     ) -> list[torch.Tensor]:
         """
         Settle network activations to energy minimum.
@@ -168,8 +152,6 @@ class Settler:
             target: Target tensor (None for free phase).
             beta: Nudging strength.
             energy_fn: Function to compute energy.
-            structure: Model structure from inspector (deprecated: use
-                ``transition_modules()`` on the model instead).
 
         Returns:
             List of settled state tensors for each layer.
@@ -183,8 +165,8 @@ class Settler:
         if beta < 0 or beta > 1:
             raise ValueError(f"Beta must be in [0, 1], got {beta}")
 
-        # Determine transition modules — prefer transition_modules() over structure.
-        transition_modules = self._resolve_transition_modules(model, structure)
+        # Determine transition modules.
+        transition_modules = self._resolve_transition_modules(model)
 
         # Capture initial states
         states = self._capture_states_from_transitions(model, x, transition_modules)
@@ -193,19 +175,12 @@ class Settler:
             if transition_modules:
                 raise RuntimeError(
                     f"No activations captured. Expected {len(transition_modules)} "
-                    f"transition module(s), got 0.\n"
-                    f"Model: {type(model).__name__}"
+                    f"transition module(s)."
                 )
-            else:
-                return []  # No states to settle
+            return []
 
-        # Build compat structure for energy_fn (backward compat).
-        if structure is None:
-            compat_structure = [
-                {"type": "layer", "module": m} for m in transition_modules
-            ]
-        else:
-            compat_structure = structure
+        # Build structure for energy_fn from transition modules.
+        compat_structure = [{"type": "layer", "module": m} for m in transition_modules]
 
         # Prepare target
         target_vec = None
@@ -240,7 +215,6 @@ class Settler:
         target: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
-        structure: list[dict[str, object]] | None = None,
     ) -> list[torch.Tensor]:
         """
         Settle network keeping computation graph intact for gradient flow.
@@ -251,13 +225,8 @@ class Settler:
             raise ValueError(f"Beta must be in [0, 1], got {beta}")
 
         # Resolve transition modules.
-        transition_modules = self._resolve_transition_modules(model, structure)
-        if structure is None:
-            compat_structure = [
-                {"type": "layer", "module": m} for m in transition_modules
-            ]
-        else:
-            compat_structure = structure
+        transition_modules = self._resolve_transition_modules(model)
+        compat_structure = [{"type": "layer", "module": m} for m in transition_modules]
 
         # Capture initial states
         states = self._capture_states_from_transitions(model, x, transition_modules)
@@ -363,34 +332,6 @@ class Settler:
 
         return states
 
-    def _capture_states(
-        self, model: nn.Module, x: torch.Tensor, structure: list[dict[str, object]]
-    ) -> list[torch.Tensor]:
-        """Capture initial layer states."""
-        states: list[torch.Tensor] = []
-        handles: list[object] = []
-
-        def capture_hook(module: nn.Module, inp: object, output: object) -> None:
-            # Capture state in float32 for stability during settling updates
-            if isinstance(output, tuple):
-                s = output[0].detach().float().clone().requires_grad_(True)
-            else:
-                s = output.detach().float().clone().requires_grad_(True)
-            states.append(s)
-
-        for item in structure:
-            if item["type"] in ("layer", "attention"):
-                handles.append(item["module"].register_forward_hook(capture_hook))
-
-        try:
-            with torch.no_grad():
-                model(x)
-        finally:
-            for h in handles:
-                h.remove()
-
-        return states
-
     def _prepare_target(
         self, target: torch.Tensor, num_classes: int, dtype: torch.dtype
     ) -> torch.Tensor:
@@ -442,13 +383,8 @@ class Settler:
             raise ValueError(f"Beta must be in [0, 1], got {beta}")
 
         # Resolve transition modules.
-        transition_modules = self._resolve_transition_modules(model, structure)
-        if structure is None:
-            compat_structure = [
-                {"type": "layer", "module": m} for m in transition_modules
-            ]
-        else:
-            compat_structure = structure
+        transition_modules = self._resolve_transition_modules(model)
+        compat_structure = [{"type": "layer", "module": m} for m in transition_modules]
 
         # Capture initial states
         states = self._capture_states_from_transitions(model, x, transition_modules)

@@ -3,8 +3,8 @@ import unittest
 import torch
 
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.domains.base import DomainSpec, DomainType, Metrics, TaskSplit
 from bioplausible.domains.base import DomainTask as BaseTask
-from bioplausible.domains.base import DomainType, DomainSpec, Metrics, TaskSplit
 
 
 # Mock Task for testing

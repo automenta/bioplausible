@@ -52,7 +52,7 @@ def _make_config(**overrides) -> ModelConfig:
         input_dim=10,
         output_dim=5,
         hidden_dims=[20],
-        equilibrium_steps=3,
+        max_steps=3,
     )
     defaults.update(overrides)
     return ModelConfig(**defaults)

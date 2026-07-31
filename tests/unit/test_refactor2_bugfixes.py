@@ -89,33 +89,15 @@ def test_model_spec_citation_read_in_latex_report_context():
     assert isinstance(bib, set)
 
 
-# ---------------------------------------------------------------------------
-# Bug #7: `_FAMILY_TAGS` had `"forward_only"` but ForwardForwardNet/PEPITA
-# registered with tag `"forward-only"` (hyphen).  Family resolution silently
-# returned "experimental", mis-routing metamodel classification.
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.parametrize("model_name", ["forward_forward", "pepita"])
 def test_forward_only_family_resolves_correctly(model_name: str):
     """Models tagged with `forward-only` (hyphen) must resolve to family
-    `forward_only` (underscore), matching `_FAMILY_TAGS` and the metamodel
-    fallback table in `hyperparameter_metamodel.py`.
+    `forward_only` (underscore), matching the `family` field in metadata.
     """
     spec = get_model_spec(model_name)
     assert spec.family == "forward_only", (
         f"Expected family=='forward_only' for {model_name}, got {spec.family!r}"
     )
-
-
-def test_family_resolution_normalizes_hyphenated_tags():
-    """`ModelSpec._FAMILY_TAGS` accepts both hyphenated and
-    underscored variants of algorithm family tags.
-    """
-    from bioplausible.zoo import ModelSpec
-
-    assert "forward_only" in ModelSpec._FAMILY_TAGS
-    assert "forward-only" in ModelSpec._FAMILY_TAGS
 
 
 # ---------------------------------------------------------------------------
@@ -207,11 +189,13 @@ def test_task_trainer_nan_val_when_validation_fails():
     """
     from bioplausible.domains import _TaskTrainer
     from bioplausible.domains.base import (
-        DomainType,
         DomainSpec,
-        DomainTask as BaseTask,
+        DomainType,
         Metrics,
         TaskSplit,
+    )
+    from bioplausible.domains.base import (
+        DomainTask as BaseTask,
     )
 
     class FailingValTask(BaseTask):
@@ -280,11 +264,13 @@ def test_task_trainer_uses_mse_for_regression_tasks():
     """
     from bioplausible.domains import _resolve_task_loss, _TaskTrainer
     from bioplausible.domains.base import (
-        DomainType,
         DomainSpec,
-        DomainTask as BaseTask,
+        DomainType,
         Metrics,
         TaskSplit,
+    )
+    from bioplausible.domains.base import (
+        DomainTask as BaseTask,
     )
 
     class RegressionTask(BaseTask):
@@ -347,13 +333,15 @@ def test_task_trainer_uses_cross_entropy_for_discrete_rl():
     action_dim) should pick CrossEntropyLoss for classification over
     discrete actions, matching the old default behavior.
     """
-    from bioplausible.domains import _TaskTrainer, _resolve_task_loss
+    from bioplausible.domains import _resolve_task_loss, _TaskTrainer
     from bioplausible.domains.base import (
-        DomainType,
         DomainSpec,
-        DomainTask as BaseTask,
+        DomainType,
         Metrics,
         TaskSplit,
+    )
+    from bioplausible.domains.base import (
+        DomainTask as BaseTask,
     )
 
     class DiscreteRLTask(BaseTask):
@@ -897,11 +885,13 @@ def test_task_trainer_grad_clip_zero_applies_clipping():
     """
     from bioplausible.domains import _TaskTrainer
     from bioplausible.domains.base import (
-        DomainType,
         DomainSpec,
-        DomainTask as BaseTask,
+        DomainType,
         Metrics,
         TaskSplit,
+    )
+    from bioplausible.domains.base import (
+        DomainTask as BaseTask,
     )
 
     class SimpleTask(BaseTask):

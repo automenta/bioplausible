@@ -167,7 +167,7 @@ class EPGradient(GradientStrategy):
             patience=self.patience,
             adaptive=self.adaptive,
         )
-        return settler.settle(model, x, target, beta, energy_fn, structure)
+        return settler.settle(model, x, target, beta, energy_fn)
 
     def _apply_contrast(
         self,
@@ -298,7 +298,7 @@ class LocalEPGradient:
 
         # Free phase
         states_free = settler.settle(
-            model, x, target=None, beta=0.0, energy_fn=energy_fn, structure=structure
+            model, x, target=None, beta=0.0, energy_fn=energy_fn
         )
 
         # Nudged phase
@@ -308,7 +308,6 @@ class LocalEPGradient:
             target=target,
             beta=self.beta,
             energy_fn=energy_fn,
-            structure=structure,
         )
 
         # Apply local contrast per layer

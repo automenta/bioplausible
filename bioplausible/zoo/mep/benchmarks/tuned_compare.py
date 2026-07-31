@@ -18,8 +18,8 @@ from torch import nn
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
-from bioplausible.zoo.mep.benchmarks.baselines import get_optimizer
 from bioplausible.zoo.mep.benchmarks._shared import EpochMetrics, OptimizerResult
+from bioplausible.zoo.mep.benchmarks.baselines import get_optimizer
 
 __all__ = [
     "OPTIMIZER_CONFIGS",

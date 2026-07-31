@@ -11,8 +11,6 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
 from bioplausible.data.vision import get_vision_dataset
-
-from bioplausible.data.vision import get_vision_dataset
 from bioplausible.domains.base import (
     DomainSpec,
     DomainTask,

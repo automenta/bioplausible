@@ -37,12 +37,7 @@ logger = logging.getLogger(__name__)
 
 import torch
 import torch.nn.functional as F
-
-# Use new torch.amp API (2.0+) or fallback to deprecated cuda.amp
-try:
-    from torch.amp import GradScaler, autocast
-except ImportError:
-    from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 
 if TYPE_CHECKING:
     from torch import Tensor

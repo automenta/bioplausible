@@ -9,15 +9,15 @@ exception: ``raise DomainError("msg") from original_exception``.
 
 __all__ = [
     "BioplausibleError",
-    "ConfigError",
-    "RegistryError",
-    "IncompatibilityError",
     "CheckpointError",
-    "LoadStateError",
+    "ConfigError",
+    "IncompatibilityError",
     "KnowledgeBaseError",
-    "TrialExecutionError",
+    "LoadStateError",
     "PropagatorError",
+    "RegistryError",
     "TileGraphError",
+    "TrialExecutionError",
 ]
 
 

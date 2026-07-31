@@ -21,14 +21,6 @@ from bioplausible.core.registry import ComponentCategory, Registry
 __all__ = [
     "EqPropClassifier",
 ]
-_MODEL_NAME_MAP: dict[str, str] = {
-    "EqProp MLP": "eqprop_mlp",
-    "StandardEqProp": "eqprop",
-    "LoopedMLP": "eqprop_mlp",
-    "BackpropMLP": "backprop_mlp",
-    "StandardFA": "standard_fa",
-    "ForwardForward": "forward_forward",
-}
 
 
 class EqPropClassifier(BaseEstimator, ClassifierMixin):
@@ -92,8 +84,8 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         self.optimizer_: torch.optim.Optimizer | None = None
 
     def _resolve_model_name(self) -> str:
-        """Map legacy model names to Registry names."""
-        return _MODEL_NAME_MAP.get(self.model_name, self.model_name)
+        """Resolve model name to Registry name."""
+        return self.model_name
 
     def _initialize(
         self, X: np.ndarray, y: np.ndarray | None = None, classes: object = None

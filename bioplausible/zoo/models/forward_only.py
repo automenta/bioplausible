@@ -39,10 +39,12 @@ class FFLayer(nn.Linear):
 
 @register_model(
     "forward_forward",
-    locality_level=LocalityLevel.LOCAL,
+    locality_level=LocalityLevel.FORWARD_ONLY,
     bio_plausibility_score=0.85,
     credit_assignment_type="forward-only",
     requires_backward=False,
+    family="forward_only",
+    typical_lr_range=(0.01, 0.1),
     tags=["forward-forward", "forward-only", "local"],
     description="Forward-Forward network: trained with local goodness function.",
 )
@@ -180,8 +182,10 @@ class ForwardForwardNet(TransitionGraphMixin, nn.Module):
     bio_plausibility_score=0.8,
     credit_assignment_type="forward-only",
     requires_backward=False,
+    family="forward_only",
+    typical_lr_range=(0.01, 0.1),
     tags=["pepita", "forward-only", "local"],
-    description="PEPITA: Present the Error to Perturb the Input To modulate Activity.",
+    description="PEPITA: random feedback alignment variant.",
 )
 class PEPITA(TransitionGraphMixin, nn.Module):
     """

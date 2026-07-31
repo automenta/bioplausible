@@ -22,6 +22,7 @@ __all__ = [
 @register_model(
     "directed_ep",
     family="eqprop",
+    typical_lr_range=(0.001, 0.01),
     tags=["eqprop", "directed"],
 )
 class DirectedEP(BioModel):
@@ -34,7 +35,7 @@ class DirectedEP(BioModel):
         super().__init__(config, **kwargs)
 
         self.beta = self.config.beta
-        self.eq_steps = self.config.equilibrium_steps
+        self.eq_steps = self.config.max_steps
         self.lr = self.config.learning_rate
 
         hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)

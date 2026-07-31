@@ -48,6 +48,7 @@ def _kernel_backend_step(
     requires_backward=False,
     memory_complexity="O(1)",
     family="eqprop",
+    typical_lr_range=(0.001, 0.01),
     tags=["eqprop", "looped_mlp", "equilibrium"],
 )
 class LoopedMLP(EqPropModel):

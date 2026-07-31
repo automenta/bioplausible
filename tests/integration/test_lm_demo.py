@@ -16,11 +16,6 @@ import pathlib
 import pytest
 import torch
 
-from bioplausible.equitile.lm.data import (
-    CharacterTokenizer,
-    LMDataset,
-    create_shakespeare_dataset,
-)
 from bioplausible.equitile.lm.components import (
     FastEquiTileLayer,
     FastLMConfig,
@@ -28,10 +23,13 @@ from bioplausible.equitile.lm.components import (
     SwiGLUFeedForward,
     TileLocalAttention,
 )
+from bioplausible.equitile.lm.data import (
+    CharacterTokenizer,
+    LMDataset,
+    create_shakespeare_dataset,
+)
 from bioplausible.equitile.lm.fast_lm import (
     FastLMEquiTile,
-    create_fast_lm_medium,
-    create_fast_lm_shakespeare,
     create_fast_lm_small,
     create_fast_lm_tiny,
 )

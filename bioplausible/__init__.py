@@ -182,15 +182,6 @@ from bioplausible.zoo.models.eqprop import (
     MemoryEfficientLoopedMLP,
     TransformerEqProp,
 )
-
-# Re-export model-side classes from propagators package (two-tier arch)
-from bioplausible.zoo.propagators import (
-    PEPITA,
-    DifferenceTargetProp,
-    FabricPCGraphPCN,
-    ForwardForwardNet,
-    PredictiveCodingHybrid,
-)
 from bioplausible.zoo.propagators.eqprop import EqProp
 from bioplausible.zoo.propagators.fa import DirectFA, FeedbackAlignment
 
@@ -264,6 +255,7 @@ __all__ = [
     "TrainingMetrics",
     "TransformerEqProp",
     "VisionTask",
+    "_EquiTile",
     "build_trainer",
     "count_parameters",
     "create_data_loaders",
@@ -297,11 +289,4 @@ __all__ = [
     "zoo_optimizers",
     "zoo_propagators",
     "zoo_sparsity",
-    # Model-side re-exports (two-tier propagator/model architecture)
-    "DifferenceTargetProp",
-    "FabricPCGraphPCN",
-    "ForwardForwardNet",
-    "PEPITA",
-    "PredictiveCodingHybrid",
-    "_EquiTile",
 ]

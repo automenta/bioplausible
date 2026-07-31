@@ -45,6 +45,8 @@ from bioplausible.equitile.lm import (
 )
 from bioplausible.equitile.lm.training import (
     create_training_config,
+)
+from bioplausible.equitile.lm.training import (
     train_model as train_lm_model,
 )
 

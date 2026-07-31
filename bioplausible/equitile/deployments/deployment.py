@@ -152,14 +152,10 @@ class EquiTileExporter:
         logger.info("Model exported to %s", path)
         return path
 
-    def to_torchscript(
-        self,
-        path: str,
-        input_shape: tuple[int, ...],
-        method: Literal["trace", "script", "compile"] = "compile",
-        device: str = "cpu",
+    def export(
+        self, path: str, input_shape: tuple[int, ...], device: str = "cpu"
     ) -> str:
-        """Export to TorchScript or torch.compile format.
+        """Export model using torch.compile format.
 
         Parameters
         ----------
@@ -167,8 +163,6 @@ class EquiTileExporter:
             Output path
         input_shape : tuple
             Input tensor shape
-        method : str
-            Export method: 'compile' (recommended), 'trace', or 'script'
         device : str
             Device for export
 
@@ -176,12 +170,6 @@ class EquiTileExporter:
         -------
         str
             Path to exported model
-
-        Notes
-        -----
-        - 'compile': Uses torch.compile (recommended for Python 3.14+)
-        - 'trace': Uses torch.jit.trace (deprecated in Python 3.14+)
-        - 'script': Uses torch.jit.script (deprecated in Python 3.14+)
         """
         self.model.to(device)
         self.model.eval()
@@ -194,49 +182,22 @@ class EquiTileExporter:
         if not path.endswith(".pt"):
             path += ".pt"
 
-        # Export
-        if method == "compile":
-            # torch.compile returns an optimized module, save state dict instead
-            compiled_model = torch.compile(self.model, mode="reduce-overhead")
-            # Run once to trigger compilation
-            _ = compiled_model(dummy_input)
-            # Save state dict for compiled model
-            torch.save(
-                {
-                    "model_state_dict": compiled_model.state_dict(),
-                    "config": (
-                        self.model.config if hasattr(self.model, "config") else None
-                    ),
-                    "compiled": True,
-                },
-                path,
-            )
-            logger.info("Compiled model saved to %s", path)
-            return path
-
-        # Deprecated jit paths
-        import warnings
-
-        if method == "trace":
-            warnings.warn(
-                "torch.jit.trace is deprecated in Python 3.14+. "
-                "Use method='compile' to use torch.compile instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            scripted_model = torch.jit.trace(self.model, dummy_input)
-        else:
-            # script method
-            warnings.warn(
-                "torch.jit.script is deprecated in Python 3.14+. "
-                "Use method='compile' to use torch.compile instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            scripted_model = torch.jit.script(self.model)
-
-        scripted_model.save(path)
-        logger.info("Model exported to %s", path)
+        # torch.compile returns an optimized module, save state dict instead
+        compiled_model = torch.compile(self.model, mode="reduce-overhead")
+        # Run once to trigger compilation
+        _ = compiled_model(dummy_input)
+        # Save state dict for compiled model
+        torch.save(
+            {
+                "model_state_dict": compiled_model.state_dict(),
+                "config": (
+                    self.model.config if hasattr(self.model, "config") else None
+                ),
+                "compiled": True,
+            },
+            path,
+        )
+        logger.info("Compiled model saved to %s", path)
         return path
 
     def quantize_dynamic(

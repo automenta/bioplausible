@@ -17,7 +17,7 @@ All improvements are optional/configurable for ablation studies.
 """
 
 import math
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
@@ -100,40 +100,15 @@ class EnhancedEquiTile(EquiTile):
         output_dim: int,
         # Enhanced config
         enhanced_config: EnhancedEquiTileConfig | None = None,
-        # Backward compatibility
-        learning_rate: float = 0.01,
-        importance_lr: float = 0.001,
-        inference_steps: int = 10,
-        step_size: float = 0.1,
-        lambda_error: float = 0.1,
-        weight_decay: float = 1e-4,
-        dropout: float = 0.1,
-        gradient_clip: float = 1.0,
-        activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu",
-        task_type: Literal[
-            "classification", "regression", "binary", "multilabel"
-        ] = "classification",
-        mode: Literal["pc", "ep"] = "pc",
         **kwargs,
     ):
-        # Use enhanced config or create from parameters
+        # Use enhanced config or default
         if enhanced_config is None:
             enhanced_config = EnhancedEquiTileConfig(
                 neurons_per_tile=neurons_per_tile,
                 num_layers=num_layers,
                 tiles_per_layer=tiles_per_layer,
-                learning_rate=learning_rate,
-                importance_lr=importance_lr,
-                inference_steps=inference_steps,
-                step_size=step_size,
-                lambda_error=lambda_error,
-                weight_decay=weight_decay,
-                dropout=dropout,
-                gradient_clip=gradient_clip,
-                mode=mode,
-                task_type=task_type,
-                activation=activation,
-                **kwargs,  # Pass remaining kwargs to config
+                **kwargs,
             )
 
         # Store enhanced config as self.equitile_config (parent expects this)

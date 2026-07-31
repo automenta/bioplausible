@@ -28,6 +28,7 @@ class SimpleMLP(TransitionGraphMixin, nn.Module):
         self.fc1 = nn.Linear(dim, dim)
         self.fc2 = nn.Linear(dim, dim)
         self.fc3 = nn.Linear(dim, dim)
+        self.layers = nn.ModuleList([self.fc1, self.fc2, self.fc3])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = torch.relu(self.fc1(x))

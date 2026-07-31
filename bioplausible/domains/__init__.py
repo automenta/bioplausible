@@ -24,7 +24,7 @@ from bioplausible.domains.rl import RLTask
 from bioplausible.domains.scientific import ScientificTask
 from bioplausible.domains.tabular import TabularTask
 from bioplausible.domains.timeseries import TimeSeriesTask
-from bioplausible.domains.trainer import TaskProtocol, _TaskTrainer, _resolve_task_loss
+from bioplausible.domains.trainer import TaskProtocol, _resolve_task_loss, _TaskTrainer
 from bioplausible.domains.vision import VisionTask
 
 # Registry for domain tasks
