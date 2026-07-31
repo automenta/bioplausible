@@ -359,3 +359,143 @@ This plan is a **precondition**, not a substitute. Refactoring completion is the
 - **RESEARCH.md Phase 4.2** (KB synthesis) depends on Tier 1.6
 
 *Update this plan as refactors reveal additional debt. The snapshot tests added here become part of RESEARCH.md Phase 0's reproducibility infrastructure.*
+
+---
+
+## Appendix: Additional Architectural Findings (from Deep Codebase Study)
+
+These items emerged from a systematic architectural review of the 267-file codebase. They represent structural opportunities that don't fit neatly into the Tier 1-4 refactors but should inform future work. **Do not schedule as standalone refactors** — fold into relevant feature work from RESEARCH.md.
+
+### A1. Configuration Unification (Three-Layer Config Problem)
+**Files**: `bioplausible/core/config.py` (ModelConfig), `bioplausible/config/schema.py` (OmegaConf configs), `bioplausible/equitile/core/config.py` (EquiTileConfig + 7 factory functions)
+**Issue**: Three independent config hierarchies with manual conversions (`to_internal()`, `_build_model_config()`). No shared base class or conversion protocol. EquiTileConfig has 70+ flat fields; core ModelConfig has 25; OmegaConf configs have their own structure.
+**Impact**: Configuration errors are hard to trace; RESEARCH.md Phase 0.1 parity suite will need to construct configs in all three dialects.
+**Approach**: Define a `ConfigProtocol` with `to_internal() -> InternalModelConfig` and `from_internal(config: InternalModelConfig) -> Self`. Make all three config types implement it. Move factory functions to a `ConfigBuilder` that composes the three layers.
+
+### A2. Domain/Execution Task Duplication
+**Files**: `bioplausible/domains/base.py` (DomainTask ABC), `bioplausible/execution/task.py` (ExperimentTask dataclass), `bioplausible/validation/tracks/` (tracks consume tasks)
+**Issue**: Two task abstractions with different interfaces. `DomainTask` is ABC with `setup()`, `get_dataloader()`, `evaluate()`. `ExperimentTask` is a dataclass with tier, model_name, config dict. Validation tracks expect yet another format. No unified `TaskProtocol` used consistently.
+**Impact**: AutoScientist (execution layer) can't cleanly hand off to domain evaluation; validation tracks need adapters.
+**Approach**: Extract a `TaskProtocol` (PEP 544) that both satisfy. Make `ExperimentTask` carry a `DomainTask` instance. Validation tracks consume `TaskProtocol`.
+
+### A3. State Persistence Fragmentation (Multiple SQLite Databases)
+**Files**: `bioplausible/execution/_state.py` (bioplausible.db for Optuna), `bioplausible/knowledge/kb.py` (bioplausible_kb.db for KB), `bioplausible/validation/tracks/` (various artifact dirs), `checkpoints/` (model checkpoints)
+**Issue**: Four+ independent persistence layers with no cross-referencing. Optuna study doesn't link to KB entries; checkpoints don't link to trial IDs.
+**Impact**: RESEARCH.md Phase 4.2 (KB meta-analysis) cannot correlate hyperopt results with knowledge entries.
+**Approach**: Add a `persistence_id: str` (UUID) to every trial/experiment/checkpoint/KB entry. Create a lightweight `PersistenceIndex` (single table) that maps `persistence_id` → `{trial_id, kb_entry_id, checkpoint_path, track_id}`. Use existing `experiment_id` from KB as the key.
+
+### A4. Optuna Hard Dependency
+**Files**: `bioplausible/hyperopt/optuna_bridge.py`, `bioplausible/execution/_state.py`, `bioplausible/execution/engine.py` all import `optuna` at module level.
+**Issue**: Optuna is a required dependency, not optional. No abstraction layer — `create_study()`, `TPESampler`, `HyperbandPruner` are used directly. If a different backend is needed (Ray Tune, nevergrad), it's invasive.
+**Impact**: Blocks RESEARCH.md Phase 4.3 (surrogate-guided optimization with custom acquisition) which may want a different backend.
+**Approach**: Extract a `TrialBackend` protocol with `create_study()`, `suggest()`, `complete_trial()`, `get_best_trials()`. Implement `OptunaBackend` as the default. Make `hyperopt` import Optuna lazily inside the backend. Configuration chooses backend.
+
+### A5. ExecutionEngine / AutoScientistCampaign Split
+**Files**: `bioplausible/execution/engine.py` (ExecutionEngine — 900+ lines), `bioplausible/autoscientist/campaign.py` (AutoScientistCampaign — 300+ lines), `bioplausible/autoscientist/proposer.py`, `reasoner.py`, `bridge.py`
+**Issue**: Two overlapping autonomous agents. `ExecutionEngine` runs continuous trials with Optuna. `AutoScientistCampaign` uses LLM for hypothesis generation. They share no common interface; `campaign.py` imports `engine.py` but not vice versa. `bridge.py` attempts to connect them but is underused.
+**Impact**: RESEARCH.md Phase 4 (AutoScientist) will need to pick one or unify. Duplicate state management, duplicate reporting.
+**Approach**: Define a `DiscoveryEngine` protocol (`run_cycle() -> list[TrialResult]`, `get_state() -> EngineState`). Make `ExecutionEngine` and `AutoScientistCampaign` implement it. Create a `CompositeEngine` that alternates or delegates based on tier.
+
+### A6. Parallel Execution Fragmentation
+**Files**: `bioplausible/hyperopt/parallel_runner.py` (ParallelTrialRunner), `bioplausible/execution/engine.py` (uses ParallelTrialRunner), `bioplausible/equitile/training/async_execution.py` (AsyncEquiTile), `bioplausible/equitile/training/distributed.py` (DistributedEquiTile), `bioplausible/equitile/training/_nccl.py`
+**Issue**: Four parallel execution subsystems with no shared primitives. `ParallelTrialRunner` uses `concurrent.futures.ProcessPoolExecutor`. `AsyncEquiTile` uses `asyncio.TaskGroup`. `DistributedEquiTile` uses NCCL. No common `WorkerPool` abstraction.
+**Impact**: Resource contention (GPU memory, CPU) when multiple run simultaneously. No unified backpressure.
+**Approach**: Extract a `ComputePool` protocol (`submit(fn)`, `map(fn, iterable)`, `shutdown()`). Implement `ProcessPool`, `AsyncTaskGroup`, `NCCLCommunicator` as backends. `ExecutionEngine` and `EquiTile` both take a `ComputePool` dependency.
+
+### A7. Missing Protocol Interfaces (ABCs over Protocols)
+**Files**: `bioplausible/domains/base.py` (DomainTask ABC), `bioplausible/core/model.py` (BioModel ABC), `bioplausible/zoo/propagators/base.py` (BioOptimizer/LearningRuleOptimizer ABCs), `bioplausible/evaluation/base.py` (EvaluatorBase ABC)
+**Issue**: AGENTS.md says "Prefer `Protocol` over ABCs". The codebase uses ABCs for key interfaces. Protocols enable structural subtyping (no inheritance required) which is critical for cross-package composition (e.g., EquiTile + Zoo models).
+**Impact**: New algorithm implementations must inherit from specific base classes rather than just implementing the structural contract.
+**Approach**: For each ABC, define a matching `Protocol` (e.g., `DomainTaskProtocol`, `BioModelProtocol`). Keep ABCs as convenience base classes but type-hint against protocols in consumers. This is a gradual migration — do when touching the ABC file for Tier 1-3 work.
+
+### A8. Global Mutable State Audit
+**Files**: `bioplausible/core/registry.py` (`Registry._components` class-level dict), `bioplausible/validation/tracks/track_registry.py` (`ALL_TRACKS` module-level dict), `bioplausible/knowledge/kb.py` (`DEFAULT_KB` lazy via `__getattr__`), `bioplausible/execution/engine.py` (module-level `logging.basicConfig`)
+**Issue**: Multiple global singletons with mutable state. Not thread-safe (PEP 703). `Registry._components` is modified at import time via decorators. `ALL_TRACKS` is populated at import. `logging.basicConfig` in `engine.py` affects root logger for entire process.
+**Impact**: Test isolation issues; parallel execution may corrupt state; `import bioplausible` has side effects (registration).
+**Approach**: 
+- `Registry`: Make it a true singleton class with `instance()` method; clear between tests via fixture.
+- `ALL_TRACKS`: Move to a `TrackRegistry` class with `register()` and `get_all()`.
+- `logging.basicConfig`: Remove from `engine.py`; configure in CLI entry points only.
+
+### A9. Registry Metadata Inference Complexity
+**File**: `bioplausible/core/registry.py:254-277` (`_infer_metadata` uses `object.__setattr__` on frozen dataclass)
+**Issue**: The registry bypasses frozen dataclass immutability to infer metadata from component classes. This is a workaround for the registration API design where metadata is declared both on the component class and in the decorator.
+**Impact**: Obscures mutation; makes `ComponentMetadata` not truly frozen; harder to reason about.
+**Approach**: Redesign registration to be explicit: decorator provides ALL metadata; component class is just implementation. Remove `_infer_metadata` and `object.__setattr__` hacks.
+
+### A10. Validation Track Magic Registration
+**File**: `bioplausible/validation/tracks/track_registry.py:33-64` (`register_tracks_from_module` inspects for `track_` functions or TRACKS dict)
+**Issue**: Track discovery relies on naming conventions and `inspect.getmembers`. Fragile; hard to know which tracks exist without running; no static type checking.
+**Impact**: Adding a track is error-prone; IDE can't autocomplete track IDs; CI can't validate track signatures.
+**Approach**: Replace with explicit registration: each track module exports a `TRACKS: dict[int, TrackFn]` dict. `track_registry.py` imports and merges them. Add a `TrackProtocol` for the function signature.
+
+### A11. EquiTile Configuration Factory Sprawl
+**File**: `bioplausible/equitile/core/config.py` (7 factory functions: `create_production_config`, `create_research_config`, `create_fast_config`, `create_enhanced_config`, `create_dynamic_config`, etc.)
+**Issue**: 7 factory functions with overlapping parameter spaces. No clear taxonomy — "production" vs "research" vs "enhanced" are not mutually exclusive. Each has 50+ kwargs. Hard to compose.
+**Impact**: RESEARCH.md Phase 1.7.1 (EquiTile scaling sweep) needs clean config composition, not preset selection.
+**Approach**: Replace factories with a `EquiTileConfigBuilder` (fluent API) that composes base → domain → mode → hardware overrides. Presets become named builder configurations, not functions.
+
+### A12. Knowledge Base — Feature Bloat in Single Class
+**File**: `bioplausible/knowledge/kb.py` (950 lines, 40+ methods: CRUD, vector search, surrogate training, symbolic regression, causal discovery, meta-analysis, export)
+**Issue**: `KnowledgeBase` is a god class mixing storage, search, ML (surrogates), statistics, and analysis. Violates SRP. Hard to test; surrogate training pulls in sklearn/pandas at import time.
+**Impact**: RESEARCH.md Phase 4.2 (KB meta-analysis) will add more methods. Circular imports risk (KB imports metamodel which imports KB).
+**Approach**: Split into: `KnowledgeStore` (CRUD + vector search), `SurrogateModelRegistry` (training/prediction), `MetaAnalyzer` (scaling laws, symbolic regression, causal discovery), `KnowledgeBase` (facade composing the three). Use dependency injection.
+
+### A13. Leaderboard / Validation Track Disconnect
+**Files**: `bioplausible/leaderboard/generator.py`, `bioplausible/validation/tracks/track_registry.py`
+**Issue**: Leaderboard generates markdown from experiment results. Validation tracks produce structured results. They don't share a common result schema. Leaderboard re-queries databases; tracks don't publish to leaderboard automatically.
+**Impact**: Manual step to update leaderboard; results may diverge.
+**Approach**: Define a `BenchmarkResult` protocol (already exists in `evaluation/__init__.py`). Validation tracks emit `BenchmarkResult` events. Leaderboard subscribes and updates incrementally.
+
+### A14. Graph Domain Isolation
+**Files**: `bioplausible/graph/` (inference.py, initialization.py, nodes.py, topology.py, training.py), `bioplausible/domains/graph.py`
+**Issue**: Graph has its own training/inference modules separate from the domains abstraction. `domains/graph.py` wraps some graph functionality but not all. Two independent graph implementations.
+**Impact**: RESEARCH.md Phase 2.3 (Graph domain) may need to unify or pick one.
+**Approach**: Move `graph/training.py` logic into `domains/graph.py` as a `GraphTask` implementation. Keep `graph/topology.py` and `graph/nodes.py` as utilities. Deprecate duplicate code.
+
+### A15. P2P / Distributed Separation
+**Files**: `bioplausible/p2p/` (DHT, evolution, state), `bioplausible/equitile/training/distributed.py` (DistributedEquiTile with NCCL)
+**Issue**: Two distributed training approaches: P2P (Kademlia DHT, decentralized) and EquiTile NCCL (centralized, GPU). No shared abstraction; they serve different use cases but could share `Communicator` protocol.
+**Impact**: RESEARCH.md Phase 10 (Distributed & P2P) will need to integrate both.
+**Approach**: Define a `Communicator` protocol (`all_reduce`, `broadcast`, `barrier`). Implement `NCCLCommunicator` and `DHTCommunicator`. `DistributedEquiTile` and `P2PEvolution` both take `Communicator`.
+
+### A16. Test Architecture — Integration Test Bloat
+**Files**: `tests/integration/` (35 files, some >15KB: `test_smoke_training.py` 16KB, `test_lm_demo.py` 19KB, `test_equitile_domains.py` 16KB)
+**Issue**: Many "integration" tests are actually end-to-end training runs (download MNIST, train for epochs, assert accuracy). They're slow, flaky, and hard to debug. They duplicate unit test coverage.
+**Impact**: CI slow; hard to isolate failures; coverage floor maintained by slow tests, not unit tests.
+**Approach**: 
+- Move true integration tests (cross-module) to `tests/integration/` (keep ~10).
+- Move training smoke tests to `tests/slow/` (already exists, mark with `@pytest.mark.slow`).
+- Add property-based tests in `tests/property/` for pure functions (registry, config, kernels).
+- Use synthetic data fixtures for fast unit tests (already in `conftest.py`).
+
+### A17. Property-Based Testing — Underutilized
+**Files**: `tests/property/` (exists but minimal)
+**Issue**: `hypothesis` is in dev dependencies but few property tests exist. Pure functions in `core/registry.py` (`_QueryFilter.matches`), `core/config.py` (`resolve_hidden_dims`), `acceleration/kernels.py` are excellent candidates.
+**Impact**: Missing opportunity for high-confidence refactoring guards (especially for Tier 1.2, 1.3).
+**Approach**: Add `@given` tests for:
+- `_QueryFilter.matches` with strategies for `ComponentMetadata`
+- Config resolution with various `hidden_dim`/`num_layers` combos
+- Kernel numerical properties (transpose, matmul equivalences)
+- Registry query round-trips
+
+### A18. CLI Entry Point Consolidation
+**Files**: `pyproject.toml` (4 scripts), `bioplausible/cli/__main__.py`, `bioplausible/cli/lab.py`, `bioplausible/cli/run.py`, `bioplausible/cli/rank.py`, `bioplausible/execution/cli.py`
+**Issue**: Multiple CLI modules with overlapping commands. `bioplausible/cli` is the main user-facing CLI; `execution/cli.py` has `main_scientist`, `main_reporter`. No unified command hierarchy.
+**Impact**: User confusion; hard to discover features; `biopl-scientist` vs `bioplausible run` do similar things.
+**Approach**: Single `bioplausible` CLI with subcommands (`train`, `search`, `scientist`, `report`, `leaderboard`, `validate`). Migrate all entry points to `cli/` using `typer` or `click`.
+
+### A19. Experiment Presets — Untyped Configuration
+**Files**: `bioplausible/experiments/presets.py`
+**Issue**: Many preset configurations as raw dicts. No validation, no type checking, no documentation of what each preset tests. Used by validation tracks and CI but not integrated with config schema.
+**Impact**: Hard to add new presets; drift between preset and actual config schema.
+**Approach**: Convert presets to `ExperimentConfig` (OmegaConf) objects. Validate at import time. Generate preset documentation from type annotations.
+
+### A20. Two-Tier Architecture (Model vs Propagator) — Cross-Reference Maintenance
+**Files**: `bioplausible/__init__.py` (re-exports model-side classes from propagators), `bioplausible/core/registry.py` (`_PROPAGATOR_TO_MODEL` mapping), `bioplausible/zoo/propagators/__init__.py`
+**Issue**: Some algorithms exist in both tiers (FF, PEPITA, TargetProp, PCN are models but re-exported as propagators). The `_PROPAGATOR_TO_MODEL` mapping is manually maintained. When a new model-side algorithm is added, it's easy to forget the cross-reference.
+**Impact**: AutoScientist may query wrong tier; users get confusing errors.
+**Approach**: Make the two-tier distinction a first-class concept in the registry:
+- `ComponentCategory.MODEL` and `ComponentCategory.PROPAGATOR` are separate
+- Algorithms that are MODEL-ONLY register only as models; registry returns a typed error with the model name when queried as propagator
+- Remove manual `_PROPAGATOR_TO_MODEL` mapping; use a `ModelOnly` marker in metadata

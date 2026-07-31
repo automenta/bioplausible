@@ -1,6 +1,6 @@
 # Bioplausible Research Roadmap
 
-**Goal**: Transform Bioplausible from a sophisticated framework into a *discovery engine* that produces breakthrough results demonstrating bio-plausible learning can match or exceed backpropagation in regimes where backprop fails.
+**Goal**: Develop Bioplausible into a *discovery engine* that produces breakthrough results demonstrating bio-plausible learning can match or exceed backpropagation in regimes where backprop fails.
 
 **Strategy**: GPU-first, low-hanging-fruit prioritized, user-recruiting milestones. Defer non-GPU (neuromorphic hardware, analog simulation) until GPU validation is solid.
 
@@ -23,7 +23,9 @@ Automated, compute-matched comparison infrastructure:
 **Target models for parity**: `eqprop_mlp`, `directed_ep`, `feedback_alignment`, `standard_fa`, `forward_forward`, `pepita`, `equitile`, `equitile_ep`
 
 **Tests**: MNIST, CIFAR-10, Tiny Shakespeare, Penn Treebank
-**Metrics**: Accuracy, FLOPs/sample, peak memory, wall-time/epoch, energy estimate (Joules)
+**Metrics**: Accuracy, FLOPs/sample, peak memory, wall-time/epoch, energy estimate (Joules).  Be explicit about the Energy model: GPU TDP × utilization × wall-time, or an operation-count-based model (e.g., Horowitz 2014 energy per FLOP)? The former is more honest; the latter is more portable - report both.
+
+Compute-matched definition: "same FLOPs" is ambiguous for equilibrium methods, since settling steps aren't fixed at graph-construction time the way backprop's forward/backward pass is. Decide up front whether you match wall-clock, FLOPs, or settling-steps-to-convergence, and report the tradeoff explicitly rather than picking whichever makes EqProp look best.
 
 ### 0.2 Registry Metadata Completeness Audit
 **File**: `bioplausible/validation/registry_audit.py`
@@ -47,6 +49,8 @@ Verify every registered component for complete, calibrated metadata:
 - Environment capture: git commit, torch/cuda versions, dependencies hash
 - Artifact versioning: model checkpoints, configs, logs with content-addressable storage
 - CI smoke test: `biopl-repro-check` runs 1-epoch parity on all models nightly
+
+Gradient equivalence testing (5.2) should be P0, not P1. If EqProp claims approximate gradient equivalence to backprop, that claim needs finite-difference verification from day one. Every EqProp variant should ship with a passing gradient check before it's registered. Otherwise you'll discover subtle bugs later that invalidate published numbers.
 
 ---
 
@@ -309,6 +313,9 @@ Current: Stores entries. Target: **Generates insights**.
 - [ ] Slack/Discord notifications for milestone results
 - [ ] Interactive hypothesis editing
 
+
+Note: explicitly sequence Phase 4 after Phase 0 + Phase 5.2/5.3 are complete, not in parallel. Otherwise AutoScientist will generate confident-sounding hypotheses on top of unvalidated or buggy numbers, which is a credibility risk once you're trying to recruit users/contributors.
+
 ---
 
 ## Phase 5: Validation Framework — Scientific Rigor (GPU-Complete)
@@ -325,7 +332,7 @@ Current: Stores entries. Target: **Generates insights**.
 | Hardware (GPU/CPU/neuromorphic) | ❌ | P1 |
 | Application (vision/language/RL) | ✅ | — |
 | Architecture Comparison | ✅ | — |
-| Negative Results (NEBC) | 🔄 | P1 |
+| Negative Results | 🔄 | P1 |
 
 **P1**: Implement missing tracks with standardized protocols.
 
@@ -344,6 +351,9 @@ Current: Stores entries. Target: **Generates insights**.
 - [ ] Multiple comparison correction (Benjamini-Hochberg)
 - [ ] Power analysis for experiment sizing
 - [ ] Bayesian A/B testing (rope, HDI)
+
+Right now 5.3 (bootstrap CIs, effect sizes, multiple-comparison correction) is listed as a separate P1 deliverable from 0.1 (parity suite), but the parity suite explicitly says it needs "confidence intervals, effect sizes." That's circular unless 5.3's utilities are built first or concurrently.  Fix the dependency order in the file map: statistics.py should be a prerequisite import for backprop_parity.py, not a parallel-track deliverable. Otherwise you'll ship a "publication ready" parity table that then needs retrofitting with proper CIs.
+
 
 ### 5.4 Negative Result Documentation — **P1**
 **File**: `bioplausible/analysis/failure_manifesto.py` — structured negative results:
@@ -367,6 +377,9 @@ Address the "pure local learning underfits complex patterns" hypothesis:
 - `equitile_global_readout`: EquiTile tiles + global attention readout
 - `progressive_locality`: Start global (backprop), anneal to local (EqProp) over training
 - Registration: full metadata, parity tests, AutoScientist discoverable
+
+`progressive_locality` (start backprop, anneal to EqProp) is potentially the most impactful idea in the "New Model" table. It sidesteps the cold-start problem of pure local learning and gives a principled interpolation between the two regimes. Consider promoting this to Phase 1 or 2.  If it just recovers backprop performance because the "anneal to local" phase happens after most learning is already done, it's not actually demonstrating bio-plausible learning power — it's demonstrating backprop with cleanup. Design the ablation explicitly to test how early you can start annealing and still retain performance, and report where the crossover breaks.
+This should probably get its own dedicated ablation in 7.4 rather than being folded generically into "hybrid architectures."
 
 ### 6.2 Spectral/Normalization Variants for Stability
 **Files**: `bioplausible/zoo/models/spectral/`, `bioplausible/zoo/optimizers/spectral.py`
@@ -541,18 +554,18 @@ Beyond layered grids:
 
 ## Milestone Schedule (GPU-First)
 
-| Week | Milestone | Deliverable | Recruitment Signal |
-|------|-----------|-------------|-------------------|
-| 1-2 | Foundation | Parity suite, metadata audit, reproducibility | "Run `pytest tests/validation/test_parity.py` — see exactly how close we are to backprop" |
-| 3-4 | EqProp/MEP Portfolio | All EqProp variants working + Triton kernels | "EqProp matches backprop on MNIST/CIFAR with 10x less memory" |
-| 4-6 | EquiTile Core | Stable core + ConvEquiTile + LMEquiTile demos | "Train EquiTile on CIFAR-10 in 5 min on single GPU" |
-| 5-6 | Validation Tracks | Scaling, Signal, Hardware, NEBC tracks complete | "Automated scaling law extraction from your experiments" |
-| 6-8 | Analysis Suite | Dynamics, Pareto, Ablation, Scaling laws | "One command: `biopl-analyze experiment.db --pareto`" |
-| 7-9 | AutoScientist v1 | CoT reasoning + KB synthesis + campaign persistence | "Leave it running overnight; wake up to 50 tested hypotheses" |
-| 8-10 | EquiTile Domains | RL, Graph, TimeSeries benchmarks published | "EquiTile beats backprop on continual learning benchmarks" |
-| 10-12 | Deployment | ONNX export + inference server | "Deploy EquiTile to production in 3 commands" |
-| 12-14 | Distributed | Multi-GPU + P2P coordinator | "Scale to 8 GPUs with one config change" |
-| 14+ | Neuromorphic | Loihi 2 / SpiNNaker deployment | "Same EquiTile code runs on neuromorphic hardware" |
+| Milestone | Deliverable | Recruitment Signal |
+|-----------|-------------|--------------------|
+| Foundation | Parity suite, metadata audit, reproducibility | "Run `pytest tests/validation/test_parity.py` — see exactly how close we are to backprop" |
+| EqProp/MEP Portfolio | All EqProp variants working + Triton kernels | "EqProp matches backprop on MNIST/CIFAR with 10x less memory" |
+| EquiTile Core | Stable core + ConvEquiTile + LMEquiTile demos | "Train EquiTile on CIFAR-10 in 5 min on single GPU" |
+| Validation Tracks | Scaling, Signal, Hardware, NEBC tracks complete | "Automated scaling law extraction from your experiments" |
+| Analysis Suite | Dynamics, Pareto, Ablation, Scaling laws | "One command: `biopl-analyze experiment.db --pareto`" |
+| AutoScientist v1 | CoT reasoning + KB synthesis + campaign persistence | "Leave it running overnight; wake up to 50 tested hypotheses" |
+| EquiTile Domains | RL, Graph, TimeSeries benchmarks published | "EquiTile beats backprop on continual learning benchmarks" |
+| Deployment | ONNX export + inference server | "Deploy EquiTile to production in 3 commands" |
+| Distributed | Multi-GPU + P2P coordinator | "Scale to 8 GPUs with one config change" |
+| Neuromorphic | Loihi 2 / SpiNNaker deployment | "Same EquiTile code runs on neuromorphic hardware" |
 
 ---
 
@@ -582,6 +595,9 @@ Beyond layered grids:
 | **Meta-Learned β Schedule** | EqProp | Medium | Learned nudge annealing |
 | **Energy-Based Regularization** | All | Low | Contractive dynamics → robustness |
 
+
+Mixture-of-Tiles (MoT) is listed as medium effort, but if OptimizedLMEquiTile already implements it (the table says ✅), then the research question shifts to: does sparse tile activation actually help, or does it just add routing overhead? The ablation framework (7.4) should test this explicitly.   Elevate this specific ablation (dense vs. sparse tile routing, controlling for parameter count and compute) to a named flagship experiment (1.7.5), not just a footnote in 7.4 — it's testable now with OptimizedLMEquiTile, doesn't require new infrastructure, and gives a concrete negative-or-positive result either way.
+
 ---
 
 ## Tool/Analysis Gaps
@@ -601,7 +617,7 @@ Beyond layered grids:
 ## Recruitment Strategy
 
 ### For Users (Researchers/Engineers)
-- **5-minute Colab demo** → "See EquiTile train on your data"
+- **5-minute Colab demo** → "See <MODEL> train on your data"
 - **Parity benchmark results** → "Here's exactly where we match/beat backprop"
 - **Leaderboard** → "Compare your method against 50+ bio-plausible baselines"
 - **AutoScientist** → "Automate your architecture search"
@@ -620,6 +636,8 @@ Beyond layered grids:
 ---
 
 ## Success Metrics (Track in Knowledge Base)
+
+Note: the provided numbers in the following chart are only *examples*; do not take seriously/literally.
 
 | Metric | Target (6 mo) | Target (12 mo) |
 |--------|---------------|----------------|
@@ -652,8 +670,7 @@ Beyond layered grids:
 2. **Registry-driven**: New components auto-discoverable by AutoScientist/hyperopt
 3. **Reproducible by default**: Seeds, env capture, artifact versioning mandatory
 4. **Publishable output**: Every experiment generates paper-ready figures/tables
-5. **Negative results included**: NEBC track = first-class citizen
-6. **Low-friction contribution**: `register_model` decorator + CI validation = 5 min to add algorithm
+5. **Low-friction contribution**: `register_model` decorator + CI validation = 5 min to add algorithm
 
 ---
 
@@ -702,21 +719,6 @@ bioplausible/
 ├── utils/reproducibility.py        # NEW P0
 └── validation/tracks/              # COMPLETE registration
 ```
-
----
-
-## Immediate Next Actions (Unordered)
-
-- [ ] Implement `backprop_parity.py` with CLI
-- [ ] Run EquiTile scaling sweep (Phase 1.7.1)
-- [ ] Run EqProp family parity on CIFAR-10 (Phase 1.7.2)
-- [ ] Harden AutoScientist LLM prompts with CoT templates
-- [ ] Add symbolic regression to KB meta-analysis
-- [ ] Create tutorial gallery (3 notebooks minimum)
-- [ ] Set up nightly CI with parity smoke test
-- [ ] Register hybrid local-global models (Phase 6.1)
-- [ ] Implement gradient equivalence testing (Phase 5.2)
-- [ ] Build `biopl-scientist --demo` one-command demo
 
 ---
 
