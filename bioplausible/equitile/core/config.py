@@ -5,8 +5,8 @@ EquiTile Configuration Classes
 Consolidated configuration for all EquiTile components.
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Literal
+from dataclasses import dataclass, field, fields
+from typing import Literal
 
 # =============================================================================
 # Core Configuration
@@ -442,7 +442,7 @@ def create_production_config(
     neurons_per_tile: int = 64,
     num_layers: int = 4,
     tiles_per_layer: int = 4,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> EquiTileConfig:
     """Create a production-ready configuration."""
     return EquiTileConfig(
@@ -461,7 +461,7 @@ def create_research_config(
     neurons_per_tile: int = 64,
     num_layers: int = 4,
     tiles_per_layer: int = 4,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> EquiTileConfig:
     """Create a research configuration for EP studies."""
     return EquiTileConfig(
@@ -481,7 +481,7 @@ def create_fast_config(
     neurons_per_tile: int = 32,
     num_layers: int = 3,
     tiles_per_layer: int = 2,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> EquiTileConfig:
     """Create a fast configuration for prototyping."""
     return EquiTileConfig(
@@ -498,7 +498,7 @@ def create_enhanced_config(
     use_layer_norm: bool = True,
     use_curriculum: bool = True,
     curriculum_stages: int = 5,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> EnhancedEquiTileConfig:
     """Create enhanced EP configuration."""
     return EnhancedEquiTileConfig(
@@ -512,14 +512,22 @@ def create_enhanced_config(
 def create_dynamic_config(
     growth_enabled: bool = True,
     prune_enabled: bool = True,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> DynamicEquiTileConfig:
     """Create dynamic tile configuration."""
+    growth_fields = {f.name for f in fields(TileGrowthConfig)}
+    reserved = {"growth_enabled", "prune_enabled"}
+    growth_kwargs = {
+        k: v for k, v in kwargs.items() if k in growth_fields and k not in reserved
+    }
+    dynamic_kwargs = {k: v for k, v in kwargs.items() if k not in growth_fields}
     return DynamicEquiTileConfig(
         growth=TileGrowthConfig(
-            growth_enabled=growth_enabled, prune_enabled=prune_enabled, **kwargs
+            growth_enabled=growth_enabled,
+            prune_enabled=prune_enabled,
+            **growth_kwargs,
         ),
-        **kwargs,
+        **dynamic_kwargs,
     )
 
 
@@ -596,4 +604,4 @@ class LMEquiTileConfig:
     step_size: float = 0.1
     beta: float = 0.1
     activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu"
-    equitile_kwargs: dict[str, Any] = field(default_factory=dict)
+    equitile_kwargs: dict[str, object] = field(default_factory=dict)

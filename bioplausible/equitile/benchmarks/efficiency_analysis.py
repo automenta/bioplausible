@@ -15,10 +15,13 @@ Example
 >>> print(f"Parameter efficiency score: {result.efficiency_score:.2f}")
 """
 
+import logging
 from dataclasses import dataclass
 
 import torch
 from torch import nn
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "EfficiencyAnalyzer",
@@ -507,7 +510,7 @@ def compare_efficiency(
     }
 
     for name, model in models:
-        print(f"\nAnalyzing {name}...")
+        logger.info(f"\nAnalyzing {name}...")
 
         # Parameter efficiency
         param_result = analyze_parameter_efficiency(model, val_loader, device)

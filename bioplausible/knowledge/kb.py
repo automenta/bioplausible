@@ -15,6 +15,8 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
+from bioplausible.core.exceptions import KnowledgeBaseError
+
 # Optional dependencies for vector search
 try:
     import faiss
@@ -98,7 +100,7 @@ class KnowledgeBase:
             try:
                 self.embedding_model = SentenceTransformer(embedding_model)
                 logger.info("Loaded embedding model: %s", embedding_model)
-            except Exception as e:
+            except (OSError, RuntimeError, ValueError) as e:
                 logger.warning("Failed to load embedding model: %s", e)
 
         # Load seed data if empty
@@ -258,7 +260,7 @@ class KnowledgeBase:
         try:
             embedding = self.embedding_model.encode(text, normalize_embeddings=True)
             return embedding.astype(np.float32)
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.warning("Embedding failed: %s", e)
             return None
 
@@ -739,9 +741,9 @@ class KnowledgeBase:
             return mm.extract_symbolic_rules(
                 target_metric=target_metric, focus_model=focus_model
             )
-        except Exception as e:
-            logger.warning("Symbolic rule extraction failed: %s", e)
-            return [f"Symbolic analysis unavailable: {e}"]
+        except (sqlite3.Error, KeyError, ValueError) as e:
+            logger.exception("Symbolic rule extraction failed")
+            raise KnowledgeBaseError("Symbolic rule extraction failed") from e
 
     def compute_algorithm_similarity(self) -> dict[str, dict[str, float]]:
         """
@@ -760,9 +762,9 @@ class KnowledgeBase:
             if sim_df.empty:
                 return {}
             return sim_df.to_dict()
-        except Exception as e:
-            logger.warning("Algorithm similarity failed: %s", e)
-            return {}
+        except (sqlite3.Error, KeyError, ValueError) as e:
+            logger.exception("Algorithm similarity failed")
+            raise KnowledgeBaseError("Algorithm similarity computation failed") from e
 
     def train_surrogate(
         self,
@@ -828,9 +830,9 @@ class KnowledgeBase:
             logger.info("Trained surrogate %s with R2=%s", surrogate_id, score)
             return surrogate_id
 
-        except Exception as e:
-            logger.warning("Surrogate training failed: %s", e)
-            return None
+        except (sqlite3.Error, KeyError, ValueError) as e:
+            logger.exception("Surrogate training failed")
+            raise KnowledgeBaseError("Surrogate training failed") from e
 
     def predict_outcome(
         self,
@@ -855,9 +857,9 @@ class KnowledgeBase:
             # This is a simplified prediction - in production,
             # we'd load the actual saved model
             return float(surrogate.get("performance", {}).get("r2", 0.0))
-        except Exception as e:
-            logger.warning("Prediction failed: %s", e)
-            return 0.0
+        except (KeyError, ValueError, TypeError) as e:
+            logger.exception("Prediction failed")
+            raise KnowledgeBaseError("Surrogate prediction failed") from e
 
     def run_causal_analysis(
         self,
@@ -876,7 +878,6 @@ class KnowledgeBase:
             Dict with causal analysis results.
         """
         try:
-            import numpy as np
             import pandas as pd
 
             exps = self.list_experiments(limit=500)
@@ -918,9 +919,9 @@ class KnowledgeBase:
                 "ranked_factors": sorted_corr,
                 "n_samples": len(records),
             }
-        except Exception as e:
-            logger.warning("Causal analysis failed: %s", e)
-            return {"error": str(e)}
+        except (sqlite3.Error, KeyError, ValueError) as e:
+            logger.exception("Causal analysis failed")
+            raise KnowledgeBaseError("Causal analysis failed") from e
 
 
 # Factory function

@@ -18,6 +18,7 @@ Example
 """
 
 import json
+import logging
 import math
 import random
 import time
@@ -36,6 +37,8 @@ import torch
 from bioplausible.equitile.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
 from bioplausible.equitile.lm.data import create_shakespeare_dataset
 from bioplausible.equitile.lm.fast_lm import FastLMConfig, FastLMEquiTile
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Reproducibility Framework
@@ -452,33 +455,33 @@ class RigorousBenchmark:
 
     def run_comparison(self) -> dict[str, BenchmarkResult]:
         """Run comparison between EquiTile and NanoGPT."""
-        print("=" * 70)
-        print("Rigorous Benchmark: EquiTile vs NanoGPT")
-        print("=" * 70)
-        print(f"Number of runs: {self.config.num_runs}")
-        print(f"Confidence level: {self.config.confidence_level * 100:.0f}%")
-        print(f"Device: {self.config.device}")
-        print()
+        logger.info("=" * 70)
+        logger.info("Rigorous Benchmark: EquiTile vs NanoGPT")
+        logger.info("=" * 70)
+        logger.info(f"Number of runs: {self.config.num_runs}")
+        logger.info(f"Confidence level: {self.config.confidence_level * 100:.0f}%")
+        logger.info(f"Device: {self.config.device}")
+        logger.info()
 
         # Create dataset (same for both models)
-        print("Loading dataset...")
+        logger.info("Loading dataset...")
         train_loader, val_loader, tokenizer = create_shakespeare_dataset(
             batch_size=self.config.batch_size,
             seq_length=self.config.seq_length,
             num_workers=0,
         )
         vocab_size = tokenizer.vocab_size
-        print(f"Vocabulary size: {vocab_size}")
-        print(f"Train batches: {len(train_loader)}")
-        print(f"Val batches: {len(val_loader)}")
-        print()
+        logger.info(f"Vocabulary size: {vocab_size}")
+        logger.info(f"Train batches: {len(train_loader)}")
+        logger.info(f"Val batches: {len(val_loader)}")
+        logger.info()
 
         results = {}
 
         # NanoGPT
-        print("-" * 70)
-        print("Benchmarking NanoGPT...")
-        print("-" * 70)
+        logger.info("-" * 70)
+        logger.info("Benchmarking NanoGPT...")
+        logger.info("-" * 70)
         nanogpt_config = NanoGPTConfig(
             vocab_size=vocab_size,
             block_size=self.config.seq_length,
@@ -490,20 +493,20 @@ class RigorousBenchmark:
         )
         nanogpt = NanoGPTModel(nanogpt_config)
         nanogpt_params = sum(p.numel() for p in nanogpt.parameters())
-        print(f"Parameters: {nanogpt_params:,}")
+        logger.info(f"Parameters: {nanogpt_params:,}")
 
         results["nanogpt"] = self.run_single_model(
             nanogpt, "NanoGPT", train_loader, val_loader
         )
-        print(
+        logger.info(
             f"Throughput: {results['nanogpt'].throughput_stats.mean:,.0f} ± {results['nanogpt'].throughput_stats.std:.0f} tok/s"
         )
-        print()
+        logger.info()
 
         # EquiTile
-        print("-" * 70)
-        print("Benchmarking EquiTile...")
-        print("-" * 70)
+        logger.info("-" * 70)
+        logger.info("Benchmarking EquiTile...")
+        logger.info("-" * 70)
         equitile_config = FastLMConfig(
             vocab_size=vocab_size,
             embed_dim=self.config.embed_dim,
@@ -518,15 +521,15 @@ class RigorousBenchmark:
         )
         equitile = FastLMEquiTile(equitile_config)
         equitile_params = sum(p.numel() for p in equitile.parameters())
-        print(f"Parameters: {equitile_params:,}")
+        logger.info(f"Parameters: {equitile_params:,}")
 
         results["equitile"] = self.run_single_model(
             equitile, "equitile", train_loader, val_loader
         )
-        print(
+        logger.info(
             f"Throughput: {results['equitile'].throughput_stats.mean:,.0f} ± {results['equitile'].throughput_stats.std:.0f} tok/s"
         )
-        print()
+        logger.info()
 
         # Save results
         self._save_results(results)
@@ -572,7 +575,7 @@ class RigorousBenchmark:
         with Path(filepath).open("w") as f:
             json.dump(data, f, indent=2)
 
-        print(f"Results saved to {filepath}")
+        logger.info(f"Results saved to {filepath}")
 
     def report(self, results: dict[str, BenchmarkResult]) -> str:
         """Generate comprehensive report."""
@@ -681,7 +684,7 @@ class RigorousBenchmark:
         lines.append("=" * 70)
 
         report = "\n".join(lines)
-        print(report)
+        logger.info(report)
 
         # Save report
         report_path = (

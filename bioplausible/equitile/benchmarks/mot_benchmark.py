@@ -14,7 +14,11 @@ Usage
 >>> output, tile_importance = mot(x)
 """
 
+import logging
+
 import torch
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Benchmark
@@ -84,8 +88,8 @@ def benchmark_mot(
 
 
 if __name__ == "__main__":
-    print("MoT Kernel Benchmark")
-    print("=" * 50)
+    logger.info("MoT Kernel Benchmark")
+    logger.info("=" * 50)
 
     results = benchmark_mot(
         batch_size=32,
@@ -98,5 +102,5 @@ if __name__ == "__main__":
         repeat=50,
     )
 
-    print(f"Time:       {results['time_ms']:.2f} ms")
-    print(f"Throughput: {results['throughput_tok_s']:,.0f} tok/s")
+    logger.info(f"Time:       {results['time_ms']:.2f} ms")
+    logger.info(f"Throughput: {results['throughput_tok_s']:,.0f} tok/s")

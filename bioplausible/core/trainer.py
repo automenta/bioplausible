@@ -12,7 +12,7 @@ import os
 import tempfile
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -164,7 +164,7 @@ class TrainerConfig:
         return OmegaConf.to_container(OmegaConf.structured(self), resolve=True)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TrainingMetrics:
     """Metrics from a training step/epoch."""
 
@@ -190,7 +190,7 @@ class TrainingMetrics:
     extra: dict[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
-        return {k: v for k, v in self.__dict__.items() if v is not None}
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
 class CoreTrainer:
@@ -289,7 +289,7 @@ class CoreTrainer:
         device: str = "cpu",
         optimizer: torch.optim.Optimizer | None = None,
         epochs: int = 1,
-        **kwargs,
+        **kwargs: object,
     ) -> CoreTrainer:
         """Create a CoreTrainer from a pre-built model and task.
 

@@ -1,6 +1,6 @@
 """Equilibrium Propagation model variants."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import torch
 from torch import nn
@@ -15,7 +15,7 @@ __all__ = [
 ]
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class LazyStats:
     """Statistics for lazy execution."""
 
@@ -33,10 +33,9 @@ class LazyStats:
     def flop_savings(self) -> float:
         return self.skip_ratio * 100
 
-    def reset(self):
-        self.total_neurons = 0
-        self.active_neurons = 0
-        self.skipped_neurons = 0
+    @staticmethod
+    def reset() -> LazyStats:
+        return LazyStats()
 
 
 @register_model(
@@ -129,9 +128,12 @@ class LazyEqProp(TransitionGraphMixin, nn.Module):
 
             num_neurons = batch_size * self.hidden_dim
             num_active = int(active_mask.sum().item())
-            self.stats.total_neurons += num_neurons
-            self.stats.active_neurons += num_active
-            self.stats.skipped_neurons += num_neurons - num_active
+            self.stats = replace(
+                self.stats,
+                total_neurons=self.stats.total_neurons + num_neurons,
+                active_neurons=self.stats.active_neurons + num_active,
+                skipped_neurons=(self.stats.skipped_neurons + num_neurons - num_active),
+            )
 
             h_current = h_states.get(
                 i, torch.zeros(batch_size, self.hidden_dim, device=device)
@@ -148,7 +150,7 @@ class LazyEqProp(TransitionGraphMixin, nn.Module):
         batch_size = x.size(0)
         device = x.device
 
-        self.stats.reset()
+        self.stats = self.stats.reset()
 
         x_emb = self.embed(x)
 

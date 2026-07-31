@@ -10,6 +10,41 @@
 
 ---
 
+## Session Log
+
+### 2026-07-31 — Sprint 1 Core Implemented (13 files + 1 new)
+
+**Done this session:** tasks 1.1–1.9 and 1.11–1.14 (everything except 1.10 snapshot tests).
+
+**Gate status after session:**
+```bash
+uv run ruff format --check .        # PASS (594 files)
+uv run ruff check bioplausible/     # 2525 errors (baseline was 2521; +4 net, all plan-mandated TRY003)
+uv run pyright .                    # 0 errors, 2290 warnings (unchanged)
+uv run pytest tests/unit/ tests/property/ -q --no-cov   # 763 passed, 1 skipped in ~23s (CPU)
+```
+Whole-repo `ruff check` / coverage are pre-existing failures, not regressions.
+
+**Net ruff delta explained (+4):**
+- kb.py +5 `TRY003` (`raise KnowledgeBaseError("...") from e`) and model.py +2 `TRY003` (`raise LoadStateError(...) from e`) — **plan-mandated**; codebase already has ~10 unsuppressed TRY003 in model.py, so consistent with house style.
+- Offsets: `_relax` no longer `complex-structure` (C901), `too-many-locals` gone, `_state.py` one `try-consider-else`/try-clause resolved, `TC003` fixed by TYPE_CHECKING import. All other touched files at baseline.
+
+**Discovered during work (fixes embedded in this session):**
+- `create_dynamic_config` (equitile/core/config.py) forwarded the *identical* `**kwargs` to both `TileGrowthConfig` and `DynamicEquiTileConfig` — latent bug. Now split via `fields(TileGrowthConfig)`.
+- `LazyStats.reset()` mutated `self` — incompatible with frozen dataclass. Now `@staticmethod` returning a fresh `LazyStats`; callers updated (`lazy_eqprop.py`, `scaling_tracks.py: model.stats = model.stats.reset()`).
+- `TrainingMetrics.to_dict()` used `self.__dict__` — broken under `slots=True`. Switched to `asdict(self)`.
+- `_QueryFilter` needs `_predicates: tuple[_Predicate, ...]` as a **quoted-free** forward ref: Python 3.14 PEP 649 lazy annotations make `tuple[_Predicate, ...]` legal before `_Predicate` is defined (verified).
+- `CreditAssignmentType` Literal needs `"backpropagation"` and `"local"` in addition to the 6 members listed in the table below — they are real values at registration sites.
+- `pickle` import in model.py: ruff 0.16 inline suppression syntax is `# ruff: ignore[rule-name]` (code form `[S403]` triggers RUF100, `-- reason` suffix must follow on the same line).
+- Logger placement in benchmark files: keep `import logging` in stdlib block; assign `logger = logging.getLogger(...)` only *after* all imports (avoids E402).
+- kb.py early `return None` guards (e.g. no-data paths) live *inside* the narrowed try blocks, so the new `KnowledgeBaseError` chaining does not change behavior on those paths — 42 kb tests green.
+
+**Remaining Sprint 1:**
+- **1.10 snapshot tests** for the extracted helpers (never started).
+- True CI gate cleanup (whole-repo ruff → 0, coverage → ≥50%) is a separate, larger effort; today's work only guarantees "no new violations from Sprint 1 code" modulo the +4 TRY003.
+
+---
+
 ## Sprint 1: Foundation Hardening (Week 1-2)
 *Only work that makes the test suite faster, stricter, and more trustworthy.*
 
@@ -17,39 +52,40 @@
 
 | # | Task | Ref | Done |
 |---|------|-----|------|
-| 1.1 | Add `bioplausible/core/exceptions.py` with domain hierarchy (`BioplausibleError`, `ConfigError`, `RegistryError`, `CheckpointError`, `KnowledgeBaseError`, `TrialExecutionError`, `PropagatorError`, `TileGraphError`) | pre.md 1.1 | ☐ |
-| 1.2 | Narrow 3 broad `except Exception` sites to specific types + chain raise domain errors (`equitile/core/model.py`×2, `knowledge/kb.py`×5) | pre.md 2.2 | ☐ |
-| 1.3 | Replace `print()` with `logging` in 4 equitile benchmark files (library code only) | pre.md 2.1 | ☐ |
-| 1.4 | Fix bare `except X, Y:` → `except (X, Y):` in 12 files | pre.md 2.3 | ☐ |
-| 1.5 | Add `@contextmanager _connect(db_path)` helper; migrate `execution/_state.py` 12 methods to use it | pre.md 1.6 | ☐ |
+| 1.1 | Add `bioplausible/core/exceptions.py` with domain hierarchy (`BioplausibleError`, `ConfigError`, `RegistryError`, `CheckpointError`, `KnowledgeBaseError`, `TrialExecutionError`, `PropagatorError`, `TileGraphError`) | pre.md 1.1 | ☑ |
+| 1.2 | Narrow 3 broad `except Exception` sites to specific types + chain raise domain errors (`equitile/core/model.py`×2, `knowledge/kb.py`×5) | pre.md 2.2 | ☑ |
+| 1.3 | Replace `print()` with `logging` in 4 equitile benchmark files (library code only) | pre.md 2.1 | ☑ |
+| 1.4 | Fix bare `except X, Y:` → `except (X, Y):` in 12 files | pre.md 2.3 | ☑ |
+| 1.5 | Add `@contextmanager _connect(db_path)` helper; migrate `execution/_state.py` 12 methods to use it | pre.md 1.6 | ☑ |
 
 ### High-Impact Architecture (Testability Enablers)
 
 | # | Task | Ref | Done |
 |---|------|-----|------|
-| 1.6 | Refactor `_QueryFilter.matches` → predicate dispatch table (`_Predicate` Protocol + frozen dataclass per axis). Makes `matches()` a one-liner; each predicate independently testable with `hypothesis`. | pre.md 1.2 | ☐ |
-| 1.7 | Extract `_relax` → `_step_with_tolerance`, `_measure_change`, `_check_convergence` (each <20 LOC, pure). | pre.md 1.3 | ☐ |
-| 1.8 | Extract `_apply_hebbian_updates` → `_propagate_errors_backward`, `_compute_weight_updates`, `_apply_weight_updates` (each <25 LOC). | pre.md 1.3 | ☐ |
-| 1.9 | Convert `EquiTile._get_activation` (5-way) and `train_step` (3-way on closed `Literal`) to `match`/`case`. | pre.md 1.4 | ☐ |
+| 1.6 | Refactor `_QueryFilter.matches` → predicate dispatch table (`_Predicate` Protocol + frozen dataclass per axis). Makes `matches()` a one-liner; each predicate independently testable with `hypothesis`. | pre.md 1.2 | ☑ |
+| 1.7 | Extract `_relax` → `_step_with_tolerance`, `_measure_change`, `_check_convergence` (each <20 LOC, pure). | pre.md 1.3 | ☑ |
+| 1.8 | Extract `_apply_hebbian_updates` → `_propagate_errors_backward`, `_compute_weight_updates`, `_apply_weight_updates` (each <25 LOC). | pre.md 1.3 | ☑ |
+| 1.9 | Convert `EquiTile._get_activation` (5-way) and `train_step` (3-way on closed `Literal`) to `match`/`case`. | pre.md 1.4 | ☑ |
 | 1.10 | Add **snapshot tests** for extracted helpers: deterministic seed → fixed tensor output. Guard all future refactors. | pre.md Snapshot Tests | ☐ |
 
 ### Type System Quick Wins (Ride Along)
 
 | # | Task | Ref | Done |
 |---|------|-----|------|
-| 1.11 | `credit_assignment_type: str` → `Literal["gradient","equilibrium","hebbian","target","forward-only","spiking"]` | pre.md 3.2 | ☐ |
-| 1.12 | `**kwargs: Any` → `**kwargs: object` in 6 factory functions | pre.md 3.1 | ☐ |
-| 1.13 | `frozen=True, slots=True` on `TrainingMetrics`, `LazyStats`, `TileTask` | pre.md 3.4 | ☐ |
-| 1.14 | `builtins.list` → `list` in 6 annotations (`registry.py`) | pre.md 3.5 | ☐ |
+| 1.11 | `credit_assignment_type: str` → `Literal["gradient","equilibrium","hebbian","target","forward-only","spiking"]` (+ `"backpropagation"`, `"local"` seen in the wild) | pre.md 3.2 | ☑ |
+| 1.12 | `**kwargs: Any` → `**kwargs: object` in 6 factory functions | pre.md 3.1 | ☑ |
+| 1.13 | `frozen=True, slots=True` on `TrainingMetrics`, `LazyStats`, `TileTask` | pre.md 3.4 | ☑ |
+| 1.14 | `builtins.list` → `list` in 6 annotations (`registry.py`) | pre.md 3.5 | ☑ |
 
 ### Sprint 1 Gate (Must Pass Before Any Other Work)
 ```bash
 uv run ruff format --check . && uv run ruff check . && uv run pyright . && uv run pytest --cov -x --tb=short
 ```
-- Zero ruff violations
-- Zero pyright errors
-- Coverage ≥ baseline
-- All tests pass in **<60s on CPU** (no GPU, no downloads)
+- Zero ruff violations — **NOT met** (pre-existing ~2521 project-wide; this session kept it at +4 net, all plan-mandated TRY003)
+- Zero pyright errors — **met** (0 errors; 2290 warnings pre-existing, relaxed in pyproject)
+- Coverage ≥ baseline — **NOT met** (whole-repo coverage 16.82% vs required 50%; unit+property ~763 tests pass)
+- All tests pass in **<60s on CPU** (no GPU, no downloads) — **met** (~23s for unit+property)
+- Remaining gate cleanup (whole-repo ruff + coverage) is a Sprint 1.5 effort, tracked below.
 
 ---
 

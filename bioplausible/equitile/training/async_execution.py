@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 # =============================================================================
 
 
-@dataclass(order=True)
+@dataclass(order=True, frozen=True, slots=True)
 class TileTask:
     """A task for processing a single tile.
 

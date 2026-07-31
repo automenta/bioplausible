@@ -21,12 +21,15 @@ Example
 >>> print(f"EquiTile advantage: {results['equitile_speedup']:.2f}x")
 """
 
+import logging
 import time
 from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+logger = logging.getLogger(__name__)
 
 # Use new torch.amp API (2.0+) or fallback
 
@@ -105,10 +108,10 @@ class NanoGPTModel(nn.Module):
         # Compile if requested
         if config.use_compile and hasattr(torch, "compile"):
             try:
-                print(f"Compiling NanoGPT model (mode={config.compile_mode})...")
+                logger.info(f"Compiling NanoGPT model (mode={config.compile_mode})...")
                 self.forward = torch.compile(self.forward, mode=config.compile_mode)
             except Exception as e:
-                print(f"Compilation failed: {e}")
+                logger.info(f"Compilation failed: {e}")
 
     def _init_weights(self) -> None:
         """Initialize weights."""
@@ -457,7 +460,7 @@ def benchmark_model(
             total_tokens += input_ids.numel()
 
         final_train_loss = epoch_loss / n_batches
-        print(f"  Epoch {epoch + 1}/{epochs}: Loss = {final_train_loss:.4f}")
+        logger.info(f"  Epoch {epoch + 1}/{epochs}: Loss = {final_train_loss:.4f}")
 
     # Validation
     model.eval()
@@ -546,22 +549,22 @@ def compare_nanoGPT(
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print("=" * 60)
-    print("EquiTile vs NanoGPT Comparison Benchmark")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("EquiTile vs NanoGPT Comparison Benchmark")
+    logger.info("=" * 60)
 
     # Load dataset
-    print(f"\nLoading {task} dataset...")
+    logger.info(f"\nLoading {task} dataset...")
     train_loader, val_loader, tokenizer = create_shakespeare_dataset(
         batch_size=batch_size,
         seq_length=seq_length,
         num_workers=2,
     )
     vocab_size = tokenizer.vocab_size
-    print(f"Vocabulary: {vocab_size}")
+    logger.info(f"Vocabulary: {vocab_size}")
 
     # Create models with matched parameters
-    print("\nCreating models with matched parameters...")
+    logger.info("\nCreating models with matched parameters...")
 
     # NanoGPT config
     nanogpt_config = NanoGPTConfig(
@@ -574,7 +577,7 @@ def compare_nanoGPT(
     )
     nanogpt = NanoGPTModel(nanogpt_config)
     nanogpt_params = nanogpt.get_parameter_count()
-    print(f"NanoGPT parameters: {nanogpt_params:,}")
+    logger.info(f"NanoGPT parameters: {nanogpt_params:,}")
 
     # EquiTile config (matched)
     equitile_config = FastLMConfig(
@@ -593,12 +596,12 @@ def compare_nanoGPT(
     equitile = FastLMEquiTile(equitile_config)
     equitile._init_weights()
     equitile_params = equitile.get_parameter_count()
-    print(f"EquiTile parameters: {equitile_params:,}")
+    logger.info(f"EquiTile parameters: {equitile_params:,}")
 
     # Benchmark NanoGPT
-    print("\n" + "-" * 40)
-    print("Benchmarking NanoGPT...")
-    print("-" * 40)
+    logger.info("\n" + "-" * 40)
+    logger.info("Benchmarking NanoGPT...")
+    logger.info("-" * 40)
     nanogpt_result = benchmark_model(
         nanogpt,
         train_loader,
@@ -608,9 +611,9 @@ def compare_nanoGPT(
     )
 
     # Benchmark EquiTile
-    print("\n" + "-" * 40)
-    print("Benchmarking EquiTile...")
-    print("-" * 40)
+    logger.info("\n" + "-" * 40)
+    logger.info("Benchmarking EquiTile...")
+    logger.info("-" * 40)
     equitile_result = benchmark_model(
         equitile,
         train_loader,
@@ -620,9 +623,9 @@ def compare_nanoGPT(
     )
 
     # Compare results
-    print("\n" + "=" * 60)
-    print("Comparison Results")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("Comparison Results")
+    logger.info("=" * 60)
 
     results = {
         "nanogpt": vars(nanogpt_result),
@@ -637,27 +640,27 @@ def compare_nanoGPT(
         / (nanogpt_params / max(1, equitile_params)),
     }
 
-    print("\nParameter Count:")
-    print(f"  NanoGPT:  {nanogpt_params:,}")
-    print(f"  EquiTile: {equitile_params:,}")
+    logger.info("\nParameter Count:")
+    logger.info(f"  NanoGPT:  {nanogpt_params:,}")
+    logger.info(f"  EquiTile: {equitile_params:,}")
 
-    print("\nValidation Perplexity (lower is better):")
-    print(f"  NanoGPT:  {nanogpt_result.val_ppl:.2f}")
-    print(f"  EquiTile: {equitile_result.val_ppl:.2f}")
+    logger.info("\nValidation Perplexity (lower is better):")
+    logger.info(f"  NanoGPT:  {nanogpt_result.val_ppl:.2f}")
+    logger.info(f"  EquiTile: {equitile_result.val_ppl:.2f}")
 
-    print("\nTraining Throughput (tokens/sec):")
-    print(f"  NanoGPT:  {nanogpt_result.tokens_per_sec:.0f}")
-    print(f"  EquiTile: {equitile_result.tokens_per_sec:.0f}")
+    logger.info("\nTraining Throughput (tokens/sec):")
+    logger.info(f"  NanoGPT:  {nanogpt_result.tokens_per_sec:.0f}")
+    logger.info(f"  EquiTile: {equitile_result.tokens_per_sec:.0f}")
 
-    print("\nTraining Time:")
-    print(f"  NanoGPT:  {nanogpt_result.training_time_sec:.1f}s")
-    print(f"  EquiTile: {equitile_result.training_time_sec:.1f}s")
+    logger.info("\nTraining Time:")
+    logger.info(f"  NanoGPT:  {nanogpt_result.training_time_sec:.1f}s")
+    logger.info(f"  EquiTile: {equitile_result.training_time_sec:.1f}s")
 
-    print("\nEquiTile Advantages:")
-    print(f"  Speedup:              {results['equitile_speedup']:.2f}x")
-    print(f"  Throughput Gain:      {results['equitile_throughput_gain']:.2f}x")
-    print(f"  PPL Improvement:      {results['equitile_ppl_improvement']:.2f}x")
-    print(f"  Parameter Efficiency: {results['parameter_efficiency']:.2f}x")
+    logger.info("\nEquiTile Advantages:")
+    logger.info(f"  Speedup:              {results['equitile_speedup']:.2f}x")
+    logger.info(f"  Throughput Gain:      {results['equitile_throughput_gain']:.2f}x")
+    logger.info(f"  PPL Improvement:      {results['equitile_ppl_improvement']:.2f}x")
+    logger.info(f"  Parameter Efficiency: {results['parameter_efficiency']:.2f}x")
 
     return results
 
@@ -722,7 +725,7 @@ def run_benchmark_comparison(
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
-        print(f"\nBenchmarking {config.get('name', model_type)}...")
+        logger.info(f"\nBenchmarking {config.get('name', model_type)}...")
         result = benchmark_model(
             model, train_loader, val_loader, epochs=epochs, device=device
         )

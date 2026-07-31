@@ -4,24 +4,33 @@ Decorator-based registry for all components (models, propagators,
 optimizers, sparsity) enabling AutoScientist to query and compose
 intelligently."""
 
-import builtins
 import logging
 import pathlib
 from collections.abc import Callable
 from dataclasses import MISSING, dataclass, field, fields
 from enum import Enum, StrEnum
-from typing import TypeVar, cast
+from typing import Literal, Protocol, TypeVar, cast
+
+from bioplausible.core.exceptions import IncompatibilityError as _IncompatibilityError
 
 logger = logging.getLogger(__name__)
 
 Component = TypeVar("Component")  # registered class or factory callable
 
+# Credit-assignment strategy a component uses. Closed set so the
+# AutoScientist can rely on membership when composing capability queries.
+CreditAssignmentType = Literal[
+    "gradient",
+    "equilibrium",
+    "hebbian",
+    "target",
+    "forward-only",
+    "spiking",
+    "backpropagation",
+    "local",
+]
 
-class IncompatibilityError(TypeError):
-    """Raised when a propagator requires capabilities the model does not provide.
-
-    This is a hard error — no fallback, no silent discovery.
-    """
+IncompatibilityError = _IncompatibilityError
 
 
 class ComponentCategory(str, Enum):
@@ -90,9 +99,7 @@ class ComponentMetadata:
     locality_level: LocalityLevel = LocalityLevel.GLOBAL
     compute_profile: ComputeProfile = ComputeProfile.GPU
     bio_plausibility_score: float = 0.5  # 0.0 = backprop, 1.0 = fully bio-plausible
-    credit_assignment_type: str = (
-        "gradient"  # gradient, equilibrium, hebbian, target, forward-only, spiking
-    )
+    credit_assignment_type: CreditAssignmentType = "gradient"
     requires_backward: bool = True
     memory_complexity: str = "O(N)"  # O(1) for MEP, O(N) standard
     min_params: int | None = None
@@ -132,37 +139,133 @@ class _QueryFilter:
     requires_backward: bool | None = None
     min_bio_score: float | None = None
     max_bio_score: float | None = None
-    tags: builtins.list[str] | None = None
-    credit_type: str | None = None
+    tags: list[str] | None = None
+    credit_type: CreditAssignmentType | None = None
     family: str | None = None
+    _predicates: tuple[_Predicate, ...] = field(init=False, repr=False, default=())
+
+    def __post_init__(self) -> None:
+        """Build the predicate dispatch table once at construction."""
+        predicates: list[_Predicate] = []
+        if self.domain is not None:
+            predicates.append(_DomainIn(self.domain))
+        if self.locality is not None:
+            predicates.append(_LocalityIs(self.locality))
+        if self.compute is not None:
+            predicates.append(_ComputeIs(self.compute))
+        if self.requires_backward is not None:
+            predicates.append(_RequiresBackwardIs(self.requires_backward))
+        if self.min_bio_score is not None:
+            predicates.append(_MinBioScore(self.min_bio_score))
+        if self.max_bio_score is not None:
+            predicates.append(_MaxBioScore(self.max_bio_score))
+        if self.credit_type is not None:
+            predicates.append(_CreditTypeIs(self.credit_type))
+        if self.tags is not None:
+            predicates.append(_TagsAll(frozenset(self.tags)))
+        if self.family is not None:
+            predicates.append(_FamilyIs(self.family))
+        object.__setattr__(self, "_predicates", tuple(predicates))
 
     def matches(self, meta: ComponentMetadata) -> bool:
         """Return True iff ``meta`` satisfies every constraint in this filter."""
-        return (
-            (self.domain is None or self.domain in meta.domains)
-            and (self.locality is None or meta.locality_level == self.locality)
-            and (self.compute is None or meta.compute_profile == self.compute)
-            and (
-                self.requires_backward is None
-                or meta.requires_backward == self.requires_backward
-            )
-            and (
-                self.min_bio_score is None
-                or meta.bio_plausibility_score >= self.min_bio_score
-            )
-            and (
-                self.max_bio_score is None
-                or meta.bio_plausibility_score <= self.max_bio_score
-            )
-            and (
-                self.credit_type is None
-                or meta.credit_assignment_type == self.credit_type
-            )
-            and (
-                self.tags is None or builtins.all(tag in meta.tags for tag in self.tags)
-            )
-            and (self.family is None or meta.family == self.family)
-        )
+        return all(predicate(meta) for predicate in self._predicates)
+
+
+class _Predicate(Protocol):
+    """Single-axis capability predicate."""
+
+    def __call__(self, meta: ComponentMetadata) -> bool: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _DomainIn:
+    """True iff ``meta`` declares the target domain."""
+
+    domain: Domain
+
+    def __call__(self, meta: ComponentMetadata) -> bool:
+        return self.domain in meta.domains
+
+
+@dataclass(frozen=True, slots=True)
+class _LocalityIs:
+    """True iff ``meta`` locality matches exactly."""
+
+    locality: LocalityLevel
+
+    def __call__(self, meta: ComponentMetadata) -> bool:
+        return meta.locality_level == self.locality
+
+
+@dataclass(frozen=True, slots=True)
+class _ComputeIs:
+    """True iff ``meta`` compute profile matches exactly."""
+
+    compute: ComputeProfile
+
+    def __call__(self, meta: ComponentMetadata) -> bool:
+        return meta.compute_profile == self.compute
+
+
+@dataclass(frozen=True, slots=True)
+class _RequiresBackwardIs:
+    """True iff ``meta`` backward requirement matches exactly."""
+
+    requires_backward: bool
+
+    def __call__(self, meta: ComponentMetadata) -> bool:
+        return meta.requires_backward == self.requires_backward
+
+
+@dataclass(frozen=True, slots=True)
+class _MinBioScore:
+    """True iff ``meta`` bio-plausibility is at least the bound."""
+
+    min_bio_score: float
+
+    def __call__(self, meta: ComponentMetadata) -> bool:
+        return meta.bio_plausibility_score >= self.min_bio_score
+
+
+@dataclass(frozen=True, slots=True)
+class _MaxBioScore:
+    """True iff ``meta`` bio-plausibility is at most the bound."""
+
+    max_bio_score: float
+
+    def __call__(self, meta: ComponentMetadata) -> bool:
+        return meta.bio_plausibility_score <= self.max_bio_score
+
+
+@dataclass(frozen=True, slots=True)
+class _CreditTypeIs:
+    """True iff ``meta`` credit-assignment type matches exactly."""
+
+    credit_type: CreditAssignmentType
+
+    def __call__(self, meta: ComponentMetadata) -> bool:
+        return meta.credit_assignment_type == self.credit_type
+
+
+@dataclass(frozen=True, slots=True)
+class _TagsAll:
+    """True iff ``meta`` carries every required tag."""
+
+    tags: frozenset[str]
+
+    def __call__(self, meta: ComponentMetadata) -> bool:
+        return all(tag in meta.tags for tag in self.tags)
+
+
+@dataclass(frozen=True, slots=True)
+class _FamilyIs:
+    """True iff ``meta`` family matches exactly."""
+
+    family: str
+
+    def __call__(self, meta: ComponentMetadata) -> bool:
+        return meta.family == self.family
 
 
 class Registry:
@@ -314,7 +417,7 @@ class Registry:
     @classmethod
     def list(
         cls, category: ComponentCategory | str | None = None
-    ) -> dict[str, builtins.list[str]]:
+    ) -> dict[str, list[str]]:
         """List all registered components, optionally filtered by category."""
         if category is not None:
             cat = cls._resolve_category(category)
@@ -333,10 +436,10 @@ class Registry:
         requires_backward: bool | None = None,
         min_bio_score: float | None = None,
         max_bio_score: float | None = None,
-        tags: builtins.list[str] | None = None,
-        credit_type: str | None = None,
+        tags: list[str] | None = None,
+        credit_type: CreditAssignmentType | None = None,
         family: str | None = None,
-    ) -> builtins.list[dict[str, object]]:
+    ) -> list[dict[str, object]]:
         """Query registry with capability constraints.
 
         Returns list of ``{name, category, class, metadata}`` dict
@@ -357,7 +460,7 @@ class Registry:
         cats = [category] if category else list(cls._components.keys())
         categories = [cls._resolve_category(c) for c in cats]
 
-        results: builtins.list[dict[str, object]] = []
+        results: list[dict[str, object]] = []
         for cat in categories:
             if cat not in cls._components:
                 continue
@@ -377,12 +480,12 @@ class Registry:
         cls,
         model_name: str,
         model_category: ComponentCategory = ComponentCategory.MODEL,
-    ) -> dict[str, builtins.list[dict[str, object]]]:
+    ) -> dict[str, list[dict[str, object]]]:
         """Get components compatible with a given model."""
         model_meta = cls.get_metadata(model_category, model_name)
         primary_domain = model_meta.domains[0] if model_meta.domains else None
 
-        compat: dict[str, builtins.list[dict[str, object]]] = {}
+        compat: dict[str, list[dict[str, object]]] = {}
         for cat in ComponentCategory:
             if cat == model_category:
                 continue
@@ -482,6 +585,7 @@ __all__ = [
     "ComponentCategory",
     "ComponentMetadata",
     "ComputeProfile",
+    "CreditAssignmentType",
     "Domain",
     "IncompatibilityError",
     "LocalityLevel",

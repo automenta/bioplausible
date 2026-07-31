@@ -10,12 +10,14 @@ A high-performance, scalable deep learning framework featuring:
 """
 
 import logging
+import pickle  # ruff: ignore[suspicious-pickle-import] -- UnpicklingError needed for torch.load weights_only fallback
 from typing import TYPE_CHECKING, Literal
 
 import torch
 from torch import nn
 
 from bioplausible.core.config import ModelConfig
+from bioplausible.core.exceptions import LoadStateError
 from bioplausible.core.model import BioModel
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 
@@ -290,15 +292,17 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
             initialize_io_projections(self.W_in, self.W_out)
 
     def _get_activation(self, name: str) -> nn.Module:
-        if name == "tanh":
-            return nn.Tanh()
-        elif name == "relu":
-            return nn.ReLU()
-        elif name == "gelu":
-            return nn.GELU()
-        elif name == "silu":
-            return nn.SiLU()
-        return nn.GELU()
+        match name:
+            case "tanh":
+                return nn.Tanh()
+            case "relu":
+                return nn.ReLU()
+            case "gelu":
+                return nn.GELU()
+            case "silu":
+                return nn.SiLU()
+            case _:
+                return nn.GELU()
 
     def to(self, *args, **kwargs):
         model = super().to(*args, **kwargs)
@@ -443,44 +447,64 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
             self._compute_errors()
 
             if tolerance is not None:
-                prev_activities = {
-                    tile.id: (
-                        tile.activity.clone() if tile.activity is not None else None
-                    )
-                    for tile in self.graph.all_tiles
-                }
+                prev_activities = self._snapshot_activities()
 
-            # Set input activities at each step (or just once outside loop,
-            # but original code did it inside loop, ensuring they stay fixed)
-            for i, tile in enumerate(self.graph.all_tiles):
-                if tile.is_input:
-                    idx = self.graph.input_tile_ids.index(tile.id)
-                    start = idx * self.equitile_config.neurons_per_tile
-                    tile.activity = input_proj[:, start : start + tile.neurons].clone()
+            self._step_with_tolerance(input_proj, step_size, clamp, output_nudge)
 
-            self._relaxation_step(step_size, clamp, output_nudge)
+            if self._check_convergence(prev_activities, tolerance, step):
+                break  # Converged
 
-            # Early stopping check
-            if tolerance is not None and prev_activities is not None and step > 2:
-                mean_change = 0.0
-                count = 0
-                for tile in self.graph.all_tiles:
-                    if tile.is_input or prev_activities.get(tile.id) is None:
-                        continue
-                    if tile.activity is not None:
-                        change = (
-                            (tile.activity - prev_activities[tile.id])
-                            .abs()
-                            .mean()
-                            .item()
-                        )
-                        mean_change += change
-                        count += 1
+    def _snapshot_activities(self) -> dict[int, Tensor | None]:
+        """Clone all tile activities for convergence measurement."""
+        return {
+            tile.id: (tile.activity.clone() if tile.activity is not None else None)
+            for tile in self.graph.all_tiles
+        }
 
-                if count > 0:
-                    mean_change /= count
-                    if mean_change < tolerance:
-                        break  # Converged
+    def _step_with_tolerance(
+        self,
+        input_proj: Tensor,
+        step_size: float,
+        clamp: bool,
+        output_nudge: Tensor | None,
+    ) -> None:
+        """Run one relaxation step, keeping input activities pinned."""
+        # Set input activities at each step (or just once outside loop,
+        # but original code did it inside loop, ensuring they stay fixed)
+        for i, tile in enumerate(self.graph.all_tiles):
+            if tile.is_input:
+                idx = self.graph.input_tile_ids.index(tile.id)
+                start = idx * self.equitile_config.neurons_per_tile
+                tile.activity = input_proj[:, start : start + tile.neurons].clone()
+
+        self._relaxation_step(step_size, clamp, output_nudge)
+
+    def _measure_change(self, prev_activities: dict[int, Tensor | None]) -> float:
+        """Mean absolute activity change across non-input tiles."""
+        mean_change = 0.0
+        count = 0
+        for tile in self.graph.all_tiles:
+            if tile.is_input or prev_activities.get(tile.id) is None:
+                continue
+            if tile.activity is not None:
+                change = (tile.activity - prev_activities[tile.id]).abs().mean().item()
+                mean_change += change
+                count += 1
+
+        if count > 0:
+            return mean_change / count
+        return 0.0
+
+    def _check_convergence(
+        self,
+        prev_activities: dict[int, Tensor | None] | None,
+        tolerance: float | None,
+        step: int,
+    ) -> bool:
+        """Early-stopping check: converged once mean change falls below tolerance."""
+        if tolerance is None or prev_activities is None or step <= 2:
+            return False
+        return self._measure_change(prev_activities) < tolerance
 
     def compute_metrics(self, logits: Tensor, y: Tensor) -> float:
         """Compute task-specific accuracy metric."""
@@ -489,11 +513,13 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Train with predictive-coding (PC) or equilibrium propagation (EP) mode."""
         self._step_count += 1
-        if self.equitile_config.mode == "backprop":
-            return self._train_step_backprop(x, y)
-        elif self.equitile_config.mode == "ep":
-            return self._train_step_ep(x, y)
-        return self._train_step_pc(x, y)
+        match self.equitile_config.mode:
+            case "backprop":
+                return self._train_step_backprop(x, y)
+            case "ep":
+                return self._train_step_ep(x, y)
+            case _:
+                return self._train_step_pc(x, y)
 
     def _train_step_backprop(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Train using standard backpropagation through time (BPTT)."""
@@ -769,6 +795,13 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
 
     def _apply_hebbian_updates(self, output_delta: Tensor, batch: int) -> None:
         """Apply local Hebbian updates."""
+        tile_errors = self._propagate_errors_backward(output_delta)
+        with torch.no_grad():
+            for edge_idx, (src_id, dst_id) in enumerate(self.graph.edges):
+                self._apply_weight_updates(edge_idx, src_id, dst_id, tile_errors, batch)
+
+    def _propagate_errors_backward(self, output_delta: Tensor) -> dict[int, Tensor]:
+        """Compute per-tile errors by propagating output delta backward."""
         tile_errors: dict[int, Tensor] = {}
         for i, tile_id in enumerate(self.graph.output_tile_ids):
             tile = self.graph.tiles[tile_id]
@@ -789,29 +822,51 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
                 if weight is not None:
                     error = error + tile_errors[fwd_id] @ weight.T
             tile_errors[tile.id] = error
+        return tile_errors
 
+    def _compute_weight_updates(
+        self,
+        edge_idx: int,
+        src_id: int,
+        dst_id: int,
+        tile_errors: dict[int, Tensor],
+        batch: int,
+    ) -> tuple[Tensor, Tensor] | None:
+        """Compute Hebbian weight/bias updates for one edge, if applicable."""
+        _weight, _ = self._get_edge_params(src_id, dst_id)
+        src, dst = self.graph.tiles[src_id], self.graph.tiles[dst_id]
+        if src.activity is None or dst.id not in tile_errors:
+            return None
+
+        imp = torch.sigmoid(self.edge_importance[edge_idx]).item()
+        src_act = self._apply_activation(src.activity)
+        dst_err = tile_errors[dst.id]
+        return compute_hebbian_update(src_act, dst_err, imp, batch)
+
+    def _apply_weight_updates(
+        self,
+        edge_idx: int,
+        src_id: int,
+        dst_id: int,
+        tile_errors: dict[int, Tensor],
+        batch: int,
+    ) -> None:
+        """Apply weight and bias updates for one edge."""
         lr = self.equitile_config.learning_rate
-        with torch.no_grad():
-            for edge_idx, (src_id, dst_id) in enumerate(self.graph.edges):
-                weight, bias = self._get_edge_params(src_id, dst_id)
-                src, dst = self.graph.tiles[src_id], self.graph.tiles[dst_id]
-                if src.activity is None or dst.id not in tile_errors:
-                    continue
+        updates = self._compute_weight_updates(
+            edge_idx, src_id, dst_id, tile_errors, batch
+        )
+        if updates is None:
+            return
 
-                imp = torch.sigmoid(self.edge_importance[edge_idx]).item()
-                src_act = self._apply_activation(src.activity)
-                dst_err = tile_errors[dst.id]
-
-                weight_update, bias_update = compute_hebbian_update(
-                    src_act, dst_err, imp, batch
-                )
-
-                if weight is not None:
-                    weight.data = weight.data - lr * (
-                        weight_update + self.equitile_config.weight_decay * weight.data
-                    )
-                if bias is not None:
-                    bias.data = bias.data - lr * bias_update
+        weight_update, bias_update = updates
+        weight, bias = self._get_edge_params(src_id, dst_id)
+        if weight is not None:
+            weight.data = weight.data - lr * (
+                weight_update + self.equitile_config.weight_decay * weight.data
+            )
+        if bias is not None:
+            bias.data = bias.data - lr * bias_update
 
     def _count_active_tiles(self) -> int:
         return sum(
@@ -997,8 +1052,10 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
             )
             try:
                 self._lr_scheduler.load_state_dict(state["lr_scheduler"])
-            except Exception:
-                logger.warning("Failed to load LR scheduler state, using default")
+            except (KeyError, RuntimeError) as e:
+                logger.warning(
+                    "Failed to load LR scheduler state, using default", exc_info=e
+                )
 
     def add_tile(
         self,
@@ -1221,10 +1278,17 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
 
         try:
             state = torch.load(path, map_location=device, weights_only=True)
-        except Exception:
-            state = torch.load(path, map_location=device, weights_only=False)
+        except (RuntimeError, pickle.UnpicklingError) as e:
+            logger.warning("weights_only=True load failed (%s); retrying legacy", e)
+            try:
+                state = torch.load(path, map_location=device, weights_only=False)
+            except (RuntimeError, pickle.UnpicklingError) as e2:
+                raise LoadStateError(f"Failed to load checkpoint from {path}") from e2
 
-        self.load_state(state)
+        try:
+            self.load_state(state)
+        except Exception as e:
+            raise LoadStateError(f"Failed to load state into model from {path}") from e
         return state.get("metadata")
 
 

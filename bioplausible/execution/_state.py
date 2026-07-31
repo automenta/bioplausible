@@ -10,11 +10,16 @@ import json
 import logging
 import sqlite3
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 import optuna
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 from bioplausible.hyperopt.storage import HyperoptStorage
 
@@ -27,6 +32,22 @@ __all__ = [
     "logger",
 ]
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _connect(db_path: str) -> Iterator[sqlite3.Connection]:
+    """Yield a committed sqlite3 connection with ``Row`` row factory.
+
+    Commits on success, rolls back on exception, always closes the
+    connection — the single safe entry point for all SQLite access.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.row_factory = sqlite3.Row
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # =============================================================================
@@ -74,12 +95,8 @@ class FailureTracker:
         self.db_path = db_path
         self._init_db()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path)
-
     def _init_db(self) -> None:
-        conn = self._get_connection()
-        try:
+        with _connect(self.db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS failures (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,13 +124,9 @@ class FailureTracker:
                 "CREATE INDEX IF NOT EXISTS idx_failures_timestamp"
                 " ON failures(timestamp)"
             )
-            conn.commit()
-        finally:
-            conn.close()
 
     def log_failure(self, record: FailureRecord) -> None:
-        conn = self._get_connection()
-        try:
+        with _connect(self.db_path) as conn:
             conn.execute(
                 """
                 INSERT INTO failures
@@ -136,16 +149,12 @@ class FailureTracker:
                     record.stack_trace,
                 ),
             )
-            conn.commit()
             logger.info(
                 "Logged %s failure for %s", record.failure_type, record.model_name
             )
-        finally:
-            conn.close()
 
     def get_failure_stats(self, hours: int | None = None) -> dict[str, object]:
-        conn = self._get_connection()
-        try:
+        with _connect(self.db_path) as conn:
             cursor = conn.cursor()
             where_clause = ""
             if hours:
@@ -185,12 +194,9 @@ class FailureTracker:
                 "by_task": by_task,
                 "time_window_hours": hours,
             }
-        finally:
-            conn.close()
 
     def get_recent_failures(self, limit: int = 50) -> list[FailureRecord]:
-        conn = self._get_connection()
-        try:
+        with _connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -219,8 +225,6 @@ class FailureTracker:
                     )
                 )
             return records
-        finally:
-            conn.close()
 
     def analyze_failure_patterns(self) -> dict[str, object]:
         stats = self.get_failure_stats()
@@ -276,7 +280,7 @@ class FailureTracker:
         self, param: str, failure_type: str
     ) -> float | None:
         try:
-            with self._get_connection() as conn:
+            with _connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "SELECT config FROM failures WHERE failure_type=?",
@@ -300,7 +304,7 @@ class FailureTracker:
     def _detect_divergence_signatures(self) -> list[dict[str, object]]:
         recs = []
         try:
-            with self._get_connection() as conn:
+            with _connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT COUNT(*) FROM failures WHERE failure_epoch < 2")
                 res = cursor.fetchone()
@@ -338,7 +342,7 @@ class DecisionLogger:
 
     def _init_db(self) -> None:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with _connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS decision_log (
@@ -349,7 +353,6 @@ class DecisionLogger:
                         metadata TEXT
                     )
                 """)
-                conn.commit()
         except sqlite3.Error as e:
             logger.error("Failed to init decision log DB: %s", e)
 
@@ -361,7 +364,7 @@ class DecisionLogger:
     ) -> None:
         try:
             meta_json = json.dumps(metadata) if metadata else "{}"
-            with sqlite3.connect(self.db_path) as conn:
+            with _connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "INSERT INTO decision_log"
@@ -369,7 +372,6 @@ class DecisionLogger:
                     " VALUES (?, ?, ?, ?)",
                     (time.time(), event_type, description, meta_json),
                 )
-                conn.commit()
             logger.info("Decision Logged: [%s] %s", event_type, description)
         except sqlite3.Error as e:
             logger.error("Failed to log decision: %s", e)
@@ -379,8 +381,7 @@ class DecisionLogger:
     def get_log(self, limit: int = 1000) -> list[dict[str, object]]:
         entries = []
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
+            with _connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "SELECT * FROM decision_log ORDER BY timestamp ASC LIMIT ?",

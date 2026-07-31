@@ -299,7 +299,7 @@ def track_12_lazy_updates(verifier) -> TrackResult:
         acc = evaluate_accuracy(model, X_test, y_test)
 
         # Measure FLOP savings on a forward pass
-        model.stats.reset()
+        model.stats = model.stats.reset()
         with torch.no_grad():
             _ = model(X_test, steps=30)
         savings = model.get_flop_savings()
