@@ -29,7 +29,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.core.registry import Domain, LocalityLevel
+from bioplausible.core.config import ModelConfig
+from bioplausible.core.model import BioModel
+from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig, LMEquiTileConfig
 from bioplausible.equitile.language.components import (
@@ -37,9 +39,6 @@ from bioplausible.equitile.language.components import (
     TileAttention,
     TileFeedForward,
 )
-from bioplausible.core.config import ModelConfig
-from bioplausible.core.model import BioModel
-from bioplausible.core.registry import register_model
 
 if TYPE_CHECKING:
     from torch import Tensor

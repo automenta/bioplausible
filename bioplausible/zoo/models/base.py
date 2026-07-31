@@ -5,8 +5,10 @@ import torch
 import torch.nn.functional as F
 from torch import autograd, nn
 
-from .._settling import EquilibriumFunction, settle_single_state
+from bioplausible.core.config import ModelConfig
 from bioplausible.core.model import BioModel
+
+from .._settling import EquilibriumFunction, settle_single_state
 
 __all__ = [
     "EqPropModel",
@@ -20,20 +22,45 @@ class EqPropModel(BioModel):
     Abstract base class for Equilibrium Propagation models.
     """
 
-    def __init__(self, max_steps: int = 30, gradient_method: str = "bptt", **kwargs):
+    def __init__(
+        self,
+        config: ModelConfig | None = None,
+        max_steps: int = 30,
+        gradient_method: str = "bptt",
+        **kwargs,
+    ):
         """
         Args:
-            max_steps: Number of equilibrium steps
-            gradient_method: 'bptt', 'equilibrium' (implicit),
-                or 'contrastive' (Hebbian)
+            config: Optional ``ModelConfig`` (preferred).  If given,
+                ``input_dim``, ``hidden_dims``, ``output_dim``,
+                ``max_steps``, ``use_spectral_norm``, and
+                ``lipschitz_mode`` are extracted from the config.
+                ``gradient_method`` falls back to ``config.extra``.
+            max_steps: Number of equilibrium steps (ignored if ``config``
+                is given).
+            gradient_method: ``'bptt'``, ``'equilibrium'`` (implicit),
+                or ``'contrastive'`` (Hebbian).
         """
-        input_dim = kwargs.pop("input_dim", 0)
-        hidden_dim = kwargs.pop("hidden_dim", 0)
-        output_dim = kwargs.pop("output_dim", 0)
-        use_spectral_norm = kwargs.pop("use_spectral_norm", True)
-        lipschitz_mode = kwargs.pop("lipschitz_mode", "power_iteration")
+        if config is not None:
+            input_dim = config.input_dim
+            hidden_dim = config.hidden_dims[0] if config.hidden_dims else 0
+            output_dim = config.output_dim
+            use_spectral_norm = config.use_spectral_norm
+            lipschitz_mode = config.lipschitz_mode
+            max_steps = config.max_steps
+            gm = config.extra.get("gradient_method")
+            gradient_method = gm if isinstance(gm, str) else gradient_method
+            beta = config.beta
+        else:
+            input_dim = kwargs.pop("input_dim", 0)
+            hidden_dim = kwargs.pop("hidden_dim", 0)
+            output_dim = kwargs.pop("output_dim", 0)
+            use_spectral_norm = kwargs.pop("use_spectral_norm", True)
+            lipschitz_mode = kwargs.pop("lipschitz_mode", "power_iteration")
+            beta = kwargs.get("beta", 0.1)
 
         super().__init__(
+            config=config,
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             output_dim=output_dim,
@@ -43,9 +70,7 @@ class EqPropModel(BioModel):
             **kwargs,
         )
         self.gradient_method = gradient_method
-
-        # Contrastive Hebbian specific params
-        self.beta = kwargs.get("beta", 0.1)
+        self.beta = beta
         self.hebbian_lr = kwargs.get("learning_rate", 0.001)
         self.internal_optimizer = None
 

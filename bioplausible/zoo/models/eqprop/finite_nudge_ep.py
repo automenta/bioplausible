@@ -2,6 +2,7 @@
 
 from bioplausible.core.config import ModelConfig, _build_model_config
 from bioplausible.core.registry import register_model
+
 from .standard_eqprop import StandardEqProp
 
 __all__ = [

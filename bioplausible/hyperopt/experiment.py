@@ -21,12 +21,12 @@ import torch
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.execution._guards import SafetyConfig
-from bioplausible.execution._state import FailureRecord, FailureTracker
 from bioplausible.execution._lifecycle import CheckpointManager, ExperimentArchiver
+from bioplausible.execution._state import FailureRecord, FailureTracker
 from bioplausible.execution.dashboard import DASHBOARD
 from bioplausible.execution.monitoring import InterferenceMonitor
 from bioplausible.hyperopt.storage import HyperoptStorage
-from bioplausible.hyperopt.tasks import create_task
+from bioplausible.domains import create_task
 from bioplausible.tracking import ExperimentTracker
 from bioplausible.zoo import load_weights
 

@@ -6,9 +6,9 @@ import torch
 from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
+from bioplausible.core.registry import register_model
 
 from ....acceleration import compile_settling_loop
-from bioplausible.core.registry import register_model
 from ...utils import spectral_conv2d
 from ..base import EqPropModel
 

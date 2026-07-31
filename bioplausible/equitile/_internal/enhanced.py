@@ -23,7 +23,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.core.registry import Domain, LocalityLevel
+from bioplausible.core.config import ModelConfig
+from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EnhancedEquiTileConfig
 from bioplausible.equitile.core.kernels import (
@@ -35,8 +36,6 @@ from bioplausible.equitile.utils.init_utils import (
     initialize_edge_weights,
     initialize_io_projections,
 )
-from bioplausible.core.config import ModelConfig
-from bioplausible.core.registry import register_model
 
 if TYPE_CHECKING:
     from torch import Tensor

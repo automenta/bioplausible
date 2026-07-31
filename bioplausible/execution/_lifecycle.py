@@ -17,11 +17,11 @@ import torch
 
 __all__ = [
     "ARTIFACTS_DIR",
+    "PROMOTION_THRESHOLDS",
     "CheckpointManager",
     "CheckpointRecord",
     "CurriculumManager",
     "ExperimentArchiver",
-    "PROMOTION_THRESHOLDS",
     "PromotionGate",
     "logger",
 ]
@@ -82,11 +82,12 @@ class PromotionGate:
                 return False
 
         # Check Efficiency (if available)
-        if "time" in metrics and metrics["time"] > 0:
-            if (
-                task_name in ["digits", "mnist"] and metrics["time"] > 600.0
-            ):  # > 10 mins for MNIST is bad
-                return False
+        if (
+            "time" in metrics
+            and metrics["time"] > 0
+            and (task_name in ["digits", "mnist"] and metrics["time"] > 600.0)
+        ):  # > 10 mins for MNIST is bad
+            return False
 
         return True
 
@@ -196,7 +197,7 @@ Original Accuracy: {metrics.get("accuracy", 0.0):.4f}
 import torch
 import json
 from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.hyperopt.tasks import create_task
+from bioplausible.domains import create_task
 
 def reproduce():
     config = {config_repr}

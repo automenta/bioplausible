@@ -10,7 +10,7 @@ import torch
 logger = logging.getLogger(__name__)
 
 from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.hyperopt.tasks import create_task
+from bioplausible.domains import create_task
 
 __all__ = [
     "inspect_model",

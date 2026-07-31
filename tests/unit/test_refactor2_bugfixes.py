@@ -15,8 +15,8 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.losses import reshape_for_cross_entropy
+from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import (
     CoreTrainer,
     TrainerConfig,
@@ -205,7 +205,14 @@ def test_task_trainer_nan_val_when_validation_fails():
     must surface NaN so downstream ranking logic cannot mistake a silently
     swallowed failure for a real 0.0 / train-accuracy result.
     """
-    from bioplausible.hyperopt.tasks import BaseTask, _TaskTrainer
+    from bioplausible.domains import _TaskTrainer
+    from bioplausible.domains.base import (
+        DomainType,
+        DomainSpec,
+        DomainTask as BaseTask,
+        Metrics,
+        TaskSplit,
+    )
 
     class FailingValTask(BaseTask):
         """Stub task whose validation path raises RuntimeError."""
@@ -222,6 +229,20 @@ def test_task_trainer_nan_val_when_validation_fails():
         @property
         def task_type(self) -> str:
             return "vision"
+
+        @property
+        def domain_type(self) -> DomainType:
+            return DomainType.VISION
+
+        @property
+        def spec(self) -> DomainSpec:
+            return DomainSpec(name="failing_val", domain_type=DomainType.VISION)
+
+        def get_dataloader(self, split: TaskSplit) -> None:
+            return None
+
+        def evaluate(self, model, split=TaskSplit.VAL, max_batches=None) -> Metrics:
+            return Metrics(loss=0.0, accuracy=0.0)
 
         def get_batch(self, split: str = "train", batch_size: int = 4):
             if split == "train":
@@ -257,10 +278,13 @@ def test_task_trainer_uses_mse_for_regression_tasks():
     using CrossEntropyLoss on float [B,1] targets crashed with a shape /
     dtype error.
     """
-    from bioplausible.hyperopt.tasks import (
-        BaseTask,
-        _resolve_task_loss,
-        _TaskTrainer,
+    from bioplausible.domains import _resolve_task_loss, _TaskTrainer
+    from bioplausible.domains.base import (
+        DomainType,
+        DomainSpec,
+        DomainTask as BaseTask,
+        Metrics,
+        TaskSplit,
     )
 
     class RegressionTask(BaseTask):
@@ -275,6 +299,20 @@ def test_task_trainer_uses_mse_for_regression_tasks():
         @property
         def task_type(self) -> str:
             return "tabular"
+
+        @property
+        def domain_type(self) -> DomainType:
+            return DomainType.TABULAR
+
+        @property
+        def spec(self) -> DomainSpec:
+            return DomainSpec(name="regression", domain_type=DomainType.TABULAR)
+
+        def get_dataloader(self, split: TaskSplit) -> None:
+            return None
+
+        def evaluate(self, model, split=TaskSplit.VAL, max_batches=None) -> Metrics:
+            return Metrics(loss=0.0, accuracy=0.0)
 
         def get_batch(self, split: str = "train", batch_size: int = 8):
             x = torch.randn(batch_size, 4)
@@ -309,13 +347,20 @@ def test_task_trainer_uses_cross_entropy_for_discrete_rl():
     action_dim) should pick CrossEntropyLoss for classification over
     discrete actions, matching the old default behavior.
     """
-    from bioplausible.hyperopt.tasks import BaseTask, _resolve_task_loss
+    from bioplausible.domains import _TaskTrainer, _resolve_task_loss
+    from bioplausible.domains.base import (
+        DomainType,
+        DomainSpec,
+        DomainTask as BaseTask,
+        Metrics,
+        TaskSplit,
+    )
 
     class DiscreteRLTask(BaseTask):
         def __init__(self) -> None:
             super().__init__("discrete_rl", "cpu", quick_mode=True)
             self._input_dim = 8
-            self._output_dim = 6  # discrete action space of size 6
+            self._output_dim = 6
 
         def setup(self) -> None:
             pass
@@ -323,6 +368,20 @@ def test_task_trainer_uses_cross_entropy_for_discrete_rl():
         @property
         def task_type(self) -> str:
             return "rl"
+
+        @property
+        def domain_type(self) -> DomainType:
+            return DomainType.RL
+
+        @property
+        def spec(self) -> DomainSpec:
+            return DomainSpec(name="discrete_rl", domain_type=DomainType.RL)
+
+        def get_dataloader(self, split: TaskSplit) -> None:
+            return None
+
+        def evaluate(self, model, split=TaskSplit.VAL, max_batches=None) -> Metrics:
+            return Metrics(loss=0.0, accuracy=0.0)
 
         def get_batch(self, split: str = "train", batch_size: int = 8):
             return torch.randn(batch_size, 8), torch.randint(0, 6, (batch_size,))
@@ -836,7 +895,14 @@ def test_task_trainer_grad_clip_zero_applies_clipping():
     """Verify that grad_clip=0.0 actually runs through clip_grad_norm_
     without raising (it should clamp all grads to 0.0, which is valid).
     """
-    from bioplausible.hyperopt.tasks import BaseTask, _TaskTrainer
+    from bioplausible.domains import _TaskTrainer
+    from bioplausible.domains.base import (
+        DomainType,
+        DomainSpec,
+        DomainTask as BaseTask,
+        Metrics,
+        TaskSplit,
+    )
 
     class SimpleTask(BaseTask):
         def __init__(self) -> None:
@@ -851,6 +917,20 @@ def test_task_trainer_grad_clip_zero_applies_clipping():
         @property
         def task_type(self) -> str:
             return "vision"
+
+        @property
+        def domain_type(self) -> DomainType:
+            return DomainType.VISION
+
+        @property
+        def spec(self) -> DomainSpec:
+            return DomainSpec(name="simple", domain_type=DomainType.VISION)
+
+        def get_dataloader(self, split: TaskSplit) -> None:
+            return None
+
+        def evaluate(self, model, split=TaskSplit.VAL, max_batches=None) -> Metrics:
+            return Metrics(loss=0.0, accuracy=0.0)
 
         def get_batch(
             self, split: str = "train", batch_size: int = 4

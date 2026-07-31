@@ -3,7 +3,6 @@
 import torch
 from torch import nn
 
-from ....zoo._settling import settle_activations_list
 from bioplausible.core.config import (
     ModelConfig,
     _build_model_config,
@@ -11,6 +10,8 @@ from bioplausible.core.config import (
 )
 from bioplausible.core.model import BioModel
 from bioplausible.core.registry import register_model
+
+from ....zoo._settling import settle_activations_list
 from ._contrastive import _contrastive_step
 
 __all__ = [

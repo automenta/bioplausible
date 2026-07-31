@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import register_model
+
 from ..transitions import TransitionGraphMixin
 from .modern_conv_eqprop import SimpleConvEqProp
 

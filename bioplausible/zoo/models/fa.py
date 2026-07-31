@@ -17,6 +17,7 @@ from bioplausible.core.config import (
 )
 from bioplausible.core.model import BioModel
 from bioplausible.core.registry import register_model
+
 from ..nebc_base import NEBCBase
 from .base import EqPropModel
 

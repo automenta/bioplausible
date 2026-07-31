@@ -21,11 +21,11 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.config import ModelConfig
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.equitile.core.config import LMEquiTileConfig
 from bioplausible.equitile.language.canonical import LMEquiTile
 from bioplausible.equitile.language.components import PositionalEncoding
-from bioplausible.core.config import ModelConfig
 
 __all__ = [
     "OptimizedEquiTileTransformerLayer",

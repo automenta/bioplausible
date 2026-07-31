@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import register_propagator
+from bioplausible.zoo._settling import energy_gradient_descent
 from bioplausible.zoo.mep.optimizers.strategies import UpdateStrategy
 
 from .base import LearningRuleOptimizer
@@ -165,35 +166,19 @@ class EqProp(LearningRuleOptimizer):
         settle_steps: int,
         settle_lr: float,
     ) -> list[torch.Tensor]:
-        """Run one phase of settling (free or nudged) with gradient descent on energy."""
-        # Make states require grad for energy computation
+        """Run one phase of settling via energy gradient descent."""
         states = [s.detach().clone().requires_grad_(True) for s in initial_states]
 
-        # Momentum buffers for states
-        momentum = [torch.zeros_like(s) for s in states]
+        def energy_fn(s: list[torch.Tensor]) -> torch.Tensor:
+            return self._energy(x, s, layers, target, beta)
 
-        for step in range(settle_steps):
-            with torch.enable_grad():
-                E = self._energy(x, states, layers, target, beta)
-
-            # Check for divergence
-            if torch.isnan(E) or torch.isinf(E):
-                raise RuntimeError(f"Energy diverged at step {step}: E={E.item()}")
-
-            # Compute gradients w.r.t states
-            grads = torch.autograd.grad(
-                E, states, retain_graph=False, allow_unused=True
-            )
-
-            # SGD with momentum on states
-            with torch.no_grad():
-                for i, (state, grad) in enumerate(zip(states, grads)):
-                    if grad is None:
-                        continue
-                    momentum[i].mul_(0.5).add_(grad)
-                    state.sub_(momentum[i], alpha=settle_lr)
-
-        return [s.detach() for s in states]
+        return energy_gradient_descent(
+            states,
+            energy_fn,
+            settle_steps,
+            lr=settle_lr,
+            momentum=0.5,
+        )
 
     def _energy(
         self,

@@ -5,9 +5,8 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
-from bioplausible.zoo.models.transitions import TransitionGraphMixin
-
 from bioplausible.core.registry import register_model
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 __all__ = [
     "LocalUpdateModule",

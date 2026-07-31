@@ -70,6 +70,8 @@ class LMTask(DomainTask):
         n = int(0.9 * len(data))
         train_data = data[:n]
         val_data = data[n:]
+        self._train_data = train_data
+        self._val_data = val_data
 
         # Create DataLoaders
         self._train_loader = DataLoader(
@@ -89,6 +91,27 @@ class LMTask(DomainTask):
             return self._train_loader
         else:
             return self._val_loader
+
+    def get_batch(
+        self, split: str | TaskSplit = "train", batch_size: int | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Get a batch of (inputs, targets) for LM training.
+
+        Randomly samples subsequences from the data tensor.
+        """
+        if not self._setup_done:
+            self.setup()
+
+        bsz = batch_size or self.batch_size
+        if isinstance(split, str):
+            data = self._train_data if split == "train" else self._val_data
+        else:
+            data = self._train_data if split == TaskSplit.TRAIN else self._val_data
+
+        idx = torch.randint(0, len(data) - self.seq_len - 1, (bsz,))
+        x = torch.stack([data[i : i + self.seq_len] for i in idx]).to(self.device)
+        y = torch.stack([data[i + self.seq_len] for i in idx]).to(self.device)
+        return x, y
 
     def evaluate(
         self,

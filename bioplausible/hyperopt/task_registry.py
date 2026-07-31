@@ -3,13 +3,14 @@ Task Registration
 
 Tasks are registered directly into the core Registry under
 ``ComponentCategory.TASK`` via the ``register_task`` convenience decorator.
+
+All concrete task classes now live in ``domains/`` (Phase 3.1 merge).
 """
 
 from bioplausible.core.registry import register_task
-from bioplausible.hyperopt.tasks import LMTask, RLTask, VisionTask
-
-# Register core task types via decorator syntax.
-# Instantiation logic (parsing 'mnist_01') lives in the task factory.
+from bioplausible.domains.lm import LMTask
+from bioplausible.domains.rl import RLTask
+from bioplausible.domains.vision import VisionTask
 
 __all__ = []
 register_task("lm")(LMTask)

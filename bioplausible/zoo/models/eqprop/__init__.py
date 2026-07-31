@@ -1,6 +1,7 @@
 """Equilibrium Propagation Model Zoo Subpackage."""
 
 from bioplausible.core.model import BioModel as _BioModel_re_export
+
 from .causal_transformer_eqprop import (
     CausalEqPropAttention,
     CausalTransformerEqProp,

@@ -3,6 +3,10 @@ Domains Package
 
 Domain abstraction layer with standard interfaces for vision, LM, RL, graph,
 tabular, time series, and scientific simulation.
+
+Also re-exports the merged task factory (``create_task``) and training
+utilities (``_TaskTrainer``, ``TaskProtocol``) that originated in
+``hyperopt/tasks.py``.
 """
 
 from bioplausible.domains.base import (
@@ -13,12 +17,14 @@ from bioplausible.domains.base import (
     Metrics,
     TaskSplit,
 )
+from bioplausible.domains.factory import CharNGramTask, create_task
 from bioplausible.domains.graph import GraphTask
 from bioplausible.domains.lm import LMTask
 from bioplausible.domains.rl import RLTask
 from bioplausible.domains.scientific import ScientificTask
 from bioplausible.domains.tabular import TabularTask
 from bioplausible.domains.timeseries import TimeSeriesTask
+from bioplausible.domains.trainer import TaskProtocol, _TaskTrainer, _resolve_task_loss
 from bioplausible.domains.vision import VisionTask
 
 # Registry for domain tasks
@@ -70,8 +76,14 @@ __all__ = [
     "TabularTask",
     "TimeSeriesTask",
     "ScientificTask",
+    "CharNGramTask",
     # Factory
     "create_domain_task",
     "register_domain_task",
     "list_domains",
+    "create_task",
+    # Training utilities
+    "TaskProtocol",
+    "_TaskTrainer",
+    "_resolve_task_loss",
 ]

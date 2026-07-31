@@ -11,6 +11,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.zoo._settling import energy_gradient_descent
+
 __all__ = [
     "Settler",
 ]
@@ -212,120 +214,24 @@ class Settler:
                 target, states[-1].shape[-1], states[-1].dtype
             )
 
-        # Momentum buffers
-        momentum_buffers = [torch.zeros_like(s) for s in states]
+        # Settle via shared energy gradient descent primitive
+        states = [s.requires_grad_(True) for s in states]
 
-        # Settling loop
-        prev_energy: float | None = None
-        patience_counter = 0
-        current_lr = self.lr
-        just_restored = False
+        def wrapped_energy_fn(s: list[torch.Tensor]) -> torch.Tensor:
+            return energy_fn(model, x, s, compat_structure, target_vec, beta)
 
-        # Backup for adaptive steps
-        states_backup = [s.clone() for s in states] if self.adaptive else None
-
-        for step in range(self.steps):
-            with torch.enable_grad():
-                E = energy_fn(model, x, states, compat_structure, target_vec, beta)
-
-                # Check for divergence
-                if torch.isnan(E) or torch.isinf(E):
-                    raise RuntimeError(
-                        f"Energy diverged at step {step}: E={E.item()}. "
-                        f"Try reducing settle_lr, beta, or learning rate."
-                    )
-
-                current_energy = float(E.item())
-
-                # Adaptive step size logic
-                if self.adaptive and states_backup is not None:
-                    if prev_energy is not None:
-                        if current_energy > prev_energy:
-                            # Energy increased: reject step
-                            # Restore states from backup
-                            with torch.no_grad():
-                                for s, b in zip(states, states_backup):
-                                    s.copy_(b)
-
-                            # Decay LR
-                            current_lr *= self.step_size_decay
-
-                            # We must continue to re-evaluate at restored state
-                            just_restored = True
-                            continue
-                        else:
-                            # Energy decreased: accept step
-
-                            # Grow LR slightly (with cap?) only if we didn't just restore
-                            if not just_restored:
-                                current_lr = min(
-                                    current_lr * self.step_size_growth, self.lr * 10
-                                )
-
-                            # Update backup
-                            with torch.no_grad():
-                                for s, b in zip(states, states_backup):
-                                    b.copy_(s)
-                    else:
-                        # First step
-                        with torch.no_grad():
-                            for s, b in zip(states, states_backup):
-                                b.copy_(s)
-
-                # Early stopping
-                # Skip check if we just restored (delta would be 0)
-                if prev_energy is not None and not just_restored:
-                    delta = abs(current_energy - prev_energy)
-                    # Use both absolute and relative tolerance for robust convergence detection
-                    rel_tol = self.tol * max(1.0, abs(prev_energy))
-                    if delta < self.tol or delta < rel_tol:
-                        patience_counter += 1
-                    else:
-                        patience_counter = 0
-
-                    if patience_counter >= self.patience:
-                        # Converged - energy stable for patience steps
-                        break
-
-                just_restored = False
-                prev_energy = current_energy
-
-                grads = torch.autograd.grad(
-                    E, states, retain_graph=False, allow_unused=True
-                )
-
-            # SGD step with momentum - use fused kernel if available
-            with torch.no_grad():
-                # Try to use fused CUDA kernel for efficiency
-                try:
-                    from ..cuda.kernels import fused_settle_step_inplace
-
-                    if states[0].is_cuda:
-                        fused_settle_step_inplace(
-                            states,
-                            momentum_buffers,
-                            grads,
-                            momentum=self.MOMENTUM,
-                            lr=current_lr,
-                        )
-                    else:
-                        # CPU fallback
-                        for i, (state, g) in enumerate(zip(states, grads)):
-                            if g is None:
-                                continue
-                            buf = momentum_buffers[i]
-                            buf.mul_(self.MOMENTUM).add_(g)
-                            state.sub_(buf, alpha=current_lr)
-                except ImportError:
-                    # Fallback if cuda module not available
-                    for i, (state, g) in enumerate(zip(states, grads)):
-                        if g is None:
-                            continue
-                        buf = momentum_buffers[i]
-                        buf.mul_(self.MOMENTUM).add_(g)
-                        state.sub_(buf, alpha=current_lr)
-
-        return [s.detach() for s in states]
+        return energy_gradient_descent(
+            states,
+            wrapped_energy_fn,
+            self.steps,
+            lr=self.lr,
+            momentum=self.MOMENTUM,
+            adaptive=self.adaptive,
+            tol=self.tol,
+            patience=self.patience,
+            step_size_growth=self.step_size_growth,
+            step_size_decay=self.step_size_decay,
+        )
 
     def settle_with_graph(
         self,

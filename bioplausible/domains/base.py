@@ -127,6 +127,9 @@ class DomainTask(ABC):
 
     Each domain (vision, LM, RL, etc.) implements this interface
     to provide standardized data loading, evaluation, and metrics.
+
+    ``DomainTask`` is a superset of ``TaskProtocol`` — all subclasses
+    satisfy the experiment-system protocol as well.
     """
 
     def __init__(
@@ -134,11 +137,13 @@ class DomainTask(ABC):
         name: str,
         device: str | torch.device = "cpu",
         batch_size: int = 32,
+        quick_mode: bool = False,
         **kwargs,
     ):
         self.name = name
         self.device = torch.device(device)
         self.batch_size = batch_size
+        self.quick_mode = quick_mode
         self.kwargs = kwargs
         self._train_loader: DataLoader | None = None
         self._val_loader: DataLoader | None = None
@@ -146,6 +151,11 @@ class DomainTask(ABC):
         self._input_dim: int | None = None
         self._output_dim: int | None = None
         self._setup_done = False
+
+    @property
+    def task_type(self) -> str:
+        """Short string identifier (alias for ``domain_type``)."""
+        return str(self.domain_type)
 
     @property
     @abstractmethod
@@ -186,11 +196,40 @@ class DomainTask(ABC):
             self._test_loader = self.get_dataloader(TaskSplit.TEST)
         return self._test_loader
 
-    def get_batch(self, split: TaskSplit = TaskSplit.TRAIN) -> Batch:
-        """Get a single batch from the specified split."""
-        loader = self.get_dataloader(split)
+    def get_batch(
+        self, split: str | TaskSplit = "train", batch_size: int | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Get a single batch as raw tensors (protocol-compatible).
+
+        Compatible with the ``TaskProtocol.get_batch`` signature.  Returns
+        a ``(inputs, targets)`` tuple.
+
+        Subclasses that don't use DataLoaders (e.g. graph, RL) should
+        override this method.
+        """
+        if isinstance(split, str):
+            split_enum = TaskSplit.TRAIN if split == "train" else TaskSplit.VAL
+        else:
+            split_enum = split
+        loader = self.get_dataloader(split_enum)
+        if loader is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} does not use DataLoaders; "
+                "override get_batch() to provide custom batch generation"
+            )
+        if batch_size is not None:
+            loader = DataLoader(
+                loader.dataset,
+                batch_size=batch_size,
+                shuffle=(split_enum == TaskSplit.TRAIN),
+            )
         inputs, targets = next(iter(loader))
-        return Batch(inputs=inputs, targets=targets).to(self.device)
+        return inputs.to(self.device), targets.to(self.device)
+
+    def get_batch_domain(self, split: TaskSplit = TaskSplit.TRAIN) -> Batch:
+        """Get a single batch as a ``Batch`` dataclass (rich interface)."""
+        inputs, targets = self.get_batch(split)
+        return Batch(inputs=inputs, targets=targets)
 
     @property
     def input_dim(self) -> int:
@@ -222,11 +261,26 @@ class DomainTask(ABC):
         return torch.nn.functional.cross_entropy(outputs, targets)
 
     def compute_metrics(
+        self, logits: torch.Tensor, y: torch.Tensor, loss: float
+    ) -> dict[str, float]:
+        """Compute metrics from model outputs (protocol-compatible).
+
+        Compatible with the ``TaskProtocol.compute_metrics`` signature
+        (``logits, y, loss``) returning a ``dict``.
+
+        Handles 3-D logits (LM autoregressive heads) by using the last
+        token's prediction — matching ``compute_loss`` behaviour.
+        """
+        if logits.dim() == 3:
+            logits = logits[:, -1, :]
+        accuracy = (logits.argmax(1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": accuracy}
+
+    def compute_metrics_domain(
         self, outputs: torch.Tensor, targets: torch.Tensor, loss: float
     ) -> Metrics:
-        """Compute metrics from outputs and targets."""
-        accuracy = (outputs.argmax(1) == targets).float().mean().item()
-        return Metrics(loss=loss, accuracy=accuracy)
+        """Compute metrics as a ``Metrics`` dataclass (rich interface)."""
+        return Metrics.from_dict(self.compute_metrics(outputs, targets, loss))
 
     def get_model_kwargs(self) -> dict[str, object]:
         """Get keyword arguments for model construction."""
@@ -234,3 +288,10 @@ class DomainTask(ABC):
             "input_dim": self.input_dim,
             "output_dim": self.output_dim,
         }
+
+    def create_trainer(self, model: nn.Module, **kwargs) -> object:
+        """Create a trainer for this task (protocol-compat)."""
+        from bioplausible.domains.trainer import _TaskTrainer
+
+        kwargs.pop("device", None)
+        return _TaskTrainer(model, self, device=str(self.device), **kwargs)

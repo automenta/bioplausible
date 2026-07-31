@@ -4,6 +4,7 @@ import torch
 from torch import nn
 
 from bioplausible.core.registry import register_model
+
 from ..base import EqPropModel
 
 __all__ = [

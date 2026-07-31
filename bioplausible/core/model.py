@@ -53,9 +53,6 @@ class BioModel(nn.Module, ABC):
 
         # Handle config vs direct args
         if config is None:
-            if input_dim is None or output_dim is None:
-                pass
-
             # Legacy/Direct init
             self.config = ModelConfig(
                 name=self.algorithm_name,

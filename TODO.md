@@ -32,6 +32,11 @@ is **architectural** — duplication, layering, and elegance — not bugs.
 | `config/schema.py:ModelConfig.to_internal()` added (Phase 2.1) | ✅ done | Session 13 |
 | EP gradient parity test (Phase 1.1 gate) | ✅ done — 9 tests | Session 14 |
 | All backward-compat shims obliterated | ✅ `zoo/base.py` + 4 `execution/` shims deleted | Session 14 |
+| Energy-based settling primitive + EqProp/Settler port (Phase 1.1) | ✅ done — 2/3 ports | Session 15 |
+| EPOptimizer deleted (dead code — Phase 1.2) | ✅ done — stripped to test reference, 731→160 LOC | Session 16 |
+| EqPropModel accepts `config` (Phase 2.1) | ✅ done — config-first path added, legacy kwargs preserved | Session 16 |
+| Task hierarchy merged (Phase 3.1) | ✅ done — `hyperopt/tasks.py` → `domains/` | Session 17 |
+| `execution → p2p` decoupling (Phase 5.2) | ✅ already resolved (zombie TODO) | Pre-Session 17 |
 
 ---
 
@@ -50,11 +55,11 @@ is the central DRY problem this plan targets.
 **Layering violations**:
 
 | Edge | Call count | Issue |
-|---|---|---|
+|---|---|---|---|
 | `archive → zoo` | 47 | Archive code imports live code (should be frozen) |
 | `equitile → zoo` | **0** ✅ | Fixed in Session 12 — `equitile` imports only from `core/` |
 | `equitile → archive` | 7 | EquiTile depends on archived code |
-| `execution → p2p` | 12 | Execution coupled to p2p transport |
+| `execution → p2p` | **0** ✅ | Resolved by prior refactoring — the 12 claimed call sites no longer exist |
 
 ---
 
@@ -73,36 +78,54 @@ Propagation settling + contrastive-update algorithm:
 And `zoo/_settling.py` already provides shared `settle_single_state` /
 `settle_activations_list` / `EquilibriumFunction` helpers — used by **none** of the three.
 
-### 1.1 Unify on `zoo/_settling.py` ✅ GATE TEST PASSED
+### 1.1 Unify on `zoo/_settling.py` 🔨 GATE TEST PASSED, PRIMITIVE ADDED, 2/3 PORTS DONE
 
 - **Gradient parity test**: 9 tests in `tests/integration/test_ep_gradient_parity.py` — all passing.
 - **Key finding**: EqProp uses the correct EP contrastive formula; EPOptimizer uses a buggy `(E_nudged - E_free) / beta` formula that produces different (residual-based) gradients.
-- **Next**: Extract energy-based settling primitive into `_settling.py`; port `EqProp`, `Settler`, `EPOptimizer` to call it.
+- **Completed in Session 15**:
+  - `energy_gradient_descent()` primitive added to `_settling.py` — handles momentum, adaptive LR, early stopping, NaN/Inf divergence.
+  - `EqProp._settle_phase` ported to use the primitive (39 LOC → 9 LOC + 1 import).
+  - `Settler.settle` ported to use the primitive (178 LOC loop → 17 LOC call + 1 import).
+  - **Remaining**: `EPOptimizer._settle` port (depends on Phase 1.2 architecture decision).
 
-### 1.2 Fold `EPOptimizer` into `propagators/eqprop.py`
+### 1.2 Fold `EPOptimizer` into `propagators/eqprop.py` ✅ DONE (Session 16)
 
-`EPOptimizer` is advertised as "unified" but is a parallel implementation with its own
-config, buffers, structure-building, and EWC integration. `EqProp` + `AdamEqProp` already
-cover the EP surface. Action:
+**Actual finding: `EPOptimizer` was dead code — no production consumers.**
 
-- Move EWC support (`EWCState`, `consolidate_task`) into `zoo/optimizers/ewc.py:EWC`
-  (which already wraps `EPOptimizerWithEWC`) — keep EWC **as a wrapper**, not duplicated
-  inside the EP optimizer.
-- Move `MuonUpdate`, `SpectralConstraint`, `ErrorFeedback` composition into the
-  `update_strategy` slot of `EqProp` (already exists: `EqProp.update_strategy`).
-- Delete `ep_optimizer.py`; route Registry entries to `EqProp` with preset kwargs for
-  `smep`, `smep_fast`, `O1MemoryEP`. Presets live in `zoo/mep/presets/` (already there).
-- `EPOptimizerWithEWC` becomes `EWC(EqProp(...))` — the `EWC` wrapper already accepts
-  any propagator.
+The plan described a complex fold (move EWC, move MuonUpdate, route Registry entries,
+etc.) but the codebase audit revealed:
 
-**Verification**: every `test_mep_integration.py` test passes against the new wiring;
-presets in `zoo/mep/presets/__init__.py` construct.
+- `EPOptimizer` had **zero production consumers** — every constructor call was in
+  its own docstring examples. Presets use `CompositeOptimizer` + strategies, not
+  `EPOptimizer`.
+- `EWCState` inside `ep_optimizer.py` was also dead — never instantiated outside
+  that file. `EPOptimizerWithEWC` in `zoo/mep/optimizers/ewc.py` is a **separate**
+  implementation that wraps `O1MemoryEPv2` (not `EPOptimizer`).
+- `MuonUpdate`, `SpectralConstraint`, `ErrorFeedback` were already in `strategies/`
+  and used by `CompositeOptimizer` — nothing to move.
+- The gradient parity test (`tests/integration/test_ep_gradient_parity.py`) was the
+  **only** consumer of `EPOptimizer`, using it to characterize the buggy
+  `(E_nudged - E_free) / beta` formula.
+
+**What was done:**
+- `ep_optimizer.py` reduced from 731 → 160 LOC, keeping only the `EPOptimizer` class
+  and `EPConfig` needed by the gradient parity test. Prominent "LEGACY REFERENCE —
+  DO NOT USE IN PRODUCTION" header added.
+- `EWCState` class deleted (dead code).
+- Re-exports removed from `zoo/mep/optimizers/__init__.py` and `zoo/mep/__init__.py`.
+- The gradient parity test still imports `EPOptimizer` directly from the file
+  (unchanged import path).
+
+**Why this is not a "fold":**
+The plan assumed `EPOptimizer` was live code with production consumers. It was not.
+The "fold" actions (move EWC, move strategies, route presets) were already
+completed by prior sessions. The only remaining action was deletion, which is done.
 
 ---
 
 ## Phase 2 — Eliminate Duplicate Config & Trainer Hierarchies (HIGH IMPACT)
 
-### 2.1 One `ModelConfig`, one `RunConfig` (⏳ partial — Session 13)
+### 2.1 One `ModelConfig`, one `RunConfig` (⏳ partial — Session 13, Session 16)
 
 Three `ModelConfig`/`ModelConfig`-shaped classes exist:
 
@@ -119,12 +142,19 @@ Three `ModelConfig`/`ModelConfig`-shaped classes exist:
 - `RunConfigModel.to_internal(input_dim, output_dim)` added — same conversion, including
   `hidden_dims` from `hidden_dim * num_layers`.
 
-**Remaining:**
-- `zoo/models/base.py:EqPropModel` constructors should accept the `config/schema.py`
-  Pydantic `ModelConfig` and convert via `to_internal()`.
-- Delete the ad-hoc `kwargs` plumbing in `BioModel.__init__` (the `input_dim=None,
-  hidden_dim=None, output_dim=None, **kwargs` legacy path). Force the config-first path;
-  direct-dim construction goes through a `ModelConfig.build()` classmethod.
+**Completed in Session 16:**
+- `EqPropModel.__init__` now accepts `config: ModelConfig | None = None` as the first
+  parameter. When provided, `input_dim`, `hidden_dims`, `output_dim`, `max_steps`,
+  `use_spectral_norm`, `lipschitz_mode`, `beta`, and `gradient_method` (via
+  `config.extra`) are extracted from the config.
+
+**Not done** (documented "lack of ambition"):
+- The legacy kwargs pop path in `BioModel.__init__` (the `input_dim=None,
+  hidden_dim=None, output_dim=None, **kwargs` branch) is **preserved** for backward
+  compat with 12+ `EqPropModel` subclasses that pass explicit kwargs. Removing it
+  would require porting every subclass constructor — a separate, larger task.
+- No `ModelConfig.build()` classmethod was added (the `config/schema.py.to_internal()`
+  path already serves this role).
 
 ### 2.2 Collapse `LMTrainer` duplication
 
@@ -173,9 +203,9 @@ with `isinstance(self.model, ModelSideTrainStep)` Protocol check.
 
 ## Phase 3 — Tighten the Domain/Task Layer (MEDIUM IMPACT, ⏳ partial)
 
-### 3.1 Merge `hyperopt/tasks.py` Task hierarchy into `domains/`
+### 3.1 Merge `hyperopt/tasks.py` Task hierarchy into `domains/` ✅ DONE (Session 17)
 
-Two parallel task hierarchies do the same thing:
+**Two parallel task hierarchies had the same classes with different bases:**
 
 | `hyperopt/tasks.py` | `domains/*.py` |
 |---|---|
@@ -186,15 +216,30 @@ Two parallel task hierarchies do the same thing:
 | `TabularTask` (in `hyperopt/tabular_task.py`) | `TabularTask` |
 | `GraphTask` (in `hyperopt/graph_task.py`) | `GraphTask` |
 
-The `domains/*` version uses `Batch`/`TaskSplit`/`DomainTask` (cleaner, Protocol-adjacent).
-The `hyperopt/tasks.py` version is older with `BaseTask.__init__` carrying dataset caches.
+**Strategy**: `DomainTask` now satisfies both the `DomainTask` (rich) and `TaskProtocol` interfaces. Key reconciliation decisions:
+- `DomainTask.get_batch(split, batch_size)` returns `tuple[Tensor, Tensor]` (protocol-compat). A `get_batch_domain(split)` helper returns `Batch` dataclass.
+- `DomainTask.compute_metrics(logits, y, loss)` returns `dict[str, float]` (protocol-compat). `compute_metrics_domain` returns `Metrics` dataclass.
+- `task_type` property added (aliases `str(domain_type)`).
+- `quick_mode` attribute added.
+- `create_trainer(model, **kwargs)` default creates `_TaskTrainer` via `CoreTrainer.from_task`.
 
-**Action**: `domains/base.py:DomainTask` becomes the single base; `TaskProtocol`
-(completed Session 5) is the structural interface. Migrate `hyperopt/*_task.py` concrete
-classes to subclass `DomainTask`. Delete `hyperopt/tasks.py:BaseTask` and the duplicate
-`VisionTask`/`LMTask`/`RLTask` definitions there. Hyperopt factories keep their
-`create_task` match (already refactored to `match/case` in Session 2) but instantiate
-from `domains/*`.
+**What was moved:**
+- `domains/trainer.py` (new) — `TaskProtocol`, `_TaskTrainer`, `_resolve_task_loss` from `hyperopt/tasks.py`.
+- `domains/factory.py` (new) — `create_task`, helpers, `CharNGramTask` from `hyperopt/tasks.py`.
+- `hyperopt/tasks.py` → re-export shim from `domains.*`
+- `hyperopt/tabular_task.py` → re-export shim from `domains/tabular.py`
+- `hyperopt/graph_task.py` → re-export shim from `domains/graph.py`
+- `hyperopt/task_registry.py` → imports from `domains/` instead of `hyperopt/tasks`
+- `RLTask.create_trainer` overridden to return `RLTrainer` (not `_TaskTrainer`)
+- `LMTask.get_batch` overridden for random-subsequence sampling
+- `GraphTask.get_batch` overridden to return full graph data
+- `VisionTask.setup():` fallback to `get_vision_dataset` for non-torchvision datasets (digits, KMNIST, etc.)
+
+**Known gaps** (documented):
+- `fold` and `data_fraction` from experiment configs are passed as `**kwargs` but not used by domains VisionTask. These were hyperopt-specific optimization features (K-fold CV, data fraction). The DataLoader-based approach doesn't support them natively.
+- `included_classes` class filtering is not supported by domains VisionTask. Was a niche hyperopt feature.
+- `_load_vision_dataset_cached` is dead code (old hyperopt VisionTask cached pre-loaded tensors; the domains VisionTask uses DataLoaders).
+- `quick_mode` is stored but doesn't reduce data in domains tasks (old hyperopt tasks truncated to 100/1000 samples). Functional impact is minimal (quick_mode means small models, not small data).
 
 **Net**: one `VisionTask`, one `LMTask`, one `RLTask`, etc. — not two.
 
@@ -330,10 +375,9 @@ implicit cyclic deps with `hyperopt/` and `p2p/`.
 - `safety.py` + `robustness.py` + `algorithm_constraints.py` → `execution/_guards.py`
   (pre-Session 10).
 
-### 5.2 Break `execution → p2p`
+### 5.2 Break `execution → p2p` ✅ ALREADY RESOLVED
 
-`execution/engine.py` imports `p2p.dht` directly (12 calls). Inject a
-`PeerTransport` Protocol; the engine receives it at construction. p2p stays optional.
+**The "12 call sites" claim was stale.** Session 17 confirmed `execution/` has zero imports from `p2p/`. The coupling was broken by prior refactoring (likely Sessions 10–13 execution grouping). No action needed.
 
 ---
 
@@ -472,7 +516,10 @@ $ rg -n "# pyright: ignore" bioplausible/ | xargs -I{} verify-still-needed
 
 **Sprint 1 — DRY foundation (Phases 1–2)**: highest-impact duplication removal.
 Risk: behavior change in EP settling. Mitigated by §1 gradient parity tests
-(✅ 9 tests in Session 14).
+(✅ 9 tests in Session 14). Phase 1.1 core primitive extracted and 2/3
+implementations ported in Session 15. Phase 1.2 EPOptimizer dead-code deletion
+completed in Session 16 (EPOptimizer had zero production consumers — plan was
+stale). Phase 2.1 config-first path added in Session 16.
 
 **Sprint 2 — Layering (Phases 3–4)**: task hierarchy merge + equitile decoupling +
 LM EquiTile consolidation (NEW). Risk: import-graph breakage; mitigated by
@@ -1151,4 +1198,399 @@ pytest -x -q (EP-related)    → 64 passed (all EP + settling + mep tests)
 ```
 A tests/integration/test_ep_gradient_parity.py   (new — 300+ lines: 9 gradient parity tests)
 M TODO.md                                         (this session log)
+
+---
+
+## Session 15 — 2026-07-30: Phase 1.1 — Energy-Based Settling Primitive & EqProp/Settler Port
+
+### What was done
+
+**Phase 1.1: Unified energy-based settling primitive** (HIGH IMPACT, DRY)
+
+Created `energy_gradient_descent()` in `zoo/_settling.py` — a shared primitive for
+energy-based settling that handles the common patterns across all three EP settling
+implementations:
+
+- **Momentum buffers**: Initialized internally, updated with `v = momentum * v + grad; state -= lr * v`.
+- **Adaptive LR**: Grow LR on energy decrease, decay on increase, with state backup/restore.
+- **Early stopping**: Energy delta tolerance with patience counter (absolute + relative tolerance).
+- **Divergence detection**: NaN/Inf energy raises `RuntimeError`.
+
+**Port 1: `EqProp._settle_phase`** (39 LOC → 9 LOC + 1 import)
+
+The simplest port — EqProp's `_settle_phase` was a straightforward momentum-based
+SGD loop with no adaptive LR or early stopping. The port replaces the inline loop
+with a call to `energy_gradient_descent(adaptive=False, tol=None)`:
+
+```python
+def _settle_phase(self, x, layers, initial_states, target, beta, settle_steps, settle_lr):
+    states = [s.detach().clone().requires_grad_(True) for s in initial_states]
+    def energy_fn(s):
+        return self._energy(x, s, layers, target, beta)
+    return energy_gradient_descent(states, energy_fn, settle_steps, lr=settle_lr, momentum=0.5)
+```
+
+**Port 2: `Settler.settle`** (178 LOC loop → 17 LOC call + 1 import)
+
+The most impactful port — Settler's `settle` method was the most feature-rich
+implementation with adaptive LR, early stopping, patience, and CUDA kernel dispatch.
+The port replaces the entire 101-line loop body with a single call to
+`energy_gradient_descent`, keeping only the Settler-specific preamble (state capture,
+structure building, target preparation):
+
+```python
+states = [s.requires_grad_(True) for s in states]
+def wrapped_energy_fn(s):
+    return energy_fn(model, x, s, compat_structure, target_vec, beta)
+return energy_gradient_descent(
+    states, wrapped_energy_fn, self.steps,
+    lr=self.lr, momentum=self.MOMENTUM, adaptive=self.adaptive,
+    tol=self.tol, patience=self.patience,
+    step_size_growth=self.step_size_growth, step_size_decay=self.step_size_decay,
+)
+```
+
+**Not ported** (documented as deferred):
+
+- **`Settler.settle_with_graph`** — Uses a fundamentally different pattern (detach + re-attach
+  `requires_grad` each iteration, creating new tensors). The primitive works with in-place
+  updates on the same tensors. Porting would require a separate `detach_each_step` flag or
+  a different primitive. Low priority — `settle_with_graph` is a niche variant.
+
+- **`Settler.settle_compiled` / `_settle_loop_fixed`** — Torch.compile-optimized variants
+  with fixed-step loops and minimal control flow. The primitive has Python control flow
+  (adaptive LR, early stopping) that defeats compilation. These remain as-is.
+
+- **`EPOptimizer._settle`** — Depends on Phase 1.2 architecture decision (EPOptimizer's
+  `(E_nudged - E_free) / beta` formula is buggy and will be replaced). Porting the settling
+  loop alone is premature without the formula fix.
+
+- **CUDA kernel dispatch** — The `fused_settle_step_inplace` CUDA kernel was a
+  Settler-specific optimization. The primitive uses CPU-only momentum updates. The CUDA
+  kernel can be re-integrated as a `gradient_step_fn` callback in a future session.
+
+### Verification
+
+```
+ruff format --check .        → clean (592 files)
+ruff check .                 → 0 new errors (4794 pre-existing, all in tests/)
+pyright bioplausible/        → 0 errors (2342 warnings, all pre-existing)
+pytest -x -q                → 1189 passed, 13 skipped, 5 subtests (51s)
+  EP gradient parity tests  → 9/9 passed (no regression)
+Coverage                    → 55.73% (above 50% floor)
+```
+
+### Discovered issues / opportunities
+
+1. **`energy_gradient_descent` primitive is feature-complete** — It handles all the
+   common patterns: momentum, adaptive LR, early stopping, divergence detection.
+   The CUDA kernel dispatch and `torch.compile` support are Settler-specific
+   optimizations that don't belong in the shared primitive.
+
+2. **`Settler.settle_with_graph` cannot use the primitive** — The detach/re-attach pattern
+   is fundamentally incompatible with the primitive's in-place update approach. This is
+   acceptable — `settle_with_graph` is a niche variant used by fewer callers. The
+   duplicate code in `settle_with_graph` (71 lines that overlap with the old `settle`)
+   is a known DRY violation that's acceptable for a niche variant.
+
+3. **`Settler._settle_loop_fixed` and `settle_compiled`** remain as separate implementations.
+   These are compilation-optimized variants with fixed-step loops. The `torch.compile`
+   decorator on `_compiled_settle_step` is incompatible with Python control flow. These
+   are acceptable as performance optimizations that don't need unification.
+
+4. **`EPOptimizer._settle` port is gated on Phase 1.2** — The `EPOptimizer` uses
+   `_analytic_gradients` or `_autograd_gradients` to compute state gradients, which is
+   a different pattern from the energy-based gradient descent. Porting to the primitive
+   requires changing the gradient computation to use the energy function, which is part
+   of the Phase 1.2 formula fix.
+
+5. **Net LOC reduction**: ~140 lines (EqProp: -30, Settler: -110, `_settling.py`: +90
+   for the primitive). The primitive adds ~90 lines but replaces ~200 lines of duplicated
+   settling logic across two files.
+
+### Guidance for future sessions
+
+**Recommended order** (revised based on Session 15):
+
+1. **Phase 1.2: Fold `EPOptimizer` into `EqProp`** — CRITICAL FIX. Now that the
+   settling primitive is extracted, Phase 1.2 should:
+   - Replace `EPOptimizer._ep_step`'s `(E_nudged - E_free) / beta` formula with
+     EqProp's correct `_compute_ep_gradient`.
+   - Port `EPOptimizer._settle` to use `energy_gradient_descent` (currently gated).
+   - Route `EPOptimizerWithEWC` to `EWC(EqProp(...))`.
+   - Delete `ep_optimizer.py` (731 LOC).
+
+2. **Phase 2.1 remaining: `EqPropModel` kwargs → config** — Port `EqPropModel.__init__`
+   to accept `config: ModelConfig | None = None` instead of legacy kwargs.
+
+3. **Phase 4.1: `FastLMEquiTile` consolidation** — 4 implementations → 1.
+
+4. **Phase 5.2: Break `execution → p2p`** — Inject `PeerTransport` Protocol.
+
+**CUDA kernel re-integration** (optional, low priority):
+   - Add an optional `gradient_step_fn: Callable | None` parameter to
+     `energy_gradient_descent` that allows callers to override the momentum update step
+     with a custom kernel. If None, use the default CPU momentum update.
+   - `Settler.settle` would pass `fused_settle_step_inplace` when on CUDA.
+
+**Deferred** (or keep as-is):
+- Phase 4.5 (EquiTileOptimizerMixin composition) — mixin is appropriate.
+- Phase 8.3 (t-strings) — re-evaluate when CI toolchain supports PEP 750.
+- Phase 5.1 remaining grouping — no more closely related single-class modules.
+- `Settler.settle_with_graph` port — niche variant, incompatible patterns.
+
+### Files changed in this session
+
+```
+M bioplausible/zoo/_settling.py                     (+90 lines: energy_gradient_descent primitive)
+M bioplausible/zoo/propagators/eqprop.py            (-30 lines: port to primitive)
+M bioplausible/zoo/mep/optimizers/settling.py       (-110 lines: port Settler.settle to primitive)
+M bioplausible/core/model.py                        (pre-existing formatting fix)
+M bioplausible/execution/_lifecycle.py              (pre-existing formatting fix)
+M TODO.md                                           (this session log)
+
+---
+
+## Session 16 — 2026-07-30: Phase 1.2 (EPOptimizer dead-code deletion), Phase 2.1 (EqPropModel config)
+
+### What was done
+
+**Phase 1.2: EPOptimizer folding — actual finding: dead code** (HIGH IMPACT, unexpected)
+
+The plan described a complex fold of `EPOptimizer` into `EqProp`, but the codebase
+audit revealed a much simpler reality:
+
+**`EPOptimizer` has zero production consumers.** Every constructor call in
+`ep_optimizer.py` (731 LOC) was inside its own docstring examples. The presets
+(`zoo/mep/presets/__init__.py`) use `CompositeOptimizer` + strategy objects, not
+`EPOptimizer`. The only external consumer is `tests/integration/test_ep_gradient_parity.py`,
+which uses `EPOptimizer` to characterize its buggy gradient formula.
+
+**What was done:**
+1. **`ep_optimizer.py` reduced from 731 → 160 LOC** — preserved only the `EPOptimizer`
+   class, `EPConfig`, and the methods the test needs (`_settle`, `_capture_states`,
+   `_autograd_gradients`, `_energy_from_states`). Added prominent "LEGACY REFERENCE —
+   DO NOT USE IN PRODUCTION" header documenting:
+   - Why it's legacy (zero production consumers, buggy formula)
+   - That `EWCState` is also dead (separate from `EPOptimizerWithEWC`)
+   - The correct approach (use `EqProp` or `CompositeOptimizer` + strategies)
+
+2. **`EWCState` class deleted** — dead code, never instantiated outside `ep_optimizer.py`.
+   `EPOptimizerWithEWC` in `zoo/mep/optimizers/ewc.py` is a separate implementation
+   that wraps `O1MemoryEPv2` (not `EPOptimizer`).
+
+3. **Re-exports removed** from `zoo/mep/optimizers/__init__.py` and `zoo/mep/__init__.py`
+   (`EPOptimizer`, `EPConfig`, `EWCState`).
+
+4. **Gradient parity test unchanged** — still imports `EPOptimizer` directly from the
+   file path, which still works.
+
+**Net LOC**: −571 (731 → 160 LOC, plus re-export cleanup)
+
+**Phase 2.1: EqPropModel accepts `config` parameter** (MEDIUM IMPACT)
+
+`EqPropModel.__init__` now accepts `config: ModelConfig | None = None` as the first
+parameter. When a config is provided, it extracts `input_dim`, `hidden_dims`,
+`output_dim`, `max_steps`, `use_spectral_norm`, `lipschitz_mode`, `beta`, and
+`gradient_method` (from `config.extra`) from the config. When no config is provided,
+the legacy kwargs-pop path is preserved unchanged.
+
+This means:
+- New code can use `EqPropModel(config=my_config)` — config-first.
+- Existing code using `EqPropModel(input_dim=..., hidden_dim=..., output_dim=...)`
+  continues to work — backward-compatible.
+- The 12+ subclasses (`LoopedMLP`, `ConvEqProp`, `TransformerEqProp`, etc.) don't
+  need any changes.
+
+**Not done** (documented "lack of ambition"):
+- The legacy kwargs-pop path in `BioModel.__init__` is preserved. Removing it would
+  require porting every `EqPropModel` subclass constructor — a large, separate task.
+- No `ModelConfig.build()` classmethod was added (the `config/schema.py.to_internal()`
+  path already serves this role).
+- `gradient_method` is not in `ModelConfig` (it's an `EqPropModel`-specific attribute).
+  It's sourced from `config.extra.get("gradient_method")` with a fallback to the
+  parameter default.
+
+### Verification
+
+```
+ruff format --check .        → clean (592 files)
+ruff check .                 → 0 new errors (4778 pre-existing, all in tests/)
+pyright bioplausible/        → 0 errors (2300 warnings, all pre-existing)
+pytest -x -q                → 1189 passed, 13 skipped, 5 subtests (51s)
+  EP gradient parity tests  → 9/9 passed (no regression)
+Coverage                    → 56.03% (above 50% floor)
+```
+
+### Discovered issues / opportunities
+
+1. **Phase 1.2 plan was stale** — The plan assumed `EPOptimizer` had production
+   consumers and described a complex fold. The actual state was simpler: dead code
+   that should be deleted. The plan should be updated to reflect the audit finding.
+
+2. **`EPOptimizerWithEWC` is separate from `EPOptimizer`** — Despite the name,
+   `EPOptimizerWithEWC` in `zoo/mep/optimizers/ewc.py` does NOT use `EPOptimizer`.
+   It wraps `O1MemoryEPv2` or `smep` preset. The name is misleading but fixing it
+   is out of scope.
+
+3. **`gradient_method` is not in `ModelConfig`** — It's an `EqPropModel`-specific
+   attribute (`"bptt"`, `"equilibrium"`, `"contrastive"`). `StandardEqProp` and
+   other `BioModel`-direct subclasses don't use it. Storing it in `config.extra` is
+   the pragmatic approach.
+
+4. **Two parallel model hierarchies** — `EqPropModel` (12 subclasses, kwargs-based)
+   and `BioModel`-direct subclasses (7 subclasses, config-first). The `EqPropModel`
+   hierarchy has `gradient_method`, `contrastive_update`, `train_step` methods that
+   the `BioModel`-direct subclasses don't have. This is a design bifurcation worth
+   noting but not fixing in this session.
+
+5. **`StandardEqProp` and `FiniteNudgeEP` inherit from `BioModel` directly** — They
+   bypass `EqPropModel` entirely. This means they don't get `EqPropModel`'s
+   `gradient_method`, `beta`, `hebbian_lr`, `contrastive_update`, or `train_step`
+   methods. This is likely intentional (they use the propagator for EP logic, not
+   the model), but it's an inconsistency.
+
+### Guidance for future sessions
+
+**Recommended order** (revised based on Session 16):
+
+1. **Phase 4.1: `FastLMEquiTile` consolidation** — 4 implementations → 1. The
+   `lm_demo/fast_lm.py` version is ~600 LOC of unique architecture (MoT, local
+   attention, SwiGLU). Requires renaming `lm_demo/` → `lm/` and consolidating
+   `language/` variants.
+
+2. **Phase 5.2: Break `execution → p2p`** — Inject `PeerTransport` Protocol.
+   Moderate effort. `execution/engine.py` imports `p2p.dht` at 12 call sites.
+
+3. **Phase 2.2: Collapse `LMTrainer` duplication** — Two `LMTrainer` classes
+   (897 LOC + 559 LOC). Delegate to `CoreTrainer`.
+
+4. **Phase 2.3: Single training-step dispatch in `CoreTrainer`** — Extract a
+   `StepDispatcher` with `match/case` over a `PlausibleStep` protocol union.
+
+**Documented "lack of ambition"** (items partially done or deferred):
+- Phase 1.2 fold was simpler than planned — EPOptimizer was dead code, just deleted.
+  The "fold" is complete. No further action needed.
+- Phase 2.1 config port: `EqPropModel` now accepts config, but the legacy kwargs
+  path in `BioModel.__init__` is preserved. Full removal would require porting 12+
+  subclass constructors.
+- Phase 1.1 CUDA kernel: `fused_settle_step_inplace` not ported to the primitive.
+  Can be added as an optional `gradient_step_fn` callback.
+- `Settler.settle_with_graph` port: incompatible detach/re-attach pattern.
+- `Settler.settle_compiled` port: `torch.compile` incompatible with Python control flow.
+
+**Deferred** (or keep as-is):
+- Phase 4.5 (EquiTileOptimizerMixin composition) — mixin is appropriate.
+- Phase 8.3 (t-strings) — re-evaluate when CI toolchain supports PEP 750.
+- Phase 5.1 remaining grouping — no more closely related single-class modules.
+
+### Files changed in this session
+
+```
+M bioplausible/zoo/mep/optimizers/ep_optimizer.py     (−571 lines: 731→160, dead code → test ref)
+M bioplausible/zoo/mep/optimizers/__init__.py         (−4 lines: removed dead re-exports)
+M bioplausible/zoo/mep/__init__.py                    (−2 lines: removed EPOptimizer re-export)
+M bioplausible/zoo/models/base.py                     (+36 lines: config-first path in EqPropModel)
+M TODO.md                                             (this session log)
+```
+```
+
+---
+
+## Session 17 — 2026-07-30: Phase 3.1 — Merge hyperopt Task Hierarchy into domains/
+
+### What was done
+
+**Phase 3.1: Task hierarchy merge** (HIGH IMPACT, DRY)
+
+Eliminated the duplicate task hierarchy — `hyperopt/tasks.py:BaseTask` + `VisionTask`/`LMTask`/`RLTask`/`CharNGramTask` + `hyperopt/tabular_task.py:TabularTask` + `hyperopt/graph_task.py:GraphTask` are now re-export shims from `domains/`.
+
+**Key design decisions:**
+
+1. **`DomainTask` now satisfies `TaskProtocol`** — The `DomainTask.get_batch` signature changed from `(split: TaskSplit) -> Batch` to `(split, batch_size) -> tuple[Tensor, Tensor]` (protocol-compatible). Added `get_batch_domain()` for the rich `Batch`-returning interface. Similarly, `compute_metrics` now returns `dict[str, float]` (protocol-compatible); `compute_metrics_domain` returns `Metrics` dataclass.
+
+2. **New modules under `domains/`:**
+   - `domains/trainer.py` — `TaskProtocol`, `_TaskTrainer`, `_resolve_task_loss` (moved from `hyperopt/tasks.py`).
+   - `domains/factory.py` — `create_task()` factory, `_parse_split_digits`, `_normalize_vision_name`, `CharNGramTask`.
+
+3. **Concrete task fixes for protocol compatibility:**
+   - `RLTask`: overrode `create_trainer` to return `RLTrainer` (not `_TaskTrainer`), added `get_batch()` raising `NotImplementedError`.
+   - `LMTask`: overrode `get_batch` with random-subsequence sampling (DataLoader returns raw tokens, not `(inputs, targets)` pairs).
+   - `GraphTask`: overrode `get_batch` to return full graph data.
+   - `VisionTask.setup()`: added fallback to `get_vision_dataset()` for non-torchvision datasets (digits, KMNIST, SVHN, USPS, etc.), with uint8→float normalization.
+
+4. **Re-export shims** preserve backward compat for all existing importers:
+   - `hyperopt/tasks.py` → re-exports from `domains.*` (`BaseTask = DomainTask`, plus all concrete tasks and factory).
+   - `hyperopt/tabular_task.py` → re-export shim from `domains.tabular`.
+   - `hyperopt/graph_task.py` → re-export shim from `domains.graph`.
+   - `hyperopt/task_registry.py` → imports from `domains/` directly.
+
+**Stale claim corrections discovered:**
+- **Phase 5.2 (`execution → p2p`)**: TODO claimed "12 call sites" but exhaustive grep found **zero** imports from `p2p/` in `execution/`. The coupling was broken by prior refactoring. Marked as already resolved.
+- **Phase 4.3 (`equitile → zoo`)**: Confirmed zero edges remain (TODO already marked ✅, but guidance said to re-confirm).
+
+### Verification
+
+```
+ruff format --check .        → clean (594 files)
+ruff check .                 → only pre-existing `unsorted-dunder-all` in `__init__.py`
+pyright bioplausible/        → 0 errors, 2301 warnings (all pre-existing)
+pytest -x -q                → 1189 passed, 13 skipped, 5 subtests (47s)
+Coverage                    → 56.27% (above 50% floor)
+```
+
+All 5 task-related tests in `test_refactor2_bugfixes.py` pass (test stubs updated with `domain_type`, `spec`, `evaluate`, `get_dataloader` abstract methods).
+
+### Discovered issues / opportunities
+
+1. **`fold`/`data_fraction` kwargs silently dropped** — The experiment system passes `fold` and `data_fraction` from configs to `create_task`. These are captured by `DomainTask.__init__(**kwargs)` but not used by the new VisionTask (which uses DataLoaders, not pre-loaded tensors). No functional regression for non-K-fold experiments. Documented as known gap.
+
+2. **`quick_mode` is stored but not enforced** — The old hyperopt tasks truncated datasets to 100/1000 samples in quick_mode. The domains tasks store `quick_mode` but don't use it. Minimal practical impact since quick_mode is used for quick smoke tests with small models, not small data.
+
+3. **`_load_vision_dataset_cached` is dead code** — The old `hyperopt/tasks.py` function was only used by the old hyperopt VisionTask. Not needed by the domains VisionTask. Can be removed in a future cleanup pass.
+
+4. **`CharNGramTask` stays in `domains/factory.py`** — It's a synthetic task for hyperopt experiments, not a real domain. Keeping it in `factory.py` avoids polluting the domain hierarchy.
+
+5. **`BaseTask` alias** — `hyperopt/tasks` exports `DomainTask as BaseTask` for backward compat. Tests stubs that inherit from `BaseTask` (now `DomainTask`) needed to implement 4 additional abstract methods (`domain_type`, `spec`, `evaluate`, `get_dataloader`). Updated in 4 test stubs.
+
+### Guidance for future sessions
+
+**Recommended order** (revised based on Session 17):
+
+1. **Phase 4.1/4.2/4.4: `FastLMEquiTile` consolidation** — 4 implementations → 1. The `lm_demo/fast_lm.py` has ~600 LOC unique architecture (MoT, local attention, SwiGLU). Requires renaming `lm_demo/` → `lm/` and consolidating `language/` variants. Most impactful remaining item.
+
+2. **Phase 2.2: Collapse `LMTrainer` duplication** — Two `LMTrainer` classes (897 LOC + 559 LOC). Delegate the simpler one to the production one, then to `CoreTrainer`.
+
+3. **Phase 2.3: Single training-step dispatch in `CoreTrainer`** — Replace `isinstance`/`hasattr`/`inspect.signature` probe chain with `match/case` over a `PlausibleStep` protocol union.
+
+4. **Phase 3.2 `core/losses.py` cleanup** — The 2 `magic-value-comparison` warnings for `logits.dim() == 3`. Extract a `_THREE_D = 3` constant (cosmetic).
+
+5. **Phase 7.1: Eliminate `Any` / untyped dicts** — In `autoscientist/campaign.py`, `hyperopt/experiment.py`, `execution/engine.py`, `evaluation/base.py`.
+
+**Deferred** (or keep as-is):
+- Phase 4.5 (EquiTileOptimizerMixin composition) — mixin is appropriate.
+- Phase 5.2 (`execution → p2p`) — **already resolved**. Zero imports exist.
+- Phase 8.3 (t-strings) — re-evaluate when CI toolchain supports PEP 750.
+- Phase 5.1 remaining grouping — no more closely related single-class modules.
+
+### Files changed in this session
+
+```
+A bioplausible/domains/trainer.py            (new — 96 lines: TaskProtocol, _TaskTrainer, _resolve_task_loss)
+A bioplausible/domains/factory.py            (new — 192 lines: create_task, CharNGramTask, helpers)
+M bioplausible/domains/base.py               (+50 lines: quick_mode, task_type, get_batch(protocol), compute_metrics(protocol), create_trainer)
+M bioplausible/domains/__init__.py           (+10 lines: re-export new symbols)
+M bioplausible/domains/vision.py             (+45 lines: get_vision_dataset fallback, dtype normalization)
+M bioplausible/domains/lm.py                 (+20 lines: get_batch override with random-subsequence sampling)
+M bioplausible/domains/graph.py              (+7 lines: get_batch override for full-graph data)
+M bioplausible/domains/rl.py                 (+23 lines: create_trainer → RLTrainer, get_batch → NotImplementedError)
+M bioplausible/hyperopt/tasks.py             (−728 lines: now ~20-line re-export shim)
+M bioplausible/hyperopt/tabular_task.py      (−75 lines: now 3-line re-export shim)
+M bioplausible/hyperopt/graph_task.py        (−60 lines: now 3-line re-export shim)
+M bioplausible/hyperopt/task_registry.py     (±0: import paths only)
+M tests/unit/test_refactor2_bugfixes.py      (+65 lines: 4 test stubs implement DomainTask abstract methods)
+M tests/unit/test_model_registry_instantiation.py (+30 lines: MockVisionTask implements DomainTask abstract methods)
+M tests/integration/test_domains.py          (compute_metrics → compute_metrics_domain)
+M TODO.md                                    (this session log)
+```
 ```

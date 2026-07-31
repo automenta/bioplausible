@@ -23,11 +23,6 @@ Quick Start:
 
 from .composite import CompositeOptimizer
 from .energy import EnergyFunction
-from .ep_optimizer import (
-    EPConfig,
-    EPOptimizer,
-    EWCState,
-)
 from .ewc import EPOptimizerWithEWC, EWCRegularizer, TaskMemory
 from .o1_memory_v2 import (
     O1MemoryEPv2,
@@ -84,10 +79,6 @@ __all__ = [
     # Utilities
     "EnergyFunction",
     "Settler",
-    # Unified EP optimizer (recommended)
-    "EPOptimizer",
-    "EPConfig",
-    "EWCState",
     # O(1) memory v2 implementation used by EPOptimizerWithEWC
     "analytic_state_gradients",
     "settle_manual_o1",

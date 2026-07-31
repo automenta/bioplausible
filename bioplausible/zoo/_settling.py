@@ -97,6 +97,127 @@ def _inf_norm_converged(
 
 
 # ---------------------------------------------------------------------------
+# Energy-based settling via gradient descent (unified primitive)
+# ---------------------------------------------------------------------------
+
+
+def energy_gradient_descent(
+    states: list[torch.Tensor],
+    energy_fn: Callable[[list[torch.Tensor]], torch.Tensor],
+    steps: int,
+    *,
+    lr: float = 0.15,
+    momentum: float = 0.5,
+    adaptive: bool = False,
+    tol: float | None = None,
+    patience: int = 5,
+    step_size_growth: float = 1.1,
+    step_size_decay: float = 0.5,
+) -> list[torch.Tensor]:
+    """Run gradient descent on state tensors to minimize an energy function.
+
+    Each iteration:
+      1. Computes energy via ``energy_fn(states)``.
+      2. Checks for NaN/Inf divergence.
+      3. Computes gradients of energy w.r.t. states via ``autograd.grad``.
+      4. Applies momentum update: ``v = momentum * v + grad; state -= lr * v``.
+      5. Optionally adapts LR (grow on energy decrease, decay on increase).
+      6. Optionally checks early stopping via energy delta tolerance.
+
+    Args:
+        states: List of state tensors (must have ``requires_grad=True``).
+        energy_fn: Callable ``f(states) -> scalar Tensor``.
+        steps: Maximum number of settling iterations.
+        lr: Learning rate for state updates.
+        momentum: Momentum coefficient for state velocity buffers.
+        adaptive: If True, use adaptive step size (grow on decrease, decay on
+            increase).  Requires ``tol`` to be set.
+        tol: Absolute tolerance for energy convergence.  If None, early
+            stopping is disabled.
+        patience: Number of consecutive steps below tolerance before
+            declaring convergence.
+        step_size_growth: Multiplier for LR when energy decreases.
+        step_size_decay: Multiplier for LR when energy increases.
+
+    Returns:
+        Detached final state tensors.
+
+    Raises:
+        RuntimeError: If energy diverges (NaN/Inf).
+    """
+    momentum_buffers = [torch.zeros_like(s) for s in states]
+
+    prev_energy: float | None = None
+    patience_counter = 0
+    current_lr = lr
+    just_restored = False
+
+    states_backup = [s.clone() for s in states] if adaptive else None
+
+    for step in range(steps):
+        with torch.enable_grad():
+            E = energy_fn(states)
+
+            if torch.isnan(E) or torch.isinf(E):
+                raise RuntimeError(
+                    f"Energy diverged at step {step}: E={E.item()}. "
+                    f"Try reducing settle_lr or beta."
+                )
+
+            current_energy = float(E.item())
+
+            # Adaptive step size: reject increase, decay LR; accept decrease, grow LR
+            if adaptive and states_backup is not None:
+                if prev_energy is not None:
+                    if current_energy > prev_energy:
+                        with torch.no_grad():
+                            for s, b in zip(states, states_backup):
+                                s.copy_(b)
+                        current_lr *= step_size_decay
+                        just_restored = True
+                        continue
+                    else:
+                        if not just_restored:
+                            current_lr = min(current_lr * step_size_growth, lr * 10)
+                        with torch.no_grad():
+                            for s, b in zip(states, states_backup):
+                                b.copy_(s)
+                else:
+                    with torch.no_grad():
+                        for s, b in zip(states, states_backup):
+                            b.copy_(s)
+
+            # Early stopping
+            if tol is not None and prev_energy is not None and not just_restored:
+                delta = abs(current_energy - prev_energy)
+                rel_tol = tol * max(1.0, abs(prev_energy))
+                if delta < tol or delta < rel_tol:
+                    patience_counter += 1
+                else:
+                    patience_counter = 0
+
+                if patience_counter >= patience:
+                    break
+
+            just_restored = False
+            prev_energy = current_energy
+
+            grads = torch.autograd.grad(
+                E, states, retain_graph=False, allow_unused=True
+            )
+
+        # SGD with momentum
+        with torch.no_grad():
+            for i, (state, grad) in enumerate(zip(states, grads)):
+                if grad is None:
+                    continue
+                momentum_buffers[i].mul_(momentum).add_(grad)
+                state.sub_(momentum_buffers[i], alpha=current_lr)
+
+    return [s.detach() for s in states]
+
+
+# ---------------------------------------------------------------------------
 # Family A — single-hidden-state settling (EqPropModel subclasses)
 # ---------------------------------------------------------------------------
 
@@ -427,6 +548,7 @@ class EquilibriumFunction(autograd.Function):
 __all__ = [
     "EquilibriumFunction",
     "_run_with_sn_freeze",
+    "energy_gradient_descent",
     "settle_activations_list",
     "settle_single_state",
 ]

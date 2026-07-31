@@ -8,10 +8,9 @@ from torch.nn.utils.parametrizations import spectral_norm
 
 from bioplausible.acceleration.kernels import HAS_CUPY, EqPropKernel
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
-from bioplausible.core.registry import Domain, LocalityLevel
+from bioplausible.core.registry import Domain, LocalityLevel, register_model
 
 from ....acceleration import compile_settling_loop
-from bioplausible.core.registry import register_model
 from ..base import EqPropModel
 from ..transitions import TransitionGraphMixin
 

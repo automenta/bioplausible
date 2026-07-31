@@ -3,11 +3,12 @@
 import torch
 from torch import nn
 
-from ....acceleration import compile_settling_loop
-from ....zoo._settling import settle_activations_list
 from bioplausible.core.config import ModelConfig, resolve_hidden_dims
 from bioplausible.core.model import BioModel
 from bioplausible.core.registry import register_model
+
+from ....acceleration import compile_settling_loop
+from ....zoo._settling import settle_activations_list
 from ._contrastive import _contrastive_step
 
 __all__ = [

@@ -3,7 +3,8 @@ import unittest
 import torch
 
 from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.hyperopt.tasks import BaseTask
+from bioplausible.domains.base import DomainTask as BaseTask
+from bioplausible.domains.base import DomainType, DomainSpec, Metrics, TaskSplit
 
 
 # Mock Task for testing
@@ -16,6 +17,20 @@ class MockVisionTask(BaseTask):
     @property
     def task_type(self):
         return "vision"
+
+    @property
+    def domain_type(self) -> DomainType:
+        return DomainType.VISION
+
+    @property
+    def spec(self) -> DomainSpec:
+        return DomainSpec(name="mock_vision", domain_type=DomainType.VISION)
+
+    def get_dataloader(self, split: TaskSplit) -> None:
+        return None
+
+    def evaluate(self, model, split=TaskSplit.VAL, max_batches=None) -> Metrics:
+        return Metrics(loss=0.0, accuracy=0.0)
 
     def setup(self):
         pass

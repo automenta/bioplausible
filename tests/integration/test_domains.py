@@ -160,17 +160,17 @@ def test_domain_registry():
 
 
 def test_metrics_computation():
-    """Test compute_metrics."""
+    """Test compute_metrics (rich Metrics dataclass interface)."""
     task = _DomainTaskForTesting(name="test")
     outputs = torch.tensor([[2.0, 0.0], [0.0, 3.0]])
     targets = torch.tensor([0, 1])
 
-    metrics = task.compute_metrics(outputs, targets, 0.5)
+    metrics = task.compute_metrics_domain(outputs, targets, 0.5)
     assert metrics.loss == pytest.approx(0.5)
     assert metrics.accuracy == pytest.approx(1.0)  # Both predictions correct
 
     # Test with wrong predictions
     outputs_wrong = torch.tensor([[0.0, 2.0], [3.0, 0.0]])
-    metrics_wrong = task.compute_metrics(outputs_wrong, targets, 1.0)
+    metrics_wrong = task.compute_metrics_domain(outputs_wrong, targets, 1.0)
     assert metrics_wrong.loss == pytest.approx(1.0)
     assert metrics_wrong.accuracy == pytest.approx(0.0)

@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.hyperopt.tasks import VisionTask, create_task
+from bioplausible.domains import VisionTask, create_task
 
 _SKIP_ON_DOWNLOAD_KEYWORDS = ("download", "socket", "timeout", "url", "ssl")
 

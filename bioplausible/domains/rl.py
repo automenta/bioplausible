@@ -80,6 +80,33 @@ class RLTask(DomainTask):
         # RL doesn't use traditional dataloaders
         return None
 
+    def get_batch(
+        self, split: str | TaskSplit = "train", batch_size: int = 32
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        raise NotImplementedError(
+            "RL Task does not support get_batch directly, use RLTrainer"
+        )
+
+    def create_trainer(self, model: nn.Module, **kwargs) -> object:
+        from bioplausible.training.rl import RLTrainer
+
+        rl_args = {}
+        if "batches_per_epoch" in kwargs and "episodes_per_epoch" not in kwargs:
+            kwargs["episodes_per_epoch"] = kwargs["batches_per_epoch"]
+        valid_keys = [
+            "episodes",
+            "lr",
+            "gamma",
+            "max_steps",
+            "tracker",
+            "episodes_per_epoch",
+        ]
+        for k in valid_keys:
+            if k in kwargs:
+                rl_args[k] = kwargs[k]
+
+        return RLTrainer(model, self.env_id, device=str(self.device), **rl_args)
+
     def evaluate(
         self,
         model: nn.Module,

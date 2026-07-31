@@ -4,11 +4,15 @@ Vision Domain Tasks
 Standard vision datasets (MNIST, CIFAR, ImageNet, etc.)
 """
 
+import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
+from bioplausible.data.vision import get_vision_dataset
+
+from bioplausible.data.vision import get_vision_dataset
 from bioplausible.domains.base import (
     DomainSpec,
     DomainTask,
@@ -138,7 +142,45 @@ class VisionTask(DomainTask):
             self._input_dim = (1, 28, 28)
             self._output_dim = 10
         else:
-            raise ValueError(f"Unknown dataset: {self.dataset_name}")
+            # Fallback: use get_vision_dataset for datasets not in torchvision
+            # (e.g. "digits" from scikit-learn)
+            from torch.utils.data import TensorDataset
+
+            train_ds = get_vision_dataset(self.dataset_name, train=True)
+            val_ds = get_vision_dataset(self.dataset_name, train=False)
+
+            if isinstance(train_ds, TensorDataset):
+                train_x, train_y = train_ds.tensors
+                val_x, val_y = val_ds.tensors
+            else:
+                train_x, train_y = train_ds.data, train_ds.targets
+                val_x, val_y = val_ds.data, val_ds.targets
+
+            if isinstance(train_y, (list, np.ndarray)):
+                train_y = torch.tensor(train_y)
+                val_y = torch.tensor(val_y)
+
+            if not isinstance(train_x, torch.Tensor):
+                train_x = torch.from_numpy(train_x)
+                val_x = torch.from_numpy(val_x)
+
+            # Normalize uint8 images to [0, 1]
+            if train_x.dtype == torch.uint8:
+                train_x = train_x.float() / 255.0
+                val_x = val_x.float() / 255.0
+            elif train_x.dtype != torch.float32:
+                train_x = train_x.float()
+                val_x = val_x.float()
+
+            if train_x.dim() == 3:
+                train_x = train_x.unsqueeze(1)
+                val_x = val_x.unsqueeze(1)
+
+            self._input_dim = tuple(train_x.shape[1:])
+            self._output_dim = int(train_y.max().item() + 1)
+
+            train_ds = TensorDataset(train_x, train_y)
+            val_ds = TensorDataset(val_x, val_y)
 
         self._train_loader = DataLoader(
             train_ds,

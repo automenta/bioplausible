@@ -69,6 +69,13 @@ class GraphTask(DomainTask):
         # Graph tasks typically use full graph
         return None
 
+    def get_batch(
+        self, split: str | TaskSplit = "train", batch_size: int = 32
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if self._data is None:
+            raise RuntimeError("Call setup() first.")
+        return self._data, self._data.y
+
     def evaluate(
         self,
         model: nn.Module,

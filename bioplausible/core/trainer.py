@@ -33,7 +33,7 @@ from bioplausible.data.vision import create_data_loaders
 from bioplausible.domains.base import DomainType
 
 if TYPE_CHECKING:
-    from bioplausible.hyperopt.tasks import TaskProtocol
+    from bioplausible.domains import TaskProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -438,7 +438,7 @@ class CoreTrainer:
         self.config.model_kwargs.setdefault("vocab_size", vocab_size)
 
         # Create simple data loaders
-        from bioplausible.hyperopt.tasks import LMTask
+        from bioplausible.domains import LMTask
 
         self.task_obj = LMTask(
             name=self.config.task,
@@ -1102,7 +1102,7 @@ def run_from_runconfig(cfg: object) -> dict[str, object]:
     """
     import json
 
-    from bioplausible.hyperopt.tasks import create_task
+    from bioplausible.domains import create_task
 
     torch.manual_seed(cfg.seed)
 

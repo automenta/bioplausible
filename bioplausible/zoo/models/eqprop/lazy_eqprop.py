@@ -6,9 +6,8 @@ import torch
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
-from bioplausible.zoo.models.transitions import TransitionGraphMixin
-
 from bioplausible.core.registry import register_model
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 __all__ = [
     "LazyEqProp",
