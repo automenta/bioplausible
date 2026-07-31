@@ -12,7 +12,7 @@ import sqlite3
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 import optuna
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-class FailureCategory(Enum):
+class FailureCategory(StrEnum):
     CONVERGENCE_FAILURE = "convergence_failure"
     GRADIENT_EXPLOSION = "gradient_explosion"
     SETTLING_DIVERGENCE = "settling_divergence"

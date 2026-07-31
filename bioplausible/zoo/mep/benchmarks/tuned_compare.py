@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
 from bioplausible.zoo.mep.benchmarks.baselines import get_optimizer
+from bioplausible.zoo.mep.benchmarks._shared import EpochMetrics, OptimizerResult
 
 __all__ = [
     "OPTIMIZER_CONFIGS",
@@ -133,29 +134,6 @@ class BenchmarkConfig:
     subset_train: int = 5000
     subset_test: int = 1000
     device: str = "cuda"
-
-
-@dataclass
-class EpochMetrics:
-    """Metrics for a single epoch."""
-
-    epoch: int
-    train_loss: float
-    train_acc: float
-    val_loss: float
-    val_acc: float
-    epoch_time: float
-
-
-@dataclass
-class OptimizerResult:
-    """Results for a single optimizer."""
-
-    name: str
-    metrics: list[EpochMetrics]
-    total_time: float
-    best_val_acc: float
-    final_train_acc: float
 
 
 def get_dataloaders(config: BenchmarkConfig) -> tuple[DataLoader, DataLoader]:

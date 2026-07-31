@@ -29,6 +29,7 @@ __all__ = [
 
 
 @dataclass
+@dataclass(frozen=True, slots=True)
 class TaskMemory:
     """Stored information for a completed task."""
 

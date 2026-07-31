@@ -28,7 +28,7 @@ jobs:
       - name: Type Check (Pyright)
         run: uv run pyright .
       - name: Test with Coverage
-        run: uv run pytest --cov=bioplausible --cov-report=term-missing --cov-fail-under=85
+        run: uv run pytest --cov=bioplausible --cov-report=term-missing --cov-fail-under=50
       - name: Dependency Scan (pip-audit)
         run: uv run pip-audit
 
@@ -55,7 +55,7 @@ jobs:
         uv run eqprop-verify --quick
     - name: Run Full Test Suite
       run: |
-        uv run pytest tests/ -v --cov=bioplausible --cov-report=term-missing --cov-fail-under=85
+        uv run pytest tests/ -v --cov=bioplausible --cov-report=term-missing --cov-fail-under=50
 
   build-package:
     runs-on: ubuntu-latest

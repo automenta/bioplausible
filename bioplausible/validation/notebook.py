@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -8,26 +9,45 @@ logger = logging.getLogger(__name__)
 import numpy as np
 
 __all__ = [
+    "EvidenceLevel",
     "TrackResult",
+    "TrackStatus",
     "ValidationTrack",
     "VerificationNotebook",
     "logger",
 ]
 
 
-@dataclass
+class TrackStatus(StrEnum):
+    """Status of a verification track."""
+
+    PASS = "pass"
+    FAIL = "fail"
+    PARTIAL = "partial"
+    STUB = "stub"
+
+
+class EvidenceLevel(StrEnum):
+    """Level of evidence for a verification track."""
+
+    SMOKE = "smoke"
+    DIRECTIONAL = "directional"
+    CONCLUSIVE = "conclusive"
+
+
+@dataclass(frozen=True, slots=True)
 class TrackResult:
     """Result of a verification track."""
 
     track_id: int
     name: str
-    status: str  # 'pass', 'fail', 'partial', 'stub'
+    status: str  # TrackStatus.PASS, .FAIL, .PARTIAL, .STUB
     score: float  # 0-100
     metrics: dict
     evidence: str  # Markdown evidence block
     time_seconds: float
     improvements: list[str] = field(default_factory=list)
-    evidence_level: str = "smoke"  # 'smoke', 'directional', 'conclusive'
+    evidence_level: str = "smoke"  # EvidenceLevel.SMOKE, .DIRECTIONAL, .CONCLUSIVE
     limitations: list[str] = field(default_factory=list)
     reproducibility_hash: str | None = None
 

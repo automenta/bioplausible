@@ -6,13 +6,10 @@ All concrete task classes now live in ``domains/``.
 """
 
 import logging
-from typing import Protocol, runtime_checkable
 
-import numpy as np
 import torch
 from torch import nn
 
-from bioplausible.domains.base import DomainType
 from bioplausible.domains.trainer import TaskProtocol, _TaskTrainer
 
 __all__ = [
