@@ -11,7 +11,7 @@ from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 from bioplausible.core.registry import Domain, LocalityLevel
 
 from ....acceleration import compile_settling_loop
-from ...base import register_model
+from bioplausible.core.registry import register_model
 from ..base import EqPropModel
 from ..transitions import TransitionGraphMixin
 

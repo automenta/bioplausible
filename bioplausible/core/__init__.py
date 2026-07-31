@@ -1,5 +1,12 @@
-"""Core package: Registry, CoreTrainer, Config."""
+"""Core package: Registry, CoreTrainer, Config, Model."""
 
+from bioplausible.core.config import (
+    LayerRole,
+    ModelConfig,
+    compute_hidden_dims,
+    resolve_hidden_dims,
+)
+from bioplausible.core.model import BioModel
 from bioplausible.core.registry import (
     ComponentCategory,
     ComponentMetadata,
@@ -20,6 +27,12 @@ from bioplausible.core.trainer import (
 )
 
 __all__ = [
+    # Config & Model
+    "BioModel",
+    "LayerRole",
+    "ModelConfig",
+    "compute_hidden_dims",
+    "resolve_hidden_dims",
     # Registry
     "Registry",
     "ComponentCategory",

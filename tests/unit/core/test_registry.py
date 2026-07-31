@@ -349,7 +349,7 @@ def test_runtime_checkable_transition_graph():
 def test_all_models_have_transition_modules_or_override():
     """Verify all registered BioModel subclasses expose transition_modules()."""
     from bioplausible.core.registry import ComponentCategory, Registry
-    from bioplausible.zoo.base import BioModel
+    from bioplausible.core.model import BioModel
 
     models = Registry.list(ComponentCategory.MODEL).get("model", [])
     # Models that use non-nn.Module internal dynamics (graph, kernel, plain nn.Module)

@@ -22,6 +22,7 @@ from torch import nn
 
 from bioplausible.core.energy import EnergyTracker
 from bioplausible.core.energy_model import EBMTrainer, EnergyModel
+from bioplausible.core.losses import compute_accuracy, compute_loss
 from bioplausible.core.registry import (
     ComponentCategory,
     IncompatibilityError,
@@ -29,6 +30,7 @@ from bioplausible.core.registry import (
 )
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.data.vision import create_data_loaders
+from bioplausible.domains.base import DomainType
 
 if TYPE_CHECKING:
     from bioplausible.hyperopt.tasks import TaskProtocol
@@ -43,61 +45,6 @@ def _default_output_base() -> Path:
     if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in os.environ.get("_", ""):
         return Path(tempfile.mkdtemp(prefix="biopl-runs-"))
     return Path("logs")
-
-
-def _reshape_logits_targets_for_ce(
-    logits: torch.Tensor, y: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Coerce logits/targets into CrossEntropyLoss-compatible shapes.
-
-    Models may emit 3-D logits ``[B, L, V]`` (LM autoregressive heads) where
-    only the last token's prediction is supervised, and regression-era
-    datasets return float ``[B, 1]`` targets. ``F.cross_entropy`` requires
-    logits ``[B, C]`` paired with long indices ``[B]``. Without this
-    coercer the standard forward/backward path raises a confusing shape
-    error in ``_train_step``/``_validate`` whenever an LM-shaped model
-    doesn't expose its own ``train_step``. Returns logits/y along with the
-    argmax dim expected across the caller.
-    """
-    if logits.dim() == 3:
-        logits = logits[:, -1, :]
-    if y.dim() > 1 and y.size(-1) == 1:
-        y = y.squeeze(-1)
-    if y.dtype != torch.long:
-        y = y.long()
-    return logits, y
-
-
-def _compute_loss(
-    loss_fn: Callable[..., torch.Tensor] | None,
-    logits: torch.Tensor,
-    y: torch.Tensor,
-) -> torch.Tensor:
-    """Compute loss using ``loss_fn`` or fallback cross-entropy.
-
-    Handles 3-D logits (LM autoregressive heads), 2-D targets with
-    singleton dimension, and non-long targets.
-    """
-    if loss_fn is not None:
-        loss_input = logits
-        loss_target = y
-        if logits.dim() == 3:
-            loss_input = logits[:, -1, :]
-        if isinstance(loss_fn, nn.CrossEntropyLoss):
-            if y.dim() > 1 and y.size(-1) == 1:
-                loss_target = y.squeeze(-1).long()
-            elif y.dtype != torch.long:
-                loss_target = y.long()
-        return loss_fn(loss_input, loss_target)
-    logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
-    return torch.nn.functional.cross_entropy(logits_ce, y_ce)
-
-
-def _compute_accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
-    """Accuracy via argmax over logits vs reshaped targets."""
-    logits_ce, y_ce = _reshape_logits_targets_for_ce(logits, y)
-    with torch.no_grad():
-        return (logits_ce.argmax(1) == y_ce).float().mean().item()
 
 
 class TrainerProtocol(Protocol):
@@ -354,7 +301,7 @@ class CoreTrainer:
         # Resolve loss function matching the task's output geometry.
         task_type = getattr(task, "task_type", "vision")
         output_dim = getattr(task, "output_dim", 0)
-        if task_type == "tabular" and output_dim == 1:
+        if task_type == DomainType.TABULAR and output_dim == 1:
             loss_fn = nn.MSELoss()
         else:
             loss_fn = nn.CrossEntropyLoss()
@@ -451,35 +398,27 @@ class CoreTrainer:
         batch_size = self.config.batch_size
         val_batch_size = self.config.val_batch_size or batch_size
 
-        # Use existing dataset utilities
-        if self.config.task in [
-            "mnist",
-            "cifar10",
-            "fashion_mnist",
-            "kmnist",
-            "digits",
-        ]:
-            self.train_loader, self.val_loader = create_data_loaders(
-                dataset_name=self.config.task,
-                batch_size=batch_size,
-                num_workers=self.config.num_workers,
-                **self.config.data_kwargs,
-            )
-        elif self.config.task in ["shakespeare", "tiny_shakespeare", "wikitext"]:
-            # LM datasets - use custom logic
-            self._setup_lm_data(batch_size, val_batch_size)
-        else:
-            # Try generic loader
-            try:
+        match self.config.task:
+            case "mnist" | "cifar10" | "fashion_mnist" | "kmnist" | "digits":
                 self.train_loader, self.val_loader = create_data_loaders(
                     dataset_name=self.config.task,
                     batch_size=batch_size,
                     num_workers=self.config.num_workers,
                     **self.config.data_kwargs,
                 )
-            except Exception as e:
-                logger.warning("Could not load dataset %s: %s", self.config.task, e)
-                raise
+            case "shakespeare" | "tiny_shakespeare" | "wikitext":
+                self._setup_lm_data(batch_size, val_batch_size)
+            case _:
+                try:
+                    self.train_loader, self.val_loader = create_data_loaders(
+                        dataset_name=self.config.task,
+                        batch_size=batch_size,
+                        num_workers=self.config.num_workers,
+                        **self.config.data_kwargs,
+                    )
+                except Exception as e:
+                    logger.warning("Could not load dataset %s: %s", self.config.task, e)
+                    raise
 
         train_len = len(self.train_loader)
         val_len = len(self.val_loader) if self.val_loader else 0
@@ -873,7 +812,7 @@ class CoreTrainer:
             self.optimizer.zero_grad()
 
         logits = self.model(x)
-        loss = _compute_loss(self.loss_fn, logits, y)
+        loss = compute_loss(self.loss_fn, logits, y)
         loss.backward()
 
         # Gradient clipping
@@ -894,7 +833,7 @@ class CoreTrainer:
                 )
                 metrics.update(task_metrics)
         else:
-            metrics["accuracy"] = _compute_accuracy(logits, y)
+            metrics["accuracy"] = compute_accuracy(logits, y)
 
         return metrics
 
@@ -911,7 +850,6 @@ class CoreTrainer:
         val_accs: list[float] = []
         val_perplexities: list[float] = []
         batch_size = self.config.val_batch_size or self.config.batch_size
-        use_task = self.task_obj is not None
 
         with torch.no_grad():
             for _ in range(val_batches):
@@ -919,7 +857,7 @@ class CoreTrainer:
                 x, y = x.to(self.device), y.to(self.device)
 
                 logits = self.model(x)
-                loss = _compute_loss(self.loss_fn, logits, y)
+                loss = compute_loss(self.loss_fn, logits, y)
                 val_losses.append(loss.item())
 
                 # Accuracy from task or fallback
@@ -929,10 +867,10 @@ class CoreTrainer:
                     step_metrics = self.task_obj.compute_metrics(logits, y, loss.item())
                     val_accs.append(step_metrics.get("accuracy", 0.0))
                 else:
-                    val_accs.append(_compute_accuracy(logits, y))
+                    val_accs.append(compute_accuracy(logits, y))
 
                 # Perplexity for LM
-                if self.task_obj and self.task_obj.task_type == "lm":
+                if self.task_obj and self.task_obj.task_type == DomainType.LM:
                     val_perplexities.append(np.exp(min(loss.item(), 10)))
 
         result: dict[str, object] = {

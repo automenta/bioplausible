@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch import autograd, nn
 
 from .._settling import EquilibriumFunction, settle_single_state
-from ..base import BioModel
+from bioplausible.core.model import BioModel
 
 __all__ = [
     "EqPropModel",

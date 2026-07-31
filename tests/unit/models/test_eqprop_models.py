@@ -7,7 +7,7 @@ Tests are model-specific due to varying constructor signatures.
 import torch
 from torch import nn
 
-from bioplausible.zoo.base import ModelConfig
+from bioplausible.core.config import ModelConfig
 from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
 from bioplausible.zoo.models.eqprop.eqprop_diffusion import EqPropDiffusion
 from bioplausible.zoo.models.eqprop.finite_nudge_ep import FiniteNudgeEP

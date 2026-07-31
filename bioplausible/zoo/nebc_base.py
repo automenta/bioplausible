@@ -17,7 +17,7 @@ import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
-from .base import BioModel
+from bioplausible.core.model import BioModel
 
 __all__ = [
     "NEBCBase",

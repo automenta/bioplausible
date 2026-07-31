@@ -12,6 +12,8 @@ from typing import Any
 
 from omegaconf import MISSING, OmegaConf
 
+from bioplausible.core.config import ModelConfig as InternalModelConfig
+
 __all__ = [
     "DatasetConfig",
     "DomainConfig",
@@ -60,6 +62,26 @@ class ModelConfig:
     kwargs: dict[str, Any] = field(default_factory=dict)
     compile: bool = False
     compile_mode: str = "reduce-overhead"
+
+    def to_internal(
+        self, input_dim: int = 0, output_dim: int = 0
+    ) -> InternalModelConfig:
+        """Convert to the internal frozen :class:`ModelConfig` used by models.
+
+        Parameters from *kwargs* that match :class:`InternalModelConfig` fields
+        are forwarded; the rest land in *extra*.
+
+        Args:
+            input_dim: Number of input features (known at task-setup time).
+            output_dim: Number of output classes / prediction targets.
+        """
+        return InternalModelConfig(
+            name=self.name,
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=[],
+            extra=self.kwargs,
+        )
 
 
 @dataclass
@@ -247,6 +269,18 @@ class RunConfigModel:
     hidden_dim: int = 256
     num_layers: int = 3
     extra: dict[str, Any] = field(default_factory=dict)
+
+    def to_internal(
+        self, input_dim: int = 0, output_dim: int = 0
+    ) -> InternalModelConfig:
+        """Convert to the internal frozen :class:`ModelConfig` used by models."""
+        return InternalModelConfig(
+            name=self.name,
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=[self.hidden_dim] * max(self.num_layers, 1),
+            extra=self.extra,
+        )
 
 
 @dataclass

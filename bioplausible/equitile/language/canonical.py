@@ -37,7 +37,9 @@ from bioplausible.equitile.language.components import (
     TileAttention,
     TileFeedForward,
 )
-from bioplausible.zoo.base import BioModel, ModelConfig, register_model
+from bioplausible.core.config import ModelConfig
+from bioplausible.core.model import BioModel
+from bioplausible.core.registry import register_model
 
 if TYPE_CHECKING:
     from torch import Tensor

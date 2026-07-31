@@ -14,19 +14,13 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.graph.topology import GraphStructure
 
 __all__ = [
     "train_backprop",
     "train_pcn",
 ]
-
-
-def _compute_accuracy(logits: torch.Tensor, targets: torch.Tensor) -> float:
-    """Compute classification accuracy."""
-    if targets.dim() > 1 and targets.shape[-1] == logits.shape[-1]:
-        targets = targets.argmax(dim=-1)
-    return (logits.argmax(dim=-1) == targets).float().mean().item()
 
 
 def _feedforward(
@@ -125,7 +119,7 @@ def train_backprop(
             optimizer.step()
 
             epoch_loss += loss.item()
-            epoch_acc += _compute_accuracy(output, batch_y)
+            epoch_acc += compute_accuracy(output, batch_y)
             n_batches += 1
 
         epoch_time = time.time() - epoch_start
@@ -336,7 +330,7 @@ def train_pcn(
             loss = F.cross_entropy(output, batch_y)
 
             epoch_loss += loss.item()
-            epoch_acc += _compute_accuracy(output, batch_y)
+            epoch_acc += compute_accuracy(output, batch_y)
             n_batches += 1
 
         epoch_time = time.time() - epoch_start

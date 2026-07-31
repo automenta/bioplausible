@@ -10,13 +10,13 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
-from ..base import (
-    BioModel,
+from bioplausible.core.config import (
     ModelConfig,
     _build_model_config,
-    register_model,
     resolve_hidden_dims,
 )
+from bioplausible.core.model import BioModel
+from bioplausible.core.registry import register_model
 from ..nebc_base import NEBCBase
 from .base import EqPropModel
 

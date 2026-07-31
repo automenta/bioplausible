@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from bioplausible.zoo.base import ModelConfig
+from bioplausible.core.config import ModelConfig
 from bioplausible.zoo.models.predictive_coding import (
     FabricPCGraphPCN,
     PredictiveCodingHybrid,

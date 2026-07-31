@@ -16,7 +16,9 @@ import torch
 from torch import nn
 
 from bioplausible.core.registry import Domain, LocalityLevel
-from bioplausible.zoo.base import BioModel, ModelConfig, register_model
+from bioplausible.core.config import ModelConfig
+from bioplausible.core.model import BioModel
+from bioplausible.core.registry import register_model
 
 logger = logging.getLogger(__name__)
 from bioplausible.equitile._internal.state_types import EquiTileStateDict

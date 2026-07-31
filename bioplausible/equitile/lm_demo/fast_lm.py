@@ -46,7 +46,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.zoo.base import BioModel, ModelConfig
+from bioplausible.core.config import ModelConfig
+from bioplausible.core.model import BioModel
 
 logger = logging.getLogger(__name__)
 

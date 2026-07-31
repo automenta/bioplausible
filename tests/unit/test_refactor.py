@@ -51,7 +51,7 @@ class TestRefactor(unittest.TestCase):
         # And we can instantiate by name
         # NB: the registry class for "eqprop" is StandardEqProp which needs
         # a ModelConfig (or kwargs matching its signature). Smoke check:
-        from bioplausible.zoo.base import ModelConfig
+        from bioplausible.core.config import ModelConfig
 
         spec = ModelConfig(
             name="eqprop",

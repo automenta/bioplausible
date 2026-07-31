@@ -1,10 +1,7 @@
 """Equilibrium Propagation model variants."""
 
-from ...base import (
-    ModelConfig,
-    _build_model_config,
-    register_model,
-)
+from bioplausible.core.config import ModelConfig, _build_model_config
+from bioplausible.core.registry import register_model
 from .standard_eqprop import StandardEqProp
 
 __all__ = [

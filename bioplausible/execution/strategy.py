@@ -12,10 +12,10 @@ from bioplausible.execution._guards import (
     check_verification_needed,
     get_stats,
 )
+from bioplausible.execution._lifecycle import CurriculumManager
 from bioplausible.execution._state import DecisionLogger, ExperimentState
-from bioplausible.execution.curriculum import CurriculumManager
 from bioplausible.execution.dashboard import DASHBOARD
-from bioplausible.execution.promotion import PromotionGate
+from bioplausible.execution._lifecycle import PromotionGate
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel
 

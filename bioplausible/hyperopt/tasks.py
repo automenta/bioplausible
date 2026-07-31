@@ -16,6 +16,7 @@ from torch import nn
 
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.data.vision import get_vision_dataset
+from bioplausible.domains.base import DomainType
 
 __all__ = [
     "BaseTask",
@@ -203,7 +204,7 @@ def _resolve_task_loss(task: TaskProtocol) -> nn.Module:
     bypass ``_TaskTrainer`` entirely via ``RLTask.create_trainer``
     returning ``RLTrainer``, so RL never flows through this resolver.
     """
-    if task.task_type == "tabular" and task.output_dim == 1:
+    if task.task_type == DomainType.TABULAR and task.output_dim == 1:
         return nn.MSELoss()
     return nn.CrossEntropyLoss()
 

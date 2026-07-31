@@ -16,10 +16,10 @@ import torch
 from torch import nn
 
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.losses import reshape_for_cross_entropy
 from bioplausible.core.trainer import (
     CoreTrainer,
     TrainerConfig,
-    _reshape_logits_targets_for_ce,
 )
 from bioplausible.zoo import ModelSpec, get_model_spec
 
@@ -128,7 +128,7 @@ def test_reshape_logits_targets_for_ce_handles_3d_logits():
     """3-D LM logits must be sliced to last-token prediction."""
     logits = torch.randn(4, 7, 13)  # [B, L, V]
     y = torch.randint(0, 13, (4,))
-    out_logits, out_y = _reshape_logits_targets_for_ce(logits, y)
+    out_logits, out_y = reshape_for_cross_entropy(logits, y)
     assert out_logits.shape == (4, 13)
     assert out_y.shape == (4,)
     assert out_y.dtype == torch.long
@@ -140,7 +140,7 @@ def test_reshape_logits_targets_for_ce_squeezes_singleton_target_dim():
     """
     logits = torch.randn(8, 5)
     y = torch.rand(8, 1) * 4  # [B, 1] float targets simulating regression
-    out_logits, out_y = _reshape_logits_targets_for_ce(logits, y)
+    out_logits, out_y = reshape_for_cross_entropy(logits, y)
     assert out_y.shape == (8,)
     assert out_y.dtype == torch.long
 
@@ -149,7 +149,7 @@ def test_reshape_logits_targets_for_ce_idempotent_for_plain_classification():
     """Plain `[B, C]` logits with `[B]` long labels should pass through."""
     logits = torch.randn(4, 10)
     y = torch.tensor([0, 1, 2, 3])
-    out_logits, out_y = _reshape_logits_targets_for_ce(logits, y)
+    out_logits, out_y = reshape_for_cross_entropy(logits, y)
     assert torch.equal(out_logits, logits)
     assert torch.equal(out_y, y)
 

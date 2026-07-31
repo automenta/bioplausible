@@ -35,7 +35,8 @@ from bioplausible.equitile.utils.init_utils import (
     initialize_edge_weights,
     initialize_io_projections,
 )
-from bioplausible.zoo.base import ModelConfig, register_model
+from bioplausible.core.config import ModelConfig
+from bioplausible.core.registry import register_model
 
 if TYPE_CHECKING:
     from torch import Tensor

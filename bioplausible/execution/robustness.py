@@ -16,6 +16,7 @@ import torch
 from torch import nn
 
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.domains.base import DomainType
 from bioplausible.execution.interpretability import FeatureAttribution
 from bioplausible.hyperopt.tasks import create_task
 from bioplausible.zoo import get_model_spec
@@ -156,7 +157,7 @@ class RobustnessEvaluator:
 
             # Test B: Input Perturbation (Random Noise)
             # Only for vision/continuous inputs
-            if task.task_type == "vision":
+            if task.task_type == DomainType.VISION:
                 perturb_score = self._test_input_perturbation(model, task)
                 scores.append(perturb_score)
                 metrics["perturbation_score"] = perturb_score

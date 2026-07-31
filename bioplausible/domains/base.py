@@ -4,7 +4,7 @@ Base classes for Domain Abstraction Layer.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 import torch
 from torch import nn
@@ -17,10 +17,11 @@ __all__ = [
     "DomainType",
     "Metrics",
     "TaskSplit",
+    "TaskType",
 ]
 
 
-class DomainType(str, Enum):
+class DomainType(StrEnum):
     """Supported domain types."""
 
     VISION = "vision"
@@ -35,7 +36,12 @@ class DomainType(str, Enum):
     CUSTOM = "custom"
 
 
-class TaskSplit(str, Enum):
+# Canonical alias — prefer ``TaskType`` for function signatures that
+# accept/return a task-type value; ``DomainType`` remains the full enum.
+TaskType = DomainType
+
+
+class TaskSplit(StrEnum):
     """Data splits."""
 
     TRAIN = "train"

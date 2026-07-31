@@ -11,7 +11,7 @@ import torch
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
-from bioplausible.zoo.base import (
+from bioplausible.core.model import (
     BioModel as EqPropModel,
 )  # alias: wrappers expose forward-only API, not EqProp settling
 from bioplausible.zoo.models.transitions import TransitionGraphMixin

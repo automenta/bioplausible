@@ -95,7 +95,7 @@ def mnist_quick_task():
 @pytest.fixture
 def eqprop_model():
     """Minimal StandardEqProp for settling/contrastive tests."""
-    from bioplausible.zoo.base import ModelConfig
+    from bioplausible.core.config import ModelConfig
     from bioplausible.zoo.models.eqprop import StandardEqProp
 
     config = ModelConfig(name="test", input_dim=64, output_dim=10, max_steps=5)

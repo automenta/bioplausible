@@ -4,13 +4,13 @@ import torch
 from torch import nn
 
 from ....zoo._settling import settle_activations_list
-from ...base import (
-    BioModel,
+from bioplausible.core.config import (
     ModelConfig,
     _build_model_config,
-    register_model,
     resolve_hidden_dims,
 )
+from bioplausible.core.model import BioModel
+from bioplausible.core.registry import register_model
 from ._contrastive import _contrastive_step
 
 __all__ = [

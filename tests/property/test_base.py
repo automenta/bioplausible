@@ -3,7 +3,7 @@
 from hypothesis import given
 from hypothesis import strategies as st
 
-from bioplausible.zoo.base import compute_hidden_dims
+from bioplausible.core.config import compute_hidden_dims
 
 
 @given(
