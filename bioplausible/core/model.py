@@ -285,7 +285,7 @@ class BioModel(nn.Module, ABC):
             kwargs,
             learning_rate=getattr(spec, "default_lr", 0.001),
             beta=0.1,
-            equilibrium_steps=20,
+            max_steps=20,
             use_spectral_norm=True,
         )
         return cls(config=config).to(device)

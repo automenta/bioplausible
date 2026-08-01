@@ -735,6 +735,28 @@ class DirectFeedbackAlignmentEqProp(NEBCBase):
         stats["mean_alignment"] = sum(angles.values()) / len(angles) if angles else 0.0
         return stats
 
+    @classmethod
+    def build(
+        cls,
+        spec,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        num_layers,
+        device,
+        task_type,
+        **kwargs,
+    ):
+        return cls(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            num_layers=num_layers,
+            use_spectral_norm=kwargs.get("use_spectral_norm", True),
+            max_steps=kwargs.get("max_steps", 30),
+            alpha=kwargs.get("alpha", 0.5),
+        ).to(device)
+
 
 @register_model("dfa_deep")
 class DeepDFAEqProp(DirectFeedbackAlignmentEqProp):
@@ -771,6 +793,28 @@ class DeepDFAEqProp(DirectFeedbackAlignmentEqProp):
                 h[i] = self.layer_norms[i]((1 - self.alpha) * h[i] + self.alpha * h_new)
 
         return self.head(h[-1])
+
+    @classmethod
+    def build(
+        cls,
+        spec,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        num_layers,
+        device,
+        task_type,
+        **kwargs,
+    ):
+        return cls(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            num_layers=num_layers,
+            use_spectral_norm=kwargs.get("use_spectral_norm", True),
+            max_steps=kwargs.get("max_steps", 30),
+            alpha=kwargs.get("alpha", 0.5),
+        ).to(device)
 
 
 # ============================================================================
