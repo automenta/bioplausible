@@ -226,8 +226,8 @@ class ExecutionEngine:
                 try:
                     self.generate_reports()
                     self.last_report_trial = self.trial_count
-                except Exception as e:
-                    logger.error("Periodic reporting failed: %s", e)
+                except Exception:
+                    logger.exception("Periodic reporting failed")
 
             if self.num_workers > 1 and self.parallel_runner:
                 # Parallel Execution
@@ -365,8 +365,8 @@ class ExecutionEngine:
             DASHBOARD.log("Running Diagnostic Task (Digits/MLP)...", style="yellow")
             metrics = self._process_task(task)
             return metrics is not None
-        except Exception as e:
-            logger.error("Diagnostic failed: %s", e)
+        except Exception:
+            logger.exception("Diagnostic failed")
             return False
 
     def _handle_no_task(self, task: ExperimentTask | None) -> bool:
@@ -453,8 +453,10 @@ class ExecutionEngine:
                 )
 
                 if failure_type == "permanent":
-                    logger.error(
-                        f"Permanent failure for {task.model_name}/{task.task_name}: {e}"
+                    logger.exception(
+                        "Permanent failure for %s/%s",
+                        task.model_name,
+                        task.task_name,
                     )
                     DASHBOARD.log(f"Permanent failure: {e}", style="bold red")
                     break
@@ -480,12 +482,11 @@ class ExecutionEngine:
                 if attempt < self.MAX_RETRIES - 1:
                     logger.warning("Transient failure (attempt %s): %s", attempt + 1, e)
                 else:
-                    logger.error(
-                        "All %d retries exhausted for %s/%s: %s",
+                    logger.exception(
+                        "All %d retries exhausted for %s/%s",
                         self.MAX_RETRIES,
                         task.model_name,
                         task.task_name,
-                        e,
                     )
                     DASHBOARD.log(f"All retries exhausted: {e}", style="bold red")
                     # Trip circuit breaker on repeated failures

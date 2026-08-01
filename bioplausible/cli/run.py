@@ -70,7 +70,7 @@ def run_search(args):
     try:
         tier = PatientLevel(tier_name)
     except ValueError:
-        logger.error(
+        logger.exception(
             "[FAIL]  Invalid tier: %s. Available: %s",
             tier_name,
             [t.value for t in PatientLevel],
@@ -165,8 +165,8 @@ def run_search(args):
         except KeyboardInterrupt:
             logger.warning("Search Interrupted")
             break
-        except Exception as e:
-            logger.error("[FAIL]  Error optimizing %s: %s", model, e)
+        except Exception:
+            logger.exception("[FAIL]  Error optimizing %s", model)
 
 
 def run_core_train(args):

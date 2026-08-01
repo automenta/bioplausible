@@ -178,8 +178,8 @@ class ExperimentArchiver:
             logger.info("Archived trial %s to %s", trial_id, zip_path)
             return str(zip_path)
 
-        except Exception as e:
-            logger.error("Failed to archive trial %s: %s", trial_id, e)
+        except Exception:
+            logger.exception("Failed to archive trial %s", trial_id)
             return None
 
     def _generate_reproduction_script(

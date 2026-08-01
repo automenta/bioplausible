@@ -86,8 +86,8 @@ class DHTNode:
 
         try:
             self.loop.run_forever()
-        except Exception as e:
-            logger.error("DHT Loop Error: %s", e)
+        except Exception:
+            logger.exception("DHT Loop Error")
         finally:
             self.server.stop()
             self.loop.close()
@@ -116,8 +116,8 @@ class DHTNode:
                 self.server.set(key, val_str), self.loop
             )
             future.result(timeout=5)
-        except Exception as e:
-            logger.error("DHT Set Error (%s): %s", key, e)
+        except Exception:
+            logger.exception("DHT Set Error (%s)", key)
 
     def get_best_model(self, task: str) -> dict | None:
         """Retrieve the best model for a task."""

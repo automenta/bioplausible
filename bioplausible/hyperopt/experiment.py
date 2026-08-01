@@ -124,8 +124,8 @@ class TrialRunner:
 
             logger.warning("Could not find artifact for trial %s", transfer_from)
 
-        except Exception as e:
-            logger.error("Error loading transfer weights: %s", e)
+        except Exception:
+            logger.exception("Error loading transfer weights")
 
     def run_trial(self, trial_id: int, pruning_callback=None) -> bool:
         """Run a single trial and record results."""
@@ -237,8 +237,8 @@ class TrialRunner:
                 config=trial.config,
             )
 
-        except Exception as e:
-            logger.error("Trial %s failed: %s", trial_id, e)
+        except Exception:
+            logger.exception("Trial %s failed", trial_id)
             import traceback
 
             traceback.print_exc()
@@ -502,7 +502,7 @@ def run_single_trial_task(
             return None
 
     except TimeoutError as e:
-        logger.error("Timeout Error: %s", e)
+        logger.exception("Timeout Error")
         failure_tracker.log_failure(
             FailureRecord(
                 timestamp=datetime.now().isoformat(),
@@ -520,8 +520,8 @@ def run_single_trial_task(
         )
         return None
 
-    except Exception as e:
-        logger.error("Execution Error: %s", e)
+    except Exception:
+        logger.exception("Execution Error")
         if verbose:
             traceback.print_exc()
 

@@ -166,6 +166,6 @@ def reduce_dimensions(features: np.ndarray, method="pca", n_components=2) -> np.
 
     try:
         return reducer.fit_transform(features)
-    except Exception as e:
-        logger.error("Reduction failed: %s", e)
+    except Exception:
+        logger.exception("Reduction failed")
         return np.zeros((features.shape[0], n_components))

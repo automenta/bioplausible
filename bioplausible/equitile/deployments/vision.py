@@ -180,9 +180,7 @@ class ConvFeatureExtractor(nn.Module):
         )
 
         for i in range(len(config.conv_channels)):
-            # Convolution (with padding)
-            size = size  # No change with padding
-
+            # Convolution (with padding): feature-map size is unchanged
             # Pooling
             if config.use_pooling:
                 size = size // config.pooling_size

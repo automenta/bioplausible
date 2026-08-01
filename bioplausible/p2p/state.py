@@ -38,5 +38,5 @@ def save_state(points, jobs_done):
     try:
         with Path(STATE_FILE).open("w") as f:
             json.dump({"points": points, "jobs_done": jobs_done}, f)
-    except Exception as e:
-        logger.error("Failed to save P2P state: %s", e)
+    except Exception:
+        logger.exception("Failed to save P2P state")

@@ -353,8 +353,8 @@ class DecisionLogger:
                         metadata TEXT
                     )
                 """)
-        except sqlite3.Error as e:
-            logger.error("Failed to init decision log DB: %s", e)
+        except sqlite3.Error:
+            logger.exception("Failed to init decision log DB")
 
     def log_decision(
         self,
@@ -373,8 +373,8 @@ class DecisionLogger:
                     (time.time(), event_type, description, meta_json),
                 )
             logger.info("Decision Logged: [%s] %s", event_type, description)
-        except sqlite3.Error as e:
-            logger.error("Failed to log decision: %s", e)
+        except sqlite3.Error:
+            logger.exception("Failed to log decision")
         except Exception as e:
             logger.error("Unexpected error logging decision: %s", e, exc_info=True)
 
@@ -398,8 +398,8 @@ class DecisionLogger:
                         "description": row["description"],
                         "metadata": json.loads(row["metadata"]),
                     })
-        except sqlite3.Error as e:
-            logger.error("Failed to read decision log: %s", e)
+        except sqlite3.Error:
+            logger.exception("Failed to read decision log")
         except Exception as e:
             logger.error("Unexpected error reading decision log: %s", e, exc_info=True)
         return entries
@@ -491,8 +491,8 @@ class ExperimentState:
                 except Exception:
                     logger.warning("Failed to deserialize recent task entry")
             return recent_tasks
-        except Exception as e:
-            logger.error("Error fetching recent tasks: %s", e)
+        except Exception:
+            logger.exception("Error fetching recent tasks")
             return []
 
     def get_recent_models(self, limit: int = 10) -> list[str]:
@@ -503,8 +503,8 @@ class ExperimentState:
                 (limit,),
             )
             return [row[0] for row in cursor.fetchall()]
-        except Exception as e:
-            logger.error("Error fetching recent models: %s", e)
+        except Exception:
+            logger.exception("Error fetching recent models")
             return []
 
     def get_fragile_models(

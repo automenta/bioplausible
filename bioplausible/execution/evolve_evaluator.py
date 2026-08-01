@@ -97,7 +97,7 @@ def evaluate_candidate(
         }
 
     except Exception as e:
-        logger.error("Evaluation failed: %s", e)
+        logger.exception("Evaluation failed")
         traceback.print_exc()
         return {"eval_score": 0.0, "success": False, "error": str(e)}
 

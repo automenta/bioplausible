@@ -68,8 +68,8 @@ class KnowledgebaseMetamodel:
             self.fitted = True
             logger.info("Metamodel successfully fitted to %s records.", len(self.df))
 
-        except Exception as e:
-            logger.error("Metamodel fit failed: %s", e)
+        except Exception:
+            logger.exception("Metamodel fit failed")
             self.fitted = False
 
     def extract_symbolic_rules(

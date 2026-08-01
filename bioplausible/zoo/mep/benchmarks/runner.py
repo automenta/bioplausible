@@ -6,6 +6,7 @@ including YAML-based configuration, metrics tracking, and automated visualizatio
 """
 
 import argparse
+import contextlib
 import json
 import time
 from dataclasses import asdict, dataclass, field
@@ -509,10 +510,8 @@ def plot_results(
         return
 
     # Set style
-    try:
+    with contextlib.suppress(Exception):
         sns.set_style("whitegrid")
-    except Exception:
-        pass
     plt.rcParams["figure.figsize"] = (12, 8)
 
     # Extract data

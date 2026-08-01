@@ -1,6 +1,6 @@
 # Tracks package - Phase 2 consolidated to 11 kept files + TrackRegistry
-from . import (  # ruff: ignore[unused-import]  # Track 56 - depth architecture comparison
-    application_tracks as application_tracks,
+from . import (
+    application_tracks as application_tracks,  # Track 56 - depth architecture comparison
 )
 from . import (
     architecture_comparison as architecture_comparison,

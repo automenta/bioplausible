@@ -146,6 +146,7 @@ from bioplausible.knowledge import (
     create_knowledge_base,
 )
 
+
 # Leaderboard
 from bioplausible.leaderboard.generator import LeaderboardEntry, LeaderboardGenerator
 
@@ -290,3 +291,12 @@ __all__ = [
     "zoo_propagators",
     "zoo_sparsity",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Lazy-access DEFAULT_KB to avoid SQLite at import time (PEP 562)."""
+    if name == "DEFAULT_KB":
+        from bioplausible.knowledge import DEFAULT_KB
+
+        return DEFAULT_KB
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

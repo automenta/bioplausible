@@ -161,6 +161,7 @@ from bioplausible.equitile.core.config import (
     DynamicEquiTileConfig,
     EnhancedEquiTileConfig,
     EquiTileConfig,
+    NCCLConfig,
     TileGrowthConfig,
     create_dynamic_config,
     create_enhanced_config,

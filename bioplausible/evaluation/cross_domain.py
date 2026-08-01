@@ -198,8 +198,8 @@ class CrossDomainBenchmarkSuite:
                 )
                 return result
 
-        except Exception as e:
-            logger.error("Failed to run %s on %s: %s", model_name, task.name, e)
+        except Exception:
+            logger.exception("Failed to run %s on %s", model_name, task.name)
 
         return None
 

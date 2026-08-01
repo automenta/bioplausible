@@ -370,8 +370,8 @@ class HyperoptStorage:
 
             self.conn.commit()
 
-        except sqlite3.Error as e:
-            logger.error("Database error saving trajectory: %s", e)
+        except sqlite3.Error:
+            logger.exception("Database error saving trajectory")
             # Don't crash training if logging fails, but maybe re-raise?
             # For now, just log error.
 

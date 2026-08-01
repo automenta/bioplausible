@@ -590,7 +590,6 @@ class DistributedEquiTile:
                 assigned = tile_ids[start:end]
             elif balance == "balanced":
                 # Balance by neuron count
-                neuron_counts: dict[int, int] = {}
                 remaining = list(tile_ids)
                 assigned = []
                 for _ in range(self.n_devices):

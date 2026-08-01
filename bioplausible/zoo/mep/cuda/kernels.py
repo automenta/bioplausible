@@ -280,7 +280,7 @@ def batched_newton_schulz_cuda(
     # Ensure r >= c for stability
     if r < c:
         G_batch = G_batch.transpose(1, 2)
-        b, r, c = b, c, r
+        r, c = c, r
         transposed = True
 
     # Normalize each matrix in batch (Frobenius norm)
