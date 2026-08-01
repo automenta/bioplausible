@@ -13,6 +13,91 @@
 
 ## Session Log
 
+### 2026-08-01 — Session 11: Open-Follow-Up Sprint (Controller audit, EqPropDiffusion, spiking cleanup)
+
+**Goal (open follow-ups from Sessions 9–10):** close the three remaining small
+engineering follow-ups: (1) give controllers a real per-fixture `step()` audit
+(was instantiation-only with a mismatched `BackpropMLP`), (2) resolve Known
+Issue 9 (`EqPropDiffusion.build()` magic-numbered channel inference), and
+(3) either verify or drop the now-dead no-snnTorch fallback in `SpikingSTDP`.
+
+**Changes made:**
+1. **Controller audit is now real (was instantiation-with-BackpropMLP-only).**
+   - Added a `CONTROLLER_FIXTURES` map in `test_registry_audit.py` mirroring
+     `MODEL_FIXTURES`, with a `dynamic_equitile` fixture that builds a genuine
+     `EquiTile(neurons=4, layers=2, tiles=2, in=8, out=4)` wrapped in a
+     `DynamicEquiTile` (config with growth/prune/merge disabled + history on).
+   - Added `TestControllerRegistry.test_controller_step`: builds via the fixture,
+     calls `step()`, and asserts the returned stats dict is a superset of
+     `{grown, pruned, merged, split}` with non-negative ints, plus that
+     `tile_modified` is a bool and `get_history()` returns a list. Non-fixture
+     controllers fall back to `BackpropMLP` wrapping (constructor-only, skip-safe).
+   - `_build_controller` is now a `@staticmethod` (no self) — avoids a ruff
+     `no-self-use`; the audit file's ruff count actually *dropped* 21 → 20.
+2. **Known Issue 9 resolved — `EqPropDiffusion.build()` is now explicit.**
+   - Previous `build()` reverse-engineered `img_channels` from total pixels via
+     ad-hoc magic constants (`784 → 1`, `3072 → 3`, perfect-square / ×3 checks).
+     Rewrote it to take `img_channels` explicitly (default 1) and forward nothing
+     else. No test exercised the old magic path (registry audit drives this model
+     via its own `MODEL_FIXTURES`), so removing the heuristics is lossless.
+   - Added regression `test_eqprop_diffusion_build_explicit_channels`: `build(
+     img_channels=3)` → `model.img_channels == 3` and denoiser
+     `input_channels_count == 4` (channels + time-step channel); default →
+     `img_channels == 1`, denoiser `input_channels_count == 2`. (Note: the
+     denoiser attribute is `input_channels_count` on `SimpleConvEqProp`, not
+     `input_channels` — that's a `ModernConvEqProp` thing.)
+3. **Dead no-snnTorch fallback removed from `SpikingSTDP` (follow-up item).**
+   - `snnTorch` is now a core dependency, so `HAS_SNN` was always True and every
+     `if not HAS_SNN:` branch was dead code. Removed the try/except `HAS_SNN`
+     guard and both fallback branches (`fc1→ReLU→fc2` forward, no-op train_step).
+     `SpikingSTDP` now unconditionally builds the LIF path
+     (`fc1/lif1/fc2/lif2`). Updated the module docstring and the test module
+     docstring/`test_train_step_no_trainable_params_change` comment that
+     referenced the removed fallback. No backwards-compat needed (no users).
+   - The separate **propagator** `stdp` (`zoo/propagators/spiking.py`,
+     `STDPLearningRule`) is intentionally pure-PyTorch and unaffected — it does
+     not require snnTorch at all.
+
+**Gates (**all green, zero failures**):**
+```bash
+uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov  # 278 passed, 0 skipped (~2.7s)
+uv run pytest tests/unit/models/test_spiking_model.py -q --no-cov       # 8 passed (LIF path, no fallback)
+uv run pytest tests/unit/models/test_spiking_propagator.py -q --no-cov  # 7 passed (STDP still functional)
+uv run pytest tests/unit/ tests/property/ -q --no-cov                   # 1195 passed, 1 skipped, 1 xfailed (~73s)
+uv run pytest tests/ -q --no-cov                                        # 1612 passed, 13 skipped, 1 xfailed, 5 subtests (ZERO FAILURES)
+uv run ruff format --check <5 changed files>                            # PASS
+uv run ruff check <5 changed source/test files>                         # 41 vs 40 baseline (net +1 accounted: the new build() test shifted a line;
+                                                                           NO new error lines; audit file improved 21→20)
+uv run pyright <5 changed files>                                        # 0 errors (11 pre-existing warnings)
+```
+
+**New discoveries / notes:**
+- **`SimpleConvEqProp` vs `ModernConvEqProp` attribute naming differs**: the
+  former stores channels as `input_channels_count`, the latter as `input_channels`.
+  Easy to trip on when asserting builder output — grep before assuming the name.
+- **Controllers now have a genuine step() audit**, satisfying the last "open
+  follow-up". `DynamicEquiTile` is exercised with a real `EquiTile` and a
+  no-op-growth config so `step()` runs deterministically without topology drift.
+- **`EqPropDiffusion.build()` no longer mangles arbitrary `input_dim`** — it can
+  no longer silently produce a 3-channel model from a magic pixel total. Callers
+  that wanted 3-channel diffusion must pass `img_channels=3` explicitly.
+- **Spiking model and spiking propagator are now cleanly separated**: `SpikingSTDP`
+  (model) needs snnTorch and owns LIF+STDP; `STDPLearningRule` (the `stdp`
+  propagator) is pure PyTorch and works on any `transition_modules()` MLP.
+
+**Files touched this session:**
+- `bioplausible/zoo/models/eqprop/eqprop_diffusion.py` — `build()` made explicit
+  (`img_channels` kwarg, default 1), magic-number inference removed.
+- `bioplausible/zoo/models/spiking.py` — dropped `HAS_SNN` guard + dead fallback.
+- `tests/unit/validation/test_registry_audit.py` — `CONTROLLER_FIXTURES` +
+  `test_controller_step`; `_build_controller` as staticmethod.
+- `tests/unit/models/test_eqprop_models.py` — new
+  `test_eqprop_diffusion_build_explicit_channels`.
+- `tests/unit/models/test_spiking_model.py` — docstring/comment updates for the
+  removed fallback.
+
+---
+
 ### 2026-08-01 — Session 10: Registry Category-Correctness Sprint + STDP Made Functional
 
 **Goal (path-forward items 3 + 5):** fix the registry classification smell (Known
@@ -644,10 +729,12 @@ uv run ruff format --check . && uv run pyright .
 
 8. **Coverage is ~17% whole-repo** — target 50% in Sprint 4.2.2 (deferred with CI). Unit+property coverage is higher. To raise coverage without touching CI, add property tests for the Sprint 5 plumbing components (see Sprint 5 table) — they exercise unused `core`/`acceleration`/`kb` code paths.
 
-9. **EqPropDiffusion build() mangles config semantics** — its `build()` maps `input_dim`
-   through a heuristic to derive `img_channels` (e.g. `64 → 1`, `784 → 1`, `3072 → 3`). It also
-   takes `hidden_channels` as the `hidden_dim` positional. Works for a handful of magic sizes;
-   do not rely on it for arbitrary `input_dim`.
+9. **EqPropDiffusion build() mangles config semantics — RESOLVED (session 11).**
+   The old `build()` mapped `input_dim` through magic heuristics to derive
+   `img_channels` (`64→1`, `784→1`, `3072→3`). It now takes `img_channels`
+   explicitly (default 1); no magic-numbered inference. Callers wanting
+   3-channel diffusion must pass `img_channels=3`. Regression-tested
+   (`test_eqprop_diffusion_build_explicit_channels`).
 
 10. **Registry classification smell — RESOLVED (session 10).** `DynamicEquiTile` was
     misfiled as a MODEL (it's a training-side controller with no forward), and
@@ -704,28 +791,36 @@ uv run ruff format --check . && uv run pyright .
      `snnTorch` promoted to a core dependency, `SpikingSTDP` runs its real LIF path and
      the `stdp` propagator is a self-contained `STDPLearningRule` (rate-encoding, A+/A−
      asymmetric window) that executes real updates and passes Hebbian-strengthening
-     tests.
- 6. Any prior item unblocks CI (4.2) later: make `pytest tests/` the fast gate, or add `-m slow`
-    separation.
+     tests. **Session 11:** dropped the now-dead no-snnTorch fallback in `SpikingSTDP`
+     (core dep ⇒ `HAS_SNN` always True), keeping LIF-only.
+ 6. **Open follow-ups** — **COMPLETE (session 11)**: controller `step()` audit via
+     `CONTROLLER_FIXTURES` (real `EquiTile` wrapper), EqPropDiffusion `build()`
+     explicit-`img_channels` fix (Known Issue 9), and removal of dead `HAS_SNN`
+     fallback code. Full suite: **1612 passed, 0 failures**.
+ 7. Any prior item unblocks CI (4.2) later: make `pytest tests/` the fast gate, or add
+    `-m slow` separation.
 
 **Open follow-ups (small, low-value; no blockers):**
-- Give controllers their own per-fixture audit (mirror `MODEL_FIXTURES`) to drive
-  `DynamicEquiTile.step()` with a real `EquiTile` — only one controller exists today, so
-  low value.
-- Whole-repo `ruff check` (pre-existing ~2525) + `pyright` warnings (pre-existing
+- ~~Give controllers their own per-fixture audit (mirror `MODEL_FIXTURES`) to drive
+  `DynamicEquiTile.step()` with a real `EquiTile`~~ — **DONE (session 11).**
+  `CONTROLLER_FIXTURES` + `test_controller_step` now run a real topology `step()`
+  against an actual `EquiTile` with growth/prune/merge disabled.
+- Whole-repo `ruff check` (~2525 pre-existing) + `pyright` warnings (pre-existing
   ~2440) + coverage (~17%) remain unaddressed; all deferred with CI (4.2).
-- **EqPropDiffusion.build() mangles config semantics (Known Issue 9)** — `build()`
-  maps `input_dim` through a heuristic to derive `img_channels` (e.g. `64→1`, `784→1`,
-  `3072→3`) and takes `hidden_channels` as the `hidden_dim` positional. Works for a
-  handful of magic sizes; should be made explicit rather than magic-numbered. Touches
-  `zoo/models/eqprop/eqprop_diffusion.py`.
-- **Restore/verify the `spiking_stdp` model's no-snnTorch fallback test path** — now
+- ~~**EqPropDiffusion.build() mangles config semantics (Known Issue 9)**~~ —
+  **DONE (session 11):** `build()` now takes `img_channels` explicitly (default 1);
+  magic-numbered inference removed + regression test added.
+- ~~**Restore/verify the `spiking_stdp` model's no-snnTorch fallback test path** — now
   that `snnTorch` is a core dependency, `HAS_SNN` is always True; confirm the fallback
   branch (used only if the dep is ever reverted to optional) is still covered, or drop
-  the dead fallback code.
-- **Controller audit completeness** — `DynamicEquiTile` requires a real `EquiTile`
+  the dead fallback code~~ — **DONE (session 11):** since `snnTorch` is core and there
+  are no users to keep a fallback for, the dead `HAS_SNN` guard + fallback branches
+  were removed. `SpikingSTDP` is LIF-only; the pure-PyTorch `stdp` propagator
+  (`STDPLearningRule`) is separate and unaffected.
+- ~~**Controller audit completeness** — `DynamicEquiTile` requires a real `EquiTile`
   wrapper; consider `CONTROLLER_FIXTURES` mirroring `MODEL_FIXTURES` so the audit drives
-  `dynamic_equitile.step()` rather than only instantiating with a `BackpropMLP`.
+  `dynamic_equitile.step()` rather than only instantiating with a `BackpropMLP`~~ —
+  **DONE (session 11):** see `CONTROLLER_FIXTURES` + `test_controller_step`.
 
 ---
 

@@ -1,11 +1,13 @@
 """
 Spiking Neural Network Models
-==============================
+=============================
 
 SpikingSTDP model for the model zoo.
 """
 
 import torch
+import snntorch as snn
+from snntorch import surrogate
 from torch import nn
 
 from bioplausible.core.registry import register_model
@@ -14,13 +16,6 @@ from bioplausible.zoo.models.transitions import TransitionGraphMixin
 __all__ = [
     "SpikingSTDP",
 ]
-try:
-    import snntorch as snn
-    from snntorch import surrogate
-
-    HAS_SNN = True
-except ImportError:
-    HAS_SNN = False
 
 
 @register_model(
@@ -39,11 +34,6 @@ class SpikingSTDP(TransitionGraphMixin, nn.Module):
     ):
         super().__init__()
         self.num_steps = num_steps
-        if not HAS_SNN:
-            self.fc1 = nn.Linear(input_dim, hidden_dim)
-            self.fc2 = nn.Linear(hidden_dim, output_dim)
-            return
-
         spike_grad = surrogate.fast_sigmoid(slope=25)
         self.fc1 = nn.Linear(input_dim, hidden_dim, bias=False)
         self.lif1 = snn.Leaky(beta=0.9, spike_grad=spike_grad)
@@ -68,19 +58,10 @@ class SpikingSTDP(TransitionGraphMixin, nn.Module):
         ).to(device)
 
     def transition_modules(self) -> list[nn.Module]:
-        """Return weight layers in order: fc1, fc2."""
-        modules: list[nn.Module] = [self.fc1]
-        if HAS_SNN:
-            modules.append(self.lif1)
-        modules.append(self.fc2)
-        if HAS_SNN:
-            modules.append(self.lif2)
-        return modules
+        """Return weight layers in order: fc1, lif1, fc2, lif2."""
+        return [self.fc1, self.lif1, self.fc2, self.lif2]
 
     def forward(self, x):
-        if not HAS_SNN:
-            return self.fc2(torch.relu(self.fc1(x)))
-
         mem1 = self.lif1.init_leaky()
         mem2 = self.lif2.init_leaky()
 
@@ -95,9 +76,6 @@ class SpikingSTDP(TransitionGraphMixin, nn.Module):
         return torch.stack(spk2_rec, dim=0).sum(0)
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        if not HAS_SNN:
-            return {"loss": 0.0, "accuracy": 0.0}
-
         mem1 = self.lif1.init_leaky()
         mem2 = self.lif2.init_leaky()
 

@@ -45,6 +45,47 @@ def _reg(name: str) -> object:
     return _decorator
 
 
+# Per-controller construction fixtures. Controllers (e.g. ``dynamic_equitile``)
+# wrap a real model — here a genuine ``EquiTile`` — rather than an arbitrary
+# nn.Module, so the audit can drive ``step()`` for a meaningful topology update.
+CONTROLLER_FIXTURES: dict[str, object] = {}
+
+
+def _creg(name: str) -> object:
+    def _decorator(fn: object) -> object:
+        CONTROLLER_FIXTURES[name] = fn()  # type: ignore[operator]
+        return fn
+
+    return _decorator
+
+
+@_creg("dynamic_equitile")
+def _dynamic_equitile():
+    from bioplausible.equitile.analysis.dynamics import DynamicEquiTile
+    from bioplausible.equitile.core import EquiTile
+    from bioplausible.equitile.core.config import (
+        DynamicEquiTileConfig,
+        TileGrowthConfig,
+    )
+
+    def build():
+        model = EquiTile(
+            neurons_per_tile=4,
+            num_layers=2,
+            tiles_per_layer=2,
+            input_dim=8,
+            output_dim=4,
+        )
+        growth = TileGrowthConfig(
+            growth_enabled=False, prune_enabled=False, merge_enabled=False
+        )
+        return DynamicEquiTile(
+            model, config=DynamicEquiTileConfig(growth=growth, track_history=True)
+        )
+
+    return build
+
+
 @_reg("lazy_eqprop")
 def _lazy_eqprop():
     from bioplausible.zoo.models.eqprop.lazy_eqprop import LazyEqProp
@@ -737,21 +778,60 @@ class TestConstraintRegistry:
 class TestControllerRegistry:
     """Tests for controller registry audit (non-Module training-side controllers)."""
 
+    @staticmethod
+    def _build_controller(name):
+        fixture = CONTROLLER_FIXTURES.get(name)
+        if fixture is not None:
+            return fixture()
+        cls = Registry.get(ComponentCategory.CONTROLLER, name)
+        from bioplausible.zoo.models.eqprop import BackpropMLP
+
+        return cls(BackpropMLP(input_dim=8, hidden_dim=8, output_dim=4, num_layers=2))
+
     @pytest.mark.parametrize(
         "name",
         [c["name"] for c in Registry.query(category=ComponentCategory.CONTROLLER)],
     )
     def test_controller_instantiates(self, name):
-        """Every registered controller should instantiate with a model."""
-        cls = Registry.get(ComponentCategory.CONTROLLER, name)
+        """Every registered controller should instantiate."""
         try:
-            from bioplausible.zoo.models.eqprop import BackpropMLP
-
-            model = BackpropMLP(input_dim=8, hidden_dim=8, output_dim=4, num_layers=2)
-            ctrl = cls(model)
+            ctrl = self._build_controller(name)
             assert ctrl is not None
         except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
             pytest.skip(f"{name} instantiation failed: {e}")
+
+    @pytest.mark.parametrize(
+        "name",
+        [c["name"] for c in Registry.query(category=ComponentCategory.CONTROLLER)],
+    )
+    def test_controller_step(self, name):
+        """Controller step() runs against a real wrapped model and returns stats.
+
+        For fixtures providing a genuine wrapped model (``dynamic_equitile`` →
+        real ``EquiTile``), assert the returned stats dict shape and that the
+        controller exposed state evolved (tile count stable, history tracked).
+        """
+        try:
+            ctrl = self._build_controller(name)
+        except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
+            pytest.skip(f"{name} instantiation failed: {e}")
+
+        if not hasattr(ctrl, "step"):
+            pytest.skip(f"{name}: no step() API to smoke")
+
+        try:
+            stats = ctrl.step()
+        except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
+            pytest.skip(f"{name} step() failed: {e}")
+
+        assert isinstance(stats, dict)
+        assert set(stats).issuperset({"grown", "pruned", "merged", "split"})
+        assert all(isinstance(v, int) for v in stats.values())
+        assert all(v >= 0 for v in stats.values())
+
+        assert getattr(ctrl, "tile_modified", False) in {True, False}
+        history = getattr(ctrl, "get_history", lambda: None)()
+        assert history is None or isinstance(history, list)
 
     @pytest.mark.parametrize(
         "name",

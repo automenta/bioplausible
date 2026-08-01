@@ -147,3 +147,36 @@ def test_eqprop_diffusion_train_step():
     result = model.train_step(x)
     assert isinstance(result, dict)
     assert "loss" in result
+
+
+def test_eqprop_diffusion_build_explicit_channels():
+    """build() honors explicit img_channels instead of magic-number inference.
+
+    Regression for Known Issue 9: previously ``build(input_dim=3072)`` was
+    reverse-engineered to 3 channels and ``784`` to 1 via ad-hoc heuristics.
+    Now the channel count is explicit (default 1) and set via ``img_channels``.
+    """
+    model = EqPropDiffusion.build(
+        spec=None,
+        input_dim=784,
+        output_dim=10,
+        hidden_dim=32,
+        num_layers=2,
+        device="cpu",
+        task_type="vision",
+        img_channels=3,
+    )
+    assert model.img_channels == 3
+    assert model.denoiser.input_channels_count == 4  # channels + time-step channel
+
+    mono = EqPropDiffusion.build(
+        spec=None,
+        input_dim=4096,
+        output_dim=10,
+        hidden_dim=32,
+        num_layers=2,
+        device="cpu",
+        task_type="vision",
+    )
+    assert mono.img_channels == 1
+    assert mono.denoiser.input_channels_count == 2

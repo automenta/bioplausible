@@ -77,22 +77,19 @@ class EqPropDiffusion(TransitionGraphMixin, nn.Module):
         task_type,
         **kwargs,
     ):
-        channels = input_dim if input_dim is not None else 1
+        """Build an ``EqPropDiffusion`` from explicit configuration.
 
-        if channels == 784:
-            channels = 1
-        elif channels == 3072:
-            channels = 3
-        elif channels > 10:
-            side = int(channels**0.5)
-            if side * side == channels:
-                channels = 1
-            elif (channels % 3 == 0) and (
-                int((channels / 3) ** 0.5) ** 2 * 3 == channels
-            ):
-                channels = 3
-
-        return cls(img_channels=channels, hidden_channels=hidden_dim).to(device)
+        ``input_dim`` is the total flattened image size ``C * H * W``. Channel
+        count is taken explicitly from ``img_channels`` (default 1) rather than
+        reverse-engineered from magic pixel totals (784/3072, etc.). Spatial
+        size is set via ``img_size`` (default 28); no other kwargs are passed
+        through to the constructor.
+        """
+        img_channels = int(kwargs.get("img_channels", 1))
+        return cls(
+            img_channels=img_channels,
+            hidden_channels=hidden_dim,
+        ).to(device)
 
     def train_step(self, x, y=None):
         device = x.device

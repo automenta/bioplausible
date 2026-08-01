@@ -1,9 +1,8 @@
 """Tests for zoo/models/spiking.py (SpikingSTDP with snnTorch LIF kinetics).
 
-snnTorch is now a core dependency (see pyproject), so SpikingSTDP runs its real
-Leaky-Integrate-and-Fire path (HAS_SNN=True). Tests are written to pass against
-either the SNN path or the no-snnTorch fallback (FC1 -> ReLU -> FC2), so they
-remain valid if the dependency is ever made optional again.
+snnTorch is a core dependency (see pyproject), so SpikingSTDP runs its real
+Leaky-Integrate-and-Fire path unconditionally; there is no no-snnTorch
+fallback anymore.
 """
 
 import torch
@@ -12,7 +11,7 @@ from bioplausible.zoo.models.spiking import SpikingSTDP
 
 
 class TestSpikingSTDP:
-    """SpikingSTDP without snnTorch (HAS_SNN=False fallback path)."""
+    """SpikingSTDP LIF path."""
 
     def test_forward_shape(self):
         model = SpikingSTDP(input_dim=8, hidden_dim=16, output_dim=4)
@@ -68,9 +67,8 @@ class TestSpikingSTDP:
         x = torch.randn(4, 8)
         y = torch.randint(0, 4, (4,))
         model.train_step(x, y)
-        # With SNN (HAS_SNN=True), weights are updated during train_step.
-        # Without SNN (fallback), weights are unchanged.
-        # This test only verifies train_step runs without error.
+        # train_step applies the STDP weight update in-place (fc1 weight and
+        # trace variables are mutated), but the tensor shapes are stable.
         assert model.fc1.weight.data.shape == w1_before.shape
 
     def test_multiple_batches(self):
