@@ -13,6 +13,80 @@
 
 ## Session Log
 
+### 2026-08-01 — Session 8: Registry Re-audit Complete (SKIP lists eliminated)
+
+**Done this session:** Re-enabled and audited every previously-skipped model and
+propagator in `test_registry_audit.py`. SKIP lists essentially eliminated.
+
+**Registry audit before → after:**
+```bash
+# Before (session 7): 188 passed, 59 skipped
+# After:
+uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov # 247 passed, 4 skipped in ~2.5s
+```
+
+**Changes made:**
+1. **Per-model builder fixtures** in `test_registry_audit.py` (`MODEL_FIXTURES`):
+   each maps a model name → `(build, input_fn)` so specialized models get a matching
+   dummy input (token IDs, 4D images, graph tuples) instead of the flat `(B, input_dim)`.
+   Re-enabled **all 12** previously-skipped models: `lazy_eqprop`, `eqprop_diffusion`,
+   `feedback_alignment`, `hebbian_3d`, `backprop_transformer_lm`, `graph_equitile`,
+   `timeseries_equitile`, `enhanced_equitile`, `conv_equitile`, `lm_equitile`,
+   `optimized_lm_equitile`, and (new) `fast_lm_equitile`.
+2. **Fixed a real forward bug** in `graph.py:GraphEquiTileLayer`: `forward()` used
+   `self.dropout(attn_output)` but `self.dropout` was never defined → added
+   `self.dropout = nn.Dropout(config.dropout)` in `__init__`. Graph equitile now forwards.
+3. **Propagator audit was silently ALL-SKIPPED** (major discovery): the single propagator
+   helper imported `from bioplausible.zoo.models.backprop import BackpropMLP`, which raises
+   `ImportError` (BackpropMLP actually lives in `zoo.models.eqprop.looped_mlp`). The
+   `except ImportError` swallowed it → every propagator instantiation was skipping, not
+   testing. Fixed the import and made construction **signature-aware** (some propagators
+   are `(params, model)` SMEP-family factories, others are pure `(params)` optimizers like
+   `muon_backprop`). All 19 propagators now instantiate.
+4. **Sparsity audit**: 3 pruning methods (`TopKPruning`, `RandomPruning`,
+   `ActivityDrivenPruning`) require a `model` arg — now detected via signature and passed
+   a `BackpropMLP`. Previously randomized skip.
+5. `fast_lm_equitile` IS registered now (session 7 noted it as unregistered; that was stale).
+   Generic `build(config=ModelConfig)` fails it (`no .vocab_size`); added a fixture that
+   builds it with a real `FastLMConfig`.
+
+**Remaining skips (4, all justified):**
+- `dynamic_equitile` × 3 — `analysis.dynamics.DynamicEquiTile` is a **training-side topology
+  controller**, NOT an `nn.Module`; it has no `forward`. It is misfiled in the MODEL registry
+  and should be moved to a non-model category (see findings).
+- `plain` optimizer × 1 — `PlainUpdate` is an update **strategy** (takes no `params`) that is
+  misregistered as an OPTIMIZER. Instantiation raises `PlainUpdate() takes no arguments`.
+
+**Gate status:**
+```bash
+uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov # 247 passed, 4 skipped in ~2.5s
+uv run pytest tests/unit/ tests/property/ -q --no-cov  # 1153 passed, 5 skipped, 1 xfailed in ~73s
+uv run pytest tests/ -q --no-cov  # 1574 passed, 17 skipped, 1 xfailed, 5 subtests (ZERO FAILURES)
+uv run ruff format --check bioplausible/equitile/deployments/graph.py # PASS
+uv run pyright tests/unit/validation/test_registry_audit.py  # 0 errors
+```
+Whole-repo `ruff check` (graph.py 5 pre-existing errors), whole-repo `pyright` warnings and
+coverage are pre-existing and unchanged.
+
+**New discoveries / opportunities:**
+- **REGISTRY CLASSIFICATION SMELLS (opportunity for a dedicated cleanup sprint):**
+  several components are registered under the wrong category:
+  - `DynamicEquiTile` (analysis controller) in `MODEL` — no forward, can't be audited.
+  - `plain`, `muon`, `dion`, `fisher` (update *strategies*) and `spectral`
+    (a *constraint*) registered as `OPTIMIZER`. The true optimizers are `ewc`, `sgd`,
+    `adam`, `adamw`. The audit only "passes" `muon/dion/fisher/spectral` by accident of
+    `**kwargs`-style signatures.
+  - `EqPropDiffusion` mangles `input_dim`/`hidden_channels` semantics (see Known Issue 9).
+  Fixing these categorizations would make the audit fully rigorous.
+- **Propagator audit is now meaningful** (was entirely skipped before this session). Consider
+  adding a forward/step smoke test per propagator, not just instantiation.
+- `BackpropMLP` lives in `zoo/models/eqprop/looped_mlp.py`, re-exported from
+  `zoo/models/eqprop/__init__.py` and `bioplausible/__init__.py` — but NOT from
+  `zoo/models/backprop.py`. Anyone importing it from `backprop` silently breaks the callers
+  that swallow ImportError. Worth re-exporting from `backprop.py` for hygiene.
+
+---
+
 ### 2026-07-31 — Sprint 1 Core Implemented (13 files + 1 new)
 
 **Done this session:** tasks 1.1–1.9 and 1.11–1.14 (everything except 1.10 snapshot tests).
@@ -363,11 +437,24 @@ uv run ruff format --check . && uv run pyright .
 
 5. **Pyright warnings (2442) are pre-existing** — mostly `reportUnusedFunction`/`reportUnusedImport` in `zoo/` from dead code after refactors. Not actionable without whole-repo cleanup.
 
-6. **Registry components** — `test_registry_audit.py` covers all with skip lists. **FIXED (session 6): the last 3 failures in `fast_lm_equitile` are resolved** (added to `SKIP_MODELS` — it needs a `FastLMConfig`, not the generic `ModelConfig` the audit's `build()` passes). Registry audit now fully green: 170 passed, 77 skipped.
+6. **Registry components** — `test_registry_audit.py` covers all. **COMPLETE (session 8):** all
+   previously-skipped models/propagators/sparsity now audited via per-model fixtures and
+   signature-aware construction. Only justified skips remain (`dynamic_equitile` ×3 — a
+   non-MODEL topology controller, and the misregistered `plain` optimizer). 247 passed, 4 skipped.
 
 7. **Reproducibility tests pass** — fixed seed → identical weights, loss trajectory, outputs; env capture serializes to JSON; state_dict round-trips.
 
 8. **Coverage is ~17% whole-repo** — target 50% in Sprint 4.2.2 (deferred with CI). Unit+property coverage is higher. To raise coverage without touching CI, add property tests for the Sprint 5 plumbing components (see Sprint 5 table) — they exercise unused `core`/`acceleration`/`kb` code paths.
+
+9. **EqPropDiffusion build() mangles config semantics** — its `build()` maps `input_dim`
+   through a heuristic to derive `img_channels` (e.g. `64 → 1`, `784 → 1`, `3072 → 3`). It also
+   takes `hidden_channels` as the `hidden_dim` positional. Works for a handful of magic sizes;
+   do not rely on it for arbitrary `input_dim`.
+
+10. **Registry classification smell (cleanup opportunity, see Session 8 log)** — `DynamicEquiTile`
+    is misfiled as a MODEL (it's a training-side controller with no forward), and
+    `plain`/`muon`/`dion`/`fisher`/`spectral` are update strategies/constraints misfiled as
+    OPTIMIZERs. A category-correctness sprint would make the audit fully rigorous.
 
 ### Quick Reference: Key Files
 
@@ -388,8 +475,17 @@ uv run ruff format --check . && uv run pyright .
 
 **Next up:** With 4.2 (CI) deferred, the highest-value remaining work is:
 1. **Sprint 5 plumbing property tests** — **COMPLETE (session 7)**, see Sprint 5 table below.
-2. **Re-audit the registry** — **partial progress (session 7):** un-skipped 6 of 19 `SKIP_MODELS`. Remaining model skips need per-model fixtures; propagator `SKIP_PROPAGATORS` untouched (requires model+params construction fixtures).
-3. Any one of these unblocks CI (4.2) later: make `pytest tests/` the fast gate, or add `-m slow` separation.
+2. **Registry re-audit** — **COMPLETE (session 8)**: all models/propagators/sparsity audited via
+   per-model fixtures + signature-aware construction. Only 4 justified skips remain
+   (`dynamic_equitile` and misregistered `plain` optimizer). See the session 8 log.
+3. **Registry category-correctness sprint (new, optional)** — fix the classification smell
+   (Known Issue 10): move `DynamicEquiTile` out of MODEL, and split the update-strategy
+   `muon/dion/plain/fisher/spectral` entries out of OPTIMIZER. Would make the audit fully
+   rigorous — but touch the registry registration decorators, not just the test.
+4. **Per-propagator forward smoke tests (new, optional)** — the propagator audit now
+   meaningfully instantiates all 19; add a one-step `update()`/forward smoke test to catch
+   runtime errors, not just construction.
+5. Any one of these unblocks CI (4.2) later: make `pytest tests/` the fast gate, or add `-m slow` separation.
 
 ---
 

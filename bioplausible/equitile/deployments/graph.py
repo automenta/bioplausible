@@ -325,6 +325,8 @@ class GraphEquiTileLayer(nn.Module):
             dropout=config.dropout,
         )
 
+        self.dropout = nn.Dropout(config.dropout)
+
         # Layer norm
         self.norm = nn.LayerNorm(config.hidden_dim)
 
