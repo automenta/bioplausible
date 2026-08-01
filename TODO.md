@@ -1,1016 +1,250 @@
-# Bioplausible Short-Term Development Plan
+# Bioplausible Development Plan (Revised)
 
-**Goal**: Stabilize the codebase so that passing unit tests *are* the viability proof — for **biology**, not just plumbing. No lengthy experiments, no UI/CLI work, no demos until the foundation is solid.
+**Goal**: Build a credible, GPU-accelerated bio-plausible learning framework with an interactive demo that proves biology — not just plumbing. The demo + passing test suite = viability proof for researchers and contributors.
 
-**Principle**: If it takes >30 seconds to run, it's not a unit test. If it requires real data download, it's not a unit test. The test suite must pass in <60s on CPU.
-
-**References**:
-- `RESEARCH.md` — full roadmap (deferred: Phases 1-10)
-- `RESEARCH.pre.md` — refactoring prerequisites (Tiers 1-4 + Appendix A)
-- `TODO.test.md` — gap analysis: what current suite guarantees vs. biology axioms
+**Principle**: No cosmetic/lint work until functional milestones land. GPU for heavy tests only. All Tier 1 architecture from RESEARCH.pre.md folded in. RESEARCH.md stays as long-term agenda; this TODO is the only short-term plan.
 
 ---
 
 ## Session Log
 
-### 2026-08-01 — Session 12: Whole-Repo Lint Sprint, Round 1 (Correctness-First)
-
-**Goal:** begin closing the last remaining gap vs. the Success Metrics (`Ruff violations: 0`).
-All plan sprints (1–5) and follow-ups are complete, so this session attacks the deferred
-whole-repo `ruff check` debt (was 2503 pre-existing errors) — but **correctness-first**: fix
-the small, high-confidence categories that indicate real bugs or genuinely lost diagnostic
-value, and leave the thousands of pure-style violations for a deliberate policy decision.
-
-**Key tactical discovery (read before touching ruff again):**
-- **`--unsafe-fixes` is runtime-breaking on this codebase.** A blanket
-  `uv run ruff check bioplausible/ --fix --unsafe-fixes` "fixed" 520 errors across ~150 files
-  but (a) *introduced ~113 net-new lint errors* and (b) **broke imports**: it deleted a needed
-  `from typing import Iterable` (ruff judged it unused because it's only used inside a
-  `**kwargs`-annotated signature), producing a real `NameError: name 'Iterable' is not defined`
-  at runtime in `zoo/mep/presets/__init__.py`. The whole diff was reverted. Do NOT blanket-apply
-  `--unsafe-fixes`. Safe `--fix` alone only fixes 2 errors repo-wide.
-- **`RUF100`/`unused-noqa` verdicts are `--select`-dependent.** Running
-  `ruff check --select RUF100` (or any restricted select) reports suppression comments that
-  target *other* rules as "non-enabled" → false `unused-noqa` positives. Only trust
-  `unused-noqa` output from a default (full-config) run. This tripped me up on
-  `sklearn_interface.py`'s `# ruff: file-ignore[...]`, `_array_ops.py`, and
-  `equitile/__init__.py:257` — none are real problems.
-
-**Changes made (all behavior-preserving, all gates green):**
-1. **`logging.error` → `logging.exception` in 26 `except` blocks** (TRY400 `error-instead-of-exception`
-   now **0 repo-wide**). Every one of the 26 sites was `except ... as e:` + `logger.error("...%s", e)`.
-   Canonical fix is TWO steps, not one:
-   - `logging.exception(...)` auto-includes the traceback, so the trailing `, e` arg becomes
-     redundant and triggers `verbose-log-message` — drop it (e.g. `"...: %s", e` → `"..."`),
-     and convert any f-string `f"...: {e}"` to `%`-style with no `e` (`engine.py:457`).
-   - The now-unused `e` in `except ... as e:` triggers F841 — drop the `as e` binding (21 sites,
-     auto-safe).
-2. **Dead code removed:**
-   - `equitile/deployments/vision.py` — `size = size  # No change with padding` self-assignment.
-   - `equitile/training/distributed.py` — unused `neuron_counts` dict in `"balanced"` branch.
-   - `validation/tracks/__init__.py` — spurious `# ruff: ignore[unused-import]`.
-   - `zoo/mep/benchmarks/runner.py` — `try: sns.set_style(...) except Exception: pass` →
-     `with contextlib.suppress(Exception):` (clears `suppressible-exception` + `try-except-pass`).
-3. **REAL BUG FIXED: `from bioplausible import DEFAULT_KB` raised `ImportError`.**
-   `DEFAULT_KB` was listed in `bioplausible/__all__` with a "lazy — avoid SQLite" comment, but the
-   top-level package had **no** `__getattr__` (unlike `knowledge/__init__.py` / `kb.py`, which do).
-   `bioplausible.DEFAULT_KB` raised `AttributeError` and star-import failed. Added a PEP 562
-   module-level `__getattr__` at the **end of the file** (NOT mid-file — inserting it among the
-   import block turns the ~11 imports below it into `E402 module-import-not-at-top`).
-4. **REAL BUG FIXED: `NCCLConfig` was in `equitile/__all__` but never imported.**
-   `from bioplausible.equitile import *` would have failed; `equitile.NCCLConfig` raised
-   `AttributeError`. Now imported from `equitile.core.config` alongside `AsyncConfig`/`DistributedConfig`.
-5. `zoo/mep/cuda/kernels.py` — rewrote `b, r, c = b, c, r` as `r, c = c, r` (the tuple-swap was
-   correct, just tripped `self-assigning-variable` on `b`).
-
-**Gates (all green, zero failures):**
-```bash
-uv run ruff check bioplausible/                    # 2472 errors (was 2503; -31)
-uv run ruff format --check bioplausible/           # PASS (267 files)
-uv run pyright bioplausible/__init__.py ...        # 0 errors (181 pre-existing warnings)
-uv run pytest tests/unit/ tests/property/ -q --no-cov  # 1195 passed, 1 skipped, 1 xfailed (~74s)
-uv run pytest tests/ -q --no-cov                   # 1612 passed, 13 skipped, 1 xfailed, 5 subtests (ZERO FAILURES)
-```
-
-**Remaining work / guidance for future sessions (important):**
-- **The remaining 2472 violations are ~100% style, not correctness.** Top offenders:
-  `magic-value-comparison` (309), `non-lowercase-variable-in-function` (258),
-  `too-many-arguments` (195), `raise-vanilla-args` (189), `too-many-positional-arguments` (187),
-  `no-self-use` (125), `unused-method-argument` (112), `unused-class-method-argument` (72),
-  `redefined-loop-name` (68), `too-many-statements-in-try-clause` (67), `unspecified-encoding` (62),
-  `too-many-locals` (61), `complex-structure` (58), `module-import-not-at-top-of-file` (66).
-  These are `N803/N806` + `PLR09xx` + `TRY002` + `PLW0xxx` + `E402` — mostly the blanket-strict
-  `select` list applied to a large scaffold.
-- **Decision needed for the "Ruff violations: 0" metric:** grinding 2472 style violations is a
-  multi-session, near-zero-behavioral-value effort. Two defensible paths:
-  (a) **Re-scope the lint config** — drop/relax the noise rules (`magic-value-comparison`,
-  `non-lowercase-variable-in-function`, the `too-many-*` set, `no-self-use`, `unused-*-argument`,
-  `raise-vanilla-args`, `module-import-not-at-top-of-file`) via `ignore` or a per-file-ignore for
-  the `zoo/` + `equitile/` experimental code, keeping correctness rules (F/E/S/TRY/PLE/PGH) fully
-  enforced. This makes the metric achievable and keeps enforcement honest. This is a config call
-  for the owner — the AGENTS.md toolchain section would need a matching note.
-  (b) **Grind file-by-file**, starting with the correctness-adjacent remainder:
-  the `S`-bandit set (`hashlib-insecure-hash-function` 11, `suspicious-non-cryptographic-random-usage`
-  11, `hardcoded-sql-expression` 8, `hardcoded-password-string` 5, `hardcoded-bind-all-interfaces` 2,
-  `suspicious-pickle-*` 2, `subprocess` 3), then `unspecified-encoding` (62 — mechanical, just add
-  `encoding="utf-8"`), then `commented-out-code` (25 — delete or move to docs).
-- **The 5 `undefined-export` flags for `DEFAULT_KB`/`SEED_KB` are PEP 562 false positives**
-  (intentional lazy exports in `knowledge/__init__.py` and `kb.py`). `bioplausible/__init__.py`'s
-  was a genuine bug and is now fixed with a real `__getattr__`. If the metric must hit 0, add
-  `# noqa: F401`-style line suppressions or a `per-file-ignores` for `undefined-export` on those
-  three modules — but they are NOT bugs.
-- **Anything that removed `e` from `except ... as e:`** leaves F841 unless you also drop the binding;
-  prefer the 2-step TRY400 fix shown above.
-- CI (4.2) remains deferred; when it's resumed, the gate order in AGENTS.md
-  (`ruff format --check` → `ruff check` → `pyright` → `pytest --cov`) will fail on `ruff check`
-  until the style-rule decision above is made.
-
-**Files touched (20):**
-- `bioplausible/__init__.py` — new lazy `__getattr__` for `DEFAULT_KB` (end of file).
-- `bioplausible/equitile/__init__.py` — import `NCCLConfig`.
-- `bioplausible/equitile/deployments/vision.py`, `equitile/training/distributed.py`,
-  `validation/tracks/__init__.py`, `zoo/mep/benchmarks/runner.py`, `zoo/mep/cuda/kernels.py`.
-- 14 `logging`-fix files: `cli/run.py`, `evaluation/cross_domain.py`, `execution/_lifecycle.py`,
-  `execution/_state.py`, `execution/engine.py`, `execution/evolve_evaluator.py`,
-  `execution/monitoring.py`, `hyperopt/analysis.py`, `hyperopt/experiment.py`,
-  `hyperopt/storage.py`, `knowledge/metamodel.py`, `p2p/dht.py`, `p2p/state.py`.
+*(New sessions append here)*
 
 ---
 
-### 2026-08-01 — Session 11: Open-Follow-Up Sprint (Controller audit, EqPropDiffusion, spiking cleanup)
+## Sprint 0: Architecture Foundations (Weeks 1–2)
 
-**Goal (open follow-ups from Sessions 9–10):** close the three remaining small
-engineering follow-ups: (1) give controllers a real per-fixture `step()` audit
-(was instantiation-only with a mismatched `BackpropMLP`), (2) resolve Known
-Issue 9 (`EqPropDiffusion.build()` magic-numbered channel inference), and
-(3) either verify or drop the now-dead no-snnTorch fallback in `SpikingSTDP`.
+*Folds RESEARCH.pre.md Tier 1 (1.1–1.6) — high-leverage refactors that unblock everything downstream.*
 
-**Changes made:**
-1. **Controller audit is now real (was instantiation-with-BackpropMLP-only).**
-   - Added a `CONTROLLER_FIXTURES` map in `test_registry_audit.py` mirroring
-     `MODEL_FIXTURES`, with a `dynamic_equitile` fixture that builds a genuine
-     `EquiTile(neurons=4, layers=2, tiles=2, in=8, out=4)` wrapped in a
-     `DynamicEquiTile` (config with growth/prune/merge disabled + history on).
-   - Added `TestControllerRegistry.test_controller_step`: builds via the fixture,
-     calls `step()`, and asserts the returned stats dict is a superset of
-     `{grown, pruned, merged, split}` with non-negative ints, plus that
-     `tile_modified` is a bool and `get_history()` returns a list. Non-fixture
-     controllers fall back to `BackpropMLP` wrapping (constructor-only, skip-safe).
-   - `_build_controller` is now a `@staticmethod` (no self) — avoids a ruff
-     `no-self-use`; the audit file's ruff count actually *dropped* 21 → 20.
-2. **Known Issue 9 resolved — `EqPropDiffusion.build()` is now explicit.**
-   - Previous `build()` reverse-engineered `img_channels` from total pixels via
-     ad-hoc magic constants (`784 → 1`, `3072 → 3`, perfect-square / ×3 checks).
-     Rewrote it to take `img_channels` explicitly (default 1) and forward nothing
-     else. No test exercised the old magic path (registry audit drives this model
-     via its own `MODEL_FIXTURES`), so removing the heuristics is lossless.
-   - Added regression `test_eqprop_diffusion_build_explicit_channels`: `build(
-     img_channels=3)` → `model.img_channels == 3` and denoiser
-     `input_channels_count == 4` (channels + time-step channel); default →
-     `img_channels == 1`, denoiser `input_channels_count == 2`. (Note: the
-     denoiser attribute is `input_channels_count` on `SimpleConvEqProp`, not
-     `input_channels` — that's a `ModernConvEqProp` thing.)
-3. **Dead no-snnTorch fallback removed from `SpikingSTDP` (follow-up item).**
-   - `snnTorch` is now a core dependency, so `HAS_SNN` was always True and every
-     `if not HAS_SNN:` branch was dead code. Removed the try/except `HAS_SNN`
-     guard and both fallback branches (`fc1→ReLU→fc2` forward, no-op train_step).
-     `SpikingSTDP` now unconditionally builds the LIF path
-     (`fc1/lif1/fc2/lif2`). Updated the module docstring and the test module
-     docstring/`test_train_step_no_trainable_params_change` comment that
-     referenced the removed fallback. No backwards-compat needed (no users).
-   - The separate **propagator** `stdp` (`zoo/propagators/spiking.py`,
-     `STDPLearningRule`) is intentionally pure-PyTorch and unaffected — it does
-     not require snnTorch at all.
+| # | Task | Owner | Status | Validation |
+|---|------|-------|--------|------------|
+| **0.1** | **Domain Exception Hierarchy** (`core/exceptions.py`) — base `BioplausibleError` + `ConfigError`, `RegistryError`, `IncompatibilityError`, `CheckpointError`, `LoadStateError`, `KnowledgeBaseError`, `TrialExecutionError`, `PropagatorError`, `TileGraphError`. Replace 127 bare `except Exception` with narrow+chain. | | ☐ | `pyright` 0 errors; `grep -r "except Exception" bioplausible/ | wc -l` → 0 in lib code |
+| **0.2** | **`_QueryFilter` Predicate Dispatch** (`core/registry.py:120-165`) — convert boolean mega-expression to frozen predicate dataclasses + protocol; `matches()` = `all(p(meta) for p in predicates)`. Enables hypothesis tests + AutoScientist capability matching. | | ☐ | Property tests for each predicate axis; registry audit passes |
+| **0.3** | **Cyclomatic Complexity Extraction** — hot paths only: `engine.py:_run_discovery_loop` (cc=17), `engine.py:_process_with_retry` (cc=12), `equitile/model.py:_relax` (cc=16), `equitile/model.py:_apply_hebbian_updates` (cc=13). Extract `_`-prefixed helpers with guard clauses. | | ☐ | `ruff check --select C901` = 0 on these files; snapshot tests for `_relax`/`_apply_hebbian_updates` |
+| **0.4** | **`match`/`case` Conversion** — closed-enum chains: `equitile/model.py:_get_activation` (5-way), `equitile/model.py:train_step` (3-way mode), `engine.py:_log_task_start` (after dataclass extraction), `engine.py:_prepare_fixed_config` (after dataclass extraction). | | ☐ | Exhaustiveness checking catches new variants; no regressions |
+| **0.5** | **Module Boundary Hardening** — `bioplausible/__init__.py`: split heavy registration into `_register_all.py`; `equitile/utils/` → `_utils/` or `_internal/`; verify no external imports of `_internal/`. | | ☐ | `import bioplausible.types` doesn't trigger model registration; `ruff` TID252 clean |
+| **0.6** | **SQLite Resource Standardization** — `execution/_state.py`: replace 12+ manual `try/finally` with `@contextmanager _connect(db_path)` helper matching `kb.py` pattern. | | ☐ | No resource leaks under stress; KB meta-analysis (RESEARCH.md 4.2) unblocked |
 
-**Gates (**all green, zero failures**):**
-```bash
-uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov  # 278 passed, 0 skipped (~2.7s)
-uv run pytest tests/unit/models/test_spiking_model.py -q --no-cov       # 8 passed (LIF path, no fallback)
-uv run pytest tests/unit/models/test_spiking_propagator.py -q --no-cov  # 7 passed (STDP still functional)
-uv run pytest tests/unit/ tests/property/ -q --no-cov                   # 1195 passed, 1 skipped, 1 xfailed (~73s)
-uv run pytest tests/ -q --no-cov                                        # 1612 passed, 13 skipped, 1 xfailed, 5 subtests (ZERO FAILURES)
-uv run ruff format --check <5 changed files>                            # PASS
-uv run ruff check <5 changed source/test files>                         # 41 vs 40 baseline (net +1 accounted: the new build() test shifted a line;
-                                                                           NO new error lines; audit file improved 21→20)
-uv run pyright <5 changed files>                                        # 0 errors (11 pre-existing warnings)
-```
-
-**New discoveries / notes:**
-- **`SimpleConvEqProp` vs `ModernConvEqProp` attribute naming differs**: the
-  former stores channels as `input_channels_count`, the latter as `input_channels`.
-  Easy to trip on when asserting builder output — grep before assuming the name.
-- **Controllers now have a genuine step() audit**, satisfying the last "open
-  follow-up". `DynamicEquiTile` is exercised with a real `EquiTile` and a
-  no-op-growth config so `step()` runs deterministically without topology drift.
-- **`EqPropDiffusion.build()` no longer mangles arbitrary `input_dim`** — it can
-  no longer silently produce a 3-channel model from a magic pixel total. Callers
-  that wanted 3-channel diffusion must pass `img_channels=3` explicitly.
-- **Spiking model and spiking propagator are now cleanly separated**: `SpikingSTDP`
-  (model) needs snnTorch and owns LIF+STDP; `STDPLearningRule` (the `stdp`
-  propagator) is pure PyTorch and works on any `transition_modules()` MLP.
-
-**Files touched this session:**
-- `bioplausible/zoo/models/eqprop/eqprop_diffusion.py` — `build()` made explicit
-  (`img_channels` kwarg, default 1), magic-number inference removed.
-- `bioplausible/zoo/models/spiking.py` — dropped `HAS_SNN` guard + dead fallback.
-- `tests/unit/validation/test_registry_audit.py` — `CONTROLLER_FIXTURES` +
-  `test_controller_step`; `_build_controller` as staticmethod.
-- `tests/unit/models/test_eqprop_models.py` — new
-  `test_eqprop_diffusion_build_explicit_channels`.
-- `tests/unit/models/test_spiking_model.py` — docstring/comment updates for the
-  removed fallback.
+**Gate**: `uv run pytest tests/unit/ tests/property/ -q --no-cov` < 60s, 0 failures; `pyright` 0 errors.
 
 ---
 
-### 2026-08-01 — Session 10: Registry Category-Correctness Sprint + STDP Made Functional
+## Sprint 1: GPU-Accelerated Test Infrastructure (Week 2–3)
 
-**Goal (path-forward items 3 + 5):** fix the registry classification smell (Known
-Issue 10) and dispose of the non-functional `stdp` propagator stub (Known Issue 11).
+*Selective GPU: unit/property stay CPU (fast, deterministic); integration/large-model/benchmark tests run on GPU.*
 
-*> Note on the `stdp` stub:* an earlier draft of this session *deleted* the stub. On
-> reconsideration that was the wrong call — `snnTorch` was already a declared optional
-> extra (`spiking = ["snnTorch>=0.8"]`) present in the lockfile, installs as a pure
-> Python wheel with no compiler, and `SpikingSTDP` (`zoo/models/spiking.py`) only runs
-> its real LIF dynamics when it's present. So instead of deleting, this session:
-> **installed `snnTorch` as a core dependency and re-implemented `stdp` as a genuinely
-> functional propagator.** See item 5 below.
+| # | Task | Owner | Status | Validation |
+|---|------|-------|--------|------------|
+| **1.1** | **GPU Test Fixtures** (`tests/conftest.py`) — `device` fixture: `cuda` if available else `cpu`; `gpu_only` marker skips on CPU; `synthetic_batch_gpu`, `synthetic_vision_task_gpu`, `synthetic_lm_task_gpu` session-scoped on CUDA. | | ☐ | `pytest -m gpu_only` runs on RTX 3080; CPU suite unchanged |
+| **1.2** | **Migrate Heavy Tests to GPU** — move `tests/integration/test_equitile_sparsity_robustness.py`, `test_lm_demo.py`, `test_triton_*.py`, `test_deq.py` (memory tests) to `@pytest.mark.gpu` + GPU fixtures. | | ☐ | GPU suite ~2-3x faster than CPU; memory tests use `torch.cuda.max_memory_allocated()` |
+| **1.3** | **Benchmark Harness** (`tests/unit/validation/benchmark_harness.py`) — parametrized `@pytest.mark.benchmark` tests: FLOPs, peak memory, wall-time per model family (EqProp, FA, MEP, EquiTile, FF/PEPITA, Spiking). Uses `torch.profiler` + `torch.cuda.memory`. | | ☐ | `pytest tests/unit/validation/benchmark_harness.py -m benchmark` produces JSONL for Pareto plots |
+| **1.4** | **Deterministic GPU Seeding** — extend `utils/reproducibility.py`: `set_global_seed(seed, device="cuda")` covers torch/numpy/random/CUDA/cuDNN; env capture (git commit, torch/cuda versions, deps hash). | | ☐ | `biopl-repro-check` (CLI) runs 1-epoch parity on all models, same seed → bitwise identical |
 
-**Changes made:**
-1. **Three new `ComponentCategory` members + decorators** in `core/registry.py`:
-   `UPDATE_STRATEGY`, `CONSTRAINT`, `CONTROLLER` (plus `register_update_strategy`,
-   `register_constraint`, `register_controller`; re-exported from `core/__init__.py`).
-   Now the registry can express true component kinds instead of forcing
-   strategies/constraints/controllers into MODEL/OPTIMIZER/PROPAGATOR.
-2. **Moved the 4 MEP update strategies out of OPTIMIZER.** `muon`/`dion`/`plain`/
-   `fisher` (`MuonUpdate`/`DionUpdate`/`PlainUpdate`/`FisherUpdate` in
-   `zoo/mep/optimizers/strategies/update.py`) are gradient *transformation*
-   strategies (`transform_gradient(...)`), not `torch.optim` estimators with
-   parameter/costate ownership. Re-registered under `ComponentCategory.UPDATE_STRATEGY`
-   (in `zoo/mep/_registration.py`). Consumers resolve them via the presets
-   (`smep`/`muon_backprop`), so nothing downstream changed.
-3. **`spectral` moved OPTIMIZER → CONSTRAINT.** `zoo/optimizers/spectral.py`'s
-   `SpectralConstraint` is a post-step weight projection (constraint), so it now
-   registers via `register_constraint("spectral")`. `test_optimizer_stubs.py`'s
-   registration test updated to the new category.
-4. **`dynamic_equitile` moved MODEL → CONTROLLER.** `DynamicEquiTile`
-   (`equitile/analysis/dynamics.py`) is a training-side topology controller (wraps an
-   `EquiTile`, has `step()` but **no** `forward()` and is not an `nn.Module`), so it
-   was never a valid MODEL. Re-registered under `ComponentCategory.CONTROLLER` via
-   `register_controller`. The registry audit's `SKIP_MODELS` is now **empty**.
-5. **`stdp` is now a functional propagator (Known Issue 11 resolved the RIGHT way).**
-   - `snnTorch>=0.8` promoted from optional `spiking` extra to a **core dependency**
-     (`pyproject.toml`) and installed; lockfile re-resolved. This makes `SpikingSTDP`
-     run its real Leaky-Integrate-and-Fire path (`HAS_SNN=True`).
-   - Rewrote `zoo/propagators/spiking.py` as a **self-contained `STDPLearningRule`**
-     (subclass of `LearningRuleOptimizer`): rate-encodes the input, propagates spikes
-     once forward through the model's `transition_modules()` linear layers, and applies
-     a canonical asymmetric STDP update to each `nn.Linear` weight:
-     `dw = lr * (A+·postᵀ·pre_trace − A−·post_traceᵀ·pre) / batch`. It requires zero
-     snnTorch (pure PyTorch), so it works on ANY model exposing `transition_modules()`
-     (the audit's `BackpropMLP` included) — distinct from `SpikingSTDP`, which owns STDP
-     internally as a model. Registered via `@register_propagator("stdp", ...)`
-     (`credit_assignment_type="spiking"`, `requires=["transition_graph"]`).
-   - Added `tests/unit/models/test_spiking_propagator.py` (7 tests): registration,
-     instantiation, weights-update-on-step, finite weights, **Hebbian strengthening**
-     (correlated pre/post grows the co-active weight), and the TypeError on a model with
-     no `transition_modules()`.
-6. **Registry audit now covers the three new categories** with dedicated smoke tests:
-   - `TestUpdateStrategyRegistry`: instantiate + **`transform_gradient` runs on a 2D
-     grad and returns same shape** (the audit now tests the real strategy API instead of
-     the absent `step()`).
-   - `TestConstraintRegistry`: instantiate + `step()` runs.
-   - `TestControllerRegistry`: instantiate with a model + metadata.
-   Removed the `NON_OPTIMIZER_STRATEGIES` skip set (`test_optimizer_runs_one_step` now
-   only sees true optimizers). `MIN_OPTIMIZERS` 5→4, added min counts for the new
-   categories. **The audit plus every component's one-step smoke now run — SKIP list
-   fully eliminated (277 passed, 0 skipped in the audit).**
-
-**Gate status:**
-```bash
-uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov  # 277 passed, 0 skipped in ~2.7s
-uv run pytest tests/unit/models/test_spiking_propagator.py -q --no-cov   # 7 passed (STDP now functional)
-uv run pytest tests/unit/models/test_spiking_model.py -q --no-cov        # 8 passed (real LIF path now)
-uv run pytest tests/unit/zoo/test_optimizer_stubs.py -q --no-cov         # all pass (spectral → CONSTRAINT)
-uv run pytest tests/unit/ tests/property/ -q --no-cov                    # 1193 passed, 1 skipped, 1 xfailed in ~74s
-uv run pytest tests/ -q --no-cov                                         # 1610 passed, 13 skipped, 1 xfailed, 5 subtests (ZERO FAILURES)
-uv run ruff format --check <8 changed files>                             # PASS
-uv run ruff check <changed source files>                                 # only pre-existing errors (verified vs HEAD); new spiking.py matches sibling-propagator style
-uv run pyright <changed files>                                           # 0 errors (only pre-existing base-typing warnings, same as hebbian.py)
-uv lock                                                                    # re-resolved with snnTorch core dependency
-```
-
-**New discoveries / notes:**
-- **Registry category SKIPs are now zero.** The audit instantiates + forward-runs every
-  MODEL, executable-smokes every PROPAGATOR/optimizer/strategy/constraint/controller.
-- **`snnTorch` was never actually a blocker.** It was already a declared optional extra
-  (`spiking`) sitting in the lockfile; the correct move was to make it a core dependency
-  and exercise the real spiking path, not delete the STDP surface.
-- **Two distinct `SpectralConstraint` classes, only one registered.** There is
-  `zoo/optimizers/spectral.py:SpectralConstraint` (the *registered* CONSTRAINT, wraps
-  params + `step()`) and `zoo/mep/optimizers/strategies/constraint.py:SpectralConstraint`
-  (a strategy used internally by MEP presets, `transform_gradient`-style, NOT registered).
-  They are unrelated despite the shared name — keep them separate.
-- **`DynamicEquiTile` needs an `EquiTile` wrapper to instantiate.** Its constructor
-  takes `(model, config)` where `model` must be an actual `EquiTile`, not `BackpropMLP`.
-  The new `TestControllerRegistry` passes a `BackpropMLP`; a future session could give
-  controllers per-fixies (mirroring `MODEL_FIXTURES`) to drive `dynamic_equitile.step()`
-  — single controller, so low value.
-
-**Files touched this session:**
-- `bioplausible/core/registry.py` — 3 new categories + 3 decorators + `__all__`.
-- `bioplausible/core/__init__.py` — re-export the new decorators.
-- `bioplausible/zoo/mep/_registration.py` — 4 strategies OPTIMIZER → UPDATE_STRATEGY.
-- `bioplausible/zoo/optimizers/spectral.py` — `register_optimizer` → `register_constraint`.
-- `bioplausible/equitile/analysis/dynamics.py` — `register_model` → `register_controller`.
-- `bioplausible/zoo/propagators/spiking.py` — **rewritten** as functional `STDPLearningRule`.
-- `bioplausible/zoo/propagators/__init__.py` — keeps `spiking` import.
-- `pyproject.toml` — `snnTorch>=0.8` promoted to a core dependency; `uv.lock` re-resolved.
-- `tests/unit/zoo/test_optimizer_stubs.py` — spectral category assertion.
-- `tests/unit/validation/test_registry_audit.py` — 3 new audit classes, emptied
-  `SKIP_MODELS`, removed `NON_OPTIMIZER_STRATEGIES`, updated counts.
-- `tests/unit/models/test_spiking_propagator.py` — **new**, 7 STDP tests.
-- `tests/unit/models/test_spiking_model.py` — docstring updated (snnTorch is core now).
+**Gate**: GPU integration tests < 30s total; benchmark harness produces comparable numbers across runs.
 
 ---
 
-### 2026-08-01 — Session 9: Registration Hygiene + Propagator/Optimizer Step Smoke Tests
+## Sprint 2: Biology Validation Expansion (Week 3–4)
 
-**Goal (path-forward items 3/4):** make the registry audit not just *instantiate* but
-actually *run* a one-step update for every component, and fix two hygiene gaps
-(`fast_lm_equitile` registration robustness + `BackpropMLP` re-export).
+*Beyond the 8 axioms: add gradient equivalence (finite-diff), energy landscape visualization, and negative-result documentation.*
 
-**Changes made:**
-1. **`fast_lm_equitile` registration made robust (not test-side-effect-dependent).**
-   Root cause traced: `FastLMEquiTile` in `bioplausible/equitile/lm/fast_lm.py` is a
-   distinct `BioModel` from `equitile.language.fast.FastLMEquiTile`. It was registered
-   ONLY as a side effect of the audit's `@_reg("fast_lm_equitile")` fixture importing
-   `fast_lm` at module load — a bare `import bioplausible` showed 46 models and NO
-   `fast_lm_equitile` (contradicting / refining Session 8's "it IS registered now",
-   which was only true *inside* the test process). Added
-   `from bioplausible.equitile import lm  # ruff: ignore[unused-import]` to
-   `equitile/__init__.py` so registration happens at package import. Bare import now
-   yields 47 models with `fast_lm_equitile` present. The audit's 4 `fast_lm_equitile`
-   tests now run against a real registered entry.
-2. **`BackpropMLP` now re-exported from `zoo/models/backprop.py`** (Session 8 finding).
-   It lives in `eqprop/looped_mlp.py`; anyone importing it from `backprop` (mirroring
-   the name) got `ImportError`, which root causes silently-swallowed audits. Re-exported
-   from `backprop.py` + added to `__all__`. `from bioplausible.zoo.models.backprop import
-   BackpropMLP` now works. No circular import (looped_mlp doesn't import backprop).
-3. **NEW `TestComponentStepSmoke` in `test_registry_audit.py`** — instantiation is
-   necessary but not sufficient. New parametrized tests drive ONE update step:
-   - `test_propagator_runs_one_step`: builds a tiny `BackpropMLP(8,8,4,2)`, instantiates
-     each of the 19 propagators signature-aware, and calls the right step convention
-     (`LearningRuleOptimizer.step(x,target)` / `CompositeOptimizer.step(x=x,target=y)` /
-     torch `Optimizer.step`). **13 propagators now actually execute a learning step**
-     (was instantiation-only). Skips: `stdp` (genuinely not implemented via the Zoo
-     interface — real gap, see discoveries).
-   - `test_optimizer_runs_one_step`: `sgd/adam/adamw/ewc` run `step()` after seeding a
-     grad; the 5 misfiled strategies (`muon/dion/plain/fisher/spectral`) skip with an
-     explicit reason pointing at TODO Known Issue 10.
-   - Key drafting lesson: FA/EP/backprop propagators require a **Long class-index**
-     target, not float — that's why they look like they "fail"; passing `torch.randint`
-     Long targets makes them run. Many early skips were my dtype bug, not model bugs.
+| # | Task | Owner | Status | Validation |
+|---|------|-------|--------|------------|
+| **2.1** | **Finite-Difference Gradient Equivalence** (`tests/integration/test_gradient_equivalence.py`) — for every propagator: compute `grad_fd = (loss(w+ε) - loss(w-ε)) / 2ε`; assert `cosine(grad_fd, grad_local) ≥ threshold` per family (EqProp 0.7, FA 0.5, MEP 0.6, EquiTile 0.6, FF/PEPITA N/A). | | ☐ | CI gate: all registered propagators pass; thresholds documented in registry metadata |
+| **2.2** | **Energy Landscape Visualization** (`analysis/energy_landscape.py`) — 2D slices of `E(w)` around trained weights; contour plots + gradient flow arrows. Integrate with `visualization.py`. | | ☐ | Generates `energy_landscape_{model}_{task}.png` for EqProp/EquiTile |
+| **2.3** | **Contraction Mapping Verification** — extend `test_biology_axioms.py`: verify `||Δx_{t+1}|| / ||Δx_t|| < 1` for EquiTile/EP settling dynamics across β, depth, spectral norm. | | ☐ | Property test with hypothesis strategies for config space |
+| **2.4** | **Failure Manifesto** (`analysis/failure_manifesto.py`) — structured negative results: what was tried, search space, why it failed, partial successes, hypotheses. Auto-populated from KB failed trials. | | ☐ | `biopl-failure-manifesto --model eqprop_mlp` → markdown report |
+| **2.5** | **Biology Metadata Calibration** — extend registry `ComponentMetadata`: `bio_plausibility_score` (0-1, calibrated), `locality_level` (GLOBAL/LAYERWISE/LOCAL/EQUILIBRIUM/FORWARD_ONLY), `memory_complexity`, `requires_backward`, `credit_assignment_type`, `family` tag. Audit all 80+ components. | | ☐ | `biopl-registry-audit --metadata` → calibrated CSV; CI gate on completeness |
 
-**Gate status:**
-```bash
-uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov  # 269 passed, 10 skipped in ~2.7s
-uv run pytest tests/unit/ tests/property/ -q --no-cov                   # 1179 passed, 11 skipped, 1 xfailed in ~74s
-uv run pytest tests/ -q --no-cov                                        # 1596 passed, 23 skipped, 1 xfailed, 5 subtests (ZERO FAILURES)
-uv run ruff format --check .                                            # PASS (608 files)
-uv run ruff check tests/unit/validation/test_registry_audit.py           # only pre-existing no-self-use / too-many-statements
-uv run pyright bioplausible/equitile/__init__.py bioplausible/zoo/models/backprop.py tests/unit/validation/test_registry_audit.py  # 0 errors
-```
-Whole-repo `ruff check` (pre-existing errors) and coverage are unchanged/unaddressed.
-
-**Remaining skips (10, all justified or documented):**
-- `dynamic_equitile` ×3 — topology controller, not an `nn.Module`, misfiled in MODEL.
-- `plain` optimizer instantiation ×1 — strategy, takes no args, misfiled as OPTIMIZER.
-- `stdp` propagator step ×1 — **genuinely unimplemented via the Zoo interface** (raises
-  "STDP not yet implemented; use `zoo.models.spiking.SpikingSTDP`"). Real gap for a
-  future session: either route the propagator to the spiking STDP model or drop the
-  misleading `@register_propagator("stdp")` stub.
-- `muon/dion/plain/fisher/spectral` optimizer step ×5 — misfiled strategies/constraints
-  (Known Issue 10).
-
-**New discoveries / opportunities:**
-- **`stdp` propagator is a non-functional stub** (see above). It registers and
-  instantiates but its `step()` raises "not yet implemented via the Zoo interface".
-  Either implement it by delegating to `zoo.models.spiking.SpikingSTDP` or remove the
-  registration so the audit stops pretending it exists.
-- **`fast_lm_equitile` registration was environment-dependent** — the audit fixture was
-  the only thing registering it (import side effect). Now robust. Any future "unregistered
-  model" surprises should check for modules never imported at package init.
-- The smoke tests now execute real updates for 13/19 propagators, giving genuine
-  end-to-end coverage of the learning-rule path (forward+credit+update) per propagator.
-- **Category-correctness sprint (Known Issue 10) is the natural next step and now fully
-  de-risked:** the smoke tests already isolate the 5 misfiled strategies (`NON_OPTIMIZER_
-  STRATEGIES` set) and `dynamic_equitile`. A future session can add an `UPDATE_STRATEGY`
-  (or `CONSTRAINT`) `ComponentCategory`, re-register `muon/dion/plain/fisher` (+
-  `spectral` → constraint) there, audit ``transform_gradient`` instead of ``step()``, and
-  drop them from the optimizer audit. This touches `core/registry.py` (enum) +
-  `zoo/mep/_registration.py` only; consumers resolve via the presets (`smep`/`muon_backprop`)
-  so the benchmarks are unaffected.
-
-**Files touched this session:**
-- `bioplausible/equitile/__init__.py` — import `lm` package to register `fast_lm_equitile`.
-- `bioplausible/zoo/models/backprop.py` — re-export `BackpropMLP` (+ `__all__`).
-- `tests/unit/validation/test_registry_audit.py` — `TestComponentStepSmoke` + fixture/import cleanup.
+**Gate**: All biology property tests + gradient equivalence pass; failure manifesto generates for at least 3 model families.
 
 ---
 
-### 2026-08-01 — Session 8: Registry Re-audit Complete (SKIP lists eliminated)
+## Sprint 3: Interactive Demo UI — NiceGUI (Weeks 4–6)
 
-**Done this session:** Re-enabled and audited every previously-skipped model and
-propagator in `test_registry_audit.py`. SKIP lists essentially eliminated.
+*Side-by-side comparison of any 2 configurations (incl. backprop): live charts, animated weight matrices, hyperparameter widgets. Trivial + real tasks.*
 
-**Registry audit before → after:**
-```bash
-# Before (session 7): 188 passed, 59 skipped
-# After:
-uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov # 247 passed, 4 skipped in ~2.5s
-```
+| # | Task | Owner | Status | Validation |
+|---|------|-------|--------|------------|
+| **3.1** | **NiceGUI Project Setup** (`demo/`) — `pyproject.toml` extra `demo = ["nicegui", "plotly", "torchvision", "datasets"]`; `demo/main.py` entry; Quasar dark theme; asyncio event bus from `execution/engine.py` plugs directly. | | ☐ | `uv run demo/main.py` → browser opens at `localhost:8080` |
+| **3.2** | **Config-Driven Widget Generation** — `demo/widgets.py`: inspect Pydantic/dataclass config (e.g., `EquiTileConfig`, `ModelConfig`) → auto-generate sliders, dropdowns, number inputs with tooltips from docstrings. Two panels: **Config A** vs **Config B** (backprop baseline pre-filled). | | ☐ | Changing any widget updates live preview instantly |
+| **3.3** | **Task Selector** — tabs: **Toy** (XOR, spiral, concentric circles), **Digits** (sklearn), **MNIST**, **CIFAR-10**, **Tiny Shakespeare**. Each loads synthetic or real data via `tests/conftest.py` fixtures (GPU-accelerated). | | ☐ | All 5 tasks load < 2s; MNIST/CIFAR stream from torchvision cache |
+| **3.4** | **Live Training Charts** (`demo/charts.py`) — Plotly `FigureWidget` streaming: loss/accuracy (dual Y), Lipschitz constant, gradient alignment, tile activity heatmap (EquiTile), energy trajectory (EP). WebSocket push from engine callback. | | ☐ | 100-step training animates smoothly at 10 FPS; no UI freeze |
+| **3.5** | **Animated Weight Matrices** (`demo/weight_viz.py`) — canvas/Vue component: color-coded `W_t` per layer/tile; play/pause/scrub slider; hover shows value + gradient magnitude; side-by-side diff view (Config A - Config B). | | ☐ | 64×64 matrix @ 30 FPS; diff view highlights divergent weights |
+| **3.6** | **Experiment Persistence** — "Save Config" / "Load Config" (JSON); "Export Run" (CSV + charts PNG + weight MP4); shareable URL with encoded config. | | ☐ | Exported config reloads identically; MP4 playable |
+| **3.7** | **Backprop Baseline Parity** — pre-built `backprop_mlp`, `backprop_cnn`, `backprop_transformer` configs; one-click "Run Parity" trains both configs, overlays curves, prints final gap %. | | ☐ | Parity gap matches CLI `biopl-parity` within 1% |
 
-**Changes made:**
-1. **Per-model builder fixtures** in `test_registry_audit.py` (`MODEL_FIXTURES`):
-   each maps a model name → `(build, input_fn)` so specialized models get a matching
-   dummy input (token IDs, 4D images, graph tuples) instead of the flat `(B, input_dim)`.
-   Re-enabled **all 12** previously-skipped models: `lazy_eqprop`, `eqprop_diffusion`,
-   `feedback_alignment`, `hebbian_3d`, `backprop_transformer_lm`, `graph_equitile`,
-   `timeseries_equitile`, `enhanced_equitile`, `conv_equitile`, `lm_equitile`,
-   `optimized_lm_equitile`, and (new) `fast_lm_equitile`.
-2. **Fixed a real forward bug** in `graph.py:GraphEquiTileLayer`: `forward()` used
-   `self.dropout(attn_output)` but `self.dropout` was never defined → added
-   `self.dropout = nn.Dropout(config.dropout)` in `__init__`. Graph equitile now forwards.
-3. **Propagator audit was silently ALL-SKIPPED** (major discovery): the single propagator
-   helper imported `from bioplausible.zoo.models.backprop import BackpropMLP`, which raises
-   `ImportError` (BackpropMLP actually lives in `zoo.models.eqprop.looped_mlp`). The
-   `except ImportError` swallowed it → every propagator instantiation was skipping, not
-   testing. Fixed the import and made construction **signature-aware** (some propagators
-   are `(params, model)` SMEP-family factories, others are pure `(params)` optimizers like
-   `muon_backprop`). All 19 propagators now instantiate.
-4. **Sparsity audit**: 3 pruning methods (`TopKPruning`, `RandomPruning`,
-   `ActivityDrivenPruning`) require a `model` arg — now detected via signature and passed
-   a `BackpropMLP`. Previously randomized skip.
-5. `fast_lm_equitile` IS registered now (session 7 noted it as unregistered; that was stale).
-   Generic `build(config=ModelConfig)` fails it (`no .vocab_size`); added a fixture that
-   builds it with a real `FastLMConfig`.
-
-**Remaining skips (4, all justified):**
-- `dynamic_equitile` × 3 — `analysis.dynamics.DynamicEquiTile` is a **training-side topology
-  controller**, NOT an `nn.Module`; it has no `forward`. It is misfiled in the MODEL registry
-  and should be moved to a non-model category (see findings).
-- `plain` optimizer × 1 — `PlainUpdate` is an update **strategy** (takes no `params`) that is
-  misregistered as an OPTIMIZER. Instantiation raises `PlainUpdate() takes no arguments`.
-
-**Gate status:**
-```bash
-uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov # 247 passed, 4 skipped in ~2.5s
-uv run pytest tests/unit/ tests/property/ -q --no-cov  # 1153 passed, 5 skipped, 1 xfailed in ~73s
-uv run pytest tests/ -q --no-cov  # 1574 passed, 17 skipped, 1 xfailed, 5 subtests (ZERO FAILURES)
-uv run ruff format --check bioplausible/equitile/deployments/graph.py # PASS
-uv run pyright tests/unit/validation/test_registry_audit.py  # 0 errors
-```
-Whole-repo `ruff check` (graph.py 5 pre-existing errors), whole-repo `pyright` warnings and
-coverage are pre-existing and unchanged.
-
-**New discoveries / opportunities:**
-- **REGISTRY CLASSIFICATION SMELLS (opportunity for a dedicated cleanup sprint):**
-  several components are registered under the wrong category:
-  - `DynamicEquiTile` (analysis controller) in `MODEL` — no forward, can't be audited.
-  - `plain`, `muon`, `dion`, `fisher` (update *strategies*) and `spectral`
-    (a *constraint*) registered as `OPTIMIZER`. The true optimizers are `ewc`, `sgd`,
-    `adam`, `adamw`. The audit only "passes" `muon/dion/fisher/spectral` by accident of
-    `**kwargs`-style signatures.
-  - `EqPropDiffusion` mangles `input_dim`/`hidden_channels` semantics (see Known Issue 9).
-  Fixing these categorizations would make the audit fully rigorous.
-- **Propagator audit is now meaningful** (was entirely skipped before this session). Consider
-  adding a forward/step smoke test per propagator, not just instantiation.
-- `BackpropMLP` lives in `zoo/models/eqprop/looped_mlp.py`, re-exported from
-  `zoo/models/eqprop/__init__.py` and `bioplausible/__init__.py` — but NOT from
-  `zoo/models/backprop.py`. Anyone importing it from `backprop` silently breaks the callers
-  that swallow ImportError. Worth re-exporting from `backprop.py` for hygiene.
+**Gate**: Demo runs end-to-end on RTX 3080; researcher can reproduce parity claim in < 5 min.
 
 ---
 
-### 2026-07-31 — Sprint 1 Core Implemented (13 files + 1 new)
+## Sprint 4: Ecosystem Positioning & Recruitment (Week 6–7)
 
-**Done this session:** tasks 1.1–1.9 and 1.11–1.14 (everything except 1.10 snapshot tests).
+*Articulate Bioplausible's unique value in modern ML; produce recruitment artifacts.*
 
-**Gate status after session:**
-```bash
-uv run ruff format --check .        # PASS (594 files)
-uv run ruff check bioplausible/     # 2525 errors (baseline was 2521; +4 net, all plan-mandated TRY003)
-uv run pyright .                    # 0 errors, 2290 warnings (unchanged)
-uv run pytest tests/unit/ tests/property/ -q --no-cov   # 763 passed, 1 skipped in ~23s (CPU)
-```
-Whole-repo `ruff check` / coverage are pre-existing failures, not regressions.
+| # | Task | Owner | Status | Validation |
+|---|------|-------|--------|------------|
+| **4.1** | **Positioning Doc** (`docs/positioning.md`) — where Bioplausible fits: (a) **Local learning research** — only framework with EqProp/FA/MEP/EquiTile/FF/Spiking unified; (b) **Neuromorphic bridge** — same code runs GPU + Loihi/SpiNNaker via deployment; (c) **AutoScientist substrate** — registry + KB + campaign = autonomous hypothesis engine; (d) **Memory-efficient training** — O(1) memory claim verified on 1000-layer EquiTile. | | ☐ | Doc reviewed by 2 external researchers; feedback incorporated |
+| **4.2** | **5-Minute Colab Notebook** (`examples/colab/bioplausible_demo.ipynb`) — `pip install bioplausible[demo]` → runs EquiTile on CIFAR-10 in browser; links to live demo UI. | | ☐ | Executes in Colab free tier (T4) < 5 min; no auth needed |
+| **4.3** | **Leaderboard Automation** (`leaderboard/generator.py` + GitHub Action) — nightly parity benchmarks → markdown table in README; Pareto frontier plots as artifacts. | | ☐ | `README.md` updates automatically; plots viewable in Actions |
+| **4.4** | **Good First Issues** — tag 10 issues: test gaps, docstrings, benchmark configs, demo widgets, registry metadata. `CONTRIBUTING.md` with component registration walkthrough. | | ☐ | Issues labeled `good first issue`; PR template enforces registry metadata |
 
-**Sprint 1 complete**: All 14 tasks done.
+**Gate**: Colab notebook runs green; leaderboard updates nightly; 2+ external PRs merged.
 
 ---
 
-### 2026-07-31 — Sprint 2 Start: Snapshot Tests + Gate Bump
+## Sprint 5: RESEARCH.pre.md Tier 2–3 (CI Correctness + Types) (Week 7–8)
 
-**Done this session:** task 1.10 snapshot tests (29 tests across 2 files).
+*Finish Tier 2 (CI gates) and Tier 3 (type system) from RESEARCH.pre.md — now unblocked by Sprint 0.*
 
-**Gate status:**
-```bash
-uv run ruff format --check .        # PASS (596 files)
-uv run ruff check tests/unit/equitile/test_helpers_snapshot.py tests/unit/core/test_queryfilter_snapshot.py  # PASS (0 errors)
-uv run pyright tests/unit/equitile/test_helpers_snapshot.py tests/unit/core/test_queryfilter_snapshot.py  # PASS (0 errors, 0 warnings)
-uv run pyright .                    # 0 errors, 2465 warnings (pre-existing; +175 from baseline ~2290, all outside our scope)
-uv run pytest tests/unit/ tests/property/ -q --no-cov   # 792 passed, 1 skipped in ~23s (CPU)
-```
+| # | Task | Owner | Status | Validation |
+|---|------|-------|--------|------------|
+| **5.1** | **`print()` → `logging`** — 4 benchmark files (52+38+26+4 prints) → module-level logger + lazy `%s` interpolation. | | ☐ | `grep -r "print(" bioplausible/ --include="*.py" | grep -v "__main__" | wc -l` = 0 |
+| **5.2** | **Narrow `except Exception`** — 5 KB sites + 2 EquiTile scheduler sites → specific exceptions + `logger.exception` + chained domain errors (uses Sprint 0.1 hierarchy). | | ☐ | No bare `except Exception` in lib code; tracebacks preserved |
+| **5.3** | **Bare-Except Parens** — 17 sites across 12 files → `except (X, Y):` (mechanical, one pass). | | ☐ | `ruff check --select E722` = 0 |
+| **5.4** | **Eliminate `Any`** — 6 sites (trainer, config, equitile/config) → `object` or `Protocol`; `Literal` for `credit_assignment_type`; frozen dataclass audit (3 stragglers). | | ☐ | `pyright --strict` 0 errors (warnings may remain) |
+| **5.5** | **CI Pipeline Config** (`.github/workflows/ci.yml`) — `ruff format --check` → `ruff check` → `pyright` → `pytest --cov --maxfail=5` (unit+property+biology); coverage floor 50% → 85% over time. | | ☐ | CI green on main; badge in README |
 
-**Sprint 1 now fully complete.** All 14 tasks done. Gate shows +29 new passing tests, same `skip=1`.
-
----
-
-### 2026-07-31 — Session 2: Backwards Compatibility Purge
-
-Done: removed all BC code from codebase. Docs restored (were deleted in this session).
-
-**Gate:**
-```
-ruff format: PASS | ruff check: 3641 pre-existing | pyright: 0 errors, 2440w
-pytest: 555 passed, 226 failed, 11 errors (failures from removed BC features)
-```
-
-**Remaining:** Fix ~226 test failures (delete tests for removed BC, add explicit `family` metadata, fix removed re-export imports). Then proceed to Sprint 2 parity tests.
+**Gate**: Full CI pipeline passes; `pyright` 0 errors; coverage ≥ 50%.
 
 ---
 
-### 2026-07-31 — Session 4: Sprint 3 Biology Property Tests Complete
+## Sprint 6: AutoScientist v1 Foundations (Week 8–10)
 
-**Done this session:** Completed Sprint 3 biology property tests — all 8 axioms verified + 5 disabled tests wired up.
+*Minimal viable autonomous discovery: campaign persistence + structured reasoning + KB synthesis.*
 
-**Changes made:**
-1. **Fixed FA model instantiation** — Added `build()` classmethods to `DirectFeedbackAlignmentEqProp` and `DeepDFAEqProp` (fa.py:724, 775)
-2. **Fixed `_build_model_config` call** — Removed invalid `equilibrium_steps` kwarg from `BioModel.build()` (core/model.py:288)
-3. **Updated `_instantiate_model` helper** — Allow kwargs to override `num_layers` (test_biology_axioms.py:50)
-4. **Fixed weight-transport freeness test** — Improved forward weight detection to include spectral norm params (test_biology_axioms.py:690)
-5. **Implemented locality of credit test** — Properly checks edges into tiles BEFORE corrupted tile (test_biology_axioms.py:768)
-6. **Adjusted memory independence threshold** — 10x ratio accounts for parameter growth vs activation memory (test_biology_axioms.py:875)
-7. **Marked adaptive FA alignment as xfail** — Feedback LR too small to show alignment in 50 steps (test_biology_axioms.py:870)
-8. **Wired up 5 disabled tests** — Oracle convergence, EquiTile EP contrastive, EquiTile PC local Hebbian (test_biology_axioms.py:988)
+| # | Task | Owner | Status | Validation |
+|---|------|-------|--------|------------|
+| **6.1** | **Campaign Persistence** (`autoscientist/campaign_v1.py`) — YAML + SQLite state; resume from arbitrary checkpoint; git-like branches for exploration. | | ☐ | `biopl-scientist resume campaign.yaml --from trial_42` works |
+| **6.2** | **Chain-of-Thought Templates** (`autoscientist/reasoner.py`) — failure analysis, transfer reasoning, composition reasoning, scaling prediction; structured JSON output matching `Hypothesis` dataclass. | | ☐ | LLM generates valid hypothesis JSON for 5/5 test prompts |
+| **6.3** | **KB Meta-Analysis** (`knowledge/kb.py:run_meta_analysis()`) — scaling law fits (power law), algorithm fingerprinting (PCA on hyperparam sensitivity), failure manifold, cross-domain transfer matrix. | | ☐ | `kb.run_meta_analysis()` → report with fitted α,β,γ + confidence intervals |
+| **6.4** | **Surrogate-Guided Proposal** — `kb.suggest_next_experiment()` uses GPyTorch/BoTorch (optional dep) over algorithm space; falls back to random if unavailable. | | ☐ | Generates non-trivial config suggestions; logs to KB |
 
-**Gate status:**
-```
-uv run pytest tests/property/biology/ -v --no-cov  # 23 passed, 1 xfailed in ~6s
-uv run pytest tests/unit/ tests/property/ -q --no-cov  # 1017 passed, 78 skipped, 5 xfailed, 1 xpassed in ~33s
-uv run pytest tests/ -q --no-cov  # 1435 passed, 90 skipped, 5 xfailed, 1 xpassed, 3 failed (pre-existing fast_lm_equitile bug)
-uv run ruff format --check .   # PASS
-uv run pyright .   # 0 errors
-```
+**Gate**: AutoScientist runs overnight → 50 tested hypotheses in KB; meta-analysis report readable.
 
 ---
 
-### 2026-08-01 — Session 5: Sprint 4.1 Parity Hyperparameter Tuning Complete
+## Deferred / Not In This Plan
 
-**Done this session:** Completed hyperparameter tuning for all 5 models in backprop parity tests — all now achieve 5% parity target.
-
-**Changes made:**
-1. **Made hyperparameters configurable** — Added `lr` parameters to `FFLayer`, `ForwardForwardNet`, and `PEPITA` (bioplausible/zoo/models/forward_only.py)
-2. **Created hyperparameter sweep scripts** — `tests/unit/validation/hyperparams/sweep_parity.py`, `sweep_targeted.py`, `verify_eqprop.py` for systematic tuning
-3. **Found passing configs for all 4 bio-plausible models:**
-   - `eqprop_mlp`: `hebbian_lr=0.008`, `beta=0.03`, `max_steps=20` (contrastive method)
-   - `directed_ep`: `lr=0.03`, `beta=0.3`, `eq_steps=20`
-   - `forward_forward`: `threshold=0.5`, `layer_lr=0.01`, `classifier_lr=0.005`
-   - `pepita`: `lr=0.3`, `num_layers=2`
-4. **Updated `test_backprop_parity.py`** — Uses tuned hyperparameters, changed tolerance from 15% to 5%, removed `@pytest.mark.xfail`
-5. **Fixed seed handling** — Single seed for both model init and training to ensure reproducibility
-
-**Gate status:**
-```
-uv run ruff format --check .        # PASS (596 files)
-uv run ruff check .                 # PASS (0 errors)
-uv run pyright .                    # 0 errors, 2442 warnings (pre-existing)
-uv run pytest tests/unit/validation/test_backprop_parity.py -v --no-cov  # 16 passed
-uv run pytest tests/property/biology/ -v --no-cov  # 23 passed, 1 xfailed
-uv run pytest tests/unit/ tests/property/ -q --no-cov  # 1022 passed, 78 skipped, 1 xfailed
-uv run pytest tests/ -q --no-cov    # 1440 passed, 90 skipped, 1 xfailed, 3 failed (pre-existing fast_lm_equitile bug)
-```
-
-**Sprint 4.1 complete:** All 5 models pass 5% parity target. Removed 4 xfail marks.
-
----
-
-### 2026-08-01 — Session 6: Sprint 4.1.3 + 4.3 Progress
-
-**Done this session:**
-1. **Fixed the last 3 pre-existing test failures (known issue #6)** — `fast_lm_equitile`
-   no longer crashes the registry audit. Root cause: the registry audit's generic
-   `build()` path passes a `ModelConfig`, but `FastLMEquiTile` requires a `FastLMConfig`
-   (with `.vocab_size`) and token-ID input `(B, L)`. This is a genuinely different
-   interface, so it was added to `SKIP_MODELS` in `test_registry_audit.py` alongside the
-   other three LM models (`lm_equitile`, `optimized_lm_equitile`, `backprop_transformer_lm`).
-   **Full suite is now 100% green — zero failures** (a first for this repo).
-
-2. **Sprint 4.1.3 COMPLETE — FLOPs/memory assertions added** to `test_backprop_parity.py`:
-   `test_forward_flops_bounded` (FLOPs == 2·params·batch, positive) and
-   `test_param_count_bounded` (params finite, <1e7), parametrized across all 5 parity models.
-   Uses existing `bioplausible.core.energy.count_flops`.
-
-3. **Sprint 4.3.4 COMPLETE — synthetic fixtures added** to `tests/conftest.py`:
-   `synthetic_batch` (8×64 classification batch), `synthetic_vision_task` (64×1×16×16
-   image tensors, no MNIST download), `synthetic_lm_task` (8×24 token sequences, no
-   download). All session-scoped, deterministic seeds, zero I/O.
-
-4. **4.3.2/4.3.3 AUDITED — CLEAN**: `tests/unit/` has zero network/GPU/persistent I/O
-   (the only I/O uses pytest `tmp_path`/`tmpdir` for save/load round-trips, which is
-   sanitized). `tests/property/` uses only `hypothesis` strategies; its single fixture
-   (`synthetic_mlp_task` in biology axioms) is pure with no side effects.
-
-**Gate status:**
-```bash
-uv run pytest tests/unit/ tests/property/ -q --no-cov   # 1032 passed, 78 skipped, 1 xfailed in ~60s
-uv run pytest tests/unit/ tests/property/ tests/integration/ -q --no-cov  # 1392 passed, 90 skipped, 1 xfailed in ~84s
-uv run pytest tests/ -q --no-cov                        # 1440 passed, 93 skipped, 1 xfailed, 5 subtests (ZERO FAILURES)
-uv run ruff format --check .                            # PASS
-uv run ruff check tests/unit/validation/test_backprop_parity.py  # PASS (0 errors; file was ruff-clean after fixes)
-uv run pyright .                                        # 0 errors (pre-existing warnings unchanged)
-```
-
-**Note on the `fast_lm_equitile` fix:** the model itself is fine when built via
-`create_fast_lm_tiny()` (which supplies a proper `FastLMConfig`); only the generic
-registry `build()` path can't. It stays in `SKIP_MODELS` until the registry gets a
-per-model builder protocol, not a crash.
-
----
-
-## Sprint 1: Foundation Hardening (Week 1-2) — **COMPLETE**
-
-All 14 tasks done. See session logs above.
-
----
-
-## Sprint 2: Validation Infrastructure (Week 2) — **COMPLETE**
-
-| Task | Status |
+| Item | Reason |
 |------|--------|
-| 2.1–2.6: Backprop parity test suite | ✅ Created + tuned (all 5 models pass 5% target) |
-| 2.7–2.10: Registry audit | ✅ Created (170 passed) |
-| 2.11–2.13: Reproducibility | ✅ Created (22 passed) |
+| Ruff style violations (2472 remaining) | Cosmetic; re-scope config or fix opportunistically during real work |
+| Full neuromorphic deployment (Loihi, SpiNNaker, BrainScaleS) | Trigger: GPU parity published + hardware partner interest |
+| Optical/analog/memristor simulation | Post-GPU-validation; collaboration-dependent |
+| Phase 2–10 of RESEARCH.md | Long-term agenda; this plan covers Phase 0 + Demo + Recruitment |
+| CLI unification (`bioplausible` single entry) | NiceGUI demo replaces CLI for researchers; CLI for automation only |
+| Colab notebooks per domain | One flagship notebook sufficient for recruitment |
 
 ---
 
-## Sprint 3: Biology Verification Property Tests (Week 3) — **COMPLETE**
-
-*All 8 biology axioms verified + 5 disabled tests wired up.*
-
-| # | Target | Axiom Verified | Status |
-|---|--------|----------------|--------|
-| 3.1 | **EP gradient-equivalence** | Equilibrium Prop ≈ BPTT | ✅ 2 tests passing (cos_sim ≥ 0.5) |
-| 3.2 | **Lyapunov energy-descent** | Energy descent dynamics | ✅ 2 tests passing (eqprop_mlp, equitile) |
-| 3.3 | **Contraction mapping** | Fixed-point stability | ✅ 4 tests passing (eqprop_mlp ×3 step_sizes, equitile) |
-| 3.4 | **Fixed-point reliability** | Attractor uniqueness | ✅ 2 tests passing (uniqueness + idempotence) |
-| 3.5 | **Weight-transport freeness** | FA family defining property | ✅ 4 tests passing (3 FA models + separate tensors) |
-| 3.6 | **Locality of credit** | Local learning | ✅ 1 test passing (equitile layer isolation) |
-| 3.7 | **Memory-independence-of-depth** | O(1) memory claim | ✅ 4 tests passing (depths 5,10,20, ratio < 10x) |
-| 3.8 | **Adaptive-FA alignment improvement** | Feedback alignment learning | ✅ xfail (expected — LR too small in 50 steps) |
-
-**Disabled Tests Wired Up:**
-| File | Test | Fix Applied |
-|------|------|-------------|
-| `tests/unit/models/test_deq.py::test_gradients_match_bptt` | Computes cosine sim, assigns to `_` | ✅ Wired up as `test_deq_gradients_match_bptt_wired_up` |
-| `tests/unit/models/test_oracle.py` | `steps_noisy > steps_clean` softened | ✅ Wired up as `test_oracle_convergence_time_vs_noise` |
-| `tests/unit/equitile/test_equitile_modes.py::test_ep_contrastive_property` | Only `weights_changed = True` | ✅ Wired up with contrastive direction check |
-| `tests/unit/equitile/test_equitile_modes.py::test_pc_local_hebbian_property` | Only `weights_changed = True` | ✅ Wired up with locality check |
-
-### Sprint 3 Gate
-```bash
-uv run pytest tests/property/biology/ -x --tb=short
-```
-- ✅ All 8 biology property tests pass (1000+ examples each via `hypothesis`)
-- ✅ 5 disabled tests wired up and passing
-- ✅ **Biology property suite <30s on CPU** (~6s)
-
----
-
-## Sprint 4: Parity Hyperparameter Tuning + CI Hardening (Week 3-4)
-
-### 4.1 Parity Hyperparameter Tuning (Sprint 2.5 deferred work) — **COMPLETE**
-| # | Task | Target | Status |
-|---|------|--------|--------|
-| 4.1.1 | Per-model hyperparameter sweep configs (lr, β, step_size, max_steps, spectral_norm γ) | Each model hits 5% parity on synthetic | ✅ Done |
-| 4.1.2 | Remove `@pytest.mark.xfail` from `test_backprop_parity.py` | All 5 models pass | ✅ Done |
-| 4.1.3 | Add FLOPs/memory tracking assertions | Per Sprint 2.4 gate | ✅ Done (session 6) |
-
-### 4.2 CI Pipeline Hardening — **DEFERRED by owner decision (no GitHub/CI planned now)**
-| # | Task | Done |
-|---|------|------|
-| 4.2.1 | `.github/workflows/ci.yml`: `ruff format --check` → `ruff check` → `pyright` → `pytest --cov --maxfail=5` (unit + property + biology) | ☐ deferred |
-| 4.2.2 | Coverage floor: `--cov-fail-under=50` (per `pyproject.toml`), trending to 85% | ☐ deferred |
-| 4.2.3 | Separate `slow` mark for integration tests (excluded from default CI) | ☐ deferred |
-| 4.2.4 | Nightly workflow: runs `tests/slow/` (real data, full epochs) — results to artifact store, not gate | ☐ deferred |
-
-### 4.3 Test Organization Cleanup
-| # | Task | Done |
-|---|------|------|
-| 4.3.1 | Move all real-data/download tests to `tests/slow/` (currently mixed in `integration/`) | ☐ **assessed — see note below** |
-| 4.3.2 | Ensure `tests/unit/` has zero I/O, zero GPU, zero network | ✅ audited (session 6) |
-| 4.3.3 | Ensure `tests/property/` uses only `hypothesis` strategies, no fixtures with side effects | ✅ audited (session 6) |
-| 4.3.4 | Add `conftest.py` synthetic fixtures: `synthetic_batch`, `synthetic_vision_task`, `synthetic_lm_task` | ✅ Done (session 6) |
-
-**4.3.1 note (assessed, not moved):** All 40+ files in `tests/integration/` already
-self-skip when datasets are missing locally (`_dataset_available` / `quick_mode=True` /
-skip-on-download keywords), and the suite runs in ~23s offline. With CI (4.2) deferred
-and no automated gate that depends on the split, physically relocating 40+ working files
-is high-risk/low-value *now*. The fast gate is already `tests/unit/ tests/property/`, which
-excludes `integration/`. Revisit 4.3.1 only when CI (4.2) is resumed.
-
-### Sprint 4 Gate
-```bash
-uv run pytest tests/unit/ tests/property/ tests/property/biology/ --maxfail=1 -q
-```
-- **<45s on CPU** (CI runner)
-- Coverage ≥ 50%
-- Zero flakes in 5 consecutive runs
-- **All biology property tests pass**
-- **All parity tests pass (5% target)**
-
----
-
-## Sprint 5 (Complete): Plumbing Property Tests
-
-*Completed session 7 — see Session 7 log for the 7 new property suites.*
-
-| # | Target | Properties |
-|---|--------|------------|
-| 5.1 | `_QueryFilter` predicates | `matches(meta)` ↔ predicate logic equivalence; commutativity of filter composition ✅ |
-| 5.2 | `core.config.resolve_hidden_dims` / `compute_hidden_dims` | Idempotence, monotonicity in `num_layers`, `hidden_dim=None` → `[]` ✅ |
-| 5.3 | `acceleration.kernels` (softmax, CE, tanh_deriv, spectral_normalize) | Numerical equivalence to PyTorch reference; spectral norm ≈ 1; shape invariants ✅ |
-| 5.4 | `Registry.register` + `Registry.get` round-trip | `get(register(x)) == x`; metadata preserved; name collision handling ✅ |
-| 5.5 | `knowledge.kb.KnowledgeEntry` serialization | `from_dict(to_dict(entry)) == entry`; embedding determinism/exclusion ✅ |
-| 5.6 | `equitile.core.config.EquiTileConfig.validate()` | Invalid configs raise; valid configs don't; field bounds respected ✅ |
-| 5.7 | `domains.base.DomainSpec` / `Batch` / `Metrics` | Round-trip serialization; `Batch.to(device)` preserves metadata ✅ |
-
----
-
-## What Is Explicitly NOT In This Plan
-
-| Deferred | Reason |
-|----------|--------|
-| Full training experiments (GPU, real data, multi-epoch) | Code still changing; experiments belong in RESEARCH.md Phase 1+ after foundation solid |
-| CLI (`biopl-scientist --demo`, `biopl-parity`, etc.) | Passing unit tests = viability proof; CLI is polish |
-| Colab notebooks / leaderboard / failure gallery | Recruitment artifacts; build after test suite is bulletproof |
-| AutoScientist LLM integration / campaign persistence | Requires stable execution engine; Sprint 1-4 stabilize the engine |
-| Cross-domain benchmarks (LM, RL, Graph, TimeSeries) | Need stable domain tasks first; domain tasks need stable registry |
-| Neuromorphic / distributed / P2P | Explicitly deferred in RESEARCH.md |
-| Config unification (A1), TaskProtocol (A2), PersistenceIndex (A3) | Appendix A items — fold into Sprint 1-4 when touching those files |
-
----
-
-## Viability Proof = Passing Test Suite (Biology + Plumbing)
-
-| Audience | What They See |
-|----------|---------------|
-| **Developer** | `git clone && uv sync && uv run pytest` → green in <60s, no setup |
-| **Researcher** | `tests/property/biology/` — 6 bio-plausibility axioms verified by property tests; `test_backprop_parity.py` — models within 5% of backprop on synthetic |
-| **Contributor** | Clear test patterns: unit (fast, isolated), biology property (exhaustive, axioms), plumbing property (exhaustive, pure), slow (real data, opt-in) |
-
----
-
-## Success Metrics (End of Sprint 4)
+## Success Metrics (End of Sprint 6)
 
 | Metric | Target |
 |--------|--------|
-| Unit + property + biology test time (CPU) | <60s |
-| Ruff violations | 0 |
-| Pyright errors | 0 |
-| Coverage (unit + property) | ≥50% |
-| Parity accuracy (synthetic, 1 epoch) | Bio-plausible within 5% of backprop |
-| Registry instantiation | 100% of 80+ components |
-| Determinism | 100% components reproducible |
-| Biology axioms verified | 6/6 (contraction, energy descent, fixed-point, locality, weight-transport-free, O(1) memory) |
-| Flaky tests | 0 in 5 consecutive runs |
+| **Demo viability** | Researcher reproduces EqProp/EquiTile parity on CIFAR-10 in < 5 min via NiceGUI |
+| **Test suite** | Unit+property+biology < 60s CPU; GPU integration < 30s; 0 flakes in 5 runs |
+| **Biology proof** | 8 axioms + gradient equivalence + energy landscapes + failure manifesto for 3+ families |
+| **Registry** | 100% components instantiated, metadata calibrated, audit CI gate green |
+| **AutoScientist** | 50 hypotheses/week; meta-analysis extracts scaling laws from KB |
+| **Recruitment** | Colab runs green; leaderboard updates nightly; 2+ external PRs |
+| **Type safety** | `pyright` 0 errors (strict); `ruff` 0 correctness violations (style ignored) |
 
 ---
 
-## After Sprint 4: RESEARCH.md Phase 0 Complete
+## Architecture Decision Log
 
-Only then consider:
-1. **Phase 1** — Full experiments (GPU, real data, multi-epoch) via `tests/slow/`
-2. **Phase 4** — AutoScientist (stable execution engine + KB)
-3. **Adoption** — CLI, Colabs, leaderboards
-
-**The test suite is the product until Sprint 4 gates pass — and now it proves biology, not just plumbing.**
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 2026-08-01 | NiceGUI for demo UI | Asyncio-native; headless engine event bus plugs directly; Python-only authoring; Quasar theme; canvas escape hatch for weight matrices |
+| 2026-08-01 | Selective GPU testing | Unit/property tests stay CPU (deterministic, fast); integration/benchmarks use GPU for 5-10x speedup on large models |
+| 2026-08-01 | Fold RESEARCH.pre.md Tier 1 into Sprint 0 | High-leverage architecture unblocks AutoScientist, registry, KB, scaling sweeps; defer Tier 2-3 to Sprint 5 |
+| 2026-08-01 | Defer all lint style work | 2472 violations are ~100% style (N803, PLR09xx, TRY002, E402); config re-scope or opportunistic fixes only |
 
 ---
 
-## Path Forward: Immediate Next Steps
+## Quick Reference: Commands
 
-### Sprint 4.1: Parity Hyperparameter Tuning — **COMPLETE** ✅
-All 5 models achieve 5% parity target. Xfail marks removed. **4.1.3 (FLOPs/memory) also done.**
-
-### Sprint 4.3: Test Organization — mostly done (session 6)
-- ✅ 4.3.2 (unit purity), 4.3.3 (property purity) audited clean
-- ✅ 4.3.4 synthetic fixtures added to `tests/conftest.py`
-- ☐ 4.3.1 (move integration → slow) deferred — see note in Sprint 4.3 table
-
-### Sprint 4.2: CI Pipeline — **DEFERRED** (owner: no GitHub/CI planned, revisit much later)
-
-**Commands to verify current state:**
 ```bash
-# Fast gate (unit + property + biology)
+# Fast gate (CPU only)
 uv run pytest tests/unit/ tests/property/ -q --no-cov
 
-# Validation only (includes parity + FLOPs/memory)
-uv run pytest tests/unit/validation/ -q --no-cov
+# GPU integration gate
+uv run pytest tests/integration/ -m gpu -q --no-cov
 
-# Full suite (should now be ZERO failures)
-uv run pytest tests/ -q --no-cov
+# Biology property tests
+uv run pytest tests/property/biology/ -v --no-cov
 
-# Format + typecheck
-uv run ruff format --check . && uv run pyright .
+# Benchmark harness
+uv run pytest tests/unit/validation/benchmark_harness.py -m benchmark -v --no-cov
+
+# Demo UI
+uv run demo/main.py
+
+# Registry audit + metadata
+uv run biopl-registry-audit --metadata
+
+# Gradient equivalence
+uv run pytest tests/integration/test_gradient_equivalence.py -v --no-cov
+
+# AutoScientist overnight
+uv run biopl-scientist --campaign config/campaign.yaml --max-trials 50
+
+# Full CI simulation
+uv run ruff format --check . && uv run ruff check . && uv run pyright . && uv run pytest --cov --maxfail=5
 ```
-
-**Files created/modified (session 6):**
-- `tests/conftest.py` — added `synthetic_batch`, `synthetic_vision_task`, `synthetic_lm_task`
-- `tests/unit/validation/test_backprop_parity.py` — added `test_forward_flops_bounded`, `test_param_count_bounded`
-- `tests/unit/validation/test_registry_audit.py` — added `fast_lm_equitile` to `SKIP_MODELS` (fixes last 3 failures)
-
-### Known Issues / Clues
-
-1. **LoopedMLP has no `step_size` param** — controlled via `max_steps` and internal logic. Don't pass `step_size` to constructor.
-
-2. **EquiTile uses `W_in(x)` for input projection** — not `_project_input()`. Use `model.W_in(xb)` and `model._init_activities()`.
-
-3. **EqProp free energy = dynamics energy only (β=0 phase)** — prediction error is for nudged phase. Use `0.5 * mean((h_next - h)^2)` for free energy trajectory.
-
-4. **Triton warning is harmless** — "Triton detected but missing 'tanh'" just means CUDA kernels disabled; CPU path works.
-
-5. **Pyright warnings (2442) are pre-existing** — mostly `reportUnusedFunction`/`reportUnusedImport` in `zoo/` from dead code after refactors. Not actionable without whole-repo cleanup.
-
-6. **Registry components** — `test_registry_audit.py` covers all. **COMPLETE (sessions 8–10):** all
-   models/propagators/sparsity audited via per-model fixtures and signature-aware construction,
-   PLUS step smoke tests running a real update for 13 propagators and 4 optimizers (session 9),
-   PLUS the category-correctness sprint (session 10) which added UPDATE_STRATEGY/CONSTRAINT/
-   CONTROLLER categories (strategy `transform_gradient` + constraint `step()` smoked) and
-   eliminated the last skips. **The audit's SKIP list is fully empty — 274 passed, 0 skipped.**
-
-7. **Reproducibility tests pass** — fixed seed → identical weights, loss trajectory, outputs; env capture serializes to JSON; state_dict round-trips.
-
-8. **Coverage is ~17% whole-repo** — target 50% in Sprint 4.2.2 (deferred with CI). Unit+property coverage is higher. To raise coverage without touching CI, add property tests for the Sprint 5 plumbing components (see Sprint 5 table) — they exercise unused `core`/`acceleration`/`kb` code paths.
-
-9. **EqPropDiffusion build() mangles config semantics — RESOLVED (session 11).**
-   The old `build()` mapped `input_dim` through magic heuristics to derive
-   `img_channels` (`64→1`, `784→1`, `3072→3`). It now takes `img_channels`
-   explicitly (default 1); no magic-numbered inference. Callers wanting
-   3-channel diffusion must pass `img_channels=3`. Regression-tested
-   (`test_eqprop_diffusion_build_explicit_channels`).
-
-10. **Registry classification smell — RESOLVED (session 10).** `DynamicEquiTile` was
-    misfiled as a MODEL (it's a training-side controller with no forward), and
-    `plain`/`muon`/`dion`/`fisher`/`spectral` were update strategies/constraints
-    misfiled as OPTIMIZERs. The category-correctness sprint (session 10) added
-    `UPDATE_STRATEGY`/`CONSTRAINT`/`CONTROLLER` categories, re-registered every
-    component under its true kind, and the audit now smoke-runs `transform_gradient`
-    for strategies, `step()` for constraints, and instantiation for controllers. The
-    audit's SKIP list is fully eliminated.
-
-11. **`stdp` propagator — RESOLVED as functional (session 10).** The original
-    `@register_propagator("stdp")` stub raised NotImplementedError in `step()`. Fixed
-    the RIGHT way: promoted `snnTorch` to a core dependency and re-implemented
-    `zoo/propagators/spiking.py` as `STDPLearningRule`, a self-contained rate-encoding
-    STDP local rule (pure PyTorch, works on any `transition_modules()` MLP) with an
-    asymmetric A+/A− window. It registers, executes a one-step update in the audit, and
-    has 7 dedicated tests including Hebbian strengthening.
-
-12. **`fast_lm_equitile` registration was test-process-dependent (resolved, session 9)** — the
-    audit's `@_reg` fixture import was the only thing triggering `equitile/lm/fast_lm.py`'s
-    `@register_model`. Now imported from `equitile/__init__.py`, so a bare `import bioplausible`
-    registers it (47 models). Watch for other models registered only when a test happens to
-    import their module.
-
-13. **Whole-repo `ruff check` state — session 12 began the cleanup.** Baseline was 2503
-    pre-existing violations; session 12 cleared the correctness-relevant ones and dropped it
-    to **2472**. Three things every future session must know:
-    - **`--unsafe-fixes` broke runtime imports** (`NameError: Iterable` in
-      `zoo/mep/presets/__init__.py` by deleting a needed `typing` import) and net-added ~113
-      errors. Never blanket-apply `--unsafe-fixes`; it is not behavior-preserving here.
-    - **`unused-noqa`/`RUF100` verdicts are `--select`-dependent** — only trust them from a
-      default (full-config) run.
-    - **`logging.exception` auto-includes the traceback**, so a TRY400 fix must also drop the
-      trailing `, e` arg (else `verbose-log-message`) and the now-unused `as e` binding (else
-      F841). The 26 fixed sites in session 12 are the canonical reference.
-    Remaining 2472 are style rules (`N806`/`PLR09xx`/`TRY002`/`E402`/...). Whether to grind them
-    or re-scope the `select` list is an open policy decision — see the Session 12 log.
-
-### Quick Reference: Key Files
-
-| Area | Key Files |
-|------|-----------|
-| Biology tests | `tests/property/biology/test_biology_axioms.py` |
-| Parity tests | `tests/unit/validation/test_backprop_parity.py` |
-| Registry audit | `tests/unit/validation/test_registry_audit.py` |
-| Reproducibility | `tests/unit/validation/test_reproducibility.py` |
-| EqProp model | `bioplausible/zoo/models/eqprop/looped_mlp.py` |
-| EqProp base | `bioplausible/zoo/models/base.py` (EqPropModel) |
-| EquiTile model | `bioplausible/equitile/core/model.py` |
-| FA models | `bioplausible/zoo/models/fa.py` |
-| Config | `bioplausible/core/config.py`, `bioplausible/equitile/core/config.py` |
-| Hyperparam sweeps | `tests/unit/validation/hyperparams/` |
 
 ---
 
-**Next up:** With 4.2 (CI) deferred, the highest-value remaining work is:
- 1. **Sprint 5 plumbing property tests** — **COMPLETE (session 7)**, see Sprint 5 table below.
- 2. **Registry re-audit** — **COMPLETE (sessions 8–9)**: all models/propagators/sparsity audited
-    via per-model fixtures + signature-aware construction, PLUS per-component step smoke
-    tests that actually execute one update for 13 propagators + 4 optimizers.
- 3. **Registry category-correctness sprint** — **COMPLETE (session 10)**: added
-    `UPDATE_STRATEGY`/`CONSTRAINT`/`CONTROLLER` categories; moved
-    `muon`/`dion`/`plain`/`fisher` → UPDATE_STRATEGY, `spectral` → CONSTRAINT,
-    `dynamic_equitile` → CONTROLLER. The audit now smokes `transform_gradient` for
-    strategies and eliminated its SKIP list entirely (274 passed, 0 skipped).
- 4. **Per-propagator/optimizer step smoke tests** — **COMPLETE (sessions 9–10)**.
- 5. **`stdp` propagator stub** — **COMPLETE (session 10)**: made functional. With
-     `snnTorch` promoted to a core dependency, `SpikingSTDP` runs its real LIF path and
-     the `stdp` propagator is a self-contained `STDPLearningRule` (rate-encoding, A+/A−
-     asymmetric window) that executes real updates and passes Hebbian-strengthening
-     tests. **Session 11:** dropped the now-dead no-snnTorch fallback in `SpikingSTDP`
-     (core dep ⇒ `HAS_SNN` always True), keeping LIF-only.
- 6. **Open follow-ups** — **COMPLETE (session 11)**: controller `step()` audit via
-     `CONTROLLER_FIXTURES` (real `EquiTile` wrapper), EqPropDiffusion `build()`
-     explicit-`img_channels` fix (Known Issue 9), and removal of dead `HAS_SNN`
-     fallback code. Full suite: **1612 passed, 0 failures**.
- 7. Any prior item unblocks CI (4.2) later: make `pytest tests/` the fast gate, or add
-    `-m slow` separation.
- 8. **Whole-repo lint sprint** — **IN PROGRESS (session 12, round 1 of N)**: the first
-    correctness-first pass fixed 26 lost-traceback `logging.error` calls, 2 real import bugs
-    (`bioplausible.DEFAULT_KB` ImportError, `equitile.NCCLConfig` never-imported), several
-    dead-code/`except: pass` sites, and took `ruff check` 2503 → 2472. The remaining ~2472
-    are style-only; see Session 12 log for the config-vs-grind decision that must be made
-    before the `Ruff violations: 0` metric is reachable.
+## File/Module Map for New Work
 
-**Open follow-ups (small, low-value; no blockers):**
-- ~~Give controllers their own per-fixture audit (mirror `MODEL_FIXTURES`) to drive
-  `DynamicEquiTile.step()` with a real `EquiTile`~~ — **DONE (session 11).**
-  `CONTROLLER_FIXTURES` + `test_controller_step` now run a real topology `step()`
-  against an actual `EquiTile` with growth/prune/merge disabled.
-- Whole-repo `ruff check` (**2472 remaining**, down from 2503; session 12 removed the
-  correctness/security-relevant categories — remaining is pure style) + `pyright` warnings
-  (pre-existing ~2440) + coverage (~17%) remain unaddressed; all deferred with CI (4.2).
-  **See Session 12 log for the recommended path (re-scope style rules vs. grind) and the
-  `--unsafe-fixes` warning (it broke runtime imports — never blanket-apply).**
-- ~~**EqPropDiffusion.build() mangles config semantics (Known Issue 9)**~~ —
-  **DONE (session 11):** `build()` now takes `img_channels` explicitly (default 1);
-  magic-numbered inference removed + regression test added.
-- ~~**Restore/verify the `spiking_stdp` model's no-snnTorch fallback test path** — now
-  that `snnTorch` is a core dependency, `HAS_SNN` is always True; confirm the fallback
-  branch (used only if the dep is ever reverted to optional) is still covered, or drop
-  the dead fallback code~~ — **DONE (session 11):** since `snnTorch` is core and there
-  are no users to keep a fallback for, the dead `HAS_SNN` guard + fallback branches
-  were removed. `SpikingSTDP` is LIF-only; the pure-PyTorch `stdp` propagator
-  (`STDPLearningRule`) is separate and unaffected.
-- ~~**Controller audit completeness** — `DynamicEquiTile` requires a real `EquiTile`
-  wrapper; consider `CONTROLLER_FIXTURES` mirroring `MODEL_FIXTURES` so the audit drives
-  `dynamic_equitile.step()` rather than only instantiating with a `BackpropMLP`~~ —
-  **DONE (session 11):** see `CONTROLLER_FIXTURES` + `test_controller_step`.
-- ~~**`from bioplausible import DEFAULT_KB` raises ImportError** (in `__all__`, no
-  `__getattr__` existed)~~ — **DONE (session 12):** PEP 562 lazy `__getattr__` added.
-- ~~**`equitile.NCCLConfig` in `__all__` but never imported** (star-import would fail)~~ —
-  **DONE (session 12):** imported from `equitile.core.config`.
+```
+bioplausible/
+├── core/
+│   ├── exceptions.py          # NEW Sprint 0.1
+│   ├── registry.py            # REFACTOR Sprint 0.2 (_QueryFilter predicates)
+│   ├── model.py               # REFACTOR Sprint 0.3, 0.4
+│   └── trainer.py             # REFACTOR Sprint 0.3
+├── execution/
+│   ├── engine.py              # REFACTOR Sprint 0.3, 0.4
+│   ├── _state.py              # REFACTOR Sprint 0.6 (SQLite context manager)
+│   └── dashboard.py           # INTEGRATES with NiceGUI event bus
+├── equitile/
+│   ├── core/model.py          # REFACTOR Sprint 0.3, 0.4
+│   └── utils/ → _utils/       # Sprint 0.5 (module boundary)
+├── knowledge/
+│   └── kb.py                  # ENHANCE Sprint 2.4, 6.3 (meta-analysis)
+├── analysis/
+│   ├── energy_landscape.py    # NEW Sprint 2.2
+│   ├── failure_manifesto.py   # NEW Sprint 2.4
+│   └── scaling.py             # NEW Sprint 6.3
+├── autoscientist/
+│   ├── campaign_v1.py         # NEW Sprint 6.1
+│   ├── reasoner.py            # ENHANCE Sprint 6.2 (CoT templates)
+│   └── proposer.py            # ENHANCE Sprint 6.4 (surrogate-guided)
+├── deployment.py              # EXISTING (ONNX/FastAPI)
+└── visualization.py           # EXISTING (matplotlib → Plotly for demo)
+
+demo/                          # NEW Sprint 3
+├── main.py                    # NiceGUI entry
+├── widgets.py                 # Config-driven auto-widgets
+├── charts.py                  # Plotly FigureWidget streaming
+├── weight_viz.py              # Canvas/Vue weight matrix animation
+├── tasks.py                   # Toy/Digits/MNIST/CIFAR/LM loaders
+└── demo_config.py             # Pre-built backprop baselines
+
+tests/
+├── conftest.py                # ENHANCE Sprint 1.1 (GPU fixtures)
+├── integration/
+│   ├── test_gradient_equivalence.py  # NEW Sprint 2.1
+│   └── ... (migrated to @pytest.mark.gpu)
+└── unit/validation/
+    └── benchmark_harness.py   # NEW Sprint 1.3
+
+.github/workflows/ci.yml       # NEW Sprint 5.5
+docs/positioning.md            # NEW Sprint 4.1
+examples/colab/bioplausible_demo.ipynb  # NEW Sprint 4.2
+```
 
 ---
 
-### 2026-08-01 — Session 7: Sprint 5 Plumbing Property Tests COMPLETE + Registry Re-audit Progress
-
-**Done this session:**
-1. **Sprint 5 COMPLETE — all 7 plumbing property suites created.** Each is pure,
-   fast (<3s each), raises coverage on underlying `core`/`acceleration`/`kb`/
-   `equitile`/`domains` code, and passes `ruff` + `pyright` clean.
-
-| # | New file | Laws encoded | Tests |
-|---|----------|--------------|-------|
-| 5.1 | `tests/property/test_queryfilter.py` | `_QueryFilter.matches(meta)` == independent per-axis AND; empty filter matches all; conjunction commutative + idempotent; impossible tag never matches; query result-set commutative | 6 |
-| 5.2 | `tests/property/test_base.py` (extended) | `resolve_hidden_dims`: config-wins is exact/idempotent, None/None→[], None→[h], empty-config→[h]; `compute_hidden_dims` length monotone in num_layers | +7 |
-| 5.3 | `tests/property/test_kernels.py` | `softmax`/`cross_entropy`/`tanh_deriv` match torch reference; `spectral_normalize` recovers W/σ, unit spectral norm, σ≈svd; shape invariants | 8 |
-| 5.4 | `tests/property/test_registry_roundtrip.py` | get(register(x))==x identity; metadata preserved; re-register overwrites→latest; callables round-trip | 4 |
-| 5.5 | `tests/property/test_knowledge.py` | `from_dict(to_dict(e))==e`; embedding excluded from `to_dict`; to_dict deterministic | 3 |
-| 5.6 | `tests/property/test_equitile_config.py` | valid configs don't raise; every guarded bound (neurons/layers/tiles≤0, lr<0, dropout/sparsity>1, decay<0, steps<0, bad mode) raises | 13 |
-| 5.7 | `tests/property/test_domains.py` | Metrics round-trip (incl. custom keys, reserved-key presence); Batch.to(device) preserves tensors/metadata/batch_size; DomainSpec defaults | 6 |
-
-2. **Registry re-audit: un-skipped 6 of 19 `SKIP_MODELS`.** Probed each skipped
-   model through the audit's exact generic `build()` path and found 6 now pass
-   instantiate + forward + determinism (they gained `build()` in Sprint 3):
-   `eqprop`, `direct_feedback_alignment_eqprop`, `dfa_deep`, `standard_fa`,
-   `contrastive_feedback_alignment`, `rl_equitile`. Removed them from
-   `SKIP_MODELS` in `test_registry_audit.py` → **+18 passing tests** (3 audit
-   tests × 6 models), 60 skipped now (was 78). Removed the dead `fast_lm_equitile`
-   entry too (it's *not even registered* in the registry — `create_fast_lm_tiny()`
-   is the only way to build it; see Known Issue below).
-
-**Gate status:**
-```bash
-uv run pytest tests/property/test_{queryfilter,base,kernels,registry_roundtrip,knowledge,equitile_config,domains}.py --no-cov  # all pass
-uv run pytest tests/property/ -q --no-cov            # 93 passed, 1 xfailed in ~21s
-uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov  # 188 passed, 59 skipped
-uv run pytest tests/unit/ tests/property/ -q --no-cov # 1098 passed, 60 skipped, 1 xfailed in ~72s
-uv run ruff check  (new property files)               # PASS (clean)
-uv run ruff check tests/unit/validation/test_registry_audit.py  # only pre-existing no-self-use errors
-uv run pyright (new property files)                   # 0 errors, 0 warnings
-```
-Whole-repo `ruff check`/coverage remain pre-existing; no new errors introduced.
-
-**New discoveries / notes:**
-- `fast_lm_equitile` is **not registered** in `Registry` (probe: "Unknown model").
-  The old SKIP entry was dead code. To audit it, the model needs registering via
-  `create_fast_lm_tiny()` OR the registry needs a per-model builder protocol
-  (supplies `FastLMConfig`). Same root cause as Known Issue #6.
-- `rl_equitile`, `eqprop`, and the 3 FA-family models now build under the generic
-  `build(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type)`
-  path — evidence the Sprint 3 `build()` classmethods are doing their job.
-- Remaining `SKIP_MODELS` (12) fall into clear categories:
-  - **No `build()`**: `lazy_eqprop`, `dynamic_equitile` (wrapper)
-  - **Needs non-ModelConfig data**: `graph_equitile` (node_features),
-    `timeseries_equitile` (hidden_dim on config), `conv_equitile` (2D input),
-    `lm_equitile`/`optimized_lm_equitile` (token IDs), `backprop_transformer_lm`
-  - **Needs bespoke constructor**: `enhanced_equitile` (kw-only args),
-    `feedback_alignment` (pos args), `hebbian_3d` (3D), `eqprop_diffusion` (t)
-  These need a per-model builder protocol, not SKIP list edits — see next steps.
-
-**Remaining SKIP list count:** 12 models (was 19). `SKIP_PROPAGATORS` (13) still
-intact — propagators require `(params, model)` construction fixtures; higher
-effort, deferred.
+*This plan replaces the previous TODO.md. RESEARCH.md remains the long-term research agenda. RESEARCH.pre.md is now fully absorbed — its Tier 1 items are Sprint 0, Tier 2-3 are Sprint 5, Appendix items are referenced in relevant sprints.*
