@@ -241,3 +241,114 @@ Only then consider:
 3. **Adoption** — CLI, Colabs, leaderboards
 
 **The test suite is the product until Sprint 4 gates pass — and now it proves biology, not just plumbing.**
+
+---
+
+## Path Forward: Immediate Next Steps
+
+### Sprint 3: Finish Biology Property Tests (Current Priority)
+
+**What's passing (11 tests):**
+```bash
+uv run pytest tests/property/biology/test_biology_axioms.py -v --no-cov
+```
+- EP Gradient Equivalence (eqprop_mlp) — 2 tests ✅
+- Lyapunov Energy Descent (eqprop_mlp, equitile) — 2 tests ✅
+- Contraction Mapping (eqprop_mlp ×3 step_sizes, equitile) — 4 tests ✅
+- Lipschitz Power Iteration (eqprop_mlp) — 1 test ✅
+- Fixed Point Uniqueness (eqprop_mlp) — 1 test ✅
+- Fixed Point Idempotence (eqprop_mlp) — 1 test ✅
+
+**What's skipped (need model fixtures):**
+- Weight-Transport Freeness: `standard_fa`, `adaptive_feedback_alignment`, `direct_feedback_alignment_eqprop` — skipped because `_instantiate_model` fails (need specific config)
+- Locality of Credit: `equitile` — skipped (no `get_layer_updates` / `corrupt_layer_activity` methods)
+- Memory Independence of Depth: `equitile` at depths 5,10,20 — skipped (instantiation issues)
+- Adaptive FA Alignment: `adaptive_feedback_alignment` — skipped (instantiation issues)
+
+**To unblock skipped tests:**
+1. **FA models**: Check `bioplausible/zoo/models/fa/` for build() signatures — they likely need `feedback_alignment_config` or similar
+2. **EquiTile methods**: Add `get_layer_updates()` and `corrupt_layer_activity()` to `bioplausible/equitile/core/model.py` for locality test
+3. **Memory test**: Ensure `tracemalloc` works with EquiTile — may need to disable torch.compile in test
+
+**Wire up disabled tests (from Sprint 3 table):**
+- `tests/unit/models/test_deq.py::test_gradients_match_bptt` — add `assert cos_sim >= 0.9`
+- `tests/unit/models/test_deq.py::test_memory_usage` — CPU `tracemalloc` version
+- `tests/unit/models/test_oracle.py` — restore `steps_noisy > steps_clean` assertion
+- `tests/unit/models/test_equitile_modes.py::test_ep_contrastive_property` — assert contrastive direction
+- `tests/unit/models/test_equitile_modes.py::test_pc_local_hebbian_property` — assert locality
+
+### Sprint 2.5 / Sprint 4.1: Parity Hyperparameter Tuning
+
+**Current state:** 4/5 models xfail in `test_backprop_parity.py`
+```bash
+uv run pytest tests/unit/validation/test_backprop_parity.py::test_backprop_parity -v --no-cov
+```
+
+**Models needing tuning:**
+| Model | Current Status | Likely Hyperparameters |
+|-------|----------------|------------------------|
+| eqprop_mlp | xfail | `beta`, `step_size`, `max_steps`, `hebbian_lr`, `spectral_norm` |
+| directed_ep | xfail | `beta`, `step_size`, `max_steps` |
+| forward_forward | xfail | `lr`, `threshold`, `goodness_fn` |
+| pepita | xfail | `lr`, `feedback_scale` |
+| equitile | xpass | (accidentally passes) |
+
+**Approach:** Create `tests/unit/validation/hyperparams/` with per-model YAML configs, then a sweep script that runs `test_backprop_parity.py` with each config. Target: remove `@pytest.mark.xfail` once all 5 pass.
+
+### Sprint 4.2-4.3: CI Hardening & Test Org
+
+**Commands to verify current state:**
+```bash
+# Full suite
+uv run pytest tests/ -q --no-cov
+
+# Biology only
+uv run pytest tests/property/biology/ -q --no-cov
+
+# Validation only
+uv run pytest tests/unit/validation/ -q --no-cov
+
+# Format + typecheck
+uv run ruff format --check . && uv run pyright .
+```
+
+**Files to create/modify:**
+- `.github/workflows/ci.yml` — add biology property tests to gate
+- `tests/conftest.py` — add `synthetic_batch`, `synthetic_vision_task`, `synthetic_lm_task` fixtures
+- Move `tests/integration/` → `tests/slow/` (exclude from default CI)
+
+### Known Issues / Clues
+
+1. **LoopedMLP has no `step_size` param** — controlled via `max_steps` and internal logic. Don't pass `step_size` to constructor.
+
+2. **EquiTile uses `W_in(x)` for input projection** — not `_project_input()`. Use `model.W_in(xb)` and `model._init_activities()`.
+
+3. **EqProp free energy = dynamics energy only (β=0 phase)** — prediction error is for nudged phase. Use `0.5 * mean((h_next - h)^2)` for free energy trajectory.
+
+4. **Triton warning is harmless** — "Triton detected but missing 'tanh'" just means CUDA kernels disabled; CPU path works.
+
+5. **Pyright warnings (2433) are pre-existing** — mostly `reportUnusedFunction`/`reportUnusedImport` in `zoo/` from dead code after refactors. Not actionable without whole-repo cleanup.
+
+6. **Registry has 77 components** — 46 models, 19 propagators, 9 optimizers, 3 sparsity. `test_registry_audit.py` covers all with skip lists for known issues.
+
+7. **Reproducibility tests pass** — fixed seed → identical weights, loss trajectory, outputs; env capture serializes to JSON; state_dict round-trips.
+
+8. **Coverage is ~17% whole-repo** — target 50% in Sprint 4.2.2. Unit+property coverage is higher.
+
+### Quick Reference: Key Files
+
+| Area | Key Files |
+|------|-----------|
+| Biology tests | `tests/property/biology/test_biology_axioms.py` |
+| Parity tests | `tests/unit/validation/test_backprop_parity.py` |
+| Registry audit | `tests/unit/validation/test_registry_audit.py` |
+| Reproducibility | `tests/unit/validation/test_reproducibility.py` |
+| EqProp model | `bioplausible/zoo/models/eqprop/looped_mlp.py` |
+| EqProp base | `bioplausible/zoo/models/base.py` (EqPropModel) |
+| EquiTile model | `bioplausible/equitile/core/model.py` |
+| FA models | `bioplausible/zoo/models/fa/` |
+| Config | `bioplausible/core/config.py`, `bioplausible/equitile/core/config.py` |
+
+---
+
+**Start here for Sprint 3:** Unblock FA model instantiation → add locality/memory methods to EquiTile → wire up disabled tests → all 8 biology axioms passing.
