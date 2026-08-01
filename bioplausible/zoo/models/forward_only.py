@@ -27,10 +27,12 @@ __all__ = [
 
 
 class FFLayer(nn.Linear):
-    def __init__(self, in_features, out_features, bias=True, device=None, dtype=None):
+    def __init__(
+        self, in_features, out_features, bias=True, device=None, dtype=None, lr=0.03
+    ):
         super().__init__(in_features, out_features, bias=bias)
         self.relu = nn.ReLU()
-        self.opt = torch.optim.Adam(self.parameters(), lr=0.03)
+        self.opt = torch.optim.Adam(self.parameters(), lr=lr)
 
     def forward(self, x):
         x_dir = x / (x.norm(2, 1, keepdim=True) + 1e-4)
@@ -62,6 +64,8 @@ class ForwardForwardNet(TransitionGraphMixin, nn.Module):
         output_dim: int,
         threshold: float = 2.0,
         num_layers: int = 2,
+        layer_lr: float = 0.03,
+        classifier_lr: float = 0.01,
     ):
         super().__init__()
         if isinstance(input_dim, tuple):
@@ -71,12 +75,14 @@ class ForwardForwardNet(TransitionGraphMixin, nn.Module):
         self.output_dim = output_dim
         self.threshold = threshold
 
-        self.layers = nn.ModuleList([FFLayer(input_dim, hidden_dim)])
+        self.layers = nn.ModuleList([FFLayer(input_dim, hidden_dim, lr=layer_lr)])
         for _ in range(num_layers - 1):
-            self.layers.append(FFLayer(hidden_dim, hidden_dim))
+            self.layers.append(FFLayer(hidden_dim, hidden_dim, lr=layer_lr))
 
         self.classifier = nn.Linear(hidden_dim * num_layers, output_dim)
-        self.classifier_opt = torch.optim.Adam(self.classifier.parameters(), lr=0.01)
+        self.classifier_opt = torch.optim.Adam(
+            self.classifier.parameters(), lr=classifier_lr
+        )
 
     @classmethod
     def build(
@@ -95,6 +101,8 @@ class ForwardForwardNet(TransitionGraphMixin, nn.Module):
             hidden_dim=hidden_dim,
             output_dim=output_dim,
             num_layers=num_layers,
+            layer_lr=kwargs.get("layer_lr", 0.03),
+            classifier_lr=kwargs.get("classifier_lr", 0.01),
         ).to(device)
 
     def predict(self, x):
@@ -194,7 +202,12 @@ class PEPITA(TransitionGraphMixin, nn.Module):
     """
 
     def __init__(
-        self, input_dim: int, hidden_dim: int, output_dim: int, num_layers: int = 2
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_layers: int = 2,
+        lr: float = 0.01,
     ):
         super().__init__()
         if isinstance(input_dim, tuple):
@@ -212,7 +225,7 @@ class PEPITA(TransitionGraphMixin, nn.Module):
         self.feedback_matrix = nn.Parameter(
             torch.randn(input_dim, output_dim) / input_dim**0.5
         )
-        self.lr = 0.01
+        self.lr = lr
 
     @classmethod
     def build(

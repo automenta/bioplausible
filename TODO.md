@@ -86,6 +86,36 @@ uv run pyright .   # 0 errors
 
 ---
 
+### 2026-08-01 — Session 5: Sprint 4.1 Parity Hyperparameter Tuning Complete
+
+**Done this session:** Completed hyperparameter tuning for all 5 models in backprop parity tests — all now achieve 5% parity target.
+
+**Changes made:**
+1. **Made hyperparameters configurable** — Added `lr` parameters to `FFLayer`, `ForwardForwardNet`, and `PEPITA` (bioplausible/zoo/models/forward_only.py)
+2. **Created hyperparameter sweep scripts** — `tests/unit/validation/hyperparams/sweep_parity.py`, `sweep_targeted.py`, `verify_eqprop.py` for systematic tuning
+3. **Found passing configs for all 4 bio-plausible models:**
+   - `eqprop_mlp`: `hebbian_lr=0.008`, `beta=0.03`, `max_steps=20` (contrastive method)
+   - `directed_ep`: `lr=0.03`, `beta=0.3`, `eq_steps=20`
+   - `forward_forward`: `threshold=0.5`, `layer_lr=0.01`, `classifier_lr=0.005`
+   - `pepita`: `lr=0.3`, `num_layers=2`
+4. **Updated `test_backprop_parity.py`** — Uses tuned hyperparameters, changed tolerance from 15% to 5%, removed `@pytest.mark.xfail`
+5. **Fixed seed handling** — Single seed for both model init and training to ensure reproducibility
+
+**Gate status:**
+```
+uv run ruff format --check .        # PASS (596 files)
+uv run ruff check .                 # PASS (0 errors)
+uv run pyright .                    # 0 errors, 2442 warnings (pre-existing)
+uv run pytest tests/unit/validation/test_backprop_parity.py -v --no-cov  # 16 passed
+uv run pytest tests/property/biology/ -v --no-cov  # 23 passed, 1 xfailed
+uv run pytest tests/unit/ tests/property/ -q --no-cov  # 1022 passed, 78 skipped, 1 xfailed
+uv run pytest tests/ -q --no-cov    # 1440 passed, 90 skipped, 1 xfailed, 3 failed (pre-existing fast_lm_equitile bug)
+```
+
+**Sprint 4.1 complete:** All 5 models pass 5% parity target. Removed 4 xfail marks.
+
+---
+
 ## Sprint 1: Foundation Hardening (Week 1-2) — **COMPLETE**
 
 All 14 tasks done. See session logs above.
@@ -96,13 +126,9 @@ All 14 tasks done. See session logs above.
 
 | Task | Status |
 |------|--------|
-| 2.1–2.6: Backprop parity test suite | ✅ Created (4/5 models xfail — need hyperparameter tuning) |
+| 2.1–2.6: Backprop parity test suite | ✅ Created + tuned (all 5 models pass 5% target) |
 | 2.7–2.10: Registry audit | ✅ Created (170 passed) |
 | 2.11–2.13: Reproducibility | ✅ Created (22 passed) |
-
-**Remaining Sprint 2 work (deferred to Sprint 2.5):**
-- Hyperparameter tuning per model to achieve 5% parity target
-- Enable parity tests (remove xfail)
 
 ---
 
@@ -141,12 +167,12 @@ uv run pytest tests/property/biology/ -x --tb=short
 
 ## Sprint 4: Parity Hyperparameter Tuning + CI Hardening (Week 3-4)
 
-### 4.1 Parity Hyperparameter Tuning (Sprint 2.5 deferred work)
-| # | Task | Target |
-|---|------|--------|
-| 4.1.1 | Per-model hyperparameter sweep configs (lr, β, step_size, max_steps, spectral_norm γ) | Each model hits 5% parity on synthetic |
-| 4.1.2 | Remove `@pytest.mark.xfail` from `test_backprop_parity.py` | All 5 models pass |
-| 4.1.3 | Add FLOPs/memory tracking assertions | Per Sprint 2.4 gate |
+### 4.1 Parity Hyperparameter Tuning (Sprint 2.5 deferred work) — **COMPLETE**
+| # | Task | Target | Status |
+|---|------|--------|--------|
+| 4.1.1 | Per-model hyperparameter sweep configs (lr, β, step_size, max_steps, spectral_norm γ) | Each model hits 5% parity on synthetic | ✅ Done |
+| 4.1.2 | Remove `@pytest.mark.xfail` from `test_backprop_parity.py` | All 5 models pass | ✅ Done |
+| 4.1.3 | Add FLOPs/memory tracking assertions | Per Sprint 2.4 gate | ☐ |
 
 ### 4.2 CI Pipeline Hardening
 | # | Task | Done |
@@ -245,25 +271,10 @@ Only then consider:
 
 ## Path Forward: Immediate Next Steps
 
-### Sprint 2.5 / Sprint 4.1: Parity Hyperparameter Tuning (Next Priority)
+### Sprint 4.1: Parity Hyperparameter Tuning — **COMPLETE** ✅
+All 5 models achieve 5% parity target. Xfail marks removed.
 
-**Current state:** 4/5 models xfail in `test_backprop_parity.py`
-```bash
-uv run pytest tests/unit/validation/test_backprop_parity.py::test_backprop_parity -v --no-cov
-```
-
-**Models needing tuning:**
-| Model | Current Status | Likely Hyperparameters |
-|-------|----------------|------------------------|
-| eqprop_mlp | xfail | `beta`, `step_size`, `max_steps`, `hebbian_lr`, `spectral_norm` |
-| directed_ep | xfail | `beta`, `step_size`, `max_steps` |
-| forward_forward | xfail | `lr`, `threshold`, `goodness_fn` |
-| pepita | xfail | `lr`, `feedback_scale` |
-| equitile | xpass | (accidentally passes) |
-
-**Approach:** Create `tests/unit/validation/hyperparams/` with per-model YAML configs, then a sweep script that runs `test_backprop_parity.py` with each config. Target: remove `@pytest.mark.xfail` once all 5 pass.
-
-### Sprint 4.2-4.3: CI Hardening & Test Org
+### Sprint 4.2-4.3: CI Hardening & Test Org (Next Priority)
 
 **Commands to verify current state:**
 ```bash
@@ -273,7 +284,7 @@ uv run pytest tests/ -q --no-cov
 # Biology only
 uv run pytest tests/property/biology/ -q --no-cov
 
-# Validation only
+# Validation only (includes parity)
 uv run pytest tests/unit/validation/ -q --no-cov
 
 # Format + typecheck
@@ -295,7 +306,7 @@ uv run ruff format --check . && uv run pyright .
 
 4. **Triton warning is harmless** — "Triton detected but missing 'tanh'" just means CUDA kernels disabled; CPU path works.
 
-5. **Pyright warnings (2433) are pre-existing** — mostly `reportUnusedFunction`/`reportUnusedImport` in `zoo/` from dead code after refactors. Not actionable without whole-repo cleanup.
+5. **Pyright warnings (2442) are pre-existing** — mostly `reportUnusedFunction`/`reportUnusedImport` in `zoo/` from dead code after refactors. Not actionable without whole-repo cleanup.
 
 6. **Registry has 77 components** — 46 models, 19 propagators, 9 optimizers, 3 sparsity. `test_registry_audit.py` covers all with skip lists for known issues. **3 pre-existing failures** in `fast_lm_equitile` (ModelConfig vocab_size bug).
 
@@ -316,7 +327,8 @@ uv run ruff format --check . && uv run pyright .
 | EquiTile model | `bioplausible/equitile/core/model.py` |
 | FA models | `bioplausible/zoo/models/fa.py` |
 | Config | `bioplausible/core/config.py`, `bioplausible/equitile/core/config.py` |
+| Hyperparam sweeps | `tests/unit/validation/hyperparams/` |
 
 ---
 
-**Start here for Sprint 2.5:** Hyperparameter sweep for parity tests — remove 4 xfail marks once models hit 5% target.
+**Next up for Sprint 4.2-4.3:** CI pipeline hardening, test organization cleanup, and coverage improvements.
