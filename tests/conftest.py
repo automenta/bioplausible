@@ -100,3 +100,47 @@ def eqprop_model():
 
     config = ModelConfig(name="test", input_dim=64, output_dim=10, max_steps=5)
     return StandardEqProp(config=config)
+
+
+# --- Sprint 4.3.4 Synthetic Fixtures (zero I/O, zero download) ---
+
+
+@pytest.fixture(scope="session")
+def synthetic_batch() -> tuple[torch.Tensor, torch.Tensor]:
+    """A small deterministic batch (x, y) for fast feedforward tests."""
+    torch.manual_seed(0)
+    x = torch.randn(8, 64)
+    y = torch.randint(0, 10, (8,))
+    return x, y
+
+
+@pytest.fixture(scope="session")
+def synthetic_vision_task() -> tuple[torch.Tensor, torch.Tensor]:
+    """Deterministic image-shaped classification tensors (no MNIST download).
+
+    Returns (images, labels) where images are (N, 1, 16, 16). Tests that need a
+    real VisionTask loader should use tests/slow/ instead.
+    """
+    torch.manual_seed(1)
+    n = 64
+    images = torch.randn(n, 1, 16, 16)
+    # Inject a weak spatial signal so the task is learnable.
+    images += (images.mean(dim=(2, 3), keepdim=True) > 0).float() * 0.5
+    labels = (images.mean(dim=(2, 3)).squeeze(1) > 0).long() % 10
+    return images, labels
+
+
+@pytest.fixture(scope="session")
+def synthetic_lm_task() -> tuple[torch.Tensor, torch.Tensor]:
+    """Deterministic token-sequence batch for LM tests (no download).
+
+    Returns (input_ids, target_ids) of shape (N, seq_len) over a small vocab.
+    """
+    torch.manual_seed(2)
+    seq_len = 24
+    vocab_size = 256
+    n = 8
+    ids = torch.randint(1, vocab_size, (n, seq_len))
+    input_ids = ids[:, :-1]
+    target_ids = ids[:, 1:]
+    return input_ids, target_ids

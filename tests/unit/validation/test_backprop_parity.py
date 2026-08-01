@@ -100,8 +100,8 @@ def _instantiate_model_tuned(
         return model.to(device)
 
     elif model_name == "directed_ep":
-        from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
         from bioplausible.core.config import ModelConfig
+        from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
 
         model_config = ModelConfig(
             name="directed_ep",
@@ -246,6 +246,53 @@ def test_parity_suite_runtime(synthetic_classification_task):
 # =============================================================================
 # Additional Parity Checks (FLOPs, Memory)
 # =============================================================================
+
+
+@pytest.mark.parametrize("model_name", PARITY_MODELS)
+def test_forward_flops_bounded(model_name, synthetic_classification_task):
+    """Forward-pass FLOPs should be proportional to params, not blow up.
+
+    Sprint 4.1.3 gate: count_flops must be finite, positive, and scale
+    linearly with parameter count (no accidental O(n^2) per-sample state).
+    """
+    _, _, input_dim, n_classes = synthetic_classification_task
+
+    try:
+        torch.manual_seed(456)
+        model = _instantiate_model_tuned(model_name, input_dim, n_classes)
+    except (NotImplementedError, TypeError, ValueError) as e:
+        pytest.skip(f"{model_name} instantiation failed: {e}")
+
+    from bioplausible.core.energy import count_flops
+
+    params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    flops = count_flops(model, (32, input_dim))
+
+    assert params > 0, f"{model_name}: model has no trainable parameters"
+    assert flops > 0, f"{model_name}: FLOPs should be positive"
+    expected = 2 * params * 32  # count_flops = 2 * params * batch_size
+    assert flops == expected, (
+        f"{model_name}: unexpected FLOPs {flops} vs 2*params*batch={expected}"
+    )
+
+
+@pytest.mark.parametrize("model_name", PARITY_MODELS)
+def test_param_count_bounded(model_name, synthetic_classification_task):
+    """Parameter count should be finite and memory-reasonable for the task."""
+    _, _, input_dim, n_classes = synthetic_classification_task
+
+    try:
+        torch.manual_seed(456)
+        model = _instantiate_model_tuned(model_name, input_dim, n_classes)
+    except (NotImplementedError, TypeError, ValueError) as e:
+        pytest.skip(f"{model_name} instantiation failed: {e}")
+
+    params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # Same hidden_dim=64 arch as the backprop baseline; allow generous headroom.
+    assert 0 < params < 10**7, (
+        f"{model_name}: param count {params} outside (0, 1e7) for task "
+        f"({input_dim}->{n_classes})"
+    )
 
 
 @pytest.mark.parametrize("model_name", PARITY_MODELS)

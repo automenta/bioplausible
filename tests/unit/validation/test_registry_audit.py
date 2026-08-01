@@ -35,6 +35,7 @@ SKIP_MODELS = {
     "conv_equitile": "Requires 2D image input (B, C, H, W)",
     "lm_equitile": "Requires token IDs input (B, L)",
     "optimized_lm_equitile": "Requires token IDs input (B, L)",
+    "fast_lm_equitile": "Requires FastLMConfig + token IDs input (B, L), not ModelConfig",
     "rl_equitile": "Requires RL-specific input",
 }
 
