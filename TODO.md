@@ -252,19 +252,19 @@ uv run pytest tests/unit/ tests/property/ tests/property/biology/ --maxfail=1 -q
 
 ---
 
-## Sprint 5 (Deferred): Plumbing Property Tests — *Low Priority*
+## Sprint 5 (Complete): Plumbing Property Tests
 
-*Original Sprint 3 targets — pure plumbing, zero biology. Do only if time permits after Sprint 4.*
+*Completed session 7 — see Session 7 log for the 7 new property suites.*
 
 | # | Target | Properties |
 |---|--------|------------|
-| 5.1 | `_QueryFilter` predicates | `matches(meta)` ↔ predicate logic equivalence; commutativity of filter composition |
-| 5.2 | `core.config.resolve_hidden_dims` / `compute_hidden_dims` | Idempotence, monotonicity in `num_layers`, `hidden_dim=None` → `[]` |
-| 5.3 | `acceleration.kernels` (matmul, transpose, outer product) | Numerical equivalence to PyTorch reference; shape invariants |
-| 5.4 | `Registry.register` + `Registry.get` round-trip | `get(register(x)) == x`; metadata preserved; name collision handling |
-| 5.5 | `knowledge.kb.KnowledgeEntry` serialization | `from_dict(to_dict(entry)) == entry`; vector embedding determinism |
-| 5.6 | `equitile.core.config.EquiTileConfig.validate()` | Invalid configs raise; valid configs don't; field bounds respected |
-| 5.7 | `domains.base.DomainSpec` / `Batch` / `Metrics` | Round-trip serialization; `Batch.to(device)` preserves metadata |
+| 5.1 | `_QueryFilter` predicates | `matches(meta)` ↔ predicate logic equivalence; commutativity of filter composition ✅ |
+| 5.2 | `core.config.resolve_hidden_dims` / `compute_hidden_dims` | Idempotence, monotonicity in `num_layers`, `hidden_dim=None` → `[]` ✅ |
+| 5.3 | `acceleration.kernels` (softmax, CE, tanh_deriv, spectral_normalize) | Numerical equivalence to PyTorch reference; spectral norm ≈ 1; shape invariants ✅ |
+| 5.4 | `Registry.register` + `Registry.get` round-trip | `get(register(x)) == x`; metadata preserved; name collision handling ✅ |
+| 5.5 | `knowledge.kb.KnowledgeEntry` serialization | `from_dict(to_dict(entry)) == entry`; embedding determinism/exclusion ✅ |
+| 5.6 | `equitile.core.config.EquiTileConfig.validate()` | Invalid configs raise; valid configs don't; field bounds respected ✅ |
+| 5.7 | `domains.base.DomainSpec` / `Batch` / `Metrics` | Round-trip serialization; `Batch.to(device)` preserves metadata ✅ |
 
 ---
 
@@ -387,6 +387,68 @@ uv run ruff format --check . && uv run pyright .
 ---
 
 **Next up:** With 4.2 (CI) deferred, the highest-value remaining work is:
-1. **Sprint 5 plumbing property tests** — 7 items in the Sprint 5 table (pure, fast, raise coverage without touching CI).
-2. **Re-audit the registry** — remove the remaining ~19 `SKIP_MODELS` entries by fixing each model's `build()` path (many are "needs specific config" — a per-model builder protocol would consolidate this).
+1. **Sprint 5 plumbing property tests** — **COMPLETE (session 7)**, see Sprint 5 table below.
+2. **Re-audit the registry** — **partial progress (session 7):** un-skipped 6 of 19 `SKIP_MODELS`. Remaining model skips need per-model fixtures; propagator `SKIP_PROPAGATORS` untouched (requires model+params construction fixtures).
 3. Any one of these unblocks CI (4.2) later: make `pytest tests/` the fast gate, or add `-m slow` separation.
+
+---
+
+### 2026-08-01 — Session 7: Sprint 5 Plumbing Property Tests COMPLETE + Registry Re-audit Progress
+
+**Done this session:**
+1. **Sprint 5 COMPLETE — all 7 plumbing property suites created.** Each is pure,
+   fast (<3s each), raises coverage on underlying `core`/`acceleration`/`kb`/
+   `equitile`/`domains` code, and passes `ruff` + `pyright` clean.
+
+| # | New file | Laws encoded | Tests |
+|---|----------|--------------|-------|
+| 5.1 | `tests/property/test_queryfilter.py` | `_QueryFilter.matches(meta)` == independent per-axis AND; empty filter matches all; conjunction commutative + idempotent; impossible tag never matches; query result-set commutative | 6 |
+| 5.2 | `tests/property/test_base.py` (extended) | `resolve_hidden_dims`: config-wins is exact/idempotent, None/None→[], None→[h], empty-config→[h]; `compute_hidden_dims` length monotone in num_layers | +7 |
+| 5.3 | `tests/property/test_kernels.py` | `softmax`/`cross_entropy`/`tanh_deriv` match torch reference; `spectral_normalize` recovers W/σ, unit spectral norm, σ≈svd; shape invariants | 8 |
+| 5.4 | `tests/property/test_registry_roundtrip.py` | get(register(x))==x identity; metadata preserved; re-register overwrites→latest; callables round-trip | 4 |
+| 5.5 | `tests/property/test_knowledge.py` | `from_dict(to_dict(e))==e`; embedding excluded from `to_dict`; to_dict deterministic | 3 |
+| 5.6 | `tests/property/test_equitile_config.py` | valid configs don't raise; every guarded bound (neurons/layers/tiles≤0, lr<0, dropout/sparsity>1, decay<0, steps<0, bad mode) raises | 13 |
+| 5.7 | `tests/property/test_domains.py` | Metrics round-trip (incl. custom keys, reserved-key presence); Batch.to(device) preserves tensors/metadata/batch_size; DomainSpec defaults | 6 |
+
+2. **Registry re-audit: un-skipped 6 of 19 `SKIP_MODELS`.** Probed each skipped
+   model through the audit's exact generic `build()` path and found 6 now pass
+   instantiate + forward + determinism (they gained `build()` in Sprint 3):
+   `eqprop`, `direct_feedback_alignment_eqprop`, `dfa_deep`, `standard_fa`,
+   `contrastive_feedback_alignment`, `rl_equitile`. Removed them from
+   `SKIP_MODELS` in `test_registry_audit.py` → **+18 passing tests** (3 audit
+   tests × 6 models), 60 skipped now (was 78). Removed the dead `fast_lm_equitile`
+   entry too (it's *not even registered* in the registry — `create_fast_lm_tiny()`
+   is the only way to build it; see Known Issue below).
+
+**Gate status:**
+```bash
+uv run pytest tests/property/test_{queryfilter,base,kernels,registry_roundtrip,knowledge,equitile_config,domains}.py --no-cov  # all pass
+uv run pytest tests/property/ -q --no-cov            # 93 passed, 1 xfailed in ~21s
+uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov  # 188 passed, 59 skipped
+uv run pytest tests/unit/ tests/property/ -q --no-cov # 1098 passed, 60 skipped, 1 xfailed in ~72s
+uv run ruff check  (new property files)               # PASS (clean)
+uv run ruff check tests/unit/validation/test_registry_audit.py  # only pre-existing no-self-use errors
+uv run pyright (new property files)                   # 0 errors, 0 warnings
+```
+Whole-repo `ruff check`/coverage remain pre-existing; no new errors introduced.
+
+**New discoveries / notes:**
+- `fast_lm_equitile` is **not registered** in `Registry` (probe: "Unknown model").
+  The old SKIP entry was dead code. To audit it, the model needs registering via
+  `create_fast_lm_tiny()` OR the registry needs a per-model builder protocol
+  (supplies `FastLMConfig`). Same root cause as Known Issue #6.
+- `rl_equitile`, `eqprop`, and the 3 FA-family models now build under the generic
+  `build(spec, input_dim, output_dim, hidden_dim, num_layers, device, task_type)`
+  path — evidence the Sprint 3 `build()` classmethods are doing their job.
+- Remaining `SKIP_MODELS` (12) fall into clear categories:
+  - **No `build()`**: `lazy_eqprop`, `dynamic_equitile` (wrapper)
+  - **Needs non-ModelConfig data**: `graph_equitile` (node_features),
+    `timeseries_equitile` (hidden_dim on config), `conv_equitile` (2D input),
+    `lm_equitile`/`optimized_lm_equitile` (token IDs), `backprop_transformer_lm`
+  - **Needs bespoke constructor**: `enhanced_equitile` (kw-only args),
+    `feedback_alignment` (pos args), `hebbian_3d` (3D), `eqprop_diffusion` (t)
+  These need a per-model builder protocol, not SKIP list edits — see next steps.
+
+**Remaining SKIP list count:** 12 models (was 19). `SKIP_PROPAGATORS` (13) still
+intact — propagators require `(params, model)` construction fixtures; higher
+effort, deferred.

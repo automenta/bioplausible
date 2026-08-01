@@ -23,20 +23,13 @@ SKIP_MODELS = {
     "graph_equitile": "Requires graph data",
     "timeseries_equitile": "Requires timeseries data",
     "enhanced_equitile": "Requires enhanced_config",
-    "eqprop": "Needs specific config",
     "eqprop_diffusion": "Complex config",
     "feedback_alignment": "Needs specific config",
-    "contrastive_feedback_alignment": "Needs specific config",
-    "direct_feedback_alignment_eqprop": "Needs specific config",
-    "dfa_deep": "Needs specific config",
-    "standard_fa": "Needs specific config",
     "hebbian_3d": "Needs 3D input",
     "backprop_transformer_lm": "LM model, different interface",
     "conv_equitile": "Requires 2D image input (B, C, H, W)",
     "lm_equitile": "Requires token IDs input (B, L)",
     "optimized_lm_equitile": "Requires token IDs input (B, L)",
-    "fast_lm_equitile": "Requires FastLMConfig + token IDs input (B, L), not ModelConfig",
-    "rl_equitile": "Requires RL-specific input",
 }
 
 # Propagators that need special handling
