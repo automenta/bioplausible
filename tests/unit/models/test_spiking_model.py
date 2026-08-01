@@ -1,7 +1,9 @@
-"""Tests for zoo/models/spiking.py (SpikingSTDP fallback when snnTorch is absent).
+"""Tests for zoo/models/spiking.py (SpikingSTDP with snnTorch LIF kinetics).
 
-SpikingSTDP uses a fallback path (FC1 -> ReLU -> FC2) when snnTorch is not
-installed (HAS_SNN=False). All tests exercise this fallback.
+snnTorch is now a core dependency (see pyproject), so SpikingSTDP runs its real
+Leaky-Integrate-and-Fire path (HAS_SNN=True). Tests are written to pass against
+either the SNN path or the no-snnTorch fallback (FC1 -> ReLU -> FC2), so they
+remain valid if the dependency is ever made optional again.
 """
 
 import torch

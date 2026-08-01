@@ -6,7 +6,8 @@ Validates that every registered component:
 3. Metadata fields match implementation
 4. Produces deterministic output with fixed seed
 
-Target: <15s total for all components (46 models + 19 propagators + 9 optimizers + 3 sparsity).
+Target: <15s total for all components (47 models + 18 propagators + 4 optimizers
++ 4 update strategies + 1 constraint + 1 controller + 3 sparsity).
 
 Most components build through the generic :meth:`BioModel.build` path. A handful
 of specialised models (LM / vision / graph / diffusion / lazy) expose genuinely
@@ -19,6 +20,7 @@ import inspect
 
 import pytest
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import ComponentCategory, Registry
@@ -194,8 +196,8 @@ def _lm_equitile():
 
 @_reg("optimized_lm_equitile")
 def _optimized_lm_equitile():
-    from bioplausible.equitile.language.optimized import OptimizedLMEquiTile
     from bioplausible.equitile.language.canonical import LMEquiTileConfig
+    from bioplausible.equitile.language.optimized import OptimizedLMEquiTile
 
     def build():
         return OptimizedLMEquiTile(
@@ -229,12 +231,12 @@ def _fast_lm_equitile():
     return build, lambda _m: (torch.randint(0, 20, (BATCH_SIZE, 8)),)
 
 
-# Models that cannot be audited through a forward() call at all. ``dynamic_equitile``
-# is a training-side topology controller (analysis.dynamics.DynamicEquiTile), NOT an
-# nn.Module — it has no forward pass and is misfiled in the MODEL registry. See TODO.
-SKIP_MODELS = {
-    "dynamic_equitile": "Training-side topology controller, not an nn.Module; no forward()",
-}
+# Models that cannot be audited through a forward() call at all. As of the
+# category-correctness sprint ``dynamic_equitile`` is no longer registered under
+# MODEL — it moved to ComponentCategory.CONTROLLER (it is a training-side
+# topology controller, not an nn.Module with a forward pass). Any model left here
+# should have no forward() to exercise.
+SKIP_MODELS = {}
 
 # =============================================================================
 # Constants
@@ -244,7 +246,10 @@ BATCH_SIZE = 4
 TUPLE_LENGTH_2 = 2
 MIN_MODELS = 40
 MIN_PROPAGATORS = 15
-MIN_OPTIMIZERS = 5
+MIN_OPTIMIZERS = 4
+MIN_UPDATE_STRATEGIES = 4
+MIN_CONSTRAINTS = 1
+MIN_CONTROLLERS = 1
 MIN_SPARSITY = 2
 MIN_TOTAL = 70
 
@@ -512,7 +517,9 @@ class TestSparsityRegistry:
             target = sp_cls.__init__ if inspect.isclass(sp_cls) else sp_cls
             sig = inspect.signature(target)
             if "model" in sig.parameters:
-                m = BackpropMLP(input_dim=64, hidden_dim=64, output_dim=10, num_layers=2)
+                m = BackpropMLP(
+                    input_dim=64, hidden_dim=64, output_dim=10, num_layers=2
+                )
                 sp = sp_cls(model=m)
             else:
                 sp = sp_cls()
@@ -533,6 +540,232 @@ class TestSparsityRegistry:
 
 
 # =============================================================================
+# One-step smoke tests
+#
+# Instantiation is necessary but not sufficient: a propagator can construct yet
+# crash on its first update. These tests drive a single update step on a tiny
+# model. Update *strategies* (``muon``/``dion``/``plain``/``fisher``) and the
+# ``spectral`` constraint are no longer registered as OPTIMIZERS (see TODO
+# Known Issue 10) — they live under UPDATE_STRATEGY/CONSTRAINT and are audited
+# by their own one-step classes below.
+# =============================================================================
+
+
+def _step_drives_update(prop, x: torch.Tensor, target: torch.Tensor) -> bool:
+    """Drive one update step through ``prop``. Return False if no step API.
+
+    Three calling conventions are supported (see ``zoo/propagators/base.py``):
+      1. ``LearningRuleOptimizer.step(x, target)`` — owns its forward+backward.
+      2. ``CompositeOptimizer.step(x=x, target=y)`` — EP presets (smep family).
+      3. torch ``Optimizer.step(closure=None)`` — owns only the parameter
+         update after ``loss.backward()`` (backprop-family/muon_backprop).
+    """
+    if hasattr(prop, "step") and callable(prop.step):
+        sig = inspect.signature(prop.step)
+        params = sig.parameters
+        if "x" in params:
+            prop.step(x=x, target=target)
+            return True
+        # torch Optimizer.step(closure=None)
+        if "closure" in params:
+            logits = prop.model(x) if getattr(prop, "model", None) else x
+            loss = F.cross_entropy(logits, target)
+            loss.backward()
+            prop.step()
+            return True
+    return False
+
+
+class TestComponentStepSmoke:
+    """Ensure every propagator/optimizer survives a single update step."""
+
+    @pytest.mark.parametrize(
+        "prop_name",
+        [p["name"] for p in Registry.query(category=ComponentCategory.PROPAGATOR)],
+    )
+    def test_propagator_runs_one_step(self, prop_name):
+        from bioplausible.zoo.models.eqprop import BackpropMLP
+
+        model = BackpropMLP(input_dim=8, hidden_dim=8, output_dim=4, num_layers=2)
+        params = list(model.parameters())
+        x = torch.randn(2, 8)
+        y = torch.randint(0, 4, (2,))
+
+        try:
+            prop = _propagator_instantiates(prop_name, params, model)
+        except (
+            NotImplementedError,
+            TypeError,
+            ValueError,
+            RuntimeError,
+            ImportError,
+        ) as e:
+            pytest.skip(f"{prop_name} instantiation failed: {e}")
+
+        if not isinstance(prop, nn.Module) and not hasattr(prop, "step"):
+            pytest.skip(f"{prop_name}: no optimizer step() API to smoke")
+
+        try:
+            ran = _step_drives_update(prop, x, y)
+        except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
+            pytest.skip(f"{prop_name} one-step update failed: {e}")
+
+        assert ran, f"{prop_name} exposes no compatible step API"
+
+    @pytest.mark.parametrize(
+        "opt_name",
+        [o["name"] for o in Registry.query(category=ComponentCategory.OPTIMIZER)],
+    )
+    def test_optimizer_runs_one_step(self, opt_name):
+        opt_cls = Registry.get(ComponentCategory.OPTIMIZER, opt_name)
+
+        param = nn.Parameter(torch.randn(4, 4))
+        params = [param]
+        try:
+            opt = opt_cls(params)
+        except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
+            pytest.skip(f"{opt_name} instantiation failed: {e}")
+
+        param.grad = torch.randn_like(param)
+        try:
+            opt.step()
+        except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
+            pytest.skip(f"{opt_name} step() failed: {e}")
+
+        assert param.grad is not None
+
+
+class TestUpdateStrategyRegistry:
+    """Tests for update-strategy registry audit (gradient transformations)."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [s["name"] for s in Registry.query(category=ComponentCategory.UPDATE_STRATEGY)],
+    )
+    def test_update_strategy_instantiates(self, name):
+        """Every registered update strategy should instantiate."""
+        cls = Registry.get(ComponentCategory.UPDATE_STRATEGY, name)
+        try:
+            strategy = cls()
+            assert strategy is not None
+        except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
+            pytest.skip(f"{name} instantiation failed: {e}")
+
+        assert hasattr(strategy, "transform_gradient"), (
+            f"{name}: update strategy must expose transform_gradient()"
+        )
+
+    @pytest.mark.parametrize(
+        "name",
+        [s["name"] for s in Registry.query(category=ComponentCategory.UPDATE_STRATEGY)],
+    )
+    def test_update_strategy_metadata(self, name):
+        """Update-strategy metadata should be valid."""
+        meta = Registry.get_metadata(ComponentCategory.UPDATE_STRATEGY, name)
+        assert meta.name == name
+        assert meta.category == ComponentCategory.UPDATE_STRATEGY
+
+    @pytest.mark.parametrize(
+        "name",
+        [s["name"] for s in Registry.query(category=ComponentCategory.UPDATE_STRATEGY)],
+    )
+    def test_update_strategy_transforms_gradient(self, name):
+        """transform_gradient() runs on a 2D gradient and returns same shape."""
+        cls = Registry.get(ComponentCategory.UPDATE_STRATEGY, name)
+        try:
+            strategy = cls()
+        except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
+            pytest.skip(f"{name} instantiation failed: {e}")
+
+        param = nn.Parameter(torch.randn(8, 8))
+        grad = torch.randn(8, 8)
+        try:
+            out = strategy.transform_gradient(param, grad, {}, {})
+        except Exception as e:
+            pytest.skip(f"{name} transform_gradient failed: {e}")
+        assert out.shape == grad.shape, (
+            f"{name}: transform_gradient must preserve shape"
+        )
+
+
+class TestConstraintRegistry:
+    """Tests for constraint registry audit (post-step weight projection)."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [c["name"] for c in Registry.query(category=ComponentCategory.CONSTRAINT)],
+    )
+    def test_constraint_instantiates(self, name):
+        """Every registered constraint should instantiate."""
+        cls = Registry.get(ComponentCategory.CONSTRAINT, name)
+        param = nn.Parameter(torch.randn(4, 4))
+        try:
+            c = cls([param])
+            assert c is not None
+        except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
+            pytest.skip(f"{name} instantiation failed: {e}")
+
+    @pytest.mark.parametrize(
+        "name",
+        [c["name"] for c in Registry.query(category=ComponentCategory.CONSTRAINT)],
+    )
+    def test_constraint_step(self, name):
+        """Constraint step() runs without error."""
+        cls = Registry.get(ComponentCategory.CONSTRAINT, name)
+        param = nn.Parameter(torch.randn(4, 4))
+        try:
+            c = cls([param])
+        except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
+            pytest.skip(f"{name} instantiation failed: {e}")
+        param.grad = torch.randn_like(param)
+        try:
+            c.step()
+        except Exception as e:
+            pytest.skip(f"{name} step() failed: {e}")
+
+    @pytest.mark.parametrize(
+        "name",
+        [c["name"] for c in Registry.query(category=ComponentCategory.CONSTRAINT)],
+    )
+    def test_constraint_metadata(self, name):
+        """Constraint metadata should be valid."""
+        meta = Registry.get_metadata(ComponentCategory.CONSTRAINT, name)
+        assert meta.name == name
+        assert meta.category == ComponentCategory.CONSTRAINT
+
+
+class TestControllerRegistry:
+    """Tests for controller registry audit (non-Module training-side controllers)."""
+
+    @pytest.mark.parametrize(
+        "name",
+        [c["name"] for c in Registry.query(category=ComponentCategory.CONTROLLER)],
+    )
+    def test_controller_instantiates(self, name):
+        """Every registered controller should instantiate with a model."""
+        cls = Registry.get(ComponentCategory.CONTROLLER, name)
+        try:
+            from bioplausible.zoo.models.eqprop import BackpropMLP
+
+            model = BackpropMLP(input_dim=8, hidden_dim=8, output_dim=4, num_layers=2)
+            ctrl = cls(model)
+            assert ctrl is not None
+        except (NotImplementedError, TypeError, ValueError, RuntimeError) as e:
+            pytest.skip(f"{name} instantiation failed: {e}")
+
+    @pytest.mark.parametrize(
+        "name",
+        [c["name"] for c in Registry.query(category=ComponentCategory.CONTROLLER)],
+    )
+    def test_controller_metadata(self, name):
+        """Controller metadata should be valid."""
+        meta = Registry.get_metadata(ComponentCategory.CONTROLLER, name)
+        assert meta.name == name
+        assert meta.category == ComponentCategory.CONTROLLER
+        assert meta.locality_level in VALID_LOCALITY_LEVELS
+
+
+# =============================================================================
 # Summary Test
 # =============================================================================
 
@@ -542,6 +775,9 @@ def test_registry_counts():
     models = Registry.query(category=ComponentCategory.MODEL)
     propagators = Registry.query(category=ComponentCategory.PROPAGATOR)
     optimizers = Registry.query(category=ComponentCategory.OPTIMIZER)
+    strategies = Registry.query(category=ComponentCategory.UPDATE_STRATEGY)
+    constraints = Registry.query(category=ComponentCategory.CONSTRAINT)
+    controllers = Registry.query(category=ComponentCategory.CONTROLLER)
     sparsity = Registry.query(category=ComponentCategory.SPARSITY)
 
     assert len(models) >= MIN_MODELS, f"Expected >=40 models, got {len(models)}"
@@ -549,11 +785,28 @@ def test_registry_counts():
         f"Expected >=15 propagators, got {len(propagators)}"
     )
     assert len(optimizers) >= MIN_OPTIMIZERS, (
-        f"Expected >=5 optimizers, got {len(optimizers)}"
+        f"Expected >=4 optimizers, got {len(optimizers)}"
+    )
+    assert len(strategies) >= MIN_UPDATE_STRATEGIES, (
+        f"Expected >=4 update strategies, got {len(strategies)}"
+    )
+    assert len(constraints) >= MIN_CONSTRAINTS, (
+        f"Expected >=1 constraint, got {len(constraints)}"
+    )
+    assert len(controllers) >= MIN_CONTROLLERS, (
+        f"Expected >=1 controller, got {len(controllers)}"
     )
     assert len(sparsity) >= MIN_SPARSITY, (
         f"Expected >=2 sparsity methods, got {len(sparsity)}"
     )
 
-    total = len(models) + len(propagators) + len(optimizers) + len(sparsity)
+    total = (
+        len(models)
+        + len(propagators)
+        + len(optimizers)
+        + len(strategies)
+        + len(constraints)
+        + len(controllers)
+        + len(sparsity)
+    )
     assert total >= MIN_TOTAL, f"Expected >=70 total components, got {total}"

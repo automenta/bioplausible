@@ -12,6 +12,12 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import register_model
+
+# ``BackpropMLP`` lives in ``zoo.models.eqprop.looped_mlp`` (it is built against
+# the equilibrating MLP machinery). Re-export it here for hygiene so callers that
+# import it from ``zoo.models.backprop`` (mirroring its name) resolve correctly
+# instead of silently raising ImportError. See the registry-audit session log.
+from bioplausible.zoo.models.eqprop.looped_mlp import BackpropMLP
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 # ============================================================================
@@ -21,6 +27,7 @@ from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 __all__ = [
     "BackpropCausalAttention",
+    "BackpropMLP",
     "BackpropTransformerBlock",
     "BackpropTransformerLM",
     "CustomStackedModel",

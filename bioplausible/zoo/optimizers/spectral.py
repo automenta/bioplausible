@@ -6,14 +6,14 @@ Wraps spectral normalization as a post-step constraint.
 
 import torch
 
-from bioplausible.core.registry import register_optimizer
+from bioplausible.core.registry import register_constraint
 
 __all__ = [
     "SpectralConstraint",
 ]
 
 
-@register_optimizer("spectral")
+@register_constraint("spectral")
 class SpectralConstraint:
     """Spectral constraint on weights.
 

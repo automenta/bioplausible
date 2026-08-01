@@ -14,11 +14,14 @@ from bioplausible.core.registry import (
     Domain,
     LocalityLevel,
     Registry,
+    register_constraint,
+    register_controller,
     register_metric,
     register_model,
     register_optimizer,
     register_propagator,
     register_sparsity,
+    register_update_strategy,
 )
 from bioplausible.core.trainer import (
     CoreTrainer,
@@ -43,6 +46,9 @@ __all__ = [
     "register_model",
     "register_propagator",
     "register_optimizer",
+    "register_update_strategy",
+    "register_constraint",
+    "register_controller",
     "register_sparsity",
     "register_metric",
     # Trainer

@@ -38,6 +38,9 @@ dependencies = [
     # Configuration & validation
     "pydantic>=2.0",
     "omegaconf>=2.3",
+
+    # Spiking neural networks (LIF kinetics for SpikingSTDP)
+    "snnTorch>=0.8",
 ]
 
 [project.optional-dependencies]

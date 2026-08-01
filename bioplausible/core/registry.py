@@ -39,6 +39,16 @@ class ComponentCategory(str, Enum):
     MODEL = "model"
     PROPAGATOR = "propagator"
     OPTIMIZER = "optimizer"
+    # Update/constraint strategies that transform gradients or project weights
+    # AFTER an optimizer steps (e.g. Muon Newton-Schulz, spectral norm clipping).
+    # Distinct from OPTIMIZER because they are not torch.optim estimators: they
+    # expose ``transform_gradient`` (strategies) or ``step`` (constraints) with
+    # no parameter/costate ownership.
+    UPDATE_STRATEGY = "update_strategy"
+    CONSTRAINT = "constraint"
+    # Training-side controllers (e.g. DynamicEquiTile topology controller) that
+    # are not nn.Modules and never run a forward pass.
+    CONTROLLER = "controller"
     SPARSITY = "sparsity"
     METRIC = "metric"
     TASK = "task"
@@ -560,6 +570,21 @@ def register_optimizer(name: str | None = None, **kwargs) -> Callable:
     return Registry.register(ComponentCategory.OPTIMIZER, name, **kwargs)
 
 
+def register_update_strategy(name: str | None = None, **kwargs) -> Callable:
+    """Register an update-strategy component (gradient transformation)."""
+    return Registry.register(ComponentCategory.UPDATE_STRATEGY, name, **kwargs)
+
+
+def register_constraint(name: str | None = None, **kwargs) -> Callable:
+    """Register a constraint component (post-step weight projection)."""
+    return Registry.register(ComponentCategory.CONSTRAINT, name, **kwargs)
+
+
+def register_controller(name: str | None = None, **kwargs) -> Callable:
+    """Register a training-side controller component (not an ``nn.Module``)."""
+    return Registry.register(ComponentCategory.CONTROLLER, name, **kwargs)
+
+
 def register_sparsity(name: str | None = None, **kwargs) -> Callable:
     """Register a sparsity component."""
     return Registry.register(ComponentCategory.SPARSITY, name, **kwargs)
@@ -591,10 +616,13 @@ __all__ = [
     "LocalityLevel",
     "Registry",
     "list_models",
+    "register_constraint",
+    "register_controller",
     "register_metric",
     "register_model",
     "register_optimizer",
     "register_propagator",
     "register_sparsity",
     "register_task",
+    "register_update_strategy",
 ]

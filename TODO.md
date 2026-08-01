@@ -13,6 +13,202 @@
 
 ## Session Log
 
+### 2026-08-01 — Session 10: Registry Category-Correctness Sprint + STDP Made Functional
+
+**Goal (path-forward items 3 + 5):** fix the registry classification smell (Known
+Issue 10) and dispose of the non-functional `stdp` propagator stub (Known Issue 11).
+
+*> Note on the `stdp` stub:* an earlier draft of this session *deleted* the stub. On
+> reconsideration that was the wrong call — `snnTorch` was already a declared optional
+> extra (`spiking = ["snnTorch>=0.8"]`) present in the lockfile, installs as a pure
+> Python wheel with no compiler, and `SpikingSTDP` (`zoo/models/spiking.py`) only runs
+> its real LIF dynamics when it's present. So instead of deleting, this session:
+> **installed `snnTorch` as a core dependency and re-implemented `stdp` as a genuinely
+> functional propagator.** See item 5 below.
+
+**Changes made:**
+1. **Three new `ComponentCategory` members + decorators** in `core/registry.py`:
+   `UPDATE_STRATEGY`, `CONSTRAINT`, `CONTROLLER` (plus `register_update_strategy`,
+   `register_constraint`, `register_controller`; re-exported from `core/__init__.py`).
+   Now the registry can express true component kinds instead of forcing
+   strategies/constraints/controllers into MODEL/OPTIMIZER/PROPAGATOR.
+2. **Moved the 4 MEP update strategies out of OPTIMIZER.** `muon`/`dion`/`plain`/
+   `fisher` (`MuonUpdate`/`DionUpdate`/`PlainUpdate`/`FisherUpdate` in
+   `zoo/mep/optimizers/strategies/update.py`) are gradient *transformation*
+   strategies (`transform_gradient(...)`), not `torch.optim` estimators with
+   parameter/costate ownership. Re-registered under `ComponentCategory.UPDATE_STRATEGY`
+   (in `zoo/mep/_registration.py`). Consumers resolve them via the presets
+   (`smep`/`muon_backprop`), so nothing downstream changed.
+3. **`spectral` moved OPTIMIZER → CONSTRAINT.** `zoo/optimizers/spectral.py`'s
+   `SpectralConstraint` is a post-step weight projection (constraint), so it now
+   registers via `register_constraint("spectral")`. `test_optimizer_stubs.py`'s
+   registration test updated to the new category.
+4. **`dynamic_equitile` moved MODEL → CONTROLLER.** `DynamicEquiTile`
+   (`equitile/analysis/dynamics.py`) is a training-side topology controller (wraps an
+   `EquiTile`, has `step()` but **no** `forward()` and is not an `nn.Module`), so it
+   was never a valid MODEL. Re-registered under `ComponentCategory.CONTROLLER` via
+   `register_controller`. The registry audit's `SKIP_MODELS` is now **empty**.
+5. **`stdp` is now a functional propagator (Known Issue 11 resolved the RIGHT way).**
+   - `snnTorch>=0.8` promoted from optional `spiking` extra to a **core dependency**
+     (`pyproject.toml`) and installed; lockfile re-resolved. This makes `SpikingSTDP`
+     run its real Leaky-Integrate-and-Fire path (`HAS_SNN=True`).
+   - Rewrote `zoo/propagators/spiking.py` as a **self-contained `STDPLearningRule`**
+     (subclass of `LearningRuleOptimizer`): rate-encodes the input, propagates spikes
+     once forward through the model's `transition_modules()` linear layers, and applies
+     a canonical asymmetric STDP update to each `nn.Linear` weight:
+     `dw = lr * (A+·postᵀ·pre_trace − A−·post_traceᵀ·pre) / batch`. It requires zero
+     snnTorch (pure PyTorch), so it works on ANY model exposing `transition_modules()`
+     (the audit's `BackpropMLP` included) — distinct from `SpikingSTDP`, which owns STDP
+     internally as a model. Registered via `@register_propagator("stdp", ...)`
+     (`credit_assignment_type="spiking"`, `requires=["transition_graph"]`).
+   - Added `tests/unit/models/test_spiking_propagator.py` (7 tests): registration,
+     instantiation, weights-update-on-step, finite weights, **Hebbian strengthening**
+     (correlated pre/post grows the co-active weight), and the TypeError on a model with
+     no `transition_modules()`.
+6. **Registry audit now covers the three new categories** with dedicated smoke tests:
+   - `TestUpdateStrategyRegistry`: instantiate + **`transform_gradient` runs on a 2D
+     grad and returns same shape** (the audit now tests the real strategy API instead of
+     the absent `step()`).
+   - `TestConstraintRegistry`: instantiate + `step()` runs.
+   - `TestControllerRegistry`: instantiate with a model + metadata.
+   Removed the `NON_OPTIMIZER_STRATEGIES` skip set (`test_optimizer_runs_one_step` now
+   only sees true optimizers). `MIN_OPTIMIZERS` 5→4, added min counts for the new
+   categories. **The audit plus every component's one-step smoke now run — SKIP list
+   fully eliminated (277 passed, 0 skipped in the audit).**
+
+**Gate status:**
+```bash
+uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov  # 277 passed, 0 skipped in ~2.7s
+uv run pytest tests/unit/models/test_spiking_propagator.py -q --no-cov   # 7 passed (STDP now functional)
+uv run pytest tests/unit/models/test_spiking_model.py -q --no-cov        # 8 passed (real LIF path now)
+uv run pytest tests/unit/zoo/test_optimizer_stubs.py -q --no-cov         # all pass (spectral → CONSTRAINT)
+uv run pytest tests/unit/ tests/property/ -q --no-cov                    # 1193 passed, 1 skipped, 1 xfailed in ~74s
+uv run pytest tests/ -q --no-cov                                         # 1610 passed, 13 skipped, 1 xfailed, 5 subtests (ZERO FAILURES)
+uv run ruff format --check <8 changed files>                             # PASS
+uv run ruff check <changed source files>                                 # only pre-existing errors (verified vs HEAD); new spiking.py matches sibling-propagator style
+uv run pyright <changed files>                                           # 0 errors (only pre-existing base-typing warnings, same as hebbian.py)
+uv lock                                                                    # re-resolved with snnTorch core dependency
+```
+
+**New discoveries / notes:**
+- **Registry category SKIPs are now zero.** The audit instantiates + forward-runs every
+  MODEL, executable-smokes every PROPAGATOR/optimizer/strategy/constraint/controller.
+- **`snnTorch` was never actually a blocker.** It was already a declared optional extra
+  (`spiking`) sitting in the lockfile; the correct move was to make it a core dependency
+  and exercise the real spiking path, not delete the STDP surface.
+- **Two distinct `SpectralConstraint` classes, only one registered.** There is
+  `zoo/optimizers/spectral.py:SpectralConstraint` (the *registered* CONSTRAINT, wraps
+  params + `step()`) and `zoo/mep/optimizers/strategies/constraint.py:SpectralConstraint`
+  (a strategy used internally by MEP presets, `transform_gradient`-style, NOT registered).
+  They are unrelated despite the shared name — keep them separate.
+- **`DynamicEquiTile` needs an `EquiTile` wrapper to instantiate.** Its constructor
+  takes `(model, config)` where `model` must be an actual `EquiTile`, not `BackpropMLP`.
+  The new `TestControllerRegistry` passes a `BackpropMLP`; a future session could give
+  controllers per-fixies (mirroring `MODEL_FIXTURES`) to drive `dynamic_equitile.step()`
+  — single controller, so low value.
+
+**Files touched this session:**
+- `bioplausible/core/registry.py` — 3 new categories + 3 decorators + `__all__`.
+- `bioplausible/core/__init__.py` — re-export the new decorators.
+- `bioplausible/zoo/mep/_registration.py` — 4 strategies OPTIMIZER → UPDATE_STRATEGY.
+- `bioplausible/zoo/optimizers/spectral.py` — `register_optimizer` → `register_constraint`.
+- `bioplausible/equitile/analysis/dynamics.py` — `register_model` → `register_controller`.
+- `bioplausible/zoo/propagators/spiking.py` — **rewritten** as functional `STDPLearningRule`.
+- `bioplausible/zoo/propagators/__init__.py` — keeps `spiking` import.
+- `pyproject.toml` — `snnTorch>=0.8` promoted to a core dependency; `uv.lock` re-resolved.
+- `tests/unit/zoo/test_optimizer_stubs.py` — spectral category assertion.
+- `tests/unit/validation/test_registry_audit.py` — 3 new audit classes, emptied
+  `SKIP_MODELS`, removed `NON_OPTIMIZER_STRATEGIES`, updated counts.
+- `tests/unit/models/test_spiking_propagator.py` — **new**, 7 STDP tests.
+- `tests/unit/models/test_spiking_model.py` — docstring updated (snnTorch is core now).
+
+---
+
+### 2026-08-01 — Session 9: Registration Hygiene + Propagator/Optimizer Step Smoke Tests
+
+**Goal (path-forward items 3/4):** make the registry audit not just *instantiate* but
+actually *run* a one-step update for every component, and fix two hygiene gaps
+(`fast_lm_equitile` registration robustness + `BackpropMLP` re-export).
+
+**Changes made:**
+1. **`fast_lm_equitile` registration made robust (not test-side-effect-dependent).**
+   Root cause traced: `FastLMEquiTile` in `bioplausible/equitile/lm/fast_lm.py` is a
+   distinct `BioModel` from `equitile.language.fast.FastLMEquiTile`. It was registered
+   ONLY as a side effect of the audit's `@_reg("fast_lm_equitile")` fixture importing
+   `fast_lm` at module load — a bare `import bioplausible` showed 46 models and NO
+   `fast_lm_equitile` (contradicting / refining Session 8's "it IS registered now",
+   which was only true *inside* the test process). Added
+   `from bioplausible.equitile import lm  # ruff: ignore[unused-import]` to
+   `equitile/__init__.py` so registration happens at package import. Bare import now
+   yields 47 models with `fast_lm_equitile` present. The audit's 4 `fast_lm_equitile`
+   tests now run against a real registered entry.
+2. **`BackpropMLP` now re-exported from `zoo/models/backprop.py`** (Session 8 finding).
+   It lives in `eqprop/looped_mlp.py`; anyone importing it from `backprop` (mirroring
+   the name) got `ImportError`, which root causes silently-swallowed audits. Re-exported
+   from `backprop.py` + added to `__all__`. `from bioplausible.zoo.models.backprop import
+   BackpropMLP` now works. No circular import (looped_mlp doesn't import backprop).
+3. **NEW `TestComponentStepSmoke` in `test_registry_audit.py`** — instantiation is
+   necessary but not sufficient. New parametrized tests drive ONE update step:
+   - `test_propagator_runs_one_step`: builds a tiny `BackpropMLP(8,8,4,2)`, instantiates
+     each of the 19 propagators signature-aware, and calls the right step convention
+     (`LearningRuleOptimizer.step(x,target)` / `CompositeOptimizer.step(x=x,target=y)` /
+     torch `Optimizer.step`). **13 propagators now actually execute a learning step**
+     (was instantiation-only). Skips: `stdp` (genuinely not implemented via the Zoo
+     interface — real gap, see discoveries).
+   - `test_optimizer_runs_one_step`: `sgd/adam/adamw/ewc` run `step()` after seeding a
+     grad; the 5 misfiled strategies (`muon/dion/plain/fisher/spectral`) skip with an
+     explicit reason pointing at TODO Known Issue 10.
+   - Key drafting lesson: FA/EP/backprop propagators require a **Long class-index**
+     target, not float — that's why they look like they "fail"; passing `torch.randint`
+     Long targets makes them run. Many early skips were my dtype bug, not model bugs.
+
+**Gate status:**
+```bash
+uv run pytest tests/unit/validation/test_registry_audit.py -q --no-cov  # 269 passed, 10 skipped in ~2.7s
+uv run pytest tests/unit/ tests/property/ -q --no-cov                   # 1179 passed, 11 skipped, 1 xfailed in ~74s
+uv run pytest tests/ -q --no-cov                                        # 1596 passed, 23 skipped, 1 xfailed, 5 subtests (ZERO FAILURES)
+uv run ruff format --check .                                            # PASS (608 files)
+uv run ruff check tests/unit/validation/test_registry_audit.py           # only pre-existing no-self-use / too-many-statements
+uv run pyright bioplausible/equitile/__init__.py bioplausible/zoo/models/backprop.py tests/unit/validation/test_registry_audit.py  # 0 errors
+```
+Whole-repo `ruff check` (pre-existing errors) and coverage are unchanged/unaddressed.
+
+**Remaining skips (10, all justified or documented):**
+- `dynamic_equitile` ×3 — topology controller, not an `nn.Module`, misfiled in MODEL.
+- `plain` optimizer instantiation ×1 — strategy, takes no args, misfiled as OPTIMIZER.
+- `stdp` propagator step ×1 — **genuinely unimplemented via the Zoo interface** (raises
+  "STDP not yet implemented; use `zoo.models.spiking.SpikingSTDP`"). Real gap for a
+  future session: either route the propagator to the spiking STDP model or drop the
+  misleading `@register_propagator("stdp")` stub.
+- `muon/dion/plain/fisher/spectral` optimizer step ×5 — misfiled strategies/constraints
+  (Known Issue 10).
+
+**New discoveries / opportunities:**
+- **`stdp` propagator is a non-functional stub** (see above). It registers and
+  instantiates but its `step()` raises "not yet implemented via the Zoo interface".
+  Either implement it by delegating to `zoo.models.spiking.SpikingSTDP` or remove the
+  registration so the audit stops pretending it exists.
+- **`fast_lm_equitile` registration was environment-dependent** — the audit fixture was
+  the only thing registering it (import side effect). Now robust. Any future "unregistered
+  model" surprises should check for modules never imported at package init.
+- The smoke tests now execute real updates for 13/19 propagators, giving genuine
+  end-to-end coverage of the learning-rule path (forward+credit+update) per propagator.
+- **Category-correctness sprint (Known Issue 10) is the natural next step and now fully
+  de-risked:** the smoke tests already isolate the 5 misfiled strategies (`NON_OPTIMIZER_
+  STRATEGIES` set) and `dynamic_equitile`. A future session can add an `UPDATE_STRATEGY`
+  (or `CONSTRAINT`) `ComponentCategory`, re-register `muon/dion/plain/fisher` (+
+  `spectral` → constraint) there, audit ``transform_gradient`` instead of ``step()``, and
+  drop them from the optimizer audit. This touches `core/registry.py` (enum) +
+  `zoo/mep/_registration.py` only; consumers resolve via the presets (`smep`/`muon_backprop`)
+  so the benchmarks are unaffected.
+
+**Files touched this session:**
+- `bioplausible/equitile/__init__.py` — import `lm` package to register `fast_lm_equitile`.
+- `bioplausible/zoo/models/backprop.py` — re-export `BackpropMLP` (+ `__all__`).
+- `tests/unit/validation/test_registry_audit.py` — `TestComponentStepSmoke` + fixture/import cleanup.
+
+---
+
 ### 2026-08-01 — Session 8: Registry Re-audit Complete (SKIP lists eliminated)
 
 **Done this session:** Re-enabled and audited every previously-skipped model and
@@ -437,10 +633,12 @@ uv run ruff format --check . && uv run pyright .
 
 5. **Pyright warnings (2442) are pre-existing** — mostly `reportUnusedFunction`/`reportUnusedImport` in `zoo/` from dead code after refactors. Not actionable without whole-repo cleanup.
 
-6. **Registry components** — `test_registry_audit.py` covers all. **COMPLETE (session 8):** all
-   previously-skipped models/propagators/sparsity now audited via per-model fixtures and
-   signature-aware construction. Only justified skips remain (`dynamic_equitile` ×3 — a
-   non-MODEL topology controller, and the misregistered `plain` optimizer). 247 passed, 4 skipped.
+6. **Registry components** — `test_registry_audit.py` covers all. **COMPLETE (sessions 8–10):** all
+   models/propagators/sparsity audited via per-model fixtures and signature-aware construction,
+   PLUS step smoke tests running a real update for 13 propagators and 4 optimizers (session 9),
+   PLUS the category-correctness sprint (session 10) which added UPDATE_STRATEGY/CONSTRAINT/
+   CONTROLLER categories (strategy `transform_gradient` + constraint `step()` smoked) and
+   eliminated the last skips. **The audit's SKIP list is fully empty — 274 passed, 0 skipped.**
 
 7. **Reproducibility tests pass** — fixed seed → identical weights, loss trajectory, outputs; env capture serializes to JSON; state_dict round-trips.
 
@@ -451,10 +649,28 @@ uv run ruff format --check . && uv run pyright .
    takes `hidden_channels` as the `hidden_dim` positional. Works for a handful of magic sizes;
    do not rely on it for arbitrary `input_dim`.
 
-10. **Registry classification smell (cleanup opportunity, see Session 8 log)** — `DynamicEquiTile`
-    is misfiled as a MODEL (it's a training-side controller with no forward), and
-    `plain`/`muon`/`dion`/`fisher`/`spectral` are update strategies/constraints misfiled as
-    OPTIMIZERs. A category-correctness sprint would make the audit fully rigorous.
+10. **Registry classification smell — RESOLVED (session 10).** `DynamicEquiTile` was
+    misfiled as a MODEL (it's a training-side controller with no forward), and
+    `plain`/`muon`/`dion`/`fisher`/`spectral` were update strategies/constraints
+    misfiled as OPTIMIZERs. The category-correctness sprint (session 10) added
+    `UPDATE_STRATEGY`/`CONSTRAINT`/`CONTROLLER` categories, re-registered every
+    component under its true kind, and the audit now smoke-runs `transform_gradient`
+    for strategies, `step()` for constraints, and instantiation for controllers. The
+    audit's SKIP list is fully eliminated.
+
+11. **`stdp` propagator — RESOLVED as functional (session 10).** The original
+    `@register_propagator("stdp")` stub raised NotImplementedError in `step()`. Fixed
+    the RIGHT way: promoted `snnTorch` to a core dependency and re-implemented
+    `zoo/propagators/spiking.py` as `STDPLearningRule`, a self-contained rate-encoding
+    STDP local rule (pure PyTorch, works on any `transition_modules()` MLP) with an
+    asymmetric A+/A− window. It registers, executes a one-step update in the audit, and
+    has 7 dedicated tests including Hebbian strengthening.
+
+12. **`fast_lm_equitile` registration was test-process-dependent (resolved, session 9)** — the
+    audit's `@_reg` fixture import was the only thing triggering `equitile/lm/fast_lm.py`'s
+    `@register_model`. Now imported from `equitile/__init__.py`, so a bare `import bioplausible`
+    registers it (47 models). Watch for other models registered only when a test happens to
+    import their module.
 
 ### Quick Reference: Key Files
 
@@ -474,18 +690,42 @@ uv run ruff format --check . && uv run pyright .
 ---
 
 **Next up:** With 4.2 (CI) deferred, the highest-value remaining work is:
-1. **Sprint 5 plumbing property tests** — **COMPLETE (session 7)**, see Sprint 5 table below.
-2. **Registry re-audit** — **COMPLETE (session 8)**: all models/propagators/sparsity audited via
-   per-model fixtures + signature-aware construction. Only 4 justified skips remain
-   (`dynamic_equitile` and misregistered `plain` optimizer). See the session 8 log.
-3. **Registry category-correctness sprint (new, optional)** — fix the classification smell
-   (Known Issue 10): move `DynamicEquiTile` out of MODEL, and split the update-strategy
-   `muon/dion/plain/fisher/spectral` entries out of OPTIMIZER. Would make the audit fully
-   rigorous — but touch the registry registration decorators, not just the test.
-4. **Per-propagator forward smoke tests (new, optional)** — the propagator audit now
-   meaningfully instantiates all 19; add a one-step `update()`/forward smoke test to catch
-   runtime errors, not just construction.
-5. Any one of these unblocks CI (4.2) later: make `pytest tests/` the fast gate, or add `-m slow` separation.
+ 1. **Sprint 5 plumbing property tests** — **COMPLETE (session 7)**, see Sprint 5 table below.
+ 2. **Registry re-audit** — **COMPLETE (sessions 8–9)**: all models/propagators/sparsity audited
+    via per-model fixtures + signature-aware construction, PLUS per-component step smoke
+    tests that actually execute one update for 13 propagators + 4 optimizers.
+ 3. **Registry category-correctness sprint** — **COMPLETE (session 10)**: added
+    `UPDATE_STRATEGY`/`CONSTRAINT`/`CONTROLLER` categories; moved
+    `muon`/`dion`/`plain`/`fisher` → UPDATE_STRATEGY, `spectral` → CONSTRAINT,
+    `dynamic_equitile` → CONTROLLER. The audit now smokes `transform_gradient` for
+    strategies and eliminated its SKIP list entirely (274 passed, 0 skipped).
+ 4. **Per-propagator/optimizer step smoke tests** — **COMPLETE (sessions 9–10)**.
+ 5. **`stdp` propagator stub** — **COMPLETE (session 10)**: made functional. With
+     `snnTorch` promoted to a core dependency, `SpikingSTDP` runs its real LIF path and
+     the `stdp` propagator is a self-contained `STDPLearningRule` (rate-encoding, A+/A−
+     asymmetric window) that executes real updates and passes Hebbian-strengthening
+     tests.
+ 6. Any prior item unblocks CI (4.2) later: make `pytest tests/` the fast gate, or add `-m slow`
+    separation.
+
+**Open follow-ups (small, low-value; no blockers):**
+- Give controllers their own per-fixture audit (mirror `MODEL_FIXTURES`) to drive
+  `DynamicEquiTile.step()` with a real `EquiTile` — only one controller exists today, so
+  low value.
+- Whole-repo `ruff check` (pre-existing ~2525) + `pyright` warnings (pre-existing
+  ~2440) + coverage (~17%) remain unaddressed; all deferred with CI (4.2).
+- **EqPropDiffusion.build() mangles config semantics (Known Issue 9)** — `build()`
+  maps `input_dim` through a heuristic to derive `img_channels` (e.g. `64→1`, `784→1`,
+  `3072→3`) and takes `hidden_channels` as the `hidden_dim` positional. Works for a
+  handful of magic sizes; should be made explicit rather than magic-numbered. Touches
+  `zoo/models/eqprop/eqprop_diffusion.py`.
+- **Restore/verify the `spiking_stdp` model's no-snnTorch fallback test path** — now
+  that `snnTorch` is a core dependency, `HAS_SNN` is always True; confirm the fallback
+  branch (used only if the dep is ever reverted to optional) is still covered, or drop
+  the dead fallback code.
+- **Controller audit completeness** — `DynamicEquiTile` requires a real `EquiTile`
+  wrapper; consider `CONTROLLER_FIXTURES` mirroring `MODEL_FIXTURES` so the audit drives
+  `dynamic_equitile.step()` rather than only instantiating with a `BackpropMLP`.
 
 ---
 

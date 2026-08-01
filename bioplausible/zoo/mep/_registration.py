@@ -90,9 +90,14 @@ Registry.register(
     family="mep",
 )(muon_backprop)
 
-# Pure update strategies as optimizers (complement the propagator presets)
+# Pure update strategies as optimizers (complement the propagator presets).
+#
+# As of the category-correctness sprint these are registered under
+# ComponentCategory.UPDATE_STRATEGY, NOT OPTIMIZER: they are gradient
+# transformation strategies (no torch.optim parameter/state ownership) rather
+# than optimizers. Consumers resolve them via the presets (smep/muon_backprop).
 Registry.register(
-    ComponentCategory.OPTIMIZER,
+    ComponentCategory.UPDATE_STRATEGY,
     name="muon",
     domains=[Domain.VISION, Domain.TABULAR, Domain.LM, Domain.RL],
     locality_level=LocalityLevel.GLOBAL,
@@ -105,7 +110,7 @@ Registry.register(
 )(MuonUpdate)
 
 Registry.register(
-    ComponentCategory.OPTIMIZER,
+    ComponentCategory.UPDATE_STRATEGY,
     name="dion",
     domains=[Domain.VISION, Domain.TABULAR, Domain.LM],
     locality_level=LocalityLevel.GLOBAL,
@@ -118,7 +123,7 @@ Registry.register(
 )(DionUpdate)
 
 Registry.register(
-    ComponentCategory.OPTIMIZER,
+    ComponentCategory.UPDATE_STRATEGY,
     name="plain",
     domains=[
         Domain.VISION,
@@ -138,7 +143,7 @@ Registry.register(
 )(PlainUpdate)
 
 Registry.register(
-    ComponentCategory.OPTIMIZER,
+    ComponentCategory.UPDATE_STRATEGY,
     name="fisher",
     domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.GLOBAL,

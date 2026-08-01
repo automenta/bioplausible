@@ -155,6 +155,7 @@ dependencies = [
     { name = "omegaconf" },
     { name = "pydantic" },
     { name = "rich" },
+    { name = "snntorch" },
     { name = "torch" },
     { name = "tqdm" },
 ]
@@ -333,6 +334,7 @@ requires-dist = [
     { name = "scipy", marker = "extra == 'ml'" },
     { name = "seaborn", marker = "extra == 'dev'" },
     { name = "seaborn", marker = "extra == 'plot'" },
+    { name = "snntorch", specifier = ">=0.8" },
     { name = "snntorch", marker = "extra == 'spiking'", specifier = ">=0.8" },
     { name = "sympy", marker = "extra == 'knowledgebase'" },
     { name = "tabulate", marker = "extra == 'analysis'", specifier = ">=0.9" },

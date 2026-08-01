@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 import torch
 import torch.nn.functional as F
 
-from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.registry import Domain, LocalityLevel, register_controller
 from bioplausible.equitile.core.config import DynamicEquiTileConfig, TileGrowthConfig
 
 __all__ = [
@@ -409,7 +409,7 @@ class TileSplitter:
         return new_ids
 
 
-@register_model(
+@register_controller(
     "dynamic_equitile",
     domains=[Domain.VISION, Domain.RL],
     locality_level=LocalityLevel.LOCAL,
