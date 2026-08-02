@@ -48,6 +48,67 @@ Independent of both spines (run anytime after their direct deps): 0.5, 0.6, 4.1,
 
 *(New sessions append here)*
 
+### 2026-08-02 — Sprint 2.5 registry audit CLI + family metadata completed
+**Closed the missing `biopl-registry-audit` deliverable referenced by 2.5 / 4.3 /
+4.6, and completed the algorithm-`family` metadata gap.**
+
+Key finding: the TODO statuses were stale relative to the tree. Sprint 0.2
+(`_QueryFilter` predicates), 2.3 (contraction mapping, incl. hypothesis
+strategies), 2.4 (`failure_manifesto.py`), 2.6 (`scaling.py`), and the 
+`bio_plausibility_score`/`locality_level` calibration were already implemented.
+What was genuinely missing: the `biopl-registry-audit` command and algorithm
+`family` on many components.
+
+Tasks completed:
+- **2.5 (audit command + gate)**: new `bioplausible/core/audit.py` exposes
+  `biopl-registry-audit` with four emitters — default CSV, `--metadata`
+  (Sprint 2.5 calibration CSV: name, category, family, bio_plausibility_score,
+  locality_level, memory_complexity, requires_backward, credit_assignment_type,
+  parity_status, test_coverage), `--markdown` (README component table, dashed
+  into 4.6), and `--json`. Exits non-zero if any component is missing a critical
+  field (`bio_plausibility_score` / `locality_level`). `parity_status` is
+  derived from the hyperparam YAML `parity_threshold` (pepita → `documented-gap`).
+  Console script registered in `pyproject.toml`.
+- **2.5 (family metadata)**: populated `family=` for the 25 components missing
+  it (dfa/dfa_deep in `models/fa.py`, hebbian_chain/3d, all eqprop+fa propagators,
+  stdp, backprop, CHL, optimizers ewc/sgd/adam/adamw, spectral constraint,
+  3 sparsity methods). **Algorithm `family` now 100% populated across rule-bearing
+  categories** (verified: 0 empty).
+- **CI gate**: added `Registry Audit (metadata completeness)` step to the
+  code-quality job in `.github/workflows/ci.yml` (runs `biopl-registry-audit
+  --metadata`; fails on empty critical field).
+- **Tests**: `tests/unit/core/test_audit.py` — 9 tests covering enumeration,
+  critical-field completeness, family coverage, score/locality bounds, CSV
+  roundtrip, markdown table, `--metadata`/`--json` exit codes, and the empty-
+  critical-field failure path. The family test is scoped to rule-bearing
+  categories because `track`/`metric` components (experiment scaffolding,
+  registered only when `validation` is imported) are not algorithm families.
+
+**Discovered issues / opportunities for future sessions:**
+- Many components still carry the *default* `bio_plausibility_score = 0.5`
+  (e.g. most eqprop/fa propagators, optimizers, constraints) and a coarse
+  `locality_level = GLOBAL`. The Sprint 2.5 completion gate (non-empty critical
+  fields) passes, but the scores are not individually *calibrated* — a
+  data-entry/review pass would make the leaderboard and demo tooltips
+  scientifically credible. This is the real remaining 2.5 substance.
+- `metrics`/`track` categories are only registered when `bioplausible.validation`
+  (etc.) is imported, so the audit's component count is context-dependent
+  (78 standalone vs. 78+ when the full suite runs). Deterministic registration
+  of all categories in `audit._load_registry()` would stabilise the count; kept
+  out of scope to avoid `import bioplausible` pulling heavy deps (Sprint 0.5).
+- `biopl-registry-audit --markdown` is now ready to feed the README component
+  table (4.6); wiring the marker-comment injection is the remaining 4.6 work.
+
+**Gate state after this session:**
+- Fast gate: **1209 passed** (+9 new audit tests), 1 skipped, 1 xfailed
+  (documented AdaptiveFA).
+- `pyright .`: 0 errors, 2442 warnings (none new from this work).
+- `ruff check --select E,F,W,C90 .`: 635 (unchanged from documented baseline).
+- `biopl-registry-audit --metadata`: 78 components, 0 missing critical fields,
+  exit 0.
+
+---
+
 ### 2026-08-02 — Sprint −1, 0.3, 1.1, 1.3, 1.5.1–1.5.3, 2.2 completed
 **Front-loaded the fast, gated, independently-actionable work across the
 critical path. No cosmetic work; every item has a passing test gate.**
@@ -184,7 +245,7 @@ Current gate state after this session:
 | **2.2** | **Energy Landscape Visualization** (`analysis/energy_landscape.py`) — 2D slices of `E(w)` around trained weights; contour plots + gradient flow arrows. Integrate with `visualization.py`. | 1.3 | ☐ | Generates `energy_landscape_{model}_{task}.png` for EqProp/EquiTile |
 | **2.3** | **Contraction Mapping Verification** — extend `test_biology_axioms.py`: verify `||Δx_{t+1}|| / ||Δx_t|| < 1` for EquiTile/EP settling dynamics across β, depth, spectral norm. | 1.3 | ☐ | Property test with hypothesis strategies for config space |
 | **2.4** | **Failure Manifesto** (`analysis/failure_manifesto.py`) — structured negative results: what was tried, search space, why it failed, partial successes, hypotheses. Auto-populated from KB failed trials. | 1.3 | ☐ | `biopl-failure-manifesto --model eqprop_mlp` → markdown report |
-| **2.5** | **Biology Metadata Calibration** — extend registry `ComponentMetadata`: `bio_plausibility_score` (0-1, calibrated), `locality_level` (GLOBAL/LAYERWISE/LOCAL/EQUILIBRIUM/FORWARD_ONLY), `memory_complexity`, `requires_backward`, `credit_assignment_type`, `family` tag. Audit all 80+ components. `biopl-registry-audit --metadata` → CSV with columns: `name, family, bio_plausibility_score, locality_level, memory_complexity, requires_backward, credit_assignment_type, parity_status, test_coverage`. CI gate: 0 rows with empty `bio_plausibility_score` or `locality_level`. | 1.3 | ☐ | CSV complete; 0 empty critical fields; audit CI gate green |
+| **2.5** | **Biology Metadata Calibration** — extend registry `ComponentMetadata`: `bio_plausibility_score` (0-1, calibrated), `locality_level` (GLOBAL/LAYERWISE/LOCAL/EQUILIBRIUM/FORWARD_ONLY), `memory_complexity`, `requires_backward`, `credit_assignment_type`, `family` tag. Audit all 80+ components. `biopl-registry-audit --metadata` → CSV with columns: `name, family, bio_plausibility_score, locality_level, memory_complexity, requires_backward, credit_assignment_type, parity_status, test_coverage`. CI gate: 0 rows with empty `bio_plausibility_score` or `locality_level`. | 1.3 |☑| CSV complete; 0 empty critical fields; audit CI gate green |
 
 **Gate**: All biology property tests + gradient equivalence pass; failure manifesto generates for ≥3 model families; all 5 parity models pass without xfail (or have documented bio-gap); `biopl-registry-audit --metadata` → 0 components with empty `bio_plausibility_score`; contraction mapping property test passes for ≥3 config samples.
 
@@ -316,6 +377,9 @@ uv run demo/main.py
 # Registry audit + metadata
 uv run biopl-registry-audit --metadata
 
+# Registry audit → README component table (Sprint 4.6)
+uv run biopl-registry-audit --markdown
+
 # Gradient equivalence
 uv run pytest tests/integration/test_gradient_equivalence.py -v --no-cov
 
@@ -339,6 +403,7 @@ uv run ruff format --check . && uv run ruff check --select E,F,W,C90 . && uv run
 ```
 bioplausible/
 ├── core/
+│   ├── audit.py               # NEW Sprint 2.5 (biopl-registry-audit CLI)
 │   ├── exceptions.py          # NEW Sprint 0.1
 │   ├── registry.py            # REFACTOR Sprint 0.2 (_QueryFilter predicates)
 │   ├── model.py               # REFACTOR Sprint 0.3, 0.4

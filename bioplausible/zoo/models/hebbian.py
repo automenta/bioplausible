@@ -77,7 +77,7 @@ class HebbianLayer(nn.Module):
     family="hebbian",
     tags=["hebbian", "deep"],
 )
-@register_model("hebbian_chain")
+@register_model("hebbian_chain", family="hebbian")
 class DeepHebbianChain(NEBCBase):
     """
     Deep Hebbian Chain with spectral normalization.
@@ -220,7 +220,7 @@ class DeepHebbianChain(NEBCBase):
         return None
 
 
-@register_model("hebbian_3d")
+@register_model("hebbian_3d", family="hebbian")
 class HebbianCube(TransitionGraphMixin, NEBCBase):
     """
     3D Hebbian lattice for testing spatial organization.

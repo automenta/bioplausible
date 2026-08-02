@@ -13,7 +13,7 @@ __all__ = [
 ]
 
 
-@register_constraint("spectral")
+@register_constraint("spectral", family="constraint")
 class SpectralConstraint:
     """Spectral constraint on weights.
 

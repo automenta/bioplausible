@@ -18,6 +18,7 @@ __all__ = [
 
 @register_propagator(
     "contrastive_hebbian_learning",
+    family="hebbian",
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.85,
     credit_assignment_type="hebbian",

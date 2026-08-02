@@ -641,7 +641,7 @@ class ContrastiveFeedbackAlignment(BioModel):
 # ============================================================================
 
 
-@register_model("direct_feedback_alignment_eqprop")
+@register_model("direct_feedback_alignment_eqprop", family="fa")
 class DirectFeedbackAlignmentEqProp(NEBCBase):
     """
     Direct Feedback Alignment with EqProp-style dynamics.
@@ -758,7 +758,7 @@ class DirectFeedbackAlignmentEqProp(NEBCBase):
         ).to(device)
 
 
-@register_model("dfa_deep")
+@register_model("dfa_deep", family="fa")
 class DeepDFAEqProp(DirectFeedbackAlignmentEqProp):
     """
     DFA variant optimized for extreme depth (1000+ layers).

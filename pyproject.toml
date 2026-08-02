@@ -127,6 +127,7 @@ eqprop-verify = "bioplausible.cli:main"
 eqprop-p2p-worker = "bioplausible.p2p.p2p_worker:main"
 biopl-scientist = "bioplausible.execution.cli:main_scientist"
 biopl-report = "bioplausible.execution.cli:main_reporter"
+biopl-registry-audit = "bioplausible.core.audit:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

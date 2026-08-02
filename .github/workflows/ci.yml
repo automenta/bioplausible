@@ -27,6 +27,8 @@ jobs:
         run: uv run ruff check .
       - name: Type Check (Pyright)
         run: uv run pyright .
+      - name: Registry Audit (metadata completeness)
+        run: uv run biopl-registry-audit --metadata
       - name: Test with Coverage
         run: uv run pytest --cov=bioplausible --cov-report=term-missing --cov-fail-under=50
       - name: Dependency Scan (pip-audit)

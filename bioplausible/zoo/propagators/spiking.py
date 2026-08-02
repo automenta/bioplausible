@@ -27,6 +27,7 @@ __all__ = [
 
 @register_propagator(
     "stdp",
+    family="spiking",
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.95,
     credit_assignment_type="spiking",

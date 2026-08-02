@@ -19,6 +19,7 @@ __all__ = [
 
 @register_propagator(
     "backprop",
+    family="backprop",
     locality_level=LocalityLevel.GLOBAL,
     bio_plausibility_score=0.3,
     credit_assignment_type="backpropagation",

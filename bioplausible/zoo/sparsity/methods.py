@@ -18,6 +18,7 @@ from bioplausible.core.registry import (
 
 @register_sparsity(
     name="TopKPruning",
+    family="sparsity",
     domains=[Domain.VISION, Domain.LM, Domain.TIMESERIES],
     locality_level=LocalityLevel.LOCAL,
     compute_profile=ComputeProfile.NEUROMORPHIC,
@@ -69,6 +70,7 @@ class TopKPruning:
 
 @register_sparsity(
     name="ActivityDrivenPruning",
+    family="sparsity",
     domains=[Domain.VISION, Domain.LM, Domain.TIMESERIES],
     locality_level=LocalityLevel.LOCAL,
     compute_profile=ComputeProfile.NEUROMORPHIC,
@@ -116,6 +118,7 @@ class ActivityDrivenPruning:
 
 @register_sparsity(
     name="RandomPruning",
+    family="sparsity",
     domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,

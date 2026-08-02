@@ -13,7 +13,7 @@ __all__ = [
 ]
 
 
-@register_optimizer("ewc")
+@register_optimizer("ewc", family="optimizer")
 class EWC:
     """Elastic Weight Consolidation.
 

@@ -15,16 +15,16 @@ __all__ = [
 ]
 
 
-@register_optimizer("sgd")
+@register_optimizer("sgd", family="optimizer")
 class SGD(TorchSGD):
     """SGD optimizer wrapper."""
 
 
-@register_optimizer("adam")
+@register_optimizer("adam", family="optimizer")
 class Adam(TorchAdam):
     """Adam optimizer wrapper."""
 
 
-@register_optimizer("adamw")
+@register_optimizer("adamw", family="optimizer")
 class AdamW(TorchAdamW):
     """AdamW optimizer wrapper."""
