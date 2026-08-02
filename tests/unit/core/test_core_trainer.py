@@ -92,3 +92,54 @@ def test_core_trainer_initialization():
     assert trainer is not None
     assert trainer.config.model == "test"
     assert trainer.config.epochs == 1
+
+
+REGISTERED_PROPAGATORS = [
+    "backprop",
+    "feedback_alignment",
+    "direct_fa",
+    "adaptive_fa",
+    "stochastic_fa",
+    "contrastive_fa",
+    "eq_prop",
+    "adam_eq_prop",
+    "holomorphic_eq_prop",
+    "finite_nudge_eq_prop",
+    "lazy_eq_prop",
+    "contrastive_hebbian_learning",
+]
+
+
+@pytest.mark.parametrize("propagator", REGISTERED_PROPAGATORS)
+def test_propagator_constructs_with_correct_signature(propagator):
+    """All registered propagators are LearningRuleOptimizer `(params, model, ...)`.
+
+    Regression for the CoreTrainer `_create_propagator` bug that bound the
+    *model* to the `params` positional arg (`prop_cls(self.model, ...)`), which
+    raised a TypeError for the entire propagator family.
+    """
+    config = TrainerConfig(
+        model="backprop_mlp",
+        propagator=propagator,
+        task="digits",
+        model_kwargs={"input_dim": 64, "hidden_dim": 16, "output_dim": 10},
+        epochs=1,
+    )
+    trainer = CoreTrainer(config)
+    trainer.setup()
+    assert trainer.propagator is not None
+    assert trainer.propagator.model is trainer.model
+
+
+def test_feedback_alignment_propagator_trains():
+    """FA as a propagator (not just the self-training FA *model*) fits end-to-end."""
+    config = TrainerConfig(
+        model="backprop_mlp",
+        propagator="feedback_alignment",
+        task="digits",
+        model_kwargs={"input_dim": 64, "hidden_dim": 16, "output_dim": 10},
+        epochs=1,
+    )
+    history = CoreTrainer(config).fit()
+    assert len(history) == 1
+    assert history[-1].val_accuracy > 0.0

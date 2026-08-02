@@ -61,6 +61,211 @@ Independent of both spines (run anytime after their direct deps): 0.5, 0.6, 4.1,
 
 *(New sessions append here)*
 
+### 2026-08-02 — `biopl-parity` CLI (3.7) + Sprint 0.5 lazy expansion exposed & fixed 2 circular imports
+
+**New `biopl-parity` CLI** (`bioplausible/cli/parity.py`, registered in
+`pyproject.toml`). Trains two configs via `CoreTrainer` under one
+`set_global_seed`, reports `gap_pp == (val_acc_B - val_acc_A) * 100` matching the
+demo's `charts.parity_gap` (the demo uses the same train-first accuracy rule).
+`--config-a/--config-b/--task/--epochs/--lr/--hidden/--seed/--device/--json`;
+rejects the toy tasks (not wired through CoreTrainer). Example verified:
+`equitile 0.507 vs backprop_mlp 0.666 → gap 15.9 pp`. 7 tests
+(`tests/unit/cli/test_parity_cli.py`): formula-consistency, per-epoch
+train-first rule, task validation, 3 fresh-interpreter lazy-import regression
+tests, and a full 1-epoch digits e2e.
+
+**IMPORTANT regression caught & fixed — the prior lazy-`__init__` change broke
+every `bioplausible.cli.*` console script.** `biopl-repro-check --help` and
+`biopl-repro-check` (a CI gate) both failed with a latent circular import
+(`cli/__init__ → __main__ → rank → analysis → hyperopt → execution →
+execution/__init__ → engine → strategy → `from bioplausible.hyperopt import
+PatientLevel``). It had only ever worked because the OLD eager
+`bioplausible/__init__.py` pre-imported `hyperopt`/`execution` first, masking
+the cycle. Removed the eager pre-warming → exposed it.
+
+**Fixes (all sprint-0.5-style lazy, cycle-free):**
+- `bioplausible/cli/__init__.py` → lazy `_LAZY` (was eagerly importing
+  `cli.__main__`).
+- `bioplausible/execution/__init__.py` → lazy `_LAZY` (was eagerly importing
+  `engine`/`strategy` → `hyperopt`).
+- `bioplausible/hyperopt/__init__.py` → dropped the eager
+  `from bioplausible.execution._guards import (create_constrained_optuna_config,
+  get_constrained_search_space)` (it was the cycle edge; nothing imports those
+  two from `hyperopt` — `execution.engine` imports them from `_guards` direct);
+  re-exported them lazily via `__getattr__` (`# noqa: F822` on the __all__ rows).
+
+**Verified**: `biopl-repro-check`, `biopl-registry-audit`, `biopl-parity` all
+exit 0; `biopl.repro-check --models eqprop_mlp` still reports bitwise
+reproducible.
+
+**Sprint 0.5 bonus win from the execution/__init__ laziness**: `import
+bioplausible.core` went from ~5.8s (pulling `execution/_state → hyperopt.storage
+→ zoo → torchvision`) to **0.00s** — because `core.trainer`'s
+`execution.callbacks` import no longer drags in `execution.engine`/`strategy` →
+`hyperopt` → `zoo`. Remaining deep-coupling to fully slim the demo:
+`core.trainer` still does `from bioplausible.zoo.propagators.base import
+is_learning_rule_optimizer`.
+
+**Gate state after this session (cumulative):**
+- Root fast gate: `tests/unit/ tests/property/` = **1253 passed** (+7 parity,
+  +13 propagator, +3 boundary, +12 narrowing-related), 1 skipped, 1 xfailed.
+- `tests/integration + tests/unit/validation` (no gpu/benchmark): 713 passed.
+- `tests/unit/execution`: 80 passed. Demo suite: **52 passed**.
+- ruff correctness clean on all changed files (fixed 2 E501, 2 F822 lazy
+  re-exports).
+
+**Discovered / remaining work:**
+- Sprint 0.1 exception hierarchy: still ~106 real sites remaining (see the 0.1
+  row / prior session log for the continuation pattern). `docs/exception_audit_
+  baseline.txt` captured.
+- `biopl-parity` is not yet wired into the demo's one-click Run; the 3.7 gate
+  "demo gap matches CLI within 1%" is now mechanically possible but not
+  automated — a future step is to have the demo run the same `run_parity` path
+  (with a fixed seed) so the UI and CLI provably agree.
+- Toy tasks (xor/spiral/circles) still not wired through `CoreTrainer` (demo
+  task selector limitation).
+
+
+### 2026-08-02 — Sprint 0.1 exception-hierarchy pass started (12 narrowed; pattern + exemption documented)
+
+Made the first real dent in the named Sprint-0 remaining root item. The domain
+exception hierarchy (`core/exceptions.py`) already exists; the work is narrowing
+the 120 bare `except Exception` sites. Captured the required migration-safety
+baseline (`docs/exception_audit_baseline.txt`, 120 sites) and narrowed 12 that
+mapped cleanly to specific exceptions, all behavior-preserving:
+
+- `execution/_state.py` (8 sites, all `sqlite3` best-effort helpers) → narrowed
+  to `(sqlite3.Error, OSError)`, `(OSError, ValueError, TypeError)`, or
+  `(sqlite3.Error, OSError, ValueError)` depending on the JSON/DB surface.
+- `core/trainer.py` (4 sites) → `torch.compile` fallback → `(RuntimeError,
+  TypeError, ValueError)`; dataset loader → `(OSError, ValueError, RuntimeError)`
+  (still re-raises); fit-loop catch → `(RuntimeError, OSError, ValueError)`
+  (still re-raises); registry metadata fetch → `(ValueError, KeyError)`.
+
+**Two sites in `trainer.py` are intentionally-left broad and must be EXEMPTED
+from the 0.1 grep gate**: `_run_callbacks` and `_fire_execution_hook` dispatch
+to external/user-supplied callbacks that may legitimately raise anything (a
+fire-and-forget listener must not crash training). Per the "no global relax,
+per-line `# noqa` with a reason" rule they are marked
+`# noqa: BLE001  # broad: external listener may raise anything`. The CI grep
+check should exclude lines containing `# broad:` (or otherwise whitelist these).
+
+**Count**: 120 → 108 (of which 2 are the documented exemptions → ~106 real
+narrowable remain across ~50 files: equitile, p2p, lightning_, validation,
+hyperopt, acceleration, CLI, autoscientist, etc.).
+
+**Gate state after this session (cumulative):**
+- Root fast gate: `tests/unit/ tests/property/` = **1246 passed** (+13 propagator
+  construction/train tests), 1 skipped, 1 xfailed.
+
+**Helpful notes for continuing 0.1:**
+- Narrowing pattern: best-effort log-and-continue SQL/JSON helpers →
+  `(sqlite3.Error, OSError, ValueError, TypeError)`; re-raising log+`raise` sites
+  stay `(RuntimeError, OSError, ValueError)` since propagation is unchanged (only
+  the logged set narrows); genuinely-broad external-dispatch catch stays
+  `Exception` + `# noqa: BLE001 # broad:` reason.
+- Work file-by-file so the diff stays reviewable; re-run `tests/unit/core` +
+  `tests/unit/execution` (or the file's own tests) after each file.
+
+
+
+### 2026-08-02 — CoreTrainer propagator construction FIXED (FA + all LearningRuleOptimizer)
+
+**Root bug fixed — the whole propagator family could not be used via
+`CoreTrainer`.** `_create_propagator` constructed propagators as
+`prop_cls(self.model, **kwargs)`, binding the *model* to the `params` positional
+arg. Every registered propagator is a `LearningRuleOptimizer` with signature
+`(params, model, **kwargs)`, so this raised
+`TypeError: FeedbackAlignment.__init__() missing 1 required positional arg
+'model'` for all of them (backprop, all FA variants, eq_prop family, CHL, STDP).
+Fix at `bioplausible/core/trainer.py:527`: construct as
+`prop_cls(list(self.model.parameters()), self.model, **propagator_kwargs)`.
+
+This closes the TODO's "remaining FA gap" (`feedback_alignment`,
+`direct_feedback_alignment_eqprop`, `dfa_deep` were propagator-driven and hit
+"model does not implement custom train_step" via the broken construction). All
+12 registered propagators now construct via the generic CoreTrainer path, and
+6 representative (feedback_alignment, backprop, eq_prop, direct_fa,
+stochastic_fa, adaptive_fa) verified to `fit()` end-to-end on digits.
+
+**Regression tests** (`tests/unit/core/test_core_trainer.py`, +13):
+- `test_propagator_constructs_with_correct_signature` — parametrized over ALL 12
+  registered propagators, asserts `setup()` builds it and
+  `propagator.model is trainer.model` (directly guards the positional-arg bug).
+- `test_feedback_alignment_propagator_trains` — FA *as a propagator* fits.
+
+**Gate state after this session (cumulative with the lazy-import + hidden_dim
+work):**
+- Root fast gate: `tests/unit/ tests/property/` = **1233 passed** (+3 boundary,
+  +13 propagator), 1 skipped, 1 xfailed.
+- `tests/unit/core` + gradient-equivalence integration: 158 passed.
+- Demo tests: **52 passed**; `main.py` imports clean.
+
+**Discovered / remaining work:**
+- Sprint 0.1 (exception hierarchy, 120 bare `except Exception` across 54 files)
+  is the next big root item — unchanged. Re-take the audit baseline first:
+  `grep -rn "except Exception" bioplausible/ > docs/exception_audit_baseline.txt`.
+- `test_gradient_equivalence.py:58` has a pre-existing double `import torch`
+  (LSP-reported; not caused by this work).
+- Demo/3.7 `biopl-parity` CLI cross-check and toy-task CoreTrainer wiring remain
+  open demo items.
+
+
+### 2026-08-02 — Sprint 0.5 lazy imports landed + demo per-model hidden_dim defaults
+
+**Sprint 0.5 (module boundary hardening) — core deliverable done.** Both
+`bioplausible/__init__.py` and `bioplausible/core/__init__.py` are now lazy
+(PEP 562 `_LAZY` name→`(module, attr)` maps + `__getattr__`). `import
+bioplausible` is now ~instant (was ~6s pulling the whole zoo); `import
+bioplausible.core.registry` is **0.028s and does NOT load torch, the zoo, or
+register any models** (was ~5.9s and registered everything). This is locked by
+`tests/unit/core/test_module_boundary.py` (3 subprocess-isolated tests; guards
+against regression).
+
+**The demo now imports its models explicitly.** Because `import bioplausible`
+no longer registers models as a side effect, `demo/runner.py` added explicit
+`import bioplausible.zoo` + `import bioplausible.equitile` (required:
+equitile variants register under `bioplausible.equitile`, NOT `bioplausible.zoo`
+— zoo covers pepita/forward_forward/standard_fa). This is the correct explicit
+dependency for any consumer that needs the registry populated.
+
+**Demo step — per-model hidden_dim defaults.** `demo/runner.py` gained
+`_DEFAULT_HIDDEN_DIM` + `default_hidden_dim(model)`; `default_trainer_config`
+now takes `hidden_dim: int | None = None` and falls back per model
+(equitile→32, pepita→32, forward_forward→32, backprop/eqprop/standard_fa→128)
+instead of the generic 256. Keeps the flagship EquiTile config small (its
+`neurons_per_tile` tracks hidden_dim, so 256 built huge slow tile graphs). 4 new
+tests in `demo/tests/test_runner_metadata.py` (`TestHiddenDimDefaults`).
+
+**Gate state after this session:**
+- Root fast gate: `tests/unit/ tests/property/` = **1230 passed** (+3 boundary),
+  1 skipped, 1 xfailed.
+- Root `tests/integration/ + tests/unit/validation/` (no gpu/benchmark) =
+  **713 passed**, 12 skipped.
+- Demo tests: **52 passed** (+4 hidden-dim).
+- `ruff --select E,F,W,C90,U,F401` clean on all changed files (fixed 7
+  E501 line-length in the lazy maps).
+- `pyright demo/runner.py`: 0 errors (2 warnings = intentional zoo/equitile
+  side-effect imports, not covered by pyright).
+
+**Discovered / remaining work:**
+- **Sprint 0.5's deeper goal (slim demo deps) is NOT fully met.** The heavy
+  import chain is intra-package, not the package `__init__`: `import
+  bioplausible.core.trainer` → `from bioplausible.zoo.propagators.base import
+  is_learning_rule_optimizer` → pulls the whole zoo (→ conv_eqprop → torchvision).
+  Measured with `python -X importtime`. So `bioplausible.core` as a whole is
+  still heavy; only the *light* entry points (`core.registry`, top-level
+  `bioplausible`) are now fast. Truly slimming the demo requires unlinking
+  `core.trainer` from `zoo` (e.g. inject `is_learning_rule_optimizer` as a
+  callable/late binding) — a deeper Sprint-0-depth refactor, not done here.
+- `bioplausible/types.py` referenced by the old 0.5 validation **does not
+  exist** — the plan's literal "import bioplausible.types" check has no target;
+  the registry boundary test supersedes it.
+- The demo still needs the zoo at import (= torchvision, lightning, etc.), so
+  `demo/` staying on `bioplausible[full]` is unchanged; the demo-dep-slimming
+  benefit only materializes once the trainer→zoo coupling above is broken.
+
+
 ### 2026-08-02 — EquiTile/pepita/FF/FA CoreTrainer integration FIXED → demo trains 6 model families
 
 **The single biggest demo unlock from the TODO's "next session's scope" is
@@ -713,11 +918,11 @@ Current gate state after this session:
 
 | # | Task | Depends On | Status | Validation |
 |---|------|------------|--------|------------|
-| **0.1** | **Domain Exception Hierarchy** (`core/exceptions.py`) — base `BioplausibleError` + `ConfigError`, `RegistryError`, `IncompatibilityError`, `CheckpointError`, `LoadStateError`, `KnowledgeBaseError`, `TrialExecutionError`, `PropagatorError`, `TileGraphError`. Replace 127 bare `except Exception` with narrow+chain. **Migration safety**: before replacing, run `grep -rn "except Exception" bioplausible/ > docs/exception_audit_baseline.txt`. After replacing, diff against baseline. CI check: `grep -r "except Exception" bioplausible/ --include="*.py" | grep -v "core/exceptions.py" | wc -l` → 0. | −1 | ☐ | `pyright` 0 errors; CI grep check → 0 |
+| **0.1** | **Domain Exception Hierarchy** (`core/exceptions.py`) — base `BioplausibleError` + `ConfigError`, `RegistryError`, `IncompatibilityError`, `CheckpointError`, `LoadStateError`, `KnowledgeBaseError`, `TrialExecutionError`, `PropagatorError`, `TileGraphError`. Replace 127 bare `except Exception` with narrow+chain. **Migration safety**: before replacing, run `grep -rn "except Exception" bioplausible/ > docs/exception_audit_baseline.txt`. After replacing, diff against baseline. CI check: `grep -r "except Exception" bioplausible/ --include="*.py" | grep -v "core/exceptions.py" | wc -l` → 0. | −1 | ◐ | Hierarchy **exists** (`core/exceptions.py`, all 10 classes). **2026-08-02: baseline captured (`docs/exception_audit_baseline.txt`, 120 sites); narrowed 12 in `execution/_state.py` (8→0) + `core/trainer.py` (6→2).** Remaining gate needs a re-scope: 2 sites in `trainer.py` (`_run_callbacks`/`_fire_execution_hook`) are documented intentional broad catches (external/user callbacks), marked `# noqa: BLE001 # broad:...` — the CI grep must exclude `# broad:`. ~106 sites remain across 50+ files (long tail). |
 | **0.2** | **`_QueryFilter` Predicate Dispatch** (`core/registry.py:120-165`) — convert boolean mega-expression to frozen predicate dataclasses + protocol; `matches()` = `all(p(meta) for p in predicates)`. Enables hypothesis tests + AutoScientist capability matching. | 0.1 | ☐ | Property tests for each predicate axis; registry audit passes |
 | **0.3** | **Cyclomatic Complexity Extraction** — hot paths only: `engine.py:_run_discovery_loop` (cc=17), `engine.py:_process_with_retry` (cc=12), `equitile/model.py:_relax` (cc=16), `equitile/model.py:_apply_hebbian_updates` (cc=13). **Snapshot tests first**: write tests capturing current outputs for 3 representative configs, then extract `_`-prefixed helpers with guard clauses. | 0.1 |☑| `ruff check --select C901` = 0 on these files; snapshot tests pass unchanged after extraction |
 | **0.4** | **`match`/`case` Conversion** — closed-enum chains: `equitile/model.py:_get_activation` (5-way), `equitile/model.py:train_step` (3-way mode), `engine.py:_log_task_start` (after dataclass extraction), `engine.py:_prepare_fixed_config` (after dataclass extraction). | 0.3 | ☐ | Exhaustiveness checking catches new variants; no regressions |
-| **0.5** | **Module Boundary Hardening** — `bioplausible/__init__.py`: split heavy registration into `_register_all.py`; `equitile/utils/` → `_utils/` or `_internal/`; verify no external imports of `_internal/`. | 0.1 | ☐ | `import bioplausible.types` doesn't trigger model registration; `ruff` TID252 clean |
+| **0.5** | **Module Boundary Hardening** — `bioplausible/__init__.py`: split heavy registration into `_register_all.py`; `equitile/utils/` → `_utils/` or `_internal/`; verify no external imports of `_internal/`. | 0.1 | ◐ | `import bioplausible.core.registry` fast (~0.03s) + does NOT load torch/zoo or register models (locked by `tests/unit/core/test_module_boundary.py`, 3 tests). **2026-08-02: `bioplausible/__init__.py`, `bioplausible/core/__init__.py`, `bioplausible/cli/__init__.py`, `bioplausible/execution/__init__.py`, `bioplausible/hyperopt/__init__.py` all lazy (PEP 562 `_LAZY` maps). `import bioplausible.core` now instant (0.00s; was ~5.8s).** `cli`/`execution`/`hyperopt` laziness ALSO broke 2 pre-existing circular imports (see session log) — required because the old eager top-level `__init__` used to mask them. Remaining deep goal: `bioplausible.core.trainer` still imports `bioplausible.zoo.propagators.base.is_learning_rule_optimizer` directly, so `core.trainer`/demo still pull the zoo (documented). |
 | **0.6** | **SQLite Resource Standardization** — `execution/_state.py`: replace 12+ manual `try/finally` with `@contextmanager _connect(db_path)` helper matching `kb.py` pattern. | 0.1 | ☐ | No resource leaks under stress; KB meta-analysis (RESEARCH.md 4.2) unblocked |
 
 **Gate**: `uv run pytest tests/unit/ tests/property/ -q --no-cov` < 60s, 0 failures (xfail allowed only if documented in −1.2); `pyright` 0 errors; `grep -r "except Exception" bioplausible/ --include="*.py" | grep -v core/exceptions.py | wc -l` → 0; `ruff check --select C901` on the 4 refactored files → 0.
@@ -782,7 +987,7 @@ Current gate state after this session:
 | **3.4** | **Live Training Charts** (`demo/charts.py`) — Plotly `FigureWidget` streaming: loss/accuracy (dual Y), Lipschitz constant, gradient alignment, tile activity heatmap (EquiTile), energy trajectory (EP). **Prerequisite**: add `ExecutionCallback` protocol to `execution/engine.py` with hooks `on_epoch_end(metrics)`, `on_step_end(loss, grads)`, `on_settling_step(energy)`. NiceGUI registers async callback; engine remains UI-agnostic. | 0.3 |☑| 100-step training animates smoothly at 10 FPS; no UI freeze (demo-side gate pending) |
 | **3.5** | **Animated Weight Matrices** (`demo/weight_viz.py`) — color-coded `W_t` per layer; play/pause/scrub slider; side-by-side diff view (Config A - Config B). Re-test on any NiceGUI bump (ADR recorded tested version). | 3.1 | ◐ | **Session 2026-08-02**: `_WeightProbe` decimated snapshot capture in CoreTrainer + `WeightMatrixAnimator` (Play/Plotly heatmap/diff) wired into `main.py` post-run; 8 unit tests. Pending: full 30 FPS check on 64×64, hover magnitude tooltip, NiceGUI Vue-canvas upgrade is optional (Plotly heatmap ships first). |
 | **3.6** | **Experiment Persistence** — "Save Config" / "Load Config" (JSON); "Export Run" (CSV + PNG); shareable URL with encoded config. | 3.1 | ◐ | **Session 2026-08-02**: config⇄JSON + `export_run_csv` + `export_run_png` (Agg) + `config_to_url`/`config_from_url` (`bioplausible://` base64) + Save/Load/Share/Export UI buttons all done+tested (44 demo tests green, boot HTTP 200). Pending: MP4 weight export (dropped as low-value; PNG+CSV ship), URL only encodes selector knobs (documented). |
-| **3.7** | **Backprop Baseline Parity** — one-click "Run Parity" trains both configs, overlays curves, prints final gap %. **Prerequisite**: Sprint 1.5 complete. If any model has `parity_threshold > 0.05`, demo displays gap explanation alongside curves. | 1.5 | ◐ | **Session 2026-08-02**: train() rebuilds panels from current selectors, surfaces per-panel errors, end-to-end parity VERIFIED. `charts.parity_explanation` now reads `parity_threshold` from registry `extra` (mirroring hyperparam YAMLs; eqprop 0.05, pepita 0.2, FF 0.05) instead of hardcoded 5 pp. Pending: `biopl-parity` CLI for the "match CLI within 1%" wording — demo parity_gap and CLI are not yet cross-checked. |
+| **3.7** | **Backprop Baseline Parity** — one-click "Run Parity" trains both configs, overlays curves, prints final gap %. **Prerequisite**: Sprint 1.5 complete. If any model has `parity_threshold > 0.05`, demo displays gap explanation alongside curves. | 1.5 | ◐ | **Session 2026-08-02**: train() rebuilds panels from current selectors, surfaces per-panel errors, end-to-end parity VERIFIED. `charts.parity_explanation` now reads `parity_threshold` from registry `extra` (mirroring hyperparam YAMLs; eqprop 0.05, pepita 0.2, FF 0.05) instead of hardcoded 5 pp. **NEW `biopl-parity` CLI (`bioplausible/cli/parity.py`)** — trains two configs under one seed, reports gap_pp == `(val_acc_B - val_acc_A)*100` matching `charts.parity_gap`; 7 tests (`tests/unit/cli/test_parity_cli.py`) incl. formula-consistency + lazy-import regression. Pending: wiring the CLI into the demo's one-click (demo gap vs CLI cross-check is now mechanically possible). |
 
 **Gate**: Demo runs end-to-end: (1) select Config A = EquiTile, Config B = backprop MLP; (2) select task = CIFAR-10; (3) click Run; (4) loss/accuracy charts stream for ≥50 epochs without freeze; (5) final parity gap displayed matches CLI `biopl-parity` within 1%; (6) "Export Run" produces valid CSV + PNG.
 

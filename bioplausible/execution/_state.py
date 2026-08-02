@@ -297,7 +297,7 @@ class FailureTracker:
                 if not failed_vals:
                     return None
                 return sum(failed_vals) / len(failed_vals)
-        except Exception as e:
+        except (sqlite3.Error, OSError) as e:
             logger.warning("Correlation check failed: %s", e)
             return None
 
@@ -323,7 +323,7 @@ class FailureTracker:
                             f"{early_fails}/{total} failures occurred in first 2 epochs"
                         ),
                     })
-        except Exception as e:
+        except (sqlite3.Error, OSError) as e:
             logger.warning("Divergence check failed: %s", e)
         return recs
 
@@ -375,7 +375,7 @@ class DecisionLogger:
             logger.info("Decision Logged: [%s] %s", event_type, description)
         except sqlite3.Error:
             logger.exception("Failed to log decision")
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             logger.error("Unexpected error logging decision: %s", e, exc_info=True)
 
     def get_log(self, limit: int = 1000) -> list[dict[str, object]]:
@@ -400,7 +400,7 @@ class DecisionLogger:
                     })
         except sqlite3.Error:
             logger.exception("Failed to read decision log")
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             logger.error("Unexpected error reading decision log: %s", e, exc_info=True)
         return entries
 
@@ -488,10 +488,10 @@ class ExperimentState:
                     config = json.loads(row[0])
                     if "task" in config:
                         recent_tasks.append(config["task"])
-                except Exception:
+                except (ValueError, TypeError):
                     logger.warning("Failed to deserialize recent task entry")
             return recent_tasks
-        except Exception:
+        except (sqlite3.Error, OSError, ValueError):
             logger.exception("Error fetching recent tasks")
             return []
 
@@ -503,7 +503,7 @@ class ExperimentState:
                 (limit,),
             )
             return [row[0] for row in cursor.fetchall()]
-        except Exception:
+        except (sqlite3.Error, OSError, ValueError):
             logger.exception("Error fetching recent models")
             return []
 
@@ -529,7 +529,7 @@ class ExperimentState:
             )
             for row in cursor.fetchall():
                 fragile_models[row["model_name"]] = row["avg_rob"]
-        except Exception:
+        except (sqlite3.Error, OSError, ValueError):
             logger.warning("Failed to query fragile models")
         return fragile_models
 

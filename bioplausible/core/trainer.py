@@ -398,7 +398,7 @@ class CoreTrainer:
             try:
                 self.model = torch.compile(self.model, mode=self.config.compile_mode)
                 logger.info("Model compiled with mode=%s", self.config.compile_mode)
-            except Exception as e:
+            except (RuntimeError, TypeError, ValueError) as e:
                 logger.warning("Compilation failed: %s", e)
 
         # 6. Move to device
@@ -431,7 +431,7 @@ class CoreTrainer:
                         num_workers=self.config.num_workers,
                         **self.config.data_kwargs,
                     )
-                except Exception as e:
+                except (OSError, ValueError, RuntimeError) as e:
                     logger.warning("Could not load dataset %s: %s", self.config.task, e)
                     raise
 
@@ -524,7 +524,14 @@ class CoreTrainer:
                 "Propagator %s not in registry, skipping", self.config.propagator
             )
             return
-        self.propagator = prop_cls(self.model, **self.config.propagator_kwargs)
+        # Every registered propagator is a LearningRuleOptimizer with the
+        # signature `(params, model, **kwargs)` (params first, then the model).
+        # Constructing with the raw model as the first positional arg (the old
+        # `prop_cls(self.model, ...)`) bound the *model* to `params` and left
+        # `model` as a required kwarg — a hard TypeError for the whole family.
+        self.propagator = prop_cls(
+            list(self.model.parameters()), self.model, **self.config.propagator_kwargs
+        )
 
     def _create_optimizer(self) -> None:
         """Create optimizer."""
@@ -613,7 +620,7 @@ class CoreTrainer:
                     break
         except KeyboardInterrupt:
             logger.info("Training interrupted by user")
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError) as e:
             logger.error("Training failed: %s", e, exc_info=True)
             raise
         finally:
@@ -757,7 +764,7 @@ class CoreTrainer:
                         getattr(self.model, "algorithm_name", self.config.model),
                     )
                     requires_backward = meta.requires_backward
-                except Exception:
+                except (ValueError, KeyError):
                     logger.warning(
                         "Could not fetch metadata for %s",
                         getattr(self.model, "algorithm_name", self.config.model),
@@ -953,7 +960,7 @@ class CoreTrainer:
         for cb in self._callbacks:
             try:
                 cb(self, metrics)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # broad: user callbacks may raise anything
                 logger.warning("Callback failed: %s", e)
 
     def add_callback(self, callback: Callable) -> None:
@@ -977,7 +984,7 @@ class CoreTrainer:
         for cb in self._execution_callbacks:
             try:
                 getattr(cb, name)(*args)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # broad: external listener may raise anything
                 logger.warning("Execution callback %r.%s failed: %s", cb, name, e)
 
     @staticmethod

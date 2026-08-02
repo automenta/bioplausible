@@ -1,0 +1,120 @@
+bioplausible/acceleration/compile.py:47:        except Exception as e:
+bioplausible/acceleration/compile.py:107:    except Exception as e:
+bioplausible/acceleration/compile.py:147:    except Exception:
+bioplausible/acceleration/backends.py:89:        except Exception as e:
+bioplausible/acceleration/kernels.py:186:        except Exception:
+bioplausible/acceleration/kernels.py:193:except Exception:  # Capture other potential import errors
+bioplausible/acceleration/kernels.py:222:        except Exception:
+bioplausible/analysis/ablation.py:95:        except Exception as e:
+bioplausible/analysis/scaling.py:37:    except Exception as e:
+bioplausible/cli/lab.py:55:        except Exception:
+bioplausible/cli/run.py:113:        except Exception:
+bioplausible/cli/run.py:168:        except Exception:
+bioplausible/cli/repro.py:253:        except Exception:  # noqa: BLE001 - report any family failure
+bioplausible/hyperopt/analysis.py:169:    except Exception:
+bioplausible/hyperopt/experiment.py:127:        except Exception:
+bioplausible/hyperopt/experiment.py:169:                except Exception as e:
+bioplausible/hyperopt/experiment.py:240:        except Exception:
+bioplausible/hyperopt/experiment.py:523:    except Exception:
+bioplausible/hyperopt/parallel_runner.py:64:    except Exception as e:
+bioplausible/p2p/evolution.py:94:            except Exception as e:
+bioplausible/p2p/evolution.py:110:                except Exception as e:
+bioplausible/p2p/evolution.py:116:        except Exception as e:
+bioplausible/p2p/evolution.py:400:            except Exception as e:
+bioplausible/p2p/dht.py:81:            except Exception as e:
+bioplausible/p2p/dht.py:89:        except Exception:
+bioplausible/p2p/dht.py:105:        except Exception as e:
+bioplausible/p2p/dht.py:119:        except Exception:
+bioplausible/p2p/dht.py:174:        except Exception as e:
+bioplausible/p2p/state.py:31:    except Exception:
+bioplausible/p2p/state.py:41:    except Exception:
+bioplausible/validation/tracks/nebc_tracks.py:58:        except Exception as e:
+bioplausible/validation/tracks/track_registry.py:59:                    except Exception:
+bioplausible/validation/tracks/track_registry.py:61:    except Exception as e:
+bioplausible/validation/tracks/signal_tracks.py:102:        except Exception as e:
+bioplausible/validation/core.py:182:            except Exception as e:
+bioplausible/validation/core.py:252:            except Exception as e:
+bioplausible/validation/notebook.py:291:        except Exception as e:
+bioplausible/knowledge/metamodel.py:64:                except Exception as e:
+bioplausible/knowledge/metamodel.py:71:        except Exception:
+bioplausible/lightning_/experiment.py:76:    except Exception as e:
+bioplausible/lightning_/experiment.py:132:    except Exception as e:
+bioplausible/lightning_/nas.py:91:        except Exception:
+bioplausible/core/trainer.py:401:            except Exception as e:
+bioplausible/core/trainer.py:434:                except Exception as e:
+bioplausible/core/trainer.py:623:        except Exception as e:
+bioplausible/core/trainer.py:767:                except Exception:
+bioplausible/core/trainer.py:963:            except Exception as e:
+bioplausible/core/trainer.py:987:            except Exception as e:
+bioplausible/core/energy_model.py:207:        except Exception:
+bioplausible/zoo/__init__.py:118:    except Exception:
+bioplausible/config/schema.py:50:    except Exception:
+bioplausible/autoscientist/campaign.py:121:                except Exception as e:
+bioplausible/autoscientist/campaign.py:212:        except Exception as e:
+bioplausible/autoscientist/reasoner.py:73:            except Exception as e:
+bioplausible/autoscientist/reasoner.py:213:        except Exception as e:
+bioplausible/autoscientist/reasoner.py:331:        except Exception as e:
+bioplausible/evaluation/cross_domain.py:126:        except Exception as e:
+bioplausible/evaluation/cross_domain.py:201:        except Exception:
+bioplausible/evaluation/cross_domain.py:269:                        except Exception as e:
+bioplausible/data/lm.py:54:        except Exception as e:
+bioplausible/equitile/benchmarks/compare_nanoGPT.py:113:            except Exception as e:
+bioplausible/equitile/utils/reproducibility.py:129:        except Exception:
+bioplausible/equitile/language/optimized.py:447:            except Exception as e:
+bioplausible/equitile/language/canonical.py:846:            except Exception:
+bioplausible/equitile/language/fast.py:205:        except Exception as e:
+bioplausible/equitile/language/fast.py:613:            except Exception as e:
+bioplausible/equitile/lm/data.py:822:        except Exception:
+bioplausible/equitile/lm/fast_lm.py:163:            except Exception:
+bioplausible/equitile/validate.py:153:        except Exception as e:
+bioplausible/equitile/validate.py:184:        except Exception as e:
+bioplausible/equitile/validate.py:213:        except Exception as e:
+bioplausible/equitile/validate.py:248:        except Exception as e:
+bioplausible/equitile/validate.py:301:        except Exception as e:
+bioplausible/equitile/validate.py:330:        except Exception as e:
+bioplausible/equitile/validate.py:408:        except Exception as e:
+bioplausible/equitile/validate.py:458:        except Exception as e:
+bioplausible/equitile/validate.py:513:        except Exception as e:
+bioplausible/equitile/validate.py:539:        except Exception as e:
+bioplausible/equitile/core/model.py:1288:        except Exception as e:
+bioplausible/equitile/training/_nccl.py:81:        except Exception as e:
+bioplausible/equitile/training/async_execution.py:221:        except Exception as e:
+bioplausible/equitile/training/async_execution.py:523:            except Exception as e:
+bioplausible/execution/monitoring.py:102:        except Exception:
+bioplausible/execution/monitoring.py:143:            except Exception:
+bioplausible/execution/resources.py:109:            except Exception:
+bioplausible/execution/robustness.py:191:        except Exception as e:
+bioplausible/execution/robustness.py:493:        except Exception as e:
+bioplausible/execution/strategy.py:60:    except Exception:  # pragma: no cover - registry not populated
+bioplausible/execution/strategy.py:853:            except Exception as e:
+bioplausible/execution/synthesizer.py:89:        except Exception as e:
+bioplausible/execution/synthesizer.py:112:            except Exception:
+bioplausible/execution/synthesizer.py:131:        except Exception as e:
+bioplausible/execution/synthesizer.py:291:        except Exception as e:
+bioplausible/execution/synthesizer.py:351:        except Exception as e:
+bioplausible/execution/synthesizer.py:385:        except Exception as e:
+bioplausible/execution/synthesizer.py:550:        except Exception as e:
+bioplausible/execution/_lifecycle.py:181:        except Exception:
+bioplausible/execution/_lifecycle.py:342:        except Exception as e:
+bioplausible/execution/_state.py:300:        except Exception as e:
+bioplausible/execution/_state.py:326:        except Exception as e:
+bioplausible/execution/_state.py:378:        except Exception as e:
+bioplausible/execution/_state.py:403:        except Exception as e:
+bioplausible/execution/_state.py:491:                except Exception:
+bioplausible/execution/_state.py:494:        except Exception:
+bioplausible/execution/_state.py:506:        except Exception:
+bioplausible/execution/_state.py:532:        except Exception:
+bioplausible/execution/evolve_evaluator.py:99:    except Exception as e:
+bioplausible/execution/dashboard.py:209:            except Exception:
+bioplausible/execution/engine.py:243:        except Exception:
+bioplausible/execution/engine.py:279:        except Exception as e:
+bioplausible/execution/engine.py:375:        except Exception:
+bioplausible/execution/engine.py:443:            except Exception as e:
+bioplausible/execution/engine.py:635:            except Exception as e:
+bioplausible/execution/engine.py:805:                        except Exception as e:
+bioplausible/execution/engine.py:890:        except Exception as e:
+bioplausible/tracking.py:64:            except Exception as e:
+bioplausible/deployment.py:126:            except Exception as e:
+bioplausible/deployment.py:134:            except Exception as e:
+bioplausible/deployment.py:757:            except Exception as e:
+bioplausible/utils.py:174:    except Exception as e:

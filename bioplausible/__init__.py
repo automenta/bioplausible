@@ -41,265 +41,165 @@ Some algorithms (FF, PEPITA, TargetProp, PCN) inherently require model-level
 control and are registered as models, not propagators. Querying them via
 `Registry.get(ComponentCategory.PROPAGATOR, "pepita")` raises a
 `ValueError` with a cross-reference to the correct model-side registration.
-The model-side classes are re-exported from `bioplausible.zoo.propagators`
-alongside working propagators so registry consumers can reach them without
-crossing module boundaries.
 """
 
-# AutoScientist (LLM meta-reasoner)
-from bioplausible.autoscientist import (
-    AutoScientistBridge,
-    AutoScientistCampaign,
-    ExperimentProposal,
-    ExperimentProposer,
-    Hypothesis,
-    HypothesisReasoner,
-    LLMHypothesisGenerator,
-)
-
-# Config
-from bioplausible.config import (
-    DEFAULT_CONFIGS,
-    DatasetConfig,
-    ExperimentConfig,
-    ModelConfig,
-    OptimizerConfig,
-    PropagatorConfig,
-    ScientistConfig,
-    SparsityConfig,
-    TrainingConfig,
-    get_default_config,
-    get_named_config,
-    list_named_configs,
-    register_default_config,
-    validate_config,
-)
-from bioplausible.core.registry import (
-    ComponentCategory,
-    ComponentMetadata,
-    ComputeProfile,
-    Domain,
-    LocalityLevel,
-    Registry,
-    list_models,
-    register_metric,
-    register_model,
-    register_optimizer,
-    register_propagator,
-    register_sparsity,
-)
-from bioplausible.core.trainer import (
-    CoreTrainer,
-    TrainerConfig,
-    TrainingMetrics,
-)
-
-# Data
-from bioplausible.data.lm import get_lm_dataset
-from bioplausible.data.vision import create_data_loaders, get_vision_dataset
-
-# Domains
-from bioplausible.domains import (
-    Batch,
-    DomainSpec,
-    DomainTask,
-    DomainType,
-    GraphTask,
-    LMTask,
-    Metrics,
-    RLTask,
-    ScientificTask,
-    TabularTask,
-    TaskSplit,
-    TimeSeriesTask,
-    VisionTask,
-    create_domain_task,
-    list_domains,
-)
-
-# EquiTile top-level package — importing registers all variants
-from bioplausible.equitile import EquiTile as _EquiTile
-
-# Evaluation
-from bioplausible.evaluation import (
-    BenchmarkRegistry,
-    BenchmarkResult,
-    BenchmarkSuiteConfig,
-    BenchmarkSuiteResult,
-    CrossDomainBenchmarkSuite,
-    EvaluatorBase,
-    MetricSuite,
-    evaluate_model_on_task,
-    get_benchmark,
-    list_benchmarks,
-    run_cross_domain_benchmark,
-)
-
-# Scientist (execution engine) - now in execution
-from bioplausible.execution.callbacks import BaseExecutionCallback, ExecutionCallback
-from bioplausible.execution.engine import ExecutionEngine
-from bioplausible.execution.task import ExperimentTask
-
-# Knowledge Base (DEFAULT_KB lazy — avoid SQLite at import time)
-from bioplausible.knowledge import (
-    KnowledgeBase,
-    KnowledgeEntry,
-    create_knowledge_base,
-)
-
-
-# Leaderboard
-from bioplausible.leaderboard.generator import LeaderboardEntry, LeaderboardGenerator
-
-# Lightning Integration
-from bioplausible.lightning_ import (
-    BioLightningModule,
-    BioOptunaPruner,
-    BioPrecisionCallback,
-    BioPrecisionMixin,
-    BioPredictionWriter,
-    BioRayTuneSearch,
-    EnergyConvergenceCallback,
-    build_trainer,
-    run_nas_search,
-    run_pl_trial,
-    run_pl_trial_with_wandb,
-)
-
-# Utilities
-from bioplausible.utils import count_parameters
-
-# Zoo
-from bioplausible.zoo import models as zoo_models
-from bioplausible.zoo import optimizers as zoo_optimizers
-from bioplausible.zoo import propagators as zoo_propagators
-from bioplausible.zoo import sparsity as zoo_sparsity
-
-# Optimizers / Propagators
-from bioplausible.zoo.mep.presets import muon_backprop, smep, smep_fast
-from bioplausible.zoo.models.eqprop import (
-    BackpropMLP,
-    ConvEqProp,
-    LoopedMLP,
-    MemoryEfficientLoopedMLP,
-    TransformerEqProp,
-)
-from bioplausible.zoo.propagators.eqprop import EqProp
-from bioplausible.zoo.propagators.fa import DirectFA, FeedbackAlignment
+# Lazy top-level API (Sprint 0.5 module-boundary hardening). `import
+# bioplausible` no longer eagerly pulls the entire zoo (torchvision, lightning,
+# optuna, ...): names are imported on first attribute access via __getattr__,
+# so a lightweight consumer (e.g. `import bioplausible.core.registry`) stays
+# fast and dependency-slim. Side-effect model registration is preserved because
+# importing any zoo symbol triggers `bioplausible.zoo` (which imports all
+# components); consumers that need a registered model must import it (or
+# `bioplausible.zoo`) explicitly.
 
 __version__ = "1.0.0"
 
-__all__ = [
-    "DEFAULT_CONFIGS",
-    "DEFAULT_KB",
-    "AutoScientistBridge",
-    "AutoScientistCampaign",
-    "BaseExecutionCallback",
-    "BackpropMLP",
-    "Batch",
-    "BenchmarkRegistry",
-    "BenchmarkResult",
-    "BenchmarkSuiteConfig",
-    "BenchmarkSuiteResult",
-    "BioLightningModule",
-    "BioOptunaPruner",
-    "BioPrecisionCallback",
-    "BioPrecisionMixin",
-    "BioPredictionWriter",
-    "BioRayTuneSearch",
-    "ComponentCategory",
-    "ComponentMetadata",
-    "ComputeProfile",
-    "ConvEqProp",
-    "CoreTrainer",
-    "CrossDomainBenchmarkSuite",
-    "DatasetConfig",
-    "DirectFA",
-    "Domain",
-    "DomainSpec",
-    "DomainTask",
-    "DomainType",
-    "EnergyConvergenceCallback",
-    "EqProp",
-    "EvaluatorBase",
-    "ExecutionCallback",
-    "ExecutionEngine",
-    "ExperimentConfig",
-    "ExperimentProposal",
-    "ExperimentProposer",
-    "ExperimentTask",
-    "FeedbackAlignment",
-    "GraphTask",
-    "Hypothesis",
-    "HypothesisReasoner",
-    "KnowledgeBase",
-    "KnowledgeEntry",
-    "LLMHypothesisGenerator",
-    "LMTask",
-    "LeaderboardEntry",
-    "LeaderboardGenerator",
-    "LocalityLevel",
-    "LoopedMLP",
-    "MemoryEfficientLoopedMLP",
-    "MetricSuite",
-    "Metrics",
-    "ModelConfig",
-    "OptimizerConfig",
-    "PropagatorConfig",
-    "RLTask",
-    "Registry",
-    "ScientificTask",
-    "ScientistConfig",
-    "SparsityConfig",
-    "TabularTask",
-    "TaskSplit",
-    "TimeSeriesTask",
-    "TrainerConfig",
-    "TrainingConfig",
-    "TrainingMetrics",
-    "TransformerEqProp",
-    "VisionTask",
-    "_EquiTile",
-    "build_trainer",
-    "count_parameters",
-    "create_data_loaders",
-    "create_domain_task",
-    "create_knowledge_base",
-    "evaluate_model_on_task",
-    "get_benchmark",
-    "get_default_config",
-    "get_lm_dataset",
-    "get_named_config",
-    "get_vision_dataset",
-    "list_benchmarks",
-    "list_domains",
-    "list_models",
-    "list_named_configs",
-    "muon_backprop",
-    "register_default_config",
-    "register_metric",
-    "register_model",
-    "register_optimizer",
-    "register_propagator",
-    "register_sparsity",
-    "run_cross_domain_benchmark",
-    "run_nas_search",
-    "run_pl_trial",
-    "run_pl_trial_with_wandb",
-    "smep",
-    "smep_fast",
-    "validate_config",
-    "zoo_models",
-    "zoo_optimizers",
-    "zoo_propagators",
-    "zoo_sparsity",
-]
+# name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
+_LAZY: dict[str, tuple[str, str | None]] = {
+    # AutoScientist (LLM meta-reasoner)
+    "AutoScientistBridge": ("bioplausible.autoscientist", "AutoScientistBridge"),
+    "AutoScientistCampaign": ("bioplausible.autoscientist", "AutoScientistCampaign"),
+    "ExperimentProposal": ("bioplausible.autoscientist", "ExperimentProposal"),
+    "ExperimentProposer": ("bioplausible.autoscientist", "ExperimentProposer"),
+    "Hypothesis": ("bioplausible.autoscientist", "Hypothesis"),
+    "HypothesisReasoner": ("bioplausible.autoscientist", "HypothesisReasoner"),
+    "LLMHypothesisGenerator": ("bioplausible.autoscientist", "LLMHypothesisGenerator"),
+    # Config
+    "DEFAULT_CONFIGS": ("bioplausible.config", "DEFAULT_CONFIGS"),
+    "DatasetConfig": ("bioplausible.config", "DatasetConfig"),
+    "ExperimentConfig": ("bioplausible.config", "ExperimentConfig"),
+    "ModelConfig": ("bioplausible.config", "ModelConfig"),
+    "OptimizerConfig": ("bioplausible.config", "OptimizerConfig"),
+    "PropagatorConfig": ("bioplausible.config", "PropagatorConfig"),
+    "ScientistConfig": ("bioplausible.config", "ScientistConfig"),
+    "SparsityConfig": ("bioplausible.config", "SparsityConfig"),
+    "TrainingConfig": ("bioplausible.config", "TrainingConfig"),
+    "get_default_config": ("bioplausible.config", "get_default_config"),
+    "get_named_config": ("bioplausible.config", "get_named_config"),
+    "list_named_configs": ("bioplausible.config", "list_named_configs"),
+    "register_default_config": ("bioplausible.config", "register_default_config"),
+    "validate_config": ("bioplausible.config", "validate_config"),
+    # Core registry / trainer
+    "ComponentCategory": ("bioplausible.core.registry", "ComponentCategory"),
+    "ComponentMetadata": ("bioplausible.core.registry", "ComponentMetadata"),
+    "ComputeProfile": ("bioplausible.core.registry", "ComputeProfile"),
+    "Domain": ("bioplausible.core.registry", "Domain"),
+    "LocalityLevel": ("bioplausible.core.registry", "LocalityLevel"),
+    "Registry": ("bioplausible.core.registry", "Registry"),
+    "list_models": ("bioplausible.core.registry", "list_models"),
+    "register_metric": ("bioplausible.core.registry", "register_metric"),
+    "register_model": ("bioplausible.core.registry", "register_model"),
+    "register_optimizer": ("bioplausible.core.registry", "register_optimizer"),
+    "register_propagator": ("bioplausible.core.registry", "register_propagator"),
+    "register_sparsity": ("bioplausible.core.registry", "register_sparsity"),
+    "CoreTrainer": ("bioplausible.core.trainer", "CoreTrainer"),
+    "TrainerConfig": ("bioplausible.core.trainer", "TrainerConfig"),
+    "TrainingMetrics": ("bioplausible.core.trainer", "TrainingMetrics"),
+    # Data
+    "get_lm_dataset": ("bioplausible.data.lm", "get_lm_dataset"),
+    "create_data_loaders": ("bioplausible.data.vision", "create_data_loaders"),
+    "get_vision_dataset": ("bioplausible.data.vision", "get_vision_dataset"),
+    # Domains
+    "Batch": ("bioplausible.domains", "Batch"),
+    "DomainSpec": ("bioplausible.domains", "DomainSpec"),
+    "DomainTask": ("bioplausible.domains", "DomainTask"),
+    "DomainType": ("bioplausible.domains", "DomainType"),
+    "GraphTask": ("bioplausible.domains", "GraphTask"),
+    "LMTask": ("bioplausible.domains", "LMTask"),
+    "Metrics": ("bioplausible.domains", "Metrics"),
+    "RLTask": ("bioplausible.domains", "RLTask"),
+    "ScientificTask": ("bioplausible.domains", "ScientificTask"),
+    "TabularTask": ("bioplausible.domains", "TabularTask"),
+    "TaskSplit": ("bioplausible.domains", "TaskSplit"),
+    "TimeSeriesTask": ("bioplausible.domains", "TimeSeriesTask"),
+    "VisionTask": ("bioplausible.domains", "VisionTask"),
+    "create_domain_task": ("bioplausible.domains", "create_domain_task"),
+    "list_domains": ("bioplausible.domains", "list_domains"),
+    # EquiTile — importing registers all variants
+    "_EquiTile": ("bioplausible.equitile", "EquiTile"),
+    # Evaluation
+    "BenchmarkRegistry": ("bioplausible.evaluation", "BenchmarkRegistry"),
+    "BenchmarkResult": ("bioplausible.evaluation", "BenchmarkResult"),
+    "BenchmarkSuiteConfig": ("bioplausible.evaluation", "BenchmarkSuiteConfig"),
+    "BenchmarkSuiteResult": ("bioplausible.evaluation", "BenchmarkSuiteResult"),
+    "CrossDomainBenchmarkSuite": (
+        "bioplausible.evaluation", "CrossDomainBenchmarkSuite"
+    ),
+    "EvaluatorBase": ("bioplausible.evaluation", "EvaluatorBase"),
+    "MetricSuite": ("bioplausible.evaluation", "MetricSuite"),
+    "evaluate_model_on_task": ("bioplausible.evaluation", "evaluate_model_on_task"),
+    "get_benchmark": ("bioplausible.evaluation", "get_benchmark"),
+    "list_benchmarks": ("bioplausible.evaluation", "list_benchmarks"),
+    "run_cross_domain_benchmark": (
+        "bioplausible.evaluation", "run_cross_domain_benchmark"
+    ),
+    # Execution engine / callbacks
+    "BaseExecutionCallback": (
+        "bioplausible.execution.callbacks", "BaseExecutionCallback"
+    ),
+    "ExecutionCallback": ("bioplausible.execution.callbacks", "ExecutionCallback"),
+    "ExecutionEngine": ("bioplausible.execution.engine", "ExecutionEngine"),
+    "ExperimentTask": ("bioplausible.execution.task", "ExperimentTask"),
+    # Knowledge Base
+    "KnowledgeBase": ("bioplausible.knowledge", "KnowledgeBase"),
+    "KnowledgeEntry": ("bioplausible.knowledge", "KnowledgeEntry"),
+    "DEFAULT_KB": ("bioplausible.knowledge", "DEFAULT_KB"),
+    "create_knowledge_base": ("bioplausible.knowledge", "create_knowledge_base"),
+    # Leaderboard
+    "LeaderboardEntry": ("bioplausible.leaderboard.generator", "LeaderboardEntry"),
+    "LeaderboardGenerator": (
+        "bioplausible.leaderboard.generator", "LeaderboardGenerator"
+    ),
+    # Lightning Integration
+    "BioLightningModule": ("bioplausible.lightning_", "BioLightningModule"),
+    "BioOptunaPruner": ("bioplausible.lightning_", "BioOptunaPruner"),
+    "BioPrecisionCallback": ("bioplausible.lightning_", "BioPrecisionCallback"),
+    "BioPrecisionMixin": ("bioplausible.lightning_", "BioPrecisionMixin"),
+    "BioPredictionWriter": ("bioplausible.lightning_", "BioPredictionWriter"),
+    "BioRayTuneSearch": ("bioplausible.lightning_", "BioRayTuneSearch"),
+    "EnergyConvergenceCallback": (
+        "bioplausible.lightning_", "EnergyConvergenceCallback"
+    ),
+    "build_trainer": ("bioplausible.lightning_", "build_trainer"),
+    "run_nas_search": ("bioplausible.lightning_", "run_nas_search"),
+    "run_pl_trial": ("bioplausible.lightning_", "run_pl_trial"),
+    "run_pl_trial_with_wandb": ("bioplausible.lightning_", "run_pl_trial_with_wandb"),
+    # Utilities
+    "count_parameters": ("bioplausible.utils", "count_parameters"),
+    # Zoo module aliases
+    "zoo_models": ("bioplausible.zoo.models", None),
+    "zoo_optimizers": ("bioplausible.zoo.optimizers", None),
+    "zoo_propagators": ("bioplausible.zoo.propagators", None),
+    "zoo_sparsity": ("bioplausible.zoo.sparsity", None),
+    # Select zoo symbols (mep presets + eqprop/fa models & propagators)
+    "muon_backprop": ("bioplausible.zoo.mep.presets", "muon_backprop"),
+    "smep": ("bioplausible.zoo.mep.presets", "smep"),
+    "smep_fast": ("bioplausible.zoo.mep.presets", "smep_fast"),
+    "BackpropMLP": ("bioplausible.zoo.models.eqprop", "BackpropMLP"),
+    "ConvEqProp": ("bioplausible.zoo.models.eqprop", "ConvEqProp"),
+    "LoopedMLP": ("bioplausible.zoo.models.eqprop", "LoopedMLP"),
+    "MemoryEfficientLoopedMLP": (
+        "bioplausible.zoo.models.eqprop", "MemoryEfficientLoopedMLP"
+    ),
+    "TransformerEqProp": ("bioplausible.zoo.models.eqprop", "TransformerEqProp"),
+    "EqProp": ("bioplausible.zoo.propagators.eqprop", "EqProp"),
+    "DirectFA": ("bioplausible.zoo.propagators.fa", "DirectFA"),
+    "FeedbackAlignment": ("bioplausible.zoo.propagators.fa", "FeedbackAlignment"),
+}
+
+__all__ = sorted(_LAZY) + ["__version__"]
 
 
 def __getattr__(name: str) -> object:
-    """Lazy-access DEFAULT_KB to avoid SQLite at import time (PEP 562)."""
-    if name == "DEFAULT_KB":
-        from bioplausible.knowledge import DEFAULT_KB
+    """Lazily import a top-level symbol on first access (PEP 562)."""
+    if name not in _LAZY:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name, attr = _LAZY[name]
+    module = __import__(module_name, fromlist=[attr] if attr else ["*"])
+    value: object = module if attr is None else getattr(module, attr)
+    setattr(__import__(__name__), name, value)  # cache on the module
+    return value
 
-        return DEFAULT_KB
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+def __dir__() -> list[str]:
+    return sorted(__all__)

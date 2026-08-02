@@ -5,11 +5,31 @@ import pytest
 from runner import (
     TRAINABLE_MODELS,
     DemoPanel,
+    default_hidden_dim,
     default_trainer_config,
     model_metadata,
     run_headless,
 )
 from charts import parity_explanation
+
+
+class TestHiddenDimDefaults:
+    def test_equitile_uses_small_default(self):
+        # neurons_per_tile tracks hidden_dim → a 256 default builds huge tile
+        # graphs; the flagship demo should start small (32) to stay snappy.
+        cfg = default_trainer_config(model="equitile")
+        assert cfg.model_kwargs["hidden_dim"] == 32
+
+    def test_backprop_default_is_larger(self):
+        cfg = default_trainer_config(model="backprop_mlp")
+        assert cfg.model_kwargs["hidden_dim"] == 128
+
+    def test_explicit_override_wins(self):
+        cfg = default_trainer_config(model="equitile", hidden_dim=64)
+        assert cfg.model_kwargs["hidden_dim"] == 64
+
+    def test_fallback_for_unknown_model(self):
+        assert default_hidden_dim("not_a_model") == 128
 
 
 class TestModelMetadata:

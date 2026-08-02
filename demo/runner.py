@@ -15,6 +15,13 @@ from threading import Lock
 
 import torch
 
+# Ensure the full component registry is populated. `import bioplausible` is
+# lazy (Sprint 0.5), so model registration no longer happens as a side effect
+# of importing the top-level package. The demo's Registry lookups (and any
+# CoreTrainer instantiations by registered model name) need the zoo + equitile
+# imported explicitly and up-front for deterministic behavior.
+import bioplausible.equitile  # noqa: F401  (registers equitile model family)
+import bioplausible.zoo  # noqa: F401       (registers zoo models/propagators)
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.execution.callbacks import BaseExecutionCallback
@@ -158,16 +165,42 @@ def model_metadata(model: str) -> dict[str, object]:
     }
 
 
+# Per-model default hidden_dim. The shared 256 default is wasteful/slow for
+# tile-based families where `neurons_per_tile`/`num_tiles` track hidden_dim
+# (EquiTile builds a graph proportional to it), and for tiny forward-only
+# nets (PEPITA/FF) that are best explored at small scale. Kept central so the
+# demo stays snappy while still allowing the widget tree to override.
+_DEFAULT_HIDDEN_DIM: dict[str, int] = {
+    "backprop_mlp": 128,
+    "eqprop_mlp": 128,
+    "equitile": 32,
+    "pepita": 32,
+    "forward_forward": 32,
+    "standard_fa": 128,
+}
+
+
+def default_hidden_dim(model: str) -> int:
+    """Return the per-model default hidden dimension (fallback 128)."""
+    return _DEFAULT_HIDDEN_DIM.get(model, 128)
+
+
 def default_trainer_config(
     model: str = "backprop_mlp",
     task: str = "mnist",
     epochs: int = 10,
     lr: float = 0.001,
-    hidden_dim: int = 256,
+    hidden_dim: int | None = None,
     optimizer: str = "adam",
 ) -> TrainerConfig:
-    """Build a sane default TrainerConfig for the demo."""
+    """Build a sane default TrainerConfig for the demo.
+
+    ``hidden_dim`` defaults per model (see ``_DEFAULT_HIDDEN_DIM``) so e.g. the
+    flagship EquiTile config starts small (32) instead of the generic 256.
+    """
     input_dim, output_dim = _TASK_DIMS.get(task, (784, 10))
+    if hidden_dim is None:
+        hidden_dim = default_hidden_dim(model)
     return TrainerConfig(
         model=model,
         model_kwargs={

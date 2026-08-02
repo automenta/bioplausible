@@ -17,18 +17,42 @@ Usage:
     engine.run()  # Start continuous discovery
 """
 
-from bioplausible.execution._state import DecisionLogger, ExperimentState
-from bioplausible.execution.callbacks import BaseExecutionCallback, ExecutionCallback
-from bioplausible.execution.engine import ExecutionEngine
-from bioplausible.execution.strategy import ExecutionStrategy
-from bioplausible.execution.task import ExperimentTask
+# Lazy package init (Sprint 0.5 module boundary). The old eager ``engine`` /
+# ``strategy`` imports created a genuine circular import:
+#   bioplausible.hyperopt → execution._guards → execution/__init__ → engine →
+#   strategy → `from bioplausible.hyperopt import PatientLevel`  (hyperopt only
+#   partially initialized → ImportError).
+# It was masked only when the old eager top-level `bioplausible/__init__.py`
+# happened to import `hyperopt`/`execution` in a working order first. Lazily
+# exposing the symbols means importing (say) `execution.callbacks` — all the
+# `core.trainer` needs — no longer drags in `execution.engine`/`strategy` →
+# `hyperopt` → `zoo`, which also slims the `core` import graph.
 
-__all__ = [
-    "BaseExecutionCallback",
-    "DecisionLogger",
-    "ExecutionCallback",
-    "ExecutionEngine",
-    "ExecutionStrategy",
-    "ExperimentState",
-    "ExperimentTask",
-]
+_LAZY: dict[str, tuple[str, str | None]] = {
+    "BaseExecutionCallback": (
+        "bioplausible.execution.callbacks",
+        "BaseExecutionCallback",
+    ),
+    "DecisionLogger": ("bioplausible.execution._state", "DecisionLogger"),
+    "ExecutionCallback": ("bioplausible.execution.callbacks", "ExecutionCallback"),
+    "ExecutionEngine": ("bioplausible.execution.engine", "ExecutionEngine"),
+    "ExecutionStrategy": ("bioplausible.execution.strategy", "ExecutionStrategy"),
+    "ExperimentState": ("bioplausible.execution._state", "ExperimentState"),
+    "ExperimentTask": ("bioplausible.execution.task", "ExperimentTask"),
+}
+
+__all__ = sorted(_LAZY)
+
+
+def __getattr__(name: str) -> object:
+    if name not in _LAZY:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name, attr = _LAZY[name]
+    module = __import__(module_name, fromlist=[attr] if attr else ["*"])
+    value: object = module if attr is None else getattr(module, attr)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(__all__)
