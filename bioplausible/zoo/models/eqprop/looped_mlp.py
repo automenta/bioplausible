@@ -50,6 +50,7 @@ def _kernel_backend_step(
     family="eqprop",
     typical_lr_range=(0.001, 0.01),
     tags=["eqprop", "looped_mlp", "equilibrium"],
+    extra={"parity_threshold": 0.05},
 )
 class LoopedMLP(EqPropModel):
     """

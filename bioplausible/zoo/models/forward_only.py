@@ -48,6 +48,7 @@ class FFLayer(nn.Linear):
     family="forward_only",
     typical_lr_range=(0.01, 0.1),
     tags=["forward-forward", "forward-only", "local"],
+    extra={"parity_threshold": 0.05},
     description="Forward-Forward network: trained with local goodness function.",
 )
 class ForwardForwardNet(TransitionGraphMixin, nn.Module):
@@ -106,6 +107,8 @@ class ForwardForwardNet(TransitionGraphMixin, nn.Module):
         ).to(device)
 
     def predict(self, x):
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         h = x
         hidden_states = []
         for layer in self.layers:
@@ -118,6 +121,8 @@ class ForwardForwardNet(TransitionGraphMixin, nn.Module):
         return self.predict(x)
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         x_pos = x.clone()
         x_neg = x.clone()
 
@@ -193,6 +198,7 @@ class ForwardForwardNet(TransitionGraphMixin, nn.Module):
     family="forward_only",
     typical_lr_range=(0.01, 0.1),
     tags=["pepita", "forward-only", "local"],
+    extra={"parity_threshold": 0.2},
     description="PEPITA: random feedback alignment variant.",
 )
 class PEPITA(TransitionGraphMixin, nn.Module):
@@ -247,6 +253,8 @@ class PEPITA(TransitionGraphMixin, nn.Module):
         ).to(device)
 
     def forward(self, x, return_activations=False):
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         activations = []
         h = x
         for layer in self.layers:
@@ -258,6 +266,8 @@ class PEPITA(TransitionGraphMixin, nn.Module):
         return out
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         y_onehot = torch.zeros(x.shape[0], self.output_dim, device=x.device)
         y_onehot.scatter_(1, y.unsqueeze(1), 1.0)
 

@@ -141,6 +141,33 @@ class TestEquiTileRefactor(unittest.TestCase):
         self.assertEqual(value.shape, (2,))
         self.assertEqual(log_prob.shape, (2, 1))
 
+    def test_spatial_input_flatten_demo_path(self):
+        """EquiTile must accept [B, C, H, W] vision input (demo/CoreTrainer path).
+
+        Regression for the demo train failure recorded in TODO: the demo feeds
+        digit/MNIST tensors as [B, 1, 8, 8] while EquiTile's W_in is a Linear
+        expecting [B, input_dim]. The forward must flatten spatial input before
+        the input projection (see _project_input).
+        """
+        model = EquiTile(
+            neurons_per_tile=8,
+            num_layers=3,
+            tiles_per_layer=2,
+            input_dim=64,
+            output_dim=10,
+            mode="pc",
+            inference_steps=2,
+        ).to(self.device)
+        x = torch.randn(2, 1, 8, 8).to(self.device)
+        y = torch.randint(0, 10, (2,)).to(self.device)
+
+        logits = model(x)
+        self.assertEqual(logits.shape, (2, 10))
+
+        stats = model.train_step(x, y)
+        self.assertIn("loss", stats)
+        self.assertIn("accuracy", stats)
+
 
 if __name__ == "__main__":
     unittest.main()

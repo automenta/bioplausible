@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 
 from compat import apply_compat_shims
 
@@ -20,20 +21,28 @@ apply_compat_shims()  # must run before `import nicegui`
 
 from nicegui import ui  # noqa: E402
 
-from charts import loss_series, parity_gap  # noqa: E402
-from runner import DemoPanel, default_trainer_config, run_headless  # noqa: E402
+from charts import loss_series, parity_explanation, parity_gap  # noqa: E402
+from persistence import (  # noqa: E402
+    config_to_url,
+    export_run_csv,
+    export_run_png,
+    load_config,
+    save_config,
+)
+from renderer import render_group  # noqa: E402
+from runner import (  # noqa: E402
+    TRAINABLE_MODELS,
+    DemoPanel,
+    default_trainer_config,
+    model_metadata,
+    run_headless,
+)
 from tasks import build_tasks  # noqa: E402
+from widgets import build_widget_tree  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-DEMO_MODELS = [
-    "backprop_mlp",
-    "eqprop_mlp",
-    "equitile",
-    "forward_forward",
-    "pepita",
-    "feedback_alignment",
-]
+DEMO_MODELS = list(TRAINABLE_MODELS)
 
 
 def _fresh_panel(model: str, task: str, epochs: int, lr: float) -> DemoPanel:
@@ -51,8 +60,11 @@ class DemoUi:
         self.acc_fig: ui.elements.plotly_element.Plotly | None = None
         self.gap_label: ui.label | None = None
         self.run_btn: ui.button | None = None
+        self.meta_a: ui.label | None = None
+        self.meta_b: ui.label | None = None
+        self.weight_box: ui.column | None = None
 
-    def _make_chart(self) -> "ui.elements.plotly_element.Plotly":
+    def _make_chart(self) -> ui.elements.plotly_element.Plotly:
         import plotly.graph_objects as go
 
         fig = go.Figure(
@@ -63,6 +75,17 @@ class DemoUi:
         )
         fig.update_layout(height=260, margin=dict(l=40, r=20, t=20, b=30))
         return ui.plotly(fig)
+
+
+def _meta_text(name: str) -> str:
+    """One-line Sprint 2.5 metadata summary for a model (or '—' if unknown)."""
+    m = model_metadata(name)
+    if not m:
+        return "—"
+    return (
+        f"bio {m['bio_plausibility_score']} · locality {m['locality_level']} · "
+        f"family {m['family']}"
+    )
 
 
 def create_page(demo: DemoUi) -> None:
@@ -79,6 +102,44 @@ def create_page(demo: DemoUi) -> None:
         epochs = ui.number(value=5, min=1, max=50, label="Epochs")
         lr = ui.number(value=0.001, format="%.4f", label="Learning Rate")
 
+    # --- Live editable config panels (Sprint 3.2 widget tree) ---
+    demo.panel_a = _fresh_panel(model_a.value, task_sel.value, 5, 0.001)
+    demo.panel_b = _fresh_panel(model_b.value, task_sel.value, 5, 0.001)
+
+    demo.meta_a = ui.label("")
+    demo.meta_b = ui.label("")
+    demo.meta_a.set_text(_meta_text(model_a.value))
+    demo.meta_b.set_text(_meta_text(model_b.value))
+    model_a.on("change", lambda: demo.meta_a.set_text(_meta_text(model_a.value)))
+    model_b.on("change", lambda: demo.meta_b.set_text(_meta_text(model_b.value)))
+
+    def sync_a() -> None:
+        """Rebind quick-set controls (epochs/lr) onto panel A's live config."""
+        demo.panel_a.trainer_config.epochs = int(epochs.value)
+        demo.panel_a.trainer_config.optimizer_kwargs["lr"] = float(lr.value)
+
+    def sync_b() -> None:
+        demo.panel_b.trainer_config.epochs = int(epochs.value)
+        demo.panel_b.trainer_config.optimizer_kwargs["lr"] = float(lr.value)
+
+    with ui.row():
+        with ui.column():
+            ui.label("Config A")
+            render_group(
+                build_widget_tree(demo.panel_a.trainer_config, "Config A"),
+                demo.panel_a.trainer_config,
+                lambda cfg: None,  # renderer mutates config in place
+                ui.column(),
+            )
+        with ui.column():
+            ui.label("Config B")
+            render_group(
+                build_widget_tree(demo.panel_b.trainer_config, "Config B"),
+                demo.panel_b.trainer_config,
+                lambda cfg: None,
+                ui.column(),
+            )
+
     # --- Charts ---
     with ui.row():
         demo.loss_fig = demo._make_chart()
@@ -86,14 +147,24 @@ def create_page(demo: DemoUi) -> None:
 
     demo.gap_label = ui.label("Parity gap: —")
 
+    # --- Animated weight matrices (Sprint 3.5) ---
+    demo.weight_box = ui.column()
+    _refresh_weight_viz(demo)
+
     # --- Train button ---
     async def train() -> None:
+        # Rebuild both panels from the CURRENT selectors so what the user
+        # picked is what actually trains (stale-panel fix): changing Config A
+        # or the task must change the run, else the demo silently trains the
+        # startup defaults. Quick-set epochs/lr re-applied via sync_*.
         demo.panel_a = _fresh_panel(
             model_a.value, task_sel.value, int(epochs.value), float(lr.value)
         )
         demo.panel_b = _fresh_panel(
             model_b.value, task_sel.value, int(epochs.value), float(lr.value)
         )
+        sync_a()
+        sync_b()
         demo.run_btn.disable()
 
         async def train_one(panel: DemoPanel) -> None:
@@ -103,12 +174,107 @@ def create_page(demo: DemoUi) -> None:
         await asyncio.gather(train_one(demo.panel_a), train_one(demo.panel_b))
 
         _refresh_charts(demo)
+        _refresh_weight_viz(demo)
+        errs = [
+            f"{p.trainer_config.model}: {p.error}"
+            for p in (demo.panel_a, demo.panel_b)
+            if p.error
+        ]
+        if errs:
+            demo.gap_label.set_text("Error: " + " | ".join(errs))
+            demo.run_btn.enable()
+            return
         gap = parity_gap(demo.panel_a, demo.panel_b)
-        text = f"Parity gap: {gap} pp" if gap is not None else "Parity gap: —"
+        if gap is None:
+            text = "Parity gap: —"
+        else:
+            note = parity_explanation(demo.panel_a, demo.panel_b, gap)
+            text = f"Parity gap (B−A): {gap} pp{note}"
         demo.gap_label.set_text(text)
         demo.run_btn.enable()
 
     demo.run_btn = ui.button("Run", on_click=train)
+
+    # --- Persistence controls (Sprint 3.6) ---
+    export_info = ui.label("").classes("text-grey text-xs")
+    with ui.row():
+        ui.button("Save Config A", on_click=_save_cfg("a", demo, export_info))
+        ui.button("Save Config B", on_click=_save_cfg("b", demo, export_info))
+        ui.button("Load Config A", on_click=_load_cfg("a", demo, export_info))
+        ui.button(
+            "Copy Share URL A",
+            on_click=_copy_share("a", demo, export_info),
+        )
+    with ui.row():
+        ui.button("Export Run (CSV+PNG)", on_click=_export_run(demo, export_info))
+
+
+def _save_cfg(side: str, demo: DemoUi, status) -> Callable[[], None]:
+    from pathlib import Path
+
+    def _do() -> None:
+        panel = demo.panel_a if side == "a" else demo.panel_b
+        if panel is None:
+            return
+        path = Path(f"/tmp/bioplausible-{side}.json")
+        save_config(panel.trainer_config, path)
+        ui.download(path)
+        status.set_text(f"Saved Config {side.upper()} to {path}")
+
+    return _do
+
+
+def _load_cfg(side: str, demo: DemoUi, status) -> Callable[[], None]:
+    from pathlib import Path
+
+    def _do() -> None:
+        panel = demo.panel_a if side == "a" else demo.panel_b
+        if panel is None:
+            return
+        path = Path(f"/tmp/bioplausible-{side}.json")
+        if not path.exists():
+            status.set_text(f"No saved Config {side.upper()} yet")
+            return
+        panel.trainer_config = load_config(path)
+        status.set_text(f"Loaded Config {side.upper()}: {panel.trainer_config.model}")
+
+    return _do
+
+
+def _copy_share(side: str, demo: DemoUi, status) -> Callable[[], None]:
+    def _do() -> None:
+        panel = demo.panel_a if side == "a" else demo.panel_b
+        if panel is None:
+            return
+        ui.clipboard().write(config_to_url(panel.trainer_config))
+        status.set_text(f"Config {side.upper()} share URL copied to clipboard")
+
+    return _do
+
+
+def _export_run(demo: DemoUi, status) -> Callable[[], None]:
+    from pathlib import Path
+
+    def _do() -> None:
+        a, b = demo.panel_a, demo.panel_b
+        if a is None or b is None:
+            return
+        status.set_text("Exporting run CSV + PNG…")
+        for label, panel in (("A", a), ("B", b)):
+            csv_path = Path(f"/tmp/bioplausible-run-{label}.csv")
+            png_path = Path(f"/tmp/bioplausible-run-{label}.png")
+            export_run_csv(
+                panel.losses, panel.accuracies, csv_path,
+                header={"model": panel.trainer_config.model,
+                        "task": panel.trainer_config.task},
+            )
+            export_run_png(panel.losses, panel.accuracies, png_path,
+                           title=f"Bioplausible {label} — {panel.trainer_config.model}")
+            ui.download(csv_path)
+            ui.download(png_path)
+        status.set_text("Exported CSV + PNG for both configs")
+
+    return _do
 
 
 def _refresh_charts(demo: DemoUi) -> None:
@@ -123,6 +289,24 @@ def _refresh_charts(demo: DemoUi) -> None:
         demo.loss_fig.update_traces(
             x=[a.x, b.x], y=[a.y, b.y], selector={}
         )
+
+
+def _refresh_weight_viz(demo: DemoUi) -> None:
+    """(Re)build the animated weight-matrix widget from the current panels."""
+    from weight_viz import WeightMatrixAnimator
+
+    if demo.weight_box is None or demo.panel_a is None or demo.panel_b is None:
+        return
+    demo.weight_box.clear()
+    if not demo.panel_a.weight_history:
+        with demo.weight_box:
+            ui.label("Run training to inspect weight evolution").classes("text-grey")
+        return
+    with demo.weight_box:
+        ui.label("Weight evolution (Config A − Config B)").classes("text-bold")
+        WeightMatrixAnimator(
+            demo.panel_a, demo.panel_b, diff=True
+        ).render(container=None)
 
 
 def build_ui() -> DemoUi:

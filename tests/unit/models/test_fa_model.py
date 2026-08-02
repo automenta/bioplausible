@@ -146,6 +146,23 @@ class TestAdaptiveFeedbackAlignment:
         )
         assert isinstance(model, AdaptiveFeedbackAlignment)
 
+    def test_spatial_input_flatten(self):
+        """FA models must flatten [B, C, H, W] input (demo/CoreTrainer path).
+
+        Regression for the demo failure recorded in TODO: the demo feeds image
+        tensors [B, 1, H, W] while the FA Linear layers expect [B, input_dim].
+        """
+        model = AdaptiveFeedbackAlignment(
+            input_dim=64, hidden_dim=16, output_dim=10, num_layers=2
+        )
+        x = torch.randn(4, 1, 8, 8)
+        y = torch.randint(0, 10, (4,))
+        out = model(x)
+        assert out.shape == (4, 10)
+        result = model.train_step(x, y)
+        assert "loss" in result
+        assert "accuracy" in result
+
 
 # ─── StochasticFA ───────────────────────────────────────────────────────────────
 

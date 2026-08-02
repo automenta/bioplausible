@@ -72,11 +72,14 @@ def _fa_forward(
     """
     activations: list[torch.Tensor] = [x]
     h = x
+    if h.dim() > 2:
+        h = h.view(h.size(0), -1)
     for i, layer in enumerate(model.layers):  # type: ignore[attr-defined]
         h = layer(h)
         if i < len(model.layers) - 1:  # type: ignore[attr-defined]
             h = model.activation(h)  # type: ignore[attr-defined]
         activations.append(h)
+    activations[0] = activations[0].view(activations[0].size(0), -1)
     return activations
 
 
@@ -444,6 +447,8 @@ class AdaptiveFeedbackAlignment(BioModel):
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         h = x
         for i, layer in enumerate(self.layers):
             h = layer(h)
@@ -538,6 +543,8 @@ class StochasticFA(BioModel):
         self.drop_prob = 0.5
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         h = x
         for i, layer in enumerate(self.layers):
             h = layer(h)
@@ -625,6 +632,8 @@ class ContrastiveFeedbackAlignment(BioModel):
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         h = x
         for i, layer in enumerate(self.layers):
             h = layer(h)
@@ -852,6 +861,8 @@ class StandardFA(BioModel):
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         h = x
         for i, layer in enumerate(self.layers):
             h = layer(h)
@@ -912,6 +923,8 @@ class EnergyGuidedFA(BioModel):
         self.criterion = nn.CrossEntropyLoss()
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         h = x
         for i, layer in enumerate(self.layers):
             h = layer(h)
@@ -989,6 +1002,8 @@ class EnergyMinimizingFA(BioModel):
             self.feedback_weights.append(nn.Parameter(B, requires_grad=False))
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         h = x
         for i, layer in enumerate(self.layers):
             h = layer(h)
@@ -1052,6 +1067,8 @@ class LayerwiseEquilibriumFA(BioModel):
         self.criterion = nn.CrossEntropyLoss()
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         h = x
         for i, layer in enumerate(self.layers):
             h = layer(h)

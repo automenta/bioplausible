@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from runner import DemoPanel
+from runner import DemoPanel, model_metadata
 
 
 @dataclass
@@ -59,3 +59,28 @@ def parity_gap(panel_a: DemoPanel, panel_b: DemoPanel) -> float | None:
     if not panel_a.accuracies or not panel_b.accuracies:
         return None
     return round((panel_b.accuracies[-1] - panel_a.accuracies[-1]) * 100, 3)
+
+
+def parity_explanation(panel_a: DemoPanel, panel_b: DemoPanel, gap: float) -> str:
+    """Qualifier when a wide gap traces to a backward-free family (Sprint 3.7).
+
+    Equilibrium/forward-only rules that need no backward pass get an inline
+    'gap expected' note when they trail the other config by more than their
+    documented ``parity_threshold`` (absolute accuracy gap, read from the
+    hyperparam YAMLs via registry ``extra``; default 5 pp). This stops the demo
+    from reading a known bio trade-off as a plain failure.
+    """
+    no_bwd = [
+        meta
+        for cfg in (panel_a.trainer_config, panel_b.trainer_config)
+        for meta in (model_metadata(cfg.model),)
+        if meta.get("requires_backward") is False
+    ]
+    if no_bwd and abs(gap) >= 100 * min(
+        m.get("parity_threshold", 0.05) for m in no_bwd
+    ):
+        families = ", ".join(
+            sorted({m.get("family") for m in no_bwd if m.get("family")})
+        )
+        return f" (gap expected: {families} is backward-free)"
+    return ""

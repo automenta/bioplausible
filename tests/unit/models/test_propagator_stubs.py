@@ -8,7 +8,10 @@ implementation.
 
 import pytest
 
+import torch
+
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.zoo.models.forward_only import ForwardForwardNet, PEPITA
 
 
 class TestPropagatorCrossReference:
@@ -74,3 +77,33 @@ class TestPropagatorCrossReference:
 
         result = Registry.get(ComponentCategory.PROPAGATOR, "eq_prop")
         assert result is EqProp
+
+
+def test_pepita_spatial_input_flatten():
+    """PEPITA must accept [B, C, H, W] input (demo/CoreTrainer path).
+
+    Regression for the demo failure recorded in TODO: PEPITA's train_step did
+    not flatten image inputs before the feedback_matrix projection.
+    """
+    model = PEPITA(input_dim=64, hidden_dim=16, output_dim=10, num_layers=2)
+    x = torch.randn(4, 1, 8, 8)
+    y = torch.randint(0, 10, (4,))
+    out = model.forward(x)
+    assert out.shape == (4, 10)
+    result = model.train_step(x, y)
+    assert "loss" in result
+    assert "accuracy" in result
+
+
+def test_forward_forward_spatial_input_flatten():
+    """ForwardForwardNet must accept [B, C, H, W] input (demo/CoreTrainer path)."""
+    model = ForwardForwardNet(
+        input_dim=64, hidden_dim=16, output_dim=10, num_layers=2
+    )
+    x = torch.randn(4, 1, 8, 8)
+    y = torch.randint(0, 10, (4,))
+    out = model.forward(x)
+    assert out.shape == (4, 10)
+    result = model.train_step(x, y)
+    assert "loss" in result
+    assert "accuracy" in result

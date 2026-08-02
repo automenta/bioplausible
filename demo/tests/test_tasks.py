@@ -15,5 +15,27 @@ class TestTasks:
 
     def test_shapes_match_descriptor(self):
         for t in build_tasks():
+            if t.downloads:
+                continue  # real-data samplers need network/data; covered elsewhere
             x, y = t.sample(8)
             assert x.shape[1] == t.input_dim
+
+    def test_new_task_dims_declared(self):
+        tasks = {t.name: t for t in build_tasks()}
+        assert tasks["cifar10"].input_dim == 3072
+        assert tasks["cifar10"].output_dim == 10
+        assert tasks["tiny_shakespeare"].input_dim == 16
+        assert tasks["tiny_shakespeare"].kind == "lm"
+
+    def test_download_flags_only_on_real_data(self):
+        by_kind = {}
+        for t in build_tasks():
+            by_kind.setdefault(t.kind, []).append(t)
+        for t in by_kind.get("toy", []) + by_kind.get("digits", []):
+            assert not t.downloads
+        for t in (
+            by_kind.get("mnist", [])
+            + by_kind.get("cifar10", [])
+            + by_kind.get("lm", [])
+        ):
+            assert t.downloads is True

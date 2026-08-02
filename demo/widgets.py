@@ -64,7 +64,7 @@ class WidgetGroup:
 
     label: str
     fields: list[WidgetField]
-    groups: list["WidgetGroup"] = dataclasses.field(default_factory=list)
+    groups: list[WidgetGroup] = dataclasses.field(default_factory=list)
 
 
 def _tooltip(annotated: Any) -> str:

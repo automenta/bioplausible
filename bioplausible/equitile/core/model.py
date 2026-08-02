@@ -521,6 +521,11 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
             case _:
                 return self._train_step_pc(x, y)
 
+    def _project_input(self, x: Tensor) -> Tensor:
+        """Flatten spatial input and project through the input layer."""
+        flat = x.reshape(x.size(0), -1)
+        return self.W_in(flat)
+
     def _train_step_backprop(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Train using standard backpropagation through time (BPTT)."""
         logits = self.forward(x, steps=self.equitile_config.inference_steps)
@@ -541,7 +546,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
 
     def _train_step_pc(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Train with predictive-coding relaxation + task-driven local learning."""
-        input_proj = self.W_in(x)
+        input_proj = self._project_input(x)
         batch = x.shape[0]
 
         # 1. Inference
@@ -624,7 +629,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
     def _train_step_ep(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Train with strict two-phase Equilibrium Propagation."""
         batch = x.shape[0]
-        input_proj = self.W_in(x)
+        input_proj = self._project_input(x)
 
         # Beta schedule
         beta = self.equitile_config.beta * (
@@ -949,7 +954,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
         """Forward pass."""
         batch, device = x.shape[0], x.device
         steps = steps if steps is not None else self.equitile_config.inference_steps
-        input_proj = self.W_in(x)
+        input_proj = self._project_input(x)
 
         self._run_inference(input_proj, steps, batch, device)
 
