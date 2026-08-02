@@ -1,0 +1,8 @@
+# EquiTile hyperparameters — base tile topology on the synthetic parity task.
+model: equitile
+family: equitile
+hidden_dim: 64
+num_layers: 2
+lr: 0.01
+batch_size: 32
+parity_threshold: 0.05

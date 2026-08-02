@@ -1,0 +1,10 @@
+# Directed EP hyperparameters — from sweep_results.json (diff 0.044, passed<0.05).
+model: directed_ep
+family: eqprop
+hidden_dim: 64
+num_layers: 2
+lr: 0.03
+beta: 0.3
+max_steps: 20
+batch_size: 32
+parity_threshold: 0.05

@@ -130,7 +130,14 @@ biopl-report = "bioplausible.execution.cli:main_reporter"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["slow: marks tests as slow (e.g. MNIST full epoch)"]
+markers = [
+    "slow: marks tests as slow (e.g. MNIST full epoch)",
+    "gpu: runs on CUDA device; skipped when GPU unavailable",
+    "gpu_only: requires CUDA; skipped on CPU-only machines",
+    "benchmark: performance/parity benchmark producing JSONL",
+    "flaky: quarantined non-deterministic test (Sprint 5.6)",
+    "llm: requires a real LLM provider; skipped in CI",
+]
 addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=50 -p no:warnings"
 
 [tool.coverage.run]

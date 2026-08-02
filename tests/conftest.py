@@ -69,6 +69,20 @@ def pytest_unconfigure(config: object) -> None:
         cwd_kb.unlink()
 
 
+def pytest_collection_modifyitems(config: object, items: list[object]) -> None:
+    """Apply GPU-marked skips when CUDA is unavailable.
+
+    Any test carrying ``gpu_only`` is skipped on CPU-only machines; ``gpu``
+    tests run on whatever device is present (they should be device-agnostic).
+    """
+    if torch.cuda.is_available():
+        return
+    skip_gpu = pytest.mark.skip(reason="CUDA not available")
+    for item in items:
+        if "gpu_only" in item.keywords:
+            item.add_marker(skip_gpu)
+
+
 # --- E.2 Shared Fixtures (test reorg) ---
 
 
@@ -106,6 +120,22 @@ def eqprop_model():
 
 
 @pytest.fixture(scope="session")
+def device() -> str:
+    """Return 'cuda' if available, else 'cpu'.
+
+    Persistent CUDA is avoided; tests that need a live GPU should use the
+    ``gpu`` / ``gpu_only`` markers and place tensors on the returned device.
+    """
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+@pytest.fixture(scope="session")
+def cuda_available() -> bool:
+    """Whether CUDA is available to tests."""
+    return torch.cuda.is_available()
+
+
+@pytest.fixture
 def synthetic_batch() -> tuple[torch.Tensor, torch.Tensor]:
     """A small deterministic batch (x, y) for fast feedforward tests."""
     torch.manual_seed(0)
@@ -144,3 +174,45 @@ def synthetic_lm_task() -> tuple[torch.Tensor, torch.Tensor]:
     input_ids = ids[:, :-1]
     target_ids = ids[:, 1:]
     return input_ids, target_ids
+
+
+# --- Sprint 1.1 GPU Fixtures (session-scoped, placed on CUDA) ---
+
+
+@pytest.fixture(scope="session")
+def gpu_device() -> str:
+    """CUDA device for GPU tests (raises if CUDA unavailable)."""
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA not available", allow_module_level=False)
+    return "cuda"
+
+
+@pytest.fixture(scope="session")
+def synthetic_batch_gpu(gpu_device: str) -> tuple[torch.Tensor, torch.Tensor]:
+    """Deterministic (x, y) batch on CUDA for GPU-accelerated tests."""
+    torch.manual_seed(0)
+    x = torch.randn(128, 64, device=gpu_device)
+    y = torch.randint(0, 10, (128,), device=gpu_device)
+    return x, y
+
+
+@pytest.fixture(scope="session")
+def synthetic_vision_task_gpu(gpu_device: str) -> tuple[torch.Tensor, torch.Tensor]:
+    """Deterministic image-shaped classification tensors on CUDA."""
+    torch.manual_seed(1)
+    n = 128
+    images = torch.randn(n, 1, 16, 16, device=gpu_device)
+    images += (images.mean(dim=(2, 3), keepdim=True) > 0).float() * 0.5
+    labels = (images.mean(dim=(2, 3)).squeeze(1) > 0).long() % 10
+    return images, labels
+
+
+@pytest.fixture(scope="session")
+def synthetic_lm_task_gpu(gpu_device: str) -> tuple[torch.Tensor, torch.Tensor]:
+    """Deterministic token-sequence batch on CUDA for LM tests."""
+    torch.manual_seed(2)
+    seq_len = 24
+    vocab_size = 256
+    n = 128
+    ids = torch.randint(1, vocab_size, (n, seq_len), device=gpu_device)
+    return ids[:, :-1], ids[:, 1:]

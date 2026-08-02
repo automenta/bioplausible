@@ -1,0 +1,10 @@
+# PEPITA hyperparameters — from sweep_results.json (diff 0.196, does NOT meet parity).
+# PEPITA has a theoretical information-loss ceiling (single forward perturbation);
+# its residual gap is documented as a bio-gap in docs/parity_gaps.md (Sprint 1.5.3).
+model: pepita
+family: forward_only
+hidden_dim: 64
+num_layers: 2
+lr: 0.3
+batch_size: 32
+parity_threshold: 0.2

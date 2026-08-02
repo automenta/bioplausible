@@ -898,6 +898,19 @@ class TestMemoryIndependenceOfDepth:
 class TestAdaptiveFAAlignment:
     """Verify feedback alignment matrices align with forward weights over training."""
 
+    # -- xfail root cause (Sprint −1.2 triage, 2026-08-02) -------------------
+    # AdaptiveFeedbackAlignment uses a deliberately slow feedback evolution:
+    # `b_optimizer` runs at `learning_rate * 0.001` (see
+    # bioplausible/zoo/models/fa.py:443). In K=50 training steps the forward
+    # weights W move substantially, but B crawls, so cos(B, W.T) does not move
+    # > 0.05. This is a *biologically motivated* ceiling — slow synaptic
+    # feedback reconfiguration — not an implementation bug. Keep xfailing
+    # until either (a) bio-plausibility cost of a faster B is justified, or
+    # (b) the test lengthens K to the biologically-relevant settling horizon.
+    # Linking gap to Sprint 1.5 parity tuning: FA-family topology is tuned in
+    # tests/unit/validation/hyperparams/directed_ep.yaml independently; this
+    # test exercises the slow-B regimen by design.
+    # ----------------------------------------------------------------------
     @pytest.mark.xfail(
         reason="AdaptiveFA feedback LR (lr*0.001) too small to show alignment in 50 steps"
     )

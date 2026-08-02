@@ -1,0 +1,10 @@
+# Forward-Forward hyperparameters — from sweep_results.json (diff 0.042, passed < 0.05).
+model: forward_forward
+family: forward_only
+hidden_dim: 64
+num_layers: 2
+threshold: 0.5
+layer_lr: 0.01
+classifier_lr: 0.005
+batch_size: 32
+parity_threshold: 0.05

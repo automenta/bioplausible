@@ -5,12 +5,17 @@ standard backprop on identical synthetic MLP tasks. All tests run on CPU with
 fixed seeds, no I/O, no GPU, no downloads. Total suite target: <30s.
 """
 
+import pathlib
+
 import pytest
 import torch
 from torch import nn, optim
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.zoo import get_model_spec
+
+
+HYPERPARAM_DIR = pathlib.Path(__file__).parent / "hyperparams"
 
 # =============================================================================
 # Synthetic Data Fixtures
@@ -200,19 +205,32 @@ PARITY_MODELS = [
 ]
 
 
+def _parity_threshold(model_name: str) -> float:
+    """Load the per-model parity threshold from its hyperparams YAML (1.5.2)."""
+    yaml_path = HYPERPARAM_DIR / f"{model_name}.yaml"
+    if not yaml_path.exists():
+        return 0.05  # default threshold
+    import yaml  # local import: keep module import cheap (AGENTS.md)
+
+    cfg = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    return float(cfg.get("parity_threshold", 0.05))
+
+
 # =============================================================================
-# Parity Tests — 5% tolerance with tuned hyperparameters
+# Parity Tests — threshold-driven from hyperparams YAML
 # =============================================================================
 
 
 @pytest.mark.parametrize("model_name", PARITY_MODELS)
 def test_backprop_parity(model_name, synthetic_classification_task, backprop_baseline):
-    """Each bio-plausible model should reach within 5% of backprop accuracy.
+    """Each bio-plausible model should reach within its tuned threshold of backprop.
 
-    Hyperparameters have been tuned per-model to achieve the 5% parity target
-    on this synthetic classification task.
+    Threshold is read from ``hyperparams/{model_name}.yaml`` (Sprint 1.5.2).
+    Any model with ``parity_threshold > 0.05`` must be justified in
+    ``docs/parity_gaps.md`` (enforced by the registry audit check, 1.5.3).
     """
     x, y, input_dim, n_classes = synthetic_classification_task
+    tolerance = _parity_threshold(model_name)
 
     # Skip models that don't support the task dimensions or crash on CPU
     try:
@@ -229,12 +247,37 @@ def test_backprop_parity(model_name, synthetic_classification_task, backprop_bas
         logits = model(x)
         bio_acc = (logits.argmax(1) == y).float().mean().item()
 
-    # Assert within 5% of backprop baseline (Sprint 2 gate target)
-    tolerance = 0.05  # 5%
+    # Assert within the model's tuned threshold of the backprop baseline
     assert bio_acc >= backprop_baseline - tolerance, (
         f"{model_name}: bio-plausible acc={bio_acc:.3f}, "
         f"backprop baseline={backprop_baseline:.3f}, "
         f"diff={backprop_baseline - bio_acc:.3f} > {tolerance}"
+    )
+
+
+@pytest.mark.parametrize("model_name", PARITY_MODELS)
+def test_parity_threshold_documented(model_name):
+    """Any model with parity_threshold > 0.05 must be justified in parity_gaps.md.
+
+    Enforces Sprint 1.5.3: every elevated threshold has a section explaining
+    the biological trade-off in ``docs/parity_gaps.md``.
+    """
+    threshold = _parity_threshold(model_name)
+    if threshold <= 0.05:
+        return
+
+    gap_doc = (
+        pathlib.Path(__file__).parent.parent.parent.parent / "docs" / "parity_gaps.md"
+    )
+    if not gap_doc.exists():
+        pytest.fail(
+            f"{model_name} has parity_threshold={threshold} > 0.05 but "
+            "docs/parity_gaps.md does not exist (Sprint 1.5.3)"
+        )
+    content = gap_doc.read_text(encoding="utf-8")
+    assert f"## {model_name}" in content, (
+        f"{model_name} has parity_threshold={threshold} > 0.05 but no section "
+        "in docs/parity_gaps.md explaining the biological trade-off (Sprint 1.5.3)"
     )
 
 

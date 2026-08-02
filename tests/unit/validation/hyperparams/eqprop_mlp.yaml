@@ -1,0 +1,16 @@
+# EqProp MLP hyperparameters — derived from tests/unit/validation/hyperparams/sweep_results.json
+# (tuned on the synthetic 64-dim / 10-class parity task).
+model: eqprop_mlp
+family: eqprop
+# Tuned training hyperparameters
+hidden_dim: 64
+num_layers: 2
+lr: 0.001
+beta: 0.03
+max_steps: 20
+gradient_method: contrastive
+use_spectral_norm: true
+hebbian_lr: 0.008
+# Common gate knobs
+batch_size: 32
+parity_threshold: 0.05

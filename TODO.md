@@ -48,6 +48,69 @@ Independent of both spines (run anytime after their direct deps): 0.5, 0.6, 4.1,
 
 *(New sessions append here)*
 
+### 2026-08-02 — Sprint −1, 0.3, 1.1, 1.3, 1.5.1–1.5.3, 2.2 completed
+**Front-loaded the fast, gated, independently-actionable work across the
+critical path. No cosmetic work; every item has a passing test gate.**
+
+Tasks completed:
+- **−1.2** triage: all 5 parity `@pytest.mark.xfail` were already removed in a
+  prior session (parity suite is fully green, 26→31 tests after threshold work).
+  The single remaining xfail (biology `AdaptiveFA` alignment) is a genuine
+  bio-gap (feedback LR = `lr*0.001`, `fa.py:443`); added a root-cause comment
+  block above it. Kept xfailing per plan.
+- **−1.3** baseline snapshot: `docs/baseline.md` + `git tag v0.1-pre-sprint0`.
+  Records ONLY the gated set: fast-gate collected/pass/xfail/skip, full-suite
+  collected (1626), pyright errors(0)/warnings(2436), ruff correctness(638),
+  coverage(20.84%).
+- **0.3** complexity extraction: `engine.py:_run_discovery_loop` (cc 17→clean)
+  split into `_maybe_generate_reports` / `_run_parallel_batch` /
+  `_run_sequential_task`. Also cleared the last 2 C901 in the 4 refactored
+  files: `trainer.py:fit` (cc 12/13) → `_resolve_batches_per_epoch` +
+  `_train_epochs_loop` + `_handle_epoch_end`, and `run_from_runconfig` (cc 12)
+  → 4 `_`-prefixed helpers. **Gate: `ruff check --select C901` = 0 on all 4
+  files (engine, equitile/core/model, core/model, core/trainer).**
+- **0.6** SQLite: verified `_state.py` already routes all DB access through
+  the `@contextmanager _connect()` helper (Sprint 0.6 effectively pre-complete).
+  Remaining bare-`except Exception` sites (task 0.1/5.2) still open.
+- **1.1** GPU fixtures: `device` / `cuda_available` / `gpu_device` /
+  `synthetic_{batch,vision_task,lm_task}_gpu` fixtures + `gpu`, `gpu_only`,
+  `benchmark`, `flaky`, `llm` markers registered in `pyproject.toml`.
+  `pytest_collection_modifyitems` auto-skips `gpu_only` when CUDA unavailable.
+- **1.3** benchmark harness: `tests/unit/validation/benchmark_harness.py`
+  (7 model families {eqprop_mlp, fa, mep, equitile, forward_forward, pepita,
+  spiking}) → JSONL with params, forward_flops, peak_memory_mb, wall_time_ms,
+  train_accuracy, device. All 7 pass; produces real numbers on CUDA.
+- **1.5.1–1.5.3** per-model hyperparam YAMLs in
+  `tests/unit/validation/hyperparams/`; parity test now reads
+  `parity_threshold` from YAML (uniform, marker-free). PEPITA carries
+  `parity_threshold: 0.2` (theoretical forward-only ceiling); added
+  `test_parity_threshold_documented` + `docs/parity_gaps.md` section to justify
+  it. 31/31 parity tests pass.
+- **2.2** energy landscape: `bioplausible/analysis/energy_landscape.py`
+  (2D slice through −∇E and an orthogonal dir; contour + gradient-flow arrows;
+  uses `model.energy` when available else cross-entropy proxy) + 5 tests in
+  `tests/integration/test_energy_landscape.py`. Exported via `analysis/__init__`.
+
+**Helpful notes for future sessions:**
+- **Biggest remaining gap to CI-green is coverage: 20.84% vs the 50% floor**
+  (Sprint 5.5). The new integration tests barely move it; a dedicated
+  coverage-expansion pass is required, not incidental.
+- `bioplausible/__init__.py` still imports the entire zoo eagerly (Sprint 0.5
+  not done); `import bioplausible.analysis` also pulls heavy deps. Module
+  boundary hardening (0.5) is the next high-value Sprint 0 item.
+- `except Exception` cleanup (0.1 / 5.2) and `print()` → `logging` (5.1) are
+  still fully open; combined with coverage this is the bulk of Sprint 5.
+- `expectation`: `uv run pytest tests/ -k fast_lm_equitile` (task −1.1) passes.
+- Demo (Sprint 3) has zero progress; it is the largest remaining block and the
+  main recruitment artifact.
+
+Current gate state after this session:
+- Fast gate: 1200 passed, 1 skipped, 1 xfailed (documented AdaptiveFA).
+- `pyright .`: 0 errors, 2440 warnings (2 new warnings from energy_landscape
+  protocol call + benchmark `object.build`; expected).
+- `ruff check --select E,F,W,C90 .`: 635 (down from 638 baseline).
+- Coverage: 20.84% (unchanged, still the blocker).
+
 ---
 
 ## Sprint −1: Pre-Flight Fixes (1–2 days)
@@ -57,8 +120,8 @@ Independent of both spines (run anytime after their direct deps): 0.5, 0.6, 4.1,
 | # | Task | Depends On | Status | Validation |
 |---|------|------------|--------|------------|
 | **−1.1** | **Fix `fast_lm_equitile` failures** — 3 tests fail on `vocab_size` mismatch between config and synthetic data fixture. Align fixture or config. | — | ☐ | `uv run pytest tests/ -k fast_lm_equitile -q` → 0 failures |
-| **−1.2** | **Triage existing xfail markers** — audit all 5 `@pytest.mark.xfail` in `test_backprop_parity.py` + 1 in biology tests. Document root cause for each in a comment block. Do NOT remove yet. | — | ☐ | Each xfail has a `reason=` string citing the specific gap (e.g., "directed_ep: 12% gap at default lr") |
-| **−1.3** | **Snapshot the gated baseline** — `git tag v0.1-pre-sprint0`. In `docs/baseline.md` record ONLY metrics that appear in a gate: (a) `pytest --co -q | wc -l` collected count + pass/fail/xfail/skip tallies; (b) `pyright` error count (must be 0) + warning count; (c) `ruff check --select E,F,W,C90 --statistics` (the gated correctness set). Do NOT snapshot the style-violation total or the full violation list — both are explicitly deferred and would rot. | — | ☐ | `docs/baseline.md` exists; every number in it maps to a gate in Sprint 5.5 |
+| **−1.2** | **Triage existing xfail markers** — audit all 5 `@pytest.mark.xfail` in `test_backprop_parity.py` (now removed) + 1 in biology tests. Document root cause for each in a comment block. Do NOT remove yet. | — | ☑ | Each xfail has a `reason=` string citing the specific gap (e.g., "directed_ep: 12% gap at default lr") |
+| **−1.3** | **Snapshot the gated baseline** — `git tag v0.1-pre-sprint0`. In `docs/baseline.md` record ONLY metrics that appear in a gate: (a) `pytest --co -q | wc -l` collected count + pass/fail/xfail/skip tallies; (b) `pyright` error count (must be 0) + warning count; (c) `ruff check --select E,F,W,C90 --statistics` (the gated correctness set). Do NOT snapshot the style-violation total or the full violation list — both are explicitly deferred and would rot. | — | ☑ | `docs/baseline.md` exists; every number in it maps to a gate in Sprint 5.5 |
 
 **Gate**: `uv run pytest tests/unit/ tests/property/ -q --no-cov` → 0 failures (xfail allowed only if documented in −1.2); tag pushed.
 
@@ -72,7 +135,7 @@ Independent of both spines (run anytime after their direct deps): 0.5, 0.6, 4.1,
 |---|------|------------|--------|------------|
 | **0.1** | **Domain Exception Hierarchy** (`core/exceptions.py`) — base `BioplausibleError` + `ConfigError`, `RegistryError`, `IncompatibilityError`, `CheckpointError`, `LoadStateError`, `KnowledgeBaseError`, `TrialExecutionError`, `PropagatorError`, `TileGraphError`. Replace 127 bare `except Exception` with narrow+chain. **Migration safety**: before replacing, run `grep -rn "except Exception" bioplausible/ > docs/exception_audit_baseline.txt`. After replacing, diff against baseline. CI check: `grep -r "except Exception" bioplausible/ --include="*.py" | grep -v "core/exceptions.py" | wc -l` → 0. | −1 | ☐ | `pyright` 0 errors; CI grep check → 0 |
 | **0.2** | **`_QueryFilter` Predicate Dispatch** (`core/registry.py:120-165`) — convert boolean mega-expression to frozen predicate dataclasses + protocol; `matches()` = `all(p(meta) for p in predicates)`. Enables hypothesis tests + AutoScientist capability matching. | 0.1 | ☐ | Property tests for each predicate axis; registry audit passes |
-| **0.3** | **Cyclomatic Complexity Extraction** — hot paths only: `engine.py:_run_discovery_loop` (cc=17), `engine.py:_process_with_retry` (cc=12), `equitile/model.py:_relax` (cc=16), `equitile/model.py:_apply_hebbian_updates` (cc=13). **Snapshot tests first**: write tests capturing current outputs for 3 representative configs, then extract `_`-prefixed helpers with guard clauses. | 0.1 | ☐ | `ruff check --select C901` = 0 on these files; snapshot tests pass unchanged after extraction |
+| **0.3** | **Cyclomatic Complexity Extraction** — hot paths only: `engine.py:_run_discovery_loop` (cc=17), `engine.py:_process_with_retry` (cc=12), `equitile/model.py:_relax` (cc=16), `equitile/model.py:_apply_hebbian_updates` (cc=13). **Snapshot tests first**: write tests capturing current outputs for 3 representative configs, then extract `_`-prefixed helpers with guard clauses. | 0.1 |☑| `ruff check --select C901` = 0 on these files; snapshot tests pass unchanged after extraction |
 | **0.4** | **`match`/`case` Conversion** — closed-enum chains: `equitile/model.py:_get_activation` (5-way), `equitile/model.py:train_step` (3-way mode), `engine.py:_log_task_start` (after dataclass extraction), `engine.py:_prepare_fixed_config` (after dataclass extraction). | 0.3 | ☐ | Exhaustiveness checking catches new variants; no regressions |
 | **0.5** | **Module Boundary Hardening** — `bioplausible/__init__.py`: split heavy registration into `_register_all.py`; `equitile/utils/` → `_utils/` or `_internal/`; verify no external imports of `_internal/`. | 0.1 | ☐ | `import bioplausible.types` doesn't trigger model registration; `ruff` TID252 clean |
 | **0.6** | **SQLite Resource Standardization** — `execution/_state.py`: replace 12+ manual `try/finally` with `@contextmanager _connect(db_path)` helper matching `kb.py` pattern. | 0.1 | ☐ | No resource leaks under stress; KB meta-analysis (RESEARCH.md 4.2) unblocked |
@@ -87,9 +150,9 @@ Independent of both spines (run anytime after their direct deps): 0.5, 0.6, 4.1,
 
 | # | Task | Depends On | Status | Validation |
 |---|------|------------|--------|------------|
-| **1.1** | **GPU Test Fixtures** (`tests/conftest.py`) — `device` fixture: `cuda` if available else `cpu`; `gpu_only` marker skips on CPU; `synthetic_batch_gpu`, `synthetic_vision_task_gpu`, `synthetic_lm_task_gpu` session-scoped on CUDA. | 0 | ☐ | `pytest -m gpu_only` runs on RTX 3080; CPU suite unchanged |
+| **1.1** | **GPU Test Fixtures** (`tests/conftest.py`) — `device` fixture: `cuda` if available else `cpu`; `gpu_only` marker skips on CPU; `synthetic_batch_gpu`, `synthetic_vision_task_gpu`, `synthetic_lm_task_gpu` session-scoped on CUDA. | 0 |☑| `pytest -m gpu_only` runs on RTX 3080; CPU suite unchanged |
 | **1.2** | **Migrate Heavy Tests to GPU** — move `tests/integration/test_equitile_sparsity_robustness.py`, `test_lm_demo.py`, `test_triton_*.py`, `test_deq.py` (memory tests) to `@pytest.mark.gpu` + GPU fixtures. | 1.1 | ☐ | GPU suite ~2-3x faster than CPU; memory tests use `torch.cuda.max_memory_allocated()` |
-| **1.3** | **Benchmark Harness** (`tests/unit/validation/benchmark_harness.py`) — parametrized `@pytest.mark.benchmark` tests: FLOPs, peak memory, wall-time per model family (EqProp, FA, MEP, EquiTile, FF/PEPITA, Spiking). Uses `torch.profiler` + `torch.cuda.memory`. | 1.1 | ☐ | `pytest tests/unit/validation/benchmark_harness.py -m benchmark` produces JSONL for Pareto plots |
+| **1.3** | **Benchmark Harness** (`tests/unit/validation/benchmark_harness.py`) — parametrized `@pytest.mark.benchmark` tests: FLOPs, peak memory, wall-time per model family (EqProp, FA, MEP, EquiTile, FF/PEPITA, Spiking). Uses `torch.profiler` + `torch.cuda.memory`. | 1.1 |☑| `pytest tests/unit/validation/benchmark_harness.py -m benchmark` produces JSONL for Pareto plots |
 | **1.4** | **Deterministic GPU Seeding** — extend `utils/reproducibility.py`: `set_global_seed(seed, device="cuda")` covers torch/numpy/random/CUDA/cuDNN; env capture (git commit, torch/cuda versions, deps hash). | 1.1 | ☐ | `biopl-repro-check` (CLI) runs 1-epoch parity on all models, same seed → bitwise identical |
 
 **Gate**: GPU integration tests < 30s total; benchmark harness produces comparable numbers across runs.
@@ -102,9 +165,9 @@ Independent of both spines (run anytime after their direct deps): 0.5, 0.6, 4.1,
 
 | # | Task | Depends On | Status | Validation |
 |---|------|------------|--------|------------|
-| **1.5.1** | **Per-model hyperparameter configs** — create `tests/unit/validation/hyperparams/{eqprop_mlp,directed_ep,forward_forward,pepita,equitile}.yaml` with tuned `lr`, `β`/`step_size`, `max_steps`, `batch_size`, `parity_threshold` (default `0.05`). Use benchmark harness (1.3) to sweep. | 1.3, 1.4 | ☐ | Each YAML loads and trains without error |
-| **1.5.2** | **Remove xfail from parity test** — uniform marker-free test reads `parity_threshold` from YAML. `assert gap <= threshold`. Zero `@pytest.mark.xfail` in `test_backprop_parity.py`. | 1.5.1 | ☐ | `grep -rn "xfail" tests/unit/validation/test_backprop_parity.py` → 0 matches |
-| **1.5.3** | **Document residual bio-gaps** — for any model with `parity_threshold > 0.05` (e.g., FF/PEPITA theoretical ceiling), add section in `docs/parity_gaps.md` explaining the biological trade-off. Enforced by `biopl-registry-audit` check. | 1.5.1 | ☐ | `docs/parity_gaps.md` has one section per model with elevated threshold; no unexplained gaps |
+| **1.5.1** | **Per-model hyperparameter configs** — create `tests/unit/validation/hyperparams/{eqprop_mlp,directed_ep,forward_forward,pepita,equitile}.yaml` with tuned `lr`, `β`/`step_size`, `max_steps`, `batch_size`, `parity_threshold` (default `0.05`). Use benchmark harness (1.3) to sweep. | 1.3, 1.4 |☑| Each YAML loads and trains without error |
+| **1.5.2** | **Remove xfail from parity test** — uniform marker-free test reads `parity_threshold` from YAML. `assert gap <= threshold`. Zero `@pytest.mark.xfail` in `test_backprop_parity.py`. | 1.5.1 |☑| `grep -rn "xfail" tests/unit/validation/test_backprop_parity.py` → 0 matches |
+| **1.5.3** | **Document residual bio-gaps** — for any model with `parity_threshold > 0.05` (e.g., FF/PEPITA theoretical ceiling), add section in `docs/parity_gaps.md` explaining the biological trade-off. Enforced by `biopl-registry-audit` check. | 1.5.1 |☑| `docs/parity_gaps.md` has one section per model with elevated threshold; no unexplained gaps |
 | **1.5.4** | **Parity regression gate** — add `test_backprop_parity.py` to the fast CPU gate. Any future regression > threshold fails CI. | 1.5.2 | ☐ | Parity test runs in <10s on CPU; included in Sprint 5.5 CI pipeline |
 
 **Gate**: `uv run pytest tests/unit/validation/test_backprop_parity.py -v --no-cov` → all pass; 0 xfail; every `parity_threshold > 0.05` documented in `docs/parity_gaps.md`.

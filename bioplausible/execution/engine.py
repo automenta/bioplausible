@@ -201,9 +201,7 @@ class ExecutionEngine:
         return "permanent"
 
     def _run_discovery_loop(self) -> None:
-        """
-        The main loop execution logic.
-        """
+        """The main loop execution logic."""
         while self.running:
             DASHBOARD.update()
 
@@ -216,79 +214,86 @@ class ExecutionEngine:
             if self._check_failures_pause():
                 continue
 
-            # Check for periodic reporting
-            if (
-                self.trial_count > 0
-                and (self.trial_count - self.last_report_trial) >= self.report_interval
-            ):
-                logger.info("Generating periodic research reports...")
-                DASHBOARD.log("Generating Periodic Reports...", style="cyan")
-                try:
-                    self.generate_reports()
-                    self.last_report_trial = self.trial_count
-                except Exception:
-                    logger.exception("Periodic reporting failed")
+            self._maybe_generate_reports()
 
             if self.num_workers > 1 and self.parallel_runner:
                 # Parallel Execution
-                tasks = self.strategy.plan_batch(self.num_workers)
-                if not tasks:
-                    self._handle_no_task(None)
-                    continue
-
-                logger.info(
-                    "Starting batch of %d tasks with %d workers.",
-                    len(tasks),
-                    self.num_workers,
-                )
-
-                try:
-                    # Resolve configs first
-                    configs = []
-                    for t in tasks:
-                        # We need to resolve configs here to pass to runner
-                        # This duplicates logic in _process_task a bit, but necessary
-                        study = self.state.get_optuna_study(t.study_name)
-
-                        if t.fixed_config:
-                            conf, _ = self._prepare_fixed_config(t)
-                        else:
-                            # Parallel Optuna sampling; SQLite handles it.
-                            _, conf, _ = self._prepare_optuna_config(t, study)
-
-                        self._inject_tier_config(conf, t)
-                        configs.append(conf)
-
-                    results = self.parallel_runner.run_batch(tasks, configs)
-
-                    for i, metrics in enumerate(results):
-                        self._handle_result(metrics, tasks[i])
-
-                    self.trial_count += len(results)
-
-                except Exception as e:
-                    logger.error("Parallel batch failed: %s", e, exc_info=True)
-                    self.consecutive_failures += 1
+                self._run_parallel_batch()
             else:
                 # Sequential Execution
-                task = self.strategy.plan_next()
-                if not self._handle_no_task(task):
-                    continue
-
-                self._log_task_start(task)
-
-                # Attempt with retry logic
-                metrics = self._process_with_retry(task)
-                if metrics is not None:
-                    self._handle_result(metrics, task)
-                    self.consecutive_failures = 0
-                else:
-                    self.consecutive_failures += 1
-                self.trial_count += 1
+                self._run_sequential_task()
 
             # Post-trial cleanup
             time.sleep(1)
             self._cleanup_memory()
+
+    def _maybe_generate_reports(self) -> None:
+        """Emit periodic research reports once the reporting interval elapses."""
+        if self.trial_count == 0:
+            return
+        if (self.trial_count - self.last_report_trial) < self.report_interval:
+            return
+        logger.info("Generating periodic research reports...")
+        DASHBOARD.log("Generating Periodic Reports...", style="cyan")
+        try:
+            self.generate_reports()
+            self.last_report_trial = self.trial_count
+        except Exception:
+            logger.exception("Periodic reporting failed")
+
+    def _run_parallel_batch(self) -> None:
+        """Execute a batch of tasks across the parallel runner."""
+        tasks = self.strategy.plan_batch(self.num_workers)
+        if not tasks:
+            self._handle_no_task(None)
+            return
+
+        logger.info(
+            "Starting batch of %d tasks with %d workers.",
+            len(tasks),
+            self.num_workers,
+        )
+
+        try:
+            # Resolve configs first. This duplicates logic in _process_task a
+            # bit, but is necessary to pass resolved configs to the runner.
+            configs = []
+            for t in tasks:
+                study = self.state.get_optuna_study(t.study_name)
+                if t.fixed_config:
+                    conf, _ = self._prepare_fixed_config(t)
+                else:
+                    # Parallel Optuna sampling; SQLite handles it.
+                    _, conf, _ = self._prepare_optuna_config(t, study)
+                self._inject_tier_config(conf, t)
+                configs.append(conf)
+
+            results = self.parallel_runner.run_batch(tasks, configs)
+
+            for i, metrics in enumerate(results):
+                self._handle_result(metrics, tasks[i])
+
+            self.trial_count += len(results)
+        except Exception as e:
+            logger.error("Parallel batch failed: %s", e, exc_info=True)
+            self.consecutive_failures += 1
+
+    def _run_sequential_task(self) -> None:
+        """Execute a single task with retry logic."""
+        task = self.strategy.plan_next()
+        if not self._handle_no_task(task):
+            return
+
+        self._log_task_start(task)
+
+        # Attempt with retry logic
+        metrics = self._process_with_retry(task)
+        if metrics is not None:
+            self._handle_result(metrics, task)
+            self.consecutive_failures = 0
+        else:
+            self.consecutive_failures += 1
+        self.trial_count += 1
 
     def _check_circuit_breaker(self) -> bool:
         """Check circuit breaker state and pause if open."""

@@ -588,90 +588,27 @@ class CoreTrainer:
 
         logger.info("Starting training for %d epochs", self.config.epochs)
 
-        # Determine batches per epoch
-        if self.config.batches_per_epoch:
-            batches_per_epoch = self.config.batches_per_epoch
-        elif self.train_loader:
-            batches_per_epoch = len(self.train_loader)
-        else:
-            batches_per_epoch = 100  # Default for task-based
-
+        batches_per_epoch = self._resolve_batches_per_epoch()
         val_batches = self.config.val_batches or 20
 
+        self._train_epochs_loop(batches_per_epoch, val_batches)
+
+        logger.info("Training complete")
+        return self.history
+
+    def _train_epochs_loop(self, batches_per_epoch: int, val_batches: int) -> None:
+        """Run the epoch loop, handling checkpoints, callbacks, and early stop."""
         try:
             for epoch in range(self.config.epochs):
                 self.current_epoch = epoch
                 epoch_start = time.time()
-
-                # Training epoch
-                train_metrics = self._train_epoch(batches_per_epoch)
-
-                # Validation
-                val_metrics = self._validate(val_batches)
-
-                # Combine metrics
-                epoch_metrics = TrainingMetrics(
-                    epoch=epoch,
-                    train_loss=train_metrics.get("loss", 0.0),
-                    train_accuracy=train_metrics.get("accuracy", 0.0),
-                    val_loss=val_metrics.get("val_loss"),
-                    val_accuracy=val_metrics.get("val_accuracy"),
-                    val_perplexity=val_metrics.get("val_perplexity"),
-                    learning_rate=self._get_lr(),
-                    epoch_time=time.time() - epoch_start,
-                    samples_seen=train_metrics.get("samples_seen", 0),
-                    energy_proxy=train_metrics.get("energy_proxy"),
-                    forward_flops=train_metrics.get("forward_flops"),
-                    backward_flops=train_metrics.get("backward_flops"),
-                    wall_time_ms=train_metrics.get("wall_time_ms"),
-                    peak_memory_mb=train_metrics.get("peak_memory_mb"),
-                    requires_backward=train_metrics.get("requires_backward"),
-                    extra={
-                        k: v
-                        for k, v in train_metrics.items()
-                        if k
-                        not in [
-                            "loss",
-                            "accuracy",
-                            "samples_seen",
-                            "energy_proxy",
-                            "forward_flops",
-                            "backward_flops",
-                            "wall_time_ms",
-                            "peak_memory_mb",
-                            "requires_backward",
-                        ]
-                    },
+                epoch_metrics = self._run_epoch(
+                    epoch, epoch_start, batches_per_epoch, val_batches
                 )
-
-                self.history.append(epoch_metrics)
-
-                # Logging
-                self._log_epoch(epoch_metrics)
-
-                # Callbacks
-                self._run_callbacks(epoch_metrics)
-
-                # Checkpointing
-                if self.config.save_checkpoints and self._should_save_checkpoint(
-                    epoch_metrics
-                ):
-                    self._save_checkpoint(epoch_metrics)
-
-                # Early stopping
-                if self._check_early_stopping(epoch_metrics):
-                    logger.info("Early stopping triggered at epoch %d", epoch)
+                if epoch_metrics is None:
                     break
-
-                # Scheduler step (if any)
-                if self.scheduler is not None:
-                    if self._is_kernal_model():
-                        logger.warning(
-                            "LR scheduler has no effect in kernel mode "
-                            "(kernel manages its own updates)"
-                        )
-                    self.scheduler.step()
-
+                if self._handle_epoch_end(epoch_metrics):
+                    break
         except KeyboardInterrupt:
             logger.info("Training interrupted by user")
         except Exception as e:
@@ -680,8 +617,83 @@ class CoreTrainer:
         finally:
             self._save_history()
 
-        logger.info("Training complete")
-        return self.history
+    def _handle_epoch_end(self, epoch_metrics: TrainingMetrics) -> bool:
+        """Post-step bookkeeping for a finished epoch.
+
+        Returns True if early stopping triggered (caller should break).
+        """
+        epoch = self.current_epoch
+
+        self.history.append(epoch_metrics)
+        self._log_epoch(epoch_metrics)
+        self._run_callbacks(epoch_metrics)
+
+        if self.config.save_checkpoints and self._should_save_checkpoint(
+            epoch_metrics
+        ):
+            self._save_checkpoint(epoch_metrics)
+
+        if self._check_early_stopping(epoch_metrics):
+            logger.info("Early stopping triggered at epoch %d", epoch)
+            return True
+
+        if self.scheduler is not None:
+            if self._is_kernal_model():
+                logger.warning(
+                    "LR scheduler has no effect in kernel mode "
+                    "(kernel manages its own updates)"
+                )
+            self.scheduler.step()
+        return False
+
+    def _resolve_batches_per_epoch(self) -> int:
+        """Determine the number of batches per epoch for training."""
+        if self.config.batches_per_epoch:
+            return self.config.batches_per_epoch
+        if self.train_loader:
+            return len(self.train_loader)
+        return 100  # Default for task-based
+
+    def _run_epoch(
+        self,
+        epoch: int,
+        epoch_start: float,
+        batches_per_epoch: int,
+        val_batches: int,
+    ) -> TrainingMetrics | None:
+        """Run a single training epoch and return its metrics (None if aborted)."""
+        train_metrics = self._train_epoch(batches_per_epoch)
+        val_metrics = self._validate(val_batches)
+
+        extra_keys = [
+            "loss",
+            "accuracy",
+            "samples_seen",
+            "energy_proxy",
+            "forward_flops",
+            "backward_flops",
+            "wall_time_ms",
+            "peak_memory_mb",
+            "requires_backward",
+        ]
+        return TrainingMetrics(
+            epoch=epoch,
+            train_loss=train_metrics.get("loss", 0.0),
+            train_accuracy=train_metrics.get("accuracy", 0.0),
+            val_loss=val_metrics.get("val_loss"),
+            val_accuracy=val_metrics.get("val_accuracy"),
+            val_perplexity=val_metrics.get("val_perplexity"),
+            learning_rate=self._get_lr(),
+            epoch_time=time.time() - epoch_start,
+            samples_seen=train_metrics.get("samples_seen", 0),
+            energy_proxy=train_metrics.get("energy_proxy"),
+            forward_flops=train_metrics.get("forward_flops"),
+            backward_flops=train_metrics.get("backward_flops"),
+            wall_time_ms=train_metrics.get("wall_time_ms"),
+            peak_memory_mb=train_metrics.get("peak_memory_mb"),
+            requires_backward=train_metrics.get("requires_backward"),
+            extra={k: v for k, v in train_metrics.items() if k not in extra_keys},
+        )
 
     def train_epoch(self) -> dict[str, float]:
         """Public single-epoch runner matching ``TrainerProtocol``.
@@ -1113,17 +1125,55 @@ def run_from_runconfig(cfg: object) -> dict[str, object]:
 
     torch.manual_seed(cfg.seed)
 
-    device = (
-        "cuda"
-        if cfg.device == "auto" and torch.cuda.is_available()
-        else ("cpu" if cfg.device == "auto" else cfg.device)
-    )
+    device = _resolve_runconfig_device(cfg)
 
     task = create_task(cfg.data.task, device=device)
     task.setup()
 
+    model = _build_runconfig_model(cfg, task, device)
+    optimizer = _build_runconfig_optimizer(cfg, model)
+
+    ablation_tags = _convert_dictconfig(cfg.ablation_tags)
+
+    trainer = task.create_trainer(
+        model=model,
+        optimizer=optimizer,
+        epochs=cfg.trainer.epochs,
+        batches_per_epoch=cfg.trainer.batches_per_epoch,
+        grad_clip=cfg.trainer.grad_clip,
+        use_compile=cfg.trainer.use_compile,
+        track_energy=cfg.trainer.track_energy,
+        ablation_tags=ablation_tags,
+        output_dir=cfg.output_dir,
+        device=device,
+    )
+
+    results = _run_runconfig_epochs(trainer, cfg)
+
+    Path(cfg.output_dir).mkdir(exist_ok=True, parents=True)
+    clean_results = _convert_dictconfig(results)
+    with (Path(cfg.output_dir) / "results.json").open("w") as f:
+        json.dump(clean_results, f, indent=4)
+
+    return {
+        "history": clean_results,
+        "final_val_accuracy": (
+            clean_results[-1].get("val_accuracy", 0.0) if clean_results else 0.0
+        ),
+    }
+
+
+def _resolve_runconfig_device(cfg: object) -> str:
+    """Resolve the target device from a RunConfig's ``device`` field."""
+    if cfg.device == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    return cfg.device
+
+
+def _build_runconfig_model(cfg: object, task: object, device: str) -> nn.Module:
+    """Instantiate and move a model to ``device`` from a RunConfig."""
     extra_kwargs = _convert_dictconfig(cfg.model.extra)
-    kwargs = {
+    kwargs: dict[str, object] = {
         "input_dim": task.input_dim,
         "hidden_dim": cfg.model.hidden_dim,
         "output_dim": task.output_dim,
@@ -1134,9 +1184,12 @@ def run_from_runconfig(cfg: object) -> dict[str, object]:
 
     model_cls = Registry.get(ComponentCategory.MODEL, cfg.model.name)
     model = model_cls(**kwargs)
-    model = model.to(device)
+    return model.to(device)
 
-    opt_kwargs = {
+
+def _build_runconfig_optimizer(cfg: object, model: nn.Module) -> object:
+    """Build the optimizer from a RunConfig, trying both call signatures."""
+    opt_kwargs: dict[str, object] = {
         "lr": cfg.optimizer.lr,
         "weight_decay": cfg.optimizer.weight_decay,
     }
@@ -1159,31 +1212,18 @@ def run_from_runconfig(cfg: object) -> dict[str, object]:
     # Some optimizers (learning-rule propagators) require the model, while
     # plain torch.optim optimizers do not. Attempt both call signatures.
     try:
-        optimizer = opt_cls(model.parameters(), model=model, **opt_kwargs)
+        return opt_cls(model.parameters(), model=model, **opt_kwargs)
     except TypeError:
-        optimizer = opt_cls(model.parameters(), **opt_kwargs)
+        return opt_cls(model.parameters(), **opt_kwargs)
 
-    ablation_tags = _convert_dictconfig(cfg.ablation_tags)
 
-    trainer = task.create_trainer(
-        model=model,
-        optimizer=optimizer,
-        epochs=cfg.trainer.epochs,
-        batches_per_epoch=cfg.trainer.batches_per_epoch,
-        grad_clip=cfg.trainer.grad_clip,
-        use_compile=cfg.trainer.use_compile,
-        track_energy=cfg.trainer.track_energy,
-        ablation_tags=ablation_tags,
-        output_dir=cfg.output_dir,
-        device=device,
-    )
-
-    results = []
+def _run_runconfig_epochs(trainer: object, cfg: object) -> list[dict[str, object]]:
+    """Run training epochs, adopting the trainer's scheduling interface."""
+    results: list[dict[str, object]] = []
 
     if hasattr(trainer, "train_epoch"):
         for _ in range(cfg.trainer.epochs):
-            epoch_metrics = trainer.train_epoch()
-            results.append(epoch_metrics)
+            results.append(trainer.train_epoch())
     elif hasattr(trainer, "run"):
         history = trainer.run()
         if isinstance(history, dict) and "rewards" in history:
@@ -1192,17 +1232,7 @@ def run_from_runconfig(cfg: object) -> dict[str, object]:
     else:
         trainer.fit(train_loader=None, epochs=cfg.trainer.epochs)
 
-    Path(cfg.output_dir).mkdir(exist_ok=True, parents=True)
-    clean_results = _convert_dictconfig(results)
-    with (Path(cfg.output_dir) / "results.json").open("w") as f:
-        json.dump(clean_results, f, indent=4)
-
-    return {
-        "history": clean_results,
-        "final_val_accuracy": (
-            clean_results[-1].get("val_accuracy", 0.0) if clean_results else 0.0
-        ),
-    }
+    return results
 
 
 __all__ = [
