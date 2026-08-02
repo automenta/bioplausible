@@ -29,6 +29,8 @@ jobs:
         run: uv run pyright .
       - name: Registry Audit (metadata completeness)
         run: uv run biopl-registry-audit --metadata
+      - name: Reproducibility Check (Sprint 1.4)
+        run: uv run biopl-repro-check --device cpu
       - name: Test with Coverage
         run: uv run pytest --cov=bioplausible --cov-report=term-missing --cov-fail-under=50
       - name: Dependency Scan (pip-audit)

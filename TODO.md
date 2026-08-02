@@ -48,6 +48,102 @@ Independent of both spines (run anytime after their direct deps): 0.5, 0.6, 4.1,
 
 *(New sessions append here)*
 
+### 2026-08-02 — Sprint 1.4 (deterministic GPU seeding + biopl-repro-check) + demo sprint start (3.1/3.2/3.3/3.4/3.6 cores)
+
+**Sprint 1.4 complete — first new CI-enforceable gate landed.**
+- New `bioplausible/utils.py`: `set_global_seed(seed, device="cpu|gpu")` seeds
+  Python `random`, `PYTHONHASHSEED`, NumPy, torch (CPU), and on CUDA devices the
+  CUDA generator(s) + cuDNN deterministic/benchmark flags. Refuses a CUDA
+  request when CUDA is unavailable (a silent CPU fallback would defeat the
+  bitwise guarantee). Also `capture_environment()` (git commit, torch/CUDA/
+  python versions) and `deps_hash()`. All re-exported in `__all__`.
+- New `bioplausible/cli/repro.py` → `biopl-repro-check` console script
+  (registered in `pyproject.toml` `[project.scripts]`). Trains each of 7 model
+  families (eqprop_mlp, fa, mep, equitile, forward_forward, pepita, spiking)
+  one epoch twice under the same seed and asserts **bitwise-identical** state
+  dicts. `--json` emits a machine-readable report; exit 0 = all recursive.
+  Verified green on **both CPU and CUDA** (real bitwise identity on the RTX
+  3080). Added as a `code-quality` CI step in `.github/workflows/ci.yml`.
+- Tests: `tests/unit/validation/test_repro_check.py` (9 tests) — seed determinism
+  across all RNG sources, cudnn flags on CUDA, cuda-request-without-gpu raises,
+  env fingerprint completeness/determinism, CLI JSON report + empty-models exit.
+- **Bug caught & fixed by the gate's own scaffolding**: my first `_instantiate`
+  fallback for `equitile` mis-used `Registry.get()` (which returns the *class*)
+  as if it were a spec — this made the repro check *report* non-determinism that
+  was actually a broken instantiation path. Corrected to mirror the benchmark
+  harness (`get_model_spec` + `model_cls.build(...)`): all 7 families then pass.
+  Lesson for future gates: a failing repro check can mean a broken harness, not
+  real non-determinism — verify before blaming the model.
+
+**Sprint 1.5.4 verified already-satisfied** — `test_backprop_parity.py` lives
+under `tests/unit/` (the fast CPU gate) and completes in **1.9s** (<10s gate);
+CI's full-suite step runs it. The "parity regression gate" deliverable therefore
+needed no new wiring — just confirmation that it's inside the gate (it is).
+
+**Demo (Sprint 3) — real skeleton lands; the largest remaining block finally has
+a bootable core.** Created `demo/` as a separate uv project
+(`demo/pyproject.toml`, requires-python >=3.14, editable dep on parent, pinned
+Deps via `demo/uv.lock`). Modules:
+- `demo/compat.py` — `apply_compat_shims()`: patches `pkgutil.find_loader`
+  (removed in 3.12+) that NiceGUI's transitive dep `vbuild` calls at import.
+  **Required** — without it NiceGUI won't import on Python 3.14. Called at the
+  very top of `main.py`.
+- `demo/runner.py` — headless `CoreTrainer`+`ExecutionCallback` wrapper that
+  emits telemetry into a thread-safe `DemoPanel` (Sprint 3.4's hooks consumed
+  by a pure listener; the UI never touches training). `run_headless` /
+  `run_async` + `default_trainer_config` (drops the old `MLP` name → real
+  registered `backprop_mlp`).
+- `demo/widgets.py` — Sprint 3.2 config→widget descriptor tree (nested
+  dataclasses/Pydantic recurse into groups; Literal→select; unsupported types
+  degrade to read-only; `WidgetField.apply` round-trips frozen dataclasses /
+  Pydantic / dicts).
+- `demo/charts.py` — plotly-free chart data transforms (rolling mean, loss/acc/
+  energy series, `parity_gap`) so chart logic is unit-testable without a browser.
+- `demo/tasks.py` — task selector loaders (xor/spiral/circles toy + digits +
+  MNIST w/ module-level cache).
+- `demo/persistence.py` + tests — Sprint 3.6 Save/Load Config (TrainerConfig
+  ⇄ JSON round-trip) + run-export summary payload.
+- `demo/main.py` — two-panel side-by-side (Config A / Config B, backprop
+  pre-filled), task selector, epochs/lr widgets, empty Plotly line figures, Run
+  button that trains both in worker threads then shows parity gap.
+- Demo tests (`demo/tests/test_{widgets,charts,tasks,persistence}.py`): **12
+  pass**. `uv run ruff check --select E,F,W,C90 demo/` clean.
+- **Verified end-to-end**: `uv run python demo/main.py` boots ("NiceGUI ready to
+  go on http://localhost:8080"), returns HTTP 200 on `/`, and renders the config
+  A/B, task, epochs, parity-gap, and Run controls.
+
+**Gate state after this session:**
+- Root fast gate: **1226 passed** (+9 repro), 1 skipped, 1 xfailed.
+- Demo tests: 12 passed; demo boots & serves.
+- `pyright`: 0 errors (only pre-existing warnings).
+- `ruff --select E,F,W,C90`: root net-flat on my files (utils.py's 3 E402
+  import-after-logger are pre-existing; no new violations introduced).
+
+**Discovered issues / remaining work:**
+- **Demo dep cascade — the real cost of Sprint 0.5 being open.** `import
+  bioplausible` eagerly imports the entire zoo (`execution` → `robustness` →
+  `domains` → torchvision; `lightning_` → pytorch_lightning; plus optuna,
+  matplotlib, etc.). The demo therefore had to depend on `bioplausible[full]`
+  to boot. Making `bioplausible/__init__.py` lazy (real Sprint 0.5 work) would
+  let the demo (and any import) stay light. **This is now the highest-value
+  hardening task** — it directly unblocks a slimmer demo and faster imports.
+- **NiceGUI <-> Python 3.14 compat is fragile**: the `vbuild`/`pkgutil`
+  breakage is real; `compat.py` shims it, but any NiceGUI/vbuild bump must be
+  re-tested (matches the existing ADR about re-testing 3.5 on NiceGUI bumps).
+- **Demo still missing**: animated weight matrices (3.5), full task coverage
+  (CIFAR, Tiny Shakespeare), config A/B widget *rendering* (the descriptor
+  layer is done; the `ui.*` renderer that turns `WidgetField`s into live
+  sliders/dropdowns is not yet wired into `main.py`), 3.7 parity-vs-CLI
+  assertion, and a demo CI/test hook in root CI.
+- **Coverage blocker is RESOLVED**: full-suite `pytest --cov` reports 58.23%
+  (well above the 50% floor); CI `--cov-fail-under=50` now passes. The old
+  "coverage ≈21%" notes in earlier session logs are stale.
+- EquiTile/contraction/energy-landscape/failure-manifesto/scaling/QueryFilter
+  are all implemented (per the 2.5 session); several TODO status checkboxes are
+  stale vs the tree.
+- CoreTrainer registered-model inventory is authoritative: use `backprop_mlp`
+  (not `MLP`) for the backprop baseline (demo discovered this).
+
 ### 2026-08-02 — Sprint 3.4 (ExecutionCallback) + 2.1 (gradient equivalence) + 2 real bio bugs
 **Completed two independently-gated items and fixed two genuine learning-rule
 bugs uncovered by Sprint 2.1's finite-difference direction test.**
@@ -306,7 +402,7 @@ Current gate state after this session:
 | **1.1** | **GPU Test Fixtures** (`tests/conftest.py`) — `device` fixture: `cuda` if available else `cpu`; `gpu_only` marker skips on CPU; `synthetic_batch_gpu`, `synthetic_vision_task_gpu`, `synthetic_lm_task_gpu` session-scoped on CUDA. | 0 |☑| `pytest -m gpu_only` runs on RTX 3080; CPU suite unchanged |
 | **1.2** | **Migrate Heavy Tests to GPU** — move `tests/integration/test_equitile_sparsity_robustness.py`, `test_lm_demo.py`, `test_triton_*.py`, `test_deq.py` (memory tests) to `@pytest.mark.gpu` + GPU fixtures. | 1.1 | ☐ | GPU suite ~2-3x faster than CPU; memory tests use `torch.cuda.max_memory_allocated()` |
 | **1.3** | **Benchmark Harness** (`tests/unit/validation/benchmark_harness.py`) — parametrized `@pytest.mark.benchmark` tests: FLOPs, peak memory, wall-time per model family (EqProp, FA, MEP, EquiTile, FF/PEPITA, Spiking). Uses `torch.profiler` + `torch.cuda.memory`. | 1.1 |☑| `pytest tests/unit/validation/benchmark_harness.py -m benchmark` produces JSONL for Pareto plots |
-| **1.4** | **Deterministic GPU Seeding** — extend `utils/reproducibility.py`: `set_global_seed(seed, device="cuda")` covers torch/numpy/random/CUDA/cuDNN; env capture (git commit, torch/cuda versions, deps hash). | 1.1 | ☐ | `biopl-repro-check` (CLI) runs 1-epoch parity on all models, same seed → bitwise identical |
+| **1.4** | **Deterministic GPU Seeding** — extend `utils/reproducibility.py`: `set_global_seed(seed, device="cuda")` covers torch/numpy/random/CUDA/cuDNN; env capture (git commit, torch/cuda versions, deps hash). | 1.1 |☑| `biopl-repro-check` (CLI) runs 1-epoch parity on all models, same seed → bitwise identical |
 
 **Gate**: GPU integration tests < 30s total; benchmark harness produces comparable numbers across runs.
 
@@ -321,7 +417,7 @@ Current gate state after this session:
 | **1.5.1** | **Per-model hyperparameter configs** — create `tests/unit/validation/hyperparams/{eqprop_mlp,directed_ep,forward_forward,pepita,equitile}.yaml` with tuned `lr`, `β`/`step_size`, `max_steps`, `batch_size`, `parity_threshold` (default `0.05`). Use benchmark harness (1.3) to sweep. | 1.3, 1.4 |☑| Each YAML loads and trains without error |
 | **1.5.2** | **Remove xfail from parity test** — uniform marker-free test reads `parity_threshold` from YAML. `assert gap <= threshold`. Zero `@pytest.mark.xfail` in `test_backprop_parity.py`. | 1.5.1 |☑| `grep -rn "xfail" tests/unit/validation/test_backprop_parity.py` → 0 matches |
 | **1.5.3** | **Document residual bio-gaps** — for any model with `parity_threshold > 0.05` (e.g., FF/PEPITA theoretical ceiling), add section in `docs/parity_gaps.md` explaining the biological trade-off. Enforced by `biopl-registry-audit` check. | 1.5.1 |☑| `docs/parity_gaps.md` has one section per model with elevated threshold; no unexplained gaps |
-| **1.5.4** | **Parity regression gate** — add `test_backprop_parity.py` to the fast CPU gate. Any future regression > threshold fails CI. | 1.5.2 | ☐ | Parity test runs in <10s on CPU; included in Sprint 5.5 CI pipeline |
+| **1.5.4** | **Parity regression gate** — add `test_backprop_parity.py` to the fast CPU gate. Any future regression > threshold fails CI. | 1.5.2 | ☑ | Parity test runs in <10s on CPU; included in Sprint 5.5 CI pipeline (verified: 1.9s, already under tests/unit/) |
 
 **Gate**: `uv run pytest tests/unit/validation/test_backprop_parity.py -v --no-cov` → all pass; 0 xfail; every `parity_threshold > 0.05` documented in `docs/parity_gaps.md`.
 
@@ -349,12 +445,12 @@ Current gate state after this session:
 
 | # | Task | Depends On | Status | Validation |
 |---|------|------------|--------|------------|
-| **3.1** | **NiceGUI Project Setup** (`demo/`) — separate uv project with `demo/pyproject.toml`: `nicegui = ">=2.0,<3.0"`, `plotly = ">=5.20,<6.0"`, `torchvision`, `datasets`. `demo/main.py` entry; Quasar dark theme; asyncio event bus from `execution/engine.py` plugs directly. Exact pins auto-held in `demo/uv.lock`. | 1.5, 2.5 | ☐ | `uv run demo/main.py` → browser opens at `localhost:8080` |
-| **3.2** | **Config-Driven Widget Generation** (`demo/widgets.py`) — inspect Pydantic/dataclass config → auto-generate sliders, dropdowns, number inputs with tooltips from docstrings. **Nested configs recursively**: `EquiTileConfig.tile.sparsity.type` → grouped accordion. Unsupported types render as read-only JSON. Two panels: **Config A** vs **Config B** (backprop baseline pre-filled). Tooltips display `bio_plausibility_score` and `locality_level` from Sprint 2.5. | 2.5 | ☐ | Changing any widget updates live preview instantly; no crash on unannotated fields |
-| **3.3** | **Task Selector** — tabs: **Toy** (XOR, spiral, concentric circles), **Digits** (sklearn), **MNIST**, **CIFAR-10**, **Tiny Shakespeare**. Each loads synthetic or real data via `tests/conftest.py` fixtures (GPU-accelerated). | 1.1 | ☐ | All 5 tasks load < 2s; MNIST/CIFAR stream from torchvision cache |
+| **3.1** | **NiceGUI Project Setup** (`demo/`) — separate uv project with `demo/pyproject.toml`: `nicegui = ">=2.0,<3.0"`, `plotly = ">=5.20,<6.0"`, `torchvision`, `datasets`. `demo/main.py` entry; Quasar dark theme; asyncio event bus from `execution/engine.py` plugs directly. Exact pins auto-held in `demo/uv.lock`. | 1.5, 2.5 | ◐ | `uv run demo/main.py` → browser opens at `localhost:8080` (verified: boots, HTTP 200)` |
+| **3.2** | **Config-Driven Widget Generation** (`demo/widgets.py`) — inspect Pydantic/dataclass config → auto-generate sliders, dropdowns, number inputs with tooltips from docstrings. **Nested configs recursively**: `EquiTileConfig.tile.sparsity.type` → grouped accordion. Unsupported types render as read-only JSON. Two panels: **Config A** vs **Config B** (backprop baseline pre-filled). Tooltips display `bio_plausibility_score` and `locality_level` from Sprint 2.5. | 2.5 | ◐ | Changing any widget updates live preview instantly; no crash on unannotated fields (descriptor tree done+tested; live `ui.*` renderer in main.py pending) |
+| **3.3** | **Task Selector** — tabs: **Toy** (XOR, spiral, concentric circles), **Digits** (sklearn), **MNIST**, **CIFAR-10**, **Tiny Shakespeare**. Each loads synthetic or real data via `tests/conftest.py` fixtures (GPU-accelerated). | 1.1 | ◐ | All 5 tasks load < 2s; MNIST/CIFAR stream from torchvision cache (selectors done: xor/spiral/circles/digits/mnist; CIFAR+LM pending) |
 | **3.4** | **Live Training Charts** (`demo/charts.py`) — Plotly `FigureWidget` streaming: loss/accuracy (dual Y), Lipschitz constant, gradient alignment, tile activity heatmap (EquiTile), energy trajectory (EP). **Prerequisite**: add `ExecutionCallback` protocol to `execution/engine.py` with hooks `on_epoch_end(metrics)`, `on_step_end(loss, grads)`, `on_settling_step(energy)`. NiceGUI registers async callback; engine remains UI-agnostic. | 0.3 |☑| 100-step training animates smoothly at 10 FPS; no UI freeze (demo-side gate pending) |
 | **3.5** | **Animated Weight Matrices** (`demo/weight_viz.py`) — canvas/Vue component: color-coded `W_t` per layer/tile; play/pause/scrub slider; hover shows value + gradient magnitude; side-by-side diff view (Config A - Config B). Re-test on any NiceGUI bump (ADR recorded tested version). | 3.1 | ☐ | 64×64 matrix @ 30 FPS; diff view highlights divergent weights |
-| **3.6** | **Experiment Persistence** — "Save Config" / "Load Config" (JSON); "Export Run" (CSV + charts PNG + weight MP4); shareable URL with encoded config. | 3.1 | ☐ | Exported config reloads identically; MP4 playable |
+| **3.6** | **Experiment Persistence** — "Save Config" / "Load Config" (JSON); "Export Run" (CSV + charts PNG + weight MP4); shareable URL with encoded config. | 3.1 | ◐ | `demo/persistence.py` config⇄JSON round-trip + export-summary done+tested; full CSV/PNG/MP4 export + UI buttons pending |
 | **3.7** | **Backprop Baseline Parity** — pre-built `backprop_mlp`, `backprop_cnn`, `backprop_transformer` configs; one-click "Run Parity" trains both configs, overlays curves, prints final gap %. **Prerequisite**: Sprint 1.5 complete. If any model has `parity_threshold > 0.05`, demo displays gap explanation alongside curves. | 1.5 | ☐ | Parity gap matches CLI `biopl-parity` within 1% |
 
 **Gate**: Demo runs end-to-end: (1) select Config A = EquiTile, Config B = backprop MLP; (2) select task = CIFAR-10; (3) click Run; (4) loss/accuracy charts stream for ≥50 epochs without freeze; (5) final parity gap displayed matches CLI `biopl-parity` within 1%; (6) "Export Run" produces valid CSV + PNG.

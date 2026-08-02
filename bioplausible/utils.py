@@ -7,6 +7,7 @@ Helper functions for ONNX export, model verification, and training utilities.
 import logging
 import os
 import random
+import sys
 import time
 from contextlib import contextmanager
 
@@ -33,6 +34,87 @@ def seed_everything(seed: int = 42) -> None:
     # Ensure deterministic behavior (may impact performance)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+def set_global_seed(seed: int = 42, device: str = "cpu") -> dict[str, str]:
+    """Set every RNG for fully deterministic execution across a device.
+
+    This is the Sprint 1.4 upgrade over :func:`seed_everything`: it seeds
+    Python's ``random``, NumPy, PyTorch (CPU), and — when ``device`` is
+    ``cuda``/``gpu`` and CUDA is present — the CUDA generator(s) plus cuDNN
+    deterministic/benchmark flags. It also captures the environment fingerprint
+    (git commit, torch/CUDA versions) so a ``biopl-repro-check`` run can prove
+    two runs are bitwise identical.
+
+    Args:
+        seed: Master seed for every RNG.
+        device: ``"cpu"`` (default), ``"cuda"``/``"gpu"`` (also seeds CUDA +
+            cuDNN, and refuses to pretend determinism without CUDA).
+
+    Returns:
+        Environment fingerprint dict (see :func:`capture_environment`).
+
+    Raises:
+        RuntimeError: If ``device`` asks for CUDA seeding but CUDA is
+            unavailable — a silent CPU fallback would silently defeat the
+            bitwise-identical guarantee the caller is relying on.
+    """
+    want_cuda = device in ("cuda", "gpu") or device.startswith("cuda:")
+    if want_cuda and not torch.cuda.is_available():
+        raise RuntimeError(
+            f"set_global_seed device={device!r} but CUDA is unavailable"
+        )
+
+    random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    if want_cuda:
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+    return capture_environment()
+
+
+def capture_environment() -> dict[str, str]:
+    """Capture a compact, hashable fingerprint of the execution environment.
+
+    Returns a dict that stays stable within a machine/commit so the same-input
+    guarantee can be asserted across two identical runs. Keys: ``git_commit``,
+    ``torch_version``, ``cuda_version`` (or ``"n/a"``), ``python_version``.
+    """
+    git_commit = "unknown"
+    try:
+        import subprocess
+
+        git_commit = (
+            subprocess.check_output(["git", "rev-parse", "HEAD"])
+            .decode("ascii")
+            .strip()
+        )
+    except (OSError, subprocess.CalledProcessError):
+        pass
+
+    return {
+        "git_commit": git_commit,
+        "torch_version": torch.__version__,
+        "cuda_version": torch.version.cuda if torch.version.cuda else "n/a",
+        "python_version": (
+            f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        ),
+    }
+
+
+def deps_hash(environment: dict[str, str] | None = None) -> str:
+    """Return a short digest of :func:`capture_environment` for rollup reporting."""
+    import hashlib
+
+    env = environment if environment is not None else capture_environment()
+    canonical = "|".join(f"{k}={env[k]}" for k in sorted(env))
+    return hashlib.sha256(canonical.encode()).hexdigest()[:12]
 
 
 def export_to_onnx(
@@ -365,13 +447,16 @@ def spectral_conv2d(
 
 
 __all__ = [
+    "capture_environment",
     "compute_gradient_norm",
     "count_parameters",
     "create_model_preset",
+    "deps_hash",
     "estimate_memory_usage",
     "export_to_onnx",
     "profile_model",
     "seed_everything",
+    "set_global_seed",
     "simple_profiler",
     "spectral_conv2d",
     "spectral_linear",
