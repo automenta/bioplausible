@@ -76,11 +76,22 @@ class ContrastiveHebbianLearning(LearningRuleOptimizer):
         x: torch.Tensor,
         target: torch.Tensor,
     ) -> list[torch.Tensor]:
-        states = [x]
-        h = x
-        for layer in self._get_transitions():
-            h = layer(h)
-            states.append(h)
+        """Forward pass with the output layer clamped to the target.
+
+        In the CHL clamped phase both the input and the output are fixed:
+        we run the free forward to get intermediate activations, then
+        replace the final (output) state with the clamped target so the
+        contrastive Hebbian term ``post_clamped`` reflects supervision.
+        """
+        states = self._forward_capture(x)
+        output = states[-1]
+        if target.dim() == 1:
+            target_vec = torch.nn.functional.one_hot(
+                target, num_classes=output.shape[1]
+            ).float()
+        else:
+            target_vec = target.float()
+        states[-1] = target_vec.to(output.device)
         return states
 
     def _get_transitions(self) -> list[nn.Module]:
@@ -113,7 +124,11 @@ class ContrastiveHebbianLearning(LearningRuleOptimizer):
                     pre_clamped.T @ post_clamped - pre_free.T @ post_free
                 ) / pre_free.shape[0]
 
-                layer.weight.grad = delta_w.T
+                # Movellan (1991) CHL: W += lr * (post_clamped.T @ pre_clamped
+                # - post_free.T @ pre_free). The base ``_apply_update``
+                # applies ``-lr * grad``, so store the negative contrast to
+                # descend the clamped-phase energy.
+                layer.weight.grad = -delta_w.T
 
         for param, buffer in zip(self.params, self.buffers):
             if param.grad is not None:

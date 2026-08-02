@@ -97,3 +97,28 @@ class TestContrastiveHebbianLearning:
         for l in weight_layers:
             assert l.weight.grad is not None, f"weight.grad should be set for layer {l}"
             assert l.weight.grad.shape == l.weight.shape
+
+    def test_forward_clamped_clamps_output(self, params, model, x, target):
+        """The clamped phase must fix the output layer to the target."""
+        opt = ContrastiveHebbianLearning(params, model)
+        states = opt._forward_clamped(x, target)
+        y_onehot = torch.nn.functional.one_hot(target, num_classes=4).float()
+        assert torch.equal(states[-1], y_onehot), (
+            "clamped phase output should be the one-hot target"
+        )
+        assert torch.equal(states[0], x), "input stays clamped in both phases"
+
+    def test_hebbian_update_contrast_is_nonzero(self, params, model, x, target):
+        """Free vs clamped contrast must yield a non-trivial (non-zero) gradient."""
+        torch.manual_seed(42)
+        opt = ContrastiveHebbianLearning(params, model, lr=0.1)
+        for p in params:
+            p.grad = None
+        free = opt._forward_capture(x)
+        clamped = opt._forward_clamped(x, target)
+        opt._hebbian_update(free, clamped)
+        weight_layers = [l for l in opt._get_transitions() if hasattr(l, "weight")]
+        grads = [l.weight.grad for l in weight_layers]
+        assert any(g.norm().item() > 0 for g in grads), (
+            "clamped contrast must produce a non-trivial gradient"
+        )

@@ -255,14 +255,21 @@ class EqProp(LearningRuleOptimizer):
     ) -> None:
         if self.beta == 0:
             raise ValueError("beta must be non-zero for EP gradient computation")
-        for i, param in enumerate(self.params):
-            if param.ndim >= 2 and i < len(pairs_free):
-                inp, _ = pairs_free[i]
-                _, out_free = pairs_free[i]
-                _, out_nudged = pairs_nudged[i]
-                contrast = (out_nudged - out_free) / self.beta
-                batch_size = inp.shape[0]
-                param.grad = (inp.T @ contrast) / batch_size
+        for i, layer in enumerate(self._get_transitions()):
+            if i >= len(pairs_free):
+                break
+            inp, _ = pairs_free[i]
+            _, out_free = pairs_free[i]
+            _, out_nudged = pairs_nudged[i]
+            contrast = (out_nudged - out_free) / self.beta
+            batch_size = inp.shape[0]
+            weight = next((p for p in layer.parameters() if p.ndim >= 2), None)
+            if weight is not None:
+                # EP contrastive gradient of the weight W of layer y = x @ W.T:
+                #   dL/dW = (1/beta) * (s_nudged - s_free).T @ x_prev
+                # (Scellier & Bengio 2017). Free-phase term vanishes at the
+                # free equilibrium where pred == state.
+                weight.grad = -(contrast.T @ inp) / batch_size
 
 
 @register_propagator(

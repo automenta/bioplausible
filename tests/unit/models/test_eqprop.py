@@ -18,9 +18,8 @@ from bioplausible.zoo.propagators.eqprop import (
 class SimpleMLP(TransitionGraphMixin, nn.Module):
     """Minimal MLP for eqprop tests.
 
-    NOTE: All layers must have the same hidden dim to match EqProp's
-    _compute_ep_gradient shape assumption (contrast.T needs same dim
-    as weight matrix).
+    Layers may have differing dims; ``_compute_ep_gradient`` computes a
+    properly-shaped contrastive gradient ``(contrast.T @ inp)`` per layer.
     """
 
     def __init__(self, dim: int = 8):
@@ -88,21 +87,17 @@ class TestEqProp:
             opt.step(x)
 
     def test_step_sets_gradients(self, params, model, x, target):
-        """Step runs and sets gradients on weight params for reachable layers.
-        NOTE: Only the first len(layers) weight params get grads due to the
-        i < len(pairs_free) guard in _compute_ep_gradient."""
+        """Step runs and sets gradients on the weight params of every layer."""
         opt = EqProp(params, model, lr=0.1, beta=0.5, settle_steps=5, settle_lr=0.1)
 
         opt.step(x, target)
 
-        layers = opt._get_transitions()
-        reachable_weights = [
-            p for i, p in enumerate(params) if p.ndim >= 2 and i < len(layers)
-        ]
-        assert all(p.grad is not None for p in reachable_weights), (
-            "Weight params reachable by EP gradient should have grads"
+        weight_params = [p for p in params if p.ndim >= 2]
+        assert weight_params, "expected at least one weight param"
+        assert all(p.grad is not None for p in weight_params), (
+            "Every layer weight should receive an EP gradient"
         )
-        for p in reachable_weights:
+        for p in weight_params:
             assert p.grad.shape == p.shape, (
                 f"Gradient shape {p.grad.shape} != param shape {p.shape}"
             )
@@ -137,7 +132,7 @@ class TestEqProp:
             assert inp.shape[0] == out.shape[0], f"Batch dim mismatch at layer {i}"
 
     def test_compute_ep_gradient_sets_grad(self, params, model, x):
-        """Weight params reachable by EP contrast get correct-shaped grads."""
+        """Every layer weight gets a correct-shaped contrastive grad."""
         opt = EqProp(params, model, beta=0.5)
         for p in params:
             p.grad = None
@@ -150,13 +145,14 @@ class TestEqProp:
 
         layers = opt._get_transitions()
         for i, p in enumerate(params):
-            if p.ndim >= 2 and i < len(layers):
+            if p.ndim >= 2:
                 assert p.grad is not None, (
                     f"Grad should be set for weight {p.shape} at i={i}"
                 )
                 assert p.grad.shape == p.shape, (
                     f"Gradient shape {p.grad.shape} != param shape {p.shape} at i={i}"
                 )
+        assert len(layers) >= 1
 
     def test_step_updates_params(self, params, model, x, target):
         """Smoke test: step changes parameter values."""

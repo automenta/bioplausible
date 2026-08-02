@@ -18,12 +18,15 @@ Usage:
 """
 
 from bioplausible.execution._state import DecisionLogger, ExperimentState
+from bioplausible.execution.callbacks import BaseExecutionCallback, ExecutionCallback
 from bioplausible.execution.engine import ExecutionEngine
 from bioplausible.execution.strategy import ExecutionStrategy
 from bioplausible.execution.task import ExperimentTask
 
 __all__ = [
+    "BaseExecutionCallback",
     "DecisionLogger",
+    "ExecutionCallback",
     "ExecutionEngine",
     "ExecutionStrategy",
     "ExperimentState",

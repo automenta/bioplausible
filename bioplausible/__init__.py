@@ -136,6 +136,7 @@ from bioplausible.evaluation import (
 )
 
 # Scientist (execution engine) - now in execution
+from bioplausible.execution.callbacks import BaseExecutionCallback, ExecutionCallback
 from bioplausible.execution.engine import ExecutionEngine
 from bioplausible.execution.task import ExperimentTask
 
@@ -193,6 +194,7 @@ __all__ = [
     "DEFAULT_KB",
     "AutoScientistBridge",
     "AutoScientistCampaign",
+    "BaseExecutionCallback",
     "BackpropMLP",
     "Batch",
     "BenchmarkRegistry",
@@ -220,6 +222,7 @@ __all__ = [
     "EnergyConvergenceCallback",
     "EqProp",
     "EvaluatorBase",
+    "ExecutionCallback",
     "ExecutionEngine",
     "ExperimentConfig",
     "ExperimentProposal",

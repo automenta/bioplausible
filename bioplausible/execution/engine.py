@@ -27,6 +27,7 @@ import optuna
 import torch
 
 from bioplausible.execution._state import DecisionLogger, ExperimentState, FailureRecord
+from bioplausible.execution.callbacks import ExecutionCallback
 from bioplausible.execution.dashboard import DASHBOARD
 from bioplausible.execution.resources import ResourceMonitor
 from bioplausible.execution.robustness import run_robustness_check
@@ -42,6 +43,7 @@ from bioplausible.hyperopt.parallel_runner import ParallelTrialRunner
 from bioplausible.lightning_.experiment import run_pl_trial
 
 __all__ = [
+    "ExecutionCallback",
     "ExecutionEngine",
     "ExecutionStrategy",
     "ExperimentState",

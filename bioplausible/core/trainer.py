@@ -23,6 +23,7 @@ from torch import nn
 from bioplausible.core.energy import EnergyTracker
 from bioplausible.core.energy_model import EBMTrainer, EnergyModel
 from bioplausible.core.losses import compute_accuracy, compute_loss
+from bioplausible.execution.callbacks import ExecutionCallback
 from bioplausible.core.registry import (
     ComponentCategory,
     IncompatibilityError,
@@ -267,6 +268,7 @@ class CoreTrainer:
 
         # Callbacks
         self._callbacks: list[Callable] = []
+        self._execution_callbacks: list[ExecutionCallback] = []
 
         logger.info("CoreTrainer initialized on %s", self.device)
         logger.info("Output dir: %s", self.output_dir)
@@ -627,10 +629,9 @@ class CoreTrainer:
         self.history.append(epoch_metrics)
         self._log_epoch(epoch_metrics)
         self._run_callbacks(epoch_metrics)
+        self._fire_execution_hook("on_epoch_end", epoch, epoch_metrics)
 
-        if self.config.save_checkpoints and self._should_save_checkpoint(
-            epoch_metrics
-        ):
+        if self.config.save_checkpoints and self._should_save_checkpoint(epoch_metrics):
             self._save_checkpoint(epoch_metrics)
 
         if self._check_early_stopping(epoch_metrics):
@@ -789,6 +790,19 @@ class CoreTrainer:
             if self.global_step % self.config.log_every_n_steps == 0:
                 self._log_step(step_metrics, batch_idx, batches_per_epoch)
 
+            # Execution callbacks (Sprint 3.4) — scalar telemetry only
+            self._fire_execution_hook(
+                "on_step_end",
+                self.global_step,
+                step_metrics.get("loss", float("nan")),
+                self._compute_grad_norms(self.model),
+            )
+            energy = step_metrics.get("energy_proxy") or step_metrics.get("energy")
+            if energy is not None and isinstance(energy, (int, float)):
+                self._fire_execution_hook(
+                    "on_settling_step", self.global_step, float(energy)
+                )
+
         # Average metrics
         avg_metrics: dict[str, object] = {
             k: np.mean(v) for k, v in metrics_agg.items() if v
@@ -945,6 +959,35 @@ class CoreTrainer:
     def add_callback(self, callback: Callable) -> None:
         """Add a callback function."""
         self._callbacks.append(callback)
+
+    def add_execution_callback(self, callback: ExecutionCallback) -> None:
+        """Register an ``ExecutionCallback`` for live telemetry.
+
+        Hooks fire best-effort (a raising callback is logged and
+        swallowed) and receive scalar metrics only, so UI listeners
+        (e.g. the NiceGUI demo) can never corrupt training state.
+
+        Args:
+            callback: Object implementing the ``ExecutionCallback`` protocol.
+        """
+        self._execution_callbacks.append(callback)
+
+    def _fire_execution_hook(self, name: str, *args: object) -> None:
+        """Fire an execution callback hook on all registered callbacks."""
+        for cb in self._execution_callbacks:
+            try:
+                getattr(cb, name)(*args)
+            except Exception as e:
+                logger.warning("Execution callback %r.%s failed: %s", cb, name, e)
+
+    @staticmethod
+    def _compute_grad_norms(model: nn.Module) -> dict[str, float]:
+        """Compute per-parameter L2 gradient norms for the model."""
+        norms: dict[str, float] = {}
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                norms[name] = param.grad.norm().item()
+        return norms
 
     def _should_save_checkpoint(self, metrics: TrainingMetrics) -> bool:
         """Determine if checkpoint should be saved."""
