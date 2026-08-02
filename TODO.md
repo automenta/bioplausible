@@ -6,9 +6,61 @@
 
 ---
 
+## Provenance
+
+This plan supersedes `TODO.md` (Sprints 1–3 complete, Sprint 4 not started).
+- Old Sprint 4.1 (parity tuning) → **new Sprint 1.5**
+- Old Sprint 4.2 (coverage) → **new Sprint 5.5**
+- Old Sprint 4.3 (flaky quarantine) → **new Sprint 5.6**
+- Old Sprint 4.4 (docs) → **new Sprint 4.5 + 4.6**
+- Old Sprint 4.5 (CI) → **new Sprint 5.5**
+- RESEARCH.pre.md Tier 1 → **new Sprint 0**
+- RESEARCH.pre.md Tier 2–3 → **new Sprint 5**
+- RESEARCH.md Phases 2–10 → **deferred (long-term agenda)**
+
+---
+
+## Architecture Decision Log
+
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 2026-08-01 | NiceGUI for demo UI | Asyncio-native; headless engine event bus plugs directly; Python-only authoring; Quasar theme; canvas escape hatch for weight matrices |
+| 2026-08-01 | Selective GPU testing | Unit/property tests stay CPU (deterministic, fast); integration/benchmarks use GPU for 5-10x speedup on large models |
+| 2026-08-01 | Fold RESEARCH.pre.md Tier 1 into Sprint 0 | High-leverage architecture unblocks AutoScientist, registry, KB, scaling sweeps; defer Tier 2-3 to Sprint 5 |
+| 2026-08-01 | Defer all lint style work | 2472 violations are ~100% style (N803, PLR09xx, TRY002, E402); config re-scope or opportunistic fixes only |
+| 2026-08-02 | Parity tuning before demo | Sprint 3.7 exposes accuracy gaps publicly; tuning in Sprint 1.5 ensures the demo shows credible numbers, not xfail excuses |
+| 2026-08-02 | AutoScientist contingent on green tests | RESEARCH.md explicitly warns against generating hypotheses on unvalidated numbers; Sprint 6 has a hard prerequisite gate |
+| 2026-08-02 | NiceGUI pinned to tested version | `demo/` is a separate uv project; root pyproject unaffected. Exact pin auto-held in `demo/uv.lock`. Tested version recorded here because task 3.5 (Vue weight canvas) depends on NiceGUI's Vue-component API, which is not semver-stable. Re-test 3.5 on any NiceGUI bump. |
+
+---
+
+## Critical Path (dependency order, not time order)
+
+Chain A (viability spine):  −1 → 0 → 1 → (1.3,1.4) → 1.5 → 3.7
+Chain B (biology spine):    1.3 → 2 → 2.5 → 3.2 / 4.6
+Chain C (autonomy spine):   (A green) ∧ (B green) ∧ (cov≥50%) → 6
+
+Independent of both spines (run anytime after their direct deps): 0.5, 0.6, 4.1, 5.1–5.4
+
+---
+
 ## Session Log
 
 *(New sessions append here)*
+
+---
+
+## Sprint −1: Pre-Flight Fixes (1–2 days)
+
+*Clear the known-failure backlog so every subsequent gate starts from green.*
+
+| # | Task | Depends On | Status | Validation |
+|---|------|------------|--------|------------|
+| **−1.1** | **Fix `fast_lm_equitile` failures** — 3 tests fail on `vocab_size` mismatch between config and synthetic data fixture. Align fixture or config. | — | ☐ | `uv run pytest tests/ -k fast_lm_equitile -q` → 0 failures |
+| **−1.2** | **Triage existing xfail markers** — audit all 5 `@pytest.mark.xfail` in `test_backprop_parity.py` + 1 in biology tests. Document root cause for each in a comment block. Do NOT remove yet. | — | ☐ | Each xfail has a `reason=` string citing the specific gap (e.g., "directed_ep: 12% gap at default lr") |
+| **−1.3** | **Snapshot the gated baseline** — `git tag v0.1-pre-sprint0`. In `docs/baseline.md` record ONLY metrics that appear in a gate: (a) `pytest --co -q | wc -l` collected count + pass/fail/xfail/skip tallies; (b) `pyright` error count (must be 0) + warning count; (c) `ruff check --select E,F,W,C90 --statistics` (the gated correctness set). Do NOT snapshot the style-violation total or the full violation list — both are explicitly deferred and would rot. | — | ☐ | `docs/baseline.md` exists; every number in it maps to a gate in Sprint 5.5 |
+
+**Gate**: `uv run pytest tests/unit/ tests/property/ -q --no-cov` → 0 failures (xfail allowed only if documented in −1.2); tag pushed.
 
 ---
 
@@ -16,47 +68,62 @@
 
 *Folds RESEARCH.pre.md Tier 1 (1.1–1.6) — high-leverage refactors that unblock everything downstream.*
 
-| # | Task | Owner | Status | Validation |
-|---|------|-------|--------|------------|
-| **0.1** | **Domain Exception Hierarchy** (`core/exceptions.py`) — base `BioplausibleError` + `ConfigError`, `RegistryError`, `IncompatibilityError`, `CheckpointError`, `LoadStateError`, `KnowledgeBaseError`, `TrialExecutionError`, `PropagatorError`, `TileGraphError`. Replace 127 bare `except Exception` with narrow+chain. | | ☐ | `pyright` 0 errors; `grep -r "except Exception" bioplausible/ | wc -l` → 0 in lib code |
-| **0.2** | **`_QueryFilter` Predicate Dispatch** (`core/registry.py:120-165`) — convert boolean mega-expression to frozen predicate dataclasses + protocol; `matches()` = `all(p(meta) for p in predicates)`. Enables hypothesis tests + AutoScientist capability matching. | | ☐ | Property tests for each predicate axis; registry audit passes |
-| **0.3** | **Cyclomatic Complexity Extraction** — hot paths only: `engine.py:_run_discovery_loop` (cc=17), `engine.py:_process_with_retry` (cc=12), `equitile/model.py:_relax` (cc=16), `equitile/model.py:_apply_hebbian_updates` (cc=13). Extract `_`-prefixed helpers with guard clauses. | | ☐ | `ruff check --select C901` = 0 on these files; snapshot tests for `_relax`/`_apply_hebbian_updates` |
-| **0.4** | **`match`/`case` Conversion** — closed-enum chains: `equitile/model.py:_get_activation` (5-way), `equitile/model.py:train_step` (3-way mode), `engine.py:_log_task_start` (after dataclass extraction), `engine.py:_prepare_fixed_config` (after dataclass extraction). | | ☐ | Exhaustiveness checking catches new variants; no regressions |
-| **0.5** | **Module Boundary Hardening** — `bioplausible/__init__.py`: split heavy registration into `_register_all.py`; `equitile/utils/` → `_utils/` or `_internal/`; verify no external imports of `_internal/`. | | ☐ | `import bioplausible.types` doesn't trigger model registration; `ruff` TID252 clean |
-| **0.6** | **SQLite Resource Standardization** — `execution/_state.py`: replace 12+ manual `try/finally` with `@contextmanager _connect(db_path)` helper matching `kb.py` pattern. | | ☐ | No resource leaks under stress; KB meta-analysis (RESEARCH.md 4.2) unblocked |
+| # | Task | Depends On | Status | Validation |
+|---|------|------------|--------|------------|
+| **0.1** | **Domain Exception Hierarchy** (`core/exceptions.py`) — base `BioplausibleError` + `ConfigError`, `RegistryError`, `IncompatibilityError`, `CheckpointError`, `LoadStateError`, `KnowledgeBaseError`, `TrialExecutionError`, `PropagatorError`, `TileGraphError`. Replace 127 bare `except Exception` with narrow+chain. **Migration safety**: before replacing, run `grep -rn "except Exception" bioplausible/ > docs/exception_audit_baseline.txt`. After replacing, diff against baseline. CI check: `grep -r "except Exception" bioplausible/ --include="*.py" | grep -v "core/exceptions.py" | wc -l` → 0. | −1 | ☐ | `pyright` 0 errors; CI grep check → 0 |
+| **0.2** | **`_QueryFilter` Predicate Dispatch** (`core/registry.py:120-165`) — convert boolean mega-expression to frozen predicate dataclasses + protocol; `matches()` = `all(p(meta) for p in predicates)`. Enables hypothesis tests + AutoScientist capability matching. | 0.1 | ☐ | Property tests for each predicate axis; registry audit passes |
+| **0.3** | **Cyclomatic Complexity Extraction** — hot paths only: `engine.py:_run_discovery_loop` (cc=17), `engine.py:_process_with_retry` (cc=12), `equitile/model.py:_relax` (cc=16), `equitile/model.py:_apply_hebbian_updates` (cc=13). **Snapshot tests first**: write tests capturing current outputs for 3 representative configs, then extract `_`-prefixed helpers with guard clauses. | 0.1 | ☐ | `ruff check --select C901` = 0 on these files; snapshot tests pass unchanged after extraction |
+| **0.4** | **`match`/`case` Conversion** — closed-enum chains: `equitile/model.py:_get_activation` (5-way), `equitile/model.py:train_step` (3-way mode), `engine.py:_log_task_start` (after dataclass extraction), `engine.py:_prepare_fixed_config` (after dataclass extraction). | 0.3 | ☐ | Exhaustiveness checking catches new variants; no regressions |
+| **0.5** | **Module Boundary Hardening** — `bioplausible/__init__.py`: split heavy registration into `_register_all.py`; `equitile/utils/` → `_utils/` or `_internal/`; verify no external imports of `_internal/`. | 0.1 | ☐ | `import bioplausible.types` doesn't trigger model registration; `ruff` TID252 clean |
+| **0.6** | **SQLite Resource Standardization** — `execution/_state.py`: replace 12+ manual `try/finally` with `@contextmanager _connect(db_path)` helper matching `kb.py` pattern. | 0.1 | ☐ | No resource leaks under stress; KB meta-analysis (RESEARCH.md 4.2) unblocked |
 
-**Gate**: `uv run pytest tests/unit/ tests/property/ -q --no-cov` < 60s, 0 failures; `pyright` 0 errors.
+**Gate**: `uv run pytest tests/unit/ tests/property/ -q --no-cov` < 60s, 0 failures (xfail allowed only if documented in −1.2); `pyright` 0 errors; `grep -r "except Exception" bioplausible/ --include="*.py" | grep -v core/exceptions.py | wc -l` → 0; `ruff check --select C901` on the 4 refactored files → 0.
 
 ---
 
-## Sprint 1: GPU-Accelerated Test Infrastructure (Week 2–3)
+## Sprint 1: GPU-Accelerated Test Infrastructure (Weeks 2–3)
 
 *Selective GPU: unit/property stay CPU (fast, deterministic); integration/large-model/benchmark tests run on GPU.*
 
-| # | Task | Owner | Status | Validation |
-|---|------|-------|--------|------------|
-| **1.1** | **GPU Test Fixtures** (`tests/conftest.py`) — `device` fixture: `cuda` if available else `cpu`; `gpu_only` marker skips on CPU; `synthetic_batch_gpu`, `synthetic_vision_task_gpu`, `synthetic_lm_task_gpu` session-scoped on CUDA. | | ☐ | `pytest -m gpu_only` runs on RTX 3080; CPU suite unchanged |
-| **1.2** | **Migrate Heavy Tests to GPU** — move `tests/integration/test_equitile_sparsity_robustness.py`, `test_lm_demo.py`, `test_triton_*.py`, `test_deq.py` (memory tests) to `@pytest.mark.gpu` + GPU fixtures. | | ☐ | GPU suite ~2-3x faster than CPU; memory tests use `torch.cuda.max_memory_allocated()` |
-| **1.3** | **Benchmark Harness** (`tests/unit/validation/benchmark_harness.py`) — parametrized `@pytest.mark.benchmark` tests: FLOPs, peak memory, wall-time per model family (EqProp, FA, MEP, EquiTile, FF/PEPITA, Spiking). Uses `torch.profiler` + `torch.cuda.memory`. | | ☐ | `pytest tests/unit/validation/benchmark_harness.py -m benchmark` produces JSONL for Pareto plots |
-| **1.4** | **Deterministic GPU Seeding** — extend `utils/reproducibility.py`: `set_global_seed(seed, device="cuda")` covers torch/numpy/random/CUDA/cuDNN; env capture (git commit, torch/cuda versions, deps hash). | | ☐ | `biopl-repro-check` (CLI) runs 1-epoch parity on all models, same seed → bitwise identical |
+| # | Task | Depends On | Status | Validation |
+|---|------|------------|--------|------------|
+| **1.1** | **GPU Test Fixtures** (`tests/conftest.py`) — `device` fixture: `cuda` if available else `cpu`; `gpu_only` marker skips on CPU; `synthetic_batch_gpu`, `synthetic_vision_task_gpu`, `synthetic_lm_task_gpu` session-scoped on CUDA. | 0 | ☐ | `pytest -m gpu_only` runs on RTX 3080; CPU suite unchanged |
+| **1.2** | **Migrate Heavy Tests to GPU** — move `tests/integration/test_equitile_sparsity_robustness.py`, `test_lm_demo.py`, `test_triton_*.py`, `test_deq.py` (memory tests) to `@pytest.mark.gpu` + GPU fixtures. | 1.1 | ☐ | GPU suite ~2-3x faster than CPU; memory tests use `torch.cuda.max_memory_allocated()` |
+| **1.3** | **Benchmark Harness** (`tests/unit/validation/benchmark_harness.py`) — parametrized `@pytest.mark.benchmark` tests: FLOPs, peak memory, wall-time per model family (EqProp, FA, MEP, EquiTile, FF/PEPITA, Spiking). Uses `torch.profiler` + `torch.cuda.memory`. | 1.1 | ☐ | `pytest tests/unit/validation/benchmark_harness.py -m benchmark` produces JSONL for Pareto plots |
+| **1.4** | **Deterministic GPU Seeding** — extend `utils/reproducibility.py`: `set_global_seed(seed, device="cuda")` covers torch/numpy/random/CUDA/cuDNN; env capture (git commit, torch/cuda versions, deps hash). | 1.1 | ☐ | `biopl-repro-check` (CLI) runs 1-epoch parity on all models, same seed → bitwise identical |
 
 **Gate**: GPU integration tests < 30s total; benchmark harness produces comparable numbers across runs.
 
 ---
 
-## Sprint 2: Biology Validation Expansion (Week 3–4)
+## Sprint 1.5: Parity Hyperparameter Tuning (Week 3)
 
-*Beyond the 8 axioms: add gradient equivalence (finite-diff), energy landscape visualization, and negative-result documentation.*
+*Close the accuracy gap. Every xfail removed or re-justified with a biology-specific ceiling (data-driven, not marker-driven).*
 
-| # | Task | Owner | Status | Validation |
-|---|------|-------|--------|------------|
-| **2.1** | **Finite-Difference Gradient Equivalence** (`tests/integration/test_gradient_equivalence.py`) — for every propagator: compute `grad_fd = (loss(w+ε) - loss(w-ε)) / 2ε`; assert `cosine(grad_fd, grad_local) ≥ threshold` per family (EqProp 0.7, FA 0.5, MEP 0.6, EquiTile 0.6, FF/PEPITA N/A). | | ☐ | CI gate: all registered propagators pass; thresholds documented in registry metadata |
-| **2.2** | **Energy Landscape Visualization** (`analysis/energy_landscape.py`) — 2D slices of `E(w)` around trained weights; contour plots + gradient flow arrows. Integrate with `visualization.py`. | | ☐ | Generates `energy_landscape_{model}_{task}.png` for EqProp/EquiTile |
-| **2.3** | **Contraction Mapping Verification** — extend `test_biology_axioms.py`: verify `||Δx_{t+1}|| / ||Δx_t|| < 1` for EquiTile/EP settling dynamics across β, depth, spectral norm. | | ☐ | Property test with hypothesis strategies for config space |
-| **2.4** | **Failure Manifesto** (`analysis/failure_manifesto.py`) — structured negative results: what was tried, search space, why it failed, partial successes, hypotheses. Auto-populated from KB failed trials. | | ☐ | `biopl-failure-manifesto --model eqprop_mlp` → markdown report |
-| **2.5** | **Biology Metadata Calibration** — extend registry `ComponentMetadata`: `bio_plausibility_score` (0-1, calibrated), `locality_level` (GLOBAL/LAYERWISE/LOCAL/EQUILIBRIUM/FORWARD_ONLY), `memory_complexity`, `requires_backward`, `credit_assignment_type`, `family` tag. Audit all 80+ components. | | ☐ | `biopl-registry-audit --metadata` → calibrated CSV; CI gate on completeness |
+| # | Task | Depends On | Status | Validation |
+|---|------|------------|--------|------------|
+| **1.5.1** | **Per-model hyperparameter configs** — create `tests/unit/validation/hyperparams/{eqprop_mlp,directed_ep,forward_forward,pepita,equitile}.yaml` with tuned `lr`, `β`/`step_size`, `max_steps`, `batch_size`, `parity_threshold` (default `0.05`). Use benchmark harness (1.3) to sweep. | 1.3, 1.4 | ☐ | Each YAML loads and trains without error |
+| **1.5.2** | **Remove xfail from parity test** — uniform marker-free test reads `parity_threshold` from YAML. `assert gap <= threshold`. Zero `@pytest.mark.xfail` in `test_backprop_parity.py`. | 1.5.1 | ☐ | `grep -rn "xfail" tests/unit/validation/test_backprop_parity.py` → 0 matches |
+| **1.5.3** | **Document residual bio-gaps** — for any model with `parity_threshold > 0.05` (e.g., FF/PEPITA theoretical ceiling), add section in `docs/parity_gaps.md` explaining the biological trade-off. Enforced by `biopl-registry-audit` check. | 1.5.1 | ☐ | `docs/parity_gaps.md` has one section per model with elevated threshold; no unexplained gaps |
+| **1.5.4** | **Parity regression gate** — add `test_backprop_parity.py` to the fast CPU gate. Any future regression > threshold fails CI. | 1.5.2 | ☐ | Parity test runs in <10s on CPU; included in Sprint 5.5 CI pipeline |
 
-**Gate**: All biology property tests + gradient equivalence pass; failure manifesto generates for at least 3 model families.
+**Gate**: `uv run pytest tests/unit/validation/test_backprop_parity.py -v --no-cov` → all pass; 0 xfail; every `parity_threshold > 0.05` documented in `docs/parity_gaps.md`.
+
+---
+
+## Sprint 2: Biology Validation Expansion (Weeks 3–4)
+
+*Beyond the 8 axioms: add gradient equivalence (finite-diff), energy landscape visualization, contraction verification, negative-result documentation, metadata calibration.*
+
+| # | Task | Depends On | Status | Validation |
+|---|------|------------|--------|------------|
+| **2.1** | **Finite-Difference Gradient Equivalence** (`tests/integration/test_gradient_equivalence.py`) — for every propagator: `grad_fd = (loss(w+ε) - loss(w-ε)) / 2ε`; assert `cosine(grad_fd, grad_local) ≥ threshold` per family (EqProp 0.7, FA 0.5, MEP 0.6, EquiTile 0.6, FF/PEPITA N/A). **Complements parity**: verifies gradient *direction*; parity verifies *accuracy magnitude*. A model can pass direction but fail magnitude (wrong scale) or pass magnitude but fail direction (right answer, wrong reason). Both gates required. | 1.3 | ☐ | CI gate: all registered propagators pass; thresholds documented in registry metadata |
+| **2.2** | **Energy Landscape Visualization** (`analysis/energy_landscape.py`) — 2D slices of `E(w)` around trained weights; contour plots + gradient flow arrows. Integrate with `visualization.py`. | 1.3 | ☐ | Generates `energy_landscape_{model}_{task}.png` for EqProp/EquiTile |
+| **2.3** | **Contraction Mapping Verification** — extend `test_biology_axioms.py`: verify `||Δx_{t+1}|| / ||Δx_t|| < 1` for EquiTile/EP settling dynamics across β, depth, spectral norm. | 1.3 | ☐ | Property test with hypothesis strategies for config space |
+| **2.4** | **Failure Manifesto** (`analysis/failure_manifesto.py`) — structured negative results: what was tried, search space, why it failed, partial successes, hypotheses. Auto-populated from KB failed trials. | 1.3 | ☐ | `biopl-failure-manifesto --model eqprop_mlp` → markdown report |
+| **2.5** | **Biology Metadata Calibration** — extend registry `ComponentMetadata`: `bio_plausibility_score` (0-1, calibrated), `locality_level` (GLOBAL/LAYERWISE/LOCAL/EQUILIBRIUM/FORWARD_ONLY), `memory_complexity`, `requires_backward`, `credit_assignment_type`, `family` tag. Audit all 80+ components. `biopl-registry-audit --metadata` → CSV with columns: `name, family, bio_plausibility_score, locality_level, memory_complexity, requires_backward, credit_assignment_type, parity_status, test_coverage`. CI gate: 0 rows with empty `bio_plausibility_score` or `locality_level`. | 1.3 | ☐ | CSV complete; 0 empty critical fields; audit CI gate green |
+
+**Gate**: All biology property tests + gradient equivalence pass; failure manifesto generates for ≥3 model families; all 5 parity models pass without xfail (or have documented bio-gap); `biopl-registry-audit --metadata` → 0 components with empty `bio_plausibility_score`; contraction mapping property test passes for ≥3 config samples.
 
 ---
 
@@ -64,61 +131,74 @@
 
 *Side-by-side comparison of any 2 configurations (incl. backprop): live charts, animated weight matrices, hyperparameter widgets. Trivial + real tasks.*
 
-| # | Task | Owner | Status | Validation |
-|---|------|-------|--------|------------|
-| **3.1** | **NiceGUI Project Setup** (`demo/`) — `pyproject.toml` extra `demo = ["nicegui", "plotly", "torchvision", "datasets"]`; `demo/main.py` entry; Quasar dark theme; asyncio event bus from `execution/engine.py` plugs directly. | | ☐ | `uv run demo/main.py` → browser opens at `localhost:8080` |
-| **3.2** | **Config-Driven Widget Generation** — `demo/widgets.py`: inspect Pydantic/dataclass config (e.g., `EquiTileConfig`, `ModelConfig`) → auto-generate sliders, dropdowns, number inputs with tooltips from docstrings. Two panels: **Config A** vs **Config B** (backprop baseline pre-filled). | | ☐ | Changing any widget updates live preview instantly |
-| **3.3** | **Task Selector** — tabs: **Toy** (XOR, spiral, concentric circles), **Digits** (sklearn), **MNIST**, **CIFAR-10**, **Tiny Shakespeare**. Each loads synthetic or real data via `tests/conftest.py` fixtures (GPU-accelerated). | | ☐ | All 5 tasks load < 2s; MNIST/CIFAR stream from torchvision cache |
-| **3.4** | **Live Training Charts** (`demo/charts.py`) — Plotly `FigureWidget` streaming: loss/accuracy (dual Y), Lipschitz constant, gradient alignment, tile activity heatmap (EquiTile), energy trajectory (EP). WebSocket push from engine callback. | | ☐ | 100-step training animates smoothly at 10 FPS; no UI freeze |
-| **3.5** | **Animated Weight Matrices** (`demo/weight_viz.py`) — canvas/Vue component: color-coded `W_t` per layer/tile; play/pause/scrub slider; hover shows value + gradient magnitude; side-by-side diff view (Config A - Config B). | | ☐ | 64×64 matrix @ 30 FPS; diff view highlights divergent weights |
-| **3.6** | **Experiment Persistence** — "Save Config" / "Load Config" (JSON); "Export Run" (CSV + charts PNG + weight MP4); shareable URL with encoded config. | | ☐ | Exported config reloads identically; MP4 playable |
-| **3.7** | **Backprop Baseline Parity** — pre-built `backprop_mlp`, `backprop_cnn`, `backprop_transformer` configs; one-click "Run Parity" trains both configs, overlays curves, prints final gap %. | | ☐ | Parity gap matches CLI `biopl-parity` within 1% |
+| # | Task | Depends On | Status | Validation |
+|---|------|------------|--------|------------|
+| **3.1** | **NiceGUI Project Setup** (`demo/`) — separate uv project with `demo/pyproject.toml`: `nicegui = ">=2.0,<3.0"`, `plotly = ">=5.20,<6.0"`, `torchvision`, `datasets`. `demo/main.py` entry; Quasar dark theme; asyncio event bus from `execution/engine.py` plugs directly. Exact pins auto-held in `demo/uv.lock`. | 1.5, 2.5 | ☐ | `uv run demo/main.py` → browser opens at `localhost:8080` |
+| **3.2** | **Config-Driven Widget Generation** (`demo/widgets.py`) — inspect Pydantic/dataclass config → auto-generate sliders, dropdowns, number inputs with tooltips from docstrings. **Nested configs recursively**: `EquiTileConfig.tile.sparsity.type` → grouped accordion. Unsupported types render as read-only JSON. Two panels: **Config A** vs **Config B** (backprop baseline pre-filled). Tooltips display `bio_plausibility_score` and `locality_level` from Sprint 2.5. | 2.5 | ☐ | Changing any widget updates live preview instantly; no crash on unannotated fields |
+| **3.3** | **Task Selector** — tabs: **Toy** (XOR, spiral, concentric circles), **Digits** (sklearn), **MNIST**, **CIFAR-10**, **Tiny Shakespeare**. Each loads synthetic or real data via `tests/conftest.py` fixtures (GPU-accelerated). | 1.1 | ☐ | All 5 tasks load < 2s; MNIST/CIFAR stream from torchvision cache |
+| **3.4** | **Live Training Charts** (`demo/charts.py`) — Plotly `FigureWidget` streaming: loss/accuracy (dual Y), Lipschitz constant, gradient alignment, tile activity heatmap (EquiTile), energy trajectory (EP). **Prerequisite**: add `ExecutionCallback` protocol to `execution/engine.py` with hooks `on_epoch_end(metrics)`, `on_step_end(loss, grads)`, `on_settling_step(energy)`. NiceGUI registers async callback; engine remains UI-agnostic. | 0.3 | ☐ | 100-step training animates smoothly at 10 FPS; no UI freeze |
+| **3.5** | **Animated Weight Matrices** (`demo/weight_viz.py`) — canvas/Vue component: color-coded `W_t` per layer/tile; play/pause/scrub slider; hover shows value + gradient magnitude; side-by-side diff view (Config A - Config B). Re-test on any NiceGUI bump (ADR recorded tested version). | 3.1 | ☐ | 64×64 matrix @ 30 FPS; diff view highlights divergent weights |
+| **3.6** | **Experiment Persistence** — "Save Config" / "Load Config" (JSON); "Export Run" (CSV + charts PNG + weight MP4); shareable URL with encoded config. | 3.1 | ☐ | Exported config reloads identically; MP4 playable |
+| **3.7** | **Backprop Baseline Parity** — pre-built `backprop_mlp`, `backprop_cnn`, `backprop_transformer` configs; one-click "Run Parity" trains both configs, overlays curves, prints final gap %. **Prerequisite**: Sprint 1.5 complete. If any model has `parity_threshold > 0.05`, demo displays gap explanation alongside curves. | 1.5 | ☐ | Parity gap matches CLI `biopl-parity` within 1% |
 
-**Gate**: Demo runs end-to-end on RTX 3080; researcher can reproduce parity claim in < 5 min.
+**Gate**: Demo runs end-to-end: (1) select Config A = EquiTile, Config B = backprop MLP; (2) select task = CIFAR-10; (3) click Run; (4) loss/accuracy charts stream for ≥50 epochs without freeze; (5) final parity gap displayed matches CLI `biopl-parity` within 1%; (6) "Export Run" produces valid CSV + PNG.
 
 ---
 
-## Sprint 4: Ecosystem Positioning & Recruitment (Week 6–7)
+## Sprint 4: Ecosystem Positioning & Recruitment (Weeks 6–7)
 
 *Articulate Bioplausible's unique value in modern ML; produce recruitment artifacts.*
 
-| # | Task | Owner | Status | Validation |
-|---|------|-------|--------|------------|
-| **4.1** | **Positioning Doc** (`docs/positioning.md`) — where Bioplausible fits: (a) **Local learning research** — only framework with EqProp/FA/MEP/EquiTile/FF/Spiking unified; (b) **Neuromorphic bridge** — same code runs GPU + Loihi/SpiNNaker via deployment; (c) **AutoScientist substrate** — registry + KB + campaign = autonomous hypothesis engine; (d) **Memory-efficient training** — O(1) memory claim verified on 1000-layer EquiTile. | | ☐ | Doc reviewed by 2 external researchers; feedback incorporated |
-| **4.2** | **5-Minute Colab Notebook** (`examples/colab/bioplausible_demo.ipynb`) — `pip install bioplausible[demo]` → runs EquiTile on CIFAR-10 in browser; links to live demo UI. | | ☐ | Executes in Colab free tier (T4) < 5 min; no auth needed |
-| **4.3** | **Leaderboard Automation** (`leaderboard/generator.py` + GitHub Action) — nightly parity benchmarks → markdown table in README; Pareto frontier plots as artifacts. | | ☐ | `README.md` updates automatically; plots viewable in Actions |
-| **4.4** | **Good First Issues** — tag 10 issues: test gaps, docstrings, benchmark configs, demo widgets, registry metadata. `CONTRIBUTING.md` with component registration walkthrough. | | ☐ | Issues labeled `good first issue`; PR template enforces registry metadata |
+| # | Task | Depends On | Status | Validation |
+|---|------|------------|--------|------------|
+| **4.1** | **Positioning Doc** (`docs/positioning.md`) — where Bioplausible fits: (a) **Local learning research** — only framework with EqProp/FA/MEP/EquiTile/FF/Spiking unified; (b) **Neuromorphic bridge** — same code runs GPU + Loihi/SpiNNaker via deployment; (c) **AutoScientist substrate** — registry + KB + campaign = autonomous hypothesis engine; (d) **Memory-efficient training** — O(1) memory claim verified on 1000-layer EquiTile. | 2.5 | ☐ | Doc reviewed by 2 external researchers; feedback incorporated |
+| **4.2** | **5-Minute Colab Notebook** (`examples/colab/bioplausible_demo.ipynb`) — `pip install bioplausible[demo]` → runs EquiTile on CIFAR-10 in browser; links to live demo UI. | 3 | ☐ | Executes in Colab free tier (T4) < 5 min; no auth needed |
+| **4.3** | **Leaderboard Automation** (`leaderboard/generator.py` + GitHub Action) — nightly parity benchmarks → markdown table in README; Pareto frontier plots as artifacts. Table columns: Model \| Family \| Parity Gap (%) \| Bio Score \| Locality \| Peak Mem (MB) \| Wall Time (s/epoch) \| Status (✅/⚠️/❌). Pareto: x = peak memory, y = parity gap, color = family. Generated from benchmark JSONL (Sprint 1.3). | 1.3, 1.5 | ☐ | `README.md` updates automatically; plots viewable in Actions |
+| **4.4** | **Good First Issues** — tag 10 issues: test gaps, docstrings, benchmark configs, demo widgets, registry metadata. `CONTRIBUTING.md` with component registration walkthrough. | 2.5 | ☐ | Issues labeled `good first issue`; PR template enforces registry metadata |
+| **4.5** | **API Reference** (`docs/api/`) — `mkdocstrings` auto-generated from docstrings; registry component index page listing all 77+ components with metadata from Sprint 2.5. Link from README. | 2.5 | ☐ | `docs/api/index.html` builds; every registered component has an entry |
+| **4.6** | **README Component Index** — replace "planned" note with auto-generated table (model family, component count, biology score range, parity status). Generated by `biopl-registry-audit --markdown` and injected via marker comments in README. | 2.5 | ☐ | README shows live component table; `biopl-registry-audit --markdown` is idempotent |
 
 **Gate**: Colab notebook runs green; leaderboard updates nightly; 2+ external PRs merged.
 
 ---
 
-## Sprint 5: RESEARCH.pre.md Tier 2–3 (CI Correctness + Types) (Week 7–8)
+## Sprint 5: RESEARCH.pre.md Tier 2–3 (CI Correctness + Types) (Weeks 7–8)
 
 *Finish Tier 2 (CI gates) and Tier 3 (type system) from RESEARCH.pre.md — now unblocked by Sprint 0.*
 
-| # | Task | Owner | Status | Validation |
-|---|------|-------|--------|------------|
-| **5.1** | **`print()` → `logging`** — 4 benchmark files (52+38+26+4 prints) → module-level logger + lazy `%s` interpolation. | | ☐ | `grep -r "print(" bioplausible/ --include="*.py" | grep -v "__main__" | wc -l` = 0 |
-| **5.2** | **Narrow `except Exception`** — 5 KB sites + 2 EquiTile scheduler sites → specific exceptions + `logger.exception` + chained domain errors (uses Sprint 0.1 hierarchy). | | ☐ | No bare `except Exception` in lib code; tracebacks preserved |
-| **5.3** | **Bare-Except Parens** — 17 sites across 12 files → `except (X, Y):` (mechanical, one pass). | | ☐ | `ruff check --select E722` = 0 |
-| **5.4** | **Eliminate `Any`** — 6 sites (trainer, config, equitile/config) → `object` or `Protocol`; `Literal` for `credit_assignment_type`; frozen dataclass audit (3 stragglers). | | ☐ | `pyright --strict` 0 errors (warnings may remain) |
-| **5.5** | **CI Pipeline Config** (`.github/workflows/ci.yml`) — `ruff format --check` → `ruff check` → `pyright` → `pytest --cov --maxfail=5` (unit+property+biology); coverage floor 50% → 85% over time. | | ☐ | CI green on main; badge in README |
+| # | Task | Depends On | Status | Validation |
+|---|------|------------|--------|------------|
+| **5.1** | **`print()` → `logging`** — 4 benchmark files (52+38+26+4 prints) → module-level logger + lazy `%s` interpolation. | 0 | ☐ | `grep -r "print(" bioplausible/ --include="*.py" | grep -v "__main__" | wc -l` = 0 |
+| **5.2** | **Narrow `except Exception`** — 5 KB sites + 2 EquiTile scheduler sites → specific exceptions + `logger.exception` + chained domain errors (uses Sprint 0.1 hierarchy). | 0.1 | ☐ | No bare `except Exception` in lib code; tracebacks preserved |
+| **5.3** | **Bare-Except Parens** — 17 sites across 12 files → `except (X, Y):` (mechanical, one pass). | 0 | ☐ | `ruff check --select E722` = 0 |
+| **5.4** | **Eliminate `Any`** — 6 sites (trainer, config, equitile/config) → `object` or `Protocol`; `Literal` for `credit_assignment_type`; frozen dataclass audit (3 stragglers). | 0 | ☐ | `pyright --strict` 0 errors (warnings may remain) |
+| **5.5** | **CI Pipeline Config** (`.github/workflows/ci.yml`) — Stages: (1) `ruff format --check` + `ruff check --select E,F,W,C90` (correctness only), (2) `pyright`, (3) `pytest tests/unit/ tests/property/ tests/property/biology/ --cov --maxfail=5`, (4) `pytest tests/unit/validation/test_backprop_parity.py tests/integration/test_gradient_equivalence.py -q`. Coverage floor 50% → 85% over time. Baseline asserts against `docs/baseline.md` (Sprint −1.3). | 5.1–5.4 | ☐ | CI green on main; badge in README; `ruff_correctness_count ≤ baseline`; `pyright_errors == 0` |
+| **5.6** | **Flaky Test Quarantine** — run full suite 5× (`pytest --count=5` or loop); any test that fails non-deterministically gets `@pytest.mark.flaky` + issue link. Quarantined tests excluded from gate; tracked separately. | 5.5 | ☐ | 5 consecutive green runs on main; quarantined list in `docs/flaky.md` |
 
-**Gate**: Full CI pipeline passes; `pyright` 0 errors; coverage ≥ 50%.
+**Gate**: Full CI pipeline passes; `pyright` 0 errors; coverage ≥ 50%; 5 consecutive green runs.
 
 ---
 
-## Sprint 6: AutoScientist v1 Foundations (Week 8–10)
+## Sprint 6: AutoScientist v1 Foundations (Weeks 8–10)
 
 *Minimal viable autonomous discovery: campaign persistence + structured reasoning + KB synthesis.*
 
-| # | Task | Owner | Status | Validation |
-|---|------|-------|--------|------------|
-| **6.1** | **Campaign Persistence** (`autoscientist/campaign_v1.py`) — YAML + SQLite state; resume from arbitrary checkpoint; git-like branches for exploration. | | ☐ | `biopl-scientist resume campaign.yaml --from trial_42` works |
-| **6.2** | **Chain-of-Thought Templates** (`autoscientist/reasoner.py`) — failure analysis, transfer reasoning, composition reasoning, scaling prediction; structured JSON output matching `Hypothesis` dataclass. | | ☐ | LLM generates valid hypothesis JSON for 5/5 test prompts |
-| **6.3** | **KB Meta-Analysis** (`knowledge/kb.py:run_meta_analysis()`) — scaling law fits (power law), algorithm fingerprinting (PCA on hyperparam sensitivity), failure manifold, cross-domain transfer matrix. | | ☐ | `kb.run_meta_analysis()` → report with fitted α,β,γ + confidence intervals |
-| **6.4** | **Surrogate-Guided Proposal** — `kb.suggest_next_experiment()` uses GPyTorch/BoTorch (optional dep) over algorithm space; falls back to random if unavailable. | | ☐ | Generates non-trivial config suggestions; logs to KB |
+| # | Task | Depends On | Status | Validation |
+|---|------|------------|--------|------------|
+| **6.1** | **Campaign Persistence** (`autoscientist/campaign_v1.py`) — YAML + SQLite state; resume from arbitrary checkpoint; git-like branches for exploration. | 5 | ☐ | `biopl-scientist resume campaign.yaml --from trial_42` works |
+| **6.2** | **Chain-of-Thought Templates** (`autoscientist/reasoner.py`) — failure analysis, transfer reasoning, composition reasoning, scaling prediction; structured JSON output matching `Hypothesis` dataclass. **LLM config**: `provider: local | openai | anthropic` in campaign config. Validation uses `provider: local` with mock LLM returning canned JSON. Integration test with real LLM is `@pytest.mark.llm` (skipped in CI). Fallback: template-based hypothesis generation (no learning, but valid JSON). | 5 | ☐ | Mock LLM generates valid hypothesis JSON for 5/5 test prompts |
+| **6.3** | **KB Meta-Analysis** (`knowledge/kb.py:run_meta_analysis()`) — scaling law fits (power law), algorithm fingerprinting (PCA on hyperparam sensitivity), failure manifold, cross-domain transfer matrix. | 2.4, 5 | ☐ | `kb.run_meta_analysis()` → report with fitted α,β,γ + confidence intervals |
+| **6.4** | **Surrogate-Guided Proposal** — `kb.suggest_next_experiment()` uses GPyTorch/BoTorch (optional dep) over algorithm space; falls back to random if unavailable. `proposer.py` imports `botorch` inside `try/except ImportError` with module-level `HAS_BOTORCH = False` flag. `pyproject.toml` extra: `autoscientist = ["botorch", "gpytorch"]`. Tests run without botorch installed. | 6.3 | ☐ | Generates non-trivial config suggestions; logs to KB |
+
+**Prerequisite Gate** (hard, checked before Sprint 6 starts):
+- 0 xfail in parity tests (trivially true once 1.5 lands)
+- Every `parity_threshold > 0.05` documented in `docs/parity_gaps.md`
+- Gradient equivalence passing for all families
+- 0 pre-existing test failures
+- Coverage ≥ 50%
+- `fast_lm_equitile` fixed
+
+If any prerequisite fails, Sprint 6 is deferred and the plan documents why.
 
 **Gate**: AutoScientist runs overnight → 50 tested hypotheses in KB; meta-analysis report readable.
 
@@ -134,6 +214,7 @@
 | Phase 2–10 of RESEARCH.md | Long-term agenda; this plan covers Phase 0 + Demo + Recruitment |
 | CLI unification (`bioplausible` single entry) | NiceGUI demo replaces CLI for researchers; CLI for automation only |
 | Colab notebooks per domain | One flagship notebook sufficient for recruitment |
+| Old TODO Sprint 4 (Parity + CI) | Absorbed: parity → Sprint 1.5; CI → Sprint 5.5; coverage → Sprint 5.5; flaky → Sprint 5.6; docs → Sprint 4.5–4.6 |
 
 ---
 
@@ -146,19 +227,8 @@
 | **Biology proof** | 8 axioms + gradient equivalence + energy landscapes + failure manifesto for 3+ families |
 | **Registry** | 100% components instantiated, metadata calibrated, audit CI gate green |
 | **AutoScientist** | 50 hypotheses/week; meta-analysis extracts scaling laws from KB |
-| **Recruitment** | Colab runs green; leaderboard updates nightly; 2+ external PRs |
+| **Recruitment** | Colab runs green on T4; leaderboard updates nightly; CONTRIBUTING.md published; 10 good-first-issues tagged; API reference builds |
 | **Type safety** | `pyright` 0 errors (strict); `ruff` 0 correctness violations (style ignored) |
-
----
-
-## Architecture Decision Log
-
-| Date | Decision | Rationale |
-|------|----------|-----------|
-| 2026-08-01 | NiceGUI for demo UI | Asyncio-native; headless engine event bus plugs directly; Python-only authoring; Quasar theme; canvas escape hatch for weight matrices |
-| 2026-08-01 | Selective GPU testing | Unit/property tests stay CPU (deterministic, fast); integration/benchmarks use GPU for 5-10x speedup on large models |
-| 2026-08-01 | Fold RESEARCH.pre.md Tier 1 into Sprint 0 | High-leverage architecture unblocks AutoScientist, registry, KB, scaling sweeps; defer Tier 2-3 to Sprint 5 |
-| 2026-08-01 | Defer all lint style work | 2472 violations are ~100% style (N803, PLR09xx, TRY002, E402); config re-scope or opportunistic fixes only |
 
 ---
 
@@ -186,11 +256,17 @@ uv run biopl-registry-audit --metadata
 # Gradient equivalence
 uv run pytest tests/integration/test_gradient_equivalence.py -v --no-cov
 
+# Parity check (post Sprint 1.5)
+uv run pytest tests/unit/validation/test_backprop_parity.py -v --no-cov
+
+# Verify pre-flight fixes
+uv run pytest tests/ -k fast_lm_equitile -q --no-cov
+
 # AutoScientist overnight
 uv run biopl-scientist --campaign config/campaign.yaml --max-trials 50
 
 # Full CI simulation
-uv run ruff format --check . && uv run ruff check . && uv run pyright . && uv run pytest --cov --maxfail=5
+uv run ruff format --check . && uv run ruff check --select E,F,W,C90 . && uv run pyright . && uv run pytest tests/unit/ tests/property/ tests/property/biology/ --cov --maxfail=5
 ```
 
 ---
@@ -205,7 +281,7 @@ bioplausible/
 │   ├── model.py               # REFACTOR Sprint 0.3, 0.4
 │   └── trainer.py             # REFACTOR Sprint 0.3
 ├── execution/
-│   ├── engine.py              # REFACTOR Sprint 0.3, 0.4
+│   ├── engine.py              # REFACTOR Sprint 0.3, 0.4 (+ ExecutionCallback)
 │   ├── _state.py              # REFACTOR Sprint 0.6 (SQLite context manager)
 │   └── dashboard.py           # INTEGRATES with NiceGUI event bus
 ├── equitile/
@@ -219,14 +295,16 @@ bioplausible/
 │   └── scaling.py             # NEW Sprint 6.3
 ├── autoscientist/
 │   ├── campaign_v1.py         # NEW Sprint 6.1
-│   ├── reasoner.py            # ENHANCE Sprint 6.2 (CoT templates)
-│   └── proposer.py            # ENHANCE Sprint 6.4 (surrogate-guided)
+│   ├── reasoner.py            # ENHANCE Sprint 6.2 (CoT templates + LLM config)
+│   └── proposer.py            # ENHANCE Sprint 6.4 (surrogate-guided + botorch guard)
 ├── deployment.py              # EXISTING (ONNX/FastAPI)
 └── visualization.py           # EXISTING (matplotlib → Plotly for demo)
 
-demo/                          # NEW Sprint 3
+demo/                          # NEW Sprint 3 (separate uv project)
+├── pyproject.toml             # nicegui>=2.0,<3.0, plotly>=5.20,<6.0, ...
+├── uv.lock                    # auto-maintained exact pins
 ├── main.py                    # NiceGUI entry
-├── widgets.py                 # Config-driven auto-widgets
+├── widgets.py                 # Config-driven auto-widgets (nested support)
 ├── charts.py                  # Plotly FigureWidget streaming
 ├── weight_viz.py              # Canvas/Vue weight matrix animation
 ├── tasks.py                   # Toy/Digits/MNIST/CIFAR/LM loaders
@@ -238,11 +316,24 @@ tests/
 │   ├── test_gradient_equivalence.py  # NEW Sprint 2.1
 │   └── ... (migrated to @pytest.mark.gpu)
 └── unit/validation/
-    └── benchmark_harness.py   # NEW Sprint 1.3
+    ├── benchmark_harness.py   # NEW Sprint 1.3
+    ├── test_backprop_parity.py         # ENHANCE Sprint 1.5 (no xfail, threshold-driven)
+    └── hyperparams/           # NEW Sprint 1.5
+        ├── eqprop_mlp.yaml
+        ├── directed_ep.yaml
+        ├── forward_forward.yaml
+        ├── pepita.yaml
+        └── equitile.yaml
+
+docs/
+├── baseline.md                # NEW Sprint −1.3 (gated metrics only)
+├── parity_gaps.md             # NEW Sprint 1.5.3 (bio-gap explanations)
+├── flaky.md                   # NEW Sprint 5.6
+├── positioning.md             # NEW Sprint 4.1
+├── api/                       # NEW Sprint 4.5 (mkdocstrings)
+└── ...
 
 .github/workflows/ci.yml       # NEW Sprint 5.5
-docs/positioning.md            # NEW Sprint 4.1
-examples/colab/bioplausible_demo.ipynb  # NEW Sprint 4.2
 ```
 
 ---
