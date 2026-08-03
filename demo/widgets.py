@@ -36,26 +36,56 @@ class WidgetField:
     max: float | None = None
     options: tuple[str, ...] = ()
     tooltip: str = ""
+    # Nested location within the config root. Empty means the field is at the
+    # top level (``path == (name,)``). Used for expanded ``dict`` knobs like
+    # ``optimizer_kwargs["lr"]`` and ``model_kwargs["hidden_dim"]`` (Sprint 3.2).
+    path: tuple[str, ...] = ()
 
     def apply(self, config: Any, value: Any) -> Any:
-        """Return a copy of ``config`` with this field set to ``value``.
+        """Return the config with this field set to ``value`` (in place for
+        mutable parents).
 
-        Supports mutable dataclasses (setattr) and frozen dataclasses /
-        Pydantic models (dataclasses.replace / model_copy).
+        Supports mutable dataclasses (setattr), frozen dataclasses / Pydantic
+        (rebuild on the leaf), and nested ``dict`` parents (the common demo
+        case: ``optimizer_kwargs`` / ``model_kwargs``).
         """
-        if dataclasses.is_dataclass(config):
-            if config.__dataclass_params__.frozen:  # type: ignore[attr-defined]
-                return dataclasses.replace(config, **{self.name: value})
-            setattr(config, self.name, value)
-            return config
-        if _HAS_PYDANTIC and isinstance(config, BaseModel):
-            return config.model_copy(update={self.name: value})
-        if isinstance(config, dict):
-            config = dict(config)
-            config[self.name] = value
-            return config
-        setattr(config, self.name, value)
+        path = self.path or (self.name,)
+        if len(path) == 1:
+            return _set_leaf(config, path[0], value, name=self.name)
+        parent = config
+        for key in path[:-1]:
+            parent = _read_child(parent, key)
+        _set_child(parent, path[-1], value)
         return config
+
+
+def _read_child(parent: Any, key: str) -> Any:
+    if isinstance(parent, dict):
+        return parent[key]
+    return getattr(parent, key)
+
+
+def _set_child(parent: Any, key: str, value: Any) -> None:
+    if isinstance(parent, dict):
+        parent[key] = value
+    else:
+        setattr(parent, key, value)
+
+
+def _set_leaf(config: Any, key: str, value: Any, name: str) -> Any:
+    if dataclasses.is_dataclass(config):
+        if config.__dataclass_params__.frozen:  # type: ignore[attr-defined]
+            return dataclasses.replace(config, **{name: value})
+        setattr(config, name, value)
+        return config
+    if _HAS_PYDANTIC and isinstance(config, BaseModel):
+        return config.model_copy(update={name: value})
+    if isinstance(config, dict):
+        config = dict(config)
+        config[name] = value
+        return config
+    setattr(config, name, value)
+    return config
 
 
 @dataclass(frozen=True)
@@ -72,9 +102,7 @@ def _tooltip(annotated: Any) -> str:
     return getattr(annotated, "__doc__", None) or ""
 
 
-def _kind_for_annotation(
-    annotation: Any, value: Any
-) -> tuple[str, tuple[str, ...]]:
+def _kind_for_annotation(annotation: Any, value: Any) -> tuple[str, tuple[str, ...]]:
     origin = get_origin(annotation)
     args = get_args(annotation)
 
@@ -119,6 +147,10 @@ def _is_leaf_dataclass(obj: Any) -> bool:
     return False
 
 
+def _is_scalar(value: Any) -> bool:
+    return value is None or isinstance(value, (bool, int, float, str))
+
+
 def _iter_fields(obj: Any):
     """Yield (name, value, annotation) pairs for a dataclass/model object."""
     if dataclasses.is_dataclass(obj):
@@ -160,6 +192,27 @@ def build_widget_tree(config: Any, root_label: str = "Config") -> WidgetGroup:
 
         if isinstance(value, (list, tuple)) and value and _is_leaf_dataclass(value[0]):
             groups.append(build_widget_tree(value[0], root_label=f"{label}[0]"))
+            continue
+
+        # Dict of scalar knobs (e.g. optimizer_kwargs["lr"], model_kwargs
+        # ["hidden_dim"]) → group of live controls instead of read-only JSON.
+        if (
+            isinstance(value, dict)
+            and value
+            and all(_is_scalar(v) for v in value.values())
+        ):
+            knob_fields = [
+                WidgetField(
+                    name=str(k),
+                    label=str(k).replace("_", " ").title(),
+                    kind=_kind_from_value(v)[0],
+                    value=v,
+                    options=_kind_from_value(v)[1],
+                    path=(name, str(k)),
+                )
+                for k, v in value.items()
+            ]
+            groups.append(WidgetGroup(label=label, fields=knob_fields))
             continue
 
         kind, options = _kind_for_annotation(annotation, value)

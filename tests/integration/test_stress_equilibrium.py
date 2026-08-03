@@ -1,3 +1,4 @@
+import pytest
 import sys
 import unittest
 from pathlib import Path
@@ -11,6 +12,7 @@ parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
 from bioplausible.zoo.models.eqprop import LoopedMLP
+pytestmark = pytest.mark.gpu
 
 
 class TestEquilibriumStress(unittest.TestCase):

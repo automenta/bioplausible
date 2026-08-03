@@ -8,6 +8,7 @@ from runner import (
     default_hidden_dim,
     default_trainer_config,
     model_metadata,
+    prepare_trainer_config,
     run_headless,
 )
 from charts import parity_explanation
@@ -30,6 +31,42 @@ class TestHiddenDimDefaults:
 
     def test_fallback_for_unknown_model(self):
         assert default_hidden_dim("not_a_model") == 128
+
+
+class TestPrepareTrainerConfig:
+    """Sprint 3.2 wiring — live widget knob edits survive into the trained run."""
+
+    def test_reuses_same_object_when_model_task_unchanged(self):
+        prev = default_trainer_config(
+            model="equitile", task="mnist", epochs=3, lr=0.001
+        )
+        # Simulate a widget edit on the live config object.
+        prev.model_kwargs["hidden_dim"] = 64
+        cfg = prepare_trainer_config(prev, "equitile", "mnist", 3, 0.001)
+        assert cfg is prev  # same object preserved → widget edits kept
+        assert cfg.model_kwargs["hidden_dim"] == 64
+
+    def test_refreshes_epochs_lr_on_reuse(self):
+        prev = default_trainer_config(
+            model="backprop_mlp", task="mnist", epochs=3, lr=0.001
+        )
+        cfg = prepare_trainer_config(prev, "backprop_mlp", "mnist", 7, 0.01)
+        assert cfg.epochs == 7
+        assert cfg.optimizer_kwargs["lr"] == 0.01
+
+    def test_rebuilds_defaults_when_model_changes(self):
+        prev = default_trainer_config(
+            model="equitile", task="mnist", epochs=3, lr=0.001
+        )
+        prev.model_kwargs["hidden_dim"] = 64
+        cfg = prepare_trainer_config(prev, "backprop_mlp", "mnist", 3, 0.001)
+        assert cfg is not prev
+        assert cfg.model == "backprop_mlp"
+        assert cfg.model_kwargs["hidden_dim"] == default_hidden_dim("backprop_mlp")
+
+    def test_none_prev_builds_defaults(self):
+        cfg = prepare_trainer_config(None, "backprop_mlp", "digits", 5, 0.01)
+        assert cfg.model_kwargs["input_dim"] == 64
 
 
 class TestModelMetadata:

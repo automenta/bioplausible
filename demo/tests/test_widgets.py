@@ -43,3 +43,37 @@ class TestWidgetTree:
         lr_field = next(f for f in group.fields if f.name == "lr")
         updated = lr_field.apply(outer, 0.01)
         assert updated.lr == 0.01
+
+
+class TestDictKnobs:
+    def test_dict_of_scalars_expands_to_group(self):
+        cfg = TrainerConfig(
+            model="backprop_mlp",
+            task="mnist",
+            epochs=3,
+            optimizer_kwargs={"lr": 0.001},
+            model_kwargs={"hidden_dim": 32},
+        )
+        group = build_widget_tree(cfg)
+        # optimizer_kwargs ({"lr": ...}) and model_kwargs should be knob groups.
+        labels = {g.label for g in group.groups}
+        assert "Optimizer Kwargs" in labels
+        optim = next(g for g in group.groups if g.label == "Optimizer Kwargs")
+        assert any(
+            f.name == "lr" and f.path == ("optimizer_kwargs", "lr")
+            for f in optim.fields
+        )
+
+    def test_dict_knob_apply_writes_through_path(self):
+        cfg = TrainerConfig(
+            model="equitile",
+            task="mnist",
+            epochs=3,
+            optimizer_kwargs={"lr": 0.001},
+            model_kwargs={"hidden_dim": 32},
+        )
+        group = build_widget_tree(cfg)
+        model_group = next(g for g in group.groups if g.label == "Model Kwargs")
+        hidden = next(f for f in model_group.fields if f.name == "hidden_dim")
+        hidden.apply(cfg, 64)
+        assert cfg.model_kwargs["hidden_dim"] == 64

@@ -35,6 +35,7 @@ from runner import (  # noqa: E402
     DemoPanel,
     default_trainer_config,
     model_metadata,
+    prepare_trainer_config,
     run_headless,
 )
 from tasks import build_tasks  # noqa: E402
@@ -48,6 +49,20 @@ DEMO_MODELS = list(TRAINABLE_MODELS)
 def _fresh_panel(model: str, task: str, epochs: int, lr: float) -> DemoPanel:
     cfg = default_trainer_config(model=model, task=task, epochs=epochs, lr=lr)
     return DemoPanel(trainer_config=cfg, epochs=epochs)
+
+
+def _cooked_panel(
+    prev: DemoPanel | None, model: str, task: str, epochs: int, lr: float
+) -> DemoPanel:
+    """Build the panel to train, preserving live widget-tree knob edits."""
+    cfg = prepare_trainer_config(
+        prev.trainer_config if prev is not None else None,
+        model,
+        task,
+        int(epochs),
+        float(lr),
+    )
+    return DemoPanel(trainer_config=cfg, epochs=int(epochs))
 
 
 class DemoUi:
@@ -153,15 +168,22 @@ def create_page(demo: DemoUi) -> None:
 
     # --- Train button ---
     async def train() -> None:
-        # Rebuild both panels from the CURRENT selectors so what the user
-        # picked is what actually trains (stale-panel fix): changing Config A
-        # or the task must change the run, else the demo silently trains the
-        # startup defaults. Quick-set epochs/lr re-applied via sync_*.
-        demo.panel_a = _fresh_panel(
-            model_a.value, task_sel.value, int(epochs.value), float(lr.value)
+        # Use the current selectors, but reuse each panel's live (widget-mutated)
+        # config when the model/task are unchanged so Sprint 3.2 knob edits feed
+        # the run; only a model/task change rebuilds from defaults.
+        demo.panel_a = _cooked_panel(
+            demo.panel_a,
+            model_a.value,
+            task_sel.value,
+            int(epochs.value),
+            float(lr.value),
         )
-        demo.panel_b = _fresh_panel(
-            model_b.value, task_sel.value, int(epochs.value), float(lr.value)
+        demo.panel_b = _cooked_panel(
+            demo.panel_b,
+            model_b.value,
+            task_sel.value,
+            int(epochs.value),
+            float(lr.value),
         )
         sync_a()
         sync_b()
@@ -264,12 +286,20 @@ def _export_run(demo: DemoUi, status) -> Callable[[], None]:
             csv_path = Path(f"/tmp/bioplausible-run-{label}.csv")
             png_path = Path(f"/tmp/bioplausible-run-{label}.png")
             export_run_csv(
-                panel.losses, panel.accuracies, csv_path,
-                header={"model": panel.trainer_config.model,
-                        "task": panel.trainer_config.task},
+                panel.losses,
+                panel.accuracies,
+                csv_path,
+                header={
+                    "model": panel.trainer_config.model,
+                    "task": panel.trainer_config.task,
+                },
             )
-            export_run_png(panel.losses, panel.accuracies, png_path,
-                           title=f"Bioplausible {label} — {panel.trainer_config.model}")
+            export_run_png(
+                panel.losses,
+                panel.accuracies,
+                png_path,
+                title=f"Bioplausible {label} — {panel.trainer_config.model}",
+            )
             ui.download(csv_path)
             ui.download(png_path)
         status.set_text("Exported CSV + PNG for both configs")
@@ -286,9 +316,7 @@ def _refresh_charts(demo: DemoUi) -> None:
     ):
         a = loss_series(demo.panel_a)
         b = loss_series(demo.panel_b)
-        demo.loss_fig.update_traces(
-            x=[a.x, b.x], y=[a.y, b.y], selector={}
-        )
+        demo.loss_fig.update_traces(x=[a.x, b.x], y=[a.y, b.y], selector={})
 
 
 def _refresh_weight_viz(demo: DemoUi) -> None:
@@ -304,9 +332,9 @@ def _refresh_weight_viz(demo: DemoUi) -> None:
         return
     with demo.weight_box:
         ui.label("Weight evolution (Config A − Config B)").classes("text-bold")
-        WeightMatrixAnimator(
-            demo.panel_a, demo.panel_b, diff=True
-        ).render(container=None)
+        WeightMatrixAnimator(demo.panel_a, demo.panel_b, diff=True).render(
+            container=None
+        )
 
 
 def build_ui() -> DemoUi:

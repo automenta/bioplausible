@@ -5,6 +5,8 @@ import torch
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.utils import seed_everything
 from bioplausible.zoo.models.eqprop import LoopedMLP
+import pytest
+pytestmark = pytest.mark.gpu
 
 
 class TestAdvancedTraining(unittest.TestCase):

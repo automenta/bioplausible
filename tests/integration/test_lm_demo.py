@@ -40,6 +40,8 @@ from bioplausible.equitile.lm.training import (
     TrainingMetrics,
 )
 
+pytestmark = pytest.mark.gpu
+
 
 def _tiny_lm(vocab_size: int = 100) -> FastLMEquiTile:
     """Build a minimal FastLMEquiTile shared across tests that don't assert on

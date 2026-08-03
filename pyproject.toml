@@ -130,6 +130,7 @@ biopl-report = "bioplausible.execution.cli:main_reporter"
 biopl-registry-audit = "bioplausible.core.audit:main"
 biopl-repro-check = "bioplausible.cli.repro:main"
 biopl-parity = "bioplausible.cli.parity:main"
+biopl-failure-manifesto = "bioplausible.analysis.failure_manifesto:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

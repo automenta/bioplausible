@@ -25,6 +25,7 @@ import bioplausible.zoo  # noqa: F401       (registers zoo models/propagators)
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.execution.callbacks import BaseExecutionCallback
+from bioplausible.utils import set_global_seed
 
 
 @dataclass
@@ -41,6 +42,10 @@ class DemoPanel:
     running: bool = False
     finished: bool = False
     error: str | None = None
+    # Fixed-seed reproducibility for this panel. When set, `run_headless` seeds
+    # the global RNG before training so the two-panel comparison (and the
+    # `biopl-parity` CLI cross-check in Sprint 3.7) are bitwise-consistent.
+    seed: int | None = None
 
 
 class _WeightProbe:
@@ -66,9 +71,7 @@ class _WeightProbe:
             if "weight" not in name:
                 continue
             with torch.no_grad():
-                self.history.setdefault(name, []).append(
-                    param.detach().float().cpu()
-                )
+                self.history.setdefault(name, []).append(param.detach().float().cpu())
         if any(len(v) > self.max_snaps for v in self.history.values()):
             self._compact()
 
@@ -90,9 +93,8 @@ class _DemoCallback(BaseExecutionCallback):
     def on_epoch_end(self, epoch: int, metrics: object) -> None:
         # TrainingMetrics exposes train_accuracy/val_accuracy (no bare
         # `accuracy`); accept both plus a bare `loss`/`train_loss`.
-        acc = (
-            getattr(metrics, "train_accuracy", None)
-            or getattr(metrics, "val_accuracy", None)
+        acc = getattr(metrics, "train_accuracy", None) or getattr(
+            metrics, "val_accuracy", None
         )
         loss = getattr(metrics, "loss", None) or getattr(metrics, "train_loss", None)
         with self._lock:
@@ -152,7 +154,7 @@ def model_metadata(model: str) -> dict[str, object]:
     """
     try:
         meta = Registry.get_metadata(ComponentCategory.MODEL, model)
-    except (ValueError, KeyError):
+    except ValueError, KeyError:
         return {}
     return {
         "bio_plausibility_score": meta.bio_plausibility_score,
@@ -215,11 +217,37 @@ def default_trainer_config(
     )
 
 
+def prepare_trainer_config(
+    prev: TrainerConfig | None,
+    model: str,
+    task: str,
+    epochs: int,
+    lr: float,
+) -> TrainerConfig:
+    """Return the config to train, preserving live widget-tree knob edits.
+
+    When ``prev`` targets the same ``model``/``task``, its object is returned
+    mutated (epochs/lr refreshed) so Sprint 3.2 slider/number edits to the
+    expanded ``model_kwargs``/``optimizer_kwargs`` knobs actually feed the run.
+    A model/task change rebuilds from defaults (the widget tree needs re-render
+    on a new config object — a documented UI limitation).
+    """
+    if prev is not None and prev.model == model and prev.task == task:
+        prev.epochs = int(epochs)
+        prev.optimizer_kwargs["lr"] = float(lr)
+        return prev
+    return default_trainer_config(
+        model=model, task=task, epochs=int(epochs), lr=float(lr)
+    )
+
+
 def run_headless(panel: DemoPanel) -> None:
     """Synchronously train a panel to completion (call from a thread)."""
     try:
         panel.running = True
         panel.finished = False
+        if panel.seed is not None:
+            set_global_seed(panel.seed)
         trainer = CoreTrainer(panel.trainer_config)
         trainer.setup()  # materialize model so the callback can probe weights
         trainer.add_execution_callback(_DemoCallback(panel, trainer.model))

@@ -30,6 +30,7 @@ from bioplausible.equitile import (
     create_rl_model,
 )
 from bioplausible.equitile.language.fast import FastLMConfig, FastLMEquiTile
+pytestmark = pytest.mark.gpu
 
 # =============================================================================
 # Sparsity Enhancement Tests

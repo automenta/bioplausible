@@ -1,3 +1,4 @@
+import pytest
 import sys
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ sys.path.insert(0, str(parent_dir))
 
 from bioplausible.acceleration.triton_kernels import HAS_TRITON, TritonEqPropOps
 from bioplausible.zoo.models.eqprop import LoopedMLP
+pytestmark = pytest.mark.gpu
 
 
 class TestTritonIntegration(unittest.TestCase):
