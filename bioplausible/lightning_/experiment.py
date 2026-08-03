@@ -73,7 +73,7 @@ def run_pl_trial(
                 "loss": val_loss,
             }
         return {"accuracy": 0.0, "loss": 0.0}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # broad: best-effort
         logger.error("PL trial failed: %s", e, exc_info=True)
         return None
 
@@ -129,6 +129,6 @@ def run_pl_trial_with_wandb(
                 "loss": val_loss,
             }
         return {"accuracy": 0.0, "loss": 0.0}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # broad: best-effort
         logger.error("PL+W&B trial failed: %s", e, exc_info=True)
         return None

@@ -87,6 +87,10 @@ class LearningRuleOptimizer(BioOptimizer):
 
         self.buffers = [torch.zeros_like(p) for p in self.params]
 
+    # Marker decoupling core.trainer from the zoo package (Sprint 0.5): the
+    # trainer narrows via this class attribute instead of importing the class.
+    _is_learning_rule = True
+
     def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None:
         raise NotImplementedError
 
@@ -103,6 +107,12 @@ class LearningRuleOptimizer(BioOptimizer):
             self, "weight_decay", self.defaults.get("weight_decay", 0.0005)
         )
         lr = getattr(self, "lr", self.defaults.get("lr", 0.01))
+
+        # Momentum buffers are created before the model is moved to its final
+        # device (e.g. CUDA), so they can be left behind on CPU. Re-home them on
+        # the parameter's device before use.
+        if buffer.device != param.device:
+            buffer.data = buffer.to(param.device)
 
         buffer.mul_(momentum).add_(grad)
 

@@ -61,14 +61,20 @@ class KnowledgebaseMetamodel:
                         ),
                     }
                     records.append(record)
-                except Exception as e:
+                except (ValueError, TypeError, KeyError) as e:
                     logger.warning("Failed to parse config row for metamodel: %s", e)
 
             self.df = pd.DataFrame(records)
             self.fitted = True
             logger.info("Metamodel successfully fitted to %s records.", len(self.df))
 
-        except Exception:
+        except (
+            sqlite3.Error,
+            ValueError,
+            TypeError,
+            RuntimeError,
+            pd.errors.DatabaseError,
+        ):
             logger.exception("Metamodel fit failed")
             self.fitted = False
 

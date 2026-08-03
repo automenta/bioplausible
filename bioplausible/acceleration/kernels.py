@@ -183,14 +183,14 @@ try:
                 _ = cp.array([1.0])
                 _ = cp.random.rand(1)
             HAS_CUPY = True
-        except Exception:
+        except Exception:  # noqa: BLE001  # broad: optional-backend availability probe
             cp = None
             HAS_CUPY = False
 
 except ImportError:
     cp = None
     HAS_CUPY = False
-except Exception:  # Capture other potential import errors
+except Exception:  # noqa: BLE001  # broad: optional-backend availability probe
     cp = None
     HAS_CUPY = False
 
@@ -219,7 +219,7 @@ def to_numpy(arr: object) -> np.ndarray:
                 "cupy"
             ):
                 return cp.asnumpy(arr)
-        except Exception:
+        except (ValueError, TypeError, RuntimeError):
             logger.warning("Failed to convert CuPy array to NumPy, falling back")
     return arr
 

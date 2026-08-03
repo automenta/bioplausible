@@ -78,7 +78,7 @@ class DHTNode:
                 self.loop.run_until_complete(
                     self.server.bootstrap(self.bootstrap_nodes)
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # broad: async/network best-effort
                 logger.warning("Bootstrap failed: %s", e)
 
         self._ready_event.set()
@@ -86,7 +86,7 @@ class DHTNode:
 
         try:
             self.loop.run_forever()
-        except Exception:
+        except Exception:  # noqa: BLE001  # broad: async loop best-effort
             logger.exception("DHT Loop Error")
         finally:
             self.server.stop()
@@ -102,7 +102,7 @@ class DHTNode:
             if result:
                 return json.loads(result)
             return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # broad: async/network best-effort
             logger.debug("DHT Get Error (%s): %s", key, e)
             return None
 
@@ -116,7 +116,7 @@ class DHTNode:
                 self.server.set(key, val_str), self.loop
             )
             future.result(timeout=5)
-        except Exception:
+        except Exception:  # noqa: BLE001  # broad: best-effort
             logger.exception("DHT Set Error (%s)", key)
 
     def get_best_model(self, task: str) -> dict | None:
@@ -171,7 +171,7 @@ class DHTNode:
 
             future = asyncio.run_coroutine_threadsafe(_get_peers(), self.loop)
             peers = future.result(timeout=2)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # broad: best-effort
             logger.debug("Error getting peers: %s", e)
 
         return peers

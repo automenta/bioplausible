@@ -51,7 +51,7 @@ def get_lm_dataset(
             text = "\n".join(texts)
             if not text or len(text) == 0:
                 raise ValueError("Empty text after loading")
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError, ImportError, KeyError) as e:
             warnings.warn(f"HuggingFace dataset failed, using fallback: {e}")
             import urllib.request
 

@@ -218,7 +218,7 @@ class TileProcessor:
                 elapsed_time=elapsed,
             )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # broad: best-effort
             elapsed = time.perf_counter() - start_time
             return TileResult(
                 tile_id=task.tile_id,
@@ -520,7 +520,7 @@ class TileScheduler:
                         error=e,
                     )
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # broad: best-effort
                 results.append(
                     TileResult(
                         tile_id=0,

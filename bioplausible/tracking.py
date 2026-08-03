@@ -61,7 +61,7 @@ class ExperimentTracker:
                 self.run = wandb.init(
                     project=project, name=name, config=config, reinit=True, mode=mode
                 )
-            except Exception as e:
+            except (OSError, ValueError, RuntimeError, KeyError) as e:
                 # Silent failure is preferred if disabled
                 if os.environ.get("WANDB_MODE") != "disabled":
                     warnings.warn(

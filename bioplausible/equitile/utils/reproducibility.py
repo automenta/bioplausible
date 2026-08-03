@@ -126,7 +126,7 @@ class ReproducibilityTracker:
                 .decode("ascii")
                 .strip()
             )
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             logger.warning("Failed to get git branch name")
 
         # GPU info

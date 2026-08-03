@@ -160,7 +160,7 @@ class FastLMEquiTile(BioModel):
                 self._forward_impl = torch.compile(
                     self._forward_impl, mode=config.compile_mode
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001  # broad: best-effort
                 logger.warning("torch.compile failed, falling back to eager mode")
 
     def _init_weights(self) -> None:

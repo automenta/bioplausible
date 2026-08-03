@@ -240,7 +240,7 @@ class ExecutionEngine:
         try:
             self.generate_reports()
             self.last_report_trial = self.trial_count
-        except Exception:
+        except (RuntimeError, OSError, ValueError, KeyError):
             logger.exception("Periodic reporting failed")
 
     def _run_parallel_batch(self) -> None:
@@ -276,7 +276,7 @@ class ExecutionEngine:
                 self._handle_result(metrics, tasks[i])
 
             self.trial_count += len(results)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # broad: best-effort
             logger.error("Parallel batch failed: %s", e, exc_info=True)
             self.consecutive_failures += 1
 
@@ -372,7 +372,7 @@ class ExecutionEngine:
             DASHBOARD.log("Running Diagnostic Task (Digits/MLP)...", style="yellow")
             metrics = self._process_task(task)
             return metrics is not None
-        except Exception:
+        except Exception:  # noqa: BLE001  # broad: best-effort
             logger.exception("Diagnostic failed")
             return False
 
@@ -440,7 +440,7 @@ class ExecutionEngine:
 
                 return self._process_task(task)
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # broad: best-effort  # classify ANY task failure
                 failure_type = self._classify_failure(e)
 
                 self.state.failure_tracker.log_failure(
@@ -632,7 +632,7 @@ class ExecutionEngine:
                             best_trial.value,
                         )
                         study.enqueue_trial(best_trial.params)
-            except Exception as e:
+            except (ValueError, TypeError, RuntimeError, KeyError) as e:
                 logger.warning("Warm start failed: %s", e)
 
     def _inject_tier_config(
@@ -802,7 +802,7 @@ class ExecutionEngine:
                             with zipfile.ZipFile(item, "r") as zf:
                                 zf.extract("model.pt", temp_dir)
                                 found_path = str(Path(temp_dir) / "model.pt")
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001  # broad: best-effort  # artifact formats vary
                             logger.warning("Failed to extract artifact: %s", e)
                         break
 
@@ -887,7 +887,7 @@ class ExecutionEngine:
 
             orchestrator = ReportOrchestrator(self.db_path, output_dir)
             orchestrator.generate_reports()
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, KeyError) as e:
             logger.error("Failed to generate reports: %s", e, exc_info=True)
 
 

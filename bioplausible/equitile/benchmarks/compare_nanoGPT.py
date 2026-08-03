@@ -110,7 +110,7 @@ class NanoGPTModel(nn.Module):
             try:
                 logger.info(f"Compiling NanoGPT model (mode={config.compile_mode})...")
                 self.forward = torch.compile(self.forward, mode=config.compile_mode)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # broad: best-effort
                 logger.info(f"Compilation failed: {e}")
 
     def _init_weights(self) -> None:

@@ -188,7 +188,7 @@ class RobustnessEvaluator:
             metrics["robustness_score"] = float(np.mean(scores)) if scores else 0.0
             return metrics
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # broad: best-effort
             logger.error("Robustness evaluation failed: %s", e, exc_info=True)
             return {"robustness_score": 0.0}
 
@@ -490,7 +490,7 @@ class RobustnessEvaluator:
 
             logger.info("Saved saliency maps to %s", out_path)
 
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             logger.warning("Failed to generate saliency maps: %s", e)
 
 

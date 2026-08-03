@@ -70,7 +70,7 @@ class HypothesisReasoner:
         if self.llm_backend:
             try:
                 hypotheses.extend(self._llm_hypotheses(recent_results))
-            except Exception as e:
+            except (OSError, ValueError, RuntimeError) as e:
                 logger.warning("LLM hypothesis generation failed: %s", e)
 
         self._hypotheses.extend(hypotheses)
@@ -210,7 +210,7 @@ class HypothesisReasoner:
             generator = LLMHypothesisGenerator(backend=self.llm_backend)
             llm_hypotheses = generator.generate(prompt)
             hypotheses.extend(llm_hypotheses)
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.warning("Could not initialize LLM backend: %s", e)
 
         return hypotheses
@@ -328,7 +328,7 @@ class LLMHypothesisGenerator:
                         )
                     )
                 return hypotheses
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.warning("OpenAI hypothesis generation failed: %s", e)
 
         return []

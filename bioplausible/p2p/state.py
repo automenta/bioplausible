@@ -28,7 +28,7 @@ def load_state():
     try:
         with Path(STATE_FILE).open("r") as f:
             return json.load(f)
-    except Exception:
+    except (OSError, ValueError, TypeError):
         logger.warning("Failed to load P2P state, returning defaults")
         return {"points": 0, "jobs_done": 0}
 
@@ -38,5 +38,5 @@ def save_state(points, jobs_done):
     try:
         with Path(STATE_FILE).open("w") as f:
             json.dump({"points": points, "jobs_done": jobs_done}, f)
-    except Exception:
+    except (OSError, ValueError, TypeError):
         logger.exception("Failed to save P2P state")

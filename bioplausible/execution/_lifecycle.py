@@ -178,7 +178,7 @@ class ExperimentArchiver:
             logger.info("Archived trial %s to %s", trial_id, zip_path)
             return str(zip_path)
 
-        except Exception:
+        except Exception:  # noqa: BLE001  # broad: best-effort
             logger.exception("Failed to archive trial %s", trial_id)
             return None
 
@@ -339,7 +339,7 @@ class CheckpointManager:
             )
             conn.commit()
             self.buffer = []
-        except Exception as e:
+        except (sqlite3.Error, OSError, RuntimeError) as e:
             logger.warning("Failed to flush checkpoints: %s", e)
         finally:
             conn.close()

@@ -47,7 +47,7 @@ def _register_resolvers() -> None:
         OmegaConf.register_new_resolver("now", time.strftime)
     except ValueError:
         pass
-    except Exception:
+    except Exception:  # noqa: BLE001  # broad: best-effort
         logger.exception("Failed to register OmegaConf resolver 'now'")
 
 

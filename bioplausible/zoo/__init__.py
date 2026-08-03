@@ -115,7 +115,7 @@ def load_weights(
                     param.requires_grad = False
                 else:
                     logger.info("  -> %s remains trainable", name)
-    except Exception:
+    except (OSError, RuntimeError, ValueError, KeyError):
         logger.exception("Failed to load weights from %s", path)
 
 

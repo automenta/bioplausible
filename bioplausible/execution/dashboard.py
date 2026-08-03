@@ -206,7 +206,7 @@ class Dashboard:
                 free, total = torch.cuda.mem_get_info(0)
                 used_ratio = (total - free) / total * 100.0
                 sys_text.append(f"GPU: {used_ratio:.1f}%\n")
-            except Exception:
+            except Exception:  # noqa: BLE001  # broad: GPU probe
                 logger.warning("Failed to get GPU memory info")
 
         # Disk

@@ -110,7 +110,7 @@ def run_search(args):
                     domain_names,
                 )
                 continue
-        except Exception:
+        except (ValueError, KeyError):
             logger.warning("Unknown model '%s', letting it try naturally", model)
 
         logger.info("[SEARCH]  Exploring %s...", model)
@@ -165,7 +165,7 @@ def run_search(args):
         except KeyboardInterrupt:
             logger.warning("Search Interrupted")
             break
-        except Exception:
+        except (RuntimeError, OSError, ValueError):
             logger.exception("[FAIL]  Error optimizing %s", model)
 
 

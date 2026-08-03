@@ -99,7 +99,7 @@ class SignalPropagationTrack(ValidationTrack):
                 },
             }
 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, KeyError) as e:
             return {
                 "success": False,
                 "error": str(e),

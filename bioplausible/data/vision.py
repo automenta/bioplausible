@@ -6,6 +6,8 @@ Functions for loading and creating DataLoaders for standard vision datasets.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, TensorDataset
@@ -44,6 +46,8 @@ def get_vision_dataset(
     """
     if name == "digits":
         return _load_sklearn_digits(train, flatten)
+    if name in ("xor", "spiral", "circles"):
+        return _load_toy_dataset(name, train)
 
     transform = _build_transforms(name, flatten, augment=augment and train)
     dataset_class = _get_dataset_class(name)
@@ -68,6 +72,54 @@ def get_vision_dataset(
         return Subset(dataset, indices)
 
     return dataset
+
+
+def _load_toy_dataset(
+    name: str,
+    train: bool,
+    n_samples: int = 2000,
+    test_size: float = 0.2,
+    random_state: int = 42,
+) -> Dataset:
+    """Generate a fixed toy classification dataset (xor/spiral/circles).
+
+    Matches the demo's `tasks.py` toy distributions (2 features, 2 classes) so
+    the demo task selector can now train through CoreTrainer instead of raising
+    "Unknown dataset". Deterministic via a fixed-seed generator, split into
+    train/test with sklearn.
+    """
+    from sklearn.model_selection import train_test_split
+
+    gen = torch.Generator().manual_seed(random_state)
+    n = n_samples
+    if name == "xor":
+        x = torch.randint(0, 2, (n, 2), dtype=torch.float32, generator=gen)
+        y = (x[:, 0] != x[:, 1]).long()
+    elif name == "spiral":
+        theta = torch.linspace(0, 4 * math.pi, n)
+        r = torch.linspace(0.1, 1.0, n)
+        x0 = r * torch.cos(theta) + torch.randn(n, generator=gen) * 0.05
+        x1 = r * torch.sin(theta) + torch.randn(n, generator=gen) * 0.05
+        x = torch.stack([x0, x1], dim=1)
+        y = (theta > 2 * math.pi).long()
+    elif name == "circles":
+        a = torch.rand(n, generator=gen)
+        b = torch.rand(n, generator=gen)
+        r = torch.where(a < 0.5, torch.full((n,), 0.2), torch.full((n,), 0.8))
+        r = r + torch.randn(n, generator=gen) * 0.03
+        th = 2 * math.pi * b
+        x = torch.stack([r * torch.cos(th), r * torch.sin(th)], dim=1)
+        y = (r > 0.5).long()
+    else:
+        raise ValueError(f"Unknown toy dataset: {name}")
+
+    y = y.float()
+
+    x_train, x_test, y_train, y_test = train_test_split(
+        x, y, test_size=test_size, random_state=random_state, shuffle=True
+    )
+    x_data, y_data = (x_train, y_train) if train else (x_test, y_test)
+    return TensorDataset(x_data, y_data)
 
 
 def _load_sklearn_digits(

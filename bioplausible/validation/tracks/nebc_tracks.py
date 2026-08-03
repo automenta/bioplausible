@@ -55,7 +55,7 @@ def track_50_nebc_eqprop_variants(verifier: object) -> TrackResult:
 
             passed_variants += 1
             logger.info("      - %s: OK", name)
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, KeyError, AssertionError) as e:
             logger.info("      - %s: FAILED (%s)", name, e)
             import traceback
 

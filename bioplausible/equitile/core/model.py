@@ -1285,7 +1285,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
 
         try:
             self.load_state(state)
-        except Exception as e:
+        except (RuntimeError, ValueError, KeyError) as e:
             raise LoadStateError(f"Failed to load state into model from {path}") from e
         return state.get("metadata")
 

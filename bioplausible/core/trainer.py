@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, TypeIs
 
 import torch
 from omegaconf import DictConfig, OmegaConf
@@ -32,12 +32,28 @@ from bioplausible.core.registry import (
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.data.vision import create_data_loaders
 from bioplausible.domains.base import DomainType
-from bioplausible.zoo.propagators.base import is_learning_rule_optimizer
 
 if TYPE_CHECKING:
     from bioplausible.domains import TaskProtocol
 
 logger = logging.getLogger(__name__)
+
+
+class _LearningRuleOptimizer(Protocol):
+    """Duck-typed view of a zoo ``LearningRuleOptimizer`` callable surface.
+
+    Keeps ``core.trainer`` decoupled from the ``bioplausible.zoo`` package
+    (Sprint 0.5): the trainer narrows via a marker attribute instead of
+    importing the concrete class, so light consumers of ``core.trainer`` never
+    pull the whole zoo (→ torchvision/lightning/optuna).
+    """
+
+    def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None: ...
+
+
+def _is_learning_rule_optimizer(o: object) -> TypeIs[_LearningRuleOptimizer]:
+    """Type-narrowing guard for the learning-rule-optimizer calling convention."""
+    return bool(getattr(type(o), "_is_learning_rule", False))
 
 
 def _default_output_base() -> Path:
@@ -839,9 +855,12 @@ class CoreTrainer:
             if metrics is not None:
                 return metrics
 
-        # Phase 3: Learning-rule optimizer (owns forward+backward)
-        if self.optimizer is not None and is_learning_rule_optimizer(self.optimizer):
-            return self.optimizer.step(x=x, target=y) or {}
+        # Phase 3: Learning-rule optimizer / configured propagator (owns
+        # forward+backward). A configured `propagator=` is the explicit
+        # "learning rule" knob; prefer it over a learning-rule `optimizer=`.
+        rule = self.propagator if self.propagator is not None else self.optimizer
+        if rule is not None and _is_learning_rule_optimizer(rule):
+            return rule.step(x=x, target=y) or {}
 
         # Phase 4: Standard forward/backward
         return self._bptt_step(x, y)

@@ -179,7 +179,7 @@ class Verifier:
                             0, seed, 0, k, v
                         )  # Track ID 0 is generic/unknown here
 
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, KeyError) as e:
                 logger.warning("        Seed %s: Failed (%s)", seed, e)
                 import traceback
 
@@ -249,7 +249,7 @@ class Verifier:
                 # Pass self (Verifier) to the track method
                 result = method(self)
                 return tid, result, None
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError, KeyError) as e:
                 import traceback
 
                 return tid, None, f"Failed: {e}\n{traceback.format_exc()}"

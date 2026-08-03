@@ -61,7 +61,7 @@ def _worker_process_task(args: dict[str, object]) -> dict[str, float] | None:
 
         return metrics
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # broad: worker isolation
         logger.error("Worker process failed: %s", e, exc_info=True)
         return None
 

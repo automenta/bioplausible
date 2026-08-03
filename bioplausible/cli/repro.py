@@ -121,6 +121,11 @@ def _instantiate(
             num_steps=10,
         ).to(device)
 
+    # Register the equitile family: it lives in its own package (NOT zoo), so
+    # it is absent from the registry unless explicitly imported — a regression
+    # surfaced by the Sprint 0.5 lazy-import work.
+    import bioplausible.equitile  # noqa: F401
+
     from bioplausible.zoo import get_model_spec
 
     spec = get_model_spec(model_name)

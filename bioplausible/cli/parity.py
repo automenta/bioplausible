@@ -31,12 +31,13 @@ logger = logging.getLogger(__name__)
 
 # input_dim/output_dim per task — mirrors demo/runner.py `_TASK_DIMS`.
 _TASK_DIMS: dict[str, tuple[int, int]] = {
+    "xor": (2, 2),
+    "spiral": (2, 2),
+    "circles": (2, 2),
     "digits": (64, 10),
     "mnist": (784, 10),
     "cifar10": (3072, 10),
     "tiny_shakespeare": (16, 16),
-    # toy tasks are not wired through CoreTrainer (demo limitation); reject
-    # them here rather than advertise a task that cannot train.
 }
 
 _DEFAULT_TASK = "mnist"

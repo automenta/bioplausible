@@ -86,7 +86,7 @@ class ResearchSynthesizer:
                     )
 
             return df
-        except Exception as e:
+        except (ValueError, TypeError, OSError, KeyError, pd.errors.DatabaseError) as e:
             logger.warning("[WARN]  Error loading convergence data: %s", e)
             return pd.DataFrame()
 
@@ -109,7 +109,7 @@ class ResearchSynthesizer:
             try:
                 failures_query = "SELECT * FROM failures"
                 failures_df = pd.read_sql(failures_query, conn)
-            except Exception:
+            except (ValueError, TypeError, OSError, pd.errors.DatabaseError):
                 logger.warning("Failed to load failures table, using empty DataFrame")
                 failures_df = pd.DataFrame()
 
@@ -128,7 +128,7 @@ class ResearchSynthesizer:
             }
             conn.close()
             return insights
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # broad: best-effort analysis/reporting
             traceback.print_exc()
             return {"error": str(e)}
 
@@ -288,7 +288,7 @@ class ResearchSynthesizer:
                             "delta": delta,
                             "significant": abs(delta) > 0.02,  # 2% threshold
                         })
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # broad: best-effort analysis/reporting
             return [{"error": f"Ablation analysis error: {e}"}]
 
         return ablations
@@ -348,7 +348,7 @@ class ResearchSynthesizer:
 
         except ImportError:
             return [{"error": "SciPy not installed, skipping statistical tests."}]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # broad: best-effort analysis/reporting
             return [{"error": f"Significance analysis error: {e}"}]
 
     def _analyze_cross_algo(self, df: pd.DataFrame) -> str | dict[str, object]:
@@ -382,7 +382,7 @@ class ResearchSynthesizer:
                 })
 
             return {"rankings": rankings, "summary_table": summary.to_dict()}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # broad: best-effort analysis/reporting
             return f"Analysis failed: {e}"
 
     def _analyze_by_task(self, df: pd.DataFrame) -> dict[str, list[dict[str, object]]]:
@@ -547,7 +547,7 @@ class ResearchSynthesizer:
 
                 return {"counts": counts, "patterns": patterns}
             return "Failures exist but missing failure_type."
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # broad: best-effort analysis/reporting
             return f"Failure analysis failed: {e}"
 
     def _find_quick_wins(

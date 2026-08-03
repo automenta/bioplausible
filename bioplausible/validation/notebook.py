@@ -288,7 +288,7 @@ class ValidationTrack:
                 evidence_level=result_data.get("evidence_level", "directional"),
             )
 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, KeyError) as e:
             import traceback
 
             traceback.print_exc()

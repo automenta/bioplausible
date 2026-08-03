@@ -123,7 +123,7 @@ class CrossDomainBenchmarkSuite:
             task = task_cls(name=name, **kwargs)
             task.setup()
             return task
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.warning("Failed to create task %s/%s: %s", domain, name, e)
             return None
 
@@ -198,7 +198,7 @@ class CrossDomainBenchmarkSuite:
                 )
                 return result
 
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, KeyError):
             logger.exception("Failed to run %s on %s", model_name, task.name)
 
         return None
@@ -266,7 +266,7 @@ class CrossDomainBenchmarkSuite:
                             self.leaderboard.add_result(entry)
 
                             self._store_in_kb(model_name, task_name, result)
-                        except Exception as e:
+                        except (ValueError, TypeError, KeyError, OSError) as e:
                             logger.warning("Failed to create leaderboard entry: %s", e)
 
         total_time = time.time() - start_time

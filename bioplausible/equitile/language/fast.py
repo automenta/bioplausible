@@ -202,7 +202,7 @@ class FastLMEquiTile(OptimizedLMEquiTile):
 
             # Use simple random sampling for the demo loop
             # We don't need a full DataLoader overhead for single steps
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.warning(
                 "Failed to load dataset %s: %s. Falling back to Random.", name, e
             )
@@ -610,7 +610,7 @@ class FastLMEquiTile(OptimizedLMEquiTile):
         if "optimizer_state_dict" in checkpoint:
             try:
                 self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            except Exception as e:
+            except (RuntimeError, ValueError, KeyError) as e:
                 logger.warning("Could not load optimizer state: %s", e)
 
         if "step" in checkpoint:

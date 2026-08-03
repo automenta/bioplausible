@@ -78,7 +78,7 @@ class NCCLCommunicator:
                 self.config.world_size,
                 self.device,
             )
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError) as e:
             logger.warning("NCCL initialization failed: %s", e)
             self.device = torch.device("cpu")
 

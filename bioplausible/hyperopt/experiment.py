@@ -124,7 +124,7 @@ class TrialRunner:
 
             logger.warning("Could not find artifact for trial %s", transfer_from)
 
-        except Exception:
+        except (OSError, RuntimeError, ValueError, KeyError):
             logger.exception("Error loading transfer weights")
 
     def run_trial(self, trial_id: int, pruning_callback=None) -> bool:
@@ -166,7 +166,7 @@ class TrialRunner:
                     checkpoint_manager = CheckpointManager(
                         self.checkpoint_db_path, trial_id
                     )
-                except Exception as e:
+                except (OSError, ValueError, RuntimeError, TypeError) as e:
                     logger.warning("Failed to init CheckpointManager: %s", e)
 
             # 3. Define Callbacks
@@ -237,7 +237,7 @@ class TrialRunner:
                 config=trial.config,
             )
 
-        except Exception:
+        except Exception:  # noqa: BLE001  # broad: a failing trial must not stop the loop
             logger.exception("Trial %s failed", trial_id)
             import traceback
 
@@ -520,7 +520,7 @@ def run_single_trial_task(
         )
         return None
 
-    except Exception:
+    except Exception:  # noqa: BLE001  # broad: top-level executor safety net
         logger.exception("Execution Error")
         if verbose:
             traceback.print_exc()

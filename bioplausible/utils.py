@@ -171,8 +171,8 @@ def export_to_onnx(
                 dynamo=False,
             )
         logger.info("Model exported to %s", output_path)
-    except Exception as e:
-        raise RuntimeError(f"ONNX export failed: {e}")
+    except (RuntimeError, ValueError, OSError) as e:
+        raise RuntimeError(f"ONNX export failed: {e}") from e
     finally:
         if was_training:
             model.train()

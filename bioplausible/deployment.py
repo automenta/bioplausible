@@ -123,7 +123,7 @@ class ModelExporter:
             try:
                 path = self._export_onnx(model, output_dir, input_shape, verbose)
                 export_paths["onnx"] = path
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError) as e:
                 if verbose:
                     logger.warning("ONNX export failed: %s", e)
 
@@ -131,7 +131,7 @@ class ModelExporter:
             try:
                 path = self._export_torchscript(model, output_dir, input_shape, verbose)
                 export_paths["torchscript"] = path
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError) as e:
                 if verbose:
                     logger.warning("TorchScript export failed: %s", e)
 
@@ -754,7 +754,7 @@ class _AppState:
                 with torch.no_grad():
                     output = self.model_instance(tensor)
                 return {"output": output.cpu().tolist()}
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # broad: best-effort
                 return {"error": str(e)}
 
         @app.get("/health")

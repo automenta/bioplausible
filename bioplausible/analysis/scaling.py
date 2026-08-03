@@ -34,7 +34,7 @@ def fit_power_law(param_counts: list[int], losses: list[float]) -> tuple[float, 
         popt, _ = curve_fit(_power_law, N, L, p0=p0, bounds=([0, -1], [np.inf, 2]))
         a, b = popt
         return a, b
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError) as e:
         logger.warning("Failed to fit power law: %s", e)
         return float("nan"), float("nan")
 

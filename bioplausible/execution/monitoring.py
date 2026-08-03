@@ -99,7 +99,7 @@ class InterferenceMonitor:
             # Prime the counters (first call returns 0.0)
             p.cpu_percent()
             psutil.cpu_percent()
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             logger.exception("Failed to initialize monitor process")
             return
 
@@ -140,5 +140,5 @@ class InterferenceMonitor:
                 else:
                     violation_start_time = None
 
-            except Exception:
+            except (OSError, ValueError, RuntimeError):
                 logger.exception("Monitor error")

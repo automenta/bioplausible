@@ -20,6 +20,7 @@ from pathlib import Path
 
 from bioplausible.autoscientist.proposer import ExperimentProposer
 from bioplausible.autoscientist.reasoner import HypothesisReasoner
+from bioplausible.core.exceptions import KnowledgeBaseError
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.knowledge import KnowledgeBase, KnowledgeEntry
 
@@ -118,7 +119,7 @@ class AutoScientistCampaign:
 
                     # Update KnowledgeBase
                     self._update_knowledge_base(proposal, result)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001  # broad: a failing trial must not stop the campaign
                     logger.error("Proposal %s failed: %s", i, e, exc_info=True)
                     results.append({
                         "proposal": proposal,
@@ -209,7 +210,7 @@ class AutoScientistCampaign:
                 extra={"campaign_iteration": self._iteration},
             )
             self.knowledge_base.add_entry(entry)
-        except Exception as e:
+        except (KnowledgeBaseError, OSError, ValueError) as e:
             logger.warning("Failed to update KnowledgeBase: %s", e)
 
     def _log_iteration(

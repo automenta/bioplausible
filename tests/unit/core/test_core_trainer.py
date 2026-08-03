@@ -143,3 +143,34 @@ def test_feedback_alignment_propagator_trains():
     history = CoreTrainer(config).fit()
     assert len(history) == 1
     assert history[-1].val_accuracy > 0.0
+
+
+def test_configured_propagator_actually_drives_training():
+    """A configured ``propagator=`` must own forward+backward in ``_train_step``.
+
+    Regression for the dead-propagator bug: ``_train_step`` Phase 3 only checked
+    ``self.optimizer``, so a configured propagator was *never called* and the
+    "FA propagator trains" test silently passed via plain BPTT+Adam.
+    """
+    config = TrainerConfig(
+        model="backprop_mlp",
+        propagator="feedback_alignment",
+        task="digits",
+        model_kwargs={"input_dim": 64, "hidden_dim": 16, "output_dim": 10},
+        epochs=1,
+    )
+    trainer = CoreTrainer(config)
+    trainer.setup()
+    assert trainer.propagator is not None
+
+    calls: list[dict[str, object]] = []
+    original_step = trainer.propagator.step
+
+    def spying_step(x, target=None):
+        calls.append({"x": x, "target": target})
+        return original_step(x, target)
+
+    trainer.propagator.step = spying_step  # type: ignore[method-assign]
+    trainer.train_epoch()
+
+    assert calls, "the configured propagator was never invoked during training"

@@ -52,7 +52,7 @@ def inspect_model(args):
         try:
             x = x.to(device)
             out = model(x)
-        except Exception:
+        except (RuntimeError, ValueError, TypeError):
             logger.exception("Forward pass failed for model %s", args.model)
             return
         logger.info("[OK]  Forward pass successful. Output shape: %s", out.shape)

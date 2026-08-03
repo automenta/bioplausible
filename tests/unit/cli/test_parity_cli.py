@@ -32,9 +32,9 @@ def test_per_epoch_accuracy_falls_back_to_val():
     assert _per_epoch_accuracy(h) == [0.77]
 
 
-def test_task_validation_rejects_toy_tasks():
+def test_task_validation_rejects_unknown_tasks():
     with pytest.raises(ValueError):
-        run_parity("backprop_mlp", "backprop_mlp", "xor", 1, 0.01, 32, 0)
+        run_parity("backprop_mlp", "backprop_mlp", "not_a_task", 1, 0.01, 32, 0)
 
 
 @pytest.mark.parametrize(
