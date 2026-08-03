@@ -305,6 +305,22 @@ class TrialRunner:
             trainer_kwargs["scheduler_type"] = config["scheduler"]
             trainer_kwargs["scheduler_kwargs"] = config.get("scheduler_kwargs", {})
 
+        # Resolve a string ``optimizer`` (from the search space: adam/sgd/...) to
+        # an actual Optimizer instance. ``CoreTrainer.from_task`` assigns the
+        # object verbatim to ``trainer.optimizer`` (never resolving a name), so a
+        # bare string would later crash ``_bptt_step`` with
+        # ``AttributeError: 'str' object has no attribute 'zero_grad'``.
+        optimizer_name = config.get("optimizer")
+        if isinstance(optimizer_name, str):
+            opt_cls = getattr(torch.optim, optimizer_name, torch.optim.Adam)
+            optimizer = opt_cls(
+                model.parameters(),
+                lr=lr,
+                weight_decay=float(config.get("weight_decay", 0.0)),
+                **config.get("optimizer_kwargs", {}),
+            )
+            trainer_kwargs["optimizer"] = optimizer
+
         safety_config = SafetyConfig(
             max_grad_norm=config.get("grad_clip", 10.0),
             nan_check_frequency=10,
@@ -322,14 +338,25 @@ class TrialRunner:
             **trainer_kwargs,
         )
 
+        # ``model.config`` is a *frozen* ``ModelConfig`` (slots+dataclass), so
+        # direct assignment raises ``FrozenInstanceError``. Use ``object.__setattr__``
+        # to bypass the frozen guard, and additionally set the live attribute that
+        # the training loop actually reads (``model.beta`` / ``model.max_steps``).
         if beta is not None:
-            if hasattr(model, "config"):
-                model.config.beta = beta
+            config_obj = getattr(model, "config", None)
+            if config_obj is not None and hasattr(config_obj, "beta"):
+                try:
+                    object.__setattr__(config_obj, "beta", beta)
+                except (AttributeError, TypeError):
+                    pass
             if hasattr(model, "beta"):
                 if isinstance(model.beta, torch.Tensor):
                     model.beta.fill_(beta)
                 else:
                     model.beta = beta
+
+        if steps is not None and hasattr(model, "max_steps"):
+            model.max_steps = int(steps)
 
         return model, trainer
 

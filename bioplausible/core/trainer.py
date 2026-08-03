@@ -850,8 +850,13 @@ class CoreTrainer:
         # Phase 2: Model-side custom train_step (bio-plausible models)
         # Probe with real data — the only reliable way to verify
         # that train_step returns meaningful metrics vs NotImplementedError/None.
+        # A base-class train_step raises NotImplementedError to signal "use BPTT";
+        # catch it and fall through to Phase 3/4 rather than aborting the epoch.
         if hasattr(self.model, "train_step"):
-            metrics = self.model.train_step(x, y)
+            try:
+                metrics = self.model.train_step(x, y)
+            except NotImplementedError:
+                metrics = None
             if metrics is not None:
                 return metrics
 

@@ -25,6 +25,12 @@ class HyperparamScope(Enum):
     FEEDBACK_ALIGNMENT = "fa"  # FA variants (fa_scale, adapt_rate)
     HEBBIAN = "hebbian"  # CHL, etc. (contrastive_steps)
     TRANSFORMER = "transformer"  # Transformer-specific (num_heads, etc.)
+    # Referenced by get_search_space_for_model; currently have no dedicated
+    # spec lists, so these families fall back to UNIVERSAL hyperparams.
+    FORWARD_ONLY = "forward_only"  # PEPITA / Forward-Forward
+    TARGET_PROP = "target_prop"  # Difference target propagation
+    SPIKING = "spiking"  # Spiking / STDP
+    PREDICTIVE_CODING = "predictive_coding"  # PCN / FPC
 
 
 @dataclass

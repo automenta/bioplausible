@@ -117,6 +117,20 @@ class TestHyperparameterMetamodel(unittest.TestCase):
         self.assertTrue(len(errors) > 0)
         self.assertIn("beta", errors[0])
 
+    def test_forward_only_family_search_space(self):
+        """Forward-only families must resolve a search space without crashing.
+
+        Regression guard: ``HyperparamScope`` was missing the FORWARD_ONLY (and
+        sibling) members referenced by ``get_search_space_for_model``, raising
+        ``AttributeError`` and breaking all forward-only HPO runs.
+        """
+        for family in ("forward_only", "target_prop", "spiking", "predictive_coding"):
+            spec = MockModelSpec(f"{family} model", family)
+            space = HYPERPARAM_METAMODEL.get_search_space_for_model(spec)
+            # Families without a dedicated spec list fall back to UNIVERSAL.
+            self.assertIn("lr", space)
+            self.assertIn("hidden_dim", space)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -193,6 +193,7 @@ def create_study(
     sampler_name: str = "tpe",
     evaluation_config: object | None = None,  # EvaluationConfig from eval_tiers
     mode: str = "pareto",  # "pareto" or "scalarized"
+    seed: int | None = None,
 ) -> optuna.Study:
     """
     Create an Optuna study for hyperparameter optimization.
@@ -235,11 +236,13 @@ def create_study(
         n_startup = evaluation_config.n_startup_trials
 
     if sampler_name == "nsga2":
-        sampler = NSGAIISampler()
+        sampler = NSGAIISampler(seed=seed)
     elif sampler_name == "random":
-        sampler = optuna.samplers.RandomSampler()
+        sampler = optuna.samplers.RandomSampler(seed=seed)
     else:  # TPE
-        sampler = TPESampler(multivariate=True, n_startup_trials=n_startup)
+        sampler = TPESampler(
+            multivariate=True, n_startup_trials=n_startup, seed=seed
+        )
 
     # Pruner selection
     if use_pruning:
