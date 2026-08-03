@@ -780,7 +780,7 @@ class CoreTrainer:
                         getattr(self.model, "algorithm_name", self.config.model),
                     )
                     requires_backward = meta.requires_backward
-                except (ValueError, KeyError):
+                except ValueError, KeyError:
                     logger.warning(
                         "Could not fetch metadata for %s",
                         getattr(self.model, "algorithm_name", self.config.model),
@@ -833,6 +833,25 @@ class CoreTrainer:
         avg_metrics["samples_seen"] = samples_seen
         return avg_metrics
 
+    def _adapt_input(self, x: torch.Tensor) -> torch.Tensor:
+        """Adapt input tensor to the model's expected spatial format.
+
+        Models declare their input representation via ``model.input_format``:
+        - ``"spatial"`` (conv models) expect a 4D ``(B, C, H, W)`` tensor.
+        - ``"flat"`` (default, MLP / equilibrium models) expect a 2D
+          ``(B, input_dim)`` tensor.
+
+        For flat models we reshape the spatial batch to 2D, preserving the
+        per-sample content (no information is discarded by the architecture it
+        was designed for). Spatial models receive the tensor untouched so conv
+        feature extraction can leverage the retained spatial structure.
+        """
+        if x.dim() <= 2:
+            return x
+        if getattr(self.model, "input_format", "flat") == "spatial":
+            return x
+        return x.view(x.size(0), -1)
+
     def _train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Single training step.
 
@@ -842,6 +861,8 @@ class CoreTrainer:
         3. Learning-rule optimizer (TypeIs narrowing).
         4. Standard BPTT fallback.
         """
+        x = self._adapt_input(x)
+
         # Phase 1: EnergyModel — clean structural dispatch
         match self.model:
             case EnergyModel():
@@ -872,6 +893,8 @@ class CoreTrainer:
 
     def _bptt_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Standard backpropagation training step."""
+        x = self._adapt_input(x)
+
         if self.optimizer:
             self.optimizer.zero_grad()
 
@@ -920,6 +943,7 @@ class CoreTrainer:
                 x, y = self._get_batch_data("val", batch_size)
                 x, y = x.to(self.device), y.to(self.device)
 
+                x = self._adapt_input(x)
                 logits = self.model(x)
                 loss = compute_loss(self.loss_fn, logits, y)
                 val_losses.append(loss.item())

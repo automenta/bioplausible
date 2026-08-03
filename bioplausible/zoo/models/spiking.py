@@ -54,6 +54,10 @@ class SpikingSTDP(TransitionGraphMixin, nn.Module):
         task_type="vision",
         **kwargs,
     ):
+        if isinstance(input_dim, tuple):
+            import math
+
+            input_dim = math.prod(input_dim)
         return cls(
             input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim
         ).to(device)

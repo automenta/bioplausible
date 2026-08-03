@@ -93,6 +93,10 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
         task_type,
         **kwargs,
     ):
+        import math
+
+        if isinstance(input_dim, tuple):
+            input_dim = math.prod(input_dim)
         cube_size = int(round(hidden_dim ** (1 / 3)))
         return cls(
             cube_size=max(4, cube_size),

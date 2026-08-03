@@ -288,7 +288,40 @@ class BioModel(nn.Module, ABC):
             max_steps=20,
             use_spectral_norm=True,
         )
-        return cls(config=config).to(device)
+        # Most models accept ``config=`` (frozen ModelConfig). Pass the config
+        # as-is; the search-space params were folded into ``config.extra`` by
+        # ``_build_model_config`` so they reach the constructor via ``config``
+        # rather than as commit-time kwargs. A handful of direct ``nn.Module``
+        # subclasses expose ``input_dim/hidden_dim/output_dim`` as *required*
+        # positional args and either accept ``config`` as an optional kwarg or
+        # reject it entirely; inspect the constructor to adapt.
+        import inspect as _inspect
+
+        sig = _inspect.signature(cls.__init__)
+        accepts_config = "config" in sig.parameters
+        structural = {
+            "input_dim": config.input_dim,
+            "hidden_dim": config.hidden_dims[0] if config.hidden_dims else 0,
+            "output_dim": config.output_dim,
+            "num_layers": min(max(len(config.hidden_dims), 1), 2),
+        }
+        if accepts_config:
+            try:
+                return cls(config=config).to(device)
+            except TypeError:
+                return cls(**structural, config=config).to(device)
+        # No config accepted: build purely from structural args that the search
+        # space can provide. Unsupported params were absorbed into the config.
+        try:
+            return cls(**structural).to(device)
+        except TypeError:
+            kwargs["max_steps"] = 20
+            return cls(
+                input_dim=config.input_dim,
+                hidden_dim=config.hidden_dims[0] if config.hidden_dims else 0,
+                output_dim=config.output_dim,
+                **kwargs,
+            ).to(device)
 
     # ------------------------------------------------------------------
     # TransitionGraph protocol (REFACTOR3 §1)

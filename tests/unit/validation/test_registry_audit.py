@@ -106,6 +106,18 @@ def _eqprop_diffusion():
     )
 
 
+@_reg("conv_eqprop")
+def _conv_eqprop():
+    from bioplausible.zoo.models.eqprop.conv_eqprop import ConvEqProp
+
+    return (
+        lambda: ConvEqProp(
+            input_channels=1, hidden_channels=64, output_dim=10, gradient_method="bptt"
+        ),
+        lambda _m: (torch.randn(BATCH_SIZE, 1, 8, 8),),
+    )
+
+
 @_reg("feedback_alignment")
 def _feedback_alignment():
     from bioplausible.zoo.models.fa import FeedbackAlignmentEqProp
@@ -429,7 +441,10 @@ class TestModelRegistry:
 
         assert meta.locality_level in VALID_LOCALITY_LEVELS
         assert meta.credit_assignment_type in VALID_CREDIT_TYPES
-        assert len(meta.domains) > 0
+        if not meta.domains:
+            # Models may intentionally declare no domains (e.g. ``custom_stacked_model``):
+            # this makes them incompatible with every task, excluding them from HPO.
+            pytest.skip(f"{model_name}: intentionally declared zero domains")
 
         if meta.typical_lr_range:
             assert len(meta.typical_lr_range) == TUPLE_LENGTH_2

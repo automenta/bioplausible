@@ -173,14 +173,22 @@ def _task_domain(task: str) -> str:
 
 
 def _model_compatible(model_name: str, task: str) -> bool:
-    """Check whether a registered model supports a given task domain."""
+    """Check whether a registered model supports a given task domain.
+
+    A model that declares *no* domains (``domains=[]`` -> empty task_compat) is
+    treated as incompatible with every task: such models carry bespoke
+    constructor args (e.g. ``layers_config``) that no search space can satisfy,
+    so they must not be pulled into family HPO runs.
+    """
     try:
         meta = get_model_spec(model_name)
     except ValueError:
         return True  # Unregistered names are allowed to "try naturally".
     domain_names = meta.task_compat
+    if not domain_names:
+        return False  # Explicitly scoped to zero domains -> incompatible everywhere
     task_domain = _task_domain(task)
-    return bool(not domain_names or task in domain_names or task_domain in domain_names)
+    return task in domain_names or task_domain in domain_names
 
 
 def _resolve_targets(args) -> list[tuple[str, str, str | None, list[str]]]:
@@ -396,8 +404,11 @@ def _fail_stale_running(study_name: str, storage_url: str) -> None:
                     )
                 except Exception:  # noqa: BLE001  best-effort cleanup
                     pass
+    except (KeyError, ValueError, AssertionError):
+        # Study doesn't exist yet, or a reusable-study header differs — normal on first run.
+        return
     except Exception:  # noqa: BLE001  a corrupt study must never abort the run
-        logger.warning("[CLEAN] could not clean study '%s' (skipped)", study_name)
+        logger.warning("[CLEAN] could not read study '%s' (skipped)", study_name)
 
 
 def _run_hpo_family(

@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
+import sqlite3
 import sys
 import time
 from dataclasses import dataclass
@@ -40,7 +41,6 @@ import torch
 
 from bioplausible.cli.run import (
     FAMILY_MAP,
-    _fail_stale_running,
     _make_objective,
     _model_compatible,
     _resolve_family_models,
@@ -48,6 +48,57 @@ from bioplausible.cli.run import (
 )
 from bioplausible.hyperopt.eval_tiers import PatientLevel, get_evaluation_config
 from bioplausible.hyperopt.optuna_bridge import create_study
+
+
+def _cleanup_corrupt_trials(db_path: str) -> int:
+    """Remove corrupt trials (NULL objective values) and stale RUNNING trials from the Optuna DB.
+
+    Returns the number of deleted trials. This runs via raw SQL to bypass Optuna's
+    fragile trial reconstruction which crashes on NULL objective values.
+    """
+    if not Path(db_path).exists():
+        return 0
+    deleted = 0
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        cur = conn.cursor()
+
+        # Find trial IDs with any NULL objective value in trial_values
+        cur.execute("""
+            SELECT DISTINCT trial_id
+            FROM trial_values
+            WHERE value IS NULL
+        """)
+        corrupt_trial_ids = {row[0] for row in cur.fetchall()}
+
+        # Also find stale RUNNING trials (state = 2 is RUNNING in Optuna)
+        cur.execute("""
+            SELECT trial_id FROM trials WHERE state = 2
+        """)
+        running_trial_ids = {row[0] for row in cur.fetchall()}
+
+        # Combine: corrupt OR stale
+        to_delete = corrupt_trial_ids | running_trial_ids
+
+        if to_delete:
+            for table in (
+                "trial_values", "trial_params", "trial_user_attributes",
+                "trial_system_attributes", "trial_heartbeats", "trials"
+            ):
+                col = "trial_id"
+                conn.execute(
+                    f"DELETE FROM {table} WHERE {col} IN ({','.join('?' * len(to_delete))})",
+                    tuple(to_delete),
+                )
+            deleted = len(to_delete)
+            conn.commit()
+            logging.info("[DB-CLEAN] Deleted %d corrupt/stale trials from %s", deleted, db_path)
+    except Exception as e:  # noqa: BLE001
+        logging.warning("[DB-CLEAN] Cleanup failed (continuing): %s", e)
+    finally:
+        conn.close()
+    return deleted
 from bioplausible.zoo import get_model_spec
 
 logger = logging.getLogger("run_experiment")
@@ -395,7 +446,6 @@ def _ensure_studies(
     """Create or load all studies; build objectives; return {study_name: study}."""
     studies: dict[str, optuna.Study] = {}
     for t in targets:
-        _fail_stale_running(t.study_name, storage_url)
         n_startup = getattr(eval_cfg, "n_startup_trials", 10)
         # Force TPE unless the all-pruned path requires random fallback
         sampler_name = _safe_sampler_name(t.study_name, "tpe", n_startup, storage_url)
@@ -629,6 +679,9 @@ def main() -> None:
     runmod._STORAGE_URL = f"sqlite:///{db_path}"
     storage_url = runmod._STORAGE_URL
     StudyTargetStorage.db_path = db_path
+
+    # Clean corrupt/stale trials BEFORE any Optuna study access
+    _cleanup_corrupt_trials(db_path)
 
     device = args.device
     if device == "auto":

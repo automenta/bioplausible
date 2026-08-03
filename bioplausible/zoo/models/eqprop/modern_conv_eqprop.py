@@ -84,6 +84,7 @@ class ModernConvEqProp(EqPropModel):
             use_spectral_norm=use_spectral_norm,
             gradient_method=gradient_method,
         )
+        self.input_format = "spatial"
 
     def _build_layers(self):
         hidden_channels = self.base_hidden_channels
@@ -267,6 +268,7 @@ class SimpleConvEqProp(EqPropModel):
             use_spectral_norm=use_spectral_norm,
             gradient_method=gradient_method,
         )
+        self.input_format = "spatial"
 
     def _build_layers(self):
         self.embed = spectral_conv2d(

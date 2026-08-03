@@ -79,13 +79,22 @@ class EqPropDiffusion(TransitionGraphMixin, nn.Module):
     ):
         """Build an ``EqPropDiffusion`` from explicit configuration.
 
-        ``input_dim`` is the total flattened image size ``C * H * W``. Channel
-        count is taken explicitly from ``img_channels`` (default 1) rather than
-        reverse-engineered from magic pixel totals (784/3072, etc.). Spatial
-        size is set via ``img_size`` (default 28); no other kwargs are passed
-        through to the constructor.
+        ``input_dim`` is the total flattened image size ``C * H * W`` or a tuple ``(C, H, W)``.
+        Channel count is inferred from the tuple if provided, otherwise defaults to 1.
         """
-        img_channels = int(kwargs.get("img_channels", 1))
+        img_channels = 1
+        if isinstance(input_dim, tuple):
+            img_channels = input_dim[0]
+        elif isinstance(input_dim, int):
+            # Try to infer from common sizes
+            if input_dim == 784:  # 28*28
+                img_channels = 1
+            elif input_dim == 3072:  # 32*32*3
+                img_channels = 3
+            elif input_dim == 64:  # 8*8
+                img_channels = 1
+        # Also check kwargs for explicit img_channels
+        img_channels = int(kwargs.get("img_channels", img_channels))
         return cls(
             img_channels=img_channels,
             hidden_channels=hidden_dim,

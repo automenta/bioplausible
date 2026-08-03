@@ -167,3 +167,38 @@ class LazyEqProp(TransitionGraphMixin, nn.Module):
 
     def get_flop_savings(self) -> float:
         return self.stats.flop_savings
+
+    @classmethod
+    def build(
+        cls,
+        spec,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        num_layers,
+        device,
+        task_type,
+        **kwargs,
+    ):
+        """Build LazyEqProp from standard HPO parameters.
+
+        Handles both integer input_dim (flattened) and tuple input_dim (spatial).
+        Only forwards kwargs the constructor accepts; the search-space idioms
+        (lr/activation/beta/steps/nudge_type) are not constructor params.
+        """
+        import math
+
+        if isinstance(input_dim, tuple):
+            input_dim = math.prod(input_dim)
+        ctor = {
+            k: v
+            for k, v in kwargs.items()
+            if k in {"alpha", "epsilon", "use_spectral_norm"}
+        }
+        return cls(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            num_layers=num_layers,
+            **ctor,
+        ).to(device)

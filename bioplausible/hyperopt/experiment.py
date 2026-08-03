@@ -124,7 +124,7 @@ class TrialRunner:
 
             logger.warning("Could not find artifact for trial %s", transfer_from)
 
-        except (OSError, RuntimeError, ValueError, KeyError):
+        except OSError, RuntimeError, ValueError, KeyError:
             logger.exception("Error loading transfer weights")
 
     def run_trial(self, trial_id: int, pruning_callback=None) -> bool:
@@ -260,12 +260,41 @@ class TrialRunner:
         num_layers = config.get("num_layers", 4)
 
         model_cls = Registry.get(ComponentCategory.MODEL, trial.model_name)
-        model = model_cls(
-            input_dim=self.input_dim,
-            output_dim=self.output_dim,
-            hidden_dim=hidden_dim,
-            num_layers=num_layers,
-        ).to(self.device)
+
+        # Use the model's build classmethod if available (handles parameter mapping)
+        if hasattr(model_cls, "build") and callable(getattr(model_cls, "build")):
+            from bioplausible.zoo import get_model_spec
+
+            spec = get_model_spec(trial.model_name)
+            # Remove keys already passed explicitly to avoid duplicate kwargs.
+            build_kwargs = dict(config)
+            for _k in (
+                "hidden_dim",
+                "num_layers",
+                "input_dim",
+                "output_dim",
+                "device",
+                "task_type",
+            ):
+                build_kwargs.pop(_k, None)
+            model = model_cls.build(
+                spec=spec,
+                input_dim=self.input_dim,
+                output_dim=self.output_dim,
+                hidden_dim=hidden_dim,
+                num_layers=num_layers,
+                device=self.device,
+                task_type=self.task_name,
+                **build_kwargs,
+            )
+        else:
+            # Fallback to direct constructor call
+            model = model_cls(
+                input_dim=self.input_dim,
+                output_dim=self.output_dim,
+                hidden_dim=hidden_dim,
+                num_layers=num_layers,
+            ).to(self.device)
 
         transfer_from = config.get("transfer_from")
         if transfer_from:
@@ -344,7 +373,7 @@ class TrialRunner:
             if config_obj is not None and hasattr(config_obj, "beta"):
                 try:
                     object.__setattr__(config_obj, "beta", beta)
-                except (AttributeError, TypeError):
+                except AttributeError, TypeError:
                     pass
             if hasattr(model, "beta"):
                 if isinstance(model.beta, torch.Tensor):

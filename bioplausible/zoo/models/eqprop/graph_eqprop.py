@@ -23,8 +23,16 @@ except ImportError:
 )
 class GraphEqProp(EqPropModel):
     def __init__(
-        self, input_dim: int, hidden_dim: int, output_dim: int, max_steps: int = 30
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        max_steps: int = 30,
+        task_type: str = "graph",
     ):
+        # Non-graph inputs (e.g. vision tensors) cannot use GCNConv which needs
+        # an edge_index; use a plain Linear transition instead.
+        self._use_linear_conv = task_type != "graph"
         super().__init__(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
@@ -33,15 +41,12 @@ class GraphEqProp(EqPropModel):
         )
 
     def _build_layers(self):
-        if GCNConv is None:
-            self.W_in = nn.Linear(self.input_dim, self.hidden_dim)
-            self.conv = nn.Linear(self.hidden_dim, self.hidden_dim)
-            self.W_out = nn.Linear(self.hidden_dim, self.output_dim)
-            return
-
         self.W_in = nn.Linear(self.input_dim, self.hidden_dim)
-        self.conv = GCNConv(self.hidden_dim, self.hidden_dim)
         self.W_out = nn.Linear(self.hidden_dim, self.output_dim)
+        if GCNConv is None or self._use_linear_conv:
+            self.conv = nn.Linear(self.hidden_dim, self.hidden_dim)
+            return
+        self.conv = GCNConv(self.hidden_dim, self.hidden_dim)
 
     def _initialize_hidden_state(self, x: object) -> torch.Tensor:
         if hasattr(x, "x"):
@@ -154,6 +159,13 @@ class GraphEqProp(EqPropModel):
         task_type="graph",
         **kwargs,
     ):
+        import math
+
+        if isinstance(input_dim, tuple):
+            input_dim = math.prod(input_dim)
         return cls(
-            input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            task_type=task_type,
         ).to(device)

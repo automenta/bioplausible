@@ -126,11 +126,24 @@ def run_experiment():
         logging.info("  %s: %d models x %d = %d trials", fam, models, CONFIG["family_budgets"][fam], total_trials)
 
     start = time.time()
-    # Stream output live so the dashboard prints in real time
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-    for line in process.stdout:
-        logging.info(line.rstrip())
-    process.wait()
+    # Run the child with inherited stdout/stderr so its live dashboard and
+    # logs stream straight to the terminal (no double-logging). Capture the
+    # return code via wait().
+    process = subprocess.Popen(cmd)
+    try:
+        process.wait()
+    except KeyboardInterrupt:
+        logging.warning("[PHASE1] Interrupted by user; terminating child...")
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        logging.warning(
+            "[PHASE1] Child stopped; studies persisted in %s. Re-run to resume.",
+            CONFIG["db"],
+        )
+        return 130
     elapsed = time.time() - start
     logging.info("[PHASE1] Completed in %.1f min (exit=%d)", elapsed / 60, process.returncode)
     return process.returncode

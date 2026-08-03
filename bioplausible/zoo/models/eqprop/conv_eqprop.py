@@ -4,6 +4,7 @@ import torch
 from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
+from bioplausible.core.registry import register_model
 
 from ....acceleration import compile_settling_loop
 from ...utils import spectral_conv2d
@@ -14,6 +15,11 @@ __all__ = [
 ]
 
 
+@register_model(
+    "conv_eqprop",
+    family="eqprop",
+    tags=["eqprop", "conv"],
+)
 class ConvEqProp(EqPropModel):
     """
     Convolutional Equilibrium Propagation Model.
@@ -51,6 +57,7 @@ class ConvEqProp(EqPropModel):
             use_spectral_norm=use_spectral_norm,
             gradient_method=gradient_method,
         )
+        self.input_format = "spatial"
 
         with torch.no_grad():
             self.W1.weight.mul_(0.5)
@@ -125,3 +132,37 @@ class ConvEqProp(EqPropModel):
 
     def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
         return self.head(h)
+
+    @classmethod
+    def build(
+        cls,
+        spec,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        num_layers,
+        device,
+        task_type,
+        **kwargs,
+    ):
+        import math
+
+        if isinstance(input_dim, tuple):
+            input_channels = input_dim[0]
+        else:
+            # Try to infer from common sizes
+            if input_dim == 784:  # 28*28
+                input_channels = 1
+            elif input_dim == 3072:  # 32*32*3
+                input_channels = 3
+            elif input_dim == 64:  # 8*8
+                input_channels = 1
+            else:
+                input_channels = 1
+        return cls(
+            input_channels=input_channels,
+            hidden_channels=hidden_dim,
+            output_dim=output_dim,
+            max_steps=kwargs.get("max_steps", 25),
+            gradient_method=kwargs.get("gradient_method", "bptt"),
+        ).to(device)
