@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
-from bioplausible.core.registry import register_model
+from bioplausible.core.registry import LocalityLevel, register_model
 
 from ..nebc_base import NEBCBase
 from .transitions import TransitionGraphMixin
@@ -75,9 +75,10 @@ class HebbianLayer(nn.Module):
 @register_model(
     "deep_hebbian",
     family="hebbian",
+    locality_level=LocalityLevel.LOCAL,
     tags=["hebbian", "deep"],
 )
-@register_model("hebbian_chain", family="hebbian")
+@register_model("hebbian_chain", family="hebbian", locality_level=LocalityLevel.LOCAL)
 class DeepHebbianChain(NEBCBase):
     """
     Deep Hebbian Chain with spectral normalization.
@@ -220,7 +221,7 @@ class DeepHebbianChain(NEBCBase):
         return None
 
 
-@register_model("hebbian_3d", family="hebbian")
+@register_model("hebbian_3d", family="hebbian", locality_level=LocalityLevel.LOCAL)
 class HebbianCube(TransitionGraphMixin, NEBCBase):
     """
     3D Hebbian lattice for testing spatial organization.
@@ -298,6 +299,7 @@ class HebbianCube(TransitionGraphMixin, NEBCBase):
 @register_model(
     "three_factor_hebbian",
     family="hebbian",
+    locality_level=LocalityLevel.LOCAL,
     tags=["hebbian", "three-factor"],
 )
 class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):

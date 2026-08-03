@@ -14,7 +14,7 @@ from bioplausible.core.config import (
     resolve_hidden_dims,
 )
 from bioplausible.core.model import BioModel
-from bioplausible.core.registry import register_model
+from bioplausible.core.registry import LocalityLevel, register_model
 
 # ============================================================================
 # fabricpc_graph_pcn.py - FabricPCGraphPCN
@@ -30,6 +30,7 @@ __all__ = [
 @register_model(
     "fabricpc_graph_pcn",
     family="predictive_coding",
+    locality_level=LocalityLevel.LOCAL,
     tags=["predictive-coding", "fabricpc"],
 )
 class FabricPCGraphPCN(BioModel):
@@ -204,6 +205,7 @@ class FabricPCGraphPCN(BioModel):
 @register_model(
     "predictive_coding_hybrid",
     family="predictive_coding",
+    locality_level=LocalityLevel.LOCAL,
     tags=["predictive-coding", "hybrid"],
 )
 class PredictiveCodingHybrid(BioModel):

@@ -54,7 +54,7 @@ def _from_nvcc() -> pathlib.Path | None:
         cuda_root = real_nvcc.parent.parent
         if (cuda_root / "bin" / "nvcc").exists():
             return cuda_root
-    except OSError, RuntimeError:
+    except (OSError, RuntimeError):
         return None
     return None
 

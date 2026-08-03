@@ -41,7 +41,9 @@ skipped automatically with a warning.
 ## 3. Study layout
 
 For each compatible model in a family, **one Optuna study is created per model**
-named `{reg_family}_{model}_{task}` (stored in `sqlite:///bioplausible.db`).
+named `{reg_family}_{model}_{task}` (stored in `sqlite:///bioplausible.db` by
+default; pass `--db <file>` to any HPO subcommand to isolate a run in a dedicated
+SQLite file).
 
 A single study spans one model only, because `create_optuna_space` derives categorical
 choices from model metadata (`max_hidden`, `max_layers`); mixing models in one study
@@ -110,3 +112,19 @@ JSON via the `pareto` subcommand to `--output-dir`.
 - A model's `train_step` must be implemented for the chosen credit-assignment family;
   models lacking a custom `train_step` (e.g. some EqProp variants) prune the trial
   via the bridge's exception handler rather than crashing the study.
+- **Optuna 4.9 MOTPE crash guard.** When a study accumulates >= `n_startup_trials`
+  trials but *every* one is PRUNED (`values=None`), the multi-objective TPE sampler
+  crashes with `TypeError`. `run.py:_safe_sampler_name` detects this and falls back to
+  a seeded `RandomSampler` for that model so the family run completes. The failure is
+  logged (`[SAMPLER] ... falling back to random`) and is reproducible.
+- **Stale RUNNING trials.** A killed process can leave a `RUNNING` trial with
+  `values=None`. `run.py:_fail_stale_running` marks these as `FAILED` before each
+  model's search (logged `[CLEAN]`), so they never contaminate the study or the
+  comparison/portfolio reads.
+- **`training_checkpoints` schema unification.** The table is created by both
+  `hyperopt/storage.py` and `execution/_lifecycle.py`. Both now define the *same*
+  union schema (trial_id + trajectory_id + all metric columns); previously whichever
+  SQL ran first won, breaking the other with `no column named <x>`. New DBs are fine;
+  pre-existing DBs with a stale table can be fixed via
+  `DROP TABLE training_checkpoints;`.
+

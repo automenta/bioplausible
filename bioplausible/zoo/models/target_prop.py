@@ -10,7 +10,7 @@ import math
 import torch
 from torch import nn
 
-from bioplausible.core.registry import register_model
+from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 __all__ = [
@@ -35,6 +35,7 @@ class DTPLayer(nn.Module):
 @register_model(
     "diff_target_prop",
     family="target_prop",
+    locality_level=LocalityLevel.LAYERWISE,
     tags=["target-prop", "diffprop"],
 )
 class DifferenceTargetProp(TransitionGraphMixin, nn.Module):

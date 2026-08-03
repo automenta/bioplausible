@@ -302,17 +302,25 @@ class CheckpointManager:
 
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS training_checkpoints (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                         trial_id INTEGER,
-                        epoch INTEGER,
+                        trajectory_id INTEGER NOT NULL DEFAULT -1,
+                        epoch INTEGER NOT NULL,
                         train_acc REAL,
                         val_acc REAL,
+                        test_acc REAL,
                         train_loss REAL,
                         val_loss REAL,
-                        samples_seen INTEGER,
-                        trajectory_id INTEGER,
+                        grad_norm_mean REAL,
+                        grad_norm_std REAL,
+                        weight_norm REAL,
+                        learning_rate REAL,
+                        train_val_gap REAL,
                         perplexity REAL,
+                        reward REAL,
                         wall_time_seconds REAL,
-                        PRIMARY KEY (trial_id, epoch)
+                        total_flops INTEGER,
+                        samples_seen INTEGER DEFAULT 0
                     )
                 """)
 

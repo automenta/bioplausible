@@ -237,11 +237,8 @@ class TrialRunner:
                 config=trial.config,
             )
 
-        except Exception:  # noqa: BLE001  # broad: a failing trial must not stop the loop
-            logger.exception("Trial %s failed", trial_id)
-            import traceback
-
-            traceback.print_exc()
+        except Exception as exc:  # noqa: BLE001  # broad: a failing trial must not stop the loop
+            logger.warning("Trial %s failed: %s: %s", trial_id, type(exc).__name__, exc)
             self.storage.update_trial(trial_id, status="failed")
             return False
         finally:

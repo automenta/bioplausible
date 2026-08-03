@@ -80,6 +80,18 @@ logger = logging.getLogger(__name__)
 _DB_PATH = "bioplausible.db"
 _STORAGE_URL = "sqlite:///bioplausible.db"
 
+
+def _set_storage(db_path: str | None = None) -> tuple[str, str]:
+    """Resolve the SQLite storage backend, defaulting to the hardcoded file.
+
+    Returns ``(db_path, storage_url)``.  ``--db`` on any HPO subcommand lets
+    parallel/long runs isolate artifacts in a dedicated file.
+    """
+    path = db_path or _DB_PATH
+    if not str(path).endswith(".db"):
+        path = f"{path}.db"
+    return path, f"sqlite:///{path}"
+
 # Maps the CLI family label to the canonical ``family`` value used on the
 # component registry metadata.  ``feedback_alignment`` → ``fa`` (matching the
 # registry convention seen in ``zoo/models/fa.py``).
@@ -328,6 +340,66 @@ def _make_objective(ctx: _TrialContext):
     return objective
 
 
+def _safe_sampler_name(
+    study_name: str,
+    requested: str,
+    n_startup_trials: int,
+    storage_url: str,
+) -> str:
+    """Return a TPE-safe sampler name for ``study_name``.
+
+    Optuna 4.9's multi-objective TPE crashes with ``TypeError`` when a study
+    has accumulated >= ``n_startup_trials`` trials but every one is PRUNED
+    (``values is None``) — e.g. an eqprop model whose forward pass raises a
+    shape bug on every draw.  TPE then builds its Parzen estimator from
+    ``None`` objective values and dies.  That state is not recoverable by TPE,
+    so fall back to a RandomSampler (still seeded/reproducible) instead of
+    crashing the whole family run.
+    """
+    if requested != "tpe":
+        return requested
+    try:
+        study = optuna.load_study(study_name=study_name, storage=storage_url)
+    except (KeyError, OSError):
+        return "tpe"
+    completed = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+    total = len(study.trials)
+    if total >= n_startup_trials and not completed:
+        logger.warning(
+            "[SAMPLER] study '%s' has %d trials but no COMPLETE values; "
+            "MOTPE cannot build an estimator — falling back to random",
+            study_name,
+            total,
+        )
+        return "random"
+    return "tpe"
+
+
+def _fail_stale_running(study_name: str, storage_url: str) -> None:
+    """Best-effort cleanup of stale RUNNING trials left by a killed process.
+
+    Runs in isolation: if the study can't be read for any reason (including a
+    corrupt trial that Optuna's RDB layer cannot reconstruct), we return
+    silently rather than aborting the whole experiment. Stale RUNNING trials
+    simply continue to be ignored downstream (runs skipped, not repeated).
+    """
+    try:
+        study = optuna.load_study(study_name=study_name, storage=storage_url)
+        for t in study.trials:
+            if t.state == optuna.trial.TrialState.RUNNING:
+                logger.warning("[CLEAN] marking stale RUNNING trial %d as FAILED", t.number)
+                try:
+                    study._storage.set_trial_state_values(
+                        t._trial_id,
+                        optuna.trial.TrialState.FAIL,
+                        (float("nan"),) * len(study.directions),
+                    )
+                except Exception:  # noqa: BLE001  best-effort cleanup
+                    pass
+    except Exception:  # noqa: BLE001  a corrupt study must never abort the run
+        logger.warning("[CLEAN] could not clean study '%s' (skipped)", study_name)
+
+
 def _run_hpo_family(
     study_name: str,
     reg_family: str,
@@ -345,28 +417,40 @@ def _run_hpo_family(
     method = getattr(args, "method", None)
     sampler_name = "random" if method == "random" else "tpe"
     seed = getattr(args, "seed", None)
+    n_startup = getattr(eval_cfg, "n_startup_trials", 10)
+
+    if device == "auto":
+        resolved = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info("[DEVICE] auto -> %s", resolved)
 
     logger.info(
-        "[SEARCH] family=%s study=%s models=%s trials/model=%s (%s, %s)",
+        "[SEARCH] family=%s study=%s models=%s trials/model=%s (%s, %s) n_startup=%d",
         cli_family or reg_family,
         study_name,
         model_list,
         n_trials,
         tier.value,
         sampler_name,
+        n_startup,
     )
 
     for model in model_list:
         model_start = time.time()
         model_study_name = f"{reg_family}_{model}_{args.task}"
         logger.info("[MODEL] %s", model)
+        _fail_stale_running(model_study_name, _STORAGE_URL)
+        effective_sampler = _safe_sampler_name(
+            model_study_name, sampler_name, n_startup, _STORAGE_URL
+        )
+        if effective_sampler != sampler_name:
+            logger.info("[MODEL] %s -> sampler %s", model, effective_sampler)
         study = create_study(
             model_names=[model],
             n_objectives=2,
             storage=_STORAGE_URL,
             study_name=model_study_name,
             use_pruning=eval_cfg.use_pruning,
-            sampler_name=sampler_name,
+            sampler_name=effective_sampler,
             mode="pareto",
             seed=seed,
         )
@@ -387,10 +471,10 @@ def _run_hpo_family(
             )
         )
         try:
-            study.optimize(objective, n_trials=n_trials)
+            study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
         except KeyboardInterrupt:
             logger.warning("Search interrupted for %s", model)
-        except (RuntimeError, ValueError, OSError):
+        except (RuntimeError, ValueError, OSError, TypeError):
             logger.exception("[FAIL] Optimizing %s", model)
         logger.info("[OK]    %s done in %.1fs", model, time.time() - model_start)
         results.append((model, study))
@@ -1288,6 +1372,11 @@ def main():  # ruff: ignore[too-many-statements, complex-structure]  (argparse s
     search_parser.add_argument(
         "--output", type=str, help="JSONL output path for trial records"
     )
+    search_parser.add_argument(
+        "--db",
+        dest="db",
+        help="SQLite DB file for this run (default: bioplausible.db)",
+    )
 
     # ---- compare ----
     compare_parser = subparsers.add_parser(
@@ -1315,6 +1404,11 @@ def main():  # ruff: ignore[too-many-statements, complex-structure]  (argparse s
         help="Ranking metric",
     )
     compare_parser.add_argument("--output", required=True, help="Output CSV path")
+    compare_parser.add_argument(
+        "--db",
+        dest="db",
+        help="SQLite DB file containing the studies (default: bioplausible.db)",
+    )
 
     # ---- verify ----
     verify_parser = subparsers.add_parser(
@@ -1337,6 +1431,11 @@ def main():  # ruff: ignore[too-many-statements, complex-structure]  (argparse s
     verify_parser.add_argument(
         "--output", type=str, help="JSONL output path for verified runs"
     )
+    verify_parser.add_argument(
+        "--db",
+        dest="db",
+        help="SQLite DB file containing the study (default: bioplausible.db)",
+    )
 
     # ---- pareto ----
     pareto_parser = subparsers.add_parser(
@@ -1352,6 +1451,11 @@ def main():  # ruff: ignore[too-many-statements, complex-structure]  (argparse s
         default="html",
         help="Output format",
     )
+    pareto_parser.add_argument(
+        "--db",
+        dest="db",
+        help="SQLite DB file containing the study (default: bioplausible.db)",
+    )
 
     # ---- portfolio ----
     portfolio_parser = subparsers.add_parser(
@@ -1363,6 +1467,11 @@ def main():  # ruff: ignore[too-many-statements, complex-structure]  (argparse s
         help="Comma-separated task scopes to include (default: digits,cifar10)",
     )
     portfolio_parser.add_argument("--output", required=True, help="Output CSV path")
+    portfolio_parser.add_argument(
+        "--db",
+        dest="db",
+        help="SQLite DB file containing the studies (default: bioplausible.db)",
+    )
 
     # ---- list ----
     subparsers.add_parser("list", help="List available models")
@@ -1406,6 +1515,11 @@ def main():  # ruff: ignore[too-many-statements, complex-structure]  (argparse s
         format="%(levelname)s %(name)s: %(message)s",
         force=True,
     )
+
+    if getattr(args, "db", None):
+        global _DB_PATH, _STORAGE_URL  # ruff: ignore[global-statement] (per-run storage override)
+        _DB_PATH, _STORAGE_URL = _set_storage(args.db)
+        logger.info("Using storage: %s", _STORAGE_URL)
 
     if args.command == "train":
         run_training(args)

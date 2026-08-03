@@ -93,7 +93,8 @@ class HyperoptStorage:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS training_checkpoints (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                trajectory_id INTEGER NOT NULL,
+                trial_id INTEGER,
+                trajectory_id INTEGER NOT NULL DEFAULT -1,
                 epoch INTEGER NOT NULL,
                 train_acc REAL,
                 val_acc REAL,

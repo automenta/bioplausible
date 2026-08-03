@@ -10,7 +10,7 @@ import snntorch as snn
 from snntorch import surrogate
 from torch import nn
 
-from bioplausible.core.registry import register_model
+from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 __all__ = [
@@ -21,6 +21,7 @@ __all__ = [
 @register_model(
     "spiking_stdp",
     family="spiking",
+    locality_level=LocalityLevel.LOCAL,
     tags=["spiking", "stdp"],
 )
 class SpikingSTDP(TransitionGraphMixin, nn.Module):
