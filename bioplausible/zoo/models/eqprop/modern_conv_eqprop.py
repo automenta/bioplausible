@@ -42,7 +42,7 @@ class ModernConvEqProp(EqPropModel):
         gamma: float = 0.5,
         hidden_channels: int = 64,
         use_spectral_norm: bool = True,
-        gradient_method: str = "bptt",
+        gradient_method: str = "equilibrium",
         input_dim: int = 0,
         output_dim: int = 10,
         **kwargs,
@@ -228,10 +228,11 @@ class ModernConvEqProp(EqPropModel):
         **kwargs,
     ):
         return cls(
-            eq_steps=30,
+            eq_steps=kwargs.get("steps", kwargs.get("max_steps", 30)),
             hidden_channels=hidden_dim,
             input_dim=input_dim,
             output_dim=output_dim,
+            gradient_method=kwargs.get("gradient_method", "equilibrium"),
             **kwargs,
         ).to(device)
 

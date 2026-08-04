@@ -12,6 +12,7 @@ from typing import cast
 
 import torch
 from torch import autograd, nn
+from torch.utils.checkpoint import checkpoint as _checkpoint
 
 logger = logging.getLogger(__name__)
 
@@ -265,12 +266,27 @@ def settle_single_state(
 
     h = h_0
 
+    # Gradient checkpointing: during training the unrolled settling loop builds a
+    # graph of `steps` sequential `forward_step` calls; backprop then materializes
+    # all of them → memory ∝ steps × activations (OOM on CIFAR-10 for deep/high-
+    # channel conv setups). Checkpointing the step recomputes it on backward, so
+    # memory becomes O(1) in steps regardless of sampled steps/channels/task.
+    # It is a no-op under ``no_grad`` (inference/validation), so it adds zero
+    # overhead there. Compile is disabled for settling loops, so no dynamo
+    # checkpoint conflict (FIX.md §39).
+    def _step(state: torch.Tensor) -> torch.Tensor:
+        if torch.is_grad_enabled():
+            return _checkpoint(
+                forward_step, state, x_transformed, use_reentrant=False
+            )
+        return forward_step(state, x_transformed)
+
     # Index into the trajectory buffer — incremented AFTER each snapshot.
     traj_idx = 0
 
     def warmup() -> None:
         nonlocal h, traj_idx, remaining
-        h = forward_step(h, x_transformed)
+        h = _step(h)
         remaining -= 1
         if deltas is not None:
             deltas.append(torch.dist(h, h_0, p=float("inf")).item())
@@ -284,7 +300,7 @@ def settle_single_state(
         nonlocal h, traj_idx, remaining
 
         for step_idx in range(remaining):
-            h_new = forward_step(h, x_transformed)
+            h_new = _step(h)
 
             if deltas is not None:
                 deltas.append(torch.dist(h_new, h, p=float("inf")).item())

@@ -8,6 +8,9 @@ Key improvements over Phase 1:
 - Excludes underperformers from search space (archived to baselines/)
 - Collects efficiency metrics: params, FLOPs, epoch_time, peak_memory
 - Generates Pareto frontiers per architecture group
+- EqProp models run the O(1) implicit-differentiation method
+  (``gradient_method="equilibrium"``) by default — no BPTT unrolling, so
+  CIFAR-10 trials fit in memory regardless of settle steps (FIX.md §44).
 
 Usage:
     uv run python run_phase1_5.py          # Local run
@@ -34,16 +37,16 @@ from pathlib import Path
 
 # Architecture groups for FAIR comparisons
 ARCH_GROUPS = {
-    "conv": {
-        "description": "Convolutional spatial models (4D input, preserve spatial structure)",
-        "models": [
-            ("eqprop", "modern_conv_eqprop"),
-            ("eqprop", "conv_eqprop"),
-            ("eqprop", "graph_eqprop"),      # Graph conv
-        ],
-        "task": "cifar10",   # Primary task for conv models
-        "budget_per_model": 30,
-    },
+    #"conv": {
+    #    "description": "Convolutional spatial models (4D input, preserve spatial structure)",
+    #    "models": [
+    #        ("eqprop", "modern_conv_eqprop"),
+    #        ("eqprop", "conv_eqprop"),
+    #        ("eqprop", "graph_eqprop"),      # Graph conv
+    #    ],
+    #    "task": "cifar10",   # Primary task for conv models
+    #    "budget_per_model": 30,
+    #},
     "mlp": {
         "description": "Flat MLP models (1D input, flattened)",
         "models": [
@@ -69,6 +72,8 @@ EXCLUDED_MODELS = {
     # EqProp contrastive variants (nudge signal dies in deep layers)
     "eqprop", "directed_ep", "finite_nudge_ep", "momentum_equilibrium",
     "sparse_equilibrium", "equilibrium_alignment", "layerwise_equilibrium_fa",
+    # Conv EqProp (conv arch group disabled)
+    "modern_conv_eqprop", "conv_eqprop", "graph_eqprop",
     # FA hybrids (credit assignment fails end-to-end)
     "contrastive_feedback_alignment", "energy_guided_fa", "energy_minimizing_fa",
     # Hebbian (update rule plateaus)

@@ -26,7 +26,7 @@ class EqPropModel(BioModel):
         self,
         config: ModelConfig | None = None,
         max_steps: int = 30,
-        gradient_method: str = "bptt",
+        gradient_method: str = "equilibrium",
         **kwargs,
     ):
         """
@@ -38,8 +38,8 @@ class EqPropModel(BioModel):
                 ``gradient_method`` falls back to ``config.extra``.
             max_steps: Number of equilibrium steps (ignored if ``config``
                 is given).
-            gradient_method: ``'bptt'``, ``'equilibrium'`` (implicit),
-                or ``'contrastive'`` (Hebbian).
+            gradient_method: ``'bptt'``, ``'equilibrium'`` (implicit, O(1)
+                memory — the default), or ``'contrastive'`` (Hebbian).
         """
         if config is not None:
             input_dim = config.input_dim

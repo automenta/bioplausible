@@ -139,20 +139,28 @@ class BioModel(nn.Module, ABC):
         return layer
 
     def _get_spectral_normalized_weight(self, layer: nn.Module) -> torch.Tensor:
-        """Get spectral normalized weight, with caching in eval mode."""
-        # Check for cached weight in eval mode
+        """Get spectral normalized weight, cached in eval mode for inference.
+
+        When gradient tracking is enabled (e.g. the implicit ``equilibrium``
+        method's backward, which freezes spectral-norm statistics via
+        ``model.eval()`` but still needs ``dL/dW``), the *current* normalized
+        weight is returned WITHOUT detaching so parameter gradients flow. The
+        detached cache is only used for pure inference (no autograd), where the
+        frozen statistics make the recurrent map a well-defined fixed point.
+
+        Returns:
+            The (frozen-statistics) normalized weight of ``layer.weight``.
+        """
+        if torch.is_grad_enabled():
+            weight = layer.weight
+            return weight
+
+        # Pure inference / no_grad settle: reuse the cached frozen weight.
         if not self.training and hasattr(layer, "_cached_sn_weight"):
             return layer._cached_sn_weight
 
-        # Compute normalized weight (.weight triggers spectral_norm if present)
-        if hasattr(layer, "parametrizations") and hasattr(
-            layer.parametrizations, "weight"
-        ):
-            weight = layer.weight
-        else:
-            weight = layer.weight
+        weight = layer.weight
 
-        # Cache in eval mode
         if not self.training:
             layer._cached_sn_weight = weight.detach()
 

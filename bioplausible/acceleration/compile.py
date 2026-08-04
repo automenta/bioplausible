@@ -118,35 +118,20 @@ def compile_settling_loop(settling_fn: Callable) -> Callable:
     """
     Decorator to compile the inner settling loop for maximum speed.
 
-    Use this on the forward_step method of EqProp models:
-
-        @compile_settling_loop
-        def forward_step(self, h, x_emb):
-            ...
+    DISABLED: torch.compile + gradient checkpointing conflicts with dynamo LRU
+    cache (PyTorch issue #166926), causing CheckpointError. Additionally, the
+    compiled unrolled settling loop amplifies memory during BPTT (unrolled
+    graph of `steps` sequential forward_step calls). Disabling compilation
+    avoids both issues; the ~2x speedup is not worth the OOM risk and
+    checkpoint instability. See FIX.md for details.
 
     Args:
         settling_fn: Function to compile
 
     Returns:
-        Compiled function
+        Original uncompiled function
     """
-    if not hasattr(torch, "compile"):
-        return settling_fn
-
-    if not torch.cuda.is_available():
-        return settling_fn
-
-    if not _CompileCache.check():
-        return settling_fn
-
-    if not HAS_TRITON:
-        return settling_fn
-
-    try:
-        return torch.compile(settling_fn, mode="reduce-overhead")
-    except Exception:  # broad: optional torch.compile fallback
-        logger.warning("torch.compile settling loop failed, using uncompiled version")
-        return settling_fn
+    return settling_fn
 
 
 __all__ = [

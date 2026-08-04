@@ -83,7 +83,7 @@ class LoopedMLP(EqPropModel):
         output_dim: int,
         use_spectral_norm: bool = True,
         max_steps: int = 30,
-        gradient_method: str = "bptt",
+        gradient_method: str = "equilibrium",
         backend: str = "pytorch",
         num_layers: int = 2,
     ) -> None:
@@ -150,8 +150,9 @@ class LoopedMLP(EqPropModel):
             input_dim=input_dim,
             hidden_dim=hidden_dim,
             output_dim=output_dim,
-            use_spectral_norm=True,
-            max_steps=20,
+            use_spectral_norm=kwargs.get("use_spectral_norm", True),
+            max_steps=kwargs.get("steps", kwargs.get("max_steps", 20)),
+            gradient_method=kwargs.get("gradient_method", "equilibrium"),
         ).to(device)
 
     def _build_layers(self):

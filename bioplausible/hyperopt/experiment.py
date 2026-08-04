@@ -379,7 +379,7 @@ class TrialRunner:
             if config_obj is not None and hasattr(config_obj, "beta"):
                 try:
                     object.__setattr__(config_obj, "beta", beta)
-                except (AttributeError, TypeError):
+                except AttributeError, TypeError:
                     pass
             if hasattr(model, "beta"):
                 if isinstance(model.beta, torch.Tensor):

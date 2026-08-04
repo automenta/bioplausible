@@ -41,7 +41,7 @@ class ConvEqProp(EqPropModel):
         gamma: float = 0.5,
         use_spectral_norm: bool = True,
         max_steps: int = 25,
-        gradient_method: str = "bptt",
+        gradient_method: str = "equilibrium",
     ) -> None:
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
@@ -161,6 +161,7 @@ class ConvEqProp(EqPropModel):
             input_channels=input_channels,
             hidden_channels=hidden_dim,
             output_dim=output_dim,
-            max_steps=kwargs.get("max_steps", 25),
-            gradient_method=kwargs.get("gradient_method", "bptt"),
+            max_steps=kwargs.get("steps", kwargs.get("max_steps", 25)),
+            gradient_method=kwargs.get("gradient_method", "equilibrium"),
+            gamma=kwargs.get("gamma", 0.5),
         ).to(device)

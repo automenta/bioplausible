@@ -1,3 +1,5 @@
+Implement NO **backwards compatibility** of *any* kind.
+
 ## Toolchain
 *   Language: **Python 3.14+**
 *   **uv**: For dependency management, virtualenvs, and task running (`uv run`, `uv add`). Single lockfile (`uv.lock`); no `requirements.txt`.
