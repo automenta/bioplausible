@@ -162,20 +162,6 @@ GRADIENT_HYPERPARAMS = [
 # Equilibrium Propagation family
 EQUILIBRIUM_HYPERPARAMS = [
     HyperparamSpec(
-        name="gradient_method",
-        scope=HyperparamScope.EQUILIBRIUM,
-        param_type="categorical",
-        choices=["equilibrium", "bptt"],
-        description=(
-            "How gradients are computed through the settling loop. "
-            "'equilibrium' (implicit differentiation) is O(1) memory and the "
-            "bio-plausible default; 'bptt' unrolls the loop (O(steps) memory, "
-            "OOMs on CIFAR-10 for deep/high-step configs) and is kept for "
-            "gradient-parity verification only."
-        ),
-        default="equilibrium",
-    ),
-    HyperparamSpec(
         name="beta",
         scope=HyperparamScope.EQUILIBRIUM,
         param_type="continuous",

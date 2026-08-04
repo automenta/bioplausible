@@ -1,0 +1,52 @@
+# Phase 1 HPO experiment config.
+#
+# Run: uv run python run_experiment.py --config experiments/phase1.yaml --db compute.db
+#
+# Stop with Ctrl-C; re-run to resume (studies persist in SQLite, load_if_exists=True).
+# Dashboard prints every --interval seconds; interim portfolio emitted every --emit-every trials.
+
+# Families to search (CLI labels; see bioplausible.cli.run.FAMILY_MAP).
+# backprop is the baseline and MUST be run first/alongside so the portfolio
+# can compute parity gaps.
+families:
+  - backprop
+  - fa
+  - forward_only
+  - eqprop
+  - hebbian
+  - target_prop
+  - spiking
+  - predictive_coding
+
+# Tasks (datasets) to cover.
+tasks:
+  - digits
+  - cifar10
+
+# Default per-model Optuna trial budget.  Override per-family or per-model below.
+# 20 gives a fast first pass; raise to 100-200 for the statistically rigorous pass.
+budget: 20
+
+# Compute-matching patience tier.  Tiers (epochs / batch / n_startup):
+#   smoke    -> 3 / 256 / 1   (pipeline checks only; NOT real numbers)
+#   shallow  -> 7 / 128 / 3
+#   standard -> 15 / 64 / 10  (Phase 1 default; ~2-3 min/trial on CIFAR-10)
+#   deep     -> 30 / 32 / 20  (rigorous; very slow)
+tier: standard
+
+# Per-family budget overrides (win over `budget`).
+# Use lower budgets for slow families (CIFAR-10) or families with many models.
+family_budgets:
+  backprop: 30          # baseline needs more trials for a stable reference
+  fa: 20               # 11 models; keep modest for the first pass
+  eqprop: 15            # many models have shape bugs (pruned); 15 surviving is enough signal
+  forward_only: 20     # only 2 models; can afford more
+
+# Per-model budget overrides (win over family_budgets and `budget`).
+# Key: "<cli_family>.<model_name>"
+# model_budgets:
+#   fa.standard_fa: 40
+#   forward_only.forward_forward: 40
+
+# Seed for Optuna samplers + RNGs (reproducible).
+seed: 42

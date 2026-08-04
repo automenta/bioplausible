@@ -1,0 +1,18 @@
+families:
+- backprop
+- forward_only
+- eqprop
+- hebbian
+- target_prop
+tasks:
+- digits
+- cifar10
+budget: 20
+tier: standard
+family_budgets:
+  backprop: 30
+  forward_only: 20
+  eqprop: 15
+  hebbian: 15
+  target_prop: 15
+seed: 42

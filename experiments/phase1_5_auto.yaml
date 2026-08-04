@@ -1,0 +1,51 @@
+families:
+- backprop
+- eqprop
+- forward_only
+- hebbian
+- target_prop
+tasks:
+- cifar10
+- digits
+budget: 20
+tier: standard
+family_budgets:
+  backprop: 20
+  eqprop: 20
+  forward_only: 20
+  hebbian: 20
+  target_prop: 20
+model_budgets:
+  backprop.backprop_mlp: 20
+  eqprop.eqprop_mlp: 20
+  eqprop.lazy_eqprop: 20
+  eqprop.neural_cube: 20
+  eqprop.holomorphic_ep: 20
+  forward_only.forward_forward: 20
+  forward_only.pepita: 20
+  hebbian.hebbian_chain: 20
+  hebbian.deep_hebbian: 20
+  target_prop.diff_target_prop: 20
+seed: 42
+phase: '1.5'
+arch_groups:
+  mlp:
+  - backprop_mlp
+  - eqprop_mlp
+  - lazy_eqprop
+  - neural_cube
+  - holomorphic_ep
+  - forward_forward
+  - pepita
+  - hebbian_chain
+  - deep_hebbian
+  - diff_target_prop
+multi_objective: true
+objectives:
+- accuracy
+- param_count
+- epoch_time_s
+directions:
+- maximize
+- minimize
+- minimize
