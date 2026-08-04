@@ -48,6 +48,46 @@ The single blocker described below ("fix `EquilibriumFunction.backward` so it le
 
 ---
 
+## 45. Phase 1.5 profiling & low-hanging-fruit (2026-08-04)
+
+Profiled the phase 1.5 hot path (model train steps on CIFAR-10/digits-sized GPU
+inputs) and applied one safe, measured optimization.
+
+**Per-train-step GPU timings (real models, cifar-sized input, hidden=256, steps=30):**
+| Model | ms/batch (GPU) | Notes |
+|-------|----------------|-------|
+| `backprop_mlp` | 1.9 | baseline |
+| `eqprop_mlp` (equilibrium) | ~8.2 | dominated by 30-step settle |
+| `holomorphic_ep` (contrastive) | ~11.8 | 2× settle (free+nudged) — inherent |
+
+**Win applied — early-stop in `EquilibriumFunction.forward` (`zoo/_settling.py`).**
+The implicit-diff forward settle ran all `max_steps` (up to 40) iterations with
+**no** early-stopping, even though spectral-norm contraction guarantees the
+fixed point converges far earlier (verified: converges by ~step 12–13 at
+`delta < 2e-4`). Added an early-stop mirroring the BPTT path
+(`settle_single_state`/`_inf_norm_converged`): stop once the consecutive-state
+inf-norm delta drops below threshold. This cuts the forward settle from 31→15
+`forward_step` calls and measurably reduces train-step time.
+
+**Measured speedup:** 8.18 → 7.10 ms/step on CIFAR-10-sized GPU input (~13%),
+generalizes to conv models, and — crucially — makes the `steps∈[10,40]` HPO
+range effectively free above the convergence point (~step 13).
+
+**Correctness preservation:** gradient-parity (equilibrium≈bptt <5e-2), O(1)
+memory, and learning-regression tests all still pass; `eqprop_mlp` and
+`conv_eqprop` still reduce loss under `equilibrium`.
+
+**Found, not applied (lower value / higher risk):**
+- `settle_activations_list` per-step `.item()` sync (holomorphic/contrastive):
+  cheap here (~1ms, 11%) because that path already early-stops via its own
+  convergence logic and is dominated by the inherent free+nudged double settle.
+- Spectral-norm `vdot`/`sigma` recompute per `forward_step` (~5%): fixed
+  statistics during the settle make it redundant, but the win is small and the
+  change is riskier (gradient caching), so deferred.
+
+---
+
+
 ## 43. `model_budgets` allowlist filter — disable conv models in Phase 1.5 (RESOLVED)
 
 ## 1. Corrupt Optuna DB — `AssertionError: value is not None`

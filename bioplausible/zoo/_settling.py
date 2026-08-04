@@ -461,6 +461,14 @@ class EquilibriumFunction(autograd.Function):
 
         should_freeze_sn = getattr(model, "use_spectral_norm", False) and model.training
         remaining_steps = model.max_steps
+        # Contractive models (spectral norm) converge well before ``max_steps``;
+        # skipping the tail of the settle saves most of the forward cost while
+        # still producing a valid near-fixed-point for implicit differentiation
+        # (mirrors the early stop in ``settle_single_state``).
+        early_start = getattr(model, "convergence_start", 5)
+        threshold_early = getattr(model, "convergence_threshold", 2e-4)
+        threshold_late = getattr(model, "convergence_threshold_late", 1e-4)
+        transition_step = getattr(model, "convergence_transition", 10)
 
         with torch.no_grad():
             h = h_init
@@ -471,8 +479,16 @@ class EquilibriumFunction(autograd.Function):
                 model.eval()
 
             try:
-                for _ in range(remaining_steps):
-                    h = model.forward_step(h, x_transformed)
+                step_idx = 0
+                while step_idx < remaining_steps:
+                    h_new = model.forward_step(h, x_transformed)
+                    step_idx += 1
+                    if step_idx > early_start:
+                        d = torch.dist(h_new, h, p=float("inf"))
+                        if d.item() < (threshold_late if step_idx > transition_step else threshold_early):
+                            h = h_new
+                            break
+                    h = h_new
             finally:
                 if should_freeze_sn:
                     model.train()
