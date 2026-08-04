@@ -17,9 +17,9 @@ browser, matching the "UI stays a thin consumer" architecture rule.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
 
 from widgets import WidgetField, WidgetGroup
 
@@ -104,13 +104,12 @@ def render_group(
     from nicegui import ui
 
     created: list[str] = []
-    with container:
-        with ui.card():
-            ui.label(group.label).classes("text-bold")
-            for field in group.fields:
-                _render_field(field, config, on_change, created)
-            for child in group.groups:
-                created.append(render_group(child, config, on_change, container))
+    with container, ui.card():
+        ui.label(group.label).classes("text-bold")
+        for field in group.fields:
+            _render_field(field, config, on_change, created)
+        for child in group.groups:
+            created.append(render_group(child, config, on_change, container))
     return f"{group.label}: {len(group.fields)} fields, {len(group.groups)} groups"
 
 

@@ -92,7 +92,7 @@ class AblationStudy:
 
             score = float(res.get("final_val_accuracy", 0.0))
             return {**params, "success": True, "val_accuracy": score}
-        except Exception as e:  # noqa: BLE001  # broad: best-effort
+        except Exception as e:  # broad: best-effort
             return {**params, "success": False, "val_accuracy": 0.0, "error": str(e)}
 
     def run(self, parallel_workers: int = 4) -> pd.DataFrame:

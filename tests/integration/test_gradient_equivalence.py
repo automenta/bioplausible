@@ -9,16 +9,28 @@ import bioplausible.acceleration
 
 bioplausible.acceleration._check_compile_works = lambda: False
 
-from bioplausible.zoo.models.eqprop import LoopedMLP  # noqa: E402
-from bioplausible.zoo.mep.presets import smep as _smep  # noqa: E402
-from bioplausible.zoo.propagators.backprop import Backprop as _Backprop  # noqa: E402
-from bioplausible.zoo.propagators.eqprop import EqProp as _EqProp  # noqa: E402
-from bioplausible.zoo.propagators.fa import (  # noqa: E402
+from bioplausible.zoo.mep.presets import (
+    smep as _smep,
+)
+from bioplausible.zoo.models.eqprop import (
+    LoopedMLP,
+)
+from bioplausible.zoo.propagators.backprop import (
+    Backprop as _Backprop,
+)
+from bioplausible.zoo.propagators.eqprop import (
+    EqProp as _EqProp,
+)
+from bioplausible.zoo.propagators.fa import (  # ruff: ignore[module-import-not-at-top-of-file]
     DirectFA as _DirectFA,
+)
+from bioplausible.zoo.propagators.fa import (
     FeedbackAlignment as _FeedbackAlignment,
+)
+from bioplausible.zoo.propagators.fa import (
     StochasticFA as _StochasticFA,
 )
-from bioplausible.zoo.propagators.hebbian import (  # noqa: E402
+from bioplausible.zoo.propagators.hebbian import (  # ruff: ignore[module-import-not-at-top-of-file]
     ContrastiveHebbianLearning as _CHL,
 )
 

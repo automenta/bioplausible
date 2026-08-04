@@ -22,8 +22,8 @@ import logging
 # imports, importing the top-level package is no longer a registration side
 # effect; both the zoo (pepita/FF/FA/eqprop_mlp/backprop_mlp) and the separate
 # equitile package must be imported explicitly.
-import bioplausible.equitile  # noqa: F401
-import bioplausible.zoo  # noqa: F401
+import bioplausible.equitile  # ruff: ignore[unused-import]
+import bioplausible.zoo  # ruff: ignore[unused-import]
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.utils import set_global_seed
 
@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
             args.seed,
             args.device,
         )
-    except Exception as e:  # noqa: BLE001 # broad: report any parity failure
+    except Exception as e:  # broad: report any parity failure
         logger.error("biopl-parity failed: %s", e)
         return 2
 

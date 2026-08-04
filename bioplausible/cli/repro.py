@@ -124,8 +124,7 @@ def _instantiate(
     # Register the equitile family: it lives in its own package (NOT zoo), so
     # it is absent from the registry unless explicitly imported — a regression
     # surfaced by the Sprint 0.5 lazy-import work.
-    import bioplausible.equitile  # noqa: F401
-
+    import bioplausible.equitile  # ruff: ignore[unused-import]
     from bioplausible.zoo import get_model_spec
 
     spec = get_model_spec(model_name)
@@ -255,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
     for model in models:
         try:
             ok = run_one_model(model, args.seed, args.device)
-        except Exception:  # noqa: BLE001 - report any family failure
+        except Exception:
             logger.exception("model %s failed during reproducibility pass", model)
             results[model] = False
             continue

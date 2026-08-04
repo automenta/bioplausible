@@ -145,20 +145,18 @@ class ConvEqProp(EqPropModel):
         task_type,
         **kwargs,
     ):
-        import math
 
         if isinstance(input_dim, tuple):
             input_channels = input_dim[0]
+        # Try to infer from common sizes
+        elif input_dim == 784:  # 28*28
+            input_channels = 1
+        elif input_dim == 3072:  # 32*32*3
+            input_channels = 3
+        elif input_dim == 64:  # 8*8
+            input_channels = 1
         else:
-            # Try to infer from common sizes
-            if input_dim == 784:  # 28*28
-                input_channels = 1
-            elif input_dim == 3072:  # 32*32*3
-                input_channels = 3
-            elif input_dim == 64:  # 8*8
-                input_channels = 1
-            else:
-                input_channels = 1
+            input_channels = 1
         return cls(
             input_channels=input_channels,
             hidden_channels=hidden_dim,

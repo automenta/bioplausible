@@ -44,7 +44,7 @@ class _CompileCache:
             compiled = torch.compile(dummy_fn, mode="reduce-overhead")
             _ = compiled(torch.ones(128, 128))
             cls._works = True
-        except Exception as e:  # noqa: BLE001  # broad: optional torch.compile probe
+        except Exception as e:  # broad: optional torch.compile probe
             warnings.warn(
                 f"torch.compile check failed: {e}. Disabling compilation.",
                 RuntimeWarning,
@@ -104,7 +104,7 @@ def compile_model(
             fullgraph=fullgraph,
             dynamic=dynamic,
         )
-    except Exception as e:  # noqa: BLE001  # broad: optional torch.compile fallback
+    except Exception as e:  # broad: optional torch.compile fallback
         warnings.warn(
             f"torch.compile failed: {e}. Using uncompiled model.",
             RuntimeWarning,
@@ -144,7 +144,7 @@ def compile_settling_loop(settling_fn: Callable) -> Callable:
 
     try:
         return torch.compile(settling_fn, mode="reduce-overhead")
-    except Exception:  # noqa: BLE001  # broad: optional torch.compile fallback
+    except Exception:  # broad: optional torch.compile fallback
         logger.warning("torch.compile settling loop failed, using uncompiled version")
         return settling_fn
 

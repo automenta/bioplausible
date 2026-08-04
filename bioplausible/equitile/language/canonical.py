@@ -843,7 +843,7 @@ def generate_text(
                     else:
                         logits = logits[-1]
 
-            except Exception:  # noqa: BLE001  # broad: best-effort
+            except Exception:  # broad: best-effort
                 logger.warning("Complex dispatch fallback triggered")
                 # Fallback: try with different input format
                 try:

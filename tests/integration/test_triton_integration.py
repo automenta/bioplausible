@@ -1,8 +1,8 @@
-import pytest
 import sys
 import unittest
 from pathlib import Path
 
+import pytest
 import torch
 
 # Add parent to path for in-package testing
@@ -11,6 +11,7 @@ sys.path.insert(0, str(parent_dir))
 
 from bioplausible.acceleration.triton_kernels import HAS_TRITON, TritonEqPropOps
 from bioplausible.zoo.models.eqprop import LoopedMLP
+
 pytestmark = pytest.mark.gpu
 
 

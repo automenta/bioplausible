@@ -19,18 +19,21 @@ from compat import apply_compat_shims
 
 apply_compat_shims()  # must run before `import nicegui`
 
-from nicegui import ui  # noqa: E402
-
-from charts import loss_series, parity_explanation, parity_gap  # noqa: E402
-from persistence import (  # noqa: E402
+from charts import (  # ruff: ignore[module-import-not-at-top-of-file]
+    loss_series,
+    parity_explanation,
+    parity_gap,
+)
+from nicegui import ui  # ruff: ignore[module-import-not-at-top-of-file]
+from persistence import (  # ruff: ignore[module-import-not-at-top-of-file]
     config_to_url,
     export_run_csv,
     export_run_png,
     load_config,
     save_config,
 )
-from renderer import render_group  # noqa: E402
-from runner import (  # noqa: E402
+from renderer import render_group  # ruff: ignore[module-import-not-at-top-of-file]
+from runner import (  # ruff: ignore[module-import-not-at-top-of-file]
     TRAINABLE_MODELS,
     DemoPanel,
     default_trainer_config,
@@ -38,8 +41,8 @@ from runner import (  # noqa: E402
     prepare_trainer_config,
     run_headless,
 )
-from tasks import build_tasks  # noqa: E402
-from widgets import build_widget_tree  # noqa: E402
+from tasks import build_tasks  # ruff: ignore[module-import-not-at-top-of-file]
+from widgets import build_widget_tree  # ruff: ignore[module-import-not-at-top-of-file]
 
 logger = logging.getLogger(__name__)
 

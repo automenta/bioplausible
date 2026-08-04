@@ -28,7 +28,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import logging
+import random
 import sqlite3
 import sys
 import time
@@ -48,6 +50,11 @@ from bioplausible.cli.run import (
 )
 from bioplausible.hyperopt.eval_tiers import PatientLevel, get_evaluation_config
 from bioplausible.hyperopt.optuna_bridge import create_study
+
+# Active config (set in main from --config). Used by _build_objective to read
+# multi-objective settings (objectives/directions) without threading config
+# through the round-robin graph.
+_ACTIVE_CONFIG: dict[str, Any] | None = None
 
 
 def _cleanup_corrupt_trials(db_path: str) -> int:
@@ -83,8 +90,12 @@ def _cleanup_corrupt_trials(db_path: str) -> int:
 
         if to_delete:
             for table in (
-                "trial_values", "trial_params", "trial_user_attributes",
-                "trial_system_attributes", "trial_heartbeats", "trials"
+                "trial_values",
+                "trial_params",
+                "trial_user_attributes",
+                "trial_system_attributes",
+                "trial_heartbeats",
+                "trials",
             ):
                 col = "trial_id"
                 conn.execute(
@@ -93,12 +104,16 @@ def _cleanup_corrupt_trials(db_path: str) -> int:
                 )
             deleted = len(to_delete)
             conn.commit()
-            logging.info("[DB-CLEAN] Deleted %d corrupt/stale trials from %s", deleted, db_path)
-    except Exception as e:  # noqa: BLE001
+            logging.info(
+                "[DB-CLEAN] Deleted %d corrupt/stale trials from %s", deleted, db_path
+            )
+    except Exception as e:
         logging.warning("[DB-CLEAN] Cleanup failed (continuing): %s", e)
     finally:
         conn.close()
     return deleted
+
+
 from bioplausible.zoo import get_model_spec
 
 logger = logging.getLogger("run_experiment")
@@ -225,10 +240,19 @@ class StudyStats:
     total: int
     best_acc: float | None
     last_trial_time_s: float | None
+    model_type: str = ""
+    locality: str = ""
 
 
 def _study_stats(target: StudyTarget, storage_url: str) -> StudyStats:
     """Poll a study for current progress (read-only, safe mid-run)."""
+    try:
+        spec = get_model_spec(target.model)
+        model_type = spec.model_type or ""
+        locality = spec.credit_locality or ""
+    except ValueError:
+        model_type = ""
+        locality = ""
     empty = StudyStats(
         study_name=target.study_name,
         family=target.cli_family,
@@ -239,15 +263,15 @@ def _study_stats(target: StudyTarget, storage_url: str) -> StudyStats:
         total=0,
         best_acc=None,
         last_trial_time_s=None,
+        model_type=model_type,
+        locality=locality,
     )
     try:
-        study = optuna.load_study(
-            study_name=target.study_name, storage=storage_url
-        )
+        study = optuna.load_study(study_name=target.study_name, storage=storage_url)
     except (KeyError, OSError):
         # Study doesn't exist yet
         return empty
-    except Exception:  # noqa: BLE001  corrupt study must not crash the run
+    except Exception:
         return empty
     complete_trials = [
         t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE
@@ -259,10 +283,7 @@ def _study_stats(target: StudyTarget, storage_url: str) -> StudyStats:
     # Avg iteration_time from the most recent N trials (user_attr)
     recent = complete_trials[-5:]
     avg_t: float | None = None
-    times = [
-        (t.user_attrs.get("iteration_time") or 0.0)
-        for t in recent
-    ]
+    times = [(t.user_attrs.get("iteration_time") or 0.0) for t in recent]
     times = [t for t in times if t > 0]
     if times:
         avg_t = sum(times) / len(times)
@@ -276,6 +297,8 @@ def _study_stats(target: StudyTarget, storage_url: str) -> StudyStats:
         total=len(study.trials),
         best_acc=best_acc,
         last_trial_time_s=avg_t,
+        model_type=model_type,
+        locality=locality,
     )
 
 
@@ -294,6 +317,16 @@ def _baselines(stats: list[StudyStats]) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 
+def _fmt_acc(v: float | None) -> str:
+    return f"{v:.4f}" if v is not None else "—"
+
+
+def _progress_bar(fraction: float, width: int = 24) -> str:
+    done = round(fraction * width)
+    bar = "#" * done + "." * (width - done)
+    return f"[{bar}]"
+
+
 def _render_dashboard(
     stats: list[StudyStats],
     baselines: dict[str, float],
@@ -303,35 +336,45 @@ def _render_dashboard(
 ) -> None:
     """Print a live progress table to stdout."""
     lines: list[str] = []
+    total_budget = sum(s.budget for s in stats)
+    total = max(total_budget, 1)
+    pct = 100.0 * total_done / total
+    lines.append("")
     lines.append(
-        f"\n=== Cycle {cycle} | {total_done} trials done | "
-        f"elapsed {elapsed_s / 60:.1f} min ==="
+        f"=== Cycle {cycle} | {total_done}/{total_budget} trials complete "
+        f"({pct:.0f}%) | elapsed {elapsed_s / 60:.1f} min ==="
     )
-    header = (
-        f"{'study':40s} {'fam':14s} {'task':8s} {'done/tot':>9s} "
-        f"{'best_acc':>8s} {'gap_pp':>7s} {'avg_t':>6s}"
-    )
-    lines.append(header)
-    lines.append("-" * len(header))
-    sorted_stats = sorted(
-        stats,
-        key=lambda s: (s.task, s.family, -1 * (s.best_acc or -1)),
-    )
-    for s in sorted_stats:
-        done = f"{s.complete}/{s.budget}"
-        best = f"{s.best_acc:.4f}" if s.best_acc is not None else "—"
-        gap = "—"
-        bl = baselines.get(s.task)
-        if s.best_acc is not None and bl is not None:
-            gap = f"{(bl - s.best_acc) * 100:.1f}"
-        avg_t = f"{s.last_trial_time_s:.1f}s" if s.last_trial_time_s else "—"
-        lines.append(
-            f"{s.study_name[:40]:40s} {s.family[:14]:14s} {s.task:8s} "
-            f"{done:>9s} {best:>8s} {gap:>7s} {avg_t:>6s}"
-        )
+    lines.append(f"    overall {_progress_bar(total_done / total)}")
 
-    # ETA: total remaining trials * avg trial time, summed (sequential est)
-    # This is a coarse estimate; parallel runs will be faster.
+    # Group by task for readability
+    tasks = sorted({s.task for s in stats})
+    for task in tasks:
+        task_stats = [s for s in stats if s.task == task]
+        bl = baselines.get(task)
+        lines.append("")
+        lines.append(
+            f"--- task: {task}" + (f"  (backprop baseline acc={bl:.4f})" if bl else "")
+        )
+        header = (
+            f"{'model':26s} {'type':22s} {'locality':12s} "
+            f"{'done/budget':>11s} {'best_acc':>8s} {'gap_pp':>7s} {'avg_t':>7s}"
+        )
+        lines.append(header)
+        lines.append("-" * len(header))
+        for s in sorted(task_stats, key=lambda x: (x.family, x.model)):
+            done = f"{s.complete:>4d}/{s.budget:<4d}"
+            best = _fmt_acc(s.best_acc)
+            gap = "—"
+            if s.best_acc is not None and bl is not None:
+                gap = f"{(bl - s.best_acc) * 100:.1f}"
+            avg_t = f"{s.last_trial_time_s:.1f}s" if s.last_trial_time_s else "—"
+            mtype = s.model_type or s.family
+            lines.append(
+                f"{s.model[:26]:26s} {mtype[:22]:22s} {s.locality[:12]:12s} "
+                f"{done:>11s} {best:>8s} {gap:>7s} {avg_t:>7s}"
+            )
+
+    # ETA based on remaining trials * average trial time (sequential estimate)
     remaining = sum(max(0, s.budget - s.complete) for s in stats)
     avg_per_trial = None
     nonzero = [s.last_trial_time_s for s in stats if s.last_trial_time_s]
@@ -344,10 +387,16 @@ def _render_dashboard(
             eta_str = f"{eta_s / 60:.0f} min"
         else:
             eta_str = f"{eta_s / 3600:.1f} h"
-    lines.append(
-        f"ETA: ~{eta_str} (remaining {remaining} trials, "
-        f"~{avg_per_trial:.1f}s/trial seq est)"
-    )
+    lines.append("")
+    if avg_per_trial:
+        lines.append(
+            f"ETA: ~{eta_str} ({remaining} trials remaining, "
+            f"~{avg_per_trial:.1f}s/trial seq est)"
+        )
+    else:
+        lines.append(
+            f"ETA: ~{eta_str} ({remaining} trials remaining — no timing data yet)"
+        )
     sys.stdout.write("\n".join(lines) + "\n")
     sys.stdout.flush()
 
@@ -380,9 +429,11 @@ def _emit_portfolio(
     out_file = Path(out_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     tasks_seen = sorted({s.task for s in stats})
-    header = ["family", "n_trials"] + [f"acc_{t}" for t in tasks_seen] + [
-        f"gap_{t}_pp" for t in tasks_seen
-    ]
+    header = (
+        ["family", "n_trials"]
+        + [f"acc_{t}" for t in tasks_seen]
+        + [f"gap_{t}_pp" for t in tasks_seen]
+    )
     with out_file.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(header)
@@ -393,8 +444,11 @@ def _emit_portfolio(
             n_total = sum(agg[fam][t]["n"] for t in tasks_seen if t in agg[fam])
             row.append(n_total)
             for t in tasks_seen:
-                row.append(round(agg[fam].get(t, {}).get("best", 0.0), 4)
-                           if fam in agg and t in agg[fam] else "")
+                row.append(
+                    round(agg[fam].get(t, {}).get("best", 0.0), 4)
+                    if fam in agg and t in agg[fam]
+                    else ""
+                )
             for t in tasks_seen:
                 bl = baselines.get(t)
                 a = agg[fam].get(t, {}).get("best")
@@ -411,7 +465,13 @@ def _emit_portfolio(
 # ---------------------------------------------------------------------------
 
 
-def _build_objective(target: StudyTarget, eval_cfg, device: str, quick_mode: bool):
+def _build_objective(
+    target: StudyTarget,
+    eval_cfg,
+    device: str,
+    quick_mode: bool,
+    config: dict[str, Any] | None = None,
+):
     """Build the Optuna objective closure for one target."""
     try:
         family_for_tag = get_model_spec(target.model).family or target.reg_family
@@ -433,7 +493,10 @@ def _build_objective(target: StudyTarget, eval_cfg, device: str, quick_mode: boo
     # We need to ensure the module-level _DB_PATH matches our --db.
     import bioplausible.cli.run as runmod
 
-    return _make_objective(ctx), runmod
+    config = _ACTIVE_CONFIG if _ACTIVE_CONFIG is not None else {}
+    objectives = config.get("objectives", ["accuracy", "loss"])
+    directions = config.get("directions", ["maximize", "minimize"])
+    return _make_objective(ctx, objectives, directions), runmod
 
 
 def _ensure_studies(
@@ -442,26 +505,54 @@ def _ensure_studies(
     eval_cfg,
     seed: int,
     device: str,
+    config: dict[str, Any] | None = None,
 ) -> dict[str, optuna.Study]:
-    """Create or load all studies; build objectives; return {study_name: study}."""
+    """Create or load all studies; build objectives; return {study_name: study}.
+
+    Each study gets a deterministic, distinct seed derived from the base ``seed``
+    and its study name. Passing the same seed to every sampler would make every
+    study's trial-0 (and warmup random draws) identical, collapsing the HPO
+    exploration across models.
+    """
+    # Read multi-objective config (default: 2 objectives)
+    n_objectives = 2
+    if config:
+        objectives = config.get("objectives", ["accuracy", "loss"])
+        n_objectives = len(objectives)
+
     studies: dict[str, optuna.Study] = {}
-    for t in targets:
+    for i, t in enumerate(targets):
         n_startup = getattr(eval_cfg, "n_startup_trials", 10)
         # Force TPE unless the all-pruned path requires random fallback
         sampler_name = _safe_sampler_name(t.study_name, "tpe", n_startup, storage_url)
         sampler_name = sampler_name  # locked
+        study_seed = _per_study_seed(seed, t.study_name, i)
         study = create_study(
             model_names=[t.model],
-            n_objectives=2,
+            n_objectives=n_objectives,
             storage=storage_url,
             study_name=t.study_name,
             use_pruning=eval_cfg.use_pruning,
             sampler_name=sampler_name,
             mode="pareto",
-            seed=seed,
+            seed=study_seed,
         )
         studies[t.study_name] = study
     return studies
+
+
+def _per_study_seed(base_seed: int, study_name: str, index: int) -> int:
+    """Deterministically derive a unique sampler seed for one study.
+
+    ``base_seed`` (the --seed CLI value) anchors a stable master key so a re-run
+    (with the same config) reproduces the same per-study seeds, while each study
+    still explores a different region of the search space.
+    """
+    master = random.Random(base_seed)
+    master.random()  # advance the master stream before deriving
+    key = f"{base_seed}:{study_name}:{index}"
+    h = int(hashlib.sha256(key.encode()).hexdigest(), 16)
+    return h % (2**31)  # Optuna/NumPy sampler seeds are 32-bit signed-safe
 
 
 def _run_round_robin(
@@ -491,6 +582,16 @@ def _run_round_robin(
     # A model is declared exhausted after `max_stall` trials with 0 COMPLETE.
     exhausted: set[str] = set()
     max_stall = 4
+
+    # Show the empty table immediately so the user sees the full plan upfront.
+    init_stats = [_study_stats(t, storage_url) for t in targets]
+    _render_dashboard(
+        init_stats,
+        _baselines(init_stats),
+        cycle,
+        0,
+        0.0,
+    )
     try:
         while True:
             remaining = False
@@ -502,36 +603,48 @@ def _run_round_robin(
                 study = studies[t.study_name]
                 try:
                     trials = study.trials
-                except Exception as exc:  # noqa: BLE001  corrupt study must not crash run
+                except Exception as exc:
                     logger.warning(
                         "[SKIP] %s unreadable (%s: %s); skipping cycle",
-                        t.study_name, type(exc).__name__, exc,
+                        t.study_name,
+                        type(exc).__name__,
+                        exc,
                     )
                     continue
                 completed = sum(
-                    1 for x in trials
-                    if x.state == optuna.trial.TrialState.COMPLETE
+                    1 for x in trials if x.state == optuna.trial.TrialState.COMPLETE
                 )
-                total = len(
-                    [x for x in trials
-                     if x.state in (
-                         optuna.trial.TrialState.COMPLETE,
-                         optuna.trial.TrialState.PRUNED,
-                         optuna.trial.TrialState.FAIL,
-                     )]
-                )
+                total = len([
+                    x
+                    for x in trials
+                    if x.state
+                    in (
+                        optuna.trial.TrialState.COMPLETE,
+                        optuna.trial.TrialState.PRUNED,
+                        optuna.trial.TrialState.FAIL,
+                    )
+                ])
                 if completed >= t.budget:
                     continue
-                # Stall: many attempts but zero complete trials -> model can't train
+                # Stall: many attempts but zero complete trials -> model can't train.
+                # Only mark exhausted if we've tried multiple times AND got zero complete.
+                # Don't mark exhausted on total == 0 - we need to launch the first trial.
                 if total >= max_stall and completed == 0:
                     logger.warning(
                         "[STALL] %s: %d attempts, 0 complete — marking exhausted",
-                        t.study_name, total,
+                        t.study_name,
+                        total,
                     )
                     exhausted.add(t.study_name)
                     continue
                 remaining = True
                 obj = objectives[t.study_name]
+                trial_no = completed
+                print(
+                    f"  ▶ [{t.cli_family}/{t.task}] {t.model}  "
+                    f"trial {trial_no + 1}/{t.budget}",
+                    flush=True,
+                )
                 try:
                     study.optimize(obj, n_trials=1, show_progress_bar=False)
                 except KeyboardInterrupt:
@@ -540,7 +653,9 @@ def _run_round_robin(
                 except (RuntimeError, ValueError, OSError, TypeError) as e:
                     logger.warning(
                         "[SKIP] %s trial failed: %s: %s",
-                        t.study_name, type(e).__name__, e,
+                        t.study_name,
+                        type(e).__name__,
+                        e,
                     )
                 emit_counter += 1
                 if emit_counter % emit_every == 0:
@@ -556,6 +671,10 @@ def _run_round_robin(
             _render_dashboard(stats, bls, cycle, total_done, elapsed)
             _emit_portfolio(stats, bls, out_interim_csv)
 
+            # Periodic cleanup of stale RUNNING trials (can accumulate from crashes)
+            if cycle % 5 == 0:
+                _cleanup_corrupt_trials(StudyTargetStorage.db_path)
+
             if not remaining:
                 logger.info("All studies reached their budgets or are exhausted. Done.")
                 break
@@ -569,7 +688,9 @@ def _run_round_robin(
         bls = _baselines(stats)
         _emit_portfolio(stats, bls, out_interim_csv)
         _render_dashboard(
-            stats, bls, cycle,
+            stats,
+            bls,
+            cycle,
             sum(s.complete for s in stats),
             time.time() - start_time,
         )
@@ -655,11 +776,11 @@ def main() -> None:
 
     # Set the module-level storage in cli.run so objectives write to --db
     config = _load_config(args.config)
+    global _ACTIVE_CONFIG
+    _ACTIVE_CONFIG = config
     tasks = [t.strip() for t in args.task.split(",") if t.strip()]
     cli_families = (
-        [f.strip() for f in args.family.split(",") if f.strip()]
-        if args.family
-        else []
+        [f.strip() for f in args.family.split(",") if f.strip()] if args.family else []
     )
     budget = args.budget if args.budget > 0 else int(config.get("budget", 20))
 
@@ -700,14 +821,31 @@ def main() -> None:
 
     print(
         f"[TARGETS] {len(targets)} studies across "
-        f"{len(set(t.cli_family for t in targets))} families x "
+        f"{len({t.cli_family for t in targets})} families x "
         f"{len(tasks)} tasks, budget={budget}/model",
         flush=True,
     )
+    by_family: dict[str, list[StudyTarget]] = {}
     for t in targets:
-        print(f"  {t.study_name}  (budget {t.budget})", flush=True)
+        by_family.setdefault(t.cli_family, []).append(t)
+    for cli_family, fam_targets in by_family.items():
+        models = sorted({t.model for t in fam_targets})
+        tasks_here = sorted({t.task for t in fam_targets})
+        b = fam_targets[0].budget
+        print(
+            f"  [{cli_family}] {len(models)} models x {len(tasks_here)} tasks, "
+            f"budget {b}/model",
+            flush=True,
+        )
+        for m in models:
+            try:
+                spec = get_model_spec(m)
+                tinfo = f"{spec.model_type}"
+            except ValueError:
+                tinfo = ""
+            print(f"      - {m:28s} {tinfo}", flush=True)
 
-    studies = _ensure_studies(targets, storage_url, eval_cfg, args.seed, device)
+    studies = _ensure_studies(targets, storage_url, eval_cfg, args.seed, device, config)
 
     print(
         f"\nStarting round-robin. Ctrl-C to stop; re-run to resume. "

@@ -1,8 +1,8 @@
-import pytest
 import sys
 import unittest
 from pathlib import Path
 
+import pytest
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -12,6 +12,7 @@ parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
 from bioplausible.zoo.models.eqprop import LoopedMLP
+
 pytestmark = pytest.mark.gpu
 
 

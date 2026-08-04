@@ -9,11 +9,10 @@ seed/configuration, so a number shown in the UI is guaranteed to match what
 """
 
 import pytest
-
-from bioplausible.cli.parity import run_parity as cli_run_parity
-
 from charts import parity_gap
 from runner import DemoPanel, default_trainer_config, run_headless
+
+from bioplausible.cli.parity import run_parity as cli_run_parity
 
 TASK = "digits"
 EPOCHS = 1

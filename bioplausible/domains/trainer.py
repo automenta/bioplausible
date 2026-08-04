@@ -113,6 +113,10 @@ class _TaskTrainer:
         self.task = task
         self.epochs = epochs
 
+    @property
+    def optimizer(self):
+        return self._trainer.optimizer
+
     def train_epoch(self) -> dict[str, float]:
         """Run one epoch of training and return aggregated metrics."""
         import time

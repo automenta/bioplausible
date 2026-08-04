@@ -7,11 +7,10 @@ implementation.
 """
 
 import pytest
-
 import torch
 
 from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.zoo.models.forward_only import ForwardForwardNet, PEPITA
+from bioplausible.zoo.models.forward_only import PEPITA, ForwardForwardNet
 
 
 class TestPropagatorCrossReference:

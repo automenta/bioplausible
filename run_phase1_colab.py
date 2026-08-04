@@ -21,6 +21,7 @@ Or copy-paste this script into a Colab cell and run.
 # Colab setup: install uv, clone repo, install deps
 # ---------------------------------------------------------------------------
 import os
+import pathlib
 import subprocess
 import sys
 
@@ -29,7 +30,7 @@ def setup_colab():
     """Install uv and clone bioplausible if not already done."""
     # Check if we're in Colab
     in_colab = "google.colab" in sys.modules or os.getenv("COLAB_GPU") is not None
-    
+
     if in_colab:
         # Install uv
         subprocess.run(
@@ -37,11 +38,11 @@ def setup_colab():
             shell=True, check=True
         )
         os.environ["PATH"] = f"{os.path.expanduser('~/.local/bin')}:{os.environ['PATH']}"
-        
+
         # Clone repo if not present
-        if not os.path.exists("bioplausible"):
+        if not pathlib.Path("bioplausible").exists():
             subprocess.run("git clone https://github.com/autonull/bioplausible.git", shell=True, check=True)
-        
+
         os.chdir("bioplausible")
         # Sync deps (uv will use pyproject.toml + uv.lock)
         subprocess.run("uv sync", shell=True, check=True)
@@ -103,30 +104,30 @@ def run_colab_experiment():
     import subprocess
     import time
     from pathlib import Path
-    
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s: %(message)s",
         datefmt="%H:%M:%S",
         force=True,
     )
-    
+
     # Setup Colab environment
     setup_colab()
-    
+
     # GPU check
     import torch
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"🔧 Device: {device} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})")
-    
+
     # Create dirs
     Path("results").mkdir(exist_ok=True)
     Path("logs").mkdir(exist_ok=True)
     Path("experiments").mkdir(exist_ok=True)
-    
+
     # Write config
     cfg_path = write_yaml_config("experiments/phase1_colab.yaml")
-    
+
     # Run experiment
     cmd = [
         "uv", "run", "python", "run_experiment.py",
@@ -137,18 +138,18 @@ def run_colab_experiment():
         "--device", "auto",
         "--seed", "42",
     ]
-    
+
     print("=" * 60)
     print("  COLAB PHASE 1 EXPERIMENT")
     print(f"  Families: {len(CONFIG['families'])}")
     print("  Tasks: digits, cifar10")
     print("  Tier: standard")
     print("=" * 60)
-    
+
     start = time.time()
     result = subprocess.run(cmd, check=False)
     elapsed = time.time() - start
-    
+
     if result.returncode == 0:
         print(f"✅ Experiment complete in {elapsed / 60:.1f} min")
         # Build portfolio

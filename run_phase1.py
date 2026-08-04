@@ -29,31 +29,30 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 CONFIG = {
     "db": "compute.db",
-    "tier": "standard",          # "smoke" | "shallow" | "standard" | "deep"
-    "interval": 30,              # Dashboard refresh seconds
-    "emit_every": 10,            # Interim portfolio every N trials
+    "tier": "standard",  # "smoke" | "shallow" | "standard" | "deep"
+    "interval": 30,  # Dashboard refresh seconds
+    "emit_every": 10,  # Interim portfolio every N trials
     # Families to include (CLI labels from bioplausible.cli.run.FAMILY_MAP)
+    # Only families with at least one model passing the learns-gate are included.
+    # Excluded: spiking (no models pass standard vision training; requires
+    # specialized surrogate-gradient protocols per FIX.md G2).
+    # Excluded: predictive_coding (fabricpc_graph_pcn is documented baseline;
+    # only predictive_coding_hybrid passes — use --family predictive_coding opt-in).
     "families": [
         "backprop",
-        "fa",
         "forward_only",
         "eqprop",
         "hebbian",
         "target_prop",
-        "spiking",
-        "predictive_coding",
     ],
     "tasks": ["digits", "cifar10"],
     # Per-family budget overrides (trials per model). Total wall-time ~2h on RTX 3080.
     "family_budgets": {
         "backprop": 30,         # Baseline needs stable reference
-        "fa": 20,               # 11 models — keep modest for first pass
         "forward_only": 20,     # Only 2 models; can afford more
         "eqprop": 15,           # Many prune; 15 surviving is signal
         "hebbian": 15,
         "target_prop": 15,
-        "spiking": 15,
-        "predictive_coding": 15,
     },
     "seed": 42,
     "device": "auto",
@@ -93,6 +92,7 @@ def run_experiment():
         "uv",
         "run",
         "python",
+        "-u",  # unbuffered stdout so the live dashboard streams to the terminal
         "run_experiment.py",
         "--config",
         cfg_path,
@@ -106,6 +106,8 @@ def run_experiment():
         CONFIG["device"],
         "--seed",
         str(CONFIG["seed"]),
+        "--task",
+        ",".join(CONFIG["tasks"]),
     ]
 
     logging.info("[PHASE1] Starting experiment: %s", " ".join(cmd))
@@ -123,7 +125,13 @@ def run_experiment():
         else:
             models = 4  # typical
         total_trials = models * CONFIG["family_budgets"][fam]
-        logging.info("  %s: %d models x %d = %d trials", fam, models, CONFIG["family_budgets"][fam], total_trials)
+        logging.info(
+            "  %s: %d models x %d = %d trials",
+            fam,
+            models,
+            CONFIG["family_budgets"][fam],
+            total_trials,
+        )
 
     start = time.time()
     # Run the child with inherited stdout/stderr so its live dashboard and
@@ -145,7 +153,9 @@ def run_experiment():
         )
         return 130
     elapsed = time.time() - start
-    logging.info("[PHASE1] Completed in %.1f min (exit=%d)", elapsed / 60, process.returncode)
+    logging.info(
+        "[PHASE1] Completed in %.1f min (exit=%d)", elapsed / 60, process.returncode
+    )
     return process.returncode
 
 
@@ -169,7 +179,18 @@ def build_portfolio():
         logging.info("[PHASE1] Portfolio written to results/portfolio.csv")
         # Print summary
         subprocess.run(
-            ["uv", "run", "biopl-hpo", "compare", "--family", "all", "--task", "digits", "--db", CONFIG["db"]],
+            [
+                "uv",
+                "run",
+                "biopl-hpo",
+                "compare",
+                "--family",
+                "all",
+                "--task",
+                "digits",
+                "--db",
+                CONFIG["db"],
+            ],
             check=False,
         )
     else:

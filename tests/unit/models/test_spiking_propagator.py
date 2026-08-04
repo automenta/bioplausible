@@ -85,7 +85,7 @@ class TestSTDPLearningRule:
         )
 
     def test_incompatible_model_raises(self):
-        import torch.nn as nn
+        from torch import nn
 
         class NoGraph(nn.Module):
             def __init__(self):

@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, TypeIs
 
+import optuna
 import torch
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
@@ -23,7 +24,6 @@ from torch import nn
 from bioplausible.core.energy import EnergyTracker
 from bioplausible.core.energy_model import EBMTrainer, EnergyModel
 from bioplausible.core.losses import compute_accuracy, compute_loss
-from bioplausible.execution.callbacks import ExecutionCallback
 from bioplausible.core.registry import (
     ComponentCategory,
     IncompatibilityError,
@@ -32,6 +32,7 @@ from bioplausible.core.registry import (
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.data.vision import create_data_loaders
 from bioplausible.domains.base import DomainType
+from bioplausible.execution.callbacks import ExecutionCallback
 
 if TYPE_CHECKING:
     from bioplausible.domains import TaskProtocol
@@ -780,7 +781,7 @@ class CoreTrainer:
                         getattr(self.model, "algorithm_name", self.config.model),
                     )
                     requires_backward = meta.requires_backward
-                except ValueError, KeyError:
+                except (ValueError, KeyError):
                     logger.warning(
                         "Could not fetch metadata for %s",
                         getattr(self.model, "algorithm_name", self.config.model),
@@ -891,6 +892,40 @@ class CoreTrainer:
         # Phase 4: Standard forward/backward
         return self._bptt_step(x, y)
 
+    def _check_numerical_health(
+        self, logits: torch.Tensor, loss: torch.Tensor, y: torch.Tensor
+    ) -> None:
+        """Raise optuna.TrialPruned if numerical pathologies detected.
+
+        Catches: NaN/Inf, collapsed outputs, exploded gradients, constant predictions.
+        Does NOT prune on "low loss" — that's a success signal, not a pathology.
+        """
+        if not torch.isfinite(loss).all():
+            raise optuna.TrialPruned("Non-finite loss")
+
+        # Collapsed outputs: all logits nearly identical
+        if logits.std() < 1e-6:
+            raise optuna.TrialPruned(f"Collapsed logits (std={logits.std():.2e})")
+
+        # Constant predictions: all samples -> same class with high confidence
+        preds = logits.argmax(dim=1)
+        if preds.unique().numel() == 1 and logits.max() > 10:
+            raise optuna.TrialPruned("Constant high-confidence predictions")
+
+        # Weight explosion check (sample a few params)
+        for p in self.model.parameters():
+            if p.requires_grad and p.abs().max() > 1e6:
+                raise optuna.TrialPruned(f"Weight explosion (max={p.abs().max():.2e})")
+
+        # Gradient explosion (after backward, before clip)
+        total_grad_norm = 0.0
+        for p in self.model.parameters():
+            if p.grad is not None:
+                total_grad_norm += p.grad.data.norm(2).item() ** 2
+        total_grad_norm = total_grad_norm ** 0.5
+        if total_grad_norm > 100:
+            raise optuna.TrialPruned(f"Gradient explosion (norm={total_grad_norm:.1f})")
+
     def _bptt_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Standard backpropagation training step."""
         x = self._adapt_input(x)
@@ -901,6 +936,9 @@ class CoreTrainer:
         logits = self.model(x)
         loss = compute_loss(self.loss_fn, logits, y)
         loss.backward()
+
+        # Numerical health check — prune trial on actual pathologies
+        self._check_numerical_health(logits, loss, y)
 
         # Gradient clipping
         if self.config.grad_clip:
@@ -944,6 +982,14 @@ class CoreTrainer:
                 x, y = x.to(self.device), y.to(self.device)
 
                 x = self._adapt_input(x)
+                # Models with a custom val_step (e.g. diffusion denoisers that
+                # need a timestep `t`) must be evaluated through it rather than
+                # a bare forward() call.
+                if hasattr(self.model, "val_step"):
+                    val_metrics = self.model.val_step(x, y)
+                    val_losses.append(val_metrics.get("loss", float("nan")) * 1.0)
+                    val_accs.append(val_metrics.get("accuracy", 0.0))
+                    continue
                 logits = self.model(x)
                 loss = compute_loss(self.loss_fn, logits, y)
                 val_losses.append(loss.item())
@@ -1008,7 +1054,7 @@ class CoreTrainer:
         for cb in self._callbacks:
             try:
                 cb(self, metrics)
-            except Exception as e:  # noqa: BLE001  # broad: user callbacks may raise anything
+            except Exception as e:  # broad: user callbacks may raise anything
                 logger.warning("Callback failed: %s", e)
 
     def add_callback(self, callback: Callable) -> None:
@@ -1032,7 +1078,7 @@ class CoreTrainer:
         for cb in self._execution_callbacks:
             try:
                 getattr(cb, name)(*args)
-            except Exception as e:  # noqa: BLE001  # broad: external listener may raise anything
+            except Exception as e:  # broad: external listener may raise anything
                 logger.warning("Execution callback %r.%s failed: %s", cb, name, e)
 
     @staticmethod

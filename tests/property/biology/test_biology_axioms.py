@@ -8,8 +8,9 @@ Target: <30s total on CPU, no GPU, no I/O, no downloads.
 
 import pytest
 import torch
-from torch import nn, autograd, optim
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from torch import nn, optim
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.zoo import get_model_spec

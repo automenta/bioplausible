@@ -2,8 +2,9 @@
 
 from dataclasses import dataclass, field
 
-from bioplausible.core.trainer import TrainerConfig
 from widgets import build_widget_tree
+
+from bioplausible.core.trainer import TrainerConfig
 
 
 @dataclass

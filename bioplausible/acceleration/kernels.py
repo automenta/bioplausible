@@ -183,14 +183,14 @@ try:
                 _ = cp.array([1.0])
                 _ = cp.random.rand(1)
             HAS_CUPY = True
-        except Exception:  # noqa: BLE001  # broad: optional-backend availability probe
+        except Exception:  # broad: optional-backend availability probe
             cp = None
             HAS_CUPY = False
 
 except ImportError:
     cp = None
     HAS_CUPY = False
-except Exception:  # noqa: BLE001  # broad: optional-backend availability probe
+except Exception:  # broad: optional-backend availability probe
     cp = None
     HAS_CUPY = False
 

@@ -92,6 +92,7 @@ def _set_storage(db_path: str | None = None) -> tuple[str, str]:
         path = f"{path}.db"
     return path, f"sqlite:///{path}"
 
+
 # Maps the CLI family label to the canonical ``family`` value used on the
 # component registry metadata.  ``feedback_alignment`` → ``fa`` (matching the
 # registry convention seen in ``zoo/models/fa.py``).
@@ -123,6 +124,25 @@ def _set_seeds(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+# Models documented as intentional baselines (fail learns-gate; excluded from Phase 1 HPO)
+# See FIX.md §37 for rationale.
+_BASELINE_MODELS = frozenset({
+    # EqProp contrastive variants (nudge dies in deep layers)
+    "eqprop", "directed_ep", "finite_nudge_ep", "momentum_equilibrium",
+    "sparse_equilibrium", "equilibrium_alignment", "layerwise_equilibrium_fa",
+    # FA hybrids (credit assignment fails end-to-end)
+    "contrastive_feedback_alignment", "energy_guided_fa", "energy_minimizing_fa",
+    # Hebbian (update rule plateaus)
+    "hebbian_3d",
+    # Predictive Coding (requires per-graph propagator)
+    "fabricpc_graph_pcn",
+    # Spiking (requires surrogate-gradient BPTT)
+    "spiking_stdp",
+    # Diffusion (needs timestep in forward)
+    "eqprop_diffusion",
+})
+
+
 def _query_registry_models(reg_family: str) -> list[str]:
     """Return registered model names for a registry family value."""
     entries = Registry.query(category=ComponentCategory.MODEL, family=reg_family)
@@ -144,6 +164,8 @@ def _resolve_family_models(cli_family: str) -> tuple[str, list[str]]:
             logger.warning("EquiTile package not installed; skipping equitile")
             return reg_family, []
         models = _query_registry_models("equitile")
+    # Exclude documented baselines that fail the learns-gate
+    models = [m for m in models if m not in _BASELINE_MODELS]
     return reg_family, models
 
 
@@ -301,10 +323,20 @@ class _TrialContext:
     tier_name: str
 
 
-def _make_objective(ctx: _TrialContext):
-    """Build an Optuna objective closure for a single model."""
+def _make_objective(ctx: _TrialContext, objectives: list[str] = None, directions: list[str] = None):
+    """Build an Optuna objective closure for a single model.
 
-    def objective(trial: optuna.Trial) -> tuple[float, float]:
+    Args:
+        ctx: Trial context
+        objectives: List of objective names to optimize (default: ["accuracy", "loss"])
+        directions: List of directions ("maximize" or "minimize") for each objective
+    """
+    if objectives is None:
+        objectives = ["accuracy", "loss"]
+    if directions is None:
+        directions = ["maximize", "minimize"]
+
+    def objective(trial: optuna.Trial):
         trial.set_user_attr("model_name", ctx.model)
         trial.set_user_attr("family", ctx.family)
         trial.set_user_attr("task", ctx.task)
@@ -327,7 +359,7 @@ def _make_objective(ctx: _TrialContext):
             )
         except optuna.TrialPruned:
             raise
-        except Exception:  # broad: a single bad trial must not abort the study
+        except Exception:
             logger.exception("Trial failed for %s", ctx.model)
             raise optuna.TrialPruned
 
@@ -340,10 +372,26 @@ def _make_objective(ctx: _TrialContext):
         trial.set_user_attr("epochs", ctx.eval_cfg.epochs)
         trial.set_user_attr("batch_size", ctx.eval_cfg.batch_size)
 
+        # Build return values based on requested objectives
+        values = []
+        for obj in objectives:
+            if obj == "accuracy":
+                values.append(float(metrics["accuracy"]))
+            elif obj == "loss":
+                values.append(float(metrics["loss"]))
+            elif obj == "param_count":
+                values.append(float(metrics["param_count"]))
+            elif obj == "epoch_time_s" or obj == "time":
+                values.append(float(metrics["time"]))
+            else:
+                logger.warning("Unknown objective '%s', defaulting to 0.0", obj)
+                values.append(0.0)
+
         acc = float(metrics["accuracy"])
         loss = float(metrics["loss"])
-        logger.info("   [OK] %s: Acc=%.4f Loss=%.4f", ctx.model, acc, loss)
-        return acc, loss
+        logger.info("   [OK] %s: Acc=%.4f Loss=%.4f Params=%.2fM Time=%.2fs",
+                    ctx.model, acc, loss, metrics.get("param_count", 0), metrics.get("time", 0))
+        return tuple(values)
 
     return objective
 
@@ -402,12 +450,12 @@ def _fail_stale_running(study_name: str, storage_url: str) -> None:
                         optuna.trial.TrialState.FAIL,
                         (float("nan"),) * len(study.directions),
                     )
-                except Exception:  # noqa: BLE001  best-effort cleanup
+                except Exception:
                     pass
     except (KeyError, ValueError, AssertionError):
         # Study doesn't exist yet, or a reusable-study header differs — normal on first run.
         return
-    except Exception:  # noqa: BLE001  a corrupt study must never abort the run
+    except Exception:
         logger.warning("[CLEAN] could not read study '%s' (skipped)", study_name)
 
 
@@ -1528,7 +1576,7 @@ def main():  # ruff: ignore[too-many-statements, complex-structure]  (argparse s
     )
 
     if getattr(args, "db", None):
-        global _DB_PATH, _STORAGE_URL  # ruff: ignore[global-statement] (per-run storage override)
+        global _DB_PATH, _STORAGE_URL
         _DB_PATH, _STORAGE_URL = _set_storage(args.db)
         logger.info("Using storage: %s", _STORAGE_URL)
 

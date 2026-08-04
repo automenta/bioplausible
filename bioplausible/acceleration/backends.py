@@ -86,7 +86,7 @@ class CupyChecker:
             _ = cp.zeros(10)
         except ImportError:
             return False, "CuPy not installed. Install with: pip install cupy-cuda12x"
-        except Exception as e:  # noqa: BLE001  # broad: optional-backend availability probe
+        except Exception as e:  # broad: optional-backend availability probe
             return False, f"CuPy installed but CUDA failed: {e}"
         else:
             return True, "CuPy available with CUDA"

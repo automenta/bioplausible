@@ -13,7 +13,7 @@ import logging
 from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
-__all__ = ["ExecutionCallback", "BaseExecutionCallback", "logger"]
+__all__ = ["BaseExecutionCallback", "ExecutionCallback", "logger"]
 
 logger = logging.getLogger(__name__)
 

@@ -20,8 +20,8 @@ import torch
 # of importing the top-level package. The demo's Registry lookups (and any
 # CoreTrainer instantiations by registered model name) need the zoo + equitile
 # imported explicitly and up-front for deterministic behavior.
-import bioplausible.equitile  # noqa: F401  (registers equitile model family)
-import bioplausible.zoo  # noqa: F401       (registers zoo models/propagators)
+import bioplausible.equitile  # ruff: ignore[unused-import]  (registers equitile model family)
+import bioplausible.zoo  # ruff: ignore[unused-import]       (registers zoo models/propagators)
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.execution.callbacks import BaseExecutionCallback
@@ -154,7 +154,7 @@ def model_metadata(model: str) -> dict[str, object]:
     """
     try:
         meta = Registry.get_metadata(ComponentCategory.MODEL, model)
-    except ValueError, KeyError:
+    except (ValueError, KeyError):
         return {}
     return {
         "bio_plausibility_score": meta.bio_plausibility_score,
@@ -252,7 +252,7 @@ def run_headless(panel: DemoPanel) -> None:
         trainer.setup()  # materialize model so the callback can probe weights
         trainer.add_execution_callback(_DemoCallback(panel, trainer.model))
         trainer.fit()
-    except Exception as e:  # noqa: BLE001 - surface any error to the UI
+    except Exception as e:
         panel.error = str(e)
     finally:
         panel.running = False

@@ -3,6 +3,7 @@ import torch
 try:
     from bioplausible.hyperopt.graph_task import GraphTask
     from bioplausible.hyperopt.tabular_task import TabularTask
+
     from bioplausible.knowledge.metamodel import KnowledgebaseMetamodel
     from bioplausible.knowledge.seed import KnowledgeBase
     from bioplausible.zoo.models.eqprop import GraphEqProp

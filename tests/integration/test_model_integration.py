@@ -15,8 +15,6 @@ See FIX.md#22.
 
 from __future__ import annotations
 
-import math
-
 import pytest
 import torch
 from torch import nn
@@ -51,7 +49,7 @@ class _MiniVisionTask:
     output_dim = 10
     input_dim = INPUT_CH
 
-    def setup(self):  # noqa: D401 - matches protocol signature
+    def setup(self):
         return None
 
     def get_batch(self, split: str = "train", batch_size: int = 32):
@@ -127,3 +125,77 @@ def test_build_and_adapted_forward_vision(model_name):
     assert out.shape == (BATCH, 10), (
         f"{model_name}: expected output {(BATCH, 10)}, got {tuple(out.shape)}"
     )
+
+
+# Models known to not converge without specialized protocols (see FIX.md#31).
+# The test below catches "stuck at random" — a model whose loss does NOT
+# decrease over training (signalling missing train_step, broken gradient flow,
+# or weight-symmetry issues in eqprop).
+
+@pytest.mark.parametrize("model_name", MODELS)
+def test_model_learns_synthetic(model_name):
+    """Each model must reduce training loss over epochs (i.e., is learning).
+
+    A model that fails to lower its loss at all is structurally broken:
+    - eqprop: asymmetric weights block error backpropagation
+    - FA variants: feedback alignment requires layer-wise training protocol
+    - missing train_step that silently falls to BPTT
+    Loss is a more robust signal than accuracy on a random task.
+    """
+    model = _build_model(model_name)
+    task = _LearnableTask()
+    # Production (hyperopt/experiment.py) resolves a string optimizer name to an
+    # Optimizer instance before handing it to CoreTrainer.from_task. The test must
+    # mirror that resolution: a bare string would make _bptt_step crash with
+    # "'str' object has no attribute 'zero_grad'" (FIX.md#13), falsifying any model.
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    trainer = CoreTrainer.from_task(
+        model=model, task=task, epochs=5, batches_per_epoch=10,
+        val_batch_size=32, val_batches=2, device="cpu",
+        optimizer=optimizer, optimizer_kwargs={"lr": 1e-3},
+        track_energy=False,
+    )
+    # Ensure optimizer on model (eqprop's train_step expects it)
+    model.optimizer = trainer.optimizer
+
+    model.train()
+    first_loss = trainer.train_epoch()["loss"]
+    # Train 4 more epochs
+    last_loss = first_loss
+    for _ in range(4):
+        result = trainer.train_epoch()
+        last_loss = result["loss"]
+
+    loss_reduction = first_loss - last_loss
+    assert loss_reduction > 0, (
+        f"{model_name}: loss did not improve (first={first_loss:.4f}, "
+        f"last={last_loss:.4f}). The model is structurally broken — "
+        "check train_step / weight symmetry / optimizer attachment."
+    )
+
+
+class _LearnableTask:
+    """Deterministic learnable task: y = argmax of pixel block (perfectly learnable)."""
+
+    task_type = DomainType.VISION
+    output_dim = 10
+    input_dim = INPUT_CH
+    name = "learnable"
+
+    def setup(self):
+        return None
+
+    def get_batch(self, split="train", batch_size=64):
+        x = torch.randn(batch_size, *INPUT_CH)
+        # Target = argmax of a fixed linear projection of input (deterministic, learnable)
+        W = torch.randn(INPUT_CH[0] * INPUT_CH[1] * INPUT_CH[2], 10)
+        logits = x.view(x.size(0), -1) @ W
+        y = logits.argmax(dim=1)
+        return x, y
+
+    def compute_metrics(self, logits, y, loss):
+        acc = (logits.argmax(1) == y).float().mean().item()
+        return {"accuracy": acc}
+
+    def create_trainer(self, model, **kwargs):
+        return CoreTrainer.from_task(model=model, task=self, **kwargs)

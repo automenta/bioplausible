@@ -107,13 +107,13 @@ class P2PEvolution:
                     self.dht.start()
                     self._log(f"DHT started on port {local_port}")
                     break
-                except Exception as e:  # noqa: BLE001  # broad: async/network best-effort
+                except Exception as e:  # broad: async/network best-effort
                     self._log(f"Port {local_port} busy/failed, retrying... ({e})")
                     if i == 9:
                         raise  # Rethrow on last attempt
                     time.sleep(0.5)
 
-        except Exception as e:  # noqa: BLE001  # broad: async/network best-effort
+        except Exception as e:  # broad: async/network best-effort
             self._log(f"Failed to start DHT after retries: {e}")
             return
 
@@ -397,7 +397,7 @@ class P2PEvolution:
                 else:
                     self._log("Evaluation failed.")
 
-            except Exception as e:  # noqa: BLE001  # broad: process/network loop
+            except Exception as e:  # broad: process/network loop
                 self._log(f"Evolution Loop Error: {e}")
                 import traceback
 

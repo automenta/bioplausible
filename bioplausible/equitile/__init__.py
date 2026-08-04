@@ -98,6 +98,14 @@ from bioplausible.core.registry import (
     register_model,
 )
 
+# Import the lm package so ``fast_lm.FastLMEquiTile`` (a distinct BioModel from
+# ``language.fast.FastLMEquiTile``) executes its ``@register_model("fast_lm_equitile")``
+# decorator at startup. Without this the registry omits the model and the audit
+# skips it entirely.
+from bioplausible.equitile import (  # ruff: ignore[unused-import]  (registers fast_lm)
+    lm,
+)
+
 # Internal: builder + enhanced
 from bioplausible.equitile._internal.builder import (
     EnhancedEquiTileBuilder,
@@ -250,14 +258,6 @@ from bioplausible.equitile.language.canonical import (
     create_small_lm,
 )
 from bioplausible.equitile.language.fast import FastLMConfig, FastLMEquiTile
-
-# Import the lm package so ``fast_lm.FastLMEquiTile`` (a distinct BioModel from
-# ``language.fast.FastLMEquiTile``) executes its ``@register_model("fast_lm_equitile")``
-# decorator at startup. Without this the registry omits the model and the audit
-# skips it entirely.
-from bioplausible.equitile import (  # ruff: ignore[unused-import]  (registers fast_lm)
-    lm,
-)
 
 # Training: async + distributed
 from bioplausible.equitile.training import NCCLCommunicator

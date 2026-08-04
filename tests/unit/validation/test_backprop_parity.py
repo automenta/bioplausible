@@ -14,7 +14,6 @@ from torch import nn, optim
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.zoo import get_model_spec
 
-
 HYPERPARAM_DIR = pathlib.Path(__file__).parent / "hyperparams"
 
 # =============================================================================

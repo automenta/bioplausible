@@ -754,7 +754,7 @@ class _AppState:
                 with torch.no_grad():
                     output = self.model_instance(tensor)
                 return {"output": output.cpu().tolist()}
-            except Exception as e:  # noqa: BLE001  # broad: best-effort
+            except Exception as e:  # broad: best-effort
                 return {"error": str(e)}
 
         @app.get("/health")

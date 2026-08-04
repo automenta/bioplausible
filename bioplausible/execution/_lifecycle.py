@@ -178,7 +178,7 @@ class ExperimentArchiver:
             logger.info("Archived trial %s to %s", trial_id, zip_path)
             return str(zip_path)
 
-        except Exception:  # noqa: BLE001  # broad: best-effort
+        except Exception:  # broad: best-effort
             logger.exception("Failed to archive trial %s", trial_id)
             return None
 

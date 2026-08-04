@@ -1,7 +1,7 @@
 """Chart transform tests (Sprint 3.4)."""
 
-from runner import DemoPanel, default_trainer_config
 from charts import parity_gap, rolling_mean
+from runner import DemoPanel, default_trainer_config
 
 
 class TestRollingMean:

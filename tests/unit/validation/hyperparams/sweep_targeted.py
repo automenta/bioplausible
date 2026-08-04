@@ -2,16 +2,12 @@
 """Targeted sweep for eqprop_mlp and pepita."""
 
 import itertools
-import json
 import sys
 from pathlib import Path
 
 import torch
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-
-from bioplausible.zoo import get_model_spec
-from bioplausible.core.registry import ComponentCategory, Registry
 
 
 def _instantiate_model_with_config(
@@ -208,7 +204,7 @@ def run_targeted_sweep():
                 best_result = result
 
             if result["passed"]:
-                print(f"    *** FOUND PASSING CONFIG! ***")
+                print("    *** FOUND PASSING CONFIG! ***")
                 break
 
         best_configs[model_name] = best_result

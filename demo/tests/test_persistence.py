@@ -3,7 +3,6 @@
 import json
 
 import pytest
-
 from persistence import (
     config_from_url,
     config_to_url,

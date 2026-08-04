@@ -150,7 +150,7 @@ class ValidationPipeline:
                     metrics={"parameters": params},
                 )
             )
-        except Exception as e:  # noqa: BLE001  # broad: per-check best-effort
+        except Exception as e:  # broad: per-check best-effort
             self._add_result(
                 ValidationResult(
                     name="unit_model_creation",
@@ -181,7 +181,7 @@ class ValidationPipeline:
                     duration_sec=time.time() - start,
                 )
             )
-        except Exception as e:  # noqa: BLE001  # broad: per-check best-effort
+        except Exception as e:  # broad: per-check best-effort
             self._add_result(
                 ValidationResult(
                     name="unit_forward_pass",
@@ -210,7 +210,7 @@ class ValidationPipeline:
                     metrics={"loss": stats.get("loss", 0)},
                 )
             )
-        except Exception as e:  # noqa: BLE001  # broad: per-check best-effort
+        except Exception as e:  # broad: per-check best-effort
             self._add_result(
                 ValidationResult(
                     name="unit_training_step",
@@ -245,7 +245,7 @@ class ValidationPipeline:
                     duration_sec=time.time() - start,
                 )
             )
-        except Exception as e:  # noqa: BLE001  # broad: per-check best-effort
+        except Exception as e:  # broad: per-check best-effort
             self._add_result(
                 ValidationResult(
                     name="integration_dataset",
@@ -298,7 +298,7 @@ class ValidationPipeline:
                     metrics={"initial_loss": initial_loss, "final_loss": final_loss},
                 )
             )
-        except Exception as e:  # noqa: BLE001  # broad: per-check best-effort
+        except Exception as e:  # broad: per-check best-effort
             self._add_result(
                 ValidationResult(
                     name="integration_training",
@@ -327,7 +327,7 @@ class ValidationPipeline:
                     duration_sec=time.time() - start,
                 )
             )
-        except Exception as e:  # noqa: BLE001  # broad: per-check best-effort
+        except Exception as e:  # broad: per-check best-effort
             self._add_result(
                 ValidationResult(
                     name="integration_generation",
@@ -405,7 +405,7 @@ class ValidationPipeline:
                     metrics={"throughput": throughput},
                 )
             )
-        except Exception as e:  # noqa: BLE001  # broad: per-check best-effort
+        except Exception as e:  # broad: per-check best-effort
             self._add_result(
                 ValidationResult(
                     name="performance_throughput",
@@ -455,7 +455,7 @@ class ValidationPipeline:
                     metrics={"memory_mb": memory_mb},
                 )
             )
-        except Exception as e:  # noqa: BLE001  # broad: per-check best-effort
+        except Exception as e:  # broad: per-check best-effort
             self._add_result(
                 ValidationResult(
                     name="performance_memory",
@@ -510,7 +510,7 @@ class ValidationPipeline:
                     duration_sec=time.time() - start,
                 )
             )
-        except Exception as e:  # noqa: BLE001  # broad: per-check best-effort
+        except Exception as e:  # broad: per-check best-effort
             self._add_result(
                 ValidationResult(
                     name="reproducibility_seeds",
@@ -536,7 +536,7 @@ class ValidationPipeline:
                     duration_sec=time.time() - start,
                 )
             )
-        except Exception as e:  # noqa: BLE001  # broad: per-check best-effort
+        except Exception as e:  # broad: per-check best-effort
             self._add_result(
                 ValidationResult(
                     name="reproducibility_config_logging",

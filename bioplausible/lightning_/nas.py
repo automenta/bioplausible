@@ -88,7 +88,7 @@ def create_nas_objective(
             trial.set_user_attr("model_name", model_name)
             trial.set_user_attr("optimizer_name", optimizer_name)
             return acc
-        except Exception:  # noqa: BLE001  # broad: best-effort
+        except Exception:  # broad: best-effort
             logger.warning("Fit failed for trial, returning 0.0")
             return 0.0
 

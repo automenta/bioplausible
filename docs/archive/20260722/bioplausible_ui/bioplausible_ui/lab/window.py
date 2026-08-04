@@ -45,9 +45,8 @@ class LabMainWindow(QMainWindow):
             import json
             import os
 
-            from bioplausible.models.factory import create_model
-
             from bioplausible.hyperopt.tasks import create_task
+            from bioplausible.models.factory import create_model
 
             dir_path = os.path.dirname(path)
             meta_path = os.path.join(dir_path, "metadata.json")

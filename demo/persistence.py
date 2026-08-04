@@ -7,8 +7,8 @@ these; the logic is browser-free and unit-tested.
 
 from __future__ import annotations
 
-import csv
 import base64
+import csv
 import json
 from dataclasses import asdict, is_dataclass
 from pathlib import Path

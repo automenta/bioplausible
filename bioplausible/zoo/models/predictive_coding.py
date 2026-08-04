@@ -116,6 +116,12 @@ class FabricPCGraphPCN(BioModel):
             self.structure, rng_key=0
         )
 
+        # Register graph parameters as nn.Parameter so standard optimizers work
+        for node_name, node_params in self._params.items():
+            for param_name, tensor in node_params.items():
+                safe_name = f"_graph_param_{node_name}_{param_name}".replace(".", "_")
+                self.register_parameter(safe_name, nn.Parameter(tensor))
+
         self._mode = extra.get("mode", "pcn")
         self._device = torch.device("cpu")
 

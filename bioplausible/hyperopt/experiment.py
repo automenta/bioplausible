@@ -237,7 +237,7 @@ class TrialRunner:
                 config=trial.config,
             )
 
-        except Exception as exc:  # noqa: BLE001  # broad: a failing trial must not stop the loop
+        except Exception as exc:  # broad: a failing trial must not stop the loop
             logger.warning("Trial %s failed: %s: %s", trial_id, type(exc).__name__, exc)
             self.storage.update_trial(trial_id, status="failed")
             return False
@@ -336,7 +336,7 @@ class TrialRunner:
         # object verbatim to ``trainer.optimizer`` (never resolving a name), so a
         # bare string would later crash ``_bptt_step`` with
         # ``AttributeError: 'str' object has no attribute 'zero_grad'``.
-        optimizer_name = config.get("optimizer")
+        optimizer_name = config.get("optimizer", "adam")
         if isinstance(optimizer_name, str):
             opt_cls = getattr(torch.optim, optimizer_name, torch.optim.Adam)
             optimizer = opt_cls(
@@ -364,6 +364,12 @@ class TrialRunner:
             **trainer_kwargs,
         )
 
+        # Attach optimizer to model for models that expect it (e.g. EqProp
+        # contrastive_step, energy-based models with custom train_step).
+        # The trainer owns the optimizer instance; we mirror it on the model
+        # so that `model.optimizer` is available where `train_step` expects it.
+        model.optimizer = trainer.optimizer
+
         # ``model.config`` is a *frozen* ``ModelConfig`` (slots+dataclass), so
         # direct assignment raises ``FrozenInstanceError``. Use ``object.__setattr__``
         # to bypass the frozen guard, and additionally set the live attribute that
@@ -373,7 +379,7 @@ class TrialRunner:
             if config_obj is not None and hasattr(config_obj, "beta"):
                 try:
                     object.__setattr__(config_obj, "beta", beta)
-                except AttributeError, TypeError:
+                except (AttributeError, TypeError):
                     pass
             if hasattr(model, "beta"):
                 if isinstance(model.beta, torch.Tensor):
@@ -573,7 +579,7 @@ def run_single_trial_task(
         )
         return None
 
-    except Exception:  # noqa: BLE001  # broad: top-level executor safety net
+    except Exception:  # broad: top-level executor safety net
         logger.exception("Execution Error")
         if verbose:
             traceback.print_exc()

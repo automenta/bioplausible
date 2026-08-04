@@ -16,8 +16,8 @@ import torch
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from bioplausible.zoo import get_model_spec
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.zoo import get_model_spec
 
 
 @dataclass
@@ -93,8 +93,8 @@ def _instantiate_model_with_config(
         return model
 
     elif model_name == "directed_ep":
-        from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
         from bioplausible.core.config import ModelConfig
+        from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
 
         model_config = ModelConfig(
             name="directed_ep",
@@ -291,7 +291,7 @@ def run_sweep():
                 best_result = result
 
             if result["passed"]:
-                print(f"    *** FOUND PASSING CONFIG! ***")
+                print("    *** FOUND PASSING CONFIG! ***")
                 found_passing = True
                 break  # Early exit for this model
 
@@ -336,7 +336,7 @@ def run_sweep():
 
     # Save results
     output_path = Path(__file__).parent / "sweep_results.json"
-    with open(output_path, "w") as f:
+    with Path(output_path).open("w") as f:
         json.dump(
             {
                 "backprop_baseline": backprop_baseline,

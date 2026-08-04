@@ -188,7 +188,7 @@ class RobustnessEvaluator:
             metrics["robustness_score"] = float(np.mean(scores)) if scores else 0.0
             return metrics
 
-        except Exception as e:  # noqa: BLE001  # broad: best-effort
+        except Exception as e:  # broad: best-effort
             logger.error("Robustness evaluation failed: %s", e, exc_info=True)
             return {"robustness_score": 0.0}
 

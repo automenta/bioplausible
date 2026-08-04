@@ -106,7 +106,7 @@ class ResourceMonitor:
                         f" (Mem > {self.gpu_limit}%). Pausing..."
                     )
                     return True
-            except Exception:  # noqa: BLE001  # broad: best-effort
+            except Exception:  # broad: best-effort
                 logger.warning("GPU check failed, continuing")
         return False
 

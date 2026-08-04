@@ -96,7 +96,7 @@ def evaluate_candidate(
             "success": True,
         }
 
-    except Exception as e:  # noqa: BLE001  # broad: best-effort
+    except Exception as e:  # broad: best-effort
         logger.exception("Evaluation failed")
         traceback.print_exc()
         return {"eval_score": 0.0, "success": False, "error": str(e)}

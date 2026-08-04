@@ -37,11 +37,11 @@ __all__ = [
     "EvaluationConfig",
     "PatientLevel",
     "SearchSpace",
-    "create_constrained_optuna_config",  # noqa: F822  # provided lazily via __getattr__
+    "create_constrained_optuna_config",  # ruff: ignore[undefined-export]  # provided lazily via __getattr__
     "create_optuna_space",
     "create_study",
     "estimate_total_time",
-    "get_constrained_search_space",  # noqa: F822  # provided lazily via __getattr__
+    "get_constrained_search_space",  # ruff: ignore[undefined-export]  # provided lazily via __getattr__
     "get_evaluation_config",
     "get_pareto_trials",
     "get_search_space",

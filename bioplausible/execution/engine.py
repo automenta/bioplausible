@@ -276,7 +276,7 @@ class ExecutionEngine:
                 self._handle_result(metrics, tasks[i])
 
             self.trial_count += len(results)
-        except Exception as e:  # noqa: BLE001  # broad: best-effort
+        except Exception as e:  # broad: best-effort
             logger.error("Parallel batch failed: %s", e, exc_info=True)
             self.consecutive_failures += 1
 
@@ -372,7 +372,7 @@ class ExecutionEngine:
             DASHBOARD.log("Running Diagnostic Task (Digits/MLP)...", style="yellow")
             metrics = self._process_task(task)
             return metrics is not None
-        except Exception:  # noqa: BLE001  # broad: best-effort
+        except Exception:  # broad: best-effort
             logger.exception("Diagnostic failed")
             return False
 
@@ -440,7 +440,7 @@ class ExecutionEngine:
 
                 return self._process_task(task)
 
-            except Exception as e:  # noqa: BLE001  # broad: best-effort  # classify ANY task failure
+            except Exception as e:  # broad: best-effort  # classify ANY task failure
                 failure_type = self._classify_failure(e)
 
                 self.state.failure_tracker.log_failure(
@@ -802,7 +802,7 @@ class ExecutionEngine:
                             with zipfile.ZipFile(item, "r") as zf:
                                 zf.extract("model.pt", temp_dir)
                                 found_path = str(Path(temp_dir) / "model.pt")
-                        except Exception as e:  # noqa: BLE001  # broad: best-effort  # artifact formats vary
+                        except Exception as e:  # broad: best-effort  # artifact formats vary
                             logger.warning("Failed to extract artifact: %s", e)
                         break
 

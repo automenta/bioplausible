@@ -1,7 +1,6 @@
 """Weight-viz transforms tests (Sprint 3.5) — browser-free."""
 
 import torch
-
 from runner import DemoPanel, default_trainer_config
 from weight_viz import (
     align_length,

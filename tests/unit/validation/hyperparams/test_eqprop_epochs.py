@@ -97,4 +97,4 @@ for epochs in [3, 5, 10]:
                     f"  {status} epochs={epochs} hebbian_lr={hebbian_lr} beta={beta} max_steps={max_steps} diff={result['diff']:.3f} bio={result['bio_acc']:.3f}"
                 )
                 if result["passed"]:
-                    print(f"    *** FOUND PASSING CONFIG! ***")
+                    print("    *** FOUND PASSING CONFIG! ***")

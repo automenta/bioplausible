@@ -1,7 +1,7 @@
 """Registry-metadata surfacing tests (Sprint 2.5 -> demo 3.2 tooltips)."""
 
 import pytest
-
+from charts import parity_explanation
 from runner import (
     TRAINABLE_MODELS,
     DemoPanel,
@@ -11,7 +11,6 @@ from runner import (
     prepare_trainer_config,
     run_headless,
 )
-from charts import parity_explanation
 
 
 class TestHiddenDimDefaults:

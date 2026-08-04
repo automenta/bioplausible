@@ -5,8 +5,8 @@ Spiking Neural Network Models
 SpikingSTDP model for the model zoo.
 """
 
-import torch
 import snntorch as snn
+import torch
 from snntorch import surrogate
 from torch import nn
 

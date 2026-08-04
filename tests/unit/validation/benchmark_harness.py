@@ -136,7 +136,7 @@ def _instantiate(model_name: str, input_dim: int, output_dim: int, device: str, 
     # equitile lives in its own package (NOT zoo) so it must be imported to
     # register; without this the benchmark silently skips it.
     if model_name in ("equitile", "equitile_ep") or model_name.endswith("_equitile"):
-        import bioplausible.equitile  # noqa: F401
+        import bioplausible.equitile  # ruff: ignore[unused-import]
 
     spec = get_model_spec(model_name)
     model_cls = Registry.get(ComponentCategory.MODEL, model_name)

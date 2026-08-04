@@ -444,7 +444,7 @@ class OptimizedLMEquiTile(LMEquiTile):
                     self._forward_impl, mode=compile_mode
                 )
                 logger.info("LMEquiTile compiled with mode='%s'", compile_mode)
-            except Exception as e:  # noqa: BLE001  # broad: best-effort
+            except Exception as e:  # broad: best-effort
                 logger.warning("torch.compile failed: %s", e)
                 self._compiled_call = None
         else:
