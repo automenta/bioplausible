@@ -128,10 +128,17 @@ def _set_seeds(seed: int) -> None:
 # See FIX.md §37 for rationale.
 _BASELINE_MODELS = frozenset({
     # EqProp contrastive variants (nudge dies in deep layers)
-    "eqprop", "directed_ep", "finite_nudge_ep", "momentum_equilibrium",
-    "sparse_equilibrium", "equilibrium_alignment", "layerwise_equilibrium_fa",
+    "eqprop",
+    "directed_ep",
+    "finite_nudge_ep",
+    "momentum_equilibrium",
+    "sparse_equilibrium",
+    "equilibrium_alignment",
+    "layerwise_equilibrium_fa",
     # FA hybrids (credit assignment fails end-to-end)
-    "contrastive_feedback_alignment", "energy_guided_fa", "energy_minimizing_fa",
+    "contrastive_feedback_alignment",
+    "energy_guided_fa",
+    "energy_minimizing_fa",
     # Hebbian (update rule plateaus)
     "hebbian_3d",
     # Predictive Coding (requires per-graph propagator)
@@ -269,7 +276,9 @@ def _resolve_survivors(args) -> list[tuple[str, str, str | None, list[str]]]:
 
     path = Path(getattr(args, "survivors_csv", "") or "results/portfolio.csv")
     if not path.exists():
-        logger.warning("Survivors CSV '%s' not found; treating all families as survivors", path)
+        logger.warning(
+            "Survivors CSV '%s' not found; treating all families as survivors", path
+        )
         families = list(FAMILY_MAP)
     else:
         families: list[str] = []
@@ -323,13 +332,19 @@ class _TrialContext:
     tier_name: str
 
 
-def _make_objective(ctx: _TrialContext, objectives: list[str] = None, directions: list[str] = None):
+def _make_objective(
+    ctx: _TrialContext,
+    objectives: list[str] = None,
+    directions: list[str] = None,
+    max_params: int | None = None,
+):
     """Build an Optuna objective closure for a single model.
 
     Args:
         ctx: Trial context
         objectives: List of objective names to optimize (default: ["accuracy", "loss"])
         directions: List of directions ("maximize" or "minimize") for each objective
+        max_params: Hard constraint on maximum parameter count; trials exceeding this are pruned
     """
     if objectives is None:
         objectives = ["accuracy", "loss"]
@@ -366,7 +381,17 @@ def _make_objective(ctx: _TrialContext, objectives: list[str] = None, directions
         if metrics is None:
             raise optuna.TrialPruned
 
-        trial.set_user_attr("param_count", float(metrics["param_count"]))
+        param_count = float(metrics["param_count"])
+        if max_params is not None and param_count > max_params:
+            logger.info(
+                "   [PRUNED] %s: params=%.0f exceeds max_params=%d",
+                ctx.model,
+                param_count,
+                max_params,
+            )
+            raise optuna.TrialPruned
+
+        trial.set_user_attr("param_count", param_count)
         trial.set_user_attr("iteration_time", float(metrics["time"]))
         trial.set_user_attr("loss", float(metrics["loss"]))
         trial.set_user_attr("epochs", ctx.eval_cfg.epochs)
@@ -380,7 +405,7 @@ def _make_objective(ctx: _TrialContext, objectives: list[str] = None, directions
             elif obj == "loss":
                 values.append(float(metrics["loss"]))
             elif obj == "param_count":
-                values.append(float(metrics["param_count"]))
+                values.append(param_count)
             elif obj == "epoch_time_s" or obj == "time":
                 values.append(float(metrics["time"]))
             else:
@@ -389,8 +414,14 @@ def _make_objective(ctx: _TrialContext, objectives: list[str] = None, directions
 
         acc = float(metrics["accuracy"])
         loss = float(metrics["loss"])
-        logger.info("   [OK] %s: Acc=%.4f Loss=%.4f Params=%.2fM Time=%.2fs",
-                    ctx.model, acc, loss, metrics.get("param_count", 0), metrics.get("time", 0))
+        logger.info(
+            "   [OK] %s: Acc=%.4f Loss=%.4f Params=%.2fM Time=%.2fs",
+            ctx.model,
+            acc,
+            loss,
+            param_count,
+            metrics.get("time", 0),
+        )
         return tuple(values)
 
     return objective
@@ -402,7 +433,7 @@ def _safe_sampler_name(
     n_startup_trials: int,
     storage_url: str,
 ) -> str:
-    """Return a TPE-safe sampler name for ``study_name``.
+    """Return a safe sampler name for ``study_name``.
 
     Optuna 4.9's multi-objective TPE crashes with ``TypeError`` when a study
     has accumulated >= ``n_startup_trials`` trials but every one is PRUNED
@@ -411,12 +442,24 @@ def _safe_sampler_name(
     ``None`` objective values and dies.  That state is not recoverable by TPE,
     so fall back to a RandomSampler (still seeded/reproducible) instead of
     crashing the whole family run.
+
+    For NSGA-II, we need at least a few completed trials to form a population;
+    otherwise fall back to TPE.
     """
+    if requested == "nsga2":
+        try:
+            study = optuna.load_study(study_name=study_name, storage=storage_url)
+        except KeyError, OSError:
+            return "tpe"  # Study doesn't exist yet, start with TPE
+        completed = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+        if len(completed) < 4:  # NSGA-II needs a small population to start
+            return "tpe"
+        return "nsga2"
     if requested != "tpe":
         return requested
     try:
         study = optuna.load_study(study_name=study_name, storage=storage_url)
-    except (KeyError, OSError):
+    except KeyError, OSError:
         return "tpe"
     completed = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
     total = len(study.trials)
@@ -443,7 +486,9 @@ def _fail_stale_running(study_name: str, storage_url: str) -> None:
         study = optuna.load_study(study_name=study_name, storage=storage_url)
         for t in study.trials:
             if t.state == optuna.trial.TrialState.RUNNING:
-                logger.warning("[CLEAN] marking stale RUNNING trial %d as FAILED", t.number)
+                logger.warning(
+                    "[CLEAN] marking stale RUNNING trial %d as FAILED", t.number
+                )
                 try:
                     study._storage.set_trial_state_values(
                         t._trial_id,
@@ -452,7 +497,7 @@ def _fail_stale_running(study_name: str, storage_url: str) -> None:
                     )
                 except Exception:
                     pass
-    except (KeyError, ValueError, AssertionError):
+    except KeyError, ValueError, AssertionError:
         # Study doesn't exist yet, or a reusable-study header differs — normal on first run.
         return
     except Exception:
@@ -533,16 +578,14 @@ def _run_hpo_family(
             study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
         except KeyboardInterrupt:
             logger.warning("Search interrupted for %s", model)
-        except (RuntimeError, ValueError, OSError, TypeError):
+        except RuntimeError, ValueError, OSError, TypeError:
             logger.exception("[FAIL] Optimizing %s", model)
         logger.info("[OK]    %s done in %.1fs", model, time.time() - model_start)
         results.append((model, study))
     return results
 
 
-def _write_study_jsonl(
-    study: optuna.Study, stem: str, out_dir: str
-) -> None:
+def _write_study_jsonl(study: optuna.Study, stem: str, out_dir: str) -> None:
     """Append a study's complete trials to ``<out_dir>/<stem>.jsonl``."""
     out_path = Path(out_dir) / f"{stem}.jsonl"
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -829,7 +872,7 @@ def _study_pareto_ids(study_names: list[str]) -> set[int]:
     for sn in study_names:
         try:
             study = optuna.load_study(study_name=sn, storage=_STORAGE_URL)
-        except (KeyError, OSError):
+        except KeyError, OSError:
             continue
         if len(study.directions) == 1:
             best = study.best_trial
@@ -927,10 +970,7 @@ def run_portfolio(  # ruff: ignore[too-many-locals]  (per-task/per-family bookke
         return
 
     per_task = {
-        task: {
-            rf: _family_task_trials(rf, task)
-            for rf in set(FAMILY_MAP.values())
-        }
+        task: {rf: _family_task_trials(rf, task) for rf in set(FAMILY_MAP.values())}
         for task in tasks
     }
     # Drop empty slots; keep a stable family list from the union.
@@ -938,7 +978,9 @@ def run_portfolio(  # ruff: ignore[too-many-locals]  (per-task/per-family bookke
         per_task[task] = {f: t for f, t in per_task[task].items() if t}
 
     baselines = {
-        task: max((t["accuracy"] for t in per_task[task].get("backprop", [])), default=0.0)
+        task: max(
+            (t["accuracy"] for t in per_task[task].get("backprop", [])), default=0.0
+        )
         for task in tasks
     }
 
@@ -963,6 +1005,26 @@ def run_portfolio(  # ruff: ignore[too-many-locals]  (per-task/per-family bookke
             )
             for task in tasks
         }
+
+        # Phase 1.5: capture the param count of the best-accuracy trial so we can
+        # rank families on efficiency (accuracy per 1k params), keeping the
+        # comparison fair vs backprop's small models.
+        _ACC_TOL = 1e-12
+
+        def _best_trial_params(
+            task_trials: list[dict], best: float | None
+        ) -> float | None:
+            if best is None:
+                return None
+            for t in task_trials:
+                if abs(t["accuracy"] - best) < _ACC_TOL:
+                    return t["param_count"]
+            return None
+
+        best_params = {
+            task: _best_trial_params(per_task[task].get(family, []), best_accs[task])
+            for task in tasks
+        }
         primary = next((t for t in tasks if best_accs[t] is not None), tasks[0])
         primary_acc = best_accs[primary]
         if primary_acc is None:
@@ -982,7 +1044,9 @@ def run_portfolio(  # ruff: ignore[too-many-locals]  (per-task/per-family bookke
             "family": family,
             "n_trials": sum(len(per_task[task].get(family, [])) for task in tasks),
             "wall_time_s": wall_time_s if wall_time_s is not None else "",
-            "peak_mem": "O(1)" if locality & {"equilibrium", "forward-only", "local", "layerwise"} else "O(N)",
+            "peak_mem": "O(1)"
+            if locality & {"equilibrium", "forward-only", "local", "layerwise"}
+            else "O(N)",
             "regime_advantage": (
                 "baseline"
                 if family == "backprop"
@@ -998,6 +1062,18 @@ def run_portfolio(  # ruff: ignore[too-many-locals]  (per-task/per-family bookke
                 if task_acc is not None
                 else ""
             )
+            bp_params = best_params.get(task)
+            record[f"params_at_best_{task}"] = (
+                int(bp_params) if bp_params is not None else ""
+            )
+        # Efficiency: accuracy per 1k params at the best trial on the primary task.
+        primary_params = best_params.get(primary)
+        if primary_acc and primary_params:
+            record["eff_acc_per_1k_params"] = round(
+                primary_acc / (primary_params / 1000.0), 5
+            )
+        else:
+            record["eff_acc_per_1k_params"] = ""
         rows.append(record)
 
     non_baseline = [r for r in rows if r["family"] != "backprop"]
@@ -1010,7 +1086,10 @@ def run_portfolio(  # ruff: ignore[too-many-locals]  (per-task/per-family bookke
     for r in rows:
         logger.info(
             "  %-4s %-18s status=%-10s regime=%-22s",
-            r["rank"], r["family"], r["status"], r["regime_advantage"],
+            r["rank"],
+            r["family"],
+            r["status"],
+            r["regime_advantage"],
         )
     logger.info("[FILE]  Portfolio -> %s", args.output)
 
@@ -1518,7 +1597,8 @@ def main():  # ruff: ignore[too-many-statements, complex-structure]  (argparse s
 
     # ---- portfolio ----
     portfolio_parser = subparsers.add_parser(
-        "portfolio", help="Build Phase 1 portfolio ranking table (Scale/Hold/Eliminated)"
+        "portfolio",
+        help="Build Phase 1 portfolio ranking table (Scale/Hold/Eliminated)",
     )
     portfolio_parser.add_argument(
         "--tasks",

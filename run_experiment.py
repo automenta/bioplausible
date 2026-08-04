@@ -436,7 +436,8 @@ def _build_objective(
     config = _ACTIVE_CONFIG if _ACTIVE_CONFIG is not None else {}
     objectives = config.get("objectives", ["accuracy", "loss"])
     directions = config.get("directions", ["maximize", "minimize"])
-    return _make_objective(ctx, objectives, directions), runmod
+    max_params = config.get("max_params", None)
+    return _make_objective(ctx, objectives, directions, max_params), runmod
 
 
 def _ensure_studies(
@@ -456,16 +457,21 @@ def _ensure_studies(
     """
     # Read multi-objective config (default: 2 objectives)
     n_objectives = 2
+    sampler_name = "tpe"  # default
     if config:
         objectives = config.get("objectives", ["accuracy", "loss"])
         n_objectives = len(objectives)
+        sampler_name = config.get("sampler", "tpe")
 
     studies: dict[str, optuna.Study] = {}
     for i, t in enumerate(targets):
         n_startup = getattr(eval_cfg, "n_startup_trials", 10)
-        # Force TPE unless the all-pruned path requires random fallback
-        sampler_name = _safe_sampler_name(t.study_name, "tpe", n_startup, storage_url)
-        sampler_name = sampler_name  # locked
+        # Use configured sampler; fall back to TPE/Random if NSGA-II not viable
+        if sampler_name == "nsga2":
+            # NSGA-II requires population; check if viable
+            sampler_name = _safe_sampler_name(t.study_name, "nsga2", n_startup, storage_url)
+        else:
+            sampler_name = _safe_sampler_name(t.study_name, sampler_name, n_startup, storage_url)
         study_seed = _per_study_seed(seed, t.study_name, i)
         study = create_study(
             model_names=[t.model],

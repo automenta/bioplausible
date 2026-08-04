@@ -428,16 +428,18 @@ class HyperparameterMetamodel:
                 hd_spec = search_space["hidden_dim"]
                 constrained_hd = copy.deepcopy(hd_spec)
 
-                # Ensure min 64
+                # Floor relaxed to 32 so equilibrium/low-width models can sample
+                # small configs and compete with backprop on parameter count
+                # (Phase 1.5 fairness). Keep 256 max to bound compute.
                 if constrained_hd.choices:
                     constrained_hd.choices = [
-                        c for c in constrained_hd.choices if c >= 64
+                        c for c in constrained_hd.choices if 32 <= c <= 256
                     ]
                     # Fallback if empty (unlikely with standard choices)
                     if not constrained_hd.choices:
-                        constrained_hd.choices = [64]
+                        constrained_hd.choices = [32]
 
-                # Cap at 512 (default spec is 512 max anyway)
+                # Cap at 256
                 search_space["hidden_dim"] = constrained_hd
 
         # Heuristics: RL (Specific LR Range)

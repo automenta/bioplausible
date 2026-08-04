@@ -10,34 +10,26 @@ tasks:
 budget: 20
 tier: standard
 family_budgets:
-  backprop: 20
-  eqprop: 20
-  forward_only: 20
-  hebbian: 20
-  target_prop: 20
+  backprop: 40
+  eqprop: 40
+  forward_only: 40
+  hebbian: 40
+  target_prop: 40
 model_budgets:
-  backprop.backprop_mlp: 20
-  eqprop.eqprop_mlp: 20
-  eqprop.lazy_eqprop: 20
-  eqprop.neural_cube: 20
-  eqprop.holomorphic_ep: 20
-  forward_only.forward_forward: 20
-  forward_only.pepita: 20
-  hebbian.hebbian_chain: 20
-  hebbian.deep_hebbian: 20
-  target_prop.diff_target_prop: 20
-seed: 42
+  backprop.backprop_mlp: 40
+  eqprop.eqprop_mlp: 40
+  eqprop.neural_cube: 40
+  forward_only.pepita: 40
+  hebbian.deep_hebbian: 40
+  target_prop.diff_target_prop: 40
+seed: 44
 phase: '1.5'
 arch_groups:
   mlp:
   - backprop_mlp
   - eqprop_mlp
-  - lazy_eqprop
   - neural_cube
-  - holomorphic_ep
-  - forward_forward
   - pepita
-  - hebbian_chain
   - deep_hebbian
   - diff_target_prop
 multi_objective: true
@@ -49,3 +41,4 @@ directions:
 - maximize
 - minimize
 - minimize
+max_params: 400000
