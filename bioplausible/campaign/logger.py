@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Self
+from typing import Self, TypeIs
 
 __all__ = [
     "Epoch",
@@ -69,6 +69,38 @@ class GateOutcome:
     kind: str = "gate"
 
 
+#: Concrete event dataclasses the logger can serialize. Add new event types
+#: here (and to the package public API) to extend the stream.
+_EVENT_TYPES: tuple[type[object], ...] = (TrialStart, TrialEnd, Epoch, GateOutcome)
+
+
+def _is_trial_start(event: object) -> TypeIs[TrialStart]:
+    """Narrow ``event`` to :class:`TrialStart`."""
+    return isinstance(event, TrialStart)
+
+
+def _is_trial_end(event: object) -> TypeIs[TrialEnd]:
+    """Narrow ``event`` to :class:`TrialEnd`."""
+    return isinstance(event, TrialEnd)
+
+
+def _is_epoch(event: object) -> TypeIs[Epoch]:
+    """Narrow ``event`` to :class:`Epoch`."""
+    return isinstance(event, Epoch)
+
+
+def _is_gate_outcome(event: object) -> TypeIs[GateOutcome]:
+    """Narrow ``event`` to :class:`GateOutcome`."""
+    return isinstance(event, GateOutcome)
+
+
+def _is_supported_event(
+    event: object,
+) -> TypeIs[TrialStart | TrialEnd | Epoch | GateOutcome]:
+    """Narrow ``event`` to a supported log event type."""
+    return isinstance(event, _EVENT_TYPES)
+
+
 class ExperimentLogger:
     """Append-only JSONL logger bound to a single artifact file.
 
@@ -77,6 +109,12 @@ class ExperimentLogger:
     """
 
     def __init__(self, path: str | Path) -> None:
+        """Create a logger writing to ``path``.
+
+        Args:
+            path: File path for the JSONL output. Parent directories are created
+                if they do not exist.
+        """
         if isinstance(path, str):
             path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -85,12 +123,31 @@ class ExperimentLogger:
 
     @staticmethod
     def _encode(event: object) -> dict[str, object]:
-        if isinstance(event, (TrialStart, TrialEnd, Epoch, GateOutcome)):
+        """Serialize a supported event to a JSON-ready dict.
+
+        Args:
+            event: One of the supported event dataclasses.
+
+        Returns:
+            A dictionary suitable for ``json.dumps``.
+
+        Raises:
+            TypeError: If ``event`` is not a supported event type.
+        """
+        if _is_supported_event(event):
             return asdict(event)
         raise TypeError(f"Unsupported log event: {event!r}")  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
 
     def log(self, event: object) -> None:
-        """Serialize ``event`` and append one JSON line, then flush."""
+        """Serialize ``event`` and append one JSON line, then flush.
+
+        Args:
+            event: A supported event dataclass (``TrialStart``, ``TrialEnd``,
+                ``Epoch``, or ``GateOutcome``).
+
+        Side effects:
+            Writes to the underlying file handle and flushes immediately.
+        """
         payload = self._encode(event)
         self._fh.write(json.dumps(payload, sort_keys=True) + "\n")
         self._fh.flush()
@@ -100,7 +157,9 @@ class ExperimentLogger:
         self._fh.close()
 
     def __enter__(self) -> Self:
+        """Enter the context manager, returning the logger itself."""
         return self
 
     def __exit__(self, *exc_info: object) -> None:
+        """Exit the context manager, closing the file handle."""
         self.close()

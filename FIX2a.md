@@ -522,14 +522,289 @@ results/
 
 ## 13. Immediate Next Steps (This Week)
 
-1. **Create `SearchSpace` class** — replace metamodel, add constraint evaluation
-2. **Define YAML schema** — Pydantic v2 models for validation, `arms`/`protocols` fields
-3. **Implement `ParamEstimator` per model** — static param counting (per-arm budgets)
-4. **Build `biopl-run` CLI** — dry-run, resume, override, `--arm`, `--protocol`
-5. **Delete `run_phase1_5.py`** — replaced by YAML + `biopl-run`
-6. **Write TIER 0 smoke test** — synthetic tasks gate for all models
-7. **Write TIER 0.5 digits test** — loss-decrease + acc>95% gate; logs "digits-fail"
-8. **Verify conv_eqprop passes TIER 0-1** — conv-arm health gate (don't run parity on broken models)
+### Phase A (DONE — verified working)
+1. **~~Create `SearchSpace` class~~** — `search_space.py`: `ParamDistribution` Protocol, `FloatRange`/`IntRange`/`Choice`, `parse_distribution`, `sample_feasible` with constraint evaluation
+2. **~~Define YAML schema~~** — `schema.py`: Pydantic v2 models (`Campaign`, `Arm`, `Task`, `HPO`, `Compute`, `Resources`, `Output`, `Reproducibility`, `Protocols`), `validate_yaml`/`load_campaign`
+3. **~~Implement `ParamEstimator`~~** — `param_estimator.py`: `InstantiateEstimator` (constructs model, sums `numel()`), `build_model_kwargs` (signature-filtered), `bound_estimator`, `estimate_param_count`
+4. **~~Build `biopl-run` CLI~~** — `cli.py`: `validate`, `dry-run`, `gates`, `run` subcommands with `match`/`case` dispatch
+5. **~~Write TIER 0 smoke test~~** — `tiers.py`: `run_tier0` over xor/spiral/circles, fixed 2D/2-class geometry
+6. **~~Write TIER 0.5 digits test~~** — `tiers.py`: `run_tier05` over digits, fixed 64/10 geometry, `digits-fail` verdict
+
+### Phase B (PARTIALLY DONE — broken stub, needs rewrite)
+7. **`ExperimentLogger`** — `logger.py`: DONE. Typed events (`TrialStart`/`TrialEnd`/`Epoch`/`GateOutcome`), JSONL append-only, `TypeIs` narrowing, Google-style docstrings
+8. **`CampaignExecutor`** — `executor.py`: **STUB — DO NOT USE**. See §14 for the audit and §15 for the rewrite plan.
+
+### Phase C (NOT STARTED)
+9. TIER 1: MNIST + Fashion-MNIST validation
+10. TIER 2: Scaling sweep (depth/width, power-law fits)
+11. TIER 3: Parity suite (FLOP/wall-time/memory matched)
+12. Auto-generated summary artifacts (tables, plots, JSON)
+
+---
+
+## 14. Executor Audit (Why `executor.py` Is a Broken Stub)
+
+`executor.py` was written hastily and contains **11 shortcuts/hardcodes/anti-patterns** that violate the FIX2a principle: *"If it's not in the YAML, it's not configurable. No CONFIG dicts in Python."*
+
+### 14.1 Hardcoded Values (Violate "No CONFIG dicts in Python")
+
+| Line | Code | Problem | Fix |
+|------|------|---------|-----|
+| 104 | `getattr(self.campaign.hpo, "min_accuracy", 0.95)` | `min_accuracy` missing from `HPO` schema; `getattr` fallback is a code smell | Add `min_accuracy: float = Field(0.95, ge=0.0, le=1.0)` to `HPO` |
+| 212 | `batch_size=full_config.get("batch_size", 128)` | Hardcoded default 128 | Use `Compute.batch_size` or `Task.batch_size` from schema |
+| 213 | `num_workers=0` | Hardcoded 0 | Use `Compute.num_workers` from schema |
+| 216-218 | `getattr(self.campaign.compute, "track_energy", False)` | `track_energy`/`track_flops`/`track_memory` missing from `Compute` schema | Add these fields to `Compute` with defaults |
+| 211 | `epochs=self.campaign.tasks[0].epochs if self.campaign.tasks else 10` | Hardcoded fallback 10 | Require at least one task in schema (already enforced by `tasks` being a list, but executor should error explicitly if empty) |
+
+### 14.2 Architectural Problems
+
+| Line | Code | Problem | Fix |
+|------|------|---------|-----|
+| 143 | `key.replace('/', '_')` | Filename collision: `"a/b"` → `"a_b"` same as `"a_b"` | Use `Path` components: `self.storage_base / arm_name / f"{model_name}.db"` |
+| 199 | `param_count = sum(p.numel() for p in model_cls(**model_kwargs).parameters())` | Constructs model in executor instead of using `estimate_param_count` | Use `estimate_param_count(model_name, full_config, ...)` from `param_estimator.py` |
+| 155 | `_OPTIMIZER_KWARGS: frozenset[str]` defined on class body | Duplicates module-level constant; class-level constant is dead code | Remove class-level copy, keep module-level only |
+| 244 | `return f"classification_{arm_input_dim}_{arm_output_dim}"` | Generates a task name CoreTrainer won't recognize — will crash at data loading | Require `tasks` in campaign YAML (schema should enforce min 1 task for HPO campaigns) |
+| 91-95 | `gate_result` property lazily runs gates | Fragile for resume: can't skip gates on resume, can't inspect gate state | Make gates an explicit `run_gates()` step, store result, allow skip via `--resume` |
+| 35 | `_OPTIMIZER_KWARGS` module constant | Should live with the search space or param estimator (where config keys are known) | Move to `param_estimator.py` or `search_space.py` as a known-keys frozenset |
+
+### 14.3 What's Missing Entirely
+
+- **No `--resume` support**: The Optuna `load_if_exists=True` creates the study, but there's no mechanism to load prior gate results, skip already-completed trials, or resume from a crashed run.
+- **No per-task HPO**: The executor runs one study per `arm × model`, but FIX2a §2 specifies per `arm × model × task` (e.g., MNIST and Fashion-MNIST are separate tasks with separate sweeps).
+- **No multi-seed support**: `HPO.n_seeds` exists in the schema but the executor runs one trial per config, not `n_seeds` trials with different seeds aggregated via bootstrap CIs.
+- **No early stopping**: `Resources.early_stop_patience` and `Resources.max_epoch_time_sec` exist in the schema but the executor ignores them.
+- **No wall-clock budget**: `Resources.max_wall_hours` exists but is never checked.
+- **No Pareto pruning**: `HPO.prune_worse_than_pareto` exists but is never applied.
+- **No analysis output**: No `pareto_frontier.csv`, `scaling_laws.json`, `parity_table.md` generation.
+- **No checkpoint/resume for CoreTrainer**: `CoreTrainer.load_checkpoint` exists but the executor never calls it.
+- **No error aggregation**: Trial failures are logged but not aggregated into a failure summary.
+
+---
+
+## 15. Executor Rewrite Plan (Do This, Not That)
+
+### 15.1 Schema Gaps to Fill First
+
+```python
+# schema.py — add to Compute
+class Compute(BaseModel):
+    device: str = "auto"
+    max_parallel: int = Field(1, ge=1)
+    max_wall_hours: float | None = Field(None, gt=0)
+    batch_size: int = Field(128, ge=1)           # NEW
+    num_workers: int = Field(0, ge=0)            # NEW
+    track_energy: bool = False                    # NEW
+    track_flops: bool = False                     # NEW
+    track_memory: bool = False                    # NEW
+    precision: str = "32-true"                     # NEW: "16-mixed", "bf16-mixed", "32-true"
+    use_compile: bool = False                     # NEW
+
+# schema.py — add to HPO
+class HPO(BaseModel):
+    # ... existing fields ...
+    min_accuracy: float = Field(0.95, ge=0.0, le=1.0)  # NEW: TIER 0.5 gate threshold
+```
+
+### 15.2 Task Resolution (No Hardcoding)
+
+The executor must use the `Task` objects from `campaign.tasks`, matching by geometry:
+
+```python
+def _resolve_task(self, arm_name: str) -> Task:
+    arm = self.campaign.arms[arm_name]
+    arm_input_dim = self.campaign.arm_input_dim(arm_name)
+    arm_output_dim = self.campaign.arm_output_dim(arm_name)
+
+    for task in self.campaign.tasks:
+        task_input = task.input_dim or arm_input_dim
+        task_classes = task.num_classes or arm_output_dim
+        if task_input == arm_input_dim and task_classes == arm_output_dim:
+            return task
+
+    # Schema should enforce: HPO campaigns require >=1 matching task
+    raise CampaignError(
+        f"No task in campaign matches arm {arm_name!r} geometry "
+        f"({arm_input_dim} → {arm_output_dim})"
+    )
+```
+
+**Key**: `Task.name` is passed to `CoreTrainer` which maps it to `get_vision_dataset(name=...)`. The supported names are: `mnist`, `fashion_mnist`, `cifar10`, `cifar100`, `kmnist`, `svhn`, `digits`, `xor`, `spiral`, `circles`. Any task name not in this list will crash — the schema should validate task names against this set, or CoreTrainer should expose a task registry.
+
+### 15.3 Executor Architecture (Clean Rewrite)
+
+```
+CampaignExecutor
+├── run(n_trials) → gates → HPO per (arm, model, task) → studies
+├── run_gates() → run_gates() from runner.py → CampaignResult
+├── get_survivors() → list[(arm, model)] from gate results
+├── run_hpo(arm, model, task, n_trials) → Optuna Study
+│   ├── _build_trainer_config(trial, arm, model, task) → TrainerConfig
+│   ├── _objective(trial) → (accuracy, param_count, epoch_time_s)
+│   └── _log_trial(trial, status, metrics) → JSONL events
+├── resume() → load existing study, skip completed trials
+└── analyze() → Pareto frontier, scaling laws, parity table
+
+Key principles:
+1. All config comes from YAML schema, no hardcoded defaults in executor
+2. One study per (arm, model, task) — not per (arm, model)
+3. n_seeds trials per config, aggregated via bootstrap CIs
+4. Early stopping via Resources.early_stop_patience
+5. Wall-clock budget via Resources.max_wall_hours
+6. Pareto pruning via HPO.prune_worse_than_pareto
+7. Checkpoint/resume via Optuna SQLite storage + CoreTrainer.load_checkpoint
+8. Error aggregation: collect all TrialEnd(status="failed") into failure summary
+```
+
+### 15.4 CLI Changes
+
+The `run` command must be separated from `gates`:
+
+```
+biopl-run validate  --config <yaml>           # schema validation
+biopl-run dry-run   --config <yaml>           # plan preview
+biopl-run gates     --config <yaml>           # TIER 0/0.5 only
+biopl-run run       --config <yaml>           # full campaign: gates + HPO
+    --resume           # skip gates, load existing study
+    --trials N         # override hpo.n_trials
+    --arm NAME         # run only one arm
+    --model NAME       # run only one model
+    --task NAME        # run only one task
+    --device cpu|cuda  # override compute.device
+```
+
+### 15.5 What "Runnable" Means (No More False Claims)
+
+A campaign is **runnable** when ALL of these hold:
+1. `biopl-run validate` passes on the YAML
+2. `biopl-run dry-run` shows the resolved plan
+3. `biopl-run gates --tier all` completes and writes `gates.jsonl`
+4. `biopl-run run` completes at least one full trial per surviving model and writes `trials.jsonl` with `TrialStart`/`Epoch`/`TrialEnd` events
+5. `biopl-run run --resume` skips completed trials and continues from where it stopped
+
+Until all 5 hold, the campaign framework is **not runnable**. Do not claim otherwise.
+
+---
+
+## 16. Additional Opportunities (Beyond FIX2a §1-§13)
+
+### 16.1 Task Name Registry (Prevents Runtime Crashes)
+
+`CoreTrainer` accepts a `task: str` that maps to `get_vision_dataset(name=task)`. The supported names are hardcoded in `data/vision.py`. A campaign YAML with a typo (`mist` instead of `mnist`) crashes at training time, not validation time.
+
+**Fix**: Add a `TaskRegistry` in `data/vision.py` (or `core/registry.py`) that maps task names to dataset loaders. The `Task` schema validates `name` against this registry at YAML load time.
+
+### 16.2 Constraint Expression Safety (§4.1)
+
+`SearchSpace._constraints_hold` uses `eval()` with `__builtins__: {}`. This is safe for researcher-authored YAML but:
+- No timeout (a malicious/infinite loop hangs forever)
+- No import of `math`/`statistics` (useful for complex constraints)
+- Error messages don't identify which constraint failed by index
+
+**Enhancement**: Replace `eval()` with `asteval` or a restricted expression evaluator. Add `math`/`statistics` to the namespace. Include the constraint index in error messages.
+
+### 16.3 Gradient Equivalence Testing (RESEARCH.md §5.2, FIX2a §6d)
+
+TIER 3 requires cosine similarity between equilibrium implicit-diff and BPTT gradients. This is a separate concern from the campaign executor — it's a **validation track** that runs alongside HPO, not within it.
+
+**Implementation**: `bioplausible/validation/gradient_equivalence.py` with a `check_gradient_equivalence(model_name, config, task) -> float` function that:
+1. Runs one forward pass with equilibrium gradient
+2. Runs one forward pass with BPTT (oracle)
+3. Returns cosine similarity of the two gradient vectors
+4. Logs as a `GradientEquivalence` event in the JSONL stream
+
+### 16.4 Statistical Aggregation (RESEARCH.md §5.3)
+
+`n_seeds` trials per config need aggregation before reporting:
+- Bootstrap CIs (BCa) for accuracy
+- Cohen's d, Cliff's delta vs backprop baseline
+- Benjamini-Hochberg correction for multiple comparisons
+
+**Implementation**: `bioplausible/validation/statistics.py` with:
+- `bootstrap_ci(values, confidence=0.95) -> tuple[float, float]`
+- `cohens_d(treatment, control) -> float`
+- `cliffs_delta(treatment, control) -> float`
+- `benjamini_hochberg(p_values, alpha=0.05) -> list[bool]`
+
+The executor calls these after all `n_seeds` trials for a config complete.
+
+### 16.5 Campaign State Serialization (RESEARCH.md §4.3)
+
+For AutoScientist resume, the campaign needs:
+- SQLite storage of Optuna studies (already done via `sqlite:///`)
+- YAML serialization of gate results (write `gates.jsonl` → done)
+- Checkpoint paths in `TrialStart.config` (done)
+- A `campaign_state.json` with: `{ completed_trials: int, total_trials: int, gate_survivors: [...], last_updated: timestamp }`
+
+### 16.6 Failure Manifesto (RESEARCH.md §5.4)
+
+Every `TrialEnd(status="failed")` should contribute to a structured failure summary:
+- What was tried (config, model, task)
+- Why it should work (hypothesis)
+- Why it failed (error message, traceback excerpt)
+- Search space explored (hyperparameter ranges)
+- Partial successes (what *did* work)
+
+**Implementation**: `bioplausible/analysis/failure_manifesto.py` that post-processes `trials.jsonl` and generates `failure_manifesto.md`.
+
+---
+
+## 17. Implementation Order (Correct Dependency Sequence)
+
+```
+1. Schema gaps (§15.1)          — 30 min
+   └─ Add Compute.batch_size, num_workers, track_*, precision, use_compile
+   └─ Add HPO.min_accuracy
+   └─ Validate Task.name against data registry (§16.1)
+
+2. Task name registry (§16.1)   — 1 hr
+   └─ data/vision.py: expose SUPPORTED_TASKS frozenset
+   └─ schema.py: Task.name must be in SUPPORTED_TASKS
+
+3. Delete executor.py stub      — 5 min
+   └─ It's broken; rewrite from scratch
+
+4. Rewrite executor.py (§15.3)  — 4-6 hr
+   └─ Clean architecture: gates → HPO per (arm, model, task) → studies
+   └─ No hardcoded defaults; all from schema
+   └─ Use estimate_param_count, not manual construction
+   └─ One study per (arm, model, task)
+   └─ n_seeds per config with bootstrap CI aggregation
+   └─ Early stopping, wall-clock budget, Pareto pruning
+   └─ Resume via --resume flag + Optuna load_if_exists
+
+5. CLI run command (§15.4)      — 1 hr
+   └─ Separate run from gates
+   └─ Add --resume, --trials, --arm, --model, --task flags
+
+6. Statistics module (§16.4)    — 2 hr
+   └─ Bootstrap CIs, effect sizes, multiple comparison correction
+
+7. Gradient equivalence (§16.3) — 2 hr
+   └<arg_value> Separate from executor; validation track
+
+8. Analysis output (§15.3)      — 2 hr
+   └─ Pareto frontier CSV, scaling law JSON, parity table MD
+   └─ Failure manifesto (§16.6)
+
+9. End-to-end verification (§15.5) — 1 hr
+   └─ All 5 "runnable" criteria met
+   └─ Overnight run on example campaign
+```
+
+**Total**: ~14-16 hours of focused implementation.
+
+---
+
+## 18. Lesson Learned: Do Not Claim "Runnable" Prematurely
+
+The campaign framework was declared "runnable" when:
+- TIER 0/0.5 gates worked (true)
+- But the executor was a broken stub with 11 hardcodes (false)
+- No full trial had ever been executed end-to-end (false)
+- No resume had been tested (false)
+- No analysis output had been generated (false)
+
+**Rule**: "Runnable" means ALL 5 criteria in §15.5 hold. Anything less is a prototype, not a deliverable. State this explicitly when reporting status.
 
 ---
 

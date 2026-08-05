@@ -19,7 +19,10 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from bioplausible.campaign.param_estimator import build_model_kwargs
+from bioplausible.campaign.param_estimator import (
+    build_model_kwargs,
+    estimate_param_count,
+)
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 
@@ -30,8 +33,13 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "TIER0_EPOCHS",
+    "TIER0_INPUT_DIM",
+    "TIER0_OUTPUT_DIM",
     "TIER0_TASKS",
     "TIER05_EPOCHS",
+    "TIER05_INPUT_DIM",
+    "TIER05_OUTPUT_DIM",
+    "GateSettings",
     "TierOutcome",
     "run_tier0",
     "run_tier05",
@@ -39,7 +47,14 @@ __all__ = [
 
 TIER0_TASKS = ("xor", "spiral", "circles")
 TIER0_EPOCHS = 3
+# The two triage gates use FIXED task geometry (FIX2a §2), independent of any
+# campaign arm: synthetic tasks are 2D/2-class, digits is 8x8/10-class. Arm
+# geometry only matters from TIER 1 (MNIST-family) onwards.
+TIER0_INPUT_DIM = 2
+TIER0_OUTPUT_DIM = 2
 TIER05_EPOCHS = 5
+TIER05_INPUT_DIM = 64
+TIER05_OUTPUT_DIM = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +259,8 @@ def run_tier05(
     for model in models:
         accs: list[float] = []
         epoch_time_s: float = 0.0
+        failure: str | None = None
+        failure_metrics: dict[str, float] = {}
         for i in range(settings.n_seeds):
             ok, reason, metrics = _train_sample(
                 model_name=model,
@@ -252,25 +269,29 @@ def run_tier05(
                 config=config,
             )
             if not ok:
-                outcomes.append(
-                    TierOutcome(
-                        tier="tier0.5",
-                        model=model,
-                        task="digits",
-                        passed=False,
-                        reason=f"seed {settings.seed + i}: {reason}",
-                        metrics=metrics,
-                    )
-                )
+                failure = f"seed {settings.seed + i}: {reason}"
+                failure_metrics = metrics
                 break
             accs.append(metrics["final_train_acc"])
             epoch_time_s += metrics["epoch_time_s"]
 
+        if failure is not None:
+            outcomes.append(
+                TierOutcome(
+                    tier="tier0.5",
+                    model=model,
+                    task="digits",
+                    passed=False,
+                    reason=failure,
+                    metrics=failure_metrics,
+                )
+            )
+            continue
         if not accs:
             continue
 
-        param_count = _count_params(
-            model, config, settings.input_dim, settings.output_dim
+        param_count = estimate_param_count(
+            model, config, input_dim=settings.input_dim, output_dim=settings.output_dim
         )
         mean_acc = sum(accs) / len(accs)
         passed = mean_acc >= settings.min_accuracy
@@ -294,17 +315,3 @@ def run_tier05(
             )
         )
     return outcomes
-
-
-def _count_params(
-    model_name: str,
-    config: dict[str, object],
-    input_dim: int,
-    output_dim: int,
-) -> int:
-    """Static parameter count via the shared estimator (no training)."""
-    from bioplausible.campaign.param_estimator import estimate_param_count
-
-    return estimate_param_count(
-        model_name, config, input_dim=input_dim, output_dim=output_dim
-    )

@@ -27,7 +27,9 @@ __all__ = [
     "InstantiateEstimator",
     "ParamEstimateError",
     "ParamEstimator",
+    "bound_estimator",
     "build_model_kwargs",
+    "estimate_param_count",
 ]
 
 

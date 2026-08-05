@@ -15,13 +15,18 @@ List-form shorthand for distributions:
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from bioplausible.campaign.search_space import SearchSpace, parse_distribution
+from bioplausible.campaign.search_space import (
+    ParamDistribution,
+    SearchSpace,
+    parse_distribution,
+)
 
 __all__ = [
     "HPO",
@@ -85,7 +90,7 @@ class SearchSpaceConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    base: dict[str, Any] = Field(default_factory=dict)
+    base: dict[str, object] = Field(default_factory=dict)
 
 
 class Protocols(BaseModel):
@@ -182,7 +187,7 @@ class Campaign(BaseModel):
     meta: Meta
     compute: Compute = Field(default_factory=Compute)
     search_space: SearchSpaceConfig = Field(default_factory=SearchSpaceConfig)
-    model_overrides: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    model_overrides: dict[str, dict[str, object]] = Field(default_factory=dict)
     constraints: list[str] = Field(default_factory=list)
     arms: dict[str, Arm]
     protocols: Protocols = Field(default_factory=Protocols)
@@ -198,7 +203,7 @@ class Campaign(BaseModel):
         Scalars in ``search_space.base``/``model_overrides`` become fixed
         constants; lists become tunable distributions.
         """
-        base_dists: dict[str, Any] = {}
+        base_dists: dict[str, ParamDistribution] = {}
         base_constants: dict[str, object] = {}
         for key, value in self.search_space.base.items():
             if isinstance(value, list):
@@ -206,10 +211,10 @@ class Campaign(BaseModel):
             else:
                 base_constants[key] = value
 
-        overrides: dict[str, dict[str, Any]] = {}
+        overrides: dict[str, dict[str, ParamDistribution]] = {}
         constants: dict[str, dict[str, object]] = {}
         for model_name, mapping in self.model_overrides.items():
-            dists: dict[str, Any] = {}
+            dists: dict[str, ParamDistribution] = {}
             fixed: dict[str, object] = {}
             for key, value in mapping.items():
                 if isinstance(value, list):
@@ -239,10 +244,7 @@ class Campaign(BaseModel):
         if arm.input_dim is not None:
             return arm.input_dim
         if arm.input_shape:
-            product = 1
-            for dim in arm.input_shape:
-                product *= dim
-            return product
+            return math.prod(arm.input_shape)
         for task in self.tasks:
             if task.input_dim is not None:
                 return task.input_dim

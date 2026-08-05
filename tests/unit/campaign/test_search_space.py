@@ -94,3 +94,96 @@ def test_constraint_violation_returns_none():
         return 100
 
     assert space.sample_feasible(trial, "m", estimator=estimator) is None
+
+
+def test_float_range_describe():
+    assert FloatRange(1e-4, 1e-2, log=True).describe() == "float[0.0001, 0.01] log"
+    assert FloatRange(0.1, 0.9).describe() == "float[0.1, 0.9] linear"
+
+
+def test_int_range_sample_and_describe():
+    dist = IntRange(1, 5)
+    trial = optuna.create_study().ask()
+    value = dist.sample(trial, "n")
+    assert 1 <= value <= 5
+    assert dist.describe() == "int[1, 5]"
+
+
+def test_choice_describe():
+    assert Choice((1, 2, 3)).describe() == "choice[1, 2, 3]"
+
+
+def test_render_describes_distributions():
+    space = SearchSpace(
+        base={"lr": FloatRange(1e-4, 1e-2), "hidden_dim": Choice((64, 128))},
+    )
+    rendered = space.render("any_model")
+    assert "float[" in rendered["lr"]
+    assert "choice" in rendered["hidden_dim"]
+
+
+def test_sample_feasible_returns_config_when_feasible():
+    space = SearchSpace(base={"hidden_dim": Choice((64,))})
+    trial = optuna.create_study().ask()
+
+    def estimator(_config: dict[str, object]) -> int:
+        return 10
+
+    result = space.sample_feasible(trial, "m", estimator=estimator, max_params=100)
+    assert result is not None
+    assert result["hidden_dim"] == 64
+
+
+def test_sample_feasible_rejects_over_budget_without_constraints():
+    space = SearchSpace(base={"hidden_dim": Choice((64,))})
+    trial = optuna.create_study().ask()
+
+    def estimator(_config: dict[str, object]) -> int:
+        return 500
+
+    assert (
+        space.sample_feasible(trial, "m", estimator=estimator, max_params=100) is None
+    )
+
+
+def test_constraints_hold_without_estimator_returns_true():
+    space = SearchSpace(
+        base={"hidden_dim": Choice((64,))},
+        constraints=("estimate(config) <= 10",),
+    )
+    trial = optuna.create_study().ask()
+    # No estimator provided -> constraints treated as holding.
+    result = space.sample_feasible(trial, "m")
+    assert result is not None
+
+
+def test_constraint_evaluation_raises_on_bad_expression():
+    space = SearchSpace(
+        base={"hidden_dim": Choice((64,))},
+        constraints=("undefined_name > 10",),
+    )
+    trial = optuna.create_study().ask()
+
+    def estimator(_config: dict[str, object]) -> int:
+        return 10
+
+    with pytest.raises(ValueError, match="Constraint"):
+        space.sample_feasible(trial, "m", estimator=estimator)
+
+
+def test_parse_distribution_passes_through_existing_distribution():
+    dist = FloatRange(0.1, 0.9)
+    assert parse_distribution(dist) is dist
+
+
+def test_parse_linear_scale_explicit():
+    dist = parse_distribution([0.1, 0.9, "linear"])
+    assert isinstance(dist, FloatRange)
+    assert not dist.log
+
+
+def test_parse_int_scale_explicit():
+    dist = parse_distribution([1, 10, "int"])
+    assert isinstance(dist, IntRange)
+    assert dist.low == 1
+    assert dist.high == 10

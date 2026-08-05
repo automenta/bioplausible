@@ -52,9 +52,21 @@ class CampaignResult:
 
 
 class CampaignRunner:
-    """Resolve a validated campaign into executable plans and reports."""
+    """Resolve a validated campaign into executable plans and reports.
+
+    The runner is the orchestrator between the validated :class:`Campaign`
+    schema and the gate tiers: it resolves arm geometry, exposes a
+    ``--dry-run`` view, and drives the TIER 0 / 0.5 gates.
+    """
 
     def __init__(self, campaign: Campaign, output: Path | None = None) -> None:
+        """Bind the runner to a validated campaign.
+
+        Args:
+            campaign: The validated campaign definition.
+            output: Optional override for the artifacts directory. Defaults to
+                ``campaign.output.artifacts_dir``.
+        """
         self.campaign = campaign
         self.output = output or Path(campaign.output.artifacts_dir)
 
@@ -98,6 +110,7 @@ def run_gates(
     device: str = "cpu",
     n_seeds: int = 3,
     min_accuracy: float = 0.95,
+    run_tier05: bool = True,
 ) -> CampaignResult:
     """Run the TIER 0 then TIER 0.5 gates for every arm model.
 
@@ -110,36 +123,46 @@ def run_gates(
         device: Training device for the gate runs.
         n_seeds: Number of digits seeds per model (TIER 0.5).
         min_accuracy: TIER 0.5 accuracy gate (default 95%).
+        run_tier05: When False, only the cheap TIER 0 smoke gate runs.
     """
     result = CampaignResult(campaign_name=campaign.meta.name)
 
+    models: list[str] = []
+    seen: set[str] = set()
     for arm in CampaignRunner(campaign).plan():
-        plan0 = tiers.run_tier0(
-            list(arm.models),
-            tiers.GateSettings(
-                input_dim=arm.input_dim,
-                output_dim=arm.output_dim,
-                device=device,
-                seed=campaign.reproducibility.seed,
-            ),
-            config={"hidden_dim": 32, "num_layers": 2},
-        )
-        result.tiers.setdefault("tier0", []).extend(plan0)
+        for model in arm.models:
+            if model not in seen:
+                seen.add(model)
+                models.append(model)
+    if not models:
+        return result
 
-        survivors = [o.model for o in plan0 if o.passed]
-        plan05 = tiers.run_tier05(
-            survivors,
-            tiers.GateSettings(
-                input_dim=arm.input_dim,
-                output_dim=arm.output_dim,
-                device=device,
-                seed=campaign.reproducibility.seed,
-                epochs=tiers.TIER05_EPOCHS,
-                n_seeds=n_seeds,
-                min_accuracy=min_accuracy,
-            ),
-            config={"hidden_dim": 64, "num_layers": 1},
-        )
-        result.tiers.setdefault("tier0.5", []).extend(plan05)
-        result.excluded.extend(o for o in plan05 if not o.passed)
+    plan0 = tiers.run_tier0(
+        models,
+        tiers.GateSettings(
+            input_dim=tiers.TIER0_INPUT_DIM,
+            output_dim=tiers.TIER0_OUTPUT_DIM,
+            device=device,
+            seed=campaign.reproducibility.seed,
+        ),
+    )
+    result.tiers.setdefault("tier0", []).extend(plan0)
+    if not run_tier05:
+        return result
+
+    survivors = [o.model for o in plan0 if o.passed]
+    plan05 = tiers.run_tier05(
+        survivors,
+        tiers.GateSettings(
+            input_dim=tiers.TIER05_INPUT_DIM,
+            output_dim=tiers.TIER05_OUTPUT_DIM,
+            device=device,
+            seed=campaign.reproducibility.seed,
+            epochs=tiers.TIER05_EPOCHS,
+            n_seeds=n_seeds,
+            min_accuracy=min_accuracy,
+        ),
+    )
+    result.tiers.setdefault("tier0.5", []).extend(plan05)
+    result.excluded.extend(o for o in plan05 if not o.passed)
     return result

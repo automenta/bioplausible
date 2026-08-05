@@ -74,3 +74,31 @@ def test_run_gates_excludes_failed_models(monkeypatch):
     tier05_models = {o.model for o in result.tiers["tier0.5"]}
     assert tier0_models == {"backprop_mlp", "eqprop_mlp"}
     assert tier05_models == {"backprop_mlp"}
+
+
+def test_run_gates_skips_tier05_when_disabled(monkeypatch):
+    tier05_calls: list[str] = []
+
+    def fake_tier0(models, _settings, **_kwargs):
+        return [
+            tiers.TierOutcome(
+                tier="tier0",
+                model=m,
+                task="xor,spiral,circles",
+                passed=True,
+                reason="r",
+            )
+            for m in models
+        ]
+
+    def fake_tier05(_models, _settings, **_kwargs):
+        tier05_calls.append("called")
+        return []
+
+    monkeypatch.setattr("bioplausible.campaign.tiers.run_tier0", fake_tier0)
+    monkeypatch.setattr("bioplausible.campaign.tiers.run_tier05", fake_tier05)
+
+    result = run_gates(MINIMAL, run_tier05=False)
+    assert tier05_calls == []
+    assert "tier0.5" not in result.tiers
+    assert len(result.tiers["tier0"]) == 2
