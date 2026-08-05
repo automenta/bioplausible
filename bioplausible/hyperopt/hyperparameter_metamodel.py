@@ -74,9 +74,9 @@ UNIVERSAL_HYPERPARAMS = [
         name="hidden_dim",
         scope=HyperparamScope.UNIVERSAL,
         param_type="discrete",
-        choices=[32, 64, 128, 256],
+        choices=[16, 32, 64, 128, 256],
         description="Number of hidden units per layer (512 removed — too large for digits/CIFAR-10)",
-        default=128,
+        default=64,
     ),
     HyperparamSpec(
         name="num_layers",
@@ -428,16 +428,16 @@ class HyperparameterMetamodel:
                 hd_spec = search_space["hidden_dim"]
                 constrained_hd = copy.deepcopy(hd_spec)
 
-                # Floor relaxed to 32 so equilibrium/low-width models can sample
+                # Floor lowered to 16 so equilibrium/low-width models can sample
                 # small configs and compete with backprop on parameter count
                 # (Phase 1.5 fairness). Keep 256 max to bound compute.
                 if constrained_hd.choices:
                     constrained_hd.choices = [
-                        c for c in constrained_hd.choices if 32 <= c <= 256
+                        c for c in constrained_hd.choices if 16 <= c <= 256
                     ]
                     # Fallback if empty (unlikely with standard choices)
                     if not constrained_hd.choices:
-                        constrained_hd.choices = [32]
+                        constrained_hd.choices = [16]
 
                 # Cap at 256
                 search_space["hidden_dim"] = constrained_hd

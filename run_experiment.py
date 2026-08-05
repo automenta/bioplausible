@@ -223,9 +223,7 @@ def _resolve_targets_from_config(
             for model in compatible:
                 key = f"{cli_family}.{model}"
                 if model_budget_filter is not None and key not in model_budget_filter:
-                    logger.debug(
-                        "Skipping %s: not in model_budgets allowlist", key
-                    )
+                    logger.debug("Skipping %s: not in model_budgets allowlist", key)
                     continue
                 # Config can override per-model budget
                 per_model = cfg_budget
@@ -437,7 +435,10 @@ def _build_objective(
     objectives = config.get("objectives", ["accuracy", "loss"])
     directions = config.get("directions", ["maximize", "minimize"])
     max_params = config.get("max_params", None)
-    return _make_objective(ctx, objectives, directions, max_params), runmod
+    search_space = config.get("search_space", {})
+    return _make_objective(
+        ctx, objectives, directions, max_params, search_space
+    ), runmod
 
 
 def _ensure_studies(
@@ -469,9 +470,13 @@ def _ensure_studies(
         # Use configured sampler; fall back to TPE/Random if NSGA-II not viable
         if sampler_name == "nsga2":
             # NSGA-II requires population; check if viable
-            sampler_name = _safe_sampler_name(t.study_name, "nsga2", n_startup, storage_url)
+            sampler_name = _safe_sampler_name(
+                t.study_name, "nsga2", n_startup, storage_url
+            )
         else:
-            sampler_name = _safe_sampler_name(t.study_name, sampler_name, n_startup, storage_url)
+            sampler_name = _safe_sampler_name(
+                t.study_name, sampler_name, n_startup, storage_url
+            )
         study_seed = _per_study_seed(seed, t.study_name, i)
         study = create_study(
             model_names=[t.model],

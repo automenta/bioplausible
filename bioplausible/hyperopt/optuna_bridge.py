@@ -48,12 +48,13 @@ def scalarize_objectives(
     return score
 
 
-def create_optuna_space(
+def create_optuna_space(  # ruff: ignore[PLR0913]  (trial, model, meta + 3 optional override/config kwargs)
     trial: optuna.Trial,
     model_name: str,
     constraints: dict[str, object] | None = None,
     evaluation_config: object | None = None,  # EvaluationConfig
     task_name: str | None = None,
+    search_space: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """
     Create Optuna hyperparameter space using Hyperparameter Metamodel.
@@ -64,6 +65,12 @@ def create_optuna_space(
         constraints: Optional constraints (max_layers, max_hidden, etc.)
         evaluation_config: Optional EvaluationConfig for patience-based constraints
         task_name: Name of the task (e.g., 'mnist', 'digits')
+        search_space: Optional experiment-owned overrides for the search space
+            (e.g. ``{"hidden_dim": [16, 32, 64, 128, 256], "num_layers": [1, 4]}``).
+            Keys are param names; values either a full list of choices or a
+            ``[min, max]`` range. These override the metamodel's defaults so the
+            experiment controls its own bounds instead of relying on hardcoded
+            constants in bioplausible's HPO components.
 
     Returns:
         Config dictionary with sampled hyperparameters
@@ -82,6 +89,8 @@ def create_optuna_space(
             config["epochs"] = evaluation_config.epochs
 
     # Use the new Metamodel as the source of truth
+    import copy
+
     from .hyperparameter_metamodel import HYPERPARAM_METAMODEL
 
     model_spec = get_model_spec(model_name)
@@ -89,7 +98,38 @@ def create_optuna_space(
         model_spec, task_name=task_name
     )
 
-    import copy
+    # Apply experiment-owned search_space overrides (uniform bounds the experiment
+    # controls). Values are either a full list of choices (for discrete/categorical
+    # params) or a [min, max] range (for continuous/discrete params).
+    # NOTE: deep-copy each spec before mutating so we never modify the shared
+    # global specs owned by the metamodel (otherwise Optuna sees a "dynamic value
+    # space" mismatch across trials and later runs).
+    if search_space:
+        for param_name, override in search_space.items():
+            if param_name not in space:
+                continue
+            spec = space[param_name]
+            spec = copy.deepcopy(spec)
+            override_is_list = isinstance(override, (list, tuple))
+            has_choices = bool(spec.choices)
+            is_range = (
+                override_is_list
+                and len(override) == 2
+                and all(isinstance(v, (int, float)) for v in override)
+                and not has_choices
+            )
+            if is_range and spec.param_type in ("continuous", "discrete"):
+                # Explicit [min, max] range for params sampled as a range
+                min_v, max_v = override
+                spec.range_min = min_v
+                spec.range_max = max_v
+            elif override_is_list:
+                # Full choices list (authoritative for both categorical and
+                # discrete-with-choices params like hidden_dim)
+                spec.choices = [c for c in override]
+                if has_choices and spec.param_type == "categorical":
+                    spec.default = spec.choices[0]
+            space[param_name] = spec
 
     for param_name, original_spec in space.items():
         # Skip if already set (e.g., epochs from evaluation_config)
@@ -240,9 +280,7 @@ def create_study(
     elif sampler_name == "random":
         sampler = optuna.samplers.RandomSampler(seed=seed)
     else:  # TPE
-        sampler = TPESampler(
-            multivariate=True, n_startup_trials=n_startup, seed=seed
-        )
+        sampler = TPESampler(multivariate=True, n_startup_trials=n_startup, seed=seed)
 
     # Pruner selection
     if use_pruning:

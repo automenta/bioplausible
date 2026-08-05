@@ -6,23 +6,22 @@ families:
 - target_prop
 tasks:
 - cifar10
-- digits
 budget: 20
 tier: standard
 family_budgets:
-  backprop: 40
-  eqprop: 40
-  forward_only: 40
-  hebbian: 40
-  target_prop: 40
+  backprop: 50
+  eqprop: 50
+  forward_only: 50
+  hebbian: 50
+  target_prop: 50
 model_budgets:
-  backprop.backprop_mlp: 40
-  eqprop.eqprop_mlp: 40
-  eqprop.neural_cube: 40
-  forward_only.pepita: 40
-  hebbian.deep_hebbian: 40
-  target_prop.diff_target_prop: 40
-seed: 44
+  backprop.backprop_mlp: 50
+  eqprop.eqprop_mlp: 50
+  eqprop.neural_cube: 50
+  forward_only.pepita: 50
+  hebbian.deep_hebbian: 50
+  target_prop.diff_target_prop: 50
+seed: 42
 phase: '1.5'
 arch_groups:
   mlp:
@@ -41,4 +40,12 @@ directions:
 - maximize
 - minimize
 - minimize
-max_params: 400000
+max_params: 210000
+sampler: nsga2
+search_space:
+  hidden_dim:
+  - 16
+  - 32
+  num_layers:
+  - 1
+  - 4

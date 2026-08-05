@@ -337,6 +337,7 @@ def _make_objective(
     objectives: list[str] = None,
     directions: list[str] = None,
     max_params: int | None = None,
+    search_space: dict[str, object] | None = None,
 ):
     """Build an Optuna objective closure for a single model.
 
@@ -345,6 +346,7 @@ def _make_objective(
         objectives: List of objective names to optimize (default: ["accuracy", "loss"])
         directions: List of directions ("maximize" or "minimize") for each objective
         max_params: Hard constraint on maximum parameter count; trials exceeding this are pruned
+        search_space: Experiment-owned search-space overrides passed to Optuna sampling
     """
     if objectives is None:
         objectives = ["accuracy", "loss"]
@@ -357,7 +359,9 @@ def _make_objective(
         trial.set_user_attr("task", ctx.task)
         trial.set_user_attr("tier", ctx.tier_name)
 
-        trial_config = create_optuna_space(trial, ctx.model, task_name=ctx.task)
+        trial_config = create_optuna_space(
+            trial, ctx.model, task_name=ctx.task, search_space=search_space
+        )
         trial_config["epochs"] = ctx.eval_cfg.epochs
         trial_config["batch_size"] = ctx.eval_cfg.batch_size
         trial_config["tier"] = ctx.tier_name
@@ -451,7 +455,9 @@ def _safe_sampler_name(
             study = optuna.load_study(study_name=study_name, storage=storage_url)
         except KeyError, OSError:
             return "tpe"  # Study doesn't exist yet, start with TPE
-        completed = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+        completed = [
+            t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE
+        ]
         if len(completed) < 4:  # NSGA-II needs a small population to start
             return "tpe"
         return "nsga2"

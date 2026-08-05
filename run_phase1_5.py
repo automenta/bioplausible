@@ -37,16 +37,16 @@ from pathlib import Path
 
 # Architecture groups for FAIR comparisons
 ARCH_GROUPS = {
-    "conv": {
-        "description": "Convolutional spatial models (4D input, preserve spatial structure)",
-        "models": [
-            ("eqprop", "modern_conv_eqprop"),
-            ("eqprop", "conv_eqprop"),
-            ("eqprop", "graph_eqprop"),      # Graph conv
-        ],
-        "task": "cifar10",   # Primary task for conv models
-        "budget_per_model": 30,
-    },
+    # "conv": {
+    #    "description": "Convolutional spatial models (4D input, preserve spatial structure)",
+    #    "models": [
+    #        ("eqprop", "modern_conv_eqprop"),
+    #        ("eqprop", "conv_eqprop"),
+    #        ("eqprop", "graph_eqprop"),      # Graph conv
+    #    ],
+    #    "task": "cifar10",   # Primary task for conv models
+    #    "budget_per_model": 30,
+    # },
     "mlp": {
         "description": "Flat MLP models (1D input, flattened)",
         "models": [
@@ -57,7 +57,7 @@ ARCH_GROUPS = {
             ("hebbian", "deep_hebbian"),
             ("target_prop", "diff_target_prop"),
         ],
-        "task": "cifar10",   # Primary task
+        "task": "cifar10",  # Primary task
         "budget_per_model": 50,
     },
 }
@@ -95,23 +95,43 @@ EXCLUDED_MODELS = {
 
 CONFIG = {
     "db": "compute_phase1_5_v3.db",
-    "tier": "overnight",            # "smoke" | "shallow" | "standard" | "deep" | "overnight"
-    "interval": 60,               # Dashboard refresh seconds
-    "emit_every": 20,             # Interim portfolio every N trials
+    "tier": "overnight",  # "smoke" | "shallow" | "standard" | "deep" | "overnight"
+    "interval": 60,  # Dashboard refresh seconds
+    "emit_every": 20,  # Interim portfolio every N trials
     "seed": 42,
     "device": "auto",
-    "tasks": ["cifar10"],         # Tasks to run (overnight: cifar10 only; full: cifar10,digits)
+    "tasks": [
+        "cifar10"
+    ],  # Tasks to run (overnight: cifar10 only; full: cifar10,digits)
     # Multi-objective directions for Optuna
     "objectives": ["accuracy", "param_count", "epoch_time_s"],
     "directions": ["maximize", "minimize", "minimize"],
     # Pruning: remove trials that are clearly worse on all objectives
     "prune_worse_than_pareto": True,
-    # Hard constraint: reject trials exceeding this param count (pressures minimization)
-    # Relaxed vision floor (hidden_dim 32..256) lets equilibrium models sample
-    # small configs; keep the cap tight so they must compete near backprop's size.
-    "max_params": 200_000,
+    # Hard constraint: reject trials exceeding this param count (pressures minimization).
+    # NOTE: Param counts are deterministic from the sampled arch, so configs that
+    # exceed this are pure waste (they train ~50s then get pruned). Keep the search
+    # space (below) aligned with this cap so every sampled config fits.
+    # 210K: the largest feasible config in the search space is diff_target_prop at
+    # hidden=32 (~200-206K), so this cap admits it while staying tight (~49K-206K).
+    "max_params": 210_000,
     # Use NSGA-II for true multi-objective Pareto optimization
     "sampler": "nsga2",
+    # Experiment-owned search-space overrides. These replace the metamodel's
+    # hardcoded defaults (hyperparameter_metamodel.py) so the experiment controls
+    # its own uniform bounds. Applies uniformly to all models for fairness.
+    #
+    # CIFAR-10 input is 3072, so every hidden layer pays 3072*hidden_dim just for
+    # the input projection. Verified param counts (num_layers=2):
+    #   hidden 16 -> ~49K-103K  (all models fit under max_params)
+    #   hidden 32 -> ~99K-202K  (diff_target_prop ~202K, borderline)
+    #   hidden 64 -> ~197K-405K (eqprop/hebbian/dtprop EXCEED max_params)
+    # So hidden_dim = {16, 32} keeps every sampled config feasible (no wasted
+    # post-training pruning).
+    "search_space": {
+        "hidden_dim": [16, 32],
+        "num_layers": [1, 4],
+    },
 }
 
 TIER_BUDGETS = {
@@ -150,7 +170,9 @@ def resolve_models() -> list[ModelSpec]:
 
     models = []
     for arch_name, arch_cfg in ARCH_GROUPS.items():
-        budget_per = TIER_BUDGETS[budget_tier].get(arch_name, arch_cfg["budget_per_model"])
+        budget_per = TIER_BUDGETS[budget_tier].get(
+            arch_name, arch_cfg["budget_per_model"]
+        )
         primary_task = arch_cfg["task"]
 
         for cli_family, model_name in arch_cfg["models"]:
@@ -228,6 +250,7 @@ def write_experiment_config(models: list[ModelSpec], path: str, eval_tier: str):
         "directions": CONFIG["directions"],
         "max_params": CONFIG.get("max_params"),
         "sampler": CONFIG.get("sampler", "tpe"),
+        "search_space": CONFIG.get("search_space", {}),
     }
     Path(path).write_text(yaml.dump(config, sort_keys=False))
     return path
@@ -239,7 +262,9 @@ def run_experiment(models: list[ModelSpec]):
     eval_tier = "standard" if CONFIG["tier"] == "overnight" else CONFIG["tier"]
     tasks_str = ",".join(CONFIG.get("tasks", ["cifar10", "digits"]))
 
-    cfg_path = write_experiment_config(models, "experiments/phase1_5_auto.yaml", eval_tier)
+    cfg_path = write_experiment_config(
+        models, "experiments/phase1_5_auto.yaml", eval_tier
+    )
 
     cmd = [
         "uv",

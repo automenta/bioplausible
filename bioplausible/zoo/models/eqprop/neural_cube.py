@@ -98,8 +98,10 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
         if isinstance(input_dim, tuple):
             input_dim = math.prod(input_dim)
         cube_size = int(round(hidden_dim ** (1 / 3)))
+        # Allow cube_size=3 (27 neurons) for hidden_dim=32 to enable
+        # fair parameter-count comparison with backprop MLP
         return cls(
-            cube_size=max(4, cube_size),
+            cube_size=max(3, cube_size),
             input_dim=input_dim,
             output_dim=output_dim,
         ).to(device)
