@@ -10,13 +10,14 @@
 
 | Level | Claim | Required Evidence | Compute Budget | Gate to Next |
 |-------|-------|-------------------|----------------|--------------|
-| **L0: Synthetic** | Model runs, gradients flow, no NaNs | XOR / Spiral / Circles 100% train acc, 10 seeds | 30 sec | All models must pass |
-| **L0.5: Digits** | Learns on trivial real data | sklearn digits 99%+ in <30 sec, 5 seeds | 2 min | Models <99% excluded from L1 |
-| **L1: MNIST-family** | Learns on standard vision | MNIST 98%+, Fashion-MNIST 90%+, 5 seeds, <2 min each | 10 min | Models failing either excluded from L2 |
-| **L2: Scaling** | Accuracy improves with compute | Depth/width sweeps, power-law fits R² > 0.9 | 1 hr | α < threshold excluded from L3 |
-| **L3: Parity (CIFAR-10)** | Matches BP at matched compute | FLOP-matched, wall-time-matched, memory-matched, 5 seeds, bootstrap CIs, effect sizes | 4 hr | Within 2% of BP → L4 |
-| **L4: Parity (CIFAR-100)** | Scales to harder vision | Same protocol, 5 seeds | 8 hr | Within 2% → L5 |
-| **L5: Transfer** | Generalizes across domains | Vision→LM→RL→Graph, same algorithm, compute-matched | Multi-day | Publication |
+| L0  | Sanity       | Model runs, gradients flow, no NaNs | 100% train acc on xor, 10 seeds | 30 sec | All must pass |
+| L0.5 | Efficiency   | Learns on trivial real data        | Loss decreases + acc > 95% on digits, 5 seeds | 2 min | Fails → "digits-fail" |
+| L1  | Learning     | Learns on standard vision          | MNIST 98%+, Fashion 90%+, 5 seeds, <2 min | 10 min | Fail either → excluded |
+| L2  | Scaling      | Acc improves with compute          | Depth/width sweeps, power-law R² > 0.9 | 1 hr | α < 0.05 excluded |
+| L3  | Parity       | Matches BP at matched compute      | FLOP/wall-time/mem-matched, CIs, effect sizes | 4 hr | Within 2% of best-BP → L4 |
+| L4  | Scale-Up     | Matches BP on harder vision        | CIFAR-100, 5 seeds, conv arm | 8 hr | Within 2% → L5 |
+| L5  | Superiority  | Beats BP in some regime            | Lower memory, faster, better OOD | Overnight | Publication |
+| L6  | Transfer     | Generalizes across domains         | Vision→LM→RL→Graph, same algorithm | Multi-day | Publication |
 
 **Every experiment outputs**: JSON with `task, model, seed, config, metrics, traces, artifacts` — machine-readable, no manual parsing.
 
@@ -38,10 +39,10 @@
 │  TIER 0.5: DIGITS (2 min)                                          │
 │  • Task: sklearn digits (8×8, 64-dim, 10-class)                    │
 │  • Models: L0-passing only                                         │
-│  • Target: 99%+ test acc in ≤30 sec, 5 seeds                       │
+│  • Check: loss decreases + accuracy > 95%, 5 seeds                  │
 │  • Fair protocol: identical MLP arch (num_layers=1, hidden=64)     │
 │  • Output: accuracy, params, epoch_time, peak_mem per seed         │
-│  → GATE: <99% = triaged out of CIFAR; logged as "digits-fail"      │
+│  → GATE: Fails to learn (loss flat or acc ≤ chance) → "digits-fail"│
 └────────────────────────────────────────────────────────────────────┘
                               ↓
 ┌────────────────────────────────────────────────────────────────────┐
@@ -75,14 +76,14 @@
 │  • 5 seeds, bootstrap CIs (BCa), Cohen's d, Cliff's delta         │
 │  • Tasks: CIFAR-10 (flattened MLP + Conv arms)                    │
 │  • Output: publication-ready tables + Pareto plots + JSON         │
-│  → GATE: Within 2% of BP accuracy at matched compute → L4         │
+│  → GATE: Within 2% of best-in-class BP (pre-registered baseline) → L4│
 └────────────────────────────────────────────────────────────────────┘
                               ↓
 ┌────────────────────────────────────────────────────────────────────┐
 │  TIER 4: PARITY — CIFAR-100 (8 hr)                                 │
 │  • Same matching protocol, harder task                            │
 │  • Conv-arm mandatory (no flattened)                              │
-│  → GATE: Within 2% → L5                                           │
+│  → GATE: Within 2% of best-in-class BP → L5                         │
 └────────────────────────────────────────────────────────────────────┘
                               ↓
 ┌────────────────────────────────────────────────────────────────────┐
@@ -125,26 +126,55 @@ search_space:                       # Single source of truth for bounds
     weight_decay: [1e-6, 1e-3]
     dropout: [0.0, 0.3]
     grad_clip: [0.5, 5.0]
-  model_overrides:
-    eqprop_mlp:
-      beta: [0.01, 0.5]
-      steps: [10, 20, 50]
-      gradient_method: [equilibrium, bptt]  # equilibrium = default O(1)
-    neural_cube:
-      cube_size: [3, 4, 5]
-    diff_target_prop:
-      alpha: [0.1, 0.9]
-    standard_fa:
-      feedback_init: [normal, orthogonal]
-  # Conditional constraints (evaluated at sample time)
-  constraints:
-    - "hidden_dim * num_layers * 3072 <= max_params"  # CIFAR-10 input=3072
 
-models:
-  families: [backprop, eqprop, hebbian, target_prop, forward_only, fa]
-  excluded: [lazy_eqprop, holomorphic_ep, pepita, hebbian_3d, three_factor_hebbian,
-             fabricpc_graph_pcn, spiking_stdp, eqprop_diffusion]
-  # Explicit, not hidden in code. Source preserved in zoo/.
+arms:                               # Architecture-separated comparison groups
+  mlp:
+    input_dim: 3072                 # CIFAR-10 flattened
+    num_classes: 10
+    flatten: true
+    max_params: 210_000             # Per-arm budget (conv needs more)
+    models:
+      - backprop_mlp
+      - eqprop_mlp
+      - neural_cube
+      - deep_hebbian
+      - three_factor_hebbian        # Passes learns-gate; protocol=layerwise
+      - standard_fa
+      - diff_target_prop
+      - pepita
+      - forward_forward
+  conv:
+    input_shape: [3, 32, 32]
+    num_classes: 10
+    flatten: false
+    max_params: 2_000_000           # Conv layers need full spatial params
+    models:
+      - modern_conv_eqprop
+      - conv_eqprop
+      - backprop_conv
+
+model_overrides:                    # Model-specific hyperparameters
+  eqprop_mlp:
+    beta: [0.01, 0.5]
+    steps: [10, 20, 50]
+    gradient_method: equilibrium     # Immutable: O(1) impl diff, never bptt
+  neural_cube:
+    cube_size: [3, 4, 5]
+  diff_target_prop:
+    alpha: [0.1, 0.9]
+  standard_fa:
+    feedback_init: [normal, orthogonal]
+# Conditional constraints (evaluated at sample time)
+constraints:
+  - "estimate_param_count(config, model_name) <= arms[arm].max_params"
+
+protocols:                          # Training protocol per model (sub-studies)
+  default: end2end                  # All models run end2end by default
+  overrides:
+    three_factor_hebbian: layerwise   # Requires layerwise training
+    spiking_stdp: spiking_surrogate   # Requires surrogate-gradient BPTT
+    standard_fa: layerwise            # FA is layerwise by design
+  # Each model×protocol combo spawns a sub-study; results reported side-by-side
 
 tasks:
   - name: mnist
@@ -162,26 +192,28 @@ tasks:
     input_dim: 3072
     num_classes: 10
     flatten: true
-  - name: cifar10_conv
-    epochs: 50
-    input_shape: [3, 32, 32]
-    num_classes: 10
-    flatten: false
+  - name: cifar100
+    epochs: 75
+    input_dim: 3072
+    num_classes: 100
+    flatten: true
 
 hpo:
-  sampler: "nsga2"                  # Multi-objective Pareto
+  sampler: "nsga3"                   # True multi-objective (>=3 objectives)
   objectives:
     - accuracy                      # maximize
     - param_count                   # minimize
     - epoch_time_s                  # minimize
-  n_trials: 200                     # Per model per task
+  n_trials: 200                     # Per model×arm×task
   n_startup_trials: 10
   n_seeds: 5                        # Statistical rigor
   prune_worse_than_pareto: true
-  max_params: 210_000               # Hard pre-filter
+  pareto:
+    knee_point: true               # Auto-detect elbow in Pareto frontier
+    epsilon: 0.01                  # Prune near-duplicate configs
 
 resources:
-  max_params: 210_000               # Enforced at sample time
+  max_wall_hours: 4                 # Hard wall-clock limit per arm
   max_epoch_time_sec: 120           # Prune slow trials early
   early_stop_patience: 10
 
@@ -325,7 +357,7 @@ class ExperimentLogger:
 
 | Arm | Models | Input Format | Comparison Basis |
 |-----|--------|--------------|------------------|
-| **MLP** | backprop_mlp, eqprop_mlp, neural_cube, deep_hebbian, standard_fa, diff_target_prop, pepita, forward_forward | Flattened (3072-D for CIFAR-10) | Pure credit-assignment comparison |
+| **MLP** | backprop_mlp, eqprop_mlp, neural_cube, deep_hebbian, three_factor_hebbian, standard_fa, diff_target_prop, pepita, forward_forward | Flattened (3072-D for CIFAR-10) | Pure credit-assignment comparison |
 | **Conv** | modern_conv_eqprop, conv_eqprop, backprop_conv | Spatial (3×32×32) | Spatial credit assignment |
 
 **No cross-arm comparison**. Each arm has its own BP baseline.
@@ -333,8 +365,21 @@ class ExperimentLogger:
 ### 5.3 Param Budget Enforcement (Pre-Training)
 
 - Search space `constraints` evaluated at sample time via `SearchSpace.filter_config`
-- Configs exceeding `max_params` rejected **before** trial starts
-- `max_params` set per campaign in YAML (e.g., 210K for CIFAR-10 MLP)
+- Configs exceeding arm-specific `max_params` rejected **before** trial starts
+- Per-arm budgets in YAML (`max_params` under each arm) — Conv arms get 2M, MLP arms get 210K
+
+### 5.4 Protocol-Aware Fairness
+
+Some bio-plausible models require non-standard training protocols (layerwise, continual, surrogate-gradient). The `protocols` field in YAML spawns a **sub-study per protocol variant**:
+
+| Protocol | When Used | Models |
+|----------|-----------|--------|
+| `end2end` | Default | backprop, eqprop_mlp, neural_cube, deep_hebbian, diff_target_prop |
+| `layerwise` | FA requires layerwise by design | standard_fa, three_factor_hebbian |
+| `spiking_surrogate` | Spiking needs surrogate-gradient BPTT | spiking_stdp |
+| `continual` | Task-switching protocol | (future) |
+
+Results are reported side-by-side: `standard_fa (end2end, 4.2% acc)` vs `standard_fa (layerwise, 92.1% acc)` — the fair protocol wins, not the unfair comparison.
 
 ---
 
@@ -345,7 +390,7 @@ class ExperimentLogger:
 | **(a) Is eqprop's CIFAR-10 win real or a params confound?** | Tier 3: FLOP-matched + wall-time-matched + memory-matched. If eqprop_mlp at 388K params beats BP at 197K params *only* because it uses 2× compute, the parity table will show it. Same-compute comparison is the gate. |
 | **(b) Do the 13 "non-learning baselines" learn under fair protocols?** | Tier 0.5 (digits) + Tier 1 (MNIST) with *layer-wise* / *continual* / *surrogate-gradient* protocol flags in YAML. Each family gets a `protocol` field: `end2end`, `layerwise`, `continual`, `spiking_surrogate`. Fair-protocol arm runs in parallel; results reported side-by-side. |
 | **(c) Where does each model's compute scale break?** | Tier 2 scaling sweep: depth∈{2,4,8,16,32}, width∈{64,128,256,512}. Power-law fits (acc ~ params^α, depth^β, time^γ) with CIs. Break point = where α or β crosses zero (negative scaling). |
-| **(d) Does implicit `equilibrium` gradient match BPTT at scale?** | Tier 3 includes `gradient_method ∈ [equilibrium, bptt]` for EqProp models. Gradient cosine similarity logged per trial at matched compute. Conclusive: median cosine across 5 seeds at parity FLOPs. |
+| **(d) Does implicit `equilibrium` gradient match BPTT at scale?** | Tier 3: EqProp models use `gradient_method=equilibrium` (immutable). Gradient cosine similarity between equilibrium implicit-diff and analytical BPTT computed on a reference batch, logged per trial. Conclusive: median cosine across 5 seeds at matched FLOPs. (BPTT used only as oracle, never for training.) |
 | **(e) `three_factor_hebbian` loss-vs-accuracy disconnect?** | Tier 0.5 + Tier 1 with `track_classwise_metrics: true`. If loss drops but per-class accuracy stays at chance, it's optimizing the wrong objective. Ablation: swap 3-factor for standard Hebbian + readout. |
 
 ---
@@ -377,10 +422,10 @@ results/
 
 | Arm | Model | Task | Acc (mean±CI) | Params (median) | Time/epoch (median) | FLOPs/sample | vs BP (Cohen's d) | Match Axis |
 |-----|-------|------|---------------|-----------------|---------------------|--------------|-------------------|------------|
-| MLP | backprop | CIFAR-10 | 0.52 [0.50, 0.54] | 100K | 3.2s | 2.1M | — (ref) | all |
-| MLP | eqprop_mlp | CIFAR-10 | 0.48 [0.46, 0.50] | 98K | 4.1s | 2.1M | -0.8 | FLOP |
+| MLP | backprop | CIFAR-10 | 0.52 [0.50, 0.54] | 100K | 3.2s | 2.1M | — (ref: best-in-class) | all |
+| MLP | eqprop_mlp | CIFAR-10 | 0.48 [0.46, 0.50] | 98K | 4.1s | 2.1M | -1.2 | FLOP |
 | MLP | neural_cube | CIFAR-10 | 0.47 [0.45, 0.49] | 84K | 3.8s | 2.0M | -0.5 | FLOP |
-| Conv | backprop_conv | CIFAR-10 | 0.68 [0.66, 0.70] | 1.2M | 8.5s | 18M | — (ref) | all |
+| Conv | backprop_conv | CIFAR-10 | 0.68 [0.66, 0.70] | 1.2M | 8.5s | 18M | — (ref: best-in-class) | all |
 | Conv | modern_conv_eqprop | CIFAR-10 | 0.66 [0.64, 0.68] | 1.1M | 9.2s | 18M | -0.3 | FLOP |
 
 ---
@@ -397,7 +442,8 @@ results/
 - [ ] `ExperimentLogger` (JSONL, no duplicates)
 - [ ] `MultiObjective` with pre-filtering
 - [ ] TIER 0 smoke test gate (synthetic tasks)
-- [ ] TIER 0.5 digits gate (99% threshold)
+- [ ] TIER 0.5 digits gate (loss-decrease + acc > 95% threshold)
+- [ ] Protocols field: end2end/layerwise/spiking_surrogate sub-studies
 
 ### Phase C: Tiered Experiments (Week 3-4)
 - [ ] TIER 1: MNIST + Fashion-MNIST validation
@@ -409,7 +455,8 @@ results/
 - [ ] `biopl-parity` CLI for matched-compute runs
 - [ ] FLOP-matching logic (analytical + empirical)
 - [ ] Bootstrap CIs (BCa), effect sizes (Cohen's d, Cliff's delta)
-- [ ] Conv-arm parity (CIFAR-10 → CIFAR-100)
+- [ ] Conv-arm health gate: verify `conv_eqprop` passes TIER 0-2 before parity
+- [ ] CIFAR-100 parity (conv arm mandatory, ~2× CIFAR-10 budget)
 
 ---
 
@@ -431,8 +478,8 @@ results/
 |--------|--------------|-------------|
 | Change search space | Edit Python, find metamodel, debug | Edit YAML, `biopl-run --dry-run` |
 | Change tasks | Edit Python, find ARCH_GROUPS | Edit YAML `tasks:` list |
-| Change max_params | Edit Python, find CONST | Edit YAML `resources.max_params` |
-| Add model | Edit Python, register, find exclusions | Add to YAML `models.families` |
+| Change max_params | Edit Python, find CONST | Edit YAML `arms.mlp.max_params` / `arms.conv.max_params` |
+| Add model | Edit Python, register, find exclusions | Add to YAML `arms.<arm>.models` + `model_overrides` |
 | Change seeds | Edit Python | Edit YAML `hpo.n_seeds` |
 | Add task | Edit Python, find task registry | Edit YAML `tasks:` list |
 | Debug trial | Search logs, grep params | `jq '.config' metrics.jsonl` |
@@ -458,14 +505,14 @@ results/
 
 | Dimension | FIX2.md (Current) | FIX2a.md (This) |
 |-----------|-------------------|-----------------|
-| **Staircase granularity** | 5 tiers (0-4) | 7 tiers (0, 0.5, 1-5) with explicit synthetic→digits→MNIST→CIFAR-10→CIFAR-100 |
-| **Economic efficiency** | Implicit (Tier 1 = MNIST) | Explicit: digits = cheap triage gate; MNIST = validation gate; compute saved by early exclusion |
-| **Fair comparison protocol** | "FLOP-matched, wall-time-matched, memory-matched" listed | **Three axes all reported**, arm-separated (MLP vs Conv), param budget pre-filter |
-| **Open questions answered** | Not addressed | 5 specific questions with conclusive experiment design |
-| **Gradient equivalence** | Mentioned in TIER 1 | Core metric in TIER 3 (cosine at matched compute) |
-| **Non-learning baselines** | Excluded silently | Protocol-aware: `layerwise`/`continual`/`spiking_surrogate` arms tested in parallel |
-| **Scaling laws** | TIER 2 output | TIER 2 + TIER 3 (power-law fits with CIs, break-point detection) |
-| **Config system** | YAML sketch | Full schema with constraints, model_overrides, conditional search spaces |
+| **Staircase granularity** | 5 tiers (L0-L4) | 7 tiers (L0, L0.5, L1-L5) with synthetic→digits→MNIST→CIFAR-10→CIFAR-100 |
+| **Economic efficiency** | Implicit (Tier 1 = MNIST) | Explicit: digits = cheap triage gate (loss-decrease + acc>95%); models failing logged as "digits-fail", excluded early |
+| **Fair comparison protocol** | "FLOP-matched, wall-time-matched, memory-matched" listed | **Three axes all reported**, **arm-separated** (MLP vs Conv), per-arm `max_params` budgets, `protocols` field for fair-protocol arms |
+| **Open questions answered** | Not addressed | 5 Phase 1.5 questions with conclusive experiment design |
+| **Gradient equivalence** | Mentioned in TIER 1 | TIER 3 metric: cosine(equilibrium, BPTT) — BPTT is oracle only, `gradient_method=equilibrium` immutable |
+| **Non-learning baselines** | Excluded silently | Protocol-aware: `layerwise`/`continual`/`spiking_surrogate` arms in YAML, run in parallel, reported side-by-side |
+| **Scaling laws** | TIER 2 output | TIER 2 + TIER 3: power-law fits (R²>0.9) with CIs, break-point detection (α, β crossings) |
+| **Config system** | YAML sketch | Full schema: `arms`, `protocols`, `model_overrides` (immutable `gradient_method`), `constraints`, NSGA-III + knee detection |
 | **Logging** | JSONL sketch | Typed events (TrialStart/TrialEnd/EpochLog), single JSONL |
 | **CLI** | `biopl-run` sketch | Dry-run, resume, override, compare subcommands |
 
@@ -476,12 +523,13 @@ results/
 ## 13. Immediate Next Steps (This Week)
 
 1. **Create `SearchSpace` class** — replace metamodel, add constraint evaluation
-2. **Define YAML schema** — Pydantic v2 models for validation
-3. **Implement `ParamEstimator` per model** — static param counting
-4. **Build `biopl-run` CLI** — dry-run, resume, override
+2. **Define YAML schema** — Pydantic v2 models for validation, `arms`/`protocols` fields
+3. **Implement `ParamEstimator` per model** — static param counting (per-arm budgets)
+4. **Build `biopl-run` CLI** — dry-run, resume, override, `--arm`, `--protocol`
 5. **Delete `run_phase1_5.py`** — replaced by YAML + `biopl-run`
 6. **Write TIER 0 smoke test** — synthetic tasks gate for all models
-7. **Write TIER 0.5 digits test** — 99% gate, logs "digits-fail" models
+7. **Write TIER 0.5 digits test** — loss-decrease + acc>95% gate; logs "digits-fail"
+8. **Verify conv_eqprop passes TIER 0-1** — conv-arm health gate (don't run parity on broken models)
 
 ---
 
