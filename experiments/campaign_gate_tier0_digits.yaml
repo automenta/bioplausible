@@ -1,0 +1,95 @@
+# Gate campaign: TIER 0 (synthetic smoke) + TIER 0.5 (digits triage).
+# Cheap, fast, no network downloads — the first rungs of the staircase.
+meta:
+  name: "gate_tier0_digits"
+  description: "TIER 0 synthetic smoke + TIER 0.5 digits triage for all registered vision models"
+  created: "2026-08-05"
+
+compute:
+  device: "auto"
+  max_parallel: 1
+  max_wall_hours: 0.5
+
+search_space:
+  base:
+    hidden_dim: [16, 32, 64, 128]
+    num_layers: [1, 2, 4]
+    lr: [1e-4, 1e-2, "log"]
+    batch_size: [64, 128, 256]
+
+model_overrides:
+  eqprop_mlp:
+    beta: [0.01, 0.5]
+    steps: [10, 20, 50]
+    gradient_method: equilibrium
+  neural_cube:
+    cube_size: [3, 4, 5]
+  diff_target_prop:
+    alpha: [0.1, 0.9]
+
+constraints:
+  - "estimate(config) <= 210000"
+
+protocols:
+  default: end2end
+  overrides:
+    standard_fa: layerwise
+    three_factor_hebbian: layerwise
+
+arms:
+  mlp:
+    input_dim: 64
+    num_classes: 10
+    flatten: true
+    max_params: 210000
+    models:
+      - backprop_mlp
+      - eqprop_mlp
+      - neural_cube
+      - deep_hebbian
+      - three_factor_hebbian
+      - standard_fa
+      - diff_target_prop
+      - pepita
+      - forward_forward
+
+tasks:
+  - name: xor
+    epochs: 3
+    input_dim: 2
+    num_classes: 2
+  - name: spiral
+    epochs: 3
+    input_dim: 2
+    num_classes: 2
+  - name: circles
+    epochs: 3
+    input_dim: 2
+    num_classes: 2
+  - name: digits
+    epochs: 5
+    input_dim: 64
+    num_classes: 10
+
+hpo:
+  sampler: nsga2
+  objectives: [accuracy, param_count, epoch_time_s]
+  n_trials: 50
+  n_startup_trials: 5
+  n_seeds: 5
+
+resources:
+  max_wall_hours: 0.5
+  max_epoch_time_sec: 60
+  early_stop_patience: 10
+
+output:
+  db: "results/gate_tier0_digits.db"
+  artifacts_dir: "artifacts/gate_tier0_digits"
+  log_level: "INFO"
+  emit_every: 5
+
+reproducibility:
+  seed: 42
+  capture_env: true
+  artifact_hash: true

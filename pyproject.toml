@@ -125,6 +125,7 @@ documentation = "https://bioplausible.readthedocs.io"
 [project.scripts]
 eqprop-verify = "bioplausible.cli:main"
 biopl-hpo = "bioplausible.cli.hpo:main"
+biopl-run = "bioplausible.campaign.cli:main"
 eqprop-p2p-worker = "bioplausible.p2p.p2p_worker:main"
 biopl-scientist = "bioplausible.execution.cli:main_scientist"
 biopl-report = "bioplausible.execution.cli:main_reporter"
@@ -186,7 +187,7 @@ select = [
 ignore = ["line-too-long", "lowercase-imported-as-non-lowercase", "non-augmented-assignment"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
+"tests/**/*.py" = ["assert", "too-many-arguments", "too-many-statements", "PLR2004", "RUF069"]
 "tests/**/conftest.py" = ["too-many-arguments", "too-many-statements"]
 "examples/legacy/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
 "examples/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
