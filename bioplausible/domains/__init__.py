@@ -20,6 +20,7 @@ from bioplausible.domains.base import (
 from bioplausible.domains.factory import CharNGramTask, create_task
 from bioplausible.domains.graph import GraphTask
 from bioplausible.domains.lm import LMTask
+from bioplausible.domains.registry import SUPPORTED_TASKS, TaskSpec, resolve_task
 from bioplausible.domains.rl import RLTask
 from bioplausible.domains.scientific import ScientificTask
 from bioplausible.domains.tabular import TabularTask
@@ -77,6 +78,10 @@ __all__ = [
     "TimeSeriesTask",
     "ScientificTask",
     "CharNGramTask",
+    # Task registry
+    "SUPPORTED_TASKS",
+    "TaskSpec",
+    "resolve_task",
     # Factory
     "create_domain_task",
     "register_domain_task",

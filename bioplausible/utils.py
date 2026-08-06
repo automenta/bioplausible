@@ -18,36 +18,18 @@ import torch
 from torch import nn
 
 
-def seed_everything(seed: int = 42) -> None:
+def seed_everything(seed: int = 42, device: str = "cpu") -> dict[str, str]:
     """
     Seed all random number generators for reproducibility.
 
+    Single consolidated seeding API (Sprint 1.4): seeds Python's ``random``,
+    NumPy, PyTorch (CPU), and — when ``device`` is ``cuda``/``gpu`` and CUDA is
+    present — the CUDA generator(s) plus cuDNN deterministic/benchmark flags.
+    Also captures the environment fingerprint so a ``biopl-repro-check`` run can
+    prove two runs are bitwise identical.
+
     Args:
         seed: Random seed (default: 42)
-    """
-    random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    # Ensure deterministic behavior (may impact performance)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-
-def set_global_seed(seed: int = 42, device: str = "cpu") -> dict[str, str]:
-    """Set every RNG for fully deterministic execution across a device.
-
-    This is the Sprint 1.4 upgrade over :func:`seed_everything`: it seeds
-    Python's ``random``, NumPy, PyTorch (CPU), and — when ``device`` is
-    ``cuda``/``gpu`` and CUDA is present — the CUDA generator(s) plus cuDNN
-    deterministic/benchmark flags. It also captures the environment fingerprint
-    (git commit, torch/CUDA versions) so a ``biopl-repro-check`` run can prove
-    two runs are bitwise identical.
-
-    Args:
-        seed: Master seed for every RNG.
         device: ``"cpu"`` (default), ``"cuda"``/``"gpu"`` (also seeds CUDA +
             cuDNN, and refuses to pretend determinism without CUDA).
 
@@ -61,9 +43,7 @@ def set_global_seed(seed: int = 42, device: str = "cpu") -> dict[str, str]:
     """
     want_cuda = device in ("cuda", "gpu") or device.startswith("cuda:")
     if want_cuda and not torch.cuda.is_available():
-        raise RuntimeError(
-            f"set_global_seed device={device!r} but CUDA is unavailable"
-        )
+        raise RuntimeError(f"seed_everything device={device!r} but CUDA is unavailable")
 
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -91,11 +71,12 @@ def capture_environment() -> dict[str, str]:
         import subprocess
 
         git_commit = (
-            subprocess.check_output(["git", "rev-parse", "HEAD"])
+            subprocess
+            .check_output(["git", "rev-parse", "HEAD"])
             .decode("ascii")
             .strip()
         )
-    except (OSError, subprocess.CalledProcessError):
+    except OSError, subprocess.CalledProcessError:
         pass
 
     return {
@@ -456,7 +437,6 @@ __all__ = [
     "export_to_onnx",
     "profile_model",
     "seed_everything",
-    "set_global_seed",
     "simple_profiler",
     "spectral_conv2d",
     "spectral_linear",

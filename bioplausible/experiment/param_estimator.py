@@ -81,7 +81,7 @@ def _signature_params(model_cls: object) -> frozenset[str]:
     """
     try:
         sig = inspect.signature(model_cls.__init__)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return frozenset()
     params = set(sig.parameters)
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
@@ -172,7 +172,7 @@ class InstantiateEstimator:
         try:
             model = model_cls(**kwargs)
         except (TypeError, ValueError, RuntimeError) as exc:
-            raise ParamEstimateError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+            raise ParamEstimateError(  # descriptive message is the public API
                 f"Could not construct {model_name!r} for param counting: {exc}"
             ) from exc
         return sum(p.numel() for p in model.parameters())
@@ -191,6 +191,8 @@ def estimate_param_count(
     named parameters are summed. Used for the pre-training ``max_params``
     budget filter (§5.3) and for constraint expressions.
     """
+    import bioplausible.zoo  # ruff: ignore[unused-import]  (ensure the model registry is populated before construction)
+
     return InstantiateEstimator.estimate(
         model_name, config, input_dim=input_dim, output_dim=output_dim
     )

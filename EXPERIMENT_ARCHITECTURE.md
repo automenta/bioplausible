@@ -211,7 +211,8 @@ class ProbeDriver(Protocol):
 the single normalization point. `TrainingMetrics` already carries `train_accuracy`,
 `val_accuracy`, `epoch_time`, `forward_flops`, `backward_flops`, `peak_memory_mb`,
 `train_loss` (trainer.py:186-204). Future NumPy/Triton/spiking engines implement this
-interface — no core change.
+interface — no core change. The driver injects task geometry (`input_dim`/`output_dim` via
+`domains.registry.resolve_task`) into `model_kwargs`, mirroring `cli/parity.py`.
 
 ### 6.5 ConfigProducer (grid as a sampler, through `hyperopt`)
 
@@ -267,6 +268,11 @@ exact reproducibility. Storage reuses `cli.run --db` (SQLite) for the Optuna stu
 the JSONL Report for the experiment trace; the JSONL-vs-SQLite divergence from RESEARCH §4.3
 is **declared** (both satisfy resume/versioning; documented, not silent).
 
+**Resume semantics (implemented):** `StaircaseRunner._collect_probes` rehydrates
+already-finished probes for a `(stage, model)` from the Report so verdicts reflect the full
+seed set, and checks the `(stage, model, config_key, seed)` key **before** training — a
+re-launch of a finished campaign is a true no-op (no retraining) with a correct verdict.
+
 ### 6.8 Reporter
 
 Post-processing over the Report (run via existing `biopl-report`): parity tables (accuracy
@@ -312,6 +318,10 @@ and `hyperopt.pareto`/`cli.run.pareto`.
   `search_space.py`, `logger.py`, `cli.py`. Repoint `biopl-run` (`pyproject.toml:128`) off
   `campaign.cli:main`. Mirror in `tests/unit/campaign/` (migrate the 61 passing tests that
   still apply).
+  **DONE (2026-08-05):** `campaign/` is now a 1-file `__init__.py` re-export shim onto
+  `experiment.schema` + `experiment.param_estimator`; `biopl-run`/`biopl-report` repointed;
+  the applicable `test_param_estimator.py` migrated to `tests/unit/experiment/`; the retired
+  module tests dropped.
 
 **New (only genuinely new code):**
 - `experiment/{schema,param_estimator,probe,producer,staircase,report,__init__}.py`
@@ -333,12 +343,12 @@ and `hyperopt.pareto`/`cli.run.pareto`.
 ## 10. CLI Surface (extend existing; add nothing new)
 
 ```
-biopl-parity            # EXISTING — extend to drive the parity campaign stages + emit Report
-biopl-run validate      # repointed biopl-run: schema + task-registry validation + gates
-biopl-run plan          # probe count (grid) + estimate_total_time (budget), dry
+biopl-parity            # EXISTING — extended with --campaign/--stage/--report to drive a parity stage + emit Report
+biopl-run validate      # repointed biopl-run → experiment.cli:main: schema + task-registry validation + gates
+biopl-run plan          # probe count (grid × models × seeds) + estimate_total_time (budget), dry
 biopl-run run           # idempotent staircase execution (resume by default)
-biopl-report            # EXISTING — parity/Pareto/failure from the Report
-biopl-repro-check       # EXISTING — nightly gate (gradient-equivalence + run-resume no-op)
+biopl-report            # repointed → experiment.cli:main_report: parity/Pareto/failure from the Report JSONL
+biopl-repro-check       # EXISTING + --gradient (gradient-equivalence gate) + --resume-check (resume no-op)
 ```
 
 ---
@@ -382,6 +392,14 @@ trains every scheduled probe and appends to the Report.  6. `biopl-run run` agai
 for finished probes.  7. `biopl-report` renders parity/Pareto/failure.  8. Every parity-tier
 model passed the gradient gate.  9. `uv run pytest --cov` passes at floor 85 on new code; `biopl-repro-check`
 rail runs the parity ladder for 1 epoch nightly.
+
+**Phase-5 status (2026-08-05):** items 1–7 + the gradient gate (8, on the aligned families)
+and resume no-op (6) are **verified end-to-end** on the scaled `examples/parity_demo.yaml`.
+The literal 9-model × cifar10 × 10-seed run (item 8 "every parity-tier model") is an overnight
+job: equilibrium-model probes alone take ~30–70s each on tiny tasks, so it runs
+`nohup biopl-run run` with a long wall-clock budget. As built, `biopl-repro-check --gradient`
+gates the aligned propagator *families*; forward-only (FF/PEPITA) and spiking parity-tier
+models are N/A by design (RESEARCH §5.2) and are reported, not gated.
 
 ---
 

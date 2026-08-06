@@ -5,12 +5,12 @@ from __future__ import annotations
 import pytest
 
 import bioplausible.zoo  # ruff: ignore[unused-import]  # triggers model registration
-from bioplausible.campaign.param_estimator import (
+from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.experiment.param_estimator import (
     ParamEstimateError,
     build_model_kwargs,
     estimate_param_count,
 )
-from bioplausible.core.registry import ComponentCategory, Registry
 
 
 def test_backprop_mlp_manual_count():

@@ -174,6 +174,15 @@ def create_task(
                 device=str(device),
                 **kwargs,
             )
+        case "xor" | "spiral" | "circles":
+            from bioplausible.domains.vision import VisionTask
+
+            return VisionTask(
+                name=task_name,
+                dataset_name=task_name,
+                device=str(device),
+                **kwargs,
+            )
         case _:
             included_classes, base_name = _parse_split_digits(task_name)
 
@@ -197,7 +206,7 @@ def create_task(
             return GraphTask(
                 name=base_name, dataset_name=base_name, device=str(device), **kwargs
             )
-        case "breast_cancer" | "california_housing":
+        case "breast_cancer" | "california_housing" | "iris" | "wine":
             from bioplausible.domains.tabular import TabularTask
 
             return TabularTask(

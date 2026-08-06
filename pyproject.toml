@@ -125,10 +125,10 @@ documentation = "https://bioplausible.readthedocs.io"
 [project.scripts]
 eqprop-verify = "bioplausible.cli:main"
 biopl-hpo = "bioplausible.cli.hpo:main"
-biopl-run = "bioplausible.campaign.cli:main"
+biopl-run = "bioplausible.experiment.cli:main"
 eqprop-p2p-worker = "bioplausible.p2p.p2p_worker:main"
 biopl-scientist = "bioplausible.execution.cli:main_scientist"
-biopl-report = "bioplausible.execution.cli:main_reporter"
+biopl-report = "bioplausible.experiment.cli:main_report"
 biopl-registry-audit = "bioplausible.core.audit:main"
 biopl-repro-check = "bioplausible.cli.repro:main"
 biopl-parity = "bioplausible.cli.parity:main"
@@ -144,7 +144,7 @@ markers = [
     "flaky: quarantined non-deterministic test (Sprint 5.6)",
     "llm: requires a real LLM provider; skipped in CI",
 ]
-addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=50 -p no:warnings"
+addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=85 -p no:warnings"
 
 [tool.coverage.run]
 source = ["bioplausible"]
@@ -184,10 +184,11 @@ select = [
     "RSE",  # flake8-raise
     "SIM",  # flake8-simplify
 ]
-ignore = ["line-too-long", "lowercase-imported-as-non-lowercase", "non-augmented-assignment"]
+ignore = ["E501", "lowercase-imported-as-non-lowercase", "non-augmented-assignment"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["assert", "too-many-arguments", "too-many-statements", "PLR2004", "RUF069"]
+"bioplausible/experiment/**/*.py" = ["raise-vanilla-args"]
 "tests/**/conftest.py" = ["too-many-arguments", "too-many-statements"]
 "examples/legacy/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
 "examples/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]

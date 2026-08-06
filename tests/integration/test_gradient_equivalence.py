@@ -1,7 +1,6 @@
 import pytest
 import torch
 import torch.nn.functional as F
-from torch import nn
 
 # FORCE DISABLE TRITON/COMPILE CHECKS BEFORE IMPORTING MODELS
 # This avoids the hang observed during import of ConvEqProp
@@ -9,6 +8,11 @@ import bioplausible.acceleration
 
 bioplausible.acceleration._check_compile_works = lambda: False
 
+from bioplausible.validation.gradient_check import (
+    check_gradient_equivalence,
+    loss_ce,
+    loss_mse,
+)
 from bioplausible.zoo.mep.presets import (
     smep as _smep,
 )
@@ -81,101 +85,8 @@ def test_contrastive_gradients():
 # rules (FF, PEPITA) which have no defined gradient direction vs. the task
 # loss (the TODO plan marks these "N/A").
 
-
-class GradientEquivalenceMLP(nn.Module):
-    """Small bias-free MLP; all params are transition weights for EP/CHL."""
-
-    def __init__(self, input_dim: int = 8, hidden_dim: int = 8, output_dim: int = 5):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim, bias=False),
-            nn.Tanh(),
-            nn.Linear(hidden_dim, output_dim, bias=False),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
-
-    def transition_modules(self):
-        return [m for m in self.net if isinstance(m, nn.Linear)]
-
-
-def _cosine(a: torch.Tensor, b: torch.Tensor) -> float:
-    return F.cosine_similarity(a.reshape(1, -1), b.reshape(1, -1)).item()
-
-
-def _flatten(vectors: list[torch.Tensor]) -> torch.Tensor:
-    return torch.cat([v.reshape(-1) for v in vectors])
-
-
-def _loss_ce(out: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    return F.cross_entropy(out, y)
-
-
-def _loss_mse(out: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    return F.mse_loss(out, F.one_hot(y, num_classes=out.shape[1]).float())
-
-
-def _finite_diff_gradient(
-    model: nn.Module, x: torch.Tensor, y: torch.Tensor, loss_fn, eps: float = 1e-2
-) -> torch.Tensor:
-    """Central-difference finite-difference gradient of ``loss_fn(model(x), y)``."""
-    params = list(model.parameters())
-    grads: list[torch.Tensor] = []
-    for p in params:
-        g = torch.zeros_like(p)
-        flat = p.data.view(-1)
-        for i in range(p.numel()):
-            orig = flat[i].item()
-            flat[i] = orig + eps
-            loss_plus = loss_fn(model(x), y)
-            flat[i] = orig - eps
-            loss_minus = loss_fn(model(x), y)
-            flat[i] = orig
-            g.view(-1)[i] = (loss_plus - loss_minus) / (2 * eps)
-        grads.append(g)
-    return _flatten(grads)
-
-
-def _local_direction(model: nn.Module) -> torch.Tensor:
-    return _flatten([
-        p.grad.reshape(-1) for p in model.parameters() if p.grad is not None
-    ])
-
-
-def _check_gradient_equivalence(
-    name: str,
-    build_opt,
-    driver,
-    loss_fn,
-    threshold: float,
-) -> None:
-    torch.manual_seed(0)
-    x = torch.randn(16, 8)
-    y = torch.randint(0, 5, (16,))
-
-    model = GradientEquivalenceMLP()
-    sd = model.state_dict()
-    twin = GradientEquivalenceMLP()
-    twin.load_state_dict(sd)
-
-    opt = build_opt(list(model.parameters()), model)
-    driver(opt, model, x, y)
-    d = _local_direction(model)
-
-    twin.zero_grad()
-    g = _flatten(torch.autograd.grad(loss_fn(twin(x), y), list(twin.parameters())))
-    gf = _finite_diff_gradient(twin, x, y, loss_fn)
-
-    # Machinery sanity: FD must reproduce autograd.
-    assert _cosine(g, gf) > 0.99, (
-        f"{name}: FD machinery diverged (cos={_cosine(g, gf)})"
-    )
-    # Direction equivalence: local rule aligns with the (FD-verified) gradient.
-    c = _cosine(d, gf)
-    assert c >= threshold, (
-        f"{name}: local gradient direction drifted (cos={c:.3f} < {threshold})"
-    )
+# --- the finite-difference machinery + equivalence check + MLP host module
+#     are promoted to bioplausible.validation.gradient_check (Phase 1.2) ---
 
 
 def _lro_driver(opt, model, x, y) -> None:
@@ -223,10 +134,10 @@ EQUILIBRIUM_FAMILIES_MSE = [
 def test_ce_gradient_direction_equivalence(name, build, threshold):
     """Backprop/FA/MEP-backprop update directions match the CE gradient."""
     driver = _bptt_driver if name == "smep (backprop mode)" else _lro_driver
-    _check_gradient_equivalence(name, build, driver, _loss_ce, threshold)
+    check_gradient_equivalence(name, build, driver, loss_ce, threshold)
 
 
 @pytest.mark.parametrize("name,build,threshold", EQUILIBRIUM_FAMILIES_MSE)
 def test_equilibrium_gradient_direction_equivalence(name, build, threshold):
     """EqProp/MEP-EP/CHL update directions match the MSE-energy gradient."""
-    _check_gradient_equivalence(name, build, _lro_driver, _loss_mse, threshold)
+    check_gradient_equivalence(name, build, _lro_driver, loss_mse, threshold)

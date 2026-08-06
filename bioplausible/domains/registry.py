@@ -1,0 +1,92 @@
+"""Cross-domain task registry (architecture §5, §8).
+
+Single source of task *names* for scheduling; geometry is derived from the
+concrete :class:`DomainTask` each name maps to (via the domain factory), never
+hardcoded here. This is the right home for the registry because it spans every
+domain — vision, language, RL, tabular — not just vision.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+
+__all__ = [
+    "SUPPORTED_TASKS",
+    "TaskSpec",
+    "resolve_task",
+]
+
+# Network-fetching tasks (cifar100/svhn, the graph datasets) are excluded:
+# geometry resolution is offline, and architecture §11 defers the full Phase-0
+# breadth. The MLP-parity tier only schedules the offline-resolvable set.
+SUPPORTED_TASKS: frozenset[str] = frozenset({
+    # vision (incl. toy boolean/toy-classification datasets)
+    "xor",
+    "spiral",
+    "circles",
+    "digits",
+    "mnist",
+    "fashion_mnist",
+    "kmnist",
+    "usps",
+    "cifar10",
+    # language
+    "tiny_shakespeare",
+    "char_ngram",
+    # rl
+    "pendulum",
+    "acrobot",
+    "cartpole",
+    # tabular
+    "breast_cancer",
+    "iris",
+    "wine",
+})
+
+
+@dataclass(frozen=True, slots=True)
+class TaskSpec:
+    """Resolved geometry facts for a task (single source of truth).
+
+    ``input_dim`` is the *flattened* MLP input size; ``output_dim`` the class
+    count. Values are derived from the concrete ``DomainTask`` the name maps to
+    (via the domain factory), never hardcoded here.
+    """
+
+    name: str
+    input_dim: int
+    output_dim: int
+
+
+def resolve_task(name: str) -> TaskSpec:
+    """Resolve a task name to its concrete geometry.
+
+    Builds the actual ``DomainTask`` via the domain factory and reads its own
+    ``input_dim``/``output_dim`` (flattening spatial input shapes), so geometry
+    always matches the task's real data — covering every domain, not just
+    vision.
+
+    Args:
+        name: Task name (e.g. ``"mnist"``, ``"cifar10"``, ``"usps"``).
+
+    Returns:
+        The :class:`TaskSpec` derived from the concrete task.
+
+    Raises:
+        ValueError: If ``name`` is not a known task.
+    """
+    if name not in SUPPORTED_TASKS:
+        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+            f"unknown task {name!r}; available: {sorted(SUPPORTED_TASKS)}"
+        )
+    from bioplausible.domains.factory import create_task
+
+    task = create_task(name, device="cpu", quick_mode=True)
+    task.setup()
+    input_dim = task.input_dim
+    if isinstance(input_dim, (tuple, list)):
+        input_dim = math.prod(int(d) for d in input_dim)
+    return TaskSpec(
+        name=name, input_dim=int(input_dim), output_dim=int(task.output_dim)
+    )

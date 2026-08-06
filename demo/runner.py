@@ -24,8 +24,9 @@ import bioplausible.equitile  # ruff: ignore[unused-import]  (registers equitile
 import bioplausible.zoo  # ruff: ignore[unused-import]       (registers zoo models/propagators)
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
+from bioplausible.domains.registry import resolve_task
 from bioplausible.execution.callbacks import BaseExecutionCallback
-from bioplausible.utils import set_global_seed
+from bioplausible.utils import seed_everything
 
 
 @dataclass
@@ -115,18 +116,6 @@ class _DemoCallback(BaseExecutionCallback):
             self._panel.energies.append(float(energy))
 
 
-# Task -> (input_dim, output_dim) for the default MLP-style demo model.
-_TASK_DIMS: dict[str, tuple[int, int]] = {
-    "xor": (2, 2),
-    "spiral": (2, 2),
-    "circles": (2, 2),
-    "digits": (64, 10),
-    "mnist": (784, 10),
-    "cifar10": (3072, 10),
-    "tiny_shakespeare": (16, 16),
-}
-
-
 # Models the demo can train through the generic CoreTrainer path on the
 # supported tasks. Started as backprop+eqprop; EquiTile/pepita/FF/FA were
 # excluded because their core flattening was broken (they received raw image
@@ -154,7 +143,7 @@ def model_metadata(model: str) -> dict[str, object]:
     """
     try:
         meta = Registry.get_metadata(ComponentCategory.MODEL, model)
-    except (ValueError, KeyError):
+    except ValueError, KeyError:
         return {}
     return {
         "bio_plausibility_score": meta.bio_plausibility_score,
@@ -200,7 +189,8 @@ def default_trainer_config(
     ``hidden_dim`` defaults per model (see ``_DEFAULT_HIDDEN_DIM``) so e.g. the
     flagship EquiTile config starts small (32) instead of the generic 256.
     """
-    input_dim, output_dim = _TASK_DIMS.get(task, (784, 10))
+    spec = resolve_task(task)
+    input_dim, output_dim = spec.input_dim, spec.output_dim
     if hidden_dim is None:
         hidden_dim = default_hidden_dim(model)
     return TrainerConfig(
@@ -247,7 +237,7 @@ def run_headless(panel: DemoPanel) -> None:
         panel.running = True
         panel.finished = False
         if panel.seed is not None:
-            set_global_seed(panel.seed)
+            seed_everything(panel.seed)
         trainer = CoreTrainer(panel.trainer_config)
         trainer.setup()  # materialize model so the callback can probe weights
         trainer.add_execution_callback(_DemoCallback(panel, trainer.model))

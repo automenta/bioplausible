@@ -22,7 +22,7 @@ import logging
 
 import torch
 
-from bioplausible.utils import capture_environment, deps_hash, set_global_seed
+from bioplausible.utils import capture_environment, deps_hash, seed_everything
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ REPRO_MODELS = [
 ]
 
 
-def _instantiate(
+def _instantiate(  # ruff: ignore[too-many-return-statements]  (one return per registered family is the readable form)
     model_name: str, input_dim: int, output_dim: int, device: str
 ) -> torch.nn.Module:
     """Instantiate a model; mirrors the benchmark harness instantiation paths."""
@@ -192,10 +192,7 @@ def _synthetic_data(seed: int, device: str) -> tuple[torch.Tensor, torch.Tensor]
 def _states_equal(a: dict[str, torch.Tensor], b: dict[str, torch.Tensor]) -> bool:
     if set(a) != set(b):
         return False
-    return all(
-        torch.equal(a[k].detach().cpu(), b[k].detach().cpu())
-        for k in a
-    )
+    return all(torch.equal(a[k].detach().cpu(), b[k].detach().cpu()) for k in a)
 
 
 def run_one_model(
@@ -206,19 +203,138 @@ def run_one_model(
     """Train ``model_name`` twice under ``seed``; return bitwise identical."""
     x, y = _synthetic_data(seed, device)
 
-    set_global_seed(seed, device)
+    seed_everything(seed, device)
     m1 = _instantiate(model_name, x.shape[1], 10, device)
     _train_one_epoch(m1, x, y)
     s1 = {k: v.detach().clone() for k, v in m1.state_dict().items()}
 
-    set_global_seed(seed, device)
+    seed_everything(seed, device)
     m2 = _instantiate(model_name, x.shape[1], 10, device)
     _train_one_epoch(m2, x, y)
 
     return _states_equal(s1, m2.state_dict())
 
 
-def main(argv: list[str] | None = None) -> int:
+def _gradient_gate() -> dict[str, bool]:
+    """Run the gradient-equivalence gate (architecture §7#2) per model family.
+
+    Only gradient-aligned propagators have a defined update direction vs. the
+    task loss; forward-only (FF/PEPITA) and spiking families are excluded by
+    design. Returns family -> passed.
+    """
+    from bioplausible.validation.gradient_check import (
+        check_gradient_equivalence,
+        loss_ce,
+        loss_mse,
+    )
+    from bioplausible.zoo.mep.presets import smep as _smep
+    from bioplausible.zoo.propagators.backprop import Backprop as _Backprop
+    from bioplausible.zoo.propagators.eqprop import EqProp as _EqProp
+    from bioplausible.zoo.propagators.fa import (
+        DirectFA as _DirectFA,
+    )
+    from bioplausible.zoo.propagators.fa import (
+        FeedbackAlignment as _FeedbackAlignment,
+    )
+    from bioplausible.zoo.propagators.fa import (
+        StochasticFA as _StochasticFA,
+    )
+    from bioplausible.zoo.propagators.hebbian import ContrastiveHebbianLearning
+
+    def _lro_driver(opt, model, x, y) -> None:  # ruff: ignore[unused-function-argument]  (driver protocol fixes the signature)
+        opt.step(x=x, target=y)
+
+    def _bptt_driver(opt, model, x, y) -> None:
+        model.zero_grad()
+        torch.nn.functional.cross_entropy(model(x), y).backward()
+        opt.step()
+
+    families: list[tuple[str, object, object, object, float]] = [
+        ("backprop", _Backprop, _lro_driver, loss_ce, 0.9),
+        ("feedback_alignment", _FeedbackAlignment, _lro_driver, loss_ce, 0.9),
+        ("direct_fa", _DirectFA, _lro_driver, loss_ce, 0.9),
+        ("stochastic_fa", _StochasticFA, _lro_driver, loss_ce, 0.9),
+        (
+            "smep_backprop",
+            lambda p, m: _smep(p, m, mode="backprop", ns_steps=0),
+            _bptt_driver,
+            loss_ce,
+            0.9,
+        ),
+        (
+            "eq_prop",
+            lambda p, m: _EqProp(p, m, beta=0.5, settle_steps=30, settle_lr=0.15),
+            _lro_driver,
+            loss_mse,
+            0.6,
+        ),
+        (
+            "smep_ep",
+            lambda p, m: _smep(
+                p, m, mode="ep", settle_steps=30, ns_steps=0, settle_lr=0.15
+            ),
+            _lro_driver,
+            loss_mse,
+            0.6,
+        ),
+        ("contrastive_hebbian_learning", ContrastiveHebbianLearning, _lro_driver, loss_mse, 0.6),
+    ]
+
+    results: dict[str, bool] = {}
+    for name, build, driver, loss, threshold in families:
+        try:
+            check_gradient_equivalence(name, build, driver, loss, threshold)
+            results[name] = True
+        except Exception:  # broad: a failing family must not kill the gate
+            logger.exception("family %s failed the gradient gate", name)
+            results[name] = False
+    return results
+
+
+def _report_resume_noop(path: str) -> int:
+    """Verify every probe in an experiment Report is a resume no-op.
+
+    Reloads the Report (resume index) and checks that each recorded ok probe's
+    key is present in the finished set — i.e. a re-run would skip it.
+    """
+    from bioplausible.experiment.report import Report, probe_index_key
+
+    report = Report(path)
+    finished = report.finished_keys()
+    recorded = 0
+    missing: list[str] = []
+    for stage in sorted(set(_report_stages(path))):
+        for result in report.stage_results(stage):
+            if result.status == "error":
+                continue
+            recorded += 1
+            if probe_index_key(stage, result) not in finished:
+                missing.append(probe_index_key(stage, result))
+    if missing:
+        logger.error("resume no-op verification failed: %d keys absent", len(missing))
+        return 1
+    logger.info("resume no-op verified: %d finished probes", recorded)
+    return 0 if recorded > 0 else 1
+
+
+def _report_stages(path: str) -> list[str]:
+    import json
+    from pathlib import Path
+
+    stages: list[str] = []
+    p = Path(path)
+    if not p.exists():
+        return stages
+    for line in p.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        stage = json.loads(line).get("stage", "")
+        if stage and stage not in stages:
+            stages.append(stage)
+    return stages
+
+
+def main(argv: list[str] | None = None) -> int:  # ruff: ignore[complex-structure]  (CLI orchestrates repro + gradient + resume gates)
     parser = argparse.ArgumentParser(
         prog="biopl-repro-check",
         description="Verify bitwise reproducibility of every model family "
@@ -240,8 +356,21 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Emit a JSON report instead of line output",
     )
+    parser.add_argument(
+        "--gradient",
+        action="store_true",
+        help="Run the gradient-equivalence gate (architecture §7#2) on "
+        "gradient-aligned families",
+    )
+    parser.add_argument(
+        "--resume-check",
+        default=None,
+        metavar="REPORT",
+        help="Verify an experiment Report is a resume no-op",
+    )
     args = parser.parse_args(argv)
 
+    logging.basicConfig(level=logging.INFO)
     models = [m.strip() for m in args.models.split(",") if m.strip()]
     if not models:
         logger.error("No models requested")
@@ -265,20 +394,32 @@ def main(argv: list[str] | None = None) -> int:
     failed = [m for m, ok in results.items() if not ok]
     exit_code = 1 if failed else 0
 
+    gradient_results: dict[str, bool] = {}
+    if args.gradient:
+        gradient_results = _gradient_gate()
+        grad_failed = [m for m, ok in gradient_results.items() if not ok]
+        for model, ok in gradient_results.items():
+            logger.info("[%s]  gradient %s", "OK" if ok else "FAIL", model)
+        if grad_failed:
+            exit_code = 1
+
+    if args.resume_check and _report_resume_noop(args.resume_check) != 0:
+        exit_code = 1
+
     if args.json:
-        print(
-            json.dumps(
-                {
-                    "seed": args.seed,
-                    "device": args.device,
-                    "environment": env,
-                    "deps_hash": deps_hash(env),
-                    "results": results,
-                    "exit_code": exit_code,
-                },
-                indent=2,
-            )
-        )
+        report: dict[str, object] = {
+            "seed": args.seed,
+            "device": args.device,
+            "environment": env,
+            "deps_hash": deps_hash(env),
+            "results": results,
+            "exit_code": exit_code,
+        }
+        if gradient_results:
+            report["gradient_gate"] = gradient_results
+        if args.resume_check:
+            report["resume_check"] = args.resume_check
+        print(json.dumps(report, indent=2))
     else:
         logger.info(
             "repro check: %d/%d reproducible%s",
