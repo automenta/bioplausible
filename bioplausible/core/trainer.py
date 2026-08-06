@@ -774,18 +774,7 @@ class CoreTrainer:
 
             # Energy tracking
             if self.config.track_energy:
-                requires_backward = True
-                try:
-                    meta = Registry.get_metadata(
-                        ComponentCategory.MODEL,
-                        getattr(self.model, "algorithm_name", self.config.model),
-                    )
-                    requires_backward = meta.requires_backward
-                except (ValueError, KeyError):
-                    logger.warning(
-                        "Could not fetch metadata for %s",
-                        getattr(self.model, "algorithm_name", self.config.model),
-                    )
+                requires_backward = self._model_requires_backward()
 
                 with EnergyTracker(
                     self.model, requires_backward=requires_backward
@@ -1080,6 +1069,29 @@ class CoreTrainer:
                 getattr(cb, name)(*args)
             except Exception as e:  # broad: external listener may raise anything
                 logger.warning("Execution callback %r.%s failed: %s", cb, name, e)
+
+    def _model_requires_backward(self) -> bool:
+        """Whether the current model needs backward for energy tracking.
+
+        Looks the model up by its **registered** name (``config.model``), not
+        the display ``algorithm_name`` — the latter is a presentation label
+        (e.g. ``"HebbianChain"``) that has no registry entry, which previously
+        made every such lookup miss and warn per batch. Unregistered models
+        fall back to ``requires_backward = True`` and warn once.
+        """
+        name = self.config.model
+        warned = getattr(CoreTrainer, "_missing_metadata_warned", None)
+        if warned is None:
+            warned = CoreTrainer._missing_metadata_warned = set()
+        value = True
+        try:
+            meta = Registry.get_metadata(ComponentCategory.MODEL, name)
+            value = meta.requires_backward
+        except (ValueError, KeyError):
+            if name not in warned:
+                warned.add(name)
+                logger.warning("Could not fetch metadata for %s", name)
+        return value
 
     @staticmethod
     def _compute_grad_norms(model: nn.Module) -> dict[str, float]:

@@ -1,0 +1,37 @@
+# Quick smoke parity campaign — same pipeline as parity_cifar10_mlp but on
+# xor (no network fetch, tiny). Verifies plan/run/report/repro-check end-to-end
+# in minutes instead of ~37.5h. NOT a real evidence result.
+meta: {name: parity_quick_smoke, created: '2026-08-06'}
+
+compute:
+  device: auto
+  num_workers: 0
+  track: {flops: true, memory: true, energy: false}
+
+arms:
+  mlp:
+    max_params: 210_000
+    models: [backprop_mlp, eqprop_mlp, neural_cube, deep_hebbian,
+             three_factor_hebbian, standard_fa, diff_target_prop,
+             pepita, forward_forward]
+
+stages:
+  - name: smoke
+    task: xor
+    epochs: 3
+    seeds: 1
+    configs: {hidden_dim: [16, 32], num_layers: [2]}
+    pass_rule: {min_seed_ok: 1, rules: [{metric: acc, op: '>=', value: 0.60}]}
+  - name: parity
+    task: xor
+    epochs: 3
+    seeds: 10
+    configs: {hidden_dim: [16], num_layers: [2]}
+    baseline: backprop_mlp
+    matched_by:
+      equal_budget: max_params
+      reported: [wall_time_s, forward_flops, backward_flops]
+    energy: [gpu_tdp_x_util, op_count]
+    pass_rule: {min_seed_ok: 10, rules: []}
+
+reproducibility: {seed: 42, capture_env: true}

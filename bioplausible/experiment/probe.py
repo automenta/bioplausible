@@ -122,7 +122,7 @@ class CoreTrainerDriver:
     on a bulk overnight run spawns no DataLoader worker processes per probe.
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments]  # driver constructor captures all campaign compute settings at once
         self,
         *,
         num_workers: int = 0,
@@ -130,12 +130,14 @@ class CoreTrainerDriver:
         track_energy: bool = False,
         track_flops: bool = True,
         track_memory: bool = True,
+        batches_per_epoch: int | None = None,
     ) -> None:
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.track_energy = track_energy
         self.track_flops = track_flops
         self.track_memory = track_memory
+        self.batches_per_epoch = batches_per_epoch
 
     def train(  # ruff: ignore[too-many-arguments]  (probe driver signature is the public protocol contract)
         self,
@@ -199,6 +201,7 @@ class CoreTrainerDriver:
             track_energy=core_train_flag,
             track_flops=self.track_flops,
             track_memory=self.track_memory,
+            batches_per_epoch=self.batches_per_epoch,
         )
         try:
             history = CoreTrainer(cfg).fit()

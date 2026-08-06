@@ -243,3 +243,46 @@ def test_report_pareto_frontier_dominance():
     assert frontier[0]["config_key"] == config_key({"a": 2})
     # The 500-param, lower-acc config is dominated and absent.
     assert config_key({"a": 1}) not in {p["config_key"] for p in frontier}
+
+
+# ---------------------------------------------------------------------------
+# --time-budget auto-scale
+# ---------------------------------------------------------------------------
+
+
+def test_parse_time_budget_units():
+    from bioplausible.experiment.cli import _parse_time_budget
+
+    assert _parse_time_budget("1h") == 3600
+    assert _parse_time_budget("90m") == 5400
+    assert _parse_time_budget("300s") == 300
+    assert _parse_time_budget("7200") == 7200
+
+
+def test_auto_scale_reduces_epochs_to_fit_budget():
+    from bioplausible.experiment.cli import _auto_scale_campaign
+    from bioplausible.experiment.producer import HyperoptGridProducer
+    from bioplausible.experiment.schema import validate_yaml
+
+    campaign = validate_yaml(_SMOKE_YAML)
+    models = [m for arm in campaign.arms.values() for m in arm.models]
+    producer = HyperoptGridProducer(seed=42)
+    # 1 epoch on xor ~ cheap; use a deliberately slow epoch to force scaling.
+    epoch_times = {("backprop_mlp", "xor"): 100.0}
+    scaled = _auto_scale_campaign(campaign, 50, epoch_times, models, producer)
+    assert scaled.stages[0].epochs == 1  # clamped to the floor
+    assert scaled.stages[0].seeds == 1
+
+
+def test_auto_scale_noop_when_already_fits():
+    from bioplausible.experiment.cli import _auto_scale_campaign
+    from bioplausible.experiment.producer import HyperoptGridProducer
+    from bioplausible.experiment.schema import validate_yaml
+
+    campaign = validate_yaml(_SMOKE_YAML)
+    models = [m for arm in campaign.arms.values() for m in arm.models]
+    producer = HyperoptGridProducer(seed=42)
+    epoch_times = {("backprop_mlp", "xor"): 0.01}
+    scaled = _auto_scale_campaign(campaign, 1000, epoch_times, models, producer)
+    assert scaled.stages[0].epochs == campaign.stages[0].epochs
+    assert scaled.stages[0].configs == campaign.stages[0].configs

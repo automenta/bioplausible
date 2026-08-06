@@ -25,6 +25,7 @@ The full experiment process is wired and green:
 | `biopl-repro-check` | `--gradient` gate on 8 aligned families; `--resume-check` verifies no-op |
 | Overnight config | `smoke` gate fixed (15 epochs / 0.60 on xor) so all 9 models advance; 6 in-budget parity models verified training 1-epoch cifar10 `ok` |
 | `--producer bayes` | **NEW**: `OptunaBayesProducer` (TPESampler) behind `ConfigProducer`; `plan run --producer grid|bayes --candidates N` (**B.1**) |
+| `--time-budget` | **NEW**: `plan/run --time-budget 1h` calibrates epoch time on the configured device, then auto-scales epochs/configs/seeds to fit (proportional planning: ~1% of budget) |
 
 Target test suite: **86 passing** (`tests/unit/experiment/` 43 + `validation/test_statistics.py` 27
 + `domains/test_registry.py` 7 + `integration/test_gradient_equivalence.py` 9). Staircase
@@ -184,6 +185,37 @@ a full grid). CLI gains `--producer grid|bayes --candidates N` on `plan`/`run`;
 `_producer` builds either behind the same `ConfigProducer` seam. Decision ledged
 in §2. `--candidates` affects only the bayes producer; `grid` ignores it.
 **Gate**: `ruff check` clean on `experiment/`; `pyright` 0 errors; 93 passing
+(experiment + statistics + registry + gradient).
+
+### B.3 Auto-scale to a time budget (`--time-budget`) — NEW
+**Commit date**: 2026-08-06
+**Files**: `bioplausible/experiment/cli.py`, `bioplausible/experiment/probe.py`,
+`examples/parity_quick_smoke.yaml`, `tests/unit/experiment/test_cli.py`
+**Why**: a fixed campaign (e.g. cifar10 parity) is ~37h, but a "useful
+preliminary run" inside a wall-clock budget needs the schedule to fit the
+operator's available time. Previously the only knobs were manual epoch/config
+edits in the YAML.
+
+**What was done**: `plan`/`run` accept `--time-budget 1h|30m|3600s`:
+1. **Calibrate** (`_calibrate_epoch_times`): runs 1-epoch probes on the
+   *configured* device (`_resolve_device` turns `auto` → cuda/cpu) for the
+   bottleneck stage (max epochs), using 2 representative models (backprop + one
+   equilibrium/FA) on a tiny config and a reduced number of batches (scaled
+   with the budget), then extrapolates to a full 100-batch epoch.
+2. **Proportional planning**: calibration batch count scales with the budget
+   (~1% of it, clamped to a 10–100 batch floor/ceiling) so a 1h plan calibrates
+   in seconds, not minutes — keeping planning ≪ budget (≤~1min for 1h).
+3. **Auto-scale** (`_auto_scale_campaign` + `_reduce_stage_*` helpers):
+   iteratively reduce epochs → configs → seeds (respecting minimums: 1 for
+   smoke, 10 for evidence/baseline stages) until the calibrated estimate fits
+   the budget; if the minimums can't fit it, print an honest infeasibility
+   warning rather than silently overshooting.
+4. The calibrated wall-time estimate is printed (vs the heuristic tier table).
+
+`CoreTrainerDriver` gains an optional `batches_per_epoch` knob (probe.py) so
+calibration can run fewer batches through the exact same training path.
+
+**Gate**: `ruff check` + `ruff format` clean; `pyright` 0 errors; 97 passing
 (experiment + statistics + registry + gradient).
 
 ### B.2 Concurrent probe scheduling
