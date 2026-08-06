@@ -62,18 +62,40 @@ def test_driver_threads_compute_settings_into_trainer_config(monkeypatch):
     cfg = captured["cfg"]
     assert cfg.num_workers == 0
     assert cfg.batch_size == 32
-    assert cfg.track_energy is False
     assert cfg.track_flops is True
     assert cfg.track_memory is False
+    # CoreTrainer gates all profiling on `track_energy`; the driver raises it
+    # when ANY metric (here flops) is wanted so the campaign's `compute.track`
+    # actually produces values.
+    assert cfg.track_energy is True
     assert out["final_acc"] == 0.9
     assert out["epoch_time_s"] == 1.0
     assert out["peak_memory_mb"] == 5.0
+    # wall_time_s falls back to the summed epoch time (not CUDA-only).
+    assert out["wall_time_s"] == 1.0
 
 
-def test_driver_defaults_are_probe_friendly():
-    """Defaults: no worker processes and tracking on, so a plain driver is safe."""
-    driver = CoreTrainerDriver()
-    assert driver.num_workers == 0
-    assert driver.track_energy is False
-    assert driver.track_flops is True
-    assert driver.track_memory is True
+def test_driver_all_off_disables_profiling(monkeypatch):
+    """With no tracking requested, CoreTrainer's profiler stays off."""
+    captured: dict[str, object] = {}
+
+    class FakeCoreTrainer:
+        def __init__(self, cfg) -> None:
+            captured["cfg"] = cfg
+
+        @staticmethod
+        def fit() -> list[TrainingMetrics]:
+            return _fake_history()
+
+    import bioplausible.experiment.probe as probe_module
+
+    monkeypatch.setattr(probe_module, "CoreTrainer", FakeCoreTrainer)
+    CoreTrainerDriver(track_flops=False, track_memory=False, track_energy=False).train(
+        model="backprop_mlp",
+        task="mnist",
+        config={},
+        seed=0,
+        epochs=1,
+        device="cpu",
+    )
+    assert captured["cfg"].track_energy is False

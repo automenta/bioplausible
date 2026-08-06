@@ -10,6 +10,7 @@ import pytest
 from bioplausible.experiment.probe import ProbeResult, config_key
 from bioplausible.experiment.producer import (
     HyperoptGridProducer,
+    OptunaBayesProducer,
     grid_cardinality,
 )
 from bioplausible.experiment.report import Report
@@ -161,6 +162,54 @@ def test_producer_configs_are_distinct():
     configs = producer.configs_for(stage)
     # The grid enumerates a unique combination per point — no duplicates.
     assert len({frozenset(c.items()) for c in configs}) == len(configs)
+
+
+def test_bayes_producer_respects_candidates_cap():
+    # n_candidates is capped at grid cardinality so TPE cannot enumerate
+    # the whole grid into a plain grid search.
+    stage = Stage(
+        name="s",
+        task="xor",
+        epochs=1,
+        seeds=1,
+        configs={"hidden_dim": [16, 32, 64], "num_layers": [2, 4]},
+    )
+    producer = OptunaBayesProducer(n_candidates=1000, seed=7)
+    configs = producer.configs_for(stage)
+    assert len(configs) == grid_cardinality(stage.configs)
+
+
+def test_bayes_producer_returns_in_grid_distinct():
+    stage = Stage(
+        name="s",
+        task="xor",
+        epochs=1,
+        seeds=1,
+        configs={"hidden_dim": [16, 32, 64], "num_layers": [2, 4]},
+    )
+    producer = OptunaBayesProducer(n_candidates=4, seed=7)
+    configs = producer.configs_for(stage)
+    assert 0 < len(configs) <= 4
+    # Each sampled config is a unique in-grid combination.
+    assert len({frozenset(c.items()) for c in configs}) == len(configs)
+    for c in configs:
+        assert c["hidden_dim"] in {16, 32, 64}
+        assert c["num_layers"] in {2, 4}
+
+
+def test_bayes_producer_deterministic_given_seed():
+    stage = Stage(
+        name="s",
+        task="xor",
+        epochs=1,
+        seeds=1,
+        configs={"hidden_dim": [16, 32, 64], "num_layers": [2, 4]},
+    )
+    a = OptunaBayesProducer(n_candidates=4, seed=11).configs_for(stage)
+    b = OptunaBayesProducer(n_candidates=4, seed=11).configs_for(stage)
+    assert a == b
+    c = OptunaBayesProducer(n_candidates=4, seed=12).configs_for(stage)
+    assert a != c
 
 
 # ---------------------------------------------------------------------------
@@ -618,6 +667,96 @@ def test_staircase_rejects_model_entirely_over_budget(tmp_path: Path):
     assert all(m != "m_high" for m in called)
 
 
+def test_staircase_isolates_param_count_failure(tmp_path: Path):
+    """A (model, config) whose static construction fails must not abort the run.
+
+    Regression for overnight robustness: one broken constructor used to raise
+    out of ``_collect_probes`` and kill the whole campaign. It must instead be
+    recorded as an errored probe so the broken (model, config) surfaces without
+    stopping the other models/probes (architecture §6.2 per-probe isolation).
+    """
+    campaign = validate_yaml(BOARD_CAMPAIGN_YAML)
+    report = Report(tmp_path / "r.jsonl")
+    called: list[tuple[str, dict]] = []
+
+    class Driver:
+        def train(self, *, model, task, config, seed, epochs, device):
+            called.append((model, config))
+            return {"final_acc": 0.9, "epoch_time_s": 0.1}
+
+    def counter(model, config, _input_dim, _output_dim):
+        # m_high's hidden_dim=16 config cannot be built (raises); the other
+        # (model, config) pairs count fine.
+        if model == "m_high" and config["hidden_dim"] == 16:
+            raise RuntimeError(  # ruff: ignore[raise-vanilla-args]  # test force-failure
+                "ctor boom"
+            )
+        return 50
+
+    runner = StaircaseRunner(
+        campaign,
+        report,
+        Driver(),
+        HyperoptGridProducer(seed=1),
+        param_counter=counter,
+    )
+    outcomes = runner.run()
+
+    m_low = next(o for o in outcomes if o.model == "m_low")
+    # m_low trains all its configs; the run never aborts.
+    assert m_low.verdict is Verdict.PASS
+    assert any(m == "m_low" for (m, _c) in called)
+    # The broken config did not abort the run and never trained its seeds.
+    assert not any(m == "m_high" and c["hidden_dim"] == 16 for (m, c) in called)
+    # Its failure is recorded in the report as an errored probe.
+    errs = [r for r in report.stage_results("smoke") if r.status == "error"]
+    assert any("param estimation failed" in r.error for r in errs)
+
+
+def test_report_resume_tolerates_torn_tail_line(tmp_path: Path):
+    """A truncated final line (crash mid-append) must not abort resume."""
+    report = Report(tmp_path / "r.jsonl")
+    result = _result("backprop_mlp", "xor", {"hidden_dim": 16}, 0, 0.9)
+    report.append("smoke", result)
+    with Path(report.path).open("a", encoding="utf-8") as f:
+        f.write('{"model": "backprop_mlp", "config_key": "trow')  # torn write
+
+    reloaded = Report(tmp_path / "r.jsonl")
+    # The intact probe still resumes; the torn line is dropped, not fatal.
+    assert reloaded.is_finished("smoke", result)
+    assert reloaded.stage_results("smoke") == [result]
+
+
+def test_plan_skips_non_constructible_pair():
+    """plan must not crash on a (model, config) that cannot be counted.
+
+    Regression for overnight pre-flight: `_in_budget_pairs` used to raise out
+    of `estimate_param_count` for a non-constructible model, aborting `plan`.
+    It must skip those pairs so plan always prints (matching run's isolation).
+    """
+    campaign = validate_yaml(BOARD_CAMPAIGN_YAML)
+    models = [m for arm in campaign.arms.values() for m in arm.models]
+
+    def counter(model, _config, _input_dim, _output_dim):
+        if model == "m_high":
+            raise RuntimeError(  # ruff: ignore[raise-vanilla-args]  # force a non-constructible model
+                "boom"
+            )
+        return 50
+
+    from bioplausible.experiment.cli import _in_budget_pairs, _producer
+
+    pairs = _in_budget_pairs(
+        campaign,
+        campaign.stages[0],
+        models,
+        producer=_producer(campaign, "grid", None),
+        param_counter=counter,
+    )
+    # m_high's pairs are skipped, m_low's remain schedulable.
+    assert {p.model for p in pairs} == {"m_low"}
+
+
 def test_plan_run_budget_consistency(tmp_path: Path):
     """plan's probe count matches what run schedules (both filter by budget)."""
     campaign = validate_yaml(
@@ -634,7 +773,7 @@ stages:
     pass_rule: {min_seed_ok: 1, rules: []}
         """
     )
-    from bioplausible.experiment.cli import _in_budget_pairs
+    from bioplausible.experiment.cli import _in_budget_pairs, _producer
 
     models = [m for arm in campaign.arms.values() for m in arm.models]
 
@@ -644,7 +783,11 @@ stages:
         return 50
 
     pairs = _in_budget_pairs(
-        campaign, campaign.stages[0], models, param_counter=counter
+        campaign,
+        campaign.stages[0],
+        models,
+        producer=_producer(campaign, "grid", None),
+        param_counter=counter,
     )
     # m_low: 2 configs; m_high: 1 config (hidden=16 filtered) -> 3 pairs x 2 seeds.
     assert len(pairs) == 3

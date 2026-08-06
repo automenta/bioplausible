@@ -28,7 +28,11 @@ from typing import TYPE_CHECKING
 import yaml
 
 from bioplausible.experiment.probe import CoreTrainerDriver, config_key
-from bioplausible.experiment.producer import HyperoptGridProducer, ProbeWork
+from bioplausible.experiment.producer import (
+    HyperoptGridProducer,
+    OptunaBayesProducer,
+    ProbeWork,
+)
 from bioplausible.experiment.report import Report
 from bioplausible.experiment.reporting import render_report
 from bioplausible.experiment.schema import load_campaign
@@ -54,11 +58,35 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_plan = sub.add_parser("plan", help="Print the exact probe plan (dry-run)")
     p_plan.add_argument("config", help="Path to the campaign YAML")
+    p_plan.add_argument(
+        "--producer",
+        choices=("grid", "bayes"),
+        default="grid",
+        help="Config sampler: grid (exhaustive) or bayes (TPE, n_candidates)",
+    )
+    p_plan.add_argument(
+        "--candidates",
+        type=int,
+        default=None,
+        help="Bayes producer n_candidates (default 50)",
+    )
 
     p_run = sub.add_parser("run", help="Run the campaign staircase (resume by default)")
     p_run.add_argument("config", help="Path to the campaign YAML")
     p_run.add_argument("--report", default=None, help="Report JSONL path")
     p_run.add_argument("--device", default=None, help="cpu / cuda:0 / auto")
+    p_run.add_argument(
+        "--producer",
+        choices=("grid", "bayes"),
+        default="grid",
+        help="Config sampler: grid (exhaustive) or bayes (TPE, n_candidates)",
+    )
+    p_run.add_argument(
+        "--candidates",
+        type=int,
+        default=None,
+        help="Bayes producer n_candidates (default 50)",
+    )
     return parser
 
 
@@ -72,10 +100,29 @@ def _all_models(campaign: Campaign) -> list[str]:
     return [m for arm in campaign.arms.values() for m in arm.models]
 
 
+def _producer(
+    campaign: Campaign, kind: str, candidates: int | None
+) -> HyperoptGridProducer | OptunaBayesProducer:
+    """Build the config producer from a ``--producer`` selection.
+
+    ``grid`` enumerates the stage's full grid exactly; ``bayes`` draws
+    ``candidates`` (default 50) TPE-sampled points from it, so ``plan``'s
+    probe count tracks ``run`` under either choice.
+    """
+    seed = campaign.reproducibility.seed
+    if kind == "bayes":
+        return OptunaBayesProducer(
+            n_candidates=candidates if candidates is not None else 50,
+            seed=seed,
+        )
+    return HyperoptGridProducer(seed=seed)
+
+
 def _in_budget_pairs(
     campaign: Campaign,
     stage: Stage,
     models: list[str],
+    producer: HyperoptGridProducer | OptunaBayesProducer,
     param_counter: Callable[[str, dict[str, object], int, int], int] | None = None,
 ) -> list[ProbeWork]:
     """Enumerate (model, config) pairs within each model's arm ``max_params``.
@@ -99,14 +146,23 @@ def _in_budget_pairs(
         )
 
     geom = campaign.geometry(stage.task)
-    producer = HyperoptGridProducer(seed=campaign.reproducibility.seed)
     configs = producer.configs_for(stage)
     budget_by_model = {m: campaign.max_params_for(m) for m in models}
     pairs: list[ProbeWork] = []
     for model in models:
         budget = budget_by_model[model]
         for config in configs:
-            if budget is not None and _count(model, config, geom) > budget:
+            try:
+                over = budget is not None and _count(model, config, geom) > budget
+            except Exception as exc:  # broad: a non-constructible (model, config) is simply not schedulable
+                logger.warning(
+                    "skipping non-constructible pair %s/%s: %s",
+                    model,
+                    config,
+                    exc,
+                )
+                continue
+            if over:
                 continue
             pairs.append(
                 ProbeWork(model=model, config=config, config_key=config_key(config))
@@ -149,13 +205,14 @@ def _cmd_validate(config: str) -> int:
     return 0
 
 
-def _cmd_plan(config: str) -> int:
+def _cmd_plan(config: str, producer_kind: str, candidates: int | None) -> int:
     campaign = load_campaign(config)
     models = _all_models(campaign)
+    producer = _producer(campaign, producer_kind, candidates)
     total = 0
     print(f"campaign: {campaign.meta.name!r}")
     for stage in campaign.stages:
-        pairs = _in_budget_pairs(campaign, stage, models)
+        pairs = _in_budget_pairs(campaign, stage, models, producer)
         n_seeds = stage.seeds
         n_probes = len(pairs) * n_seeds
         total += n_probes
@@ -173,7 +230,13 @@ def _cmd_plan(config: str) -> int:
     return 0
 
 
-def _cmd_run(config: str, report_override: str | None, device: str | None) -> int:
+def _cmd_run(
+    config: str,
+    report_override: str | None,
+    device: str | None,
+    producer_kind: str,
+    candidates: int | None,
+) -> int:
     campaign = load_campaign(config)
     report_path = _report_path(campaign, report_override)
     if report_path.exists() and report_path.stat().st_size:
@@ -191,14 +254,33 @@ def _cmd_run(config: str, report_override: str | None, device: str | None) -> in
             track_flops=track.flops,
             track_memory=track.memory,
         ),
-        HyperoptGridProducer(seed=campaign.reproducibility.seed),
+        _producer(campaign, producer_kind, candidates),
         compute=campaign.compute,
     )
     if device and runner.compute is not None:
         runner.compute.device = device
 
     start = time.time()
-    outcomes = runner.run()
+    try:
+        outcomes = runner.run()
+    except KeyboardInterrupt:
+        print(  # '--report' path is the resume contract; a partial run must be re-runnable
+            f"interrupted: {report_path} holds {len(report.finished_keys())} "
+            f"finished probes; rerun to resume"
+        )
+        return 130
+    except Exception as exc:  # broad: a long overnight run must not lose the resume contract to a single probe/driver crash
+        logger.error(
+            "run aborted at %d finished probe(s): %s",
+            len(report.finished_keys()),
+            exc,
+            exc_info=True,
+        )
+        print(
+            f"run aborted: {report_path} holds {len(report.finished_keys())} "
+            f"finished probes and is resumable (rerun to continue)"
+        )
+        return 1
     elapsed = time.time() - start
 
     for outcome in outcomes:
@@ -218,9 +300,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             case "validate":
                 return _cmd_validate(args.config)
             case "plan":
-                return _cmd_plan(args.config)
+                return _cmd_plan(args.config, args.producer, args.candidates)
             case "run":
-                return _cmd_run(args.config, args.report, args.device)
+                return _cmd_run(
+                    args.config,
+                    args.report,
+                    args.device,
+                    args.producer,
+                    args.candidates,
+                )
             case _:
                 return 2
     except (yaml.YAMLError, ValueError, FileNotFoundError) as exc:

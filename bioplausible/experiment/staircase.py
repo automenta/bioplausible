@@ -265,6 +265,7 @@ class StaircaseRunner:
         whose seeds are all already recorded is skipped entirely — re-running a
         finished campaign builds no models (a true no-op, not just a no-train).
         """
+        from bioplausible.experiment.probe import ProbeResult
         from bioplausible.experiment.probe import config_key as _config_key
         from bioplausible.experiment.report import probe_index_key
 
@@ -286,7 +287,23 @@ class StaircaseRunner:
             ]
             if not pending:
                 continue
-            param_count = self._count_params(model, config, ctx)
+            try:
+                param_count = self._count_params(model, config, ctx)
+            except (
+                Exception
+            ) as exc:  # broad: a broken static ctor must not abort the run
+                probe = ProbeResult(
+                    model=model,
+                    task=stage.task,
+                    config=config,
+                    config_key=key,
+                    seed=pending[0],
+                    status="error",
+                    error=f"param estimation failed: {exc}",
+                )
+                self.report.append(stage.name, probe)
+                results.append(probe)
+                continue
             budget = ctx.budget_by_model[model]
             if budget is not None and param_count > budget:
                 continue

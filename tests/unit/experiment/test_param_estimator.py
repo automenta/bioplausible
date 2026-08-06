@@ -91,3 +91,40 @@ def test_param_estimate_raises_when_construction_fails():
         estimate_param_count(
             "backprop_mlp", {"hidden_dim": "bad"}, input_dim=64, output_dim=10
         )
+
+
+def test_param_estimate_memoizes_same_key(monkeypatch: pytest.FixtureRequest):
+    """Same (model, dims, frozen config) constructs the model only once."""
+    import bioplausible.experiment.param_estimator as pe
+    from bioplausible.experiment.param_estimator import (
+        InstantiateEstimator as _ImportedEstimator,
+    )
+
+    pe._PARAM_COUNT_CACHE.clear()  # prior tests may have populated it
+    calls = 0
+    original = _ImportedEstimator.estimate
+
+    def counting_estimate(
+        _model_name: str,
+        _config: dict[str, object],
+        *,
+        input_dim: int,
+        output_dim: int,
+    ) -> int:
+        nonlocal calls
+        calls += 1
+        return original(_model_name, _config, input_dim=input_dim, output_dim=output_dim)
+
+    monkeypatch.setattr(_ImportedEstimator, "estimate", staticmethod(counting_estimate))
+    cfg = {"hidden_dim": 64, "num_layers": 1}
+    assert estimate_param_count("backprop_mlp", cfg, input_dim=64, output_dim=10) > 0
+    cached = calls
+    assert estimate_param_count("backprop_mlp", cfg, input_dim=64, output_dim=10) > 0
+    assert calls == cached  # second call reused the cache
+    # A different config key is a distinct cache entry.
+    estimate_param_count("backprop_mlp", {"hidden_dim": 32}, input_dim=64, output_dim=10)
+    assert (
+        calls == cached + 1
+    ), "a fresh config must construct again (exactly one more call)"
+    # Cleanup so later tests get a fresh cache of the real path.
+    pe._PARAM_COUNT_CACHE.clear()

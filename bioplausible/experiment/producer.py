@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 __all__ = [
     "ConfigProducer",
     "HyperoptGridProducer",
+    "OptunaBayesProducer",
     "ProbeWork",
     "grid_cardinality",
 ]
@@ -92,3 +93,54 @@ class HyperoptGridProducer:
 
         study.optimize(_objective, n_trials=grid_cardinality(stage.configs))
         return [dict(t.params) for t in study.trials]
+
+
+class OptunaBayesProducer:
+    """TPESampler-backed :class:`ConfigProducer` (architecture §6.5, plan §B.1).
+
+    Swaps :class:`HyperoptGridProducer`'s exhaustive ``GridSampler`` for Optuna's
+    tree-structured Parzen estimator while keeping the same single-interface
+    contract: ``configs_for`` returns a deterministic, cardinality-exact list of
+    configs that both ``plan`` and ``run`` consume. The sampler draws
+    ``n_candidates`` distinct points from the stage's grid; the exact probe
+    count therefore follows from ``n_candidates`` rather than the grid
+    cardinality. ``n_trials`` is capped below the grid space size so TPE cannot
+    exhaust the search space into a plain grid enumeration.
+    """
+
+    def __init__(self, n_candidates: int = 50, seed: int = 42) -> None:
+        self.n_candidates = n_candidates
+        self.seed = seed
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    def configs_for(self, stage: Stage) -> list[dict[str, object]]:
+        """Enumerate ``n_candidates`` TPE-sampled configs from the stage grid.
+
+        The grid's each column is presented to the sampler as a categorical
+        over its declared choices (the same suggestion shape the grid producer
+        uses), so a stage's config space and its budget constraints are
+        unchanged — only the sampling strategy differs.
+        """
+        space: dict[str, list[object]] = {
+            name: list(choices) for name, choices in stage.configs.items()
+        }
+        n_trials = max(1, min(self.n_candidates, grid_cardinality(stage.configs)))
+        sampler = optuna.samplers.TPESampler(seed=self.seed, n_startup_trials=1)
+        study = optuna.create_study(sampler=sampler)
+
+        def _objective(trial: optuna.Trial) -> float:
+            for name, choices in space.items():
+                trial.suggest_categorical(name, choices)
+            return 0.0
+
+        seen: set[str] = set()
+        configs: list[dict[str, object]] = []
+        while len(configs) < n_trials and len(seen) < grid_cardinality(stage.configs):
+            study.optimize(_objective, n_trials=1)
+            trial = study.trials[-1]
+            key = ",".join(f"{k}={v!r}" for k, v in sorted(trial.params.items()))
+            if key in seen:
+                continue
+            seen.add(key)
+            configs.append(dict(trial.params))
+        return configs

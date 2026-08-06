@@ -71,6 +71,37 @@ def test_plan_unknown_config_fails(tmp_path: Path):
     assert main(["plan", str(tmp_path / "missing.yaml")]) == 1
 
 
+def test_plan_unexpected_error_resume_hint(tmp_path: Path, capsys, monkeypatch):
+    """A mid-run driver crash must not lose the resume contract.
+
+    Regression for the overnight run: an unexpected exception inside the
+    cascade used to escape as a bare traceback. It must instead tell the
+    operator the Report is resumable and return a non-zero exit.
+    """
+    import bioplausible.experiment.cli as cli
+
+    class ExplodingRunner:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        @staticmethod
+        def run():
+            raise RuntimeError("boom")
+
+    # Swap only the runner construction; Report is still real so we get a path.
+    original = cli.StaircaseRunner
+    cli.StaircaseRunner = ExplodingRunner  # type: ignore[assignment]
+    try:
+        rc = main(["run", str(_write(tmp_path, _SMOKE_YAML))])
+    finally:
+        cli.StaircaseRunner = original  # type: ignore[assignment]
+
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "resumable" in out
+    assert "rerun to continue" in out
+
+
 def test_report_renders_parity_and_pareto(tmp_path: Path, capsys):
     report_path = tmp_path / "r.jsonl"
     result = ProbeResult(

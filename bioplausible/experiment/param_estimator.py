@@ -193,9 +193,48 @@ def estimate_param_count(
     """
     import bioplausible.zoo  # ruff: ignore[unused-import]  (ensure the model registry is populated before construction)
 
-    return InstantiateEstimator.estimate(
-        model_name, config, input_dim=input_dim, output_dim=output_dim
+    key = (model_name, input_dim, output_dim, _freeze_config(config))
+    cached = _PARAM_COUNT_CACHE.get(key)
+    if cached is not None:
+        return cached
+    # An exception here (ParamEstimateError) naturally returns before the cache
+    # write below, so a failed construction is never cached and a transient
+    # failure can recover on retry.
+    count = InstantiateEstimator.estimate(
+        model_name,
+        config,
+        input_dim=input_dim,
+        output_dim=output_dim,
     )
+    _PARAM_COUNT_CACHE[key] = count
+    return count
+
+
+def _freeze_config(
+    config: dict[str, object],
+) -> tuple[tuple[str, object], ...]:
+    """Turn a config dict into a hashable, order-independent key fragment.
+
+    Values are ``repr``-it if unhashable (e.g. a list choice); the original
+    ``config`` is still passed to the estimator, so the cache is keyed by a
+    faithful serialisation without ever mutating the caller's data.
+    """
+    frozen: list[tuple[str, object]] = []
+    for key, value in config.items():
+        try:
+            hash(value)
+        except TypeError:
+            frozen.append((key, repr(value)))
+        else:
+            frozen.append((key, value))
+    return tuple(sorted(frozen))
+
+
+#: ``(model, dims, config) -> param count`` memo. Bounded by the number of
+#: distinct (model, config, dims) triples a single process schedules, so it is
+#: safely small for a campaign run. Reuses the exact estimator so `plan`, each
+#: `run` stage, and `report` agree on a budget without rebuilding models.
+_PARAM_COUNT_CACHE: dict[tuple[object, ...], int] = {}
 
 
 def bound_estimator(

@@ -183,6 +183,7 @@ class CoreTrainerDriver:
             output_dim=spec.output_dim,
             model_name=model,
         )
+        core_train_flag = self.track_energy or self.track_flops or self.track_memory
         cfg = TrainerConfig(
             model=model,
             model_kwargs=model_kwargs,
@@ -192,7 +193,10 @@ class CoreTrainerDriver:
             device=device,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            track_energy=self.track_energy,
+            # CoreTrainer's EnergyTracker computes flops+memory+energy under one
+            # gate; enable it when the campaign asks for any of them so the
+            # declared `compute.track` produces real values.
+            track_energy=core_train_flag,
             track_flops=self.track_flops,
             track_memory=self.track_memory,
         )
@@ -216,6 +220,10 @@ class CoreTrainerDriver:
             "forward_flops": int(last.forward_flops or 0),
             "backward_flops": int(last.backward_flops or 0),
             "peak_memory_mb": float(last.peak_memory_mb or 0.0),
+            # peak_memory_mb is CUDA-only; wall_time_s is not populated by
+            # CoreTrainer on CPU, so fall back to the summed epoch time so the
+            # parity contract's `matched_by.reported: [wall_time_s]` is real.
+            "wall_time_s": total_time,
         }
 
 
@@ -273,6 +281,7 @@ def run_probe(  # ruff: ignore[too-many-arguments]  (one normalization entrypoin
             forward_flops=int(metrics.get("forward_flops", 0)),
             backward_flops=int(metrics.get("backward_flops", 0)),
             peak_memory_mb=float(metrics.get("peak_memory_mb", 0.0)),
+            wall_time_s=float(metrics.get("wall_time_s", 0.0)),
         )
     except Exception as exc:  # broad: normalize any probe failure
         return ProbeResult(

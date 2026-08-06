@@ -42,7 +42,14 @@ class Report:
         for line in self.path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
-            record = json.loads(line)
+            try:
+                record = json.loads(line)
+            except ValueError:
+                # JSONDecodeError and UnicodeDecodeError both subclass ValueError.
+                # A torn tail write from a crash between probes must never abort
+                # resume; the incomplete line is simply not a finished probe. Any
+                # fully-written probes in earlier lines still index normally.
+                continue
             stage = record.get("stage", "")
             key = (
                 f"{stage}:{record.get('model', '')}:{record.get('config_key', '')}"

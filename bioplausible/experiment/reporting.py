@@ -29,16 +29,9 @@ __all__ = [
     "pareto_frontier",
     "parity_table",
     "render_report",
-    "report_probes",
 ]
 
 _DEFAULT_N_BOOT = 1_000
-
-
-def report_probes(path: str | Path) -> dict[str, list[ProbeResult]]:
-    """Load probe results from a Report, grouped by stage."""
-    report = Report(Path(path))
-    return {stage: report.stage_results(stage) for stage in report.stage_names()}
 
 
 def _mean_ci(values: Sequence[float]) -> tuple[float, float, float]:
