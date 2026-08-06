@@ -11,10 +11,12 @@ from bioplausible.zoo import get_model_spec
 # Type aliases
 
 __all__ = [
+    "RULE_SPACES",
     "SEARCH_SPACES",
     "DiscreteChoice",
     "NumberRange",
     "SearchSpace",
+    "get_rule_space",
     "get_search_space",
 ]
 NumberRange = tuple[
@@ -368,3 +370,59 @@ def get_search_space(model_name: str) -> SearchSpace:
         return SEARCH_SPACES["backprop_mlp"]
 
     raise ValueError(f"No search space defined for model: {model_name}")
+
+
+# Continuous, log-sampled search spaces per learning rule (plan §4A, §10).
+# These replace the coarse discrete grids with true Bayesian ranges so that
+# (a) TPE explores the posterior rather than a handful of points, and (b) each
+# rule is compared at its own optimum — including rule-specific equilibrium
+# hyperparameters (damping, step size, max iterations, convergence threshold).
+RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
+    "backprop": {
+        "lr": (1e-5, 1e-1, "log"),
+        "weight_decay": (1e-6, 1e-2, "log"),
+        "hidden_dim": (32, 1024, "log"),
+        "num_layers": (1, 6, "int"),
+        "dropout": (0.0, 0.5, "linear"),
+    },
+    "eqprop": {
+        "lr": (1e-5, 1e-1, "log"),
+        "weight_decay": (1e-6, 1e-2, "log"),
+        "hidden_dim": (32, 1024, "log"),
+        "num_layers": (1, 6, "int"),
+        "dropout": (0.0, 0.5, "linear"),
+        "beta": (0.01, 3.0, "log"),
+        "max_steps": (5, 100, "int"),
+        "damping": (0.0, 0.9, "linear"),
+        "tol": (1e-6, 1e-2, "log"),
+    },
+    "neural_cube": {
+        "lr": (1e-5, 1e-1, "log"),
+        "weight_decay": (1e-6, 1e-2, "log"),
+        "cube_size": (3, 10, "int"),
+        "hidden_dim": (32, 1024, "log"),
+        "max_steps": (5, 100, "int"),
+        "damping": (0.0, 0.9, "linear"),
+        "tol": (1e-6, 1e-2, "log"),
+    },
+}
+
+
+def get_rule_space(rule: str) -> dict[str, NumberRange | DiscreteChoice]:
+    """Return the continuous search space for a learning rule.
+
+    Args:
+        rule: Rule key from ``RULE_SPACES`` (e.g. ``"backprop"``).
+
+    Returns:
+        Parameter name → continuous range or discrete choice.
+
+    Raises:
+        ValueError: If the rule has no defined space.
+    """
+    try:
+        return RULE_SPACES[rule]
+    except KeyError:
+        raise ValueError(
+            f"No rule space defined for '{rule}'. Available: {sorted(RULE_SPACES)}"
+        ) from None

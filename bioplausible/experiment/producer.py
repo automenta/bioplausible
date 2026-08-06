@@ -108,9 +108,15 @@ class OptunaBayesProducer:
     exhaust the search space into a plain grid enumeration.
     """
 
-    def __init__(self, n_candidates: int = 50, seed: int = 42) -> None:
+    def __init__(
+        self,
+        n_candidates: int = 50,
+        seed: int = 42,
+        pruner: optuna.pruners.BasePruner | None = None,
+    ) -> None:
         self.n_candidates = n_candidates
         self.seed = seed
+        self.pruner = pruner
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
     def configs_for(self, stage: Stage) -> list[dict[str, object]]:
@@ -126,7 +132,7 @@ class OptunaBayesProducer:
         }
         n_trials = max(1, min(self.n_candidates, grid_cardinality(stage.configs)))
         sampler = optuna.samplers.TPESampler(seed=self.seed, n_startup_trials=1)
-        study = optuna.create_study(sampler=sampler)
+        study = optuna.create_study(sampler=sampler, pruner=self.pruner)
 
         def _objective(trial: optuna.Trial) -> float:
             for name, choices in space.items():

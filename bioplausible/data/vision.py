@@ -20,15 +20,18 @@ __all__ = [
 
 # Offline image sets whose standard transform is deterministic and dataset-wide,
 # so a single pre-transformed float tensor can serve every epoch and every probe.
-_CACHEABLE_VISION = frozenset({"mnist", "fashion_mnist", "kmnist"})
-# Why not cifar10/cifar100/svhn here: dataset-wide float32 tensors are ~600MB+;
-# the cache is intended for the small offline sets. cifar is excluded to avoid
-# an unintended large RAM spike in legacy callers.
+_CACHEABLE_VISION = frozenset({
+    "mnist",
+    "fashion_mnist",
+    "kmnist",
+    "cifar10",
+    "cifar100",
+})
 _VISION_TENSOR_CACHE: dict[tuple[str, bool], TensorDataset] = {}
 
 
 def _cached_vision(name: str, root: str, train: bool, download: bool) -> TensorDataset:
-    """Return a cached, pre-transformed float ``TensorDataset`` for small image sets.
+    """Return a cached, pre-transformed float ``TensorDataset`` for image sets.
 
     The torchvision standard transforms for these sets are deterministic, so
     transforming the whole dataset once and reusing it removes the dominant
@@ -68,7 +71,11 @@ def _load_sklearn_tabular(
     )
     from sklearn.preprocessing import StandardScaler
 
-    loader = {"iris": load_iris, "wine": load_wine, "breast_cancer": load_breast_cancer}[name]
+    loader = {
+        "iris": load_iris,
+        "wine": load_wine,
+        "breast_cancer": load_breast_cancer,
+    }[name]
     ds = loader()
     X = ds.data.astype(np.float32)
     y = ds.target.astype(np.int64)
@@ -83,9 +90,7 @@ def _load_sklearn_tabular(
     )
     X_data = X_train if train else X_test
     y_data = y_train if train else y_test
-    return TensorDataset(
-        torch.from_numpy(X_data), torch.from_numpy(y_data)
-    )
+    return TensorDataset(torch.from_numpy(X_data), torch.from_numpy(y_data))
 
 
 def get_vision_dataset(
@@ -300,13 +305,19 @@ class CharDataset(Dataset):
         return "".join(self.idx_to_char[i.item()] for i in indices)
 
 
-def create_data_loaders(
+def create_data_loaders(  # ruff: ignore[too-many-arguments,too-many-positional-arguments] - pin/persistent flags are plan §10 data-path knobs
     dataset_name: str = "mnist",
     batch_size: int = 64,
     num_workers: int = 0,
     flatten: bool = False,
+    pin_memory: bool = True,
+    persistent_workers: bool = False,
 ) -> tuple[DataLoader, DataLoader]:
-    """Create train and test data loaders for a vision dataset."""
+    """Create train and test data loaders for a vision dataset.
+
+    ``pin_memory`` and ``persistent_workers`` are forwarded to both loaders to
+    cut per-epoch transfer/spawn overhead on CUDA hosts (plan §3.3).
+    """
     train_data = get_vision_dataset(dataset_name, train=True, flatten=flatten)
     test_data = get_vision_dataset(dataset_name, train=False, flatten=flatten)
     train_loader = DataLoader(
@@ -314,11 +325,15 @@ def create_data_loaders(
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers and num_workers > 0,
     )
     test_loader = DataLoader(
         test_data,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers and num_workers > 0,
     )
     return train_loader, test_loader

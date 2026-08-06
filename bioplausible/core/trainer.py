@@ -127,6 +127,11 @@ class TrainerConfig:
     track_flops: bool = True
     track_memory: bool = True
 
+    # Profiling / eval toggles (plan §10): disabling these isolates the raw
+    # train-loop floor from validation and per-batch instrumentation overhead.
+    run_validation: bool = True
+    profile_epochs: bool = False
+
     # Checkpointing
     save_checkpoints: bool = True
     checkpoint_dir: str = "checkpoints"
@@ -625,6 +630,9 @@ class CoreTrainer:
     def _train_epochs_loop(self, batches_per_epoch: int, val_batches: int) -> None:
         """Run the epoch loop, handling checkpoints, callbacks, and early stop."""
         try:
+            if self.config.profile_epochs:
+                self._profile_loop(batches_per_epoch, val_batches)
+                return
             for epoch in range(self.config.epochs):
                 self.current_epoch = epoch
                 epoch_start = time.time()
@@ -642,6 +650,45 @@ class CoreTrainer:
             raise
         finally:
             self._save_history()
+
+    def _profile_loop(self, batches_per_epoch: int, val_batches: int) -> None:
+        """Run one epoch under ``torch.profiler`` and dump a Chrome trace.
+
+        Exports the trace to the run's output directory (plan §3 protocol):
+        ``profile_e0.trace``. Useful for identifying the top time consumers in
+        the CoreTrainer epoch loop (data / forward / backward / validation).
+        """
+        from torch import profiler
+
+        trace_path = self.output_dir / "profile_e0.trace"
+        logger.info("Profiling one epoch → %s", trace_path)
+
+        # Run the profiled epoch directly so the epoch-loop metrics path is
+        # exercised, mirroring a normal fit().
+        self.current_epoch = 0
+        epoch_start = time.time()
+        with profiler.profile(
+            activities=[
+                profiler.ProfilerActivity.CPU,
+                profiler.ProfilerActivity.CUDA,
+            ],
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+        ) as prof:
+            self._run_epoch(0, epoch_start, batches_per_epoch, val_batches)
+        prof.export_chrome_trace(str(trace_path))
+
+        top = [
+            (event.self_cpu_time_total, event.key)
+            for event in prof.key_averages()
+            if event.self_cpu_time_total > 0
+        ]
+        top.sort(reverse=True)
+        logger.info("Top profiler consumers:")
+        for us, key in top[:10]:
+            logger.info("  %8.1f ms  %s", us / 1000.0, key)
+        logger.info("Profile complete")
 
     def _handle_epoch_end(self, epoch_metrics: TrainingMetrics) -> bool:
         """Post-step bookkeeping for a finished epoch.
@@ -688,7 +735,7 @@ class CoreTrainer:
     ) -> TrainingMetrics | None:
         """Run a single training epoch and return its metrics (None if aborted)."""
         train_metrics = self._train_epoch(batches_per_epoch)
-        val_metrics = self._validate(val_batches)
+        val_metrics = self._validate(val_batches) if self.config.run_validation else {}
 
         extra_keys = [
             "loss",
@@ -911,7 +958,7 @@ class CoreTrainer:
         for p in self.model.parameters():
             if p.grad is not None:
                 total_grad_norm += p.grad.data.norm(2).item() ** 2
-        total_grad_norm = total_grad_norm ** 0.5
+        total_grad_norm = total_grad_norm**0.5
         if total_grad_norm > 100:
             raise optuna.TrialPruned(f"Gradient explosion (norm={total_grad_norm:.1f})")
 
@@ -1087,7 +1134,7 @@ class CoreTrainer:
         try:
             meta = Registry.get_metadata(ComponentCategory.MODEL, name)
             value = meta.requires_backward
-        except (ValueError, KeyError):
+        except ValueError, KeyError:
             if name not in warned:
                 warned.add(name)
                 logger.warning("Could not fetch metadata for %s", name)

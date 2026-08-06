@@ -12,6 +12,11 @@ from .eval_tiers import (
     get_evaluation_config,
     print_evaluation_summary,
 )
+from .frontier import (
+    RulePoint,
+    cost_of_plausibility,
+    pareto_frontier,
+)
 from .optuna_bridge import (
     create_optuna_space,
     create_study,
@@ -19,7 +24,13 @@ from .optuna_bridge import (
     optimize_with_callback,
     trial_to_metrics,
 )
-from .search_space import SEARCH_SPACES, SearchSpace, get_search_space
+from .search_space import (
+    RULE_SPACES,
+    SEARCH_SPACES,
+    SearchSpace,
+    get_rule_space,
+    get_search_space,
+)
 
 __version__ = "0.1.0"
 
@@ -33,10 +44,13 @@ HAS_OPTUNA = True
 __all__ = [
     "EVALUATION_TIERS",
     "HAS_OPTUNA",
+    "RULE_SPACES",
     "SEARCH_SPACES",
     "EvaluationConfig",
     "PatientLevel",
+    "RulePoint",
     "SearchSpace",
+    "cost_of_plausibility",
     "create_constrained_optuna_config",  # ruff: ignore[undefined-export]  # provided lazily via __getattr__
     "create_optuna_space",
     "create_study",
@@ -44,8 +58,10 @@ __all__ = [
     "get_constrained_search_space",  # ruff: ignore[undefined-export]  # provided lazily via __getattr__
     "get_evaluation_config",
     "get_pareto_trials",
+    "get_rule_space",
     "get_search_space",
     "optimize_with_callback",
+    "pareto_frontier",
     "print_evaluation_summary",
     "trial_to_metrics",
 ]
@@ -65,6 +81,7 @@ def __getattr__(name: str) -> object:
             create_constrained_optuna_config,
             get_constrained_search_space,
         )
+
         value = (
             create_constrained_optuna_config
             if name == "create_constrained_optuna_config"
