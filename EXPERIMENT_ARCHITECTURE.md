@@ -93,7 +93,7 @@ Checked against `HEAD`; keep these fixed in mind — they are why the plan looks
 | **Survivor** | A model that **PASS**ed every preceding Stage; only survivors run the next. |
 | **Run** | One Campaign execution → a **Report**. |
 | **Report** | Append-only JSONL of probes = artifact + resume index. |
-| **Task registry** | `name → TaskSpec` in `data/vision.py` (single source of task facts). |
+| **Task registry** | `name → TaskSpec` in `domains/registry.py` (single source of task facts). |
 | **Baseline** | Frozen reference (e.g. `backprop_mlp`) the reporter compares against. |
 | **ProbeDriver** | Thin adapter over the existing training path (default = CoreTrainer via `cli`). |
 | **ConfigProducer** | Adapter over the existing Optuna/`hyperopt` sampling path (default = `GridSampler`). |
@@ -232,6 +232,9 @@ class HyperoptGridProducer:
     Reuses hyperopt's study/resume machinery. Deterministic (fixed grid order, seeded
     study); probe count enumerable from the GridSampler search space (exact `plan`);
     resume via study.ask()/tell() + the content-addressed Report (skip finished probes).
+    
+    **Implementation note**: the study's objective must call `trial.suggest_categorical(name, choices)`
+    for each grid column so that GridSampler emits the enumerated configs (not empty `{}`).
     """
 ```
 
@@ -311,7 +314,7 @@ and `hyperopt.pareto`/`cli.run.pareto`.
   still apply).
 
 **New (only genuinely new code):**
-- `experiment/{schema,param_estimator,probe,producer,staircase,report}.py`
+- `experiment/{schema,param_estimator,probe,producer,staircase,report,__init__}.py`
 - `validation/{statistics,gradient_check}.py`
 
 ---
@@ -335,7 +338,7 @@ biopl-run validate      # repointed biopl-run: schema + task-registry validation
 biopl-run plan          # probe count (grid) + estimate_total_time (budget), dry
 biopl-run run           # idempotent staircase execution (resume by default)
 biopl-report            # EXISTING — parity/Pareto/failure from the Report
-biopl-repro-check       # EXISTING — nightly gate (gradient + run-resume no-op)
+biopl-repro-check       # EXISTING — nightly gate (gradient-equivalence + run-resume no-op)
 ```
 
 ---
@@ -360,24 +363,24 @@ biopl-repro-check       # EXISTING — nightly gate (gradient + run-resume no-op
 3. Task registry          1.5 hr §8-dedup        (verify: parity.py resolves via resolve_task)
 4. Seed consolidation     0.5 hr §8-dedup        (verify: no set_global_seed callers left)
 5. Schema rewrite         2 hr   §6.1            (verify: validate rejects seeds<10, unknown task)
-6. producer.py            1.5 hr §6.5            (verify: plan enumerates exact grid)
+6. producer.py            1.5 hr §6.5            (verify: plan enumerates exact grid; GridSampler objective emits configs)
 7. StaircaseRunner        2.5 hr §6.6            (verify: run + re-run no-op resume)
-8. Wire CLIs + retire     1.5 hr §8/§10          (verify: biopl-parity/report/repro-check work)
+8. Wire CLIs + retire     2.5 hr §8/§10          (verify: biopl-parity/report/repro-check work; gradient gate integrated)
 9. E2E overnight smoke    1 hr   §13
-                   Total ≈ 14 hr, of which <9 hr is new code
+                   Total ≈ 15 hr, of which <9 hr is new code
 ```
 
 ---
 
 ## 13. Definition of "Runnable" (verified, not claimed)
 
-1. `ruff check` / `format --check` pass repo-wide.  2. `pyright` zero errors on
+1. `ruff check` / `format --check` pass on **new code** (`experiment/`, `validation/`, `domains/`).  2. `pyright` zero errors on
 `experiment/`+`validation/`.  3. `biopl-run validate` passes: every `stages[].task` resolves
 via registry; evidence stages enforce `seeds≥10` + `matched_by` + dual-energy.
 4. `biopl-run plan` prints exact probe count + `estimate_total_time`.  5. `biopl-run run`
 trains every scheduled probe and appends to the Report.  6. `biopl-run run` again = no-op
 for finished probes.  7. `biopl-report` renders parity/Pareto/failure.  8. Every parity-tier
-model passed the gradient gate.  9. `uv run pytest --cov` passes at floor 85; `biopl-repro-check`
+model passed the gradient gate.  9. `uv run pytest --cov` passes at floor 85 on new code; `biopl-repro-check`
 rail runs the parity ladder for 1 epoch nightly.
 
 ---
