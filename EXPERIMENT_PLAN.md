@@ -39,7 +39,6 @@ train on cifar10. Expected budget ~37.5h (equilibrium probes ~30–70s each).
 ---
 
 ## 2. Decision ledger worth preserving (non-obvious "why")
-
 Gotchas and scope decisions that a future reader cannot recover from the code alone:
 
 - **Grid must be enumerated once per stage** (Optuna `GridSampler`, one study/stage), not per
@@ -63,6 +62,12 @@ Gotchas and scope decisions that a future reader cannot recover from the code al
   count is sampler-defined — `grid` = grid cardinality, `bayes` = `n_candidates` (capped at
   cardinality so TPE never degenerates into an exhaustive grid). `plan` and `run` consume the
   same producer so the count stays 1:1 under either flag (`cli.py:_producer`).
+- **Device resolution is duplicated and must stay in sync**: `cli._resolve_device` resolves
+  `auto` → `cuda:0`/`cpu`; `StaircaseRunner._resolve_device` must do the same. Until 2026-08-06
+  the runner hardcoded `auto` → `cpu`, so `biopl-run run` with `compute.device: auto` ran on CPU
+  while `plan --time-budget` calibrated on GPU — a silent 100%-CPU/0%-GPU mismatch. Fix in
+  `staircase.py` (device auto-resolves to CUDA). `examples/parity_digits.yaml` is a faster parity
+  sibling of `parity_cifar10_mlp` on the sklearn 8x8 `digits` task.
 
 ---
 
@@ -136,8 +141,7 @@ Gotchas and scope decisions that a future reader cannot recover from the code al
 
 **Gate**: `ruff check` + `ruff format` clean; `pyright` 0 errors; tests green.
 
-### A.2 Smoke-gate threshold validation
-**File**: `examples/parity_cifar10_mlp.yaml:18-23`
+### A.2 Smoke-gate threshold validation**File**: `examples/parity_cifar10_mlp.yaml:18-23`
 **Action**: After overnight run, check `biopl-report` output for:
 - All 9 models PASS smoke stage (acc ≥ 0.60 on xor, 15 epochs, 1 seed)
 - Any false positives (chance-level learners passing) → raise threshold
@@ -217,6 +221,63 @@ calibration can run fewer batches through the exact same training path.
 
 **Gate**: `ruff check` + `ruff format` clean; `pyright` 0 errors; 97 passing
 (experiment + statistics + registry + gradient).
+
+### B.4 Device-resolution fix + run-time status + faster parity example — DONE
+**Commit date**: 2026-08-06
+**Files**: `staircase.py`, `cli.py`, `examples/parity_digits.yaml`
+**Why**: three gaps blocked an actual overnight/quick parity run worth analyzing:
+1. `StaircaseRunner._resolve_device` hardcoded `auto` → `cpu`, so a `device: auto`
+   campaign trained on CPU even when CUDA was available ("100% CPU / 0% GPU").
+2. `biopl-run run` printed nothing until the whole cascade finished — no live
+   probe status on a long run.
+3. No faster parity campaign than the ~37.5h `parity_cifar10_mlp`.
+**What was done**:
+1. `staircase.py:_resolve_device` now mirrors `cli._resolve_device` (`auto` →
+   `cuda:0` if available else `cpu`); `cli._cmd_run` prints the effective device.
+2. `staircase.py:_collect_probes` prints `[running]`/`[done]` per probe (model,
+   seed, config, acc, elapsed) for live status.
+3. `examples/parity_digits.yaml`: same evidence structure as
+   `parity_cifar10_mlp` but on the sklearn 8×8 `digits` task (64-dim input vs
+   cifar10's 3072) — network-free, far faster.
+**Gate**: `ruff check` + `ruff format` clean; `pyright` 0 errors on changed files;
+`tests/unit/experiment/test_cli.py` + `test_experiment.py` 44 passing.
+
+### B.5 15-minute smoke run working end-to-end — DONE
+**Commit date**: 2026-08-06
+**Files**: `cli.py` (`_estimate_total_wall_time`, `_reduce_epochs_keeping_gates`,
+`_MIN_EVIDENCE_EPOCHS`), `reporting.py` (`parity_table` n<2 guard),
+`tests/unit/experiment/test_cli.py`
+**Why**: the first `--time-budget` run was degenerate: it produced a single-survivor
+report that could not even render. Two distinct bugs caused it.
+**What was done**:
+1. **Per-probe overhead overestimate** (`cli.py:_estimate_total_wall_time`): a flat
+   8s per-probe overhead dominated ~0.1s GPU probes (~80x overestimate), so the
+   auto-scaler concluded it "couldn't fit" and ground epochs to the floor of 1.
+   Now bounded to the epoch cost (`min(8, max(1, per_epoch))`), keeping the
+   estimate a conservative upper bound without swamping fast probes.
+2. **Gate reachability** (`cli.py:_reduce_epochs_keeping_gates`): epoch scaling now
+   applies only to evidence (baseline) stages, floored at `_MIN_EVIDENCE_EPOCHS=5`
+   so parity accuracy stays analyzable. Gating (non-baseline) stages keep their
+   full epochs — a pass rule unreachable in 1 epoch (e.g. xor `acc >= 0.60`)
+   was rejecting 8/9 models and collapsing to a single survivor.
+3. **Reporter n<2 crash** (`reporting.py:parity_table`): parity_table computed
+   Cohen's d / Cliff's delta for every stage, but a gating stage runs 1 seed per
+   model → `cohens_d` raised "requires at least 2 observations per group" and
+   aborted the whole report. Effect sizes for n<2 are undefined and are now
+   skipped (each `(model, n>=2)` pair guarded), not raised.
+**Result**: `biopl-run run examples/parity_digits.yaml --time-budget 15m` completes in
+~2.5 min (148.7s), all 9 models pass both stages, and `biopl-report --baseline
+backprop_mlp` renders a full parity table + Pareto frontier + effect sizes
+(e.g. eqprop d=-6.1, neural_cube d=-7.2, deep_hebbian d=-7.0 vs backprop on
+digits; three_factor/pepita/forward_forward fall well below backprop).
+`biopl-repro-check --resume-check parity_digits.report.jsonl`: resume no-op
+verified for all 99 probes; repro 7/7 reproducible.
+**Open residuals**: `_calibrate_epoch_times` still overestimates wall time for the
+`--time-budget` estimate (calibrates a single warmup-inflated 1-epoch probe and
+defaults non-bottleneck task cost to factor 1.0, so xor/smoke is charged as if it
+cost the same as the bottleneck). The run still fits comfortably under budget
+because scaling is conservative; tightening the calibration is optional polish,
+not a correctness blocker.
 
 ### B.2 Concurrent probe scheduling
 **File**: `bioplausible/experiment/staircase.py:252-297` (`_collect_probes`)  

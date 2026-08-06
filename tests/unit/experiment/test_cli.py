@@ -286,3 +286,95 @@ def test_auto_scale_noop_when_already_fits():
     scaled = _auto_scale_campaign(campaign, 1000, epoch_times, models, producer)
     assert scaled.stages[0].epochs == campaign.stages[0].epochs
     assert scaled.stages[0].configs == campaign.stages[0].configs
+
+
+# ---------------------------------------------------------------------------
+# Reporter: effect sizes must not crash when a group has n<2 (gating/smoke)
+# ---------------------------------------------------------------------------
+
+
+def test_report_renders_smoke_stage_with_single_seed(tmp_path: Path, capsys):
+    """A 1-seed gating stage (each model n=1) must still render a report.
+
+    Regression: parity_table computed Cohen's d for every stage regardless of
+    seed count, so a smoke stage with 1 seed per model raised
+    'Cohen's d requires at least 2 observations per group' and aborted the whole
+    report. Effect sizes with n=1 are undefined and must be skipped, not raised.
+    """
+    report_path = tmp_path / "simple.jsonl"
+    report = Report(report_path)
+    for model in ("backprop_mlp", "eqprop_mlp"):
+        report.append(
+            "smoke",
+            ProbeResult(
+                model=model,
+                task="xor",
+                config={"hidden_dim": 16, "num_layers": 2},
+                config_key=config_key({"hidden_dim": 16, "num_layers": 2}),
+                seed=0,
+                status="ok",
+                final_acc=0.9 if model == "backprop_mlp" else 0.7,
+                param_count=82 if model == "backprop_mlp" else 350,
+            ),
+        )
+
+    assert main_report([str(report_path), "--baseline", "backprop_mlp"]) == 0
+    out = capsys.readouterr().out
+    # Every model is still in the table; only the undefined effect size is skipped.
+    assert "backprop_mlp" in out
+    assert "eqprop_mlp" in out
+    assert "effect sizes vs baseline backprop_mlp" in out
+
+
+# ---------------------------------------------------------------------------
+# Auto-scaler: gating (non-baseline) stages keep their epochs so pass rules
+# stay reachable; evidence stages are floored at _MIN_EVIDENCE_EPOCHS.
+# ---------------------------------------------------------------------------
+
+
+def test_auto_scale_preserves_gating_epochs():
+    from bioplausible.experiment.cli import _auto_scale_campaign
+    from bioplausible.experiment.producer import HyperoptGridProducer
+    from bioplausible.experiment.schema import validate_yaml
+
+    # A two-stage campaign: cheap gating smoke + expensive baseline parity.
+    yaml_text = """
+meta: {name: two_stage, created: '2026-08-05'}
+compute: {device: cpu, num_workers: 0}
+arms:
+  mlp: {max_params: 210000, models: [backprop_mlp]}
+stages:
+  - name: smoke
+    task: xor
+    epochs: 15
+    seeds: 1
+    configs: {hidden_dim: [16, 32], num_layers: [2]}
+    pass_rule: {min_seed_ok: 1, rules: [{metric: acc, op: '>=', value: 0.6}]}
+  - name: parity
+    task: digits
+    epochs: 30
+    seeds: 10
+    configs: {hidden_dim: [64], num_layers: [1, 2]}
+    baseline: backprop_mlp
+    matched_by: {equal_budget: max_params, reported: [wall_time_s]}
+    energy: [gpu_tdp_x_util, op_count]
+reproducibility: {seed: 7}
+"""
+    campaign = validate_yaml(yaml_text)
+    models = [m for arm in campaign.arms.values() for m in arm.models]
+    producer = HyperoptGridProducer(seed=42)
+    # A huge per-epoch cost forces aggressive scaling.
+    epoch_times = {
+        ("backprop_mlp", "xor"): 1.0,
+        ("backprop_mlp", "digits"): 100.0,
+    }
+    scaled = _auto_scale_campaign(campaign, 30, epoch_times, models, producer)
+
+    smoke = next(s for s in scaled.stages if s.name == "smoke")
+    parity = next(s for s in scaled.stages if s.name == "parity")
+    # Gating stage keeps its epochs; evidence floored but non-degenerate.
+    assert smoke.epochs == 15
+    assert 5 <= parity.epochs < 30
+    from bioplausible.experiment.cli import _MIN_EVIDENCE_EPOCHS
+
+    assert parity.epochs >= _MIN_EVIDENCE_EPOCHS

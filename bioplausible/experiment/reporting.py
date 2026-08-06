@@ -33,6 +33,10 @@ __all__ = [
 
 _DEFAULT_N_BOOT = 1_000
 
+# cohens_d / cliffs_delta need >=2 observations per sample (two-sample t-test);
+# a gating/smoke stage may run 1 seed per model, which has no defined effect size.
+_MIN_EFFECT_OBS = 2
+
 
 def _mean_ci(values: Sequence[float]) -> tuple[float, float, float]:
     xs = [v for v in values if math.isfinite(v)]
@@ -71,7 +75,14 @@ def parity_table(
         ref = baseline_accs[baseline]
         lines.append(f"effect sizes vs baseline {baseline}:")
         for model, accs in baseline_accs.items():
-            if model == baseline:
+            # A gating/smoke stage may run just 1 seed per model; Cohen's d and
+            # Cliff's delta need >=2 observations in each sample, so skip pairs
+            # that lack them (an effect size over n=1 is undefined anyway).
+            if (
+                model == baseline
+                or len(ref) < _MIN_EFFECT_OBS
+                or len(accs) < _MIN_EFFECT_OBS
+            ):
                 continue
             d = cohens_d(ref, accs)
             delta = cliffs_delta(ref, accs)

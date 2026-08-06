@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 import statistics
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -308,7 +309,18 @@ class StaircaseRunner:
             if budget is not None and param_count > budget:
                 continue
             for seed in pending:
+                probe_start = time.time()
+                print(
+                    f"  [running] stage={stage.name} model={model:<22} "
+                    f"seed={seed} config={config}"
+                )
                 probe = self._run_probe(stage, model, config, seed, param_count)
+                status = probe.status
+                acc = probe.final_acc if probe.status == "ok" else probe.error
+                print(
+                    f"  [done]    {status:<5} model={model:<22} seed={seed} "
+                    f"acc={acc:.4f} in {time.time() - probe_start:.1f}s"
+                )
                 self.report.append(stage.name, probe)
                 results.append(probe)
         return results
@@ -339,7 +351,9 @@ class StaircaseRunner:
             return "cpu"
         device = self.compute.device
         if device == "auto":
-            return "cpu"  # CI/overnight runs default to CPU unless overridden
+            import torch
+
+            return "cuda:0" if torch.cuda.is_available() else "cpu"
         return device
 
     def run(self) -> list[Outcome]:

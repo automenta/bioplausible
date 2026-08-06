@@ -278,8 +278,13 @@ def _estimate_total_wall_time(
             per_epoch = max(per_epoch, et)
         if per_epoch <= 0:
             per_epoch = 30.0
-        # Per probe: epochs * per_epoch (train) + fixed setup overhead (~8s).
-        probe_time = stage.epochs * per_epoch + 8.0
+        # Per probe: epochs * per_epoch (train) plus a setup-overhead term.
+        # A flat 8s overhead dominated subsecond GPU probes (~80x overestimate),
+        # which drove the auto-scaler to the degenerate epoch-1 floor and made
+        # the smoke gate unreachable. Bound the overhead to the epoch cost so
+        # it stays an upper bound without swamping fast probes.
+        setup = min(8.0, max(1.0, per_epoch))
+        probe_time = stage.epochs * per_epoch + setup
         total += probe_time * n_pairs * n_seeds
     return total
 
@@ -296,14 +301,37 @@ def _min_seeds_for(stage: Stage) -> int:
     return 10 if stage.baseline is not None else 1
 
 
-def _reduce_stage_epochs(stage: Stage, scale_factor: float) -> bool:
+# Evidence (parity) stages must keep enough epochs that accuracy is meaningful
+# (learned) rather than chance-level noise, so the report's parity/effect-size
+# table is analyzable. Below this floor a probe is under-trained and the parity
+# comparison is meaningless (the smoke run at 1 epoch showed acc ~ chance).
+_MIN_EVIDENCE_EPOCHS = 5
+
+
+def _reduce_stage_epochs(
+    stage: Stage, scale_factor: float, min_epochs: int = 1
+) -> bool:
     """Clamp a stage's epochs toward the budget; returns True if changed."""
-    new_epochs = max(1, int(stage.epochs * scale_factor))
+    new_epochs = max(min_epochs, int(stage.epochs * scale_factor))
     if new_epochs >= stage.epochs:
         return False
     print(f"    Stage {stage.name}: epochs {stage.epochs} -> {new_epochs}")
     stage.epochs = new_epochs
     return True
+
+
+def _reduce_epochs_keeping_gates(stages: Sequence[Stage], scale_factor: float) -> None:
+    """Reduce epochs on evidence stages only; gating stages keep theirs.
+
+    A gating (non-baseline) stage whose pass-rule threshold becomes
+    unreachable under aggressive epoch cuts (e.g. xor ``acc >= 0.60`` in 1
+    epoch) would reject the whole model set and produce a degenerate
+    single-survivor report, so its epochs are never scaled down.
+    """
+    for stage in stages:
+        if stage.baseline is None:
+            continue
+        _reduce_stage_epochs(stage, scale_factor, _MIN_EVIDENCE_EPOCHS)
 
 
 def _reduce_stage_configs(
@@ -350,9 +378,13 @@ def _auto_scale_campaign(
     Return a deep copy of the campaign with epochs/configs/seeds scaled to fit the time budget.
 
     Scaling priority:
-    1. Reduce epochs (minimum 1)
-    2. Reduce configs via bayes producer (if grid)
-    3. Reduce seeds (respecting minimums: 1 for smoke, 10 for evidence)
+    1. Reduce epochs — only on evidence (baseline) stages, floored at
+       ``_MIN_EVIDENCE_EPOCHS`` so parity accuracy stays analyzable. Gating
+       (non-baseline) stages keep their epochs: a pass rule whose threshold
+       becomes unreachable (e.g. xor ``acc >= 0.60`` in 1 epoch) rejects the
+       whole model set and yields a degenerate single-survivor report.
+    2. Reduce configs (all stages).
+    3. Reduce seeds (respecting minimums: 1 for smoke, 10 for evidence).
     """
     import copy
 
@@ -366,17 +398,16 @@ def _auto_scale_campaign(
     if current <= target_seconds:
         return scaled  # already fits
 
-    # Iteratively reduce epochs -> configs -> seeds until the estimate fits the
-    # budget or every resource is at its floor. A single pass is not enough:
-    # reducing epochs changes the cost linearly, and re-solving after each step
-    # converges on the floor instead of overshooting the budget.
+    # Iteratively reduce until the estimate fits the budget or every resource
+    # is at its floor. A single pass is not enough: reducing epochs changes the
+    # cost linearly, and re-solving after each step converges on the floor
+    # instead of overshooting the budget.
     for _ in range(64):  # bounded: each reduction strictly decreases cost
         current = _estimate_total_wall_time(scaled, epoch_times, models, producer)
         if current <= target_seconds:
             return scaled
         scale_factor = target_seconds / current
-        for stage in scaled.stages:
-            _reduce_stage_epochs(stage, scale_factor)
+        _reduce_epochs_keeping_gates(scaled.stages, scale_factor)
         if (
             _estimate_total_wall_time(scaled, epoch_times, models, producer)
             <= target_seconds
@@ -674,6 +705,8 @@ def _cmd_run(  # ruff: ignore[too-many-arguments,too-many-locals,too-many-positi
         runner.compute.device = device
 
     start = time.time()
+    effective = _resolve_device(campaign, device)
+    print(f"running on {effective}")
     try:
         outcomes = runner.run()
     except KeyboardInterrupt:
