@@ -18,6 +18,36 @@ __all__ = [
     "get_vision_dataset",
 ]
 
+# Offline image sets whose standard transform is deterministic and dataset-wide,
+# so a single pre-transformed float tensor can serve every epoch and every probe.
+_CACHEABLE_VISION = frozenset({"mnist", "fashion_mnist", "kmnist"})
+# Why not cifar10/cifar100/svhn here: dataset-wide float32 tensors are ~600MB+;
+# the cache is intended for the small offline sets. cifar is excluded to avoid
+# an unintended large RAM spike in legacy callers.
+_VISION_TENSOR_CACHE: dict[tuple[str, bool], TensorDataset] = {}
+
+
+def _cached_vision(name: str, root: str, train: bool, download: bool) -> TensorDataset:
+    """Return a cached, pre-transformed float ``TensorDataset`` for small image sets.
+
+    The torchvision standard transforms for these sets are deterministic, so
+    transforming the whole dataset once and reusing it removes the dominant
+    per-epoch (and per-probe) data cost. Keyed by ``(name, train)`` so probes on
+    the same split share one in-memory tensor.
+    """
+    key = (name, train)
+    cached = _VISION_TENSOR_CACHE.get(key)
+    if cached is not None:
+        return cached
+    transform = _build_transforms(name, flatten=False)
+    dataset_class = _get_dataset_class(name)
+    dataset = dataset_class(root, train=train, download=download, transform=transform)
+    xs = torch.stack([dataset[i][0] for i in range(len(dataset))])
+    ys = torch.tensor([int(dataset[i][1]) for i in range(len(dataset))])
+    cached = TensorDataset(xs, ys)
+    _VISION_TENSOR_CACHE[key] = cached
+    return cached
+
 
 def _load_sklearn_tabular(
     name: str,
@@ -90,6 +120,17 @@ def get_vision_dataset(
         return _load_toy_dataset(name, train)
     if name in ("iris", "wine", "breast_cancer"):
         return _load_sklearn_tabular(name, train)
+    # For the offline, deterministic image sets, pre-transform the whole dataset
+    # into a float TensorDataset once and reuse it across epochs and probes.
+    # Otherwise ToTensor+Normalize re-runs per batch (and per probe), which is
+    # data-load bound (~10-14s/epoch for MNIST rather than <1s).
+    if (
+        name in _CACHEABLE_VISION
+        and not flatten
+        and not augment
+        and included_classes is None
+    ):
+        return _cached_vision(name, root, train, download)
 
     transform = _build_transforms(name, flatten, augment=augment and train)
     dataset_class = _get_dataset_class(name)

@@ -1,0 +1,37 @@
+# Parity campaign: bio-plausible MLPs vs backprop on MNIST — decisive trio.
+# Answers the central question that guides cifar10 selection: does neural_cube
+# (the digits winner) hold up on real 28x28 10-class images vs backprop, and
+# is eqprop still competitive? 3 models x 12 epochs x 10 seeds fits ~1.8h on GPU
+# with the cached-transformed data path.
+meta: {name: parity_mnist_trio, created: '2026-08-06'}
+
+compute:
+  device: auto
+  num_workers: 2
+  track: {flops: true, memory: true, energy: false}
+
+arms:
+  mlp:
+    max_params: 500_000
+    models: [backprop_mlp, neural_cube, eqprop_mlp]
+
+stages:
+  - name: smoke
+    task: xor
+    epochs: 15
+    seeds: 1
+    configs: {hidden_dim: [16, 32], num_layers: [2]}
+    pass_rule: {min_seed_ok: 1, rules: [{metric: acc, op: '>=', value: 0.60}]}
+  - name: parity
+    task: mnist
+    epochs: 12
+    seeds: 10
+    configs: {hidden_dim: [128], num_layers: [2]}
+    baseline: backprop_mlp
+    matched_by:
+      equal_budget: max_params
+      reported: [wall_time_s, forward_flops, backward_flops]
+    energy: [gpu_tdp_x_util, op_count]
+    pass_rule: {min_seed_ok: 10, rules: []}
+
+reproducibility: {seed: 42, capture_env: true}

@@ -1,0 +1,38 @@
+# Parity campaign: bio-plausible MLPs vs backprop on MNIST — focused.
+# Tests whether the digits pattern (neural_cube wins, backprop/eqprop/FA
+# competitive) holds on a real 10-class 28x28 vision task. 5 models × 30 epochs
+# × 2 configs × 10 seeds crosses-check convergence and guides CIFAR10 selection.
+# num_workers: 2 is required — with num_workers: 0 MNIST is single-process CPU
+# data-load bound (~15s/epoch); with workers it is GPU-bound (~0.1s/epoch).
+meta: {name: parity_mnist_focused, created: '2026-08-06'}
+
+compute:
+  device: auto
+  num_workers: 2
+  track: {flops: true, memory: true, energy: false}
+
+arms:
+  mlp:
+    max_params: 500_000
+    models: [backprop_mlp, neural_cube, eqprop_mlp, standard_fa, diff_target_prop]
+
+stages:
+  - name: smoke
+    task: xor
+    epochs: 15
+    seeds: 1
+    configs: {hidden_dim: [16, 32], num_layers: [2]}
+    pass_rule: {min_seed_ok: 1, rules: [{metric: acc, op: '>=', value: 0.60}]}
+  - name: parity
+    task: mnist
+    epochs: 30
+    seeds: 10
+    configs: {hidden_dim: [128, 256], num_layers: [2]}
+    baseline: backprop_mlp
+    matched_by:
+      equal_budget: max_params
+      reported: [wall_time_s, forward_flops, backward_flops]
+    energy: [gpu_tdp_x_util, op_count]
+    pass_rule: {min_seed_ok: 10, rules: []}
+
+reproducibility: {seed: 42, capture_env: true}
