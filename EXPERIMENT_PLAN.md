@@ -279,6 +279,44 @@ cost the same as the bottleneck). The run still fits comfortably under budget
 because scaling is conservative; tightening the calibration is optional polish,
 not a correctness blocker.
 
+### B.6 Calibration/estimator accuracy + a thorough parity run — DONE
+**Commit date**: 2026-08-06
+**Files**: `cli.py` (`_calibrate_epoch_times`, `_measure_epoch`,
+`_estimate_total_wall_time`, `_reduce_stage_configs`, gradual `_auto_scale`),
+`reporting.py` (zero-variance guard), `tests/unit/experiment/test_cli.py`,
+`examples/parity_digits_thorough.yaml`
+**Why**: the `--time-budget` estimator was ~80x too conservative, which under-filled
+generous budgets and made it impossible to author a genuinely thorough run.
+**What was done**:
+1. **Per-task calibration** (`_calibrate_epoch_times`): every distinct task is now
+   measured (not just the bottleneck), so cheap `xor`/smoke gets a real small
+   figure instead of the old factor-1.0 assumption. `_task_cost_factor` removed.
+2. **Warm-up amortization** (`_measure_epoch`): calib probes run `_CALIB_EPOCHS=3`
+   epochs and average, removing the single-epoch CUDA-kernel-compile spike that
+   inflated per-epoch cost ~3x.
+3. **Per-model estimate** (`_estimate_total_wall_time`): totals now sum each model
+   at its *own* calibrated per-epoch time instead of charging every model at the
+   slowest one; setup floor lowered to a realistic 0.5s.
+4. **Grid config reduction fix** (`_reduce_stage_configs`): the old code re-read
+   the producer's original grid every call and could never shrink a 3x3 grid
+   (the 6 smallest configs still span every value, reconstructing all 9). It now
+   greedily drops the highest-cost value choice per key.
+5. **Gradual auto-scaling**: per-pass reduction is clamped (max 30%) so the scaler
+   converges to a schedule that *fills* the budget instead of jumping straight to
+   the epoch floor.
+6. **Reporter zero-variance guard** (`reporting.py`): `cohens_d` raises on a pair
+   with zero variance (e.g. a smoke model scoring 1.0 on every config); such
+   undefined effect sizes are now skipped, not fatal.
+**Result**: `examples/parity_digits_thorough.yaml` (smoke xor full + parity digits
+15 epochs × hidden [64,128,256] × 10 seeds) completes in **1200s (20 min)** on the
+RTX 3080, all 9 models pass both stages, 288/288 probes, report renders with
+effect sizes and a 3-point Pareto frontier. `resume-check`: 288-probe no-op
+verified; repro 7/7. **Scientific takeaway corrected vs the 5-epoch smoke run**:
+at 5 epochs the bio models spuriously "beat" backprop; at 15 converged epochs
+backprop (0.965) is statistically tied-to-superior vs eqprop (0.954),
+neural_cube (0.985, d=-2.5 vs backprop), while deep_hebbian/standard_fa/pepita/
+three_factor/forward_forward underperform and diff_target_prop is high-variance.
+
 ### B.2 Concurrent probe scheduling
 **File**: `bioplausible/experiment/staircase.py:252-297` (`_collect_probes`)  
 **Approach**: Replace sequential `for seed in pending:` loop with `asyncio.TaskGroup`:

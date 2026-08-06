@@ -75,17 +75,24 @@ def parity_table(
         ref = baseline_accs[baseline]
         lines.append(f"effect sizes vs baseline {baseline}:")
         for model, accs in baseline_accs.items():
-            # A gating/smoke stage may run just 1 seed per model; Cohen's d and
-            # Cliff's delta need >=2 observations in each sample, so skip pairs
-            # that lack them (an effect size over n=1 is undefined anyway).
+            # A gating/smoke stage may run 1 seed per model, or a pair may have
+            # zero variance (e.g. both configs score 1.0); Cohen's d and Cliff's
+            # delta are then undefined. Skip such pairs rather than aborting the
+            # whole report.
             if (
                 model == baseline
                 or len(ref) < _MIN_EFFECT_OBS
                 or len(accs) < _MIN_EFFECT_OBS
             ):
                 continue
-            d = cohens_d(ref, accs)
-            delta = cliffs_delta(ref, accs)
+            try:
+                d = cohens_d(ref, accs)
+            except ValueError:
+                continue
+            try:
+                delta = cliffs_delta(ref, accs)
+            except ValueError:
+                continue
             lines.append(f"  {model:<22}cohen_d={d:.3f}  cliff_delta={delta:.3f}")
     return "\n".join(lines)
 

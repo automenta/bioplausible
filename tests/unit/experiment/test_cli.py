@@ -71,14 +71,14 @@ def test_plan_unknown_config_fails(tmp_path: Path):
     assert main(["plan", str(tmp_path / "missing.yaml")]) == 1
 
 
-def test_plan_unexpected_error_resume_hint(tmp_path: Path, capsys, monkeypatch):
+def test_plan_unexpected_error_resume_hint(tmp_path: Path, capsys):
     """A mid-run driver crash must not lose the resume contract.
 
     Regression for the overnight run: an unexpected exception inside the
     cascade used to escape as a bare traceback. It must instead tell the
     operator the Report is resumable and return a non-zero exit.
     """
-    import bioplausible.experiment.cli as cli
+    from bioplausible.experiment import cli
 
     class ExplodingRunner:
         def __init__(self, *args, **kwargs) -> None:
@@ -378,3 +378,40 @@ reproducibility: {seed: 7}
     from bioplausible.experiment.cli import _MIN_EVIDENCE_EPOCHS
 
     assert parity.epochs >= _MIN_EVIDENCE_EPOCHS
+
+
+def test_report_skips_zero_variance_effect_sizes(tmp_path: Path, capsys):
+    """A model scoring identically on every probe (zero variance) must not abort.
+
+    Regression: a smoke/gating pair where both configs score 1.0 has zero
+    variance, so cohens_d raised 'both samples have zero variance' and aborted
+    the whole report. Undefined effect sizes are skipped, not raised.
+    """
+    report_path = tmp_path / "z.jsonl"
+    report = Report(report_path)
+    # backprop and eqprop both score exactly 1.0 on two smoke configs.
+    for model, cfg in (
+        ("backprop_mlp", {"hidden_dim": 16, "num_layers": 2}),
+        ("backprop_mlp", {"hidden_dim": 32, "num_layers": 2}),
+        ("eqprop_mlp", {"hidden_dim": 16, "num_layers": 2}),
+        ("eqprop_mlp", {"hidden_dim": 32, "num_layers": 2}),
+    ):
+        report.append(
+            "smoke",
+            ProbeResult(
+                model=model,
+                task="xor",
+                config=cfg,
+                config_key=config_key(cfg),
+                seed=0,
+                status="ok",
+                final_acc=1.0,
+                param_count=82,
+            ),
+        )
+
+    assert main_report([str(report_path), "--baseline", "backprop_mlp"]) == 0
+    out = capsys.readouterr().out
+    assert "backprop_mlp" in out
+    assert "eqprop_mlp" in out
+    assert "effect sizes vs baseline backprop_mlp" in out

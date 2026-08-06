@@ -111,17 +111,7 @@ def _calib_batches(target_seconds: float | None) -> int:
     return max(10, min(epoch_batches, n))
 
 
-def _task_cost_factor(task: str, bottleneck_task: str) -> float:
-    """Relative per-epoch cost of ``task`` vs the calibrated bottleneck task.
-
-    xor is far cheaper than cifar10 on a GPU; unknown pairs are treated as
-    equal to the bottleneck (factor 1.0).
-    """
-    if task == "xor" and bottleneck_task == "cifar10":
-        return 1 / 50.0
-    if task == "cifar10" and bottleneck_task == "xor":
-        return 50.0
-    return 1.0
+_CALIB_EPOCHS = 3  # amortize the first-epoch warmup (kernel compile / allocator)
 
 
 def _measure_epoch(  # ruff: ignore[too-many-arguments,too-many-positional-arguments]  # passes the full probe identity + calibration knobs
@@ -133,9 +123,12 @@ def _measure_epoch(  # ruff: ignore[too-many-arguments,too-many-positional-argum
     calib_batches: int,
     epoch_batches: int,
 ) -> float:
-    """Run one 1-epoch calibration probe and extrapolate to a full epoch.
+    """Measure seconds per full epoch via a warm-up-amortized calibration probe.
 
-    Returns seconds per full (epoch_batches-batch) epoch, or 0.0 on failure.
+    Runs ``_CALIB_EPOCHS`` short epochs and divides by the count, so the
+    first-epoch warmup (CUDA kernel compile, allocator) does not inflate the
+    per-epoch cost. Returns seconds per full (``epoch_batches``-batch) epoch,
+    or 0.0 on failure.
     """
     from bioplausible.experiment.probe import run_probe
 
@@ -146,7 +139,7 @@ def _measure_epoch(  # ruff: ignore[too-many-arguments,too-many-positional-argum
             task=task,
             config=config,
             seed=0,
-            epochs=1,
+            epochs=_CALIB_EPOCHS,
             device=device,
             param_count=0,
         )
@@ -156,7 +149,7 @@ def _measure_epoch(  # ruff: ignore[too-many-arguments,too-many-positional-argum
     if result.status != "ok":
         print(f"    {model}: FAILED ({result.error})")
         return 0.0
-    per_batch = max(result.epoch_time_s, 0.0) / calib_batches
+    per_batch = max(result.epoch_time_s, 0.0) / (_CALIB_EPOCHS * calib_batches)
     return per_batch * epoch_batches
 
 
@@ -168,32 +161,21 @@ def _calibrate_epoch_times(
     target_seconds: float | None = None,
 ) -> dict[tuple[str, str], float]:
     """
-    Run quick calibration probes on the target device.
+    Calibrate seconds per full epoch for every (model, task) in the campaign.
 
-    Calibrates only the bottleneck task (most epochs) using a tiny config and
-    2 representative models. The number of calibration batches scales with the
-    time budget (proportional planning) so planning stays cheap for short runs
-    and accurate for long ones. Returns (model, task) -> seconds per full
-    (100-batch) epoch.
+    Measures each distinct task independently (not just the costliest) using a
+    tiny config and the representative models, so cheap gating tasks (e.g. xor)
+    get a real, much-smaller per-epoch figure rather than being assumed equal to
+    the bottleneck. The number of calibration batches scales with the budget
+    (proportional planning); per-epoch time is warm-up amortized. Returns
+    ``(model, task) -> seconds per full (100-batch) epoch``.
     """
     from bioplausible.experiment.probe import CoreTrainerDriver
 
-    # Pick the bottleneck task: the stage with the most epochs (usually the
-    # evidence/parity stage), since that dominates the schedule.
-    bottleneck_stage = max(campaign.stages, key=lambda s: s.epochs)
-    bottleneck_task = bottleneck_stage.task
-
-    configs = producer.configs_for(bottleneck_stage) or [{}]
-
-    def config_size(cfg: dict[str, object]) -> int:
-        h = int(cfg.get("hidden_dim", 64))
-        layers = int(cfg.get("num_layers", 1))
-        return h * layers
-
-    rep_config = min(configs, key=config_size)
+    tasks = sorted({s.task for s in campaign.stages})
     reps = _rep_models(models)
     calib_batches = _calib_batches(target_seconds)
-
+    epoch_batches = 100
     driver = CoreTrainerDriver(
         num_workers=campaign.compute.num_workers,
         track_energy=False,
@@ -202,56 +184,28 @@ def _calibrate_epoch_times(
         batches_per_epoch=calib_batches,
     )
 
-    print(
-        f"  Calibrating bottleneck task '{bottleneck_task}' on {device} "
-        f"with config: {rep_config} ({calib_batches} batches)"
-    )
-    epoch_batches = 100
     epoch_times: dict[tuple[str, str], float] = {}
-
-    for model in reps:
-        epoch_times[model, bottleneck_task] = _measure_epoch(
-            driver,
-            model,
-            bottleneck_task,
-            rep_config,
-            device,
-            calib_batches,
-            epoch_batches,
+    for task in tasks:
+        stage = next(s for s in campaign.stages if s.task == task)
+        rep_config = min(producer.configs_for(stage) or [{}], key=_config_size)
+        print(
+            f"  Calibrating task '{task}' on {device} with config: "
+            f"{rep_config} ({calib_batches} batches)"
         )
-        reported = epoch_times[model, bottleneck_task]
-        print(f"    {model}: {reported:.1f}s/epoch (est)")
-
-    # Erred/failed reps get the other rep's time (or a defensive 30s fallback).
-    for model in reps:
-        if epoch_times.get((model, bottleneck_task), 0.0) <= 0:
-            alt = next(
-                (
-                    epoch_times[m, bottleneck_task]
-                    for m in reps
-                    if m != model and epoch_times.get((m, bottleneck_task), 0) > 0
-                ),
-                30.0,
+        task_times: dict[str, float] = {}
+        for model in reps:
+            task_times[model] = _measure_epoch(
+                driver, model, task, rep_config, device, calib_batches, epoch_batches
             )
-            epoch_times[model, bottleneck_task] = alt
+            print(f"    {model}: {task_times[model]:.1f}s/epoch (est)")
 
-    # Other tasks: scale relative to the bottleneck task's dataset cost ratio.
-    max_ref = max(
-        (epoch_times.get((m, bottleneck_task), 0.0) for m in reps), default=30.0
-    )
-    for stage in campaign.stages:
-        if stage.task == bottleneck_task:
-            continue
-        factor = _task_cost_factor(stage.task, bottleneck_task)
+        valid = [t for t in task_times.values() if t > 0]
+        avg = sum(valid) / len(valid) if valid else 30.0  # defensive floor
+        for model in reps:
+            if task_times.get(model, 0.0) <= 0:
+                task_times[model] = avg
         for model in models:
-            epoch_times[model, stage.task] = max_ref * factor
-
-    # Populate the bottleneck task for every model not directly calibrated.
-    measured = [epoch_times.get((m, bottleneck_task), 0.0) for m in reps]
-    avg = sum(measured) / len(measured) if measured else 30.0
-    for model in models:
-        if (model, bottleneck_task) not in epoch_times:
-            epoch_times[model, bottleneck_task] = avg
+            epoch_times[model, task] = task_times.get(model, avg)
 
     return epoch_times
 
@@ -268,24 +222,18 @@ def _estimate_total_wall_time(
         # Reuse the same in-budget filter as `plan` so the estimate matches the
         # real schedule (over-budget pairs are excluded once, not per iteration).
         pairs = _in_budget_pairs(campaign, stage, models, producer)
-        n_pairs = len(pairs)
         n_seeds = stage.seeds
-        # Use the max per-epoch time across models in this stage as the stage's
-        # per-epoch cost (a conservative upper bound for the whole stage).
-        per_epoch = 0.0
-        for model in models:
-            et = epoch_times.get((model, stage.task), 0.0)
-            per_epoch = max(per_epoch, et)
-        if per_epoch <= 0:
-            per_epoch = 30.0
-        # Per probe: epochs * per_epoch (train) plus a setup-overhead term.
-        # A flat 8s overhead dominated subsecond GPU probes (~80x overestimate),
-        # which drove the auto-scaler to the degenerate epoch-1 floor and made
-        # the smoke gate unreachable. Bound the overhead to the epoch cost so
-        # it stays an upper bound without swamping fast probes.
-        setup = min(8.0, max(1.0, per_epoch))
-        probe_time = stage.epochs * per_epoch + setup
-        total += probe_time * n_pairs * n_seeds
+        # Sum per (model, config) using that model's own calibrated per-epoch
+        # time — fast models (e.g. a 0.07s/epoch hebbian) must not be charged at
+        # the slowest model's cost. Per probe: epochs * per_epoch plus a
+        # setup-overhead term bounded to the epoch cost (a flat 8s dominated
+        # subsecond GPU probes and made the auto-scaler degenerate).
+        for pair in pairs:
+            per_epoch = epoch_times.get((pair.model, stage.task), 0.0)
+            if per_epoch <= 0:  # uncalibrated pair: defensive upper bound
+                per_epoch = 30.0
+            setup = min(6.0, max(0.5, per_epoch))
+            total += (stage.epochs * per_epoch + setup) * n_seeds
     return total
 
 
@@ -334,26 +282,53 @@ def _reduce_epochs_keeping_gates(stages: Sequence[Stage], scale_factor: float) -
         _reduce_stage_epochs(stage, scale_factor, _MIN_EVIDENCE_EPOCHS)
 
 
-def _reduce_stage_configs(
-    stage: Stage,
-    scale_factor: float,
-    producer: HyperoptGridProducer | OptunaBayesProducer,
-) -> bool:
-    """Keep the smallest-N configs of a stage; returns True if any were dropped."""
-    configs = producer.configs_for(stage)
-    if len(configs) <= 1:
+def _grid_len(grid: dict[str, list[object]]) -> int:
+    """Cardinality of a parallel value grid (product of per-key sizes)."""
+    n = 1
+    for values in grid.values():
+        n *= len(values)
+    return n
+
+
+def _reduce_stage_configs(stage: Stage, scale_factor: float) -> bool:
+    """Drop costliest config choices until the stage grid fits ``scale_factor``.
+
+    A parallel grid can't be pruned to an arbitrary config subset (the smallest
+    N configs of a 3x3 grid still span every value in every key, so re-expanding
+    reconstructs the full grid). Instead, greedily remove the highest-cost value
+    choice from the key whose removal shrinks the grid the most, so big configs
+    are dropped first (cheapest and fewest remain). Returns True if changed.
+    """
+    from itertools import product
+
+    def expand(g: dict[str, list[object]]) -> list[dict[str, object]]:
+        keys = list(g)
+        if not keys:
+            return []
+        return [dict(zip(keys, combo)) for combo in product(*(g[k] for k in keys))]
+
+    grid: dict[str, list[object]] = {k: list(v) for k, v in stage.configs.items()}
+    target = max(1, int(_grid_len(grid) * scale_factor))
+    if target >= _grid_len(grid):
         return False
-    n_keep = max(1, int(len(configs) * scale_factor))
-    if n_keep >= len(configs):
-        return False
-    kept = sorted(configs, key=_config_size)[:n_keep]
-    print(f"    Stage {stage.name}: configs {len(configs)} -> {n_keep}")
-    new_configs: dict[str, list[object]] = {}
-    for key in stage.configs:
-        values = {cfg[key] for cfg in kept if key in cfg}
-        if values:
-            new_configs[key] = sorted(values)
-    stage.configs = new_configs
+
+    while _grid_len(grid) > target:
+        best: tuple[int, str, object] | None = None  # (shrink, key, value)
+        for key, values in grid.items():
+            if len(values) <= 1:
+                continue
+            drop = max(values, key=lambda v: _config_size({key: v}))
+            candidate = {**grid, key: [v for v in values if v != drop]}
+            shrink = _grid_len(grid) - _grid_len(candidate)
+            if best is None or shrink > best[0]:
+                best = (shrink, key, drop)
+        if best is None:
+            break
+        _, key, drop = best
+        grid[key] = [v for v in grid[key] if v != drop]
+
+    print(f"    Stage {stage.name}: configs reduced")
+    stage.configs = grid
     return True
 
 
@@ -406,7 +381,12 @@ def _auto_scale_campaign(
         current = _estimate_total_wall_time(scaled, epoch_times, models, producer)
         if current <= target_seconds:
             return scaled
-        scale_factor = target_seconds / current
+        # Clamp per-pass reduction so the schedule converges gradually instead
+        # of jumping straight to a floor and under-fitting a generous budget.
+        # Each pass removes at most 30% of epochs/configs/seeds; the loop then
+        # re-solves, so an evidence stage keeps as many epochs/configs as the
+        # budget allows (a more thorough, more informative schedule).
+        scale_factor = max(target_seconds / current, 0.7)
         _reduce_epochs_keeping_gates(scaled.stages, scale_factor)
         if (
             _estimate_total_wall_time(scaled, epoch_times, models, producer)
@@ -414,7 +394,7 @@ def _auto_scale_campaign(
         ):
             return scaled
         for stage in scaled.stages:
-            _reduce_stage_configs(stage, scale_factor, producer)
+            _reduce_stage_configs(stage, scale_factor)
         if (
             _estimate_total_wall_time(scaled, epoch_times, models, producer)
             <= target_seconds
