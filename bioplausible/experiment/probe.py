@@ -149,14 +149,21 @@ class CoreTrainerDriver:
             RuntimeError: If training raises or returns no history.
         """
         import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect; mirrors cli/parity.py)
+        from bioplausible.core.registry import ComponentCategory, Registry
         from bioplausible.domains.registry import resolve_task
+        from bioplausible.experiment.param_estimator import build_model_kwargs
         from bioplausible.utils import seed_everything
 
         seed_everything(seed, device)
         spec = resolve_task(task)
-        model_kwargs = dict(config)
-        model_kwargs.setdefault("input_dim", spec.input_dim)
-        model_kwargs.setdefault("output_dim", spec.output_dim)
+        model_cls = Registry.get(ComponentCategory.MODEL, model)
+        model_kwargs = build_model_kwargs(
+            model_cls,
+            config,
+            input_dim=spec.input_dim,
+            output_dim=spec.output_dim,
+            model_name=model,
+        )
         cfg = TrainerConfig(
             model=model,
             model_kwargs=model_kwargs,

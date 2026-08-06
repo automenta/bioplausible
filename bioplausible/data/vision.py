@@ -19,6 +19,45 @@ __all__ = [
 ]
 
 
+def _load_sklearn_tabular(
+    name: str,
+    train: bool,
+    test_size: float = 0.2,
+    random_state: int = 42,
+) -> Dataset:
+    """Load a sklearn tabular classification dataset (iris/wine/breast_cancer).
+
+    Standardizes the feature matrix so MLPs train well, and returns Long class
+    labels. Matches the registry geometry for these tasks.
+    """
+    import numpy as np
+    from sklearn.datasets import (
+        load_breast_cancer,
+        load_iris,
+        load_wine,
+    )
+    from sklearn.preprocessing import StandardScaler
+
+    loader = {"iris": load_iris, "wine": load_wine, "breast_cancer": load_breast_cancer}[name]
+    ds = loader()
+    X = ds.data.astype(np.float32)
+    y = ds.target.astype(np.int64)
+
+    scaler = StandardScaler().fit(X)
+    X = scaler.transform(X).astype(np.float32)
+
+    from sklearn.model_selection import train_test_split
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state, shuffle=True
+    )
+    X_data = X_train if train else X_test
+    y_data = y_train if train else y_test
+    return TensorDataset(
+        torch.from_numpy(X_data), torch.from_numpy(y_data)
+    )
+
+
 def get_vision_dataset(
     name: str = "mnist",
     root: str = "./data",
@@ -33,7 +72,8 @@ def get_vision_dataset(
 
     Args:
         name: Dataset name ('mnist', 'fashion_mnist', 'cifar10', 'cifar100',
-              'kmnist', 'svhn', 'digits')
+              'kmnist', 'svhn', 'digits', and the toy/tabular registry tasks
+              'xor'/'spiral'/'circles'/'iris'/'wine'/'breast_cancer')
         root: Data directory
         train: If True, load training set
         download: If True, download if not present
@@ -48,6 +88,8 @@ def get_vision_dataset(
         return _load_sklearn_digits(train, flatten)
     if name in ("xor", "spiral", "circles"):
         return _load_toy_dataset(name, train)
+    if name in ("iris", "wine", "breast_cancer"):
+        return _load_sklearn_tabular(name, train)
 
     transform = _build_transforms(name, flatten, augment=augment and train)
     dataset_class = _get_dataset_class(name)
@@ -113,7 +155,7 @@ def _load_toy_dataset(
     else:
         raise ValueError(f"Unknown toy dataset: {name}")
 
-    y = y.float()
+    y = y.long()
 
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=test_size, random_state=random_state, shuffle=True

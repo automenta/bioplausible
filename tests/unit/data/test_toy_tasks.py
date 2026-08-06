@@ -14,11 +14,25 @@ from bioplausible.data.vision import create_data_loaders
 
 @pytest.mark.parametrize("task", ["xor", "spiral", "circles"])
 def test_toy_loader_shapes(task):
-    train_loader, val_loader = create_data_loaders(task, batch_size=32)
+    train_loader, _ = create_data_loaders(task, batch_size=32)
     x, y = next(iter(train_loader))
     assert x.shape[1:] == (2,)
     assert x.dtype == torch.float32
     assert set(y.unique().tolist()).issubset({0.0, 1.0})
+    # Toy classification labels are Long class indices (one_hot/scatter host).
+    assert y.dtype == torch.long
+
+
+@pytest.mark.parametrize(
+    "task,features",
+    [("iris", 4), ("wine", 13), ("breast_cancer", 30)],
+)
+def test_tabular_loader_shapes(task, features):
+    train_loader, _ = create_data_loaders(task, batch_size=16)
+    x, y = next(iter(train_loader))
+    assert x.shape[1:] == (features,)
+    assert x.dtype == torch.float32
+    assert y.dtype == torch.long
 
 
 @pytest.mark.parametrize("task", ["xor", "spiral", "circles"])

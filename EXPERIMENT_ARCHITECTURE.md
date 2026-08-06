@@ -401,6 +401,15 @@ job: equilibrium-model probes alone take ~30–70s each on tiny tasks, so it run
 gates the aligned propagator *families*; forward-only (FF/PEPITA) and spiking parity-tier
 models are N/A by design (RESEARCH §5.2) and are reported, not gated.
 
+**All 9 parity models + all offline tabular tasks now train (2026-08-05):** three root causes
+were fixed so the full arm is runnable — toy labels are now `long` class indices (unblocked the
+`one_hot`/`scatter` models: standard_fa, diff_target_prop, pepita, three_factor_hebbian,
+forward_forward); `CoreTrainerDriver` builds ctor kwargs via `experiment.param_estimator.build_model_kwargs`
+(fixed `neural_cube`, aligned trained-params with the `max_params` budget); and the tabular
+registry tasks (`iris`/`wine`/`breast_cancer`) are now loadable. Verified: all 9 parity models
+`ok` on xor, tabular tasks train with backprop_mlp + deep_hebbian, `biopl-run run` smoke passes,
+and resume is a 0.0s no-op. **Overnight prerequisite:** `cifar10` downloads on first use (~170MB).
+
 ---
 
 ## 14. Research Alignment
