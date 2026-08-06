@@ -27,8 +27,8 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from bioplausible.experiment.probe import CoreTrainerDriver
-from bioplausible.experiment.producer import HyperoptGridProducer, grid_cardinality
+from bioplausible.experiment.probe import CoreTrainerDriver, config_key
+from bioplausible.experiment.producer import HyperoptGridProducer, ProbeWork
 from bioplausible.experiment.report import Report
 from bioplausible.experiment.reporting import render_report
 from bioplausible.experiment.schema import load_campaign
@@ -36,9 +36,9 @@ from bioplausible.experiment.staircase import StaircaseRunner, Verdict
 from bioplausible.hyperopt.eval_tiers import PatientLevel
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
-    from bioplausible.experiment.schema import Campaign
+    from bioplausible.experiment.schema import Campaign, Stage
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +72,46 @@ def _all_models(campaign: Campaign) -> list[str]:
     return [m for arm in campaign.arms.values() for m in arm.models]
 
 
-def _probe_count(campaign: Campaign) -> int:
-    return sum(
-        len(_all_models(campaign)) * grid_cardinality(stage.configs) * stage.seeds
-        for stage in campaign.stages
-    )
+def _in_budget_pairs(
+    campaign: Campaign,
+    stage: Stage,
+    models: list[str],
+    param_counter: Callable[[str, dict[str, object], int, int], int] | None = None,
+) -> list[ProbeWork]:
+    """Enumerate (model, config) pairs within each model's arm ``max_params``.
+
+    Uses the same schedule-time budget rule as the staircase
+    (architecture §6.3): a config is dropped when its training-free parameter
+    count exceeds the model's arm budget. Keeps ``plan``'s probe count exactly
+    consistent with what ``run`` will actually train.
+    """
+    from bioplausible.experiment.param_estimator import estimate_param_count
+
+    def _count(
+        model: str,
+        config: dict[str, object],
+        dims: tuple[int, int],
+    ) -> int:
+        if param_counter is not None:
+            return param_counter(model, config, dims[0], dims[1])
+        return estimate_param_count(
+            model, config, input_dim=dims[0], output_dim=dims[1]
+        )
+
+    geom = campaign.geometry(stage.task)
+    producer = HyperoptGridProducer(seed=campaign.reproducibility.seed)
+    configs = producer.configs_for(stage)
+    budget_by_model = {m: campaign.max_params_for(m) for m in models}
+    pairs: list[ProbeWork] = []
+    for model in models:
+        budget = budget_by_model[model]
+        for config in configs:
+            if budget is not None and _count(model, config, geom) > budget:
+                continue
+            pairs.append(
+                ProbeWork(model=model, config=config, config_key=config_key(config))
+            )
+    return pairs
 
 
 _SMOKE_MAX_EPOCHS = 3
@@ -98,7 +133,9 @@ def _time_budget(campaign: Campaign) -> dict[str, object]:
     from bioplausible.hyperopt.eval_tiers import estimate_total_time
 
     deepest = max(stage.epochs for stage in campaign.stages)
-    return estimate_total_time(_patience_for_epochs(deepest), n_models=len(_all_models(campaign)))
+    return estimate_total_time(
+        _patience_for_epochs(deepest), n_models=len(_all_models(campaign))
+    )
 
 
 def _cmd_validate(config: str) -> int:
@@ -114,15 +151,17 @@ def _cmd_validate(config: str) -> int:
 
 def _cmd_plan(config: str) -> int:
     campaign = load_campaign(config)
-    total = _probe_count(campaign)
+    models = _all_models(campaign)
+    total = 0
     print(f"campaign: {campaign.meta.name!r}")
     for stage in campaign.stages:
-        n_models = len(_all_models(campaign))
-        n_configs = grid_cardinality(stage.configs)
+        pairs = _in_budget_pairs(campaign, stage, models)
         n_seeds = stage.seeds
+        n_probes = len(pairs) * n_seeds
+        total += n_probes
         print(
-            f"  stage {stage.name:<16}{n_models} models x {n_configs} configs "
-            f"x {n_seeds} seeds = {n_models * n_configs * n_seeds} probes"
+            f"  stage {stage.name:<16}{len(pairs)} in-budget (model, config) "
+            f"pairs x {n_seeds} seeds = {n_probes} probes"
         )
     budget = _time_budget(campaign)
     print(f"total probes: {total}")
@@ -142,10 +181,16 @@ def _cmd_run(config: str, report_override: str | None, device: str | None) -> in
 
     wants_energy = any(bool(stage.energy) for stage in campaign.stages)
     report = Report(report_path)
+    track = campaign.compute.track
     runner = StaircaseRunner(
         campaign,
         report,
-        CoreTrainerDriver(track_energy=wants_energy),
+        CoreTrainerDriver(
+            num_workers=campaign.compute.num_workers,
+            track_energy=wants_energy,
+            track_flops=track.flops,
+            track_memory=track.memory,
+        ),
         HyperoptGridProducer(seed=campaign.reproducibility.seed),
         compute=campaign.compute,
     )
@@ -190,7 +235,9 @@ def main_report(argv: Sequence[str] | None = None) -> int:
         description="Render a parity/Pareto/failure report from an experiment Report.",
     )
     parser.add_argument("report", help="Path to the experiment Report JSONL")
-    parser.add_argument("--baseline", default=None, help="Baseline model for effect sizes")
+    parser.add_argument(
+        "--baseline", default=None, help="Baseline model for effect sizes"
+    )
     args = parser.parse_args(argv)
     try:
         print(render_report(args.report, baseline=args.baseline))

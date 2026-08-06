@@ -77,6 +77,10 @@ class Report:
         """Return all recorded probes for a stage, in append order."""
         return list(self._stage_records.get(stage, []))
 
+    def stage_names(self) -> list[str]:
+        """Return the recorded stage names, in append order."""
+        return list(self._stage_records)
+
 
 def _result_from_record(record: dict[str, object]) -> ProbeResult:
     """Rebuild a :class:`ProbeResult` from a decoded JSONL line."""

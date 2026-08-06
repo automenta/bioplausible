@@ -4,9 +4,10 @@ The experiment layer schedules probes through :class:`ConfigProducer`, whose
 default implementation (:class:`HyperoptGridProducer`) treats a stage's config
 grid as an Optuna ``GridSampler`` search space. This reuses ``hyperopt``'s study
 + resume machinery: the probe count is enumerable from the grid cardinality
-(exact ``plan``), and ``schedule`` yields :class:`ProbeWork` per (model, config)
-for the surviving models, skipping already-finished ``config_key``s when a
-Report is supplied.
+(exact ``plan``). The producer exposes a single method,
+:meth:`ConfigProducer.configs_for`, which enumerates a stage's grid once;
+scheduling (per-model probe work) and resume-skip live in the callers
+(``StaircaseRunner`` / ``cli``), not here.
 """
 
 from __future__ import annotations
@@ -16,13 +17,8 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import optuna
 
-from bioplausible.experiment.probe import config_key
-
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
-
     from bioplausible.experiment.schema import Stage
-
 __all__ = [
     "ConfigProducer",
     "HyperoptGridProducer",
@@ -52,29 +48,35 @@ def grid_cardinality(configs: dict[str, list[object]]) -> int:
 
 @runtime_checkable
 class ConfigProducer(Protocol):
-    """Produces :class:`ProbeWork` for a stage's surviving models."""
+    """Produces the ordered configs for a stage's grid.
 
-    def schedule(
-        self,
-        stage: Stage,
-        survivors: Sequence[str],
-        finished: set[str] | None = None,
-    ) -> Iterator[ProbeWork]: ...
+    The single scheduling seam: `configs_for` yields the deterministic,
+    cardinality-exact grid enumeration that both ``plan`` and ``run`` consume.
+    """
+
+    def configs_for(self, stage: Stage) -> list[dict[str, object]]: ...
 
 
 class HyperoptGridProducer:
     """Grid-as-sampler :class:`ConfigProducer` over Optuna's ``GridSampler``.
 
-    Deterministic (fixed grid order via ``GridSampler``), with the probe count
-    enumerable from the grid cardinality. When ``finished`` (a set of completed
-    ``config_key``s from the Report) is supplied, already-finished configs are
-    skipped for resumability.
+    Deterministic (fixed grid order via ``GridSampler``), with the exact probe
+    count following from the grid cardinality. The grid is enumerated **once
+    per stage** and shared across every surviving model (no per-model study).
     """
 
     def __init__(self, seed: int = 42) -> None:
         self.seed = seed
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    def _grid_for(self, stage: Stage) -> list[dict[str, object]]:
+    def configs_for(self, stage: Stage) -> list[dict[str, object]]:
+        """Enumerate the stage's grid into an ordered list of configs.
+
+        Uses Optuna's ``GridSampler`` so the enumeration is deterministic and
+        the exact probe count follows directly from the grid cardinality.
+        Enumerating is cheap (pure, no training) and stage-scoped: call once
+        and reuse across every surviving model.
+        """
         space: dict[str, list[object]] = {
             name: list(choices) for name, choices in stage.configs.items()
         }
@@ -90,28 +92,3 @@ class HyperoptGridProducer:
 
         study.optimize(_objective, n_trials=grid_cardinality(stage.configs))
         return [dict(t.params) for t in study.trials]
-
-    def schedule(
-        self,
-        stage: Stage,
-        survivors: Sequence[str],
-        finished: set[str] | None = None,
-    ) -> Iterator[ProbeWork]:
-        """Yield :class:`ProbeWork` for every (model, grid config) pair.
-
-        Args:
-            stage: The stage whose grid is enumerated.
-            survivors: Models that survived the preceding stages.
-            finished: Completed ``config_key``s to skip (resume).
-
-        Yields:
-            One :class:`ProbeWork` per (model, config), skipping finished keys.
-        """
-        done = finished or set()
-        for model in survivors:
-            for config in self._grid_for(stage):
-                key = config_key(config)
-                probe_key = f"{model}:{key}"
-                if probe_key in done:
-                    continue
-                yield ProbeWork(model=model, config=config, config_key=probe_key)

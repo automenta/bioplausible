@@ -81,7 +81,7 @@ def _signature_params(model_cls: object) -> frozenset[str]:
     """
     try:
         sig = inspect.signature(model_cls.__init__)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return frozenset()
     params = set(sig.parameters)
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):

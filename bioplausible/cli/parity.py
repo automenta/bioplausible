@@ -122,11 +122,17 @@ def _run_campaign_stage(
     stage = next(s for s in campaign.stages if s.name == stage_name)
     single = campaign.model_copy(update={"stages": [stage]})
     wants_energy = bool(stage.energy)
+    track = single.compute.track
     report = Report(report_path)
     runner = StaircaseRunner(
         single,
         report,
-        CoreTrainerDriver(track_energy=wants_energy),
+        CoreTrainerDriver(
+            num_workers=single.compute.num_workers,
+            track_energy=wants_energy,
+            track_flops=track.flops,
+            track_memory=track.memory,
+        ),
         HyperoptGridProducer(seed=campaign.reproducibility.seed),
         compute=single.compute,
     )

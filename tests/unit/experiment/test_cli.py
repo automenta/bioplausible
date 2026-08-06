@@ -110,3 +110,105 @@ def test_report_failure_manifesto(tmp_path: Path, capsys):
     out = capsys.readouterr().out
     assert "failure manifesto" in out
     assert "boom" in out
+
+
+def _ok_probe(
+    model: str, config: dict[str, object], seed: int, acc: float, n_params: int
+) -> ProbeResult:
+    return ProbeResult(
+        model=model,
+        task="xor",
+        config=config,
+        config_key=config_key(config),
+        seed=seed,
+        status="ok",
+        final_acc=acc,
+        param_count=n_params,
+        epoch_time_s=1.0,
+    )
+
+
+def test_report_dummy_data_full_render(tmp_path: Path, capsys):
+    """Render a multi-model dummy Report: parity table, effect sizes, Pareto, failures.
+
+    Regression against the full report path using synthetic probes (no training):
+    backprop is the baseline; eqprop_mlp has worse acc + more params (dominated);
+    a high-acc low-param config sits on the frontier; one probe errors.
+    """
+    report_path = tmp_path / "r.jsonl"
+    report = Report(report_path)
+
+    config_lo = {"hidden_dim": 16, "num_layers": 2}
+    config_hi = {"hidden_dim": 64, "num_layers": 4}
+    for seed in range(3):
+        report.append(
+            "parity",
+            _ok_probe(
+                "backprop_mlp", config_lo, seed, acc=0.80 + seed * 0.01, n_params=82
+            ),
+        )
+        report.append(
+            "parity",
+            _ok_probe(
+                "eqprop_mlp", config_lo, seed, acc=0.60 + seed * 0.01, n_params=3000
+            ),
+        )
+    # A dominant config: higher acc, fewer params than both — must be on the frontier.
+    report.append(
+        "parity",
+        _ok_probe("backprop_mlp", config_hi, 0, acc=0.95, n_params=58),
+    )
+    # A failing probe — must appear in the failure manifesto, never on a table row.
+    report.append(
+        "parity",
+        ProbeResult(
+            model="broken",
+            task="xor",
+            config={},
+            config_key="k",
+            seed=0,
+            status="error",
+            error="boom",
+        ),
+    )
+    report.append(
+        "parity",
+        ProbeResult(
+            model="backprop_mlp",
+            task="xor",
+            config={},
+            config_key="k2",
+            seed=9,
+            status="error",
+            error="epoch NaN",
+        ),
+    )
+
+    assert main_report([str(report_path), "--baseline", "backprop_mlp"]) == 0
+    out = capsys.readouterr().out
+
+    assert "stage: parity" in out
+    assert "effect sizes vs baseline backprop_mlp" in out
+    assert "eqprop_mlp" in out
+    assert "Pareto frontier" in out
+    # The dominant config's hash is the frontier point.
+    assert config_key(config_hi) in out
+    # The dominated config hash never appears on the frontier.
+    assert config_key(config_lo) not in out.split("Pareto frontier")[1]
+    assert "failure manifesto" in out
+    assert "epoch NaN" in out
+
+
+def test_report_pareto_frontier_dominance():
+    """Dummy-data check of the dominance rule: fewer params + higher acc wins."""
+    from bioplausible.experiment.reporting import pareto_frontier
+
+    outcomes = [
+        _ok_probe("m", {"a": 1}, 0, 0.70, 500),
+        _ok_probe("m", {"a": 2}, 0, 0.90, 60),  # dominates the 500-param point
+    ]
+    frontier = pareto_frontier(outcomes)
+    assert len(frontier) == 1
+    assert frontier[0]["config_key"] == config_key({"a": 2})
+    # The 500-param, lower-acc config is dominated and absent.
+    assert config_key({"a": 1}) not in {p["config_key"] for p in frontier}

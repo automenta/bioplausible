@@ -38,25 +38,7 @@ _DEFAULT_N_BOOT = 1_000
 def report_probes(path: str | Path) -> dict[str, list[ProbeResult]]:
     """Load probe results from a Report, grouped by stage."""
     report = Report(Path(path))
-    return {
-        stage: report.stage_results(stage)
-        for stage in _stage_names(Path(path))
-    }
-
-
-def _stage_names(path: Path) -> list[str]:
-    out: list[str] = []
-    if not path.exists():
-        return out
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        import json
-
-        stage = json.loads(line).get("stage", "")
-        if stage and stage not in out:
-            out.append(stage)
-    return out
+    return {stage: report.stage_results(stage) for stage in report.stage_names()}
 
 
 def _mean_ci(values: Sequence[float]) -> tuple[float, float, float]:
@@ -141,9 +123,7 @@ def failure_manifesto(results: Sequence[ProbeResult]) -> list[str]:
     ]
 
 
-def render_report(
-    path: str | Path, baseline: str | None = None
-) -> str:
+def render_report(path: str | Path, baseline: str | None = None) -> str:
     """Render the full human-readable report for an experiment Report.
 
     Args:
@@ -153,28 +133,25 @@ def render_report(
     Returns:
         A multi-line report string.
     """
-    import json
-
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(  # descriptive message is the public API
             f"report {p} does not exist; run 'biopl-run run' first"
         )
+    report = Report(p)
     ok: dict[str, list[ProbeResult]] = {}
     err: dict[str, list[ProbeResult]] = {}
-    for line in p.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        from bioplausible.experiment.report import _result_from_record
-
-        result = _result_from_record(rec)
-        stage = rec.get("stage", "")
-        (err if result.status == "error" else ok).setdefault(stage, []).append(result)
+    for stage in report.stage_names():
+        for result in report.stage_results(stage):
+            (err if result.status == "error" else ok).setdefault(stage, []).append(
+                result
+            )
 
     sections: list[str] = []
     for stage, results in sorted(ok.items()):
-        sections.append(parity_table(_stage_spec(results[0].task, stage), results, baseline))
+        sections.append(
+            parity_table(_stage_spec(results[0].task, stage), results, baseline)
+        )
         frontier = pareto_frontier(results)
         if frontier:
             sections.append(

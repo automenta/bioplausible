@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
 
-from bioplausible.experiment.probe import ProbeResult, config_key, run_probe
+from bioplausible.experiment.probe import ProbeResult, config_key
 from bioplausible.experiment.producer import (
-    ConfigProducer,
     HyperoptGridProducer,
-    ProbeWork,
     grid_cardinality,
 )
 from bioplausible.experiment.report import Report
 from bioplausible.experiment.schema import Stage, validate_yaml
 from bioplausible.experiment.staircase import (
-    Outcome,
     StageMetrics,
     StaircaseRunner,
     Verdict,
@@ -66,9 +64,7 @@ def test_schema_valid_campaign():
 
 def test_schema_rejects_unknown_task():
     with pytest.raises(Exception):
-        validate_yaml(
-            CAMPAIGN_YAML.replace("task: xor", "task: not_a_task")
-        )
+        validate_yaml(CAMPAIGN_YAML.replace("task: xor", "task: not_a_task"))
 
 
 def test_schema_rejects_low_seeds_on_evidence():
@@ -136,10 +132,16 @@ def test_config_key_order_independent():
 
 
 def test_grid_cardinality_exact():
-    stage = Stage(name="s", task="xor", epochs=1, seeds=1, configs={
-        "hidden_dim": [16, 32],
-        "num_layers": [2, 4],
-    })
+    stage = Stage(
+        name="s",
+        task="xor",
+        epochs=1,
+        seeds=1,
+        configs={
+            "hidden_dim": [16, 32],
+            "num_layers": [2, 4],
+        },
+    )
     assert grid_cardinality(stage.configs) == 4
 
 
@@ -147,19 +149,18 @@ def test_producer_schedules_exact_probe_count():
     campaign = validate_yaml(CAMPAIGN_YAML)
     stage = campaign.stages[0]
     producer = HyperoptGridProducer(seed=7)
-    works = list(producer.schedule(stage, ["backprop_mlp"]))
-    assert len(works) == grid_cardinality(stage.configs)
-    assert all(isinstance(w, ProbeWork) for w in works)
+    configs = producer.configs_for(stage)
+    assert len(configs) == grid_cardinality(stage.configs)
+    assert all(isinstance(c, dict) for c in configs)
 
 
-def test_producer_skips_finished():
+def test_producer_configs_are_distinct():
     campaign = validate_yaml(CAMPAIGN_YAML)
     stage = campaign.stages[0]
     producer = HyperoptGridProducer(seed=7)
-    all_works = list(producer.schedule(stage, ["backprop_mlp"]))
-    finished = {w.config_key for w in all_works[:1]}
-    remaining = list(producer.schedule(stage, ["backprop_mlp"], finished=finished))
-    assert len(remaining) == len(all_works) - 1
+    configs = producer.configs_for(stage)
+    # The grid enumerates a unique combination per point — no duplicates.
+    assert len({frozenset(c.items()) for c in configs}) == len(configs)
 
 
 # ---------------------------------------------------------------------------
@@ -184,8 +185,13 @@ def test_report_error_does_not_resume():
     report = Report(err_path)
     bad = _result("m", "xor", {"a": 1}, 0, 0.0)
     bad = ProbeResult(
-        model="m", task="xor", config={"a": 1}, config_key=bad.config_key,
-        seed=0, status="error", error="boom",
+        model="m",
+        task="xor",
+        config={"a": 1},
+        config_key=bad.config_key,
+        seed=0,
+        status="error",
+        error="boom",
     )
     report.append("s", bad)
     assert not report.is_finished("s", bad)
@@ -198,9 +204,15 @@ def test_report_error_does_not_resume():
 
 def test_passes_stage_all_rules_ok():
     stage = Stage(
-        name="smoke", task="xor", epochs=1, seeds=2,
+        name="smoke",
+        task="xor",
+        epochs=1,
+        seeds=2,
         configs={"hidden_dim": [16]},
-        pass_rule={"min_seed_ok": 1, "rules": [{"metric": "acc", "op": ">=", "value": 0.5}]},
+        pass_rule={
+            "min_seed_ok": 1,
+            "rules": [{"metric": "acc", "op": ">=", "value": 0.5}],
+        },
     )
     results = [
         _result("m", "xor", {"hidden_dim": 16}, 0, 0.8),
@@ -213,9 +225,15 @@ def test_passes_stage_all_rules_ok():
 
 def test_passes_stage_rejects_below_rule():
     stage = Stage(
-        name="smoke", task="xor", epochs=1, seeds=1,
+        name="smoke",
+        task="xor",
+        epochs=1,
+        seeds=1,
         configs={"hidden_dim": [16]},
-        pass_rule={"min_seed_ok": 1, "rules": [{"metric": "acc", "op": ">=", "value": 0.9}]},
+        pass_rule={
+            "min_seed_ok": 1,
+            "rules": [{"metric": "acc", "op": ">=", "value": 0.9}],
+        },
     )
     results = [_result("m", "xor", {"hidden_dim": 16}, 0, 0.3)]
     passed, reason = passes_stage(stage, results)
@@ -225,7 +243,10 @@ def test_passes_stage_rejects_below_rule():
 
 def test_passes_stage_respects_min_seed_ok():
     stage = Stage(
-        name="smoke", task="xor", epochs=1, seeds=3,
+        name="smoke",
+        task="xor",
+        epochs=1,
+        seeds=3,
         configs={"hidden_dim": [16]},
         pass_rule={"min_seed_ok": 3, "rules": []},
     )
@@ -240,13 +261,24 @@ def test_passes_stage_respects_min_seed_ok():
 
 def test_passes_stage_errored_seed_never_satisfies():
     stage = Stage(
-        name="smoke", task="xor", epochs=1, seeds=1,
+        name="smoke",
+        task="xor",
+        epochs=1,
+        seeds=1,
         configs={"hidden_dim": [16]},
-        pass_rule={"min_seed_ok": 1, "rules": [{"metric": "acc", "op": ">=", "value": 0.5}]},
+        pass_rule={
+            "min_seed_ok": 1,
+            "rules": [{"metric": "acc", "op": ">=", "value": 0.5}],
+        },
     )
     errored = ProbeResult(
-        model="m", task="xor", config={"hidden_dim": 16},
-        config_key="x", seed=0, status="error", error="boom",
+        model="m",
+        task="xor",
+        config={"hidden_dim": 16},
+        config_key="x",
+        seed=0,
+        status="error",
+        error="boom",
     )
     results = [errored]
     passed, _ = passes_stage(stage, results)
@@ -259,7 +291,7 @@ def test_staircase_only_survivors_advance():
         """
 meta: {name: s, created: x}
 compute: {device: cpu}
-arms: {mlp: {max_params: 1, models: [backprop_mlp, eqprop_mlp]}}
+arms: {mlp: {max_params: 100000, models: [backprop_mlp, eqprop_mlp]}}
 stages:
   - name: A
     task: xor
@@ -296,8 +328,12 @@ stages:
     outcomes = runner.run()
 
     # backprop survived both stages; eqprop rejected at A and never ran B.
-    backprop_B = [o for o in outcomes if o.model == "backprop_mlp" and o.verdict is Verdict.PASS]
-    eqprop_B = [o for o in outcomes if o.model == "eqprop_mlp" and o.verdict is Verdict.PASS]
+    backprop_B = [
+        o for o in outcomes if o.model == "backprop_mlp" and o.verdict is Verdict.PASS
+    ]
+    eqprop_B = [
+        o for o in outcomes if o.model == "eqprop_mlp" and o.verdict is Verdict.PASS
+    ]
     assert len(backprop_B) == 2  # passed A and B
     assert len(eqprop_B) == 0  # rejected at A, never ran B
 
@@ -339,6 +375,49 @@ def test_staircase_resume_noop_does_not_retrain(tmp_path: Path):
     assert all(o.verdict is Verdict.PASS for o in outcomes)
 
 
+def test_staircase_resume_noop_skips_param_construction(tmp_path: Path):
+    """Re-running a finished config builds no models for the budget check.
+
+    Regression: the budget filter used to construct every (model, config) on
+    re-run, so a finished campaign was not a *true* no-op. Finished configs
+    must be skipped before any param count (architecture §6.7 resume-noop).
+    """
+    campaign = validate_yaml(CAMPAIGN_YAML)
+    report_path = tmp_path / "resume_budget.jsonl"
+
+    class CountingDriver:
+        def train(self, *, model, task, config, seed, epochs, device):
+            return {"final_acc": 0.9, "epoch_time_s": 0.1}
+
+    counts: list[int] = []
+
+    def counter(model, config, _input_dim, _output_dim):
+        counts.append(1)
+        return 1
+
+    Report(report_path)
+    runner = StaircaseRunner(
+        campaign,
+        Report(report_path),
+        CountingDriver(),
+        HyperoptGridProducer(seed=1),
+        param_counter=counter,
+    )
+    runner.run()
+    assert len(counts) == 2  # 2 configs counted on first run
+
+    counts.clear()
+    runner2 = StaircaseRunner(
+        campaign,
+        Report(report_path),
+        CountingDriver(),
+        HyperoptGridProducer(seed=1),
+        param_counter=counter,
+    )
+    runner2.run()
+    assert counts == []  # neither config constructed on re-run (true no-op)
+
+
 def test_metrics_aggregate_median():
     metrics = StageMetrics([
         _result("m", "xor", {}, 0, 0.8),
@@ -347,3 +426,227 @@ def test_metrics_aggregate_median():
     ])
     assert metrics.value("acc", "median") == pytest.approx(0.85)
     assert metrics.value("acc", "mean") == pytest.approx(0.85)
+
+
+def _result_full(
+    model: str,
+    *,
+    seed: int,
+    acc: float = 0.0,
+    loss: float = 0.0,
+    flops: int = 0,
+    memory: float = 0.0,
+    epoch: float = 0.0,
+) -> ProbeResult:
+    return ProbeResult(
+        model=model,
+        task="xor",
+        config={},
+        config_key="k",
+        seed=seed,
+        status="ok",
+        final_acc=acc,
+        final_train_loss=loss,
+        forward_flops=flops,
+        peak_memory_mb=memory,
+        epoch_time_s=epoch,
+    )
+
+
+def test_metrics_aggregate_loss_flops_memory():
+    metrics = StageMetrics([
+        _result_full("m", seed=0, loss=1.0, flops=10, memory=5.0, epoch=2.0),
+        _result_full("m", seed=1, loss=3.0, flops=30, memory=7.0, epoch=4.0),
+    ])
+    assert metrics.value("loss", "median") == pytest.approx(2.0)
+    assert metrics.value("loss", "mean") == pytest.approx(2.0)
+    assert metrics.value("flops", "mean") == pytest.approx(20.0)
+    assert metrics.value("memory", "mean") == pytest.approx(6.0)
+    assert metrics.value("epoch_time_s", "mean") == pytest.approx(3.0)
+    # Unknown metric aggregates to NaN (never satisfies a rule).
+    assert math.isnan(metrics.value("nope", "mean"))
+
+
+def test_passes_stage_non_acc_rule():
+    stage = Stage(
+        name="perf",
+        task="xor",
+        epochs=1,
+        seeds=1,
+        configs={"hidden_dim": [16]},
+        pass_rule={
+            "min_seed_ok": 1,
+            "rules": [{"metric": "flops", "op": "<=", "value": 50}],
+        },
+    )
+    below = [
+        ProbeResult(
+            model="m",
+            task="xor",
+            config={"hidden_dim": 16},
+            config_key="a",
+            seed=0,
+            status="ok",
+            forward_flops=20,
+        )
+    ]
+    over = [
+        ProbeResult(
+            model="m",
+            task="xor",
+            config={"hidden_dim": 16},
+            config_key="a",
+            seed=0,
+            status="ok",
+            forward_flops=500,
+        )
+    ]
+    assert passes_stage(stage, below)[0] is True
+    assert passes_stage(stage, over)[0] is False
+
+
+def test_passes_stage_nonfinite_never_satisfies():
+    stage = Stage(
+        name="s",
+        task="xor",
+        epochs=1,
+        seeds=1,
+        configs={"hidden_dim": [16]},
+        pass_rule={
+            "min_seed_ok": 1,
+            "rules": [{"metric": "acc", "op": ">=", "value": 0.5}],
+        },
+    )
+    nan_result = ProbeResult(
+        model="m",
+        task="xor",
+        config={"hidden_dim": 16},
+        config_key="a",
+        seed=0,
+        status="ok",
+        final_acc=float("nan"),
+    )
+    passed, reason = passes_stage(stage, [nan_result])
+    assert not passed
+    assert "fails" in reason
+
+
+# ---------------------------------------------------------------------------
+# max_params budget enforcement (architecture §6.3, §5.3)
+# ---------------------------------------------------------------------------
+
+
+BOARD_CAMPAIGN_YAML = """
+meta: {name: budget, created: x}
+compute: {device: cpu}
+arms:
+  a: {max_params: 100, models: [m_low, m_high]}
+stages:
+  - name: smoke
+    task: xor
+    epochs: 1
+    seeds: 2
+    configs: {hidden_dim: [8, 16]}
+    pass_rule: {min_seed_ok: 1, rules: []}
+"""
+
+
+def test_staircase_skips_over_budget_configs(tmp_path: Path):
+    """Configs whose param count exceeds the arm budget never train."""
+    campaign = validate_yaml(BOARD_CAMPAIGN_YAML)
+    report = Report(tmp_path / "r.jsonl")
+    called: list[tuple[str, dict]] = []
+
+    class Driver:
+        def train(self, *, model, task, config, seed, epochs, device):
+            called.append((model, config))
+            return {"final_acc": 0.9, "epoch_time_s": 0.1}
+
+    def counter(model, config, _input_dim, _output_dim):
+        # m_low fits every config; m_high only fits hidden_dim=8.
+        hidden = config["hidden_dim"]
+        if model == "m_high" and hidden == 16:
+            return 101
+        return 50
+
+    runner = StaircaseRunner(
+        campaign,
+        report,
+        Driver(),
+        HyperoptGridProducer(seed=1),
+        param_counter=counter,
+    )
+    outcomes = runner.run()
+
+    m_low, m_high = (
+        {o.model: o for o in outcomes}["m_low"],
+        {o.model: o for o in outcomes}["m_high"],
+    )
+    # m_low trains both configs x 2 seeds; m_high trains only hidden_dim=8 (2 seeds).
+    assert m_low.verdict is Verdict.PASS
+    assert m_high.verdict is Verdict.PASS
+    trained_high = [c for (m, c) in called if m == "m_high"]
+    assert len(trained_high) == 2  # 1 in-budget config x 2 seeds
+    assert all(c["hidden_dim"] == 8 for c in trained_high)
+
+
+def test_staircase_rejects_model_entirely_over_budget(tmp_path: Path):
+    """A model whose every config blows the budget is REJECTED, not trained."""
+    campaign = validate_yaml(BOARD_CAMPAIGN_YAML)
+    report = Report(tmp_path / "r.jsonl")
+    called: list[str] = []
+
+    class Driver:
+        def train(self, *, model, task, config, seed, epochs, device):
+            called.append(model)
+            return {"final_acc": 0.9, "epoch_time_s": 0.1}
+
+    def counter(model, _config, _input_dim, _output_dim):
+        return 500 if model == "m_high" else 50
+
+    runner = StaircaseRunner(
+        campaign,
+        report,
+        Driver(),
+        HyperoptGridProducer(seed=1),
+        param_counter=counter,
+    )
+    outcomes = runner.run()
+    m_high = next(o for o in outcomes if o.model == "m_high")
+    assert m_high.verdict is Verdict.REJECT
+    assert "all configs exceed max_params=100" in m_high.reason
+    assert all(m != "m_high" for m in called)
+
+
+def test_plan_run_budget_consistency(tmp_path: Path):
+    """plan's probe count matches what run schedules (both filter by budget)."""
+    campaign = validate_yaml(
+        """
+meta: {name: b, created: x}
+compute: {device: cpu}
+arms: {a: {max_params: 100, models: [m_low, m_high]}}
+stages:
+  - name: smoke
+    task: xor
+    epochs: 1
+    seeds: 2
+    configs: {hidden_dim: [8, 16]}
+    pass_rule: {min_seed_ok: 1, rules: []}
+        """
+    )
+    from bioplausible.experiment.cli import _in_budget_pairs
+
+    models = [m for arm in campaign.arms.values() for m in arm.models]
+
+    def counter(model, config, _input_dim, _output_dim):
+        if model == "m_high" and config["hidden_dim"] == 16:
+            return 101
+        return 50
+
+    pairs = _in_budget_pairs(
+        campaign, campaign.stages[0], models, param_counter=counter
+    )
+    # m_low: 2 configs; m_high: 1 config (hidden=16 filtered) -> 3 pairs x 2 seeds.
+    assert len(pairs) == 3
+    assert all(p.config["hidden_dim"] != 16 or p.model != "m_high" for p in pairs)
+    assert {p.model for p in pairs} == {"m_low", "m_high"}

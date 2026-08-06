@@ -93,8 +93,9 @@ Checked against `HEAD`; keep these fixed in mind — they are why the plan looks
 | **Survivor** | A model that **PASS**ed every preceding Stage; only survivors run the next. |
 | **Run** | One Campaign execution → a **Report**. |
 | **Report** | Append-only JSONL of probes = artifact + resume index. |
-| **Task registry** | `name → TaskSpec` in `domains/registry.py` (single source of task facts). |
-| **Baseline** | Frozen reference (e.g. `backprop_mlp`) the reporter compares against. |
+| **Task registry** | `name → TaskSpec` in `domains/registry.py` (single source of task facts; geometry is *derived from the concrete task* via the domain factory, never hardcoded). |
+
+**Task-registry scope:** `SUPPORTED_TASKS` is the 17 offline-resolvable names (9 vision incl. `usps`, 2 language, 3 RL, 3 tabular). Network-fetching tasks (`cifar100`/`svhn`, the graph datasets `cora`/`pubmed`/`citeseer`) are **excluded**: geometry resolution is offline (setup would download), and §11 defers that breadth.| **Baseline** | Frozen reference (e.g. `backprop_mlp`) the reporter compares against. |
 | **ProbeDriver** | Thin adapter over the existing training path (default = CoreTrainer via `cli`). |
 | **ConfigProducer** | Adapter over the existing Optuna/`hyperopt` sampling path (default = `GridSampler`). |
 
@@ -124,9 +125,12 @@ arms:
              pepita, forward_forward]
 
 stages:                        # the staircase; each maps to a PatientLevel
-  - { name: smoke,          task: xor,          epochs: 3,  seeds: 1,
+  - { name: smoke,          task: xor,          epochs: 15, seeds: 1,
       configs: { hidden_dim: [16, 32], num_layers: [2] },
-      pass: { acc: {op: ">=", value: 0.90}, min_seed_ok: 1 } }
+      pass: { acc: {op: ">=", value: 0.60}, min_seed_ok: 1 } }
+  # smoke NOTE (2026-08-06): 3 epochs cannot clear a 0.90 xor bar (max ~0.75;
+  #   backprop needs ~15 epochs for 1.0), so the smoke gate would empty the parity
+  #   stage. 15 epochs + 0.60 (above the 0.5 xor-chance floor) passes all 9 models.
   - { name: digits,         task: digits,       epochs: 5,  seeds: 5,
       configs: { hidden_dim: [64], num_layers: [1] },
       pass: { acc: {op: ">=", value: 0.95}, epoch_time_s: {op: "<=", value: 120} } }
@@ -195,7 +199,11 @@ class Verdict(StrEnum):
 
 A model **PASSES** a Stage iff, for **every** `MetricRule`: the `aggregate` over its seeds
 satisfies the rule **and** `ok`-seed count ≥ `min_seed_ok` (default 1). Non-finite/errored
-seeds never satisfy `>=`. `max_params` enforced at schedule time via `estimate_param_count`.
+seeds never satisfy `>=`. `max_params` enforced at schedule time via `estimate_param_count`:
+a `(model, config)` pair whose training-free parameter count exceeds its arm's `max_params`
+is **never trained** (rejected before compute, §5.3), and a model left with zero in-budget
+probes REJECTs with an explicit `ok_seeds=0: all configs exceed max_params=…` reason. `plan`
+reports the in-budget probe count so it matches exactly what `run` schedules.
 
 ### 6.4 ProbeDriver (flex seam over the existing path)
 
@@ -212,27 +220,27 @@ the single normalization point. `TrainingMetrics` already carries `train_accurac
 `val_accuracy`, `epoch_time`, `forward_flops`, `backward_flops`, `peak_memory_mb`,
 `train_loss` (trainer.py:186-204). Future NumPy/Triton/spiking engines implement this
 interface — no core change. The driver injects task geometry (`input_dim`/`output_dim` via
-`domains.registry.resolve_task`) into `model_kwargs`, mirroring `cli/parity.py`.
+`domains.registry.resolve_task`) into `model_kwargs`, mirroring `cli/parity.py`. It also
+threads the campaign `compute` block (`num_workers`, `track.flops/memory/energy`, batch) into
+each `TrainerConfig`, so probes respect the operator's declared resource budget
+(e.g. `num_workers: 0` avoids spawning DataLoader worker processes per probe).
 
 ### 6.5 ConfigProducer (grid as a sampler, through `hyperopt`)
 
 ```python
 @runtime_checkable
 class ConfigProducer(Protocol):
-    def schedule(self, stage: Stage, survivors: list[str]) -> Iterator[ProbeWork]: ...
-
-@dataclass(frozen=True, slots=True)
-class ProbeWork:
-    model: str
-    config: dict[str, object]
-    config_key: str
+    def configs_for(self, stage: Stage) -> list[dict[str, object]]: ...
 
 class HyperoptGridProducer:
     """Grid = hyperopt.create_study(sampler=GridSampler(search_space)).
 
     Reuses hyperopt's study/resume machinery. Deterministic (fixed grid order, seeded
-    study); probe count enumerable from the GridSampler search space (exact `plan`);
-    resume via study.ask()/tell() + the content-addressed Report (skip finished probes).
+    study); probe count enumerable from the GridSampler search space (exact `plan`).
+    The producer exposes the single method `configs_for`; per-(model, config) probe
+    scheduling and resume-skip live in the callers (StaircaseRunner / cli), which both
+    consume the same `configs_for` enumeration so `plan` matches exactly what `run`
+    schedules.
     
     **Implementation note**: the study's objective must call `trial.suggest_categorical(name, choices)`
     for each grid column so that GridSampler emits the enumerated configs (not empty `{}`).
@@ -272,6 +280,9 @@ is **declared** (both satisfy resume/versioning; documented, not silent).
 already-finished probes for a `(stage, model)` from the Report so verdicts reflect the full
 seed set, and checks the `(stage, model, config_key, seed)` key **before** training — a
 re-launch of a finished campaign is a true no-op (no retraining) with a correct verdict.
+A config whose seeds are all already recorded is skipped **before** the budget param count,
+so re-running builds no models at all (not merely re-trains nothing); the per-config
+parameter count is computed once and reused for the probe's `param_count`.
 
 ### 6.8 Reporter
 

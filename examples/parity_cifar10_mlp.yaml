@@ -17,10 +17,10 @@ arms:
 stages:
   - name: smoke
     task: xor
-    epochs: 3
+    epochs: 15
     seeds: 1
     configs: {hidden_dim: [16, 32], num_layers: [2]}
-    pass_rule: {min_seed_ok: 1, rules: [{metric: acc, op: '>=', value: 0.90}]}
+    pass_rule: {min_seed_ok: 1, rules: [{metric: acc, op: '>=', value: 0.60}]}
   - name: parity
     task: cifar10
     epochs: 30

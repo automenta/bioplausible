@@ -152,7 +152,7 @@ start Phase 3 before Phase 0 (unverifiable).
 - [x] 3.1–3.7 layer working — all 17 experiment tests pass: GridSampler objective emits configs; `param_counter` DI seam added; resume/flake root cause fixed.
 - [x] 4.1.1–4.5.2 CLIs wired; `campaign/` retired; tests green — see §11 for the Phase-4 summary.
 - [~] 5 E2E smoke: **machinery demonstrated end-to-end on a scaled campaign** (`examples/parity_demo.yaml`: validate → plan → run → re-run-no-op → report → gradient gate all verified). The literal 9-model × cifar10 × 10-seed overnight run (1080 probes) remains a genuine overnight job — see §11.
-- [ ] `EXPERIMENT_ARCHITECTURE.md` and `EXPERIMENT_PLAN.md` in sync (no un-recorded drift) — ledger + §11 recorded; architecture note pending in final commit.
+- [x] `EXPERIMENT_ARCHITECTURE.md` and `EXPERIMENT_PLAN.md` in sync (no un-recorded drift) — ledger §10 (incl. `max_params` budget + grid-once refactor) and §11 Session 5 recorded; architecture §5 (registry scope) + §6.3 (budget contract) synced in the same commit.
 
 ---
 
@@ -184,16 +184,127 @@ promise that no detail is lost and that both canonical files stay truthful.
 | build | **Capability gap — tabular registry tasks (iris/wine/breast_cancer) weren't loadable.** `SUPPORTED_TASKS` advertises them and geometry resolves offline, but `CoreTrainer._setup_data` → `get_vision_dataset` raised "Unknown dataset". FIX: added `_load_sklearn_tabular` (StandardScaler + Long labels: iris 4/3, wine 13/3, breast_cancer 30/2) routed through `get_vision_dataset`. | all 19 offline-resolvable tasks now train through the layer; verified iris/wine/breast_cancer with backprop_mlp + deep_hebbian. | plan §4 (2.1), data/vision.py |
 | build | **All 9 parity models + 3 tabular tasks now train (2026-08-05 session 4).** Consolidated 1-seed/1-epoch verification: backprop_mlp, eqprop_mlp, neural_cube, deep_hebbian, three_factor_hebbian, standard_fa, diff_target_prop, pepita, forward_forward all `ok` on xor (0 errors). `biopl-run run` smoke pass + 0.0s resume-no-op reconfirmed after the driver fix. | the `parity_cifar10_mlp` overnight ladder is now runnable with the full 9-model arm. | plan §5/§7 |
 | build | **Overnight prerequisite:** `cifar10` (and other torchvision sets) download on first use (~170MB). The overnight run must have network + disk, or pre-download `./data`. The toy/tabular ladder is fully offline. | documented prerequisite; not a code change. | plan §7, architecture §13 |
+| build | **`max_params` budget was *documented-but-unwired* in the layer.** Architecture §6.3/§5.3 and `param_estimator.py` claimed configs over an arm's `max_params` are "rejected before any compute is spent", but the new `StaircaseRunner`/producer never enforced it (only the retired `cli/run.py` did). FIX: schedule-time budget filter added — `StaircaseRunner._run_stage` builds a `_StageContext` (configs/geom/per-model budget) and drops any `(model, config)` whose training-free `estimate_param_count` exceeds its arm budget **before** training (`_over_budget`); a model left with zero in-budget probes REJECTs with an explicit `ok_seeds=0: all configs exceed max_params=…` reason. `biopl-run plan` now reports the **in-budget** probe count (via `cli._in_budget_pairs`, a DI seam on `param_counter`) so `plan` matches exactly what `run` schedules. `Campaign.max_params_for(model)` = tightest budget across containing arms. | `plan` no longer over-counts; over-budget configs (e.g. `standard_fa`/`diff_target_prop` at cifar10 hidden=64 → ~395k/405k params) are never trained — `parity_cifar10_mlp` parity stage screens 81→18 in-budget (model, config) pairs, 810→180 probes. | plan §5 (3.2/3.4), architecture §6.3 |
+| build | **Grid enumerated once per stage, not per (stage, model).** `HyperoptGridProducer` previously built an Optuna study per surviving model per stage; refactored to `configs_for(stage)` (one `GridSampler` study per stage) shared across models, and `configs_for` added to the `ConfigProducer` Protocol. `ProbeWork.config_key` is now the plain config hash (matches `ProbeResult.config_key`); the producer's `finished` skip means "`{model}:{config_key}` already complete". Optuna verbosity set to WARNING. | ~1 study per stage (was ~1 per model); `plan`/`run` output no longer spammed with Optuna `[I]` lines; budget-filter logic factored into the immutable `_StageContext`. | plan §5 (3.4/3.5), architecture §6.3/§6.5 |
+| 2026-08-06 | build | **Resume-no-op still constructed models for the budget filter, and each new probe constructed its model twice for param counting** (once in the budget check, then again inside `_run_probe`). A fully-finished campaign was therefore not a *true* no-op. FIX: `_collect_probes` now (a) computes a config's seed-pending set **before** any param count — a config whose seeds are all finished is skipped entirely, building no model — and (b) computes `param_count` **once** per config and passes it into `_run_probe` (removed the second construction). `_over_budget` is now only the all-over-budget-reason helper. | finished re-run builds zero models (true no-op, well under the <5s target); each in-budget probe constructs its model once for the count instead of twice. `experiment/` tests 35 → 36 (added `test_staircase_resume_noop_skips_param_construction`). | plan §5 (3.5/3.6), architecture §6.7 |
+| 2026-08-06 | build | **Overnight `smoke` gate was misconfigured and would have emptied the parity stage.** `examples/parity_cifar10_mlp.yaml` smoke required `acc >= 0.90` on `xor` in only **3** epochs — but 3-epoch xor tops out at ~0.75 for every model (backprop needs ~15 epochs for 1.0), so **0/9** models could pass → the 180-probe parity stage would run zero probes. Measured at 15 epochs: equilibrium/FA/Hebbian models reach ~0.75–0.85, and with a **0.60** bar (clearly above the 0.5 xor-chance floor) **all 9** pass. FIX: smoke `epochs 3→15`, `value 0.90→0.60`. Verified all 9 pass end-to-end via `biopl-parity --stage smoke`. | smoke is now a real "did it learn at all" gate that lets all 9 models advance to parity (rather than a near-impossible bar that rejects everything). Parity still trains only in-budget configs: 7 distinct models reach cifar10 parity (standard_fa/diff_target_prop fully over-budget → honest REJECT), 18 pairs × 10 seeds = 180 probes. | plan §5/§7, examples/parity_cifar10_mlp.yaml |
+| 2026-08-06 | build | **`CoreTrainerDriver.train` ignored the campaign `compute` block**, using `TrainerConfig`'s default `num_workers=4` (500 worker processes across 180 probes) and hardcoded flops/memory tracking. FIX: driver now captures `num_workers`/`batch_size`/`track_flops`/`track_memory`/`track_energy` at construction; `cli._cmd_run` and `cli.parity._run_campaign_stage` thread `campaign.compute` (num_workers + track toggles) into the driver. | probes respect the declared resource budget; demo run 18.5s → **6.3s** (no per-probe DataLoader workers), and no more worker-process churn to leak semaphores on the overnight. `experiment/` tests + 2 (`test_probe.py`). | plan §5 (3.3), architecture §6.4 |
+| 2026-08-06 | build | **`ConfigProducer.schedule` was dead.** The staircase and `plan` both consume `configs_for` directly; `schedule` (with its `finished` composite-key skip) was used only by `cli._in_budget_pairs` and one unit test, and its `{model}:{config_key}` resume concept was never wired to the Report's actual `(stage,model,config,seed)` keys. FIX: simplified `ConfigProducer` to a single method `configs_for`; `_in_budget_pairs` loops models over `configs_for` directly. | smaller, clearer scheduling seam; removed the misleading composite-key skip. `experiment/` producer tests rewritten (dropped dead `test_producer_skips_finished`). | plan §5 (3.4), architecture §6.5 |
+| 2026-08-06 | tests | **Staircase coverage 82% → 90%** by pinning the core survivor-gate branches: loss/flops/memory metric aggregation, non-acc pass rules (`flops <= 50`), and non-finite-accuracy never satisfying a rule. | the verdict engine's remaining branches are now unit-tested with dummy data. `test_experiment.py` + 3; target suite 83 → 86. | plan §5 (3.5) |
 
 ---
 
 ## 11. Build State (2026-08-05; do not re-do, continue from here)
-
-Produced across three sessions. **Tests for new code: 0 failed** — the four target suites are
-green: `tests/unit/experiment/` (32: 18 schema/report/producer/staircase + 7 param-estimator + 7 CLI)
-+ `tests/unit/validation/test_statistics.py` (27)
+Produced across successive sessions. **Tests for new code: 0 failed** — the four target
+suites are
+green: `tests/unit/experiment/` (36) + `tests/unit/validation/test_statistics.py` (27)
 + `tests/unit/validation/test_repro_check.py` + `tests/unit/domains/test_registry.py` (7) +
 `tests/integration/test_gradient_equivalence.py` (9).
+
+### Session 5 (2026-08-05) — capability hardened & `max_params` budget wired
+
+No probes were run (energy/time). Verified at HEAD without training: all 9 parity models
+construct for `estimate_param_count` at both `xor` and `cifar10` geometry (the overnight
+budget/rejection path); `cifar10` data is already on disk so no download blocks the overnight
+run; `cifar10` geometry resolves offline to 3072/10; `validate`/`plan`/`biopl-repro-check
+--gradient` all green and quiet.
+
+- **Implemented the documented-but-unwired `max_params` budget filter** (architecture §6.3,
+  §5.3) so over-budget configs are never trained and `plan` matches `run`: `StaircaseRunner`
+  enforces it at schedule time via `_StageContext`; `Campaign.max_params_for(model)` is the one
+  arm-budget source; `cli._in_budget_pairs` (DI seam) makes `plan` count exactly what runs.
+- **Refactored `HyperoptGridProducer`** to enumerate the grid once per stage (`configs_for`)
+  and added it to the `ConfigProducer` Protocol; Optuna verbosity=WARNING (no `[I]` spam).
+- Added 3 budget tests (skip over-budget, reject-all-over-budget with explicit reason,
+  plan/run consistency). `tests/unit/experiment/` now 35, all green; ruff clean; pyright 0
+  errors on the touched modules.
+- Recorded ledger §10 and synced architecture §5/§6.3 in this same commit (see §10).
+
+### Session 6 (2026-08-06) — resume made a true no-op; single param construction
+
+No probes run (energy/time). Re-verified the overnight-readiness facts: `validate` /
+`plan` / `biopl-repro-check --gradient` all green and quiet; all 17 advertised tasks
+resolve offline; **34/37** registered Zoo models construct for `estimate_param_count` at
+`cifar10` geometry (the 3 that don't — `backprop_transformer_lm`, `conv_eqprop`,
+`custom_stacked_model` — need LM/conv geometry and are outside the MLP parity scope,
+architecture §11 deferral, not bugs).
+
+- **Fixed the resume-no-op's residual construction cost** (ledger §10). `_collect_probes`
+  now skips fully-finished configs **before** the param count (no model built on re-run —
+  a true no-op), and computes each in-budget config's `param_count` **once**, passing it
+  into `_run_probe` (removed the second construction per probe; also removed the now-dead
+  geometry recompute there). `_over_budget` is now only the all-over-budget-reason helper.
+- Added `test_staircase_resume_noop_skips_param_construction` (asserts zero param counts on
+  re-run). `tests/unit/experiment/` now **36**, all green; `experiment/` ruff-clean; pyright
+  0 errors on the touched modules.
+- Synced plan §10 ledger + architecture §6.7 in this same working tree (relation rule).
+
+**Net effect on the overnight plan:** unchanged probe budget (18 smoke + 180 parity); the
+re-run of a finished campaign is now a no-op that constructs no models, and each probe's
+parameter count is computed once instead of twice.
+
+## Session 7 (2026-08-06) — full pipeline E2E + overnight smoke-gate fix
+
+Ran the **complete experiment process** on a scaled demo (`examples/parity_demo.yaml`,
+3 models × 2 stages on xor/circles) without the overnight cost:
+`validate` → `plan` (16 probes) → `run` (trains, appends) → `re-run` (**1.4s true no-op** vs
+18.5s initial) → `biopl-report` (parity table w/ bootstrap CI, Cohen's d / Cliff's δ, Pareto
+frontier) → `biopl-repro-check --resume-check` (exit 0).
+
+- **Added dummy-data reporting tests** (`tests/unit/experiment/test_cli.py`, now 9): a full
+  multi-model dummy Report render (effect sizes, Pareto dominance, failure manifesto) and a
+  direct `pareto_frontier` dominance check — no training required. `test_cli.py` 7 → 9.
+- **Refactored `reporting.py`** to consume the single `Report` parse path: `render_report`
+  now uses `Report`/`stage_results` instead of its own `json.loads` loop, and the duplicated
+  `_stage_names` helper is gone (replaced by a new `Report.stage_names()`). Same output,
+  one parse path, removes `_stage_names`/inline JSON duplication. `reporting.py` pyright
+  clean (0 warnings).
+- **Fixed the overnight `smoke` gate critically** (ledger §10): all 9 models verified passing
+  the corrected 15-epoch / 0.60 bar on xor. Without this, the parity stage would run **zero**
+  probes. Detailed in the ledger.
+
+**Overnight status:** `validate`/`plan`/gradient-gate/resume-check all green; smoke gate
+fixed and all 9 models confirmed to pass it; parity trains 7 models × 18 in-budget configs
+× 10 seeds = 180 probes. The 1080→ parities and the literal overnight cifar10 run are still
+not executed here (energy/time).
+
+**Residual risk observed (largely mitigated):** an earlier run logged ~57 leaked
+loky/joblib semaphore objects on shutdown. That churn was largely the per-probe DataLoader
+worker processes spawned by `CoreTrainerDriver`'s hardcoded `num_workers=4`; Session 8
+threads the campaign `compute.num_workers: 0` into the driver, so the overnight spawns no
+worker processes per probe. A benign `resource_tracker` warning may still appear from
+helper modules (hyperopt/execution import loky); it did not affect small runs.
+
+## Session 8 (2026-08-06) — hardening: compute threading, dead code, tests
+
+- **`CoreTrainerDriver` now respects the campaign `compute` block** (ledger §10): threads
+  `num_workers`, `track.flops/memory/energy`, batch size into every `TrainerConfig`;
+  `cli._cmd_run` and `cli.parity._run_campaign_stage` construct it from
+  `campaign.compute`. Demo full run **18.5s → 6.3s** and no per-probe worker churn.
+- **Removed dead code**: dropped unused `metric_value`/`aggregate_values` (and their
+  `__all__` entries) from `staircase.py` — the live aggregation path is `StageMetrics.value`.
+- **Added `tests/unit/experiment/test_probe.py`** (2 tests): driver threads compute settings
+  into `TrainerConfig` (fake `CoreTrainer` captures the config); defaults are probe-friendly.
+  `experiment/` target suite now **40** tests.
+- Synced plan §10 ledger + architecture §6.4 in the same working tree.
+
+## Session 9 (2026-08-06) — producer simplification, survivor-gate test coverage
+
+- **Simplified `ConfigProducer` to a single method** (ledger §10): removed the dead
+  `schedule` method + its misleading `{model}:{config_key}` finished-skip composite;
+  `cli._in_budget_pairs` now loops models over `configs_for` directly and constructs
+  `ProbeWork`. `plan`/`run` consume the same `configs_for` enumeration.
+- **Raised staircase coverage 82% → 90%** (ledger §10): added loss/flops/memory metric
+  aggregation, a non-acc `flops <= 50` pass rule, and non-finite-accuracy-never-satisfies
+  branch tests. `test_experiment.py` + 3 = 25; `experiment/` suite 40 → 43.
+- Target suite now **86** (experiment 43 + statistics 27 + registry 7 + gradient 9); ruff
+  `-format`/`check` clean; pyright 0 errors on the touched modules.
+- Synced plan §10 ledger + architecture §6.5 in the same working tree.
+
+**Net effect on the overnight plan:** `parity_cifar10_mlp` parity stage screens 81 → 18
+in-budget (model, config) pairs (810 → 180 probes) because `standard_fa`/`diff_target_prop`
+blow the 210k budget even at hidden=64 on cifar10. Those over-budget configs are now honestly
+rejected (REJECT, not silently run) rather than wasting ~400k-param 10-seed × 30-epoch probes.
 
 ### Completed
 - **Phase 0** (tooling gate):

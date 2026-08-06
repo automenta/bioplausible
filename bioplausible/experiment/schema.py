@@ -176,6 +176,17 @@ class Campaign(BaseModel):
         spec = resolve_task(task)
         return spec.input_dim, spec.output_dim
 
+    def max_params_for(self, model: str) -> int | None:
+        """Return the param budget for ``model`` (the tightest arm containing it).
+
+        A model is budgeted by its arm's ``max_params``; if it appears in
+        several arms the most restrictive budget wins so the layer never trains
+        past any declared cap. Returns ``None`` when the model belongs to no arm
+        (no budget enforced — defensive; models come from arms in practice).
+        """
+        budgets = [arm.max_params for arm in self.arms.values() if model in arm.models]
+        return min(budgets) if budgets else None
+
 
 def validate_yaml(text: str) -> Campaign:
     """Parse and validate a campaign YAML string into a :class:`Campaign`.

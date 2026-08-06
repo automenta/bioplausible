@@ -26,12 +26,23 @@ __all__ = [
     "StageMetrics",
     "StaircaseRunner",
     "Verdict",
-    "aggregate_values",
-    "metric_value",
     "passes_stage",
 ]
 
 ParamCounter = Callable[[str, dict[str, object], int, int], int]
+
+
+@dataclass(frozen=True, slots=True)
+class _StageContext:
+    """Immutable, stage-scoped facts shared across a stage's surviving models.
+
+    Bundled so the per-model scheduling helpers take one context instead of a
+    growing list of loose parameters (configs, geometry, per-model budget).
+    """
+
+    configs: list[dict[str, object]]
+    geom: tuple[int, int]
+    budget_by_model: dict[str, int | None]
 
 
 def _default_param_counter(
@@ -40,7 +51,9 @@ def _default_param_counter(
     """Count parameters by constructing the real model (the production path)."""
     from bioplausible.experiment.param_estimator import estimate_param_count
 
-    return estimate_param_count(model, config, input_dim=input_dim, output_dim=output_dim)
+    return estimate_param_count(
+        model, config, input_dim=input_dim, output_dim=output_dim
+    )
 
 
 _AGGREGATORS = {
@@ -98,31 +111,6 @@ class Outcome:
     verdict: Verdict
     metrics: StageMetrics
     reason: str
-
-
-def metric_value(metric: str, result: ProbeResult) -> float:
-    """Extract one metric from a probe result (non-finite -> NaN)."""
-    match metric:
-        case "acc":
-            return float(result.final_acc)
-        case "epoch_time_s":
-            return float(result.epoch_time_s)
-        case "loss":
-            return float(result.final_train_loss)
-        case "flops":
-            return float(result.forward_flops or 0)
-        case "memory":
-            return float(result.peak_memory_mb or 0)
-        case _:
-            return float("nan")
-
-
-def aggregate_values(values: list[float], aggregate: str) -> float:
-    """Aggregate a list across the requested strategy (``median``/``mean``/``min``)."""
-    finite = [v for v in values if _isfinite(v)]
-    if not finite:
-        return float("nan")
-    return float(_AGGREGATORS[aggregate](finite))
 
 
 def _isfinite(value: float) -> bool:
@@ -206,10 +194,19 @@ class StaircaseRunner:
 
     def _run_stage(self, stage: Stage, survivors: list[str]) -> list[Outcome]:
         finished = self.report.finished_keys()
+        ctx = _StageContext(
+            configs=self.producer.configs_for(stage),  # enumerate the grid once
+            geom=self.campaign.geometry(stage.task),
+            budget_by_model={
+                model: self.campaign.max_params_for(model) for model in survivors
+            },
+        )
         outcomes: list[Outcome] = []
         for model in survivors:
-            results = self._collect_probes(stage, model, finished)
+            results = self._collect_probes(stage, model, ctx, finished)
             passed, reason = passes_stage(stage, results)
+            if not results and not passed:
+                reason = self._over_budget_reason(model, ctx)
             verdict = Verdict.PASS if passed else Verdict.REJECT
             outcomes.append(
                 Outcome(
@@ -221,15 +218,52 @@ class StaircaseRunner:
             )
         return outcomes
 
+    def _over_budget_reason(self, model: str, ctx: _StageContext) -> str:
+        """Explain an empty result set when it is caused by the param budget."""
+        over = [f"{cfg}" for cfg in ctx.configs if self._over_budget(model, cfg, ctx)]
+        budget = ctx.budget_by_model[model]
+        return (
+            f"ok_seeds=0: all configs exceed max_params={budget} (over-budget: {over})"
+        )
+
+    def _count_params(
+        self, model: str, config: dict[str, object], ctx: _StageContext
+    ) -> int:
+        """Count a (model, config)'s params via the injected ``param_counter``."""
+        return self.param_counter(model, config, ctx.geom[0], ctx.geom[1])
+
+    def _over_budget(
+        self,
+        model: str,
+        config: dict[str, object],
+        ctx: _StageContext,
+    ) -> bool:
+        """Return whether a (model, config) exceeds its arm's ``max_params``.
+
+        Used only to explain an all-over-budget rejection
+        (:meth:`_over_budget_reason`); the scheduling path in
+        :meth:`_collect_probes` computes the count once itself.
+        """
+        budget = ctx.budget_by_model[model]
+        if budget is None:
+            return False
+        return self._count_params(model, config, ctx) > budget
+
     def _collect_probes(
-        self, stage: Stage, model: str, finished: set[str]
+        self,
+        stage: Stage,
+        model: str,
+        ctx: _StageContext,
+        finished: set[str],
     ) -> list[ProbeResult]:
-        """Gather (or resume) all probes for one model under a stage.
+        """Gather (or resume) all probes for one model under a stage, in budget.
 
         Finished probes are rehydrated from the Report so verdicts reflect the
-        full seed set; missing probes are trained and appended. The resume check
-        happens **before** training, so a re-launch is a true no-op for
-        completed probes.
+        full seed set; missing probes are trained and appended. Budget and
+        resume checks both happen **before** training, so over-budget configs
+        (architecture §6.3) and completed probes are never re-trained. A config
+        whose seeds are all already recorded is skipped entirely — re-running a
+        finished campaign builds no models (a true no-op, not just a no-train).
         """
         from bioplausible.experiment.probe import config_key as _config_key
         from bioplausible.experiment.report import probe_index_key
@@ -243,24 +277,33 @@ class StaircaseRunner:
             if key in finished:
                 results.append(recorded)
                 seen.add(key)
-        for work in self.producer.schedule(stage, [model], finished=finished):
-            key = _config_key(work.config)
-            for seed in range(stage.seeds):
-                rkey = f"{stage.name}:{model}:{key}:{seed}"
-                if rkey in seen:
-                    continue
-                probe = self._run_probe(stage, work.model, work.config, seed)
+        for config in ctx.configs:
+            key = _config_key(config)
+            pending = [
+                seed
+                for seed in range(stage.seeds)
+                if f"{stage.name}:{model}:{key}:{seed}" not in seen
+            ]
+            if not pending:
+                continue
+            param_count = self._count_params(model, config, ctx)
+            budget = ctx.budget_by_model[model]
+            if budget is not None and param_count > budget:
+                continue
+            for seed in pending:
+                probe = self._run_probe(stage, model, config, seed, param_count)
                 self.report.append(stage.name, probe)
                 results.append(probe)
         return results
 
     def _run_probe(
-        self, stage: Stage, model: str, config: dict[str, object], seed: int
+        self,
+        stage: Stage,
+        model: str,
+        config: dict[str, object],
+        seed: int,
+        param_count: int,
     ) -> ProbeResult:
-        geom = self.campaign.geometry(stage.task)
-        param_count = self.param_counter(
-            model, config, input_dim=geom[0], output_dim=geom[1]
-        )
         from bioplausible.experiment.probe import run_probe
 
         return run_probe(

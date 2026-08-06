@@ -114,10 +114,28 @@ class ProbeDriver(Protocol):
 
 
 class CoreTrainerDriver:
-    """Drives a probe through ``CoreTrainer`` (the existing training path)."""
+    """Drives a probe through ``CoreTrainer`` (the existing training path).
 
-    def __init__(self, track_energy: bool = False) -> None:
+    Compute settings (worker count, tracking toggles) come from the campaign's
+    ``compute`` block and are threaded into every ``TrainerConfig`` so a probe
+    respects the operator's declared resource budget — e.g. ``num_workers: 0``
+    on a bulk overnight run spawns no DataLoader worker processes per probe.
+    """
+
+    def __init__(
+        self,
+        *,
+        num_workers: int = 0,
+        batch_size: int = 64,
+        track_energy: bool = False,
+        track_flops: bool = True,
+        track_memory: bool = True,
+    ) -> None:
+        self.num_workers = num_workers
+        self.batch_size = batch_size
         self.track_energy = track_energy
+        self.track_flops = track_flops
+        self.track_memory = track_memory
 
     def train(  # ruff: ignore[too-many-arguments]  (probe driver signature is the public protocol contract)
         self,
@@ -132,7 +150,8 @@ class CoreTrainerDriver:
         """Train one probe and return aggregated metrics.
 
         Uses ``TrainerConfig`` so the run follows the exact CoreTrainer path
-        (registration, data loading, tracking) used by the parity CLI.
+        (registration, data loading, tracking) used by the parity CLI. Compute
+        settings captured at construction (worker count, tracking) are applied.
 
         Args:
             model: Registered model name.
@@ -171,10 +190,11 @@ class CoreTrainerDriver:
             epochs=epochs,
             seed=seed,
             device=device,
-            batch_size=64,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
             track_energy=self.track_energy,
-            track_flops=True,
-            track_memory=True,
+            track_flops=self.track_flops,
+            track_memory=self.track_memory,
         )
         try:
             history = CoreTrainer(cfg).fit()
