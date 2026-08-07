@@ -33,8 +33,10 @@ This plan is the *complete* forward path: **S0 stabilization** (the suite bug), 
 | P3a flagship selection as KB query | **Real (in code)** | `select_flagship()` geomean-cost rank on honest surfaces |
 | P3b memory lever (checkpointed settle) | **Real (in code)** | `torch.utils.checkpoint` in `settle_state` under grad |
 | Test suite green; coverage ≥85% | **→ At fixed gate** | S0 landed: 2008 pass / 15 skip / 5 xfail; gate set to 55% (see §IX) |
+| S0e gradient-check registration gate | **New (build)** | finite-diff `gradcheck` on all EqProp variants at import; blocks broken rules before search |
+| P2-lite Progressive Locality pilot | **New (run)** | FA → local anneal; measures cold-start fix (accuracy + settling steps) |
 | P0b honest `neural_cube` frontier | **Missing (run)** | gated on S0 + compute |
-| P4-lite substrate go/no-go | **Missing (run, pre-commit A/B)** | cheapest decisive probe |
+| P4-lite substrate go/no-go | **Branch A (in code+data)** | surrogate-sanity `|Δacc|≤0.001`, scope: facade only on LoopedMLP (see §VIII) |
 | P3c powered conditional w/ CI | **Missing** | needs P0b + P3a + budget |
 | P3.5/R buyer signal | **▶ READY to draft** | no engineering gate |
 | P4-full / P5 / P6 | **Missing** | substrate measurement, CIFAR, flywheel mass |
@@ -50,6 +52,7 @@ These three decide the business before the flagship's third decimal; they must n
 | **Does anyone care?** | buyer-facing spec sheet on one powered conditional | P3.5 / R5–R8 (draft now) | Fund vs Pivot; the whole thesis |
 | **Is the physical story real?** | substrate surrogate-sanity + scope audit | P4-lite (after S0) | Branch A vs B |
 | **Does it compound?** | proposer skip-based-on-conditional, toy→mass | P2-lite ✓ · P6 | confidence to fund P5/P6 |
+| **Can local learning cold-start?** | Progressive Locality (FA → local anneal) | P2-lite (after S0) | if negative, cold-start unsolved; if positive, publishable bridge |
 
 ---
 
@@ -65,10 +68,25 @@ These three decide the business before the flagship's third decimal; they must n
 | **S0b** `test_model_deterministic_output[noisy_looped_mlp]` | stochastic facade under determinism assert | add `noisy_looped_mlp` to `SKIP_MODELS` (reason: noise substrate facade) | that node skips, others stay green |
 | **S0c** `test_energy_landscape_eqprop` | landscape energy ≠ forward CE for eqprop | audit `compute_energy_landscape` center-energy definition; align or relax tol to a *documented* value (keep MLP case exact `1e-4`) | node passes; `test_energy_landscape_finite` unchanged |
 | **S0d** `test_phase0::test_integration_run` | clinical guard raises `TrialPruned`; runner propagates | standalone `run_from_config` catches `TrialPruned` → records unit `status` (`expensive`/`error`) + sinks it (honors "record reverts") | node passes, history present, sink has a failure/abort record |
+| **S0e** gradient correctness for all EqProp variants | silent gradient bugs poison Pareto claims | add finite-difference gradient check as **registration gate** for every EqProp variant (`bioplausible/zoo/models/eqprop/*.py`): `torch.autograd.gradcheck` on `equilibrium_step` with `atol=1e-3, rtol=1e-2`; fail registration if check fails | `pytest tests/unit/test_gradient_check.py -q` (new gate, runs at import time) |
 
-**Coverage-closure contingency:** if the suite goes green but coverage still <85%, add a **C0** pass — focused tests for the recently-added paths (`settle_state`, validator surface/emitter, `query_conditionals`, `select_flagship`) that are already unit-covered, to lift the marginal %. Do **not** chase 85% by deleting real code.
+**Coverage-closure contingency:** if the suite goes green but coverage still <85%, add a **C0** pass — focused tests for the recently-added paths (`settle_state`, validator surface/emitter, `query_conditionals`, `select_flagship`, gradient-check gate) that are already unit-covered, to lift the marginal %. Do **not** chase 85% by deleting real code.
 
-**Success (exit):** `uv run pytest --cov` green; total coverage ≥85% with the gate enforced; scratch artifacts quarantined.
+**Success (exit):** `uv run pytest --cov` green; total coverage ≥85% with the gate enforced; scratch artifacts quarantined; gradient-check gate passes for all registered EqProp variants.
+
+---
+
+### Phase P2-lite — Read-half demo + Progressive Locality pilot (after S0)
+
+> The P2 read-half (`query_conditionals` + `avoid_characterized`) is already **Real (in code)** per §I. This phase adds a **Progressive Locality** pilot: use a cheap global surrogate (Feedback Alignment) for early training to build feature representations, then anneal to pure local equilibrium learning. This solves the cold-start problem for local rules and provides a publishable bridge.
+
+- **P2b (Progressive Locality pilot):** implement a two-phase trainer that runs `feedback_alignment` for first N% of epochs (configurable), then switches to `eqprop`/`neural_cube` equilibrium training with the learned features frozen or fine-tuned. Measure: (a) final accuracy vs pure-local baseline, (b) reduction in equilibrium settling steps, (c) wall-clock speedup.
+
+```
+uv run python scripts/progressive_locality.py --task mnist --surrogate fa --surrogate-frac 0.1 --target eqprop --epochs 20 --seed 0
+```
+
+**Budget:** 10–20 probe runs. **Success:** measurable accuracy gain and/or settling-step reduction on `eqprop`/`neural_cube` vs pure-local baseline; artifact logged to KB for AutoScientist conditioning.
 
 ---
 
@@ -84,6 +102,15 @@ uv run python scripts/preliminary_run.py --device cuda --bio eqprop --bp-probes 
 uv run python scripts/preliminary_run.py --device cuda --bio eqprop --bp-probes 10 --bio-probes 3 --epochs 1 --target-hardware gpu
 # compare: does the GPU-vs-FPGA frontier reorder? (_hw{target} cache keys already split)
 ```
+
+> **Correction (post-run, see §VIII):** the literal `--bio eqprop` above resolves to
+> `StandardEqProp`, a `BioModel` that `target_hardware` cannot swap — so its fpga/gpu
+> frontiers came out bit-identical (the knob was a silent no-op). The surrogate-sanity
+> verdict (**Branch A**) was established directly on the reachable family
+> (`scripts/p4lite_surrogate_sanity.py`: `eqprop_mlp` vs the fpga/analog facades,
+> `|Δacc| ≤ 0.001`, FLOPs identical). Any *measured* substrate comparison must therefore
+> target a `LoopedMLP`-family model directly (grep `hardware_variants.py`) — carrying the
+> plan's `--bio eqprop` forward as-is would re-measure nothing.
 
 - **Branch A (physical story holds):** budgets → substrate-faithful measurement; flagship must gain a substrate path or an eqprop-family flagship is chosen by P3a's substrate-eligibility criterion.
 - **Branch B (distorts / too narrow):** (a) build a true low-precision backward, or (b) re-anchor on the epistemic engine + GPU-efficiency story.
@@ -109,7 +136,11 @@ uv run python scripts/preliminary_run.py --device cuda --bio neural_cube --bp-pr
 
 Concentrate `budget_probes` → 500–1000 on the **selected flagship + matched `backprop_mlp` reference only** (no five-family spray). Report the **symmetric joint Pareto surface first** (§II PLAN3) and `cost_of_plausibility` second, with a 95% CI (≥3 seeds per operating point for the variance term) and `scaling_law` r²/CI.
 
-**Budget:** the dominant compute spend of the plan (hour-scale, GPU). **Success:** one defensible `cost ≤ ~1.5–1.6` ± CI **or** an honest "one lever from viable."
+**Roofline pivot:** report **Memory Traffic (GB) vs Compute (TFLOPs)** alongside FLOPs — the true cost of backprop is bandwidth. Fit roofline: `performance = min(peak_compute, bandwidth × arithmetic_intensity)`. Show that local learning shifts the operating point left (less memory traffic per useful update).
+
+**Blinded trials:** the AutoScientist proposer **never sees test-set performance**. Feed it Pareto ranks or noisy validation estimates only. Test set is locked; queried only when a config is promoted to Flagship status via `select_flagship()`.
+
+**Budget:** the dominant compute spend of the plan (hour-scale, GPU). **Success:** one defensible `cost ≤ ~1.5–1.6` ± CI **or** an honest "one lever from viable"; roofline plot + CI table; blinded-trial discipline enforced.
 
 ---
 
@@ -124,31 +155,55 @@ Concentrate `budget_probes` → 500–1000 on the **selected flagship + matched 
 
 ---
 
-### Phase P4-full (Branch A only) — executed substrate measurement
+### Phase P4-full (Branch A only) — executed substrate measurement + Hardware Tax
 
 ```
-uv run python scripts/preliminary_run.py --device cuda --bio eqprop --bp-probes 20 --bio-probes 20 --epochs 3 --target-hardware fpga  --cache-dir logs/hw_fpga
-uv run python scripts/preliminary_run.py --device cuda --bio eqprop --bp-probes 20 --bio-probes 20 --epochs 3 --target-hardware analog --cache-dir logs/hw_analog
+uv run python scripts/preliminary_run.py --device cuda --bio eqprop_mlp --bp-probes 20 --bio-probes 20 --epochs 3 --target-hardware fpga  --cache-dir logs/hw_fpga
+uv run python scripts/preliminary_run.py --device cuda --bio eqprop_mlp --bp-probes 20 --bio-probes 20 --epochs 3 --target-hardware analog --cache-dir logs/hw_analog
 ```
 
-The `_hw{target}` cache split already prevents GPU↔FPGA cross-reuse. **Success:** a real fpga/analog `cost_of_plausibility` on substrate-eligible families + a recorded "does substrate change the ranking?" answer.
+The `_hw{target}` cache split already prevents GPU↔FPGA cross-reuse. **Success:** a real fpga/analog `cost_of_plausibility` on substrate-eligible families + a recorded "does substrate change the ranking?" answer. *(Amended per §VIII: run the fpga/analog legs on a `LoopedMLP`-family model, e.g. `eqprop_mlp`, not the `--bio eqprop` shorthand which silently no-ops the facade.)*
+
+**Hardware Tax / Weaponized Noise (proves Heresy Two):** inject realistic hardware noise into GPU runs — memristor drift (`W += N(0, σ_drift)` per epoch), thermal noise (`activation += N(0, σ_thermal)` per step), device mismatch (`W` initialized with per-device variance). Run the flagship ± noise at matched budgets. **Hypothesis:** noise acts as a free regularizer → generalization *improves* vs pristine float32 at same budget.
+
+```
+uv run python scripts/hardware_tax.py --model eqprop_mlp --task mnist --noise-profile memristor --drift-std 0.01 --epochs 10 --seeds 3
+```
+
+**Budget:** 6–12 runs. **Success:** recorded `test_acc` delta (noisy − clean) with 95% CI; if delta ≥ 0, noise-as-regularizer claim holds; log to KB for AutoScientist.
 
 ---
 
-### Phase P5 — Scale + cross-terms (after P3 baseline)
+### Phase P5 — Scale + cross-terms + Memory Wall (after P3 baseline)
 
 - **P5a:** `HyperbandPruner` end-to-end → first CIFAR-10 `cost_of_plausibility` (fidelity = epochs / dataset fraction).
 - **P5b:** hardware × equilibrium cross-terms — does `convergence_threshold` search behave the same under quantization? Free once P1 protocol + P4-full exist. This is the product differentiation (substrate-specific optimization, not GPU parity).
+- **P5c (Memory Wall Benchmark):** create a benchmark that enforces a **fixed peak-memory budget** (e.g., `torch.cuda.set_per_process_memory_fraction(0.25)` or SRAM simulator) and measures max depth / accuracy each algorithm family achieves. This directly recruits the $O(1)$ depth-independent memory claim. Compare: backprop (memory ∝ depth), BPTT (memory ∝ steps), local rules (memory ∝ 1).
 
-**Success:** first CIFAR-10 cost; the cross-term recorded via the P1 protocol.
+```
+uv run python scripts/memory_wall.py --budget-mb 512 --task cifar10 --rules backprop,eqprop_mlp,neural_cube,forward_forward --max-depth 20
+```
+
+**Success:** first CIFAR-10 cost; hardware×equilibrium cross-term recorded; memory-wall plot (accuracy vs depth at fixed MB) for each family; local rules demonstrably extend deeper at same budget.
 
 ---
 
-### Phase P6 — Mass + flywheel at scale (after P3c/P5 data)
+### Phase P6 — Mass + flywheel at scale + Compositional Grammar Search (after P3c/P5 data)
 
 Let P3c/P5 accumulate through `result_sink`, then measure the AutoScientist proposing with **fewer probes because it read a prior conditional**, now at CIFAR scale. Non-trivial KB counts + a skip-based-on-conditional measurement (the P2-lite paired counterfactual, scaled).
 
-**Success:** a measured "compounding RPM" (redundant-probes-avoided / proposals) at CIFAR mass, with non-trivial KB counts.
+**Compositional Grammar Search:** move beyond flat hyperparameter tuning. Give the AutoScientist a grammar to search combinatorial space:
+```
+[Credit Assignment: EqProp|FA|CHL|EP] +
+[Topology: EquiTile|LoopedMLP|NeuralCube|GraphPCN] +
+[Optimizer: Muon|Adam|Spectral|Standard] +
+[Constraint: SpectralNorm|O1Memory|Quantized|Noisy]
+```
+The breakthroughs are in the intersections. Measure: proposals generated, unique grammar derivations, Pareto improvements vs flat search.
+
+**Blinded trials enforced:** LLM proposer sees only Pareto ranks / noisy validation estimates. Test set locked; queried only at Flagship promotion via `select_flagship()`.
+
+**Success:** a measured "compounding RPM" (redundant-probes-avoided / proposals) at CIFAR mass, with non-trivial KB counts; grammar search coverage (unique derivations ≥ N); blinded-trial discipline verified.
 
 ---
 
@@ -159,6 +214,9 @@ Let P3c/P5 accumulate through `result_sink`, then measure the AutoScientist prop
 - **Report order:** symmetric joint Pareto first; `cost_of_plausibility` second (it is backprop-relative, PLAN2 §1 — fix at the report layer, no re-measurement).
 - **Sink discipline:** every probe (win *and* revert) goes through `result_sink`; failures to the tracker.
 - **Diagnose before judging:** low acc/cost may be epoch-budget artifacts — cite `best_epoch_acc`/`acc_at_half`.
+- **Roofline reporting:** every powered conditional (P3c/P4-full/P5) includes Memory Traffic (GB) vs Compute (TFLOPs) and arithmetic intensity; plot against hardware roofline.
+- **Blinded trials:** AutoScientist proposer **never receives test-set metrics** — only validation Pareto ranks or noisy estimates. Test set queried only at Flagship promotion.
+- **Diagnostic failure manifestos:** every reverted probe logs a *physical/mathematical* root cause (e.g., "Lipschitz > 1.0 → chaotic dynamics", "gradient alignment cosine → 0", "equilibrium steps → max without convergence"), not just "low accuracy". Stored in FailureTracker with structured tags for querying.
 
 ---
 
@@ -172,6 +230,12 @@ Let P3c/P5 accumulate through `result_sink`, then measure the AutoScientist prop
 | Triton/`tanh` availability on CI | Med | flaky hw tests | pin the gate to cpu + documented triton-off path (already observed warning) |
 | Compute budget exhaustion mid-P3c | High | CI table unfinished | timebox P3c; ship "one lever from viable" as the honest output |
 | Buyers uninterested (P3.5 False positive/Pivot) | High | whole thesis | the market signal IS the decision; Branch B is a pivot on R8 mass, not a restart |
+| Silent gradient bugs in EqProp variants | Med | Pareto claims poisoned | S0e: finite-diff gate at registration (blocks broken variants before search) |
+| Progressive Locality doesn't improve over pure-local | Med | cold-start unsolved | P2b pilot is low-cost; if negative, pure-local path unchanged |
+| Hardware Tax shows noise *degrades* generalization | Low | Heresy Two falsified | record honestly; pivot to "controlled noise as regularizer" if sign flips at specific σ |
+| Memory Wall benchmark shows no local advantage | Med | O(1) claim unrecruitable | P5c is diagnostic — if false, adjust claim to "local helps at specific depth/budget" |
+| Grammar search overfits search space | Med | AutoScientist hallucinates | P6: limit derivations per generation; enforce blinded trials; track proposal diversity |
+| Roofline metric shows backprop not bandwidth-bound at our scale | Low | pitch loses key lever | report honestly; reframe to "local enables on-chip SRAM deployment" |
 
 ---
 
@@ -183,6 +247,10 @@ Let P3c/P5 accumulate through `result_sink`, then measure the AutoScientist prop
 - Record wins *and* reverts via the sink — the sink does not distinguish; write them all.
 - Space and constructor move together — P0a validator enforces; the human rule is the backup.
 - **No backwards compatibility of any kind** (AGENTS.md): S0d is the entrypoint catching the prune, not the test swallowing it.
+- **Finite-diff gradient gate at registration** (S0e): every EqProp variant must pass `gradcheck` before entering `RULE_SPACES`.
+- **Blinded trials always**: AutoScientist proposer never sees test metrics — only validation ranks / noisy estimates.
+- **Roofline on every report**: Memory Traffic (GB) vs Compute (TFLOPs) alongside FLOPs; arithmetic intensity explicit.
+- **Diagnostic failure manifestos**: every revert carries a physical/mathematical root-cause tag, not just a metric.
 
 ---
 
@@ -190,16 +258,17 @@ Let P3c/P5 accumulate through `result_sink`, then measure the AutoScientist prop
 
 | Phase | Gated by | Produces |
 |---|---|---|
-| **S0** Stabilization + C0 | (entry) | green suite; honest ≥85% coverage gate |
+| **S0** Stabilization + C0 | (entry) | green suite; honest ≥85% coverage gate; gradient-check gate |
+| **P2-lite** Read-half + Progressive Locality | S0 | KB read-half demo; PL pilot data (accuracy/settling vs pure-local) |
 | **P4-lite** Substrate go/no-go | S0 | Branch A/B verdict, pre-committed & chosen |
 | **P0b + P3a** Honest flagship | S0 (+ P4-lite branch) | rule-selected flagship + honest cost |
-| **P3c** Powered CI | P0b + P3a | one defensible cost ± 95% CI; first partner-ready table |
+| **P3c** Powered CI | P0b + P3a | one defensible cost ± 95% CI; roofline table; blinded-trial discipline |
 | **P3.5 / R1–R8** Market probe | draft now; spec sheet at P3c | buyer response — Fund / False-positive / Pivot |
-| **P4-full** Substrate measurement | Branch A | first hardware-aware cost table + ranking-change answer |
-| **P5** Scale + cross-terms | P3 baseline | CIFAR-10 cost; substrate-specific differentiation |
-| **P6** Flywheel at scale | P2-lite ✓ + P3–P5 | measured compounding RPM at CIFAR mass |
+| **P4-full** Substrate + Hardware Tax | Branch A | hw-aware cost table; noise-as-regularizer verdict |
+| **P5** Scale + cross-terms + Memory Wall | P3 baseline | CIFAR-10 cost; hw×equilibrium cross-term; memory-wall depth plot |
+| **P6** Flywheel + Grammar Search | P2-lite ✓ + P3–P5 | compounding RPM; grammar derivations; blinded-trial verified |
 
-**Why S0 first:** it is the only phase that makes every downstream number trustworthy *and* every CI run green, and it is mostly the same root cause. **Why P4-lite and P3.5 immediately after:** they are the two cheapest *decisive* probes; neither needs the flagship, and the market must not wait behind engineering.
+**Why S0 first:** it is the only phase that makes every downstream number trustworthy *and* every CI run green, and it is mostly the same root cause. **Why P4-lite and P3.5 immediately after:** they are the two cheapest *decisive* probes; neither needs the flagship, and the market must not wait behind engineering. **P2-lite (Progressive Locality)** runs in parallel with P4-lite — same compute budget, independent signal on cold-start.
 
 ---
 
@@ -219,29 +288,38 @@ Making the task genuinely learnable surfaced **five models that are *marginal/no
 ### Tracking manual — why these are xfail, not skip, and how we don't lose them
 Hard `skip` was rejected for the non-converging models because it **silently drops coverage**: a genuinely broken rule would be masked forever. Instead, `test_model_learns_synthetic` **runs full training for every model** — proving it executes, emits finite losses, and doesn't crash — and only the *improvement assert* is relaxed to **`xfail` (strict=False)** for the five known margins. Outcomes stay visible and counted each run; if a rule is later fixed it flips to **XPASS (a signal), not silence**. A registry-presence guard (`test_excluded_models_still_registered`) imports and asserts every excluded name is still a real, registered model, so deletion now fails the build instead of quietly dropping the rule. Constructors reachable only via a specialized path (`conv_equitile`, `enhanced_equitile`) remain in `EXCLUDED_BUILD` with forward coverage retained by `test_registry_audit` fixtures.
 
+### P4-lite outcome — Branch A chosen, with a scope correction (recorded post-run)
+P4-lite (substrate go/no-go) was executed on `--device cuda --bio eqprop --bp-probes 10 --bio-probes 3 --epochs 1 --target-hardware {fpga,gpu}` per the plan command:
+
+- **Scope audit (answer to §0.4):** `target_hardware` only swaps for **`LoopedMLP`-family** models (`eqprop_mlp`, `quantized_looped_mlp`, `noisy_looped_mlp`). The plan's literal command keys the bio rule to model `eqprop` = `StandardEqProp` (a `BioModel`, not a `LoopedMLP`), so `_apply_hardware` (`bioplausible/core/trainer.py:542`) silently no-ops. **The GPU and FPGA frontiers came out bit-identical** (0.78525 / 0.77992 / 0.76437 in both, `cost_of_plausibility` 10.668 fpga vs 10.699 gpu) precisely because no facade engaged. The `_hw{target}` cache split worked (separate caches, `logs/multi_family_mnist_hw_{fpga,gpu}.json`), but it cannot compensate for the facade being unreachable.
+- **Surrogate sanity (step 1 answer):** re-run directly on the reachable family — `eqprop_mlp` (float base) vs `quantized_looped_mlp` (fpga/INT8) vs `noisy_looped_mlp` (analog) on two matched configs (`scripts/p4lite_surrogate_sanity.py` → `logs/p4lite_surrogate_sanity.json`). The facades do **not** materially distort the eqprop frontier: `|Δacc| ≤ 0.001` across both facades/configs (parity threshold 0.05), and FLOPs are identical (`flops_delta_frac = 0.0`).
+
+**Verdict → Branch A (physical story holds):** float-grad/quantized-forward is a faithful surrogate on the substrate-eligible family, and the substrate path is real where it is wired. **Correction applied to how P4-full must run:** substrate-faithful measurement must target a `LoopedMLP`-family model directly (e.g. `eqprop_mlp`, or the facades), *not* the `--bio eqprop` shorthand — otherwise the hardware knob is a silent no-op and the `_hw{target}` comparison measures nothing. P4-full's commands in §III are amended to use the substrate-eligible model for the fpga/analog legs. PR budget spent: ~2 short runs + 6 one-epoch probe comparisons (≈ 8 min).
+
 ### Coverage decision (per operating priority)
 The 85% gate was **not** chased by deleting real code (plan's own C0 guard). Coverage sits at ~60% and is a pre-existing measurement gap across the whole `bioplausible` package; the gate was set to the honest achieved level (55%) so CI is green. **Re-raising it toward 85% is deferred** and should be a deliberate, C0-style test-authoring effort — the plan's "don't chase % by deleting code" rule still holds.
 
-### Still-open (unchanged, compute-gated)
-P4-lite (substrate go/no-go), P0b/P3a (honest flagship), P3c (powered CI), P3.5/R8 (market drafting — ▶ READY, no compute), P4-full, P5, P6 all remain outstanding and gated on S0 (now satisfied) + compute budget.
+### Still-open (compute-gated)
+P2-lite (Progressive Locality pilot), P0b/P3a (honest flagship), P3c (powered CI), P3.5/R8 (market drafting — ▶ READY, no compute), P4-full (Hardware Tax), P5 (Memory Wall), P6 (Grammar Search) all remain outstanding and gated on S0 (now satisfied) + compute budget. P4-lite itself is now **landed** (Branch A, §VIII).
 
 ---
 
 ## IX. Definition of Done (the whole plan, in one checklist)
 
-- [ ] **S0:** `uv run pytest --cov` green at ≥85% with the gate enforced; `noisy_looped_mlp` audited; eqprop landscape energy definitionally correct; standalone runner records pruned units.
-- [ ] **P4-lite:** Branch A/B recorded and chosen.
+- [ ] **S0:** `uv run pytest --cov` green at ≥85% with the gate enforced; `noisy_looped_mlp` audited; eqprop landscape energy definitionally correct; standalone runner records pruned units; **finite-diff gradient gate passes for all EqProp variants**.
+- [x] **P4-lite:** Branch A/B recorded and chosen.
+- [ ] **P2-lite:** Progressive Locality pilot data logged (accuracy/settling vs pure-local); KB read-half demo verified.
 - [ ] **P0b/P3a:** flagship selected by `select_flagship()` on an honest space, cost recorded.
-- [ ] **P3c:** one powered conditional (Pareto-first, CI, ≥3 seeds) — the first partner-ready artifact.
+- [ ] **P3c:** one powered conditional (Pareto-first, CI, ≥3 seeds) — the first partner-ready artifact; **roofline plot + CI table; blinded-trial discipline enforced**.
 - [ ] **P3.5/R:** one recorded buyer signal (Fund / False-positive / Pivot); spec sheet + rubric + interview template drafted; R8 one-pager written.
-- [ ] **P4-full** (A only): hardware-aware cost table + "does substrate change ranking?" answer.
-- [ ] **P5:** first CIFAR-10 cost; hardware×equilibrium cross-term recorded.
-- [ ] **P6:** flywheel-at-scale measurement (redundant-probes-avoided) with non-trivial KB mass.
+- [ ] **P4-full** (A only): hardware-aware cost table + "does substrate change ranking?" answer; **Hardware Tax verdict (noise delta ± CI)**.
+- [ ] **P5:** first CIFAR-10 cost; hardware×equilibrium cross-term recorded; **memory-wall benchmark plot (accuracy vs depth at fixed MB)**.
+- [ ] **P6:** flywheel-at-scale measurement (redundant-probes-avoided) with non-trivial KB mass; **compositional grammar search coverage; blinded-trial verified**.
 
 ---
 
 ## Bottom line
 
-The risk has flipped from *"can we measure"* (answered — every measurement tool now exists and is gated) to *"does the machine run honestly (S0), is the substrate story real (P4-lite), does the flywheel turn at mass (P6) — and does anyone pay for the truth (P3.5/R)."* The most defensible first move is **S0a–S0d** (it unblocks CI and every downstream number), with **P3.5/R drawings** and the **P4-lite branch pre-commit** running in parallel because they cost ~nothing and gate the business.
+The risk has flipped from *"can we measure"* (answered — every measurement tool now exists and is gated) to *"does the machine run honestly (S0), is the substrate story real (P4-lite), does the flywheel turn at mass (P6), does local learning cold-start (P2-lite PL), and does anyone pay for the truth (P3.5/R)."* The most defensible first move is **S0a–S0e** (it unblocks CI and every downstream number, including the gradient gate), with **P3.5/R drawings** and the **P4-lite/P2-lite branch pre-commits** running in parallel because they cost ~nothing and gate the business.
 
-⊕ *If the flagship or the whole bio-rule line is de-prioritized tomorrow, S0's green suite, P0a's surface records, P1's settle protocol, P2's read-half, and P3b's checkpointing all survive — and R8 names the assets that survive if the physical story dies. That invariance, not any single rule's cost, is what "the framework is the product" means in code and in the market.*
+⊕ *If the flagship or the whole bio-rule line is de-prioritized tomorrow, S0's green suite, P0a's surface records, P1's settle protocol, P2's read-half + Progressive Locality pilot, and P3b's checkpointing all survive — and R8 names the assets that survive if the physical story dies. That invariance, not any single rule's cost, is what "the framework is the product" means in code and in the market.*
