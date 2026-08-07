@@ -169,6 +169,15 @@ class _FrontierFinder[D]:
         """Reconstruct this rule's decision from a validated cache payload."""
         raise NotImplementedError
 
+    def _validate_before_search(self) -> None:
+        """P0a gate hook: assert this rule's search space is honest before probing.
+
+        Default is a no-op; rule finders override to run
+        :func:`~bioplausible.hyperopt.search_space.validate_rule_space`. Called at
+        the top of :meth:`find`, so a cached frontier for a now-phantom space is
+        refused rather than silently reused.
+        """
+
     # --- shared machinery ----------------------------------------------
 
     def _cache_name(self) -> str:
@@ -201,6 +210,7 @@ class _FrontierFinder[D]:
         Args:
             force: If True, re-run the search even when a cache exists.
         """
+        self._validate_before_search()
         if not force:
             cached = self.load_cache()
             if cached is not None:

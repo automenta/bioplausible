@@ -6,6 +6,7 @@ from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 from bioplausible.core.registry import register_model
+from bioplausible.zoo._settling import settle_state
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 __all__ = [
@@ -53,6 +54,8 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
         input_dim: int = 64,
         output_dim: int = 10,
         max_steps: int = 30,
+        convergence_threshold: float = 1e-3,
+        convergence_start: int = 5,
     ):
         super().__init__()
         self.cube_size = cube_size
@@ -60,6 +63,10 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.max_steps = max_steps
+        # P1: adopt the shared settle protocol — convergence knobs are real
+        # constructor parameters, so a search space may legitimately sweep them.
+        self.convergence_threshold = convergence_threshold
+        self.convergence_start = convergence_start
 
         self.W_in = nn.Linear(input_dim, self.n_neurons)
 
@@ -156,35 +163,55 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
 
         return weighted
 
+    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
+        """Zero hidden state over the cube's neurons (P1 settle protocol)."""
+        return torch.zeros((x.shape[0], self.n_neurons), device=x.device, dtype=x.dtype)
+
+    def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
+        """Project the raw input into the cube's neuron space (P1 protocol)."""
+        return self.W_in(x)
+
+    def _forward_step_impl(
+        self, h: torch.Tensor, x_transform: torch.Tensor
+    ) -> torch.Tensor:
+        """One recurrent settle step: input projection + local-neighbor update."""
+        return torch.tanh(x_transform + self.local_update(h))
+
     def forward(
         self,
         x: torch.Tensor,
         steps: int | None = None,
         return_trajectory: bool = False,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
         steps = steps or self.max_steps
-        batch_size = x.shape[0]
-        device = x.device
 
-        h = torch.zeros(batch_size, self.n_neurons, device=device, dtype=x.dtype)
+        if not return_trajectory:
+            h, steps_taken, converged = settle_state(self, x, steps=steps)
+            self._last_settle_steps = steps_taken
+            self._last_settle_converged = converged
+            return self.W_out(h)
 
-        x_proj = self.W_in(x)
-
-        trajectory = [h.detach()] if return_trajectory else None
-
-        for _ in range(steps):
-            local_contrib = self.local_update(h)
-
-            h = torch.tanh(x_proj + local_contrib)
-
-            if return_trajectory:
-                trajectory.append(h.detach())
-
-        out = self.W_out(h)
-
-        if return_trajectory:
-            return out, trajectory
-        return out
+        # Trajectory path (visualization/analysis only): hand-rolled loop so the
+        # per-step snapshots are returned. Reuses the same recurrence and the
+        # same convergence knobs as :func:`settle_state`.
+        x_transform = self._transform_input(x)
+        h = self._initialize_hidden_state(x)
+        trajectory = [h.detach()]
+        for step_idx in range(steps):
+            h_new = self._forward_step_impl(h, x_transform)
+            trajectory.append(h_new.detach())
+            if (
+                step_idx > self.convergence_start
+                and torch.dist(h_new, h, p=float("inf")).item()
+                < self.convergence_threshold
+            ):
+                self._last_settle_steps = step_idx + 1
+                self._last_settle_converged = True
+                return self.W_out(h_new), trajectory
+            h = h_new
+        self._last_settle_steps = steps
+        self._last_settle_converged = False
+        return self.W_out(h), trajectory
 
     def get_topology_stats(self) -> dict:
         active_weights = (self.W_local.abs() > 0.01).float().mean().item()

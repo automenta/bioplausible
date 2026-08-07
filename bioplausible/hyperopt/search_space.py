@@ -4,8 +4,14 @@ Search Space Definitions
 Defines the hyperparameter search spaces for each model type in the registry.
 """
 
+import hashlib
+import inspect
+from dataclasses import dataclass
+
 import numpy as np
 
+from bioplausible.core.exceptions import SpaceSignatureMismatchError
+from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.zoo import get_model_spec
 
 # Type aliases
@@ -13,11 +19,16 @@ from bioplausible.zoo import get_model_spec
 __all__ = [
     "RULE_SPACES",
     "SEARCH_SPACES",
+    "ConstructorSurface",
     "DiscreteChoice",
     "NumberRange",
     "SearchSpace",
+    "emit_rule_space_surfaces",
     "get_rule_space",
     "get_search_space",
+    "surface_for_rule",
+    "validate_all_rule_spaces",
+    "validate_rule_space",
 ]
 NumberRange = tuple[
     float, float, str
@@ -383,14 +394,12 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         "weight_decay": (1e-6, 1e-2, "log"),
         "hidden_dim": (32, 1024, "log"),
         "num_layers": (1, 6, "int"),
-        "dropout": (0.0, 0.5, "linear"),
     },
     "eqprop": {
         "lr": (1e-5, 1e-1, "log"),
         "weight_decay": (1e-6, 1e-2, "log"),
         "hidden_dim": (32, 1024, "log"),
         "num_layers": (1, 6, "int"),
-        "dropout": (0.0, 0.5, "linear"),
         "beta": (0.01, 3.0, "log"),
         "max_steps": (5, 100, "int"),
         "damping": (0.0, 0.9, "linear"),
@@ -399,13 +408,14 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         "convergence_start": (2, 10, "int"),
     },
     "neural_cube": {
+        # Honest space (P0a): every knob is real — accepted by ``NeuralCube.__init__``
+        # or routed by the training loop. ``hidden_dim``/``damping``/``tol`` were
+        # silently dropped by ``build_model_kwargs`` (phantom drift, §0.1); re-add
+        # each dimension in the same change that implements it on the model.
         "lr": (1e-5, 1e-1, "log"),
         "weight_decay": (1e-6, 1e-2, "log"),
         "cube_size": (3, 10, "int"),
-        "hidden_dim": (32, 1024, "log"),
         "max_steps": (5, 100, "int"),
-        "damping": (0.0, 0.9, "linear"),
-        "tol": (1e-6, 1e-2, "log"),
     },
     "pepita": {
         "lr": (1e-4, 1e-1, "log"),
@@ -449,3 +459,205 @@ def get_rule_space(rule: str) -> dict[str, NumberRange | DiscreteChoice]:
         raise ValueError(
             f"No rule space defined for '{rule}'. Available: {sorted(RULE_SPACES)}"
         ) from None
+
+
+# ---------------------------------------------------------------------------
+# P0a — RULE_SPACES ↔ constructor integrity gate (plan §P0a)
+# ---------------------------------------------------------------------------
+
+# Rule keys whose registered model name differs from the rule key; all others
+# share the key with their registered model (``eqprop`` → ``StandardEqProp``, …).
+_RULE_TO_MODEL: dict[str, str] = {
+    "backprop": "backprop_mlp",
+}
+
+
+def _model_name_for_rule(rule: str) -> str:
+    """Resolve the registered model name that ``build_model_kwargs`` constructs."""
+    return _RULE_TO_MODEL.get(rule, rule)
+
+
+# Keys the training/optimization pipeline consumes from a sampled config outside
+# the model constructor. These are *not* phantoms: ``lr``/``weight_decay`` etc.
+# are consumed by the optimizer even when the model's ``__init__`` never sees
+# them. Architecture & equilibrium dimensions (``hidden_dim``, ``damping``,
+# ``tol``, ``convergence_*``) are deliberately NOT listed — those are exactly the
+# knobs P0a is meant to catch when silently dropped.
+_TRAINING_HYPERPARAMS: frozenset[str] = frozenset({
+    "lr",
+    "weight_decay",
+    "dropout",
+    "momentum",
+    "batch_size",
+    "num_epochs",
+    "optimizer",
+    "scheduler",
+    "gradient_clip",
+    "warmup_epochs",
+    "reg_lambda",
+    "weight_init",
+    "betas",
+    "lr_scheduler",
+})
+
+
+@dataclass(frozen=True, slots=True)
+class ConstructorSurface:
+    """Machine-readable constructor-surface record for one rule (P0a).
+
+    Captures, as of the current commit: which advertised search-space keys are
+    real constructor parameters, which are absorbed via ``**kwargs``, which are
+    training-loop hyperparameters, and which are *phantoms* (silently dropped by
+    ``build_model_kwargs``). A non-empty :attr:`phantoms` fails the gate.
+    """
+
+    rule: str
+    model: str
+    signature: str
+    space_hash: str
+    accepted: tuple[str, ...]
+    absorbs_kwargs: bool
+    sinks: tuple[tuple[str, str], ...]
+    phantoms: frozenset[str]
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize to a JSON-compatible dict for KB storage."""
+        return {
+            "rule": self.rule,
+            "model": self.model,
+            "signature": self.signature,
+            "space_hash": self.space_hash,
+            "accepted": list(self.accepted),
+            "absorbs_kwargs": self.absorbs_kwargs,
+            "sinks": [list(kv) for kv in self.sinks],
+            "phantoms": sorted(self.phantoms),
+        }
+
+
+def _constructor_surface(model_cls: object) -> tuple[frozenset[str], bool, str]:
+    """Inspect ``model_cls.__init__`` → (accepted params, has **kwargs, signature)."""
+    try:
+        sig = inspect.signature(model_cls.__init__)
+    except TypeError, ValueError:  # un-inspectable C callable etc.; treat as opaque
+        return frozenset(), False, repr(model_cls)
+    accepted: set[str] = set()
+    for name, param in sig.parameters.items():
+        if name in {"self", "args", "kwargs"}:
+            continue
+        accepted.add(name)
+    has_kwargs = any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+    return frozenset(accepted), has_kwargs, str(sig)
+
+
+def _space_hash(space: dict[str, object]) -> str:
+    """SHA-256 of the canonical (sorted) space definition — the honest surface pin."""
+    canonical = repr(sorted(space.items(), key=lambda kv: kv[0]))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
+def surface_for_rule(rule: str) -> ConstructorSurface:
+    """Compute the constructor-surface record for one rule without raising.
+
+    Args:
+        rule: Rule key into ``RULE_SPACES`` (e.g. ``"neural_cube"``).
+
+    Returns:
+        The :class:`ConstructorSurface` for the rule (phantoms may be non-empty).
+
+    Raises:
+        ValueError: If the rule has no defined space or no registered model.
+    """
+    space = get_rule_space(rule)
+    model_name = _model_name_for_rule(rule)
+    model_cls = Registry.get(ComponentCategory.MODEL, model_name)
+    accepted, has_kwargs, signature = _constructor_surface(model_cls)
+
+    sinks: list[tuple[str, str]] = []
+    phantoms: set[str] = set()
+    for key, _spec in space.items():
+        if key in accepted:
+            sink = "constructor"
+        elif has_kwargs:
+            sink = "kwargs"
+        elif key in _TRAINING_HYPERPARAMS:
+            sink = "training"
+        else:
+            sink = "phantom"
+            phantoms.add(key)
+        sinks.append((key, sink))
+    sinks.sort()
+
+    return ConstructorSurface(
+        rule=rule,
+        model=model_name,
+        signature=signature,
+        space_hash=_space_hash(space),
+        accepted=tuple(sorted(accepted)),
+        absorbs_kwargs=has_kwargs,
+        sinks=tuple(sinks),
+        phantoms=frozenset(phantoms),
+    )
+
+
+def validate_rule_space(rule: str) -> ConstructorSurface:
+    """Assert one rule's space matches its model constructor (P0a gate).
+
+    Raises:
+        SpaceSignatureMismatchError: If any advertised key is a phantom.
+        ValueError: If the rule has no defined space or no registered model.
+    """
+    surface = surface_for_rule(rule)
+    if surface.phantoms:
+        raise SpaceSignatureMismatchError(rule, surface.phantoms)
+    return surface
+
+
+def validate_all_rule_spaces() -> dict[str, ConstructorSurface]:
+    """Validate every ``RULE_SPACES`` entry against its constructor.
+
+    Returns:
+        Mapping of rule → :class:`ConstructorSurface` (all phantoms empty).
+
+    Raises:
+        SpaceSignatureMismatchError: On the first rule with phantom knobs.
+    """
+    surfaces: dict[str, ConstructorSurface] = {}
+    for rule in sorted(RULE_SPACES):
+        surfaces[rule] = validate_rule_space(rule)
+    return surfaces
+
+
+def emit_rule_space_surfaces(kb: object) -> dict[str, str]:
+    """Write each rule's constructor surface into a KnowledgeBase (P0a emitter).
+
+    Idempotent per-rule: uses a deterministic entry id (``SURFACE-{rule}``) so
+    re-runs replace rather than duplicate. The records become queryable
+    audit-trail artifacts for the P2 flywheel and for pricing historical numbers.
+
+    Args:
+        kb: A :class:`~bioplausible.knowledge.kb.KnowledgeBase` instance.
+
+    Returns:
+        Mapping of rule → the persisted KnowledgeBase entry id.
+    """
+    from bioplausible.knowledge.kb import KnowledgeEntry
+
+    written: dict[str, str] = {}
+    for rule in sorted(RULE_SPACES):
+        surface = surface_for_rule(rule)
+        entry = KnowledgeEntry(
+            id=f"SURFACE-{rule}",
+            topic="rule_space_surface",
+            model_family=rule,
+            finding="honest" if not surface.phantoms else "phantom",
+            details=f"{surface.model} :: {surface.signature}",
+            confidence=1.0 if not surface.phantoms else 0.0,
+            tags=["rule-space", "surface", rule],
+            source="validator",
+            hyperparameters=dict(RULE_SPACES[rule]),
+            extra={"surface": surface.to_dict()},
+        )
+        written[rule] = kb.add_entry(entry)
+    return written

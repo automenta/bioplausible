@@ -10,12 +10,14 @@ exception: ``raise DomainError("msg") from original_exception``.
 __all__ = [
     "BioplausibleError",
     "CheckpointError",
+    "ConditionalQueryError",
     "ConfigError",
     "IncompatibilityError",
     "KnowledgeBaseError",
     "LoadStateError",
     "PropagatorError",
     "RegistryError",
+    "SpaceSignatureMismatchError",
     "TileGraphError",
     "TrialExecutionError",
 ]
@@ -27,6 +29,31 @@ class BioplausibleError(Exception):
 
 class ConfigError(BioplausibleError):
     """Invalid or unsupported configuration."""
+
+
+class SpaceSignatureMismatchError(ConfigError):
+    """A rule's ``RULE_SPACES`` entry advertises knobs its model constructor drops.
+
+    Raised by the P0a integrity gate when an advertised search-space dimension is
+    neither accepted by the model constructor nor absorbed via ``**kwargs`` — the
+    ``build_model_kwargs`` silent-drop drift that wastes probe budget.
+
+    Attributes:
+        rule: The offending rule key.
+        phantoms: The advertised keys with no consumer on the model.
+    """
+
+    def __init__(self, rule: str, phantoms: frozenset[str]) -> None:
+        self.rule = rule
+        self.phantoms = phantoms
+        reason = (
+            "none"
+            if not phantoms
+            else "".join(
+                f"\n  - {p!r} (dropped by build_model_kwargs)" for p in sorted(phantoms)
+            )
+        )
+        super().__init__(f"RULE_SPACES[{rule!r}] advertises phantom knobs:{reason}")
 
 
 class RegistryError(BioplausibleError):
@@ -47,6 +74,10 @@ class LoadStateError(CheckpointError):
 
 class KnowledgeBaseError(BioplausibleError):
     """Knowledge base storage or analysis failure."""
+
+
+class ConditionalQueryError(KnowledgeBaseError):
+    """A conditional query against the KnowledgeBase is malformed or unanswerable."""
 
 
 class TrialExecutionError(BioplausibleError):

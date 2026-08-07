@@ -30,7 +30,7 @@ from bioplausible.hyperopt._finder import (
     _point_to_dict,
 )
 from bioplausible.hyperopt.frontier import RulePoint, pareto_frontier
-from bioplausible.hyperopt.search_space import get_rule_space
+from bioplausible.hyperopt.search_space import get_rule_space, validate_rule_space
 
 if TYPE_CHECKING:
     import optuna
@@ -152,6 +152,10 @@ class IdealBackpropFinder(_FrontierFinder[IdealBackpropDecision]):
 
     def _sample_config(self, trial: optuna.Trial) -> dict[str, object]:  # ruff: ignore[no-self-use]  # polymorphic template hook; backprop's space is fixed
         return _sample_backprop_config(trial, get_rule_space("backprop"))
+
+    def _validate_before_search(self) -> None:
+        """P0a gate: the backprop reference space must be honest too."""
+        validate_rule_space("backprop")
 
     def _build_decision(self, points: list[RulePoint]) -> IdealBackpropDecision:
         return IdealBackpropDecision(

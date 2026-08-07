@@ -12,10 +12,12 @@ import sqlite3
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
+from typing import TypedDict
 
 import numpy as np
+from pydantic import BaseModel, Field, ValidationError
 
-from bioplausible.core.exceptions import KnowledgeBaseError
+from bioplausible.core.exceptions import ConditionalQueryError, KnowledgeBaseError
 
 # Optional dependencies for vector search
 try:
@@ -65,7 +67,100 @@ class KnowledgeEntry:
         return cls(**{k: v for k, v in d.items() if k in cls.__annotations__})
 
 
-class KnowledgeBase:
+class ConditionalQuery(TypedDict):
+    """Read-half filter for the AutoScientist flywheel (P2).
+
+    A request for previously-verified positive conditionals: which rules already
+    achieved a target accuracy within memory/flops caps on a task (optionally on
+    a specific substrate). Empty/None fields act as wildcards.
+    """
+
+    model: str | None
+    task: str | None
+    accuracy_target: float | None
+    memory_cap: float | None
+    flops_cap: float | None
+    substrate: str | None
+
+
+class _ConditionalQueryModel(BaseModel):
+    """Pydantic v2 runtime-validated form of :class:`ConditionalQuery`."""
+
+    model: str | None = Field(default=None)
+    task: str | None = Field(default=None)
+    accuracy_target: float | None = Field(default=None, ge=0.0, le=1.0)
+    memory_cap: float | None = Field(default=None, ge=0.0)
+    flops_cap: float | None = Field(default=None, ge=0.0)
+    substrate: str | None = Field(default=None)
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionalResult:
+    """One previously-verified positive conditional satisfying a query.
+
+    A frozen value object so the proposer can reason about *already-spent*
+    budget without mutating the KB or the caller's data.
+    """
+
+    model: str
+    task: str
+    accuracy: float
+    memory_mb: float
+    flops: float
+    wall_time_s: float
+    config: tuple[tuple[str, object], ...] = ()
+    substrate: str | None = None
+    entry_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FlagshipCandidate:
+    """One validated family's cost-of-plausibility operating point (P3a)."""
+
+    model: str
+    accuracy: float
+    memory_mb: float
+    flops: float
+    wall_time_s: float
+    cost_of_plausibility: float
+    substrate: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FlagshipDecision:
+    """The outcome of the P3a flagship-selection query."""
+
+    task: str
+    chosen: str | None
+    ranked: tuple[FlagshipCandidate, ...]
+
+
+def _entry_accuracy(metrics: dict[str, float]) -> float:
+    """Normalize accuracy across the probe/engine metric dialects."""
+    return float(metrics.get("final_acc", metrics.get("accuracy", 0.0)))
+
+
+def _entry_memory(metrics: dict[str, float]) -> float:
+    return float(metrics.get("peak_memory_mb", metrics.get("memory_mb", 0.0)))
+
+
+def _entry_flops(metrics: dict[str, float]) -> float:
+    return float(metrics.get("forward_flops", 0.0) + metrics.get("backward_flops", 0.0))
+
+
+def _entry_substrate(entry: KnowledgeEntry) -> str | None:
+    """Substrate tag, if one was recorded (plan §17 IBKB key)."""
+    hw = entry.extra.get("hardware") if isinstance(entry.extra, dict) else None
+    return str(hw) if hw else None
+
+
+def _entry_task(entry: KnowledgeEntry) -> str:
+    """Task name persisted through ``add_experiment``'s ``extra`` dict."""
+    meta = entry.extra.get("task") if isinstance(entry.extra, dict) else None
+    return str(meta) if meta else ""
+
+
+class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surface + conditional + flagship queries are all distinct public KB reads
     """
     Upgraded KnowledgeBase with SQLite + Vector Store.
 
@@ -336,7 +431,7 @@ class KnowledgeBase:
             experiment_id=experiment_id,
             metrics=metrics,
             hyperparameters=config,
-            extra={"artifacts": artifacts or {}},
+            extra={"artifacts": artifacts or {}, "task": task},
         )
 
         self.add_entry(entry)
@@ -410,6 +505,157 @@ class KnowledgeBase:
             rows = cursor.fetchall()
 
         return [self._row_to_entry(row) for row in rows]
+
+    def query_conditionals(
+        self, query: ConditionalQuery, limit: int = 100
+    ) -> list[ConditionalResult]:
+        """Return verified positive conditionals matching a P2 read-half query.
+
+        Filters stored experiment results by model, task, substrate, and any
+        accuracy/memory/flops caps provided in ``query``. This is the flywheel's
+        *read* side: the proposer consumes it to avoid re-characterizing probes
+        that a prior run already answered.
+
+        Args:
+            query: The filter (see :class:`ConditionalQuery`). Validated with
+                Pydantic v2 at this boundary.
+            limit: Maximum number of results.
+
+        Returns:
+            Matching conditionals, best-accuracy first.
+
+        Raises:
+            ConditionalQueryError: If ``query`` is malformed (e.g. negative cap
+                or an accuracy target outside [0, 1]).
+        """
+        try:
+            q = _ConditionalQueryModel(**query)
+        except ValidationError as exc:
+            raise ConditionalQueryError(f"invalid conditional query: {exc}") from exc
+
+        entries = self.query(
+            model_family=q.model,
+            source="experiment",
+            limit=max(limit * 4, 64),
+        )
+        if q.task is not None:
+            entries = [e for e in entries if _entry_task(e) == q.task]
+
+        results: list[ConditionalResult] = []
+        for e in entries:
+            metrics = e.metrics or {}
+            acc = _entry_accuracy(metrics)
+            if q.accuracy_target is not None and acc < q.accuracy_target:
+                continue
+            mem = _entry_memory(metrics)
+            if q.memory_cap is not None and mem > q.memory_cap:
+                continue
+            flops = _entry_flops(metrics)
+            if q.flops_cap is not None and flops > q.flops_cap:
+                continue
+            substrate = _entry_substrate(e)
+            if q.substrate is not None and substrate != q.substrate:
+                continue
+            results.append(
+                ConditionalResult(
+                    model=str(e.model_family),
+                    task=_entry_task(e),
+                    accuracy=acc,
+                    memory_mb=mem,
+                    flops=flops,
+                    wall_time_s=float(metrics.get("wall_time_s", 0.0)),
+                    config=tuple(sorted((e.hyperparameters or {}).items())),
+                    substrate=substrate,
+                    entry_id=e.id,
+                )
+            )
+        results.sort(key=lambda r: r.accuracy, reverse=True)
+        return results[:limit]
+
+    def select_flagship(
+        self,
+        *,
+        task: str = "mnist",
+        accuracy_gap: float = 0.15,
+        substrate: str | None = None,
+    ) -> FlagshipDecision:
+        """Select the flagship rule by querying the KB (P3a).
+
+        Codified selection rule, implemented as a query rather than a judgment
+        call: among **validated** families (P0a surface record present and
+        honest), pick the one with minimal ``cost_of_plausibility`` — the
+        geometric mean of its FLOPs/memory/time ratios to the backprop reference
+        on the same task — subject to:
+
+        1. **non-phantom space** — the family passed P0a (honest surface record).
+        2. **substrate-eligible** — if ``substrate`` is given, only families with
+           a matching substrate-conditional candidate.
+        3. **minimal accuracy-to-backprop gap** — the candidate's accuracy must
+           be within ``accuracy_gap`` of the backprop reference, so a trivially
+           cheap-but-awful rule is never chosen.
+
+        Args:
+            task: Task the frontier/conditionals were measured on.
+            accuracy_gap: Maximum accuracy deficit vs the backprop reference.
+            substrate: If set, only consider conditionals on this substrate.
+
+        Returns:
+            A :class:`FlagshipDecision` ranking the candidate families.
+        """
+        import math
+
+        bp = self._best_conditional("backprop_mlp", task, substrate)
+        if bp is None:
+            return FlagshipDecision(task=task, chosen=None, ranked=())
+
+        validated = {
+            e.model_family
+            for e in self.query(topic="rule_space_surface", source="validator")
+            if e.finding == "honest"
+        }
+
+        ranked: list[FlagshipCandidate] = []
+        for family in validated:
+            cand = self._best_conditional(family, task, substrate)
+            if cand is None:
+                continue
+            if bp.accuracy - cand.accuracy > accuracy_gap:
+                continue
+            cost = math.pow(
+                (cand.flops / max(bp.flops, 1e-12))
+                * (cand.memory_mb / max(bp.memory_mb, 1e-12))
+                * (cand.wall_time_s / max(bp.wall_time_s, 1e-12)),
+                1.0 / 3.0,
+            )
+            ranked.append(
+                FlagshipCandidate(
+                    model=family,
+                    accuracy=cand.accuracy,
+                    memory_mb=cand.memory_mb,
+                    flops=cand.flops,
+                    wall_time_s=cand.wall_time_s,
+                    cost_of_plausibility=cost,
+                    substrate=cand.substrate,
+                )
+            )
+
+        ranked.sort(key=lambda c: (c.cost_of_plausibility, -c.accuracy))
+        chosen = ranked[0].model if ranked else None
+        return FlagshipDecision(task=task, chosen=chosen, ranked=tuple(ranked))
+
+    def _best_conditional(
+        self, model: str, task: str, substrate: str | None
+    ) -> ConditionalResult | None:
+        """Best (highest-accuracy) verified conditional for a model on a task."""
+        results = self.query_conditionals({
+            "model": model,
+            "task": task,
+            "accuracy_target": 0.0,
+            "substrate": substrate,
+            "memory_cap": None,
+            "flops_cap": None,
+        })
+        return results[0] if results else None
 
     def _row_to_entry(self, row: sqlite3.Row) -> KnowledgeEntry:
         """Convert SQLite row to KnowledgeEntry."""

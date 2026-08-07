@@ -25,7 +25,7 @@ from bioplausible.hyperopt._finder import (
     _point_to_dict,
 )
 from bioplausible.hyperopt.frontier import RulePoint, pareto_frontier
-from bioplausible.hyperopt.search_space import get_rule_space
+from bioplausible.hyperopt.search_space import get_rule_space, validate_rule_space
 
 if TYPE_CHECKING:
     import optuna
@@ -181,6 +181,10 @@ class RuleFrontierFinder(_FrontierFinder[RuleFrontierDecision]):
 
     def _sample_config(self, trial: optuna.Trial) -> dict[str, object]:
         return sample_config_for_rule(trial, self.rule)
+
+    def _validate_before_search(self) -> None:
+        """P0a gate: refuse to probe ``neural_cube``-style phantom spaces."""
+        validate_rule_space(self.rule)
 
     def _build_decision(self, points: list[RulePoint]) -> RuleFrontierDecision:
         return RuleFrontierDecision(

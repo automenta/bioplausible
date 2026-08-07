@@ -6,6 +6,7 @@ concrete experiment proposals with configurations.
 """
 
 import logging
+from collections.abc import Callable
 
 from bioplausible.autoscientist.bridge import AutoScientistBridge, ExperimentProposal
 from bioplausible.autoscientist.reasoner import Hypothesis, HypothesisReasoner
@@ -18,6 +19,10 @@ __all__ = [
 ]
 logger = logging.getLogger(__name__)
 
+# Query service shape the proposer depends on (P2 read-half). Injected so the
+# flywheel's read path can be unit-tested against a stub, not a live DB.
+ConditionalQuerier = Callable[[dict[str, object]], list[object]]
+
 
 class ExperimentProposer:
     """
@@ -28,16 +33,26 @@ class ExperimentProposer:
     - Targeted experiments based on specific hypotheses
     - Ablation studies (vary one parameter at a time)
     - Curriculum-based progression (easy tasks first)
+
+    P2 (read-half): the proposer can consult prior verified conditionals via an
+    injected query service and prune probes the KB has already characterized —
+    turning the "knowledge layer is read" claim into a measurable skip.
     """
 
     def __init__(
         self,
         knowledge_base: KnowledgeBase | None = None,
         reasoner: HypothesisReasoner | None = None,
+        conditional_query: ConditionalQuerier | None = None,
     ):
         self.knowledge_base = knowledge_base or KnowledgeBase()
         self.reasoner = reasoner or HypothesisReasoner(self.knowledge_base)
         self.bridge = AutoScientistBridge()
+        # Dependency injection: the query service defaults to the KB's conditional
+        # read, but is swappable for a stub in tests / a remote service in prod.
+        self._conditional_query = conditional_query or (
+            self.knowledge_base.query_conditionals
+        )
 
     def propose_batch(
         self,
@@ -184,3 +199,49 @@ class ExperimentProposer:
                     )
                 )
         return proposals
+
+    def avoid_characterized(
+        self,
+        proposals: list[ExperimentProposal],
+        *,
+        accuracy_target: float = 0.5,
+    ) -> tuple[list[ExperimentProposal], list[ExperimentProposal]]:
+        """
+        Prune proposals whose (model, task) the KB has already characterized.
+
+        P2-lite's turbine-turns signal: a probe is *redundant* if a prior
+        verified conditional already answers ``(proposal.model, proposal.task)``
+        at or above ``accuracy_target``. Skipping it is the compounding claim
+        made measurable — the proposer read the KB and burned no budget on a
+        probe it could not improve.
+
+        Args:
+            proposals: Candidate proposals.
+            accuracy_target: Minimum stored accuracy for a previous conditional
+                to count as "already characterized".
+
+        Returns:
+            ``(kept, skipped)`` — proposals that remain worth probing, and those
+            dropped because a prior conditional already covered them. The paired
+            counterfactual (with-KB vs without-KB) is the count of ``skipped``.
+        """
+        kept: list[ExperimentProposal] = []
+        skipped: list[ExperimentProposal] = []
+        for p in proposals:
+            if not p.model:
+                kept.append(p)
+                continue
+            covered = self._conditional_query({
+                "model": p.model,
+                "task": (p.task or "mnist"),
+                "accuracy_target": accuracy_target,
+            })
+            if covered:
+                skipped.append(p)
+            else:
+                kept.append(p)
+        if skipped:
+            logger.info(
+                "proposer skipped %d already-characterized probe(s)", len(skipped)
+            )
+        return kept, skipped

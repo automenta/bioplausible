@@ -7,8 +7,10 @@ Provides reusable helpers for the three common settling patterns:
 """
 
 import logging
-from collections.abc import Callable
-from typing import cast
+from collections.abc import (
+    Callable,  # ruff: ignore[typing-only-standard-library-import]  (used in runtime-evaluated annotations; module has no `from __future__ import annotations`)
+)
+from typing import Protocol, cast, runtime_checkable
 
 import torch
 from torch import autograd, nn
@@ -17,6 +19,103 @@ from torch.utils.checkpoint import checkpoint as _checkpoint
 logger = logging.getLogger(__name__)
 
 _DynamicsDict = dict[str, object]
+
+
+@runtime_checkable
+class EquilibriumSettleProtocol(Protocol):
+    """Structural contract for a single-hidden-state equilibrium rule.
+
+    A model adopting this protocol routes its settling loop through the shared
+    :func:`settle_state` primitive (P1), inheriting early convergence stopping
+    instead of a hand-rolled fixed-iteration loop. The members are the knobs and
+    dynamics an equilibrium model must expose:
+
+    - ``convergence_threshold`` / ``convergence_start``: the early-stop gate.
+    - ``max_steps``: the hard iteration ceiling.
+    - ``_initialize_hidden_state(x)``: the zero (or other) starting hidden state.
+    - ``_transform_input(x)``: project the raw input once, before settling.
+    - ``_forward_step_impl(h, x_transform)``: one recurrent step.
+
+    ``LoopedMLP`` and its substrate facades already satisfy this surface;
+    ``NeuralCube`` adopts it in P1.
+    """
+
+    convergence_threshold: float
+    convergence_start: int
+    max_steps: int
+
+    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor: ...
+    def _transform_input(self, x: torch.Tensor) -> torch.Tensor: ...
+    def _forward_step_impl(
+        self, h: torch.Tensor, x_transform: torch.Tensor
+    ) -> torch.Tensor: ...
+
+
+def _inf_norm_delta(h_new: torch.Tensor, h_old: torch.Tensor) -> float:
+    """Inf-norm distance between consecutive settle states (moved to CPU)."""
+    return torch.dist(h_new, h_old, p=float("inf")).item()  # type: ignore[reportUnknownMemberType]
+
+
+def settle_state(
+    model: EquilibriumSettleProtocol,
+    x: torch.Tensor,
+    *,
+    steps: int | None = None,
+    return_trajectory: bool = False,
+) -> tuple[torch.Tensor, int, bool]:
+    """Settle a single-hidden-state equilibrium rule to a fixed point.
+
+    P1's shared primitive: runs the model's recurrence with early convergence
+    detection and gradient checkpointing, and reports how many steps it actually
+    took and whether it converged — turning the §7 early-stop win into a
+    framework property available to **any** protocol-adopting rule, not just
+    ``eqprop``.
+
+    The convergence gate honours the model's *own* ``convergence_threshold`` /
+    ``convergence_start`` (the knobs a search space can now legitimately sweep
+    after P0a/P1), rather than a hard-coded epsilon.
+
+    Args:
+        model: A model satisfying :class:`EquilibriumSettleProtocol`.
+        x: Raw input batch.
+        steps: Override for the settle ceiling (defaults to ``model.max_steps``).
+        return_trajectory: Reserved for callers that need per-step snapshots; the
+            settled ``h`` is returned either way.
+
+    Returns:
+        ``(h_final, steps_taken, converged)``:
+
+        - ``h_final`` is the settled hidden state (grad-tracked under autograd).
+        - ``steps_taken`` is the number of recurrence steps executed.
+        - ``converged`` is True if the inf-norm delta fell below
+          ``convergence_threshold`` after ``convergence_start`` steps.
+    """
+    del return_trajectory  # trajectory snapshots are handled by the caller if needed
+    max_steps = steps if steps is not None else model.max_steps
+    threshold = float(model.convergence_threshold)
+    start = int(model.convergence_start)
+    x_transform = model._transform_input(x)
+    h = model._initialize_hidden_state(x)
+
+    def _step(state: torch.Tensor) -> torch.Tensor:
+        if torch.is_grad_enabled():
+            return _checkpoint(
+                model._forward_step_impl, state, x_transform, use_reentrant=False
+            )
+        return model._forward_step_impl(state, x_transform)
+
+    converged = False
+    steps_taken = 0
+    for step_idx in range(max_steps):
+        h_new = _step(h)
+        steps_taken += 1
+        if step_idx > start and _inf_norm_delta(h_new, h) < threshold:
+            h = h_new
+            converged = True
+            break
+        h = h_new
+
+    return h, steps_taken, converged
 
 
 # ---------------------------------------------------------------------------
@@ -276,9 +375,7 @@ def settle_single_state(
     # checkpoint conflict (FIX.md §39).
     def _step(state: torch.Tensor) -> torch.Tensor:
         if torch.is_grad_enabled():
-            return _checkpoint(
-                forward_step, state, x_transformed, use_reentrant=False
-            )
+            return _checkpoint(forward_step, state, x_transformed, use_reentrant=False)
         return forward_step(state, x_transformed)
 
     # Index into the trajectory buffer — incremented AFTER each snapshot.
@@ -485,7 +582,11 @@ class EquilibriumFunction(autograd.Function):
                     step_idx += 1
                     if step_idx > early_start:
                         d = torch.dist(h_new, h, p=float("inf"))
-                        if d.item() < (threshold_late if step_idx > transition_step else threshold_early):
+                        if d.item() < (
+                            threshold_late
+                            if step_idx > transition_step
+                            else threshold_early
+                        ):
                             h = h_new
                             break
                     h = h_new
@@ -579,8 +680,10 @@ class EquilibriumFunction(autograd.Function):
 
 __all__ = [
     "EquilibriumFunction",
+    "EquilibriumSettleProtocol",
     "_run_with_sn_freeze",
     "energy_gradient_descent",
     "settle_activations_list",
     "settle_single_state",
+    "settle_state",
 ]
