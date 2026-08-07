@@ -17,7 +17,8 @@ The product is the **Epistemic Engine** (AutoScientist + Knowledge Base + honest
 
 - Run **shallow sweeps** (1–2 epochs, 3–5 probes/family) across **all registered families**: EqProp, FA, Hebbian, Forward-Forward, Predictive Coding, STDP, etc.
 - **Metrics:** variance in memory, compute time, settling steps, gradient alignment — *not* accuracy.
-- **Output:** a coarse Pareto landscape showing where each family lives in resource space.
+- **Liveness gate (binary):** `loss_decreases = (loss_epoch_0 > loss_epoch_final)` — rules that don't decrease loss are marked "dead" and excluded from the resource map. This auto-surfaces the 5 quarantined models without manual audit.
+- **Output:** a coarse Pareto landscape showing where each *live* family lives in resource space.
 - **No flagship selection.** No "honest 30-probe search" yet. Just breadth.
 
 ```
