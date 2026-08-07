@@ -395,6 +395,8 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         "max_steps": (5, 100, "int"),
         "damping": (0.0, 0.9, "linear"),
         "tol": (1e-6, 1e-2, "log"),
+        "convergence_threshold": (1e-4, 1e-2, "log"),
+        "convergence_start": (2, 10, "int"),
     },
     "neural_cube": {
         "lr": (1e-5, 1e-1, "log"),
@@ -404,6 +406,27 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         "max_steps": (5, 100, "int"),
         "damping": (0.0, 0.9, "linear"),
         "tol": (1e-6, 1e-2, "log"),
+    },
+    "pepita": {
+        "lr": (1e-4, 1e-1, "log"),
+        "hidden_dim": (32, 512, "log"),
+        "num_layers": (1, 4, "int"),
+    },
+    "forward_forward": {
+        "lr": (1e-3, 1e-1, "log"),
+        "hidden_dim": (32, 512, "log"),
+        "num_layers": (1, 4, "int"),
+        "threshold": (0.5, 5.0, "linear"),
+        "layer_lr": (1e-3, 1e-1, "log"),
+        "classifier_lr": (1e-3, 1e-1, "log"),
+    },
+    "feedback_alignment": {
+        "lr": (1e-4, 1e-1, "log"),
+        "hidden_dim": (32, 512, "log"),
+        "num_layers": (1, 4, "int"),
+        "alpha": (0.1, 1.0, "linear"),
+        "feedback_mode": ["random", "symmetric", "transpose"],
+        "use_spectral_norm": [True, False],
     },
 }
 

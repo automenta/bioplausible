@@ -59,6 +59,51 @@ def test_rule_spaces_have_equilibrium_params():
     assert "max_steps" in nc
 
 
+def test_rule_spaces_eqprop_expose_adaptive_early_stop():
+    """§7/§4C: eqprop search space exposes the convergence early-stop knobs."""
+    eq = get_rule_space("eqprop")
+    assert eq["convergence_threshold"][2] == "log"
+    assert eq["convergence_start"][2] == "int"
+
+
+def test_equilibrium_early_stop_config_wires_to_model():
+    """§7: convergence_threshold/start kwargs reach StandardEqProp."""
+    from bioplausible.zoo.models.eqprop.standard_eqprop import StandardEqProp
+
+    m = StandardEqProp(
+        config=None,
+        input_dim=10,
+        output_dim=5,
+        hidden_dim=8,
+        num_layers=1,
+        use_spectral_norm=False,
+        convergence_threshold=1e-2,
+        convergence_start=2,
+    )
+    assert m.convergence_threshold == 0.01
+    assert m.convergence_start == 2
+    # default when not passed
+    m2 = StandardEqProp(
+        config=None,
+        input_dim=10,
+        output_dim=5,
+        hidden_dim=8,
+        num_layers=1,
+        use_spectral_norm=False,
+    )
+    assert m2.convergence_threshold == pytest.approx(1e-3)
+    assert m2.convergence_start == 5
+
+
+def test_forward_only_rule_spaces_exist():
+    """§4D: forward-only and FA families have continuous spaces for search."""
+    for rule in ("pepita", "forward_forward", "feedback_alignment"):
+        space = get_rule_space(rule)
+        assert space["lr"][2] == "log"
+        assert space["hidden_dim"][2] == "log"
+        assert space["num_layers"][2] == "int"
+
+
 def test_rule_space_unknown_raises():
     with pytest.raises(ValueError):
         get_rule_space("not_a_rule")
@@ -359,10 +404,11 @@ def test_fit_accuracy_scaling_too_few_points_returns_none():
 
 
 def test_predict_flops_for_accuracy_matches_known_law():
-    # True law: acc = 0.05 * log(F) + 0.3. For target acc 0.8 -> log F = 10 -> F = e^10.
+    # True law: acc = 0.05 * log(F+1) + 0.3. For target 0.8 -> log(F+1) = 10
+    # -> F = e^10 - 1 (the inverse must subtract the +1 offset).
     law = _mk_law(slope=0.05, slope_se=0.001, intercept=0.3, intercept_se=0.005)
     mean, lo, hi = predict_flops_for_accuracy(law, 0.8)
-    assert mean == pytest.approx(np.exp(10.0), rel=0.01)
+    assert mean == pytest.approx(np.exp(10.0) - 1.0, rel=0.01)
     assert lo < mean < hi
 
 
@@ -400,12 +446,16 @@ def test_sample_config_eqprop_has_equilibrium_params():
         "max_steps": 20,
         "damping": 0.3,
         "tol": 1e-4,
+        "convergence_threshold": 1e-2,
+        "convergence_start": 2,
     })
     cfg = sample_config_for_rule(trial, "eqprop")
     assert cfg["beta"] == 0.5
     assert cfg["max_steps"] == 20
     assert cfg["damping"] == 0.3
     assert cfg["tol"] == 1e-4
+    assert cfg["convergence_threshold"] == 1e-2
+    assert cfg["convergence_start"] == 2
 
 
 def test_rule_frontier_finder_searches_bio_rule(tmp_path):

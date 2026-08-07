@@ -7,6 +7,7 @@ Executes hyperparameter optimization trials and collects metrics.
 import contextlib
 import io
 import logging
+import os
 import shutil
 import tempfile
 import time
@@ -538,6 +539,7 @@ def run_single_trial_task(
                 "time": trial.iteration_time,
                 "param_count": trial.param_count,  # In millions
             }
+            _sink_completed(model_name, task, config, metrics)
             return metrics
         else:
             if verbose:
@@ -625,3 +627,34 @@ def run_single_trial_task(
 
         if temp_dir:
             shutil.rmtree(temp_dir)
+
+
+def _sink_completed(
+    model_name: str,
+    task: str,
+    config: dict[str, object],
+    metrics: dict[str, object],
+) -> None:
+    """Persist a successful ExecutionEngine trial to the KnowledgeBase (best-effort).
+
+    Separate from the probe-driver path so each success compounds into the
+    knowledge layer regardless of which experiment framework produced it.
+    """
+    if os.environ.get("BIOPLAUSIBLE_RECORD_RESULTS", "1") == "0":
+        return
+    try:
+        from bioplausible.experiment.result_sink import record_experiment_result
+
+        record_experiment_result(
+            model=model_name,
+            task=task,
+            config=config,
+            metrics=metrics,
+            status="completed",
+            seed=config.get("seed"),
+            epochs=config.get("epochs"),
+            device="auto",
+            extra={"source": "execution_engine"},
+        )
+    except Exception:  # pragma: no cover  # best-effort persistence
+        logger.exception("result_sink failed for %s/%s", model_name, task)

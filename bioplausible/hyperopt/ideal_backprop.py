@@ -13,22 +13,27 @@ as the reference for all subsequent bio-rule experiments on that task.
 Search space: :data:`~bioplausible.hyperopt.search_space.RULE_SPACES["backprop"]`
 (the continuous, log-sampled ranges from §4A/§10).
 
-Training is delegated to an injected probe driver (:class:`CoreTrainerDriver`),
-so the component can be unit-tested with a fake driver and wired to the real
-one in production.
+The search + cache lifecycle is inherited from :class:`_FrontierFinder`; this
+class only supplies the backprop-specialised space sampler and the
+:class:`IdealBackpropDecision` (see §16.3/§17 for the cache identity).
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING
 
-import optuna
-
+from bioplausible.hyperopt._finder import (
+    FrontierDriver,
+    _dict_to_point,
+    _FrontierFinder,
+    _point_to_dict,
+)
 from bioplausible.hyperopt.frontier import RulePoint, pareto_frontier
 from bioplausible.hyperopt.search_space import get_rule_space
+
+if TYPE_CHECKING:
+    import optuna
 
 __all__ = [
     "IdealBackpropDecision",
@@ -39,22 +44,7 @@ __all__ = [
 _DEFAULT_TASK: str = "mnist"
 _DEFAULT_BUDGET: int = 2000
 _DEFAULT_EPOCHS: int = 5
-_OPTUNA_N_STARTUP: int = 10
-
-
-class ProbeDriverProto(Protocol):
-    """Minimal training surface the finder depends on."""
-
-    def train(  # ruff: ignore[too-many-arguments]  (mirrors the CoreTrainerDriver contract)
-        self,
-        *,
-        model: str,
-        task: str,
-        config: dict[str, object],
-        seed: int,
-        epochs: int,
-        device: str,
-    ) -> dict[str, object]: ...
+_DEFAULT_BACKPROP: str = "backprop_mlp"
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,8 +59,10 @@ class IdealBackpropDecision:
     task: str
     budget_probes: int
     backprop: str
-    points: tuple[RulePoint, ...]
-    frontier: tuple[RulePoint, ...]
+    epochs: int
+    target_hardware: str | None = None
+    points: tuple[RulePoint, ...] = ()
+    frontier: tuple[RulePoint, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         """Serialize to a JSON-compatible dict."""
@@ -78,32 +70,10 @@ class IdealBackpropDecision:
             "task": self.task,
             "budget_probes": self.budget_probes,
             "backprop": self.backprop,
+            "epochs": self.epochs,
+            "target_hardware": self.target_hardware,
             "frontier": [_point_to_dict(p) for p in self.frontier],
         }
-
-
-def _point_to_dict(p: RulePoint) -> dict[str, object]:
-    return {
-        "accuracy": p.accuracy,
-        "total_flops": p.total_flops,
-        "peak_memory_mb": p.peak_memory_mb,
-        "wall_time_s": p.wall_time_s,
-        "config": dict(p.config),
-    }
-
-
-def _dict_to_point(rule: str, d: dict[str, object]) -> RulePoint:
-    config = d.get("config") or {}
-    if not isinstance(config, dict):
-        config = {}
-    return RulePoint(
-        rule=rule,
-        accuracy=float(d.get("accuracy", 0.0)),
-        total_flops=float(d.get("total_flops", 0.0)),
-        peak_memory_mb=float(d.get("peak_memory_mb", 0.0)),
-        wall_time_s=float(d.get("wall_time_s", 0.0)),
-        config=tuple(sorted(config.items())),
-    )
 
 
 def _sample_backprop_config(
@@ -123,7 +93,7 @@ def _sample_backprop_config(
     return config
 
 
-class IdealBackpropFinder:
+class IdealBackpropFinder(_FrontierFinder[IdealBackpropDecision]):
     """Runs (or loads) the full backprop frontier search for a task.
 
     Args:
@@ -135,144 +105,91 @@ class IdealBackpropFinder:
         seed: Master seed for reproducibility.
         device: Target device string.
         cache_dir: Directory to store the JSON frontier cache (default ``logs``).
+        target_hardware: Substrate facade for the probes (plan §17). Part of the
+            cache identity — a GPU-derived reference is never reused for an
+            FPGA/analog comparison.
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments]  (finder bundles all search+context config at once)
+    _cache_prefix: str = "ideal_backprop"
+    _default_task: str = _DEFAULT_TASK
+    _default_budget: int = _DEFAULT_BUDGET
+    _default_epochs: int = _DEFAULT_EPOCHS
+
+    def __init__(  # ruff: ignore[too-many-arguments]  (subclass ctor re-exposes the base knobs + own model)
         self,
-        driver: ProbeDriverProto,
+        driver: FrontierDriver,
         *,
-        task: str = _DEFAULT_TASK,
-        backprop: str = "backprop_mlp",
-        budget_probes: int = _DEFAULT_BUDGET,
-        epochs: int = _DEFAULT_EPOCHS,
+        task: str | None = None,
+        backprop: str = _DEFAULT_BACKPROP,
+        budget_probes: int | None = None,
+        epochs: int | None = None,
         seed: int = 42,
         device: str = "cpu",
         cache_dir: str = "logs",
+        target_hardware: str | None = None,
     ) -> None:
-        self.driver = driver
-        self.task = task
         self.backprop = backprop
-        self.budget_probes = budget_probes
-        self.epochs = epochs
-        self.seed = seed
-        self.device = device
-        self.cache_path = Path(cache_dir) / self._cache_name()
-
-    def _cache_name(self) -> str:
-        return (
-            f"ideal_backprop_{self.task}_{self.backprop}"
-            f"_budget{self.budget_probes}.json"
+        super().__init__(
+            driver,
+            task=task,
+            budget_probes=budget_probes,
+            epochs=epochs,
+            seed=seed,
+            device=device,
+            cache_dir=cache_dir,
+            target_hardware=target_hardware,
         )
 
-    def load_cache(self) -> IdealBackpropDecision | None:
-        """Load the cached frontier for this task, or ``None`` if absent."""
-        if not self.cache_path.exists():
-            return None
-        try:
-            payload = json.loads(self.cache_path.read_text(encoding="utf-8"))
-        except ValueError:
-            return None
-        if payload.get("task") != self.task or payload.get("backprop") != self.backprop:
-            return None
-        frontier = tuple(
-            _dict_to_point(self.backprop, d) for d in payload.get("frontier", [])
-        )
+    @property
+    def _rule_key(self) -> str:
+        return self.backprop
+
+    @property
+    def _cache_identity(
+        self,
+    ) -> dict[str, object]:
+        return {**super()._cache_identity, "backprop": self.backprop}
+
+    def _sample_config(self, trial: optuna.Trial) -> dict[str, object]:  # ruff: ignore[no-self-use]  # polymorphic template hook; backprop's space is fixed
+        return _sample_backprop_config(trial, get_rule_space("backprop"))
+
+    def _build_decision(self, points: list[RulePoint]) -> IdealBackpropDecision:
         return IdealBackpropDecision(
-            task=self.task,
-            budget_probes=int(payload.get("budget_probes", self.budget_probes)),
+            task=self.ctx.task,
+            budget_probes=self.ctx.budget_probes,
             backprop=self.backprop,
-            points=frontier,
-            frontier=frontier,
-        )
-
-    def find(self, force: bool = False) -> IdealBackpropDecision:
-        """Return the ideal-backprop frontier, training if not cached.
-
-        Args:
-            force: If True, re-run the search even when a cache exists.
-
-        Returns:
-            The cached or freshly-computed :class:`IdealBackpropDecision`.
-        """
-        if not force:
-            cached = self.load_cache()
-            if cached is not None:
-                return cached
-
-        decision = self._search()
-        self._save_cache(decision)
-        return decision
-
-    def _search(self) -> IdealBackpropDecision:
-        """Run the TPE search and compute the backprop Pareto frontier."""
-        space = get_rule_space("backprop")
-        sampler = optuna.samplers.TPESampler(
-            seed=self.seed, n_startup_trials=_OPTUNA_N_STARTUP, multivariate=True
-        )
-        study = optuna.create_study(direction="maximize", sampler=sampler)
-
-        points: list[RulePoint] = []
-
-        def _objective(trial: optuna.Trial) -> float:
-            config = _sample_backprop_config(trial, space)
-            metrics = self.driver.train(
-                model=self.backprop,
-                task=self.task,
-                config=config,
-                seed=self.seed,
-                epochs=self.epochs,
-                device=self.device,
-            )
-            accuracy = float(metrics.get("final_acc", 0.0))
-            total_flops = float(metrics.get("forward_flops", 0) or 0) + float(
-                metrics.get("backward_flops", 0) or 0
-            )
-            points.append(
-                RulePoint(
-                    rule=self.backprop,
-                    accuracy=accuracy,
-                    total_flops=total_flops,
-                    peak_memory_mb=float(metrics.get("peak_memory_mb", 0.0)),
-                    wall_time_s=float(metrics.get("wall_time_s", 0.0)),
-                    config=tuple(sorted(config.items())),
-                )
-            )
-            return accuracy
-
-        study.optimize(_objective, n_trials=self.budget_probes)
-
-        return IdealBackpropDecision(
-            task=self.task,
-            budget_probes=self.budget_probes,
-            backprop=self.backprop,
+            epochs=self.ctx.epochs,
+            target_hardware=self.ctx.target_hardware,
             points=tuple(points),
             frontier=tuple(pareto_frontier(points)),
         )
 
-    def _save_cache(self, decision: IdealBackpropDecision) -> None:
-        """Persist the frontier JSON.
-
-        The cache is a pure function of the search inputs
-        (task x model x budget x space), so overwriting it with an identical
-        search is harmless.
-        """
-        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        self.cache_path.write_text(
-            json.dumps(decision.to_dict(), indent=2, sort_keys=True),
-            encoding="utf-8",
+    def _from_payload(self, payload: dict[str, object]) -> IdealBackpropDecision:
+        frontier = tuple(
+            _dict_to_point(self.backprop, d) for d in payload.get("frontier", [])
+        )
+        return IdealBackpropDecision(
+            task=self.ctx.task,
+            budget_probes=int(payload.get("budget_probes", self.ctx.budget_probes)),
+            backprop=self.backprop,
+            epochs=self.ctx.epochs,
+            target_hardware=self.ctx.target_hardware,
+            points=frontier,
+            frontier=frontier,
         )
 
 
 def find_ideal_backprop(  # ruff: ignore[too-many-arguments]  (convenience wrapper mirrors finder constructor)
-    driver: ProbeDriverProto,
+    driver: FrontierDriver,
     *,
     task: str = _DEFAULT_TASK,
-    backprop: str = "backprop_mlp",
+    backprop: str = _DEFAULT_BACKPROP,
     budget_probes: int = _DEFAULT_BUDGET,
     epochs: int = _DEFAULT_EPOCHS,
     seed: int = 42,
     device: str = "cpu",
     cache_dir: str = "logs",
+    target_hardware: str | None = None,
     force: bool = False,
 ) -> IdealBackpropDecision:
     """Convenience wrapper to run :class:`IdealBackpropFinder.find`."""
@@ -285,4 +202,5 @@ def find_ideal_backprop(  # ruff: ignore[too-many-arguments]  (convenience wrapp
         seed=seed,
         device=device,
         cache_dir=cache_dir,
+        target_hardware=target_hardware,
     ).find(force=force)

@@ -39,7 +39,7 @@ _CONF_LEVEL: float = 0.95
 
 
 def _linear(x: np.ndarray, a: float, b: float) -> np.ndarray:
-    """Accuracy as a linear function of log-FLOPs: ``a * log(x) + b``."""
+    """Accuracy as a linear function of log(FLOPs + 1): ``a * log(x + 1) + b``."""
     return a * np.log(x + 1.0) + b
 
 
@@ -133,7 +133,7 @@ def predict_flops_for_accuracy(
 ) -> tuple[float, float, float]:
     """Predict the FLOPs needed to reach ``target_accuracy``, with a CI.
 
-    Inverts the fitted ``accuracy = a * log(F) + b`` law and propagates the
+    Inverts the fitted ``accuracy = a * log(F + 1) + b`` law and propagates the
     parameter uncertainty into a confidence interval on the predicted FLOPs.
     Also reports the *deterministic* (mean) point so callers can choose.
 
@@ -150,17 +150,19 @@ def predict_flops_for_accuracy(
     if law.slope <= 0:
         return (float("nan"), float("nan"), float("nan"))
 
-    log_f = (target_accuracy - law.intercept) / law.slope
-    mean_flops = float(np.exp(log_f))
+    # accuracy = a * log(F + 1) + b  =>  log(F + 1) = (target - b) / a
+    log_f_plus_1 = (target_accuracy - law.intercept) / law.slope
+    mean_flops = float(np.exp(log_f_plus_1) - 1.0)
 
-    # Uncertainty on log(F) via delta method:
-    # var(log F) = var(intercept)/slope^2 + (log F)^2 * var(slope)/slope^2
+    # Uncertainty on log(F + 1) via delta method:
+    # var(log(F+1)) = var(intercept)/slope^2 + (log(F+1))^2 * var(slope)/slope^2
     se_logf = np.sqrt(
-        (law.intercept_se**2 + log_f**2 * law.slope_se**2) / max(law.slope**2, 1e-12)
+        (law.intercept_se**2 + log_f_plus_1**2 * law.slope_se**2)
+        / max(law.slope**2, 1e-12)
     )
     z = stats.norm.ppf(1.0 - (1.0 - confidence) / 2.0)
-    ci_low = float(np.exp(log_f - z * se_logf))
-    ci_high = float(np.exp(log_f + z * se_logf))
+    ci_low = float(np.exp(log_f_plus_1 - z * se_logf) - 1.0)
+    ci_high = float(np.exp(log_f_plus_1 + z * se_logf) - 1.0)
 
     if not all(np.isfinite(x) for x in (mean_flops, ci_low, ci_high)):
         return (float("nan"), float("nan"), float("nan"))

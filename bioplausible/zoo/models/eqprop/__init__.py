@@ -23,6 +23,7 @@ from .eqprop_lm_variants import (
 )
 from .finite_nudge_ep import FiniteNudgeEP
 from .graph_eqprop import GraphEqProp
+from .hardware_variants import NoisyLoopedMLP, QuantizedLoopedMLP
 from .holomorphic_ep import HolomorphicEP
 from .homeostatic import HomeostasisMetrics, HomeostaticEqProp
 from .lazy_eqprop import LazyEqProp, LazyStats
@@ -68,6 +69,8 @@ __all__: list[str] = [
     "ModernConvEqProp",
     "MomentumEquilibrium",
     "NeuralCube",
+    "NoisyLoopedMLP",
+    "QuantizedLoopedMLP",
     "RecurrentEqPropLM",
     "SimpleConvEqProp",
     "SparseEquilibrium",

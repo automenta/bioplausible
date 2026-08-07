@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, TypeIs
+from typing import TYPE_CHECKING, Any, Protocol, TypeIs, cast
 
 import optuna
 import torch
@@ -131,6 +131,15 @@ class TrainerConfig:
     # train-loop floor from validation and per-batch instrumentation overhead.
     run_validation: bool = True
     profile_epochs: bool = False
+
+    # Hardware target (plan §17): swaps in a substrate-faithful model facade so
+    # `cost_of_plausibility` is hardware-aware rather than idealized-digital-GPU.
+    # ``None``/``"gpu"`` = digital reference; ``"fpga"`` → ``QuantizedLoopedMLP``;
+    # ``"analog"`` → ``NoisyLoopedMLP``. Only affects the LoopedMLP equilibrium
+    # family; inert for all other models. Stored as ``str`` (not ``Literal``)
+    # because ``TrainerConfig`` round-trips through OmegaConf, which does not
+    # yet serialize ``typing.Literal`` fields.
+    target_hardware: str | None = None
 
     # Checkpointing
     save_checkpoints: bool = True
@@ -278,6 +287,7 @@ class CoreTrainer:
         )
         self.patience_counter = 0
         self.history: list[TrainingMetrics] = []
+        self._hardware_meta: dict[str, object] = {}
 
         # Output directory (session-scoped tempdir when pytest is detected)
         self.output_dir = (
@@ -501,9 +511,58 @@ class CoreTrainer:
                 f"Model '{self.config.model}' not registered. Available: {available}"
             )
         self.model = model_cls(**self.config.model_kwargs)
+        self.model = self._apply_hardware(cast(nn.Module, self.model))
 
         logger.info("Model created: %s", self.model.__class__.__name__)
         logger.info("Parameters: %s", sum(p.numel() for p in self.model.parameters()))
+
+    def _apply_hardware(self, model: nn.Module) -> nn.Module:
+        """Swap in a substrate-faithful facade when ``target_hardware`` is set.
+
+        Only the LoopedMLP equilibrium family has a substrate approximation
+        (the ``quantized_looped_mlp`` / ``noisy_looped_mlp`` facades inherit
+        from it), so the knob is a no-op for every other model. The facade is
+        rebuilt from the same ``model_kwargs`` plus the hardware depth default
+        (``bits`` for FPGA, ``noise_level`` for analog).
+
+        The chosen substrate is recorded on ``self._hardware_meta`` so each
+        epoch's :class:`TrainingMetrics.extra` exposes it to the probe driver.
+        """
+        hardware = self.config.target_hardware
+        self._hardware_meta = {}
+        if not hardware or hardware == "gpu":
+            return model
+
+        from bioplausible.zoo.models.eqprop import LoopedMLP
+        from bioplausible.zoo.models.eqprop.hardware_variants import (
+            NoisyLoopedMLP,
+            QuantizedLoopedMLP,
+        )
+
+        if not isinstance(model, LoopedMLP):
+            return model
+
+        if hardware == "fpga":
+            kwargs = dict(self.config.model_kwargs)
+            kwargs.setdefault("bits", 8)
+            self._hardware_meta = {
+                "target_hardware": "fpga",
+                "bits": int(kwargs["bits"]),
+            }
+            swapped: nn.Module = QuantizedLoopedMLP(**kwargs)
+        elif hardware == "analog":
+            kwargs = dict(self.config.model_kwargs)
+            kwargs.setdefault("noise_level", 0.05)
+            self._hardware_meta = {
+                "target_hardware": "analog",
+                "noise_level": float(kwargs["noise_level"]),
+            }
+            swapped = NoisyLoopedMLP(**kwargs)
+        else:  # pragma: no cover  # Literal type narrows the possible values
+            return model
+
+        logger.info("Hardware target '%s': %s", hardware, swapped.__class__.__name__)
+        return swapped
 
     def _is_kernal_model(self) -> bool:
         """Check if model uses kernel backend (not compatible with torch.compile)."""
@@ -764,7 +823,10 @@ class CoreTrainer:
             wall_time_ms=train_metrics.get("wall_time_ms"),
             peak_memory_mb=train_metrics.get("peak_memory_mb"),
             requires_backward=train_metrics.get("requires_backward"),
-            extra={k: v for k, v in train_metrics.items() if k not in extra_keys},
+            extra={
+                **self._hardware_meta,
+                **{k: v for k, v in train_metrics.items() if k not in extra_keys},
+            },
         )
 
     def train_epoch(self) -> dict[str, float]:

@@ -32,6 +32,9 @@ class ModelConfig:
     beta: float = 0.2  # For EqProp
     # Maximum number of equilibrium steps
     max_steps: int = 30
+    # Equilibrium settling early-stop parameters
+    convergence_threshold: float = 1e-3
+    convergence_start: int = 5
 
     # Architecture
     use_spectral_norm: bool = True
@@ -103,6 +106,8 @@ def _build_model_config(
     beta: float | None = None,
     max_steps: int | None = None,
     use_spectral_norm: bool | None = None,
+    convergence_threshold: float | None = None,
+    convergence_start: int | None = None,
 ) -> ModelConfig:
     """Construct a ``ModelConfig`` from the standard ``build`` classmethod parameters.
 
@@ -111,19 +116,34 @@ def _build_model_config(
     ``ModelConfig`` constructor; if *not* provided, the corresponding
     ``ModelConfig`` defaults apply.
     """
-    # Extract kwargs overrides that match ModelConfig fields, so we can
-    # pass them in the constructor (ModelConfig is frozen).
-    effective_lr = learning_rate
-    effective_beta = beta
-    effective_max_steps = max_steps
+    # Collect overrides that match ModelConfig fields so they can be applied to
+    # the (frozen) config after construction. ``None`` entries are filtered by
+    # the apply loop below, so named ``build`` params that weren't provided are
+    # harmless; explicit kwargs take precedence over them.
+    overrides: dict[str, object] = {
+        "learning_rate": learning_rate,
+        "beta": beta,
+        "max_steps": max_steps,
+        "convergence_threshold": convergence_threshold,
+        "convergence_start": convergence_start,
+        "use_spectral_norm": use_spectral_norm,
+    }
 
     kw_beta = kwargs.get("beta")
     if isinstance(kw_beta, float | int):
-        effective_beta = kw_beta  # type: ignore[assignment]
+        overrides["beta"] = kw_beta
 
     kw_max_steps = kwargs.get("max_steps")
     if isinstance(kw_max_steps, int):
-        effective_max_steps = kw_max_steps
+        overrides["max_steps"] = kw_max_steps
+
+    kw_threshold = kwargs.get("convergence_threshold")
+    if isinstance(kw_threshold, float | int):
+        overrides["convergence_threshold"] = float(kw_threshold)
+
+    kw_start = kwargs.get("convergence_start")
+    if isinstance(kw_start, int):
+        overrides["convergence_start"] = kw_start
 
     config = ModelConfig(
         name=spec.name,
@@ -133,13 +153,8 @@ def _build_model_config(
         extra=kwargs,
     )
     # Apply overrides after construction (frozen — use object.__setattr__).
-    if effective_lr is not None:
-        object.__setattr__(config, "learning_rate", effective_lr)
-    if effective_beta is not None:
-        object.__setattr__(config, "beta", effective_beta)
-    if effective_max_steps is not None:
-        object.__setattr__(config, "max_steps", effective_max_steps)
-    if use_spectral_norm is not None:
-        object.__setattr__(config, "use_spectral_norm", use_spectral_norm)
+    for field_name, value in overrides.items():
+        if value is not None:
+            object.__setattr__(config, field_name, value)
 
     return config

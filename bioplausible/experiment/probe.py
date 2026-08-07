@@ -15,10 +15,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
+
+# Whether probes persist results to the knowledge layer (KnowledgeBase /
+# FailureTracker) by default. Environment-controllable so tests can isolate.
+_DEFAULT_RECORD = os.environ.get("BIOPLAUSIBLE_RECORD_RESULTS", "1") != "0"
 
 __all__ = [
     "CoreTrainerDriver",
@@ -131,6 +136,8 @@ class CoreTrainerDriver:
         track_flops: bool = True,
         track_memory: bool = True,
         batches_per_epoch: int | None = None,
+        record_results: bool = _DEFAULT_RECORD,
+        target_hardware: str | None = None,
     ) -> None:
         self.num_workers = num_workers
         self.batch_size = batch_size
@@ -138,6 +145,8 @@ class CoreTrainerDriver:
         self.track_flops = track_flops
         self.track_memory = track_memory
         self.batches_per_epoch = batches_per_epoch
+        self.record_results = record_results
+        self.target_hardware = target_hardware
 
     def train(  # ruff: ignore[too-many-arguments]  (probe driver signature is the public protocol contract)
         self,
@@ -202,21 +211,48 @@ class CoreTrainerDriver:
             track_flops=self.track_flops,
             track_memory=self.track_memory,
             batches_per_epoch=self.batches_per_epoch,
+            target_hardware=self.target_hardware,
         )
         try:
             history = CoreTrainer(cfg).fit()
         except Exception as exc:  # broad: a broken model must not kill the gate
+            self._record(
+                model=model,
+                task=task,
+                config=config,
+                status="error",
+                extra={"error": str(exc)},
+                seed=seed,
+                device=device,
+            )
             raise RuntimeError(  # descriptive message is the public API
                 f"probe {model}/{task} failed: {exc}"
             ) from exc
         if not history:
+            self._record(
+                model=model,
+                task=task,
+                config=config,
+                status="error",
+                extra={"error": "no history"},
+                seed=seed,
+                device=device,
+            )
             raise RuntimeError(  # descriptive message is the public API
                 f"probe {model}/{task} returned no history"
             )
 
         last = history[-1]
         total_time = sum(float(m.epoch_time or 0.0) for m in history)
-        return {
+        last_extra = getattr(last, "extra", {}) or {}
+        # Convergence diagnostic: max accuracy over the run and accuracy at the
+        # halfway epoch. A rule with low `final_acc` but a rising, non-flat
+        # trajectory (best_epoch_acc >> final_acc, or acc_at_half << final_acc)
+        # is *mid-convergence* — a training-budget (epochs) issue — not a model
+        # failure. This distinguishes "needs more epochs" from "never learns".
+        accs = [float(m.train_accuracy or 0.0) for m in history if m.train_accuracy]
+        half_idx = max(1, len(accs) // 2) if accs else 0
+        metrics = {
             "final_acc": float(last.train_accuracy or last.val_accuracy or 0.0),
             "final_train_loss": float(last.train_loss or 0.0),
             "epoch_time_s": total_time,
@@ -227,7 +263,65 @@ class CoreTrainerDriver:
             # CoreTrainer on CPU, so fall back to the summed epoch time so the
             # parity contract's `matched_by.reported: [wall_time_s]` is real.
             "wall_time_s": total_time,
+            "best_epoch_acc": max(accs) if accs else float(last.train_accuracy or 0.0),
+            "acc_at_half": float(accs[half_idx - 1])
+            if accs and half_idx
+            else float(last.train_accuracy or 0.0),
+            # Hardware-aware fields (plan §17): present only when the trainer
+            # swapped in a substrate facade via TrainerConfig.target_hardware.
+            "target_hardware": last_extra.get("target_hardware"),
+            "bits": last_extra.get("bits"),
+            "noise_level": last_extra.get("noise_level"),
         }
+        self._record(
+            model=model,
+            task=task,
+            config=config,
+            status="completed",
+            metrics=metrics,
+            seed=seed,
+            device=device,
+        )
+        return metrics
+
+    def _record(
+        self,
+        *,
+        model: str,
+        task: str,
+        config: dict[str, object],
+        status: str,
+        metrics: dict[str, object] | None = None,
+        extra: dict[str, object] | None = None,
+        seed: int = 0,
+        device: str = "cpu",
+    ) -> None:
+        """Persist a probe outcome to the knowledge layer (best-effort).
+
+        Recording must never break a probe: a DB/embedding failure is logged
+        and swallowed. Gated by ``record_results`` so tests can disable it.
+        """
+        if not self.record_results:
+            return
+        try:
+            from bioplausible.experiment.result_sink import record_experiment_result
+
+            record_experiment_result(
+                model=model,
+                task=task,
+                config=config,
+                metrics=metrics,
+                status=status,
+                seed=seed,
+                device=device,
+                extra=extra,
+            )
+        except Exception as exc:  # pragma: no cover  # best-effort persistence
+            import logging
+
+            logging.getLogger(__name__).error(
+                "result_sink recording failed for %s/%s: %s", model, task, exc
+            )
 
 
 def run_probe(  # ruff: ignore[too-many-arguments]  (one normalization entrypoint carries all probe identity + parameters)

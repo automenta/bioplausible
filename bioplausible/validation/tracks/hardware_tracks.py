@@ -14,8 +14,10 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.zoo.models.eqprop import (
+from bioplausible.zoo.models.eqprop import (  # ruff: ignore[module-level-import-not-at-top]
     LoopedMLP,
+    NoisyLoopedMLP,
+    QuantizedLoopedMLP,
 )
 
 __all__ = [
@@ -30,23 +32,43 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-class QuantizedLoopedMLP(LoopedMLP):
-    """Approximate FPGA with bit-precision constraints."""
+def _sink_hardware_track(
+    *,
+    result: TrackResult,
+    model: str,
+    task: str,
+    hardware: str,
+) -> None:
+    """Persist a hardware-track outcome to the knowledge layer (best-effort).
 
-    def __init__(self, *args, bits=8, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.bits = bits
-        self.scale = 2 ** (bits - 1) - 1  # Signed INT8 range [-127, 127]
+    Routes a completed/partial certificate to the KnowledgeBase and a failed
+    one to the FailureTracker so the substrate validation results compound into
+    the same store as every frontier probe (plan §17). Never breaks the track.
+    """
+    try:
+        from bioplausible.experiment.result_sink import record_experiment_result
 
-    def _quantize(self, x):
-        return torch.round(x * self.scale).clamp(-self.scale, self.scale) / self.scale
-
-    def forward_step(self, x_proj, h):
-        # Quantize inputs to step
-        h_q = self._quantize(h)
-        # Standard step but with quantized state
-        pre_act = x_proj + self.W_rec(h_q)
-        return torch.tanh(pre_act)
+        status = "completed" if result.status in {"pass", "partial"} else "failed"
+        extra = {
+            "hardware": hardware,
+            "track_id": result.track_id,
+            "tier": "validation_track",
+        }
+        record_experiment_result(
+            model=model,
+            task=task,
+            config={},
+            metrics=dict(result.metrics),
+            status=status,
+            device="cuda" if torch.cuda.is_available() else "cpu",
+            extra=extra,
+        )
+    except Exception:  # pragma: no cover  # best-effort persistence
+        logger.exception(
+            "hardware-track %s recording failed for %s family",
+            result.track_id,
+            model,
+        )
 
 
 def track_16_fpga_quantization(verifier) -> TrackResult:
@@ -92,7 +114,7 @@ def track_16_fpga_quantization(verifier) -> TrackResult:
 
 **Implication**: Runs on ultra-low power DSPs/FPGA without FPUs.
 """
-    return TrackResult(
+    result = TrackResult(
         track_id=16,
         name="FPGA Bit Precision",
         status=status,
@@ -102,20 +124,10 @@ def track_16_fpga_quantization(verifier) -> TrackResult:
         time_seconds=time.time() - start,
         improvements=[],
     )
-
-
-class NoisyLoopedMLP(LoopedMLP):
-    """Approximate Analog/Photonics with continuous noise."""
-
-    def __init__(self, *args, noise_level=0.05, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.noise_level = noise_level
-
-    def forward_step(self, x_proj, h):
-        # Inject analog thermal/shot noise into interaction
-        noise = torch.randn_like(h) * self.noise_level
-        pre_act = x_proj + self.W_rec(h) + noise
-        return torch.tanh(pre_act)
+    _sink_hardware_track(
+        result=result, model="quantized_looped_mlp", task="synthetic", hardware="fpga"
+    )
+    return result
 
 
 def track_17_analog_photonics(verifier) -> TrackResult:
@@ -165,7 +177,7 @@ def track_17_analog_photonics(verifier) -> TrackResult:
 **Finding**: Attractor dynamics correct for injected noise continuously.
 """
 
-    return TrackResult(
+    result = TrackResult(
         track_id=17,
         name="Analog/Photonics Noise",
         status=status,
@@ -175,6 +187,10 @@ def track_17_analog_photonics(verifier) -> TrackResult:
         time_seconds=time.time() - start,
         improvements=[],
     )
+    _sink_hardware_track(
+        result=result, model="noisy_looped_mlp", task="synthetic", hardware="analog"
+    )
+    return result
 
 
 def track_18_thermodynamic_dna(verifier) -> TrackResult:
@@ -281,7 +297,7 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:
 Aligns with physical laws of dissipation.
 """
 
-    return TrackResult(
+    result = TrackResult(
         track_id=18,
         name="DNA/Thermodynamic",
         status=status,
@@ -291,3 +307,7 @@ Aligns with physical laws of dissipation.
         time_seconds=time.time() - start,
         improvements=[],
     )
+    _sink_hardware_track(
+        result=result, model="looped_mlp", task="synthetic", hardware="thermo"
+    )
+    return result

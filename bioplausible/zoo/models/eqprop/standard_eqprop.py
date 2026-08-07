@@ -32,9 +32,23 @@ class StandardEqProp(BioModel):
     def __init__(self, config: ModelConfig | None = None, **kwargs):
         super().__init__(config, **kwargs)
 
+        # ModelConfig is frozen; the direct-init path drops unknown kwargs into
+        # ``extra``, so apply the equilibrium convergence overrides explicitly
+        # (§7 adaptive-early-stop experiment). Only reachable when config is None.
+        kw_threshold = kwargs.get("convergence_threshold")
+        if kw_threshold is not None and config is None:
+            object.__setattr__(
+                self.config, "convergence_threshold", float(kw_threshold)
+            )
+        kw_start = kwargs.get("convergence_start")
+        if kw_start is not None and config is None:
+            object.__setattr__(self.config, "convergence_start", int(kw_start))
+
         self.beta = self.config.beta
         self.eq_steps = self.config.max_steps
         self.lr = self.config.learning_rate
+        self.convergence_threshold = self.config.convergence_threshold
+        self.convergence_start = self.config.convergence_start
 
         self.layers = nn.ModuleList()
         hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
@@ -147,8 +161,8 @@ class StandardEqProp(BioModel):
             return_trajectory=return_trajectory,
             return_dynamics=return_dynamics,
             convergence_norm=2,
-            convergence_threshold=1e-3,
-            convergence_start=5,
+            convergence_threshold=self.convergence_threshold,
+            convergence_start=self.convergence_start,
         )
 
         self._last_activations = activations
