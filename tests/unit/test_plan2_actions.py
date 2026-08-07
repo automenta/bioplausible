@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+import numpy as np
 import optuna
 import pytest
 import torch
@@ -13,10 +14,25 @@ from torch.utils.data import TensorDataset
 from bioplausible.cli.frontier import load_report_points, run_frontier_report
 from bioplausible.data.vision import create_data_loaders, get_vision_dataset
 from bioplausible.experiment.producer import OptunaBayesProducer
+from bioplausible.hyperopt.comparator import compare_frontiers
 from bioplausible.hyperopt.frontier import (
     RulePoint,
     cost_of_plausibility,
     pareto_frontier,
+)
+from bioplausible.hyperopt.ideal_backprop import (
+    IdealBackpropDecision,
+    IdealBackpropFinder,
+)
+from bioplausible.hyperopt.rule_frontier import (
+    RuleFrontierDecision,
+    RuleFrontierFinder,
+    find_rule_frontier,
+    sample_config_for_rule,
+)
+from bioplausible.hyperopt.scaling_law import (
+    fit_accuracy_scaling,
+    predict_flops_for_accuracy,
 )
 from bioplausible.hyperopt.search_space import get_rule_space
 
@@ -73,6 +89,18 @@ def test_data_loader_persistent_workers_noop_without_workers(task):
         task, batch_size=8, num_workers=0, persistent_workers=True
     )
     assert train_loader.persistent_workers is False
+
+
+def test_cached_vision_forces_zero_workers():
+    """§3: in-memory cached TensorDatasets must not spawn workers (IPC is pure overhead)."""
+    train_loader, _ = create_data_loaders("mnist", batch_size=64, num_workers=4)
+    assert train_loader.num_workers == 0
+
+
+def test_disk_dataset_keeps_workers():
+    """Generated (non-cached) datasets keep the operator's worker count."""
+    train_loader, _ = create_data_loaders("xor", batch_size=16, num_workers=4)
+    assert train_loader.num_workers == 4
 
 
 def test_cifar10_uses_tensor_cache():
@@ -192,3 +220,237 @@ def test_run_frontier_report_empty(tmp_path):
     report = run_frontier_report(str(tmp_path / "r.jsonl"), "backprop_mlp")
     assert report["n_probes"] == 0
     assert report["models"] == {}
+
+
+class _FakeDriver:
+    def __init__(self, acc_by_dim: dict[int, float] | None = None) -> None:
+        self.calls: list[dict[str, object]] = []
+        self.acc_by_dim = acc_by_dim or {}
+
+    def train(
+        self,
+        *,
+        model: str,
+        task: str,
+        config: dict[str, object],
+        seed: int,
+        epochs: int,
+        device: str,
+    ) -> dict[str, object]:
+        del model, task, seed, epochs, device
+        self.calls.append(dict(config))
+        hidden = int(config.get("hidden_dim", 64))
+        acc = self.acc_by_dim.get(hidden, 0.9)
+        return {
+            "final_acc": acc,
+            "forward_flops": hidden * 100,
+            "backward_flops": hidden * 50,
+            "peak_memory_mb": hidden / 10.0,
+            "wall_time_s": hidden / 100.0,
+        }
+
+
+def test_ideal_backprop_finder_searches_and_caches(tmp_path):
+    driver = _FakeDriver({64: 0.95, 128: 0.98})
+    finder = IdealBackpropFinder(
+        driver,
+        task="mnist",
+        budget_probes=20,
+        epochs=1,
+        seed=0,
+        cache_dir=str(tmp_path),
+    )
+    decision = finder.find()
+    assert isinstance(decision, IdealBackpropDecision)
+    assert decision.task == "mnist"
+    assert len(decision.points) == 20
+    assert decision.frontier  # non-empty
+    # every probe trains through the driver
+    assert len(driver.calls) == 20
+
+
+def test_ideal_backprop_finder_uses_cache(tmp_path):
+    driver = _FakeDriver()
+    finder = IdealBackpropFinder(
+        driver,
+        task="mnist",
+        budget_probes=10,
+        epochs=1,
+        seed=0,
+        cache_dir=str(tmp_path),
+    )
+    first = finder.find()
+    calls_after_first = len(driver.calls)
+    second = finder.find()
+    assert second.frontier == first.frontier
+    # no additional training on cache hit
+    assert len(driver.calls) == calls_after_first
+
+
+def test_ideal_backprop_finder_force_reruns(tmp_path):
+    driver = _FakeDriver()
+    finder = IdealBackpropFinder(
+        driver,
+        task="mnist",
+        budget_probes=8,
+        epochs=1,
+        seed=0,
+        cache_dir=str(tmp_path),
+    )
+    finder.find()
+    finder.find(force=True)
+    assert len(driver.calls) == 16
+
+
+def test_compare_frontiers_detects_dominating_point():
+    # bio: higher accuracy AND cheaper on all 3 resources -> strictly dominates
+    bio = [_pt("bio", 0.95, 100, 50, 10)]
+    bp = [_pt("backprop", 0.9, 150, 60, 12)]
+    cmp = compare_frontiers(bio, bp, rule="bio", backprop="backprop_mlp", task="xor")
+    assert cmp.n_dominating_points == 1
+    assert len(cmp.matches) == 1
+    assert cmp.matches[0].accuracy_delta > 0
+    assert cmp.matches[0].dominates()
+
+
+def test_compare_frontiers_cheaper_at_same_accuracy():
+    # bio: same accuracy, cheaper on all 3 resources -> cost < 1 (deployment-viable)
+    bio = [_pt("bio", 0.9, 100, 50, 10)]
+    bp = [_pt("backprop", 0.9, 150, 60, 12)]
+    cmp = compare_frontiers(bio, bp, rule="bio", backprop="backprop_mlp", task="xor")
+    assert cmp.cost_of_plausibility < 1.0
+    assert cmp.n_dominating_points == 0  # equal accuracy is not a strict dominance
+
+
+def test_compare_frontiers_worse_rule_reports_cost_above_one():
+    bio = [_pt("bio", 0.9, 500, 250, 50)]
+    bp = [_pt("backprop", 0.9, 50, 25, 5)]
+    cmp = compare_frontiers(bio, bp, rule="bio", backprop="backprop_mlp", task="xor")
+    assert cmp.n_dominating_points == 0
+    assert cmp.cost_of_plausibility == pytest.approx(10.0)
+    assert cmp.matches[0].flops_ratio == pytest.approx(10.0)
+
+
+def test_compare_frontiers_empty_returns_inf():
+    cmp = compare_frontiers([], [_pt("backprop", 0.9, 1, 1, 1)], rule="bio", task="xor")
+    assert cmp.cost_of_plausibility == float("inf")
+    assert cmp.matches == ()
+
+
+def test_fit_accuracy_scaling_recovers_linear_log_law():
+    rng = np.random.default_rng(0)
+    flops = np.logspace(3, 7, 40)
+    true_a, true_b = 0.05, 0.3
+    acc = true_a * np.log(flops) + true_b + rng.normal(0, 0.001, flops.size)
+    pts = [
+        _pt("backprop_mlp", float(a), float(f), 10.0, 1.0) for f, a in zip(flops, acc)
+    ]
+    law = fit_accuracy_scaling(pts, rule="backprop_mlp", task="mnist")
+    assert law is not None
+    assert law.slope == pytest.approx(true_a, rel=0.1)
+    assert law.intercept == pytest.approx(true_b, rel=0.1)
+    assert law.r2 > 0.9
+    assert law.n == 40
+
+
+def test_fit_accuracy_scaling_too_few_points_returns_none():
+    pts = [_pt("bio", 0.9, 100, 1, 1), _pt("bio", 0.91, 200, 1, 1)]
+    assert fit_accuracy_scaling(pts, rule="bio", task="t") is None
+
+
+def test_predict_flops_for_accuracy_matches_known_law():
+    # True law: acc = 0.05 * log(F) + 0.3. For target acc 0.8 -> log F = 10 -> F = e^10.
+    law = _mk_law(slope=0.05, slope_se=0.001, intercept=0.3, intercept_se=0.005)
+    mean, lo, hi = predict_flops_for_accuracy(law, 0.8)
+    assert mean == pytest.approx(np.exp(10.0), rel=0.01)
+    assert lo < mean < hi
+
+
+def test_predict_flops_nonpositive_slope_returns_nan():
+    law = _mk_law(slope=0.0, slope_se=0.0, intercept=0.5, intercept_se=0.0)
+    assert (
+        predict_flops_for_accuracy(law, 0.8)[0]
+        != predict_flops_for_accuracy(law, 0.8)[0]
+    )
+
+
+def _mk_law(slope, slope_se, intercept, intercept_se):
+    from bioplausible.hyperopt.scaling_law import AccuracyScalingLaw
+
+    return AccuracyScalingLaw(
+        rule="backprop_mlp",
+        task="mnist",
+        slope=slope,
+        slope_se=slope_se,
+        intercept=intercept,
+        intercept_se=intercept_se,
+        r2=0.99,
+        n=40,
+    )
+
+
+def test_sample_config_eqprop_has_equilibrium_params():
+    trial = optuna.trial.FixedTrial({
+        "lr": 0.01,
+        "weight_decay": 1e-4,
+        "hidden_dim": 128,
+        "num_layers": 3,
+        "dropout": 0.2,
+        "beta": 0.5,
+        "max_steps": 20,
+        "damping": 0.3,
+        "tol": 1e-4,
+    })
+    cfg = sample_config_for_rule(trial, "eqprop")
+    assert cfg["beta"] == 0.5
+    assert cfg["max_steps"] == 20
+    assert cfg["damping"] == 0.3
+    assert cfg["tol"] == 1e-4
+
+
+def test_rule_frontier_finder_searches_bio_rule(tmp_path):
+    driver = _FakeDriver({32: 0.92, 64: 0.95})
+    finder = RuleFrontierFinder(
+        driver,
+        rule="eqprop",
+        model="eqprop_mlp",
+        task="mnist",
+        budget_probes=15,
+        epochs=1,
+        seed=0,
+        cache_dir=str(tmp_path),
+    )
+    decision = finder.find()
+    assert isinstance(decision, RuleFrontierDecision)
+    assert decision.rule == "eqprop"
+    assert len(decision.points) == 15
+    assert decision.frontier
+    assert len(driver.calls) == 15
+
+
+def test_rule_frontier_finder_unknown_rule_raises(tmp_path):
+    finder = RuleFrontierFinder(
+        _FakeDriver(),
+        rule="not_a_rule",
+        task="mnist",
+        budget_probes=5,
+        cache_dir=str(tmp_path),
+    )
+    with pytest.raises(ValueError):
+        finder.find()
+
+
+def test_find_rule_frontier_convenience(tmp_path):
+    driver = _FakeDriver()
+    decision = find_rule_frontier(
+        driver,
+        rule="neural_cube",
+        model="neural_cube",
+        task="mnist",
+        budget_probes=7,
+        epochs=1,
+        seed=0,
+        cache_dir=str(tmp_path),
+    )
+    assert decision.rule == "neural_cube"
+    assert len(decision.points) == 7

@@ -317,23 +317,33 @@ def create_data_loaders(  # ruff: ignore[too-many-arguments,too-many-positional-
 
     ``pin_memory`` and ``persistent_workers`` are forwarded to both loaders to
     cut per-epoch transfer/spawn overhead on CUDA hosts (plan §3.3).
+
+    Workers are force-disabled for the *cached* in-memory sets
+    (``_CACHEABLE_VISION``): the whole split is already a resident
+    ``TensorDataset``, so multiprocessing only adds IPC/copy overhead with no
+    disk I/O to hide. This overrides an operator-set ``num_workers>0`` (e.g. the
+    ``TrainerConfig`` default of 4) that would otherwise slow the loop by ~2.7x.
     """
     train_data = get_vision_dataset(dataset_name, train=True, flatten=flatten)
     test_data = get_vision_dataset(dataset_name, train=False, flatten=flatten)
+    # Disable workers for the pre-transformed in-memory cache (the whole split
+    # is already resident — multiprocessing adds only IPC/copy cost). Non-cached
+    # sets (generated toys, disk-backed) keep the operator's worker count.
+    workers = 0 if dataset_name in _CACHEABLE_VISION else num_workers
     train_loader = DataLoader(
         train_data,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers,
+        num_workers=workers,
         pin_memory=pin_memory,
-        persistent_workers=persistent_workers and num_workers > 0,
+        persistent_workers=persistent_workers and workers > 0,
     )
     test_loader = DataLoader(
         test_data,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
+        num_workers=workers,
         pin_memory=pin_memory,
-        persistent_workers=persistent_workers and num_workers > 0,
+        persistent_workers=persistent_workers and workers > 0,
     )
     return train_loader, test_loader
