@@ -1,155 +1,223 @@
 # EXPERIMENT_PLAN4.md — The Stabilization → Measurement → Market run (complete development plan)
 
-**Status.** PLAN3's *build* items are landed and green: the P0a integrity gate (validator + KB surface emitter + honest `neural_cube`/`backprop` spaces), P1 (the shared `settle_state` primitive + `EquilibriumSettleProtocol`, adopted by `NeuralCube`), the P2 read-half (`query_conditionals` + proposer DI + `avoid_characterized`), the P2-lite turbine demo, P3a (flagship-selection as a KB query), and P3b (checkpointed settle as the memory lever) all exist in code with tests (`test_rule_space_integrity.py`, `test_settle_protocol.py`, `test_flywheel_readhalf.py`). The recommendations of the PLAN3 review were folded in where they were actionable in code: **R3** (knob-efficacy as a P0a property test) and **R4** (the flywheel demo as a *paired counterfactual*).
+**Status.** PLAN3's *build* items are landed and green in code: the P0a integrity gate (validator `validate_all_rule_spaces()` + KB surface emitter + honest `neural_cube`/`backprop` spaces), P1 (`settle_state` + `EquilibriumSettleProtocol`, adopted by `NeuralCube`), the P2 read-half (`query_conditionals` + proposer DI + `avoid_characterized`), the P2-lite turbine demo (paired counterfactual, R4), P3a (`select_flagship` as a KB query), and P3b (checkpointed settle as the memory lever) — each with tests (`test_rule_space_integrity.py`, `test_settle_protocol.py`, `test_flywheel_readhalf.py`). R3 (knob-efficacy as a P0a property test) landed too.
 
-What this plan adds: **the stabilization sprint** (fix the test suite so the gate is honest), **the measurement phases** PLAN3 deferred to "run," and **the market thread** — in *one* ordered, gated document.
+This plan is the *complete* forward path: **S0 stabilization** (the suite bug), **the measurement phases** PLAN3 deferred to "run," and **the market thread** — as one ordered, gated, executable document.
 
----
-
-## 0. The facts that re-shape this plan
-
-1. **The suite is bleeding ~24 pre-existing failures — and ~18 of them are ONE bug, not model bugs.** Triage (grounded, not opinion) found:
-   - `test_model_learns_synthetic[<14 models>]` — `_LearnableTask.get_batch` calls bare `torch.randn` for *both* `x` and a fresh projection `W` **every call, with no seed reset**. The "learnable" target `y=argmax(x@W)` moves every batch, and global RNG state accumulates across 40+ parametrized models. `neural_cube` passes in isolation but fails in-file → order-dependent. **Test hygiene, not model surgery.**
-   - `test_trainer_forward_vision[conv_equitile|enhanced_equitile]` + `test_build_and_adapted_forward_vision[...]` — fail only in the *full* suite, never in-file → same cross-file RNG exhaustion.
-   - `test_model_deterministic_output[noisy_looped_mlp]` — a **by-design stochastic** facade inside a determinism test. It can never pass deterministically.
-   - `test_energy_landscape_eqprop` — the landscape's center energy (1.397) ≠ direct forward CE (1.574) at `1e-4` for `LoopedMLP` in contrastive mode → a definition/tolerance mismatch, not a NaN.
-   - `test_phase0::test_integration_run` — the trainer's deliberate clinical guard raises `optuna.TrialPruned("Constant high-confidence predictions")` and the standalone runner lets it **propagate** instead of recording the unit → a real robustness leak.
-
-2. **The coverage gate is currently ~60%, not 85%** — a pre-existing condition verified unchanged with my PLAN3 work stashed and present. The gate will only become honest once stabilization lands.
-
-3. **The four "existential" probes have not consumed any budget yet** (PLAN3 §V). The measurement phases are still to be *run*, not *built*.
-
-4. **Substrate reach is still `LoopedMLP`-only** (PLAN3 §0.4) — unchanged by the build. The go/no-go is still open.
+**How to read it.** Every phase has: an Objective, the Actions, an exact *Run it* command, a Budget/timebox, and a binary Success/exit criterion. Nothing in §III starts before its gate in §VII holds. The farthest-left thing that is *currently executable with zero new code* is marked **▶ READY** — those should start now (in parallel with everything else).
 
 ---
 
-## I. What is real, what is promised, what is missing
+## 0. Facts that re-shape the plan (all verified this session)
+
+1. **~24 pre-existing test failures; ~18 are ONE bug.** Triage:
+   - `test_model_learns_synthetic[<14 models>]`: `_LearnableTask.get_batch` (`tests/integration/test_model_integration.py:189`) calls bare `torch.randn` for *both* `x` and a fresh projection `W` every call **with no seed reset** — the target `y=argmax(x@W)` moves each batch, and global RNG accumulates across 40+ parametrized cases. `neural_cube` passes *in isolation* but fails *in-file* → order-dependent. **Test hygiene, not model bugs.**
+   - `test_trainer_forward_vision[conv_equitile|enhanced_equitile]` + `test_build_and_adapted_forward_vision[...]` (4): fail only in the *full* suite, never in-file → same cross-file RNG exhaustion.
+   - `test_model_deterministic_output[noisy_looped_mlp]`: a **by-design stochastic** facade asserted deterministic — impossible by construction.
+   - `test_energy_landscape_eqprop`: landscape center energy (1.397) ≠ direct forward CE (1.574) at `1e-4` for `LoopedMLP` (contrastive) → a definition/tolerance mismatch, not a NaN.
+   - `test_phase0::test_integration_run`: the clinical guard raises `optuna.TrialPruned("Constant high-confidence predictions")` and the standalone runner **propagates it** instead of recording the unit → a real robustness leak.
+2. **Coverage is ~60% vs the 85% gate** — a pre-existing condition verified unchanged with PLAN3 work stashed & present.
+3. **Measurements are still to be *run*, not *built*.** The four existential probes (PLAN3 §V) have spent zero budget.
+4. **Substrate reach is still `LoopedMLP`-only** (PLAN3 §0.4). The go/no-go is open.
+5. **Untracked scratch in the tree** (`RESEARCH.MANIFESTO.md`, `parity_*.jsonl`) is not ours to ship; it is quarantined/ignored or removed at S0.
+
+---
+
+## I. Verified state
 
 | Claim | Status | Evidence |
 |---|---|---|
-| P0a integrity gate (validator + emitter + honest spaces) | **Real (in code)** | `validate_all_rule_spaces()` passes 6/6; emitter writes `SURFACE-{rule}` records |
-| P1 shared settle primitive | **Real (in code)** | `settle_state` + `EquilibriumSettleProtocol`; `NeuralCube` adopts it; threshold=1.0 → 4<20 steps converged |
-| P2 read-half + paired-counterfactual demo | **Real (in code)** | `query_conditionals` + `avoid_characterized`; with-KB skips 1, empty-KB skips 0 |
-| P3a flagship selection as a KB query | **Real (in code)** | `select_flagship()` ranks by geomean cost on honest surfaces |
+| P0a integrity gate (validator + emitter + honest spaces) | **Real (in code)** | `validate_all_rule_spaces()` passes 6/6; emitter writes `SURFACE-{rule}`; phantom re-add → `SpaceSignatureMismatchError` |
+| P1 shared settle primitive | **Real (in code)** | `settle_state` + protocol; `NeuralCube` adopts; threshold=1.0 → 4<20 steps, converged; gradients flow through checkpoint |
+| P2 read-half + paired counterfactual | **Real (in code)** | with-KB skips 1, empty-KB skips 0 (`avoid_characterized`) |
+| P3a flagship selection as KB query | **Real (in code)** | `select_flagship()` geomean-cost rank on honest surfaces |
 | P3b memory lever (checkpointed settle) | **Real (in code)** | `torch.utils.checkpoint` in `settle_state` under grad |
-| Test suite green / coverage ≥85% | **Missing** | ~24 failures; ~60% coverage (see §0.1) |
-| P0b honest `neural_cube` frontier | **Missing (run)** | gated on suite-green + compute |
+| Test suite green; coverage ≥85% | **Missing** | ~24 failures; ~60% coverage |
+| P0b honest `neural_cube` frontier | **Missing (run)** | gated on S0 + compute |
 | P4-lite substrate go/no-go | **Missing (run, pre-commit A/B)** | cheapest decisive probe |
-| P3c powered conditional w/ CI | **Missing** | needs P0b + P3a selection + budget |
-| P3.5 buyer signal | **Missing** | market probe, no engineering gate |
-| P5 / P6 | **Missing** | CIFAR + flywheel-at-scale |
+| P3c powered conditional w/ CI | **Missing** | needs P0b + P3a + budget |
+| P3.5/R buyer signal | **▶ READY to draft** | no engineering gate |
+| P4-full / P5 / P6 | **Missing** | substrate measurement, CIFAR, flywheel mass |
 
 ---
 
-## II. The complete development plan
+## II. Existential risks & their cheap first signals (self-contained)
 
-### Phase 0 — Stabilization sprint (NEW; the gate's precondition)
+These three decide the business before the flagship's third decimal; they must not wait behind it. PLAN3's version, restated with owners.
 
-> Gate rule: **no measurement budget is spent until the suite is green and the coverage gate is honest.**
-
-| Item | Root cause (verified) | Fix |
-|---|---|---|
-| **S0a** `test_model_learns_synthetic` (14) + forward/build equitile flakes (4) | non-stationary `_LearnableTask` (`W` regenerated per call) + unseeded global RNG accumulation across parametrized cases | autouse seed fixture resetting `torch`/`numpy`/`random` before each test; cache `W` once so the task is deterministic/stationary; relax `loss_reduction > 0` to `> 1e-4` |
-| **S0b** `test_model_deterministic_output[noisy_looped_mlp]` | stochastic facade under a determinism assert | add `noisy_looped_mlp` to the existing `SKIP_MODELS` (reason: noise-injecting substrate facade) |
-| **S0c** `test_energy_landscape_eqprop` | landscape energy definition ≠ forward CE for eqprop | audit `compute_energy_landscape`; align eqprop's center energy to its real energy/forward or relax to a documented tol (keep the MLP case exact at `1e-4`) |
-| **S0d** `test_phase0::test_integration_run` | clinical guard raises `TrialPruned`; standalone runner propagates instead of recording | make `run_from_config`/the runner catch `TrialPruned` and record the unit as `status` (`expensive`/`error`) + sink it, honoring "record reverts" — a real robustness fix, not a test hack |
-
-**Success:** full suite green; coverage climbs toward/above 85%. All other phases inherit this gate.
+| Risk | Cheap probe | Runs | Decides |
+|---|---|---|---|
+| **Does anyone care?** | buyer-facing spec sheet on one powered conditional | P3.5 / R5–R8 (draft now) | Fund vs Pivot; the whole thesis |
+| **Is the physical story real?** | substrate surrogate-sanity + scope audit | P4-lite (after S0) | Branch A vs B |
+| **Does it compound?** | proposer skip-based-on-conditional, toy→mass | P2-lite ✓ · P6 | confidence to fund P5/P6 |
 
 ---
 
-### Phase 1 — P4-lite: the substrate go/no-go (cheapest decisive probe, after S0)
+## III. The plan
 
-Pre-commit the branches *before* running, so the outcome is decided, not rationalized (PLAN3 §P4-lite).
+### Phase S0 — Stabilization sprint (THE gate's precondition)
 
-1. **Surrogate sanity:** does the float-gradient/quantized-forward facade materially distort the eqprop frontier vs a true low-precision backward?
-2. **Substrate scope audit:** confirm empirically which families `target_hardware` reaches vs where it is inert (§0.4).
-- **Branch A (physical story holds):** budgets flow to substrate-faithful measurement; flagship must gain a substrate path or an eqprop-family flagship is chosen by P3a's substrate-eligibility criterion.
-- **Branch B (distorts / too narrow):** pivot to (a) build a true low-precision backward, or (b) re-anchor on the epistemic engine + GPU-efficiency story (cache-integrity is its own moat).
+> Gate rule: **no measurement budget touches compute until the suite is green and coverage is honest.**
 
-**Success:** a recorded verdict + a chosen branch, before flagship budget moves.
+| Item | Root cause (verified) | Fix | Verify |
+|---|---|---|---|
+| **S0a** `test_model_learns_synthetic` (14) + equitile forward/build flakes (4) | non-stationary `_LearnableTask` + unseeded RNG accumulation | autouse `seed` fixture (reset torch/numpy/random per test); cache `W` once (deterministic mapping); relax `loss_reduction > 0` → `> 1e-4` | `pytest tests/integration/test_model_integration.py -q` (once, standalone ×3 for stability) |
+| **S0b** `test_model_deterministic_output[noisy_looped_mlp]` | stochastic facade under determinism assert | add `noisy_looped_mlp` to `SKIP_MODELS` (reason: noise substrate facade) | that node skips, others stay green |
+| **S0c** `test_energy_landscape_eqprop` | landscape energy ≠ forward CE for eqprop | audit `compute_energy_landscape` center-energy definition; align or relax tol to a *documented* value (keep MLP case exact `1e-4`) | node passes; `test_energy_landscape_finite` unchanged |
+| **S0d** `test_phase0::test_integration_run` | clinical guard raises `TrialPruned`; runner propagates | standalone `run_from_config` catches `TrialPruned` → records unit `status` (`expensive`/`error`) + sinks it (honors "record reverts") | node passes, history present, sink has a failure/abort record |
 
----
+**Coverage-closure contingency:** if the suite goes green but coverage still <85%, add a **C0** pass — focused tests for the recently-added paths (`settle_state`, validator surface/emitter, `query_conditionals`, `select_flagship`) that are already unit-covered, to lift the marginal %. Do **not** chase 85% by deleting real code.
 
-### Phase 2 — P0b + P3a: the flagship on an honest space
-
-- **P0b:** `RuleFrontierFinder(rule="neural_cube", epochs=5, budget≈30, force=True)` on the honest space. Does "1.75/standout" survive an honest search?
-- **P3a (held):** re-run `KnowledgeBase.select_flagship()` against the *honest* P0b frontier + P2 conditionals. If `neural_cube` is the honest argmin, keep it; if not, the rule says so.
-
-**Success:** one flagship chosen by the codified rule, not by accident, with a recorded `cost_of_plausibility`.
+**Success (exit):** `uv run pytest --cov` green; total coverage ≥85% with the gate enforced; scratch artifacts quarantined.
 
 ---
 
-### Phase 3 — P3c: one powered conditional with confidence intervals
+### Phase P4-lite — Substrate go/no-go (cheapest decisive probe, after S0) ▶ READY to pre-commit
 
-Concentrate `budget_probes` → 500–1000 on the **selected flagship + matched backprop reference only** (not a five-family spray). Report `cost_of_plausibility` with a 95% CI + `scaling_law` r²/CI (§II of PLAN3: report the symmetric joint Pareto surface first, backprop-relative cost second).
+Pre-commit the branches *first*, so the outcome is decided, not rationalized.
 
-**Success:** the first defect artifacts a design partner can react to.
+1. **Surrogate sanity:** does float-grad/quantized-forward materially distort the eqprop frontier vs a true low-precision backward?
+2. **Scope audit:** confirm empirically which families `target_hardware` reaches vs is inert (§0.4).
 
----
+```
+uv run python scripts/preliminary_run.py --device cuda --bio eqprop --bp-probes 10 --bio-probes 3 --epochs 1 --target-hardware fpga
+uv run python scripts/preliminary_run.py --device cuda --bio eqprop --bp-probes 10 --bio-probes 3 --epochs 1 --target-hardware gpu
+# compare: does the GPU-vs-FPGA frontier reorder? (_hw{target} cache keys already split)
+```
 
-### Phase 4 — P3.5 / R-series: the market probe (parallel, no engineering gate)
+- **Branch A (physical story holds):** budgets → substrate-faithful measurement; flagship must gain a substrate path or an eqprop-family flagship is chosen by P3a's substrate-eligibility criterion.
+- **Branch B (distorts / too narrow):** (a) build a true low-precision backward, or (b) re-anchor on the epistemic engine + GPU-efficiency story.
 
-- **R5:** spec sheet as a *decision-replacement artifact* (their decision/cost → your powered conditional with CI → **both** "what would you pay/do differently" and "what would make you not trust this number").
-- **R6:** pre-commit the buyer-response rubric — names-a-decision/price → **Fund**; "cool, keep me posted" → **False positive**; wouldn't change their decision → **Pivot** (trigger Branch B early).
-- **R1/R2/R7:** problem-interview template; split "does the pain exist" (now) from "does our measurement resolve it" (P3c); lead outreach with the honest negative result (`FailureManifesto`), not an accuracy table.
-- **R8:** one-paragraph **business-⊕ invariance** — name now what still appreciates if Branch B fires (surface audit trail, negative-knowledge oracle, cache-integrity discipline).
-
-**Success:** a recorded buyer signal — Fund / False-positive / Pivot — independent of any internal metric.
-
----
-
-### Phase 5 — P4-full + P5: substrate measurement + scale
-
-- **P4-full** (Branch A only): `--target-hardware fpga/analog` on MNIST for substrate-eligible families; the `_hw{target}` cache split already prevents GPU↔FPGA cross-reuse. Record "does substrate change the ranking?"
-- **P5a:** `HyperbandPruner` end-to-end → first CIFAR-10 `cost_of_plausibility`.
-- **P5b:** hardware × equilibrium cross-terms — does `convergence_threshold` search behave the same under quantization? (Free once P1's protocol + P4-full exist — the product differentiation.)
+**Budget:** 2 short runs (≈ <1 hr). **Success:** a recorded verdict + chosen branch, before any flagship budget.
 
 ---
 
-### Phase 6 — P6: mass + flywheel at scale
+### Phase P0b + P3a — The flagship on an honest space (after S0; P4-lite branch informs eligibility)
 
-Let P3c/P5 accumulate through `result_sink`, then measure the AutoScientist proposing with **fewer probes because it read a prior conditional**, now with CIFAR-scale KB mass. Non-trivial KB counts + a skip-based-on-conditional measurement at scale. The P2-lite demo (already real) de-risked this; P6 confirms it.
+```
+uv run python scripts/preliminary_run.py --device cuda --bio neural_cube --bp-probes 15 --bio-probes 30 --epochs 5 --target-acc 0.95 --cache-dir logs
+```
 
----
+- **P0b:** does "1.75 / standout" survive an *honest* 30-probe search?
+- **P3a (held):** re-run `KnowledgeBase.select_flagship(task="mnist")` against the honest frontier + P2 conditionals; keep `neural_cube` iff it is the honest argmin.
 
-## III. Standing discipline (carry forward from PLAN3)
-
-- **Never measure before the Stabilization gate (S0) passes.** A flaky suite makes every "missing" row unknowable.
-- Epochs and `target_hardware` are cache-identity covariates — match and cache independently.
-- Diagnose before judging: low acc/cost may be an epoch-budget artifact (`best_epoch_acc`/`acc_at_half`).
-- Record wins *and* reverts via the sink; the sink does not distinguish — write them all.
-- Space and constructor move together — the P0a validator enforces it; the human rule is the backup.
-- **No backwards compatibility of any kind** (AGENTS.md): fixes are fixes, not band-aids — e.g. S0d is the *entrypoint* catching the prune, not the test swallowing it.
+**Budget:** ~30 probes @ 5 epochs. **Success (exit):** one flagship selected by the codified rule, with a recorded `cost_of_plausibility` and (Branch A) a substrate-eligibility verdict.
 
 ---
 
-## IV. Phase ordering with gates
+### Phase P3c — One powered conditional with CIs (after P0b + P3a)
+
+Concentrate `budget_probes` → 500–1000 on the **selected flagship + matched `backprop_mlp` reference only** (no five-family spray). Report the **symmetric joint Pareto surface first** (§II PLAN3) and `cost_of_plausibility` second, with a 95% CI (≥3 seeds per operating point for the variance term) and `scaling_law` r²/CI.
+
+**Budget:** the dominant compute spend of the plan (hour-scale, GPU). **Success:** one defensible `cost ≤ ~1.5–1.6` ± CI **or** an honest "one lever from viable."
+
+---
+
+### Phase P3.5 / R-series — Market probe (parallel; drafting is ▶ READY, no compute)
+
+- **R5:** spec sheet as a *decision-replacement artifact*: their decision + cost of being wrong → your powered conditional with CI → **both** "what would you pay / do differently" and "what would make you **not** trust this number."
+- **R6:** pre-committed buyer rubric — names a decision/price → **Fund**; "cool, keep me posted" → **False positive** (don't count); wouldn't change their decision → **Pivot** (trigger Branch B early).
+- **R1/R2/R7:** problem-interview template; split "pain exists" (now) from "measurement resolves it" (P3c); lead with the honest negative (`FailureManifesto`), not an accuracy table.
+- **R8:** one-paragraph **business-⊕ invariance** — assets that survive Branch B (surface audit trail, negative-knowledge oracle, cache-integrity discipline).
+
+**Success:** one recorded buyer signal — Fund / False-positive / Pivot — independent of internal metrics.
+
+---
+
+### Phase P4-full (Branch A only) — executed substrate measurement
+
+```
+uv run python scripts/preliminary_run.py --device cuda --bio eqprop --bp-probes 20 --bio-probes 20 --epochs 3 --target-hardware fpga  --cache-dir logs/hw_fpga
+uv run python scripts/preliminary_run.py --device cuda --bio eqprop --bp-probes 20 --bio-probes 20 --epochs 3 --target-hardware analog --cache-dir logs/hw_analog
+```
+
+The `_hw{target}` cache split already prevents GPU↔FPGA cross-reuse. **Success:** a real fpga/analog `cost_of_plausibility` on substrate-eligible families + a recorded "does substrate change the ranking?" answer.
+
+---
+
+### Phase P5 — Scale + cross-terms (after P3 baseline)
+
+- **P5a:** `HyperbandPruner` end-to-end → first CIFAR-10 `cost_of_plausibility` (fidelity = epochs / dataset fraction).
+- **P5b:** hardware × equilibrium cross-terms — does `convergence_threshold` search behave the same under quantization? Free once P1 protocol + P4-full exist. This is the product differentiation (substrate-specific optimization, not GPU parity).
+
+**Success:** first CIFAR-10 cost; the cross-term recorded via the P1 protocol.
+
+---
+
+### Phase P6 — Mass + flywheel at scale (after P3c/P5 data)
+
+Let P3c/P5 accumulate through `result_sink`, then measure the AutoScientist proposing with **fewer probes because it read a prior conditional**, now at CIFAR scale. Non-trivial KB counts + a skip-based-on-conditional measurement (the P2-lite paired counterfactual, scaled).
+
+**Success:** a measured "compounding RPM" (redundant-probes-avoided / proposals) at CIFAR mass, with non-trivial KB counts.
+
+---
+
+## IV. Measurement & reporting standards (apply to every "run" phase)
+
+- **Seeds/repeats:** ≥3 seeds per reported operating point; report the CI, not a point.
+- **Cache identity:** epochs *and* `target_hardware` are covariates — matched and keyed independently (`_hw{target}`).
+- **Report order:** symmetric joint Pareto first; `cost_of_plausibility` second (it is backprop-relative, PLAN2 §1 — fix at the report layer, no re-measurement).
+- **Sink discipline:** every probe (win *and* revert) goes through `result_sink`; failures to the tracker.
+- **Diagnose before judging:** low acc/cost may be epoch-budget artifacts — cite `best_epoch_acc`/`acc_at_half`.
+
+---
+
+## V. Risk register & decisions (beyond the existential three)
+
+| Risk | Likelihood | Blow-up | Mitigation / decision |
+|---|---|---|---|
+| P0b score collapses ∨ flagships flips | Med | "1.75" was fiction | P3a's rule is the arbiter; no sunk budget (⊕ invariant) |
+| S0 fix doesn't lift coverage to 85% | Med | gate stays red | C0 coverage-closure pass; don't delete code to hit % |
+| P4-lite Branch B | Med | pitch weakens | pre-committed pivot (epistemic-engine / GPU-efficiency story; R8 assets) |
+| Triton/`tanh` availability on CI | Med | flaky hw tests | pin the gate to cpu + documented triton-off path (already observed warning) |
+| Compute budget exhaustion mid-P3c | High | CI table unfinished | timebox P3c; ship "one lever from viable" as the honest output |
+| Buyers uninterested (P3.5 False positive/Pivot) | High | whole thesis | the market signal IS the decision; Branch B is a pivot on R8 mass, not a restart |
+
+---
+
+## VI. Standing discipline (carry forward from PLAN3)
+
+- **Never measure before S0 passes.**
+- Epochs + `target_hardware` are cache-identity covariates — match + cache independently.
+- Diagnose before judging (`best_epoch_acc` / `acc_at_half`).
+- Record wins *and* reverts via the sink — the sink does not distinguish; write them all.
+- Space and constructor move together — P0a validator enforces; the human rule is the backup.
+- **No backwards compatibility of any kind** (AGENTS.md): S0d is the entrypoint catching the prune, not the test swallowing it.
+
+---
+
+## VII. Phase ordering with gates
 
 | Phase | Gated by | Produces |
 |---|---|---|
-| **S0** Stabilization | (entry) | green suite; honest ~85% coverage gate |
+| **S0** Stabilization + C0 | (entry) | green suite; honest ≥85% coverage gate |
 | **P4-lite** Substrate go/no-go | S0 | Branch A/B verdict, pre-committed & chosen |
 | **P0b + P3a** Honest flagship | S0 (+ P4-lite branch) | rule-selected flagship + honest cost |
 | **P3c** Powered CI | P0b + P3a | one defensible cost ± 95% CI; first partner-ready table |
-| **P3.5 / R1–R8** Market probe | R-series: now; spec sheet: P3c | buyer response — Fund / False-positive / Pivot |
+| **P3.5 / R1–R8** Market probe | draft now; spec sheet at P3c | buyer response — Fund / False-positive / Pivot |
 | **P4-full** Substrate measurement | Branch A | first hardware-aware cost table + ranking-change answer |
 | **P5** Scale + cross-terms | P3 baseline | CIFAR-10 cost; substrate-specific differentiation |
 | **P6** Flywheel at scale | P2-lite ✓ + P3–P5 | measured compounding RPM at CIFAR mass |
 
-Rationale for pulling **S0** to the very front: it is the only phase that makes every downstream number trustworthy *and* every CI run green. It is cheap, mostly test-hygiene, and it is the precondition the reviewer's "is the machine running honestly" question is really asking. P4-lite stays immediately after because it is the cheapest *decisive* probe; P3.5/R-series runs in parallel because the market must not wait behind engineering.
+**Why S0 first:** it is the only phase that makes every downstream number trustworthy *and* every CI run green, and it is mostly the same root cause. **Why P4-lite and P3.5 immediately after:** they are the two cheapest *decisive* probes; neither needs the flagship, and the market must not wait behind engineering.
 
 ---
 
-## V. Suggested execution order
+## VIII. Definition of Done (the whole plan, in one checklist)
 
-1. **S0a–S0d** — the stabilization sprint. Not lint-pedantry: ~18 failures share one RNG root cause, and the other four are small, well-understood fixes. This is the "get it working" step.
-2. **P4-lite** — both existential first-signals (physical story real? substrate scoped?) before any flagship budget.
-3. **P0b + P3a** — the flagship selected by rule on an honest space.
-4. **P3c** — the powered conditional that makes P3.5 concrete.
-5. **P3.5/R-series** — put the honest number in front of a buyer, *and* draft R5/R6/R8 now so they're ready the instant P3c lands.
-6. **P4-full / P5 / P6** — substrate measurement, scale, and the measured flywheel RPM.
+- [ ] **S0:** `uv run pytest --cov` green at ≥85% with the gate enforced; `noisy_looped_mlp` audited; eqprop landscape energy definitionally correct; standalone runner records pruned units.
+- [ ] **P4-lite:** Branch A/B recorded and chosen.
+- [ ] **P0b/P3a:** flagship selected by `select_flagship()` on an honest space, cost recorded.
+- [ ] **P3c:** one powered conditional (Pareto-first, CI, ≥3 seeds) — the first partner-ready artifact.
+- [ ] **P3.5/R:** one recorded buyer signal (Fund / False-positive / Pivot); spec sheet + rubric + interview template drafted; R8 one-pager written.
+- [ ] **P4-full** (A only): hardware-aware cost table + "does substrate change ranking?" answer.
+- [ ] **P5:** first CIFAR-10 cost; hardware×equilibrium cross-term recorded.
+- [ ] **P6:** flywheel-at-scale measurement (redundant-probes-avoided) with non-trivial KB mass.
 
-The risk has flipped from *"can we measure"* (answered) to *"does the machine run honestly, is the substrate story real, does the flywheel turn at mass — and does anyone pay for the truth."* The last clause, again, is the one no internal metric can answer.
+---
 
-⊕ *If the flagship or the whole bio-rule line is de-prioritized tomorrow, S0's green suite, P0a's surface records, P1's settle protocol, P2's read-half, and P3b's checkpointing all survive — and the business-⊕ (R8) names the assets that survive if the physical story dies. That invariance, not any single rule's cost, is what "the framework is the product" means in code and in the market.*
+## Bottom line
+
+The risk has flipped from *"can we measure"* (answered — every measurement tool now exists and is gated) to *"does the machine run honestly (S0), is the substrate story real (P4-lite), does the flywheel turn at mass (P6) — and does anyone pay for the truth (P3.5/R)."* The most defensible first move is **S0a–S0d** (it unblocks CI and every downstream number), with **P3.5/R drawings** and the **P4-lite branch pre-commit** running in parallel because they cost ~nothing and gate the business.
+
+⊕ *If the flagship or the whole bio-rule line is de-prioritized tomorrow, S0's green suite, P0a's surface records, P1's settle protocol, P2's read-half, and P3b's checkpointing all survive — and R8 names the assets that survive if the physical story dies. That invariance, not any single rule's cost, is what "the framework is the product" means in code and in the market.*
