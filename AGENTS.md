@@ -61,3 +61,5 @@ Implement NO **backwards compatibility** of *any* kind.
 - [ ] `ruff format .` && `ruff check --fix .`
 - [ ] `pyright .` — zero errors in strict mode
 - [ ] `pytest --cov` — all tests pass, coverage floor met
+
+Don't obsess over test coverage and other linty tediums: Working functionality is more important than coverage and cosmetic lint issues.

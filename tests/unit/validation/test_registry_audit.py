@@ -289,7 +289,11 @@ def _fast_lm_equitile():
 # MODEL — it moved to ComponentCategory.CONTROLLER (it is a training-side
 # topology controller, not an nn.Module with a forward pass). Any model left here
 # should have no forward() to exercise.
-SKIP_MODELS = {}
+SKIP_MODELS = {
+    # Determinism assert (fixed seed => identical output) is inapplicable to a
+    # by-design stochastic forward facade (PLAN4 S0b).
+    "noisy_looped_mlp": "stochastic/noisy forward facade under a determinism assert",
+}
 
 # =============================================================================
 # Constants

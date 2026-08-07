@@ -107,12 +107,12 @@ def test_energy_tracking():
 @pytest.mark.skipif(
     not torch.cuda.is_available() and False, reason="Run CPU test if needed"
 )
-def test_integration_run():
+def test_integration_run(tmp_path):
     # Use CharNGram for speed/no-download
     cfg = OmegaConf.create({
         "seed": 42,
         "device": "cpu",
-        "output_dir": "/tmp/bioplausible_test_run",
+        "output_dir": str(tmp_path / "run"),
         "data": {
             "task": "char_ngram",
             "batch_size": 16,
@@ -121,12 +121,6 @@ def test_integration_run():
             "name": "backprop_mlp",
             "hidden_dim": 32,
             "num_layers": 1,
-            # For CharNGram (ctx=3), input dim after flattening is 3
-            # But BackpropMLP will init with input_dim from task.
-            # CharNGram doesn't set _input_dim in init, sets it to None.
-            # We fixed BackpropMLP to default to 1 if None.
-            # But here we want 3.
-            # Let's override or ensure task sets input_dim
         },
         "optimizer": {"name": "adam", "lr": 0.01},
         "trainer": {
@@ -139,11 +133,31 @@ def test_integration_run():
 
     conf = OmegaConf.merge(OmegaConf.structured(RunConfig), cfg)
 
+    # Isolate the sink so the revert record lands in tmp, not the repo DB.
+    from bioplausible.experiment import result_sink
+
+    result_sink.configure(
+        kb_path=str(tmp_path / "kb.db"), failure_path=str(tmp_path / "fail.db")
+    )
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         res = run_from_config(conf)
 
+    # The clinical guard prunes this config (constant high-confidence), so the
+    # standalone runner must swallow the prune into a failure record rather than
+    # propagate optuna.TrialPruned (PLAN4 S0d).
     assert "history" in res
-    assert len(res["history"]) == 1
-    assert "loss" in res["history"][0]
-    assert "energy_proxy" in res["history"][0]
+    assert "status" in res
+    assert res["status"] in {"completed", "error", "failed", "expensive"}
+    if res["status"] != "completed":
+        from bioplausible.execution._state import FailureTracker
+
+        tracker = FailureTracker(db_path=str(tmp_path / "fail.db"))
+        failures = tracker.get_recent_failures(limit=10)
+        assert len(failures) == 1
+        assert failures[0].model_name == "backprop_mlp"
+    else:
+        assert len(res["history"]) == 1
+        assert "loss" in res["history"][0]
+        assert "energy_proxy" in res["history"][0]

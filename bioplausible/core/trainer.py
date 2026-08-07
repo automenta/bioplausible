@@ -1413,7 +1413,13 @@ def run_from_runconfig(cfg: object) -> dict[str, object]:
         device=device,
     )
 
-    results = _run_runconfig_epochs(trainer, cfg)
+    try:
+        results = _run_runconfig_epochs(trainer, cfg)
+    except optuna.exceptions.TrialPruned as exc:
+        # No study to consume the prune in a standalone run; record the revert
+        # instead of crashing (PLAN4 S0d).
+        _record_pruned_failure(cfg, device, exc)
+        return {"history": [], "final_val_accuracy": 0.0, "status": "error"}
 
     Path(cfg.output_dir).mkdir(exist_ok=True, parents=True)
     clean_results = _convert_dictconfig(results)
@@ -1425,7 +1431,29 @@ def run_from_runconfig(cfg: object) -> dict[str, object]:
         "final_val_accuracy": (
             clean_results[-1].get("val_accuracy", 0.0) if clean_results else 0.0
         ),
+        "status": "completed",
     }
+
+
+def _record_pruned_failure(cfg: object, device: str, exc: Exception) -> None:
+    """Persist an optuna-prune that escaped the standalone runner as a revert.
+
+    Inside a live HPO study the pruner consumes ``TrialPruned``; in a standalone
+    ``run_from_runconfig`` call there is no study to sink it, so it surfaced as a
+    crash. Record it on the failure side of the sink (honors "record reverts"):
+    the AutoScientist then knows not to re-burn the same config (PLAN4 S0d).
+    """
+    from bioplausible.experiment.result_sink import record_experiment_result
+
+    record_experiment_result(
+        model=cfg.model.name,
+        task=cfg.data.task,
+        status="error",
+        seed=cfg.seed,
+        epochs=cfg.trainer.epochs,
+        device=device,
+        extra={"error": str(exc)},
+    )
 
 
 def _resolve_runconfig_device(cfg: object) -> str:
