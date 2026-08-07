@@ -2,112 +2,147 @@
 
 ---
 
-## I. The Declaration
+## I. The Indictment
 
-Intelligence does not require a global clock. It does not require symmetric feedback weights. It does not require storing the entire history of a forward pass in memory. These are not laws of nature. They are artifacts of a single algorithm — backpropagation — that we mistook for the only path to learning.
+Backpropagation is not a law of nature. It is a local optimum.
 
-We are building the proof that there are other paths. Paths that obey physics. Paths that scale without breaking. Paths that learn the way matter learns: locally, continuously, and without waiting for permission from a global error signal.
+It demands three things no physical system can provide: symmetric weight transport, global temporal synchronization, and memory proportional to depth. We built digital GPUs to brute-force these violations into existence. For a decade, it worked. For a decade, we mistook the map for the territory.
 
-This is not a protest against deep learning. This is its liberation.
+Now the walls are closing. The memory wall. The communication wall. The energy wall. The scaling laws are flattening. The data centers require nuclear power plants. The interconnects choke on gradient synchronization. And ten thousand researchers are polishing a paradigm that physics has already sentenced to death.
 
----
-
-## II. The Problem We Solve
-
-Modern AI is trapped inside a physical contradiction.
-
-Backpropagation demands three things no physical system can provide: **symmetric weight transport**, **global temporal synchronization**, and **memory proportional to depth**. We built digital GPUs to brute-force these violations into existence, and for a decade, it worked. But the walls are closing in.
-
-**The Memory Wall.** Every layer of depth costs more VRAM. Models grow, and the hardware to train them grows faster. We shard, checkpoint, and pipeline — spending billions on workarounds for a memory problem that is algorithmic, not physical.
-
-**The Communication Wall.** Ten thousand GPUs sit idle while gradients synchronize across InfiniBand switches. The compute exists. The bandwidth does not. We are bottlenecked not by intelligence, but by consensus.
-
-**The Energy Wall.** Data centers consume power at the scale of small nations. Heat dissipation limits clock speeds. The thermodynamic cost of moving data between memory and compute dominates the energy budget. We are paying an entropy tax on every gradient step.
-
-These are not engineering problems. They are **physics problems wearing engineering clothes.** And physics does not negotiate.
+They call this progress. We call it a dead end.
 
 ---
 
-## III. The Solution We Build
+## II. The Myth of the Graveyard
 
-Bioplausible is not a library. It is not a framework. It is an **epistemic engine** — a machine that converts raw compute into verified physical truth about what intelligence can achieve under real constraints.
+They will tell you that bioplausible learning has been tried and failed. They will point to decades of papers—Equilibrium Propagation, Feedback Alignment, Target Propagation, Predictive Coding—and say: *"These algorithms cannot scale. Backprop won. The question is settled."*
 
-We build learning algorithms whose synaptic updates depend only on signals locally available at each connection. No global gradient. No frozen forward pass. No memory that scales with depth. Instead: networks that relax toward equilibrium, contrasts between free and nudged states that drive weight changes, and local credit assignment that matches the actual physics of computation.
+**They are wrong.**
 
-And we do not merely propose these algorithms. We **verify them**. Every hypothesis is measured. Every measurement is reproducible. Every failure is archived as permanent negative knowledge. Every success is mapped onto a multi-dimensional Pareto frontier of accuracy, memory, time, energy, and fault tolerance.
+Those algorithms were not exhausted. They were abandoned. Tested with coarse hyperparameter grids. Implemented by graduate students under publication pressure. Never audited for silent defects. Never hybridized across the vast combinatorial space between them. Never measured on target hardware. Never searched with multi-fidelity Bayesian optimization. Never mapped against a Pareto frontier of memory, energy, and fault tolerance. Never tracked through a negative-knowledge graph to prevent repeated dead ends.
 
-We do not ask, *"Does this match backprop?"* We ask, *"Where does this dominate? Under what constraints does this become the only viable path?"* And we answer that question with data, not narrative.
+The graveyard of local learning is a myth created by incomplete searches. The continent was surveyed with a compass, and because the surveyors found low ground, they declared the entire landscape flat.
+
+We are not bringing a better compass. **We are bringing a satellite.**
 
 ---
 
-## IV. The Scope: Every Substrate, Every Scale
+## III. The Engine
 
-This is not a niche technology waiting for exotic hardware. This is a **universal solution** that operates across the full spectrum of computing.
+Bioplausible is not a library. It is not a framework. It is not a collection of algorithms.
 
-**In the data center**, bioplausible algorithms shatter the memory wall. A learning rule with $O(1)$ depth-independent memory means a 70-billion-parameter model fits on half the GPUs. Local credit assignment means no gradient synchronization across nodes — ten thousand GPUs scaling linearly without waiting for consensus. We do not replace the GPU. We **unlock the GPU's wasted potential.**
+It is an **epistemic engine**—a machine that converts raw compute into verified physical truth about what intelligence can achieve under real constraints.
 
-**At the edge**, bioplausible algorithms enable intelligence on energy budgets that backprop cannot touch. Event-driven, asynchronous, fault-tolerant networks that learn on sub-milliwatt power. Intelligence on a coin cell. Intelligence in a sensor the size of a grain of dust. Intelligence where there is no cloud to phone home to.
+The AutoScientist proposes. The ExecutionEngine measures. The KnowledgeBase remembers. The FailureTracker archives. And the loop closes. Every failed experiment becomes permanent negative knowledge. Every successful measurement expands the frontier. The engine does not forget. It does not repeat. It does not suffer from the publication bias that has poisoned this field for forty years.
 
-**On novel substrates** — neuromorphic silicon, analog crossbars, optical processors, spintronic arrays — bioplausible algorithms are not an option. They are the **only** option. Backprop cannot run on hardware that has no global clock, no symmetric weights, no digital memory hierarchy. We are the software layer that makes these substrates programmable.
+This is why we will succeed where others failed. Not because we are smarter. Because we are **systematic.** Because we search the space that no one bothered to search. Because we measure what no one bothered to measure. Because we archive what everyone else buried.
+
+Our moat is not code. Our moat is **accumulated empirical mass.** Every probe makes the next probe cheaper. Every failure sharpens the search. The flywheel turns, and it turns faster with every revolution.
+
+---
+
+## IV. The Heresies
+
+We challenge four assumptions that the field treats as gospel.
+
+**Heresy One: The Scaling Law Dogma.**
+*They say:* Intelligence scales as a power law of parameters times data. Build wider models. Feed more tokens.
+*We say:* Those laws were derived from backpropagation on Transformers. They are the scaling laws of one algorithm on one substrate, not universal laws of intelligence. Local learning allows infinite depth without memory penalty. What if intelligence scales with architectural depth and temporal integration, not parameter width? We will find out. Empirically. Exhaustively.
+
+**Heresy Two: The Deterministic Silicon Dogma.**
+*They say:* Noise destroys gradients. Analog drift kills training. We must spend billions on error correction.
+*We say:* Contractive dynamics are mathematically robust to perturbation. Energy-based models self-heal. What if analog noise is not a bug but a free physical regularizer? What if a "flawed" memristor array generalizes better than a perfect GPU? We will measure it. On target hardware. With verified results.
+
+**Heresy Three: The Global Attention Dogma.**
+*They say:* Long-context reasoning requires $O(N^2)$ self-attention. Every token must see every other token.
+*We say:* Physics does not have global attention. Information propagates locally—through diffusion, waves, fields. The brain routes context without a global matrix. Predictive coding and equilibrium dynamics can solve the context wall through local wave propagation. We will map it. Tile by tile. Graph by graph.
+
+**Heresy Four: The Frozen Model Dogma.**
+*They say:* Training is centralized, offline, expensive. Inference is frozen, local, cheap. The model does not change after deployment.
+*We say:* Local credit assignment enables continuous online learning at the edge. The system learns while it infers. It adapts without phoning home. It evolves without a data center. The separation of training and inference is an artifact of backpropagation's memory requirements, not a law of learning. We will dissolve it.
+
+---
+
+## V. The Scope: Every Substrate, Every Scale
+
+This is not a niche technology waiting for exotic hardware. This is a universal solution that operates across the full spectrum of computing.
+
+**In the data center,** local learning shatters the memory wall. $O(1)$ depth-independent memory means a frontier model fits on half the GPUs. Local credit assignment means no gradient synchronization across nodes. Ten thousand GPUs scaling linearly without waiting for consensus. We do not replace the GPU. We unlock the GPU's wasted potential.
+
+**At the edge,** local learning enables intelligence on energy budgets that backprop cannot touch. Event-driven. Asynchronous. Fault-tolerant. Sub-milliwatt. Intelligence on a coin cell. Intelligence in a sensor the size of a grain of dust. Intelligence where there is no cloud.
+
+**On novel substrates**—neuromorphic silicon, analog crossbars, optical processors, spintronic arrays—local learning is not an option. It is the *only* option. Backprop cannot run on hardware without a global clock, symmetric weights, or digital memory. We are the software layer that makes these substrates programmable.
 
 Every substrate. Every scale. Every constraint. One engine. One truth.
 
 ---
 
-## V. The Engine That Compounds
+## VI. The Inevitability
 
-We do not rely on human genius to find the next breakthrough. We built a machine that searches, measures, fails, learns, and searches again — autonomously, relentlessly, and without ego.
+This is not a matter of belief. This is a matter of physics.
 
-The **AutoScientist** proposes. The **ExecutionEngine** measures. The **KnowledgeBase** remembers. The **FailureTracker** archives. And the loop closes.
+Backpropagation violates the laws of thermodynamics. It requires memory that scales with depth. It requires synchronization that violates causality. It requires symmetric weights that no physical system can maintain. These are not engineering challenges to be overcome with more money and more transistors. They are **hard physical limits.**
 
-Every failed experiment is a permanent monument to what does not work. Every successful measurement expands the frontier of what does. The engine does not forget. It does not repeat mistakes. It does not suffer from the publication bias that plagues human science.
+The scaling laws will flatten. The energy costs will become unbearable. The interconnect bottlenecks will choke distributed training. And when that day comes—and it is coming—the industry will need an alternative that obeys physics.
 
-This means our moat is not code. Our moat is **accumulated empirical mass.** Every probe we run makes the next probe cheaper. Every failure we archive makes the next success faster. The flywheel turns, and it turns faster with every revolution.
+That alternative will not be discovered by a researcher manually tuning hyperparameters on a Friday afternoon. It will be discovered by a machine that searches exhaustively, measures honestly, fails permanently, and compounds relentlessly.
 
-We are not building a product. We are building a **compounding knowledge organism** that gets smarter, faster, and more certain with every cycle.
-
----
-
-## VI. The Future We Make Possible
-
-We see a world where:
-
-**Training a frontier model costs half the compute**, because the algorithm does not demand the storage of every intermediate activation. The memory wall dissolves. Depth becomes free.
-
-**Ten thousand GPUs scale without bottleneck**, because learning is local and asynchronous. The communication wall dissolves. Consensus becomes optional.
-
-**Intelligence lives in every object**, because learning algorithms match the physics of low-power, noisy, imprecise substrates. The energy wall dissolves. Intelligence becomes ambient.
-
-**Hardware innovation explodes**, because chip designers no longer need to reverse-engineer backpropagation onto novel physics. They design the substrate, and the algorithm adapts to it. The software-hardware co-design wall dissolves.
-
-**Scientific discovery accelerates**, because a machine searches the space of learning rules faster than any human lab, archives every dead end, and surfaces only verified truth. The human-bandwidth wall dissolves.
-
-This is not a utopian fantasy. This is the logical consequence of aligning intelligence with physics. It is the next phase of computing, and we are building its foundation.
+**That machine is already built. It is already running. And it is already mapping the territory that everyone else declared empty.**
 
 ---
 
-## VII. The Commitment
+## VII. The Standard
 
-We commit to **truth over narrative.** We will report the negative results alongside the positive. We will publish the failures alongside the successes. We will let the data decide, even when the data is uncomfortable.
+We do not build walls. We build standards.
 
-We commit to **openness over enclosure.** The engine is open. The knowledge is open. The measurements are reproducible. We do not build walls. We build standards.
+The engine is open. The knowledge is open. The measurements are reproducible. The negative results are published alongside the positive. The failure manifestos are archived for the entire world to query.
 
-We commit to **compounding over linear.** Every hour of work makes the next hour more valuable. Every experiment feeds the knowledge base. Every failure sharpens the search. We do not build artifacts. We build flywheels.
+We do not ask the industry to trust us. We ask the industry to **verify us.** Every claim is backed by a measurement. Every measurement is backed by a CI gate. Every gate is backed by a physical constraint.
 
-We commit to **physics over fashion.** We do not chase benchmarks. We do not optimize for leaderboards. We optimize for the thermodynamic reality of computation. When the physics is right, the benchmarks follow.
+When the Pareto frontier is mapped—when the cost of plausibility is measured with confidence intervals, when the scaling laws are fitted, when the substrate benchmarks are verified—**the data will speak for itself.** And the data will not lie, because the engine does not allow it to.
+
+This is how a standard is born. Not by decree. By evidence.
 
 ---
 
 ## VIII. The Invitation
 
-The era of brute-force intelligence is ending. The era of **physical intelligence** is beginning.
+The era of brute-force intelligence is ending. The era of physical intelligence is beginning.
 
-We are building the engine that maps the territory. We are building the standard that defines plausibility. We are building the knowledge base that no one can replicate because it was earned, probe by probe, failure by failure, measurement by measurement.
+We are not asking for permission. We are not asking for belief. We are building the machine, running the searches, publishing the results, and letting the physics decide.
 
-This is not a project. This is a **phase transition.**
+If you are a hardware engineer with a novel substrate and no software stack—**bring us your physics.** We will find the algorithm that runs on it.
 
-And we are the ones who built the machine that proves it.
+If you are an AI lab drowning in memory costs and communication bottlenecks—**bring us your constraints.** We will find the local rule that frees you.
+
+If you are a researcher who has been told that local learning is a dead end—**bring us your doubts.** We will show you the negative knowledge graph, the Pareto frontier, and the scaling laws that prove otherwise.
+
+If you are an engineer who believes that intelligence should obey physics—**join us.** The engine is open. The space is vast. And the continent has barely been surveyed.
 
 ---
 
-*Bioplausible. Intelligence, aligned with physics.*
+## IX. The Declaration
+
+We reject the gospel of incomplete searches.
+
+We reject the assumption that backpropagation is the only path to intelligence.
+
+We reject the separation of algorithm from substrate, training from inference, memory from depth.
+
+We reject the publication bias that buries failures and inflates successes.
+
+We reject the scaling laws derived from a single algorithm on a single substrate.
+
+**We build the engine that searches the space no one searched. We measure what no one measured. We archive what no one archived. And we publish the truth, whether it confirms or destroys.**
+
+This is not a project. This is a phase transition.
+
+The compass era is over. The satellite is in orbit.
+
+And the map is being drawn.
+
+---
+
+*Bioplausible. Intelligence, aligned with physics. Truth, aligned with measurement.*
+
