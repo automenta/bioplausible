@@ -74,14 +74,18 @@ uv run python scripts/broad_sweep.py --epochs 1 --probes-per-rule 3 --families a
 | P3a `select_flagship()` | Live (KB query, geomean-cost rank) |
 | P3b Memory Lever | Live (checkpointed settle) |
 | P4-lite Verdict | **Branch A** — facades faithful on LoopedMLP (`scripts/p4lite_surrogate_sanity.py`) |
-| Market Probe (R5–R8) | **▶ READY TO DRAFT** — zero compute |
+| Broad Sweep (cycle 1) | **▶ BUILT** — `scripts/broad_sweep.py` (shallow probes, liveness gate → auto-quarantine, resource map, KB sink; default 2 epochs so the gate is non-degenerate) |
+| Proposer bias knob | **▶ BUILT** — `propose_batch(objective=accuracy\|memory\|settling_speed\|noise_robustness)` re-ranks candidates + tags each proposal |
+| R5 Spec Sheet | **▶ DRAFTED** — `docs/R5_SPEC_SHEET.md` (cost of locality, negative results, R8 invariance, R6 buyer rubric) |
+| Market Probe (R5–R8) | Next: put R5 in front of one design partner |
 
 ---
 
 ## Next Action (Right Now)
 
-1. **Run the first Broad Sweep** (1 epoch, 3 probes, all families) → log to KB.
-2. **Draft the R5 Spec Sheet** — explain "cost of locality" to a hardware engineer without citing a specific algorithm's accuracy.
-3. **Audit the Proposer** — force one proposal cycle optimizing for *memory efficiency* instead of accuracy.
+1. **Run the first Broad Sweep** (1 epoch, 3 probes, all families) → log to KB. —
+   *Built & surfaced; run the full `--families all` sweep on available compute and log the landscape.*
+2. **Draft the R5 Spec Sheet** — explain "cost of locality" to a hardware engineer without citing a specific algorithm's accuracy. *— DONE (`docs/R5_SPEC_SHEET.md`).*
+3. **Audit the Proposer** — force one proposal cycle optimizing for *memory efficiency* instead of accuracy. *— DONE (`propose_batch(objective="memory")`).*
 
 That's it. No 10-phase gauntlet. Just the loop.

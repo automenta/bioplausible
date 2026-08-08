@@ -63,3 +63,5 @@ Implement NO **backwards compatibility** of *any* kind.
 - [ ] `pytest --cov` — all tests pass, coverage floor met
 
 Don't obsess over test coverage and other linty tediums: Working functionality is more important than coverage and cosmetic lint issues.
+
+Prefer GPU over CPU, where appropriate.
