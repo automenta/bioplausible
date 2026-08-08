@@ -18,10 +18,11 @@ The contract here is simple and enforced by tooling, not eyeballs:
   routed into a real, fully-populated ``ModelConfig``, never ``extra``.
 * Sampled knobs that nothing can consume are *phantoms*: reported by
   :func:`phantom_knobs`, never silently ignored.
-* One canonical name per knob. ``ModelConfig``'s dataclass fields are the
+  * One canonical name per knob. ``ModelConfig``'s dataclass fields are the
   schema (reflection via ``dataclasses.fields``), so adding a field to
-  ``ModelConfig`` automatically extends the knob schema. Only a small, named
-  set of legacy aliases (``lr`` → ``learning_rate``) is rewritten at the
+  ``ModelConfig`` automatically extends the knob schema. A small, named set of
+  legacy aliases (``steps`` → ``max_steps``, ``lr`` → ``learning_rate``) is
+  rewritten at the
   boundary — there is no scattered per-key aliasing.
 
 Serialization is kept orthogonal to construction: :func:`model_kwargs` returns
@@ -54,11 +55,10 @@ __all__ = [
 ]
 
 #: Legacy names accepted at the config boundary, mapped onto a canonical knob
-#: before any downstream logic. A single named constant (no scattered aliasing);
-#: the rule spaces themselves use the canonical names.
+#: before any downstream logic. A single named constant (no scattered aliasing).
 _KNOB_ALIASES: dict[str, str] = {
-    "lr": "learning_rate",
     "steps": "max_steps",
+    "lr": "learning_rate",
 }
 
 #: ``ModelConfig`` fields that are identity/structure, not tuning knobs.
@@ -134,15 +134,16 @@ def _config_param_accepts_modelconfig(model_cls: object) -> bool:
     param = sig.parameters.get("config")
     if param is None:
         return False
-    ann = param.annotation
-    if ann is ModelConfig or ann is None:
-        return ann is ModelConfig
-    # PEP 604 union (``ModelConfig | None``) or typing.Union[ModelConfig, None]
+    # Use get_type_hints to evaluate string annotations (from __future__ import annotations)
+    try:
+        hints = typing.get_type_hints(model_cls.__init__)
+    except Exception:
+        hints = {}
+    ann = hints.get("config", param.annotation)
+    if ann is ModelConfig:
+        return True
     origin = getattr(ann, "__origin__", None)
     args = getattr(ann, "__args__", ())
-    if origin is None and args:
-        # types.UnionType exposes __args__ but no __origin__
-        return any(a is ModelConfig for a in args)
     if origin in {typing.Union, _types.UnionType}:
         return any(a is ModelConfig for a in args)
     return False

@@ -45,7 +45,10 @@ class FeedbackAlignment(LearningRuleOptimizer):
         self.feedback_weights = self._create_feedback_weights(feedback_seed)
 
     def _create_feedback_weights(self, seed: int) -> list[torch.Tensor]:
-        gen = torch.Generator()
+        # Use a generator on the same device as the parameters to avoid
+        # CPU/CUDA device mismatch (torch.randn_like requires matching device).
+        device = self.params[0].device if self.params else torch.device("cpu")
+        gen = torch.Generator(device=device)
         gen.manual_seed(seed)
         feedback = []
 
@@ -99,7 +102,7 @@ class DirectFA(LearningRuleOptimizer):
         self.feedback_weights = self._create_direct_feedback(feedback_seed)
 
     def _create_direct_feedback(self, seed: int) -> list[torch.Tensor]:
-        gen = torch.Generator()
+        gen = torch.Generator(device=self.params[0].device if self.params else torch.device("cpu"))
         gen.manual_seed(seed)
         feedback = []
 

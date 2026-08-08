@@ -453,6 +453,7 @@ def settle_activations_list(
     convergence_norm: int = 2,
     convergence_threshold: float = 1e-3,
     convergence_start: int = 5,
+    convergence_relative: bool = True,
 ) -> tuple[
     list[torch.Tensor],
     list[list[torch.Tensor]] | None,
@@ -464,6 +465,16 @@ def settle_activations_list(
     number of steps, with optional early convergence detection and
     trajectory/dynamics tracking.
 
+    Convergence (when it fires) is judged on the **max relative change** across
+    the hidden+output layers: each layer's p-norm delta is normalised by that
+    layer's p-norm, and the worst layer gates the early stop. This is the
+    standard relative fixed-point test — unlike an absolute delta summed over
+    raw activations (which is dominated by layer magnitude and so almost never
+    drops below a tight ``convergence_threshold``, forcing every model to pay
+    the full ``max_steps`` settle cost). Spectral-norm-contractive maps then
+    terminate in a handful of steps, which is what makes shallow eqprop probes
+    complete inside a wall-clock epoch budget.
+
     Args:
         activations_0: Initial per-layer activations ``[x, h1, ..., out]``.
         forward_dynamics: ``f(activations, beta, target) -> new_activations``.
@@ -471,45 +482,76 @@ def settle_activations_list(
         beta: Nudge strength.
         target: Optional target tensor for nudged phase.
         return_trajectory: If True, record snapshot of activations per step.
-        return_dynamics: If True, record per-step deltas.
-        convergence_norm: p-norm for the convergence check.
-        convergence_threshold: Threshold for early stopping.
+        return_dynamics: If True, record per-step deltas and settle stats.
+        convergence_norm: p-norm for the per-layer distance and normalisation.
+        convergence_threshold: Early-stop tolerance (relative when
+            ``convergence_relative``, absolute otherwise).
         convergence_start: Step index after which convergence is checked.
+        convergence_relative: Normalise each layer's delta by its own norm so
+            the threshold has scale-invariant meaning (default True).
 
     Returns:
         ``(final_activations, trajectory, dynamics)``.
 
         - ``trajectory`` is ``None`` or a ``list[list[Tensor]]`` where each
           entry is a CPU-detached snapshot of the activations list at a step.
-        - ``dynamics`` is ``None`` or a dict with ``"deltas"`` and
-          ``"final_delta"`` keys.
+        - ``dynamics`` is ``None`` or a dict with ``"deltas"`` (per-step
+          convergence deltas), ``"final_delta"``, ``"steps_taken"``,
+          ``"converged"`` and ``"settle_time_s"`` keys.
     """
+    import time
+
+    settle_start = time.monotonic()
     trajectory: list[list[torch.Tensor]] | None = [] if return_trajectory else None
     if trajectory is not None:
         trajectory.append([a.detach().cpu() for a in activations_0])
 
-    # Convergence delta: only compute when we might use it
+    # Convergence delta: only compute when we might use it.
     need_delta = return_dynamics or convergence_start < steps
     deltas: list[float] | None = [] if return_dynamics else None
     activations = activations_0
 
+    # Layer norms (p-norm) used as relative denominators for the convergence
+    # check. Computed once from the initial activations; ``x`` (layer 0) is
+    # fixed and never free-settles, so only the driven output layers count.
+    layer_norms = [a.norm(p=convergence_norm).item() + 1e-8 for a in activations_0]
+
+    def _layer_delta(a_new: torch.Tensor, a_prev: torch.Tensor, k: int) -> float:
+        abs_delta = torch.dist(a_new, a_prev, p=convergence_norm).item()
+        if convergence_relative:
+            return abs_delta / layer_norms[k]
+        return abs_delta
+
+    converged = False
+    steps_taken = 0
     for step_idx in range(steps):
+        if need_delta:
+            steps_taken = step_idx + 1
         prev = activations
         activations = forward_dynamics(activations, beta, target)
 
-        if need_delta:
-            delta = 0.0
+        if need_delta and step_idx > convergence_start:
+            max_rel_delta = 0.0
             for k in range(1, len(activations)):
-                delta += torch.dist(activations[k], prev[k], p=convergence_norm).item()
+                max_rel_delta = max(max_rel_delta, _layer_delta(activations[k], prev[k], k))
 
             if deltas is not None:
-                deltas.append(delta)
+                deltas.append(max_rel_delta)
 
-            # Early stopping check (unconditional)
-            if step_idx > convergence_start and delta < convergence_threshold:
+            if max_rel_delta < convergence_threshold:
+                converged = True
                 if trajectory is not None:
                     trajectory.append([a.detach().cpu() for a in activations])
                 break
+        elif need_delta and deltas is not None:
+            # Before convergence_start nothing can stop, but still record the
+            # metric for a full convergence profile when debug asked for it.
+            max_rel_delta = 0.0
+            for k in range(1, len(activations)):
+                max_rel_delta = max(max_rel_delta, _layer_delta(activations[k], prev[k], k))
+            deltas.append(max_rel_delta)
+        else:
+            steps_taken += 1
 
         if trajectory is not None:
             trajectory.append([a.detach().cpu() for a in activations])
@@ -519,6 +561,9 @@ def settle_activations_list(
         dynamics = {
             "deltas": deltas,
             "final_delta": deltas[-1] if deltas else 0.0,
+            "steps_taken": steps_taken,
+            "converged": converged,
+            "settle_time_s": time.monotonic() - settle_start,
         }
 
     return activations, trajectory, dynamics

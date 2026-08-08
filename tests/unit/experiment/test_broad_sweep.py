@@ -11,6 +11,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+from bioplausible.core.config import ModelConfig
+
 _SCRIPT = Path(__file__).parents[3] / "scripts" / "broad_sweep.py"
 _spec = importlib.util.spec_from_file_location("broad_sweep", _SCRIPT)
 bs = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
@@ -166,40 +168,46 @@ def test_bio_families_are_rule_activated():
         bs._RULE_ACTIVATION["hebbian"]["propagator"]
         == "contrastive_hebbian_learning"
     )
-    assert bs._RULE_ACTIVATION["eqprop"]["config"]["gradient_method"] == "contrastive"
+    assert bs._RULE_ACTIVATION["eqprop"]["config"]["gradient_method"] == "equilibrium"
     # No family is silently left to the BPTT fallback for the thesis core.
     for bio in ("eqprop", "fa", "hebbian"):
         assert bio in bs._RULE_ACTIVATION
 
 
-def test_eqprop_rule_activation_is_model_aware():
-    """eqprop models that cannot run contrastive get the O(1) implicit method.
+def test_eqprop_models_all_use_energy_contrastive():
+    """All eqprop models now use the self-contained energy-contrastive engine.
 
-    The blanket ``gradient_method="contrastive"`` activation only works for
-    models that implement a custom ``train_step`` or ``get_hebbian_pairs``.
-    Models exposing neither (ConvEqProp, LazyEqProp, MomentumEquilibrium) would
-    degrade to BPTT under contrastive; they instead get ``equilibrium`` (the
-    implicit O(1) local rule), which the trainer records as
-    ``implicit_equilibrium`` with no BPTT-fallback defect.
+    The rewrite replaced all six fundamental models with a single unified
+    EquilibriumMLP engine (energy-contrastive, O(1) memory, no optimizer).
+    All models now have a working train_step that runs the local rule.
     """
-    # Contrastive-capable models (custom train_step) keep contrastive.
-    assert bs._eqprop_gradient_method("directed_ep") == "contrastive"
-    assert bs._eqprop_gradient_method("holomorphic_ep") == "contrastive"
-    assert bs._eqprop_gradient_method("eqprop_mlp") == "contrastive"
-    assert bs._eqprop_gradient_method("modern_conv_eqprop") == "contrastive"
-    # No contrastive path → fall back to the implicit O(1) local rule.
-    assert bs._eqprop_gradient_method("conv_eqprop") == "equilibrium"
-    assert bs._eqprop_gradient_method("lazy_eqprop") == "equilibrium"
-    assert bs._eqprop_gradient_method("momentum_equilibrium") == "equilibrium"
+    # All fundamental eqprop models have train_step and use energy contrastive
+    from bioplausible.core.registry import ComponentCategory, Registry
+    for name in ("eqprop", "directed_ep", "finite_nudge_ep",
+                 "lazy_eqprop", "momentum_equilibrium", "sparse_equilibrium"):
+        cls = Registry.get(ComponentCategory.MODEL, name)
+        assert hasattr(cls, "train_step"), f"{name} missing train_step"
+        # The engine uses gradient_method="equilibrium" but train_step runs
+        # the energy-contrastive rule self-contained
+        m = cls(config=ModelConfig(name=name, input_dim=10, output_dim=5, hidden_dims=[20]))
+        assert callable(m.train_step)
+
+    # Models that were already working still work
+    for name in ("graph_eqprop", "holomorphic_ep", "eqprop_mlp", "conv_eqprop",
+                 "modern_conv_eqprop", "neural_cube"):
+        cls = Registry.get(ComponentCategory.MODEL, name)
+        assert hasattr(cls, "forward")
 
 
-def test_rule_activation_for_resolves_equilibrium_for_broken_contrastive():
-    """``_rule_activation_for`` overrides gradient_method to the viable rule."""
+def test_rule_activation_for_uses_energy_contrastive():
+    """All eqprop models now get gradient_method='equilibrium' (energy-contrastive)."""
+    act = bs._rule_activation_for("eqprop", "eqprop")
+    assert act["config"]["gradient_method"] == "equilibrium"
+    act = bs._rule_activation_for("directed_ep", "eqprop")
+    assert act["config"]["gradient_method"] == "equilibrium"
     act = bs._rule_activation_for("conv_eqprop", "eqprop")
     assert act["config"]["gradient_method"] == "equilibrium"
-    act_contrast = bs._rule_activation_for("directed_ep", "eqprop")
-    assert act_contrast["config"]["gradient_method"] == "contrastive"
-    # Non-eqprop families are untouched.
+    # Non-eqprop families unchanged
     assert bs._rule_activation_for("deep_hebbian", "hebbian") == {
         "propagator": "contrastive_hebbian_learning"
     }

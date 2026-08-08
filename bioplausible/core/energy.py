@@ -58,7 +58,7 @@ def _build_spatial_dummy(model: nn.Module, device: torch.device) -> torch.Tensor
     if is_spatial:
         return torch.zeros(1, input_channels, *spatial_size, device=device)
     else:
-        inp_dim = first_linear_in or 64
+        inp_dim = first_linear_in or getattr(model, "input_dim", None) or 64
         return torch.zeros(1, inp_dim, device=device)
 
 

@@ -75,6 +75,8 @@ class BioModel(nn.Module, ABC):
         self.hidden_dim = self.config.hidden_dims[0] if self.config.hidden_dims else 0
         self.use_spectral_norm = self.config.use_spectral_norm
         self.max_steps = self.config.max_steps
+        self.learning_rate = self.config.learning_rate
+        self.beta = self.config.beta
         self.lipschitz_mode = self.config.lipschitz_mode
         self.spectral_norm_power_iterations = getattr(
             self.config,

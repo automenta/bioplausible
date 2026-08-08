@@ -5,7 +5,8 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
-from bioplausible.core.registry import register_model
+from bioplausible.core.config import ModelConfig
+from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.zoo._settling import settle_state
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
@@ -56,6 +57,8 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
         max_steps: int = 30,
         convergence_threshold: float = 1e-3,
         convergence_start: int = 5,
+        learning_rate: float = 0.01,
+        beta: float = 0.1,
     ):
         super().__init__()
         self.cube_size = cube_size
@@ -80,6 +83,8 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
         )
 
         self._init_weights()
+        self.learning_rate = learning_rate
+        self.beta = beta
 
     def transition_modules(self) -> list[nn.Module]:
         """Modules called in order during one forward step.
@@ -212,6 +217,81 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
         self._last_settle_steps = steps
         self._last_settle_converged = False
         return self.W_out(h), trajectory
+
+    def _settle_nudged(self, x: torch.Tensor, nudge: torch.Tensor | None, steps: int) -> torch.Tensor:
+        """Settle to fixed point, optionally with output-layer nudging.
+
+        For the free phase ``nudge`` is None. For the nudged phase, the nudge
+        tensor ``v`` (gradient w.r.t. logits) is projected back through W_out.
+        """
+        x_transform = self._transform_input(x)
+        h = self._initialize_hidden_state(x)
+
+        for _ in range(steps):
+            if nudge is None:
+                h_new = self._forward_step_impl(h, x_transform)
+            else:
+                # Nudged: h ← tanh(W_in x + local_update(h)) − beta * (v · W_out)
+                h_new = self._forward_step_impl(h, x_transform)
+                h_new = h_new - self.beta * torch.mm(nudge, self.W_out.weight)
+            delta = torch.dist(h_new, h, p=float("inf")).item()
+            h = h_new
+            if delta < self.convergence_threshold:
+                break
+        return h
+
+    def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        """Energy-contrastive EqProp train step for NeuralCube.
+
+        Free settle → compute dL/dlogits → nudged settle → energy gradient
+        difference → manual weight update. No external optimizer.
+        """
+        x_flat = x.reshape(x.size(0), -1) if x.dim() > 2 else x
+
+        # --- Free phase ---
+        with torch.no_grad():
+            h_free = self._settle_nudged(x_flat, None, self.max_steps)
+            logits_free = self.W_out(h_free)
+            loss_free = F.cross_entropy(logits_free, y)
+
+        # dL/dlogits at free equilibrium
+        logits_det = logits_free.clone().detach().requires_grad_(True)
+        v = torch.autograd.grad(
+            F.cross_entropy(logits_det, y), logits_det, retain_graph=False
+        )[0]
+
+        # --- Nudged phase ---
+        with torch.no_grad():
+            h_nudged = self._settle_nudged(x_flat, v, max(3, self.max_steps // 3))
+
+        # --- Energy gradients: ∇_θ Σ(0.5 h² − h · pre_activation) ---
+        def _energy_grads(h: torch.Tensor) -> list[torch.Tensor]:
+            h_req = h.detach().requires_grad_(True)
+            pre_act = x_flat @ self.W_in.weight.T + self.W_in.bias
+            pre_act = pre_act + self.local_update(h_req)
+            energy = torch.sum(0.5 * h_req**2 - h_req * pre_act)
+            grads = torch.autograd.grad(
+                energy, self.parameters(), retain_graph=True,
+                allow_unused=True,
+            )
+            return [g if g is not None else torch.zeros_like(p)
+                    for g, p in zip(grads, self.parameters())]
+
+        gf = _energy_grads(h_free)
+        gn = _energy_grads(h_nudged)
+
+        # --- Manual weight updates ---
+        with torch.no_grad():
+            for p, gf_p, gn_p in zip(self.parameters(), gf, gn):
+                if p is self.W_out.weight:
+                    p -= self.learning_rate * torch.mm(v.T, h_free)
+                elif p is self.W_out.bias:
+                    p -= self.learning_rate * v.sum(0)
+                else:
+                    p -= self.learning_rate * (gf_p - gn_p) / self.beta
+
+        acc = (logits_free.argmax(1) == y).float().mean().item()
+        return {"loss": loss_free.item(), "accuracy": acc}
 
     def get_topology_stats(self) -> dict:
         active_weights = (self.W_local.abs() > 0.01).float().mean().item()

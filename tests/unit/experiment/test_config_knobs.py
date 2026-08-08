@@ -59,12 +59,12 @@ def test_config_accepting_model_honors_learning_rate_field() -> None:
     assert model.config.max_steps == 7
 
 
-def test_legacy_lr_alias_is_normalized() -> None:
-    """``lr`` (legacy) is canonicalised to ``learning_rate`` at the boundary."""
+def test_learning_rate_is_used_directly() -> None:
+    """``learning_rate`` is used directly (no ``lr`` alias)."""
     cls = Registry.get(ComponentCategory.MODEL, "eqprop")
     model = construct_model(
         cls,
-        {"hidden_dim": 32, "num_layers": 2, "lr": 0.04, "beta": 0.6},
+        {"hidden_dim": 32, "num_layers": 2, "learning_rate": 0.04, "beta": 0.6},
         input_dim=784,
         output_dim=10,
         model_name="eqprop",

@@ -126,6 +126,7 @@ class FabricPCGraphPCN(BioModel):
         self._device = torch.device("cpu")
 
     def to(self, device: torch.device) -> FabricPCGraphPCN:
+        super().to(device)
         self._device = device
         for node_name in self._params:
             for param_name in self._params[node_name]:
