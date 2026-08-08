@@ -390,17 +390,21 @@ def get_search_space(model_name: str) -> SearchSpace:
 # hyperparameters (damping, step size, max iterations, convergence threshold).
 RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
     "backprop": {
-        "lr": (1e-5, 1e-1, "log"),
+        "learning_rate": (1e-5, 1e-1, "log"),
         "weight_decay": (1e-6, 1e-2, "log"),
         "hidden_dim": (32, 1024, "log"),
         "num_layers": (1, 6, "int"),
     },
     "eqprop": {
-        "lr": (1e-5, 1e-1, "log"),
+        # learning_rate capped below the ~1e-2 divergence threshold of the
+        # contrastive EqProp family (DirectedEP diverges to NaN for lr >= 1e-2 on
+        # 784-dim MNIST; stable at ~1e-3). Keeps the shared space deliverable
+        # without flooding the sweep with diverged probes.
+        "learning_rate": (1e-5, 5e-3, "log"),
         "weight_decay": (1e-6, 1e-2, "log"),
         "hidden_dim": (32, 1024, "log"),
         "num_layers": (1, 6, "int"),
-        "beta": (0.01, 3.0, "log"),
+        "beta": (0.1, 2.0, "log"),
         "max_steps": (5, 100, "int"),
         "damping": (0.0, 0.9, "linear"),
         "tol": (1e-6, 1e-2, "log"),
@@ -412,18 +416,18 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         # or routed by the training loop. ``hidden_dim``/``damping``/``tol`` were
         # silently dropped by ``build_model_kwargs`` (phantom drift, §0.1); re-add
         # each dimension in the same change that implements it on the model.
-        "lr": (1e-5, 1e-1, "log"),
+        "learning_rate": (1e-5, 1e-1, "log"),
         "weight_decay": (1e-6, 1e-2, "log"),
         "cube_size": (3, 10, "int"),
         "max_steps": (5, 100, "int"),
     },
     "pepita": {
-        "lr": (1e-4, 1e-1, "log"),
+        "learning_rate": (1e-4, 1e-1, "log"),
         "hidden_dim": (32, 512, "log"),
         "num_layers": (1, 4, "int"),
     },
     "forward_forward": {
-        "lr": (1e-3, 1e-1, "log"),
+        "learning_rate": (1e-3, 1e-1, "log"),
         "hidden_dim": (32, 512, "log"),
         "num_layers": (1, 4, "int"),
         "threshold": (0.5, 5.0, "linear"),
@@ -431,7 +435,7 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         "classifier_lr": (1e-3, 1e-1, "log"),
     },
     "feedback_alignment": {
-        "lr": (1e-4, 1e-1, "log"),
+        "learning_rate": (1e-4, 1e-1, "log"),
         "hidden_dim": (32, 512, "log"),
         "num_layers": (1, 4, "int"),
         "alpha": (0.1, 1.0, "linear"),
@@ -484,7 +488,8 @@ def _model_name_for_rule(rule: str) -> str:
 # ``tol``, ``convergence_*``) are deliberately NOT listed — those are exactly the
 # knobs P0a is meant to catch when silently dropped.
 _TRAINING_HYPERPARAMS: frozenset[str] = frozenset({
-    "lr",
+    "learning_rate",
+    "lr",  # legacy alias (normalized to "learning_rate" by build_model_kwargs)
     "weight_decay",
     "dropout",
     "momentum",

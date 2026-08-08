@@ -13,6 +13,7 @@ import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
+from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, TypeIs, cast
 
@@ -514,7 +515,7 @@ class CoreTrainer:
         self.val_loader = None
 
     def _create_model(self) -> None:
-        """Create model from registry."""
+        """Create model from registry via the single construction layer."""
         logger.info("Creating model: %s", self.config.model)
 
         # Check if model is registered in new registry
@@ -525,7 +526,19 @@ class CoreTrainer:
             raise ValueError(
                 f"Model '{self.config.model}' not registered. Available: {available}"
             )
-        self.model = model_cls(**self.config.model_kwargs)
+        from bioplausible.core.construction import construct_model
+
+        # model_kwargs carries the resolved scalar input/output dims (build_model
+        # path); fall back to 0 only if an unusual caller omitted them.
+        input_dim = int(self.config.model_kwargs.get("input_dim") or 0)
+        output_dim = int(self.config.model_kwargs.get("output_dim") or 0)
+        self.model = construct_model(
+            model_cls,
+            self.config.model_kwargs,
+            input_dim=input_dim,
+            output_dim=output_dim,
+            model_name=self.config.model,
+        )
         self.model = self._apply_hardware(cast(nn.Module, self.model))
 
         logger.info("Model created: %s", self.model.__class__.__name__)
@@ -950,6 +963,33 @@ class CoreTrainer:
                     )
             else:
                 step_metrics = self._train_step(x, y)
+
+            # Run-wide numerical-health guard across EVERY training path
+            # (energy, propagator, model train_step, BPTT). A non-finite loss
+            # aborts the probe immediately — no point burning the remaining
+            # epoch budget on a run that has already diverged.
+            _step_loss = step_metrics.get("loss")
+            if _step_loss is not None and not isfinite(float(_step_loss)):
+                from bioplausible.core.exceptions import NumericalInstabilityError
+
+                raise NumericalInstabilityError(
+                    f"non-finite loss ({_step_loss!r}) for model="
+                    f"{self.config.model!r} at global_step={self.global_step}"
+                )
+
+            # Some training paths (e.g. a learning-rule *propagator* whose
+            # ``step()`` only applies updates and returns ``None``) do not report
+            # a per-step loss/accuracy. Without them the epoch aggregates to
+            # zero, which silently breaks the sweep's liveness gate (every such
+            # rule looks "dead"). Backfill train loss/acc from a lightweight
+            # no-grad forward so the epoch metrics — and the gate — are real.
+            if "loss" not in step_metrics or "accuracy" not in step_metrics:
+                with torch.no_grad():
+                    _logits = self.model(self._adapt_input(x))
+                if "loss" not in step_metrics:
+                    step_metrics["loss"] = float(compute_loss(self.loss_fn, _logits, y))
+                if "accuracy" not in step_metrics:
+                    step_metrics["accuracy"] = float(compute_accuracy(_logits, y))
 
             for k, v in step_metrics.items():
                 if isinstance(v, (int, float)):

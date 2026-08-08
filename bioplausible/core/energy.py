@@ -1,4 +1,5 @@
 import time
+import math
 from dataclasses import dataclass
 
 import torch
@@ -25,12 +26,56 @@ class EnergyProfile:
     requires_backward: bool  # from ModelSpec
 
 
+def _build_spatial_dummy(model: nn.Module, device: torch.device) -> torch.Tensor:
+    """Build a spatial dummy input for the model's expected input format.
+
+    For spatial models (Conv2d first layer), build a 4D tensor matching the
+    expected (C, H, W) from the model's input channels and typical MNIST/CIFAR
+    sizes. For flat models, return a 2D tensor.
+    """
+    input_channels = 1
+    spatial_size = (28, 28)
+    first_linear_in = None
+
+    for module in model.modules():
+        if isinstance(module, nn.Conv2d):
+            input_channels = module.in_channels
+            break
+        if isinstance(module, nn.Linear) and first_linear_in is None:
+            first_linear_in = module.in_features
+
+    is_spatial = input_channels != 1 or getattr(model, "input_format", "flat") == "spatial"
+
+    if is_spatial and first_linear_in is not None:
+        if first_linear_in == 784 and input_channels == 1:
+            spatial_size = (28, 28)
+        elif first_linear_in == 3072 and input_channels == 3:
+            spatial_size = (32, 32)
+        else:
+            hw = int((first_linear_in / input_channels) ** 0.5)
+            spatial_size = (hw, hw)
+
+    if is_spatial:
+        return torch.zeros(1, input_channels, *spatial_size, device=device)
+    else:
+        inp_dim = first_linear_in or 64
+        return torch.zeros(1, inp_dim, device=device)
+
+
 def _estimate_activation_sparsity(
     model: nn.Module,
-    sample_input: torch.Tensor,
+    sample_input: torch.Tensor | None = None,
     threshold: float = 1e-5,
 ) -> float:
-    """Run a forward pass with hooks to estimate activation sparsity."""
+    """Run a forward pass with hooks to estimate activation sparsity.
+
+    If ``sample_input`` is None, a proper dummy is built based on the model's
+    input format (spatial vs flat), so spatial (conv) models don't break.
+    """
+    if sample_input is None:
+        device = next(model.parameters()).device
+        sample_input = _build_spatial_dummy(model, device)
+
     activations: list[torch.Tensor] = []
 
     def _hook(_module, _input, output):
@@ -61,13 +106,15 @@ def _estimate_activation_sparsity(
     return zero_frac
 
 
-def count_flops(model, input_shape):
+def count_flops(model: nn.Module, input_shape: tuple[int, ...]) -> int:
     batch_size = input_shape[0] if input_shape else 1
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     return 2 * params * batch_size
 
 
-def profile_run(model, input_shape, requires_backward=True) -> EnergyProfile:
+def profile_run(
+    model: nn.Module, input_shape: tuple[int, ...], requires_backward: bool = True
+) -> EnergyProfile:
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     fwd_flops = count_flops(model, input_shape)
     bwd_flops = 2 * fwd_flops if requires_backward else 0
@@ -149,15 +196,9 @@ class EnergyTracker:
             weight_sparsity = zero_weights / max(params, 1)
 
             device = next(self.model.parameters()).device
-            # Estimate activation sparsity — try to infer input dim from first
-            # Linear layer.
-            inp_dim = 64
-            for m in self.model.modules():
-                if isinstance(m, nn.Linear):
-                    inp_dim = m.in_features
-                    break
-            dummy_input = torch.zeros(1, inp_dim, device=device)
-            activation_sparsity = _estimate_activation_sparsity(self.model, dummy_input)
+            # Pass None so _estimate_activation_sparsity builds a proper
+            # spatial/flat dummy matching the model's input format.
+            activation_sparsity = _estimate_activation_sparsity(self.model, None)
 
             if self.global_step is not None:
                 setattr(self.model, "_biopl_activation_sparsity", activation_sparsity)

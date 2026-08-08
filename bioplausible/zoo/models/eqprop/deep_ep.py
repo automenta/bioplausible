@@ -108,7 +108,14 @@ class DirectedEP(BioModel):
                 h = self.activation(h)
             activations.append(h)
 
-        # No early convergence for DirectedEP — always run full steps
+        # Early convergence honored from config so the shallow sweep's sampled
+        # convergence_start/threshold actually cut short a settled run. The
+        # contrastive step needs a stable fixed point; stopping once deltas fall
+        # under the declared tolerance is standard and matches the other eqprop
+        # models. Falls back to the historical "always full steps" disable when
+        # the model carries no convergence knobs.
+        start = int(getattr(self.config, "convergence_start", self.eq_steps))
+        threshold = float(getattr(self.config, "convergence_threshold", float("inf")))
         activations, trajectory, dynamics = settle_activations_list(
             activations_0=activations,
             forward_dynamics=self.forward_dynamics,
@@ -118,8 +125,8 @@ class DirectedEP(BioModel):
             return_trajectory=return_trajectory,
             return_dynamics=return_dynamics,
             convergence_norm=float("inf"),
-            convergence_threshold=1e-3,
-            convergence_start=eq_steps,  # never triggers early stop
+            convergence_threshold=threshold,
+            convergence_start=start,
         )
 
         self._last_activations = activations

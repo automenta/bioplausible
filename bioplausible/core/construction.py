@@ -1,0 +1,377 @@
+"""Single canonical model-construction layer (no phantom drift, no aliasing).
+
+Why this module exists
+----------------------
+A zoo model can be constructed many ways (loose ``model_cls(**kwargs)``, a
+``build()`` classmethod, a ``config=`` object), and finders, the sweep, the
+param estimator and the trainer each historically built models their own way.
+That divergence is what let a sampled hyper-parameter be *silently dropped*
+— e.g. ``beta``/``max_steps``/``learning_rate`` landing in ``ModelConfig.extra``
+(ignored) on the direct-init path, so every eqprop probe trained with identical
+defaults regardless of its config.
+
+The contract here is simple and enforced by tooling, not eyeballs:
+
+* Every model declares what it consumes through *reflection* (:func:`inspect
+  `.signature``). A ``config: ModelConfig = None`` parameter means the model
+  reads its hyper-parameters from ``ModelConfig`` fields — so those knobs are
+  routed into a real, fully-populated ``ModelConfig``, never ``extra``.
+* Sampled knobs that nothing can consume are *phantoms*: reported by
+  :func:`phantom_knobs`, never silently ignored.
+* One canonical name per knob. ``ModelConfig``'s dataclass fields are the
+  schema (reflection via ``dataclasses.fields``), so adding a field to
+  ``ModelConfig`` automatically extends the knob schema. Only a small, named
+  set of legacy aliases (``lr`` → ``learning_rate``) is rewritten at the
+  boundary — there is no scattered per-key aliasing.
+
+Serialization is kept orthogonal to construction: :func:`model_kwargs` returns
+a plain dict of scalar values (safe for the ``TrainerConfig`` OmegaConf
+round-trip and checkpoints), while :func:`construct_model` is the single
+function that turns those scalars into a living ``nn.Module`` with every knob
+applied. The trainer, the estimator, the finders and the probe all build via
+:func:`construct_model`, so they can never disagree.
+"""
+
+from __future__ import annotations
+
+import inspect
+import math
+from dataclasses import dataclass
+from dataclasses import fields as _dataclass_fields
+
+from bioplausible.core.config import ModelConfig, compute_hidden_dims
+
+__all__ = [
+    "KNOBS",
+    "Consumption",
+    "build_model_config",
+    "construct_model",
+    "model_kwargs",
+    "phantom_knobs",
+    "resolve_consumption",
+]
+
+#: Legacy names accepted at the config boundary, mapped onto a canonical knob
+#: before any downstream logic. A single named constant (no scattered aliasing);
+#: the rule spaces themselves use the canonical names.
+_KNOB_ALIASES: dict[str, str] = {
+    "lr": "learning_rate",
+    "steps": "max_steps",
+}
+
+#: ``ModelConfig`` fields that are identity/structure, not tuning knobs.
+_STRUCTURAL_FIELDS: frozenset[str] = frozenset({
+    "name",
+    "input_dim",
+    "output_dim",
+    "hidden_dims",
+    "extra",
+})
+
+#: The canonical tuning-knob schema — derived by reflection from
+#: ``ModelConfig``'s own fields, so it can never drift from the real config.
+KNOBS: frozenset[str] = frozenset(
+    f.name for f in _dataclass_fields(ModelConfig) if f.name not in _STRUCTURAL_FIELDS
+)
+
+#: Tuning knobs that are *not* ``ModelConfig`` fields (rule-engine / arch params).
+#: Forwarded to a constructor only when the constructor declares them.
+_OTHER_KWARGS: frozenset[str] = frozenset({
+    "alpha",
+    "cube_size",
+    "gradient_method",
+    "feedback_init",
+    "threshold",
+    "feedback_mode",
+    "input_channels",
+    "hidden_channels",
+    "hebbian_lr",
+    "layer_lr",
+    "classifier_lr",
+    "damping",
+    "tol",
+    "weight_decay",
+})
+
+
+@dataclass(frozen=True, slots=True)
+class Consumption:
+    """The declared consumer contract of one model constructor (by reflection).
+
+    Attributes:
+        accepted: Named parameters of ``__init__`` (``"self"`` removed).
+        has_catch_all: Whether ``__init__`` has a ``**kwargs`` catch-all
+            (represented by the sentinel ``"**"`` in ``accepted``).
+        accepts_config: Whether ``__init__`` has an explicit ``config`` param —
+            i.e. the model reads tuning knobs from ``ModelConfig``.
+    """
+
+    accepted: frozenset[str]
+    has_catch_all: bool
+    accepts_config: bool
+
+    def can_consume(self, knob: str) -> bool:
+        """Whether ``knob`` reaches this model.
+
+        A model that accepts ``config`` consumes every knob (they land in
+        ``ModelConfig`` fields or ``extra``). Otherwise the knob must be a
+        declared constructor parameter or be absorbed by ``**kwargs``.
+        """
+        if self.accepts_config:
+            return True
+        return knob in self.accepted or self.has_catch_all
+
+
+def resolve_consumption(model_cls: object) -> Consumption:
+    """Resolve a model's consumer contract by reflecting on its ``__init__``."""
+    try:
+        sig = inspect.signature(model_cls.__init__)  # type: ignore[misc]
+    except (TypeError, ValueError):
+        return Consumption(frozenset(), False, False)
+    params = set(sig.parameters)
+    has_catch_all = any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+    if has_catch_all:
+        params.add("**")
+    params.discard("self")
+    return Consumption(frozenset(params), has_catch_all, "config" in params)
+
+
+def _normalize(config: dict[str, object]) -> dict[str, object]:
+    """Return a copy of ``config`` with legacy knob aliases canonicalised."""
+    if not any(alias in config for alias in _KNOB_ALIASES):
+        return config
+    out = dict(config)
+    for legacy, canonical in _KNOB_ALIASES.items():
+        if legacy in out and canonical not in out:
+            out[canonical] = out.pop(legacy)
+    return out
+
+
+def _as_float(config: dict[str, object], key: str, default: float) -> float:
+    value = config.get(key)
+    return float(value) if isinstance(value, int | float) else default
+
+
+def _as_int(config: dict[str, object], key: str, default: int) -> int:
+    value = config.get(key)
+    return int(value) if isinstance(value, int) else default
+
+
+def _as_bool(config: dict[str, object], key: str, default: bool) -> bool:
+    value = config.get(key)
+    return bool(value) if isinstance(value, bool) else default
+
+
+def _derive_cube_size(config: dict[str, object]) -> dict[str, object]:
+    """Map a neural_cube ``hidden_dim`` onto its ``cube_size`` (NeuralCube.build)."""
+    if "cube_size" in config or "hidden_dim" not in config:
+        return config
+    cfg = dict(config)
+    hidden = int(cfg.pop("hidden_dim"))
+    cfg["cube_size"] = max(3, round(hidden ** (1 / 3)))
+    return cfg
+
+
+def _derive_conv_channels(
+    config: dict[str, object], *, input_dim: object
+) -> dict[str, object]:
+    """Map a shared flat space onto a conv model's channel signature."""
+    if "input_channels" in config or "hidden_channels" in config:
+        return config
+    cfg = dict(config)
+    hidden_dim = cfg.get("hidden_dim")
+    if isinstance(hidden_dim, int):
+        # GroupNorm (fixed group count, e.g. 8): round up to a multiple of 8 so
+        # an arbitrary sampled width never breaks a conv probe at construction.
+        cfg["hidden_channels"] = max(8, 8 * math.ceil(hidden_dim / 8))
+    if isinstance(input_dim, tuple) and input_dim:
+        cfg["input_channels"] = int(input_dim[0])
+    else:
+        cfg["input_channels"] = 1
+    return cfg
+
+
+def build_model_config(
+    config: dict[str, object],
+    *,
+    input_dim: int,
+    output_dim: int,
+    model_name: str,
+) -> ModelConfig:
+    """Build a fully-populated :class:`ModelConfig` from a sampled config.
+
+    This is the single place where sampled training knobs are mapped onto real
+    ``ModelConfig`` **fields** (the canonical names in :data:`KNOBS`). The raw
+    config is preserved under ``extra`` so a model that digs there still sees
+    its non-field knobs. Nothing a config-accepting model reads is dropped.
+    """
+    cfg = _normalize(config)
+    hidden_dim = cfg.get("hidden_dim")
+    num_layers = int(cfg.get("num_layers", 1))
+    return ModelConfig(
+        name=model_name,
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
+        learning_rate=_as_float(cfg, "learning_rate", 0.001),
+        beta=_as_float(cfg, "beta", 0.2),
+        max_steps=_as_int(cfg, "max_steps", 30),
+        convergence_threshold=_as_float(cfg, "convergence_threshold", 1e-3),
+        convergence_start=_as_int(cfg, "convergence_start", 5),
+        use_spectral_norm=_as_bool(cfg, "use_spectral_norm", True),
+        spectral_norm_power_iterations=_as_int(cfg, "spectral_norm_power_iterations", 5),
+        extra=dict(cfg),
+    )
+
+
+def model_kwargs(
+    model_cls: object,
+    config: dict[str, object],
+    *,
+    input_dim: int,
+    output_dim: int,
+    model_name: str | None = None,
+) -> dict[str, object]:
+    """Return a plain, serializable kwargs dict for ``model_cls``.
+
+    Scalars only — safe for the ``TrainerConfig`` OmegaConf round-trip and
+    checkpoint serialization (never embeds a ``ModelConfig`` object). This is
+    the *serialized* view; :func:`construct_model` is what actually builds a
+    model with the knobs applied.
+
+    Args:
+        model_cls: The registered model constructor.
+        config: Sampled config (may use legacy aliases).
+        input_dim: Flattened input size.
+        output_dim: Output size.
+        model_name: Registered name (enables per-model derivation like
+            neural_cube's ``cube_size``).
+
+    Returns:
+        A dict of scalar constructor kwargs reflecting what the model consumes.
+    """
+    cfg = _normalize(config)
+    if model_name == "neural_cube":
+        cfg = _derive_cube_size(cfg)
+
+    consumption = resolve_consumption(model_cls)
+    accepted, has_catch_all = consumption.accepted, consumption.has_catch_all
+
+    # Conv-channel derivation only fires for models that *declare* channel
+    # params — never merely because a ``**kwargs`` catch-all exists (an MLP with
+    # a catch-all must not be silently treated as a conv model).
+    if "input_channels" in accepted or "hidden_channels" in accepted:
+        if "input_channels" not in cfg and "hidden_channels" not in cfg:
+            cfg = _derive_conv_channels(cfg, input_dim=input_dim)
+
+    kwargs: dict[str, object] = {
+        "input_dim": cfg.get("input_dim", input_dim),
+        "output_dim": cfg.get("output_dim", output_dim),
+    }
+    if not (has_catch_all or "input_dim" in accepted):
+        kwargs.pop("input_dim", None)
+    if not (has_catch_all or "output_dim" in accepted):
+        kwargs.pop("output_dim", None)
+    for key in ("hidden_dim", "num_layers"):
+        if key in cfg and (has_catch_all or key in accepted):
+            kwargs[key] = cfg[key]
+    for key in _OTHER_KWARGS:
+        if key in cfg and (has_catch_all or key in accepted):
+            kwargs[key] = cfg[key]
+
+    # ``ModelConfig`` tuning knobs reach config-accepting models through the
+    # config object; for models without ``config`` only forward what the
+    # constructor declares.
+    if not consumption.accepts_config:
+        for key in KNOBS:
+            if key in cfg and (has_catch_all or key in accepted):
+                kwargs[key] = cfg[key]
+
+    # learning_rate is ALWAYS surfaced as a scalar: the trainer's optimizer
+    # consumes it for trainer-driven (BPTT) models, whose constructors may not
+    # accept it. construct_model filters it back out for such constructors.
+    if "learning_rate" in cfg:
+        kwargs["learning_rate"] = cfg["learning_rate"]
+    return kwargs
+
+
+def construct_model(
+    model_cls: object,
+    config: dict[str, object],
+    *,
+    input_dim: int,
+    output_dim: int,
+    model_name: str | None = None,
+) -> object:
+    """Build a live model from a sampled config, applying every consumed knob.
+
+    This is the single construction entrypoint used by the trainer, the param
+    estimator, the finders and the probe. A model that accepts ``config`` gets
+    a fully-populated :class:`ModelConfig`. A model without ``config`` gets the
+    scalars it declares. A phantom knob (nothing consumes it) is left out and is
+    reported by :func:`phantom_knobs` — never silently ignored.
+
+    Returns:
+        The constructed ``nn.Module``.
+    """
+    consumption = resolve_consumption(model_cls)
+    if consumption.accepts_config:
+        cfg = build_model_config(
+            config,
+            input_dim=input_dim,
+            output_dim=output_dim,
+            model_name=model_name or getattr(model_cls, "__name__", "model"),
+        )
+        try:
+            return model_cls(config=cfg)  # type: ignore[operator]
+        except TypeError:
+            structural = {
+                "input_dim": cfg.input_dim,
+                "hidden_dim": cfg.hidden_dims[0] if cfg.hidden_dims else 0,
+                "output_dim": cfg.output_dim,
+                "num_layers": min(max(len(cfg.hidden_dims), 1), 2),
+            }
+            return model_cls(**structural, config=cfg)  # type: ignore[operator]
+    kwargs = model_kwargs(
+        model_cls,
+        config,
+        input_dim=input_dim,
+        output_dim=output_dim,
+        model_name=model_name,
+    )
+    # A model without ``**kwargs`` must only receive parameters it declares (the
+    # serialized view may carry e.g. ``learning_rate`` for the trainer).
+    if not consumption.has_catch_all:
+        kwargs = {k: v for k, v in kwargs.items() if k in consumption.accepted}
+    return model_cls(**kwargs)  # type: ignore[operator]
+
+
+def phantom_knobs(
+    model_cls: object,
+    config: dict[str, object],
+    *,
+    input_dim: int,
+    output_dim: int,
+    model_name: str | None = None,
+) -> frozenset[str]:
+    """Return tuning knobs in ``config`` that nothing on the model can consume.
+
+    A knob is *phantom* when it would change training behaviour but neither the
+    model (no ``config=``, no constructor param, no ``**kwargs``) nor the
+    trainer can use it. ``learning_rate`` is excluded because the trainer
+    consumes it for BPTT models. The probe/sweep surface these as a defect
+    instead of silently ignoring them.
+    """
+    cfg = _normalize(config)
+    consumption = resolve_consumption(model_cls)
+    if consumption.accepts_config:
+        return frozenset()
+    return frozenset(
+        key
+        for key in KNOBS
+        if key != "learning_rate"
+        and key in cfg
+        and not (consumption.has_catch_all or key in consumption.accepted)
+    )

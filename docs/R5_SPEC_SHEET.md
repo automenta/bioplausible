@@ -144,3 +144,83 @@ Draft target framing to put in front of a design partner:
 
 It is the honest physical cost map the engine can produce today, intended to
 get a real buyer reaction — and to change the questions we ask next.
+
+---
+
+## 8. Self-diagnosis engine & single construction layer (PLAN6)
+
+This cycle hardened the measurement scaffold itself so a sweep reports *real*
+config effects — not a silent no-op. Three failures that previously corrupted
+the resource map are now structural, enforced by code, not eyeballs:
+
+### 8.1 Phantom hyper-parameters (the silent no-op bug)
+
+**Failure:** `build_model_kwargs` constructed models via loose kwargs
+(`model_cls(**kwargs)`). For a model with `config: ModelConfig = None`,
+sampled `beta`/`learning_rate`/`max_steps` landed in `ModelConfig.extra`
+(ignored), and `lr`/`max_steps` were dropped entirely. Every eqprop probe
+trained with identical defaults — the same loss for every sampled config, so
+the sweep was measuring nothing while reporting success.
+
+**Fix — single construction layer** (`bioplausible/core/construction.py`):
+- `ModelConfig`'s dataclass fields are the canonical knob schema,
+  **reflection-derived** via `dataclasses.fields` (add a field → it's a knob).
+- `construct_model()` is the one canonical entrypoint used by the trainer, the
+  param estimator, the finders, and the probe. A model that accepts `config`
+  gets a fully-populated `ModelConfig` (knobs land in **fields**, never
+  `extra`); a model without `config` gets the scalars it declares.
+- `phantom_knobs()` reports — never hides — a sampled knob nothing can consume.
+- `model_kwargs()` stays a plain scalar dict (OmegaConf/checkpoint-safe), kept
+  orthogonal to construction.
+- Serialization ⇄ construction are decoupled so the OmegaConf round-trip never
+  sees a `Literal`-typed dataclass field.
+
+### 8.2 Zero-loss liveness gate (broken verdicts)
+
+**Failure:** learning-rule *propagators* (FA, hebbian) whose `step()` returns
+`None` produced empty step metrics, so `Train Loss=0.0000` each epoch — the
+sweep's liveness gate (loss must decrease) therefore flagged every such rule
+"dead", because it could never see a loss.
+
+**Fix:** the trainer backfills train loss/accuracy from a lightweight no-grad
+forward whenever a training path does not report them. The epoch metrics — and
+the gate — are now real for every path.
+
+### 8.3 NaN divergence (wasted GPU + misreported "ok" runs)
+
+**Failure:** a diverging model (e.g. DirectedEP at lr ≥ 1e-2 on 784-dim) silently
+returned `loss=nan`, was counted as a successful probe, and skewed the map.
+
+**Fix:**
+- A run-wide numerical-health guard raises `NumericalInstabilityError` on the
+  first non-finite step loss across *every* training path, so a diverged probe
+  aborts fast instead of burning its epoch budget.
+- The sweep flags it as a `nan_divergence` defect and excludes it from
+  ok/liveness accounting.
+- The shared eqprop space's `learning_rate` is capped at 5e-3 (measured
+  divergence threshold) so contrastive EqProp probes stay stable.
+
+### 8.4 Fair-comparison parameter budget
+
+`--max-params N` rematches each probe's width toward a fixed parameter budget
+via the static estimator (binary search on `hidden_dim`/`hidden_channels`, no
+training, memoised). If no width fits the budget, the probe is **minimised**, not
+left at its sampled width, and flagged `over_budget=…`.
+
+### 8.5 Sweep protocol & defect flags
+
+Each probe's report row now carries a machine-readable `defects` list, surfaced
+at the model and family level, so the sweep self-diagnoses instead of silently
+averaging:
+
+| Flag | Meaning |
+|------|---------|
+| `bptt_fallback` | bio-family probe degraded to plain BPTT (never configured silently) |
+| `nan_divergence` | non-finite loss; excluded from liveness |
+| `phantom_knobs=[…]` | sampled knobs with no consumer; config had no effect on them |
+| `over_budget=N` | minimized width still exceeds the `max_params` budget |
+
+The repair is verified by **fast, no-op unit tests** (fake trainer / fake driver /
+static estimator) that run in ~2 seconds — no GPU training loop — so regressions
+in any of these guarantees surface immediately without burning compute.
+

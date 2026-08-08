@@ -205,9 +205,14 @@ class CoreTrainerDriver:
             RuntimeError: If training raises or returns no history.
         """
         import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect; mirrors cli/parity.py)
+        from bioplausible.core.exceptions import NumericalInstabilityError
         from bioplausible.core.registry import ComponentCategory, Registry
         from bioplausible.domains.registry import resolve_task
-        from bioplausible.experiment.param_estimator import build_model_kwargs
+        from bioplausible.experiment.param_estimator import (
+            build_model_kwargs,
+            estimate_param_count,
+            phantom_knobs,
+        )
         from bioplausible.utils import seed_everything
 
         seed_everything(seed, device)
@@ -220,6 +225,33 @@ class CoreTrainerDriver:
             output_dim=spec.output_dim,
             model_name=model,
         )
+        # Phantom-drift diagnosis: sampled tuning knobs the model cannot consume
+        # (surfaced as a sweep defect instead of silently ignored).
+        phantom = sorted(
+            phantom_knobs(
+                model_cls,
+                config,
+                input_dim=spec.input_dim,
+                output_dim=spec.output_dim,
+                model_name=model,
+            )
+        )
+        # Static parameter count under this config (fair-comparison budget).
+        try:
+            param_count = estimate_param_count(
+                model,
+                config,
+                input_dim=spec.input_dim,
+                output_dim=spec.output_dim,
+            )
+        except Exception:  # defensive: counting must never break a probe
+            param_count = 0
+        # Thread the sampled learning rate into the trainer's optimizer so
+        # trainer-driven (BPTT) models respect it — self-training models already
+        # read it from their own ``config``. The scalar is carried in
+        # ``model_kwargs`` (the OmegaConf-safe view), never a nested object.
+        learn_rate = model_kwargs.get("learning_rate")
+        opt_kwargs: dict[str, object] = {"lr": float(learn_rate)} if learn_rate is not None else {}
         core_train_flag = self.track_energy or self.track_flops or self.track_memory
         cfg = TrainerConfig(
             model=model,
@@ -231,6 +263,7 @@ class CoreTrainerDriver:
             propagator=propagator,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            optimizer_kwargs=opt_kwargs,
             allow_bptt_fallback=(
                 self.allow_bptt_fallback
                 if allow_bptt_fallback is None
@@ -251,6 +284,17 @@ class CoreTrainerDriver:
         )
         try:
             history = CoreTrainer(cfg).fit()
+        except NumericalInstabilityError as exc:
+            self._record(
+                model=model,
+                task=task,
+                config=config,
+                status="error",
+                extra={"error": str(exc), "defect": "nan_divergence"},
+                seed=seed,
+                device=device,
+            )
+            raise RuntimeError(f"probe {model}/{task} diverged: {exc}") from exc
         except Exception as exc:  # broad: a broken model must not kill the gate
             self._record(
                 model=model,
@@ -297,6 +341,7 @@ class CoreTrainerDriver:
             "final_acc": float(last.train_accuracy or last.val_accuracy or 0.0),
             "final_train_loss": float(last.train_loss or 0.0),
             "epoch_time_s": total_time,
+            "param_count": param_count,
             "forward_flops": int(last.forward_flops or 0),
             "backward_flops": int(last.backward_flops or 0),
             "peak_memory_mb": float(last.peak_memory_mb or 0.0),
@@ -316,6 +361,11 @@ class CoreTrainerDriver:
             # silent-fallback defect surfaced without human audit.
             "training_paths": dict(last_extra.get("training_paths") or {}),
             "training_path": _dominant_training_path(last_extra.get("training_paths")),
+            # Phantom-drift diagnosis: sampled tuning knobs this probe could not
+            # deliver to the model. A non-empty list is a self-diagnosis defect
+            # flagged by the sweep (the config advertised knobs that had no
+            # consumer — reported, never silently ignored).
+            "phantom_knobs": phantom,
             # Hardware-aware fields (plan §17): present only when the trainer
             # swapped in a substrate facade via TrainerConfig.target_hardware.
             "target_hardware": last_extra.get("target_hardware"),

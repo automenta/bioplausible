@@ -3,6 +3,9 @@
 Verifies that `CoreTrainerDriver` applies the campaign's `compute` settings
 (worker count, tracking toggles) to the `TrainerConfig` it builds for each
 probe — no real training; `CoreTrainer` is swapped for a config-capturing fake.
+Also covers the self-diagnosis surfaces (phantom knobs, param count) and the
+NaN-divergence guard the same way: with a fake trainer, so the whole file runs
+in milliseconds without touching GPU or data loaders.
 """
 
 from __future__ import annotations
@@ -99,3 +102,92 @@ def test_driver_all_off_disables_profiling(monkeypatch):
         device="cpu",
     )
     assert captured["cfg"].track_energy is False
+
+
+def test_driver_surfaces_phantom_knobs(monkeypatch):
+    """An unconsumable sampled knob is surfaced as a defect, never hidden.
+
+    backprop_mlp has no ``config=`` and no ``beta`` constructor param, so a
+    sampled ``beta`` is phantom — the probe must report it, not silently ignore
+    the way the pre-construction-layer code did.
+    """
+    captured: dict[str, object] = {}
+
+    class FakeCoreTrainer:
+        def __init__(self, cfg) -> None:
+            captured["cfg"] = cfg
+
+        @staticmethod
+        def fit() -> list[TrainingMetrics]:
+            return _fake_history()
+
+    import bioplausible.experiment.probe as probe_module
+
+    monkeypatch.setattr(probe_module, "CoreTrainer", FakeCoreTrainer)
+    out = CoreTrainerDriver(record_results=False).train(
+        model="backprop_mlp",
+        task="mnist",
+        config={"hidden_dim": 16, "beta": 0.5},
+        seed=0,
+        epochs=1,
+        device="cpu",
+    )
+    assert "beta" in out["phantom_knobs"]
+
+
+def test_driver_surfaces_param_count(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeCoreTrainer:
+        def __init__(self, cfg) -> None:
+            captured["cfg"] = cfg
+
+        @staticmethod
+        def fit() -> list[TrainingMetrics]:
+            return _fake_history()
+
+    import bioplausible.experiment.probe as probe_module
+
+    monkeypatch.setattr(probe_module, "CoreTrainer", FakeCoreTrainer)
+    out = CoreTrainerDriver(record_results=False).train(
+        model="backprop_mlp",
+        task="mnist",
+        config={"hidden_dim": 16},
+        seed=0,
+        epochs=1,
+        device="cpu",
+    )
+    assert out["param_count"] > 0
+
+
+def test_driver_raises_on_nan_divergence(monkeypatch):
+    """The trainer's NumericalInstabilityError becomes a clear diverged error.
+
+    The future NaN guard raises ``NumericalInstabilityError`` from the epoch
+    loop; the driver must translate that into a distinct, diagnostic failure
+    (not a generic probe error) so the sweep can classify it as a NaN defect.
+    """
+    from bioplausible.core.exceptions import NumericalInstabilityError
+
+    class FakeCoreTrainer:
+        def __init__(self, cfg) -> None:
+            pass
+
+        @staticmethod
+        def fit():
+            raise NumericalInstabilityError("non-finite loss (nan) for model='x'")
+
+    import bioplausible.experiment.probe as probe_module
+
+    monkeypatch.setattr(probe_module, "CoreTrainer", FakeCoreTrainer)
+    import pytest
+
+    with pytest.raises(RuntimeError, match="diverged"):
+        CoreTrainerDriver(record_results=False).train(
+            model="backprop_mlp",
+            task="mnist",
+            config={"hidden_dim": 16},
+            seed=0,
+            epochs=1,
+            device="cpu",
+        )

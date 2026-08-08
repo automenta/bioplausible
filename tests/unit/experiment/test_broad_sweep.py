@@ -170,3 +170,131 @@ def test_bio_families_are_rule_activated():
     # No family is silently left to the BPTT fallback for the thesis core.
     for bio in ("eqprop", "fa", "hebbian"):
         assert bio in bs._RULE_ACTIVATION
+
+
+def test_probe_runs_flags_nan_divergence():
+    """A probe returning non-finite loss is flagged, not counted as ok/live."""
+    space = {"hidden_dim": (32, 64, "int"), "learning_rate": (1e-4, 1e-2, "log")}
+
+    class FakeDriver:
+        def train(self, *, model, task, config, seed, epochs, device, propagator=None, allow_bptt_fallback=True):
+            return {
+                "final_train_loss": float("nan"),
+                "final_acc": 0.0,
+                "training_path": "model_train_step",
+                "phantom_knobs": [],
+                "param_count": 100,
+                "peak_memory_mb": 1.0,
+                "wall_time_s": 0.1,
+            }
+
+    runs, n_total, n_ok = bs._probe_runs(
+        FakeDriver(), model="m", family="eqprop", space=space,
+        probes_per_rule=1, epochs=2, seed=0, device="cpu", task="mnist",
+    )
+    assert n_total == 1
+    assert n_ok == 0  # NaN run is NOT a successful ok probe
+    assert runs[0]["ok"] is False
+    assert "nan_divergence" in runs[0]["defects"]
+
+
+def test_probe_runs_flags_phantom_knobs():
+    space = {"hidden_dim": (32, 64, "int")}
+
+    class FakeDriver:
+        def train(self, *, model, task, config, seed, epochs, device, propagator=None, allow_bptt_fallback=True):
+            return {
+                "final_train_loss": 1.0,
+                "final_acc": 0.5,
+                "training_path": "model_train_step",
+                "phantom_knobs": ["beta"],
+                "param_count": 100,
+            }
+
+    runs, _n_total, n_ok = bs._probe_runs(
+        FakeDriver(), model="m", family="eqprop", space=space,
+        probes_per_rule=1, epochs=2, seed=0, device="cpu", task="mnist",
+    )
+    assert n_ok == 0
+    assert any("phantom_knobs" in d for d in runs[0]["defects"])
+
+
+def test_summarize_family_aggregates_knob_defects():
+    """Model-level defects aggregate NaN/phantom flags from its runs."""
+    family_runs = {
+        "m1": [
+            {"ok": False, "defects": ["nan_divergence"], "final_acc": 0.0},
+            {"ok": True, "defects": [], "final_acc": 0.8, "loss_epoch_0": 2.0, "loss_epoch_final": 1.0},
+        ],
+        "m2": [
+            {"ok": False, "defects": ["phantom_knobs=['beta']"], "final_acc": 0.0},
+        ],
+    }
+    out = bs._summarize_family(family_runs, determined=True, family="eqprop")
+    assert out["models"]["m1"]["defects"] == ["nan_divergence"]
+    assert "phantom_knobs" in out["models"]["m2"]["defects"][0]
+    # Only the defect-free run fed liveness; the NaN run is not counted ok.
+    assert out["models"]["m1"]["live"] is True
+
+
+def test_match_param_budget_stays_under_budget():
+    """Width matching brings backprop_mlp's param count within the budget.
+
+    Uses the static estimator (model construction, no training), so this is a
+    fast pure-logic check of the fair-comparison rematch.
+    """
+    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
+    from bioplausible.experiment.param_estimator import estimate_param_count
+
+    budget = 4000
+    config = bs._match_param_budget(
+        "backprop_mlp",
+        {"hidden_dim": 512, "num_layers": 2},
+        budget,
+        input_dim=64,
+        output_dim=10,
+    )
+    count = estimate_param_count(
+        "backprop_mlp", config, input_dim=64, output_dim=10
+    )
+    assert count <= budget
+    assert count > budget // 2  # close to budget, not pathologically small
+
+
+def test_match_param_budget_touches_only_width():
+    """Non-width knobs survive the rematch (displayed budget config)."""
+    config = bs._match_param_budget(
+        "backprop_mlp",
+        {"hidden_dim": 512, "num_layers": 2, "learning_rate": 0.01},
+        4000,
+        input_dim=64,
+        output_dim=10,
+    )
+    assert config["learning_rate"] == 0.01
+    assert config["num_layers"] == 2
+
+
+def test_match_param_budget_minimizes_unbudgetable_model():
+    """A model whose minimum width exceeds budget is minimised, never left wide.
+
+    contrastive_feedback_alignment has ~12.8k params even at width 8 — above an
+    8k budget. The matcher must return the smallest-width config (not the
+    original wide sample) so ``max_params`` is honoured as far as possible.
+    """
+    config = bs._match_param_budget(
+        "contrastive_feedback_alignment",
+        {"hidden_dim": 128, "num_layers": 2},
+        8000,
+        input_dim=784,
+        output_dim=10,
+    )
+    assert config["hidden_dim"] == 8
+    from bioplausible.experiment.param_estimator import estimate_param_count
+
+    count = estimate_param_count(
+        "contrastive_feedback_alignment",
+        config,
+        input_dim=784,
+        output_dim=10,
+    )
+    assert count < 20000  # minimized, not the original 236k

@@ -58,7 +58,7 @@ def test_neural_cube_keeps_only_real_knobs():
     sinks = dict(surface.sinks)
     assert sinks["cube_size"] == "constructor"
     assert sinks["max_steps"] == "constructor"
-    assert sinks["lr"] == "training"
+    assert sinks["learning_rate"] == "training"
     assert sinks["weight_decay"] == "training"
 
 

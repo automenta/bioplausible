@@ -15,6 +15,7 @@ __all__ = [
     "IncompatibilityError",
     "KnowledgeBaseError",
     "LoadStateError",
+    "NumericalInstabilityError",
     "PropagatorError",
     "RegistryError",
     "SpaceSignatureMismatchError",
@@ -86,6 +87,16 @@ class TrialExecutionError(BioplausibleError):
 
 class PropagatorError(BioplausibleError):
     """A learning-rule propagator failed during forward/backward."""
+
+
+class NumericalInstabilityError(BioplausibleError):
+    """A training step produced a non-finite loss or parameter value.
+
+    Raised by the trainer's run-wide numerical-health guard so a diverging probe
+    (e.g. an eqprop model with too high a learning rate) aborts *fast* instead
+    of wasting the rest of its epoch budget, and is recorded as a definite
+    divergence — never silently counted as a healthy run.
+    """
 
 
 class TileGraphError(BioplausibleError):
