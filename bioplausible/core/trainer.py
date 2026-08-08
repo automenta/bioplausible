@@ -422,8 +422,10 @@ class CoreTrainer:
         # 3. Create propagator if specified
         self._create_propagator()
 
-        # 4. Create optimizer
-        self._create_optimizer()
+        # 4. Create optimizer (learning-rule optimizers eagerly; standard
+        # torch optimizers lazily on first BPTT step — see ``_ensure_optimizer``).
+        if self._needs_eager_optimizer():
+            self._create_optimizer()
 
         # 5. Compile model if requested
         if self.config.use_compile and not self._is_kernal_model():
@@ -613,6 +615,37 @@ class CoreTrainer:
         self.propagator = prop_cls(
             list(self.model.parameters()), self.model, **self.config.propagator_kwargs
         )
+
+    def _needs_eager_optimizer(self) -> bool:
+        """Return True if the configured optimizer is a learning-rule optimizer.
+
+        Learning-rule optimizers drive the Phase-3 update path in
+        ``_train_step`` and therefore must exist at setup time. Standard torch
+        optimizers (adam/sgd/… via the ``torch.optim`` fallback) are only used
+        by the BPTT fallback, so they are created lazily on the first BPTT step
+        — a self-updating rule (equilibrium, model-side ``train_step``) never
+        allocates a phantom optimizer it does not use.
+        """
+        if not self.config.optimizer:
+            return False
+        try:
+            meta = Registry.get_metadata(
+                ComponentCategory.OPTIMIZER, self.config.optimizer
+            )
+        except ValueError:
+            return False
+        return meta.credit_assignment_type in {
+            "equilibrium",
+            "hebbian",
+            "target",
+            "forward-only",
+            "spiking",
+        }
+
+    def _ensure_optimizer(self) -> None:
+        """Create the standard optimizer lazily on first BPTT need."""
+        if self.optimizer is None:
+            self._create_optimizer()
 
     def _create_optimizer(self) -> None:
         """Create optimizer."""
@@ -1028,6 +1061,7 @@ class CoreTrainer:
         """Standard backpropagation training step."""
         x = self._adapt_input(x)
 
+        self._ensure_optimizer()
         if self.optimizer:
             self.optimizer.zero_grad()
 

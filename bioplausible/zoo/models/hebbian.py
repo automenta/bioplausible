@@ -98,9 +98,11 @@ class DeepHebbianChain(NEBCBase):
         max_steps: int = 1,
         hebbian_lr: float = 0.001,
         use_oja: bool = True,
+        spectral_norm_power_iterations: int = 5,
     ):
         self.hebbian_lr = hebbian_lr
         self.use_oja = use_oja
+        self.spectral_norm_power_iterations = spectral_norm_power_iterations
         super().__init__(
             input_dim, hidden_dim, output_dim, num_layers, use_spectral_norm, max_steps
         )
@@ -108,9 +110,11 @@ class DeepHebbianChain(NEBCBase):
     def transition_modules(self) -> list[nn.Module]:
         """Modules called in order during one forward step.
 
-        :returns: ``list(self.chain)``
+        Must include input projection (W_in), hidden chain, and output head
+        so that propagators (e.g., ContrastiveHebbianLearning) can run the
+        full free and clamped forward passes from input to output.
         """
-        return list(self.chain)
+        return [self.W_in, *self.chain, self.head]
 
     @classmethod
     def build(
@@ -137,7 +141,7 @@ class DeepHebbianChain(NEBCBase):
     def _build_layers(self):
         self.W_in = nn.Linear(self.input_dim, self.hidden_dim)
         if self.use_spectral_norm:
-            self.W_in = spectral_norm(self.W_in, n_power_iterations=5)
+            self.W_in = spectral_norm(self.W_in, n_power_iterations=self.spectral_norm_power_iterations)
 
         self.chain = nn.ModuleList()
         for i in range(self.num_layers):
@@ -149,13 +153,13 @@ class DeepHebbianChain(NEBCBase):
             )
 
             if self.use_spectral_norm:
-                layer = spectral_norm(layer, n_power_iterations=5)
+                layer = spectral_norm(layer, n_power_iterations=self.spectral_norm_power_iterations)
 
             self.chain.append(layer)
 
         self.head = nn.Linear(self.hidden_dim, self.output_dim)
         if self.use_spectral_norm:
-            self.head = spectral_norm(self.head, n_power_iterations=5)
+            self.head = spectral_norm(self.head, n_power_iterations=self.spectral_norm_power_iterations)
 
     def forward(
         self,

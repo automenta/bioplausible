@@ -174,3 +174,28 @@ def test_configured_propagator_actually_drives_training():
     trainer.train_epoch()
 
     assert calls, "the configured propagator was never invoked during training"
+
+
+def test_standard_optimizer_is_lazy():
+    """Standard torch optimizers are only allocated on first BPTT use.
+
+    A self-updating rule (equilibrium / model-``train_step``) must not pay for a
+    phantom Adam it never steps; ``_needs_eager_optimizer`` is False for a
+    standard ``adam``.
+    """
+    config = TrainerConfig(model="test", epochs=1, optimizer="adam", task="mnist")
+    trainer = CoreTrainer(config)
+    assert trainer._needs_eager_optimizer() is False
+
+
+def test_ensure_optimizer_creates_on_demand():
+    """``_ensure_optimizer`` allocates the standard optimizer only when asked."""
+    from torch import nn
+
+    config = TrainerConfig(model="test", epochs=1, optimizer="adam", task="mnist")
+    trainer = CoreTrainer(config)
+    assert trainer.optimizer is None
+    trainer.model = nn.Linear(4, 4)
+    trainer._ensure_optimizer()
+    assert trainer.optimizer is not None
+    assert trainer.optimizer.__class__.__name__ == "Adam"

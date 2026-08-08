@@ -115,6 +115,7 @@ class ProbeDriver(Protocol):
         seed: int,
         epochs: int,
         device: str,
+        propagator: str | None = None,
     ) -> dict[str, object]: ...
 
 
@@ -157,6 +158,7 @@ class CoreTrainerDriver:
         seed: int,
         epochs: int,
         device: str,
+        propagator: str | None = None,
     ) -> dict[str, object]:
         """Train one probe and return aggregated metrics.
 
@@ -171,6 +173,11 @@ class CoreTrainerDriver:
             seed: Master seed.
             epochs: Training epochs.
             device: Target device.
+            propagator: Registered learning-rule propagator (e.g.
+                ``"feedback_alignment"``, ``"contrastive_hebbian_learning"``).
+                When set, the trainer drives this rule instead of letting the
+                model degrade to plain BPTT — required so a bio-rule probe
+                measures *local* cost, not backprop cost.
 
         Returns:
             A metrics dict with ``final_acc``, ``epoch_time_s``, flops, memory.
@@ -202,8 +209,13 @@ class CoreTrainerDriver:
             epochs=epochs,
             seed=seed,
             device=device,
+            propagator=propagator,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            # Probes are disposable resource measurements: they must not write
+            # resumable checkpoints to disk (that path is for the settle-state
+            # memory lever / long runs, not shallow probes).
+            save_checkpoints=False,
             # CoreTrainer's EnergyTracker computes flops+memory+energy under one
             # gate; enable it when the campaign asks for any of them so the
             # declared `compute.track` produces real values.
@@ -245,6 +257,11 @@ class CoreTrainerDriver:
         last = history[-1]
         total_time = sum(float(m.epoch_time or 0.0) for m in history)
         last_extra = getattr(last, "extra", {}) or {}
+        # Liveness-gate endpoints (plan §5 cycle 1): the broad sweep marks a
+        # rule "dead" iff loss does not decrease across the run. Expose both
+        # ends so the sweep (and the KB sink) can gate without the full series.
+        loss_0 = float(history[0].train_loss or 0.0)
+        loss_final = float(last.train_loss or 0.0)
         # Convergence diagnostic: max accuracy over the run and accuracy at the
         # halfway epoch. A rule with low `final_acc` but a rising, non-flat
         # trajectory (best_epoch_acc >> final_acc, or acc_at_half << final_acc)
@@ -267,6 +284,8 @@ class CoreTrainerDriver:
             "acc_at_half": float(accs[half_idx - 1])
             if accs and half_idx
             else float(last.train_accuracy or 0.0),
+            "loss_epoch_0": loss_0,
+            "loss_epoch_final": loss_final,
             # Hardware-aware fields (plan §17): present only when the trainer
             # swapped in a substrate facade via TrainerConfig.target_hardware.
             "target_hardware": last_extra.get("target_hardware"),
@@ -334,6 +353,7 @@ def run_probe(  # ruff: ignore[too-many-arguments]  (one normalization entrypoin
     epochs: int,
     device: str,
     param_count: int = 0,
+    propagator: str | None = None,
 ) -> ProbeResult:
     """Run one probe and normalize the outcome into a :class:`ProbeResult`.
 
@@ -351,6 +371,7 @@ def run_probe(  # ruff: ignore[too-many-arguments]  (one normalization entrypoin
         epochs: Training epochs.
         device: Target device.
         param_count: Static parameter count (from the estimator).
+        propagator: Registered learning-rule propagator for bio-rule probes.
 
     Returns:
         A normalized :class:`ProbeResult` (status ``"ok"`` or ``"error"``).
@@ -363,6 +384,7 @@ def run_probe(  # ruff: ignore[too-many-arguments]  (one normalization entrypoin
             seed=seed,
             epochs=epochs,
             device=device,
+            propagator=propagator,
         )
         return ProbeResult(
             model=model,

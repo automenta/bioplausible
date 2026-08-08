@@ -7,17 +7,97 @@ concrete experiment proposals with configurations.
 
 import logging
 from collections.abc import Callable
+from enum import StrEnum
 
 from bioplausible.autoscientist.bridge import AutoScientistBridge, ExperimentProposal
 from bioplausible.autoscientist.reasoner import Hypothesis, HypothesisReasoner
-from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.registry import (
+    ComponentCategory,
+    ComponentMetadata,
+    ComputeProfile,
+    LocalityLevel,
+    Registry,
+)
 from bioplausible.knowledge import KnowledgeBase
 
 __all__ = [
     "ExperimentProposer",
+    "ProposalObjective",
     "logger",
 ]
 logger = logging.getLogger(__name__)
+
+
+class ProposalObjective(StrEnum):
+    """What a proposal cycle is explicitly optimizing (bias audit, plan §5 cycle 2).
+
+    Defaulting to ``ACCURACY`` reproduces the historical behavior; choosing a
+    non-accuracy objective forces the proposer to rank candidates by a resource
+    or robustness axis instead — surfacing whether the engine is biased toward
+    accuracy alone.
+    """
+
+    ACCURACY = "accuracy"
+    MEMORY = "memory"
+    SETTLING_SPEED = "settling_speed"
+    NOISE_ROBUSTNESS = "noise_robustness"
+
+
+# Proxies for ranking candidates on non-accuracy axes. These are *declared*
+# approximations over the registry's static metadata (there is no runtime cost
+# signal at proposal time), documented so the bias is auditable, not implicit.
+_MEMORY_ORDER: dict[str, int] = {
+    "O(1)": 0,
+    "O(log N)": 1,
+    "O(N)": 2,
+    "O(N log N)": 3,
+    "O(N^2)": 4,
+}
+_ROBUST_PROFILES: frozenset[ComputeProfile] = frozenset({
+    ComputeProfile.ANALOG,
+    ComputeProfile.NEUROMORPHIC,
+    ComputeProfile.MEMRISTOR,
+})
+_ROBUST_LOCALITY: frozenset[LocalityLevel] = frozenset({
+    LocalityLevel.LOCAL,
+    LocalityLevel.FORWARD_ONLY,
+})
+
+
+def _objective_rank(
+    objective: ProposalObjective, meta: ComponentMetadata
+) -> tuple[float, ...]:
+    """Return a sort key ranking a candidate on a non-accuracy objective.
+
+    Args:
+        objective: The active proposal objective.
+        meta: The candidate's registry metadata.
+
+    Returns:
+        A tuple ordering candidates from best to worst on the objective; the
+        ACCURACY objective returns an empty key (no bias, original ordering).
+    """
+    match objective:
+        case ProposalObjective.ACCURACY:
+            return ()
+        case ProposalObjective.MEMORY:
+            # Fewer resources (as declared by memory_complexity) rank first.
+            return (_MEMORY_ORDER.get(meta.memory_complexity, 5),)
+        case ProposalObjective.SETTLING_SPEED:
+            # Proxy: lower-complexity rules settle faster than equilibrium ones.
+            return (_MEMORY_ORDER.get(meta.memory_complexity, 5),)
+        case ProposalObjective.NOISE_ROBUSTNESS:
+            # Prefer analog/neuromorphic substrates and local credit assignment,
+            # then cheaper memory within the robust set.
+            robust = (
+                meta.compute_profile in _ROBUST_PROFILES
+                or meta.locality_level in _ROBUST_LOCALITY
+            )
+            return (
+                0.0 if robust else 1.0,
+                -_MEMORY_ORDER.get(meta.memory_complexity, 5),
+            )
+
 
 # Query service shape the proposer depends on (P2 read-half). Injected so the
 # flywheel's read path can be unit-tested against a stub, not a live DB.
@@ -59,6 +139,7 @@ class ExperimentProposer:
         domain: str | None = None,
         n_proposals: int = 10,
         min_bio_score: float = 0.0,
+        objective: ProposalObjective | str = ProposalObjective.ACCURACY,
     ) -> list[ExperimentProposal]:
         """
         Propose a batch of experiments.
@@ -69,10 +150,19 @@ class ExperimentProposer:
             domain: Optional domain filter.
             n_proposals: Number of proposals to generate.
             min_bio_score: Minimum bio-plausibility score.
+            objective: The axis to optimize when ranking candidates. Defaults to
+                ACCURACY (historical behavior); a non-accuracy objective forces
+                the cycle to rank by memory/settling-speed/noise-robustness so
+                the engine's bias is explicit and auditable (plan §5 cycle 2).
 
         Returns:
             List of experiment proposals.
         """
+        objective_enum = (
+            objective
+            if isinstance(objective, ProposalObjective)
+            else ProposalObjective(objective)
+        )
         proposals = []
 
         # 1. Generate hypotheses
@@ -80,33 +170,42 @@ class ExperimentProposer:
 
         # 2. Convert hypotheses to proposals
         for h in hypotheses[: n_proposals // 2]:
-            proposal = self._hypothesis_to_proposal(h)
+            proposal = self._hypothesis_to_proposal(h, objective_enum)
             if proposal:
                 proposals.append(proposal)
 
         # 3. Fill remaining slots with systematic combinations
         remaining = n_proposals - len(proposals)
         if remaining > 0:
-            systematic = self._systematic_proposals(domain, remaining, min_bio_score)
+            systematic = self._systematic_proposals(
+                domain, remaining, min_bio_score, objective_enum
+            )
             proposals.extend(systematic)
 
         h_count = len(hypotheses)
         s_count = len(proposals) - h_count
         logger.info(
-            "Proposed %d experiments (%d hypothesis-driven, %d systematic)",
+            "Proposed %d experiments (%d hypothesis-driven, %d systematic) "
+            "objective=%s",
             len(proposals),
             h_count,
             s_count,
+            objective_enum.value,
         )
         return proposals
 
     def _hypothesis_to_proposal(
-        self, hypothesis: Hypothesis
+        self,
+        hypothesis: Hypothesis,
+        objective: ProposalObjective = ProposalObjective.ACCURACY,
     ) -> ExperimentProposal | None:
         """Convert a hypothesis to an experiment proposal."""
         if not hypothesis.proposed_model and not hypothesis.proposed_propagator:
             return None
 
+        tags = ["autoscientist", hypothesis.source]
+        if objective is not ProposalObjective.ACCURACY:
+            tags.append(f"objective:{objective.value}")
         return ExperimentProposal(
             hypothesis=hypothesis.statement,
             model=hypothesis.proposed_model or "MLP",
@@ -117,7 +216,7 @@ class ExperimentProposer:
             ),
             expected_outcome=hypothesis.statement,
             priority=hypothesis.confidence,
-            tags=["autoscientist", hypothesis.source],
+            tags=tags,
         )
 
     def _systematic_proposals(
@@ -125,6 +224,7 @@ class ExperimentProposer:
         domain: str | None = None,
         n: int = 5,
         min_bio_score: float = 0.0,
+        objective: ProposalObjective = ProposalObjective.ACCURACY,
     ) -> list[ExperimentProposal]:
         """Generate systematic exploration proposals."""
         # Get models and propagators
@@ -137,6 +237,14 @@ class ExperimentProposer:
             min_bio_score=min_bio_score,
         )
 
+        # Bias audit (plan §5 cycle 2): when optimizing a non-accuracy axis,
+        # rank candidates by that axis instead of the registry's default order.
+        if objective is not ProposalObjective.ACCURACY:
+            models = sorted(
+                models,
+                key=lambda m: _objective_rank(objective, m["metadata"]),
+            )
+
         proposals = []
         for i in range(min(n, len(models) * len(propagators))):
             m_idx = i % len(models)
@@ -144,6 +252,11 @@ class ExperimentProposer:
             model = models[m_idx]
             propagator = propagators[p_idx] if propagators else None
 
+            bias = (
+                f" targeting {objective.value}"
+                if objective is not ProposalObjective.ACCURACY
+                else ""
+            )
             proposals.append(
                 ExperimentProposal(
                     hypothesis=(
@@ -156,9 +269,14 @@ class ExperimentProposer:
                         f"Testing {model['name']} with "
                         f"{propagator['name'] if propagator else 'default'}: "
                         f"bio_score={model['metadata'].bio_plausibility_score}"
+                        f"{bias}"
                     ),
                     priority=0.3,
-                    tags=["systematic", "exploration"],
+                    tags=[
+                        "systematic",
+                        "exploration",
+                        f"objective:{objective.value}",
+                    ],
                 )
             )
 
