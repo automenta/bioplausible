@@ -67,6 +67,7 @@ _KNOWN_KWARGS: frozenset[str] = frozenset({
     "feedback_init",
     "threshold",
     "use_spectral_norm",
+    "spectral_norm_power_iterations",
     "hebbian_lr",
     "layer_lr",
     "classifier_lr",

@@ -127,6 +127,13 @@ class TrainerConfig:
     track_flops: bool = True
     track_memory: bool = True
 
+    # Bio-rule honesty: when False, a model that silently degrades to plain
+    # BPTT (no train_step, no learning-rule propagator) is not silently
+    # accepted — a loud warning is raised and `training_path="bptt"` is
+    # recorded so the sweep can flag it as a DEFECT. Bio families set this
+    # False in the sweep; backprop/forward models keep it True.
+    allow_bptt_fallback: bool = True
+
     # Profiling / eval toggles (plan §10): disabling these isolates the raw
     # train-loop floor from validation and per-batch instrumentation overhead.
     run_validation: bool = True
@@ -288,6 +295,12 @@ class CoreTrainer:
         self.patience_counter = 0
         self.history: list[TrainingMetrics] = []
         self._hardware_meta: dict[str, object] = {}
+
+        # Self-diagnosis telemetry (EXPERIMENT_PLAN5 §1): which credit-assignment
+        # path each train step actually took. Surfaced per-epoch via
+        # ``TrainingMetrics.extra["training_paths"]`` and consumed by the probe
+        # driver so the sweep can flag silent BPTT fallbacks as defects.
+        self._training_path_counts: dict[str, int] = {}
 
         # Output directory (session-scoped tempdir when pytest is detected)
         self.output_dir = (
@@ -857,6 +870,7 @@ class CoreTrainer:
             peak_memory_mb=train_metrics.get("peak_memory_mb"),
             requires_backward=train_metrics.get("requires_backward"),
             extra={
+                "training_paths": dict(self._training_path_counts),
                 **self._hardware_meta,
                 **{k: v for k, v in train_metrics.items() if k not in extra_keys},
             },
@@ -919,7 +933,9 @@ class CoreTrainer:
                 requires_backward = self._model_requires_backward()
 
                 with EnergyTracker(
-                    self.model, requires_backward=requires_backward
+                    self.model,
+                    requires_backward=requires_backward,
+                    global_step=self.global_step,
                 ) as et:
                     step_metrics = self._train_step(x, y)
 
@@ -998,6 +1014,7 @@ class CoreTrainer:
         # Phase 1: EnergyModel — clean structural dispatch
         match self.model:
             case EnergyModel():
+                self._record_path("energy")
                 return _make_ebm_trainer(self.config, self.model).train_step(x, y)
 
         # Phase 2: Model-side custom train_step (bio-plausible models)
@@ -1011,6 +1028,7 @@ class CoreTrainer:
             except NotImplementedError:
                 metrics = None
             if metrics is not None:
+                self._record_path("model_train_step")
                 return metrics
 
         # Phase 3: Learning-rule optimizer / configured propagator (owns
@@ -1018,10 +1036,16 @@ class CoreTrainer:
         # "learning rule" knob; prefer it over a learning-rule `optimizer=`.
         rule = self.propagator if self.propagator is not None else self.optimizer
         if rule is not None and _is_learning_rule_optimizer(rule):
+            self._record_path("propagator")
             return rule.step(x=x, target=y) or {}
 
         # Phase 4: Standard forward/backward
+        self._record_path("bptt")
         return self._bptt_step(x, y)
+
+    def _record_path(self, path: str) -> None:
+        """Increment the credit-assignment path counter for self-diagnosis."""
+        self._training_path_counts[path] = self._training_path_counts.get(path, 0) + 1
 
     def _check_numerical_health(
         self, logits: torch.Tensor, loss: torch.Tensor, y: torch.Tensor
@@ -1060,6 +1084,16 @@ class CoreTrainer:
     def _bptt_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Standard backpropagation training step."""
         x = self._adapt_input(x)
+
+        # Biological-rule honesty: if the caller disallowed the BPTT fallback,
+        # raise a loud warning so the silent degradation is never masked. The
+        # step still runs (the sweep flags it as a defect via training_path).
+        if not self.config.allow_bptt_fallback:
+            logger.warning(
+                "BPTT fallback used on model=%s, but allow_bptt_fallback=False — "
+                "recording training_path='bptt' (flagged as DEFECT by sweep)",
+                self.config.model,
+            )
 
         self._ensure_optimizer()
         if self.optimizer:

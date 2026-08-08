@@ -95,9 +95,26 @@ def profile_run(model, input_shape, requires_backward=True) -> EnergyProfile:
 
 
 class EnergyTracker:
-    def __init__(self, model: nn.Module, requires_backward: bool = True):
+    """Per-step energy/power measurement with throttled heavy metrics.
+
+    The activation-sparsity forward and the GPU weight-sparsity reduction are
+    expensive relative to one train step. Inside a probe (``global_step`` is
+    not ``None``) they are computed **once**, on the first measured step, and
+    cached on the model for reuse on every later step. Standalone use
+    (``global_step=None``) always measures, preserving the original eager
+    behaviour. The probe driver passes the step counter so the whole run is
+    monitored without paying the heavy cost per batch.
+    """
+
+    def __init__(
+        self,
+        model: nn.Module,
+        requires_backward: bool = True,
+        global_step: int | None = None,
+    ) -> None:
         self.model = model
         self.requires_backward = requires_backward
+        self.global_step = global_step
         self.start_time = 0.0
         self.wall_time_ms = 0.0
         self.profile = None
@@ -115,21 +132,41 @@ class EnergyTracker:
         if torch.cuda.is_available():
             peak_mem = torch.cuda.max_memory_allocated() / (1024 * 1024)
 
-        params = sum(p.numel() for p in self.model.parameters())
-        zero_weights = sum(
-            (p.abs() < 1e-5).sum().item() for p in self.model.parameters()
-        )
-        weight_sparsity = zero_weights / max(params, 1)
+        if exc_type is not None:
+            return False
 
-        device = next(self.model.parameters()).device
-        # Estimate activation sparsity — try to infer input dim from first Linear layer
-        inp_dim = 64
-        for m in self.model.modules():
-            if isinstance(m, nn.Linear):
-                inp_dim = m.in_features
-                break
-        dummy_input = torch.zeros(1, inp_dim, device=device)
-        activation_sparsity = _estimate_activation_sparsity(self.model, dummy_input)
+        params = sum(p.numel() for p in self.model.parameters())
+
+        # Heavy metrics are throttled to the first step of a probe and cached on
+        # the model; standalone trackers (global_step=None) always measure.
+        heavy_cached = hasattr(self.model, "_biopl_activation_sparsity")
+        compute_heavy = self.global_step is None or not heavy_cached
+
+        if compute_heavy:
+            zero_weights = sum(
+                (p.abs() < 1e-5).sum().item() for p in self.model.parameters()
+            )
+            weight_sparsity = zero_weights / max(params, 1)
+
+            device = next(self.model.parameters()).device
+            # Estimate activation sparsity — try to infer input dim from first
+            # Linear layer.
+            inp_dim = 64
+            for m in self.model.modules():
+                if isinstance(m, nn.Linear):
+                    inp_dim = m.in_features
+                    break
+            dummy_input = torch.zeros(1, inp_dim, device=device)
+            activation_sparsity = _estimate_activation_sparsity(self.model, dummy_input)
+
+            if self.global_step is not None:
+                setattr(self.model, "_biopl_activation_sparsity", activation_sparsity)
+                setattr(self.model, "_biopl_weight_sparsity", weight_sparsity)
+        else:
+            activation_sparsity = float(
+                getattr(self.model, "_biopl_activation_sparsity")
+            )
+            weight_sparsity = float(getattr(self.model, "_biopl_weight_sparsity"))
 
         batch_size = 64
         fwd_flops = 2 * params * batch_size
@@ -150,3 +187,4 @@ class EnergyTracker:
             energy_proxy=energy_proxy,
             requires_backward=self.requires_backward,
         )
+        return False

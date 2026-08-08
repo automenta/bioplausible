@@ -55,6 +55,20 @@ def config_key(config: dict[str, object]) -> str:
     return hashlib.sha256(blob).hexdigest()[:16]
 
 
+def _dominant_training_path(
+    paths: object,
+) -> str:
+    """Return the most-frequent credit-assignment path observed, or ``""``.
+
+    ``paths`` is the per-epoch ``training_paths`` dict recorded by
+    ``CoreTrainer`` (path name → step count). The dominant path is the probe
+    headline; the full map is preserved separately as ``training_paths``.
+    """
+    if not isinstance(paths, dict) or not paths:
+        return ""
+    return max(paths.items(), key=lambda kv: int(kv[1]))[0]
+
+
 @dataclass(frozen=True, slots=True)
 class ProbeResult:
     """Normalized per-probe metrics record (architecture §6.2)."""
@@ -73,6 +87,7 @@ class ProbeResult:
     backward_flops: int = 0
     peak_memory_mb: float = 0.0
     wall_time_s: float = 0.0
+    training_path: str = ""
     error: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -98,6 +113,7 @@ def field_to_dict(result: ProbeResult) -> dict[str, object]:
         "backward_flops": result.backward_flops,
         "peak_memory_mb": result.peak_memory_mb,
         "wall_time_s": result.wall_time_s,
+        "training_path": result.training_path,
         "error": result.error,
     }
 
@@ -139,6 +155,7 @@ class CoreTrainerDriver:
         batches_per_epoch: int | None = None,
         record_results: bool = _DEFAULT_RECORD,
         target_hardware: str | None = None,
+        allow_bptt_fallback: bool = True,
     ) -> None:
         self.num_workers = num_workers
         self.batch_size = batch_size
@@ -148,6 +165,7 @@ class CoreTrainerDriver:
         self.batches_per_epoch = batches_per_epoch
         self.record_results = record_results
         self.target_hardware = target_hardware
+        self.allow_bptt_fallback = allow_bptt_fallback
 
     def train(  # ruff: ignore[too-many-arguments]  (probe driver signature is the public protocol contract)
         self,
@@ -159,6 +177,7 @@ class CoreTrainerDriver:
         epochs: int,
         device: str,
         propagator: str | None = None,
+        allow_bptt_fallback: bool | None = None,
     ) -> dict[str, object]:
         """Train one probe and return aggregated metrics.
 
@@ -212,6 +231,11 @@ class CoreTrainerDriver:
             propagator=propagator,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            allow_bptt_fallback=(
+                self.allow_bptt_fallback
+                if allow_bptt_fallback is None
+                else allow_bptt_fallback
+            ),
             # Probes are disposable resource measurements: they must not write
             # resumable checkpoints to disk (that path is for the settle-state
             # memory lever / long runs, not shallow probes).
@@ -286,6 +310,12 @@ class CoreTrainerDriver:
             else float(last.train_accuracy or 0.0),
             "loss_epoch_0": loss_0,
             "loss_epoch_final": loss_final,
+            # Self-diagnosis (EXPERIMENT_PLAN5 §1): the credit-assignment path
+            # actually used by this probe (energy | model_train_step |
+            # propagator | bptt). A bio-family probe reporting "bptt" is a
+            # silent-fallback defect surfaced without human audit.
+            "training_paths": dict(last_extra.get("training_paths") or {}),
+            "training_path": _dominant_training_path(last_extra.get("training_paths")),
             # Hardware-aware fields (plan §17): present only when the trainer
             # swapped in a substrate facade via TrainerConfig.target_hardware.
             "target_hardware": last_extra.get("target_hardware"),
@@ -401,6 +431,7 @@ def run_probe(  # ruff: ignore[too-many-arguments]  (one normalization entrypoin
             backward_flops=int(metrics.get("backward_flops", 0)),
             peak_memory_mb=float(metrics.get("peak_memory_mb", 0.0)),
             wall_time_s=float(metrics.get("wall_time_s", 0.0)),
+            training_path=str(metrics.get("training_path", "")),
         )
     except Exception as exc:  # broad: normalize any probe failure
         return ProbeResult(

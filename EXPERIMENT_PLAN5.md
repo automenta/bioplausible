@@ -128,10 +128,11 @@ uv run pytest tests/unit/experiment/test_sweep_defect_flag.py -q
 | Broad Sweep | **▶ RUNNING** — with rule activation, liveness, checkpoint disable, no BPTT fallback |
 | Proposer Bias Knob | **▶ LIVE** — `propose_batch(objective=accuracy\|memory\|settling_speed\|noise_robustness)` |
 | Hebbian Propagator Fix | **▶ LIVE** — `transition_modules` includes W_in/head; `n_power_iterations` param |
-| Training-Path Telemetry | **▶ TODO** — this plan |
-| EnergyTracker Throttle | **▶ TODO** — this plan |
-| BPTT Opt-Out Default | **▶ TODO** — this plan |
-| EqProp GPU Memory vs BP A/B | **▶ TODO** — this plan |
+| Training-Path Telemetry | **▶ LIVE** — `CoreTrainer` records `training_path` per step; driver surfaces it in probe metrics |
+| EnergyTracker Throttle | **▶ LIVE** — heavy metrics (activation sparsity, weight-sparsity reduction) computed once per probe, cached on model |
+| BPTT Opt-Out Default | **▶ LIVE** — `allow_bptt_fallback=False` for bio families; loud warning + `training_path='bptt'` |
+| Spectral-Norm Power-Iteration Knob | **▶ LIVE** — `spectral_norm_power_iterations` exposed on `BioModel`/eqprop |
+| EqProp GPU Memory vs BP A/B | **▶ HONEST NEGATIVE** — no memory advantage yet; `test_eqprop_memory_advantage` is `xfail strict` until the fix lands |
 | R5 Spec Sheet | **▶ DRAFTED** — `docs/R5_SPEC_SHEET.md` |
 
 ---

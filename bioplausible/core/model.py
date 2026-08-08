@@ -47,6 +47,7 @@ class BioModel(nn.Module, ABC):
         use_spectral_norm: bool = True,
         max_steps: int = 30,
         lipschitz_mode: str = "power_iteration",
+        spectral_norm_power_iterations: int = 5,
         **kwargs,
     ):
         super().__init__()
@@ -62,6 +63,7 @@ class BioModel(nn.Module, ABC):
                 use_spectral_norm=use_spectral_norm,
                 max_steps=max_steps,
                 lipschitz_mode=lipschitz_mode,
+                spectral_norm_power_iterations=spectral_norm_power_iterations,
                 extra=kwargs,
             )
         else:
@@ -74,6 +76,11 @@ class BioModel(nn.Module, ABC):
         self.use_spectral_norm = self.config.use_spectral_norm
         self.max_steps = self.config.max_steps
         self.lipschitz_mode = self.config.lipschitz_mode
+        self.spectral_norm_power_iterations = getattr(
+            self.config,
+            "spectral_norm_power_iterations",
+            spectral_norm_power_iterations,
+        )
 
         # Helper for activation
         self.activation = self._get_activation(self.config.activation)
@@ -119,7 +126,9 @@ class BioModel(nn.Module, ABC):
             The normalized layer (wrapped or as-is).
         """
         if self.use_spectral_norm and isinstance(layer, (nn.Linear, nn.Conv2d)):
-            layer = spectral_norm(layer, n_power_iterations=5)
+            layer = spectral_norm(
+                layer, n_power_iterations=self.spectral_norm_power_iterations
+            )
             if (
                 self.config.output_scaling_mode == "mupc"
                 and layer_role == "output"

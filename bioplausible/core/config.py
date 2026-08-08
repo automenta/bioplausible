@@ -38,6 +38,10 @@ class ModelConfig:
 
     # Architecture
     use_spectral_norm: bool = True
+    # Power iterations for the spectral-norm parametrization. Lower = cheaper
+    # equilibrium settles (each power iteration is a forward+tranpose multiply);
+    # the coarse sweep can set 0 to drop spectral-norm cost from the map.
+    spectral_norm_power_iterations: int = 5
     activation: str = "silu"
     lipschitz_mode: str = "power_iteration"  # "power_iteration" or "svd"
 
