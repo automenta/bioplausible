@@ -381,9 +381,72 @@ Fixes applied this session, prioritized for real learning impact:
 ### 9.6 Eqprop Energy-Contrastive — KEPT (per decision)
 `gradient_method="equilibrium"` runs the energy-contrastive `train_step`. The implicit-equilibrium/Adam path is NOT substituted — the honest (slow) learning rate is surfaced. Diagnostic hypotheses recorded in §8.6.
 
-### Verification
+### 9.9 Algorithm Resurrection — Debugging Low Performers
+**Goal:** Systematically debug the remaining low-performing algorithms to find and fix remaining bugs (not just accept "slow learning" as fundamental).
+
+| Algorithm | Current | Target | Debug Focus |
+|-----------|---------|--------|-------------|
+| Energy-contrastive EqProp (6 models) | ~20% | >50% | W_in never updates; direct gradient only; implicit term missing |
+| three_factor_hebbian | ~12% | >40% | Native rule active but weak; check modulator computation |
+| spiking_stdp | 10% (random) | >40% | Pure STDP unsupervised; needs 3-factor error modulation |
+| diff_target_prop | 11% | >40% | Hardcoded target steps; inverse mapping quality; target computation |
+
+**Priority Debug Order:**
+1. **Energy-contrastive EqProp** — W_in never gets energy gradient (x_trans constant); only W_rec + W_out update
+2. **Target Prop** — route target_lr properly; check inverse mapping quality; increase target steps
+3. **Spiking** — add error-modulated 3-factor STDP; supervised signal to hidden layers
+4. **Hebbian** — three_factor_hebbian native rule active but weak; debug modulator
+
+**Debug Tools to Build:**
+- `scripts/debug_energy_grads.py` — log W_in/W_rec energy gradient norms per step
+- `scripts/debug_target_prop.py` — log target computation, inverse mapping error
+- `scripts/debug_spiking.py` — log spike counts, weight update magnitudes per layer
+- `scripts/debug_hebbian.py` — log free/clamped phase differences, modulator values
+
+**Immediate Fixes to Try:**
+- EqProp: Make x_trans a leaf with requires_grad so W_in gets gradient; add implicit term approximation
+- Target Prop: Increase target steps from 1 to 5-10; route target_lr to all layers
+- Spiking: Add 3-factor STDP with error signal from output layer
+- Hebbian: Verify three_factor_hebbian modulator = (target - output) not just correct/incorrect
+
+---
+
+### 10.0 Immediate Next Steps (This Session)
+
 ```bash
-uv run pytest tests/unit/experiment/test_broad_sweep.py tests/unit/experiment/test_sweep_defect_flag.py tests/unit/test_rule_space_integrity.py -q --no-cov  # all pass
+# 1. Debug EqProp W_in gradient issue
+uv run python scripts/debug_energy_grads.py --model eqprop --steps 10
+
+# 2. Debug Target Prop target computation
+uv run python scripts/debug_target_prop.py --model diff_target_prop --steps 10
+
+# 3. Test EqProp with W_in gradient fix
+# 4. Test Target Prop with increased target steps
+# 5. Test Spiking with 3-factor STDP
+# 5. Run sweep to verify improvements
+```
+
+---
+
+### 11.0 Updated Verification Sequence
+
+```bash
+# 1. Constructor sanity
+uv run pytest tests/unit/experiment/test_config_knobs.py -q --no-cov
+
+# 2. Eqprop engine learns + fast (GPU)
+uv run pytest tests/unit/experiment/test_eqprop_learns.py -q --no-cov
+
+# 3. Model surface contracts
+uv run pytest tests/unit/models/test_eqprop_models.py -q --no-cov
+
+# 4. Full unit regression
+uv run pytest tests/unit/ -q --no-cov
+
+# 5. GPU sweep: all families, 1 probe, 2 epochs, 32k budget
+uv run python scripts/broad_sweep.py \
+  --families fa,hebbian,forward_only,predictive_coding,spiking,target_prop,eqprop \
+  --probes-per-rule 1 --epochs 2 --device cuda --max-params 32000 --max-epoch-time 15
 ```
 
 ### 9.7 Eqprop Engine: Early-Convergence Wiring — FIXED
