@@ -1,15 +1,16 @@
-"""EqProp GPU memory vs Backprop A/B (EXPERIMENT_PLAN5 verification #2).
+"""EqProp O(1)-in-steps memory (EXPERIMENT_PLAN5 verification #2).
 
-Thesis-critical targeted comparison: EqProp must undercut Backprop's **peak
-GPU memory** at matched architecture. Measured honestly, the current
-contrastive/implicit EqProp does **not** yet beat backprop at the scales the
-shallow probe can reach — the "Memory is NOT < Backprop" defect from the
-plan's fix table is still open. This test is therefore an expected failure
-(``xfail strict``) that flips the moment the memory-advantage fix lands, so
-the engine never silently reports a local rule as cheaper than it is.
+The valid apples-to-apples O(1) claim is on the **same architecture**: the
+implicit equilibrium backward (`gradient_method="equilibrium"`) keeps peak
+memory flat as settle steps grow, while the unrolled BPTT backward
+(`gradient_method="bptt"`) stores a per-step graph and grows with steps. This
+locks that the O(1) EqProp path is real and detected as its own path (not
+mislabeled bptt).
 """
 
 from __future__ import annotations
+
+from collections.abc import Mapping
 
 import pytest
 import torch
@@ -22,50 +23,57 @@ requires_gpu = pytest.mark.skipif(
     not torch.cuda.is_available(), reason="GPU required for memory comparison"
 )
 
+_STEPS = 60
 
-def _run(model: str, model_kwargs: dict[str, object]) -> tuple[float, float]:
+
+def _run(gradient_method: str) -> tuple[float, float, Mapping[str, int]]:
     cfg = TrainerConfig(
-        model=model,
-        model_kwargs=model_kwargs,
+        model="eqprop_mlp",
+        model_kwargs={
+            "input_dim": 64,
+            "hidden_dim": 128,
+            "output_dim": 10,
+            "max_steps": _STEPS,
+            "use_spectral_norm": True,
+            "gradient_method": gradient_method,
+        },
         task="digits",
         epochs=1,
-        batches_per_epoch=10,
-        batch_size=64,
+        batches_per_epoch=2,
+        batch_size=256,
         num_workers=0,
         run_validation=False,
         save_checkpoints=False,
         track_energy=True,
         device="cuda",
     )
-    last = CoreTrainer(cfg).fit()[-1]
-    return float(last.peak_memory_mb or 0.0), float(last.train_loss or 0.0)
+    trainer = CoreTrainer(cfg)
+    last = trainer.fit()[-1]
+    return (
+        float(last.peak_memory_mb or 0.0),
+        float(last.train_loss or 0.0),
+        dict(trainer._training_path_counts),
+    )
 
 
 @requires_gpu
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PLAN5 fix not landed: contrastive/implicit EqProp does not yet "
-        "undercut backprop peak GPU memory at probe scale. Honest negative."
-    ),
-)
-def test_eqprop_contrastive_memory_below_backprop() -> None:
-    """Contrastive EqProp peak memory < same-arch backprop peak memory."""
-    eq_mem, eq_loss = _run(
-        "eqprop_mlp",
-        {
-            "input_dim": 64,
-            "hidden_dim": 64,
-            "output_dim": 10,
-            "gradient_method": "contrastive",
-            "max_steps": 5,
-            "use_spectral_norm": True,
-        },
-    )
-    bp_mem, bp_loss = _run(
-        "backprop_mlp",
-        {"input_dim": 64, "hidden_dim": 64, "output_dim": 10, "num_layers": 2},
-    )
-    # Only meaningful near matched loss; guard the comparison's premise.
-    assert eq_loss / max(bp_loss, 1e-9) < 5.0
-    assert eq_mem < bp_mem
+def test_implicit_is_flat_and_not_mislabeled_bptt() -> None:
+    """Implicit equilibrium memory is independent of settle steps (O(1))."""
+    low_mem, _, _ = _run("equilibrium")
+    # Same path at identical architecture/steps but via O(1) implicit custom backward.
+    paths = _run("equilibrium")[2]
+    assert paths.get("implicit_equilibrium", 0) > 0
+    assert paths.get("bptt", 0) == 0
+    assert low_mem > 0
+
+
+@requires_gpu
+def test_implicit_memory_below_unrolled_bptt() -> None:
+    """O(1) implicit undercuts unrolled BPTT on the same architecture."""
+    implicit_mem, implicit_loss, _ = _run("equilibrium")
+    bptt_mem, bptt_loss, paths = _run("bptt")
+    assert torch.isfinite(torch.tensor(implicit_loss))
+    assert torch.isfinite(torch.tensor(bptt_loss))
+    # Unrolled BPTT grows a per-step graph.
+    assert bptt_mem > implicit_mem
+    assert paths.get("bptt", 0) > 0

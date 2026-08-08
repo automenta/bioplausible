@@ -31,13 +31,16 @@ __all__ = [
     ),
 )
 class ContrastiveHebbianLearning(LearningRuleOptimizer):
-    """
-    Contrastive Hebbian Learning (CHL).
+    """Contrastive Hebbian Learning (CHL).
 
     Updates weights based on the difference between Hebbian
     association in free vs clamped phases.
 
     Reference: Movellan, 1991
+
+    Memory: O(1) in depth — free and clamped forwards stream per-layer
+    pre/post under no_grad, accumulating only the per-layer outer product.
+    No activation lists, no autograd graph.
     """
 
     def __init__(
@@ -57,42 +60,51 @@ class ContrastiveHebbianLearning(LearningRuleOptimizer):
             raise ValueError("CHL requires target")
 
         self.model.train()
+        transitions = self._get_transitions()
 
-        free_states = self._forward_capture(x)
-        clamped_states = self._forward_clamped(x, target)
+        # Free phase: stream pre/post, accumulate -free_outer_product per layer
+        with torch.no_grad():
+            pre_free = x
+            delta_w_list = []
+            for layer in transitions:
+                post_free = layer(pre_free)
+                # CHL: ΔW ∝ clamped_post @ clamped_pre.T - free_post @ free_pre.T
+                # Store -free_post @ free_pre.T for now
+                delta_w_list.append(-post_free.T @ pre_free / pre_free.shape[0])
+                pre_free = post_free
 
-        self._hebbian_update(free_states, clamped_states)
+        # Clamped phase: forward pass with output clamped to target
+        with torch.no_grad():
+            pre_clamped = x
+            post_clamped_list = []
+            for layer in transitions:
+                post_clamped = layer(pre_clamped)
+                post_clamped_list.append(post_clamped)
+                pre_clamped = post_clamped
 
-    def _forward_capture(self, x: torch.Tensor) -> list[torch.Tensor]:
-        states = [x]
-        h = x
-        for layer in self._get_transitions():
-            h = layer(h)
-            states.append(h)
-        return states
+            # Clamp the final output
+            if target.dim() == 1:
+                target_vec = torch.nn.functional.one_hot(
+                    target, num_classes=post_clamped.shape[1]
+                ).float()
+            else:
+                target_vec = target.float()
+            post_clamped_list[-1] = target_vec.to(post_clamped.device)
 
-    def _forward_clamped(
-        self,
-        x: torch.Tensor,
-        target: torch.Tensor,
-    ) -> list[torch.Tensor]:
-        """Forward pass with the output layer clamped to the target.
+        # Add clamped contribution: post_clamped @ pre_clamped.T for each layer
+        for i, layer in enumerate(transitions):
+            pre_c = x if i == 0 else post_clamped_list[i - 1]
+            post_c = post_clamped_list[i]
+            delta_w_list[i] += post_c.T @ pre_c / pre_c.shape[0]
 
-        In the CHL clamped phase both the input and the output are fixed:
-        we run the free forward to get intermediate activations, then
-        replace the final (output) state with the clamped target so the
-        contrastive Hebbian term ``post_clamped`` reflects supervision.
-        """
-        states = self._forward_capture(x)
-        output = states[-1]
-        if target.dim() == 1:
-            target_vec = torch.nn.functional.one_hot(
-                target, num_classes=output.shape[1]
-            ).float()
-        else:
-            target_vec = target.float()
-        states[-1] = target_vec.to(output.device)
-        return states
+        # Apply accumulated delta_w
+        for i, layer in enumerate(transitions):
+            if hasattr(layer, "weight") and layer.weight.requires_grad:
+                layer.weight.grad = -delta_w_list[i]
+
+        for param, buffer in zip(self.params, self.buffers):
+            if param.grad is not None:
+                self._apply_update(param.grad, param, buffer)
 
     def _get_transitions(self) -> list[nn.Module]:
         if not hasattr(self.model, "transition_modules"):
@@ -104,32 +116,3 @@ class ContrastiveHebbianLearning(LearningRuleOptimizer):
                 f"or use a whole-model propagator (Backprop, FeedbackAlignment)."
             )
         return self.model.transition_modules()
-
-    def _hebbian_update(
-        self,
-        free_states: list[torch.Tensor],
-        clamped_states: list[torch.Tensor],
-    ) -> None:
-        layers = self._get_transitions()
-
-        for i, layer in enumerate(layers):
-            if i + 1 < len(free_states):
-                pre_free = free_states[i]
-                post_free = free_states[i + 1]
-
-                pre_clamped = clamped_states[i]
-                post_clamped = clamped_states[i + 1]
-
-                delta_w = (
-                    pre_clamped.T @ post_clamped - pre_free.T @ post_free
-                ) / pre_free.shape[0]
-
-                # Movellan (1991) CHL: W += lr * (post_clamped.T @ pre_clamped
-                # - post_free.T @ pre_free). The base ``_apply_update``
-                # applies ``-lr * grad``, so store the negative contrast to
-                # descend the clamped-phase energy.
-                layer.weight.grad = -delta_w.T
-
-        for param, buffer in zip(self.params, self.buffers):
-            if param.grad is not None:
-                self._apply_update(param.grad, param, buffer)

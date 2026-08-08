@@ -141,7 +141,9 @@ class DeepHebbianChain(NEBCBase):
     def _build_layers(self):
         self.W_in = nn.Linear(self.input_dim, self.hidden_dim)
         if self.use_spectral_norm:
-            self.W_in = spectral_norm(self.W_in, n_power_iterations=self.spectral_norm_power_iterations)
+            self.W_in = spectral_norm(
+                self.W_in, n_power_iterations=self.spectral_norm_power_iterations
+            )
 
         self.chain = nn.ModuleList()
         for i in range(self.num_layers):
@@ -153,13 +155,17 @@ class DeepHebbianChain(NEBCBase):
             )
 
             if self.use_spectral_norm:
-                layer = spectral_norm(layer, n_power_iterations=self.spectral_norm_power_iterations)
+                layer = spectral_norm(
+                    layer, n_power_iterations=self.spectral_norm_power_iterations
+                )
 
             self.chain.append(layer)
 
         self.head = nn.Linear(self.hidden_dim, self.output_dim)
         if self.use_spectral_norm:
-            self.head = spectral_norm(self.head, n_power_iterations=self.spectral_norm_power_iterations)
+            self.head = spectral_norm(
+                self.head, n_power_iterations=self.spectral_norm_power_iterations
+            )
 
     def forward(
         self,
@@ -222,7 +228,28 @@ class DeepHebbianChain(NEBCBase):
         return stats
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        return None
+        """Local Hebbian (Oja) update per layer — O(1) memory in depth.
+
+        Free phase forward pass streams activations; each layer updates its
+        weights from its immediate pre/post using Oja's rule. No autograd
+        graph, no depth-wide backward, no BPTT fallback.
+        """
+        self.train()
+        transitions = self.transition_modules()
+
+        with torch.no_grad():
+            h = x
+            for layer in transitions:
+                post = layer(h)
+                if hasattr(layer, "hebbian_update"):
+                    layer.hebbian_update(h, post)
+                h = post
+
+        # Compute metrics at output
+        logits = h
+        loss = F.cross_entropy(logits, y)
+        acc = (logits.argmax(dim=1) == y).float().mean().item()
+        return {"loss": loss.item(), "accuracy": acc}
 
 
 @register_model("hebbian_3d", family="hebbian", locality_level=LocalityLevel.LOCAL)

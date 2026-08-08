@@ -1005,9 +1005,10 @@ class CoreTrainer:
 
         Dispatches to the appropriate training algorithm via:
         1. EnergyModel protocol (structural match/case).
-        2. Model-side ``train_step`` (probe with real data).
-        3. Learning-rule optimizer (TypeIs narrowing).
-        4. Standard BPTT fallback.
+        2. Explicit propagator= (explicit learning-rule knob; preferred).
+        3. Model-side train_step (bio-plausible model's own rule).
+        4. Learning-rule optimizer (optimizer= that is a LearningRuleOptimizer).
+        5. Standard BPTT fallback.
         """
         x = self._adapt_input(x)
 
@@ -1017,11 +1018,18 @@ class CoreTrainer:
                 self._record_path("energy")
                 return _make_ebm_trainer(self.config, self.model).train_step(x, y)
 
-        # Phase 2: Model-side custom train_step (bio-plausible models)
+        # Phase 2: Explicit propagator= — the explicit "learning rule" knob;
+        # prefer it over the model's own train_step or a learning-rule optimizer=.
+        rule = self.propagator
+        if rule is not None and _is_learning_rule_optimizer(rule):
+            self._record_path("propagator")
+            return rule.step(x=x, target=y) or {}
+
+        # Phase 3: Model-side custom train_step (bio-plausible models)
         # Probe with real data — the only reliable way to verify
         # that train_step returns meaningful metrics vs NotImplementedError/None.
         # A base-class train_step raises NotImplementedError to signal "use BPTT";
-        # catch it and fall through to Phase 3/4 rather than aborting the epoch.
+        # catch it and fall through to Phase 4/5 rather than aborting the epoch.
         if hasattr(self.model, "train_step"):
             try:
                 metrics = self.model.train_step(x, y)
@@ -1031,16 +1039,17 @@ class CoreTrainer:
                 self._record_path("model_train_step")
                 return metrics
 
-        # Phase 3: Learning-rule optimizer / configured propagator (owns
-        # forward+backward). A configured `propagator=` is the explicit
-        # "learning rule" knob; prefer it over a learning-rule `optimizer=`.
-        rule = self.propagator if self.propagator is not None else self.optimizer
+        # Phase 4: Learning-rule optimizer (optimizer= that is a LearningRuleOptimizer)
+        rule = self.optimizer
         if rule is not None and _is_learning_rule_optimizer(rule):
             self._record_path("propagator")
             return rule.step(x=x, target=y) or {}
 
-        # Phase 4: Standard forward/backward
-        self._record_path("bptt")
+        # Phase 5: Standard forward/backward
+        if getattr(self.model, "gradient_method", None) == "equilibrium":
+            self._record_path("implicit_equilibrium")
+        else:
+            self._record_path("bptt")
         return self._bptt_step(x, y)
 
     def _record_path(self, path: str) -> None:
@@ -1085,10 +1094,14 @@ class CoreTrainer:
         """Standard backpropagation training step."""
         x = self._adapt_input(x)
 
-        # Biological-rule honesty: if the caller disallowed the BPTT fallback,
-        # raise a loud warning so the silent degradation is never masked. The
-        # step still runs (the sweep flags it as a defect via training_path).
-        if not self.config.allow_bptt_fallback:
+        # Biological-rule honesty: if the caller disallowed the BPTT fallback
+        # and this is a *plain* unrolled backward (not the O(1) implicit
+        # equilibrium path, which legitimately routes through forward/backward),
+        # raise a loud warning so the silent degradation is never masked.
+        if (
+            not self.config.allow_bptt_fallback
+            and getattr(self.model, "gradient_method", None) != "equilibrium"
+        ):
             logger.warning(
                 "BPTT fallback used on model=%s, but allow_bptt_fallback=False — "
                 "recording training_path='bptt' (flagged as DEFECT by sweep)",

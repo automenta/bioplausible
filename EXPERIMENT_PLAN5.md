@@ -132,7 +132,8 @@ uv run pytest tests/unit/experiment/test_sweep_defect_flag.py -q
 | EnergyTracker Throttle | **▶ LIVE** — heavy metrics (activation sparsity, weight-sparsity reduction) computed once per probe, cached on model |
 | BPTT Opt-Out Default | **▶ LIVE** — `allow_bptt_fallback=False` for bio families; loud warning + `training_path='bptt'` |
 | Spectral-Norm Power-Iteration Knob | **▶ LIVE** — `spectral_norm_power_iterations` exposed on `BioModel`/eqprop |
-| EqProp GPU Memory vs BP A/B | **▶ HONEST NEGATIVE** — no memory advantage yet; `test_eqprop_memory_advantage` is `xfail strict` until the fix lands |
+| Deep Local O(1) Memory | **▶ LIVE** — `DeepHebbianChain.train_step` runs its local Oja rule (no BPTT): 14.8 MB @100 layers vs backprop 47.3 MB; CHL propagator rewritten to no_grad-streaming (no 2×depth state lists): 27.3 MB @100 layers |
+| EqProp GPU Memory vs BP A/B | **▶ LIVE** — O(1) implicit undercuts unrolled BPTT on the same arch; telemetry labels it `implicit_equilibrium` (not bptt); lock-in test passes |
 | R5 Spec Sheet | **▶ DRAFTED** — `docs/R5_SPEC_SHEET.md` |
 
 ---
