@@ -207,8 +207,13 @@ def test_rule_activation_for_uses_energy_contrastive():
     assert act["config"]["gradient_method"] == "equilibrium"
     act = bs._rule_activation_for("conv_eqprop", "eqprop")
     assert act["config"]["gradient_method"] == "equilibrium"
-    # Non-eqprop families unchanged
-    assert bs._rule_activation_for("deep_hebbian", "hebbian") == {
+    # DeepHebbian/ThreeFactorHebbian have native train_step -> no propagator
+    assert bs._rule_activation_for("deep_hebbian", "hebbian") == {"config": {}}
+    assert bs._rule_activation_for("three_factor_hebbian", "hebbian") == {
+        "config": {}
+    }
+    # hebbian_3d (no native train_step) keeps the CHL propagator
+    assert bs._rule_activation_for("hebbian_3d", "hebbian") == {
         "propagator": "contrastive_hebbian_learning"
     }
 

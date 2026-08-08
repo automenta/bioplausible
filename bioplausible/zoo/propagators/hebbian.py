@@ -97,10 +97,23 @@ class ContrastiveHebbianLearning(LearningRuleOptimizer):
             post_c = post_clamped_list[i]
             delta_w_list[i] += post_c.T @ pre_c / pre_c.shape[0]
 
-        # Apply accumulated delta_w
+        # Apply accumulated delta_w to the underlying trainable weight of each
+        # transition layer. CHL: ΔW = clamped − free (association difference) and
+        # weight update W += lr * ΔW (gradient descent of the energy), so here the
+        # applied gradient is −ΔW. Layers may be spectral-norm parametrized: their
+        # ``.weight`` is a computed view, so set grad on the real trainable param
+        # (``layer.parametrizations.weight.original``) or, for plain Linear, the
+        # module's own weight. Bias receives no association update.
         for i, layer in enumerate(transitions):
-            if hasattr(layer, "weight") and layer.weight.requires_grad:
-                layer.weight.grad = -delta_w_list[i]
+            target_tensor = getattr(layer, "weight", None)
+            if target_tensor is None or not target_tensor.requires_grad:
+                continue
+            if (
+                hasattr(layer, "parametrizations")
+                and "weight" in layer.parametrizations
+            ):
+                target_tensor = layer.parametrizations.weight.original
+            target_tensor.grad = -delta_w_list[i]
 
         for param, buffer in zip(self.params, self.buffers):
             if param.grad is not None:

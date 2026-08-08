@@ -58,7 +58,8 @@ def test_neural_cube_keeps_only_real_knobs():
     sinks = dict(surface.sinks)
     assert sinks["cube_size"] == "constructor"
     assert sinks["max_steps"] == "constructor"
-    assert sinks["learning_rate"] == "training"
+    # NeuralCube now accepts learning_rate/beta as constructor params (plan 7.5)
+    assert sinks["learning_rate"] == "constructor"
     assert sinks["weight_decay"] == "training"
 
 

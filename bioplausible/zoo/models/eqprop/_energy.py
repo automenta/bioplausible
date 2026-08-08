@@ -77,6 +77,21 @@ class EquilibriumMLP(EqPropModel):
         )
         self.sparse_ratio = float(self.config.extra.get("sparse_ratio", 0.5))
         self.momentum = float(self.config.extra.get("momentum", 0.5))
+        # Early-convergence knobs reach the shared settle primitive via the
+        # model surface (``settle_single_state`` honours
+        # ``model.convergence_threshold`` / ``convergence_start``).
+        self.convergence_threshold = float(
+            kwargs.get(
+                "convergence_threshold",
+                getattr(self.config, "convergence_threshold", 1e-3),
+            )
+        )
+        self.convergence_start = int(
+            kwargs.get(
+                "convergence_start",
+                getattr(self.config, "convergence_start", 5),
+            )
+        )
 
     def get_hebbian_pairs(
         self, h: torch.Tensor, x: torch.Tensor
@@ -190,7 +205,10 @@ class EquilibriumMLP(EqPropModel):
                 for g, p in zip(grads, self.parameters())]
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        # Run energy-contrastive rule for "equilibrium" mode (sweep activates eqprop this way)
+        # Energy-contrastive rule (Scellier & Bengio): no BPTT, no optimizer.
+        # Runs when the sweep activates eqprop with gradient_method="equilibrium".
+        # Kept intentionally as the honest bio-rule path even though it currently
+        # learns slowly; diagnose later (see EXPERIMENT_PLAN6.md §8.6).
         if self.gradient_method not in ("equilibrium", "contrastive"):
             return None
 

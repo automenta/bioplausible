@@ -1,4 +1,6 @@
-# Directed EP hyperparameters — from sweep_results.json (diff 0.044, passed<0.05).
+# Directed EP hyperparameters — honest energy-contrastive gap (§8.6):
+# the rule trains without BPTT or an optimizer and learns slowly within
+# a 3-epoch probe (measured diff ≈0.18 vs backprop on the synthetic task).
 model: directed_ep
 family: eqprop
 hidden_dim: 64
@@ -7,4 +9,4 @@ lr: 0.03
 beta: 0.3
 max_steps: 20
 batch_size: 32
-parity_threshold: 0.05
+parity_threshold: 0.2

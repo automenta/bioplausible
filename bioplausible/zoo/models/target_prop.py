@@ -20,7 +20,7 @@ __all__ = [
 
 
 class DTPLayer(nn.Module):
-    def __init__(self, in_features, out_features):
+    def __init__(self, in_features, out_features, learning_rate: float = 0.001):
         super().__init__()
         self.forward_net = nn.Sequential(
             nn.Linear(in_features, out_features), nn.Tanh()
@@ -28,8 +28,12 @@ class DTPLayer(nn.Module):
         self.inverse_net = nn.Sequential(
             nn.Linear(out_features, in_features), nn.Tanh()
         )
-        self.opt_f = torch.optim.Adam(self.forward_net.parameters(), lr=0.001)
-        self.opt_g = torch.optim.Adam(self.inverse_net.parameters(), lr=0.001)
+        self.opt_f = torch.optim.Adam(
+            self.forward_net.parameters(), lr=learning_rate
+        )
+        self.opt_g = torch.optim.Adam(
+            self.inverse_net.parameters(), lr=learning_rate
+        )
 
 
 @register_model(
@@ -45,19 +49,31 @@ class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
     """
 
     def __init__(
-        self, input_dim: int, hidden_dim: int, output_dim: int, num_layers: int = 2
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_layers: int = 2,
+        learning_rate: float = 0.001,
+        target_lr: float = 0.1,
     ):
         super().__init__()
         if isinstance(input_dim, tuple):
             input_dim = math.prod(input_dim)
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.layers = nn.ModuleList([DTPLayer(input_dim, hidden_dim)])
+        self.learning_rate = learning_rate
+        self.target_lr = target_lr
+        self.layers = nn.ModuleList(
+            [DTPLayer(input_dim, hidden_dim, learning_rate)]
+        )
         for _ in range(num_layers - 1):
-            self.layers.append(DTPLayer(hidden_dim, hidden_dim))
+            self.layers.append(DTPLayer(hidden_dim, hidden_dim, learning_rate))
         self.out_layer = nn.Linear(hidden_dim, output_dim)
 
-        self.out_opt = torch.optim.Adam(self.out_layer.parameters(), lr=0.001)
+        self.out_opt = torch.optim.Adam(
+            self.out_layer.parameters(), lr=learning_rate
+        )
         self.criterion = nn.CrossEntropyLoss()
 
     @classmethod
@@ -77,6 +93,8 @@ class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
             hidden_dim=hidden_dim,
             output_dim=output_dim,
             num_layers=num_layers,
+            learning_rate=float(kwargs.get("learning_rate", 0.001)),
+            target_lr=float(kwargs.get("target_lr", 0.1)),
         ).to(device)
 
     def forward(self, x):
@@ -105,7 +123,7 @@ class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
             grad_t = torch.autograd.grad(loss_t, t)[0]
 
         with torch.no_grad():
-            t_target = h - 0.1 * grad_t
+            t_target = h - self.target_lr * grad_t
 
         targets = [t_target]
 

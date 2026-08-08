@@ -442,6 +442,12 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         "feedback_mode": ["random", "symmetric", "transpose"],
         "use_spectral_norm": [True, False],
     },
+    "target_prop": {
+        "learning_rate": (1e-3, 1e-1, "log"),
+        "target_lr": (1e-2, 1e0, "log"),
+        "hidden_dim": (32, 512, "log"),
+        "num_layers": (1, 4, "int"),
+    },
 }
 
 
@@ -473,6 +479,7 @@ def get_rule_space(rule: str) -> dict[str, NumberRange | DiscreteChoice]:
 # share the key with their registered model (``eqprop`` → ``StandardEqProp``, …).
 _RULE_TO_MODEL: dict[str, str] = {
     "backprop": "backprop_mlp",
+    "target_prop": "diff_target_prop",
 }
 
 
