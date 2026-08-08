@@ -44,7 +44,7 @@ def test_rule_spaces_are_continuous():
     """§10: rule spaces use continuous ranges, not coarse discrete grids."""
     bp = get_rule_space("backprop")
     assert bp["hidden_dim"][2] == "log"
-    assert bp["lr"][2] == "log"
+    assert bp["learning_rate"][2] == "log"
     assert bp["weight_decay"][2] == "log"
     assert bp["num_layers"][2] == "int"
 
@@ -99,7 +99,7 @@ def test_forward_only_rule_spaces_exist():
     """§4D: forward-only and FA families have continuous spaces for search."""
     for rule in ("pepita", "forward_forward", "feedback_alignment"):
         space = get_rule_space(rule)
-        assert space["lr"][2] == "log"
+        assert space["learning_rate"][2] == "log"
         assert space["hidden_dim"][2] == "log"
         assert space["num_layers"][2] == "int"
 
@@ -437,7 +437,7 @@ def _mk_law(slope, slope_se, intercept, intercept_se):
 
 def test_sample_config_eqprop_has_equilibrium_params():
     trial = optuna.trial.FixedTrial({
-        "lr": 0.01,
+        "learning_rate": 0.01,
         "weight_decay": 1e-4,
         "hidden_dim": 128,
         "num_layers": 3,

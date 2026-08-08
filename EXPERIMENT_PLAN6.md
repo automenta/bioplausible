@@ -47,6 +47,10 @@ uv run pytest tests/unit/experiment/test_eqprop_memory_advantage.py -q  # 2 pass
 | **Sweep Defect: custom_stacked_model** | Low | Needs `layers_config` — skip via domain filter or add derivation. |
 | **Sweep compatibility gate** | **DONE** | `_forward_probe_ok` pre-flights a bare `forward` + bio propagator step before training; `eqprop_diffusion` (needs `t`) and `hebbian_3d` (CHL can't stream conv3d) are skipped with a logged reason (SWEEP_FAILURES #5/#6). |
 | **Phantom-knob noise** | **DONE** | `_prune_phantom_knobs` prunes family-space knobs a model cannot consume, so healthy probes no longer flag `phantom_knobs=[...]` (SWEEP_FAILURES #2). |
+| **Settle-speed quarantine** | **HIGH** | Contrastive settling models (`eqprop`, `lazy_eqprop`, `momentum_equilibrium`, `sparse_equilibrium`, `finite_nudge_ep`) all hit `epoch_time_truncated` on GPU: the settle loop (~18k sequential iterations/epoch) can't finish a probe inside the 30s epoch budget. Truncated logs prove they WERE learning (acc 0.7–0.8) — the gate never counted it. Needs: convergence early-stop that actually fires + per-model settle-step cap for shallow probes (SWEEP_FAILURES #8). |
+| **eqprop_mlp loss-flat** | Medium | LoopedMLP (implicit `EquilibriumFunction`, O(1)) completes probes but loss doesn't decrease (acc 0.19, path not `bptt`). Equilibrium-adjoint gradient learning-quality issue, distinct from StandardEqProp's speed failure. |
+| **DirectedEP NaN Loss** | Medium | `directed_ep` on MNIST (784-dim, contrastive) produces `Train Loss=nan` — reproduced on GPU sweep (1/2 probes). Needs sweep-space clamping (`beta` lower, `max_steps` lower) or migration to `equilibrium` path. |
+| **neural_cube over_budget** | Low | `--max-params` matcher can't bind `neural_cube`'s width axis (`cube_size`) → still `over_budget=52618` on GPU. It learns (acc 0.92) but is excluded from ok/liveness. |
 
 ---
 
@@ -79,13 +83,70 @@ uv run pytest tests/unit/experiment/test_eqprop_memory_advantage.py -q  # 2 pass
 
 ### Remaining
 
+- **Settle-speed quarantine (HIGH — next session P0)**: contrastive settling
+  models (`eqprop`, `lazy_eqprop`, `momentum_equilibrium`, `sparse_equilibrium`,
+  `finite_nudge_ep`) never complete a probe (`epoch_time_truncated`) because the
+  bidirectional settle loop (~18k sequential iterations/epoch with
+  free+nudged phases × `max_steps`) overruns the epoch budget. The truncated
+  logs show genuine learning (acc 0.7–0.8), so this is a probe-speed defect,
+  not a liveness verdict. Fix plan:
+  1. Instrument `settle_activations_list` to measure real steps-before-
+     early-stop and the settle/step/energy time split.
+  2. Make convergence early-stop actually fire (sampled `convergence_start` ≤10
+     + `1e-4` threshold rarely triggers; spectral-norm layers converge in a few
+     steps) and/or cap settle steps per-model in `_SHALLOW_CAPS` for the
+     shallow breadth probe.
+  3. Re-run `families=eqprop` (GPU) and require these models to complete 2 real
+     epochs (honest liveness), not just be un-truncated.
 - **DirectedEP / DeepDFAEqProp settling speed**: equilibrium-settling forwards
   (`for _ in range(max_steps)` over spectral-norm layers) dominate epoch time
   (e.g. ~53 s/epoch for 7.5k-param DeepDFAEqProp). Needs per-model settle-step
   capping / convergence early-stop for the shallow sweep.
+- **eqprop_mlp loss-flat**: LoopedMLP completes probes but loss doesn't decrease
+  over 2 epochs (acc 0.19, path not `bptt`). Isolate whether the
+  `EquilibriumFunction` adjoint gradient is wrong/oversmall at sampled lrs.
+- **directed_ep NaN**: reproduced on GPU (1/2 probes). Clamp `beta`/`max_steps`
+  or route to `equilibrium` path.
+- **neural_cube over_budget**: `_match_param_budget` can't bind `cube_size`
+  axis. Add `cube_size` to the matcher's width-axis search.
 - **Pre-existing staircase test failures**: 6 tests fail on clean HEAD
   (`staircase.py:322` formats a string error with `%.4f`, and `run_probe` passes
   `propagator=` to fake drivers that don't accept it). Unrelated to this work.
+
+---
+
+## Fresh-Session Start Plan (batch at end of session, per decision)
+
+1. **P0 — settle-speed fix** (see Remaining). Then re-run `families=eqprop`
+   GPU sweep; confirm `eqprop`/`lazy`/`momentum`/`sparse`/`finite_nudge` get
+   honest liveness verdicts, `eqprop_mlp` loss decreases, `directed_ep` not NaN.
+2. **P1 — bio families breadth sweep** (GPU): `--families
+   fa,hebbian,forward_only,predictive_coding,spiking,target_prop`,
+   `--probes-per-rule 1 --epochs 2 --device cuda --max-params 32000
+   --max-epoch-time 30`. Capture live/dead landscape + `bptt_fallback`
+   self-diagnosis + NaN/over_budget/phantom defects (skip `backprop`; it is the
+   comparison baseline, not a bio family).
+3. **P2 — batch docs**: append all results to `SWEEP_FAILURES.md` + this plan.
+
+### GPU eqprop verification snapshot (2026-08-08, `families=eqprop`, 2 epochs, 32k budget, 30s/epoch)
+
+| model | verdict | acc | defects |
+|-------|---------|-----|---------|
+| graph_eqprop | LIVE | 0.85 | none |
+| holomorphic_ep | LIVE | 0.53 | none |
+| conv_eqprop | LIVE | 0.22 | none |
+| eqprop_mlp | not live | 0.19 | none (loss flat) |
+| modern_conv_eqprop | not live | 0.11 | none |
+| eqprop | dead | — | epoch_time_truncated |
+| lazy_eqprop | dead | — | epoch_time_truncated |
+| momentum_equilibrium | dead | — | epoch_time_truncated |
+| sparse_equilibrium | dead | — | epoch_time_truncated |
+| finite_nudge_ep | dead | — | epoch_time_truncated |
+| directed_ep | dead | — | nan_divergence |
+| neural_cube | dead | — | over_budget=52618 |
+| eqprop_diffusion | skipped | — | (needs `t`) |
+
+Report: `logs/broad_sweep_mnist.json`. Family `live=True` (3/12 live).
 
 ---
 

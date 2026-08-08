@@ -215,7 +215,7 @@ class TestDeepHebbianChain:
         assert "lipschitz" in stats
         assert stats["num_layers"] == 3
 
-    def test_train_step_returns_none(self):
+    def test_train_step_returns_metrics(self):
         model = DeepHebbianChain(
             input_dim=8,
             hidden_dim=16,
@@ -227,7 +227,9 @@ class TestDeepHebbianChain:
         result = model.train_step(
             torch.randn(4, 8), torch.randint(0, NUM_CLASSES, (4,))
         )
-        assert result is None
+        assert isinstance(result, dict)
+        assert "loss" in result
+        assert "accuracy" in result
 
     def test_build_classmethod(self):
         from types import SimpleNamespace

@@ -36,6 +36,8 @@ from __future__ import annotations
 
 import inspect
 import math
+import types as _types
+import typing
 from dataclasses import dataclass
 from dataclasses import fields as _dataclass_fields
 
@@ -78,6 +80,7 @@ KNOBS: frozenset[str] = frozenset(
 #: Forwarded to a constructor only when the constructor declares them.
 _OTHER_KWARGS: frozenset[str] = frozenset({
     "alpha",
+    "backend",
     "cube_size",
     "gradient_method",
     "feedback_init",
@@ -122,6 +125,29 @@ class Consumption:
         return knob in self.accepted or self.has_catch_all
 
 
+def _config_param_accepts_modelconfig(model_cls: object) -> bool:
+    """Check if the model's ``config`` param is annotated to accept ``ModelConfig``."""
+    try:
+        sig = inspect.signature(model_cls.__init__)  # type: ignore[misc]
+    except (TypeError, ValueError):
+        return False
+    param = sig.parameters.get("config")
+    if param is None:
+        return False
+    ann = param.annotation
+    if ann is ModelConfig or ann is None:
+        return ann is ModelConfig
+    # PEP 604 union (``ModelConfig | None``) or typing.Union[ModelConfig, None]
+    origin = getattr(ann, "__origin__", None)
+    args = getattr(ann, "__args__", ())
+    if origin is None and args:
+        # types.UnionType exposes __args__ but no __origin__
+        return any(a is ModelConfig for a in args)
+    if origin in {typing.Union, _types.UnionType}:
+        return any(a is ModelConfig for a in args)
+    return False
+
+
 def resolve_consumption(model_cls: object) -> Consumption:
     """Resolve a model's consumer contract by reflecting on its ``__init__``."""
     try:
@@ -135,7 +161,8 @@ def resolve_consumption(model_cls: object) -> Consumption:
     if has_catch_all:
         params.add("**")
     params.discard("self")
-    return Consumption(frozenset(params), has_catch_all, "config" in params)
+    accepts_config = _config_param_accepts_modelconfig(model_cls)
+    return Consumption(frozenset(params), has_catch_all, accepts_config)
 
 
 def _normalize(config: dict[str, object]) -> dict[str, object]:
