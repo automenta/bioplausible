@@ -110,7 +110,7 @@ SEARCH_SPACES = {
     "backprop_mlp": SearchSpace(
         "backprop_mlp",
         {
-            "lr": (1e-5, 1e-2, "log"),
+            "learning_rate": (1e-5, 1e-2, "log"),
             "hidden_dim": [32, 64, 128, 256],
             "num_layers": [1, 2, 4],
         },
@@ -118,7 +118,7 @@ SEARCH_SPACES = {
     "eqprop_mlp": SearchSpace(
         "eqprop_mlp",
         {
-            "lr": (1e-5, 1e-2, "log"),
+            "learning_rate": (1e-5, 1e-2, "log"),
             "beta": (0.05, 0.5, "linear"),
             "steps": (5, 20, "int"),
             "hidden_dim": [32, 64, 128],
@@ -129,7 +129,7 @@ SEARCH_SPACES = {
     "Holomorphic EqProp": SearchSpace(
         "Holomorphic EqProp",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "beta": (0.01, 0.3, "linear"),
             "steps": (10, 40, "int"),
             "hidden_dim": [64, 128],
@@ -138,7 +138,7 @@ SEARCH_SPACES = {
     "Directed EqProp (Deep EP)": SearchSpace(
         "Directed EqProp (Deep EP)",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "beta": (0.1, 0.5, "linear"),
             "steps": (10, 40, "int"),
             "hidden_dim": [64, 128],
@@ -147,7 +147,7 @@ SEARCH_SPACES = {
     "Finite-Nudge EqProp": SearchSpace(
         "Finite-Nudge EqProp",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "beta": (0.5, 3.0, "linear"),  # Large beta
             "steps": (10, 40, "int"),
             "hidden_dim": [64, 128],
@@ -156,7 +156,7 @@ SEARCH_SPACES = {
     "Conv EqProp (CIFAR-10)": SearchSpace(
         "Conv EqProp (CIFAR-10)",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "steps": (10, 25, "int"),
             "hidden_dim": [128, 256],
         },
@@ -165,7 +165,7 @@ SEARCH_SPACES = {
     "Adaptive Feedback Alignment": SearchSpace(
         "Adaptive Feedback Alignment",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "fa_scale": (0.5, 1.5, "linear"),
             "adapt_rate": (0.001, 0.1, "log"),
             "hidden_dim": [64, 128, 256],
@@ -174,7 +174,7 @@ SEARCH_SPACES = {
     "Equilibrium Alignment": SearchSpace(
         "Equilibrium Alignment",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "beta": (0.1, 0.5, "linear"),
             "steps": (10, 30, "int"),
             "align_weight": (0.1, 1.0, "linear"),
@@ -183,24 +183,24 @@ SEARCH_SPACES = {
     # Add Missing Spaces
     "Layerwise Equilibrium FA": SearchSpace(
         "Layerwise Equilibrium FA",
-        {"lr": (1e-4, 1e-2, "log"), "hidden_dim": [64, 128], "num_layers": [2, 4, 6]},
+        {"learning_rate": (1e-4, 1e-2, "log"), "hidden_dim": [64, 128], "num_layers": [2, 4, 6]},
     ),
     "Energy Guided FA": SearchSpace(
         "Energy Guided FA",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "energy_scale": (0.1, 1.0, "linear"),
             "hidden_dim": [64, 128],
         },
     ),
     "Predictive Coding Hybrid": SearchSpace(
         "Predictive Coding Hybrid",
-        {"lr": (1e-4, 1e-2, "log"), "steps": (10, 30, "int"), "hidden_dim": [64, 128]},
+        {"learning_rate": (1e-4, 1e-2, "log"), "steps": (10, 30, "int"), "hidden_dim": [64, 128]},
     ),
     "Sparse Equilibrium": SearchSpace(
         "Sparse Equilibrium",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "beta": (0.05, 0.3, "linear"),
             "sparsity": (0.1, 0.9, "linear"),
             "hidden_dim": [128, 256],
@@ -209,7 +209,7 @@ SEARCH_SPACES = {
     "Momentum Equilibrium": SearchSpace(
         "Momentum Equilibrium",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "momentum": (0.5, 0.95, "linear"),
             "steps": (10, 30, "int"),
         },
@@ -217,19 +217,19 @@ SEARCH_SPACES = {
     "Stochastic FA": SearchSpace(
         "Stochastic FA",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "noise_scale": (0.01, 0.2, "log"),
             "hidden_dim": [64, 128],
         },
     ),
     "Energy Minimizing FA": SearchSpace(
-        "Energy Minimizing FA", {"lr": (1e-4, 1e-2, "log"), "hidden_dim": [64, 128]}
+        "Energy Minimizing FA", {"learning_rate": (1e-4, 1e-2, "log"), "hidden_dim": [64, 128]}
     ),
     # Transformers
     "eqprop_transformer": SearchSpace(
         "eqprop_transformer",
         {
-            "lr": (1e-5, 1e-2, "log"),
+            "learning_rate": (1e-5, 1e-2, "log"),
             "steps": (5, 12, "int"),
             "hidden_dim": [64, 128, 256],
             "num_layers": [2, 3],
@@ -238,7 +238,7 @@ SEARCH_SPACES = {
     "EqProp Transformer (Full)": SearchSpace(
         "EqProp Transformer (Full)",
         {
-            "lr": (1e-5, 1e-2, "log"),
+            "learning_rate": (1e-5, 1e-2, "log"),
             "steps": (5, 20, "int"),
             "hidden_dim": [64, 128],
             "num_layers": [2, 3],
@@ -247,7 +247,7 @@ SEARCH_SPACES = {
     "EqProp Transformer (Hybrid)": SearchSpace(
         "EqProp Transformer (Hybrid)",
         {
-            "lr": (1e-5, 1e-2, "log"),
+            "learning_rate": (1e-5, 1e-2, "log"),
             "steps": (5, 15, "int"),
             "hidden_dim": [128, 256],
             "num_layers": [2, 3],
@@ -256,7 +256,7 @@ SEARCH_SPACES = {
     "EqProp Transformer (Recurrent)": SearchSpace(
         "EqProp Transformer (Recurrent)",
         {
-            "lr": (1e-5, 1e-2, "log"),
+            "learning_rate": (1e-5, 1e-2, "log"),
             "steps": (10, 30, "int"),
             "hidden_dim": [128, 256],
             "num_layers": [1],  # Recurrent uses single block
@@ -265,7 +265,7 @@ SEARCH_SPACES = {
     "DFA (Direct Feedback Alignment)": SearchSpace(
         "DFA (Direct Feedback Alignment)",
         {
-            "lr": (1e-5, 1e-2, "log"),
+            "learning_rate": (1e-5, 1e-2, "log"),
             "hidden_dim": [64, 128, 256],
             "num_layers": [10, 20, 30],
         },
@@ -273,7 +273,7 @@ SEARCH_SPACES = {
     "CHL (Contrastive Hebbian)": SearchSpace(
         "CHL (Contrastive Hebbian)",
         {
-            "lr": (1e-5, 1e-2, "log"),
+            "learning_rate": (1e-5, 1e-2, "log"),
             "beta": (0.05, 0.3, "linear"),
             "steps": (10, 30, "int"),
             "hidden_dim": [64, 128, 256],
@@ -283,7 +283,7 @@ SEARCH_SPACES = {
     "Deep Hebbian (Hundred-Layer)": SearchSpace(
         "Deep Hebbian (Hundred-Layer)",
         {
-            "lr": (1e-5, 5e-3, "log"),
+            "learning_rate": (1e-5, 5e-3, "log"),
             "hidden_dim": [64, 128],
             "num_layers": [50, 100, 150],  # Test deep scaling
         },
@@ -291,7 +291,7 @@ SEARCH_SPACES = {
     "equitile": SearchSpace(
         "equitile",
         {
-            "lr": (1e-4, 1e-1, "log"),
+            "learning_rate": (1e-4, 1e-1, "log"),
             "inference_steps": (5, 30, "int"),
             "neurons_per_tile": [32, 64, 128],
             "tiles_per_layer": [4, 8, 16],
@@ -302,7 +302,7 @@ SEARCH_SPACES = {
     "EquiTile EP": SearchSpace(
         "EquiTile EP",
         {
-            "lr": (1e-4, 1e-1, "log"),
+            "learning_rate": (1e-4, 1e-1, "log"),
             "beta": (0.05, 0.5, "linear"),
             "inference_steps": (10, 50, "int"),
             "neurons_per_tile": [32, 64, 128],
@@ -313,7 +313,7 @@ SEARCH_SPACES = {
     "LM EquiTile": SearchSpace(
         "LM EquiTile",
         {
-            "lr": (1e-5, 1e-3, "log"),
+            "learning_rate": (1e-5, 1e-3, "log"),
             "neurons_per_tile": [64, 128],
             "tiles_per_layer": [4, 8],
             "num_layers": [4, 6],
@@ -324,7 +324,7 @@ SEARCH_SPACES = {
     "RL EquiTile": SearchSpace(
         "RL EquiTile",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "neurons_per_tile": [32, 64],
             "tiles_per_layer": [2, 4, 8],
             "num_layers": [2, 3],
@@ -335,7 +335,7 @@ SEARCH_SPACES = {
     "Conv EquiTile": SearchSpace(
         "Conv EquiTile",
         {
-            "lr": (1e-4, 1e-2, "log"),
+            "learning_rate": (1e-4, 1e-2, "log"),
             "neurons_per_tile": [32, 64, 128],
             "tiles_per_layer": [2, 4, 8],
             "num_fc_layers": [1, 2, 3],
@@ -360,7 +360,7 @@ def get_search_space(model_name: str) -> SearchSpace:
 
     if spec:
         params = {
-            "lr": (1e-5, 1e-2, "log"),
+            "learning_rate": (1e-5, 1e-2, "log"),
             "hidden_dim": [64, 128, 256],
             "num_layers": [2, 4, 6],
         }
@@ -370,7 +370,7 @@ def get_search_space(model_name: str) -> SearchSpace:
     # 3. Heuristic fallback: assume EqProp-ish defaults for unregistered models
     if "EqProp" in model_name:
         params = {
-            "lr": (1e-5, 1e-2, "log"),
+            "learning_rate": (1e-5, 1e-2, "log"),
             "beta": (0.05, 0.5, "linear"),
             "steps": (5, 20, "int"),
             "hidden_dim": [64, 128],
@@ -489,14 +489,13 @@ def _model_name_for_rule(rule: str) -> str:
 
 
 # Keys the training/optimization pipeline consumes from a sampled config outside
-# the model constructor. These are *not* phantoms: ``lr``/``weight_decay`` etc.
+# the model constructor. These are *not* phantoms: ``learning_rate``/``weight_decay`` etc.
 # are consumed by the optimizer even when the model's ``__init__`` never sees
 # them. Architecture & equilibrium dimensions (``hidden_dim``, ``damping``,
 # ``tol``, ``convergence_*``) are deliberately NOT listed — those are exactly the
 # knobs P0a is meant to catch when silently dropped.
 _TRAINING_HYPERPARAMS: frozenset[str] = frozenset({
     "learning_rate",
-    "lr",  # legacy alias (normalized to "learning_rate" by build_model_kwargs)
     "weight_decay",
     "dropout",
     "momentum",
