@@ -96,10 +96,16 @@ class DeepHebbianChain(NEBCBase):
         num_layers: int = 100,
         use_spectral_norm: bool = True,
         max_steps: int = 1,
-        hebbian_lr: float = 0.001,
+        hebbian_lr: float = 0.01,
         use_oja: bool = True,
         spectral_norm_power_iterations: int = 5,
+        learning_rate: float | None = None,
     ):
+        # ``learning_rate`` is the canonical knob name (the construction layer
+        # surfaces sampled LRs as ``learning_rate``, not ``hebbian_lr``); accept
+        # it as an alias so the sweep can actually vary this model's LR.
+        if learning_rate is not None:
+            hebbian_lr = learning_rate
         self.hebbian_lr = hebbian_lr
         self.use_oja = use_oja
         self.spectral_norm_power_iterations = spectral_norm_power_iterations
@@ -133,9 +139,12 @@ class DeepHebbianChain(NEBCBase):
             hidden_dim=hidden_dim,
             output_dim=output_dim,
             num_layers=num_layers,
-            use_spectral_norm=True,
-            hebbian_lr=0.001,
-            use_oja=True,
+            use_spectral_norm=kwargs.get("use_spectral_norm", True),
+            hebbian_lr=float(kwargs.get("learning_rate", kwargs.get("lr", 0.01))),
+            use_oja=kwargs.get("use_oja", True),
+            spectral_norm_power_iterations=int(
+                kwargs.get("spectral_norm_power_iterations", 5)
+            ),
         ).to(device)
 
     def _build_layers(self):
@@ -228,25 +237,48 @@ class DeepHebbianChain(NEBCBase):
         return stats
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        """Local Hebbian (Oja) update per layer — O(1) memory in depth.
+        """Local Hebbian (Oja) update per layer + supervised output head.
 
-        Free phase forward pass streams activations; each layer updates its
-        weights from its immediate pre/post using Oja's rule. No autograd
-        graph, no depth-wide backward, no BPTT fallback.
+        Free phase forward pass streams activations; each Hebbian layer updates
+        its weights via Oja's rule. The output head (``self.head``) receives a
+        supervised delta update so the network actually produces useful logits.
+        No autograd graph, no BPTT fallback.
         """
         self.train()
         transitions = self.transition_modules()
 
         with torch.no_grad():
             h = x
+            activations = [h]
             for layer in transitions:
-                post = layer(h)
+                h = layer(h)
                 if hasattr(layer, "hebbian_update"):
-                    layer.hebbian_update(h, post)
-                h = post
+                    layer.hebbian_update(activations[-1], h)
+                activations.append(h)
 
-        # Compute metrics at output
-        logits = h
+            # Supervised update for the output head (the last transition module).
+            # Delta W_out = lr * (y_onehot - softmax(logits)) @ h_prev
+            logits = h
+            y_onehot = torch.zeros_like(logits)
+            y_onehot.scatter_(1, y.unsqueeze(1), 1.0)
+            error = y_onehot - torch.softmax(logits, dim=1)
+            head = transitions[-1]
+            # For spectral-norm parametrized layers, update the *original*
+            # parameter (``parametrizations.weight.original``), not the
+            # computed ``weight`` property — otherwise the update is silently
+            # discarded.
+            if hasattr(head, "parametrizations"):
+                head_w = dict(head.named_parameters())["parametrizations.weight.original"]
+            elif hasattr(head, "weight"):
+                head_w = head.weight
+            else:
+                head_w = None
+            if head_w is not None:
+                head_w.addmm_(
+                    error.T, activations[-2],
+                    alpha=self.hebbian_lr / x.shape[0],
+                )
+
         loss = F.cross_entropy(logits, y)
         acc = (logits.argmax(dim=1) == y).float().mean().item()
         return {"loss": loss.item(), "accuracy": acc}
@@ -340,7 +372,8 @@ class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):
     """
 
     def __init__(
-        self, input_dim: int, hidden_dim: int, output_dim: int, num_layers: int = 2
+        self, input_dim: int, hidden_dim: int, output_dim: int, num_layers: int = 2,
+        learning_rate: float = 0.005,
     ):
         super().__init__()
         if isinstance(input_dim, tuple):
@@ -350,7 +383,7 @@ class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):
             self.layers.append(nn.Linear(hidden_dim, hidden_dim, bias=False))
         self.out_layer = nn.Linear(hidden_dim, output_dim, bias=False)
         self.relu = nn.ReLU()
-        self.lr = 0.005
+        self.lr = learning_rate
 
     @classmethod
     def build(
@@ -369,6 +402,7 @@ class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):
             hidden_dim=hidden_dim,
             output_dim=output_dim,
             num_layers=num_layers,
+            learning_rate=float(kwargs.get("learning_rate", kwargs.get("lr", 0.005))),
         )
         model = model.to(device)
         return model
@@ -387,16 +421,26 @@ class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):
             hs.append(h)
         out = self.out_layer(h)
 
-        preds = out.argmax(1)
-        correct = (preds == y).float()
-        M = correct * 2 - 1
-        M = M.to(x.device)
+        # --- Compute modulator: graded error signal, not binary ---
+        # M_i = softmax(out_i) - onehot(y_i) → continuous, ranges [-1, 1]
+        # Positive M → prediction was too high (should decrease weight)
+        # Negative M → prediction was too low (should increase weight)
+        # This is the 3rd factor: modulates Hebbian updates by error magnitude
+        with torch.no_grad():
+            pred_probs = torch.softmax(out, dim=1)
+            y_onehot = torch.zeros_like(out, device=out.device)
+            y_onehot.scatter_(1, y.unsqueeze(1), 1.0)
+            output_modulator = (y_onehot - pred_probs)  # [batch, classes]
 
         with torch.no_grad():
             for i, layer in enumerate(self.layers):
                 pre = hs[i]
                 post = hs[i + 1]
-                post_mod = post * M.unsqueeze(1)
+                # Backproject output modulator to hidden layer via output weights
+                hidden_modulator = torch.mm(output_modulator, self.out_layer.weight)  # [B, hidden]
+                # Normalize to prevent NaN: scale by hidden dim
+                hidden_modulator = hidden_modulator / max(hidden_modulator.abs().max().item(), 1.0)
+                post_mod = post * hidden_modulator  # [B, hidden]
                 layer.weight.data += self.lr * torch.mm(post_mod.T, pre) / x.shape[0]
 
             y_onehot = torch.zeros_like(out, device=out.device)
@@ -406,5 +450,7 @@ class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):
                 self.lr * torch.mm(error.T, hs[-1]) / x.shape[0]
             )
 
+        preds = out.argmax(1)
+        correct = (preds == y).float()
         loss = nn.functional.cross_entropy(out, y).item()
         return {"loss": loss, "accuracy": correct.mean().item()}

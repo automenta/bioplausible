@@ -45,6 +45,7 @@ class DTPLayer(nn.Module):
 class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
     """
     Difference Target Propagation (Lee et al. 2015).
+
     Propagates targets (not gradients) backward using learned approximate inverses.
     """
 
@@ -104,6 +105,7 @@ class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
         return self.out_layer(h)
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        # Forward pass collecting activations
         hs = [x]
         h = x
         for layer in self.layers:
@@ -112,10 +114,15 @@ class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
         out = self.out_layer(h)
 
         loss = self.criterion(out, y)
+
+        # --- Update output layer first (before backward target propagation
+        # modifies hidden layer weights, which would invalidate the forward graph) ---
         self.out_opt.zero_grad()
         loss.backward()
         self.out_opt.step()
 
+        # --- Compute target for output layer ---
+        # t_target = h - target_lr * dL/dh (where dL/dh via output layer)
         t = h.clone().detach().requires_grad_(True)
         with torch.enable_grad():
             out_t = self.out_layer(t)
@@ -127,6 +134,8 @@ class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
 
         targets = [t_target]
 
+        # --- Backward target propagation ---
+        # Propagate target backward through inverse mappings
         for i in reversed(range(len(self.layers))):
             layer = self.layers[i]
             if i > 0:
@@ -140,23 +149,24 @@ class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
                     )
                     targets.append(t_prev)
 
+            # --- Train forward net to hit target ---
             t_curr = targets[-len(targets)]
-            h_prev = hs[i].detach()
+            h_prev_det = hs[i].detach()
             layer.opt_f.zero_grad()
-            pred_h = layer.forward_net(h_prev)
+            pred_h = layer.forward_net(h_prev_det)
             loss_f = nn.functional.mse_loss(pred_h, t_curr)
             loss_f.backward()
-            layer.opt_f.step()
 
-            h_curr = hs[i + 1].detach()
-            layer.opt_g.zero_grad()
-            noise = torch.randn_like(h_curr) * 0.1
-            pred_noise = layer.inverse_net(h_curr + noise)
-            loss_g = nn.functional.mse_loss(
-                pred_noise, h_prev + torch.randn_like(h_prev) * 0.1
-            )
-            loss_g.backward()
-            layer.opt_g.step()
+            if i > 0:
+                # --- Train inverse net for cycle consistency ---
+                # Detach pred_h to avoid graph conflict after loss_f.backward freed it
+                layer.opt_g.zero_grad()
+                inv_out = layer.inverse_net(pred_h.detach())
+                loss_g = nn.functional.mse_loss(inv_out, h_prev_det)
+                loss_g.backward()
+                layer.opt_g.step()
+
+            layer.opt_f.step()
 
         acc = (out.argmax(1) == y).float().mean().item()
         return {"loss": loss.item(), "accuracy": acc}

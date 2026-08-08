@@ -161,10 +161,18 @@ class EquilibriumMLP(EqPropModel):
         beta: float,
         nudge: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Settle to fixed point; return (h_star, x_transformed)."""
+        """Settle to fixed point; return (h_star, x_transformed).
+
+        ``x_trans`` retains gradient connectivity to ``W_in`` so that
+        ``_energy_grads`` can compute gradients through it.  The settle
+        iterations themselves run under ``no_grad`` (fixed-point iteration),
+        but the input transform is recomputed with grad enabled in
+        ``_energy_grads``.
+        """
         x_flat = _flatten(x)
         h0 = self._initialize_hidden_state(x_flat)
-        x_trans = self._transform_input(x_flat)
+        with torch.no_grad():
+            x_trans_nograd = self._transform_input(x_flat)
 
         if nudge is None:
             # Free phase
@@ -172,7 +180,7 @@ class EquilibriumMLP(EqPropModel):
                 return self.forward_step(h, xt)
 
             h_star, _, _ = settle_single_state(
-                h0, free_step, x_trans, self.max_steps, model=self
+                h0, free_step, x_trans_nograd, self.max_steps, model=self
             )
         else:
             # Nudged phase: h ← forward_step(h) − beta * nudge
@@ -180,13 +188,13 @@ class EquilibriumMLP(EqPropModel):
                 return self.forward_step(h, xt) - beta * torch.mm(nudge, self.W_out.weight)
 
             h_star, _, _ = settle_single_state(
-                h0, nudged_step, x_trans, self.nudge_steps, model=self
+                h0, nudged_step, x_trans_nograd, self.nudge_steps, model=self
             )
 
-        return h_star, x_trans
+        return h_star, x_trans_nograd
 
     def _energy_grads(
-        self, h: torch.Tensor, x_transformed: torch.Tensor
+        self, h: torch.Tensor, x: torch.Tensor
     ) -> list[torch.Tensor]:
         """∇_θ Σ(0.5 h² − h·pre_act), treating h as a constant (fixed-point direct term).
 
@@ -194,10 +202,16 @@ class EquilibriumMLP(EqPropModel):
         is recomputed from the live model parameters so the gradient flows
         through ``W_rec`` — this is the direct energy-gradient term that is equal
         to the total gradient at the fixed point (where ∂E/∂h = 0).
+
+        ``x`` (the raw input) is used to recompute ``x_trans = W_in(x)`` with
+        gradient tracking so ``W_in`` receives gradients.
         """
         h_const = h.detach()
-        pre_act = self._pre_activation(h_const, x_transformed)
-        energy = torch.sum(0.5 * h_const**2 - h_const * pre_act)
+        with torch.enable_grad():
+            x_flat = _flatten(x)
+            x_trans = self._transform_input(x_flat)
+            pre_act = self._pre_activation(h_const, x_trans)
+            energy = torch.sum(0.5 * h_const**2 - h_const * pre_act)
         grads = torch.autograd.grad(
             energy, self.parameters(), retain_graph=True, allow_unused=True
         )
@@ -231,8 +245,8 @@ class EquilibriumMLP(EqPropModel):
             h_nudged, _ = self._settle(x_flat, self.beta, v)
 
         # --- Energy gradients ---
-        gf = self._energy_grads(h_free, x_trans)
-        gn = self._energy_grads(h_nudged, x_trans)
+        gf = self._energy_grads(h_free, x_flat)
+        gn = self._energy_grads(h_nudged, x_flat)
 
         # --- Manual weight updates ---
         with torch.no_grad():

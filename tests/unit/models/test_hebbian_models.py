@@ -245,8 +245,87 @@ class TestDeepHebbianChain:
             task_type="vision",
         )
         assert isinstance(model, DeepHebbianChain)
-        assert model.hebbian_lr == pytest.approx(0.001)
+        assert model.hebbian_lr == pytest.approx(0.01)
         assert model.use_oja is True
+
+    def test_build_passes_lr_from_kwargs(self):
+        """build() must pass learning_rate/lr from kwargs, not hardcode it."""
+        from types import SimpleNamespace
+
+        spec = SimpleNamespace(name="deep_hebbian")
+        model = DeepHebbianChain.build(
+            spec=spec,
+            input_dim=8,
+            output_dim=NUM_CLASSES,
+            hidden_dim=16,
+            num_layers=3,
+            device="cpu",
+            task_type="vision",
+            lr=0.123,
+        )
+        assert model.hebbian_lr == pytest.approx(0.123)
+
+    def test_construct_model_threads_learning_rate(self):
+        """construct_model (the sweep's actual path) must thread the sampled
+        ``learning_rate`` into ``hebbian_lr``. Without an accepted alias the
+        construction layer silently drops it (``hebbian_lr`` falls back to
+        default), so two probes with different sampled LRs produce identical
+        results — the original silent-LR-discard bug."""
+        from bioplausible.core.construction import construct_model
+
+        m = construct_model(
+            DeepHebbianChain,
+            {
+                "input_dim": 8,
+                "output_dim": NUM_CLASSES,
+                "hidden_dim": 16,
+                "num_layers": 3,
+                "learning_rate": 0.42,
+            },
+            input_dim=8,
+            output_dim=NUM_CLASSES,
+            model_name="deep_hebbian",
+        )
+        assert m.hebbian_lr == pytest.approx(0.42)
+
+    def test_train_step_updates_spectral_normed_head(self):
+        """train_step must update the *original* parameter behind spectral
+        norm, not the computed ``weight`` property (which silently discards
+        in-place writes)."""
+        model = DeepHebbianChain(
+            input_dim=8,
+            hidden_dim=16,
+            output_dim=NUM_CLASSES,
+            num_layers=2,
+            use_spectral_norm=True,
+            hebbian_lr=0.5,
+        )
+        head_orig = dict(model.head.named_parameters())[
+            "parametrizations.weight.original"
+        ]
+        w_before = head_orig.clone()
+        model.train_step(torch.randn(4, 8), torch.randint(0, NUM_CLASSES, (4,)))
+        assert not torch.allclose(w_before, head_orig), \
+            "Spectral-normed head must receive in-place weight updates"
+
+    def test_train_step_learns_separable_task(self):
+        """End-to-end: a shallow DeepHebbianChain should learn a linearly
+        separable task to >80% accuracy within 50 steps. This guards against
+        silent update-discarding bugs (e.g. writing to a parametrized
+        ``weight`` property)."""
+        torch.manual_seed(42)
+        model = DeepHebbianChain(
+            input_dim=32,
+            hidden_dim=64,
+            output_dim=4,
+            num_layers=2,
+            hebbian_lr=0.5,
+        )
+        protos = torch.randn(4, 32) * 3
+        y = torch.arange(4).repeat(8)
+        x = protos[y] + torch.randn(32, 32) * 0.3
+        accs = [model.train_step(x, y)["accuracy"] for _ in range(50)]
+        assert accs[-1] > 0.8, f"Did not learn separable task: final acc {accs[-1]:.3f}"
 
     def test_forward_no_spectral_norm_train(self):
         model = DeepHebbianChain(
@@ -439,6 +518,48 @@ class TestThreeFactorHebbian:
             task_type="vision",
         )
         assert isinstance(model, ThreeFactorHebbian)
+
+    def test_build_passes_lr_from_kwargs(self):
+        """build() must pass learning_rate/lr from kwargs, not hardcode it."""
+        from types import SimpleNamespace
+
+        spec = SimpleNamespace(name="three_factor_hebbian")
+        model = ThreeFactorHebbian.build(
+            spec=spec,
+            input_dim=8,
+            output_dim=NUM_CLASSES,
+            hidden_dim=16,
+            num_layers=2,
+            device="cpu",
+            task_type="vision",
+            lr=0.321,
+        )
+        assert model.lr == pytest.approx(0.321)
+
+    def test_modulator_is_graded_not_binary(self):
+        """The three-factor modulator must be a graded (continuous) signal
+        ``(y_onehot - softmax(logits))``, not a binary correct/incorrect
+        value. A binary modulator gives no error-magnitude information to
+        hidden layers."""
+        model = ThreeFactorHebbian(
+            input_dim=8, hidden_dim=16, output_dim=NUM_CLASSES, num_layers=2
+        )
+        torch.manual_seed(0)
+        x = torch.randn(8, 8)
+        y = torch.randint(0, NUM_CLASSES, (8,))
+        with torch.no_grad():
+            out = model.forward(x)
+            pred_probs = torch.softmax(out, dim=1)
+            y_onehot = torch.zeros_like(out)
+            y_onehot.scatter_(1, y.unsqueeze(1), 1.0)
+            modulator = y_onehot - pred_probs
+
+        # Binary modulator would have exactly 2 unique values per sample.
+        # A graded one has at least 3 distinct intermediate values.
+        n_unique = len(torch.unique(modulator[0].round(decimals=4)))
+        assert n_unique >= 3, (
+            f"Modulator appears binary (n_unique={n_unique}); must be graded"
+        )
 
     def test_deeper_network(self):
         model = ThreeFactorHebbian(
