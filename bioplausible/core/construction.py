@@ -178,18 +178,23 @@ def _derive_conv_channels(
     config: dict[str, object], *, input_dim: object
 ) -> dict[str, object]:
     """Map a shared flat space onto a conv model's channel signature."""
-    if "input_channels" in config or "hidden_channels" in config:
-        return config
     cfg = dict(config)
-    hidden_dim = cfg.get("hidden_dim")
-    if isinstance(hidden_dim, int):
-        # GroupNorm (fixed group count, e.g. 8): round up to a multiple of 8 so
-        # an arbitrary sampled width never breaks a conv probe at construction.
-        cfg["hidden_channels"] = max(8, 8 * math.ceil(hidden_dim / 8))
-    if isinstance(input_dim, tuple) and input_dim:
-        cfg["input_channels"] = int(input_dim[0])
-    else:
-        cfg["input_channels"] = 1
+    # Derive hidden_channels from the shared sampled hidden_dim only when not
+    # already set (a param matcher sets it directly). GroupNorm (fixed group
+    # count, e.g. 8) needs a multiple of 8 so an arbitrary sampled width never
+    # breaks a conv probe at construction.
+    if "hidden_channels" not in cfg:
+        hidden_dim = cfg.get("hidden_dim")
+        if isinstance(hidden_dim, int):
+            cfg["hidden_channels"] = max(8, 8 * math.ceil(hidden_dim / 8))
+    # input_channels is ALWAYS derived for a conv model when absent, even if
+    # hidden_channels was set directly (param matcher) — otherwise the model
+    # cannot be counted/built (SWEEP_FAILURES #4).
+    if "input_channels" not in cfg:
+        if isinstance(input_dim, tuple) and input_dim:
+            cfg["input_channels"] = int(input_dim[0])
+        else:
+            cfg["input_channels"] = 1
     return cfg
 
 
@@ -263,8 +268,7 @@ def model_kwargs(
     # params — never merely because a ``**kwargs`` catch-all exists (an MLP with
     # a catch-all must not be silently treated as a conv model).
     if "input_channels" in accepted or "hidden_channels" in accepted:
-        if "input_channels" not in cfg and "hidden_channels" not in cfg:
-            cfg = _derive_conv_channels(cfg, input_dim=input_dim)
+        cfg = _derive_conv_channels(cfg, input_dim=input_dim)
 
     kwargs: dict[str, object] = {
         "input_dim": cfg.get("input_dim", input_dim),

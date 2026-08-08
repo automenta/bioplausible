@@ -361,8 +361,12 @@ class EqPropModel(BioModel):
             # O(1) memory implicit differentiation
             # We must pass params to apply so they are captured by ctx for
             # backward. Note: We use list(self.parameters()) to get all
-            # parameters including weight_orig
-            params = list(self.parameters())
+            # parameters including weight_orig. Only trainable params are
+            # forwarded: passing a `requires_grad=False` param (e.g. the fixed
+            # random feedback `B_out` in EquilibriumAlignment) makes the adjoint
+            # `autograd.grad` raise "One of the differentiated Tensors does not
+            # require grad".
+            params = [p for p in self.parameters() if p.requires_grad]
             h_star = EquilibriumFunction.apply(self, x_transformed, h, *params)
             out = self._output_projection(h_star)
             return out

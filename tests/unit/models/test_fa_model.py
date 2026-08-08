@@ -483,3 +483,36 @@ class TestEquilibriumAlignment:
         model = EquilibriumAlignment(10, 20, 3)
         stats = model.get_stats()
         assert "num_params" in stats
+
+    def test_equilibrium_backward_tolerates_nontrainable_params(self):
+        """Fixed (requires_grad=False) params must not break the adjoint solver.
+
+        ``B_out`` is a non-trainable random-feedback matrix. When the O(1)
+        equilibrium solver's backward differentiates through ``self.parameters()``
+        it must only view trainable params — otherwise ``autograd.grad`` raises
+        "One of the differentiated Tensors does not require grad".
+        """
+        model = EquilibriumAlignment(10, 20, 3, max_steps=4)
+        assert not next(
+            p for n, p in model.named_parameters() if n.startswith("B_out")
+        ).requires_grad
+        x = torch.randn(8, 10)
+        y = torch.randint(0, 3, (8,))
+        out = model(x)
+        loss = torch.nn.functional.cross_entropy(out, y)
+        loss.backward()
+        # Every trainable forward weight receives a gradient.
+        for name, p in model.named_parameters():
+            if p.requires_grad:
+                assert p.grad is not None, name
+
+    def test_equilibrium_backward_via_fa_propagator(self):
+        """The sweep's FA-propagation path trains EquilibriumAlignment in-graph."""
+        from bioplausible.zoo.propagators.fa import FeedbackAlignment
+
+        model = EquilibriumAlignment(10, 20, 3, max_steps=4, learning_rate=0.01)
+        optimizer = FeedbackAlignment(list(model.parameters()), model, lr=0.01)
+        x = torch.randn(8, 10)
+        y = torch.randint(0, 3, (8,))
+        optimizer.step(x, y)
+        assert any(p.grad is not None for p in model.parameters() if p.requires_grad)

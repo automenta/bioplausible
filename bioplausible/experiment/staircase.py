@@ -316,10 +316,13 @@ class StaircaseRunner:
                 )
                 probe = self._run_probe(stage, model, config, seed, param_count)
                 status = probe.status
-                acc = probe.final_acc if probe.status == "ok" else probe.error
+                if probe.status == "ok":
+                    detail = f"acc={probe.final_acc:.4f}"
+                else:
+                    detail = f"error={probe.error!r}"
                 print(
                     f"  [done]    {status:<5} model={model:<22} seed={seed} "
-                    f"acc={acc:.4f} in {time.time() - probe_start:.1f}s"
+                    f"{detail} in {time.time() - probe_start:.1f}s"
                 )
                 self.report.append(stage.name, probe)
                 results.append(probe)

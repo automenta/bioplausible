@@ -172,6 +172,40 @@ def test_bio_families_are_rule_activated():
         assert bio in bs._RULE_ACTIVATION
 
 
+def test_eqprop_rule_activation_is_model_aware():
+    """eqprop models that cannot run contrastive get the O(1) implicit method.
+
+    The blanket ``gradient_method="contrastive"`` activation only works for
+    models that implement a custom ``train_step`` or ``get_hebbian_pairs``.
+    Models exposing neither (ConvEqProp, LazyEqProp, MomentumEquilibrium) would
+    degrade to BPTT under contrastive; they instead get ``equilibrium`` (the
+    implicit O(1) local rule), which the trainer records as
+    ``implicit_equilibrium`` with no BPTT-fallback defect.
+    """
+    # Contrastive-capable models (custom train_step) keep contrastive.
+    assert bs._eqprop_gradient_method("directed_ep") == "contrastive"
+    assert bs._eqprop_gradient_method("holomorphic_ep") == "contrastive"
+    assert bs._eqprop_gradient_method("eqprop_mlp") == "contrastive"
+    assert bs._eqprop_gradient_method("modern_conv_eqprop") == "contrastive"
+    # No contrastive path → fall back to the implicit O(1) local rule.
+    assert bs._eqprop_gradient_method("conv_eqprop") == "equilibrium"
+    assert bs._eqprop_gradient_method("lazy_eqprop") == "equilibrium"
+    assert bs._eqprop_gradient_method("momentum_equilibrium") == "equilibrium"
+
+
+def test_rule_activation_for_resolves_equilibrium_for_broken_contrastive():
+    """``_rule_activation_for`` overrides gradient_method to the viable rule."""
+    act = bs._rule_activation_for("conv_eqprop", "eqprop")
+    assert act["config"]["gradient_method"] == "equilibrium"
+    act_contrast = bs._rule_activation_for("directed_ep", "eqprop")
+    assert act_contrast["config"]["gradient_method"] == "contrastive"
+    # Non-eqprop families are untouched.
+    assert bs._rule_activation_for("deep_hebbian", "hebbian") == {
+        "propagator": "contrastive_hebbian_learning"
+    }
+
+
+
 def test_probe_runs_flags_nan_divergence():
     """A probe returning non-finite loss is flagged, not counted as ok/live."""
     space = {"hidden_dim": (32, 64, "int"), "learning_rate": (1e-4, 1e-2, "log")}
@@ -196,6 +230,41 @@ def test_probe_runs_flags_nan_divergence():
     assert n_ok == 0  # NaN run is NOT a successful ok probe
     assert runs[0]["ok"] is False
     assert "nan_divergence" in runs[0]["defects"]
+
+
+def test_task_domain_maps_digits_to_vision():
+    """``digits`` is a vision task, so non-vision (LM/RL) models are filtered."""
+    assert bs._task_domain("digits") is not None
+    assert bs._task_domain("mnist") is not None
+    assert bs._task_domain("imdb") is not None
+    assert bs._task_domain("cartpole") is not None
+    assert bs._task_domain("unknown_task") is None
+
+
+def test_probe_runs_flags_epoch_time_truncation():
+    """A budget-truncated run is a defect (partial-epoch stats are not ok)."""
+    space = {"hidden_dim": (32, 64, "int")}
+
+    class FakeDriver:
+        def train(self, *, model, task, config, seed, epochs, device, propagator=None, allow_bptt_fallback=True):
+            return {
+                "final_train_loss": 0.5,
+                "final_acc": 0.5,
+                "training_path": "energy",
+                "phantom_knobs": [],
+                "param_count": 100,
+                "peak_memory_mb": 1.0,
+                "wall_time_s": 0.1,
+                "epoch_time_budget_stopped": True,
+            }
+
+    runs, n_total, n_ok = bs._probe_runs(
+        FakeDriver(), model="m", family="eqprop", space=space,
+        probes_per_rule=1, epochs=2, seed=0, device="cpu", task="mnist",
+    )
+    assert runs[0]["ok"] is False
+    assert "epoch_time_truncated" in runs[0]["defects"]
+
 
 
 def test_probe_runs_flags_phantom_knobs():
@@ -298,3 +367,101 @@ def test_match_param_budget_minimizes_unbudgetable_model():
         output_dim=10,
     )
     assert count < 20000  # minimized, not the original 236k
+
+
+def test_match_param_budget_binds_conv_model_width():
+    """Budget rematch searches the conv width axis (hidden_channels), so a conv
+    eqprop model is not left at its sampled-wide 100k+ param count (SWEEP_FAILURES
+    #3/#4). The family space samples hidden_dim; the matcher must search the
+    model's real width axis hidden_channels instead of returning the wide sample.
+    """
+    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
+    from bioplausible.experiment.param_estimator import estimate_param_count
+
+    for model in ("modern_conv_eqprop", "conv_eqprop"):
+        config = bs._match_param_budget(
+            model,
+            {"hidden_dim": 128, "learning_rate": 1e-3},
+            32000,
+            input_dim=784,
+            output_dim=10,
+        )
+        assert "hidden_channels" in config
+        count = estimate_param_count(
+            model, config, input_dim=784, output_dim=10
+        )
+        assert count <= 32000, f"{model} over budget: {count}"
+
+
+def test_match_param_budget_rounds_channels_to_groupnorm_multiple():
+    """Conv channel derivations stay GroupNorm-divisible even when the matcher
+    seeds hidden_channels from the sampled hidden_dim (SWEEP_FAILURES #4)."""
+    config = bs._match_param_budget(
+        "conv_eqprop",
+        {"hidden_dim": 100, "learning_rate": 1e-3},
+        32000,
+        input_dim=784,
+        output_dim=10,
+    )
+    assert config["hidden_channels"] % 8 == 0
+
+
+def test_prune_phantom_knobs_drops_unconsumed_equilibrium_knobs():
+    """Conv/lazy eqprop models that don't route beta/convergence_* no longer
+    accumulate phantom-knob defect noise from the sampled family space
+    (SWEEP_FAILURES #2): the probe samples the model's real knob subspace only.
+    """
+    from bioplausible.domains.registry import resolve_task
+
+    spec = resolve_task("mnist")
+    cfg = {
+        "hidden_dim": 64,
+        "learning_rate": 1e-3,
+        "beta": 0.5,
+        "max_steps": 10,
+        "convergence_threshold": 1e-3,
+        "convergence_start": 5,
+    }
+    out = bs._prune_phantom_knobs(
+        "conv_eqprop", cfg, input_dim=spec.input_dim, output_dim=spec.output_dim
+    )
+    # beta/convergence_* are not consumed by conv_eqprop -> dropped; learning_rate
+    # is retained (the trainer consumes it) and so is the structural width.
+    assert "beta" not in out
+    assert "convergence_start" not in out
+    assert "convergence_threshold" not in out
+    assert "learning_rate" in out
+    assert "hidden_dim" in out
+    # A **kwargs eqprop model consumes everything -> nothing pruned.
+    full = bs._prune_phantom_knobs(
+        "momentum_equilibrium", cfg, input_dim=spec.input_dim, output_dim=spec.output_dim
+    )
+    assert set(full) == set(cfg)
+
+
+def test_forward_probe_ok_skips_diffusion_and_chl_incompatible():
+    """The pre-sweep compatibility gate skips models whose probe path would
+    crash every probe: a diffusion model whose forward needs ``t`` (SWEEP_FAILURES
+    #5) and a 2D->conv3d model whose CHL propagator can't stream it (#6). Healthy
+    rules pass through.
+    """
+    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
+
+    # eqprop_diffusion: bare flat forward raises 't must be provided'.
+    cfg = {"hidden_dim": 64, "learning_rate": 1e-3}
+    assert bs._forward_probe_ok(
+        "eqprop_diffusion", cfg, input_dim=784, output_dim=10, device="cpu"
+    ) is False
+    # hebbian_3d: CHL cannot stream its 2D->conv3d transition chain.
+    assert bs._forward_probe_ok(
+        "hebbian_3d",
+        {"hidden_dim": 32, "learning_rate": 1e-3},
+        input_dim=784,
+        output_dim=10,
+        device="cpu",
+        propagator="contrastive_hebbian_learning",
+    ) is False
+    # A healthy eqprop model passes both the bare forward and its local rule.
+    assert bs._forward_probe_ok(
+        "conv_eqprop", cfg, input_dim=784, output_dim=10, device="cpu"
+    ) is True

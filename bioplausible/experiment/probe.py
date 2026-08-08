@@ -156,6 +156,7 @@ class CoreTrainerDriver:
         record_results: bool = _DEFAULT_RECORD,
         target_hardware: str | None = None,
         allow_bptt_fallback: bool = True,
+        max_epoch_time: float = 0.0,
     ) -> None:
         self.num_workers = num_workers
         self.batch_size = batch_size
@@ -166,6 +167,7 @@ class CoreTrainerDriver:
         self.record_results = record_results
         self.target_hardware = target_hardware
         self.allow_bptt_fallback = allow_bptt_fallback
+        self.max_epoch_time = max_epoch_time
 
     def train(  # ruff: ignore[too-many-arguments]  (probe driver signature is the public protocol contract)
         self,
@@ -280,6 +282,7 @@ class CoreTrainerDriver:
             track_flops=self.track_flops,
             track_memory=self.track_memory,
             batches_per_epoch=self.batches_per_epoch,
+            max_epoch_time=self.max_epoch_time,
             target_hardware=self.target_hardware,
         )
         try:
@@ -361,6 +364,17 @@ class CoreTrainerDriver:
             # silent-fallback defect surfaced without human audit.
             "training_paths": dict(last_extra.get("training_paths") or {}),
             "training_path": _dominant_training_path(last_extra.get("training_paths")),
+            # Epoch-time truncation: if any epoch was cut short by the
+            # ``max_epoch_time`` budget, the run's resource metrics are over a
+            # partial epoch — not comparable to full-epoch runs. The sweep must
+            # prune (flag as defect) such a run, not average partial stats in.
+            "epoch_time_budget_stopped": bool(
+                any(
+                    bool(m.extra.get("epoch_time_budget_stopped"))
+                    for m in history
+                    if getattr(m, "extra", None)
+                )
+            ),
             # Phantom-drift diagnosis: sampled tuning knobs this probe could not
             # deliver to the model. A non-empty list is a self-diagnosis defect
             # flagged by the sweep (the config advertised knobs that had no
@@ -457,15 +471,20 @@ def run_probe(  # ruff: ignore[too-many-arguments]  (one normalization entrypoin
         A normalized :class:`ProbeResult` (status ``"ok"`` or ``"error"``).
     """
     try:
-        metrics = driver.train(
-            model=model,
-            task=task,
-            config=config,
-            seed=seed,
-            epochs=epochs,
-            device=device,
-            propagator=propagator,
-        )
+        call_kwargs: dict[str, object] = {
+            "model": model,
+            "task": task,
+            "config": config,
+            "seed": seed,
+            "epochs": epochs,
+            "device": device,
+        }
+        # ``propagator`` is an optional learning-rule override: only forward it
+        # when set, so drivers that represent the default (no-rule) probe path
+        # do not need to declare a keyword they never use.
+        if propagator is not None:
+            call_kwargs["propagator"] = propagator
+        metrics = driver.train(**call_kwargs)
         return ProbeResult(
             model=model,
             task=task,

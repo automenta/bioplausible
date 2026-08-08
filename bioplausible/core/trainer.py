@@ -117,6 +117,11 @@ class TrainerConfig:
     epochs: int = 10
     batches_per_epoch: int | None = None
     val_batches: int | None = None
+    # Hard per-epoch wall-clock budget in seconds. When >0, a training epoch
+    # stops consuming batches once the budget is exhausted (measured from the
+    # epoch's first batch). Bounds slow-settling rule models (eqprop) so a
+    # shallow breadth probe cannot burn the whole sweep on one epoch.
+    max_epoch_time: float = 0.0
     grad_clip: float | None = 1.0
     use_compile: bool = False
     compile_mode: str = "reduce-overhead"
@@ -302,6 +307,12 @@ class CoreTrainer:
         # ``TrainingMetrics.extra["training_paths"]`` and consumed by the probe
         # driver so the sweep can flag silent BPTT fallbacks as defects.
         self._training_path_counts: dict[str, int] = {}
+
+        # BPTT-fallback warning dedup: the "silent degradation to backprop"
+        # warning is emitted once per run, not once per batch, so a probe that
+        # degrades does not flood the log (one warning per probe, then the
+        # per-epoch training_path='bptt' telemetry records the defect).
+        self._bptt_fallback_warned = False
 
         # Output directory (session-scoped tempdir when pytest is detected)
         self.output_dir = (
@@ -516,8 +527,6 @@ class CoreTrainer:
 
     def _create_model(self) -> None:
         """Create model from registry via the single construction layer."""
-        logger.info("Creating model: %s", self.config.model)
-
         # Check if model is registered in new registry
         try:
             model_cls = Registry.get(ComponentCategory.MODEL, self.config.model)
@@ -541,8 +550,11 @@ class CoreTrainer:
         )
         self.model = self._apply_hardware(cast(nn.Module, self.model))
 
-        logger.info("Model created: %s", self.model.__class__.__name__)
-        logger.info("Parameters: %s", sum(p.numel() for p in self.model.parameters()))
+        logger.info(
+            "Model created: %s (%d params)",
+            self.model.__class__.__name__,
+            sum(p.numel() for p in self.model.parameters()),
+        )
 
     def _apply_hardware(self, model: nn.Module) -> nn.Module:
         """Swap in a substrate-faithful facade when ``target_hardware`` is set.
@@ -675,8 +687,6 @@ class CoreTrainer:
 
     def _create_optimizer(self) -> None:
         """Create optimizer."""
-        logger.info("Creating optimizer: %s", self.config.optimizer)
-
         # Check if optimizer is in new registry
         try:
             opt_cls = Registry.get(ComponentCategory.OPTIMIZER, self.config.optimizer)
@@ -713,8 +723,6 @@ class CoreTrainer:
             self.optimizer = opt_cls(
                 self.model.parameters(), **self.config.optimizer_kwargs
             )
-
-        logger.info("Optimizer created: %s", self.optimizer.__class__.__name__)
 
     def fit(
         self, scheduler: torch.optim.lr_scheduler.LRScheduler | None = None
@@ -932,7 +940,19 @@ class CoreTrainer:
         batch_size = self.config.batch_size
         use_task = self.task_obj is not None
 
+        epoch_start = time.time()
+        max_epoch_time = float(self.config.max_epoch_time or 0.0)
+        budget_stopped = False
+
         for batch_idx in range(batches_per_epoch):
+            if max_epoch_time > 0.0 and time.time() - epoch_start >= max_epoch_time:
+                logger.info(
+                    "epoch time budget reached at batch=%d (%.0fs), stopping epoch",
+                    batch_idx,
+                    time.time() - epoch_start,
+                )
+                budget_stopped = True
+                break
             x, y = (
                 self._get_batch_data("train", batch_size)
                 if use_task
@@ -1019,6 +1039,7 @@ class CoreTrainer:
             k: np.mean(v) for k, v in metrics_agg.items() if v
         }
         avg_metrics["samples_seen"] = samples_seen
+        avg_metrics["epoch_time_budget_stopped"] = budget_stopped
         return avg_metrics
 
     def _adapt_input(self, x: torch.Tensor) -> torch.Tensor:
@@ -1137,11 +1158,15 @@ class CoreTrainer:
         # Biological-rule honesty: if the caller disallowed the BPTT fallback
         # and this is a *plain* unrolled backward (not the O(1) implicit
         # equilibrium path, which legitimately routes through forward/backward),
-        # raise a loud warning so the silent degradation is never masked.
+        # raise a loud warning so the silent degradation is never masked. Warn
+        # once per run, not once per batch — a probe that degrades to BPTT
+        # floods the log if we log on every step.
         if (
             not self.config.allow_bptt_fallback
             and getattr(self.model, "gradient_method", None) != "equilibrium"
+            and not self._bptt_fallback_warned
         ):
+            self._bptt_fallback_warned = True
             logger.warning(
                 "BPTT fallback used on model=%s, but allow_bptt_fallback=False — "
                 "recording training_path='bptt' (flagged as DEFECT by sweep)",
