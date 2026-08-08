@@ -69,7 +69,7 @@ class EquilibriumMLP(EqPropModel):
         gradient_method: str = "equilibrium",
         **kwargs,
     ):
-        super().__init__(config, gradient_method="equilibrium", **kwargs)
+        super().__init__(config, gradient_method=gradient_method, **kwargs)
         self.lr = self.config.learning_rate
         self.beta = self.config.beta
         self.nudge_steps = int(
@@ -77,6 +77,13 @@ class EquilibriumMLP(EqPropModel):
         )
         self.sparse_ratio = float(self.config.extra.get("sparse_ratio", 0.5))
         self.momentum = float(self.config.extra.get("momentum", 0.5))
+
+    def get_hebbian_pairs(
+        self, h: torch.Tensor, x: torch.Tensor
+    ) -> list[tuple[nn.Module, torch.Tensor, torch.Tensor]]:
+        """Return ``(layer, input, target)`` tuples for the base-class contrastive update."""
+        x_in = _flatten(x)
+        return [(self.W_in, x_in, h), (self.W_rec, h, h)]
 
     def _build_layers(self):
         hid = self.hidden_dim if self.hidden_dim > 0 else 64
@@ -118,7 +125,7 @@ class EquilibriumMLP(EqPropModel):
                 self._velocity = torch.zeros_like(h)
             pre = self.momentum * self._velocity + pre
             self._velocity = pre.detach().clone()
-        h_next = self.activation(pre)
+        h_next = torch.tanh(pre)
         if self.variant == "sparse":
             k = int(h_next.size(1) * self.sparse_ratio)
             if k > 0:
@@ -139,7 +146,7 @@ class EquilibriumMLP(EqPropModel):
         beta: float,
         nudge: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Settle to fixed point; return (h_star, pre_act_star)."""
+        """Settle to fixed point; return (h_star, x_transformed)."""
         x_flat = _flatten(x)
         h0 = self._initialize_hidden_state(x_flat)
         x_trans = self._transform_input(x_flat)
@@ -161,16 +168,21 @@ class EquilibriumMLP(EqPropModel):
                 h0, nudged_step, x_trans, self.nudge_steps, model=self
             )
 
-        pre_act_star = self._pre_activation(h_star, x_trans)
-        return h_star, pre_act_star
+        return h_star, x_trans
 
     def _energy_grads(
-        self, h: torch.Tensor, pre_act: torch.Tensor
+        self, h: torch.Tensor, x_transformed: torch.Tensor
     ) -> list[torch.Tensor]:
-        """∇_θ Σ(0.5 h² − h·pre_act)."""
-        h_req = h.detach().requires_grad_(True)
-        pre_req = pre_act.detach().requires_grad_(True)
-        energy = torch.sum(0.5 * h_req**2 - h_req * pre_req)
+        """∇_θ Σ(0.5 h² − h·pre_act), treating h as a constant (fixed-point direct term).
+
+        ``h`` is the settled equilibrium state (detached, constant).  ``pre_act``
+        is recomputed from the live model parameters so the gradient flows
+        through ``W_rec`` — this is the direct energy-gradient term that is equal
+        to the total gradient at the fixed point (where ∂E/∂h = 0).
+        """
+        h_const = h.detach()
+        pre_act = self._pre_activation(h_const, x_transformed)
+        energy = torch.sum(0.5 * h_const**2 - h_const * pre_act)
         grads = torch.autograd.grad(
             energy, self.parameters(), retain_graph=True, allow_unused=True
         )
@@ -178,11 +190,15 @@ class EquilibriumMLP(EqPropModel):
                 for g, p in zip(grads, self.parameters())]
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        # Run energy-contrastive rule for "equilibrium" mode (sweep activates eqprop this way)
+        if self.gradient_method not in ("equilibrium", "contrastive"):
+            return None
+
         x_flat = _flatten(x)
 
         # --- Free phase ---
         with torch.no_grad():
-            h_free, pre_free = self._settle(x_flat, 0.0, None)
+            h_free, x_trans = self._settle(x_flat, 0.0, None)
             logits_free = self._output_projection(h_free)
             loss_free = F.cross_entropy(logits_free, y)
 
@@ -194,23 +210,24 @@ class EquilibriumMLP(EqPropModel):
 
         # --- Nudged phase ---
         with torch.no_grad():
-            h_nudged, pre_nudged = self._settle(x_flat, self.beta, v)
+            h_nudged, _ = self._settle(x_flat, self.beta, v)
 
         # --- Energy gradients ---
-        gf = self._energy_grads(h_free, pre_free)
-        gn = self._energy_grads(h_nudged, pre_nudged)
+        gf = self._energy_grads(h_free, x_trans)
+        gn = self._energy_grads(h_nudged, x_trans)
 
         # --- Manual weight updates ---
         with torch.no_grad():
             for p, gf_p, gn_p in zip(self.parameters(), gf, gn):
-                if p is self.W_out:
+                if p is self.W_out.weight:
                     # Supervised output update: ΔW_out = −lr * v.T @ h_free
                     p -= self.lr * torch.mm(v.T, h_free)
-                    if p is self.W_out.weight and self.W_out.bias is not None:
-                        self.W_out.bias -= self.lr * v.sum(0)
+                elif p is self.W_out.bias:
+                    p -= self.lr * v.sum(0)
                 else:
-                    # Δw = −lr * (gf − gn) / beta
-                    p -= self.lr * (gf_p - gn_p) / self.beta
+                    # Energy-contrastive update: Δw = −lr * (∂E_nudged − ∂E_free) / β
+                    # = −lr * (gn − gf) / β
+                    p -= self.lr * (gn_p - gf_p) / self.beta
 
         acc = (logits_free.argmax(1) == y).float().mean().item()
         return {"loss": loss_free.item(), "accuracy": acc}

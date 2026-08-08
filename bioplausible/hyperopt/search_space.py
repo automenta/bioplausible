@@ -400,11 +400,11 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         # contrastive EqProp family (DirectedEP diverges to NaN for lr >= 1e-2 on
         # 784-dim MNIST; stable at ~1e-3). Keeps the shared space deliverable
         # without flooding the sweep with diverged probes.
-        "learning_rate": (1e-5, 5e-3, "log"),
+        "learning_rate": (1e-5, 1e-2, "log"),
         "weight_decay": (1e-6, 1e-2, "log"),
         "hidden_dim": (32, 1024, "log"),
         "num_layers": (1, 6, "int"),
-        "beta": (0.1, 2.0, "log"),
+        "beta": (0.05, 0.5, "log"),
         "max_steps": (5, 100, "int"),
         "damping": (0.0, 0.9, "linear"),
         "tol": (1e-6, 1e-2, "log"),
