@@ -185,17 +185,16 @@ select = [
     "RSE",  # flake8-raise
     "SIM",  # flake8-simplify
 ]
-ignore = ["E501", "lowercase-imported-as-non-lowercase", "non-augmented-assignment"]
+ignore = ["E501", "N812", "PLR6104", "TRY003"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["assert", "too-many-arguments", "too-many-statements", "PLR2004", "RUF069"]
-"bioplausible/experiment/**/*.py" = ["raise-vanilla-args"]
-"tests/**/conftest.py" = ["too-many-arguments", "too-many-statements"]
-"examples/legacy/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
-"examples/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
-"scripts/legacy/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
-"scripts/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
-"docs/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
+"tests/**/*.py" = ["S101", "PLR0913", "PLR0915", "PLR2004", "RUF069"]
+"tests/**/conftest.py" = ["PLR0913", "PLR0915"]
+"examples/legacy/**/*.py" = ["S101", "PLR0913", "PLR0915"]
+"examples/**/*.py" = ["S101", "PLR0913", "PLR0915"]
+"scripts/legacy/**/*.py" = ["S101", "PLR0913", "PLR0915"]
+"scripts/**/*.py" = ["S101", "PLR0913", "PLR0915"]
+"docs/**/*.py" = ["S101", "PLR0913", "PLR0915"]
 
 [tool.ruff.lint.flake8-type-checking]
 

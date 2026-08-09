@@ -132,3 +132,79 @@ def test_build_model_config_surfaces_every_knob_in_extra() -> None:
     # Non-field knobs are preserved for a model that reads ``extra``.
     assert cfg.extra["damping"] == 0.3
     assert cfg.extra["tol"] == 1e-3
+
+
+def test_num_layers_unconsumed_is_reported_as_phantom() -> None:
+    """A model that cannot grow depth must surface ``num_layers`` as phantom.
+
+    Regression for the deep-eqprop phantom bug: a hand-written ``build()``
+    accepted ``num_layers`` but constructed ``hidden_dims=[hidden_dim]``, so
+    every sample trained at one hidden layer regardless of the sampled depth —
+    with zero knobs flagged. The supervisor now builds the model and checks
+    ``len(config.hidden_dims)`` actually grew with the request.
+    """
+    from bioplausible.core.registry import ComponentCategory, Registry
+
+    for model_name in ("graph_eqprop", "conv_eqprop"):
+        cls = Registry.get(ComponentCategory.MODEL, model_name)
+        cfg = {"hidden_dim": 64, "num_layers": 3, "learning_rate": 0.01}
+        assert "num_layers" in phantom_knobs(
+            cls, cfg, input_dim=784, output_dim=10, model_name=model_name
+        )
+
+
+def test_num_layers_consumed_is_not_phantom() -> None:
+    """The consolidated deep eqprop engine honours ``num_layers`` — not phantom."""
+    from bioplausible.core.registry import ComponentCategory, Registry
+
+    for model_name in (
+        "eqprop",
+        "directed_ep",
+        "lazy_eqprop",
+        "finite_nudge_ep",
+        "momentum_equilibrium",
+        "sparse_equilibrium",
+        "eqprop_mlp",
+        "holomorphic_ep",
+    ):
+        cls = Registry.get(ComponentCategory.MODEL, model_name)
+        cfg = {"hidden_dim": 64, "num_layers": 3, "learning_rate": 0.01}
+        assert "num_layers" not in phantom_knobs(
+            cls, cfg, input_dim=784, output_dim=10, model_name=model_name
+        ), (
+            f"{model_name} must honour sampled num_layers (truncating hidden_dims "
+            "to [hidden_dim] would silently lock the probe to one hidden layer)"
+        )
+
+
+def test_param_count_varies_with_num_layers() -> None:
+    """The fair-comparison estimator must agree with the built model per depth."""
+    from bioplausible.experiment.param_estimator import estimate_param_count
+
+    for model_name in (
+        "eqprop",
+        "directed_ep",
+        "lazy_eqprop",
+        "finite_nudge_ep",
+        "momentum_equilibrium",
+        "sparse_equilibrium",
+        "eqprop_mlp",
+    ):
+        cls = Registry.get(ComponentCategory.MODEL, model_name)
+        one = estimate_param_count(
+            model_name, {"hidden_dim": 64, "num_layers": 1},
+            input_dim=784, output_dim=10,
+        )
+        three = estimate_param_count(
+            model_name, {"hidden_dim": 64, "num_layers": 3},
+            input_dim=784, output_dim=10,
+        )
+        assert three != one, (
+            f"{model_name}: num_layers=1 and num_layers=3 report identical "
+            "param counts — the depth knob does not change the architecture"
+        )
+        built = construct_model(
+            cls, {"hidden_dim": 64, "num_layers": 3},
+            input_dim=784, output_dim=10, model_name=model_name,
+        )
+        assert sum(p.numel() for p in built.parameters()) == three

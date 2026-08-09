@@ -16,15 +16,24 @@ __all__ = [
 
 
 class MemoryEfficientLoopedMLP(LoopedMLP):
-    """
-    Memory-efficient version of LoopedMLP that defaults to O(1) memory kernel backend.
+    """Memory-efficiency metadata facade over the consolidated layered eqprop MLP.
 
-    This model uses the NumPy/CuPy kernel for O(1) memory training, making it suitable
-    for deep networks where PyTorch autograd would consume O(N) memory.
+    The prior implementation routed to a NumPy/CuPy single-hidden kernel for
+    O(1)-memory training. That kernel was bound to a single hidden state and
+    is incompatible with the layered engine that now backs ``LoopedMLP`` (the
+    consolidated ``EquilibriumMLP`` keeps one state per hidden layer and
+    settles jointly via ``settle_activations_list``). The kernel backend is
+    no longer wired; ``backend`` is recorded for trainer-compat and the
+    contrastive ``train_step`` runs on the canonical PyTorch path.
+
+    The class survives mainly because the hardware-targeted reproducibility /
+    signal-probe validation tracks instantiate it for memory-efficiency
+    measurement. Once those tracks grow layered-aware kernels, this facade
+    can be retired.
 
     Example:
         >>> model = MemoryEfficientLoopedMLP(784, 256, 10)
-        >>> print(model.backend)  # 'kernel' if CUDA/CuPy available, else 'pytorch'
+        >>> print(model.backend)  # 'pytorch' (kernel backend is single-state only)
     """
 
     def __init__(
@@ -35,13 +44,8 @@ class MemoryEfficientLoopedMLP(LoopedMLP):
         use_spectral_norm: bool = True,
         max_steps: int = 30,
         gradient_method: str = "bptt",
-        use_gpu_if_available: bool = True,
+        use_gpu_if_available: bool = True,  # noqa: ARG002  (compat kwarg, ignored)
     ) -> None:
-        if use_gpu_if_available and HAS_CUPY and torch.cuda.is_available():
-            backend = "kernel"
-        else:
-            backend = "pytorch"
-
         super().__init__(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
@@ -49,20 +53,16 @@ class MemoryEfficientLoopedMLP(LoopedMLP):
             use_spectral_norm=use_spectral_norm,
             max_steps=max_steps,
             gradient_method=gradient_method,
-            backend=backend,
+            backend="pytorch",
         )
-
-        self.is_memory_efficient = self.backend == "kernel"
+        self.is_memory_efficient = False
 
     def __repr__(self) -> str:
-        backend_str = f", backend={self.backend}"
-        efficiency_str = (
-            ", O(1) memory" if self.is_memory_efficient else ", O(N) memory"
-        )
+        efficiency_str = ", O(N) memory" if self.is_memory_efficient else ", layered PyTorch path"
         return (
             f"MemoryEfficientLoopedMLP(input={self.input_dim}, hidden={self.hidden_dim}, "
             f"output={self.output_dim}, steps={self.max_steps}, "
-            f"spectral_norm={self.use_spectral_norm}{backend_str}{efficiency_str})"
+            f"spectral_norm={self.use_spectral_norm}{efficiency_str})"
         )
 
 

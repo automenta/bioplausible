@@ -21,7 +21,20 @@ import bioplausible.zoo  # noqa: F401  (model registration side effect)
 
 from bioplausible.core.config import ModelConfig
 
-logging.disable(logging.CRITICAL)
+# Silence the probe-sweep logger for the *duration of this module's tests* only.
+# A module-scope ``logging.disable`` would leak into every other test in the
+# same pytest process (e.g. ``test_registry.py`` duplicate-warning caplog) —
+# scope the level toggle to this module's tests instead.
+
+
+@pytest.fixture(autouse=True)
+def _silence_settle_logs():
+    """Set the root logger's effective level high for this module's tests, then restore."""
+    prev_level = logging.getLogger().getEffectiveLevel()
+    logging.getLogger().setLevel(logging.CRITICAL)
+    yield
+    logging.getLogger().setLevel(prev_level)
+
 
 from bioplausible.core.construction import construct_model  # noqa: E402
 from bioplausible.core.registry import (  # noqa: E402
@@ -127,13 +140,23 @@ def test_eqprop_engine_has_no_settle_cap():
 
 
 def test_eqprop_engine_fast_settle():
-    """EquilibriumMLP settles in ~5 ms/step via settle_single_state."""
-    # This is a structural test; actual speed is verified in GPU tests.
+    """EquilibriumMLP settles via ``settle_activations_list`` (multi-layer state).
+
+    The deep eqprop engine holds one state per hidden layer (not the prior
+    single-hidden ``settle_single_state``) so ``num_layers`` is honoured. This
+    test asserts the structural settle entrypoint exists and the model can be
+    settled forwards; actual speed is verified in GPU tests.
+    """
     cls = Registry.get(ComponentCategory.MODEL, "eqprop")
     model = cls(config=ModelConfig(
         name="eqprop", input_dim=10, output_dim=5, hidden_dims=[20],
         max_steps=10, learning_rate=1e-3, beta=0.3, use_spectral_norm=True,
     ))
-    # Engine uses settle_single_state (single hidden) not settle_activations_list
-    assert hasattr(model, "_settle")
+    # Deep eqprop sets an activations list, not a single hidden state.
+    assert hasattr(model, "forward_dynamics")
     assert hasattr(model, "train_step")
+    model.eval()
+    x = torch.randn(4, 10)
+    with torch.no_grad():
+        out = model(x)
+    assert out.shape == (4, 5)

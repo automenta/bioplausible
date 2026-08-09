@@ -121,14 +121,14 @@ def _get_environment_info() -> dict[str, Any]:
 @pytest.fixture(scope="module")
 def test_models():
     """Subset of models that reliably instantiate and train."""
-    return ["eqprop_mlp", "forward_forward", "pepita", "equitile", "directed_ep"]
+    return ["eqprop_mlp", "forward_forward", "pepita", "directed_ep"]
 
 
 class TestReproducibility:
     """Tests for reproducibility guarantees."""
 
     @pytest.mark.parametrize(
-        "model_name", ["eqprop_mlp", "forward_forward", "pepita", "equitile"]
+        "model_name", ["eqprop_mlp", "forward_forward", "pepita", "directed_ep"]
     )
     def test_fixed_seed_identical_weights(self, model_name):
         """Fixed seed should produce identical initial weights."""
@@ -146,7 +146,7 @@ class TestReproducibility:
             assert torch.equal(p1, p2), f"Parameter {name1} differs with same seed"
 
     @pytest.mark.parametrize(
-        "model_name", ["eqprop_mlp", "forward_forward", "pepita", "equitile"]
+        "model_name", ["eqprop_mlp", "forward_forward", "pepita", "directed_ep"]
     )
     def test_fixed_seed_identical_loss_trajectory(self, model_name):
         """Fixed seed should produce identical loss trajectory for 5 steps."""
@@ -188,7 +188,7 @@ class TestReproducibility:
             assert abs(l1 - l2) < LOSS_TOL, f"Loss at step {i} differs: {l1} vs {l2}"
 
     @pytest.mark.parametrize(
-        "model_name", ["eqprop_mlp", "forward_forward", "pepita", "equitile"]
+        "model_name", ["eqprop_mlp", "forward_forward", "pepita", "directed_ep"]
     )
     def test_fixed_seed_identical_output_after_training(self, model_name):
         """Fixed seed should produce identical outputs after training."""
@@ -281,7 +281,7 @@ class TestEnvironmentCapture:
 class TestModelStateSerialization:
     """Tests for model state serialization (weights, config)."""
 
-    @pytest.mark.parametrize("model_name", ["equitile", "forward_forward"])
+    @pytest.mark.parametrize("model_name", ["eqprop_mlp", "forward_forward"])
     def test_model_state_dict_serialization(self, model_name):
         """Model state dict should be serializable and loadable."""
         torch.manual_seed(SEED_DATA)
@@ -308,24 +308,21 @@ class TestModelStateSerialization:
         ):
             assert torch.equal(p1, p2), f"Parameter {name1} differs after load"
 
-    @pytest.mark.parametrize("model_name", ["equitile", "forward_forward"])
+    @pytest.mark.parametrize("model_name", ["eqprop_mlp", "forward_forward"])
     def test_model_config_serialization(self, model_name):
-        """Model config should be serializable."""
+        """Model state should round-trip through a serializable container."""
+        import io
+
         torch.manual_seed(SEED_DATA)
         model = _instantiate_model(model_name)
 
-        # Get config if available
-        if hasattr(model, "equitile_config"):
-            config = model.equitile_config
-            # Dataclass should be convertible to dict
-            import dataclasses
+        buf = io.BytesIO()
+        torch.save(model.state_dict(), buf)
+        buf.seek(0)
+        restored = torch.load(buf, weights_only=True)
 
-            config_dict = dataclasses.asdict(config)
-            assert isinstance(config_dict, dict)
-
-            # Should be JSON serializable
-            json_str = json.dumps(config_dict, default=str)
-            assert isinstance(json_str, str)
+        assert isinstance(restored, dict)
+        assert set(restored.keys()) == set(model.state_dict().keys())
 
 
 # =============================================================================
@@ -335,7 +332,7 @@ class TestModelStateSerialization:
 
 def test_full_training_reproducibility():
     """Full training run should be reproducible with fixed seed."""
-    model_name = "equitile"
+    model_name = "eqprop_mlp"
 
     # Create deterministic data
     torch.manual_seed(SEED_DATA)

@@ -15,7 +15,14 @@ from bioplausible.zoo.models.eqprop import (
 
 
 class TestModelKernelAPI(unittest.TestCase):
-    """Tests for the O(1) Memory API (LoopedMLP with backend='kernel')."""
+    """Tests for the consolidated layered LoopedMLP API.
+
+    The single-hidden CuPy ``EqPropKernel`` engine was removed when the six
+    fundamental eqprop models (and ``LoopedMLP == eqprop_mlp``) were unified
+    onto the layered ``EquilibriumMLP`` engine. ``backend`` is recorded for
+    trainer compatibility but always runs the PyTorch layered path; ``W_in``
+    is now ``layers[0]`` like every other eqprop model.
+    """
 
     def setUp(self):
         self.input_dim = 10
@@ -32,16 +39,17 @@ class TestModelKernelAPI(unittest.TestCase):
         self.loader = DataLoader(self.dataset, batch_size=self.batch_size, shuffle=True)
 
     def test_looped_mlp_kernel_backend_init(self):
-        """Test initializing LoopedMLP with backend='kernel'."""
+        """backend='kernel' records the flag but routes to the layered engine."""
         model = LoopedMLP(
             self.input_dim, self.hidden_dim, self.output_dim, backend="kernel"
         )
         self.assertEqual(model.backend, "kernel")
-        self.assertIsNotNone(model._engine)
-        self.assertEqual(model._engine.input_dim, self.input_dim)
+        # The engine is the layered EquilibriumMLP: a layer stack, no numpy kernel.
+        self.assertEqual(len(model.layers), 2)  # input→h, h→output
+        self.assertFalse(hasattr(model, "_engine"))
 
     def test_looped_mlp_forward_kernel(self):
-        """Test forward pass via kernel engine."""
+        """Forward pass on the backend='kernel' facade returns correct shape."""
         model = LoopedMLP(
             self.input_dim, self.hidden_dim, self.output_dim, backend="kernel"
         )
@@ -51,20 +59,17 @@ class TestModelKernelAPI(unittest.TestCase):
         self.assertEqual(out.shape, (2, self.output_dim))
 
     def test_model_kernel_forward_no_grad(self):
-        """In kernel mode, the LoopedMLP forward path goes through the engine,
-        leaving PyTorch parameters' .grad unset until external training.
-        """
+        """Forward without backward leaves parameter gradients unset."""
         model = LoopedMLP(
             self.input_dim, self.hidden_dim, self.output_dim, backend="kernel"
         )
         out = model(self.x_torch[:2])
-        # Forward only; no backward called, so grads remain None.
         for param in model.parameters():
             self.assertIsNone(param.grad)
         self.assertIsInstance(out, torch.Tensor)
 
     def test_regression_pytorch_backend(self):
-        """Verify that the standard PyTorch backend still updates weights."""
+        """The standard PyTorch backend updates weights through the layer stack."""
         model = LoopedMLP(
             self.input_dim, self.hidden_dim, self.output_dim, backend="pytorch"
         )
@@ -72,18 +77,28 @@ class TestModelKernelAPI(unittest.TestCase):
         criterion = torch.nn.CrossEntropyLoss()
 
         x, y = next(iter(self.loader))
-        w_before = model.W_in.parametrizations.weight.original.clone()
+        # ``layers[0]`` is the input projection (was ``W_in`` pre-consolidation).
+        w_before = model.layers[0].parametrizations.weight.original.clone()
 
         optimizer.zero_grad()
         loss = criterion(model(x), y)
         loss.backward()
         optimizer.step()
 
-        w_after = model.W_in.parametrizations.weight.original
+        w_after = model.layers[0].parametrizations.weight.original
         self.assertFalse(
             torch.allclose(w_before, w_after),
             "Weights did not update in PyTorch mode",
         )
+
+    def test_num_layers_builds_multi_hidden_stack(self):
+        """num_layers > 1 must build a deeper layer stack (no phantom depth)."""
+        model = LoopedMLP(
+            self.input_dim, self.hidden_dim, self.output_dim, num_layers=3
+        )
+        # input→h0→h1→h2→output
+        self.assertEqual(len(model.layers), 4)
+        self.assertEqual(len(model.W_rec), 3)
 
 
 if __name__ == "__main__":

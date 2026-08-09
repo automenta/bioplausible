@@ -36,15 +36,39 @@ def _run_free_nudged(
     """Run free (beta=0) and nudged phase forward passes.
 
     Returns ``(free_activations, nudged_activations, free_output)``.
+
+    Uses the model's *explicit* settle (``_explicit_forward`` when present)
+    because the contrastive rule needs the per-layer activations list — a
+    single-hidden ``equilibrium`` model would otherwise route ``forward``
+    through the O(1) implicit backward, which returns only the output and
+    leaves ``_last_activations`` unset.
     """
-    with torch.no_grad():
-        model.forward(x, beta=0.0)
-        free_acts: list[torch.Tensor] = model._last_activations  # type: ignore[attr-defined]
-        free_out = free_acts[-1]
+    _forward = getattr(model, "_explicit_forward", model.forward)
+
+    def _run(beta_phase: float) -> list[torch.Tensor]:
+        if _forward is model.forward:
+            model.forward(x, beta=beta_phase, target=target if beta_phase else None)
+        else:
+            _forward(
+                x,
+                beta=beta_phase,
+                target=target if beta_phase else None,
+                steps=None,
+                return_trajectory=False,
+                return_dynamics=False,
+            )
+        return model._last_activations  # type: ignore[attr-defined]
 
     with torch.no_grad():
-        model.forward(x, beta=beta, target=target)
-        nudged_acts: list[torch.Tensor] = model._last_activations  # type: ignore[attr-defined]
+        free_acts = _run(0.0)
+        free_out = free_acts[-1]
+        # Reset momentum velocity between phases (if applicable)
+        if hasattr(model, '_velocity') and model._velocity is not None:
+            for v in model._velocity:
+                v.zero_()
+
+    with torch.no_grad():
+        nudged_acts = _run(beta)
 
     return free_acts, nudged_acts, free_out
 
@@ -90,6 +114,7 @@ def _contrastive_step(
     beta: float,
     use_conj: bool = False,
     feedback_layer_list: list[nn.Module] | None = None,
+    recurrent_layer_list: list[nn.Module] | None = None,
 ) -> dict[str, float]:
     """Full contrastive train_step for EqProp-style models.
 
@@ -107,6 +132,11 @@ def _contrastive_step(
         Whether to conjugate the pre-synaptic activation (HolomorphicEP).
     feedback_layer_list:
         Optional backward/feedback layers (DirectedEP).
+    recurrent_layer_list:
+        Optional per-hidden self-recurrent layers (``W_rec[i]``). Each is
+        updated by the contrastive difference of its own hidden state — the
+        "pre" and "post" sides are both ``h_i``, so ``dW = (h_iᵀh_i
+        _{nudge} − h_iᵀh_i_{free})/β`` (Scellier-Bengio self-loop rule).
 
     Returns
     -------
@@ -149,10 +179,29 @@ def _contrastive_step(
 
             # Optional feedback layer update (DirectedEP)
             if feedback_layer_list is not None and i < len(feedback_layer_list):
-                bprod_nudge = torch.matmul(h_prev_nudge.T, h_post_nudge)
-                bprod_free = torch.matmul(h_prev_free.T, h_post_free)
+                # Feedback layer i maps from output -> hidden_i
+                # pre = output (last activation), post = hidden_i (i+1)
+                # Weight shape: [hidden_i, output_dim], so gradient needs [hidden_i, output_dim]
+                h_out_free = free_acts[-1]
+                h_out_nudge = nudged_acts[-1]
+                h_hidden_free = free_acts[i + 1]
+                h_hidden_nudge = nudged_acts[i + 1]
+                bprod_nudge = torch.matmul(h_hidden_nudge.T, h_out_nudge)
+                bprod_free = torch.matmul(h_hidden_free.T, h_out_free)
                 dB = (bprod_nudge - bprod_free) / beta / batch_size
                 _apply_layer_update(feedback_layer_list[i], dB, None, use_conj=use_conj)
+
+        # Self-recurrent layers: pre/post are the *same* hidden state, so the
+        # contrastive difference collapses to h_iᵀh_i.
+        if recurrent_layer_list is not None:
+            for i, rec in enumerate(recurrent_layer_list):
+                h_free = free_acts[i + 1]
+                h_nudged = nudged_acts[i + 1]
+                prod_nudge = h_nudged.T @ (h_nudged.conj() if use_conj else h_nudged)
+                prod_free = h_free.T @ (h_free.conj() if use_conj else h_free)
+                dW = (prod_nudge - prod_free) / beta / batch_size
+                db = (h_nudged - h_free).sum(0) / beta / batch_size
+                _apply_layer_update(rec, dW, db, use_conj=use_conj)
 
     model.optimizer.step()  # type: ignore[attr-defined]
 

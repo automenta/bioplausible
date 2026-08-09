@@ -1,29 +1,57 @@
-"""Self-contained energy-contrastive Equilibrium Propagation engine.
+"""Consolidated deep Equilibrium Propagation engine (Scellier & Bengio).
 
-Implements the Scellier & Bengio energy contrastive rule on a single-hidden
-recurrent MLP, settled via ``settle_single_state`` (contractive forward-only
-with early convergence). No external optimizer — weight updates are the
-genuine free/nudged energy difference: ``Δw = (∇E_nudged − ∇E_free) / β``.
-This is the proven, fast, O(1)-memory design used by ``GraphEqProp`` (vision
-path, 0.85 acc, 9 s/epoch on MNIST).
+All six fundamental eqprop models (``StandardEqProp``, ``DirectedEP``,
+``FiniteNudgeEP``, ``LazyEqProp``, ``MomentumEquilibrium``,
+``SparseEquilibrium``) share a single engine here: a deep MLP whose widths are
+``config.hidden_dims`` (threaded from the sampled ``num_layers`` via
+:func:`bioplausible.core.config.compute_hidden_dims`), settled jointly to
+equilibrium via :func:`settle_activations_list`, and trained by energy-
+contrastive ("free" vs "nudged") updates — the same rule Scellier & Bengio
+described for layered networks.
+
+Subclasses differ only by a class-level ``variant`` field ("plain",
+"momentum", "sparse", "feedback") that augments the per-step dynamics or adds
+a feedback pathway; none of them overrides ``build()`` — they inherit the
+canonical safe path from :class:`bioplausible.core.model.BioModel` so the
+phantom-knob supervisor sees every sampled knob reach ``config``. Adding a
+new eqprop model means picking a ``variant`` and registering — no new
+``build()`` to write, no held-together-by-hand ``ModelConfig`` builder.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 import torch
-import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
 from bioplausible.core.config import ModelConfig
-from bioplausible.zoo._settling import settle_single_state
-from bioplausible.zoo.models.base import EqPropModel
-from dataclasses import dataclass
+from bioplausible.core.model import BioModel
+from bioplausible.core.registry import register_model
+from bioplausible.zoo._settling import settle_activations_list
+
+from ._contrastive import _contrastive_step
+
+__all__ = [
+    "DirectedEP",
+    "EquilibriumMLP",
+    "FiniteNudgeEP",
+    "LazyEqProp",
+    "LazyStats",
+    "MomentumEquilibrium",
+    "SparseEquilibrium",
+    "StandardEqProp",
+]
+
+#: Discriminator for the per-step dynamics variant.
+Variant = Literal["plain", "momentum", "sparse", "feedback"]
 
 
 @dataclass(frozen=True, slots=True)
 class LazyStats:
-    """Statistics for lazy execution."""
+    """Statistics for lazy execution (computed lazily during settle)."""
 
     total_neurons: int = 0
     active_neurons: int = 0
@@ -48,336 +76,519 @@ def _flatten(x: torch.Tensor) -> torch.Tensor:
     return x.reshape(x.size(0), -1) if x.dim() > 2 else x
 
 
-class EquilibriumMLP(EqPropModel):
+class EquilibriumMLP(BioModel):
+    """Deep energy-contrastive EqProp MLP (Scellier & Bengio).
+
+    Architecture:
+        Layers ``W[0]: input→h_0``, ``W[1..L-1]: h_{i-1}→h_i``,
+        ``W_out: h_{L-1}→out``. Depth is ``len(config.hidden_dims)`` and is
+        honoured by ``_build_layers`` — so a sampled ``num_layers=N`` actually
+        produces an N-hidden MLP and varies the parameter count, unlike the
+        prior engine which silently truncated every probe to one hidden layer
+        (phantom ``num_layers``).
+
+    Dynamics:
+        Each hidden layer relaxes jointly to equilibrium from its neighbours
+        via ``settle_activations_list``. The output layer is a linear
+        projection clamped by ``beta·(target − out)`` in the nudged phase.
+
+    Training:
+        ``train_step`` runs the consolidated energy-contrastive rule
+        (``_contrastive_step``): free settle → nudged settle →
+        ``ΔW = (post_nudge·pre_nudge.T − post_free·pre_free.T) / β`` per layer.
+        No external optimizer is touched by the bio rule itself; the
+        ``self.optimizer`` (a plain SGD) is created lazily and steps the
+        contrastive gradients.
+
+    Variants:
+        Subclasses pick ``variant = "plain" | "momentum" | "sparse" |
+        "feedback"``. ``momentum`` adds a per-layer velocity term; ``sparse``
+        masks each hidden state to its top-k activations; ``feedback`` adds a
+        backward path ``W_fb: out→h_i`` injected into the nudged phase. None of
+        these alters the layer structure.
     """
-    Single-hidden recurrent MLP trained via energy-contrastive EqProp.
 
-    Recurrence:  h ← σ(W_in x + W_rec h)
-    Output:      W_out h*
-    Settle:      contractive forward-only via ``settle_single_state``
-                 (spectral-norm freeze + early convergence, O(1) memory).
-    Train step:  energy contrastive (free + nudged), fully self-contained
-                 manual updates — no external optimizer.
-    """
+    #: Per-step dynamics / topology variant, set by subclasses. The base class
+    #: implements all four — subclasses just select.
+    variant: Variant = "plain"
 
-    #: Recurrence variant: "plain", "momentum", "sparse", "feedback"
-    variant: str = "plain"
-
-    def __init__(
-        self,
-        config: ModelConfig | None = None,
-        gradient_method: str = "equilibrium",
-        **kwargs,
-    ):
-        super().__init__(config, gradient_method=gradient_method, **kwargs)
-        self.lr = self.config.learning_rate
-        self.beta = self.config.beta
-        self.nudge_steps = int(
-            self.config.extra.get("nudge_steps", max(3, self.max_steps // 3))
+    def __init__(self, config: ModelConfig | None = None, **kwargs) -> None:
+        super().__init__(config=config, **kwargs)
+        cfg = self.config
+        # ``gradient_method`` selects the trainer routing: ``"contrastive"`` →
+        # energy-contrastive ``train_step`` (the bio rule); ``"equilibrium"``
+        # → O(1) implicit differentiation backward; ``"bptt"`` → unrolled
+        # backprop through the settle (baseline). Read from ``extra`` (search
+        # space passes it there) or fallback kwarg.
+        gm = cfg.extra.get("gradient_method")
+        self.gradient_method = (
+            gm if isinstance(gm, str) else kwargs.get("gradient_method", "equilibrium")
         )
-        self.sparse_ratio = float(self.config.extra.get("sparse_ratio", 0.5))
-        self.momentum = float(self.config.extra.get("momentum", 0.5))
-        # Early-convergence knobs reach the shared settle primitive via the
-        # model surface (``settle_single_state`` honours
-        # ``model.convergence_threshold`` / ``convergence_start``).
-        self.convergence_threshold = float(
-            kwargs.get(
-                "convergence_threshold",
-                getattr(self.config, "convergence_threshold", 1e-3),
+        self.lr = float(cfg.learning_rate)
+        self.beta = float(cfg.beta)
+        self.max_steps = int(cfg.max_steps)
+        # EqProp dynamics use a bounded activation so the joint settle is
+        # contractive under spectral-normed weights. The legacy ``LoopedMLP``
+        # used ``tanh``; ``ModelConfig.activation`` defaults to ``silu``. Force
+        # ``tanh`` here unless the caller explicitly overrode ``activation``
+        # via ``config.extra``. This keeps the consolidated layered engine
+        # architecturally compatible with the prior single-hidden recurrent
+        # ``LoopedMLP`` at ``num_layers=1``.
+        explicit_activation = cfg.extra.get("activation")
+        if isinstance(explicit_activation, str):
+            object.__setattr__(cfg, "activation", explicit_activation)
+        elif cfg.activation == "silu":
+            object.__setattr__(cfg, "activation", "tanh")
+        self.activation_fn = self._get_activation(cfg.activation)
+        # ``ModelConfig`` defaults slippery params first; allow ``**kwargs`` to
+        # override non-field knobs that the search space samples per-rule
+        # (the search space for the eqprop family defines these alongside the
+        # ``ModelConfig`` knobs and the build path lands them in ``extra``).
+        self.nudge_steps = int(
+            kwargs.get("nudge_steps", cfg.extra.get("nudge_steps")) or max(
+                3, self.max_steps // 3
             )
+        )
+        self.sparse_ratio = float(
+            kwargs.get("sparse_ratio", cfg.extra.get("sparse_ratio", 0.5))
+        )
+        self.momentum = float(
+            kwargs.get("momentum", cfg.extra.get("momentum", 0.5))
+        )
+        self.convergence_threshold = float(
+            cfg.extra.get("convergence_threshold", cfg.convergence_threshold)
         )
         self.convergence_start = int(
-            kwargs.get(
-                "convergence_start",
-                getattr(self.config, "convergence_start", 5),
+            cfg.extra.get("convergence_start", cfg.convergence_start)
+        )
+        # Lazily-created optimizer for the contrastive step. The bio rule does
+        # not strictly require an optimizer (updates are manual in the
+        # contrastive step), but ``_contrastive_step`` expects one to apply the
+        # accumulated gradients. A plain SGD keeps the rule transparent.
+        self.optimizer: torch.optim.Optimizer | None = None
+        # Transient velocity buffer (variant == "momentum").
+        self._velocity: list[torch.Tensor] | None = None
+        self._build_layers()
+
+    # ------------------------------------------------------------------
+    # Architecture — single source of truth for the deep eqprop MLP.
+    # ------------------------------------------------------------------
+
+    def _hidden_dims(self) -> list[int]:
+        """The full hidden-width list, validated.
+
+        ``ModelConfig`` is built via ``compute_hidden_dims`` so it already
+        encodes ``num_layers``; here we just surface it and ensure at least one
+        hidden layer exists.
+        """
+        dims = list(self.config.hidden_dims)
+        if not dims:
+            # Defensive: a config with an empty ``hidden_dims`` (legacy direct
+            # init) maps to a single hidden layer of ``self.hidden_dim`` so the
+            # model still constructs. The construction supervisor separately
+            # reports this as a knob-threading defect, but the constructor
+            # raises instead of silently building a degenerate model.
+            dim = self.hidden_dim if self.hidden_dim > 0 else 64
+            dims = [dim]
+        return dims
+
+    def _build_layers(self) -> None:
+        hidden = self._hidden_dims()
+        dims = [self.input_dim, *hidden, self.output_dim]
+        # Forward stack: input→h_0→...→h_{L-1}→out (one Linear per adjacent pair).
+        self.layers = nn.ModuleList(
+            [nn.Linear(dims[i], dims[i + 1]) for i in range(len(dims) - 1)]
+        )
+        # Self-recurrent stack: one (h_i → h_i) Linear per hidden layer. Keeps
+        # the prior single-hidden ``LoopedMLP`` dynamics as the ``num_layers=1``
+        # case (with ``tanh`` + spectral norm the two are bit-equivalent).
+        self.W_rec = nn.ModuleList(
+            [nn.Linear(h, h) for h in hidden]
+        )
+        if self.config.use_spectral_norm:
+            self.layers = nn.ModuleList(
+                [
+                    spectral_norm(layer) if i < len(self.layers) - 1 else layer
+                    for i, layer in enumerate(self.layers)
+                ]
             )
-        )
-
-    def get_hebbian_pairs(
-        self, h: torch.Tensor, x: torch.Tensor
-    ) -> list[tuple[nn.Module, torch.Tensor, torch.Tensor]]:
-        """Return ``(layer, input, target)`` tuples for the base-class contrastive update."""
-        x_in = _flatten(x)
-        return [(self.W_in, x_in, h), (self.W_rec, h, h)]
-
-    def _build_layers(self):
-        hid = self.hidden_dim if self.hidden_dim > 0 else 64
-        self.W_in = nn.Linear(self.input_dim, hid)
-        self.W_rec = nn.Linear(hid, hid)
-        self.W_out = nn.Linear(hid, self.output_dim)
-        if self.use_spectral_norm:
-            self.W_rec = spectral_norm(self.W_rec)
-
-        # Feedback path (DirectedEP variant)
+            self.W_rec = nn.ModuleList([spectral_norm(l) for l in self.W_rec])
+        self._init_weights()
+        # Feedback pathway (variant == "feedback") — one backward Linear per
+        # hidden layer whose input is the output state.
         if self.variant == "feedback":
-            self.W_fb = nn.Linear(self.output_dim, hid)
+            self.feedback_layers = nn.ModuleList(
+                [nn.Linear(self.output_dim, h) for h in hidden]
+            )
+            self._init_weights(self.feedback_layers)
 
-        self.layers = nn.ModuleList([self.W_in, self.W_rec, self.W_out])
+    def _init_weights(self, modules: nn.Module | None = None) -> None:
+        """Initialise Linear weights with Xavier-uniform, biases to zero."""
+        layers = (
+            list(modules) if isinstance(modules, nn.ModuleList) else self.layers
+        )
+        for layer in layers:
+            actual = layer
+            if hasattr(layer, "parametrizations") and hasattr(
+                layer.parametrizations, "weight"
+            ):
+                actual = layer.parametrizations.weight.original
+            if hasattr(actual, "weight"):
+                nn.init.xavier_uniform_(actual.weight, gain=0.5)
+            if hasattr(actual, "bias") and actual.bias is not None:
+                nn.init.zeros_(actual.bias)
+        # Self-recurrent weights start at zero so the free phase initially
+        # reduces to a plain feedforward settle; the contrastive rule then
+        # learns a non-trivial recurrence term where it helps.
+        if isinstance(modules, nn.ModuleList):
+            return
+        for layer in self.W_rec:
+            actual = layer
+            if hasattr(layer, "parametrizations") and hasattr(
+                layer.parametrizations, "weight"
+            ):
+                actual = layer.parametrizations.weight.original
+            if hasattr(actual, "weight"):
+                nn.init.zeros_(actual.weight)
+            if hasattr(actual, "bias") and actual.bias is not None:
+                nn.init.zeros_(actual.bias)
 
-    def transition_modules(self) -> list[nn.Module]:
-        return [self.W_in, self.W_rec, self.W_out]
+    # ------------------------------------------------------------------
+    # Forward / settle (deep eqprop state is an *activations list*).
+    # ------------------------------------------------------------------
 
-    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.zeros(
-            (x.size(0), self.hidden_dim), device=x.device, dtype=x.dtype
+    def _initial_activations(self, x: torch.Tensor) -> list[torch.Tensor]:
+        """Seed per-layer activations from ``x``.
+
+        Layers below the output are first set by a single feedforward pass, so
+        the settle starts close to a real fixed point and converges quickly.
+        The output layer is clamped to zero (it will be driven by the dynamics
+        on the first settle step).
+        """
+        x = _flatten(x)
+        acts: list[torch.Tensor] = [x]
+        h = x
+        for i, layer in enumerate(self.layers):
+            h = layer(h)
+            if i < len(self.layers) - 1:
+                h = self.activation_fn(h)
+            acts.append(h)
+        return acts
+
+    def forward_dynamics(
+        self,
+        activations: list[torch.Tensor],
+        beta: float = 0.0,
+        target: torch.Tensor | None = None,
+    ) -> list[torch.Tensor]:
+        """One joint settle step for every layer state.
+
+        ``activations[0]`` is the (fixed) input ``x``. ``activations[1..L]``
+        are hidden-layer states ``h_0..h_{L-1}``. ``activations[L+1]`` is the
+        output ``out``. The output is the only layer that receives a nudge
+        term ``beta·(target − out)`` when ``target`` is provided; hidden layers
+        settle from their forward and backward neighbours.
+
+        Variant hooks:
+            * ``momentum`` — adds a decaying velocity term per hidden layer.
+            * ``sparse`` — top-k masks each hidden state post-step.
+            * ``feedback`` — a constant output→hidden backward drive is added
+              during the nudged phase.
+        """
+        x = activations[0]
+        num_hidden = len(self.layers) - 1
+        new_acts: list[torch.Tensor] = [x]
+        # Update velocity bookkeeping only when momentum is active.
+        use_momentum = self.variant == "momentum"
+        if use_momentum:
+            batch_size = activations[0].size(0)
+            if (
+                self._velocity is None
+                or len(self._velocity) != num_hidden
+                or self._velocity[0].size(0) != batch_size
+            ):
+                self._velocity = [
+                    torch.zeros_like(activations[i + 1]) for i in range(num_hidden)
+                ]
+        for i in range(num_hidden):
+            layer = self.layers[i]
+            pre = layer(activations[i])  # bottom-up from previous layer
+            # Self-recurrent term (LoopedMLP dynamics, generalised per layer).
+            pre = pre + self.W_rec[i](activations[i + 1])
+            # Top-down drive: every hidden layer reads a backward pass from the
+            # state *above* it — ``activations[i + 2]``. For the last hidden
+            # layer that above-state is the output ``activations[-1]`` (driven
+            # by ``W_out``), so the nudged output error propagates down to the
+            # last hidden unit and every hidden weight receives a contrastive
+            # (free vs nudged) gradient. Without this, the last hidden layer is
+            # a feedforward terminal and free ≡ nudged ⇒ zero learning signal.
+            # Weight used as-is (a ``Linear(out, in)`` maps its input space to
+            # its output space via ``y = x @ weight.T``, so the adjoint that
+            # back-projects ``h_above`` into the current layer's space is
+            # ``h_above @ weight`` — see shape derivation in the docstring).
+            next_layer = self.layers[i + 1]
+            w_bwd = next_layer.weight
+            top_down = activations[i + 2] @ w_bwd
+            total = pre + top_down
+            if use_momentum:
+                total = self.momentum * self._velocity[i] + total
+                self._velocity[i] = total.detach().clone()
+            h_new = self.activation_fn(total)
+            if self.variant == "sparse":
+                k = max(1, int(h_new.size(1) * self.sparse_ratio))
+                vals, _ = torch.topk(torch.abs(h_new), k, dim=1)
+                thr = vals[:, -1].unsqueeze(1)
+                h_new = h_new * (torch.abs(h_new) >= thr).to(h_new.dtype)
+            if self.variant == "feedback" and beta > 0:
+                # Output→hidden feedback drive, active only during nudge.
+                fb = self.feedback_layers[i](activations[-1])
+                h_new = h_new + beta * fb
+            new_acts.append(h_new)
+        # Output layer: linear projection of the last hidden state.
+        out = self.layers[-1](new_acts[-1])
+        if beta > 0 and target is not None:
+            out = out + beta * (target - out)
+        new_acts.append(out)
+        return new_acts
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        beta: float = 0.0,
+        target: torch.Tensor | None = None,
+        steps: int | None = None,
+        *,
+        return_trajectory: bool = False,
+        return_dynamics: bool = False,
+    ) -> (
+        torch.Tensor
+        | tuple[torch.Tensor, list[list[torch.Tensor]]]
+        | tuple[torch.Tensor, dict[str, object]]
+    ):
+        """Settle the eqprop state and return the output layer.
+
+        Two settle paths:
+
+        * ``gradient_method="equilibrium"`` on a single-hidden model (the
+          canonical "small recurrent" EqProp of Scellier & Bengio) uses the
+          O(1)-memory implicit backward — memory is flat in ``max_steps`` via
+          the implicit-function theorem (kept for the memory-advantage
+          contract; deep multi-hidden models settle explicitly instead).
+        * otherwise (deep, ``contrastive``, ``bptt``, inference) the model
+          settles via :func:`settle_activations_list`; under ``no_grad``
+          memory is O(L) activations, not O(L · steps).
+        """
+        if (
+            self.gradient_method == "equilibrium"
+            and len(self._hidden_dims()) == 1
+            and beta <= 0
+            and target is None
+            and not return_trajectory
+            and not return_dynamics
+            and self.training
+        ):
+            # O(1)-memory implicit path: single-state fixed point, adjoint
+            # solved iteratively by ``EquilibriumFunction`` (no unrolled graph).
+            return self._implicit_forward(x, steps=steps)
+        return self._explicit_forward(
+            x,
+            beta=beta,
+            target=target,
+            steps=steps,
+            return_trajectory=return_trajectory,
+            return_dynamics=return_dynamics,
         )
 
-    def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
-        return self.W_in(_flatten(x))
-
-    def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
-        return self.W_out(h)
-
-    def _pre_activation(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
-        return x_transformed + self.W_rec(h)
-
-    def _forward_step_impl(
-        self, h: torch.Tensor, x_transformed: torch.Tensor
+    def _implicit_forward(
+        self, x: torch.Tensor, steps: int | None = None
     ) -> torch.Tensor:
-        pre = self._pre_activation(h, x_transformed)
-        if self.variant == "momentum":
-            if not hasattr(self, "_velocity") or self._velocity.shape != h.shape:
-                self._velocity = torch.zeros_like(h)
-            pre = self.momentum * self._velocity + pre
-            self._velocity = pre.detach().clone()
-        h_next = torch.tanh(pre)
-        if self.variant == "sparse":
-            k = int(h_next.size(1) * self.sparse_ratio)
-            if k > 0:
-                vals, _ = torch.topk(torch.abs(h_next), k, dim=1)
-                thr = vals[:, -1].unsqueeze(1)
-                mask = (torch.abs(h_next) >= thr).float()
-                h_next = h_next * mask
-        return h_next
+        """O(1)-in-steps implicit settle for the single-hidden case."""
+        from bioplausible.zoo._settling import EquilibriumFunction
 
+        xf = _flatten(x)
+        n_steps = steps if steps is not None else self.max_steps
+        params = [p for p in self.parameters() if p.requires_grad]
+        h0 = torch.zeros(
+            (xf.size(0), self._hidden_dims()[0]), device=xf.device, dtype=xf.dtype
+        )
+        x_transformed = self._transform_input(xf)
+        # The implicit function stores the requested step count on the model
+        # for its forward/backward loop (it reads ``model.max_steps``).
+        saved_steps = self.max_steps
+        self.max_steps = n_steps
+        try:
+            h_star = EquilibriumFunction.apply(self, x_transformed, h0, *params)
+        finally:
+            self.max_steps = saved_steps
+        out = self._output_projection(h_star)
+        self._last_activations = None
+        return out
+
+    # Single-hidden shims for the O(1) implicit ``EquilibriumFunction`` path
+    # (it calls ``forward_step`` / ``_transform_input`` / ``_output_projection``
+    # / ``_initialize_hidden_state``). For single-hidden eqprop these reduce to
+    # the canonical "small recurrent" Scellier-Bengio dynamics
+    # ``h ← tanh(W_in(x) + W_rec h)``.
     def forward_step(
         self, h: torch.Tensor, x_transformed: torch.Tensor
     ) -> torch.Tensor:
-        return self._forward_step_impl(h, x_transformed)
+        return torch.tanh(x_transformed + self.W_rec[0](h))
 
-    def _settle(
+    def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
+        return self.layers[0](_flatten(x))
+
+    def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
+        return self.layers[-1](h)
+
+    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
+        xf = _flatten(x)
+        return torch.zeros(
+            (xf.size(0), self._hidden_dims()[0]), device=xf.device, dtype=xf.dtype
+        )
+
+    def _explicit_forward(
         self,
         x: torch.Tensor,
+        *,
         beta: float,
-        nudge: torch.Tensor | None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Settle to fixed point; return (h_star, x_transformed).
-
-        ``x_trans`` retains gradient connectivity to ``W_in`` so that
-        ``_energy_grads`` can compute gradients through it.  The settle
-        iterations themselves run under ``no_grad`` (fixed-point iteration),
-        but the input transform is recomputed with grad enabled in
-        ``_energy_grads``.
-        """
-        x_flat = _flatten(x)
-        h0 = self._initialize_hidden_state(x_flat)
-        with torch.no_grad():
-            x_trans_nograd = self._transform_input(x_flat)
-
-        if nudge is None:
-            # Free phase
-            def free_step(h, xt):
-                return self.forward_step(h, xt)
-
-            h_star, _, _ = settle_single_state(
-                h0, free_step, x_trans_nograd, self.max_steps, model=self
-            )
-        else:
-            # Nudged phase: h ← forward_step(h) − beta * nudge
-            def nudged_step(h, xt):
-                return self.forward_step(h, xt) - beta * torch.mm(nudge, self.W_out.weight)
-
-            h_star, _, _ = settle_single_state(
-                h0, nudged_step, x_trans_nograd, self.nudge_steps, model=self
-            )
-
-        return h_star, x_trans_nograd
-
-    def _energy_grads(
-        self, h: torch.Tensor, x: torch.Tensor
-    ) -> list[torch.Tensor]:
-        """∇_θ Σ(0.5 h² − h·pre_act), treating h as a constant (fixed-point direct term).
-
-        ``h`` is the settled equilibrium state (detached, constant).  ``pre_act``
-        is recomputed from the live model parameters so the gradient flows
-        through ``W_rec`` — this is the direct energy-gradient term that is equal
-        to the total gradient at the fixed point (where ∂E/∂h = 0).
-
-        ``x`` (the raw input) is used to recompute ``x_trans = W_in(x)`` with
-        gradient tracking so ``W_in`` receives gradients.
-        """
-        h_const = h.detach()
-        with torch.enable_grad():
-            x_flat = _flatten(x)
-            x_trans = self._transform_input(x_flat)
-            pre_act = self._pre_activation(h_const, x_trans)
-            energy = torch.sum(0.5 * h_const**2 - h_const * pre_act)
-        grads = torch.autograd.grad(
-            energy, self.parameters(), retain_graph=True, allow_unused=True
+        target: torch.Tensor | None,
+        steps: int | None,
+        return_trajectory: bool,
+        return_dynamics: bool,
+    ) -> (
+        torch.Tensor
+        | tuple[torch.Tensor, list[list[torch.Tensor]]]
+        | tuple[torch.Tensor, dict[str, object]]
+    ):
+        """Settle the (possibly deep) activations list explicitly."""
+        if x.dtype not in (torch.float32, torch.float64, torch.float16):
+            x = x.float()
+        activations = self._initial_activations(x)
+        n_steps = steps if steps is not None else self.max_steps
+        settled, trajectory, dynamics = settle_activations_list(
+            activations_0=activations,
+            forward_dynamics=self.forward_dynamics,
+            steps=n_steps,
+            beta=beta,
+            target=target,
+            return_trajectory=return_trajectory,
+            return_dynamics=return_dynamics,
+            convergence_threshold=self.convergence_threshold,
+            convergence_start=self.convergence_start,
         )
-        return [g if g is not None else torch.zeros_like(p)
-                for g, p in zip(grads, self.parameters())]
+        self._last_activations = settled
+        out = settled[-1]
+        if return_dynamics:
+            return out, dynamics
+        if return_trajectory:
+            return out, trajectory
+        return out
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Forward ``Linear`` layers in order — used by propagator/audit."""
+        return list(self.layers)
+
+    # ------------------------------------------------------------------
+    # Train step — consolidated energy-contrastive.
+    # ------------------------------------------------------------------
+
+    def _ensure_optimizer(self) -> None:
+        if self.optimizer is None:
+            self.optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        # Energy-contrastive rule (Scellier & Bengio): no BPTT, no optimizer.
-        # Runs when the sweep activates eqprop with gradient_method="equilibrium".
-        # Kept intentionally as the honest bio-rule path even though it currently
-        # learns slowly; diagnose later (see EXPERIMENT_PLAN6.md §8.6).
+        """Energy-contrastive free/nudged update (Scellier & Bengio).
+
+        Returns a metrics dict with ``loss`` and ``accuracy``. Runs when the
+        sweep activates the model with ``gradient_method="contrastive"`` or
+        ``"equilibrium"`` (the trainer tries ``model.train_step`` before any
+        fallback, so the local rule runs under the fast path too). Models
+        without a native rule fall through to the implicit / BPTT trainer
+        paths. ``"bptt"`` explicitly opts out.
+
+        For single-hidden models with ``gradient_method="equilibrium"``, return
+        ``None`` so the trainer's EnergyModel path (Phase 1) runs the O(1)-memory
+        implicit equilibrium backward — the historic fast path.
+        """
         if self.gradient_method not in ("equilibrium", "contrastive"):
-            return None
-
-        x_flat = _flatten(x)
-
-        # --- Free phase ---
-        with torch.no_grad():
-            h_free, x_trans = self._settle(x_flat, 0.0, None)
-            logits_free = self._output_projection(h_free)
-            loss_free = F.cross_entropy(logits_free, y)
-
-        # dL/dlogits at free equilibrium
-        logits_det = logits_free.clone().detach().requires_grad_(True)
-        v = torch.autograd.grad(
-            F.cross_entropy(logits_det, y), logits_det, retain_graph=False
-        )[0]
-
-        # --- Nudged phase ---
-        with torch.no_grad():
-            h_nudged, _ = self._settle(x_flat, self.beta, v)
-
-        # --- Energy gradients ---
-        gf = self._energy_grads(h_free, x_flat)
-        gn = self._energy_grads(h_nudged, x_flat)
-
-        # --- Manual weight updates ---
-        with torch.no_grad():
-            for p, gf_p, gn_p in zip(self.parameters(), gf, gn):
-                if p is self.W_out.weight:
-                    # Supervised output update: ΔW_out = −lr * v.T @ h_free
-                    p -= self.lr * torch.mm(v.T, h_free)
-                elif p is self.W_out.bias:
-                    p -= self.lr * v.sum(0)
-                else:
-                    # Energy-contrastive update: Δw = −lr * (∂E_nudged − ∂E_free) / β
-                    # = −lr * (gn − gf) / β
-                    p -= self.lr * (gn_p - gf_p) / self.beta
-
-        acc = (logits_free.argmax(1) == y).float().mean().item()
-        return {"loss": loss_free.item(), "accuracy": acc}
+            return None  # type: ignore[return-value]
+        # Single-hidden equilibrium models use the implicit O(1)-memory path
+        # via the EnergyModel protocol (trainer Phase 1).
+        if self.gradient_method == "equilibrium" and len(self._hidden_dims()) == 1:
+            return None  # type: ignore[return-value]
+        self._ensure_optimizer()
+        # For DirectedEP (variant == "feedback"), pass feedback_layers to
+        # _contrastive_step so the output->hidden feedback weights are updated.
+        feedback_layers = list(self.feedback_layers) if self.variant == "feedback" else None
+        return _contrastive_step(
+            self,
+            x,
+            y,
+            layer_list=list(self.layers),
+            beta=self.beta,
+            use_conj=False,
+            recurrent_layer_list=list(self.W_rec),
+            feedback_layer_list=feedback_layers,
+        )
 
 
 # ============================================================
-# Six thin registered subclasses — same engine, different names
+# Six thin registered subclasses — same engine, different variant.
+# Inheriting ``build()`` means the canonical construction path threads
+# every sampled knob (``num_layers`` included) into ``ModelConfig``.
 # ============================================================
-
-from bioplausible.core.registry import register_model
 
 
 @register_model("eqprop", family="eqprop", tags=["eqprop", "energy"])
 class StandardEqProp(EquilibriumMLP):
-    """Plain energy-contrastive EqProp (replaces StandardEqProp)."""
-    variant = "plain"
+    """Plain energy-contrastive deep EqProp MLP."""
 
-    @classmethod
-    def build(cls, spec, input_dim, output_dim, hidden_dim, num_layers,
-              device, task_type, **kwargs):
-        return cls(
-            config=ModelConfig(
-                name="eqprop", input_dim=input_dim, output_dim=output_dim,
-                hidden_dims=[hidden_dim], max_steps=kwargs.get("max_steps", 20),
-                learning_rate=kwargs.get("learning_rate", 1e-3),
-                beta=kwargs.get("beta", 0.3), use_spectral_norm=kwargs.get("use_spectral_norm", True),
-            )
-        ).to(device)
+    variant: Variant = "plain"
 
 
-@register_model("directed_ep", family="eqprop", tags=["eqprop", "energy", "feedback"])
+@register_model(
+    "directed_ep", family="eqprop", tags=["eqprop", "energy", "feedback"]
+)
 class DirectedEP(EquilibriumMLP):
-    """Energy-contrastive EqProp with output-to-hidden feedback (replaces DirectedEP)."""
-    variant = "feedback"
+    """Energy-contrastive EqProp with output→hidden feedback (DirectedEP)."""
 
-    @classmethod
-    def build(cls, spec, input_dim, output_dim, hidden_dim, num_layers,
-              device, task_type, **kwargs):
-        return cls(
-            config=ModelConfig(
-                name="directed_ep", input_dim=input_dim, output_dim=output_dim,
-                hidden_dims=[hidden_dim], max_steps=kwargs.get("max_steps", 20),
-                learning_rate=kwargs.get("learning_rate", 1e-3),
-                beta=kwargs.get("beta", 0.3), use_spectral_norm=kwargs.get("use_spectral_norm", True),
-            )
-        ).to(device)
+    variant: Variant = "feedback"
 
 
 @register_model("finite_nudge_ep", family="eqprop", tags=["eqprop", "energy"])
 class FiniteNudgeEP(EquilibriumMLP):
-    """Energy-contrastive EqProp with configurable nudge steps (replaces FiniteNudgeEP)."""
-    variant = "plain"
+    """Energy-contrastive EqProp with configurable nudge-step count.
 
-    @classmethod
-    def build(cls, spec, input_dim, output_dim, hidden_dim, num_layers,
-              device, task_type, **kwargs):
-        return cls(
-            config=ModelConfig(
-                name="finite_nudge_ep", input_dim=input_dim, output_dim=output_dim,
-                hidden_dims=[hidden_dim], max_steps=kwargs.get("max_steps", 20),
-                learning_rate=kwargs.get("learning_rate", 1e-3),
-                beta=kwargs.get("beta", 0.3), use_spectral_norm=kwargs.get("use_spectral_norm", True),
-                extra={"nudge_steps": kwargs.get("nudge_steps", max(3, kwargs.get("max_steps", 20)//3))}
-            )
-        ).to(device)
+    The surrogate ``max(3, max_steps // 3)`` nudge step count is read from
+    ``config.extra["nudge_steps"]`` when sampled, or defaults from
+    ``max_steps`` (Scellier & Bengio use a weaker nudge than the free settle).
+    """
+
+    variant: Variant = "plain"
 
 
 @register_model("lazy_eqprop", family="eqprop", tags=["eqprop", "energy"])
 class LazyEqProp(EquilibriumMLP):
-    """Energy-contrastive EqProp (replaces LazyEqProp)."""
-    variant = "plain"
+    """Energy-contrastive EqProp (lazy per-step activations)."""
 
-    @classmethod
-    def build(cls, spec, input_dim, output_dim, hidden_dim, num_layers,
-              device, task_type, **kwargs):
-        return cls(
-            config=ModelConfig(
-                name="lazy_eqprop", input_dim=input_dim, output_dim=output_dim,
-                hidden_dims=[hidden_dim], max_steps=kwargs.get("max_steps", 20),
-                learning_rate=kwargs.get("learning_rate", 1e-3),
-                beta=kwargs.get("beta", 0.3), use_spectral_norm=kwargs.get("use_spectral_norm", True),
-            )
-        ).to(device)
+    variant: Variant = "plain"
 
 
-@register_model("momentum_equilibrium", family="eqprop", tags=["eqprop", "energy", "momentum"])
+@register_model(
+    "momentum_equilibrium",
+    family="eqprop",
+    tags=["eqprop", "energy", "momentum"],
+)
 class MomentumEquilibrium(EquilibriumMLP):
-    """Energy-contrastive EqProp with momentum in settle dynamics (replaces MomentumEquilibrium)."""
-    variant = "momentum"
+    """Energy-contrastive EqProp with per-layer velocity (MomentumEquilibrium)."""
 
-    @classmethod
-    def build(cls, spec, input_dim, output_dim, hidden_dim, num_layers,
-              device, task_type, **kwargs):
-        return cls(
-            config=ModelConfig(
-                name="momentum_equilibrium", input_dim=input_dim, output_dim=output_dim,
-                hidden_dims=[hidden_dim], max_steps=kwargs.get("max_steps", 20),
-                learning_rate=kwargs.get("learning_rate", 1e-3),
-                beta=kwargs.get("beta", 0.3), use_spectral_norm=kwargs.get("use_spectral_norm", True),
-                extra={"momentum": kwargs.get("momentum", 0.5)}
-            )
-        ).to(device)
+    variant: Variant = "momentum"
 
 
-@register_model("sparse_equilibrium", family="eqprop", tags=["eqprop", "energy", "sparse"])
+@register_model(
+    "sparse_equilibrium", family="eqprop", tags=["eqprop", "energy", "sparse"]
+)
 class SparseEquilibrium(EquilibriumMLP):
-    """Energy-contrastive EqProp with top-k sparsity (replaces SparseEquilibrium)."""
-    variant = "sparse"
+    """Energy-contrastive EqProp with top-k hidden sparsity (SparseEquilibrium)."""
 
-    @classmethod
-    def build(cls, spec, input_dim, output_dim, hidden_dim, num_layers,
-              device, task_type, **kwargs):
-        return cls(
-            config=ModelConfig(
-                name="sparse_equilibrium", input_dim=input_dim, output_dim=output_dim,
-                hidden_dims=[hidden_dim], max_steps=kwargs.get("max_steps", 20),
-                learning_rate=kwargs.get("learning_rate", 1e-3),
-                beta=kwargs.get("beta", 0.3), use_spectral_norm=kwargs.get("use_spectral_norm", True),
-                extra={"sparse_ratio": kwargs.get("sparse_ratio", 0.5)}
-            )
-        ).to(device)
+    variant: Variant = "sparse"

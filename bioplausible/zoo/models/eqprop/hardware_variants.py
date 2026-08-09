@@ -4,16 +4,18 @@ These facades approximate non-Von-Neumann substrates so that the frontier
 pipeline's ``cost_of_plausibility`` can be measured *hardware-aware* rather
 than on an idealized digital GPU:
 
-- :class:`QuantizedLoopedMLP` — FPGA / bit-precision: the hidden state is
-  rounded to a signed ``bits``-bit representation each settle step.
+- :class:`QuantizedLoopedMLP` — FPGA / bit-precision: every hidden-layer
+  activation is rounded to a signed ``bits``-bit representation each settle
+  step.
 - :class:`NoisyLoopedMLP` — analog/photonic: a Gaussian noise draw (shot +
-  thermal) is added to the recurrent interaction every settle step.
+  thermal) is added to every hidden-layer pre-activation each settle step.
 
-Both keep float32 gradients (a surrogate for analog accumulation / high
-precision integration) and otherwise share the equilibrium loop and training
-path of their parent, so they drop into ``CoreTrainer`` and the probe driver
-unchanged. Living here (instead of ``validation/tracks``) keeps them
-importable from ``core.trainer`` without a `validation -> core` dependency.
+Both keep float32 gradients (a surrogate for analog accumulation / high-
+precision integration) and otherwise share the consolidated layered eqprop
+engine of their parent (:class:`EquilibriumMLP`), so they drop into
+``CoreTrainer`` and the probe driver unchanged. Living here (instead of
+``validation/tracks``) keeps them importable from ``core.trainer`` without a
+``validation -> core`` dependency.
 """
 
 import torch
@@ -43,12 +45,13 @@ class QuantizedLoopedMLP(LoopedMLP):
 
     Args:
         input_dim: Input dimensionality.
-        hidden_dim: Recurrent (equilibrium) state width.
+        hidden_dim: Equilibrium state width (per hidden layer).
         output_dim: Output logits width.
-        bits: Signed fixed-point width (e.g. ``8`` for INT8). The hidden state
-            is rounded to ``[-2**(bits-1)+1, 2**(bits-1)-1]`` each step.
+        bits: Signed fixed-point width (e.g. ``8`` for INT8). Each hidden
+            activation is rounded to ``[-2**(bits-1)+1, 2**(bits-1)-1]`` every
+            settle step.
         **kwargs: Remaining :class:`LoopedMLP` constructor arguments
-            (``max_steps``, ``use_spectral_norm``, ...).
+            (``num_layers``, ``max_steps``, ``use_spectral_norm``, ...).
 
     Gradients stay float: this simulates high-precision accumulators with a
     quantized interaction (surrogate-gradient style).
@@ -64,12 +67,15 @@ class QuantizedLoopedMLP(LoopedMLP):
     def _quantize(self, x: torch.Tensor) -> torch.Tensor:
         return torch.round(x * self.scale).clamp(-self.scale, self.scale) / self.scale
 
-    def _forward_step_impl(
-        self, h: torch.Tensor, x_transformed: torch.Tensor
-    ) -> torch.Tensor:
-        h_q = self._quantize(h)
-        pre_act = x_transformed + self.W_rec(h_q)
-        return torch.tanh(pre_act)
+    def forward_dynamics(self, activations, beta: float = 0.0, target=None):
+        """Settle one step with quantised hidden states (FPGA fidelity)."""
+        # Quantise the prior hidden activations before they feed the bottom-up,
+        # self-recurrent and top-down terms — this matches the original
+        # single-hidden facade's "quantise h before W Recurrence" rule.
+        quantised = [activations[0]]
+        for i in range(1, len(activations)):
+            quantised.append(self._quantize(activations[i]))
+        return super().forward_dynamics(quantised, beta=beta, target=target)
 
 
 @register_model(
@@ -90,7 +96,7 @@ class NoisyLoopedMLP(LoopedMLP):
 
     Args:
         input_dim: Input dimensionality.
-        hidden_dim: Recurrent (equilibrium) state width.
+        hidden_dim: Equilibrium state width (per hidden layer).
         output_dim: Output logits width.
         noise_level: Std-dev of the per-step Gaussian noise (as a fraction of
             the activation scale).
@@ -111,9 +117,15 @@ class NoisyLoopedMLP(LoopedMLP):
         super().__init__(input_dim, hidden_dim, output_dim, **kwargs)
         self.noise_level = float(noise_level)
 
-    def _forward_step_impl(
-        self, h: torch.Tensor, x_transformed: torch.Tensor
-    ) -> torch.Tensor:
-        noise = torch.randn_like(h) * self.noise_level
-        pre_act = x_transformed + self.W_rec(h) + noise
-        return torch.tanh(pre_act)
+    def forward_dynamics(self, activations, beta: float = 0.0, target=None):
+        """Inject Gaussian noise into the bottom-up term of each hidden layer."""
+        new_acts = super().forward_dynamics(activations, beta=beta, target=target)
+        # Add fresh noise to every hidden activation (layers 1..L), analogue
+        # of the original single-hidden facade's "noise to the recurrent
+        # pre-activation" rule. The output layer (last entry) stays noise-free.
+        with torch.no_grad():
+            for i in range(1, len(new_acts) - 1):
+                new_acts[i] = new_acts[i] + torch.randn_like(
+                    new_acts[i]
+                ) * self.noise_level
+        return new_acts

@@ -56,7 +56,7 @@ class TestSchedulerIntegration(unittest.TestCase):
         # Reconfigure model with kernel backend.
         self.trainer.model = LoopedMLP(
             input_dim=784, hidden_dim=20, output_dim=10, backend="kernel"
-        )
+        ).to(self.trainer.device)
         self.trainer.config.batches_per_epoch = 1
         self.trainer.config.val_batches = 1
 

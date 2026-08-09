@@ -1,18 +1,26 @@
-"""Equilibrium Propagation model variants."""
+"""Equilibrium Propagation model variants.
+
+``LoopedMLP`` is the single-registered-name facade (``eqprop_mlp``) over the
+consolidated deep-eqprop engine in :mod:`bioplausible.zoo.models.eqprop._energy`.
+It exists only to preserve the 3-arg positional legacy constructor used by the
+validation tracks and hardware facades; the engine itself, the depth handling
+(``num_layers``→real hidden layers) and the energy-contrastive rule live in
+:class:`EquilibriumMLP` — there is no second architecture here.
+
+``BackpropMLP`` is the plain feedforward MLP used as the parity baseline
+against all the bio-plausible families.
+"""
 
 import math
 
 import torch
 from torch import nn
-from torch.nn.utils.parametrizations import spectral_norm
 
-from bioplausible.acceleration.kernels import HAS_CUPY, EqPropKernel
-from bioplausible.acceleration.triton_kernels import TritonEqPropOps
+from bioplausible.core.config import ModelConfig
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 
-from ....acceleration import compile_settling_loop
-from ..base import EqPropModel
 from ..transitions import TransitionGraphMixin
+from ._energy import EquilibriumMLP
 
 __all__ = [
     "BackpropMLP",
@@ -28,7 +36,10 @@ def _kernel_backend_step(
     """Run a train step via the NumPy/CuPy kernel engine.
 
     Returns ``None`` when the engine is unavailable (caller falls back to
-    the PyTorch implementation).
+    the PyTorch implementation). The kernel engine is single-hidden-state
+    only; layered ``LoopedMLP`` (``num_layers > 1``) must keep ``backend``
+    on ``"pytorch"`` and never reach here — the consolidated engine's
+    ``train_step`` path is then used instead.
     """
     if engine is None:
         return None
@@ -52,230 +63,86 @@ def _kernel_backend_step(
     tags=["eqprop", "looped_mlp", "equilibrium"],
     extra={"parity_threshold": 0.05},
 )
-class LoopedMLP(EqPropModel):
+class LoopedMLP(EquilibriumMLP):
+    """Canonical eqprop MLP — alias of :class:`EquilibriumMLP`.
+
+    The registration metadata lives here (rather than on ``EquilibriumMLP``
+    itself) so the historic search-space key ``"eqprop_mlp"`` keeps resolving
+    to the consolidated layered engine. Architecture, depth handling
+    (``num_layers``→real hidden layers), and energy-contrastive update are
+    inherited unmodified: there is no separate "looped" implementation, this
+    is the unified eqprop MLP seen under the old name.
+
+    The positional 3-arg constructor ``LoopedMLP(input_dim, hidden_dim,
+    output_dim, ...)`` historically used by the validation/hardware tracks is
+    preserved by translating it into a ``ModelConfig``; ``config=`` remains
+    the preferred entrypoint for the construction layer.
     """
-    A recurrent MLP that iterates to a fixed-point equilibrium.
 
-    The key insight: By constraining Lipschitz constant L < 1 via spectral norm,
-    the network is guaranteed to converge to a unique fixed point.
-
-    Architecture:
-        h_{t+1} = tanh(W_in @ x + W_rec @ h_t)
-        output = W_out @ h*  (where h* is the fixed point)
-
-    This model can be trained using:
-    1. BPTT (Backpropagation Through Time): With EqPropTrainer(use_kernel=False)
-    2. EqProp (Equilibrium Propagation): Using EqPropTrainer(use_kernel=True).
-       Note: For EqProp kernel mode, the weights are managed by the kernel (NumPy/CuPy),
-       not this PyTorch module. This module is primarily for BPTT or inference/visualization.
-
-    Example:
-        >>> model = LoopedMLP(784, 256, 10, use_spectral_norm=True)
-        >>> x = torch.randn(32, 784)
-        >>> output = model(x, steps=30)  # [32, 10]
-        >>> L = model.compute_lipschitz()  # Should be < 1.0
-    """
+    variant = "plain"  # type: ignore[assignment]
 
     def __init__(
         self,
-        input_dim: int | tuple,
-        hidden_dim: int,
-        output_dim: int,
+        input_dim: int | tuple[int, ...] | None = None,
+        hidden_dim: int | None = None,
+        output_dim: int | None = None,
+        num_layers: int = 1,
+        *,
+        config: ModelConfig | None = None,
         use_spectral_norm: bool = True,
         max_steps: int = 30,
         gradient_method: str = "equilibrium",
         backend: str = "pytorch",
-        num_layers: int = 2,
-    ) -> None:
-        if isinstance(input_dim, tuple):
-            input_dim = math.prod(input_dim)
-
-        super().__init__(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim,
-            max_steps=max_steps,
-            use_spectral_norm=use_spectral_norm,
-            gradient_method=gradient_method,
-        )
-
-        if backend == "auto":
-            backend = "kernel" if torch.cuda.is_available() and HAS_CUPY else "pytorch"
-
-        self.backend = backend
-        self._engine = None
-
-        if self.backend == "kernel":
-            use_gpu = HAS_CUPY and torch.cuda.is_available()
-            self._engine = EqPropKernel(
-                input_dim=input_dim,
-                hidden_dim=hidden_dim,
-                output_dim=output_dim,
-                max_steps=max_steps,
-                use_spectral_norm=use_spectral_norm,
-                use_gpu=use_gpu,
-                architecture="rnn",
-            )
-
-        self._init_weights()
-
-    def transition_modules(self) -> list[nn.Module]:
-        """Modules called in order during one forward step.
-
-        :returns: ``[self.W_in, self.W_rec, self.W_out]``
-        """
-        return [self.W_in, self.W_rec, self.W_out]
-
-    def __repr__(self) -> str:
-        backend_str = f", backend={self.backend}" if self.backend != "pytorch" else ""
-        return (
-            f"LoopedMLP(input={self.input_dim}, hidden={self.hidden_dim}, "
-            f"output={self.output_dim}, steps={self.max_steps}, "
-            f"spectral_norm={self.use_spectral_norm}{backend_str})"
-        )
-
-    @classmethod
-    def build(
-        cls,
-        spec,
-        input_dim,
-        output_dim,
-        hidden_dim,
-        num_layers,
-        device,
-        task_type,
         **kwargs,
-    ):
-        return cls(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim,
-            use_spectral_norm=kwargs.get("use_spectral_norm", True),
-            max_steps=kwargs.get("steps", kwargs.get("max_steps", 20)),
-            gradient_method=kwargs.get("gradient_method", "equilibrium"),
-        ).to(device)
-
-    def _build_layers(self):
-        self.W_in = nn.Linear(self.input_dim, self.hidden_dim)
-        self.W_rec = nn.Linear(self.hidden_dim, self.hidden_dim)
-        self.W_out = nn.Linear(self.hidden_dim, self.output_dim)
-
-        if self.use_spectral_norm:
-            self.W_in = spectral_norm(self.W_in)
-            self.W_rec = spectral_norm(self.W_rec)
-            self.W_out = spectral_norm(self.W_out)
-
-    def _init_weights(self) -> None:
-        for layer in [self.W_in, self.W_rec, self.W_out]:
-            self._initialize_single_layer(layer)
-
-    def _initialize_single_layer(self, layer: nn.Module) -> None:
-        actual_layer = self._get_actual_layer(layer)
-        if hasattr(actual_layer, "weight"):
-            nn.init.xavier_uniform_(actual_layer.weight, gain=0.5)
-            if actual_layer.bias is not None:
-                nn.init.zeros_(actual_layer.bias)
-
-    def _get_actual_layer(self, layer: nn.Module) -> nn.Module:
-        if hasattr(layer, "parametrizations") and hasattr(
-            layer.parametrizations, "weight"
-        ):
-            return layer.parametrizations.weight.original
-        return layer
-
-    def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
-        batch_size = x.shape[0]
-        return torch.zeros(
-            (batch_size, self.hidden_dim), device=x.device, dtype=x.dtype
-        )
-
-    def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
-        if x.dtype not in [torch.float32, torch.float64, torch.float16, torch.bfloat16]:
-            x = x.float()
-
-        if x.dim() > 2:
-            x = x.reshape(x.size(0), -1)
-
-        if x.shape[1] != self.input_dim:
-            raise ValueError(
-                f"Input dimension mismatch: expected {self.input_dim}, got {x.shape[1]}"
+    ) -> None:
+        if config is None:
+            if input_dim is None or hidden_dim is None or output_dim is None:
+                raise ValueError(
+                    "LoopedMLP positional init requires input_dim, hidden_dim and "
+                    "output_dim (or pass config=ModelConfig(...))."
+                )
+            if isinstance(input_dim, tuple):
+                input_dim = math.prod(input_dim)
+            config = ModelConfig(
+                name="eqprop_mlp",
+                input_dim=input_dim,
+                output_dim=output_dim,
+                hidden_dims=[hidden_dim] * max(num_layers, 1),
+                use_spectral_norm=use_spectral_norm,
+                max_steps=max_steps,
+                extra={
+                    "gradient_method": gradient_method,
+                    "backend": backend,
+                    **kwargs,
+                },
             )
-        if not self.training:
-            w = self._get_spectral_normalized_weight(self.W_in)
-            b = self.W_in.bias
-            return torch.nn.functional.linear(x, w, b)
-        return self.W_in(x)
-
-    def _forward_step_impl(
-        self, h: torch.Tensor, x_transformed: torch.Tensor
-    ) -> torch.Tensor:
-        if TritonEqPropOps.is_available():
-            pre_act = x_transformed + self.W_rec(h)
-            return TritonEqPropOps.step(h, pre_act, alpha=1.0)
-
-        if not self.training:
-            w = self._get_spectral_normalized_weight(self.W_rec)
-            b = self.W_rec.bias
-            rec = torch.nn.functional.linear(h, w, b)
-            return torch.tanh(x_transformed + rec)
-
-        return torch.tanh(x_transformed + self.W_rec(h))
-
-    @compile_settling_loop
-    def forward_step(
-        self, h: torch.Tensor, x_transformed: torch.Tensor
-    ) -> torch.Tensor:
-        return self._forward_step_impl(h, x_transformed)
-
-    def _output_projection(self, h: torch.Tensor) -> torch.Tensor:
-        if not self.training:
-            w = self._get_spectral_normalized_weight(self.W_out)
-            b = self.W_out.bias
-            return torch.nn.functional.linear(h, w, b)
-        return self.W_out(h)
-
-    def get_hebbian_pairs(self, h, x):
-        return [(self.W_in, x, h), (self.W_rec, h, h)]
+        # ``backend`` is recorded for trainer compatibility (the kernel backend
+        # used to live here); the consolidated layered engine ignores it and
+        # always runs through ``settle_activations_list``. Read it from the
+        # config's ``extra`` when constructed via the canonical trainer path
+        # (where ``backend`` lands in ``ModelConfig.extra``), falling back to
+        # the explicit kwarg.
+        self.backend = str(config.extra.get("backend", backend))
+        super().__init__(config=config, **kwargs)
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        """Route to the correct training path.
+
+        * ``gradient_method="equilibrium"`` + single hidden layer → return ``None``
+          so the trainer's EnergyModel path (Phase 1) runs the O(1)-memory
+          implicit equilibrium backward — the historic fast path.
+        * ``gradient_method="contrastive"`` or multi-layer → run the consolidated
+          contrastive free/nudged step via ``EquilibriumMLP.train_step``.
+        """
+        if self.gradient_method == "equilibrium" and len(self._hidden_dims()) == 1:
+            # Single-hidden eqprop MLPs keep the O(1)-memory implicit
+            # differentiation backward (memory flat in settle steps).
+            return None  # type: ignore[return-value]
         if self.backend == "kernel":
-            metrics = _kernel_backend_step(self._engine, x, y)
+            metrics = _kernel_backend_step(getattr(self, "_engine", None), x, y)
             if metrics is not None:
                 return metrics
-
         return super().train_step(x, y)
-
-    def forward(
-        self,
-        x: torch.Tensor,
-        steps: int | None = None,
-        return_trajectory: bool = False,
-        return_dynamics: bool = False,
-    ) -> (
-        torch.Tensor
-        | tuple[torch.Tensor, list[torch.Tensor]]
-        | tuple[torch.Tensor, dict[str, object]]
-    ):
-        if self.backend == "kernel" and self._engine is not None:
-            if isinstance(x, torch.Tensor):
-                x_np = x.detach().cpu().numpy()
-            else:
-                x_np = x
-
-            if x_np.ndim > 2:
-                x_np = x_np.reshape(x_np.shape[0], -1)
-
-            h_star, _, _ = self._engine.solve_equilibrium(x_np)
-            logits_np = self._engine.compute_output(h_star)
-
-            logits = torch.from_numpy(logits_np).to(x.device)
-
-            if return_trajectory or return_dynamics:
-                return logits, {} if return_dynamics else []
-
-            return logits
-
-        return super().forward(x, steps, return_trajectory, return_dynamics)
 
 
 @register_model(

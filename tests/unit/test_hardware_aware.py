@@ -53,20 +53,34 @@ def test_hardware_variants_are_registered_models():
 
 
 def test_quantized_step_bounds_state_to_unit_scale():
-    """FPGA facade's quantized step keeps the hidden state in [-1, 1]."""
+    """FPGA facade's quantised ``forward_dynamics`` keeps hidden states in [-1, 1].
+
+    On the consolidated layered engine the facade quantises every hidden
+    activation before the next settle step, so a single-step forward dynamics
+    from a noisy state remains bounded to the signed fixed-point range [-1, 1].
+    """
     model = QuantizedLoopedMLP(**_kpw())
-    x = model._transform_input(torch.randn(8, 32))
-    h = torch.randn(8, 16) * 3.0
-    out = model._forward_step_impl(h, x)
-    assert out.min() >= -1.0 and out.max() <= 1.0
+    x = torch.randn(8, 32)
+    model.eval()
+    with torch.no_grad():
+        activations = model._initial_activations(x)
+        activations = model.forward_dynamics(activations, beta=0.0, target=None)
+    for h in activations[1:-1]:
+        assert h.min() >= -1.0 and h.max() <= 1.0
 
 
 def test_noisy_step_injects_stochastic_noise():
-    """Analog facade's step is stochastic (noise differs every call)."""
+    """Analog facade's ``forward_dynamics`` is stochastic (noise differs per call)."""
     model = NoisyLoopedMLP(**_kpw(), noise_level=0.05)
-    x = model._transform_input(torch.randn(8, 32))
-    h = torch.randn(8, 16)
-    outs = {model._forward_step_impl(h, x) for _ in range(3)}
+    x = torch.randn(8, 32)
+    model.eval()
+    with torch.no_grad():
+        acts0 = model._initial_activations(x)
+        outs = set()
+        for _ in range(3):
+            new_acts = model.forward_dynamics(acts0, beta=0.0, target=None)
+            # Stable hash: compare a single hidden layer's tensor hash.
+            outs.add(hash(new_acts[1].detach().cpu().numpy().tobytes()))
     assert len(outs) > 1  # runs with fresh noise differ
 
 

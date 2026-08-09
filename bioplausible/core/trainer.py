@@ -767,6 +767,19 @@ class CoreTrainer:
                 )
                 if epoch_metrics is None:
                     break
+                # A shallow-probe ``max_epoch_time`` budget that exhausted the
+                # epoch means the run is truncated: remaining epochs carry no
+                # signal (they'd hit the same budget immediately) and the probe
+                # already routes this run to ``epoch_time_truncated``. Stop here
+                # so the remaining epochs + validation passes don't waste the
+                # GPU budget.
+                if epoch_metrics.extra.get("epoch_time_budget_stopped"):
+                    logger.info(
+                        "epoch=%-2d hit max_epoch_time — stopping run early "
+                        "(epoch_time_truncated)",
+                        epoch,
+                    )
+                    break
                 if self._handle_epoch_end(epoch_metrics):
                     break
         except KeyboardInterrupt:

@@ -396,20 +396,26 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         "num_layers": (1, 6, "int"),
     },
     "eqprop": {
-        # learning_rate capped below the ~1e-2 divergence threshold of the
-        # contrastive EqProp family (DirectedEP diverges to NaN for lr >= 1e-2 on
-        # 784-dim MNIST; stable at ~1e-3). Keeps the shared space deliverable
-        # without flooding the sweep with diverged probes.
-        "learning_rate": (1e-5, 1e-2, "log"),
+        # Energy-contrastive EqProp update scale is `lr * (gn - gf) / beta`.
+        # Plan-6 §8.6 / §10.2 found the previous range (lr 1e-5..1e-2,
+        # beta 0.05..0.5) starved the rule: the optimal operating point is
+        # lr ~ 0.05-0.1 and beta ~ 0.01-0.1 (hand-tuned probe reached 34% at
+        # lr=0.05, beta=0.1 over 100 steps, vs 10-14% with the old space).
+        # Diverged probes [lr too high for a given beta] are quarantined by the
+        # sweep's nan_divergence defect gate — the space is not responsible for
+        # preventing divergence; it must include the working region.
+        "learning_rate": (1e-2, 5e-1, "log"),
         "weight_decay": (1e-6, 1e-2, "log"),
         "hidden_dim": (32, 1024, "log"),
         "num_layers": (1, 6, "int"),
-        "beta": (0.05, 0.5, "log"),
+        "beta": (1e-3, 1e-1, "log"),
         "max_steps": (5, 100, "int"),
         "damping": (0.0, 0.9, "linear"),
         "tol": (1e-6, 1e-2, "log"),
         "convergence_threshold": (1e-4, 1e-2, "log"),
         "convergence_start": (2, 10, "int"),
+        "sparse_ratio": (0.5, 1.0, "linear"),
+        "momentum": (0.0, 0.9, "linear"),
     },
     "neural_cube": {
         # Honest space (P0a): every knob is real — accepted by ``NeuralCube.__init__``

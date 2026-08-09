@@ -1,7 +1,9 @@
 """Test energy-contrastive EqProp gradient flow.
 
-Locks down that all non-output parameters receive non-zero energy gradients.
-W_out is excluded because it gets a separate supervised update.
+Locks down that all non-output parameters receive non-zero contrastive
+updates after a ``train_step`` (the consolidated deep-eqprop engine, so the
+self-recurrent ``W_rec`` layers are exercised too). W_out is excluded from the
+"hidden must move" assertion because it gets the separate supervised update.
 """
 import torch
 from bioplausible.core.config import ModelConfig
@@ -9,7 +11,7 @@ from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 
 
 def test_energy_grads_all_params_nonzero():
-    """All hidden-layer params must receive non-zero energy gradients."""
+    """All hidden-layer params must move after a contrastive train_step."""
     config = ModelConfig(
         name="eqprop_test",
         input_dim=784,
@@ -24,15 +26,18 @@ def test_energy_grads_all_params_nonzero():
     model = EquilibriumMLP(config=config, gradient_method="equilibrium")
 
     x = torch.randn(8, 784)
-    h_fixed = torch.randn(8, 64)
+    y = torch.randint(0, 10, (8,))
 
-    gf = model._energy_grads(h_fixed, x)
+    before = {n: p.clone() for n, p in model.named_parameters()}
+    model.train_step(x, y)
 
-    for (name, p), grad in zip(model.named_parameters(), gf):
-        # W_out gets a supervised update path, not energy gradient
-        if "W_out" in name:
-            continue
-        assert grad.norm().item() > 0, f"{name} has zero gradient — W_in/W_rec not updating!"
+    for name, p in model.named_parameters():
+        if "layers." in name and name.endswith(".weight") and name.startswith(
+            "layers." + str(len(model.layers) - 1) + "."
+        ):
+            continue  # W_out has a separate supervised update
+        delta = (p - before[name]).norm().item()
+        assert delta > 0, f"{name} has zero update after train_step"
 
 
 def test_train_step_updates_all_params():

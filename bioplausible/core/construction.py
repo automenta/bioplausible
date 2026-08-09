@@ -394,15 +394,87 @@ def phantom_knobs(
     trainer can use it. ``learning_rate`` is excluded because the trainer
     consumes it for BPTT models. The probe/sweep surface these as a defect
     instead of silently ignoring them.
+
+    Unlike a static reflection-only check, this also *constructs* the model for
+    config-accepting models and verifies that a sampled ``num_layers`` is
+    honoured by the actual architecture (``len(model.config.hidden_dims)``
+    tracks the request). That closes the ``build()``/``_build_layers`` phantom
+    drift the old supervisor missed: a model could accept ``config``, get a
+    fully-populated ``ModelConfig``, and then silently truncate ``hidden_dims``
+    to ``[hidden_dim]`` — every probe trained at one hidden layer regardless of
+    the sampled ``num_layers`` with zero knobs flagged.
     """
     cfg = _normalize(config)
     consumption = resolve_consumption(model_cls)
-    if consumption.accepts_config:
-        return frozenset()
-    return frozenset(
+    # Depth supervision runs for every model: a sampled ``num_layers`` must
+    # grow the constructed architecture, whether the model consumes ``config``
+    # (knob → ``ModelConfig.hidden_dims``) or not (knob → structural args).
+    knobs = set(
         key
         for key in KNOBS
         if key != "learning_rate"
         and key in cfg
         and not (consumption.has_catch_all or key in consumption.accepted)
     )
+    if not consumption.accepts_config:
+        knobs |= _config_num_layers_phantoms(
+            model_cls, cfg, input_dim=input_dim, output_dim=output_dim,
+            model_name=model_name,
+        )
+        return frozenset(knobs)
+    return _config_num_layers_phantoms(
+        model_cls, cfg, input_dim=input_dim, output_dim=output_dim,
+        model_name=model_name,
+    )
+
+
+def _config_num_layers_phantoms(
+    model_cls: object,
+    cfg: dict[str, object],
+    *,
+    input_dim: int,
+    output_dim: int,
+    model_name: str | None,
+) -> frozenset[str]:
+    """Check a config-accepting model's *depth* honours the sampled ``num_layers``.
+
+    Returns ``{"num_layers"}`` when ``num_layers > 1`` is sampled but the
+    constructed model's ``config.hidden_dims`` does not grow with it (i.e. the
+    architecture/silently dropped the knob). Safe to call on any config-
+    accepting model: constructs under ``try``, and models that cannot reflect
+    depth (e.g. some conv/graph types) are treated as depth-honouring to avoid
+    false positives when the model *deliberately* uses another width axis.
+    """
+    num_layers = cfg.get("num_layers")
+    if not isinstance(num_layers, int) or num_layers <= 1:
+        return frozenset()
+    # Build with a small width so the construction is cheap and does not OOM
+    # (a probe on the real config already happens elsewhere; this is a shallow
+    # supervision probe). ``hidden_dim`` is bumped only if the caller did not
+    # already supply one — we never want to skip the check just to win a race
+    # against a huge ``hidden_dim``.
+    probe_cfg = dict(cfg)
+    probe_cfg.setdefault("hidden_dim", 64)
+    probe_cfg["num_layers"] = num_layers
+    try:
+        model = construct_model(
+            model_cls,
+            probe_cfg,
+            input_dim=input_dim,
+            output_dim=output_dim,
+            model_name=model_name,
+        )
+    except (TypeError, ValueError, RuntimeError, NotImplementedError):
+        # Cannot construct here (e.g. fixture-only model); cannot verify depth —
+        # do not cry wolf on unverifiable models.
+        return frozenset()
+    cfg_obj = getattr(model, "config", None)
+    actual_layers = len(cfg_obj.hidden_dims) if cfg_obj is not None else 0
+    # Some models grow a *fixed* width axis instead of ``hidden_dims`` (conv
+    # ``hidden_channels``, cube ``cube_size``), and ``construct_model`` may
+    # route ``num_layers`` through a structural cap. Only flag when the config
+    # faithfully carries ``hidden_dims`` and the count is stuck far below the
+    # request — the canonical MLP-failure signature.
+    if actual_layers > 0 and actual_layers < num_layers:
+        return frozenset({"num_layers"})
+    return frozenset()

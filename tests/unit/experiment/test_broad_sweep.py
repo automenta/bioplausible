@@ -200,7 +200,14 @@ def test_eqprop_models_all_use_energy_contrastive():
 
 
 def test_rule_activation_for_uses_energy_contrastive():
-    """All eqprop models now get gradient_method='equilibrium' (energy-contrastive)."""
+    """All eqprop models get gradient_method='equilibrium' (energy-contrastive).
+
+    ``"equilibrium"`` routes a unified ``EquilibriumMLP`` model through its
+    native contrastive ``train_step`` (the trainer tries Phase-3
+    ``model.train_step`` before anything else), while conv/graph add-ons (no
+    native rule) keep the fast O(1) implicit backward. It is the one value
+    that gives every eqprop model its fastest correct training path.
+    """
     act = bs._rule_activation_for("eqprop", "eqprop")
     assert act["config"]["gradient_method"] == "equilibrium"
     act = bs._rule_activation_for("directed_ep", "eqprop")
