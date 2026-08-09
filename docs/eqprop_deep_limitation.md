@@ -150,7 +150,38 @@ until diagnostics show sustained early-layer contrastive signal AND a
 compute-matched accuracy result. The `status:*` registry tags make this
 quarantine operational: known-broken models are excluded from default sweeps.
 
+## 7. Knobs — Honest Labels (Plan 8 §B4)
+
+The Session 2/3 work separated four concepts that the codebase previously
+conflated. Each knob below is a *separate* lever; mislabelling any of them
+as an EqProp β re-introduces the "per-layer β is a fix" confusion that
+§3 rejects.
+
+| Concept | Knob (RULE_SPACES) | What it actually does | Honest scope |
+|---|---|---|---|
+| Energy nudge | `beta` | The free/nudged-state β in the contrastive loss | Global, energy-based — the only true β |
+| Per-layer update scale | `update_scale`, `update_scale_by_depth` | Optimizer multiplier, applied *after* the EqProp update | An LR hack, not a β. May amplify residual signal but does not change contrastive dynamics |
+| Feedback pathway | `feedback_gain`, `feedback_init_gain` | Explicit output→hidden drive in the nudged phase | Restores early-layer signal (B2 +0.16 slope) but does not yield learning in 5 epochs (G2 fail) |
+| Recurrent init | `w_rec_init`, `w_rec_gain` | Construction-time `W_rec` initialisation | Tests the "zero-init breaks power iteration" hypothesis; orthogonal to credit-assignment fix |
+
+### Honesty rule
+
+These knobs are now all sweepable in `RULE_SPACES["eqprop"]` (verified by
+`test_every_advertised_key_is_consumed_somewhere`), so any report claiming
+"feedback works" must show both:
+
+1. The contrastive-signal slope (not just the accuracy delta).
+2. Which knobs were active (`update_scale_by_depth`, `feedback_gain`, etc.)
+   and their values — because a "win" driven by per-layer LR scaling is
+   structurally an LR hack (§3), not a β-driven energy result.
+
+When a future variant of deep EqProp achieves competitive accuracy, that
+claim is only credible if it survives capacity-controlled comparison (Plan 8
+§15.4 Tertiary) AND reports the active knobs. Until then the G2 negative
+result (§5) stands.
+
 ---
 
 *Maintained by Plan 8 Track D5. Update this document when the depth-scaling
-slope or Gate G2 evidence changes.*
+slope or Gate G2 evidence changes, or when the §15.4 parity report adds a
+capacity-controlled finding for the eqprop family.*

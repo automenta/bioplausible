@@ -119,3 +119,159 @@ def test_parity_fails_loudly_on_out_of_budget_params(tmp_path: Path):
     )
     notes = "\n".join(report["notes"])
     assert "does not match baseline" in notes, notes
+
+
+# ---------------------------------------------------------------------------
+# Three-contract report (Plan 8 §15.4): width_matched / compute_matched /
+# capacity_controlled. Effect sizes (Cohen's d, Cliff's δ, bootstrap_p) are
+# part of the §C2 contract.
+# ---------------------------------------------------------------------------
+
+
+def test_parity_emits_three_contracts_per_cell(tmp_path: Path):
+    """Each non-baseline cell produces the three §15.4 comparison contracts.
+
+    Capacity-controlled is gated by ``width_ladder`` being non-empty — the
+    existing smoke build passes the default ladder, so the row count per cell
+    is exactly 3. (Dropping the ladder keeps width/compute-matched — only the
+    capacity-controlled arm is optional.)
+    """
+    report = bp.build_report(
+        task="digits",
+        depths=(2,),
+        hidden_dims=(16,),
+        seeds=1,
+        epochs=1,
+        device="cpu",
+        families=("backprop", "target_prop"),
+        output_dir=str(tmp_path),
+    )
+    contracts = {c["contract"] for c in report["comparisons"]}
+    assert contracts == {
+        bp.Contract.WIDTH_MATCHED.value,
+        bp.Contract.COMPUTE_MATCHED.value,
+        bp.Contract.CAPACITY_CONTROLLED.value,
+    }, (
+        "All three §15.4 contracts must appear in a full-ladder run; got "
+        f"{sorted(contracts)}"
+    )
+
+
+def test_parity_compute_matched_carries_flops(tmp_path: Path):
+    """The compute-matched row reports forward+backward FLOPs for both arms.
+
+    FLOPs are the §15.4 honest currency for PC/eqprop families whose settling
+    steps cost more compute than backprop's single forward+backward — the
+    ``model_total_flops``/``baseline_total_flops`` fields expose that
+    discrepancy rather than hiding it in the wall-clock column.
+    """
+    report = bp.build_report(
+        task="digits",
+        depths=(2,),
+        hidden_dims=(16,),
+        seeds=1,
+        epochs=1,
+        device="cpu",
+        families=("backprop", "target_prop"),
+        output_dir=str(tmp_path),
+    )
+    compute_rows = [
+        c
+        for c in report["comparisons"]
+        if c["contract"] == bp.Contract.COMPUTE_MATCHED.value
+    ]
+    assert compute_rows, "compute_matched contract row missing"
+    row = compute_rows[0]
+    assert "model_total_flops" in row
+    assert "baseline_total_flops" in row
+    assert "flops_advantage" in row
+    assert isinstance(row["flops_advantage"], bool)
+
+
+def test_parity_capacity_controlled_reports_baseline_width(tmp_path: Path):
+    """The capacity-controlled arm reports which backprop width it searched to.
+
+    That ``baseline_width`` makes the §15.4 Tertiary arm auditable: someone
+    reading the markdown can verify what backprop architecture the bio model
+    was compared against, without re-deriving the width ladder.
+    """
+    report = bp.build_report(
+        task="digits",
+        depths=(2,),
+        hidden_dims=(16,),
+        seeds=1,
+        epochs=1,
+        device="cpu",
+        families=("backprop", "target_prop"),
+        output_dir=str(tmp_path),
+    )
+    cap_rows = [
+        c
+        for c in report["comparisons"]
+        if c["contract"] == bp.Contract.CAPACITY_CONTROLLED.value
+    ]
+    assert cap_rows, "capacity_controlled row missing"
+    row = cap_rows[0]
+    assert "baseline_width" in row
+    assert isinstance(row["baseline_width"], int)
+    assert row["baseline_width"] > 0
+
+
+def test_parity_effect_sizes_appear_when_seeds_ge_2(tmp_path: Path):
+    """Effect sizes (Cohen's d, Cliff's δ, bootstrap_p) require ≥2 seeds.
+
+    They are ``nan`` for 1-seed probes (the stats primitives are undefined);
+    the parity runner degrades gracefully so a 1-seed smoke probe still
+    produces a valid row, and ≥2-seed runs populate the fields.
+    """
+    report = bp.build_report(
+        task="digits",
+        depths=(2,),
+        hidden_dims=(16,),
+        seeds=2,
+        epochs=1,
+        device="cpu",
+        families=("backprop", "target_prop"),
+        output_dir=str(tmp_path),
+    )
+    rows_with_effects = [
+        c
+        for c in report["comparisons"]
+        if c.get("cohen_d") is not None
+        and c.get("cliff_delta") is not None
+        and c.get("bootstrap_p") is not None
+    ]
+    assert rows_with_effects, (
+        "≥2-seed parity rows must populate the §C2 effect-size fields"
+    )
+    import math
+
+    cohen = float(rows_with_effects[0]["cohen_d"])
+    assert not math.isnan(cohen), "cohen_d should be a finite number for ≥2 seeds"
+
+
+def test_parity_recovery_when_ladder_disabled(tmp_path: Path):
+    """Passing an empty width ladder disables only the capacity-controlled arm.
+
+    The other two contracts still produce rows; this is the supported route for
+    very small cells where a backprop retrain would dominate the elapsed time.
+    """
+    report = bp.run_parity(
+        task="digits",
+        depths=(2,),
+        hidden_dims=(16,),
+        seeds=1,
+        epochs=1,
+        device="cpu",
+        families=("backprop", "target_prop"),
+        output_dir=tmp_path,
+        width_ladder=(),
+    )
+    contracts = {c["contract"] for c in report["comparisons"]}
+    assert contracts == {
+        bp.Contract.WIDTH_MATCHED.value,
+        bp.Contract.COMPUTE_MATCHED.value,
+    }, (
+        "Empty width_ladder disables the capacity-controlled arm only; got "
+        f"{sorted(contracts)}"
+    )

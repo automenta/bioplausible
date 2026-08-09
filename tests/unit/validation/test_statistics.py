@@ -18,6 +18,7 @@ from bioplausible.validation.statistics import (
     bootstrap_percentile_ci,
     cliffs_delta,
     cohens_d,
+    permutation_test_p,
     power_for_two_sample,
 )
 
@@ -178,6 +179,58 @@ def test_power_zero_effect_is_alpha():
 def test_power_rejects_small_samples():
     with pytest.raises(ValueError):
         power_for_two_sample(0.5, 1)
+
+
+# ---------------------------------------------------------------------------
+# Permutation-test p-value (bootstrap_p in the parity report)
+# ---------------------------------------------------------------------------
+
+
+def test_permutation_test_p_null_is_high():
+    """Two samples drawn from the same distribution yield a high p-value."""
+    rng = np.random.default_rng(0)
+    a = rng.normal(0, 1, 30)
+    b = rng.normal(0, 1, 30)
+    p = permutation_test_p(a.tolist(), b.tolist(), n_perm=2_000, seed=0)
+    assert 0.05 < p <= 1.0, p
+
+
+def test_permutation_test_p_strong_alternative_is_low():
+    """Two well-separated samples yield a small p-value."""
+    rng = np.random.default_rng(1)
+    a = rng.normal(0, 1, 30)
+    b = rng.normal(3, 1, 30)  # ~3 SD shift → near-certain rejection
+    p = permutation_test_p(a.tolist(), b.tolist(), n_perm=2_000, seed=0)
+    assert p < 0.05, p
+
+
+def test_permutation_test_p_identical_samples_is_one():
+    """Identical samples: every permutation reproduces the observed mean diff."""
+    p = permutation_test_p([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], n_perm=200, seed=0)
+    assert p == pytest.approx(1.0, abs=0.01)
+
+
+def test_permutation_test_p_never_returns_zero():
+    """Add-one smoothing: a small sample cannot over-claim p = 0."""
+    p = permutation_test_p([1.0, 1.0, 1.0], [10.0, 10.0, 10.0], n_perm=10, seed=0)
+    assert p > 0.0
+    # Lowest credible p under n_perm draws is 1/(n_perm+1).
+    assert p >= 1 / 11 - 1e-12
+
+
+def test_permutation_test_p_empty_raises():
+    with pytest.raises(ValueError):
+        permutation_test_p([], [1.0])
+    with pytest.raises(ValueError):
+        permutation_test_p([1.0], [])
+
+
+def test_permutation_test_p_in_unit_interval():
+    rng = np.random.default_rng(2)
+    a = rng.normal(0, 2, 8)
+    b = rng.normal(1, 2, 8)
+    p = permutation_test_p(a.tolist(), b.tolist(), n_perm=500, seed=0)
+    assert 0.0 <= p <= 1.0
 
 
 # ---------------------------------------------------------------------------

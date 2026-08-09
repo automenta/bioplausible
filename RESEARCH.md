@@ -27,6 +27,63 @@ Automated, compute-matched comparison infrastructure:
 
 Compute-matched definition: "same FLOPs" is ambiguous for equilibrium methods, since settling steps aren't fixed at graph-construction time the way backprop's forward/backward pass is. Decide up front whether you match wall-clock, FLOPs, or settling-steps-to-convergence, and report the tradeoff explicitly rather than picking whichever makes EqProp look best.
 
+#### Plan 8 §15.4 — Compute-Matched Parity Report (Session 5)
+
+The compute-matched parity runner now emits a **three-contract report** per
+non-baseline cell, designed precisely so the report can be read as evidence
+*prior* to a verdict, not as a verdict itself. Each contract is a different
+control for a different confound:
+
+1. **Width-matched (Secondary).** Both arms sampled from the same width
+   ladder. Old §C2 contract — the bio model's width is the closest
+   parameterizable shape; the residual param mismatch surfaces as a note so
+   the reader knows the comparison is not capacity-faithful.
+2. **Compute-matched (Primary).** Same probes — same epochs, same seeds, the
+   same wall-clock cap per epoch enforced by CoreTrainer — plus
+   forward+backward FLOPs (the §15.4 "honest currency" for the PC/eqprop
+   families whose settling steps cost more FLOPs than backprop's single
+   forward+backward). The parity tier (C4) is computed on this contract.
+3. **Capacity-controlled (Tertiary).** Backprop is width-searched up to the
+   bio model's parameter budget. The same accuracy comparison repeated
+   param-matched answers the question §15.4 explicitly asks: *if the bio
+   model wins, was the win capacity or credit-assignment?*
+
+Each comparison carries **Cohen's d**, **Cliff's δ**, and a
+**permutation-test p-value** (the §C2-effect-size fields), so the reader
+sees not just "Δ % points" but also how separable the two distributions
+are at this budget. The report deliberately does **not** make algorithm
+classifications — at 5-seeds × 5-epochs × MLP-shape, no single cell can. It
+is decision-input evidence that motivates either knob sweeps, longer
+training, larger-N replicas, or architecture changes for any candidate the
+reporter (or reader) finds promising.
+
+Reference results: `runs/parity/{digits,usps,mnist}_mlp/{report.md,results.json}`.
+A 14-model digits GPU run (5 seeds × 5 epochs × depths {2,3}) is checked in;
+the flagships are also confirmed on USPS at intermediate scale (backprop
+baseline ~94.9 %, `fabricpc_graph_pcn` ~99.5 %). These cells place evidence
+on the table, not a tribunal. A negative tier at this budget means "the
+current knob set and training budget do not surface parity," not "this
+algorithm cannot parity" — further work on the rule, the architecture, or
+the budget can move any of these cells. The §B4 honesty rule
+(`docs/eqprop_deep_limitation.md` §7) governs how such further-tuning
+results must be reported so future capacity-driven wins are not
+mislabelled as credit-assignment wins.
+
+The Tier classification (C4) is repeated here so the reader can match the
+markdown table without consulting the runner source:
+
+- **Tier 1 — Strong parity.** Mean accuracy within 2 % absolute of backprop.
+- **Tier 2 — Acceptable parity.** Within 5 % *and* a memory, time, or FLOPs
+  advantage §15.4 declared as the honest currency.
+- **Tier 3 — Negative result.** Beyond 5 % below backprop with no
+  compensating advantage under this budget.
+
+Tier 3 is evidence-at-this-budget, not an algorithm-condemnation. The plan
+explicitly keeps Tier 3 candidates prefixed `status:experimental` — the
+registry quarantine preserves them for further work while the reporting
+infrastructure separates their cell-row evidence from claims about their
+eventual ceiling.
+
 ### 0.2 Registry Metadata Completeness Audit
 **File**: `bioplausible/validation/registry_audit.py`
 

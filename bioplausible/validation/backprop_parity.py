@@ -1,18 +1,34 @@
 """Compute-matched parity runner (Plan 8 Track C2).
 
-Compares bio-plausible families against the backprop baseline under matched
-compute: same task/split, matched architecture depth/width (parameter count
-within tolerance), the same seed set, the same epoch budget and the same
-wall-clock budget per epoch.
+Compares bio-plausible families against the backprop baseline under three
+contracts (Plan 8 §15.4 pre-registration):
+
+1. **Width-matched (Secondary)** — the bio model's width is selected from
+   ``hidden_dims`` to land closest to the baseline's param count. Param
+   mismatch is reported loudly. This is the legacy §C2 contract.
+2. **Capacity-controlled (Tertiary)** — backprop is width-searched up to the
+   bio model's param count. If the bio model still wins param-matched, the
+   bio claim strengthens; if backprop closes the gap, the bio win was
+   capacity-confounded. This is the §15.4 "more worth than any other cell" arm.
+3. **Compute-matched (Primary)** — uses the same probes as the width-matched
+   arm (same epoch budget, same wall-clock cap, same seeds) but reports
+   forward+backward FLOPs so the settling-cost discrepancy (PC/eqprop settle
+   FLOPs vs backprop's single forward+backward) is visible. Tiers are
+   computed on this contract.
+
+Per §15.4 the tier classification lives on the **Primary** contract; the other
+two contracts are reported as additional comparison rows so the reader can
+reconcile accuracy wins against compute and capacity.
 
 Each probe runs through :class:`CoreTrainerDriver` — the same training path as
 the broad sweep and the experiment campaign layer — so the metrics (final
-accuracy, epoch time, peak memory, param count) are directly comparable with
-the sweep reports.
+accuracy, epoch time, peak memory, FLOPs, param count) are directly
+comparable with the sweep reports.
 
 Reports: JSON per comparison plus a markdown summary with per-family
-confidence intervals (bootstrap), effect sizes (Cohen's d, Cliff's δ) and a
-parity tier (Plan 8 §C4/Gate G3):
+confidence intervals (bootstrap), effect sizes (Cohen's d, Cliff's δ),
+distribution-free p-value (permutation test) and a parity tier (Plan 8
+§C4/Gate G3):
 
 - **Tier 1 — Strong parity**: within 2% absolute of backprop.
 - **Tier 2 — Acceptable parity**: within 5% absolute **and** a
@@ -34,12 +50,19 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "Contract",
     "ParityReport",
     "backprop_baseline",
     "build_report",
@@ -54,11 +77,52 @@ PARAM_TOLERANCE = 0.10
 _TIER1_STRONG = 0.02
 _TIER2_ACCEPTABLE = 0.05
 
+# Default width ladder for the capacity-controlled backprop search. Sized to
+# span the MLP feasible width range across small (digits, input_dim≈256) and
+# large (MNIST, input_dim=784) tasks; the search picks the closest non-negative
+# param match.
+_DEFAULT_WIDTH_LADDER: tuple[int, ...] = (
+    16,
+    24,
+    32,
+    48,
+    64,
+    96,
+    128,
+    160,
+    192,
+    256,
+    384,
+    512,
+    768,
+    1024,
+    1536,
+    2048,
+)
+
+
+class Contract(StrEnum):
+    """Per §15.4 the report carries three independent comparison contracts."""
+
+    WIDTH_MATCHED = "width_matched"
+    CAPACITY_CONTROLLED = "capacity_controlled"
+    # The compute-matched contract reuses the width-matched probes (same
+    # epochs / seeds / wall-clock cap) but reports FLOPs and computes the
+    # tier. Keep it as a distinct tag so the reader can pull the primary
+    # comparison row in the report without re-inferring from field presence.
+    COMPUTE_MATCHED = "compute_matched"
+
+
 # The families the plan shortlists for compute-matched parity (C1). Each maps
 # to registered model names that are prospected for the best config.
 _FAMILY_MODELS: dict[str, tuple[str, ...]] = {
     "backprop": ("backprop_mlp",),
-    "fa": ("feedback_alignment", "standard_fa", "direct_feedback_alignment_eqprop", "dfa_deep"),
+    "fa": (
+        "feedback_alignment",
+        "standard_fa",
+        "direct_feedback_alignment_eqprop",
+        "dfa_deep",
+    ),
     "target_prop": ("diff_target_prop",),
     "predictive_coding": ("fabricpc_graph_pcn",),
     "eqprop_feedback": ("directed_ep",),
@@ -123,19 +187,19 @@ def parity_tier(acc: float, baseline: float, *, advantage: bool = False) -> str:
 
 def _match_width(
     model: str,
-    baseline_params: int,
+    target_params: int,
     *,
     task: str,
     depth: int,
     target_widths: tuple[int, ...],
 ) -> tuple[int, int]:
-    """Pick the width closest to matching ``baseline_params`` within tolerance.
+    """Pick the width closest to matching ``target_params`` within tolerance.
 
     Estimates the parameter count statically (no training) across the candidate
     widths at the given depth and returns ``(width, params)`` for the first
-    width that lands within ``±PARAM_TOLERANCE`` of the baseline — or the
-    width whose count is nearest to baseline when none does (so the disparity,
-    not a crash, is reported).
+    width that lands within ``±PARAM_TOLERANCE`` of the target — or the width
+    whose count is nearest to target when none does (so the disparity, not a
+    crash, is reported).
 
     Raises:
         ValueError: If no registered model matches ``model``.
@@ -151,11 +215,9 @@ def _match_width(
             input_dim=_task_input_dim(task),
             output_dim=_task_output_dim(task),
         )
-        if best is None or abs(count - baseline_params) < abs(
-            best[1] - baseline_params
-        ):
+        if best is None or abs(count - target_params) < abs(best[1] - target_params):
             best = (width, count)
-        if abs(count - baseline_params) < baseline_params * PARAM_TOLERANCE:
+        if abs(count - target_params) < target_params * PARAM_TOLERANCE:
             return width, count
     if best is None:  # pragma: no cover - candidate widths always non-empty
         raise RuntimeError(f"no candidate width resolved for {model}")
@@ -187,7 +249,13 @@ def _run_probe(  # ruff: ignore[too-many-arguments]  # probe call mirrors the dr
     device: str,
     propagator: str | None = None,
 ) -> dict[str, object]:
-    """Train one probe and return its metrics dict."""
+    """Train one probe and return its metrics dict.
+
+    The probe driver is constructed with ``track_flops=True`` so the primary
+    (compute-matched) contract can record forward+backward FLOPs — the §15.4
+    honest currency for PC/eqprop-style bioplausible families whose settling
+    steps cost more FLOPs than backprop's single forward+backward pass.
+    """
     return driver.train(  # type: ignore[attr-defined]
         model=model,
         task=task,
@@ -212,12 +280,15 @@ def backprop_baseline(  # ruff: ignore[too-many-arguments]  # baseline signature
     seeds: int,
     device: str,
     learning_rate: float = 1e-3,
-) -> tuple[float, dict[str, object]]:
-    """Train the backprop reference and return ``(mean_acc, metrics)``.
+) -> tuple[float, dict[str, object], list[dict[str, float]]]:
+    """Train the backprop reference.
 
-    The baseline is always ``backprop_mlp`` at the requested depth/width,
-    seeded once per ``seeds`` and averaged. Raises ``RuntimeError`` if no seed
-    produces a valid run (the parity report must not silently show a dead
+    Returns ``(mean_acc, last_metrics, probes)`` where ``probes`` is the per-
+    seed record list (one entry per seed) used by the §15.4 three-contract
+    comparison arms — effect sizes need per-seed accuracies, not just the
+    mean. The baseline is always ``backprop_mlp`` at the requested depth/width,
+    seeded once per ``seeds`` and averaged. Raises ``RuntimeError`` if no
+    seed produces a valid run (the parity report must not silently show a dead
     baseline).
     """
     from bioplausible.experiment.probe import CoreTrainerDriver
@@ -226,12 +297,12 @@ def backprop_baseline(  # ruff: ignore[too-many-arguments]  # baseline signature
         num_workers=0,
         batch_size=64,
         track_energy=False,
-        track_flops=False,
+        track_flops=True,
         track_memory=True,
         record_results=False,
         allow_bptt_fallback=True,
     )
-    accs: list[float] = []
+    probes: list[dict[str, float]] = []
     metrics: dict[str, object] = {}
     for seed in range(seeds):
         m = _run_probe(
@@ -245,55 +316,47 @@ def backprop_baseline(  # ruff: ignore[too-many-arguments]  # baseline signature
             seed=seed,
             device=device,
         )
-        acc = float(m["final_acc"])
-        accs.append(acc)
+        probes.append({
+            "acc": float(m["final_acc"]),
+            "loss": float(m["final_train_loss"]),
+            "epoch_time": float(m.get("epoch_time_s", 0.0)),
+            "peak_mem": float(m.get("peak_memory_mb", 0.0)),
+            "forward_flops": float(m.get("forward_flops", 0.0)),
+            "backward_flops": float(m.get("backward_flops", 0.0)),
+        })
         metrics = m  # last seed's compute metrics — representative
-    if not accs:
+    if not probes:
         raise RuntimeError("backprop baseline produced no valid seeds")
-    return sum(accs) / len(accs), metrics
+    return sum(p["acc"] for p in probes) / len(probes), metrics, probes
 
 
-def _run_cell(  # ruff: ignore[too-many-arguments]  # cell signature is the report contract
-    *,
+def _collect_probes(  # ruff: ignore[too-many-arguments]  # probe contract
     driver: object,
     model_name: str,
-    family: str,
     task: str,
+    *,
+    hidden_dim: int,
     depth: int,
-    hidden_dims: tuple[int, ...],
-    baseline_params: int,
-    baseline_acc: float,
-    baseline_epoch_time: float,
-    baseline_peak_memory: float,
+    learning_rate: float,
     epochs: int,
     seeds: int,
-    learning_rate: float,
     device: str,
-) -> tuple[dict[str, object] | None, dict[str, object] | None, str]:
-    """Train one (model, depth) cell across seeds and return the report pieces.
+) -> tuple[list[dict[str, float]], list[str]]:
+    """Run ``model_name``/``depth``/``hidden_dim`` across seeds.
 
-    Returns ``(model_entry, comparison, note)``. ``model_entry`` is None when
-    no seed produced a valid run (the caller records ``note``); ``comparison``
-    is None for the backprop baseline itself.
+    Returns ``(probes, failures)``. Each probe carries the metrics the parity
+    contract needs: per-seed accuracy, loss, epoch time, peak memory, and
+    forward+backward FLOPs (used for the §15.4 compute-matched contract).
     """
-    from bioplausible.validation.statistics import bootstrap_percentile_ci
-
-    width, params = _match_width(
-        model_name,
-        baseline_params,
-        task=task,
-        depth=depth,
-        target_widths=hidden_dims,
-    )
     probes: list[dict[str, float]] = []
-    probe_failures: list[str] = []
+    failures: list[str] = []
     for seed in range(seeds):
         try:
             m = _run_probe(
                 driver,
                 model_name,
                 task,
-                hidden_dim=width,
+                hidden_dim=hidden_dim,
                 depth=depth,
                 learning_rate=learning_rate,
                 epochs=epochs,
@@ -301,26 +364,38 @@ def _run_cell(  # ruff: ignore[too-many-arguments]  # cell signature is the repo
                 device=device,
             )
         except RuntimeError as exc:
-            probe_failures.append(f"{model_name}@{depth}/{seed}: {exc}")
+            failures.append(f"{model_name}@{depth}/{seed}: {exc}")
             continue
         probes.append({
             "acc": float(m["final_acc"]),
             "loss": float(m["final_train_loss"]),
             "epoch_time": float(m.get("epoch_time_s", 0.0)),
             "peak_mem": float(m.get("peak_memory_mb", 0.0)),
+            "forward_flops": float(m.get("forward_flops", 0.0)),
+            "backward_flops": float(m.get("backward_flops", 0.0)),
         })
+    return probes, failures
 
-    note = "; ".join(probe_failures)
-    if not probes:
-        return None, None, note or f"{model_name}@{depth}: no valid seeds"
+
+def _aggregate_model_entry(  # ruff: ignore[too-many-arguments]  # report contract
+    *,
+    model_name: str,
+    family: str,
+    depth: int,
+    width: int,
+    params: int,
+    epochs: int,
+    probes: list[dict[str, float]],
+) -> dict[str, object]:
+    """Build the per-model JSON/markdown row from raw per-seed probes."""
+    from bioplausible.validation.statistics import bootstrap_percentile_ci
 
     accs = [p["acc"] for p in probes]
     lo, hi = bootstrap_percentile_ci(accs, seed=0, n_boot=500)
-    mean_acc = sum(accs) / len(accs)
-    mean_epoch_time = sum(p["epoch_time"] for p in probes) / len(probes)
-    mean_peak_memory = sum(p["peak_mem"] for p in probes) / len(probes)
-
-    entry: dict[str, object] = {
+    total_flops = sum(p["forward_flops"] + p["backward_flops"] for p in probes) / len(
+        probes
+    )
+    return {
         "model": model_name,
         "family": family,
         "depth": depth,
@@ -328,45 +403,329 @@ def _run_cell(  # ruff: ignore[too-many-arguments]  # cell signature is the repo
         "params": params,
         "epochs": epochs,
         "seed_count": len(accs),
-        "mean_accuracy": mean_acc,
+        "mean_accuracy": sum(accs) / len(accs),
         "accuracy_ci95": [lo, hi],
         "mean_loss": sum(p["loss"] for p in probes) / len(probes),
-        "epoch_time_s": mean_epoch_time,
-        "peak_memory_mb": mean_peak_memory,
+        "epoch_time_s": sum(p["epoch_time"] for p in probes) / len(probes),
+        "peak_memory_mb": sum(p["peak_mem"] for p in probes) / len(probes),
+        "mean_total_flops": total_flops,
         "is_baseline": False,
     }
 
-    # Advantage: beat baseline epoch time or peak memory by >=10%.
-    advantage = (
-        baseline_epoch_time > 0 and mean_epoch_time < baseline_epoch_time * 0.9
-    ) or (baseline_peak_memory > 0 and mean_peak_memory < baseline_peak_memory * 0.9)
-    param_match = (
-        abs(params - baseline_params) / baseline_params if baseline_params else 1.0
+
+def _effect_sizes(
+    model_accs: Sequence[float],
+    baseline_accs: Sequence[float],
+) -> dict[str, float]:
+    """Per-comparison effect sizes for the §C2 required fields.
+
+    Args:
+        model_accs: Per-seed accuracies of the bioplausible model.
+        baseline_accs: Per-seed accuracies of the backprop baseline (same seeds).
+
+    Returns:
+        Dict with ``cohen_d``, ``cliff_delta`` and ``bootstrap_p`` (a
+        permutation-test p-value; see ``permutation_test_p`` for the rationale
+        behind the absolute-Δ statistic). Fields are ``nan`` when the statistic
+        is undefined for the provided cell size (``cohens_d`` requires
+        ``≥2`` observations per group) so a 1-seed parity probe can still emit a
+        valid JSON row without crashing the report writer.
+    """
+    from bioplausible.validation.statistics import (
+        cliffs_delta,
+        cohens_d,
+        permutation_test_p,
     )
-    if param_match > PARAM_TOLERANCE:
-        note += (
-            f"{'; ' if note else ''}{model_name}@{depth}: param count {params} "
-            f"does not match baseline {baseline_params} within "
-            f"{PARAM_TOLERANCE:.0%} (match={param_match:.2f}); comparison may "
-            "not be compute-matched (Plan 8 §C2)"
-        )
-    comparison: dict[str, object] = {
+
+    def _safe(stat: Callable[[Sequence[float], Sequence[float]], float]) -> float:
+        try:
+            return round(stat(list(model_accs), list(baseline_accs)), 4)
+        except ValueError, ZeroDivisionError:
+            return float("nan")
+
+    def _safe_p() -> float:
+        try:
+            return round(
+                permutation_test_p(
+                    list(model_accs), list(baseline_accs), n_perm=2_000, seed=0
+                ),
+                4,
+            )
+        except ValueError, ZeroDivisionError:
+            return float("nan")
+
+    return {
+        "cohen_d": _safe(cohens_d),
+        "cliff_delta": _safe(cliffs_delta),
+        "bootstrap_p": _safe_p(),
+    }
+
+
+def _make_comparison(  # ruff: ignore[too-many-arguments]  # comparison-record contract
+    *,
+    contract: Contract,
+    model_name: str,
+    family: str,
+    depth: int,
+    model_params: int,
+    baseline_params: int,
+    model_accs: Sequence[float],
+    baseline_accs: Sequence[float],
+    model_epoch_time: float,
+    baseline_epoch_time: float,
+    model_peak_memory: float,
+    baseline_peak_memory: float,
+) -> dict[str, object]:
+    """One comparison row tagged with its §15.4 contract."""
+    mean_acc = sum(model_accs) / len(model_accs)
+    mean_baseline = sum(baseline_accs) / len(baseline_accs)
+    advantage = (
+        baseline_epoch_time > 0 and model_epoch_time < baseline_epoch_time * 0.9
+    ) or (baseline_peak_memory > 0 and model_peak_memory < baseline_peak_memory * 0.9)
+    param_match = (
+        abs(model_params - baseline_params) / baseline_params
+        if baseline_params
+        else 1.0
+    )
+    record: dict[str, object] = {
+        "contract": contract.value,
         "model": model_name,
         "family": family,
         "depth": depth,
         "baseline_params": baseline_params,
-        "params": params,
-        "param_match": param_match,
-        "delta_accuracy": round(mean_acc - baseline_acc, 4),
-        "tier": parity_tier(mean_acc, baseline_acc, advantage=advantage),
+        "params": model_params,
+        "param_match": round(param_match, 3),
+        "delta_accuracy": round(mean_acc - mean_baseline, 4),
+        "tier": parity_tier(mean_acc, mean_baseline, advantage=advantage),
         "advantage": advantage,
-        "baseline_acc": baseline_acc,
+        "baseline_acc": mean_baseline,
         "model_acc": mean_acc,
+        "baseline_epoch_time_s": baseline_epoch_time,
+        "model_epoch_time_s": model_epoch_time,
+        "baseline_peak_memory_mb": baseline_peak_memory,
+        "model_peak_memory_mb": model_peak_memory,
     }
-    return entry, comparison, note
+    record.update(_effect_sizes(model_accs, baseline_accs))
+    return record
 
 
-def run_parity(  # ruff: ignore[too-many-arguments]  # campaign signature is the report contract
+def _width_search_backprop_for_bio_params(
+    bio_params: int,
+    *,
+    task: str,
+    depth: int,
+    width_ladder: tuple[int, ...],
+) -> tuple[int, int]:
+    """Width-ladder search for the backprop width closest to ``bio_params``.
+
+    The capacity-controlled contract (§15.4 "Tertiary") widens backprop until
+    its param count matches the bio cell. The ladder is the geometric range
+    from 16 to 2048; the picked width is the one whose backprop param count is
+    closest to (and never below by more than the tolerance) the bio model's.
+
+    Returns:
+        ``(width, backprop_params)``. ``backprop_params`` reflects the actual
+        constructed architecture so the runner can report the residual
+        param-match honestly (it never inherits the bio model's count).
+    """
+    return _match_width(
+        "backprop_mlp",
+        bio_params,
+        task=task,
+        depth=depth,
+        target_widths=width_ladder,
+    )
+
+
+def _run_cell(  # ruff: ignore[too-many-arguments,too-many-locals]  # cell bundles the three §15.4 contract arms; locals track per-arm probes/notes
+    *,
+    driver: object,
+    model_name: str,
+    family: str,
+    task: str,
+    depth: int,
+    hidden_dims: tuple[int, ...],
+    width_ladder: tuple[int, ...],
+    baseline_params: int,
+    baseline_probes: list[dict[str, float]],
+    baseline_acc: float,
+    baseline_epoch_time: float,
+    baseline_peak_memory: float,
+    epochs: int,
+    seeds: int,
+    learning_rate: float,
+    device: str,
+) -> tuple[dict[str, object] | None, list[dict[str, object]], str]:
+    """Train one (model, depth) cell and return ``(model_entry, comparisons, note)``.
+
+    Produces comparison records under three contracts (Plan 8 §15.4):
+    ``width_matched`` (cross-width baseline), ``compute_matched`` (primarily
+    reports FLOPs + tier computed on the width-matched probes — same epochs
+    / seeds / wall-clock cap), and ``capacity_controlled`` (backprop retrained
+    at the bio cell's param budget via a width search).
+
+    Returns an empty ``comparisons`` list when no seed produced a valid run.
+    """
+    width, params = _match_width(
+        model_name,
+        baseline_params,
+        task=task,
+        depth=depth,
+        target_widths=hidden_dims,
+    )
+    probes, failures = _collect_probes(
+        driver,
+        model_name,
+        task,
+        hidden_dim=width,
+        depth=depth,
+        learning_rate=learning_rate,
+        epochs=epochs,
+        seeds=seeds,
+        device=device,
+    )
+    note = "; ".join(failures)
+    if not probes:
+        return None, [], note or f"{model_name}@{depth}: no valid seeds"
+
+    entry = _aggregate_model_entry(
+        model_name=model_name,
+        family=family,
+        depth=depth,
+        width=width,
+        params=params,
+        epochs=epochs,
+        probes=probes,
+    )
+    model_accs = [p["acc"] for p in probes]
+    baseline_accs = [p["acc"] for p in baseline_probes] or [baseline_acc]
+    model_epoch_time = float(entry["epoch_time_s"])
+    model_peak_memory = float(entry["peak_memory_mb"])
+    comparisons: list[dict[str, object]] = []
+
+    width_record = _make_comparison(
+        contract=Contract.WIDTH_MATCHED,
+        model_name=model_name,
+        family=family,
+        depth=depth,
+        model_params=params,
+        baseline_params=baseline_params,
+        model_accs=model_accs,
+        baseline_accs=baseline_accs,
+        model_epoch_time=model_epoch_time,
+        baseline_epoch_time=baseline_epoch_time,
+        model_peak_memory=model_peak_memory,
+        baseline_peak_memory=baseline_peak_memory,
+    )
+    if float(width_record["param_match"]) > PARAM_TOLERANCE:
+        note += (
+            f"{'; ' if note else ''}{model_name}@{depth}[width_matched]: "
+            f"param count {params} does not match baseline {baseline_params} "
+            f"within {PARAM_TOLERANCE:.0%} (match={width_record['param_match']:.2f}); "
+            "comparison may not be compute-matched (Plan 8 §C2)"
+        )
+    comparisons.append(width_record)
+
+    compute_record = _make_comparison(
+        contract=Contract.COMPUTE_MATCHED,
+        model_name=model_name,
+        family=family,
+        depth=depth,
+        model_params=params,
+        baseline_params=baseline_params,
+        model_accs=model_accs,
+        baseline_accs=baseline_accs,
+        model_epoch_time=model_epoch_time,
+        baseline_epoch_time=baseline_epoch_time,
+        model_peak_memory=model_peak_memory,
+        baseline_peak_memory=baseline_peak_memory,
+    )
+    compute_record["model_total_flops"] = float(entry["mean_total_flops"])
+    compute_record["baseline_total_flops"] = (
+        sum(p["forward_flops"] + p["backward_flops"] for p in baseline_probes)
+        / len(baseline_probes)
+        if baseline_probes
+        else 0.0
+    )
+    # FLOPs advantage: bio model uses fewer total FLOPs by ≥10% → counts as
+    # an advantage for §C4 Tier 2 even when wall-clock is comparable. This is
+    # the honest currency per §15.4 ("settling steps make FLOPs the honest
+    # currency for PC/eqprop"); modelled as an ``flops_advantage`` flag.
+    base_flops = float(compute_record["baseline_total_flops"])
+    flops_advantage = (
+        base_flops > 0 and float(compute_record["model_total_flops"]) < base_flops * 0.9
+    )
+    compute_record["flops_advantage"] = flops_advantage
+    if flops_advantage and not bool(compute_record["advantage"]):
+        compute_record["advantage"] = True
+        compute_record["tier"] = parity_tier(
+            sum(model_accs) / len(model_accs),
+            sum(baseline_accs) / len(baseline_accs),
+            advantage=True,
+        )
+    comparisons.append(compute_record)
+
+    # Capacity-controlled: widen backprop to the bio cell's param budget.
+    if width_ladder:
+        bp_width, bp_params = _width_search_backprop_for_bio_params(
+            params,
+            task=task,
+            depth=depth,
+            width_ladder=width_ladder,
+        )
+        cap_probes, cap_failures = _collect_probes(
+            driver,
+            "backprop_mlp",
+            task,
+            hidden_dim=bp_width,
+            depth=depth,
+            learning_rate=learning_rate,
+            epochs=epochs,
+            seeds=seeds,
+            device=device,
+        )
+        if cap_failures:
+            note += f"{'; ' if note else ''}capacity-controlled backprop: " + "; ".join(
+                cap_failures
+            )
+        if cap_probes:
+            cap_accs = [p["acc"] for p in cap_probes]
+            cap_model_epoch_time = sum(p["epoch_time"] for p in cap_probes) / len(
+                cap_probes
+            )
+            cap_model_peak_memory = sum(p["peak_mem"] for p in cap_probes) / len(
+                cap_probes
+            )
+            cap_record = _make_comparison(
+                contract=Contract.CAPACITY_CONTROLLED,
+                model_name=model_name,
+                family=family,
+                depth=depth,
+                model_params=params,
+                baseline_params=bp_params,
+                model_accs=model_accs,
+                baseline_accs=cap_accs,
+                model_epoch_time=model_epoch_time,
+                baseline_epoch_time=cap_model_epoch_time,
+                model_peak_memory=model_peak_memory,
+                baseline_peak_memory=cap_model_peak_memory,
+            )
+            cap_record["baseline_width"] = bp_width
+            cap_record["baseline_total_flops"] = sum(
+                p["forward_flops"] + p["backward_flops"] for p in cap_probes
+            ) / len(cap_probes)
+            cap_record["model_total_flops"] = float(entry["mean_total_flops"])
+            comparisons.append(cap_record)
+        elif cap_failures:
+            note += (
+                f"{'; ' if note else ''}{model_name}@{depth}"
+                "[capacity_controlled]: no valid backprop seeds"
+            )
+
+    return entry, comparisons, note
+
+
+def run_parity(  # ruff: ignore[too-many-arguments,too-many-locals]  # campaign signature; per-depth baseline + cells accumulate locals
     *,
     task: str,
     depths: tuple[int, ...],
@@ -378,6 +737,7 @@ def run_parity(  # ruff: ignore[too-many-arguments]  # campaign signature is the
     families: tuple[str, ...] | None = None,
     output_dir: Path,
     include_broken: bool = False,
+    width_ladder: tuple[int, ...] = _DEFAULT_WIDTH_LADDER,
 ) -> dict[str, object]:
     """Run the compute-matched parity campaign and write the reports.
 
@@ -392,6 +752,10 @@ def run_parity(  # ruff: ignore[too-many-arguments]  # campaign signature is the
         families: Subset of the plan's C1 portfolio to run; None runs all.
         output_dir: Where ``results.json`` and ``report.md`` are written.
         include_broken: If False, ``status:broken`` models are skipped.
+        width_ladder: Backprop width candidates for the §15.4 capacity-
+            controlled contract. The default ladder spans 16→2048 covers both
+            the small (digits) and large (MNIST) tasks; pass ``()`` to disable
+            the capacity-controlled arm (saves a backprop retrain per cell).
 
     Returns:
         The full report dict (models, comparisons, provenance).
@@ -418,7 +782,7 @@ def run_parity(  # ruff: ignore[too-many-arguments]  # campaign signature is the
         num_workers=0,
         batch_size=64,
         track_energy=False,
-        track_flops=False,
+        track_flops=True,
         track_memory=True,
         record_results=False,
         allow_bptt_fallback=True,
@@ -430,7 +794,11 @@ def run_parity(  # ruff: ignore[too-many-arguments]  # campaign signature is the
 
     for depth in depths:
         # Backprop baseline for this depth.
-        baseline_acc, baseline_metrics = backprop_baseline(
+        (
+            baseline_acc,
+            baseline_metrics,
+            baseline_probes,
+        ) = backprop_baseline(
             task=task,
             depth=depth,
             hidden_dim=hidden_dims[0],
@@ -442,6 +810,27 @@ def run_parity(  # ruff: ignore[too-many-arguments]  # campaign signature is the
         baseline_params = _estimate_params("backprop_mlp", hidden_dims[0], depth, task)
         baseline_epoch_time = float(baseline_metrics.get("epoch_time_s", 0.0))
         baseline_peak_memory = float(baseline_metrics.get("peak_memory_mb", 0.0))
+        baseline_metrics_dict: dict[str, object] = {
+            "model": "backprop_mlp",
+            "family": "backprop",
+            "depth": depth,
+            "hidden_dim": hidden_dims[0],
+            "params": baseline_params,
+            "epochs": epochs,
+            "seed_count": seeds,
+            "mean_accuracy": baseline_acc,
+            "mean_loss": float(baseline_metrics.get("final_train_loss", 0.0)),
+            "epoch_time_s": baseline_epoch_time,
+            "peak_memory_mb": baseline_peak_memory,
+            "mean_total_flops": (
+                sum(p["forward_flops"] + p["backward_flops"] for p in baseline_probes)
+                / len(baseline_probes)
+                if baseline_probes
+                else 0.0
+            ),
+            "is_baseline": True,
+        }
+        models[f"backprop_mlp@{depth}"] = baseline_metrics_dict
 
         for family in wanted:
             for model_name in _FAMILY_MODELS[family]:
@@ -455,36 +844,21 @@ def run_parity(  # ruff: ignore[too-many-arguments]  # campaign signature is the
                             "--include-broken to run it)"
                         )
                         continue
-
-                # The backprop reference is the baseline already trained above;
-                # record it directly rather than re-train it in the family loop.
+                # The backprop reference already has its own family port (above);
+                # skip it inside other family lists to keep the report single-entry.
                 if model_name == "backprop_mlp":
-                    models[f"backprop_mlp@{depth}"] = {
-                        "model": model_name,
-                        "family": family,
-                        "depth": depth,
-                        "hidden_dim": hidden_dims[0],
-                        "params": baseline_params,
-                        "epochs": epochs,
-                        "seed_count": seeds,
-                        "mean_accuracy": baseline_acc,
-                        "mean_loss": float(
-                            baseline_metrics.get("final_train_loss", 0.0)
-                        ),
-                        "epoch_time_s": baseline_epoch_time,
-                        "peak_memory_mb": baseline_peak_memory,
-                        "is_baseline": True,
-                    }
                     continue
 
-                entry, comparison, note = _run_cell(
+                entry, cell_comparisons, note = _run_cell(
                     driver=driver,
                     model_name=model_name,
                     family=family,
                     task=task,
                     depth=depth,
                     hidden_dims=hidden_dims,
+                    width_ladder=width_ladder,
                     baseline_params=baseline_params,
+                    baseline_probes=baseline_probes,
                     baseline_acc=baseline_acc,
                     baseline_epoch_time=baseline_epoch_time,
                     baseline_peak_memory=baseline_peak_memory,
@@ -498,8 +872,7 @@ def run_parity(  # ruff: ignore[too-many-arguments]  # campaign signature is the
                 if entry is None:
                     continue
                 models[f"{model_name}@{depth}"] = entry
-                if comparison is not None:
-                    comparisons.append(comparison)
+                comparisons.extend(cell_comparisons)
 
     report = {
         "task": task,
@@ -559,6 +932,7 @@ def build_report(
 
 
 def _render_markdown(report: dict[str, object]) -> str:
+    """Render the parity report as a Plan 8 §15.4 three-contract summary."""
     lines = [
         "# Compute-Matched Parity Report",
         "",
@@ -568,35 +942,68 @@ def _render_markdown(report: dict[str, object]) -> str:
         f"**Seeds:** {report['seeds']}",
         f"**Device:** {report['device']}",
         "",
+        "_Three contracts per Plan 8 §15.4: width_matched (Secondary — same "
+        "width ladder as backprop baseline), compute_matched (Primary — same "
+        "probes + FLOPs reported, tier computed here), capacity_controlled "
+        "(backprop widened to the bio model's param budget — isolates "
+        "capacity from rule)._",
+        "",
         "## Models",
         "",
-        "| Model | Family | Depth | Width | Params | Seeds | Mean Acc | CI95 | Mean Loss | Epoch s | Peak MB |",
-        "|---|---|---:|---:|---:|---:|---:|---|---:|---:|---:|",
+        "| Model | Family | Depth | Width | Params | Seeds | Mean Acc | CI95 | "
+        "Mean Loss | Epoch s | Peak MB | MFLOPs |",
+        "|---|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|",
     ]
     models = report["models"]
     for key in sorted(models):
         m = models[key]
+        m_flops = float(m.get("mean_total_flops", 0.0)) / 1e6
         lines.append(
             f"| {m['model']} | {m['family']} | {m['depth']} | {m['hidden_dim']} | "
             f"{m['params']} | {m['seed_count']} | "
             f"{m['mean_accuracy']:.4f} | "
             f"{_ci_str(m)} | {m['mean_loss']:.4f} | "
-            f"{m['epoch_time_s']:.3f} | {m['peak_memory_mb']:.1f} |"
+            f"{m['epoch_time_s']:.3f} | {m['peak_memory_mb']:.1f} | "
+            f"{m_flops:.1f} |"
         )
     lines.extend(["", "## Comparisons vs Backprop", ""])
-    lines.append("| Family | Model | Depth | Δ Acc | Tier | Param Match |")
+    lines.append(
+        "| Contract | Family | Model | Depth | Δ Acc | Tier | Param Match"
+        " | Cohen d | Cliff δ | boot p | Base MFLOPs | Model MFLOPs |"
+    )
+    lines.append("|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|")
     for c in report["comparisons"]:
-        lines.append(
-            f"| {c['family']} | {c['model']} | {c['depth']} | "
-            f"{c['delta_accuracy']:+.4f} | {c['tier']} | "
-            f"{c['param_match']:.3f} |"
+        base_flops_m = float(c.get("baseline_total_flops", 0.0)) / 1e6
+        model_flops_m = float(c.get("model_total_flops", 0.0)) / 1e6
+        contract = c.get("contract", "width_matched")
+        row = (
+            f"| {contract} | {c['family']} | {c['model']} | {c['depth']} | "
+            f"{c['delta_accuracy']:+.4f} | {c['tier']} | {c['param_match']:.3f} | "
+            f"{_fmt_or_dash(c.get('cohen_d'), '{:+.3f}')} | "
+            f"{_fmt_or_dash(c.get('cliff_delta'), '{:+.3f}')} | "
+            f"{_fmt_or_dash(c.get('bootstrap_p'), '{:.3f}')} | "
+            f"{base_flops_m:.1f} | {model_flops_m:.1f} |"
         )
+        lines.append(row)
     if not report["comparisons"]:
         lines.append("_No comparisons — baseline only._")
     lines.extend(["", "## Notes", ""])
     lines.extend(f"- {n}" for n in report["notes"] or ["_none_"])
     lines.append("")
     return "\n".join(lines)
+
+
+def _fmt_or_dash(value: object, fmt: str) -> str:
+    """Format a possibly-missing numeric comparison field (no ``None`` in MD)."""
+    if value is None:
+        return "—"
+    try:
+        f = float(value)  # type: ignore[arg-type]
+    except TypeError, ValueError:
+        return "—"
+    if math.isnan(f):  # parity rows drop the stat when seeds < 2
+        return "—"
+    return fmt.format(f)
 
 
 def _ci_str(m: dict[str, object]) -> str:

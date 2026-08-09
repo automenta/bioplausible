@@ -443,6 +443,36 @@ def phantom_knobs(
     )
 
 
+def _safe_layer_count(model: object, cfg_obj: object) -> int:
+    """Best-effort layer count for the phantom-depth audit (Plan 8 §15.2 #3).
+
+    Returns the number of constructed layers, or ``-1`` to signal "audit
+    oracle unavailable" — the caller skips the phantom flag in that case (see
+    :func:`_config_num_layers_phantoms`). Some models (EquiTile family,
+    ``fabricpc_graph_pcn``) deliberately override ``transition_modules`` to
+    raise ``NotImplementedError`` because their width axis is a graph / tile
+    parameter rather than a layers list. Their ``config.hidden_dims`` follows
+    model-specific conventions (e.g. EquiTile stores ``num_layers - 2``
+    interior layers), so it cannot be compared against the sampled
+    ``num_layers`` uniformly without false positives. The registry-wide
+    param-count growth guard is the authoritative check for these models;
+    depth-oracle truth here would only cry wolf.
+
+    A non-negative return is the layer count constructed — ``0`` when neither
+    signal is available. ``0`` is safe because the audit only flags
+    ``actual_layers < num_layers`` (zero never triggers that path).
+    """
+    try:
+        built = getattr(model, "transition_modules", list)()
+    except NotImplementedError:
+        return -1
+    if built:
+        return len(built)
+    if cfg_obj is not None:
+        return len(getattr(cfg_obj, "hidden_dims", ()))
+    return 0
+
+
 def _config_num_layers_phantoms(
     model_cls: object,
     cfg: dict[str, object],
@@ -491,13 +521,19 @@ def _config_num_layers_phantoms(
     # reflects what was materially constructed; fall back to hidden_dims only
     # for models whose width axis is not a layers list (conv ``hidden_channels``,
     # cube ``cube_size``).
-    built = getattr(model, "transition_modules", lambda: [])()
-    if built:
-        actual_layers = len(built)
-    elif cfg_obj is not None:
-        actual_layers = len(cfg_obj.hidden_dims)
-    else:
-        actual_layers = 0
+    actual_layers = _safe_layer_count(model, cfg_obj)
+    # ``-1`` from the oracle means the model deliberately opts out of the
+    # standard ``transition_modules`` / ``hidden_dims`` convention (EquiTile
+    # family, ``fabricpc_graph_pcn`` whose width is a tile graph not a layers
+    # list). The phantom-depth audit cannot be applied to such models using the
+    # standard ``hidden_dims`` axis: the audit would false-positive on
+    # nonstandard conventions (EquiTile stores interior layers only, length
+    # ``num_layers-2``). The registry-wide depth guard
+    # (test_all_models_honor_depth_or_are_knowingly_phantom) already verifies
+    # param-count growth, which is the authoritative signal in that case;
+    # don't cry wolf here.
+    if actual_layers < 0:
+        return frozenset()
     # Some models grow a *fixed* width axis instead of ``hidden_dims`` (conv
     # ``hidden_channels``, cube ``cube_size``), and ``construct_model`` may
     # route ``num_layers`` through a structural cap. Only flag when the config
