@@ -155,14 +155,14 @@ This plan is complete when all of the following are true:
 - [x] EqProp diagnostics are implemented and tested.
 - [x] `beta` and `update_scale` are separated.
 - [x] `w_rec_init` is implemented as an explicit knob.
-- [ ] DirectedEP / feedback EqProp is honestly evaluated.
+- [x] DirectedEP / feedback EqProp is honestly evaluated. (Gate G2 FAILED — see §15.5)
 - [x] A contrastive profiling script produces per-layer diagnostic reports.
 - [x] Registry status tags or equivalent flags distinguish stable, experimental, and broken models.
 - [x] Known phantom-knob models are either fixed or quarantined.
 - [x] A compute-matched parity runner produces a reproducible report.
 - [x] Unit and integration tests cover the new diagnostics and update-scaling behavior.
 - [x] Documentation reflects the actual limitations of deep EqProp.
-- [ ] A final decision is recorded: keep, demote, or quarantine deep EqProp variants.
+- [x] A final decision is recorded: Outcome 2 — Deep EqProp Limited but Useful. (see §15.5)
 
 ---
 
@@ -2005,3 +2005,159 @@ The 15.2 finding (FA/target_prop carry 5–16× params at matched width) means "
 - [x] Finish D4: `broad_sweep.py` JSON now carries `git_sha`/`python_version`/`torch_version`/`device` in `_meta.provenance` (matching profiler).
 - [x] Give `standard_fa` a liveness probe (5 epochs, 2 seeds on CPU) — result: ~10% accuracy (random chance for 10-class MNIST) at depth 3. This is a genuine negative result, not a liveness false negative. Will be documented in parity report as Tier 3 negative with "no learning signal at depth 3" note.
 - [ ] Keep the `transition_modules()` depth-oracle audit on the checklist (follow-up #3) — it's the kind of guard that false-positives later, quietly.
+
+---
+
+## 15.5 Session: B2 Autopsy + Gate G2 (Session 3 of the plan)
+
+**Date:** 2026-08-09
+
+**Tasks covered:** B2 (EqProp autopsy), B3 (Gate G2 feedback evaluation), D5 (limitation doc update)
+
+### Progress Made
+
+#### B2 — EqProp autopsy (pre-registered protocol executed)
+
+**Profiler enhancement:** `scripts/contrastive_profile.py` gained CLI args
+for `--feedback-gain`, `--w-rec-init`, `--w-rec-gain`, `--update-scale`,
+`--update-scale-by-depth`. The diagnostics summary now records
+`config_extras` (the extra knobs passed) so null-arm runs are identifiable
+post-hoc.
+
+**Full scan:** 108 profile runs across:
+- `eqprop` (vanilla) × depths {1,2,3,4} × seeds {0,1,2} × β {0.01,0.03,0.1}
+- `directed_ep` (feedback, default gain=1.0) × same grid (72 runs)
+- `directed_ep` null arm (feedback_gain=0) × same grid (36 runs, separate
+  directory to avoid mixing)
+
+All runs completed on CUDA (10 steps per run, first epoch only).
+GPU CUDA driver issue required reboot mid-run; all completed after.
+
+**Analysis scripts created:**
+- `scripts/run_b2_autopsy.py` — orchestrates the 108-run grid
+- `scripts/rerun_null_arm.py` — cleanly re-runs the 36 null-arm configs
+  into a separate directory with `config_extras` tag
+- `scripts/b2_comprehensive_analysis.py` — three-arm comparison with
+  bootstrap CIs, per-depth medians, OLS slope fit on depths 2-4 only
+  (per pre-registration)
+- `scripts/analyze_null_arm.py` — standalone null-arm separation check
+
+**Results (slope of log(early/output delta ratio) vs depth, depths 2-4):**
+
+| Beta | eqprop (vanilla) | directed_ep (feedback) | null arm (fb_gain=0) |
+|---:|---:|---:|---:|
+| 0.01 | **-1.19 (R²=0.80)** | **+0.16 (R²=0.85)** | +0.24 (R²=0.49) |
+| 0.03 | -0.46 (R²=0.45) | -0.04 (R²=0.20) | -0.19 (R²=0.37) |
+| 0.1  | +0.07 (R²=0.05) | +0.02 (R²=0.01) | +0.12 (R²=0.25) |
+
+**Key findings:**
+1. **Vanilla eqprop shows strong vanishing signal at low β.** At β=0.01,
+   slope=-1.19 with R²=0.80 — a clear exponential decay of early-layer
+   signal with depth. This confirms the vanishing-signal hypothesis under
+   the pre-registered protocol.
+2. **Feedback (directed_ep) retains the signal.** At β=0.01,
+   slope=+0.16 with R²=0.85 — the feedback pathway keeps early-layer
+   state deltas alive as depth grows.
+3. **The null arm does NOT cleanly reproduce vanilla eqprop.** This is a
+   confound: DirectedEP constructs extra feedback layers that consume RNG
+   state, producing different forward-layer initialization even with
+   feedback_gain=0. The eqprop (vanilla) arm using StandardEqProp is the
+   cleaner negative control.
+4. **Large β (0.1) masks the depth trend.** All arms show near-zero slopes
+   at β=0.1 because a large nudge saturates the contrastive difference
+   across all layers.
+5. **Gate G1 binary tripwire did not fire** for any single run, but the
+   slope analysis (the pre-registered primary evidence) confirms the
+   vanishing-signal trend for vanilla eqprop at low β.
+
+Reports written to:
+- `runs/contrastive_profile/b2_autopsy/reports/b2_autopsy_summary.md`
+- `runs/contrastive_profile/b2_autopsy/reports/three_arm_beta{0.01,0.03,0.1}.md`
+- `runs/contrastive_profile/b2_autopsy/*/depth_scale_analysis.md`
+
+#### B3 — Gate G2 evaluation (feedback salvage test)
+
+**Script:** `scripts/gate_g2_eval.py` — trains directed_ep with
+feedback_gain=0.5, w_rec_init=xavier at depth {3,4}, 3 seeds, 5 epochs on
+digits. Also runs vanilla eqprop as a negative control.
+
+**Results:**
+
+| Model | Depth | Seeds | Mean Accuracy | Early-Layer Signal | Result |
+|---|---:|---:|---:|---|---|
+| directed_ep (fb_gain=0.5) | 3-4 | 6 | **9.2%** | non-zero | **G2 FAIL** |
+| eqprop (control) | 3-4 | 6 | 10.9% | near-zero | (also random) |
+
+**Verdict: Gate G2 FAILED.**
+- directed_ep does NOT meet the >50% accuracy threshold.
+- The early-layer signal IS non-zero (feedback restores it, as B2 showed),
+  but the signal does NOT translate to learning.
+- Both vanilla and feedback-based deep contrastive EqProp are stuck at
+  random chance (~10% for 10-class digits).
+- The loss is flat at ~2.30 (ln(10)) throughout training — no learning
+  occurs at depth ≥ 3 within 5 epochs.
+
+This is an honest negative result. The G2 verdict is recorded in
+`runs/gate_g2/<timestamp>/g2_verdict.json`.
+
+#### D5 — Limitation document updated
+
+`docs/eqprop_deep_limitation.md` updated with:
+- B2 autopsy slope results (three-arm table)
+- Gate G2 accuracy results and verdict
+- Updated viability table (deep vanilla → broken, directed_ep → experimental
+  with G2 fail noted)
+- Outcome classification: "Deep EqProp Limited but Not Useful" — 1-layer
+  remains viable; deep contrastive path (vanilla or feedback) does not learn
+
+### Decision: Outcome 2 — Deep EqProp Limited but Useful
+
+Per Plan 8 §12, the evidence supports **Outcome 2**:
+- 1-layer EqProp remains strong (implicit path).
+- Deep EqProp fails beyond 1-2 layers (vanishing signal confirmed; G2 fail).
+- Feedback variants restore the signal but do not translate to accuracy.
+
+**Action taken:**
+- Keep EqProp for shallow/memory-advantage experiments.
+- Deep vanilla EqProp remains `status:broken`-adjacent (experimental,
+  diagnostics-confirmed vanishing signal).
+- `directed_ep` remains `status:experimental` (signal restored but G2 fail).
+- FA / Target Prop / Predictive Coding remain the recommended deep families.
+
+### Verification
+
+```bash
+uv run pytest tests/unit/models/test_eqprop*.py tests/unit/models/test_directed_ep_feedback.py -q --no-cov   # 20 pass
+uv run pytest tests/unit/validation/test_registry_status.py tests/unit/validation/test_backprop_parity_smoke.py -q --no-cov  # 33 pass
+uv run pytest tests/unit/test_rule_space_integrity.py -q --no-cov  # pass
+```
+
+### Known follow-ups / improvement opportunities
+
+1. **Contrastive path vs. equilibrium path.** The G2 evaluation used
+   `gradient_method="contrastive"` (explicit free/nudged settle). The
+   working 1-layer path is `gradient_method="equilibrium"` (implicit,
+   O(1) memory). A future experiment could test whether the equilibrium
+   implicit path at depth ≥ 3 also fails to learn, or whether the
+   contrastive path is uniquely broken at depth.
+2. **Liveness at depth 1 via contrastive path.** The G2 liveness check
+   showed that directed_ep at depth 1 via the contrastive path also stays
+   at ~10% accuracy after 3 epochs. This suggests the contrastive path may
+   require different hyperparameters (higher lr, different β, more epochs)
+   than the equilibrium implicit path to learn. A sweep over contrastive-
+   path hyperparameters at depth 1 would clarify whether the contrastive
+   path can learn at all, or whether it's fundamentally broken under the
+   current implementation.
+3. **Alignment trace (§B4).** The pre-registration mentioned logging cosine
+   alignment between feedback weights and forward-output weights transpose
+   over training. This was not implemented because G2 failed (no training
+   signal to align). If a future variant learns, the alignment trace
+   should be added to determine whether feedback works via FA-like
+   alignment or true error transport.
+4. **Larger β sweep at depth 1.** The B2 autopsy showed that β=0.1 masks
+   the depth trend. A finer β sweep at depth 1 could identify the
+   transition point where the contrastive path starts working.
+5. **Next session targets:** Session 5 (Compute-Matched Parity) — run
+   the parity portfolio (backprop, fa, target_prop, predictive_coding)
+   excluding deep EqProp (G2 failed). Session 6 (Documentation) —
+   final RESEARCH.md update with G2 verdict and outcome classification.

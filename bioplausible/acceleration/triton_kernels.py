@@ -31,6 +31,7 @@ class TritonEqPropOps:
             try:
                 import triton
                 import triton.language as tl
+                from triton.language.extra import libdevice
 
                 @triton.jit
                 def _step_kernel(
@@ -55,7 +56,7 @@ class TritonEqPropOps:
                         else 0.0
                     )
 
-                    out = (1.0 - alpha) * h + alpha * tl.tanh(pre_act + bias)
+                    out = (1.0 - alpha) * h + alpha * libdevice.tanh(pre_act + bias)
                     tl.store(out_ptr + offsets, out, mask=mask)
 
                 cls._triton_kernel = _step_kernel

@@ -106,10 +106,14 @@ HAS_TRITON = False
 try:
     import triton
     import triton.language as tl
+    from triton.language.extra import libdevice
 
-    if not hasattr(tl, "tanh"):
+    # In Triton 2.x, tanh was at tl.tanh. In Triton 3.x it moved to
+    # libdevice.tanh. Check the latter (the current API).
+    if not hasattr(libdevice, "tanh"):
         warnings.warn(
-            "Triton detected but missing 'tanh'. Disabling Triton support.",
+            "Triton detected but libdevice.tanh unavailable. "
+            "Disabling Triton support.",
             RuntimeWarning,
         )
     else:
