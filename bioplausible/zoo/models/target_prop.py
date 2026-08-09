@@ -10,6 +10,7 @@ import math
 import torch
 from torch import nn
 
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
@@ -28,19 +29,15 @@ class DTPLayer(nn.Module):
         self.inverse_net = nn.Sequential(
             nn.Linear(out_features, in_features), nn.Tanh()
         )
-        self.opt_f = torch.optim.Adam(
-            self.forward_net.parameters(), lr=learning_rate
-        )
-        self.opt_g = torch.optim.Adam(
-            self.inverse_net.parameters(), lr=learning_rate
-        )
+        self.opt_f = torch.optim.Adam(self.forward_net.parameters(), lr=learning_rate)
+        self.opt_g = torch.optim.Adam(self.inverse_net.parameters(), lr=learning_rate)
 
 
 @register_model(
     "diff_target_prop",
     family="target_prop",
     locality_level=LocalityLevel.LAYERWISE,
-    tags=["target-prop", "diffprop"],
+    tags=["target-prop", "diffprop", status_tag("stable")],
 )
 class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
     """
@@ -65,16 +62,12 @@ class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
         self.output_dim = output_dim
         self.learning_rate = learning_rate
         self.target_lr = target_lr
-        self.layers = nn.ModuleList(
-            [DTPLayer(input_dim, hidden_dim, learning_rate)]
-        )
+        self.layers = nn.ModuleList([DTPLayer(input_dim, hidden_dim, learning_rate)])
         for _ in range(num_layers - 1):
             self.layers.append(DTPLayer(hidden_dim, hidden_dim, learning_rate))
         self.out_layer = nn.Linear(hidden_dim, output_dim)
 
-        self.out_opt = torch.optim.Adam(
-            self.out_layer.parameters(), lr=learning_rate
-        )
+        self.out_opt = torch.optim.Adam(self.out_layer.parameters(), lr=learning_rate)
         self.criterion = nn.CrossEntropyLoss()
 
     @classmethod

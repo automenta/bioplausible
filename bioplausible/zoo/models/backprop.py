@@ -11,6 +11,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, register_model
 
 # ``BackpropMLP`` lives in ``zoo.models.eqprop.looped_mlp`` (it is built against
@@ -127,7 +128,7 @@ class BackpropTransformerBlock(nn.Module):
     "backprop_transformer_lm",
     family="backprop",
     domains=[Domain.LM],
-    tags=["backprop", "transformer"],
+    tags=["backprop", "transformer", status_tag("stable")],
 )
 class BackpropTransformerLM(TransitionGraphMixin, nn.Module):
     """
@@ -338,7 +339,7 @@ def create_layer(config: dict[str, object], in_features: int) -> tuple[nn.Module
     "custom_stacked_model",
     family="backprop",
     domains=[],
-    tags=["backprop", "stacked"],
+    tags=["backprop", "stacked", status_tag("stable")],
 )
 class CustomStackedModel(TransitionGraphMixin, nn.Module):
     """

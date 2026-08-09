@@ -47,6 +47,7 @@ from torch import nn
 
 from bioplausible.core.config import ModelConfig
 from bioplausible.core.model import BioModel
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.equitile.lm.components import (
     FastEquiTileLayer,
@@ -72,6 +73,7 @@ if TYPE_CHECKING:
     requires_backward=False,
     credit_assignment_type="hebbian",
     family="equitile",
+    tags=[status_tag("experimental")],
 )
 class FastLMEquiTile(BioModel):
     """FastLMEquiTile: High-Performance Language Model.

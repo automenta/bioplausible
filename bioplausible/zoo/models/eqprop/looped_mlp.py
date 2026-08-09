@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 from bioplausible.core.config import ModelConfig
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 
 from ..transitions import TransitionGraphMixin
@@ -60,7 +61,7 @@ def _kernel_backend_step(
     memory_complexity="O(1)",
     family="eqprop",
     typical_lr_range=(0.001, 0.01),
-    tags=["eqprop", "looped_mlp", "equilibrium"],
+    tags=["eqprop", "looped_mlp", "equilibrium", status_tag("stable")],
     extra={"parity_threshold": 0.05},
 )
 class LoopedMLP(EquilibriumMLP):
@@ -148,7 +149,7 @@ class LoopedMLP(EquilibriumMLP):
 @register_model(
     "backprop_mlp",
     family="backprop",
-    tags=["backprop", "mlp"],
+    tags=["backprop", "mlp", status_tag("stable")],
 )
 class BackpropMLP(TransitionGraphMixin, nn.Module):
     """Standard feedforward MLP for comparison (no equilibrium dynamics)."""

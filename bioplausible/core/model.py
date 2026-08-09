@@ -318,11 +318,16 @@ class BioModel(nn.Module, ABC):
 
         sig = _inspect.signature(cls.__init__)
         accepts_config = "config" in sig.parameters
+        # ``num_layers`` is re-derived from ``hidden_dims`` (which the search
+        # space already threaded from the sampled ``num_layers``). No cap:
+        # a min(..., 2) here silently truncated every depth>=3 architecture
+        # through the structural path, making ``build`` disagree with the
+        # config-accepting path (phantom-num_layers defect).
         structural = {
             "input_dim": config.input_dim,
             "hidden_dim": config.hidden_dims[0] if config.hidden_dims else 0,
             "output_dim": config.output_dim,
-            "num_layers": min(max(len(config.hidden_dims), 1), 2),
+            "num_layers": max(len(config.hidden_dims), 1),
         }
         if accepts_config:
             try:

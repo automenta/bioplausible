@@ -6,6 +6,7 @@ from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 from bioplausible.core.config import ModelConfig
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.zoo._settling import settle_state
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
@@ -39,7 +40,7 @@ class LocalUpdateModule(nn.Module):
 @register_model(
     "neural_cube",
     family="eqprop",
-    tags=["eqprop", "neural-cube"],
+    tags=["eqprop", "neural-cube", status_tag("broken")],
 )
 class NeuralCube(TransitionGraphMixin, nn.Module):
     """
@@ -47,6 +48,10 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
 
     Each neuron connects only to its 26 neighbors (3x3x3 local patch minus self).
     This mimics biological neural tissue where connectivity is spatially local.
+
+    Status: ``broken`` — the structural axis is ``cube_size`` (a 3D lattice),
+    not ``num_layers``; sampled ``num_layers`` is silently dropped at
+    construction. See ``docs/phantom_knob_audit.md``.
     """
 
     def __init__(
@@ -218,7 +223,9 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
         self._last_settle_converged = False
         return self.W_out(h), trajectory
 
-    def _settle_nudged(self, x: torch.Tensor, nudge: torch.Tensor | None, steps: int) -> torch.Tensor:
+    def _settle_nudged(
+        self, x: torch.Tensor, nudge: torch.Tensor | None, steps: int
+    ) -> torch.Tensor:
         """Settle to fixed point, optionally with output-layer nudging.
 
         For the free phase ``nudge`` is None. For the nudged phase, the nudge
@@ -271,11 +278,15 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
             pre_act = pre_act + self.local_update(h_req)
             energy = torch.sum(0.5 * h_req**2 - h_req * pre_act)
             grads = torch.autograd.grad(
-                energy, self.parameters(), retain_graph=True,
+                energy,
+                self.parameters(),
+                retain_graph=True,
                 allow_unused=True,
             )
-            return [g if g is not None else torch.zeros_like(p)
-                    for g, p in zip(grads, self.parameters())]
+            return [
+                g if g is not None else torch.zeros_like(p)
+                for g, p in zip(grads, self.parameters())
+            ]
 
         gf = _energy_grads(h_free)
         gn = _energy_grads(h_nudged)

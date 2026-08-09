@@ -56,10 +56,21 @@ def _run_free_nudged(
     x: torch.Tensor,
     target: torch.Tensor,
     beta: float,
-) -> tuple[list[torch.Tensor], list[torch.Tensor], torch.Tensor]:
+    *,
+    track_settle: bool = False,
+) -> tuple[
+    list[torch.Tensor],
+    list[torch.Tensor],
+    torch.Tensor,
+    dict[str, object] | None,
+    dict[str, object] | None,
+]:
     """Run free (beta=0) and nudged phase forward passes.
 
-    Returns ``(free_activations, nudged_activations, free_output)``.
+    Returns ``(free_activations, nudged_activations, free_output,
+    free_settle, nudged_settle)``. ``free_settle``/``nudged_settle`` are the
+    per-phase settle dynamics dicts (``final_delta``, ``steps_taken``,
+    ``converged``, ``settle_time_s``) when ``track_settle`` is True, else None.
 
     Uses the model's *explicit* settle (``_explicit_forward`` when present)
     because the contrastive rule needs the per-layer activations list — a
@@ -69,22 +80,27 @@ def _run_free_nudged(
     """
     _forward = getattr(model, "_explicit_forward", model.forward)
 
-    def _run(beta_phase: float) -> list[torch.Tensor]:
+    def _run(beta_phase: float) -> tuple[list[torch.Tensor], dict[str, object] | None]:
         if _forward is model.forward:
             model.forward(x, beta=beta_phase, target=target if beta_phase else None)
-        else:
-            _forward(
-                x,
-                beta=beta_phase,
-                target=target if beta_phase else None,
-                steps=None,
-                return_trajectory=False,
-                return_dynamics=False,
-            )
-        return model._last_activations  # type: ignore[attr-defined]
+            return model._last_activations, None  # type: ignore[attr-defined]
+        out = _forward(
+            x,
+            beta=beta_phase,
+            target=target if beta_phase else None,
+            steps=None,
+            return_trajectory=False,
+            return_dynamics=track_settle,
+        )
+        if track_settle:
+            # ``_explicit_forward`` returns ``(out, dynamics)`` when
+            # ``return_dynamics=True``.
+            dynamics = out[1] if isinstance(out, tuple) else None
+            return model._last_activations, dynamics  # type: ignore[attr-defined]
+        return model._last_activations, None  # type: ignore[attr-defined]
 
     with torch.no_grad():
-        free_acts = _run(0.0)
+        free_acts, free_settle = _run(0.0)
         free_out = free_acts[-1]
         # Reset momentum velocity between phases (if applicable)
         if hasattr(model, "_velocity") and model._velocity is not None:
@@ -92,9 +108,9 @@ def _run_free_nudged(
                 v.zero_()
 
     with torch.no_grad():
-        nudged_acts = _run(beta)
+        nudged_acts, nudged_settle = _run(beta)
 
-    return free_acts, nudged_acts, free_out
+    return free_acts, nudged_acts, free_out, free_settle, nudged_settle
 
 
 def _apply_layer_update(
@@ -180,7 +196,9 @@ def _contrastive_step(
         model.config.output_dim,  # type: ignore[attr-defined]
         dtype=torch.complex64 if use_conj else None,
     )
-    free_acts, nudged_acts, free_out = _run_free_nudged(model, x, target, beta)
+    free_acts, nudged_acts, free_out, free_settle, nudged_settle = _run_free_nudged(
+        model, x, target, beta, track_settle=diagnostics
+    )
     batch_size = x.size(0)
 
     model.optimizer.zero_grad()  # type: ignore[attr-defined]
@@ -268,6 +286,16 @@ def _contrastive_step(
             "beta": beta,
             "loss": loss,
             "accuracy": acc,
+            "free_converged": bool(free_settle and free_settle.get("converged")),
+            "nudged_converged": bool(nudged_settle and nudged_settle.get("converged")),
+            "free_settle_residual": float(
+                (free_settle or {}).get("final_delta", float("nan"))
+            ),
+            "nudged_settle_residual": float(
+                (nudged_settle or {}).get("final_delta", float("nan"))
+            ),
+            "free_steps_taken": int((free_settle or {}).get("steps_taken", 0)),
+            "nudged_steps_taken": int((nudged_settle or {}).get("steps_taken", 0)),
         }
 
     return result

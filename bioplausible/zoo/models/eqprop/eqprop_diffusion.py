@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 
 from ..transitions import TransitionGraphMixin
@@ -17,7 +18,7 @@ __all__ = [
 @register_model(
     "eqprop_diffusion",
     family="eqprop",
-    tags=["eqprop", "diffusion"],
+    tags=["eqprop", "diffusion", status_tag("broken")],
 )
 class EqPropDiffusion(TransitionGraphMixin, nn.Module):
     """

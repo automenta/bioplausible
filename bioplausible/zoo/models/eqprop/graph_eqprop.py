@@ -3,6 +3,7 @@
 import torch
 from torch import nn
 
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 
 from ..base import EqPropModel
@@ -19,9 +20,15 @@ except ImportError:
 @register_model(
     "graph_eqprop",
     family="eqprop",
-    tags=["eqprop", "graph"],
+    tags=["eqprop", "graph", status_tag("broken")],
 )
 class GraphEqProp(EqPropModel):
+    """Graph Equilibrium Propagation Model.
+
+    Status: ``broken`` — ``num_layers`` is a phantom knob on this model
+    (silently dropped at construction). See ``docs/phantom_knob_audit.md``.
+    """
+
     def __init__(
         self,
         input_dim: int,

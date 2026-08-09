@@ -20,6 +20,7 @@ engine of their parent (:class:`EquilibriumMLP`), so they drop into
 
 import torch
 
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 
 from .looped_mlp import LoopedMLP
@@ -37,7 +38,14 @@ __all__ = ["NoisyLoopedMLP", "QuantizedLoopedMLP"]
     memory_complexity="O(1)",
     family="eqprop",
     typical_lr_range=(0.001, 0.01),
-    tags=["eqprop", "looped_mlp", "fpga", "hardware", "quantization"],
+    tags=[
+        "eqprop",
+        "looped_mlp",
+        "fpga",
+        "hardware",
+        "quantization",
+        status_tag("experimental"),
+    ],
     extra={"parity_threshold": 0.05},
 )
 class QuantizedLoopedMLP(LoopedMLP):
@@ -88,7 +96,15 @@ class QuantizedLoopedMLP(LoopedMLP):
     memory_complexity="O(1)",
     family="eqprop",
     typical_lr_range=(0.001, 0.01),
-    tags=["eqprop", "looped_mlp", "analog", "photonic", "hardware", "noise"],
+    tags=[
+        "eqprop",
+        "looped_mlp",
+        "analog",
+        "photonic",
+        "hardware",
+        "noise",
+        status_tag("experimental"),
+    ],
     extra={"parity_threshold": 0.05},
 )
 class NoisyLoopedMLP(LoopedMLP):
@@ -125,7 +141,7 @@ class NoisyLoopedMLP(LoopedMLP):
         # pre-activation" rule. The output layer (last entry) stays noise-free.
         with torch.no_grad():
             for i in range(1, len(new_acts) - 1):
-                new_acts[i] = new_acts[i] + torch.randn_like(
-                    new_acts[i]
-                ) * self.noise_level
+                new_acts[i] = (
+                    new_acts[i] + torch.randn_like(new_acts[i]) * self.noise_level
+                )
         return new_acts

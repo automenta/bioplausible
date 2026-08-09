@@ -16,6 +16,7 @@ from bioplausible.core.config import (
     resolve_hidden_dims,
 )
 from bioplausible.core.model import BioModel
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 
 from ..nebc_base import NEBCBase
@@ -324,7 +325,7 @@ class FeedbackAlignmentLayer(nn.Module):
 @register_model(
     "feedback_alignment",
     family="fa",
-    tags=["fa", "feedback-alignment"],
+    tags=["fa", "feedback-alignment", status_tag("stable")],
 )
 class FeedbackAlignmentEqProp(BioModel):
     """
@@ -404,7 +405,7 @@ class FeedbackAlignmentEqProp(BioModel):
 @register_model(
     "adaptive_feedback_alignment",
     family="fa",
-    tags=["fa", "adaptive-feedback-alignment"],
+    tags=["fa", "adaptive-feedback-alignment", status_tag("experimental")],
 )
 class AdaptiveFeedbackAlignment(BioModel):
     """FA with slow adaptive feedback evolution."""
@@ -503,7 +504,7 @@ class AdaptiveFeedbackAlignment(BioModel):
 @register_model(
     "stochastic_fa",
     family="fa",
-    tags=["fa", "stochastic"],
+    tags=["fa", "stochastic", status_tag("experimental")],
 )
 class StochasticFA(BioModel):
     """FA with dropout on feedback signals."""
@@ -596,7 +597,7 @@ class StochasticFA(BioModel):
 @register_model(
     "contrastive_feedback_alignment",
     family="fa",
-    tags=["fa", "contrastive"],
+    tags=["fa", "contrastive", status_tag("experimental")],
 )
 class ContrastiveFeedbackAlignment(BioModel):
     """Contrastive FA."""
@@ -650,7 +651,11 @@ class ContrastiveFeedbackAlignment(BioModel):
 # ============================================================================
 
 
-@register_model("direct_feedback_alignment_eqprop", family="fa")
+@register_model(
+    "direct_feedback_alignment_eqprop",
+    family="fa",
+    tags=[status_tag("broken")],
+)
 class DirectFeedbackAlignmentEqProp(NEBCBase):
     """
     Direct Feedback Alignment with EqProp-style dynamics.
@@ -767,7 +772,11 @@ class DirectFeedbackAlignmentEqProp(NEBCBase):
         ).to(device)
 
 
-@register_model("dfa_deep", family="fa")
+@register_model(
+    "dfa_deep",
+    family="fa",
+    tags=[status_tag("broken")],
+)
 class DeepDFAEqProp(DirectFeedbackAlignmentEqProp):
     """
     DFA variant optimized for extreme depth (1000+ layers).
@@ -834,7 +843,7 @@ class DeepDFAEqProp(DirectFeedbackAlignmentEqProp):
 @register_model(
     "standard_fa",
     family="fa",
-    tags=["fa", "standard"],
+    tags=["fa", "standard", status_tag("stable")],
 )
 class StandardFA(BioModel):
     """Feedback Alignment with random fixed backward weights."""
@@ -898,7 +907,7 @@ class StandardFA(BioModel):
 @register_model(
     "energy_guided_fa",
     family="fa",
-    tags=["fa", "energy-guided"],
+    tags=["fa", "energy-guided", status_tag("experimental")],
 )
 class EnergyGuidedFA(BioModel):
     """Energy Guided FA."""
@@ -963,7 +972,7 @@ class EnergyGuidedFA(BioModel):
 @register_model(
     "energy_minimizing_fa",
     family="fa",
-    tags=["fa", "energy-minimizing"],
+    tags=["fa", "energy-minimizing", status_tag("experimental")],
 )
 class EnergyMinimizingFA(BioModel):
     """EqProp dynamics + FA updates."""
@@ -1042,7 +1051,7 @@ class EnergyMinimizingFA(BioModel):
 @register_model(
     "layerwise_equilibrium_fa",
     family="fa",
-    tags=["fa", "layerwise-equilibrium"],
+    tags=["fa", "layerwise-equilibrium", status_tag("experimental")],
 )
 class LayerwiseEquilibriumFA(BioModel):
     """Layerwise Equilibrium FA."""
@@ -1117,7 +1126,7 @@ class LayerwiseEquilibriumFA(BioModel):
 @register_model(
     "equilibrium_alignment",
     family="fa",
-    tags=["fa", "equilibrium-alignment"],
+    tags=["fa", "equilibrium-alignment", status_tag("broken")],
 )
 class EquilibriumAlignment(EqPropModel):
     """

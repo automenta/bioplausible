@@ -819,7 +819,7 @@ def create_python_dataset(
     for f in files:
         try:
             code_texts.append(f.read_text())
-        except (OSError, ValueError):
+        except OSError, ValueError:
             logger.warning("Failed to read file %s", f)
 
     text = "\n\n# === END OF FILE ===\n\n".join(code_texts)

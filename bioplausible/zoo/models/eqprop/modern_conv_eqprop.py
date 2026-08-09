@@ -6,6 +6,7 @@ import torch
 from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 
 from ....acceleration import compile_settling_loop
@@ -21,7 +22,7 @@ __all__ = [
 @register_model(
     "modern_conv_eqprop",
     family="eqprop",
-    tags=["eqprop", "conv"],
+    tags=["eqprop", "conv", status_tag("broken")],
 )
 class ModernConvEqProp(EqPropModel):
     """

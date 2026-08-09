@@ -9,6 +9,7 @@ from bioplausible.core.config import (
     resolve_hidden_dims,
 )
 from bioplausible.core.model import BioModel
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 
 from ....zoo._settling import settle_activations_list
@@ -22,7 +23,7 @@ __all__ = [
 @register_model(
     "holomorphic_ep",
     family="eqprop",
-    tags=["eqprop", "holomorphic"],
+    tags=["eqprop", "holomorphic", status_tag("experimental")],
 )
 class HolomorphicEP(BioModel):
     """

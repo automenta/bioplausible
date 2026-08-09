@@ -11,6 +11,7 @@ from snntorch import surrogate
 import snntorch as snn
 from torch import nn
 
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
@@ -23,7 +24,7 @@ __all__ = [
     "spiking_stdp",
     family="spiking",
     locality_level=LocalityLevel.LOCAL,
-    tags=["spiking", "stdp"],
+    tags=["spiking", "stdp", status_tag("experimental")],
 )
 class SpikingSTDP(TransitionGraphMixin, nn.Module):
     """
@@ -35,7 +36,11 @@ class SpikingSTDP(TransitionGraphMixin, nn.Module):
     """
 
     def __init__(
-        self, input_dim: int, hidden_dim: int, output_dim: int, num_steps: int = 10,
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_steps: int = 10,
         learning_rate: float = 0.01,
     ):
         super().__init__()
@@ -67,7 +72,9 @@ class SpikingSTDP(TransitionGraphMixin, nn.Module):
         if isinstance(input_dim, tuple):
             input_dim = math.prod(input_dim)
         return cls(
-            input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim,
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
             learning_rate=float(kwargs.get("learning_rate", 0.01)),
         ).to(device)
 

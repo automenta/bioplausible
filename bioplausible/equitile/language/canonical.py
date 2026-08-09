@@ -31,6 +31,7 @@ from torch import nn
 
 from bioplausible.core.config import ModelConfig
 from bioplausible.core.model import BioModel
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig, LMEquiTileConfig
@@ -174,6 +175,7 @@ class EquiTileTransformerLayer(nn.Module):
     requires_backward=False,
     credit_assignment_type="hebbian",
     family="equitile",
+    tags=[status_tag("experimental")],
 )
 class LMEquiTile(BioModel):
     """EquiTile for Language Modeling.
@@ -853,7 +855,7 @@ def generate_text(
                         logits = logits[0, -1, :]
                     elif logits.dim() == 2:
                         logits = logits[0]
-                except (RuntimeError, ValueError, IndexError):
+                except RuntimeError, ValueError, IndexError:
                     break
 
             # Apply temperature

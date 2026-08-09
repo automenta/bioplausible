@@ -74,9 +74,7 @@ class EquilibriumMLP(EqPropModel):
         return [self.W_in, self.W_rec, self.W_out]
 
     def _initialize_hidden_state(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.zeros(
-            (x.size(0), self.hidden_dim), device=x.device, dtype=x.dtype
-        )
+        return torch.zeros((x.size(0), self.hidden_dim), device=x.device, dtype=x.dtype)
 
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         return self.W_in(_flatten(x))
@@ -89,7 +87,9 @@ class EquilibriumMLP(EqPropModel):
     ) -> torch.Tensor:
         return self.activation(x_transformed + self.W_rec(h))
 
-    def forward_step(self, h: torch.Tensor, x_transformed: torch.Tensor) -> torch.Tensor:
+    def forward_step(
+        self, h: torch.Tensor, x_transformed: torch.Tensor
+    ) -> torch.Tensor:
         return self._forward_step_impl(h, x_transformed)
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
@@ -102,9 +102,7 @@ class EquilibriumMLP(EqPropModel):
         import torch.nn.functional as F
 
         if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(
-                self.parameters(), lr=self.hebbian_lr
-            )
+            self.optimizer = torch.optim.Adam(self.parameters(), lr=self.hebbian_lr)
         logits = self.forward(x)
         loss = F.cross_entropy(logits, y)
         self.optimizer.zero_grad()

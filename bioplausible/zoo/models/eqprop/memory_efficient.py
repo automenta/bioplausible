@@ -58,7 +58,9 @@ class MemoryEfficientLoopedMLP(LoopedMLP):
         self.is_memory_efficient = False
 
     def __repr__(self) -> str:
-        efficiency_str = ", O(N) memory" if self.is_memory_efficient else ", layered PyTorch path"
+        efficiency_str = (
+            ", O(N) memory" if self.is_memory_efficient else ", layered PyTorch path"
+        )
         return (
             f"MemoryEfficientLoopedMLP(input={self.input_dim}, hidden={self.hidden_dim}, "
             f"output={self.output_dim}, steps={self.max_steps}, "

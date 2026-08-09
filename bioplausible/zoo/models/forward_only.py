@@ -11,6 +11,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
@@ -47,7 +48,7 @@ class FFLayer(nn.Linear):
     requires_backward=False,
     family="forward_only",
     typical_lr_range=(0.01, 0.1),
-    tags=["forward-forward", "forward-only", "local"],
+    tags=["forward-forward", "forward-only", "local", status_tag("stable")],
     extra={"parity_threshold": 0.05},
     description="Forward-Forward network: trained with local goodness function.",
 )
@@ -197,7 +198,7 @@ class ForwardForwardNet(TransitionGraphMixin, nn.Module):
     requires_backward=False,
     family="forward_only",
     typical_lr_range=(0.01, 0.1),
-    tags=["pepita", "forward-only", "local"],
+    tags=["pepita", "forward-only", "local", status_tag("stable")],
     extra={"parity_threshold": 0.2},
     description="PEPITA: random feedback alignment variant.",
 )

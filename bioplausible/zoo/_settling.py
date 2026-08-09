@@ -533,7 +533,9 @@ def settle_activations_list(
         if need_delta and step_idx > convergence_start:
             max_rel_delta = 0.0
             for k in range(1, len(activations)):
-                max_rel_delta = max(max_rel_delta, _layer_delta(activations[k], prev[k], k))
+                max_rel_delta = max(
+                    max_rel_delta, _layer_delta(activations[k], prev[k], k)
+                )
 
             if deltas is not None:
                 deltas.append(max_rel_delta)
@@ -548,7 +550,9 @@ def settle_activations_list(
             # metric for a full convergence profile when debug asked for it.
             max_rel_delta = 0.0
             for k in range(1, len(activations)):
-                max_rel_delta = max(max_rel_delta, _layer_delta(activations[k], prev[k], k))
+                max_rel_delta = max(
+                    max_rel_delta, _layer_delta(activations[k], prev[k], k)
+                )
             deltas.append(max_rel_delta)
         else:
             steps_taken += 1

@@ -128,7 +128,7 @@ def _config_param_accepts_modelconfig(model_cls: object) -> bool:
     """Check if the model's ``config`` param is annotated to accept ``ModelConfig``."""
     try:
         sig = inspect.signature(model_cls.__init__)  # type: ignore[misc]
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
     param = sig.parameters.get("config")
     if param is None:
@@ -152,7 +152,7 @@ def resolve_consumption(model_cls: object) -> Consumption:
     """Resolve a model's consumer contract by reflecting on its ``__init__``."""
     try:
         sig = inspect.signature(model_cls.__init__)  # type: ignore[misc]
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return Consumption(frozenset(), False, False)
     params = set(sig.parameters)
     has_catch_all = any(
@@ -253,7 +253,9 @@ def build_model_config(
         convergence_threshold=_as_float(cfg, "convergence_threshold", 1e-3),
         convergence_start=_as_int(cfg, "convergence_start", 5),
         use_spectral_norm=_as_bool(cfg, "use_spectral_norm", True),
-        spectral_norm_power_iterations=_as_int(cfg, "spectral_norm_power_iterations", 5),
+        spectral_norm_power_iterations=_as_int(
+            cfg, "spectral_norm_power_iterations", 5
+        ),
         extra=dict(cfg),
     )
 
@@ -358,11 +360,18 @@ def construct_model(
         try:
             return model_cls(config=cfg)  # type: ignore[operator]
         except TypeError:
+            # Structural fallback: the model declares required positional
+            # args in addition to ``config``. Do NOT cap depth — the
+            # sampled ``num_layers`` has already been threaded into
+            # ``hidden_dims`` by ``build_model_config``, so re-deriving
+            # ``num_layers`` from the config must preserve the full depth
+            # (a min(..., 2) cap here silently truncated every depth>=3
+            # architecture through this path — the phantom-num_layers bug).
             structural = {
                 "input_dim": cfg.input_dim,
                 "hidden_dim": cfg.hidden_dims[0] if cfg.hidden_dims else 0,
                 "output_dim": cfg.output_dim,
-                "num_layers": min(max(len(cfg.hidden_dims), 1), 2),
+                "num_layers": max(len(cfg.hidden_dims), 1),
             }
             return model_cls(**structural, config=cfg)  # type: ignore[operator]
     kwargs = model_kwargs(
@@ -418,12 +427,18 @@ def phantom_knobs(
     )
     if not consumption.accepts_config:
         knobs |= _config_num_layers_phantoms(
-            model_cls, cfg, input_dim=input_dim, output_dim=output_dim,
+            model_cls,
+            cfg,
+            input_dim=input_dim,
+            output_dim=output_dim,
             model_name=model_name,
         )
         return frozenset(knobs)
     return _config_num_layers_phantoms(
-        model_cls, cfg, input_dim=input_dim, output_dim=output_dim,
+        model_cls,
+        cfg,
+        input_dim=input_dim,
+        output_dim=output_dim,
         model_name=model_name,
     )
 
@@ -464,12 +479,25 @@ def _config_num_layers_phantoms(
             output_dim=output_dim,
             model_name=model_name,
         )
-    except (TypeError, ValueError, RuntimeError, NotImplementedError):
+    except TypeError, ValueError, RuntimeError, NotImplementedError:
         # Cannot construct here (e.g. fixture-only model); cannot verify depth —
         # do not cry wolf on unverifiable models.
         return frozenset()
     cfg_obj = getattr(model, "config", None)
-    actual_layers = len(cfg_obj.hidden_dims) if cfg_obj is not None else 0
+    # Prefer the *actually built* architecture over ``config.hidden_dims``:
+    # the structural path can route ``num_layers`` separately from the config
+    # (the phantom-num-layers defect), so reading hidden_dims alone cannot see
+    # when the built model diverges from the sampled depth. ``transition_modules``
+    # reflects what was materially constructed; fall back to hidden_dims only
+    # for models whose width axis is not a layers list (conv ``hidden_channels``,
+    # cube ``cube_size``).
+    built = getattr(model, "transition_modules", lambda: [])()
+    if built:
+        actual_layers = len(built)
+    elif cfg_obj is not None:
+        actual_layers = len(cfg_obj.hidden_dims)
+    else:
+        actual_layers = 0
     # Some models grow a *fixed* width axis instead of ``hidden_dims`` (conv
     # ``hidden_channels``, cube ``cube_size``), and ``construct_model`` may
     # route ``num_layers`` through a structural cap. Only flag when the config

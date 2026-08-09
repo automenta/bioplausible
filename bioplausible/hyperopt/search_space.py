@@ -431,6 +431,13 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         # Plan 8: recurrent weight initialization knob
         "w_rec_init": ["zero", "xavier"],
         "w_rec_gain": (1e-3, 1e0, "log"),
+        # Plan 8 B3: explicit feedback-pathway knobs (DirectedEP).
+        # ``feedback_gain`` scales the output→hidden feedback drive in the
+        # nudged phase; ``feedback_init_gain`` sets the xavier gain of the
+        # feedback weight matrices. Both are optimization/magnitude knobs for
+        # the feedback pathway, mathematically distinct from ``beta``.
+        "feedback_gain": (1e-2, 1e1, "log"),
+        "feedback_init_gain": (1e-3, 1e0, "log"),
     },
     "neural_cube": {
         # Honest space (P0a): every knob is real — accepted by ``NeuralCube.__init__``

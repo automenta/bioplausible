@@ -4,6 +4,7 @@ import torch
 from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 
 from ....acceleration import compile_settling_loop
@@ -18,11 +19,17 @@ __all__ = [
 @register_model(
     "conv_eqprop",
     family="eqprop",
-    tags=["eqprop", "conv"],
+    tags=["eqprop", "conv", status_tag("broken")],
 )
 class ConvEqProp(EqPropModel):
     """
     Convolutional Equilibrium Propagation Model.
+
+    Status: ``broken`` — ``num_layers`` is a phantom knob on this model
+    (silently dropped at construction; the architecture is a single conv loop
+    regardless of the requested depth). See ``docs/phantom_knob_audit.md``.
+    Use ``modern_conv_eqprop`` for a depth-aware conv EqProp once it clears
+    its own audit, or ``eqprop`` / ``backprop_mlp`` for conv-unaware depth.
 
     Uses ResNet-like loop structure with spectral normalization.
     Suitable for image classification tasks (MNIST, CIFAR-10).

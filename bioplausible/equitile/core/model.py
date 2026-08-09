@@ -18,6 +18,7 @@ from torch import nn
 from bioplausible.core.config import ModelConfig
 from bioplausible.core.exceptions import LoadStateError
 from bioplausible.core.model import BioModel
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ if TYPE_CHECKING:
     credit_assignment_type="hebbian",
     family="equitile",
     typical_lr_range=(0.01, 0.1),
+    tags=[status_tag("experimental")],
 )
 class EquiTile(BioModel, EquiTileOptimizerMixin):
     """EquiTile: Scalable Local-Learning Architecture."""
@@ -1298,6 +1300,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
     requires_backward=False,
     credit_assignment_type="equilibrium",
     family="equitile",
+    tags=[status_tag("experimental")],
 )
 class EquiTileEP(EquiTile):
     """EquiTile with strict Equilibrium Propagation learning."""

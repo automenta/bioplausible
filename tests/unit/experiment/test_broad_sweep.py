@@ -134,6 +134,36 @@ def test_registry_families_detected() -> None:
     assert "backprop" in families
 
 
+def test_models_in_family_excludes_broken_by_default() -> None:
+    """status:broken models are excluded from default sweeps (Plan 8 §D1).
+
+    Default sweeps must not waste compute on known-broken probes; the
+    ``--include-broken`` flag opts back in.
+    """
+    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
+
+    # conv_eqprop is tagged status:broken (phantom num_layers).
+    default = bs._models_in_family("eqprop")
+    assert "conv_eqprop" not in default
+    assert "graph_eqprop" not in default
+
+    include = bs._models_in_family("eqprop", include_broken=True)
+    assert "conv_eqprop" in include
+    assert "graph_eqprop" in include
+
+    # The explicitly-broken set is a strict superset of the default set.
+    assert set(default) < set(include)
+
+
+def test_model_status_reads_registry_tag() -> None:
+    """_model_status returns the status:<x> tag value from registry metadata."""
+    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
+
+    assert bs._model_status("conv_eqprop") == "broken"
+    assert bs._model_status("eqprop") == "stable"
+    assert bs._model_status("no_such_model_zzz") is None
+
+
 def test_shallow_clamp_caps_large_configs() -> None:
     config = {
         "hidden_dim": 2048,
@@ -165,8 +195,7 @@ def test_bio_families_are_rule_activated():
     """
     assert bs._RULE_ACTIVATION["fa"]["propagator"] == "feedback_alignment"
     assert (
-        bs._RULE_ACTIVATION["hebbian"]["propagator"]
-        == "contrastive_hebbian_learning"
+        bs._RULE_ACTIVATION["hebbian"]["propagator"] == "contrastive_hebbian_learning"
     )
     assert bs._RULE_ACTIVATION["eqprop"]["config"]["gradient_method"] == "equilibrium"
     # No family is silently left to the BPTT fallback for the thesis core.
@@ -183,18 +212,33 @@ def test_eqprop_models_all_use_energy_contrastive():
     """
     # All fundamental eqprop models have train_step and use energy contrastive
     from bioplausible.core.registry import ComponentCategory, Registry
-    for name in ("eqprop", "directed_ep", "finite_nudge_ep",
-                 "lazy_eqprop", "momentum_equilibrium", "sparse_equilibrium"):
+
+    for name in (
+        "eqprop",
+        "directed_ep",
+        "finite_nudge_ep",
+        "lazy_eqprop",
+        "momentum_equilibrium",
+        "sparse_equilibrium",
+    ):
         cls = Registry.get(ComponentCategory.MODEL, name)
         assert hasattr(cls, "train_step"), f"{name} missing train_step"
         # The engine uses gradient_method="equilibrium" but train_step runs
         # the energy-contrastive rule self-contained
-        m = cls(config=ModelConfig(name=name, input_dim=10, output_dim=5, hidden_dims=[20]))
+        m = cls(
+            config=ModelConfig(name=name, input_dim=10, output_dim=5, hidden_dims=[20])
+        )
         assert callable(m.train_step)
 
     # Models that were already working still work
-    for name in ("graph_eqprop", "holomorphic_ep", "eqprop_mlp", "conv_eqprop",
-                 "modern_conv_eqprop", "neural_cube"):
+    for name in (
+        "graph_eqprop",
+        "holomorphic_ep",
+        "eqprop_mlp",
+        "conv_eqprop",
+        "modern_conv_eqprop",
+        "neural_cube",
+    ):
         cls = Registry.get(ComponentCategory.MODEL, name)
         assert hasattr(cls, "forward")
 
@@ -216,14 +260,11 @@ def test_rule_activation_for_uses_energy_contrastive():
     assert act["config"]["gradient_method"] == "equilibrium"
     # DeepHebbian/ThreeFactorHebbian have native train_step -> no propagator
     assert bs._rule_activation_for("deep_hebbian", "hebbian") == {"config": {}}
-    assert bs._rule_activation_for("three_factor_hebbian", "hebbian") == {
-        "config": {}
-    }
+    assert bs._rule_activation_for("three_factor_hebbian", "hebbian") == {"config": {}}
     # hebbian_3d (no native train_step) keeps the CHL propagator
     assert bs._rule_activation_for("hebbian_3d", "hebbian") == {
         "propagator": "contrastive_hebbian_learning"
     }
-
 
 
 def test_probe_runs_flags_nan_divergence():
@@ -231,7 +272,18 @@ def test_probe_runs_flags_nan_divergence():
     space = {"hidden_dim": (32, 64, "int"), "learning_rate": (1e-4, 1e-2, "log")}
 
     class FakeDriver:
-        def train(self, *, model, task, config, seed, epochs, device, propagator=None, allow_bptt_fallback=True):
+        def train(
+            self,
+            *,
+            model,
+            task,
+            config,
+            seed,
+            epochs,
+            device,
+            propagator=None,
+            allow_bptt_fallback=True,
+        ):
             return {
                 "final_train_loss": float("nan"),
                 "final_acc": 0.0,
@@ -243,8 +295,15 @@ def test_probe_runs_flags_nan_divergence():
             }
 
     runs, n_total, n_ok = bs._probe_runs(
-        FakeDriver(), model="m", family="eqprop", space=space,
-        probes_per_rule=1, epochs=2, seed=0, device="cpu", task="mnist",
+        FakeDriver(),
+        model="m",
+        family="eqprop",
+        space=space,
+        probes_per_rule=1,
+        epochs=2,
+        seed=0,
+        device="cpu",
+        task="mnist",
     )
     assert n_total == 1
     assert n_ok == 0  # NaN run is NOT a successful ok probe
@@ -266,7 +325,18 @@ def test_probe_runs_flags_epoch_time_truncation():
     space = {"hidden_dim": (32, 64, "int")}
 
     class FakeDriver:
-        def train(self, *, model, task, config, seed, epochs, device, propagator=None, allow_bptt_fallback=True):
+        def train(
+            self,
+            *,
+            model,
+            task,
+            config,
+            seed,
+            epochs,
+            device,
+            propagator=None,
+            allow_bptt_fallback=True,
+        ):
             return {
                 "final_train_loss": 0.5,
                 "final_acc": 0.5,
@@ -279,19 +349,36 @@ def test_probe_runs_flags_epoch_time_truncation():
             }
 
     runs, n_total, n_ok = bs._probe_runs(
-        FakeDriver(), model="m", family="eqprop", space=space,
-        probes_per_rule=1, epochs=2, seed=0, device="cpu", task="mnist",
+        FakeDriver(),
+        model="m",
+        family="eqprop",
+        space=space,
+        probes_per_rule=1,
+        epochs=2,
+        seed=0,
+        device="cpu",
+        task="mnist",
     )
     assert runs[0]["ok"] is False
     assert "epoch_time_truncated" in runs[0]["defects"]
-
 
 
 def test_probe_runs_flags_phantom_knobs():
     space = {"hidden_dim": (32, 64, "int")}
 
     class FakeDriver:
-        def train(self, *, model, task, config, seed, epochs, device, propagator=None, allow_bptt_fallback=True):
+        def train(
+            self,
+            *,
+            model,
+            task,
+            config,
+            seed,
+            epochs,
+            device,
+            propagator=None,
+            allow_bptt_fallback=True,
+        ):
             return {
                 "final_train_loss": 1.0,
                 "final_acc": 0.5,
@@ -301,8 +388,15 @@ def test_probe_runs_flags_phantom_knobs():
             }
 
     runs, _n_total, n_ok = bs._probe_runs(
-        FakeDriver(), model="m", family="eqprop", space=space,
-        probes_per_rule=1, epochs=2, seed=0, device="cpu", task="mnist",
+        FakeDriver(),
+        model="m",
+        family="eqprop",
+        space=space,
+        probes_per_rule=1,
+        epochs=2,
+        seed=0,
+        device="cpu",
+        task="mnist",
     )
     assert n_ok == 0
     assert any("phantom_knobs" in d for d in runs[0]["defects"])
@@ -313,7 +407,13 @@ def test_summarize_family_aggregates_knob_defects():
     family_runs = {
         "m1": [
             {"ok": False, "defects": ["nan_divergence"], "final_acc": 0.0},
-            {"ok": True, "defects": [], "final_acc": 0.8, "loss_epoch_0": 2.0, "loss_epoch_final": 1.0},
+            {
+                "ok": True,
+                "defects": [],
+                "final_acc": 0.8,
+                "loss_epoch_0": 2.0,
+                "loss_epoch_final": 1.0,
+            },
         ],
         "m2": [
             {"ok": False, "defects": ["phantom_knobs=['beta']"], "final_acc": 0.0},
@@ -343,9 +443,7 @@ def test_match_param_budget_stays_under_budget():
         input_dim=64,
         output_dim=10,
     )
-    count = estimate_param_count(
-        "backprop_mlp", config, input_dim=64, output_dim=10
-    )
+    count = estimate_param_count("backprop_mlp", config, input_dim=64, output_dim=10)
     assert count <= budget
     assert count > budget // 2  # close to budget, not pathologically small
 
@@ -407,9 +505,7 @@ def test_match_param_budget_binds_conv_model_width():
             output_dim=10,
         )
         assert "hidden_channels" in config
-        count = estimate_param_count(
-            model, config, input_dim=784, output_dim=10
-        )
+        count = estimate_param_count(model, config, input_dim=784, output_dim=10)
         assert count <= 32000, f"{model} over budget: {count}"
 
 
@@ -454,7 +550,10 @@ def test_prune_phantom_knobs_drops_unconsumed_equilibrium_knobs():
     assert "hidden_dim" in out
     # A **kwargs eqprop model consumes everything -> nothing pruned.
     full = bs._prune_phantom_knobs(
-        "momentum_equilibrium", cfg, input_dim=spec.input_dim, output_dim=spec.output_dim
+        "momentum_equilibrium",
+        cfg,
+        input_dim=spec.input_dim,
+        output_dim=spec.output_dim,
     )
     assert set(full) == set(cfg)
 
@@ -469,19 +568,28 @@ def test_forward_probe_ok_skips_diffusion_and_chl_incompatible():
 
     # eqprop_diffusion: bare flat forward raises 't must be provided'.
     cfg = {"hidden_dim": 64, "learning_rate": 1e-3}
-    assert bs._forward_probe_ok(
-        "eqprop_diffusion", cfg, input_dim=784, output_dim=10, device="cpu"
-    ) is False
+    assert (
+        bs._forward_probe_ok(
+            "eqprop_diffusion", cfg, input_dim=784, output_dim=10, device="cpu"
+        )
+        is False
+    )
     # hebbian_3d: CHL cannot stream its 2D->conv3d transition chain.
-    assert bs._forward_probe_ok(
-        "hebbian_3d",
-        {"hidden_dim": 32, "learning_rate": 1e-3},
-        input_dim=784,
-        output_dim=10,
-        device="cpu",
-        propagator="contrastive_hebbian_learning",
-    ) is False
+    assert (
+        bs._forward_probe_ok(
+            "hebbian_3d",
+            {"hidden_dim": 32, "learning_rate": 1e-3},
+            input_dim=784,
+            output_dim=10,
+            device="cpu",
+            propagator="contrastive_hebbian_learning",
+        )
+        is False
+    )
     # A healthy eqprop model passes both the bare forward and its local rule.
-    assert bs._forward_probe_ok(
-        "conv_eqprop", cfg, input_dim=784, output_dim=10, device="cpu"
-    ) is True
+    assert (
+        bs._forward_probe_ok(
+            "conv_eqprop", cfg, input_dim=784, output_dim=10, device="cpu"
+        )
+        is True
+    )

@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 
 from ..nebc_base import NEBCBase
@@ -76,9 +77,14 @@ class HebbianLayer(nn.Module):
     "deep_hebbian",
     family="hebbian",
     locality_level=LocalityLevel.LOCAL,
-    tags=["hebbian", "deep"],
+    tags=["hebbian", "deep", status_tag("broken")],
 )
-@register_model("hebbian_chain", family="hebbian", locality_level=LocalityLevel.LOCAL)
+@register_model(
+    "hebbian_chain",
+    family="hebbian",
+    locality_level=LocalityLevel.LOCAL,
+    tags=[status_tag("broken")],
+)
 class DeepHebbianChain(NEBCBase):
     """
     Deep Hebbian Chain with spectral normalization.
@@ -268,14 +274,17 @@ class DeepHebbianChain(NEBCBase):
             # computed ``weight`` property — otherwise the update is silently
             # discarded.
             if hasattr(head, "parametrizations"):
-                head_w = dict(head.named_parameters())["parametrizations.weight.original"]
+                head_w = dict(head.named_parameters())[
+                    "parametrizations.weight.original"
+                ]
             elif hasattr(head, "weight"):
                 head_w = head.weight
             else:
                 head_w = None
             if head_w is not None:
                 head_w.addmm_(
-                    error.T, activations[-2],
+                    error.T,
+                    activations[-2],
                     alpha=self.hebbian_lr / x.shape[0],
                 )
 
@@ -284,7 +293,12 @@ class DeepHebbianChain(NEBCBase):
         return {"loss": loss.item(), "accuracy": acc}
 
 
-@register_model("hebbian_3d", family="hebbian", locality_level=LocalityLevel.LOCAL)
+@register_model(
+    "hebbian_3d",
+    family="hebbian",
+    locality_level=LocalityLevel.LOCAL,
+    tags=[status_tag("broken")],
+)
 class HebbianCube(TransitionGraphMixin, NEBCBase):
     """
     3D Hebbian lattice for testing spatial organization.
@@ -363,7 +377,7 @@ class HebbianCube(TransitionGraphMixin, NEBCBase):
     "three_factor_hebbian",
     family="hebbian",
     locality_level=LocalityLevel.LOCAL,
-    tags=["hebbian", "three-factor"],
+    tags=["hebbian", "three-factor", status_tag("experimental")],
 )
 class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):
     """
@@ -372,7 +386,11 @@ class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):
     """
 
     def __init__(
-        self, input_dim: int, hidden_dim: int, output_dim: int, num_layers: int = 2,
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_layers: int = 2,
         learning_rate: float = 0.005,
     ):
         super().__init__()
@@ -430,16 +448,20 @@ class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):
             pred_probs = torch.softmax(out, dim=1)
             y_onehot = torch.zeros_like(out, device=out.device)
             y_onehot.scatter_(1, y.unsqueeze(1), 1.0)
-            output_modulator = (y_onehot - pred_probs)  # [batch, classes]
+            output_modulator = y_onehot - pred_probs  # [batch, classes]
 
         with torch.no_grad():
             for i, layer in enumerate(self.layers):
                 pre = hs[i]
                 post = hs[i + 1]
                 # Backproject output modulator to hidden layer via output weights
-                hidden_modulator = torch.mm(output_modulator, self.out_layer.weight)  # [B, hidden]
+                hidden_modulator = torch.mm(
+                    output_modulator, self.out_layer.weight
+                )  # [B, hidden]
                 # Normalize to prevent NaN: scale by hidden dim
-                hidden_modulator = hidden_modulator / max(hidden_modulator.abs().max().item(), 1.0)
+                hidden_modulator = hidden_modulator / max(
+                    hidden_modulator.abs().max().item(), 1.0
+                )
                 post_mod = post * hidden_modulator  # [B, hidden]
                 layer.weight.data += self.lr * torch.mm(post_mod.T, pre) / x.shape[0]
 

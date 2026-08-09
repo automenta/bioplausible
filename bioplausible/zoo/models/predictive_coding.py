@@ -14,6 +14,7 @@ from bioplausible.core.config import (
     resolve_hidden_dims,
 )
 from bioplausible.core.model import BioModel
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 
 # ============================================================================
@@ -31,7 +32,7 @@ __all__ = [
     "fabricpc_graph_pcn",
     family="predictive_coding",
     locality_level=LocalityLevel.LOCAL,
-    tags=["predictive-coding", "fabricpc"],
+    tags=["predictive-coding", "fabricpc", status_tag("stable")],
 )
 class FabricPCGraphPCN(BioModel):
     """Predictive Coding model using FabricPC graph topology."""
@@ -213,7 +214,7 @@ class FabricPCGraphPCN(BioModel):
     "predictive_coding_hybrid",
     family="predictive_coding",
     locality_level=LocalityLevel.LOCAL,
-    tags=["predictive-coding", "hybrid"],
+    tags=["predictive-coding", "hybrid", status_tag("experimental")],
 )
 class PredictiveCodingHybrid(BioModel):
     """Layers predict inputs; FA propagates prediction errors."""

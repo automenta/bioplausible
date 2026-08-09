@@ -30,6 +30,7 @@ from torch import nn
 
 from bioplausible.core.config import ModelConfig
 from bioplausible.core.model import BioModel
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig
@@ -398,6 +399,7 @@ class TimeSeriesEquiTileLayer(nn.Module):
     requires_backward=False,
     credit_assignment_type="hebbian",
     family="equitile",
+    tags=[status_tag("experimental")],
 )
 class TimeSeriesEquiTile(BioModel):
     """Time Series EquiTile for sequential data.

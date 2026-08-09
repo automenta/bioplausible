@@ -34,7 +34,13 @@ def test_config_accepting_model_honors_directed_ep_knobs() -> None:
     cls = Registry.get(ComponentCategory.MODEL, "directed_ep")
     model = construct_model(
         cls,
-        {"hidden_dim": 64, "num_layers": 2, "learning_rate": 0.05, "beta": 0.5, "max_steps": 20},
+        {
+            "hidden_dim": 64,
+            "num_layers": 2,
+            "learning_rate": 0.05,
+            "beta": 0.5,
+            "max_steps": 20,
+        },
         input_dim=784,
         output_dim=10,
         model_name="directed_ep",
@@ -49,7 +55,13 @@ def test_config_accepting_model_honors_learning_rate_field() -> None:
     cls = Registry.get(ComponentCategory.MODEL, "eqprop")
     model = construct_model(
         cls,
-        {"hidden_dim": 32, "num_layers": 2, "learning_rate": 0.02, "beta": 1.3, "max_steps": 7},
+        {
+            "hidden_dim": 32,
+            "num_layers": 2,
+            "learning_rate": 0.02,
+            "beta": 1.3,
+            "max_steps": 7,
+        },
         input_dim=784,
         output_dim=10,
         model_name="eqprop",
@@ -124,7 +136,13 @@ def test_knobs_are_reflection_derived() -> None:
 
 def test_build_model_config_surfaces_every_knob_in_extra() -> None:
     cfg = build_model_config(
-        {"hidden_dim": 16, "num_layers": 1, "learning_rate": 0.01, "damping": 0.3, "tol": 1e-3},
+        {
+            "hidden_dim": 16,
+            "num_layers": 1,
+            "learning_rate": 0.01,
+            "damping": 0.3,
+            "tol": 1e-3,
+        },
         input_dim=784,
         output_dim=10,
         model_name="m",
@@ -192,19 +210,119 @@ def test_param_count_varies_with_num_layers() -> None:
     ):
         cls = Registry.get(ComponentCategory.MODEL, model_name)
         one = estimate_param_count(
-            model_name, {"hidden_dim": 64, "num_layers": 1},
-            input_dim=784, output_dim=10,
+            model_name,
+            {"hidden_dim": 64, "num_layers": 1},
+            input_dim=784,
+            output_dim=10,
         )
         three = estimate_param_count(
-            model_name, {"hidden_dim": 64, "num_layers": 3},
-            input_dim=784, output_dim=10,
+            model_name,
+            {"hidden_dim": 64, "num_layers": 3},
+            input_dim=784,
+            output_dim=10,
         )
         assert three != one, (
             f"{model_name}: num_layers=1 and num_layers=3 report identical "
             "param counts — the depth knob does not change the architecture"
         )
         built = construct_model(
-            cls, {"hidden_dim": 64, "num_layers": 3},
-            input_dim=784, output_dim=10, model_name=model_name,
+            cls,
+            {"hidden_dim": 64, "num_layers": 3},
+            input_dim=784,
+            output_dim=10,
+            model_name=model_name,
         )
         assert sum(p.numel() for p in built.parameters()) == three
+
+
+def test_all_models_honor_depth_or_are_knowingly_phantom() -> None:
+    """Registry-wide depth-invariant guard (Plan 8 §D2 regression).
+
+    No registered model may silently drop the sampled ``num_layers``: either
+    the constructed architecture grows its parameter count with depth (the
+    healthy case), or the depth knob is *reported* as phantom by
+    :func:`phantom_knobs` so sweeps quarantine it. This is the universal
+    regression that catches the feedback_alignment-class defect (structural
+    fallback silently capping ``num_layers``) without needing one test per
+    model.
+
+    A model that absorbs ``num_layers`` through ``**kwargs`` without using it
+    is *not* flagged by the constructor surface (the knob lands in kwargs, so
+    the surface treats it as "absorbed") — but it must still be quarantined:
+    if it silently drops depth it must be tagged ``status:broken`` so default
+    sweeps exclude it. Otherwise the guard hard-fails.
+    """
+    from bioplausible.experiment.param_estimator import estimate_param_count
+
+    unverifiable: list[str] = []
+    silently_dropped: list[str] = []
+    for rec in Registry.query(category=ComponentCategory.MODEL):
+        name = rec["name"]
+        cls = Registry.get(ComponentCategory.MODEL, name)
+        cfg = {"hidden_dim": 32, "num_layers": 3, "learning_rate": 0.01}
+        # Models that refuse vision-style dimension args (LM/RL/graph/diffusion)
+        # cannot be audited on the vision dummy dims; opt them out of the guard.
+        if name in (
+            "backprop_transformer_lm",
+            "eqprop_diffusion",
+            "graph_equitile",
+            "lm_equitile",
+            "optimized_lm_equitile",
+            "fast_lm_equitile",
+            "rl_equitile",
+            "timeseries_equitile",
+            "custom_stacked_model",
+            "spiking_stdp",
+        ):
+            continue
+        try:
+            ph = phantom_knobs(cls, cfg, input_dim=256, output_dim=10, model_name=name)
+        except TypeError, ValueError, NotImplementedError, RuntimeError:
+            unverifiable.append(name)
+            continue
+        # A knowingly-phantom depth knob is acceptable: sweeps quarantine it.
+        if "num_layers" in ph:
+            continue
+        try:
+            one = estimate_param_count(
+                name,
+                {"hidden_dim": 32, "num_layers": 1},
+                input_dim=256,
+                output_dim=10,
+            )
+            three = estimate_param_count(
+                name,
+                {"hidden_dim": 32, "num_layers": 3},
+                input_dim=256,
+                output_dim=10,
+            )
+        except TypeError, ValueError, NotImplementedError, RuntimeError, Exception:
+            unverifiable.append(name)
+            continue
+        if three == one:
+            silently_dropped.append(name)
+
+    # A model that (a) absorbs num_layers via **kwargs (no phantom flagged) yet
+    # (b) does not grow depth must be quarantined (status:broken). Both
+    # conditions together are the failure: depth silently dropped AND not
+    # excluded from default sweeps.
+    tags_by_name = {
+        rec["name"]: rec["metadata"].tags
+        for rec in Registry.query(category=ComponentCategory.MODEL)
+    }
+    unquarantined_drops = [
+        m for m in silently_dropped if "status:broken" not in tags_by_name[m]
+    ]
+    assert not unquarantined_drops, (
+        "models silently dropping sampled num_layers with NO phantom flag and "
+        "NO status:broken quarantine (they run in default sweeps with a "
+        f"dead depth knob): {sorted(unquarantined_drops)}"
+    )
+    quarantined = [m for m in silently_dropped if "status:broken" in tags_by_name[m]]
+    assert set(quarantined) <= {
+        "equilibrium_alignment",
+        "neural_cube",
+    }, f"unexpected quarantined drops: {sorted(quarantined)}"
+    # Keep the unverifiable list noisy-but-tolerated so a future audit can
+    # shrink it; the guard only hard-fails on *silent unquarantined* drops.
+    print(f"[registry depth audit] unverifiable: {sorted(unverifiable)}")

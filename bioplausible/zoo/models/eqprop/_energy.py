@@ -29,6 +29,7 @@ from torch.nn.utils.parametrizations import spectral_norm
 
 from bioplausible.core.config import ModelConfig
 from bioplausible.core.model import BioModel
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 from bioplausible.zoo._settling import settle_activations_list
 
@@ -182,12 +183,16 @@ class EquilibriumMLP(BioModel):
             self.contrastive_diagnostics = bool(
                 cfg.extra.get("contrastive_diagnostics", False)
             )
+            self.feedback_gain = float(cfg.extra.get("feedback_gain", 1.0))
+            self.feedback_init_gain = float(cfg.extra.get("feedback_init_gain", 0.5))
         else:
             self.w_rec_init = kwargs.get("w_rec_init", "zero")
             self.w_rec_gain = float(kwargs.get("w_rec_gain", 0.1))
             self.update_scale = float(kwargs.get("update_scale", 1.0))
             self.update_scale_by_depth = float(kwargs.get("update_scale_by_depth", 1.0))
             self.contrastive_diagnostics = bool(kwargs.get("contrastive_diagnostics"))
+            self.feedback_gain = float(kwargs.get("feedback_gain", 1.0))
+            self.feedback_init_gain = float(kwargs.get("feedback_init_gain", 0.5))
 
         super().__init__(config=config, **kwargs)
         cfg = self.config
@@ -295,7 +300,11 @@ class EquilibriumMLP(BioModel):
             self.feedback_layers = nn.ModuleList([
                 nn.Linear(self.output_dim, h) for h in hidden
             ])
-            self._init_weights(self.feedback_layers)
+            for layer in self.feedback_layers:
+                _init_weight_storage(
+                    _unwrap_weight(layer), gain=self.feedback_init_gain
+                )
+                _zero_bias(layer, _unwrap_weight(layer))
 
     def _init_weights(self, modules: nn.Module | None = None) -> None:
         """Xavier-init forward (and feedback) weights, biases to zero."""
@@ -404,8 +413,11 @@ class EquilibriumMLP(BioModel):
                 h_new = h_new * (torch.abs(h_new) >= thr).to(h_new.dtype)
             if self.variant == "feedback" and beta > 0:
                 # Output→hidden feedback drive, active only during nudge.
+                # ``feedback_gain`` scales the pathway (Plan 8 B3); the drive
+                # is added to the hidden pre-activation, not multiplied into
+                # the energy nudge term ``beta`` itself.
                 fb = self.feedback_layers[i](activations[-1])
-                h_new = h_new + beta * fb
+                h_new = h_new + beta * self.feedback_gain * fb
             new_acts.append(h_new)
         # Output layer: linear projection of the last hidden state.
         out = self.layers[-1](new_acts[-1])
@@ -612,21 +624,44 @@ class EquilibriumMLP(BioModel):
 # ============================================================
 
 
-@register_model("eqprop", family="eqprop", tags=["eqprop", "energy"])
+@register_model(
+    "eqprop",
+    family="eqprop",
+    tags=["eqprop", "energy", status_tag("stable")],
+)
 class StandardEqProp(EquilibriumMLP):
-    """Plain energy-contrastive deep EqProp MLP."""
+    """Plain energy-contrastive deep EqProp MLP.
+
+    Status: ``stable`` for the 1-hidden implicit equilibrium path; deep vanilla
+    contrastive EqProp is ``experimental`` pending Plan 8 §B2/G2 (vanishing
+    contrastive signal at depth ≥ 3). See ``docs/eqprop_deep_limitation.md``.
+    """
 
     variant: Variant = "plain"
 
 
-@register_model("directed_ep", family="eqprop", tags=["eqprop", "energy", "feedback"])
+@register_model(
+    "directed_ep",
+    family="eqprop",
+    tags=["eqprop", "energy", "feedback", status_tag("experimental")],
+)
 class DirectedEP(EquilibriumMLP):
-    """Energy-contrastive EqProp with output→hidden feedback (DirectedEP)."""
+    """Energy-contrastive EqProp with output→hidden feedback (DirectedEP).
+
+    Status: ``experimental`` — feedback pathway restores deep-layer signal
+    (profiling shows non-zero early-layer state deltas at depth ≥ 3), but its
+    accuracy at canonical parity targets has not been established across
+    multiple seeds (Plan 8 §B3 / Gate G2). Promising but not yet validated.
+    """
 
     variant: Variant = "feedback"
 
 
-@register_model("finite_nudge_ep", family="eqprop", tags=["eqprop", "energy"])
+@register_model(
+    "finite_nudge_ep",
+    family="eqprop",
+    tags=["eqprop", "energy", status_tag("experimental")],
+)
 class FiniteNudgeEP(EquilibriumMLP):
     """Energy-contrastive EqProp with configurable nudge-step count.
 
@@ -638,7 +673,11 @@ class FiniteNudgeEP(EquilibriumMLP):
     variant: Variant = "plain"
 
 
-@register_model("lazy_eqprop", family="eqprop", tags=["eqprop", "energy"])
+@register_model(
+    "lazy_eqprop",
+    family="eqprop",
+    tags=["eqprop", "energy", status_tag("experimental")],
+)
 class LazyEqProp(EquilibriumMLP):
     """Energy-contrastive EqProp (lazy per-step activations)."""
 
@@ -648,7 +687,7 @@ class LazyEqProp(EquilibriumMLP):
 @register_model(
     "momentum_equilibrium",
     family="eqprop",
-    tags=["eqprop", "energy", "momentum"],
+    tags=["eqprop", "energy", "momentum", status_tag("experimental")],
 )
 class MomentumEquilibrium(EquilibriumMLP):
     """Energy-contrastive EqProp with per-layer velocity (MomentumEquilibrium)."""
@@ -657,7 +696,9 @@ class MomentumEquilibrium(EquilibriumMLP):
 
 
 @register_model(
-    "sparse_equilibrium", family="eqprop", tags=["eqprop", "energy", "sparse"]
+    "sparse_equilibrium",
+    family="eqprop",
+    tags=["eqprop", "energy", "sparse", status_tag("experimental")],
 )
 class SparseEquilibrium(EquilibriumMLP):
     """Energy-contrastive EqProp with top-k hidden sparsity (SparseEquilibrium)."""

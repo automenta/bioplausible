@@ -102,7 +102,9 @@ class DirectFA(LearningRuleOptimizer):
         self.feedback_weights = self._create_direct_feedback(feedback_seed)
 
     def _create_direct_feedback(self, seed: int) -> list[torch.Tensor]:
-        gen = torch.Generator(device=self.params[0].device if self.params else torch.device("cpu"))
+        gen = torch.Generator(
+            device=self.params[0].device if self.params else torch.device("cpu")
+        )
         gen.manual_seed(seed)
         feedback = []
 
