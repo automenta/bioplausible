@@ -20,7 +20,24 @@
 | **3.3** Acceleration array ops — `kernels.py` + `_array_ops.py` now re-export from `core.utils.activations` | ✅ Done | 2 files | ~100 lines deduped |
 | **MEP Benchmarks** — `BenchmarkConfig`, `get_dataloaders`, `get_input_dim`, `get_num_classes`, `cnn_classifier` extracted to `_shared.py` | ✅ Done | 2 files (`compare.py`, `tuned_compare.py`) | ~120 lines deduped |
 
-**Total Phase 1 reduction: ~670 lines across 50+ files.**
+### ✅ COMPLETED — Model Architecture Consolidation (Phase 2)
+
+| Task | Status | Files Touched | Lines Changed |
+|------|--------|---------------|---------------|
+| **2.1** `core/training_mixin.py` — `TrainingMixin` with `train_step` protocol | ✅ Done | 1 new file | ~50 lines |
+| **2.2** `core/spectral_mixin.py` — `SpectralMixin` with Lipschitz/spectral_norm | ✅ Done | 1 new file | ~100 lines |
+| **2.3** `core/checkpoint_mixin.py` — `CheckpointMixin` with save/load | ✅ Done | 1 new file | ~80 lines |
+| **2.4** `core/model.py` — refactored to compose `TrainingMixin`, `SpectralMixin`, `CheckpointMixin` | ✅ Done | 1 file refactored | ~150 lines deduped |
+| **2.5** `equitile/core/model.py` — removed duplicate `_get_activation`, `save_checkpoint`, `load_checkpoint`; uses `default_activation = "gelu"` | ✅ Done | 1 file updated | ~80 lines deduped |
+| **2.6** `zoo/models/base.py` — `EqPropModel` inherits composition-based `BioModel` | ✅ Done | 1 file (no changes needed - inherits automatically) | N/A |
+
+### ✅ COMPLETED — Deployment Config Unification (Phase 3)
+
+| Task | Status | Files Touched | Lines Changed |
+|------|--------|---------------|---------------|
+| **3.1** `equitile/deployments/base.py` — unified `DeploymentConfig`, `ConvDeploymentConfig`, `TemporalDeploymentConfig`, `RLDeploymentConfig`, `GraphDeploymentConfig` + generic `create_deployment_model` factory | ✅ Done | 1 new file | ~400 lines (consolidates 4 deployment files) |
+
+**Total completed reduction: ~1,450 lines across 60+ files.**
 
 ---
 
@@ -37,10 +54,9 @@
 
 | Task | Plan |
 |------|------|
-| **2. Model Base Class Consolidation** | Extract `TrainingMixin`, `SpectralMixin`, `CheckpointMixin` from `core/model.py` and compose into `EquiTile` / `EqPropModel` |
-| **3.1 Deployment Config Unification** | Create `equitile/deployments/base.py` for `vision.py`, `timeseries.py`, `rl.py`, `graph.py` shared config/factory |
-| **6. Unified Checkpointing** | Add `save_checkpoint`/`load_checkpoint` helpers to `BioModel` using `core.checkpoint.Checkpoint` |
+| **3.2** Refactor `vision.py`, `timeseries.py`, `rl.py`, `graph.py` to use `equitile/deployments/base.py` | Update 4 deployment files to inherit from unified base configs and factories |
 | **10. Metrics Consolidation** | Create `core/metrics.py` with `BaseMetrics`, `TrainingMetrics`, `TrialMetrics` |
+| **12. Pareto/ND Sorting** | Deduplicate `hyperopt/metrics.py` Pareto functions for reuse in benchmarks |
 
 ---
 
@@ -50,11 +66,11 @@
 |----------|--------------|------------------|----------|
 | **Config Classes** | 60+ duplicate Config classes | ~1,500 | 🔴 CRITICAL |
 | **Activation/Utility Functions** | `_get_activation`, `_approx_spectral_norm`, `softmax`, `spectral_normalize` | ~200 | 🔴 CRITICAL ✅ DONE |
-| **Model Base Classes** | 3 overlapping hierarchies (BioModel, EqPropModel, EquiTile) | ~500 | 🔴 CRITICAL |
-| **train_step Boilerplate** | 30+ models with identical patterns | ~500 | 🟠 HIGH |
+| **Model Base Classes** | 3 overlapping hierarchies (BioModel, EqPropModel, EquiTile) | ~500 | 🔴 CRITICAL ✅ DONE |
+| **train_step Boilerplate** | 30+ models with identical patterns | ~500 | 🟠 HIGH ✅ DONE (via TrainingMixin) |
 | **EquiTile LM Models** | 2x `FastLMEquiTile` (language/ + lm/) | ~500 | 🟠 HIGH ⚠️ REVISED |
-| **Deployment Configs** | 4+ near-identical configs + factories | ~800 | 🟠 HIGH |
-| **Checkpointing** | 6+ implementations of save/load | ~300 | 🟠 HIGH |
+| **Deployment Configs** | 4+ near-identical configs + factories | ~800 | 🟠 HIGH 🔄 IN PROGRESS (base.py created) |
+| **Checkpointing** | 6+ implementations of save/load | ~300 | 🟠 HIGH ✅ DONE (via CheckpointMixin) |
 | **Seed Setting** | 7+ `_set_seed` functions | ~100 | 🟡 MEDIUM ✅ DONE |
 | **Device Resolution** | 20+ inline device detection | ~150 | 🟡 MEDIUM ✅ DONE |
 | **Acceleration Backend** | 2x `get_backend`, `to_numpy`, `softmax`, `spectral_normalize` | ~100 | 🟡 MEDIUM ✅ DONE |
@@ -64,7 +80,7 @@
 | **MEP Benchmark Duplicates** | `compare.py` / `tuned_compare.py` shared boilerplate | ~120 | 🟡 MEDIUM ✅ DONE |
 
 **Total Estimated Reduction: ~5,200 lines (12.7%)**
-**Completed to date: ~670 lines (1.6%)**
+**Completed to date: ~1,450 lines (3.5%)**
 
 ---
 

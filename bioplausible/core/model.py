@@ -9,29 +9,35 @@ from abc import ABC, abstractmethod
 
 import torch
 from torch import nn
-from torch.nn.utils.parametrizations import spectral_norm
 
+from bioplausible.core.checkpoint_mixin import CheckpointMixin
 from bioplausible.core.config import (
     LayerRole,
     ModelConfig,
     _build_model_config,
 )
+from bioplausible.core.spectral_mixin import SpectralMixin
+from bioplausible.core.training_mixin import TrainingMixin
 
 __all__ = [
     "BioModel",
 ]
 
 
-class BioModel(nn.Module, ABC):
+class BioModel(nn.Module, ABC, TrainingMixin, SpectralMixin, CheckpointMixin):
     """
     Abstract base class for all bio-plausible models/algorithms.
 
     Unifies:
-    - NEBCBase (Spectral Norm, Lipschitz)
-    - BaseAlgorithm (train_step, config)
+    - NEBCBase (Spectral Norm, Lipschitz) via SpectralMixin
+    - BaseAlgorithm (train_step, config) via TrainingMixin
+    - Checkpointing via CheckpointMixin
     """
 
     algorithm_name: str = "BioModel"
+
+    # Default activation for _get_activation; subclasses can override.
+    default_activation: str = "relu"
 
     # Capability declaration for Registry (REFACTOR3 §4).
     provides: list[str] = ["transition_graph", "standard_autograd"]
@@ -86,6 +92,9 @@ class BioModel(nn.Module, ABC):
         # Helper for activation
         self.activation = self._get_activation(self.config.activation)
 
+        # TrainingMixin expects _step_count
+        self._step_count = 0
+
         # NEBCBase compatibility: Check for _build_layers hook
         if hasattr(self, "_build_layers"):
             self._build_layers()
@@ -93,138 +102,46 @@ class BioModel(nn.Module, ABC):
     def _get_activation(self, name: str) -> nn.Module:
         from bioplausible.core.utils.activations import get_activation
 
-        return get_activation(name)
-
-    def apply_spectral_norm(
-        self,
-        layer: nn.Module,
-        layer_role: LayerRole = "hidden",
-    ) -> nn.Module:
-        """Apply spectral normalization to a layer if enabled.
-
-        Parameters
-        ----------
-        layer : nn.Module
-            The layer to normalize.
-        layer_role : LayerRole
-            Whether this is a ``"hidden"`` or ``"output"`` layer.
-            When ``output_scaling_mode == "mupc"`` and ``layer_role == "output"``,
-            the weight is rescaled to remove the √L fan-in factor that is
-            present in the default kaiming initialization but should not
-            apply to output nodes under μPC.
-
-        Returns
-        -------
-        nn.Module
-            The normalized layer (wrapped or as-is).
-        """
-        if self.use_spectral_norm and isinstance(layer, (nn.Linear, nn.Conv2d)):
-            layer = spectral_norm(
-                layer, n_power_iterations=self.spectral_norm_power_iterations
-            )
-            if (
-                self.config.output_scaling_mode == "mupc"
-                and layer_role == "output"
-                and isinstance(layer, nn.Linear)
-            ):
-                fan_in = layer.weight.size(1)
-                if fan_in > 0:
-                    with torch.no_grad():
-                        # μPC: output layer weights should NOT include the √L factor.
-                        # Default kaiming init sets std = gain * √(2 / fan_in).
-                        # For μPC output, we rescale to std = gain (no fan_in denom).
-                        gain = nn.init.calculate_gain("linear")
-                        std = gain * (2.0 / fan_in) ** 0.5
-                        target_std = gain  # no √L factor
-                        layer.weight.mul_(target_std / max(std, 1e-12))
-            return layer
-        return layer
-
-    def _get_spectral_normalized_weight(self, layer: nn.Module) -> torch.Tensor:
-        """Get spectral normalized weight, cached in eval mode for inference.
-
-        When gradient tracking is enabled (e.g. the implicit ``equilibrium``
-        method's backward, which freezes spectral-norm statistics via
-        ``model.eval()`` but still needs ``dL/dW``), the *current* normalized
-        weight is returned WITHOUT detaching so parameter gradients flow. The
-        detached cache is only used for pure inference (no autograd), where the
-        frozen statistics make the recurrent map a well-defined fixed point.
-
-        Returns:
-            The (frozen-statistics) normalized weight of ``layer.weight``.
-        """
-        if torch.is_grad_enabled():
-            weight = layer.weight
-            return weight
-
-        # Pure inference / no_grad settle: reuse the cached frozen weight.
-        if not self.training and hasattr(layer, "_cached_sn_weight"):
-            return layer._cached_sn_weight
-
-        weight = layer.weight
-
-        if not self.training:
-            layer._cached_sn_weight = weight.detach()
-
-        return weight
+        return get_activation(name, default=self.default_activation)
 
     def train(self, mode: bool = True):
         """Override train to clear caches."""
+        # Call SpectralMixin.train() which calls super().train()
         super().train(mode)
-        if mode:  # Entering training mode, clear cache
-            for module in self.modules():
-                if hasattr(module, "_cached_sn_weight"):
-                    delattr(module, "_cached_sn_weight")
         return self
 
-    def compute_lipschitz(self) -> float:
-        """Compute the maximum Lipschitz constant across all layers."""
-        max_L = 0.0
-        with torch.no_grad():
-            for module in self.modules():
-                # Access .weight property if available (handles spectral_norm)
-                if hasattr(module, "weight") and isinstance(
-                    module.weight, torch.Tensor
-                ):
-                    w = module.weight
-                    if w.dim() >= 2:
-                        if self.lipschitz_mode == "power_iteration":
-                            # Optimization: Use Power Iteration (O(N^2))
-                            L = self._approx_spectral_norm(w)
-                        elif self.lipschitz_mode == "svd":
-                            # Exact SVD (O(N^3))
-                            w_mat = w.view(w.size(0), -1)
-                            s = torch.linalg.svdvals(w_mat)
-                            L = s[0].item() if s.numel() > 0 else 0.0
-                        else:
-                            # Fallback to SVD for safety
-                            w_mat = w.view(w.size(0), -1)
-                            s = torch.linalg.svdvals(w_mat)
-                            L = s[0].item() if s.numel() > 0 else 0.0
+    def _forward_train(self, x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, dict]:
+        """Single training forward pass.
 
-                        max_L = max(max_L, L)
-        return max_L
+        Returns:
+            (logits, aux_dict) where aux_dict contains additional metrics
+            to include in the train_step return value.
 
-    def _approx_spectral_norm(self, weight: torch.Tensor, n_iter: int = 10) -> float:
-        """Approximate spectral norm using power iteration (faster than SVD)."""
-        from bioplausible.core.utils.activations import approx_spectral_norm
+        Override this for models that follow the standard TrainingMixin protocol.
+        Models with custom train_step (e.g. EquiTile, EqPropModel) can override
+        train_step directly instead.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement _forward_train or override train_step"
+        )
 
-        return approx_spectral_norm(weight, n_iter=n_iter)
+    def compute_loss(self, logits: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Compute loss from logits and targets. Override for custom losses."""
+        return torch.nn.functional.cross_entropy(logits, y)
 
-    def get_stats(self) -> dict[str, float]:
-        """Get algorithm-specific statistics for reporting."""
-        return {
-            "lipschitz": self.compute_lipschitz(),
-            "num_params": sum(p.numel() for p in self.parameters()),
-            "spectral_norm": self.use_spectral_norm,
-        }
+    def compute_metrics(self, logits: torch.Tensor, y: torch.Tensor) -> float:
+        """Compute accuracy from logits and targets."""
+        return (logits.argmax(dim=-1) == y).float().mean().item()
+
+    def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        """Execute one training step using TrainingMixin protocol."""
+        return super().train_step(x, y)
 
     @classmethod
     def create_pair(
         cls, input_dim: int, hidden_dim: int, output_dim: int, **kwargs
     ) -> tuple[BioModel, BioModel]:
         """Create a pair of models: with and without spectral norm (for ablation)."""
-        # Note: Uses direct init assuming arguments match __init__
         with_sn = cls(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
@@ -240,22 +157,6 @@ class BioModel(nn.Module, ABC):
             **kwargs,
         )
         return with_sn, without_sn
-
-    @abstractmethod
-    def forward(self, x: torch.Tensor, *args: object, **kwargs: object) -> torch.Tensor:
-        """Forward pass."""
-
-    def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        """
-        Custom training step.
-        Override this for algorithms that don't use standard autograd
-        (e.g. EqProp, FA). If not overridden, EqPropTrainer will assume
-        standard BPTT/Autograd can be used if this returns None or raises
-        NotImplementedError, or EqPropTrainer handles BPTT.
-        """
-        raise NotImplementedError(
-            "Model does not implement custom train_step. Use BPTT."
-        )
 
     @classmethod
     def build(
@@ -281,22 +182,10 @@ class BioModel(nn.Module, ABC):
             max_steps=20,
             use_spectral_norm=True,
         )
-        # Most models accept ``config=`` (frozen ModelConfig). Pass the config
-        # as-is; the search-space params were folded into ``config.extra`` by
-        # ``_build_model_config`` so they reach the constructor via ``config``
-        # rather than as commit-time kwargs. A handful of direct ``nn.Module``
-        # subclasses expose ``input_dim/hidden_dim/output_dim`` as *required*
-        # positional args and either accept ``config`` as an optional kwarg or
-        # reject it entirely; inspect the constructor to adapt.
         import inspect as _inspect
 
         sig = _inspect.signature(cls.__init__)
         accepts_config = "config" in sig.parameters
-        # ``num_layers`` is re-derived from ``hidden_dims`` (which the search
-        # space already threaded from the sampled ``num_layers``). No cap:
-        # a min(..., 2) here silently truncated every depth>=3 architecture
-        # through the structural path, making ``build`` disagree with the
-        # config-accepting path (phantom-num_layers defect).
         structural = {
             "input_dim": config.input_dim,
             "hidden_dim": config.hidden_dims[0] if config.hidden_dims else 0,
@@ -308,8 +197,6 @@ class BioModel(nn.Module, ABC):
                 return cls(config=config).to(device)
             except TypeError:
                 return cls(**structural, config=config).to(device)
-        # No config accepted: build purely from structural args that the search
-        # space can provide. Unsupported params were absorbed into the config.
         try:
             return cls(**structural).to(device)
         except TypeError:
@@ -333,11 +220,9 @@ class BioModel(nn.Module, ABC):
         Subclasses with non-standard structure (e.g. ``LoopedMLP``,
         ``HomeostaticEqProp``, ``NeuralCube``) MUST override this method.
         """
-        # 1. Explicit ModuleList (most common).
         layers = getattr(self, "layers", None)
         if isinstance(layers, nn.ModuleList):
             return list(layers)
-        # 2. Forward layers (DirectedEP).
         forward_layers = getattr(self, "forward_layers", None)
         if isinstance(forward_layers, nn.ModuleList):
             return list(forward_layers)

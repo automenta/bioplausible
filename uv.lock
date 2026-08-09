@@ -283,6 +283,11 @@ vision = [
     { name = "torchvision" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "hypothesis" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "bioplausible", extras = ["vision", "lm", "rl", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "spiking", "llm"], marker = "extra == 'full'" },
@@ -350,6 +355,9 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'deploy'" },
     { name = "uvicorn", marker = "extra == 'dev'" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "hypothesis", specifier = ">=6.161.2" }]
 
 [[package]]
 name = "boolean-py"

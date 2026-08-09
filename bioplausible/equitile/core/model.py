@@ -61,6 +61,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
     """EquiTile: Scalable Local-Learning Architecture."""
 
     algorithm_name = "EquiTile"
+    default_activation: str = "gelu"
 
     @classmethod
     def build(
@@ -292,11 +293,6 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
                 nn.init.zeros_(bias)
 
             initialize_io_projections(self.W_in, self.W_out)
-
-    def _get_activation(self, name: str) -> nn.Module:
-        from bioplausible.core.utils.activations import get_activation
-
-        return get_activation(name, default="gelu")
 
     def to(self, *args, **kwargs):
         model = super().to(*args, **kwargs)
@@ -1259,11 +1255,13 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
         self.reset_optimizers()
 
     def save_checkpoint(self, path: str, metadata: dict | None = None) -> None:
-        """Save model checkpoint to disk."""
+        """Save model checkpoint to disk using unified checkpoint format."""
         state = self.get_state()
         if metadata:
             state["metadata"] = metadata
-        torch.save(state, path)
+        # Use core checkpoint helper for standardized format
+        from bioplausible.core.checkpoint import save_checkpoint
+        save_checkpoint(path, state)
 
     def load_checkpoint(
         self,
@@ -1272,11 +1270,10 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
         load_optimizer: bool = True,
     ) -> dict | None:
         """Load model checkpoint from disk."""
+        from bioplausible.core.checkpoint import load_checkpoint
         if device is None:
             device = next(self.parameters()).device
-
-        state = torch.load(path, map_location=device, weights_only=True)
-
+        state = load_checkpoint(path, map_location=device)
         try:
             self.load_state(state)
         except (RuntimeError, ValueError, KeyError) as e:

@@ -135,6 +135,11 @@ biopl-parity = "bioplausible.cli.parity:main"
 biopl-frontier = "bioplausible.cli.frontier:main"
 biopl-failure-manifesto = "bioplausible.analysis.failure_manifesto:main"
 
+[dependency-groups]
+dev = [
+    "hypothesis>=6.161.2",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
