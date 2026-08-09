@@ -20,7 +20,6 @@ Example
 import json
 import logging
 import math
-import random
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -58,15 +57,10 @@ __all__ = [
 
 
 def set_all_seeds(seed: int = 42) -> None:
-    """Set all random seeds for reproducibility."""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    """Set all random seeds for reproducibility (cudnn deterministic)."""
+    from bioplausible.core.utils.seeds import set_all_seeds as _set_all_seeds
+
+    _set_all_seeds(seed, deterministic=True)
 
 
 def get_system_info() -> dict[str, str]:
@@ -302,11 +296,9 @@ class RigorousBenchmark:
         val_loader: torch.utils.data.DataLoader,
     ) -> BenchmarkResult:
         """Run benchmark for a single model with multiple runs."""
-        device = torch.device(
-            self.config.device
-            if self.config.device != "auto"
-            else ("cuda" if torch.cuda.is_available() else "cpu")
-        )
+        from bioplausible.core.utils.device import get_device
+
+        device = get_device(self.config.device)
         model = model.to(device)
 
         throughput_samples = []

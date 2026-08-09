@@ -10,14 +10,21 @@ import json
 import logging
 import pathlib
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets, transforms
 
-from bioplausible.zoo.mep.benchmarks._shared import EpochMetrics, OptimizerResult
+from bioplausible.core.utils.device import get_device
+from bioplausible.zoo.mep.benchmarks._shared import (
+    BenchmarkConfig,
+    EpochMetrics,
+    OptimizerResult,
+    cnn_classifier,
+    get_dataloaders,
+    get_input_dim,
+    get_num_classes,
+)
 from bioplausible.zoo.mep.benchmarks.baselines import get_optimizer
 
 __all__ = [
@@ -38,75 +45,6 @@ __all__ = [
     "train_epoch",
 ]
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class BenchmarkConfig:
-    """Benchmark configuration."""
-
-    dataset: str = "mnist"
-    model: str = "mlp"
-    epochs: int = 10
-    batch_size: int = 128
-    lr: float = 0.01
-    weight_decay: float = 0.0005
-    subset_train: int = 5000
-    subset_test: int = 1000
-    device: str = "cuda"
-
-
-def get_dataloaders(config: BenchmarkConfig) -> tuple[DataLoader, DataLoader]:
-    """Get data loaders for the specified dataset."""
-    if config.dataset == "mnist":
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,)),
-        ])
-
-        train_dataset = datasets.MNIST(
-            "./data", train=True, download=True, transform=transform
-        )
-        test_dataset = datasets.MNIST("./data", train=False, transform=transform)
-
-    elif config.dataset == "fashion":
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.2860,), (0.3530,)),
-        ])
-
-        train_dataset = datasets.FashionMNIST(
-            "./data", train=True, download=True, transform=transform
-        )
-        test_dataset = datasets.FashionMNIST("./data", train=False, transform=transform)
-
-    elif config.dataset == "cifar10":
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
-        ])
-
-        train_dataset = datasets.CIFAR10(
-            "./data", train=True, download=True, transform=transform
-        )
-        test_dataset = datasets.CIFAR10("./data", train=False, transform=transform)
-    else:
-        raise ValueError(f"Unknown dataset: {config.dataset}")
-
-    # Create subsets for faster benchmarking
-    train_indices = list(range(min(config.subset_train, len(train_dataset))))
-    test_indices = list(range(min(config.subset_test, len(test_dataset))))
-
-    train_subset = Subset(train_dataset, train_indices)
-    test_subset = Subset(test_dataset, test_indices)
-
-    train_loader = DataLoader(
-        train_subset, batch_size=config.batch_size, shuffle=True, num_workers=0
-    )
-    test_loader = DataLoader(
-        test_subset, batch_size=config.batch_size, shuffle=False, num_workers=0
-    )
-
-    return train_loader, test_loader
 
 
 def get_model(config: BenchmarkConfig, input_dim: int, num_classes: int) -> nn.Module:
@@ -131,52 +69,9 @@ def get_model(config: BenchmarkConfig, input_dim: int, num_classes: int) -> nn.M
         )
     elif config.model == "cnn":
         if config.dataset == "cifar10":
-            return nn.Sequential(
-                nn.Conv2d(3, 32, 3, padding=1),
-                nn.ReLU(),
-                nn.MaxPool2d(2),
-                nn.Conv2d(32, 64, 3, padding=1),
-                nn.ReLU(),
-                nn.MaxPool2d(2),
-                nn.Flatten(),
-                nn.Linear(64 * 8 * 8, 128),
-                nn.ReLU(),
-                nn.Linear(128, num_classes),
-            )
-        else:
-            return nn.Sequential(
-                nn.Conv2d(1, 32, 3, padding=1),
-                nn.ReLU(),
-                nn.MaxPool2d(2),
-                nn.Conv2d(32, 64, 3, padding=1),
-                nn.ReLU(),
-                nn.MaxPool2d(2),
-                nn.Flatten(),
-                nn.Linear(64 * 7 * 7, 128),
-                nn.ReLU(),
-                nn.Linear(128, num_classes),
-            )
-    else:
-        raise ValueError(f"Unknown model: {config.model}")
-
-
-def get_input_dim(config: BenchmarkConfig) -> int:
-    """Get input dimension for the dataset."""
-    if config.dataset in ["mnist", "fashion"]:
-        return 784
-    elif config.dataset == "cifar10":
-        return 3072
-    else:
-        return 784
-
-
-def get_num_classes(config: BenchmarkConfig) -> int:
-    """Get number of classes for the dataset."""
-    if config.dataset in ["mnist", "fashion", "cifar10"]:
-        return 10
-    else:
-        return 10
-
+            return cnn_classifier(3, 8, num_classes)
+        return cnn_classifier(1, 7, num_classes)
+    raise ValueError(f"Unknown model: {config.model}")
 
 def train_epoch(
     model: nn.Module,
@@ -244,7 +139,7 @@ def evaluate(
 
 def run_benchmark(optimizer_name: str, config: BenchmarkConfig) -> OptimizerResult:
     """Run benchmark for a single optimizer."""
-    device = torch.device(config.device if torch.cuda.is_available() else "cpu")
+    device = get_device(config.device)
 
     # Get data
     train_loader, test_loader = get_dataloaders(config)
@@ -265,7 +160,7 @@ def run_benchmark(optimizer_name: str, config: BenchmarkConfig) -> OptimizerResu
         settle_lr=0.05,
         loss_type=(
             "cross_entropy"
-            if config.dataset in ["mnist", "fashion", "cifar10"]
+            if config.dataset in {"mnist", "fashion", "cifar10"}
             else "mse"
         ),
     )
@@ -386,7 +281,7 @@ def save_results(results: dict[str, OptimizerResult], output_path: str) -> None:
         }
         data[name] = result_dict
 
-    with pathlib.Path(output_path).open("w") as f:
+    with pathlib.Path(output_path).open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
     logger.info("Results saved to: %s", output_path)

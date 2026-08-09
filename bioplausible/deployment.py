@@ -455,7 +455,7 @@ class InferenceEngine:
         self.device = device
 
         if device == "auto":
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = str(get_device())
 
         self.model = self.model.to(self.device)
         self.model.eval()
@@ -699,6 +699,8 @@ def export_to_torchscript(model, input_sample, path):
 import numpy as np
 import uvicorn
 from fastapi import FastAPI
+
+from bioplausible.core.utils.device import get_device
 
 
 class _AppState:

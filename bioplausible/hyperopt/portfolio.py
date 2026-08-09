@@ -21,15 +21,21 @@ __all__ = [
 
 # Families whose credit-assignment regime is claimed to enable continual
 # learning (VALIDATE.md Phase 1.1 bullet 3).
-CONTINUAL_FAMILIES: frozenset[str] = frozenset(
-    {"eqprop", "fa", "hebbian", "forward_only"}
-)
+CONTINUAL_FAMILIES: frozenset[str] = frozenset({
+    "eqprop",
+    "fa",
+    "hebbian",
+    "forward_only",
+})
 
 # Locality levels that imply an O(1) / low-activation-memory regime (the
 # structural advantage that can offset a raw-accuracy deficit).
-LOW_MEMORY_LOCALITIES: frozenset[str] = frozenset(
-    {"equilibrium", "forward-only", "local", "layerwise"}
-)
+LOW_MEMORY_LOCALITIES: frozenset[str] = frozenset({
+    "equilibrium",
+    "forward-only",
+    "local",
+    "layerwise",
+})
 
 # Phase thresholds (in percentage points of tuned accuracy vs backprop baseline).
 _ELIMINATE_PP = 15.0
@@ -57,7 +63,9 @@ class PortfolioRow:
 
     @property
     def status(self) -> str:
-        return decide_status(self.best_acc, self.baseline_acc, self.family, self.locality)
+        return decide_status(
+            self.best_acc, self.baseline_acc, self.family, self.locality
+        )
 
 
 def has_regime_advantage(family: str, locality: set[str]) -> bool:

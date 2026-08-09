@@ -20,13 +20,11 @@ import hashlib
 import json
 import logging
 import os
-import random
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 import torch
 
 __all__ = [
@@ -96,15 +94,9 @@ class ReproducibilityTracker:
 
     def _set_seeds(self) -> None:
         """Set all random seeds."""
-        random.seed(self.seed)
-        np.random.seed(self.seed)
-        torch.manual_seed(self.seed)
+        from bioplausible.core.utils.seeds import set_all_seeds
 
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed(self.seed)
-            torch.cuda.manual_seed_all(self.seed)
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
+        set_all_seeds(self.seed, deterministic=True)
 
     def _capture_environment(self) -> EnvironmentInfo:
         """Capture current environment information."""
@@ -369,12 +361,6 @@ def set_reproducible_mode(seed: int = 42) -> None:
     seed : int
         Random seed
     """
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+    from bioplausible.core.utils.seeds import set_all_seeds
 
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    set_all_seeds(seed, deterministic=True)

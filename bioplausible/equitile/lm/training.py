@@ -23,23 +23,26 @@ Example
 >>> trainer = LMTrainer(model, config, device="cuda")
 >>> trainer.train(train_loader, val_loader)
 """
-
 import json
 import logging
 import math
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-logger = logging.getLogger(__name__)
 
 import torch
 import torch.nn.functional as F
 from torch.amp import GradScaler, autocast
 
+from bioplausible.core.utils.device import get_device
+
+logger = logging.getLogger(__name__)
+
+
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from torch import Tensor
     from torch.utils.data import DataLoader
 
@@ -137,7 +140,7 @@ class TrainingConfig:
     def __post_init__(self) -> None:
         """Validate and set defaults."""
         if self.device == "auto":
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = str(get_device())
 
 
 # =============================================================================
@@ -240,13 +243,13 @@ class TrainingMetrics:
             "best_val_loss": self.best_val_loss,
             "best_val_step": self.best_val_step,
         }
-        with Path(path).open("w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
     @classmethod
     def load(cls, path: str) -> TrainingMetrics:
         """Load metrics from file."""
-        with Path(path).open() as f:
+        with Path(path).open(encoding="utf-8") as f:
             data = json.load(f)
 
         metrics = cls()

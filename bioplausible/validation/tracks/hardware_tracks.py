@@ -6,6 +6,13 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
+from bioplausible.core.utils.device import get_device
+from bioplausible.zoo.models.eqprop import (
+    LoopedMLP,
+    NoisyLoopedMLP,
+    QuantizedLoopedMLP,
+)
+
 from ..notebook import TrackResult
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 
@@ -14,11 +21,6 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.zoo.models.eqprop import (  # ruff: ignore[module-level-import-not-at-top]
-    LoopedMLP,
-    NoisyLoopedMLP,
-    QuantizedLoopedMLP,
-)
 
 __all__ = [
     "NoisyLoopedMLP",
@@ -60,7 +62,7 @@ def _sink_hardware_track(
             config={},
             metrics=dict(result.metrics),
             status=status,
-            device="cuda" if torch.cuda.is_available() else "cpu",
+            device=str(get_device()),
             extra=extra,
         )
     except Exception:  # pragma: no cover  # best-effort persistence

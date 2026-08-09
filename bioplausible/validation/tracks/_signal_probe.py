@@ -17,6 +17,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from bioplausible.core.utils.device import get_device
 from bioplausible.data.vision import get_vision_dataset
 from bioplausible.zoo.models.eqprop import LoopedMLP, MemoryEfficientLoopedMLP
 
@@ -172,7 +173,7 @@ def run_signal_propagation_experiment(
     dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
 
     # Get a sample batch for testing
-    sample_x, sample_y = next(iter(dataloader))
+    sample_x, _sample_y = next(iter(dataloader))
 
     for depth in tqdm(depths, desc="Testing depths"):
         logger.info("\nTesting depth %d...", depth)
@@ -187,7 +188,7 @@ def run_signal_propagation_experiment(
         )
 
         # Move to appropriate device
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = get_device()
         model = model.to(device)
         sample_x = sample_x.to(device)
 

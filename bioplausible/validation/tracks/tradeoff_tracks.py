@@ -20,7 +20,6 @@ Honest verdict:
 - If EqProp matches with acceptable trade-offs → CONTINUE with clear niche
 - If EqProp wins on key metric → VALIDATE value proposition
 """
-
 import logging
 import os
 import sys
@@ -32,16 +31,18 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 
+from bioplausible.core.utils.device import get_device
+from bioplausible.zoo.models.eqprop import (
+    BackpropMLP,
+    LoopedMLP,
+)
+
 from ..notebook import TrackResult
 
 root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.zoo.models.eqprop import (
-    BackpropMLP,
-    LoopedMLP,
-)
 
 __all__ = [
     "count_parameters",
@@ -190,7 +191,7 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
     )
 
     start = time.time()
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(get_device())
 
     # Load MNIST
     from torch.utils.data import DataLoader, Subset

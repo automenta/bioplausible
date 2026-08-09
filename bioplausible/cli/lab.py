@@ -10,6 +10,7 @@ import torch
 logger = logging.getLogger(__name__)
 
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.utils.device import get_device
 from bioplausible.domains import create_task
 
 __all__ = [
@@ -22,7 +23,7 @@ __all__ = [
 def inspect_model(args):
     logger.info("[LAB]  Inspecting Model: %s", args.model)
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(get_device())
 
     # Create Task
     task = create_task(args.task, device=device)
@@ -52,7 +53,7 @@ def inspect_model(args):
         try:
             x = x.to(device)
             out = model(x)
-        except (RuntimeError, ValueError, TypeError):
+        except RuntimeError, ValueError, TypeError:
             logger.exception("Forward pass failed for model %s", args.model)
             return
         logger.info("[OK]  Forward pass successful. Output shape: %s", out.shape)

@@ -123,7 +123,8 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "BenchmarkSuiteConfig": ("bioplausible.evaluation", "BenchmarkSuiteConfig"),
     "BenchmarkSuiteResult": ("bioplausible.evaluation", "BenchmarkSuiteResult"),
     "CrossDomainBenchmarkSuite": (
-        "bioplausible.evaluation", "CrossDomainBenchmarkSuite"
+        "bioplausible.evaluation",
+        "CrossDomainBenchmarkSuite",
     ),
     "EvaluatorBase": ("bioplausible.evaluation", "EvaluatorBase"),
     "MetricSuite": ("bioplausible.evaluation", "MetricSuite"),
@@ -131,11 +132,13 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "get_benchmark": ("bioplausible.evaluation", "get_benchmark"),
     "list_benchmarks": ("bioplausible.evaluation", "list_benchmarks"),
     "run_cross_domain_benchmark": (
-        "bioplausible.evaluation", "run_cross_domain_benchmark"
+        "bioplausible.evaluation",
+        "run_cross_domain_benchmark",
     ),
     # Execution engine / callbacks
     "BaseExecutionCallback": (
-        "bioplausible.execution.callbacks", "BaseExecutionCallback"
+        "bioplausible.execution.callbacks",
+        "BaseExecutionCallback",
     ),
     "ExecutionCallback": ("bioplausible.execution.callbacks", "ExecutionCallback"),
     "ExecutionEngine": ("bioplausible.execution.engine", "ExecutionEngine"),
@@ -148,7 +151,8 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     # Leaderboard
     "LeaderboardEntry": ("bioplausible.leaderboard.generator", "LeaderboardEntry"),
     "LeaderboardGenerator": (
-        "bioplausible.leaderboard.generator", "LeaderboardGenerator"
+        "bioplausible.leaderboard.generator",
+        "LeaderboardGenerator",
     ),
     # Lightning Integration
     "BioLightningModule": ("bioplausible.lightning_", "BioLightningModule"),
@@ -158,7 +162,8 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "BioPredictionWriter": ("bioplausible.lightning_", "BioPredictionWriter"),
     "BioRayTuneSearch": ("bioplausible.lightning_", "BioRayTuneSearch"),
     "EnergyConvergenceCallback": (
-        "bioplausible.lightning_", "EnergyConvergenceCallback"
+        "bioplausible.lightning_",
+        "EnergyConvergenceCallback",
     ),
     "build_trainer": ("bioplausible.lightning_", "build_trainer"),
     "run_nas_search": ("bioplausible.lightning_", "run_nas_search"),
@@ -179,7 +184,8 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "ConvEqProp": ("bioplausible.zoo.models.eqprop", "ConvEqProp"),
     "LoopedMLP": ("bioplausible.zoo.models.eqprop", "LoopedMLP"),
     "MemoryEfficientLoopedMLP": (
-        "bioplausible.zoo.models.eqprop", "MemoryEfficientLoopedMLP"
+        "bioplausible.zoo.models.eqprop",
+        "MemoryEfficientLoopedMLP",
     ),
     "TransformerEqProp": ("bioplausible.zoo.models.eqprop", "TransformerEqProp"),
     "EqProp": ("bioplausible.zoo.propagators.eqprop", "EqProp"),

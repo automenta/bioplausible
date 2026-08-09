@@ -1,80 +1,29 @@
-"""Array utilities for acceleration backends (CuPy/NumPy interop)."""
+"""Array utilities for acceleration backends (CuPy/NumPy interop).
 
-import numpy as np
+Thin re-export layer over :mod:`bioplausible.core.utils.activations`, which
+now holds the canonical implementations of the NumPy/CuPy array helpers
+(``get_backend``, ``to_numpy``, ``softmax``, ``cross_entropy`` and
+``spectral_normalize``). Importing from ``core.utils`` keeps a single source
+of truth while preserving this module's public surface.
+"""
 
-from bioplausible.acceleration.backends import HAS_CUPY
+from bioplausible.core.utils.activations import (
+    cross_entropy,
+    get_backend,
+    softmax,
+    spectral_normalize,
+    to_numpy,
+)
 
-
-def get_backend(use_gpu: bool) -> object:
-    """Return appropriate array library (CuPy or NumPy)."""
-    if use_gpu and HAS_CUPY:
-        import cupy as cp
-
-        return cp
-    return np
-
-
-def to_numpy(arr: object) -> np.ndarray:
-    """Convert array to NumPy (handles both NumPy and CuPy arrays)."""
-    if HAS_CUPY:
-        try:
-            import cupy as cp
-
-            if hasattr(arr, "__class__") and arr.__class__.__module__.startswith(
-                "cupy"
-            ):
-                return cp.asnumpy(arr)
-        except ImportError:
-            pass
-    return arr
-
-
-def softmax(x: np.ndarray, xp: object = None) -> np.ndarray:
-    """Stable softmax."""
-    if xp is None:
-        xp = np
-    x_max = xp.max(x, axis=-1, keepdims=True)
-    exp_x = xp.exp(x - x_max)
-    return exp_x / xp.sum(exp_x, axis=-1, keepdims=True)
-
-
-def cross_entropy(logits: np.ndarray, targets: np.ndarray, xp: object = None) -> float:
-    """Cross-entropy loss from logits."""
-    if xp is None:
-        xp = np
-    batch_size = logits.shape[0]
-    probs = softmax(logits, xp)
-    probs = xp.clip(probs, 1e-10, 1.0)
-    log_probs = xp.log(probs)
-    loss = -xp.sum(log_probs[xp.arange(batch_size), targets]) / batch_size
-    return float(loss)
-
-
-def spectral_normalize(
-    W: np.ndarray,  # ruff: ignore[invalid-argument-name] - mathematical weight-matrix convention
-    num_iters: int = 5,
-    u: np.ndarray | None = None,
-    xp: object = None,
-) -> tuple[np.ndarray, np.ndarray, float]:
-    """Power iteration spectral normalization."""
-    if xp is None:
-        xp = np
-    out_dim, _in_dim = W.shape
-
-    if u is None:
-        u = xp.random.randn(out_dim).astype(W.dtype)
-    u /= xp.linalg.norm(u)
-
-    for _ in range(num_iters):
-        v = W.T @ u
-        v /= xp.linalg.norm(v) + 1e-12
-        u = W @ v
-        u /= xp.linalg.norm(u) + 1e-12
-
-    sigma = float(u @ W @ v)
-    w_normalized = W / (sigma + 1e-12)
-
-    return w_normalized, u, sigma
+__all__ = [
+    "cross_entropy",
+    "get_backend",
+    "get_kernel_classes",
+    "get_triton_ops",
+    "softmax",
+    "spectral_normalize",
+    "to_numpy",
+]
 
 
 def get_kernel_classes() -> tuple[type[object], type[object]]:
@@ -96,14 +45,3 @@ def get_triton_ops() -> type[object] | None:
     except ImportError:
         return None
     return _TritonEqPropOps
-
-
-__all__ = [
-    "cross_entropy",
-    "get_backend",
-    "get_kernel_classes",
-    "get_triton_ops",
-    "softmax",
-    "spectral_normalize",
-    "to_numpy",
-]

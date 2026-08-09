@@ -5,7 +5,7 @@ Allows using EqProp models in Scikit-Learn pipelines with .fit() and .predict().
 Supports incremental learning via .partial_fit().
 """
 
-# ruff: file-ignore[invalid-argument-name, non-lowercase-variable-in-function, too-many-arguments, too-many-positional-arguments, raise-vanilla-args] — sklearn convention uses uppercase X
+# ruff: file-ignore[invalid-argument-name, non-lowercase-variable-in-function, too-many-arguments, too-many-positional-arguments] — sklearn convention uses uppercase X
 
 import numpy as np
 import torch
@@ -17,6 +17,7 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.utils.device import get_device
 
 __all__ = [
     "EqPropClassifier",
@@ -111,7 +112,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
             np.random.seed(self.random_state)
 
         if self.device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = str(get_device())
 
         resolved = self._resolve_model_name()
         model_cls = Registry.get(ComponentCategory.MODEL, resolved)

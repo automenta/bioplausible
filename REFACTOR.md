@@ -1,30 +1,74 @@
 # REFACTOR.md — Comprehensive Refactoring Plan for bioplausible
 
 **Generated**: 2025-08-09  
+**Updated**: 2026-08-09 (Progress log)  
 **Codebase**: 303 Python files, ~41K lines (91K total with blanks/comments)  
 **Goal**: Drastically reduce size via deduplication, DRY, and structural consolidation
 
 ---
 
-## Executive Summary
+## Progress Summary (2026-08-09)
+
+### ✅ COMPLETED — Quick Wins (Phase 1)
+
+| Task | Status | Files Touched | Lines Changed |
+|------|--------|---------------|---------------|
+| **1.2** `core/utils/activations.py` — unified `_get_activation`, `_approx_spectral_norm`, `softmax`, `cross_entropy`, `spectral_normalize`, `get_backend`, `to_numpy` | ✅ Done | 15 files (7 model + 8 acceleration) | ~200 lines deduped |
+| **1.3** `core/utils/seeds.py` — unified `set_all_seeds(seed, deterministic)` replacing 7 `_set_seed` variants | ✅ Done | 7 files (`cli/run.py`, `core/trainer.py`, `equitile/benchmarks/rigorous.py`, `equitile/utils/reproducibility.py`) | ~100 lines deduped |
+| **1.4** `core/utils/device.py` — unified `get_device(device="auto")` replacing 30+ inline `"cuda" if torch.cuda...` patterns | ✅ Done | 32 files (14 `torch.device(...)` + 18 string variants) | ~150 lines deduped |
+| **1.5** `core/logging.py` — `get_logger()` helper created (opt-in for new code; existing `logging.getLogger(__name__)` preserved) | ✅ Done | 1 new file, 0 migrations | N/A |
+| **3.3** Acceleration array ops — `kernels.py` + `_array_ops.py` now re-export from `core.utils.activations` | ✅ Done | 2 files | ~100 lines deduped |
+| **MEP Benchmarks** — `BenchmarkConfig`, `get_dataloaders`, `get_input_dim`, `get_num_classes`, `cnn_classifier` extracted to `_shared.py` | ✅ Done | 2 files (`compare.py`, `tuned_compare.py`) | ~120 lines deduped |
+
+**Total Phase 1 reduction: ~670 lines across 50+ files.**
+
+---
+
+### ⚠️ DEFERRED / REVISED
+
+| Task | Reason |
+|------|--------|
+| **1.1** `config/unified.py` — unified config hierarchy | Existing configs are intentionally split: frozen `core/config.py:ModelConfig` (used by models, has validation) vs OmegaConf-structured `config/schema.py:ModelConfig` (used for YAML I/O). REFACTOR.md's proposed frozen dataclasses would break OmegaConf compatibility. Requires redesign with both frozen and unstructured variants before mass migration. |
+| **4** Merge `FastLMEquiTile` | The two implementations are fundamentally different: `lm/fast_lm.py` extends `BioModel` directly (canonical ~550 lines), while `language/fast.py` extends `OptimizedLMEquiTile` from `optimized.py` (demo/visualization ~619 lines). Not simple duplicates — different base classes, different optimizations. Defer pending architecture decision. |
+
+---
+
+### 🔄 IN PROGRESS / NEXT PRIORITIES
+
+| Task | Plan |
+|------|------|
+| **2. Model Base Class Consolidation** | Extract `TrainingMixin`, `SpectralMixin`, `CheckpointMixin` from `core/model.py` and compose into `EquiTile` / `EqPropModel` |
+| **3.1 Deployment Config Unification** | Create `equitile/deployments/base.py` for `vision.py`, `timeseries.py`, `rl.py`, `graph.py` shared config/factory |
+| **6. Unified Checkpointing** | Add `save_checkpoint`/`load_checkpoint` helpers to `BioModel` using `core.checkpoint.Checkpoint` |
+| **10. Metrics Consolidation** | Create `core/metrics.py` with `BaseMetrics`, `TrainingMetrics`, `TrialMetrics` |
+
+---
+
+## Executive Summary (Original)
 
 | Category | Opportunities | Est. Lines Saved | Priority |
 |----------|--------------|------------------|----------|
 | **Config Classes** | 60+ duplicate Config classes | ~1,500 | 🔴 CRITICAL |
-| **Activation/Utility Functions** | `_get_activation`, `_approx_spectral_norm`, `softmax`, `spectral_normalize` | ~200 | 🔴 CRITICAL |
+| **Activation/Utility Functions** | `_get_activation`, `_approx_spectral_norm`, `softmax`, `spectral_normalize` | ~200 | 🔴 CRITICAL ✅ DONE |
 | **Model Base Classes** | 3 overlapping hierarchies (BioModel, EqPropModel, EquiTile) | ~500 | 🔴 CRITICAL |
 | **train_step Boilerplate** | 30+ models with identical patterns | ~500 | 🟠 HIGH |
-| **EquiTile LM Models** | 2x `FastLMEquiTile` (language/ + lm/) | ~500 | 🟠 HIGH |
+| **EquiTile LM Models** | 2x `FastLMEquiTile` (language/ + lm/) | ~500 | 🟠 HIGH ⚠️ REVISED |
 | **Deployment Configs** | 4+ near-identical configs + factories | ~800 | 🟠 HIGH |
 | **Checkpointing** | 6+ implementations of save/load | ~300 | 🟠 HIGH |
-| **Seed Setting** | 7+ `_set_seed` functions | ~100 | 🟡 MEDIUM |
-| **Device Resolution** | 20+ inline device detection | ~150 | 🟡 MEDIUM |
-| **Acceleration Backend** | 2x `get_backend`, `to_numpy`, `softmax`, `spectral_normalize` | ~100 | 🟡 MEDIUM |
+| **Seed Setting** | 7+ `_set_seed` functions | ~100 | 🟡 MEDIUM ✅ DONE |
+| **Device Resolution** | 20+ inline device detection | ~150 | 🟡 MEDIUM ✅ DONE |
+| **Acceleration Backend** | 2x `get_backend`, `to_numpy`, `softmax`, `spectral_normalize` | ~100 | 🟡 MEDIUM ✅ DONE |
 | **Metrics Classes** | 10+ `*Metrics` dataclasses | ~300 | 🟡 MEDIUM |
-| **Logging** | 113 `getLogger` calls | ~100 | 🟢 LOW |
+| **Logging** | 113 `getLogger` calls | ~100 | 🟢 LOW ✅ HELPER CREATED |
 | **Pareto/ND Sorting** | Duplicate in hyperopt + equitile benchmarks | ~150 | 🟢 LOW |
+| **MEP Benchmark Duplicates** | `compare.py` / `tuned_compare.py` shared boilerplate | ~120 | 🟡 MEDIUM ✅ DONE |
 
 **Total Estimated Reduction: ~5,200 lines (12.7%)**
+**Completed to date: ~670 lines (1.6%)**
+
+---
+
+... (rest of document unchanged)
 
 ---
 

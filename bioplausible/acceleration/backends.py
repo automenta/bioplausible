@@ -112,8 +112,7 @@ try:
     # libdevice.tanh. Check the latter (the current API).
     if not hasattr(libdevice, "tanh"):
         warnings.warn(
-            "Triton detected but libdevice.tanh unavailable. "
-            "Disabling Triton support.",
+            "Triton detected but libdevice.tanh unavailable. Disabling Triton support.",
             RuntimeWarning,
         )
     else:

@@ -18,6 +18,8 @@ import logging
 
 import torch
 
+from bioplausible.core.utils.device import get_device
+
 logger = logging.getLogger(__name__)
 
 # =============================================================================
@@ -47,7 +49,7 @@ def benchmark_mot(
     dict
         Timing results
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
     x = torch.randn(batch_size, seq_len, embed_dim, device=device)
 
     results = {}

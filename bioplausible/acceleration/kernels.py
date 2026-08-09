@@ -54,7 +54,7 @@ def _from_nvcc() -> pathlib.Path | None:
         cuda_root = real_nvcc.parent.parent
         if (cuda_root / "bin" / "nvcc").exists():
             return cuda_root
-    except (OSError, RuntimeError):
+    except OSError, RuntimeError:
         return None
     return None
 
@@ -219,7 +219,7 @@ def to_numpy(arr: object) -> np.ndarray:
                 "cupy"
             ):
                 return cp.asnumpy(arr)
-        except (ValueError, TypeError, RuntimeError):
+        except ValueError, TypeError, RuntimeError:
             logger.warning("Failed to convert CuPy array to NumPy, falling back")
     return arr
 
@@ -229,19 +229,16 @@ logger = logging.getLogger(__name__)
 
 def softmax(x: np.ndarray, xp: object = np) -> np.ndarray:
     """Stable softmax."""
-    x_max = xp.max(x, axis=-1, keepdims=True)
-    exp_x = xp.exp(x - x_max)
-    return exp_x / xp.sum(exp_x, axis=-1, keepdims=True)
+    from bioplausible.core.utils.activations import softmax as _softmax
+
+    return _softmax(x, xp)
 
 
 def cross_entropy(logits: np.ndarray, targets: np.ndarray, xp: object = np) -> float:
     """Cross-entropy loss from logits."""
-    batch_size = logits.shape[0]
-    probs = softmax(logits, xp)
-    probs = xp.clip(probs, 1e-10, 1.0)
-    log_probs = xp.log(probs)
-    loss = -xp.sum(log_probs[xp.arange(batch_size), targets]) / batch_size
-    return loss
+    from bioplausible.core.utils.activations import cross_entropy as _cross_entropy
+
+    return _cross_entropy(logits, targets, xp)
 
 
 def tanh_deriv(x: np.ndarray, xp: object = np) -> np.ndarray:
@@ -268,51 +265,11 @@ def spectral_normalize(
         u_new: Updated u vector for next call
         sigma: Estimated spectral norm
     """
-    out_dim, in_dim = W.shape
+    from bioplausible.core.utils.activations import (
+        spectral_normalize as _spectral_normalize,
+    )
 
-    u = _initialize_u_vector(u, out_dim, W.dtype, xp)
-
-    for _ in range(num_iters):
-        v = _compute_v_vector(W, u, xp)
-        u = _compute_u_vector(W, v, xp)
-
-    sigma = _compute_spectral_norm(W, u, v)
-    W_normalized = W / (_add_epsilon(sigma))
-
-    return W_normalized, u, sigma
-
-
-def _add_epsilon(value: float, epsilon: float = 1e-12) -> float:
-    """Add small epsilon to prevent division by zero."""
-    return value + epsilon
-
-
-def _initialize_u_vector(
-    u: np.ndarray | None, out_dim: int, dtype: np.dtype, xp: object
-) -> np.ndarray:
-    """Initialize or validate the u vector for power iteration."""
-    if u is None:
-        u = xp.random.randn(out_dim).astype(dtype)
-    return u / xp.linalg.norm(u)
-
-
-def _compute_v_vector(W: np.ndarray, u: np.ndarray, xp: object) -> np.ndarray:
-    """Compute v vector in power iteration: v = W.T @ u, normalized."""
-    v = W.T @ u
-    norm = xp.linalg.norm(v)
-    return v / _add_epsilon(norm)
-
-
-def _compute_u_vector(W: np.ndarray, v: np.ndarray, xp: object) -> np.ndarray:
-    """Compute u vector in power iteration: u = W @ v, normalized."""
-    u = W @ v
-    norm = xp.linalg.norm(u)
-    return u / _add_epsilon(norm)
-
-
-def _compute_spectral_norm(W: np.ndarray, u: np.ndarray, v: np.ndarray) -> float:
-    """Compute the spectral norm (largest singular value) of W."""
-    return u @ W @ v
+    return _spectral_normalize(W, num_iters=num_iters, u=u, xp=xp)
 
 
 class EqPropKernel:

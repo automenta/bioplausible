@@ -240,7 +240,7 @@ class ExecutionEngine:
         try:
             self.generate_reports()
             self.last_report_trial = self.trial_count
-        except (RuntimeError, OSError, ValueError, KeyError):
+        except RuntimeError, OSError, ValueError, KeyError:
             logger.exception("Periodic reporting failed")
 
     def _run_parallel_batch(self) -> None:
@@ -802,7 +802,9 @@ class ExecutionEngine:
                             with zipfile.ZipFile(item, "r") as zf:
                                 zf.extract("model.pt", temp_dir)
                                 found_path = str(Path(temp_dir) / "model.pt")
-                        except Exception as e:  # broad: best-effort  # artifact formats vary
+                        except (
+                            Exception
+                        ) as e:  # broad: best-effort  # artifact formats vary
                             logger.warning("Failed to extract artifact: %s", e)
                         break
 

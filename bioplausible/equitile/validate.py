@@ -32,6 +32,7 @@ from pathlib import Path
 
 import torch
 
+from bioplausible.core.utils.device import get_device
 from bioplausible.equitile.lm import (
     FastLMConfig,
     FastLMEquiTile,
@@ -68,7 +69,7 @@ class ValidationPipeline:
         self.tracker = ReproducibilityTracker(seed=42)
 
         # Device
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = get_device()
         logger.info("Validation device: %s", self.device)
 
     def run_all(self) -> bool:
@@ -229,7 +230,7 @@ class ValidationPipeline:
         # Test 1: Dataset loading
         start = time.time()
         try:
-            train_loader, val_loader, tokenizer = create_shakespeare_dataset(
+            train_loader, val_loader, _tokenizer = create_shakespeare_dataset(
                 batch_size=4,
                 seq_length=32,
                 num_workers=0,
@@ -593,7 +594,7 @@ class ValidationPipeline:
         }
 
         results_path = Path("validation_results.json")
-        with Path(results_path).open("w") as f:
+        with Path(results_path).open("w", encoding="utf-8") as f:
             json.dump(results_data, f, indent=2)
 
         logger.info("Results saved to %s", results_path)

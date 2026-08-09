@@ -20,6 +20,8 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
+from bioplausible.core.utils.device import get_device
+
 logger = logging.getLogger(__name__)
 
 
@@ -109,7 +111,7 @@ class ExperimentRunner:
     def __init__(self, device: str = "auto"):
         self.device = device
         if device == "auto":
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = str(get_device())
 
     def run(
         self,

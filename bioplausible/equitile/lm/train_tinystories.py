@@ -37,6 +37,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
+from bioplausible.core.utils.device import get_device
 from bioplausible.equitile.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
 from bioplausible.equitile.lm import (
     BPETokenizer,
@@ -87,7 +88,7 @@ class TinyStoriesDataset(Dataset):
         self.tokens = []
 
         count = 0
-        with Path(data_path).open() as f:
+        with Path(data_path).open(encoding="utf-8") as f:
             for line in f:
                 if max_samples and count >= max_samples:
                     break
@@ -150,7 +151,7 @@ def download_tinystories(data_dir: str = "data") -> str:
         {"story": "The sun was shining and the birds were singing. " * 100},
     ]
 
-    with Path(train_file).open("w") as f:
+    with Path(train_file).open("w", encoding="utf-8") as f:
         for story in dummy_stories * 100:  # Repeat for more data
             f.write(json.dumps(story) + "\n")
 
@@ -313,10 +314,7 @@ def main():
     args = parser.parse_args()
 
     # Setup device
-    if args.device == "auto":
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device = torch.device(args.device)
+    device = get_device() if args.device == "auto" else torch.device(args.device)
     logger.info("Using device: %s", device)
 
     # Download/load dataset
@@ -328,7 +326,7 @@ def main():
 
     # Load a subset for tokenizer training
     sample_texts = []
-    with Path(data_file).open() as f:
+    with Path(data_file).open(encoding="utf-8") as f:
         for i, line in enumerate(f):
             if i >= 1000:
                 break
@@ -373,7 +371,7 @@ def main():
     # Train models
     results = {}
 
-    if args.model in ["equitile", "both"]:
+    if args.model in {"equitile", "both"}:
         logger.info("\n" + "=" * 70)
         logger.info("Training EquiTile")
         logger.info("=" * 70)
@@ -390,7 +388,7 @@ def main():
         )
         results["equitile"] = history
 
-    if args.model in ["nanogpt", "both"]:
+    if args.model in {"nanogpt", "both"}:
         logger.info("\n" + "=" * 70)
         logger.info("Training NanoGPT")
         logger.info("=" * 70)
@@ -414,7 +412,7 @@ def main():
     results_file = (
         output_dir / f"tinystories_{args.model}_{time.strftime('%Y%m%d_%H%M%S')}.json"
     )
-    with Path(results_file).open("w") as f:
+    with Path(results_file).open("w", encoding="utf-8") as f:
         json.dump(
             {
                 "config": vars(args),

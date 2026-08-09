@@ -205,7 +205,7 @@ def is_bio_plausible(model_name: str) -> bool:
     try:
         spec = get_model_spec(model_name)
         return spec.family != "baseline"
-    except (ValueError, KeyError):
+    except ValueError, KeyError:
         return (
             "backprop" not in model_name.lower()
             and "baseline" not in model_name.lower()
@@ -224,7 +224,7 @@ def group_trials_by_family(trials: list[dict]) -> dict[str, list[dict]]:
         try:
             spec = get_model_spec(model_name)
             family = spec.family
-        except (ValueError, KeyError):
+        except ValueError, KeyError:
             family = model_name.split()[0].lower()
 
         grouped[family].append(trial)

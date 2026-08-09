@@ -11,13 +11,18 @@ Reference:
 
 import logging
 from collections import OrderedDict
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.utils.data import DataLoader
 
-from .continual_learning import ContinualLearningResult
+from bioplausible.core.utils.device import get_device
+
+if TYPE_CHECKING:
+    from torch.utils.data import DataLoader
+
+    from .continual_learning import ContinualLearningResult
 
 __all__ = [
     "EWC",
@@ -292,7 +297,7 @@ def run_ewc_benchmark(
     )
 
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = get_device()
 
     torch.manual_seed(seed)
 

@@ -8,6 +8,13 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
+from bioplausible.core.utils.device import get_device
+from bioplausible.zoo.models.eqprop import (
+    LazyEqProp,
+    LoopedMLP,
+    NeuralCube,
+)
+
 from ..notebook import TrackResult
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 
@@ -16,11 +23,6 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.zoo.models.eqprop import (
-    LazyEqProp,
-    LoopedMLP,
-    NeuralCube,
-)
 
 __all__ = [
     "logger",
@@ -277,7 +279,7 @@ def track_10_memory_scaling(verifier) -> TrackResult:
     input_dim, hidden_dim, output_dim = 64, 128, 10
     batch = 128
     depths = [10, 25, 50, 100] if not verifier.quick_mode else [10, 25, 50]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(get_device())
     geometry = _MemoryGeometry(input_dim, hidden_dim, output_dim, batch, device)
 
     logger.info("\n[10a] Measuring peak memory vs depth (%s)...", device)
@@ -380,7 +382,7 @@ def track_11_deep_network(verifier) -> TrackResult:
     model.eval()
     x = X[:1]
     with torch.enable_grad():
-        out, trajectory = model(x, return_trajectory=True)
+        out, _trajectory = model(x, return_trajectory=True)
         loss = F.cross_entropy(out, y[:1])
         loss.backward()
 

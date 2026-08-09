@@ -204,7 +204,7 @@ class EBMTrainer:
             loss = nn.functional.cross_entropy(logits, y)
             acc = (logits.argmax(dim=1) == y).float().mean().item()
             return {"loss": loss.item(), "accuracy": acc}
-        except (RuntimeError, ValueError, TypeError):
+        except RuntimeError, ValueError, TypeError:
             logger.warning(
                 "Could not compute metrics from model forward. "
                 "Override _compute_metrics for custom extraction."

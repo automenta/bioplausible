@@ -109,7 +109,7 @@ class ResearchSynthesizer:
             try:
                 failures_query = "SELECT * FROM failures"
                 failures_df = pd.read_sql(failures_query, conn)
-            except (ValueError, TypeError, OSError, pd.errors.DatabaseError):
+            except ValueError, TypeError, OSError, pd.errors.DatabaseError:
                 logger.warning("Failed to load failures table, using empty DataFrame")
                 failures_df = pd.DataFrame()
 
@@ -227,7 +227,7 @@ class ResearchSynthesizer:
                             row["param_count"] = int(p_val * 1_000_000)
                         else:
                             row["param_count"] = int(p_val)
-                    except (ValueError, TypeError):
+                    except ValueError, TypeError:
                         row["param_count"] = self._estimate_param_count(row)
 
             return row
@@ -242,7 +242,7 @@ class ResearchSynthesizer:
         try:
             h_int = int(h) if pd.notnull(h) else 32
             l_int = int(n_layers) if pd.notnull(n_layers) else 1
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             h_int = 32
             l_int = 1
 

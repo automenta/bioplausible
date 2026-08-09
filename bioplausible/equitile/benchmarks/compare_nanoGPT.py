@@ -547,7 +547,9 @@ def compare_nanoGPT(
     from bioplausible.equitile.lm.fast_lm import FastLMConfig, FastLMEquiTile
 
     if device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        from bioplausible.core.utils.device import get_device
+
+        device = str(get_device())
 
     logger.info("=" * 60)
     logger.info("EquiTile vs NanoGPT Comparison Benchmark")

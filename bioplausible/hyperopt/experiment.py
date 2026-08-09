@@ -21,6 +21,7 @@ import numpy as np
 import torch
 
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.utils.device import get_device
 from bioplausible.domains import create_task
 from bioplausible.execution._guards import SafetyConfig
 from bioplausible.execution._lifecycle import CheckpointManager, ExperimentArchiver
@@ -67,7 +68,7 @@ class TrialRunner:
     def _select_device(self, device: str) -> str:
         """Resolve 'auto' device selection."""
         if device == "auto":
-            return "cuda" if torch.cuda.is_available() else "cpu"
+            return str(get_device())
         return device
 
     def _setup_task(self):

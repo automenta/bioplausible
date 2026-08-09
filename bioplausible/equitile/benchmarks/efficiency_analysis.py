@@ -21,6 +21,8 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
+from bioplausible.core.utils.device import get_device
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -84,11 +86,7 @@ class EfficiencyAnalyzer:
 
     def __init__(self, model: nn.Module, device: str = "cuda") -> None:
         self.model = model
-        self.device = torch.device(
-            device
-            if device != "auto"
-            else ("cuda" if torch.cuda.is_available() else "cpu")
-        )
+        self.device = get_device(device)
 
     def count_parameters(self) -> dict[str, int]:
         """Count parameters by component.
@@ -314,7 +312,7 @@ def analyze_parameter_efficiency(
         Analysis results
     """
     if device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = str(get_device())
 
     model = model.to(device)
     model.eval()
@@ -388,7 +386,7 @@ def analyze_flop_efficiency(
         Analysis results
     """
     if device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = str(get_device())
 
     model = model.to(device)
     model.eval()
@@ -463,7 +461,7 @@ def analyze_memory_efficiency(
         Analysis results
     """
     if device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = str(get_device())
 
     # Measure throughput
     analyzer = EfficiencyAnalyzer(model, device)

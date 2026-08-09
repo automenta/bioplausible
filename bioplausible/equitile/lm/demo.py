@@ -36,7 +36,6 @@ Resume training:
         --task shakespeare \
         --resume checkpoints/checkpoint_500.pt
 """
-
 import argparse
 import json
 import logging
@@ -45,13 +44,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 import torch
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-
+from bioplausible.core.utils.device import get_device
 from bioplausible.equitile.lm.data import (
     CharacterTokenizer,
     Tokenizer,
@@ -70,6 +65,13 @@ from bioplausible.equitile.lm.training import (
     TrainingConfig,
     TrainingMetrics,
 )
+
+logger = logging.getLogger(__name__)
+
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+
 
 # =============================================================================
 # Real-time Metrics Dashboard
@@ -218,7 +220,7 @@ class MetricsDashboard:
             logger.info("  Generated: %s...", clean_text)
 
         # Flush
-        with Path(self.log_file).open("a") as f:
+        with Path(self.log_file).open("a", encoding="utf-8") as f:
             f.write(
                 f"[{elapsed_str}] Step {step}: Loss={train_loss:.4f}, PPL={ppl_str}\n"
             )
@@ -234,7 +236,7 @@ class MetricsDashboard:
             "summary": self.get_summary(),
         }
 
-        with Path(metrics_path).open("w") as f:
+        with Path(metrics_path).open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
     def get_summary(self) -> dict[str, object]:
@@ -269,7 +271,7 @@ class MetricsDashboard:
             )
             return
 
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        _fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
         # Loss curve
         ax = axes[0, 0]
@@ -479,7 +481,7 @@ def create_dataset(config: DemoConfig):
         )
     elif config.task == "custom" and config.data_path:
         # Load custom text file
-        with Path(config.data_path).open() as f:
+        with Path(config.data_path).open(encoding="utf-8") as f:
             text = f.read()
         return create_custom_dataset(
             text,
@@ -507,7 +509,7 @@ def run_training(
 
     # Auto-detect device
     if config.device == "auto":
-        config.device = "cuda" if torch.cuda.is_available() else "cpu"
+        config.device = str(get_device())
     logger.info("Device: %s", config.device)
 
     # Create dataset
@@ -671,7 +673,7 @@ def run_inference(
 ) -> None:
     """Run inference with a trained model."""
     if device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = str(get_device())
 
     logger.info("Loading model from %s...", checkpoint_path)
     checkpoint = torch.load(checkpoint_path, map_location=device)

@@ -16,6 +16,7 @@ import torch
 from torch import nn
 
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.utils.device import get_device
 from bioplausible.domains import create_task
 from bioplausible.domains.base import DomainType
 from bioplausible.execution.interpretability import FeatureAttribution
@@ -96,7 +97,7 @@ class RobustnessEvaluator:
         self.config = config
         self.weights_path = weights_path
         self.output_dir = output_dir
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = str(get_device())
 
     def run(self) -> dict[str, float]:
         """

@@ -26,6 +26,7 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision import datasets, transforms
 
+from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.mep.optimizers import CompositeOptimizer
 from bioplausible.zoo.mep.optimizers.strategies.constraint import SpectralConstraint
 from bioplausible.zoo.mep.optimizers.strategies.feedback import (
@@ -295,7 +296,7 @@ def run_permuted_mnist_benchmark(
         ContinualLearningResult with metrics.
     """
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = get_device()
 
     torch.manual_seed(seed)
 
@@ -487,7 +488,7 @@ def save_results(
     """Save results to JSON file."""
     data = {name: asdict(result) for name, result in results.items()}
 
-    with pathlib.Path(output_path).open("w") as f:
+    with pathlib.Path(output_path).open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
     logger.info("Results saved to: %s", output_path)

@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from bioplausible.core.utils.device import get_device
 from bioplausible.experiment.probe import CoreTrainerDriver, config_key
 from bioplausible.experiment.producer import (
     HyperoptGridProducer,
@@ -66,9 +67,7 @@ def _resolve_device(campaign: Campaign, override: str | None) -> str:
         return override
     device = campaign.compute.device
     if device == "auto":
-        import torch
-
-        return "cuda:0" if torch.cuda.is_available() else "cpu"
+        return str(get_device("cuda:0"))
     return device
 
 

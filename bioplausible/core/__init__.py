@@ -26,7 +26,8 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "register_propagator": ("bioplausible.core.registry", "register_propagator"),
     "register_sparsity": ("bioplausible.core.registry", "register_sparsity"),
     "register_update_strategy": (
-        "bioplausible.core.registry", "register_update_strategy"
+        "bioplausible.core.registry",
+        "register_update_strategy",
     ),
     "CoreTrainer": ("bioplausible.core.trainer", "CoreTrainer"),
     "TrainerConfig": ("bioplausible.core.trainer", "TrainerConfig"),

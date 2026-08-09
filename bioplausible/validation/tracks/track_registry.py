@@ -56,7 +56,7 @@ def register_tracks_from_module(module):
                         if len(parts) >= 2 and parts[1].isdigit():
                             track_id = int(parts[1])
                             ALL_TRACKS[track_id] = func
-                    except (ValueError, IndexError):
+                    except ValueError, IndexError:
                         logger.warning("Failed to parse track name '%s'", name)
     except (ImportError, AttributeError, TypeError, ValueError) as e:
         logger.warning(

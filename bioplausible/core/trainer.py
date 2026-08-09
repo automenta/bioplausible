@@ -406,27 +406,15 @@ class CoreTrainer:
 
     def _set_seed(self, seed: int) -> None:
         """Set random seeds for reproducibility."""
-        import random
+        from bioplausible.core.utils.seeds import set_all_seeds
 
-        import numpy as np
-
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
-        if self.config.deterministic:
-            torch.use_deterministic_algorithms(True)
+        set_all_seeds(seed, deterministic=self.config.deterministic)
 
     def _resolve_device(self, device: str) -> torch.device:
         """Resolve device string to torch.device."""
-        if device == "auto":
-            if torch.cuda.is_available():
-                return torch.device("cuda")
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                return torch.device("mps")
-            return torch.device("cpu")
-        return torch.device(device)
+        from bioplausible.core.utils.device import get_device
+
+        return get_device(device)
 
     def _save_config(self) -> None:
         """Save config to output directory."""
@@ -548,7 +536,7 @@ class CoreTrainer:
             output_dim=output_dim,
             model_name=self.config.model,
         )
-        self.model = self._apply_hardware(cast(nn.Module, self.model))
+        self.model = self._apply_hardware(cast("nn.Module", self.model))
 
         logger.info(
             "Model created: %s (%d params)",
@@ -1617,8 +1605,10 @@ def _record_pruned_failure(cfg: object, device: str, exc: Exception) -> None:
 
 def _resolve_runconfig_device(cfg: object) -> str:
     """Resolve the target device from a RunConfig's ``device`` field."""
+    from bioplausible.core.utils.device import get_device
+
     if cfg.device == "auto":
-        return "cuda" if torch.cuda.is_available() else "cpu"
+        return str(get_device())
     return cfg.device
 
 

@@ -57,7 +57,7 @@ def _model_specs() -> list[_ModelSpec]:
                         d.value if hasattr(d, "value") else str(d) for d in domains
                     ]
             specs.append(_ModelSpec(entry["name"], task_compat))
-    except (KeyError, AttributeError, ValueError):  # pragma: no cover - registry empty
+    except KeyError, AttributeError, ValueError:  # pragma: no cover - registry empty
         logger.exception("Failed to enumerate models from Registry")
     _model_specs.cache = specs
     return specs

@@ -16,6 +16,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Subset, TensorDataset
 from torchvision import datasets, transforms
 
+from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.mep.presets import smep
 
 __all__ = [
@@ -45,19 +46,19 @@ def benchmark_regression(
     This is EP's natural domain - the energy function directly matches
     the regression objective.
     """
-    _device = torch.device(device if torch.cuda.is_available() else "cpu")
+    device_ = get_device(device)
 
     # Generate synthetic regression data
     torch.manual_seed(42)
-    X_train = torch.randn(n_train, n_features, device=_device)
+    X_train = torch.randn(n_train, n_features, device=device_)
     # Target: sum of features + noise
     y_train = X_train.sum(dim=1, keepdim=True) + 0.1 * torch.randn(
-        n_train, 1, device=_device
+        n_train, 1, device=device_
     )
 
-    X_test = torch.randn(n_test, n_features, device=_device)
+    X_test = torch.randn(n_test, n_features, device=device_)
     y_test = X_test.sum(dim=1, keepdim=True) + 0.1 * torch.randn(
-        n_test, 1, device=_device
+        n_test, 1, device=device_
     )
 
     # Normalize
@@ -135,7 +136,7 @@ def benchmark_regression(
             # Train
             model.train()
             for X, y in train_loader:
-                if name in ["SGD", "Adam"]:
+                if name in {"SGD", "Adam"}:
                     optimizer.zero_grad()
                     output = model(X)
                     loss = F.mse_loss(output, y)
@@ -179,19 +180,19 @@ def benchmark_continual_learning(
 
     Each task uses different output dimensions. Measure forgetting on previous tasks.
     """
-    _device = torch.device(device if torch.cuda.is_available() else "cpu")
+    device_ = get_device(device)
 
     torch.manual_seed(42)
 
     # Generate tasks: each task predicts different feature combinations
     tasks = []
     for t in range(n_tasks):
-        X = torch.randn(samples_per_task, n_features, device=_device)
+        X = torch.randn(samples_per_task, n_features, device=device_)
         # Each task uses different subset of features
         start_idx = (t * 4) % n_features
         y = X[:, start_idx : start_idx + 4].sum(
             dim=1, keepdim=True
-        ) + 0.1 * torch.randn(samples_per_task, 1, device=_device)
+        ) + 0.1 * torch.randn(samples_per_task, 1, device=device_)
         tasks.append((X, y, start_idx))
 
     def make_model() -> nn.Module:
@@ -302,7 +303,7 @@ def benchmark_adaptive_settling(
 
     This can save computation by using fewer settle steps when possible.
     """
-    _device = torch.device(device if torch.cuda.is_available() else "cpu")
+    _device = get_device(device)
 
     # Load MNIST
     transform = transforms.Compose([

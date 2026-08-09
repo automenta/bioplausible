@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from bioplausible.core.utils.device import get_device
+
 if TYPE_CHECKING:
     from bioplausible.experiment.probe import ProbeResult
     from bioplausible.experiment.report import Report
@@ -354,9 +356,7 @@ class StaircaseRunner:
             return "cpu"
         device = self.compute.device
         if device == "auto":
-            import torch
-
-            return "cuda:0" if torch.cuda.is_available() else "cpu"
+            return str(get_device("cuda:0"))
         return device
 
     def run(self) -> list[Outcome]:

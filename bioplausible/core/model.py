@@ -8,7 +8,6 @@ Extracted from ``zoo/base.py`` so that ``equitile/`` can depend on
 from abc import ABC, abstractmethod
 
 import torch
-import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
@@ -92,17 +91,9 @@ class BioModel(nn.Module, ABC):
             self._build_layers()
 
     def _get_activation(self, name: str) -> nn.Module:
-        match name:
-            case "silu":
-                return nn.SiLU()
-            case "relu":
-                return nn.ReLU()
-            case "tanh":
-                return nn.Tanh()
-            case "gelu":
-                return nn.GELU()
-            case _:
-                return nn.ReLU()
+        from bioplausible.core.utils.activations import get_activation
+
+        return get_activation(name)
 
     def apply_spectral_norm(
         self,
@@ -216,26 +207,9 @@ class BioModel(nn.Module, ABC):
 
     def _approx_spectral_norm(self, weight: torch.Tensor, n_iter: int = 10) -> float:
         """Approximate spectral norm using power iteration (faster than SVD)."""
-        if weight.dim() < 2:
-            return 0.0
+        from bioplausible.core.utils.activations import approx_spectral_norm
 
-        w_mat = weight.view(weight.size(0), -1)
-        out_dim, in_dim = w_mat.shape
-
-        u = torch.randn(out_dim, device=weight.device)
-
-        # Power iteration
-        for _ in range(n_iter):
-            # v = W^T u / ||W^T u||
-            v = torch.mv(w_mat.t(), u)
-            v = F.normalize(v, dim=0, eps=1e-12)
-
-            # u = W v / ||W v||
-            u = torch.mv(w_mat, v)
-            u = F.normalize(u, dim=0, eps=1e-12)
-
-        # sigma = u^T W v
-        return torch.dot(u, torch.mv(w_mat, v)).item()
+        return approx_spectral_norm(weight, n_iter=n_iter)
 
     def get_stats(self) -> dict[str, float]:
         """Get algorithm-specific statistics for reporting."""

@@ -294,17 +294,9 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
             initialize_io_projections(self.W_in, self.W_out)
 
     def _get_activation(self, name: str) -> nn.Module:
-        match name:
-            case "tanh":
-                return nn.Tanh()
-            case "relu":
-                return nn.ReLU()
-            case "gelu":
-                return nn.GELU()
-            case "silu":
-                return nn.SiLU()
-            case _:
-                return nn.GELU()
+        from bioplausible.core.utils.activations import get_activation
+
+        return get_activation(name, default="gelu")
 
     def to(self, *args, **kwargs):
         model = super().to(*args, **kwargs)

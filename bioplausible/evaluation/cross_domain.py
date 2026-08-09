@@ -19,9 +19,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import torch
-
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.utils.device import get_device
 from bioplausible.domains import (
     GraphTask,
     LMTask,
@@ -198,7 +197,7 @@ class CrossDomainBenchmarkSuite:
                 )
                 return result
 
-        except (RuntimeError, ValueError, TypeError, KeyError):
+        except RuntimeError, ValueError, TypeError, KeyError:
             logger.exception("Failed to run %s on %s", model_name, task.name)
 
         return None
@@ -215,7 +214,7 @@ class CrossDomainBenchmarkSuite:
         tasks = config.tasks or list(self.get_benchmark_tasks().keys())
         device = config.device
         if device == "auto":
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            device = str(get_device())
 
         for domain in tasks:
             logger.info("\n%s", "=" * 60)

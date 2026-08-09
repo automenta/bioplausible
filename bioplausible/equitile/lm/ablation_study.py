@@ -18,6 +18,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.utils.device import get_device
 from bioplausible.equitile.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
 from bioplausible.equitile.lm import FastLMConfig, FastLMEquiTile
 
@@ -63,10 +64,7 @@ def run_training_ablation(
     with torch.no_grad():
         output = model(val_input)
         # Handle NanoGPT which returns (logits, loss) tuple
-        if isinstance(output, tuple):
-            logits = output[0]
-        else:
-            logits = output
+        logits = output[0] if isinstance(output, tuple) else output
         val_loss = F.cross_entropy(
             logits.view(-1, logits.size(-1)), val_target.view(-1)
         )
@@ -109,10 +107,7 @@ def run_training_ablation(
     model.eval()
     with torch.no_grad():
         output = model(val_input)
-        if isinstance(output, tuple):
-            logits = output[0]
-        else:
-            logits = output
+        logits = output[0] if isinstance(output, tuple) else output
         val_loss = F.cross_entropy(
             logits.view(-1, logits.size(-1)), val_target.view(-1)
         )
@@ -144,7 +139,7 @@ def ablation_mot_sparsity(vocab_size: int = 1000, seq_len: int = 64):
     print("ABLATION 1: MoT Sparsity (k value)")
     print("=" * 70)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
 
     # Create data
     train_input = torch.randint(0, vocab_size, (32, seq_len), device=device)
@@ -212,7 +207,7 @@ def ablation_initialization(vocab_size: int = 1000, seq_len: int = 64):
     print("ABLATION 2: Initialization Schemes")
     print("=" * 70)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
 
     # Create data
     train_input = torch.randint(0, vocab_size, (32, seq_len), device=device)
@@ -277,7 +272,7 @@ def ablation_output_scale(vocab_size: int = 1000, seq_len: int = 64):
     print("ABLATION 3: Output Scaling")
     print("=" * 70)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
 
     # Create data
     train_input = torch.randint(0, vocab_size, (32, seq_len), device=device)
@@ -339,7 +334,7 @@ def ablation_architecture(vocab_size: int = 1000, seq_len: int = 64):
     print("ABLATION 4: Architecture Comparison")
     print("=" * 70)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = get_device()
 
     # Create data
     train_input = torch.randint(0, vocab_size, (32, seq_len), device=device)

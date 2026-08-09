@@ -253,7 +253,9 @@ class CoreTrainerDriver:
         # read it from their own ``config``. The scalar is carried in
         # ``model_kwargs`` (the OmegaConf-safe view), never a nested object.
         learn_rate = model_kwargs.get("learning_rate")
-        opt_kwargs: dict[str, object] = {"lr": float(learn_rate)} if learn_rate is not None else {}
+        opt_kwargs: dict[str, object] = (
+            {"lr": float(learn_rate)} if learn_rate is not None else {}
+        )
         core_train_flag = self.track_energy or self.track_flops or self.track_memory
         cfg = TrainerConfig(
             model=model,

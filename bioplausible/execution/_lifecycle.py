@@ -198,12 +198,13 @@ import torch
 import json
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.domains import create_task
+from bioplausible.core.utils.device import get_device
 
 def reproduce():
     config = {config_repr}
 
     logger.info("Reproducing model: %s", config['model'])
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(get_device())
 
     task_name = config.get("task", "mnist")
     logger.info("Loading task: %s...", task_name)

@@ -44,7 +44,9 @@ def _build_spatial_dummy(model: nn.Module, device: torch.device) -> torch.Tensor
         if isinstance(module, nn.Linear) and first_linear_in is None:
             first_linear_in = module.in_features
 
-    is_spatial = input_channels != 1 or getattr(model, "input_format", "flat") == "spatial"
+    is_spatial = (
+        input_channels != 1 or getattr(model, "input_format", "flat") == "spatial"
+    )
 
     if is_spatial and first_linear_in is not None:
         if first_linear_in == 784 and input_channels == 1:

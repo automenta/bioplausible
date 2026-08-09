@@ -119,7 +119,9 @@ class AutoScientistCampaign:
 
                     # Update KnowledgeBase
                     self._update_knowledge_base(proposal, result)
-                except Exception as e:  # broad: a failing trial must not stop the campaign
+                except (
+                    Exception
+                ) as e:  # broad: a failing trial must not stop the campaign
                     logger.error("Proposal %s failed: %s", i, e, exc_info=True)
                     results.append({
                         "proposal": proposal,

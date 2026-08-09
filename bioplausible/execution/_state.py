@@ -292,7 +292,7 @@ class FailureTracker:
                         cfg = json.loads(row[0])
                         if param in cfg:
                             failed_vals.append(float(cfg[param]))
-                    except (ValueError, TypeError, json.JSONDecodeError):
+                    except ValueError, TypeError, json.JSONDecodeError:
                         pass
                 if not failed_vals:
                     return None
@@ -488,10 +488,10 @@ class ExperimentState:
                     config = json.loads(row[0])
                     if "task" in config:
                         recent_tasks.append(config["task"])
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     logger.warning("Failed to deserialize recent task entry")
             return recent_tasks
-        except (sqlite3.Error, OSError, ValueError):
+        except sqlite3.Error, OSError, ValueError:
             logger.exception("Error fetching recent tasks")
             return []
 
@@ -503,7 +503,7 @@ class ExperimentState:
                 (limit,),
             )
             return [row[0] for row in cursor.fetchall()]
-        except (sqlite3.Error, OSError, ValueError):
+        except sqlite3.Error, OSError, ValueError:
             logger.exception("Error fetching recent models")
             return []
 
@@ -529,7 +529,7 @@ class ExperimentState:
             )
             for row in cursor.fetchall():
                 fragile_models[row["model_name"]] = row["avg_rob"]
-        except (sqlite3.Error, OSError, ValueError):
+        except sqlite3.Error, OSError, ValueError:
             logger.warning("Failed to query fragile models")
         return fragile_models
 

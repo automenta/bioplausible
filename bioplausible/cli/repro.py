@@ -277,7 +277,13 @@ def _gradient_gate() -> dict[str, bool]:
             loss_mse,
             0.6,
         ),
-        ("contrastive_hebbian_learning", ContrastiveHebbianLearning, _lro_driver, loss_mse, 0.6),
+        (
+            "contrastive_hebbian_learning",
+            ContrastiveHebbianLearning,
+            _lro_driver,
+            loss_mse,
+            0.6,
+        ),
     ]
 
     results: dict[str, bool] = {}

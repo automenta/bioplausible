@@ -37,6 +37,7 @@ except ImportError:
 
 import logging
 
+from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.mep.presets import sdmep, smep
 
 __all__ = [
@@ -106,7 +107,7 @@ def load_config(config_path: str) -> dict[str, object]:
             "PyYAML is required for config loading. Install with: pip install PyYAML"
         )
 
-    with Path(config_path).open() as f:
+    with Path(config_path).open(encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     # Handle defaults inheritance
@@ -119,7 +120,7 @@ def load_config(config_path: str) -> dict[str, object]:
                         # Load base config
                         base_path = Path(config_path).parent / "base.yaml"
                         if base_path.exists():
-                            with Path(base_path).open() as f:
+                            with Path(base_path).open(encoding="utf-8") as f:
                                 base_config = yaml.safe_load(f)
                         break
 
@@ -196,7 +197,7 @@ def get_dataloader(
     std: tuple[float, ...]
 
     # Normalize based on dataset
-    if dataset_name.upper() in ["MNIST", "FASHIONMNIST"]:
+    if dataset_name.upper() in {"MNIST", "FASHIONMNIST"}:
         mean, std = (0.5,), (0.5,)
     else:  # CIFAR10, CIFAR100
         mean, std = (0.5, 0.5, 0.5), (0.5, 0.5, 0.5)
@@ -444,7 +445,7 @@ def run_benchmark(
 
     # Create optimizer
     optimizer = create_optimizer(optimizer_name, model, config)
-    is_ep = optimizer_name in ["SMEP", "SDMEP"]
+    is_ep = optimizer_name in {"SMEP", "SDMEP"}
 
     # Training loop
     result = BenchmarkResult(config=config, optimizer_name=optimizer_name)
@@ -585,7 +586,7 @@ def plot_results(
     plt.close()
 
     # Plot 2: Final comparison bar chart
-    fig, ax = plt.subplots(figsize=(10, 6))
+    _fig, ax = plt.subplots(figsize=(10, 6))
 
     x = range(len(results))
     final_accs = [r.best_val_acc for r in results]
@@ -647,7 +648,7 @@ def save_results(
         "results": [r.to_dict() for r in results],
     }
 
-    with Path(save_path).open("w") as f:
+    with Path(save_path).open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
     logger.info("Results saved to %s", save_path)
@@ -658,10 +659,7 @@ def run_all_benchmarks(config: dict[str, object]) -> list[BenchmarkResult]:
 
     # Determine device
     device_str = config.get("experiment", {}).get("device", "auto")
-    if device_str == "auto":
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device = torch.device(device_str)
+    device = get_device() if device_str == "auto" else torch.device(device_str)
 
     logger.info("Running benchmarks on %s", device)
     logger.info("Dataset: %s", config["dataset"]["name"])
@@ -669,7 +667,7 @@ def run_all_benchmarks(config: dict[str, object]) -> list[BenchmarkResult]:
 
     results = []
 
-    for optimizer_name in config.get("optimizers", {}).keys():
+    for optimizer_name in config.get("optimizers", {}):
         logger.info("\n%s", "=" * 50)
         logger.info("Benchmarking: %s", optimizer_name)
         logger.info("%s", "=" * 50)

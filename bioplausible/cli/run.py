@@ -17,7 +17,6 @@ import argparse
 import csv
 import json
 import logging
-import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +24,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import optuna
-import torch
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
@@ -117,11 +115,9 @@ FAMILY_MAP: dict[str, str] = {
 
 def _set_seeds(seed: int) -> None:
     """Seed every RNG used downstream for reproducible single-trial runs."""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+    from bioplausible.core.utils.seeds import set_all_seeds
+
+    set_all_seeds(seed)
 
 
 # Models documented as intentional baselines (fail learns-gate; excluded from Phase 1 HPO)
@@ -530,7 +526,9 @@ def _run_hpo_family(
     n_startup = getattr(eval_cfg, "n_startup_trials", 10)
 
     if device == "auto":
-        resolved = "cuda" if torch.cuda.is_available() else "cpu"
+        from bioplausible.core.utils.device import get_device
+
+        resolved = str(get_device())
         logger.info("[DEVICE] auto -> %s", resolved)
 
     logger.info(

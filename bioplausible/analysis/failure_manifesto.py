@@ -98,8 +98,7 @@ def _write_diagnostics(f, tracker: FailureTracker) -> None:
     analysis = tracker.analyze_failure_patterns()
     if not analysis.get("recommendations"):
         f.write(
-            "No critical failure patterns detected "
-            "requiring immediate intervention.\n"
+            "No critical failure patterns detected requiring immediate intervention.\n"
         )
         return
     for rec in analysis["recommendations"]:
@@ -112,9 +111,7 @@ def _write_diagnostics(f, tracker: FailureTracker) -> None:
         f.write(f"- **Recommendation**: {rec.get('suggestion')}\n")
         if "affected_models" in rec:
             f.write(
-                "- **Affected Models**: {}\n".format(
-                    ", ".join(rec["affected_models"])
-                )
+                "- **Affected Models**: {}\n".format(", ".join(rec["affected_models"]))
             )
         if "details" in rec:
             f.write(f"- **Details**: {rec['details']}\n")
