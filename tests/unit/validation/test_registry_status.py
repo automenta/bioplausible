@@ -58,12 +58,15 @@ def test_broken_models_are_quarantined_models() -> None:
         "graph_eqprop",
         "conv_eqprop",
         "modern_conv_eqprop",
-        "direct_feedback_alignment_eqprop",
         "equilibrium_alignment",
         "hebbian_chain",
         "hebbian_3d",
     ):
         assert expected in broken, f"{expected} must be tagged status:broken"
+    
+    # These were previously broken but are now fixed (depth-cap fix)
+    for fixed in ("direct_feedback_alignment_eqprop", "dfa_deep"):
+        assert fixed not in broken, f"{fixed} should no longer be status:broken"
 
 
 def test_sweep_filters_broken_by_default() -> None:
@@ -94,6 +97,8 @@ def test_sweep_include_broken_restores_them() -> None:
         ("eqprop_mlp", ModelStatus.STABLE),
         ("directed_ep", ModelStatus.EXPERIMENTAL),
         ("conv_eqprop", ModelStatus.BROKEN),
+        ("direct_feedback_alignment_eqprop", ModelStatus.EXPERIMENTAL),
+        ("dfa_deep", ModelStatus.EXPERIMENTAL),
     ],
 )
 def test_key_models_have_expected_status(model: str, expected: ModelStatus) -> None:

@@ -20,8 +20,6 @@ tests. This table records the historical audit.
 | `graph_eqprop` | `num_layers` | Quarantine | `phantom_knobs()` flags `num_layers`; constructor builds a fixed single-GCN-loop graph regardless of requested depth | `status:broken` |
 | `conv_eqprop` | `num_layers` | Quarantine | `phantom_knobs()` flags `num_layers`; single conv loop, depth not threaded | `status:broken` |
 | `modern_conv_eqprop` | `num_layers` | Quarantine | `phantom_knobs()` flags `num_layers`; depth fixed by architecture | `status:broken` |
-| `direct_feedback_alignment_eqprop` | `num_layers` | Quarantine | `phantom_knobs()` flags `num_layers` | `status:broken` |
-| `dfa_deep` | `num_layers` | Quarantine | `phantom_knobs()` flags `num_layers` (inherits parent) | `status:broken` |
 | `equilibrium_alignment` | `num_layers` | Quarantine | `phantom_knobs()` flags `num_layers` | `status:broken` |
 | `hebbian_chain` | `num_layers` | Quarantine | `phantom_knobs()` flags `num_layers` | `status:broken` |
 | `deep_hebbian` | `num_layers` | Quarantine | `phantom_knobs()` flags `num_layers` (alias of `hebbian_chain`) | `status:broken` |
@@ -29,6 +27,13 @@ tests. This table records the historical audit.
 | `eqprop_diffusion` | n/a (diffusion interface) | Quarantine | `forward(x, t)` requires a timestep that the probe driver cannot supply; not a phantom-`num_layers` case but a task-interface incompatibility (see `_forward_probe_ok`) | `status:broken` |
 | `neural_cube` | `num_layers` (structural axis is `cube_size`) | Quarantine | `cube_size` defines the 3D lattice; sampled `num_layers` is absorbed via `**kwargs` and silently dropped (no constructor-surface phantom is raised because the knob is "absorbed") — caught by the registry-wide depth guard | `status:broken` |
 | `equilibrium_alignment` | `num_layers` (absorbed via `**kwargs`, unused) | Quarantine | Same `**kwargs` absorption: `num_layers` lands in kwargs and never grows the architecture — caught by the registry-wide depth guard | `status:broken` |
+
+## Resolved (depth-cap fix)
+
+| Model | Phantom Knob | Resolution | Evidence | Status |
+|---|---|---|---|---|
+| `direct_feedback_alignment_eqprop` | `num_layers` | Fixed | Structural fallback depth cap (`min(..., 2)`) removed; `phantom_knobs()` now returns `frozenset()`; `num_layers` honored in `transition_modules()` | `status:experimental` |
+| `dfa_deep` | `num_layers` | Fixed | Same fix as parent; depth honored | `status:experimental` |
 
 ## Registry-Wide Depth Guard
 

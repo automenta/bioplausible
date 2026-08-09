@@ -1680,14 +1680,14 @@ Pre-existing failures confirmed unrelated (verified via `git stash`):
   `status:<value>` registry tags.
 - Every registered model now carries exactly one valid status tag (verified by
   `test_registry_status.py::test_every_registered_model_has_status_tag`).
-  Distribution: 11 stable, 18 experimental, 10 broken.
+  Distribution: 11 stable, 18 experimental, 11 broken.
   - stable: `backprop_mlp`, `eqprop_mlp`, `feedback_alignment`, `standard_fa`,
     `diff_target_prop`, `fabricpc_graph_pcn`, `forward_forward`, `pepita`,
     `backprop_transformer_lm`, `custom_stacked_model`.
   - broken: `graph_eqprop`, `conv_eqprop`, `modern_conv_eqprop`,
-    `eqprop_diffusion`, `direct_feedback_alignment_eqprop`, `dfa_deep`,
-    `equilibrium_alignment`, `hebbian_chain`, `deep_hebbian`, `hebbian_3d`,
-    `neural_cube`.
+    `eqprop_diffusion`, `equilibrium_alignment`, `hebbian_chain`,
+    `deep_hebbian`, `hebbian_3d`, `neural_cube`, `direct_feedback_alignment_eqprop`,
+    `dfa_deep`.
 - `scripts/broad_sweep.py` filters `status:broken` by default via
   `_models_in_family(..., include_broken=False)` + `_model_status()`; new
   `--include-broken` flag to opt in. Logged as a family-level skip note.
@@ -1894,3 +1894,114 @@ Matrix: `{eqprop, directed_ep} × depths 1–4 × 3 seeds`, profiler (10 steps) 
 - Keep the commit discipline you've shown: the NaN fix, the three broken-test repairs, and the diagnostics are all evidence-tied commits. That's the standard for the rest of the plan.
 
 The loop is working. Now let the depth-scaling slope and the G2 sweep — not intuition — decide EqProp's fate.
+
+---
+
+## 15.3 Session: Portfolio/Status Fix (D1/D2 follow-up)
+
+**Date:** 2026-08-09
+
+**Tasks covered:** Fix portfolio/status contradiction — `direct_feedback_alignment_eqprop` and `dfa_deep` were tagged `status:broken` but are Plan 7 top performers (94% / 85%). The phantom-knob audit flagged them due to the structural-fallback depth cap (now fixed); `phantom_knobs()` now returns `frozenset()` for both.
+
+### Progress Made
+
+#### D1/D2 — Status corrections and audit update
+- **`direct_feedback_alignment_eqprop`**: `status:broken` → `status:experimental` (tags: `fa`, `dfa`, `experimental`). Verified: `phantom_knobs() == frozenset()`, `transition_modules()` length = 3 at `num_layers=3`.
+- **`dfa_deep`**: `status:broken` → `status:experimental` (tags: `fa`, `dfa`, `deep`, `experimental`). Same verification.
+- **`docs/phantom_knob_audit.md`**: Added "Resolved (depth-cap fix)" table; moved both models from quarantine to experimental with evidence.
+- **`tests/unit/validation/test_registry_status.py`**: Updated `test_broken_models_are_quarantined_models` to expect the two models *not* in broken set; added spot-check assertions for their new `EXPERIMENTAL` status.
+- **`bioplausible/validation/backprop_parity.py`**: Added both models to `_FAMILY_MODELS["fa"]` portfolio so they participate in compute-matched parity (C1). Default CLI families unchanged (still runs all `fa` models).
+
+#### Hygiene items completed
+- **D4 provenance**: `scripts/broad_sweep.py` now emits `_meta.provenance` with `git_sha`, `python_version`, `torch_version`, `device` (matching profiler).
+- **Broken-count fix**: Corrected 15.2 log from "10 broken" to "11 broken" (the audit table lists 11).
+- **Pre-existing parity failures triaged**: `test_backprop_parity[eqprop_mlp]` and `[directed_ep]` fail on git baseline too — not Session 2/3 regressions. Memo will flag as known harness gaps.
+- **`standard_fa` liveness probe**: 5 epochs × 2 seeds on CPU → ~10% accuracy (random for 10-class MNIST) at depth 3. Genuine negative result, not liveness false negative. Will enter parity report as Tier 3 with "no learning signal at depth 3" note.
+
+#### Verification
+```bash
+uv run pytest tests/unit/validation/test_registry_status.py -q --no-cov  # 12 pass
+uv run pytest tests/unit/experiment/test_config_knobs.py -q --no-cov     # 13 pass
+uv run pytest tests/unit/validation/test_backprop_parity_smoke.py -q --no-cov  # 12 pass
+uv run pytest tests/unit/validation/ tests/unit/experiment/ -q --no-cov  # 536 pass, 2 pre-existing failures (eqprop_mlp, directed_ep parity)
+uv run python -c "
+from bioplausible.core.construction import phantom_knobs
+from bioplausible.core.registry import ComponentCategory, Registry
+import bioplausible.zoo
+for name in ['direct_feedback_alignment_eqprop', 'dfa_deep']:
+    cls = Registry.get(ComponentCategory.MODEL, name)
+    ph = phantom_knobs(cls, {'num_layers': 3, 'hidden_dim': 64}, input_dim=784, output_dim=10, model_name=name)
+    print(f'{name}: phantom={ph}')
+"  # both return frozenset()
+```
+
+### Next: Run Session 3 (B2 autopsy) with frozen protocol.
+
+---
+
+## 15.4 Session: Protocol Freeze (Pre-registration)
+
+**Date:** 2026-08-09
+
+**Tasks covered:** Freeze the autopsy protocol, G2 gates, and parity contract per user guidance before Session 3 compute.
+
+### PRE-REGISTRATION (Session 3 Autopsy Protocol)
+
+```text
+PRE-REGISTRATION (Session 3):
+- models: eqprop, directed_ep, directed_ep(feedback_gain=0) [null arm]
+- depths 1–4; slope fit on 2–4 only; depth 1 reported, excluded from slope
+- hidden_dim 256, batch 128, seeds {0,1,2}
+- beta ∈ {0.01, 0.03, 0.1}; lr 0.05
+- ratio = mean over steps 1–9 (step-0 transient excluded),
+  early = first hidden layer
+- report per-depth median ratio + bootstrap CI;
+  OLS slope of log(ratio) vs depth with CI
+- G1 tripwire unchanged; the slope is the evidence
+```
+
+**Notes:**
+- Preliminary slopes were *positive* (+2.10 / +0.51), driven by the anomalous depth-1 cell. If the 2–4 slope for vanilla is near zero or mildly negative with ratio ~1e-2, the honest claim is "signal decays but is nonzero; updates are too weak to learn in budget" — not "exponential vanishing." Let the data pick the sentence; the limitation doc is a draft until then.
+- The profiler (`scripts/contrastive_profile.py`) already implements Gate G1 (`_check_gate_g1`). The `analyze-depths` subcommand fits the OLS slope. The protocol now explicitly excludes depth-1 from the slope fit.
+
+### PRE-REGISTRATION (Gate G2 — Feedback Salvage)
+
+**Null arm:** `directed_ep` with `feedback_gain=0` must reproduce vanilla eqprop's ratios and accuracy, else feedback isn't the active ingredient.
+
+**Alignment trace:** cosine(feedback weights, forward-output weightsᵀ) over training. If accuracy is good *without* alignment to the transpose, you're in an FA-like regime — say so explicitly per §B4.
+
+**`update_scale_by_depth` arm:** accuracy up + deltas unchanged ⇒ optimizer hack, documented as such.
+
+**G2 command (frozen):**
+```bash
+uv run python scripts/broad_sweep.py \
+  --families eqprop \
+  --probes-per-rule 1 \
+  --epochs 5 \
+  --device cuda \
+  --max-params 50000 \
+  --max-epoch-time 60 \
+  --task digits \
+  --model directed_ep \
+  --config-overrides '{"feedback_gain": 0.5, "w_rec_init": "xavier"}'
+```
+Thresholds (from Plan 8 §Gate G2):
+- > 50% accuracy on digits with depth ≥ 3 after 5 epochs, 3 seeds
+- OR > 75% accuracy on MNIST with depth ≥ 3 after 10 epochs, 3 seeds
+- AND diagnostics show non-zero early-layer state deltas or gradient norms
+
+### PRE-REGISTRATION (Parity Contract — Capacity-Controlled)
+
+The 15.2 finding (FA/target_prop carry 5–16× params at matched width) means "width-matched" comparisons are capacity-confounded. Lock a three-contract report:
+
+1. **Primary — compute-matched:** matched epoch wall-time *and* FLOPs where measurable (settling steps make FLOPs the honest currency for PC/eqprop). Tiers computed on this contract.
+2. **Secondary — width-matched:** report the param delta loudly (runner already does).
+3. **Capacity-controlled:** width-search *backprop* up to the bio model's param count ±10%. If FA still wins param-matched, the bio claim strengthens; if backprop closes the gap, the FA win was capacity. This one arm is worth more than any other parity cell.
+
+### Hygiene Checklist (before Session 6 memo)
+
+- [x] Triage the two pre-existing parity failures (`test_backprop_parity[eqprop_mlp/directed_ep]`) — confirmed pre-existing on git baseline; not caused by Session 2/3 changes. Memo will note these as known gaps in the parity harness, not Session 3 regressions.
+- [x] Fix the broken-count inconsistency in 15.2 (says 10, lists 11) — corrected to 11 broken in 15.2 log and audit table.
+- [x] Finish D4: `broad_sweep.py` JSON now carries `git_sha`/`python_version`/`torch_version`/`device` in `_meta.provenance` (matching profiler).
+- [x] Give `standard_fa` a liveness probe (5 epochs, 2 seeds on CPU) — result: ~10% accuracy (random chance for 10-class MNIST) at depth 3. This is a genuine negative result, not a liveness false negative. Will be documented in parity report as Tier 3 negative with "no learning signal at depth 3" note.
+- [ ] Keep the `transition_modules()` depth-oracle audit on the checklist (follow-up #3) — it's the kind of guard that false-positives later, quietly.

@@ -58,7 +58,7 @@ _TIER2_ACCEPTABLE = 0.05
 # to registered model names that are prospected for the best config.
 _FAMILY_MODELS: dict[str, tuple[str, ...]] = {
     "backprop": ("backprop_mlp",),
-    "fa": ("feedback_alignment", "standard_fa"),
+    "fa": ("feedback_alignment", "standard_fa", "direct_feedback_alignment_eqprop", "dfa_deep"),
     "target_prop": ("diff_target_prop",),
     "predictive_coding": ("fabricpc_graph_pcn",),
     "eqprop_feedback": ("directed_ep",),

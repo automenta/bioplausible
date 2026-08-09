@@ -654,7 +654,7 @@ class ContrastiveFeedbackAlignment(BioModel):
 @register_model(
     "direct_feedback_alignment_eqprop",
     family="fa",
-    tags=[status_tag("broken")],
+    tags=["fa", "dfa", status_tag("experimental")],
 )
 class DirectFeedbackAlignmentEqProp(NEBCBase):
     """
@@ -775,7 +775,7 @@ class DirectFeedbackAlignmentEqProp(NEBCBase):
 @register_model(
     "dfa_deep",
     family="fa",
-    tags=[status_tag("broken")],
+    tags=["fa", "dfa", "deep", status_tag("experimental")],
 )
 class DeepDFAEqProp(DirectFeedbackAlignmentEqProp):
     """
