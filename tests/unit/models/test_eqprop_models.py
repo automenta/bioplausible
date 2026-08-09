@@ -53,6 +53,7 @@ def _make_config(**overrides) -> ModelConfig:
         output_dim=5,
         hidden_dims=[20],
         max_steps=3,
+        extra={"gradient_method": "contrastive"},
     )
     defaults.update(overrides)
     return ModelConfig(**defaults)

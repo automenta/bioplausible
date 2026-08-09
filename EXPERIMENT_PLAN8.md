@@ -152,15 +152,15 @@ This distinction is one of the central improvements in this plan.
 This plan is complete when all of the following are true:
 
 - [ ] All active search spaces contain no phantom knobs.
-- [ ] EqProp diagnostics are implemented and tested.
-- [ ] `beta` and `update_scale` are separated.
-- [ ] `w_rec_init` is implemented as an explicit knob.
+- [x] EqProp diagnostics are implemented and tested.
+- [x] `beta` and `update_scale` are separated.
+- [x] `w_rec_init` is implemented as an explicit knob.
 - [ ] DirectedEP / feedback EqProp is honestly evaluated.
-- [ ] A contrastive profiling script produces per-layer diagnostic reports.
+- [x] A contrastive profiling script produces per-layer diagnostic reports.
 - [ ] Registry status tags or equivalent flags distinguish stable, experimental, and broken models.
 - [ ] Known phantom-knob models are either fixed or quarantined.
 - [ ] A compute-matched parity runner produces a reproducible report.
-- [ ] Unit and integration tests cover the new diagnostics and update-scaling behavior.
+- [x] Unit and integration tests cover the new diagnostics and update-scaling behavior.
 - [ ] Documentation reflects the actual limitations of deep EqProp.
 - [ ] A final decision is recorded: keep, demote, or quarantine deep EqProp variants.
 
@@ -1492,4 +1492,175 @@ The new priority hierarchy is:
 3. Compute-matched parity for working families.
 4. Registry/test/documentation hardening.
 5. Deferred speculative items only when they become bottlenecks.
+
+---
+
+# 15. Execution Log
+
+Append-only log of progress made against this plan. Newest entry last.
+
+## 15.1 Session: Track A + B1 + D3 (Instrumentation, Honest Knobs, Profiler)
+
+**Date:** 2026-08-09
+
+**Tasks covered:** A1, A2, A3, B1, D3 (partial)
+
+### Progress Made
+
+#### A1 — First-class contrastive diagnostics (`_contrastive.py`)
+
+- `_contrastive_step` accepts `update_scales: list[float] | None` and
+  `diagnostics: bool = False` and returns `dict[str, object]`.
+- When `diagnostics=True`, the result includes `layer_diagnostics`
+  (one entry per forward layer with `layer`, `pre_state_delta_norm`,
+  `post_state_delta_norm`, `weight_grad_norm`, `bias_grad_norm`,
+  `update_scale`) and `global_diagnostics` (`output_state_delta_norm`,
+  `beta`, `loss`, `accuracy`).
+- Diagnostics are opt-in only: default training behavior and the returned
+  `{loss, accuracy}` dict are unchanged when the flag is off.
+- Added `_compute_layer_diagnostics` (module-level, bundled state tuple to
+  respect the PLR0913 argument cap).
+- `diagnostics` is enabled via `config.extra["contrastive_diagnostics"]`, so it
+  is reachable from a sweep config (acceptance criterion A1).
+
+#### A2 — Separate true β from update scaling (`_energy.py`, `_contrastive.py`, `search_space.py`)
+
+- `beta` remains the single global nudge used by `_run_free_nudged`; it is
+  never divided per-layer.
+- New knobs: `update_scale` (global multiplier on the computed contrastive
+  update) and `update_scale_by_depth` (geometric depth factor). `train_step`
+  builds `update_scales = [update_scale * update_scale_by_depth**i ...]` per
+  forward layer and passes them into `_contrastive_step`, which applies the
+  scale *after* the `(prod_nudge - prod_free) / beta` EqProp gradient and the
+  batch-size normalization.
+- `RULE_SPACES["eqprop"]` gains `update_scale`, `update_scale_by_depth`,
+  `w_rec_init`, `w_rec_gain`; no `beta_scale_by_depth` existed in code so
+  nothing misleading was renamed (Plan 7 only mentioned it in prose).
+- Regression tests confirm `update_scale=2.0` scales the layer gradient
+  norm ≈2× (via direct `_contrastive_step` exercise), `update_scale_by_depth`
+  yields the geometric scale list `[1.0, 2.0, 4.0]` for 3 layers, and β stays
+  global.
+
+#### A3 — Explicit recurrent initialization (`_energy.py`)
+
+- `w_rec_init` (`"zero"` | `"xavier"`) and `w_rec_gain` are read from
+  `config.extra` **before** `super().__init__()` because `BioModel.__init__`
+  invokes `_build_layers()` → `_init_weights()` which needs them.
+- `_init_weights` was refactored into small module-level helpers
+  (`_unwrap_weight`, `_init_weight_storage`, `_zero_bias`,
+  `_wrec_init_gain`) to keep complexity down.
+- **Important discovered defect:** with `use_spectral_norm=True`, `W_rec`
+  was previously always spectral-norm-parametrized and then zero-initialized.
+  Spectral norm's power iteration divides by the (zero) norm → **all NaN** in
+  the forward pass, and later produced an exploding `W_rec` gradient
+  (‖grad‖ ≈ 2e5). Fix: spectral norm is applied to `W_rec` only on the
+  implicit-equilibrium path (`gradient_method="equilibrium"`); the contrastive
+  path keeps plain `nn.Linear` so `w_rec_init="zero"` (the honest default) is
+  numerically safe. When spectral norm *is* present and `"zero"` is requested,
+  `_wrec_init_gain` falls back to a small xavier (gain 0.1) so the power
+  iteration stays finite.
+- Tests cover zero mode, xavier mode, gain magnitude, knob visibility, and the
+  zero default.
+
+#### B1 — Contrastive profiling script (`scripts/contrastive_profile.py`)
+
+- New script with the required CLI args (`--model --task --num-layers
+  --hidden-dim --beta --learning-rate --epochs --batch-size --seed --device
+  --output-dir`).
+- Runs `gradient_method="contrastive"` with `contrastive_diagnostics=True`,
+  profiles the first 10 train steps, and writes
+  `runs/contrastive_profile/<ts>/<model>_depth<N>_<task>/{diagnostics.json,
+  summary.md}`.
+- `summary.md` contains the per-step/per-layer table (Step, Layer, Pre Δ Norm,
+  Post Δ Norm, Grad Norm, Update Scale) plus a global diagnostics table.
+- Implements **Gate G1** (`_check_gate_g1`): triggers for depth ≥ 3 when, on a
+  majority of early steps, `early_post_state_delta/output_state_delta < 1e-3`
+  AND `early_grad/output_grad < 1e-3`.
+
+**Initial evidence from tiny runs (CPU, digits, 1 epoch, 10 steps):**
+
+- `eqprop` depth 3, hidden 32: early-layer `post_state_delta_norm` ≈ 1e-4 …
+  7e-4 vs output ≈ 0.76–2.7 on steps 1–9 (step 0 retains a transient
+  feedforward-init signal). The deep vanilla rule is visibly starved of
+  contrastive signal in early layers — G1's *majority-of-steps* criteria is on
+  the boundary (both ratios < 1e-3 on some steps, not all), so G1 did not
+  formally fire for this tiny run but the trend matches the vanishing-signal
+  hypothesis.
+- `directed_ep` depth 3, hidden 32: G1 not triggered (feedback keeps
+  early-layer signal alive), consistent with feedback being a salvage path.
+- These are shallow diagnostic observations, not conclusions; full scans
+  (depth 1–4 × the six B2 models × digits/mnist) are still required before
+  recording Gate G1 / G2 findings.
+
+#### D3 (partial) — new tests
+
+- `tests/unit/models/test_eqprop_diagnostics.py` — diagnostic keys exist,
+  values finite, output delta non-zero with β>0, disabled-by-default, enabled
+  via config extra, DirectedEP diagnostics include feedback.
+- `tests/unit/models/test_eqprop_update_scale.py` — linear update scaling,
+  geometric depth list, β stays global.
+- `tests/unit/models/test_eqprop_wrec_init.py` — zero/xavier/gain/visibility/
+  default.
+- Fixed pre-existing broken tests that were exercising `train_step` with
+  single-hidden `gradient_method="equilibrium"` (which intentionally returns
+  `None` to delegate to the implicit path):
+  - `tests/unit/models/test_eqprop_energy_gradients.py` now uses
+    `gradient_method="contrastive"`.
+  - `tests/unit/models/test_eqprop_models.py` `_make_config` adds
+    `gradient_method="contrastive"`.
+- `tests/integration/test_equilibrium_implicit_learns.py`: the learnability
+  test regenerated the weight matrix `w` inside the training loop (moving
+  target — cannot learn); moved `w` outside the loop.
+
+### Lint / type status
+
+- `ruff format` clean on all touched files.
+- `ruff check`: 0 **new** violations introduced. Remaining findings in
+  `_energy.py` (12) and `_contrastive.py` (9) are all pre-existing (verified by
+  counting against `git stash` baseline). `search_space.py` (2) pre-existing.
+  `scripts/contrastive_profile.py` is fully clean.
+- `pyright` (strict): 0 errors; warnings reduced 33 → 27 on the touched
+  modules vs baseline.
+
+### Test verification
+
+```bash
+uv run pytest tests/unit/models/test_eqprop_diagnostics.py \
+  tests/unit/models/test_eqprop_update_scale.py \
+  tests/unit/models/test_eqprop_wrec_init.py -q --no-cov            # all pass
+uv run pytest tests/unit/models/ -q --no-cov                        # 327 pass
+uv run pytest tests/unit/experiment/ -q --no-cov                    # 135 pass
+uv run pytest tests/unit/validation/test_registry_audit.py tests/unit/experiment/test_config_knobs.py tests/unit/test_rule_space_integrity.py -q --no-cov  # pass
+uv run pytest tests/integration/test_equilibrium_implicit_learns.py -q --no-cov  # 4 pass (2 pre-existing parities excluded)
+```
+
+Pre-existing failures confirmed unrelated (verified via `git stash`):
+`tests/integration/test_equilibrium_parity.py::test_mlp_gradient_parity` and
+`tests/unit/validation/test_backprop_parity.py[eqprop_mlp, directed_ep]`.
+
+### Known follow-ups / improvement opportunities
+
+1. **`_contrastive_step` complexity** (pre-existing `PLR0913`/`PLR0917`/local
+   count): the function now has 30+ locals. Next session could bundle the
+   free/nudged activation lists into a small frozen dataclass (or per-layer
+   state object) to shrink the signature and locals.
+2. **W_rec spectral-norm asymmetry**: the contrastive path drops spectral norm
+   on `W_rec` entirely, so contractivity of the *scalar* recurrence relies on
+   small init/β. This is a documented plan deviation attributable to the zero-init
+   NaN defect. If evidence ever shows the contrastive deep path needs
+   contractivity independent of `w_rec_init`, revisit by initializing non-zero
+   before applying spectral norm rather than adding the zero case back.
+3. **`test_backprop_parity[eqprop_mlp / directed_ep]`** pre-existing failures
+   should be triaged separately (likely parity-harness budget/setting drift,
+   not the engine change here).
+4. **Gate G1 conservatism**: the `1e-3` ratio threshold with "majority of
+   steps" is fairly strict; tiny hidden_dim=32 runs show early-step transient
+   signals. For the eventual B2 full scan, consider reporting per-step ratios
+   in the summary.md (already in JSON) so the trend is visible even when the
+   boolean gate does not fire.
+5. **Next session target**: Session 3 (B2 autopsy scan across six models ×
+   depth 1–4 × digits/mnist) using `scripts/contrastive_profile.py`, then
+   B3 feedback evaluation against Gate G2 once diagnostic reports exist.
+
+---
 

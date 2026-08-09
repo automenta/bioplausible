@@ -76,6 +76,62 @@ def _flatten(x: torch.Tensor) -> torch.Tensor:
     return x.reshape(x.size(0), -1) if x.dim() > 2 else x
 
 
+def _unwrap_weight(layer: nn.Module) -> nn.Module | nn.Parameter:
+    """Return the storage object holding a layer's weight.
+
+    Spectral-norm parametrization exposes the trainable matrix as
+    ``layer.parametrizations.weight.original`` (an ``nn.Parameter``); plain
+    layers are the ``nn.Module`` itself with a ``.weight`` attribute.
+    """
+    if hasattr(layer, "parametrizations") and hasattr(layer.parametrizations, "weight"):
+        return layer.parametrizations.weight.original
+    return layer
+
+
+def _init_weight_storage(storage: nn.Module | nn.Parameter, gain: float | None) -> None:
+    """Xavier (with ``gain``) or zero-initialize a layer's weight storage.
+
+    ``gain=None`` selects zero initialization. ``storage`` is either a bare
+    ``nn.Parameter`` or an ``nn.Module`` with a ``.weight`` attribute.
+    """
+    weight = (
+        storage
+        if isinstance(storage, nn.Parameter)
+        else getattr(storage, "weight", None)
+    )
+    if weight is None:
+        return
+    if gain is None:
+        nn.init.zeros_(weight)
+    else:
+        nn.init.xavier_uniform_(weight, gain=gain)
+
+
+def _zero_bias(layer: nn.Module, storage: nn.Module | nn.Parameter) -> None:
+    """Zero the bias on ``storage`` or, for spectral-norm layers, on ``layer``."""
+    bias = getattr(storage, "bias", None)
+    if bias is not None:
+        nn.init.zeros_(bias)
+    elif isinstance(layer, nn.Linear) and layer.bias is not None:
+        nn.init.zeros_(layer.bias)
+
+
+def _wrec_init_gain(
+    w_rec_init: str, w_rec_gain: float, has_spectral_norm: bool
+) -> float | None:
+    """Resolve the W_rec initialization gain, or ``None`` for zero init.
+
+    ``"xavier"`` uses the configured ``w_rec_gain``. A requested ``"zero"``
+    under spectral norm falls back to a small xavier so the power iteration
+    never divides by zero.
+    """
+    if w_rec_init == "xavier":
+        return w_rec_gain
+    if has_spectral_norm:
+        return 0.1
+    return None
+
+
 class EquilibriumMLP(BioModel):
     """Deep energy-contrastive EqProp MLP (Scellier & Bengio).
 
@@ -113,6 +169,26 @@ class EquilibriumMLP(BioModel):
     variant: Variant = "plain"
 
     def __init__(self, config: ModelConfig | None = None, **kwargs) -> None:
+        cfg = config
+        # Read eqprop-specific config knobs BEFORE super().__init__ because
+        # BioModel.__init__ calls _build_layers() which calls _init_weights().
+        if cfg is not None:
+            self.w_rec_init = cfg.extra.get("w_rec_init", "zero")
+            self.w_rec_gain = float(cfg.extra.get("w_rec_gain", 0.1))
+            self.update_scale = float(cfg.extra.get("update_scale", 1.0))
+            self.update_scale_by_depth = float(
+                cfg.extra.get("update_scale_by_depth", 1.0)
+            )
+            self.contrastive_diagnostics = bool(
+                cfg.extra.get("contrastive_diagnostics", False)
+            )
+        else:
+            self.w_rec_init = kwargs.get("w_rec_init", "zero")
+            self.w_rec_gain = float(kwargs.get("w_rec_gain", 0.1))
+            self.update_scale = float(kwargs.get("update_scale", 1.0))
+            self.update_scale_by_depth = float(kwargs.get("update_scale_by_depth", 1.0))
+            self.contrastive_diagnostics = bool(kwargs.get("contrastive_diagnostics"))
+
         super().__init__(config=config, **kwargs)
         cfg = self.config
         # ``gradient_method`` selects the trainer routing: ``"contrastive"`` →
@@ -145,16 +221,13 @@ class EquilibriumMLP(BioModel):
         # (the search space for the eqprop family defines these alongside the
         # ``ModelConfig`` knobs and the build path lands them in ``extra``).
         self.nudge_steps = int(
-            kwargs.get("nudge_steps", cfg.extra.get("nudge_steps")) or max(
-                3, self.max_steps // 3
-            )
+            kwargs.get("nudge_steps", cfg.extra.get("nudge_steps"))
+            or max(3, self.max_steps // 3)
         )
         self.sparse_ratio = float(
             kwargs.get("sparse_ratio", cfg.extra.get("sparse_ratio", 0.5))
         )
-        self.momentum = float(
-            kwargs.get("momentum", cfg.extra.get("momentum", 0.5))
-        )
+        self.momentum = float(kwargs.get("momentum", cfg.extra.get("momentum", 0.5)))
         self.convergence_threshold = float(
             cfg.extra.get("convergence_threshold", cfg.convergence_threshold)
         )
@@ -168,7 +241,7 @@ class EquilibriumMLP(BioModel):
         self.optimizer: torch.optim.Optimizer | None = None
         # Transient velocity buffer (variant == "momentum").
         self._velocity: list[torch.Tensor] | None = None
-        self._build_layers()
+        # _build_layers() already called by BioModel.__init__
 
     # ------------------------------------------------------------------
     # Architecture — single source of truth for the deep eqprop MLP.
@@ -196,62 +269,52 @@ class EquilibriumMLP(BioModel):
         hidden = self._hidden_dims()
         dims = [self.input_dim, *hidden, self.output_dim]
         # Forward stack: input→h_0→...→h_{L-1}→out (one Linear per adjacent pair).
-        self.layers = nn.ModuleList(
-            [nn.Linear(dims[i], dims[i + 1]) for i in range(len(dims) - 1)]
-        )
+        self.layers = nn.ModuleList([
+            nn.Linear(dims[i], dims[i + 1]) for i in range(len(dims) - 1)
+        ])
         # Self-recurrent stack: one (h_i → h_i) Linear per hidden layer. Keeps
         # the prior single-hidden ``LoopedMLP`` dynamics as the ``num_layers=1``
         # case (with ``tanh`` + spectral norm the two are bit-equivalent).
-        self.W_rec = nn.ModuleList(
-            [nn.Linear(h, h) for h in hidden]
-        )
+        self.W_rec = nn.ModuleList([nn.Linear(h, h) for h in hidden])
         if self.config.use_spectral_norm:
-            self.layers = nn.ModuleList(
-                [
-                    spectral_norm(layer) if i < len(self.layers) - 1 else layer
-                    for i, layer in enumerate(self.layers)
-                ]
-            )
-            self.W_rec = nn.ModuleList([spectral_norm(l) for l in self.W_rec])
+            self.layers = nn.ModuleList([
+                spectral_norm(layer) if i < len(self.layers) - 1 else layer
+                for i, layer in enumerate(self.layers)
+            ])
+            # Apply spectral norm to W_rec only for the implicit equilibrium
+            # path (gradient_method="equilibrium"): that path relies on it for
+            # contractivity. The contrastive path initializes W_rec to zero
+            # by default (w_rec_init="zero"), and spectral norm's power
+            # iteration would divide by zero on a zero matrix — so skip it.
+            if getattr(self, "gradient_method", "contrastive") == "equilibrium":
+                self.W_rec = nn.ModuleList([spectral_norm(l) for l in self.W_rec])
         self._init_weights()
         # Feedback pathway (variant == "feedback") — one backward Linear per
         # hidden layer whose input is the output state.
         if self.variant == "feedback":
-            self.feedback_layers = nn.ModuleList(
-                [nn.Linear(self.output_dim, h) for h in hidden]
-            )
+            self.feedback_layers = nn.ModuleList([
+                nn.Linear(self.output_dim, h) for h in hidden
+            ])
             self._init_weights(self.feedback_layers)
 
     def _init_weights(self, modules: nn.Module | None = None) -> None:
-        """Initialise Linear weights with Xavier-uniform, biases to zero."""
-        layers = (
-            list(modules) if isinstance(modules, nn.ModuleList) else self.layers
-        )
+        """Xavier-init forward (and feedback) weights, biases to zero."""
+        layers = list(modules) if isinstance(modules, nn.ModuleList) else self.layers
         for layer in layers:
-            actual = layer
-            if hasattr(layer, "parametrizations") and hasattr(
-                layer.parametrizations, "weight"
-            ):
-                actual = layer.parametrizations.weight.original
-            if hasattr(actual, "weight"):
-                nn.init.xavier_uniform_(actual.weight, gain=0.5)
-            if hasattr(actual, "bias") and actual.bias is not None:
-                nn.init.zeros_(actual.bias)
-        # Self-recurrent weights start at zero so the free phase initially
-        # reduces to a plain feedforward settle; the contrastive rule then
-        # learns a non-trivial recurrence term where it helps.
+            _init_weight_storage(_unwrap_weight(layer), gain=0.5)
+            _zero_bias(layer, _unwrap_weight(layer))
+        # Self-recurrent weights: configurable init (Plan 8).
         if isinstance(modules, nn.ModuleList):
             return
+        has_spectral_norm = any(
+            hasattr(layer, "parametrizations")
+            and hasattr(layer.parametrizations, "weight")
+            for layer in self.W_rec
+        )
         for layer in self.W_rec:
-            actual = layer
-            if hasattr(layer, "parametrizations") and hasattr(
-                layer.parametrizations, "weight"
-            ):
-                actual = layer.parametrizations.weight.original
-            if hasattr(actual, "weight"):
-                nn.init.zeros_(actual.weight)
-            if hasattr(actual, "bias") and actual.bias is not None:
-                nn.init.zeros_(actual.bias)
+            gain = _wrec_init_gain(self.w_rec_init, self.w_rec_gain, has_spectral_norm)
+            _init_weight_storage(_unwrap_weight(layer), gain=gain)
+            _zero_bias(layer, _unwrap_weight(layer))
 
     # ------------------------------------------------------------------
     # Forward / settle (deep eqprop state is an *activations list*).
@@ -519,13 +582,23 @@ class EquilibriumMLP(BioModel):
         self._ensure_optimizer()
         # For DirectedEP (variant == "feedback"), pass feedback_layers to
         # _contrastive_step so the output->hidden feedback weights are updated.
-        feedback_layers = list(self.feedback_layers) if self.variant == "feedback" else None
+        feedback_layers = (
+            list(self.feedback_layers) if self.variant == "feedback" else None
+        )
+        # Compute per-layer update scales (Plan 8: separate β from update scaling)
+        num_layers = len(self.layers)
+        update_scales = [
+            self.update_scale * (self.update_scale_by_depth**i)
+            for i in range(num_layers)
+        ]
         return _contrastive_step(
             self,
             x,
             y,
             layer_list=list(self.layers),
             beta=self.beta,
+            update_scales=update_scales,
+            diagnostics=self.contrastive_diagnostics,
             use_conj=False,
             recurrent_layer_list=list(self.W_rec),
             feedback_layer_list=feedback_layers,
@@ -546,9 +619,7 @@ class StandardEqProp(EquilibriumMLP):
     variant: Variant = "plain"
 
 
-@register_model(
-    "directed_ep", family="eqprop", tags=["eqprop", "energy", "feedback"]
-)
+@register_model("directed_ep", family="eqprop", tags=["eqprop", "energy", "feedback"])
 class DirectedEP(EquilibriumMLP):
     """Energy-contrastive EqProp with output→hidden feedback (DirectedEP)."""
 

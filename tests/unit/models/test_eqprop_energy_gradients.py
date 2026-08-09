@@ -5,25 +5,37 @@ updates after a ``train_step`` (the consolidated deep-eqprop engine, so the
 self-recurrent ``W_rec`` layers are exercised too). W_out is excluded from the
 "hidden must move" assertion because it gets the separate supervised update.
 """
+
 import torch
 from bioplausible.core.config import ModelConfig
 from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 
 
-def test_energy_grads_all_params_nonzero():
-    """All hidden-layer params must move after a contrastive train_step."""
-    config = ModelConfig(
+def _make_config(**overrides):
+    defaults = dict(
         name="eqprop_test",
-        input_dim=784,
+        input_dim=64,
         output_dim=10,
-        hidden_dims=[64],
-        learning_rate=0.01,
+        hidden_dims=[32],
+        learning_rate=0.1,
         beta=2.0,
         max_steps=5,
         convergence_threshold=0.01,
         use_spectral_norm=False,
+        extra={"gradient_method": "contrastive"},
     )
-    model = EquilibriumMLP(config=config, gradient_method="equilibrium")
+    defaults.update(overrides)
+    return ModelConfig(**defaults)
+
+
+def test_energy_grads_all_params_nonzero():
+    """All hidden-layer params must move after a contrastive train_step."""
+    config = _make_config(
+        input_dim=784,
+        hidden_dims=[64],
+        learning_rate=0.01,
+    )
+    model = EquilibriumMLP(config=config)
 
     x = torch.randn(8, 784)
     y = torch.randint(0, 10, (8,))
@@ -32,8 +44,10 @@ def test_energy_grads_all_params_nonzero():
     model.train_step(x, y)
 
     for name, p in model.named_parameters():
-        if "layers." in name and name.endswith(".weight") and name.startswith(
-            "layers." + str(len(model.layers) - 1) + "."
+        if (
+            "layers." in name
+            and name.endswith(".weight")
+            and name.startswith("layers." + str(len(model.layers) - 1) + ".")
         ):
             continue  # W_out has a separate supervised update
         delta = (p - before[name]).norm().item()
@@ -42,18 +56,12 @@ def test_energy_grads_all_params_nonzero():
 
 def test_train_step_updates_all_params():
     """train_step must update all parameters (no zero deltas)."""
-    config = ModelConfig(
-        name="eqprop_test",
+    config = _make_config(
         input_dim=784,
-        output_dim=10,
         hidden_dims=[64],
         learning_rate=0.01,
-        beta=2.0,
-        max_steps=5,
-        convergence_threshold=0.01,
-        use_spectral_norm=False,
     )
-    model = EquilibriumMLP(config=config, gradient_method="equilibrium")
+    model = EquilibriumMLP(config=config)
 
     x = torch.randn(8, 784)
     y = torch.randint(0, 10, (8,))
@@ -68,18 +76,8 @@ def test_train_step_updates_all_params():
 
 def test_train_step_decreases_loss():
     """Loss should decrease over multiple steps on random data."""
-    config = ModelConfig(
-        name="eqprop_test",
-        input_dim=64,
-        output_dim=10,
-        hidden_dims=[32],
-        learning_rate=0.1,
-        beta=2.0,
-        max_steps=5,
-        convergence_threshold=0.01,
-        use_spectral_norm=False,
-    )
-    model = EquilibriumMLP(config=config, gradient_method="equilibrium")
+    config = _make_config()
+    model = EquilibriumMLP(config=config)
 
     torch.manual_seed(42)
     x = torch.randn(32, 64)

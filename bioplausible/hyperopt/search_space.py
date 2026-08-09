@@ -183,7 +183,11 @@ SEARCH_SPACES = {
     # Add Missing Spaces
     "Layerwise Equilibrium FA": SearchSpace(
         "Layerwise Equilibrium FA",
-        {"learning_rate": (1e-4, 1e-2, "log"), "hidden_dim": [64, 128], "num_layers": [2, 4, 6]},
+        {
+            "learning_rate": (1e-4, 1e-2, "log"),
+            "hidden_dim": [64, 128],
+            "num_layers": [2, 4, 6],
+        },
     ),
     "Energy Guided FA": SearchSpace(
         "Energy Guided FA",
@@ -195,7 +199,11 @@ SEARCH_SPACES = {
     ),
     "Predictive Coding Hybrid": SearchSpace(
         "Predictive Coding Hybrid",
-        {"learning_rate": (1e-4, 1e-2, "log"), "steps": (10, 30, "int"), "hidden_dim": [64, 128]},
+        {
+            "learning_rate": (1e-4, 1e-2, "log"),
+            "steps": (10, 30, "int"),
+            "hidden_dim": [64, 128],
+        },
     ),
     "Sparse Equilibrium": SearchSpace(
         "Sparse Equilibrium",
@@ -223,7 +231,8 @@ SEARCH_SPACES = {
         },
     ),
     "Energy Minimizing FA": SearchSpace(
-        "Energy Minimizing FA", {"learning_rate": (1e-4, 1e-2, "log"), "hidden_dim": [64, 128]}
+        "Energy Minimizing FA",
+        {"learning_rate": (1e-4, 1e-2, "log"), "hidden_dim": [64, 128]},
     ),
     # Transformers
     "eqprop_transformer": SearchSpace(
@@ -416,6 +425,12 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         "convergence_start": (2, 10, "int"),
         "sparse_ratio": (0.5, 1.0, "linear"),
         "momentum": (0.0, 0.9, "linear"),
+        # Plan 8: separate true β from per-layer update scaling
+        "update_scale": (1e-2, 1e1, "log"),
+        "update_scale_by_depth": (1e-1, 1e1, "log"),
+        # Plan 8: recurrent weight initialization knob
+        "w_rec_init": ["zero", "xavier"],
+        "w_rec_gain": (1e-3, 1e0, "log"),
     },
     "neural_cube": {
         # Honest space (P0a): every knob is real — accepted by ``NeuralCube.__init__``

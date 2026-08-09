@@ -68,37 +68,50 @@ def test_equilibrium_gradients_match_bptt_looped_mlp(use_sn: bool) -> None:
     """Implicit-equilibrium gradients equal unrolled BPTT to within a tolerance."""
     torch.manual_seed(0)
     bptt = LoopedMLP(
-        input_dim=8, hidden_dim=12, output_dim=3, use_spectral_norm=use_sn,
-        max_steps=10, gradient_method="bptt",
+        input_dim=8,
+        hidden_dim=12,
+        output_dim=3,
+        use_spectral_norm=use_sn,
+        max_steps=10,
+        gradient_method="bptt",
     )
     eq = LoopedMLP(
-        input_dim=8, hidden_dim=12, output_dim=3, use_spectral_norm=use_sn,
-        max_steps=10, gradient_method="equilibrium",
+        input_dim=8,
+        hidden_dim=12,
+        output_dim=3,
+        use_spectral_norm=use_sn,
+        max_steps=10,
+        gradient_method="equilibrium",
     )
     _grads(bptt, eq)
     _assert_no_none_grads(eq)
 
     worst = 0.0
-    for (nb, gb), (ne, ge) in zip(
-        bptt.named_parameters(), eq.named_parameters()
-    ):
+    for (nb, gb), (ne, ge) in zip(bptt.named_parameters(), eq.named_parameters()):
         assert nb == ne
         worst = max(worst, _max_rel_error(gb, ge))
-    assert worst < _GRAD_PARITY_TOL, f"equilibrium gradient drifted from BPTT (rel={worst:.3e})"
+    assert worst < _GRAD_PARITY_TOL, (
+        f"equilibrium gradient drifted from BPTT (rel={worst:.3e})"
+    )
 
 
 def test_equilibrium_learns_looped_mlp_with_spectral_norm() -> None:
     """The O(1) implicit method must reduce loss (the 'doesn't learn' regression)."""
     torch.manual_seed(0)
     model = LoopedMLP(
-        input_dim=8, hidden_dim=16, output_dim=3, use_spectral_norm=True,
-        max_steps=10, gradient_method="equilibrium",
+        input_dim=8,
+        hidden_dim=16,
+        output_dim=3,
+        use_spectral_norm=True,
+        max_steps=10,
+        gradient_method="equilibrium",
     )
     opt = torch.optim.Adam(model.parameters(), lr=3e-3)
+    # Fixed target function for the duration of training
+    w = torch.randn(8, 3)
     first = last = None
     for epoch in range(40):
         x = torch.randn(16, 8)
-        w = torch.randn(8, 3)
         y = (x @ w).argmax(dim=1)
         opt.zero_grad()
         loss = _forward_loss(model, x, y)
@@ -117,8 +130,12 @@ def test_conv_eqprop_equilibrium_learns() -> None:
     """Conv models default to the O(1) implicit method and still learn."""
     torch.manual_seed(0)
     model = ConvEqProp(
-        input_channels=3, hidden_channels=16, output_dim=10,
-        use_spectral_norm=True, max_steps=8, gradient_method="equilibrium",
+        input_channels=3,
+        hidden_channels=16,
+        output_dim=10,
+        use_spectral_norm=True,
+        max_steps=8,
+        gradient_method="equilibrium",
     )
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
     x = torch.randn(4, 3, 16, 16)

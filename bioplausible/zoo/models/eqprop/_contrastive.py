@@ -27,6 +27,30 @@ def _make_onehot_target(
     return target
 
 
+def _compute_layer_diagnostics(
+    layer_index: int,
+    states: tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]],
+    grad_w: torch.Tensor,
+    grad_b: torch.Tensor | None,
+    scale: float,
+) -> dict[str, float]:
+    """Compute per-layer contrastive diagnostics.
+
+    ``states`` is ``((h_pf, h_qf), (h_pn, h_qn))`` — free/nudged pre/post
+    activations for the layer. Bundling the four tensors keeps the signature
+    under the PLR0913 argument cap while staying explicit at the call site.
+    """
+    (h_prev_free, h_post_free), (h_prev_nudge, h_post_nudge) = states
+    return {
+        "layer": layer_index,
+        "pre_state_delta_norm": (h_prev_nudge - h_prev_free).norm().item(),
+        "post_state_delta_norm": (h_post_nudge - h_post_free).norm().item(),
+        "weight_grad_norm": grad_w.norm().item(),
+        "bias_grad_norm": grad_b.norm().item() if grad_b is not None else 0.0,
+        "update_scale": scale,
+    }
+
+
 def _run_free_nudged(
     model: nn.Module,
     x: torch.Tensor,
@@ -63,7 +87,7 @@ def _run_free_nudged(
         free_acts = _run(0.0)
         free_out = free_acts[-1]
         # Reset momentum velocity between phases (if applicable)
-        if hasattr(model, '_velocity') and model._velocity is not None:
+        if hasattr(model, "_velocity") and model._velocity is not None:
             for v in model._velocity:
                 v.zero_()
 
@@ -112,10 +136,12 @@ def _contrastive_step(
     *,
     layer_list: list[nn.Module],
     beta: float,
+    update_scales: list[float] | None = None,
+    diagnostics: bool = False,
     use_conj: bool = False,
     feedback_layer_list: list[nn.Module] | None = None,
     recurrent_layer_list: list[nn.Module] | None = None,
-) -> dict[str, float]:
+) -> dict[str, object]:
     """Full contrastive train_step for EqProp-style models.
 
     Parameters
@@ -128,6 +154,11 @@ def _contrastive_step(
         Forward layers to update (``self.layers`` or ``self.forward_layers``).
     beta:
         Nudging strength.
+    update_scales:
+        Optional per-layer multipliers on the computed contrastive update.
+        Applied after the EqProp gradient is computed.
+    diagnostics:
+        If True, collect and return per-layer diagnostic information.
     use_conj:
         Whether to conjugate the pre-synaptic activation (HolomorphicEP).
     feedback_layer_list:
@@ -140,7 +171,9 @@ def _contrastive_step(
 
     Returns
     -------
-    dict with ``loss`` and ``accuracy`` keys.
+    dict with ``loss`` and ``accuracy`` keys. If ``diagnostics=True``, also
+    includes ``layer_diagnostics`` (list of per-layer dicts) and
+    ``global_diagnostics`` (dict with output delta, beta, loss, accuracy).
     """
     target = _make_onehot_target(
         y,
@@ -151,6 +184,8 @@ def _contrastive_step(
     batch_size = x.size(0)
 
     model.optimizer.zero_grad()  # type: ignore[attr-defined]
+
+    layer_diagnostics: list[dict[str, float]] = []
 
     with torch.no_grad():
         for i, layer in enumerate(layer_list):
@@ -171,11 +206,25 @@ def _contrastive_step(
             )
 
             dW = (prod_nudge - prod_free) / beta
-            dW = dW / batch_size
 
-            db = (h_post_nudge - h_post_free).sum(0) / beta / batch_size
+            scale = update_scales[i] if update_scales is not None else 1.0
+            dW = dW * scale / batch_size
+
+            db = (h_post_nudge - h_post_free).sum(0) / beta
+            db = db * scale / batch_size
 
             _apply_layer_update(layer, dW, db, use_conj=use_conj)
+
+            if diagnostics:
+                layer_diagnostics.append(
+                    _compute_layer_diagnostics(
+                        i,
+                        ((h_prev_free, h_post_free), (h_prev_nudge, h_post_nudge)),
+                        dW,
+                        db,
+                        scale,
+                    )
+                )
 
             # Optional feedback layer update (DirectedEP)
             if feedback_layer_list is not None and i < len(feedback_layer_list):
@@ -210,4 +259,15 @@ def _contrastive_step(
     loss = F.cross_entropy(ce_input, y).item()
     acc = (ce_input.argmax(dim=1) == y).float().mean().item()
 
-    return {"loss": loss, "accuracy": acc}
+    result: dict[str, object] = {"loss": loss, "accuracy": acc}
+
+    if diagnostics:
+        result["layer_diagnostics"] = layer_diagnostics
+        result["global_diagnostics"] = {
+            "output_state_delta_norm": (nudged_acts[-1] - free_acts[-1]).norm().item(),
+            "beta": beta,
+            "loss": loss,
+            "accuracy": acc,
+        }
+
+    return result
