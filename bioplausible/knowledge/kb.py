@@ -6,7 +6,6 @@ Integrates surrogate models, symbolic regression, causal discovery.
 """
 
 import json
-import logging
 import pathlib
 import sqlite3
 import time
@@ -18,6 +17,7 @@ import numpy as np
 from pydantic import BaseModel, Field, ValidationError
 
 from bioplausible.core.exceptions import ConditionalQueryError, KnowledgeBaseError
+from bioplausible.core.logging import get_logger
 
 # Optional dependencies for vector search
 try:
@@ -34,7 +34,7 @@ try:
 except ImportError:
     HAS_SENTENCE_TRANSFORMERS = False
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass(frozen=True, slots=True)

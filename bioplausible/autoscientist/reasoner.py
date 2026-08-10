@@ -6,12 +6,12 @@ Supports both rule-based reasoning and optional LLM integration.
 """
 
 import json
-import logging
 from dataclasses import dataclass, field
 
+from bioplausible.core.logging import get_logger
 from bioplausible.knowledge import KnowledgeBase, KnowledgeEntry
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass(frozen=True, slots=True)

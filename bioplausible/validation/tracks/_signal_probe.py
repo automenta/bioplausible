@@ -9,7 +9,6 @@ Key insight: EqProp should maintain better signal propagation than
 traditional backprop due to bidirectional equilibrium dynamics.
 """
 
-import logging
 import time
 
 import matplotlib.pyplot as plt
@@ -17,11 +16,12 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.data.vision import get_vision_dataset
 from bioplausible.zoo.models.eqprop import LoopedMLP, MemoryEfficientLoopedMLP
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def measure_layer_signals(model, h_perturbed, x_input=None):

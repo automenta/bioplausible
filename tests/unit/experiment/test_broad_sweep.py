@@ -11,7 +11,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from bioplausible.core.config import ModelConfig
+from bioplausible.config.unified import ModelConfig
 
 _SCRIPT = Path(__file__).parents[3] / "scripts" / "broad_sweep.py"
 _spec = importlib.util.spec_from_file_location("broad_sweep", _SCRIPT)

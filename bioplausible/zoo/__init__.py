@@ -4,11 +4,10 @@ All models, propagators, optimizers, sparsity methods are registered here
 with rich metadata enabling AutoScientist composition.
 """
 
-import logging
-
 import torch
 from torch import nn
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import (
     ComponentCategory,
     ComponentMetadata,
@@ -26,7 +25,7 @@ from bioplausible.core.registry import (
 # Import submodules to trigger registration
 from bioplausible.zoo import models, optimizers, propagators, sparsity
 
-logger = logging.getLogger("bioplausible.zoo")
+logger = get_logger("bioplausible.zoo")
 
 
 class ModelSpec:
@@ -163,7 +162,6 @@ def get_optimizers_for_propagator(
 #   - bioplausible.deployment
 #   - examples/tutorials.py
 # ============================================================================
-
 
 __all__ = [
     "ComponentCategory",

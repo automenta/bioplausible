@@ -2,9 +2,9 @@
 
 import pytest
 import torch
-from bioplausible.core.config import ModelConfig
+
+from bioplausible.config.unified import ModelConfig
 from bioplausible.zoo.models.eqprop import StandardEqProp
-from bioplausible.zoo.models.eqprop._contrastive import _run_free_nudged
 
 
 def _make_config(**overrides) -> ModelConfig:
@@ -60,10 +60,10 @@ def _copy_model_weights(src: StandardEqProp, dst: StandardEqProp) -> None:
 def test_update_scale_linear_effect():
     """update_scale=2.0 approximately doubles update norm."""
     # Direct test of _contrastive_step with controlled inputs
-    import torch.nn as nn
+    from torch import nn
+
     from bioplausible.zoo.models.eqprop._contrastive import (
         _contrastive_step,
-        _make_onehot_target,
     )
 
     torch.manual_seed(42)

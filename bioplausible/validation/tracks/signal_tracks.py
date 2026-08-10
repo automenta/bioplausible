@@ -6,10 +6,9 @@ Tests the hypothesis that EqProp maintains better signal flow
 than traditional backprop through deep layers.
 """
 
-import logging
-
 import torch
 
+from bioplausible.core.logging import get_logger
 from bioplausible.validation.notebook import ValidationTrack
 from bioplausible.validation.tracks._signal_probe import (
     run_signal_propagation_experiment,
@@ -21,7 +20,7 @@ __all__ = [
     "register_signal_tracks",
     "test_signal_propagation",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class SignalPropagationTrack(ValidationTrack):

@@ -63,7 +63,7 @@ def test_broken_models_are_quarantined_models() -> None:
         "hebbian_3d",
     ):
         assert expected in broken, f"{expected} must be tagged status:broken"
-    
+
     # These were previously broken but are now fixed (depth-cap fix)
     for fixed in ("direct_feedback_alignment_eqprop", "dfa_deep"):
         assert fixed not in broken, f"{fixed} should no longer be status:broken"

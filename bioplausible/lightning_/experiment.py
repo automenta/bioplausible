@@ -5,10 +5,9 @@ This module provides PL-based alternatives for the trial execution
 in bioplausible.scientist.core.AutoScientist.
 """
 
-import logging
-
 from pytorch_lightning import Trainer
 
+from bioplausible.core.logging import get_logger
 from bioplausible.lightning_.module import BioLightningModule
 from bioplausible.lightning_.strategies import build_trainer
 
@@ -17,7 +16,7 @@ __all__ = [
     "run_pl_trial",
     "run_pl_trial_with_wandb",
 ]
-logger = logging.getLogger("AutoScientist.PL")
+logger = get_logger("AutoScientist.PL")
 
 
 def run_pl_trial(

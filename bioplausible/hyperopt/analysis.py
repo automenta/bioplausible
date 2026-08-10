@@ -3,9 +3,9 @@ Analysis tools for Hyperparameter Optimization results.
 Includes encoding and dimensionality reduction.
 """
 
-import logging
-
 import numpy as np
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "encode_configs",
@@ -13,7 +13,7 @@ __all__ = [
     "logger",
     "reduce_dimensions",
 ]
-logger = logging.getLogger("HyperoptAnalysis")
+logger = get_logger("HyperoptAnalysis")
 
 try:
     from sklearn.decomposition import PCA

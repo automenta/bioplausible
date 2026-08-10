@@ -38,14 +38,13 @@ def test_demo_gap_matches_cli_gap_pp() -> None:
     demo_gap = parity_gap(a, b)
     assert demo_gap is not None
 
-    cli = cli_run_parity(
-        model_a, model_b, TASK, EPOCHS, LR, HIDDEN, SEED
-    )
+    cli = cli_run_parity(model_a, model_b, TASK, EPOCHS, LR, HIDDEN, SEED)
     assert demo_gap == pytest.approx(cli["gap_pp"], abs=1e-6)
 
 
 def test_demo_gap_is_deterministic_under_seed() -> None:
     """Re-running both panels at the same seed reproduces the same gap."""
+
     def _gap() -> float | None:
         a = _train_panel("equitile", SEED)
         b = _train_panel("backprop_mlp", SEED)

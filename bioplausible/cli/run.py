@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import optuna
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.hyperopt import (
@@ -67,7 +68,7 @@ __all__ = [
     "run_training",
     "run_verify",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 # ---------------------------------------------------------------------------
 # HPO infrastructure constants
@@ -106,7 +107,6 @@ FAMILY_MAP: dict[str, str] = {
     "mep": "mep",
     "backprop": "backprop",
 }
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers

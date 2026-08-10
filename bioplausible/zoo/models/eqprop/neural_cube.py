@@ -5,9 +5,8 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
-from bioplausible.core.config import ModelConfig
 from bioplausible.core.model_status import status_tag
-from bioplausible.core.registry import LocalityLevel, register_model
+from bioplausible.core.registry import register_model
 from bioplausible.zoo._settling import settle_state
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 

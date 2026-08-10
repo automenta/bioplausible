@@ -1,10 +1,11 @@
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 import numpy as np
 

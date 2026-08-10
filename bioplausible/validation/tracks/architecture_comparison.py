@@ -10,13 +10,14 @@ Compares signal propagation through different architectures:
 This provides definitive evidence about what architectures work for deep EqProp.
 """
 
-import logging
 import sys
 import time
 from pathlib import Path
 
 import torch
 from torch import nn
+
+from bioplausible.core.logging import get_logger
 
 from ..notebook import TrackResult
 
@@ -36,7 +37,7 @@ __all__ = [
     "root_path",
     "track_56_depth_architecture_comparison",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class LinearChain(nn.Module):

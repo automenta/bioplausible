@@ -1,9 +1,10 @@
-import logging
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
+
+from bioplausible.core.logging import get_logger
 
 from ..notebook import TrackResult
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
@@ -24,7 +25,7 @@ __all__ = [
     "track_2_backprop_parity",
     "track_3_adversarial_healing",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def track_1_spectral_norm(verifier) -> TrackResult:

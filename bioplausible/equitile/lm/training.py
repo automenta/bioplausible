@@ -23,8 +23,8 @@ Example
 >>> trainer = LMTrainer(model, config, device="cuda")
 >>> trainer.train(train_loader, val_loader)
 """
+
 import json
-import logging
 import math
 import time
 from dataclasses import dataclass, field
@@ -35,10 +35,10 @@ import torch
 import torch.nn.functional as F
 from torch.amp import GradScaler, autocast
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger()
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -47,7 +47,6 @@ if TYPE_CHECKING:
     from torch.utils.data import DataLoader
 
     from .fast_lm import FastLMEquiTile
-
 
 # =============================================================================
 # Training Configuration

@@ -242,20 +242,33 @@ def test_excluded_models_still_registered():
     files), then asserted present. If a model is later deleted, this fails — so
     relaxing a test can never double as dropping coverage of a real model.
     """
-    from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP  # noqa: F401
-    from bioplausible.zoo.models.fa import (  # noqa: F401
+    from bioplausible.equitile._internal.enhanced import (
+        EnhancedEquiTile,  # ruff: ignore[unused-import]
+    )
+    from bioplausible.equitile.core.model import (
+        EquiTileEP,  # ruff: ignore[unused-import]
+    )
+    from bioplausible.equitile.deployments.vision import (
+        ConvEquiTile,  # ruff: ignore[unused-import]
+    )
+    from bioplausible.zoo.models.eqprop.looped_mlp import (
+        LoopedMLP,  # ruff: ignore[unused-import]
+    )
+    from bioplausible.zoo.models.fa import (  # ruff: ignore[unused-import]
         FeedbackAlignmentEqProp,
         StochasticFA,
     )
-    from bioplausible.zoo.models.hebbian import HebbianCube, ThreeFactorHebbian  # noqa: F401
-    from bioplausible.zoo.models.predictive_coding import (  # noqa: F401
+    from bioplausible.zoo.models.hebbian import (  # ruff: ignore[unused-import]
+        HebbianCube,
+        ThreeFactorHebbian,
+    )
+    from bioplausible.zoo.models.predictive_coding import (  # ruff: ignore[unused-import]
         FabricPCGraphPCN,
         PredictiveCodingHybrid,
     )
-    from bioplausible.zoo.models.spiking import SpikingSTDP  # noqa: F401
-    from bioplausible.equitile.deployments.vision import ConvEquiTile  # noqa: F401
-    from bioplausible.equitile._internal.enhanced import EnhancedEquiTile  # noqa: F401
-    from bioplausible.equitile.core.model import EquiTileEP  # noqa: F401
+    from bioplausible.zoo.models.spiking import (
+        SpikingSTDP,  # ruff: ignore[unused-import]
+    )
 
     registered = set(Registry.list(ComponentCategory.MODEL).get("model", []))
     everyone = set(EXCLUDED_BUILD) | set(NON_CONVERGING_LEARNS)

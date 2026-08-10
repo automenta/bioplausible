@@ -7,7 +7,6 @@ Consolidates database-adjacent state tracking:
 """
 
 import json
-import logging
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -17,6 +16,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import optuna
+
+from bioplausible.core.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -31,7 +32,7 @@ __all__ = [
     "FailureTracker",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @contextmanager

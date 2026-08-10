@@ -2,6 +2,7 @@ import logging
 import multiprocessing
 import os
 
+from bioplausible.core.logging import get_logger
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt.experiment import run_single_trial_task
 
@@ -21,7 +22,7 @@ def _worker_process_task(args: dict[str, object]) -> dict[str, float] | None:
         format=f"%(asctime)s [Worker-{worker_id}] %(levelname)s: %(message)s",
         level=logging.INFO,
     )
-    logger = logging.getLogger(f"Worker-{worker_id}")
+    logger = get_logger(f"Worker-{worker_id}")
 
     # Extract args
     # Note: args keys must match what is packed in run_batch

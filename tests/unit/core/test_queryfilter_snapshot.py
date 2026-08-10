@@ -71,7 +71,7 @@ def test_predicate_dispatch_all_fields() -> None:
         tags=["local"],
         family="equitile",
     )
-    assert len(q._predicates) == 9  # ruff: ignore[magic-value-comparison] -- 9 predicate axes
+    assert len(q._predicates) == 9
     expected_types = [
         _DomainIn,
         _LocalityIs,

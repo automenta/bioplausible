@@ -9,13 +9,14 @@ tree — preserving the Sprint 0.5 module-boundary goal.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
+from bioplausible.core.logging import get_logger
+
 __all__ = ["BaseExecutionCallback", "ExecutionCallback", "logger"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @runtime_checkable

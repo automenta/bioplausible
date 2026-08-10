@@ -3,7 +3,9 @@
 Verifies that error backprojection modulates hidden layer weight updates
 (element of supervised credit assignment via the 3rd factor).
 """
+
 import torch
+
 from bioplausible.zoo.models.spiking import SpikingSTDP
 
 
@@ -14,15 +16,16 @@ def test_3factor_modulator_is_error_correlated():
 
     err_y0 = torch.mm(
         torch.nn.functional.one_hot(torch.zeros(4, dtype=torch.long), 4).float() * 4,
-        model.W_fb
+        model.W_fb,
     )
     err_y1 = torch.mm(
         torch.nn.functional.one_hot(torch.ones(4, dtype=torch.long), 4).float() * 4,
-        model.W_fb
+        model.W_fb,
     )
 
-    assert not torch.allclose(err_y0, err_y1), \
+    assert not torch.allclose(err_y0, err_y1), (
         "Modulator should differ based on target label (3-factor requires error signal)"
+    )
 
 
 def test_hidden_weights_change_with_error_signal():
@@ -34,8 +37,9 @@ def test_hidden_weights_change_with_error_signal():
     w_before = model.fc1.weight.data.clone()
     model.train_step(x, y)
 
-    assert not torch.allclose(w_before, model.fc1.weight.data), \
+    assert not torch.allclose(w_before, model.fc1.weight.data), (
         "fc1 weights should change with 3-factor error signal"
+    )
 
 
 def test_feedback_weights_are_fixed():
@@ -47,8 +51,9 @@ def test_feedback_weights_are_fixed():
     fb_before = model.W_fb.clone()
     model.train_step(x, y)
 
-    assert torch.allclose(fb_before, model.W_fb), \
+    assert torch.allclose(fb_before, model.W_fb), (
         "Feedback weights should not change during training"
+    )
 
 
 if __name__ == "__main__":

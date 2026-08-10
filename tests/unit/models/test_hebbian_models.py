@@ -305,8 +305,9 @@ class TestDeepHebbianChain:
         ]
         w_before = head_orig.clone()
         model.train_step(torch.randn(4, 8), torch.randint(0, NUM_CLASSES, (4,)))
-        assert not torch.allclose(w_before, head_orig), \
+        assert not torch.allclose(w_before, head_orig), (
             "Spectral-normed head must receive in-place weight updates"
+        )
 
     def test_train_step_learns_separable_task(self):
         """End-to-end: a shallow DeepHebbianChain should learn a linearly

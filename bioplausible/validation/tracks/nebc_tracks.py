@@ -1,8 +1,7 @@
-import logging
-
 import torch
 from torch import nn
 
+from bioplausible.core.logging import get_logger
 from bioplausible.zoo.models.eqprop import (
     EqPropAttentionOnlyLM,
     FullEqPropLM,
@@ -14,7 +13,7 @@ from bioplausible.zoo.models.fa import AdaptiveFeedbackAlignment, EquilibriumAli
 
 from ..notebook import TrackResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def _get_mock_data(input_dim=784, output_dim=10, batch_size=32):

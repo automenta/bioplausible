@@ -19,8 +19,8 @@ Usage:
     )
 
     # Check available backends
-    >>> import logging
-    >>> logging.getLogger(__name__).info("CuPy: %s, Triton: %s", HAS_CUPY, HAS_TRITON)
+    >>> from bioplausible.core.logging import get_logger
+    >>> get_logger().info("CuPy: %s, Triton: %s", HAS_CUPY, HAS_TRITON)
 
     # Use optimal backend
     device = get_optimal_backend()
@@ -29,15 +29,6 @@ Usage:
     model = compile_model(model, mode='reduce-overhead')
 """
 
-from bioplausible.acceleration._array_ops import (
-    cross_entropy,
-    get_backend,
-    get_kernel_classes,
-    get_triton_ops,
-    softmax,
-    spectral_normalize,
-    to_numpy,
-)
 from bioplausible.acceleration.backends import (
     HAS_CUPY,
     HAS_TRITON,
@@ -50,6 +41,35 @@ from bioplausible.acceleration.backends import (
     get_optimal_backend,
 )
 from bioplausible.acceleration.compile import compile_model, compile_settling_loop
+from bioplausible.core.utils.activations import (
+    cross_entropy,
+    get_backend,
+    softmax,
+    spectral_normalize,
+    to_numpy,
+)
+
+
+def get_kernel_classes() -> tuple[type[object], type[object]]:
+    """Lazily import kernel classes to avoid circular imports."""
+    from bioplausible.acceleration.kernels import EqPropKernel as _EqPropKernel
+    from bioplausible.acceleration.kernels import (
+        EqPropKernelBPTT as _EqPropKernelBPTT,
+    )
+
+    return _EqPropKernel, _EqPropKernelBPTT
+
+
+def get_triton_ops() -> type[object] | None:
+    """Lazily import Triton ops, returning None if unavailable."""
+    try:
+        from bioplausible.acceleration.triton_kernels import (
+            TritonEqPropOps as _TritonEqPropOps,
+        )
+    except ImportError:
+        return None
+    return _TritonEqPropOps
+
 
 __all__ = [
     "HAS_CUPY",

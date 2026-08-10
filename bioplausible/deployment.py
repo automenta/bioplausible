@@ -12,9 +12,10 @@ Features:
 """
 
 import json
-import logging
 from dataclasses import dataclass
 from pathlib import Path
+
+from bioplausible.core.logging import get_logger
 
 
 @dataclass
@@ -25,7 +26,7 @@ class InferenceRequest:
     shape: list[int] | None = None
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 import torch
 from torch import nn
@@ -694,7 +695,6 @@ def export_to_torchscript(model, input_sample, path):
 
 
 # --- Serving Logic (FastAPI) ---
-
 
 import numpy as np
 import uvicorn

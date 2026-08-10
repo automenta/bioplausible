@@ -10,6 +10,7 @@ import signal
 import sys
 import time
 
+from bioplausible.core.logging import get_logger
 from bioplausible.p2p.evolution import P2PEvolution
 
 # Configure logging
@@ -22,7 +23,7 @@ __all__ = [
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("P2PWorker")
+logger = get_logger("P2PWorker")
 
 
 def signal_handler(sig, frame):

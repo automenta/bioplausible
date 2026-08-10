@@ -29,7 +29,6 @@ python -m bioplausible.equitile.lm.train_tinystories \
 
 import argparse
 import json
-import logging
 import time
 from pathlib import Path
 
@@ -37,6 +36,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.equitile.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
 from bioplausible.equitile.lm import (
@@ -51,7 +51,7 @@ from bioplausible.equitile.lm.training import (
     train_model as train_lm_model,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 # =============================================================================
 # TinyStories Dataset

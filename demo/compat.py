@@ -22,7 +22,7 @@ def apply_compat_shims() -> None:
     def find_loader(name: str) -> object | None:
         try:
             spec = importlib.util.find_spec(name)
-        except (ImportError, ValueError):
+        except ImportError, ValueError:
             return None
         return spec.loader if spec is not None else None
 

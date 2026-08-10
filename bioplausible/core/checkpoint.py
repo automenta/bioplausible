@@ -6,14 +6,15 @@ the three ad-hoc formats in ``CoreTrainer``, ``EquiTile``, and
 ``ExecutionEngine``.
 """
 
-import logging
 import pathlib
 from typing import TypedDict
 
 import torch
 from torch import Tensor
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 
 class Checkpoint(TypedDict, total=False):

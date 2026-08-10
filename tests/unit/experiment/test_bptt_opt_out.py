@@ -68,4 +68,3 @@ def test_fallback_warning_deduped_per_run(caplog) -> None:
         CoreTrainer(TrainerConfig(**cfg)).fit()
     count = sum(1 for r in caplog.records if "BPTT fallback" in r.message)
     assert count == 1
-

@@ -13,7 +13,7 @@ from unittest.mock import patch
 import torch
 from torch import nn
 
-from bioplausible.core.energy import EnergyTracker
+from bioplausible.core.profiling import EnergyTracker
 
 
 class _MLP(nn.Module):
@@ -29,7 +29,7 @@ def test_heavy_metrics_computed_once_per_probe() -> None:
     """With a step counter, activation sparsity is sampled only on step 0."""
     model = _MLP()
     with patch(
-        "bioplausible.core.energy._estimate_activation_sparsity",
+        "bioplausible.core.profiling._estimate_activation_sparsity",
         return_value=0.25,
     ) as spy:
         for step in range(5):
@@ -49,7 +49,7 @@ def test_standalone_tracker_always_measures() -> None:
     """Without a step counter (standalone use) every step samples sparsity."""
     model = _MLP()
     with patch(
-        "bioplausible.core.energy._estimate_activation_sparsity",
+        "bioplausible.core.profiling._estimate_activation_sparsity",
         return_value=0.0,
     ) as spy:
         for _ in range(3):
@@ -61,12 +61,14 @@ def test_standalone_tracker_always_measures() -> None:
 def test_throttle_keeps_cheap_metrics() -> None:
     """Throttling must not drop the cheap per-step metrics (time/memory/flops)."""
     model = _MLP()
-    with patch(
-        "bioplausible.core.energy._estimate_activation_sparsity",
-        return_value=0.0,
+    with (
+        patch(
+            "bioplausible.core.profiling._estimate_activation_sparsity",
+            return_value=0.0,
+        ),
+        EnergyTracker(model, global_step=2, requires_backward=True) as et,
     ):
-        with EnergyTracker(model, global_step=2, requires_backward=True) as et:
-            _ = model(torch.zeros(2, 16))
+        _ = model(torch.zeros(2, 16))
     assert et.profile is not None
     assert et.profile.param_count > 0
     assert et.profile.forward_flops > 0

@@ -20,13 +20,13 @@ Register the entry point as ``biopl-run = bioplausible.experiment.cli:main`` and
 from __future__ import annotations
 
 import argparse
-import logging
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.experiment.probe import CoreTrainerDriver, config_key
 from bioplausible.experiment.producer import (
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
     from bioplausible.experiment.schema import Campaign, Stage
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def _parse_time_budget(text: str) -> int:

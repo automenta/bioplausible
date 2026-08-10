@@ -10,13 +10,14 @@ Callers that need cudnn + deterministic-algorithms behaviour pass
 
 from __future__ import annotations
 
-import logging
 import random
 
 import numpy as np
 import torch
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 __all__ = ["set_all_seeds"]
 

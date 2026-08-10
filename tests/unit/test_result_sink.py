@@ -26,8 +26,13 @@ def test_record_success_writes_knowledge_entry(sink_paths):
         model="eqprop",
         task="mnist",
         config={"lr": 0.01, "max_steps": 20},
-        metrics={"final_acc": 0.92, "forward_flops": 100, "backward_flops": 50,
-                 "peak_memory_mb": 20.0, "wall_time_s": 3.0},
+        metrics={
+            "final_acc": 0.92,
+            "forward_flops": 100,
+            "backward_flops": 50,
+            "peak_memory_mb": 20.0,
+            "wall_time_s": 3.0,
+        },
         status="completed",
         seed=1,
         epochs=5,
@@ -64,8 +69,9 @@ def test_record_failure_writes_failure_tracker(sink_paths):
 def test_success_and_failure_use_distinct_sinks(sink_paths):
     """Successes never land in FailureTracker and failures never land in KB."""
     kb_path, fail_path = sink_paths
-    record_experiment_result(model="ff", task="mnist", metrics={"accuracy": 0.5},
-                             status="completed", seed=3)
+    record_experiment_result(
+        model="ff", task="mnist", metrics={"accuracy": 0.5}, status="completed", seed=3
+    )
     record_experiment_result(model="ff", task="mnist", status="failed", seed=4)
 
     from bioplausible.execution._state import FailureTracker

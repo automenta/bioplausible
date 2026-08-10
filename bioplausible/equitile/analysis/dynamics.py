@@ -17,13 +17,13 @@ Key Components
 - DynamicEquiTile: Full dynamic architecture
 """
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import Domain, LocalityLevel, register_controller
 from bioplausible.equitile.core.config import DynamicEquiTileConfig, TileGrowthConfig
 
@@ -39,7 +39,7 @@ __all__ = [
 if TYPE_CHECKING:
     from bioplausible.equitile.core import EquiTile
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

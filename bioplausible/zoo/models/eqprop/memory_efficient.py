@@ -44,7 +44,7 @@ class MemoryEfficientLoopedMLP(LoopedMLP):
         use_spectral_norm: bool = True,
         max_steps: int = 30,
         gradient_method: str = "bptt",
-        use_gpu_if_available: bool = True,  # noqa: ARG002  (compat kwarg, ignored)
+        use_gpu_if_available: bool = True,  # ruff: ignore[unused-method-argument]  (compat kwarg, ignored)
     ) -> None:
         super().__init__(
             input_dim=input_dim,

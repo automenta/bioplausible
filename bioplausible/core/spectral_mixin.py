@@ -91,7 +91,9 @@ class SpectralMixin:
         max_L = 0.0
         with torch.no_grad():
             for module in self.modules():
-                if hasattr(module, "weight") and isinstance(module.weight, torch.Tensor):
+                if hasattr(module, "weight") and isinstance(
+                    module.weight, torch.Tensor
+                ):
                     w = module.weight
                     if w.dim() >= 2:
                         if self.config.lipschitz_mode == "power_iteration":

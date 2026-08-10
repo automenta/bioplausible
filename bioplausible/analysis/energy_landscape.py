@@ -34,7 +34,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from bioplausible.core.energy_model import is_energy_model
+from bioplausible.core.ebm import is_energy_model
 
 __all__ = [
     "EnergyLandscape",

@@ -31,7 +31,6 @@ Examples
 >>> profiler.print_report()
 """
 
-import logging
 import time
 from collections import defaultdict
 from contextlib import contextmanager
@@ -39,6 +38,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import torch
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "BenchmarkConfig",
@@ -56,8 +57,7 @@ __all__ = [
 if TYPE_CHECKING:
     from bioplausible.equitile.core import EquiTile
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger()
 
 # =============================================================================
 # Data Structures

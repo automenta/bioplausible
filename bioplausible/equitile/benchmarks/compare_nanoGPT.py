@@ -21,7 +21,6 @@ Example
 >>> print(f"EquiTile advantage: {results['equitile_speedup']:.2f}x")
 """
 
-import logging
 import time
 from dataclasses import dataclass
 
@@ -29,7 +28,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 # Use new torch.amp API (2.0+) or fallback
 
@@ -48,7 +49,6 @@ try:
     from torch.amp import GradScaler, autocast
 except ImportError:
     from torch.cuda.amp import GradScaler, autocast
-
 
 # =============================================================================
 # NanoGPT Implementation (for comparison)

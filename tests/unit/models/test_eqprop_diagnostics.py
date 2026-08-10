@@ -1,8 +1,9 @@
 """Tests for EqProp contrastive diagnostics (Plan 8 Track A1)."""
 
 import torch
-from bioplausible.core.config import ModelConfig
-from bioplausible.zoo.models.eqprop import StandardEqProp, DirectedEP
+
+from bioplausible.config.unified import ModelConfig
+from bioplausible.zoo.models.eqprop import DirectedEP, StandardEqProp
 
 
 def _make_config(**overrides) -> ModelConfig:

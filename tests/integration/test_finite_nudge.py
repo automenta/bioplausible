@@ -3,7 +3,7 @@ import unittest
 
 import torch
 
-from bioplausible.core.config import ModelConfig
+from bioplausible.config.unified import ModelConfig
 from bioplausible.zoo.models.eqprop import FiniteNudgeEP
 
 

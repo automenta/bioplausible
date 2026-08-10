@@ -56,10 +56,12 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from bioplausible.core.logging import get_logger
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 __all__ = [
     "Contract",

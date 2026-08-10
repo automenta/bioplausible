@@ -11,7 +11,6 @@ Features:
 - Validation and benchmarking tools
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 
@@ -20,9 +19,10 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

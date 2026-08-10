@@ -35,8 +35,7 @@ try:
 except ImportError:
     VIS_AVAILABLE = False
 
-import logging
-
+from bioplausible.core.logging import get_logger
 from bioplausible.core.metrics import BaseMetrics
 from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.mep.presets import sdmep, smep
@@ -58,7 +57,7 @@ __all__ = [
     "save_results",
     "train_epoch",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass(frozen=True, slots=True)

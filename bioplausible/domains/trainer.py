@@ -4,12 +4,12 @@ Training utilities for the TaskProtocol interface.
 Moved from ``hyperopt/tasks.py`` during Phase 3.1 task hierarchy merge.
 """
 
-import logging
 from typing import Protocol, runtime_checkable
 
 import torch
 from torch import nn
 
+from bioplausible.core.logging import get_logger
 from bioplausible.domains.base import DomainType
 
 __all__ = [
@@ -18,7 +18,7 @@ __all__ = [
     "_resolve_task_loss",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @runtime_checkable

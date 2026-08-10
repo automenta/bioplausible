@@ -5,12 +5,13 @@ Persists trials, configurations, and results to a SQLite database.
 """
 
 import json
-import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 from .metrics import TrialMetrics
 

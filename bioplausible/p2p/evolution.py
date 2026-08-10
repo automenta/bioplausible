@@ -6,12 +6,12 @@ Manages the autonomous discovery loop using the DHT.
 
 import hashlib
 import json
-import logging
 import os
 import random
 import threading
 import time
 
+from bioplausible.core.logging import get_logger
 from bioplausible.hyperopt.experiment import run_single_trial_task
 from bioplausible.hyperopt.search_space import SEARCH_SPACES, get_search_space
 from bioplausible.p2p.dht import DHTNode
@@ -22,7 +22,7 @@ __all__ = [
     "get_config_hash",
     "logger",
 ]
-logger = logging.getLogger("P2PEvolution")
+logger = get_logger("P2PEvolution")
 
 
 def get_config_hash(config: dict) -> str:

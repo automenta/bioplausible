@@ -9,13 +9,14 @@ This module provides:
 All NEBC algorithms test spectral normalization as a "stability unlock".
 """
 
-import logging
 from abc import ABC
 
 import torch
 import torch.nn.functional as F
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 from bioplausible.core.model import BioModel
 

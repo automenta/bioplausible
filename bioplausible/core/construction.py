@@ -42,7 +42,7 @@ import typing
 from dataclasses import dataclass
 from dataclasses import fields as _dataclass_fields
 
-from bioplausible.core.config import ModelConfig, compute_hidden_dims
+from bioplausible.config.unified import ModelConfig, compute_hidden_dims
 
 __all__ = [
     "KNOBS",

@@ -3,18 +3,18 @@ CLI Leaderboard Viewer
 """
 
 import argparse
-import logging
 
 from tabulate import tabulate  # Assuming installed, or use simple formatter
 
 from bioplausible.analysis.results import get_rankings, load_trials
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "logger",
     "main",
     "view_rankings",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def view_rankings(args):

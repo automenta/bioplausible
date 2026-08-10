@@ -19,6 +19,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.utils.device import get_device
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.equitile.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
 from bioplausible.equitile.lm import FastLMConfig, FastLMEquiTile
 
@@ -52,8 +53,8 @@ def run_training_ablation(
     """Run training ablation and track metrics."""
     model.train()
 
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=learning_rate, betas=(0.9, 0.95)
+    optimizer = create_optimizer(
+        model, OptimizerConfig(name="adamw", lr=learning_rate, betas=(0.9, 0.95))
     )
 
     train_input, train_target = train_data

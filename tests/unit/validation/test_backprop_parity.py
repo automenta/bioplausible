@@ -104,7 +104,7 @@ def _instantiate_model_tuned(
         return model.to(device)
 
     elif model_name == "directed_ep":
-        from bioplausible.core.config import ModelConfig
+        from bioplausible.config.unified import ModelConfig
         from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
 
         model_config = ModelConfig(
@@ -291,7 +291,7 @@ def test_forward_flops_bounded(model_name, synthetic_classification_task):
     except (NotImplementedError, TypeError, ValueError) as e:
         pytest.skip(f"{model_name} instantiation failed: {e}")
 
-    from bioplausible.core.energy import count_flops
+    from bioplausible.core.profiling import count_flops
 
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     flops = count_flops(model, (32, input_dim))

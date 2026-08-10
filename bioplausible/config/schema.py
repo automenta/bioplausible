@@ -5,14 +5,14 @@ Replaces the legacy config_schema.py and config_loader.py with
 a unified, validated configuration system.
 """
 
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from omegaconf import MISSING, OmegaConf
 
-from bioplausible.core.config import ModelConfig as InternalModelConfig
+from bioplausible.config.unified import ModelConfig as InternalModelConfig
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "DatasetConfig",
@@ -34,7 +34,7 @@ __all__ = [
     "logger",
     "validate_config",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def _register_resolvers() -> None:

@@ -18,12 +18,13 @@ Example
 """
 
 import json
-import logging
 import math
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
+
+from bioplausible.core.logging import get_logger
 
 try:
     from scipy import stats
@@ -37,12 +38,11 @@ from bioplausible.equitile.benchmarks.compare_nanoGPT import NanoGPTConfig, Nano
 from bioplausible.equitile.lm.data import create_shakespeare_dataset
 from bioplausible.equitile.lm.fast_lm import FastLMConfig, FastLMEquiTile
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 # =============================================================================
 # Reproducibility Framework
 # =============================================================================
-
 
 __all__ = [
     "BenchmarkConfig",

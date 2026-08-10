@@ -1,9 +1,9 @@
-import logging
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.optimize import curve_fit
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "compute_compute_optimal",
@@ -11,7 +11,7 @@ __all__ = [
     "logger",
     "plot_scaling_curves",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def _power_law(N: np.ndarray, a: float, b: float) -> np.ndarray:

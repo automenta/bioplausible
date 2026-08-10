@@ -7,17 +7,18 @@ to guide future research directions.
 """
 
 import json
-import logging
 import sqlite3
 import traceback
 
 import pandas as pd
 
+from bioplausible.core.logging import get_logger
+
 __all__ = [
     "ResearchSynthesizer",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class ResearchSynthesizer:

@@ -5,8 +5,9 @@ Saves user contribution points and job counts.
 """
 
 import json
-import logging
 from pathlib import Path
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "STATE_FILE",
@@ -14,11 +15,11 @@ __all__ = [
     "logger",
     "save_state",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 STATE_FILE = Path("results/p2p_state.json")
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def load_state():

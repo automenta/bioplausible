@@ -15,15 +15,15 @@ Example
 >>> print(f"Parameter efficiency score: {result.efficiency_score:.2f}")
 """
 
-import logging
 from dataclasses import dataclass
 
 import torch
 from torch import nn
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 __all__ = [
     "EfficiencyAnalyzer",

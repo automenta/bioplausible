@@ -48,7 +48,7 @@ def scalarize_objectives(
     return score
 
 
-def create_optuna_space(  # ruff: ignore[PLR0913]  (trial, model, meta + 3 optional override/config kwargs)
+def create_optuna_space(  # ruff: ignore[too-many-arguments]  (trial, model, meta + 3 optional override/config kwargs)
     trial: optuna.Trial,
     model_name: str,
     constraints: dict[str, object] | None = None,

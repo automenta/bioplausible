@@ -4,14 +4,15 @@ EqProp-Torch Utilities
 Helper functions for ONNX export, model verification, and training utilities.
 """
 
-import logging
 import os
 import random
 import sys
 import time
 from contextlib import contextmanager
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 import numpy as np
 import torch

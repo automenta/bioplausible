@@ -5,12 +5,12 @@ Samples model names and optimizer names via Optuna to discover
 Pareto-optimal combinations for each task.
 """
 
-import logging
 from collections.abc import Callable
 
 import optuna
 from pytorch_lightning import Trainer
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.lightning_.module import BioLightningModule
 
@@ -21,7 +21,7 @@ __all__ = [
     "logger",
     "run_nas_search",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def get_plausible_model_names() -> list[str]:

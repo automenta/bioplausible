@@ -8,7 +8,7 @@ Aggregates all predictive coding models into a single module for the model zoo.
 import torch
 from torch import nn
 
-from bioplausible.core.config import (
+from bioplausible.config.unified import (
     ModelConfig,
     _build_model_config,
     resolve_hidden_dims,

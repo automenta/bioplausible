@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Categorical, Normal
 
-from bioplausible.core.config import ModelConfig
+from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model

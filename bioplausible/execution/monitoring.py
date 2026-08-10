@@ -5,10 +5,11 @@ Provides utilities for detecting interference from other processes
 and monitoring system resource usage to ensure experiment integrity.
 """
 
-import logging
 import os
 import threading
 import time
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "InterferenceMonitor",
@@ -19,7 +20,7 @@ try:
 except ImportError:
     psutil = None
 
-logger = logging.getLogger("InterferenceMonitor")
+logger = get_logger("InterferenceMonitor")
 
 
 class InterferenceMonitor:

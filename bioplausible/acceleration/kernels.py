@@ -15,7 +15,6 @@ Usage:
     kernel.train_step(x_batch, y_batch)
 """
 
-import logging
 import os
 import pathlib
 import shutil
@@ -23,6 +22,8 @@ import sys
 from ctypes.util import find_library
 
 import numpy as np
+
+from bioplausible.core.logging import get_logger
 
 
 def _from_env_var() -> pathlib.Path | None:
@@ -224,7 +225,7 @@ def to_numpy(arr: object) -> np.ndarray:
     return arr
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def softmax(x: np.ndarray, xp: object = np) -> np.ndarray:

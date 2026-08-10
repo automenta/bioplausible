@@ -8,13 +8,14 @@ Track 55: Pure Linear Chain Failure
   - Pure linear layers vanish even with spectral normalization
 """
 
-import logging
 import sys
 import time
 from pathlib import Path
 
 import torch
 from torch import nn
+
+from bioplausible.core.logging import get_logger
 
 from ..notebook import TrackResult
 
@@ -24,7 +25,7 @@ __all__ = [
     "root_path",
     "track_55_negative_linear_chain",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:

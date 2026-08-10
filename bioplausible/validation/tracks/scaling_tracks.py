@@ -1,5 +1,4 @@
 import gc
-import logging
 import sys
 import time
 from dataclasses import dataclass
@@ -8,6 +7,7 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.models.eqprop import (
     LazyEqProp,
@@ -23,7 +23,6 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-
 __all__ = [
     "logger",
     "root_path",
@@ -32,7 +31,7 @@ __all__ = [
     "track_11_deep_network",
     "track_12_lazy_updates",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 # Threshold (backprop-eqprop peak ratio) at which Track 10 is considered passing.
 _memory_pass_ratio = 5.0

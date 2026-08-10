@@ -1,11 +1,11 @@
-import logging
 from abc import abstractmethod
 
 import torch
 import torch.nn.functional as F
 from torch import autograd, nn
 
-from bioplausible.core.config import ModelConfig
+from bioplausible.config.unified import ModelConfig
+from bioplausible.core.logging import get_logger
 from bioplausible.core.model import BioModel
 
 from .._settling import EquilibriumFunction, settle_single_state
@@ -14,7 +14,7 @@ __all__ = [
     "EqPropModel",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class EqPropModel(BioModel):

@@ -6,7 +6,6 @@ checkpointing (``CheckpointManager``), and curriculum (``CurriculumManager``).
 """
 
 import json
-import logging
 import shutil
 import sqlite3
 import zipfile
@@ -14,6 +13,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import torch
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "ARTIFACTS_DIR",
@@ -26,7 +27,7 @@ __all__ = [
     "logger",
 ]
 
-logger = logging.getLogger("Lifecycle")
+logger = get_logger("Lifecycle")
 
 # ---------------------------------------------------------------------------
 # Promotion — promotion.py

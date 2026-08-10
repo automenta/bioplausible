@@ -4,7 +4,7 @@ from typing import Protocol
 
 import torch
 
-from bioplausible.core.energy_model import EBMTrainer, EnergyModel
+from bioplausible.core.ebm import EBMTrainer, EnergyModel
 
 
 class _DummyEnergyModel(torch.nn.Module):

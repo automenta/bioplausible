@@ -4,7 +4,6 @@ Model Compilation Utilities
 Provides torch.compile wrappers for 2-3x speedup.
 """
 
-import logging
 import os
 import warnings
 from typing import TYPE_CHECKING
@@ -12,8 +11,9 @@ from typing import TYPE_CHECKING
 import torch
 
 from bioplausible.acceleration.backends import HAS_TRITON
+from bioplausible.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 if TYPE_CHECKING:
     from collections.abc import Callable

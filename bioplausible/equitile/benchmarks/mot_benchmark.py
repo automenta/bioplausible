@@ -14,18 +14,16 @@ Usage
 >>> output, tile_importance = mot(x)
 """
 
-import logging
-
 import torch
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 # =============================================================================
 # Benchmark
 # =============================================================================
-
 
 __all__ = [
     "benchmark_mot",

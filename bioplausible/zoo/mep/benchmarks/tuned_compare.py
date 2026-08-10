@@ -7,7 +7,6 @@ EP methods need different hyperparameters than backprop methods.
 
 import argparse
 import json
-import logging
 import pathlib
 import time
 from dataclasses import asdict, dataclass
@@ -16,6 +15,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.mep.benchmarks._shared import (
     BenchmarkConfig,
@@ -47,7 +47,7 @@ __all__ = [
     "save_results",
     "train_epoch",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

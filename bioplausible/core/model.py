@@ -5,14 +5,13 @@ Extracted from ``zoo/base.py`` so that ``equitile/`` can depend on
 ``core/`` instead of ``zoo/``.
 """
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
 import torch
 from torch import nn
 
 from bioplausible.core.checkpoint_mixin import CheckpointMixin
-from bioplausible.core.config import (
-    LayerRole,
+from bioplausible.config.unified import (
     ModelConfig,
     _build_model_config,
 )
@@ -110,7 +109,9 @@ class BioModel(nn.Module, ABC, TrainingMixin, SpectralMixin, CheckpointMixin):
         super().train(mode)
         return self
 
-    def _forward_train(self, x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, dict]:
+    def _forward_train(
+        self, x: torch.Tensor, y: torch.Tensor
+    ) -> tuple[torch.Tensor, dict]:
         """Single training forward pass.
 
         Returns:

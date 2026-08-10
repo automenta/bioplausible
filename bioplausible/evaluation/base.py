@@ -8,7 +8,6 @@ Provides:
 - registry_evaluator: decorator for registering evaluators
 """
 
-import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -16,6 +15,7 @@ from dataclasses import dataclass, field
 import torch
 from torch import nn
 
+from bioplausible.core.logging import get_logger
 from bioplausible.domains.base import DomainTask, TaskSplit
 
 __all__ = [
@@ -34,7 +34,7 @@ __all__ = [
     "registry_evaluator",
     "top5_accuracy_fn",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 # ---------------------------------------------------------------------------
 # Metric Suite

@@ -186,7 +186,7 @@ def create_deployment_model(
 
     class DeploymentModel(BioModel):
         def __init__(self) -> None:
-            from bioplausible.core.config import ModelConfig
+            from bioplausible.config.unified import ModelConfig
 
             super().__init__(
                 ModelConfig(

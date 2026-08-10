@@ -7,15 +7,15 @@ communication.  Extracted from ``multigpu.py`` to be shared by both the
 unified distributed module and any other code that needs NCCL primitives.
 """
 
-import logging
 import os
 
 import torch
 import torch.distributed as dist
 
+from bioplausible.core.logging import get_logger
 from bioplausible.equitile.core.config import NCCLConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class NCCLCommunicator:

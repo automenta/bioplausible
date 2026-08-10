@@ -9,7 +9,6 @@ Reference:
     neural networks. PNAS, 114(13), 3521-3526.
 """
 
-import logging
 from collections import OrderedDict
 from typing import TYPE_CHECKING
 
@@ -17,6 +16,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ __all__ = [
     "run_ewc_benchmark",
     "train_with_ewc",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class EWC:

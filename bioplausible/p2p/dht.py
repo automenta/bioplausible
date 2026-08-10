@@ -5,9 +5,10 @@ Uses Kademlia protocol via the 'kademlia' python package.
 
 import asyncio
 import json
-import logging
 import threading
 import time
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "DHTNode",
@@ -18,7 +19,7 @@ try:
 except ImportError:
     Server = None
 
-logger = logging.getLogger("DHTNode")
+logger = get_logger("DHTNode")
 
 
 class DHTNode:

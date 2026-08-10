@@ -8,10 +8,10 @@
 
 _LAZY: dict[str, tuple[str, str | None]] = {
     "BioModel": ("bioplausible.core.model", "BioModel"),
-    "LayerRole": ("bioplausible.core.config", "LayerRole"),
-    "ModelConfig": ("bioplausible.core.config", "ModelConfig"),
-    "compute_hidden_dims": ("bioplausible.core.config", "compute_hidden_dims"),
-    "resolve_hidden_dims": ("bioplausible.core.config", "resolve_hidden_dims"),
+    "LayerRole": ("bioplausible.config.unified", "LayerRole"),
+    "ModelConfig": ("bioplausible.config.unified", "ModelConfig"),
+    "compute_hidden_dims": ("bioplausible.config.unified", "compute_hidden_dims"),
+    "resolve_hidden_dims": ("bioplausible.config.unified", "resolve_hidden_dims"),
     "ComponentCategory": ("bioplausible.core.registry", "ComponentCategory"),
     "ComponentMetadata": ("bioplausible.core.registry", "ComponentMetadata"),
     "ComputeProfile": ("bioplausible.core.registry", "ComputeProfile"),

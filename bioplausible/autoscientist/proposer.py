@@ -5,12 +5,12 @@ Takes hypotheses from HypothesisReasoner and converts them into
 concrete experiment proposals with configurations.
 """
 
-import logging
 from collections.abc import Callable
 from enum import StrEnum
 
 from bioplausible.autoscientist.bridge import AutoScientistBridge, ExperimentProposal
 from bioplausible.autoscientist.reasoner import Hypothesis, HypothesisReasoner
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import (
     ComponentCategory,
     ComponentMetadata,
@@ -25,7 +25,7 @@ __all__ = [
     "ProposalObjective",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class ProposalObjective(StrEnum):

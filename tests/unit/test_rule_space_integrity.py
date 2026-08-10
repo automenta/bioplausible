@@ -4,8 +4,6 @@ Covers the validator, the phantom detection, the finder gate, the KB surface
 emitter, and the "no advertised dimension is a no-op" (R3) checks.
 """
 
-import tempfile
-
 import pytest
 import torch
 from hypothesis import given

@@ -6,7 +6,6 @@ Executes hyperparameter optimization trials and collects metrics.
 
 import contextlib
 import io
-import logging
 import os
 import shutil
 import tempfile
@@ -15,7 +14,9 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 import numpy as np
 import torch

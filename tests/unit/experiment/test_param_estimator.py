@@ -113,7 +113,9 @@ def test_param_estimate_memoizes_same_key(monkeypatch: pytest.FixtureRequest):
     ) -> int:
         nonlocal calls
         calls += 1
-        return original(_model_name, _config, input_dim=input_dim, output_dim=output_dim)
+        return original(
+            _model_name, _config, input_dim=input_dim, output_dim=output_dim
+        )
 
     monkeypatch.setattr(_ImportedEstimator, "estimate", staticmethod(counting_estimate))
     cfg = {"hidden_dim": 64, "num_layers": 1}
@@ -122,9 +124,11 @@ def test_param_estimate_memoizes_same_key(monkeypatch: pytest.FixtureRequest):
     assert estimate_param_count("backprop_mlp", cfg, input_dim=64, output_dim=10) > 0
     assert calls == cached  # second call reused the cache
     # A different config key is a distinct cache entry.
-    estimate_param_count("backprop_mlp", {"hidden_dim": 32}, input_dim=64, output_dim=10)
-    assert (
-        calls == cached + 1
-    ), "a fresh config must construct again (exactly one more call)"
+    estimate_param_count(
+        "backprop_mlp", {"hidden_dim": 32}, input_dim=64, output_dim=10
+    )
+    assert calls == cached + 1, (
+        "a fresh config must construct again (exactly one more call)"
+    )
     # Cleanup so later tests get a fresh cache of the real path.
     pe._PARAM_COUNT_CACHE.clear()

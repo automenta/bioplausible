@@ -29,7 +29,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.core.config import ModelConfig
+from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
@@ -44,11 +44,9 @@ from bioplausible.equitile.language.components import (
 if TYPE_CHECKING:
     from torch import Tensor
 
-
 # =============================================================================
 # Configuration
 # =============================================================================
-
 
 # (PositionalEncoding, TileAttention, TileFeedForward moved to components.py)
 
@@ -757,7 +755,7 @@ def create_large_lm(
     )
 
 
-import logging
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "EquiTileTransformerLayer",
@@ -774,7 +772,7 @@ __all__ = [
     "generate_text",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def generate_text(

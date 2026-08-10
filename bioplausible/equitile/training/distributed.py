@@ -36,7 +36,6 @@ Examples
 >>> stats = dist_model.train_step(X, y)
 """
 
-import logging
 import os
 import threading
 import time
@@ -48,6 +47,7 @@ from typing import TYPE_CHECKING
 import torch
 import torch.multiprocessing as mp
 
+from bioplausible.core.logging import get_logger
 from bioplausible.equitile.core.config import DistributedConfig, TileGrowthConfig
 from bioplausible.equitile.core.kernels import (
     compute_activity_update,
@@ -69,8 +69,7 @@ __all__ = [
 if TYPE_CHECKING:
     from bioplausible.equitile.core import EquiTile
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger()
 
 # =============================================================================
 # Configuration

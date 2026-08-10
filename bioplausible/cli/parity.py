@@ -24,11 +24,12 @@ import logging
 # equitile package must be imported explicitly.
 import bioplausible.equitile  # ruff: ignore[unused-import]
 import bioplausible.zoo  # ruff: ignore[unused-import]
+from bioplausible.core.logging import get_logger
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.domains.registry import SUPPORTED_TASKS, resolve_task
 from bioplausible.utils import seed_everything
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 _DEFAULT_TASK = "mnist"
 

@@ -8,7 +8,7 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.core.energy import EnergyTracker, _estimate_activation_sparsity
+from bioplausible.core.profiling import EnergyTracker, _estimate_activation_sparsity
 
 
 class TestActivationSparsity:

@@ -6,12 +6,11 @@ Single source of truth for activation lookup, approximate spectral norm
 
 Centralising these utilities removes ad-hoc ``match`` blocks and inline
 power-iteration code that had drifted out of sync between
-``core/model.py``, ``equitile/core/model.py`` and ``acceleration/_array_ops.py``.
+``core/model.py``, ``equitile/core/model.py`` and ``acceleration``.
 """
 
 from __future__ import annotations
 
-import logging
 from typing import Literal
 
 import numpy as np
@@ -19,7 +18,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 __all__ = [
     "ActivationName",
@@ -31,7 +32,6 @@ __all__ = [
     "spectral_normalize",
     "to_numpy",
 ]
-
 
 type ActivationName = Literal["silu", "relu", "tanh", "gelu", "mish"]
 
@@ -105,7 +105,7 @@ def approx_spectral_norm(weight: torch.Tensor, n_iter: int = 10) -> float:
 # ─── NumPy/CuPy array-library helpers ────────────────────────────────────
 #
 # These are the canonical implementations previously duplicated in
-# ``acceleration/_array_ops.py`` and ``acceleration/kernels.py``. Importing
+# ``acceleration/kernels.py``. Importing
 # ``backends`` lazily-locally would create a cycle so the cupy availability
 # flag is read inside each function.
 

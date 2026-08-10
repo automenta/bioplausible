@@ -3,7 +3,7 @@
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
-from bioplausible.core.config import (
+from bioplausible.config.unified import (
     ModelConfig,
     compute_hidden_dims,
     resolve_hidden_dims,

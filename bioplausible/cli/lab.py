@@ -3,11 +3,12 @@ CLI Lab for Verification and Inspection
 """
 
 import argparse
-import logging
 
 import torch
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device

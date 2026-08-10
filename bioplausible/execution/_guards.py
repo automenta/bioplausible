@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 from dataclasses import dataclass
 
 import torch
 
+from bioplausible.core.logging import get_logger
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt.eval_tiers import PatientLevel
 from bioplausible.zoo import get_model_spec
@@ -36,8 +36,7 @@ __all__ = [
     "logger",
     "suggest_hyperparam",
 ]
-logger = logging.getLogger(__name__)
-
+logger = get_logger()
 
 # =============================================================================
 # Safety
@@ -172,7 +171,6 @@ class SafetyWrapper:
 # =============================================================================
 # Algorithm-Specific Hyperparameter Constraints
 # =============================================================================
-
 
 ALGORITHM_FAMILY_CONSTRAINTS: dict[str, dict[str, object]] = {
     "baseline": {

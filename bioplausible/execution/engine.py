@@ -26,6 +26,7 @@ from pathlib import Path
 import optuna
 import torch
 
+from bioplausible.core.logging import get_logger
 from bioplausible.execution._state import DecisionLogger, ExperimentState, FailureRecord
 from bioplausible.execution.callbacks import ExecutionCallback
 from bioplausible.execution.dashboard import DASHBOARD
@@ -57,7 +58,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[logging.FileHandler("scientist.log")],
 )
-logger = logging.getLogger("AutoScientist")
+logger = get_logger("AutoScientist")
 
 DB_PATH = "bioplausible.db"
 

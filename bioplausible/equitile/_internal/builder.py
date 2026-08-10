@@ -28,16 +28,17 @@ Examples
 ... )
 """
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
 
+from bioplausible.core.logging import get_logger
+
 if TYPE_CHECKING:
     from bioplausible.equitile.core import EquiTile
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

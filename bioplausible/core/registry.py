@@ -4,7 +4,6 @@ Decorator-based registry for all components (models, propagators,
 optimizers, sparsity) enabling AutoScientist to query and compose
 intelligently."""
 
-import logging
 import pathlib
 from collections.abc import Callable
 from dataclasses import MISSING, dataclass, field, fields
@@ -12,8 +11,9 @@ from enum import Enum, StrEnum
 from typing import Literal, Protocol, TypeVar, cast
 
 from bioplausible.core.exceptions import IncompatibilityError as _IncompatibilityError
+from bioplausible.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 Component = TypeVar("Component")  # registered class or factory callable
 

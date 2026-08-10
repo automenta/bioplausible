@@ -6,9 +6,10 @@ SpikingSTDP model for the model zoo.
 """
 
 import math
+
+import snntorch as snn
 import torch
 from snntorch import surrogate
-import snntorch as snn
 from torch import nn
 
 from bioplausible.core.model_status import status_tag

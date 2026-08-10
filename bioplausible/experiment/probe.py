@@ -432,9 +432,9 @@ class CoreTrainerDriver:
                 extra=extra,
             )
         except Exception as exc:  # pragma: no cover  # best-effort persistence
-            import logging
+            from bioplausible.core.logging import get_logger
 
-            logging.getLogger(__name__).error(
+            get_logger().error(
                 "result_sink recording failed for %s/%s: %s", model, task, exc
             )
 

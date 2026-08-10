@@ -29,7 +29,6 @@ Example
 
 import hashlib
 import json
-import logging
 import pickle
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -39,11 +38,12 @@ from typing import TYPE_CHECKING
 import torch
 from torch.utils.data import DataLoader, Dataset, IterableDataset
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 if TYPE_CHECKING:
     from torch import Tensor
-
 
 # =============================================================================
 # Tokenizers

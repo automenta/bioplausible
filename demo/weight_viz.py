@@ -69,8 +69,9 @@ def matrix_frame(panel: DemoPanel, layer: str, frame: int) -> MatrixFrame | None
 
 def align_length(a: DemoPanel, b: DemoPanel, layer: str) -> int:
     """Number of available diff frames across both panels for ``layer``."""
-    return min(len(a.weight_history.get(layer, [])),
-               len(b.weight_history.get(layer, [])))
+    return min(
+        len(a.weight_history.get(layer, [])), len(b.weight_history.get(layer, []))
+    )
 
 
 def diff_frame(
@@ -159,7 +160,10 @@ class WeightMatrixAnimator:
             with ui.row():
                 play = ui.button("▶", on_click=lambda: self._toggle(play))
                 self.slider = ui.slider(
-                    min=0, max=self._frames() - 1, step=1, value=0,
+                    min=0,
+                    max=self._frames() - 1,
+                    step=1,
+                    value=0,
                     on_change=lambda e: self._apply(int(e.value)),
                 )
             self._heatmap(0, self.fig)

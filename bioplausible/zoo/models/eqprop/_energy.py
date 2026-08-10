@@ -4,7 +4,7 @@ All six fundamental eqprop models (``StandardEqProp``, ``DirectedEP``,
 ``FiniteNudgeEP``, ``LazyEqProp``, ``MomentumEquilibrium``,
 ``SparseEquilibrium``) share a single engine here: a deep MLP whose widths are
 ``config.hidden_dims`` (threaded from the sampled ``num_layers`` via
-:func:`bioplausible.core.config.compute_hidden_dims`), settled jointly to
+:func:`bioplausible.config.unified.compute_hidden_dims`), settled jointly to
 equilibrium via :func:`settle_activations_list`, and trained by energy-
 contrastive ("free" vs "nudged") updates — the same rule Scellier & Bengio
 described for layered networks.
@@ -27,7 +27,7 @@ import torch
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
-from bioplausible.core.config import ModelConfig
+from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model

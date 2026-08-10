@@ -9,19 +9,19 @@ A high-performance, scalable deep learning framework featuring:
 - Hardware-efficient design (GPU, TPU, edge accelerators)
 """
 
-import logging
 from typing import TYPE_CHECKING, Literal
 
 import torch
 from torch import nn
 
-from bioplausible.core.config import ModelConfig
+from bioplausible.config.unified import ModelConfig
 from bioplausible.core.exceptions import LoadStateError
+from bioplausible.core.logging import get_logger
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 from bioplausible.equitile._internal.state_types import EquiTileStateDict
 from bioplausible.equitile.core.config import EquiTileConfig
 from bioplausible.equitile.core.kernels import (
@@ -1261,6 +1261,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
             state["metadata"] = metadata
         # Use core checkpoint helper for standardized format
         from bioplausible.core.checkpoint import save_checkpoint
+
         save_checkpoint(path, state)
 
     def load_checkpoint(
@@ -1271,6 +1272,7 @@ class EquiTile(BioModel, EquiTileOptimizerMixin):
     ) -> dict | None:
         """Load model checkpoint from disk."""
         from bioplausible.core.checkpoint import load_checkpoint
+
         if device is None:
             device = next(self.parameters()).device
         state = load_checkpoint(path, map_location=device)

@@ -14,12 +14,13 @@ Scientific Rigor Features:
 - Reproducibility tracking
 """
 
-import logging
-
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+from bioplausible.core.logging import get_logger
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 __all__ = [
     "classify_evidence_level",
@@ -41,7 +42,7 @@ __all__ = [
     "robustness_summary",
     "train_model",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def progress_bar(current: int, total: int, width: int = 20) -> str:
@@ -81,7 +82,7 @@ def train_model(
     track_id=0,
     seed=0,
 ) -> list[float]:
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = create_optimizer(model, OptimizerConfig(name="adam", lr=lr))
     losses = []
     perfect_streak = 0  # Track consecutive 100% accuracy epochs
 

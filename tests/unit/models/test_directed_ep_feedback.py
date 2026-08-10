@@ -6,10 +6,9 @@ feedback layers are trainable (receive contrastive updates), and that feedback
 influences the deep-layer contrastive signal (the Plan 8 salvage hypothesis).
 """
 
-
 import torch
 
-from bioplausible.core.config import ModelConfig
+from bioplausible.config.unified import ModelConfig
 from bioplausible.zoo.models.eqprop import DirectedEP, StandardEqProp
 
 

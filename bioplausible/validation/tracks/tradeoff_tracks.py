@@ -20,7 +20,7 @@ Honest verdict:
 - If EqProp matches with acceptable trade-offs → CONTINUE with clear niche
 - If EqProp wins on key metric → VALIDATE value proposition
 """
-import logging
+
 import os
 import sys
 import time
@@ -31,6 +31,7 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.models.eqprop import (
     BackpropMLP,
@@ -43,7 +44,6 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-
 __all__ = [
     "count_parameters",
     "get_memory_usage",
@@ -52,7 +52,7 @@ __all__ = [
     "track_57_honest_tradeoff_analysis",
     "train_and_measure",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def get_memory_usage():

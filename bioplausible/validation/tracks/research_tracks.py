@@ -7,11 +7,11 @@ Validates new research directions:
 - Finite-Nudge EP (Large beta)
 """
 
-import logging
 import time
 
 import torch
 
+from bioplausible.core.logging import get_logger
 from bioplausible.zoo.models.eqprop import DirectedEP, FiniteNudgeEP, HolomorphicEP
 
 from ..notebook import TrackResult
@@ -22,7 +22,7 @@ __all__ = [
     "track_43_directed_ep",
     "track_44_finite_nudge_ep",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def _get_synthetic_data(n=32, input_dim=64, output_dim=10):

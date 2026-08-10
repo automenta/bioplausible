@@ -13,9 +13,7 @@ from weight_viz import (
 def _fake_panel(shape=(4, 3), n=5) -> DemoPanel:
     p = DemoPanel(trainer_config=default_trainer_config(model="eqprop_mlp"))
     p.weight_history["in.weight"] = [
-        torch.arange(n * 4 * 3, dtype=torch.float32)
-        .view(n, 4, 3)[i]
-        .contiguous()
+        torch.arange(n * 4 * 3, dtype=torch.float32).view(n, 4, 3)[i].contiguous()
         for i in range(n)
     ]
     return p

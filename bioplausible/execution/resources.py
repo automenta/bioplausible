@@ -5,8 +5,9 @@ This module provides system resource monitoring to prevent the autonomous
 agent from overloading the host machine (CPU, RAM, Disk, GPU).
 """
 
-import logging
 import shutil
+
+from bioplausible.core.logging import get_logger
 
 # psutil needed for resource monitoring
 
@@ -24,7 +25,7 @@ try:
 except ImportError:
     torch = None
 
-logger = logging.getLogger("AutoScientist")
+logger = get_logger("AutoScientist")
 
 
 class ResourceMonitor:

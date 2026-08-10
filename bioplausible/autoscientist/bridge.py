@@ -6,9 +6,9 @@ AutoScientist proposes experiments; the Bridge packages them as
 ``propsal_to_task`` configs that the Scientist can execute.
 """
 
-import logging
 from dataclasses import dataclass, field
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import ComponentCategory, Domain, Registry
 
 __all__ = [
@@ -16,7 +16,7 @@ __all__ = [
     "ExperimentProposal",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass(frozen=True, slots=True)

@@ -7,16 +7,19 @@ implementations scattered across the codebase.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Self
 
 import torch
-from torch import nn
 
-from bioplausible.core.checkpoint import Checkpoint, load_checkpoint_into_model, save_checkpoint
+from bioplausible.core.checkpoint import (
+    Checkpoint,
+    load_checkpoint_into_model,
+    save_checkpoint,
+)
+from bioplausible.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class CheckpointMixin:
@@ -68,7 +71,9 @@ class CheckpointMixin:
         }
 
         save_checkpoint(path, ckpt)
-        logger.info("Checkpoint saved: %s (epoch %d, step %d)", path, epoch, global_step)
+        logger.info(
+            "Checkpoint saved: %s (epoch %d, step %d)", path, epoch, global_step
+        )
 
     def load_checkpoint(
         self: Self,
@@ -94,12 +99,19 @@ class CheckpointMixin:
         if device is None:
             device = next(self.parameters()).device
 
-        checkpoint = load_checkpoint_into_model(path, self, strict=strict, map_location=device)
+        checkpoint = load_checkpoint_into_model(
+            path, self, strict=strict, map_location=device
+        )
 
         if hasattr(self, "_epoch"):
             self._epoch = checkpoint.get("epoch", 0)
         if hasattr(self, "_step_count"):
             self._step_count = checkpoint.get("global_step", 0)
 
-        logger.info("Checkpoint loaded: %s (epoch %d, step %d)", path, self._epoch, self._step_count)
+        logger.info(
+            "Checkpoint loaded: %s (epoch %d, step %d)",
+            path,
+            self._epoch,
+            self._step_count,
+        )
         return checkpoint

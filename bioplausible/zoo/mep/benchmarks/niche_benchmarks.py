@@ -7,7 +7,6 @@ Explores application domains where EP-based optimizers excel:
 3. Low-memory scenarios (O(1) memory vs O(depth) for backprop)
 """
 
-import logging
 import time
 
 import torch
@@ -16,6 +15,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Subset, TensorDataset
 from torchvision import datasets, transforms
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.mep.presets import smep
 
@@ -26,7 +26,7 @@ __all__ = [
     "logger",
     "run_all_niche_benchmarks",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 # ============================================================================
 # NICHE 1: REGRESSION (EP's Natural Domain)

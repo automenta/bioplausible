@@ -1,10 +1,12 @@
-import logging
 import sys
 import time
 from pathlib import Path
 
 import torch
 from torch import nn
+
+from bioplausible.core.logging import get_logger
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 from ..notebook import TrackResult
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
@@ -24,7 +26,7 @@ __all__ = [
     "track_20_transfer_learning",
     "track_21_continual_learning",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def track_20_transfer_learning(verifier) -> TrackResult:
@@ -175,7 +177,7 @@ def track_21_continual_learning(verifier) -> TrackResult:
     # 3. Train Task B with EWC regularization
     logger.info("\n[21c] Learning Task B with EWC regularization...")
     ewc_lambda = 1000.0  # EWC regularization strength
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = create_optimizer(model, OptimizerConfig(name="adam", lr=0.01))
 
     for epoch in range(verifier.epochs):
         optimizer.zero_grad()

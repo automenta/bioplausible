@@ -10,7 +10,6 @@ Building blocks:
 - ``FastEquiTileLayer`` — pre-norm transformer layer combining all three
 """
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -18,10 +17,12 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.logging import get_logger
+
 if TYPE_CHECKING:
     from torch import Tensor
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 __all__ = [
     "FastEquiTileLayer",
@@ -30,7 +31,6 @@ __all__ = [
     "SwiGLUFeedForward",
     "TileLocalAttention",
 ]
-
 
 # =============================================================================
 # Configuration

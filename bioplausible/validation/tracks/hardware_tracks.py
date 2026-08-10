@@ -1,4 +1,3 @@
-import logging
 import sys
 import time
 from pathlib import Path
@@ -6,6 +5,7 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
@@ -21,7 +21,6 @@ root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-
 __all__ = [
     "NoisyLoopedMLP",
     "QuantizedLoopedMLP",
@@ -31,7 +30,7 @@ __all__ = [
     "track_17_analog_photonics",
     "track_18_thermodynamic_dna",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def _sink_hardware_track(

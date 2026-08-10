@@ -24,7 +24,6 @@ python -m bioplausible.models.equitile.validate --quick
 
 import argparse
 import json
-import logging
 import sys
 import time
 from dataclasses import dataclass
@@ -32,6 +31,7 @@ from pathlib import Path
 
 import torch
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.equitile.lm import (
     FastLMConfig,
@@ -46,7 +46,7 @@ __all__ = [
     "logger",
     "main",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

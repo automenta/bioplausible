@@ -7,7 +7,6 @@ and trainer_args. Uses Lightning for distributed but provides a clean local-firs
 """
 
 import json
-import logging
 import os
 import tempfile
 import time
@@ -22,8 +21,9 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
 
-from bioplausible.core.energy import EnergyTracker
-from bioplausible.core.energy_model import EBMTrainer, EnergyModel
+from bioplausible.core.profiling import EnergyTracker
+from bioplausible.core.ebm import EBMTrainer, EnergyModel
+from bioplausible.core.logging import get_logger
 from bioplausible.core.losses import compute_accuracy, compute_loss
 from bioplausible.core.metrics import BaseMetrics
 from bioplausible.core.registry import (
@@ -39,7 +39,7 @@ from bioplausible.execution.callbacks import ExecutionCallback
 if TYPE_CHECKING:
     from bioplausible.domains import TaskProtocol
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class _LearningRuleOptimizer(Protocol):

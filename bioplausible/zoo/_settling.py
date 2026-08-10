@@ -6,7 +6,6 @@ Provides reusable helpers for the three common settling patterns:
 3. Implicit differentiation via ``EquilibriumFunction`` (autograd.Function)
 """
 
-import logging
 from collections.abc import (
     Callable,  # ruff: ignore[typing-only-standard-library-import]  (used in runtime-evaluated annotations; module has no `from __future__ import annotations`)
 )
@@ -16,7 +15,9 @@ import torch
 from torch import autograd, nn
 from torch.utils.checkpoint import checkpoint as _checkpoint
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 _DynamicsDict = dict[str, object]
 

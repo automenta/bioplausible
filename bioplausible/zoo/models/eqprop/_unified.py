@@ -24,7 +24,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from bioplausible.core.config import ModelConfig  # noqa: F401  (public re-export)
+from bioplausible.config.unified import ModelConfig
 from bioplausible.zoo.models.base import EqPropModel
 
 

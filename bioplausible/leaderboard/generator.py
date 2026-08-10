@@ -6,16 +6,17 @@ across standardized benchmarks.
 """
 
 import json
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "LeaderboardEntry",
     "LeaderboardGenerator",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

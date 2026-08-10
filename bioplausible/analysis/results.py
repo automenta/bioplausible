@@ -4,14 +4,15 @@ Analysis Core Logic
 Decoupled from UI to enable headless CLI usage.
 """
 
-import logging
 import sqlite3
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 from bioplausible.hyperopt.comparison import (
     ComparisonMetric,

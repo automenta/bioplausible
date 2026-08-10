@@ -5,7 +5,6 @@ EquiTile families. Runs on CPU with tiny models; plotting is validated by
 file existence, not pixel content, so the gate stays fast and headless-safe.
 """
 
-
 import numpy as np
 import pytest
 import torch
@@ -29,15 +28,11 @@ def test_energy_landscape_finite(energy_task):
     """The energy grid is finite and the origin matches a direct evaluation."""
     x, y = energy_task
     model = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 5))
-    land = compute_energy_landscape(
-        model, x, y, "mlp", "synthetic", radius=0.5, grid=9
-    )
+    land = compute_energy_landscape(model, x, y, "mlp", "synthetic", radius=0.5, grid=9)
     assert land.energy.shape == (9, 9)
     assert np.isfinite(land.energy).all()
     mid = land.energy.shape[0] // 2
-    direct = float(
-        nn.functional.cross_entropy(model(x[:64]), y[:64]).item()
-    )
+    direct = float(nn.functional.cross_entropy(model(x[:64]), y[:64]).item())
     assert abs(land.energy[mid, mid] - direct) < 1e-4, (
         "origin energy should equal a direct forward evaluation"
     )
@@ -68,9 +63,7 @@ def test_energy_landscape_eqprop(energy_task):
     )
     assert np.isfinite(land.energy).all()
     mid = land.energy.shape[0] // 2
-    direct = float(
-        nn.functional.cross_entropy(model(x[:64]), y[:64]).item()
-    )
+    direct = float(nn.functional.cross_entropy(model(x[:64]), y[:64]).item())
     assert abs(land.energy[mid, mid] - direct) < 0.5, (
         "origin energy should be within the eqprop equilibrium basin of a "
         f"direct evaluation (got {land.energy[mid, mid]:.3f} vs {direct:.3f})"
@@ -93,9 +86,7 @@ def test_energy_landscape_plot_png(energy_task, tmp_path):
     """Plotting writes a valid PNG file."""
     x, y = energy_task
     model = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 5))
-    land = compute_energy_landscape(
-        model, x, y, "mlp", "synthetic", radius=0.5, grid=9
-    )
+    land = compute_energy_landscape(model, x, y, "mlp", "synthetic", radius=0.5, grid=9)
     out = plot_energy_landscape(land, tmp_path)
     assert out.exists()
     assert out.suffix == ".png"
@@ -106,9 +97,7 @@ def test_energy_landscape_npz_roundtrip(energy_task, tmp_path):
     """The .npz archive round-trips for downstream analysis."""
     x, y = energy_task
     model = nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 5))
-    land = compute_energy_landscape(
-        model, x, y, "mlp", "synthetic", radius=0.5, grid=5
-    )
+    land = compute_energy_landscape(model, x, y, "mlp", "synthetic", radius=0.5, grid=5)
     npz = land.save(tmp_path / "land.npz")
     data = np.load(npz)
     assert data["energy"].shape == (5, 5)

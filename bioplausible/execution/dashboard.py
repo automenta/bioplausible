@@ -7,7 +7,6 @@ trial updates, resource usage, and historical performance logs.
 """
 
 import datetime
-import logging
 import shutil
 
 import psutil
@@ -19,6 +18,8 @@ from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 from rich.table import Table
 from rich.text import Text
 
+from bioplausible.core.logging import get_logger
+
 __all__ = [
     "DASHBOARD",
     "Dashboard",
@@ -29,7 +30,7 @@ try:
 except ImportError:
     torch = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class Dashboard:

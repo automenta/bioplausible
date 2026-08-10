@@ -17,13 +17,14 @@ Examples
 >>> exporter.to_torchscript("model.pt")
 """
 
-import logging
 import pathlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
 from torch import nn
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "DeploymentChecker",
@@ -39,7 +40,7 @@ __all__ = [
 if TYPE_CHECKING:
     from bioplausible.equitile.core import EquiTile
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

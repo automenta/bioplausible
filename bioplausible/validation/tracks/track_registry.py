@@ -5,8 +5,9 @@ Aggregates all track definitions from various modules into a single lookup dicti
 This allows the Verifier to easily access all available experiments.
 """
 
-import logging
 from collections.abc import Callable
+
+from bioplausible.core.logging import get_logger
 
 # Import all KEPT track modules (Phase 4 deleted: advanced_tracks, analysis_tracks,
 # engine_validation_tracks, enhanced_validation_tracks, framework_validation,
@@ -24,7 +25,7 @@ from . import (
     tradeoff_tracks,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 # Initialize registry
 ALL_TRACKS: dict[int, Callable] = {}

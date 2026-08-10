@@ -18,7 +18,6 @@ Example
 
 import hashlib
 import json
-import logging
 import os
 import sys
 from dataclasses import asdict, dataclass
@@ -26,6 +25,8 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "EnvironmentInfo",
@@ -36,7 +37,7 @@ __all__ = [
     "logger",
     "set_reproducible_mode",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

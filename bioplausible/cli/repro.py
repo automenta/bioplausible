@@ -22,9 +22,10 @@ import logging
 
 import torch
 
+from bioplausible.core.logging import get_logger
 from bioplausible.utils import capture_environment, deps_hash, seed_everything
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 # Model families exercised by the gate. Keep this aligned with the benchmark
 # harness (Sprint 1.3) so one tiny synthetic task covers every learning rule.
@@ -62,7 +63,7 @@ def _instantiate(  # ruff: ignore[too-many-return-statements]  (one return per r
         return model.to(device)
 
     if model_name == "fa":
-        from bioplausible.core.config import ModelConfig
+        from bioplausible.config.unified import ModelConfig
         from bioplausible.zoo.models.fa import StandardFA
 
         cfg = ModelConfig(

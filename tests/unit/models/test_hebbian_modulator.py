@@ -3,7 +3,9 @@
 Verifies that the modulator is a graded error signal (not binary)
 and that hidden layers receive error-modulated updates.
 """
+
 import torch
+
 from bioplausible.zoo.models.hebbian import ThreeFactorHebbian
 
 
@@ -22,8 +24,9 @@ def test_modulator_is_graded_not_binary():
 
     # Check it's not binary (all values should not be just +1 or -1)
     unique_vals = torch.unique(modulator)
-    assert len(unique_vals) > 2, \
+    assert len(unique_vals) > 2, (
         f"Modulator should be graded (continuous), got {len(unique_vals)} unique values"
+    )
 
     # Modulator should sum to ~0 across classes (one-hot - softmax)
     assert modulator.abs().sum() > 0, "Modulator should be non-trivial"
@@ -38,8 +41,9 @@ def test_hidden_weights_change_with_error():
     w_before = model.layers[0].weight.data.clone()
     model.train_step(x, y)
 
-    assert not torch.allclose(w_before, model.layers[0].weight.data), \
+    assert not torch.allclose(w_before, model.layers[0].weight.data), (
         "Hidden layer weights should change with error-modulated update"
+    )
 
 
 def test_modulator_correlates_with_error():
@@ -62,8 +66,9 @@ def test_modulator_correlates_with_error():
     correct_mod = y_onehot_correct - pred_probs
 
     # Error modulator should have larger magnitude than correct modulator
-    assert error_mod.abs().sum() > correct_mod.abs().sum(), \
+    assert error_mod.abs().sum() > correct_mod.abs().sum(), (
         "Error signal should produce larger modulator than correct predictions"
+    )
 
 
 if __name__ == "__main__":

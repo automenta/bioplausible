@@ -23,13 +23,14 @@ import json
 import logging
 from pathlib import Path
 
+from bioplausible.core.logging import get_logger
 from bioplausible.hyperopt.frontier import (
     RulePoint,
     cost_of_plausibility,
     pareto_frontier,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 __all__ = ["load_report_points", "run_frontier_report"]
 

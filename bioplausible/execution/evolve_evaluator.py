@@ -13,6 +13,7 @@ import logging
 import pathlib
 import traceback
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import register_model
 from bioplausible.hyperopt.experiment import run_single_trial_task
 
@@ -22,7 +23,7 @@ __all__ = [
     "logger",
 ]
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("evolve_evaluator")
+logger = get_logger("evolve_evaluator")
 
 
 def load_candidate_model(code_path: str):

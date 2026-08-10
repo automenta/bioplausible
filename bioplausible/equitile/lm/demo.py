@@ -36,9 +36,9 @@ Resume training:
         --task shakespeare \
         --resume checkpoints/checkpoint_500.pt
 """
+
 import argparse
 import json
-import logging
 import sys
 import time
 from dataclasses import dataclass
@@ -46,6 +46,7 @@ from pathlib import Path
 
 import torch
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.equitile.lm.data import (
     CharacterTokenizer,
@@ -66,12 +67,10 @@ from bioplausible.equitile.lm.training import (
     TrainingMetrics,
 )
 
-logger = logging.getLogger(__name__)
-
+logger = get_logger()
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-
 
 # =============================================================================
 # Real-time Metrics Dashboard

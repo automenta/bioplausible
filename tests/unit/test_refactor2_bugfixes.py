@@ -673,7 +673,7 @@ def test_energy_profile_is_frozen_with_slots():
     """EnergyProfile is a value object — must be frozen+slots."""
     import dataclasses
 
-    from bioplausible.core.energy import EnergyProfile
+    from bioplausible.core.profiling import EnergyProfile
 
     assert dataclasses.is_dataclass(EnergyProfile)
     assert EnergyProfile.__dataclass_params__.frozen

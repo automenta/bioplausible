@@ -1,6 +1,6 @@
-import logging
 import random
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import Registry
 from bioplausible.execution._guards import (
     check_ablation_needed,
@@ -22,7 +22,7 @@ __all__ = [
     "ExecutionStrategy",
     "logger",
 ]
-logger = logging.getLogger("AutoScientist")
+logger = get_logger("AutoScientist")
 
 
 class _ModelSpec:

@@ -26,7 +26,7 @@ import pytest
 import torch
 from torch import nn, optim
 
-from bioplausible.core.energy import count_flops
+from bioplausible.core.profiling import count_flops
 from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ def _instantiate(model_name: str, input_dim: int, output_dim: int, device: str, 
         return model.to(device)
 
     if model_name == "fa":
-        from bioplausible.core.config import ModelConfig
+        from bioplausible.config.unified import ModelConfig
         from bioplausible.zoo.models.fa import StandardFA
 
         cfg = ModelConfig(

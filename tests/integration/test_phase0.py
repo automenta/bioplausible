@@ -5,7 +5,7 @@ import torch
 from omegaconf import OmegaConf
 
 from bioplausible.config.schema import RunConfig
-from bioplausible.core.energy import EnergyTracker
+from bioplausible.core.profiling import EnergyTracker
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import run_from_runconfig as run_from_config
 

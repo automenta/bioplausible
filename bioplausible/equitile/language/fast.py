@@ -11,7 +11,6 @@ model used in benchmarks, see:
 `bioplausible.equitile.lm.fast_lm`
 """
 
-import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +20,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.logging import get_logger
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.equitile.language.optimized import (
     LMEquiTileConfig,
@@ -34,7 +34,7 @@ __all__ = [
     "FastLMEquiTile",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

@@ -15,7 +15,6 @@ Metrics:
 """
 
 import json
-import logging
 import pathlib
 import random
 from dataclasses import asdict, dataclass
@@ -26,6 +25,7 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from torchvision import datasets, transforms
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.mep.optimizers import CompositeOptimizer
 from bioplausible.zoo.mep.optimizers.strategies.constraint import SpectralConstraint
@@ -54,7 +54,7 @@ __all__ = [
     "save_results",
     "train_epoch",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

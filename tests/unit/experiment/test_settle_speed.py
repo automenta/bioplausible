@@ -17,9 +17,8 @@ import logging
 import pytest
 import torch
 
-import bioplausible.zoo  # noqa: F401  (model registration side effect)
-
-from bioplausible.core.config import ModelConfig
+import bioplausible.zoo  # ruff: ignore[unused-import]  (model registration side effect)
+from bioplausible.config.unified import ModelConfig
 
 # Silence the probe-sweep logger for the *duration of this module's tests* only.
 # A module-scope ``logging.disable`` would leak into every other test in the
@@ -36,18 +35,26 @@ def _silence_settle_logs():
     logging.getLogger().setLevel(prev_level)
 
 
-from bioplausible.core.construction import construct_model  # noqa: E402
-from bioplausible.core.registry import (  # noqa: E402
+from bioplausible.core.construction import (
+    construct_model,
+)
+from bioplausible.core.registry import (  # ruff: ignore[module-import-not-at-top-of-file]
     ComponentCategory,
     Registry,
 )
-from bioplausible.zoo._settling import settle_activations_list  # noqa: E402
+from bioplausible.zoo._settling import (
+    settle_activations_list,
+)
+from scripts import (
+    broad_sweep as sweep,
+)
 
-from scripts import broad_sweep as sweep  # noqa: E402
 
-
-def _contractive(activations: list[torch.Tensor], beta: float = 0.0,
-                 target: torch.Tensor | None = None) -> list[torch.Tensor]:
+def _contractive(
+    activations: list[torch.Tensor],
+    beta: float = 0.0,
+    target: torch.Tensor | None = None,
+) -> list[torch.Tensor]:
     del beta, target
     return [activations[0]] + [torch.tanh(a) for a in activations[1:]]
 
@@ -148,10 +155,18 @@ def test_eqprop_engine_fast_settle():
     settled forwards; actual speed is verified in GPU tests.
     """
     cls = Registry.get(ComponentCategory.MODEL, "eqprop")
-    model = cls(config=ModelConfig(
-        name="eqprop", input_dim=10, output_dim=5, hidden_dims=[20],
-        max_steps=10, learning_rate=1e-3, beta=0.3, use_spectral_norm=True,
-    ))
+    model = cls(
+        config=ModelConfig(
+            name="eqprop",
+            input_dim=10,
+            output_dim=5,
+            hidden_dims=[20],
+            max_steps=10,
+            learning_rate=1e-3,
+            beta=0.3,
+            use_spectral_norm=True,
+        )
+    )
     # Deep eqprop sets an activations list, not a single hidden state.
     assert hasattr(model, "forward_dynamics")
     assert hasattr(model, "train_step")

@@ -52,14 +52,11 @@ def test_truncated_epoch_surfaces_in_metrics_extra() -> None:
     trainer = CoreTrainer(_cfg(max_epoch_time=0.0))
     trainer.fit()
     # Unlimited (0.0) — nothing truncated.
-    assert not any(
-        m.extra.get("epoch_time_budget_stopped") for m in trainer.history
-    )
+    assert not any(m.extra.get("epoch_time_budget_stopped") for m in trainer.history)
 
 
 def test_truncation_surfaces_through_driver(monkeypatch) -> None:
     """The probe driver marks a budget-truncated run for sweep pruning."""
-    from bioplausible.core.trainer import TrainingMetrics
     from bioplausible.experiment.probe import ProbeDriver, run_probe
 
     class FakeDriver(ProbeDriver):
@@ -86,7 +83,6 @@ def test_truncation_surfaces_through_driver(monkeypatch) -> None:
 def test_sweep_marks_truncated_run_as_defect(monkeypatch) -> None:
     """The sweep flags a budget-truncated run as a defect (excluded from ok)."""
     import scripts.broad_sweep as sweep
-    from bioplausible.core.registry import ComponentCategory, Domain
 
     fake_runs: list[dict[str, object]] = []
     recorded: list[dict[str, object]] = []
@@ -119,4 +115,3 @@ def test_sweep_marks_truncated_run_as_defect(monkeypatch) -> None:
     assert n_ok == 0
     assert runs[0]["ok"] is False
     assert "epoch_time_truncated" in runs[0]["defects"]
-

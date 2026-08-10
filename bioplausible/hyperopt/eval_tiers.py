@@ -5,9 +5,10 @@ Provides patience/depth control for hyperparameter optimization that scales
 epochs, model sizes, and trial counts based on available compute time.
 """
 
-import logging
 from dataclasses import dataclass
 from enum import Enum
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "EVALUATION_TIERS",
@@ -18,7 +19,7 @@ __all__ = [
     "logger",
     "print_evaluation_summary",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class PatientLevel(Enum):

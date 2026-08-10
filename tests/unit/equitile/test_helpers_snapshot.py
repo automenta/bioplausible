@@ -166,7 +166,7 @@ def test_propagate_errors_backward_snapshot() -> None:
     tile_errors = model._propagate_errors_backward(output_delta)
 
     # Output tile error = output_delta slice
-    assert 2 in tile_errors  # ruff: ignore[magic-value-comparison] -- magic tile id
+    assert 2 in tile_errors
     expected_out = torch.tensor([[0.31460840, -0.12759131], [-0.31534389, 0.12788957]])
     torch.testing.assert_close(tile_errors[2], expected_out, rtol=1e-5, atol=1e-7)
 
@@ -367,4 +367,4 @@ def test_train_step_pc_dispatch() -> None:
     assert stats["mode"] == "pc"
     assert stats["loss"] == pytest.approx(0.6933987140655518, abs=1e-6)
     assert stats["accuracy"] == pytest.approx(0.5, abs=1e-6)
-    assert stats["active_tiles"] == 2  # ruff: ignore[magic-value-comparison] -- expected count
+    assert stats["active_tiles"] == 2

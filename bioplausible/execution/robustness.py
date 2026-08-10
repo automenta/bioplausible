@@ -6,7 +6,6 @@ Evaluates models against noise injection, input perturbation, out-of-distributio
 data, and adversarial attacks.
 """
 
-import logging
 from pathlib import Path
 
 import matplotlib
@@ -15,6 +14,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device
 from bioplausible.domains import create_task
@@ -63,7 +63,7 @@ def create_model(
 
 matplotlib.use("Agg")
 
-logger = logging.getLogger("Robustness")
+logger = get_logger("Robustness")
 
 
 class RobustnessEvaluator:

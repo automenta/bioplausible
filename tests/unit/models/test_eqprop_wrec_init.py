@@ -1,7 +1,8 @@
 """Tests for EqProp recurrent weight initialization (Plan 8 Track A3)."""
 
 import torch
-from bioplausible.core.config import ModelConfig
+
+from bioplausible.config.unified import ModelConfig
 from bioplausible.zoo.models.eqprop import StandardEqProp
 
 

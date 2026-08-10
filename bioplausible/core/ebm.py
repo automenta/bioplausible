@@ -13,11 +13,12 @@ linearized gradient of the energy at free-phase equilibrium.
 
 from __future__ import annotations
 
-import logging
 from typing import Protocol, TypeIs, runtime_checkable
 
 import torch
 from torch import nn
+
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "EBMTrainer",
@@ -25,7 +26,7 @@ __all__ = [
     "is_energy_model",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @runtime_checkable

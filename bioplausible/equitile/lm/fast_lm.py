@@ -38,14 +38,14 @@ Example
 >>> logits = model(input_ids)
 """
 
-import logging
 from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.core.config import ModelConfig
+from bioplausible.config.unified import ModelConfig
+from bioplausible.core.logging import get_logger
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
@@ -54,11 +54,10 @@ from bioplausible.equitile.lm.components import (
     FastLMConfig,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 if TYPE_CHECKING:
     from torch import Tensor
-
 
 # =============================================================================
 # FastLMEquiTile Model

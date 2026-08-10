@@ -12,14 +12,15 @@ from dataclasses import dataclass
 from typing import Protocol, Self
 
 import torch
-from torch import nn
 
 
 class _HasTrainStep(Protocol):
     """Protocol for objects that implement _forward_train."""
 
     @abstractmethod
-    def _forward_train(self, x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, dict]: ...
+    def _forward_train(
+        self, x: torch.Tensor, y: torch.Tensor
+    ) -> tuple[torch.Tensor, dict]: ...
 
     def compute_loss(self, logits: torch.Tensor, y: torch.Tensor) -> torch.Tensor: ...
 

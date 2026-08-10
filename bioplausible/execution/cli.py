@@ -8,9 +8,9 @@ It supports two main modes:
 """
 
 import argparse
-import logging
 
 from bioplausible.analysis.reporting import ReportOrchestrator
+from bioplausible.core.logging import get_logger
 from bioplausible.execution.engine import ExecutionEngine
 
 __all__ = [
@@ -19,7 +19,7 @@ __all__ = [
     "main_reporter",
     "main_scientist",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def main() -> None:

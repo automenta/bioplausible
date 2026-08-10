@@ -96,9 +96,7 @@ def test_pepita_spatial_input_flatten():
 
 def test_forward_forward_spatial_input_flatten():
     """ForwardForwardNet must accept [B, C, H, W] input (demo/CoreTrainer path)."""
-    model = ForwardForwardNet(
-        input_dim=64, hidden_dim=16, output_dim=10, num_layers=2
-    )
+    model = ForwardForwardNet(input_dim=64, hidden_dim=16, output_dim=10, num_layers=2)
     x = torch.randn(4, 1, 8, 8)
     y = torch.randint(0, 10, (4,))
     out = model.forward(x)

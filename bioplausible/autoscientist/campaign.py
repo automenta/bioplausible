@@ -11,7 +11,6 @@ into a continuous discovery loop with:
 """
 
 import json
-import logging
 import os
 import sys
 import time
@@ -21,6 +20,7 @@ from pathlib import Path
 from bioplausible.autoscientist.proposer import ExperimentProposer
 from bioplausible.autoscientist.reasoner import HypothesisReasoner
 from bioplausible.core.exceptions import KnowledgeBaseError
+from bioplausible.core.logging import get_logger
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.knowledge import KnowledgeBase, KnowledgeEntry
 
@@ -28,7 +28,7 @@ __all__ = [
     "AutoScientistCampaign",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class AutoScientistCampaign:

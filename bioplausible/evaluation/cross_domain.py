@@ -14,11 +14,11 @@ Integrates with KnowledgeBase for persistent storage and LeaderboardGenerator.
 """
 
 import json
-import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device
 from bioplausible.domains import (
@@ -34,7 +34,7 @@ from bioplausible.evaluation.base import BenchmarkResult
 from bioplausible.knowledge import KnowledgeBase, KnowledgeEntry
 from bioplausible.leaderboard.generator import LeaderboardEntry, LeaderboardGenerator
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 @dataclass

@@ -1,10 +1,11 @@
-import logging
 import time
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import torch
+
+from bioplausible.core.logging import get_logger
 
 from .notebook import VerificationNotebook
 from .tracks import track_registry
@@ -13,7 +14,7 @@ __all__ = [
     "Verifier",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class Verifier:

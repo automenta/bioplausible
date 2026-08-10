@@ -12,11 +12,10 @@ but callers should prefer the accessors below so the registry can evolve
 without breaking direct-dict manipulation.
 """
 
-import logging
-
 from omegaconf import OmegaConf
 
 from bioplausible.config.schema import ExperimentConfig
+from bioplausible.core.logging import get_logger
 
 __all__ = [
     "DEFAULT_CONFIGS",
@@ -26,7 +25,7 @@ __all__ = [
 ]
 DEFAULT_CONFIGS: dict[str, ExperimentConfig] = {}
 
-_logger = logging.getLogger(__name__)
+_logger = get_logger()
 
 
 def register_default_config(name: str, overrides: dict) -> None:

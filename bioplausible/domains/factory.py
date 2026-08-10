@@ -5,11 +5,10 @@ Moved from ``hyperopt/tasks.py`` during Phase 3.1 merge.
 All concrete task classes now live in ``domains/``.
 """
 
-import logging
-
 import torch
 from torch import nn
 
+from bioplausible.core.logging import get_logger
 from bioplausible.domains.trainer import TaskProtocol, _TaskTrainer
 
 __all__ = [
@@ -18,7 +17,7 @@ __all__ = [
     "logger",
 ]
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class CharNGramTask:

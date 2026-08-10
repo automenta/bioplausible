@@ -1,5 +1,4 @@
 import json
-import logging
 import sqlite3
 
 import numpy as np
@@ -8,11 +7,13 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeRegressor, export_text
 
+from bioplausible.core.logging import get_logger
+
 __all__ = [
     "KnowledgebaseMetamodel",
     "logger",
 ]
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 class KnowledgebaseMetamodel:

@@ -6,10 +6,11 @@ analysis paths with idiomatic Lightning hooks.
 """
 
 import json
-import logging
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from bioplausible.core.logging import get_logger
+
+logger = get_logger()
 
 import pytorch_lightning as pl
 import torch

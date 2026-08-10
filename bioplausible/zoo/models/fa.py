@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
-from bioplausible.core.config import (
+from bioplausible.config.unified import (
     ModelConfig,
     _build_model_config,
     resolve_hidden_dims,
