@@ -35,9 +35,9 @@ from bioplausible.equitile.lm.fast_lm import (
 )
 from bioplausible.equitile.lm.training import (
     LMTrainer,
+    LMTrainingMetrics,
     LRScheduler,
     TrainingConfig,
-    TrainingMetrics,
 )
 
 pytestmark = pytest.mark.gpu
@@ -462,12 +462,12 @@ class TestTrainingConfig:
         assert config.device == expected
 
 
-class TestTrainingMetrics:
-    """Tests for TrainingMetrics."""
+class TestLMTrainingMetrics:
+    """Tests for LMTrainingMetrics."""
 
     def test_metrics_update(self):
         """Test metrics update."""
-        metrics = TrainingMetrics()
+        metrics = LMTrainingMetrics()
 
         metrics.update(
             train_loss=2.0,
@@ -481,7 +481,7 @@ class TestTrainingMetrics:
 
     def test_metrics_summary(self):
         """Test metrics summary."""
-        metrics = TrainingMetrics()
+        metrics = LMTrainingMetrics()
 
         metrics.update(train_loss=2.0, val_loss=2.5)
         metrics.update(train_loss=1.5, val_loss=2.0)

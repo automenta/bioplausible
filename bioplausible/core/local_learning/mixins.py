@@ -6,7 +6,7 @@ Generic weight/importance/full optimizer split. Moved from
 ``importance_lr``, and ``mode`` under ``self.equitile_config``.
 """
 
-from typing import TYPE_CHECKING
+from typing import Protocol
 
 import torch
 from torch import nn
@@ -14,10 +14,22 @@ from torch import nn
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 __all__ = [
+    "LocalLearningConfigProtocol",
     "MultiOptimizerMixin",
 ]
-if TYPE_CHECKING:
-    from bioplausible.equitile.core.config import EquiTileConfig
+
+
+class LocalLearningConfigProtocol(Protocol):
+    """Minimal config surface the optimizer mixin depends on.
+
+    Keeps ``core/*`` free of the ``equitile`` package at type-check time: any
+    consumer (EquiTile or a new zoo algorithm) supplies a config exposing
+    these three fields.
+    """
+
+    learning_rate: float
+    importance_lr: float
+    mode: str
 
 
 class MultiOptimizerMixin:
@@ -28,7 +40,7 @@ class MultiOptimizerMixin:
     W_out: nn.Linear
     tile_importance: nn.Parameter
     edge_importance: nn.Parameter
-    equitile_config: EquiTileConfig
+    equitile_config: LocalLearningConfigProtocol
     _optim_io: torch.optim.Optimizer
     _optim_importance: torch.optim.Optimizer
     _optim_full: torch.optim.Optimizer | None

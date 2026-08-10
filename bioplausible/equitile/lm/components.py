@@ -37,9 +37,9 @@ __all__ = [
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class FastLMConfig:
-    """Configuration for FastLMEquiTile.
+    """Configuration for FastLMEquiTile (frozen; REFACTOR.md §1 unified pattern).
 
     Vocabulary
     ----------

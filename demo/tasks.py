@@ -9,10 +9,11 @@ project's domain layer. All loaders are GPU-transfer-ready through the project
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 import torch
+
+from bioplausible.data.vision import generate_toy_points
 
 _MNIST_CACHE: tuple[torch.Tensor, torch.Tensor] | None = None
 _CIFAR_CACHE: tuple[torch.Tensor, torch.Tensor] | None = None
@@ -40,29 +41,17 @@ class TaskSpec:
 
 
 def _xor(batch: int, device: str) -> tuple[torch.Tensor, torch.Tensor]:
-    x = torch.randint(0, 2, (batch, 2), device=device).float()
-    y = (x[:, 0] != x[:, 1]).long()
+    x, y = generate_toy_points("xor", batch, device=device)
     return x, y
 
 
 def _spiral(batch: int, device: str) -> tuple[torch.Tensor, torch.Tensor]:
-    n = batch
-    theta = torch.linspace(0, 4 * math.pi, n, device=device)
-    r = torch.linspace(0.1, 1.0, n, device=device)
-    x0 = r * torch.cos(theta) + torch.randn(n, device=device) * 0.05
-    x1 = r * torch.sin(theta) + torch.randn(n, device=device) * 0.05
-    x = torch.stack([x0, x1], dim=1)
-    y = (theta > 2 * math.pi).long()
+    x, y = generate_toy_points("spiral", batch, device=device)
     return x, y
 
 
 def _circles(batch: int, device: str) -> tuple[torch.Tensor, torch.Tensor]:
-    a = torch.rand(batch, device=device)
-    b = torch.rand(batch, device=device)
-    r = torch.where(a < 0.5, 0.2, 0.8) + torch.randn(batch, device=device) * 0.03
-    th = 2 * math.pi * b
-    x = torch.stack([r * torch.cos(th), r * torch.sin(th)], dim=1)
-    y = (r > 0.5).long()
+    x, y = generate_toy_points("circles", batch, device=device)
     return x, y
 
 

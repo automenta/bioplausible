@@ -48,7 +48,7 @@ from .fast_lm import (
     create_fast_lm_small,
     create_fast_lm_tiny,
 )
-from .training import LMTrainer, TrainingConfig, TrainingMetrics, train_model
+from .training import LMTrainer, LMTrainingMetrics, TrainingConfig, train_model
 
 __all__ = [
     # Model
@@ -78,6 +78,6 @@ __all__ = [
     # Training
     "LMTrainer",
     "TrainingConfig",
-    "TrainingMetrics",
+    "LMTrainingMetrics",
     "train_model",
 ]

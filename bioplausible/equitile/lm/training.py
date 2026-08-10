@@ -63,8 +63,8 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class TrainingMetrics:
-    """Training metrics tracker.
+class LMTrainingMetrics:
+    """Training metrics tracker for LM training.
 
     Tracks and aggregates training statistics for logging and visualization.
     """
@@ -161,7 +161,7 @@ class TrainingMetrics:
             json.dump(data, f, indent=2)
 
     @classmethod
-    def load(cls, path: str) -> TrainingMetrics:
+    def load(cls, path: str) -> LMTrainingMetrics:
         """Load metrics from file."""
         with Path(path).open(encoding="utf-8") as f:
             data = json.load(f)
@@ -316,7 +316,7 @@ class LMTrainer:
         )
 
         # Metrics
-        self.metrics = TrainingMetrics()
+        self.metrics = LMTrainingMetrics()
 
         # Callbacks
         self.on_step_callbacks: list[Callable] = []
@@ -573,7 +573,7 @@ class LMTrainer:
         train_loader: DataLoader,
         val_loader: DataLoader | None = None,
         resume_from: str | None = None,
-    ) -> TrainingMetrics:
+    ) -> LMTrainingMetrics:
         """Train the model.
 
         Parameters
@@ -587,7 +587,7 @@ class LMTrainer:
 
         Returns
         -------
-        TrainingMetrics
+        LMTrainingMetrics
             Training metrics
         """
         # Resume if requested
@@ -750,7 +750,7 @@ def train_model(
     tokenizer=None,
     config: TrainingConfig | None = None,
     resume_from: str | None = None,
-) -> TrainingMetrics:
+) -> LMTrainingMetrics:
     """Convenience function to train a model.
 
     Parameters
@@ -770,7 +770,7 @@ def train_model(
 
     Returns
     -------
-    TrainingMetrics
+    LMTrainingMetrics
         Training metrics
     """
     if config is None:

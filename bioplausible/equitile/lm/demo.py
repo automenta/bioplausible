@@ -63,8 +63,8 @@ from bioplausible.equitile.lm.fast_lm import (
 )
 from bioplausible.equitile.lm.training import (
     LMTrainer,
+    LMTrainingMetrics,
     TrainingConfig,
-    TrainingMetrics,
 )
 
 logger = get_logger()
@@ -500,7 +500,7 @@ def create_dataset(config: DemoConfig):
 
 def run_training(
     config: DemoConfig,
-) -> tuple[FastLMEquiTile, TrainingMetrics, Tokenizer]:
+) -> tuple[FastLMEquiTile, LMTrainingMetrics, Tokenizer]:
     """Run training with the given configuration."""
     logger.info("=" * 60)
     logger.info("FastLMEquiTile Training Demo")

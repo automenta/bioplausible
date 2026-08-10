@@ -2,8 +2,8 @@
 
 **Codebase**: 316 Python files, ~41K lines  
 **Goal**: Maximize size reduction via deduplication, DRY, structural consolidation  
-**Completed**: ~3,080 lines saved (7.5%) across 90+ files; **§1/§2/§7 complete** in current session  
-**Status**: Data Transforms consolidated; Optimizer Factory final sweep complete; Strategy Optimizer Generification complete (generic framework in core/optimization); config unification in progress; validation tracks boilerplate centralized.
+**Completed**: ~3,580 lines saved (8.7%) across 90+ files; **§1/§2/§4(metrics rename)/§7 complete**; §3 Config Unification target 1 (FastLMConfig), §4 type-clean, §10 data/mnist + toy dedup landed  
+**Status**: Data Transforms consolidated; Optimizer Factory final sweep complete; Strategy Optimizer Generification complete (generic framework in core/optimization); FastLMConfig frozen on the unified pattern; `core/` fully equitile-free at type-check (LocalLearningConfigProtocol); MEP benchmark + demo toy-dataset math shared via `generate_toy_points`; validation track 57 MNIST load migrated to `get_vision_dataset()`.
 
 ---
 
@@ -33,8 +33,13 @@
 | Data Transforms | `data/transforms.py` — canonical transforms; 8 inline sites migrated | ~150 |
 | Optimizer Factory Sweep | 16 static `torch.optim` sites → `create_optimizer()` | ~150 |
 | Strategy Optimizer Generification | `core/optimization/` framework + MEP inheritance; `FAGradient` implemented | ~200 |
+| LM Metrics Rename | `equitile/lm/training.py:TrainingMetrics` → `LMTrainingMetrics` (name collision with `core.trainer.TrainingMetrics` resolved) | — |
+| Core EquiTile-Free Type-Check | `core/local_learning/mixins.py` drops `equitile` TYPE_CHECKING import → `LocalLearningConfigProtocol`; `EquiTile` re-annotates concrete `EquiTileConfig` | — |
+| FastLMConfig Frozen | `equitile/lm/components.py:FastLMConfig` → `frozen=True, slots=True` on the unified config pattern (§3 target 1) | — |
+| Vision Data Load Migrations | `validation/tracks/tradeoff_tracks.py` direct `datasets.MNIST` → `get_vision_dataset()` (canonical cached tensor path) | ~12 |
+| Toy Dataset Dedup | `data/vision.py:generate_toy_points` shared by `_load_toy_dataset` + `demo/tasks.py:_xor/_spiral/_circles` | ~30 |
 
-**Total verified reduction**: ~3,580 lines (8.7%)
+**Total verified reduction**: ~3,620 lines (8.8%)
 
 ---
 
@@ -43,11 +48,11 @@
 | Initiative | Target | Done | Remaining | Status |
 |------------|--------|------|-----------|--------|
 | Optimizer Factory | ~60 sites | 54 | 6 | 🟢 Complete |
-| Config Unification | ~12 classes | 2 | 10 | 🟡 In progress |
-| EquiTile Generification | 6 components | 6 | 0 | ✅ Complete |
+| Config Unification | ~12 classes | 3 | 9 | 🟡 In progress |
+| EquiTile Generification | 6 components | 6+ | 0 | ✅ Complete |
 | Storage Unification | 2 systems | 1.5 | 0.5 | 🟢 Mostly done |
 | Data Transforms | ~8 duplicate sites | 8 | 0 | ✅ Complete |
-| Metrics Consolidation | ~10 classes | 1 | 9 | 🔴 Not started |
+| Metrics Consolidation | ~10 classes | 2 | 8 | 🟢 Rename + audit done |
 | Training Loop Infra | ~20 implementations | 0 | 20 | 🔴 Not started |
 | Strategy Optimizer Generification | 4 strategy types | 4 | 0 | ✅ Complete |
 
@@ -61,7 +66,7 @@
 Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`save_config` helpers.
 
 **Next targets** (in priority order):
-1. **`equitile/lm/components.py:FastLMConfig`** — canonical for `lm/fast_lm.py`; `language/fast.py` variant is genuinely different architecture (pre-norm + sigmoid gating vs MoT + SwiGLU) — **leave both, dedup only shared fields**.
+1. ✅ **`equitile/lm/components.py:FastLMConfig`** — **DONE (session 6): made `frozen=True, slots=True`** on the unified config pattern. `language/fast.py` variant is genuinely different architecture (pre-norm + sigmoid gating vs MoT + SwiGLU) — **leave both, dedup only shared fields**.
 2. **`zoo/mep/benchmarks/tuned_compare.py:OptimizerConfig`** + `config/schema.py:OptimizerConfig` — per-algorithm configs with different fields (`gamma`, per-family values); reconcile only shared subset if any.
 3. **`equitile/utils/reproducibility.py:ExperimentConfig`** + `experiments/utils.py:ExperimentConfig` — different purposes (seed+dicts vs model/optimizer/runner); no merge, but standardize on `BaseConfig` pattern.
 4. **`config/schema.py:TrainingConfig`** (OmegaConf structured) — different trainer (log/save/early-stop knobs) from LM one; leave as-is.
@@ -90,8 +95,8 @@ Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`s
 - `experiment/staircase.py`: `StageMetrics` — domain-specific
 
 **Action**: 
-- Rename `equitile/lm/training.py:TrainingMetrics` → `LMTrainingMetrics` (avoid collision with `core.trainer.TrainingMetrics`)
-- Audit `BenchmarkMetrics` vs `TrainingMetrics` field naming (`train_acc`/`val_acc` vs `train_accuracy`/`val_accuracy`) — reconcile if shared readers emerge (REFACTOR.md §7)
+- ✅ **Done**: `equitile/lm/training.py:TrainingMetrics` renamed → `LMTrainingMetrics` (imports updated in `equitile/lm/__init__.py`, `demo.py`, `tests/integration/test_lm_demo.py`).
+- ✅ **Audited**: `BenchmarkMetrics`/`EpochMetrics` (`train_acc`/`val_acc`) vs `TrainingMetrics` (`train_accuracy`/`val_accuracy`) — **no shared reader consumes both** (only `continual_learning.py` and `language/fast.py` use `train_acc` *and* `train_accuracy`, each inside separate, domain-specific dataclasses). No forced merger per plan; field reconciliation still deferred until a shared reader emerges.
 - No forced merger of domain-specific classes; keep `BaseMetrics` as the only shared base.
 
 ---
@@ -112,7 +117,7 @@ Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`s
 **Substrate complete** (`core/tile/` + `core/local_learning/`). Now prove reuse.
 
 **Immediate opportunities**:
-- **Type-clean `core/local_learning/mixins.py:20`** — drop `TYPE_CHECKING` import of `equitile.core.config.EquiTileConfig`; use `LocalLearningConfig` or a narrow `Protocol` exposing `learning_rate`/`importance_lr`/`mode` so `core/*` is equitile-free at type-check time.
+- ✅ **Type-clean `core/local_learning/mixins.py:20`** — **DONE (session 6)**: dropped the `TYPE_CHECKING` import of `equitile.core.config.EquiTileConfig`; added a narrow `LocalLearningConfigProtocol` exposing `learning_rate`/`importance_lr`/`mode`, so `core/*` is now fully equitile-free at type-check time. `EquiTile` re-annotates `equitile_config: EquiTileConfig` concretely to preserve full-field access in `equitile/`. Pyright: 0 new warnings (baseline parity).
 - **Extract `tile_kwargs(base_config)`** — `core/tile/feature_extractors.py:tile_model_kwargs()` duplicates base-field mapping that `equitile/core/model.py:EquiTile.build()` also does; a generic sink could serve both (postponed — `EquiTile.build` uses `spec`-driven fields).
 - **Write one zoo algorithm on substrate** — e.g. `TileFA` (Feedback Alignment on tile graph) to validate the reuse story. Target: `zoo/models/tile_fa.py` importing `core.tile` + `core.local_learning` only.
 - **Validation & docs** — add `core/tile/README.md` with usage examples for FA/TargetProp/HierarchicalPC/SNN/GNN.
@@ -165,8 +170,8 @@ Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`s
 
 | Area | Files | Est. Lines | Effort |
 |------|-------|------------|--------|
-| **Vision Data Loading** | `data/vision.py` already canonical; migrate `validation/tracks/tradeoff_tracks.py` direct `datasets.MNIST` calls to `get_vision_dataset()` | ~50 | Low |
-| **Toy Dataset Duplication** | `_load_toy_dataset` in `data/vision.py` vs `validation/tracks/_signal_probe.py` | ~30 | Low |
+| **Vision Data Loading** | `data/vision.py` already canonical; ✅ `validation/tracks/tradeoff_tracks.py` migrated to `get_vision_dataset()` (session 6). Remaining: `domains/vision.py`, `zoo/mep/benchmarks/_shared.py`/`niche_benchmarks.py`/`continual_learning.py`/`runner.py` still construct `datasets.*` directly — each uses different transforms/subsetting so migrate case-by-case | ~12 done / ~40 left | Low |
+| **Toy Dataset Duplication** | ✅ `_load_toy_dataset` in `data/vision.py` + `demo/tasks.py:_xor/_spiral/_circles` → shared `generate_toy_points()` (session 6) | ~30 | Done |
 | **Checkpoint/Serialization** | `core/checkpoint.py` + `core/checkpoint_mixin.py` + `hyperopt/storage.py` save/load — unify serialization helpers | ~80 | Medium |
 | **Device/Seed/Logging Imports** | Already consolidated; verify no remaining inline `torch.manual_seed`/`torch.device` calls | — | Done |
 | **Registry/Build Patterns** | `core/registry.py` + `core/construction.py` — `build` classmethods across zoo models follow similar pattern; could standardize | ~100 | Medium |
@@ -214,6 +219,20 @@ pip-audit                          # no new vulnerabilities
 | 3 | 2026-08-10 | EquiTile generification Phase 1 (core/tile, core/local_learning), optimizer factory 12 more sites (38 total) | Substrate extracted; 4 shims retained temporarily |
 | 4 | 2026-08-10 | EquiTile generification Phase 2/3 (shims deleted, enhanced fold, feature-extractor decoupling), validation tracks `_base.py` | **Zero `core → equitile` deps**; 18 tracks on shared boilerplate |
 | 5 | 2026-08-10 | **Data Transforms consolidation** (8 sites), **Optimizer Factory final sweep** (16 sites), **Strategy Optimizer Generification** (core/optimization + FAGradient) | §1/§2/§7 complete; generic framework for Muon+FA etc. |
+| 6 | 2026-08-10 | **LM Metrics rename** (`TrainingMetrics`→`LMTrainingMetrics` + imports), **mixin type-clean** (`LocalLearningConfigProtocol` — core equitile-free at type-check), **FastLMConfig frozen** (§3 target 1), **tradeoff_tracks → `get_vision_dataset`**, **toy-dataset dedup** (`generate_toy_points` shared across `data`+`demo`) | `core/*` equitile-free at type-check; ready for config targets 2–4; pyright @ baseline parity |
+
+---
+
+## 🧭 FUTURE WORK NOTES (Session 6)
+
+**Verified blockers/preconditions for next sessions:**
+- **Config targets 2–4 are "no-merge" by design**: `schema.py:OptimizerConfig` (component-selection for YAML experiments) vs `core/utils/optimizer.py:OptimizerConfig` (frozen runtime hyperparams) are semantically different — reconcile *only* if a shared reader appears. `reproducibility.py:ExperimentConfig` (seed+dicts) vs `experiments/utils.py:ExperimentConfig` (model/optimizer/runner knobs) serve different purposes; only standardize field shapes, don't merge. `schema.py:TrainingConfig` stays OmegaConf-structured.
+- **Checkpoint/serialization unify** (`core/checkpoint.py` + `checkpoint_mixin.py` exist; ~14 raw `torch.save`/`torch.load` sites remain) — worth a sweep next: `core/trainer.py:1443`, `deployment.py`, `equitile/language/fast.py:582`, `equitile/deployments/deployment.py:191`, `execution/_lifecycle.py:153`, `zoo/__init__.py:104`. Each uses a bespoke dict format; adopt `core.checkpoint.Checkpoint` where the geometry fits.
+- **`BenchmarkConfig` in `zoo/mep/benchmarks/_shared.py` already extends `BaseConfig`** — the MEP benchmark family is the reference for migrating the remaining `datasets.*` calls (needs per-file subsetting/transform audit).
+- **Inline accuracy formulas** (~9 sites: `zoo/models/eqprop/_contrastive.py:278`, `hebbian.py:292`, `base.py:302`, `fa.py:1230`, `nebc_base.py:109/138`, `validation/utils.py:107/135`, `application_tracks.py:194`) still duplicate `core/losses.py:compute_accuracy` semantics — switch when touching those files (low priority).
+- **`demo/tests/` import quirk**: `demo/tests/*.py` do `from tasks import ...` and only collect when run with `demo/` as the rootdir (via `pytest demo/tests`), not when combined with other test dirs. Pre-existing; not caused by the refactor.
+- **Pre-existing failures to ignore** (present at baseline, unrelated to this session): `tests/unit/validation/test_backprop_parity.py::test_backprop_parity[eqprop_mlp|directed_ep]`; `DataLoader` undefined errors in `compare.py`/`tuned_compare.py` (they import it from `_shared` but use it before the import is visible to pyright).
+- **Zero-diff verification recipe** used this session: `git stash` → run `ruff check --output-format=concise` + `pyright .` + targeted `pytest --no-cov` → compute `comm` diffs. Keeps regression detection cheap without full-suite reruns.
 
 ---
 

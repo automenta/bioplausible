@@ -62,6 +62,7 @@ class EquiTile(BioModel, MultiOptimizerMixin):
 
     algorithm_name = "EquiTile"
     default_activation: str = "gelu"
+    equitile_config: EquiTileConfig
 
     @classmethod
     def build(

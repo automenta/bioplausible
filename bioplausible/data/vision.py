@@ -17,6 +17,7 @@ from bioplausible.data.transforms import build_transform, create_dataloader
 __all__ = [
     "CharDataset",
     "create_data_loaders",
+    "generate_toy_points",
     "get_vision_dataset",
 ]
 
@@ -164,6 +165,67 @@ def get_vision_dataset(
     return dataset
 
 
+def generate_toy_points(
+    name: str,
+    n: int,
+    generator: torch.Generator | None = None,
+    device: torch.device | str = "cpu",
+    dtype: torch.dtype = torch.float32,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Generate a batch of toy classification points (xor/spiral/circles).
+
+    Shared by :func:`_load_toy_dataset` (fixed-seed, full dataset) and
+    ``demo/tasks.py`` (on-the-fly per-batch samplers) so the distribution
+    math lives in exactly one place.
+
+    Args:
+        name: Toy family ("xor", "spiral", "circles").
+        n: Number of points.
+        generator: Optional ``torch.Generator`` for reproducibility.
+        device: Target device for the returned tensors.
+        dtype: Element dtype for the feature tensor.
+
+    Returns:
+        Tuple of ``(x, y)`` where ``x`` is ``(n, 2)`` and ``y`` is ``(n,)`` long.
+
+    Raises:
+        ValueError: If *name* is not a known toy family.
+    """
+    if name == "xor":
+        x = torch.randint(0, 2, (n, 2), dtype=dtype, device=device, generator=generator)
+        y = (x[:, 0] != x[:, 1]).long()
+    elif name == "spiral":
+        theta = torch.linspace(0, 4 * math.pi, n, device=device)
+        r = torch.linspace(0.1, 1.0, n, device=device)
+        x0 = (
+            r * torch.cos(theta)
+            + torch.randn(n, device=device, generator=generator) * 0.05
+        )
+        x1 = (
+            r * torch.sin(theta)
+            + torch.randn(n, device=device, generator=generator) * 0.05
+        )
+        x = torch.stack([x0, x1], dim=1).to(dtype)
+        y = (theta > 2 * math.pi).long().to(device)
+    elif name == "circles":
+        a = torch.rand(n, device=device, generator=generator)
+        b = torch.rand(n, device=device, generator=generator)
+        r = torch.where(
+            a < 0.5,
+            torch.full((n,), 0.2, device=device),
+            torch.full((n,), 0.8, device=device),
+        )
+        r = r + torch.randn(n, device=device, generator=generator) * 0.03
+        th = 2 * math.pi * b
+        x = torch.stack([r * torch.cos(th), r * torch.sin(th)], dim=1).to(dtype)
+        y = (r > 0.5).long()
+    else:
+        raise ValueError(f"Unknown toy dataset: {name}")
+
+    y = y.long()
+    return x, y
+
+
 def _load_toy_dataset(
     name: str,
     train: bool,
@@ -181,29 +243,7 @@ def _load_toy_dataset(
     from sklearn.model_selection import train_test_split
 
     gen = torch.Generator().manual_seed(random_state)
-    n = n_samples
-    if name == "xor":
-        x = torch.randint(0, 2, (n, 2), dtype=torch.float32, generator=gen)
-        y = (x[:, 0] != x[:, 1]).long()
-    elif name == "spiral":
-        theta = torch.linspace(0, 4 * math.pi, n)
-        r = torch.linspace(0.1, 1.0, n)
-        x0 = r * torch.cos(theta) + torch.randn(n, generator=gen) * 0.05
-        x1 = r * torch.sin(theta) + torch.randn(n, generator=gen) * 0.05
-        x = torch.stack([x0, x1], dim=1)
-        y = (theta > 2 * math.pi).long()
-    elif name == "circles":
-        a = torch.rand(n, generator=gen)
-        b = torch.rand(n, generator=gen)
-        r = torch.where(a < 0.5, torch.full((n,), 0.2), torch.full((n,), 0.8))
-        r = r + torch.randn(n, generator=gen) * 0.03
-        th = 2 * math.pi * b
-        x = torch.stack([r * torch.cos(th), r * torch.sin(th)], dim=1)
-        y = (r > 0.5).long()
-    else:
-        raise ValueError(f"Unknown toy dataset: {name}")
-
-    y = y.long()
+    x, y = generate_toy_points(name, n_samples, generator=gen)
 
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=test_size, random_state=random_state, shuffle=True

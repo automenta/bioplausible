@@ -196,18 +196,14 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
 
     device = str(get_device())
 
-    # Load MNIST
+    # Load MNIST through the canonical vision-dataset sink (cached tensor
+    # path, no per-batch ToTensor/Normalize cost).
     from torch.utils.data import DataLoader, Subset
-    from torchvision import datasets
 
-    from bioplausible.data.transforms import MNIST_TRANSFORM
+    from bioplausible.data.vision import get_vision_dataset
 
-    train_dataset = datasets.MNIST(
-        root="./data", train=True, download=True, transform=MNIST_TRANSFORM
-    )
-    test_dataset = datasets.MNIST(
-        root="./data", train=False, download=True, transform=MNIST_TRANSFORM
-    )
+    train_dataset = get_vision_dataset("mnist", train=True)
+    test_dataset = get_vision_dataset("mnist", train=False)
 
     # Use subset based on mode
     if verifier.quick_mode:
