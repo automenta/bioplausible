@@ -30,6 +30,11 @@ from bioplausible.config.schema import (
     get_default_config,
     validate_config,
 )
+from bioplausible.config.unified import (
+    BaseConfig,
+    BaseStructuredConfig,
+    config_to_dict,
+)
 
 # ──────────────────────────────────────────────
 # Merged from config_loader.py
@@ -163,6 +168,10 @@ __all__ = [
     "register_default_config",
     "get_named_config",
     "list_named_configs",
+    # Unified config hierarchy (REFACTOR.md §1.1)
+    "BaseConfig",
+    "BaseStructuredConfig",
+    "config_to_dict",
     # Merged from config_loader.py
     "load_config",
 ]

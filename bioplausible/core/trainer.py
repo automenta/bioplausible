@@ -12,7 +12,7 @@ import os
 import tempfile
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from math import isfinite
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, TypeIs, cast
@@ -25,6 +25,7 @@ from torch import nn
 from bioplausible.core.energy import EnergyTracker
 from bioplausible.core.energy_model import EBMTrainer, EnergyModel
 from bioplausible.core.losses import compute_accuracy, compute_loss
+from bioplausible.core.metrics import BaseMetrics
 from bioplausible.core.registry import (
     ComponentCategory,
     IncompatibilityError,
@@ -210,12 +211,17 @@ class TrainerConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class TrainingMetrics:
-    """Metrics from a training step/epoch."""
+class TrainingMetrics(BaseMetrics):
+    """Metrics from a training step/epoch.
 
-    epoch: int
-    train_loss: float
-    train_accuracy: float
+    Inherits the canonical ``epoch``/``step``/``extra`` shape from
+    :class:`~bioplausible.core.metrics.BaseMetrics`; ``step`` is set to
+    ``global_step`` at construction time so the metrics carry the update
+    index within the epoch.
+    """
+
+    train_loss: float = 0.0
+    train_accuracy: float = 0.0
     val_loss: float | None = None
     val_accuracy: float | None = None
     val_perplexity: float | None = None
@@ -230,12 +236,6 @@ class TrainingMetrics:
     wall_time_ms: float | None = None
     peak_memory_mb: float | None = None
     requires_backward: bool | None = None
-
-    # Extra metrics
-    extra: dict[str, object] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, object]:
-        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
 class CoreTrainer:
@@ -877,6 +877,7 @@ class CoreTrainer:
         ]
         return TrainingMetrics(
             epoch=epoch,
+            step=self.global_step,
             train_loss=train_metrics.get("loss", 0.0),
             train_accuracy=train_metrics.get("accuracy", 0.0),
             val_loss=val_metrics.get("val_loss"),

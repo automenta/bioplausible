@@ -10,7 +10,6 @@ import json
 import logging
 import pathlib
 import time
-from dataclasses import asdict
 
 import torch
 from torch import nn
@@ -72,6 +71,7 @@ def get_model(config: BenchmarkConfig, input_dim: int, num_classes: int) -> nn.M
             return cnn_classifier(3, 8, num_classes)
         return cnn_classifier(1, 7, num_classes)
     raise ValueError(f"Unknown model: {config.model}")
+
 
 def train_epoch(
     model: nn.Module,
@@ -274,7 +274,7 @@ def save_results(results: dict[str, OptimizerResult], output_path: str) -> None:
     for name, result in results.items():
         result_dict = {
             "name": result.name,
-            "metrics": [asdict(m) for m in result.metrics],
+            "metrics": [m.to_dict() for m in result.metrics],
             "total_time": result.total_time,
             "best_val_acc": result.best_val_acc,
             "final_train_acc": result.final_train_acc,

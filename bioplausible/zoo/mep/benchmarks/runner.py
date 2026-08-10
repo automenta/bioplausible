@@ -9,7 +9,7 @@ import argparse
 import contextlib
 import json
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import cast
@@ -37,6 +37,7 @@ except ImportError:
 
 import logging
 
+from bioplausible.core.metrics import BaseMetrics
 from bioplausible.core.utils.device import get_device
 from bioplausible.zoo.mep.presets import sdmep, smep
 
@@ -60,16 +61,19 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class BenchmarkMetrics:
-    """Container for benchmark metrics."""
+@dataclass(frozen=True, slots=True)
+class BenchmarkMetrics(BaseMetrics):
+    """Container for benchmark epoch metrics.
 
-    epoch: int
-    train_loss: float
-    train_acc: float
-    val_loss: float
-    val_acc: float
-    epoch_time: float
+    Inherits the canonical ``epoch``/``step``/``extra`` shape from
+    :class:`~bioplausible.core.metrics.BaseMetrics`.
+    """
+
+    train_loss: float = 0.0
+    train_acc: float = 0.0
+    val_loss: float = 0.0
+    val_acc: float = 0.0
+    epoch_time: float = 0.0
     spectral_norm: float | None = None
     energy_free: float | None = None
     energy_nudged: float | None = None
@@ -92,7 +96,7 @@ class BenchmarkResult:
         return {
             "config": self.config,
             "optimizer_name": self.optimizer_name,
-            "metrics": [asdict(m) for m in self.metrics],
+            "metrics": [m.to_dict() for m in self.metrics],
             "total_time": self.total_time,
             "final_train_acc": self.final_train_acc,
             "final_val_acc": self.final_val_acc,

@@ -13,7 +13,7 @@ shared shape.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 __all__ = ["BaseMetrics", "EpochMetrics"]
 
@@ -26,11 +26,25 @@ class BaseMetrics:
         epoch: Epoch index (1-based when set by a runner).
         step: Global update step.
         extra: Bucket for domain-specific metrics not covered by base fields.
+
+    The ``to_dict`` method serializes to a plain ``dict``, omitting ``None``
+    values so the result round-trips cleanly through ``TrainingMetrics(**m)``
+    reconstruction (fields absent from the dict fall back to their defaults).
     """
 
     epoch: int = 0
     step: int = 0
     extra: dict[str, object] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize to a dict, omitting ``None`` values.
+
+        Uses :func:`dataclasses.asdict` for a deep copy of nested
+        containers, then strips ``None`` entries so the result is
+        JSON-serialisable and losslessly reconstructable via the
+        class constructor (absent keys use defaults).
+        """
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
 @dataclass(frozen=True, slots=True)

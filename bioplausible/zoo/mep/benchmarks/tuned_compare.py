@@ -160,6 +160,7 @@ def get_model(config: BenchmarkConfig, input_dim: int, num_classes: int) -> nn.M
         return cnn_classifier(1, 7, num_classes)
     raise ValueError(f"Unknown model: {config.model}")
 
+
 def train_epoch(
     model: nn.Module,
     optimizer: object,
@@ -395,7 +396,7 @@ def save_results(results: dict[str, OptimizerResult], output_path: str) -> None:
         result_dict = {
             "name": result.name,
             "config": asdict(OPTIMIZER_CONFIGS.get(name, OptimizerConfig(lr=0.01))),
-            "metrics": [asdict(m) for m in result.metrics],
+            "metrics": [m.to_dict() for m in result.metrics],
             "total_time": result.total_time,
             "best_val_acc": result.best_val_acc,
             "final_train_acc": result.final_train_acc,

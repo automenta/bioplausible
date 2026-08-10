@@ -13,10 +13,12 @@ benchmark runners share a single canonical epoch-metrics container.
 from dataclasses import dataclass
 from typing import Protocol
 
-from bioplausible.core.metrics import EpochMetrics
 from torch import nn
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
+
+from bioplausible.config.unified import BaseConfig
+from bioplausible.core.metrics import EpochMetrics
 
 __all__ = [
     "BenchmarkConfig",
@@ -41,9 +43,14 @@ class OptimizerResult:
     final_train_acc: float
 
 
-@dataclass
-class BenchmarkConfig:
-    """Benchmark configuration."""
+@dataclass(frozen=True, slots=True)
+class BenchmarkConfig(BaseConfig):
+    """Benchmark configuration for MEP optimizer comparison.
+
+    Extends :class:`~bioplausible.config.unified.BaseConfig` for the
+    canonical ``name``/``seed``/``device`` shape; ``device`` is overridden
+    to ``"cuda"`` (the MEP benchmark default).
+    """
 
     dataset: str = "mnist"
     model: str = "mlp"
