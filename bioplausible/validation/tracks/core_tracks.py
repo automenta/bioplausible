@@ -1,22 +1,27 @@
+from __future__ import annotations
+
 import sys
-import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from bioplausible.core.logging import get_logger
+from bioplausible.zoo.models.eqprop import (
+    BackpropMLP,
+    LoopedMLP,
+)
 
-from ..notebook import TrackResult
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
+from ._base import build_track_result, track_header
+
+if TYPE_CHECKING:
+    from ..notebook import TrackResult
 
 root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.zoo.models.eqprop import (
-    BackpropMLP,
-    LoopedMLP,
-)
 
 __all__ = [
     "logger",
@@ -30,11 +35,7 @@ logger = get_logger()
 
 def track_1_spectral_norm(verifier) -> TrackResult:
     """Core: Spectral Normalization maintains L < 1."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 1: Spectral Normalization Stability")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(1, "Spectral Normalization Stability")
     input_dim, hidden_dim, output_dim = 64, 128, 10
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
 
@@ -99,14 +100,14 @@ def track_1_spectral_norm(verifier) -> TrackResult:
             "Difference between SN/non-SN too small; increase epochs or LR"
         )
 
-    return TrackResult(
+    return build_track_result(
         track_id=1,
         name="Spectral Normalization Stability",
         status=status,
         score=score,
         metrics={"L_no_sn": L_after_no, "L_sn": L_after_sn, "difference": l_difference},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=improvements,
     )
 
@@ -120,11 +121,7 @@ track_1_spectral_norm.category = "Core Stability"
 
 def track_2_backprop_parity(verifier) -> TrackResult:
     """Core: EqProp achieves accuracy parity with Backprop."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 2: EqProp vs Backprop Parity")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(2, "EqProp vs Backprop Parity")
     input_dim, hidden_dim, output_dim = 64, 128, 10
 
     # Create a single dataset and split it for fair comparison
@@ -188,14 +185,14 @@ on synthetic classification.
     if eq_acc < 0.8:
         improvements.append("Low absolute accuracy; increase epochs or model size")
 
-    return TrackResult(
+    return build_track_result(
         track_id=2,
         name="EqProp vs Backprop Parity",
         status=status,
         score=score,
         metrics={"bp_acc": bp_acc, "eq_acc": eq_acc, "gap": gap},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=improvements,
     )
 
@@ -209,11 +206,7 @@ track_2_backprop_parity.category = "Performance"
 
 def track_3_adversarial_healing(verifier) -> TrackResult:
     """Track 1 (README): Adversarial Self-Healing via noise damping."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 3: Adversarial Self-Healing")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(3, "Adversarial Self-Healing")
     input_dim, hidden_dim, output_dim = 64, 128, 10
 
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
@@ -263,14 +256,14 @@ def track_3_adversarial_healing(verifier) -> TrackResult:
             f"Damping at {avg_damping:.1f}%; check Lipschitz constraint"
         )
 
-    return TrackResult(
+    return build_track_result(
         track_id=3,
         name="Adversarial Self-Healing",
         status=status,
         score=score,
         metrics={"avg_damping": avg_damping, "results": results},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=improvements,
     )
 

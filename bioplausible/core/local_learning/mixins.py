@@ -1,4 +1,10 @@
-"""EquiTile optimizer and scheduler management mixin."""
+"""Multi-optimizer and scheduler management for local-learning models.
+
+Generic weight/importance/full optimizer split. Moved from
+``equitile.training.optimizer_mixin`` during generification; consumer models
+(EquiTile and friends) provide a config object exposing ``learning_rate``,
+``importance_lr``, and ``mode`` under ``self.equitile_config``.
+"""
 
 from typing import TYPE_CHECKING
 
@@ -8,16 +14,16 @@ from torch import nn
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 __all__ = [
-    "EquiTileOptimizerMixin",
+    "MultiOptimizerMixin",
 ]
 if TYPE_CHECKING:
     from bioplausible.equitile.core.config import EquiTileConfig
 
 
-class EquiTileOptimizerMixin:
-    """Mixin for EquiTile optimizer and scheduler management."""
+class MultiOptimizerMixin:
+    """Mixin for tile-based local-learning optimizer and scheduler management."""
 
-    # Type hints for attributes expected from EquiTile
+    # Type hints for attributes expected from the consumer model
     W_in: nn.Linear
     W_out: nn.Linear
     tile_importance: nn.Parameter
@@ -33,6 +39,15 @@ class EquiTileOptimizerMixin:
     _warmup_start_lr: float
     _total_steps: int
 
+    def extra_importance_params(self) -> list[nn.Parameter] | None:
+        """Extra parameters for the importance optimizer (e.g. per-tile LR scale)."""
+        return None
+
+    def importance_params(self) -> list[nn.Parameter]:
+        """Importance-group parameters, including optional subclass extras."""
+        extra = self.extra_importance_params()
+        return [self.tile_importance, self.edge_importance] + (extra or [])
+
     def _setup_optimizers(self) -> None:
         """Initialize optimizers explicitly."""
         self._optim_io = create_optimizer(
@@ -41,7 +56,7 @@ class EquiTileOptimizerMixin:
         )
 
         self._optim_importance = create_optimizer(
-            [self.tile_importance, self.edge_importance],
+            self.importance_params(),
             OptimizerConfig(name="adam", lr=self.equitile_config.importance_lr),
         )
 

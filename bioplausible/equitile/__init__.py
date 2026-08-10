@@ -97,6 +97,7 @@ from bioplausible.core.registry import (
     LocalityLevel,
     register_model,
 )
+from bioplausible.core.tile import TileGraph, TileState
 
 # Import the lm package so ``fast_lm.FastLMEquiTile`` (a distinct BioModel from
 # ``language.fast.FastLMEquiTile``) executes its ``@register_model("fast_lm_equitile")``
@@ -177,7 +178,6 @@ from bioplausible.equitile.core.config import (
     create_production_config,
     create_research_config,
 )
-from bioplausible.equitile.core.topology import TileGraph, TileState
 
 # Deployments
 from bioplausible.equitile.deployments.deployment import (

@@ -26,13 +26,13 @@ from torch import nn
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
-from bioplausible.equitile.core import EquiTile
-from bioplausible.equitile.core.config import EnhancedEquiTileConfig
-from bioplausible.equitile.core.kernels import (
+from bioplausible.core.tile.kernels import (
     compute_activity_update,
     compute_hebbian_update,
 )
-from bioplausible.equitile.core.topology import TileState
+from bioplausible.core.tile.topology import TileState
+from bioplausible.equitile.core import EquiTile
+from bioplausible.equitile.core.config import EnhancedEquiTileConfig
 from bioplausible.equitile.utils.init_utils import (
     initialize_edge_weights,
     initialize_io_projections,
@@ -212,29 +212,9 @@ class EnhancedEquiTile(EquiTile):
                 num_layers=num_layers,
             )
 
-    def _setup_optimizers(self) -> None:
-        """Initialize optimizers (Overrides base to include tile_lr_scale)."""
-        # I/O Optimizer
-        self._optim_io = torch.optim.Adam(
-            list(self.W_in.parameters()) + list(self.W_out.parameters()),
-            lr=self.equitile_config.learning_rate,
-        )
-
-        # Importance Optimizer
-        params = [self.tile_importance, self.edge_importance]
-        if hasattr(self, "tile_lr_scale"):
-            params.append(self.tile_lr_scale)
-
-        self._optim_importance = torch.optim.Adam(
-            params,
-            lr=self.equitile_config.importance_lr,
-        )
-
-        # Full Optimizer
-        if self.equitile_config.mode in ("backprop", "ep"):
-            self._optim_full = torch.optim.Adam(
-                self.parameters(), lr=self.equitile_config.learning_rate
-            )
+    def extra_importance_params(self) -> list[nn.Parameter] | None:
+        """Per-tile LR scale parameter, when enabled."""
+        return [self.tile_lr_scale] if hasattr(self, "tile_lr_scale") else None
 
     def to(self, *args, **kwargs):
         model = super().to(*args, **kwargs)
@@ -421,11 +401,7 @@ class EnhancedEquiTile(EquiTile):
         total_loss.backward()
 
         # Clip gradients
-        params = [self.tile_importance, self.edge_importance]
-        if hasattr(self, "tile_lr_scale"):
-            params.append(self.tile_lr_scale)
-
-        torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.importance_params(), max_norm=1.0)
 
         self._optim_importance.step()
 

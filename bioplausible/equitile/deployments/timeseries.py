@@ -157,7 +157,8 @@ class TimeSeriesEquiTile(BioModel):
 
         # Time series layers (shared layer implementation)
         self.layers = nn.ModuleList([
-            TimeSeriesEquiTileLayer(config) for _ in range(config.num_layers)
+            TimeSeriesEquiTileLayer(config, _fe.tile_model_factory)
+            for _ in range(config.num_layers)
         ])
 
         # Output projection based on task

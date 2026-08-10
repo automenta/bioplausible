@@ -147,7 +147,7 @@ class GraphEquiTile(BioModel):
 
         # Shared graph feature extractor (input proj + stacked graph EquiTile
         # layers + attention), from the unified deployments module.
-        self.feature_extractor = GraphFeatureExtractor(config)
+        self.feature_extractor = GraphFeatureExtractor(config, _fe.tile_model_factory)
 
         # Output projection
         if config.readout == "attention":

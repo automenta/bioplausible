@@ -25,6 +25,7 @@ import torch
 from torch import nn
 
 from bioplausible.config.unified import ModelConfig
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.base import EqPropModel
 
 
@@ -102,7 +103,9 @@ class EquilibriumMLP(EqPropModel):
         import torch.nn.functional as F
 
         if self.optimizer is None:
-            self.optimizer = torch.optim.Adam(self.parameters(), lr=self.hebbian_lr)
+            self.optimizer = create_optimizer(
+                self, OptimizerConfig(name="adam", lr=self.hebbian_lr, weight_decay=0.0)
+            )
         logits = self.forward(x)
         loss = F.cross_entropy(logits, y)
         self.optimizer.zero_grad()

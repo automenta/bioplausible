@@ -13,6 +13,7 @@ from torch import nn
 
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 # ============================================================================
@@ -33,7 +34,9 @@ class FFLayer(nn.Linear):
     ):
         super().__init__(in_features, out_features, bias=bias)
         self.relu = nn.ReLU()
-        self.opt = torch.optim.Adam(self.parameters(), lr=lr)
+        self.opt = create_optimizer(
+            self, OptimizerConfig(name="adam", lr=lr, weight_decay=0.0)
+        )
 
     def forward(self, x):
         x_dir = x / (x.norm(2, 1, keepdim=True) + 1e-4)
@@ -82,8 +85,9 @@ class ForwardForwardNet(TransitionGraphMixin, nn.Module):
             self.layers.append(FFLayer(hidden_dim, hidden_dim, lr=layer_lr))
 
         self.classifier = nn.Linear(hidden_dim * num_layers, output_dim)
-        self.classifier_opt = torch.optim.Adam(
-            self.classifier.parameters(), lr=classifier_lr
+        self.classifier_opt = create_optimizer(
+            self.classifier,
+            OptimizerConfig(name="adam", lr=classifier_lr, weight_decay=0.0),
         )
 
     @classmethod

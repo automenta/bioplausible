@@ -8,16 +8,21 @@ Track 55: Pure Linear Chain Failure
   - Pure linear layers vanish even with spectral normalization
 """
 
+from __future__ import annotations
+
 import sys
-import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
 
 from bioplausible.core.logging import get_logger
 
-from ..notebook import TrackResult
+from ._base import build_track_result, track_header
+
+if TYPE_CHECKING:
+    from ..notebook import TrackResult
 
 __all__ = [
     "PureLinearChain",
@@ -80,11 +85,7 @@ def track_55_negative_linear_chain(verifier) -> TrackResult:
 
     This is a NEGATIVE RESULT demonstrating architectural requirements.
     """
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 55: NEGATIVE RESULT - Pure Linear Chain Failure")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(55, "NEGATIVE RESULT - Pure Linear Chain Failure")
 
     depths = [50, 100, 200] if verifier.quick_mode else [50, 100, 200, 500]
     dim = 64
@@ -198,7 +199,7 @@ def track_55_negative_linear_chain(verifier) -> TrackResult:
 **Lesson**: Use `DeepHebbianChain` or `LoopedMLP` WITH activations.
 """
 
-    return TrackResult(
+    return build_track_result(
         track_id=55,
         name="Negative Result: Linear Chain",
         status=status,
@@ -209,6 +210,6 @@ def track_55_negative_linear_chain(verifier) -> TrackResult:
             "sn_no_help": sn_no_help,
         },
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=[],
     )

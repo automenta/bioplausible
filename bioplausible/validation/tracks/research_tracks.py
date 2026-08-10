@@ -7,14 +7,19 @@ Validates new research directions:
 - Finite-Nudge EP (Large beta)
 """
 
-import time
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import torch
 
 from bioplausible.core.logging import get_logger
 from bioplausible.zoo.models.eqprop import DirectedEP, FiniteNudgeEP, HolomorphicEP
 
-from ..notebook import TrackResult
+from ._base import build_track_result, track_header
+
+if TYPE_CHECKING:
+    from ..notebook import TrackResult
 
 __all__ = [
     "logger",
@@ -33,11 +38,7 @@ def _get_synthetic_data(n=32, input_dim=64, output_dim=10):
 
 def track_42_holomorphic_ep(verifier) -> TrackResult:
     """Track 42: Holomorphic Equilibrium Propagation."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 42: Holomorphic EP (Complex)")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(42, "Holomorphic EP (Complex)")
 
     # 1. Setup
     input_dim = 32
@@ -105,24 +106,20 @@ def track_42_holomorphic_ep(verifier) -> TrackResult:
 - Learning: {"[OK]  Yes" if learned else "[FAIL]  No"}
 """
 
-    return TrackResult(
+    return build_track_result(
         track_id=42,
         name="Holomorphic EP",
         status=status,
         score=score,
         metrics={"initial_loss": initial_loss, "final_loss": final_loss},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
     )
 
 
 def track_43_directed_ep(verifier) -> TrackResult:
     """Track 43: Directed Equilibrium Propagation."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 43: Directed EP (Asymmetric)")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(43, "Directed EP (Asymmetric)")
 
     input_dim = 32
     hidden_dim = 64
@@ -189,24 +186,20 @@ def track_43_directed_ep(verifier) -> TrackResult:
 - Final Loss: {final_loss:.4f}
 """
 
-    return TrackResult(
+    return build_track_result(
         track_id=43,
         name="Directed EP",
         status=status,
         score=score,
         metrics={"initial_loss": initial_loss, "final_loss": final_loss},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
     )
 
 
 def track_44_finite_nudge_ep(verifier) -> TrackResult:
     """Track 44: Finite-Nudge Equilibrium Propagation."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 44: Finite-Nudge EP (Large Beta)")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(44, "Finite-Nudge EP (Large Beta)")
 
     input_dim = 32
     hidden_dim = 64
@@ -262,12 +255,12 @@ def track_44_finite_nudge_ep(verifier) -> TrackResult:
 - Stability: {"[OK]  Stable" if final_loss < 100 else "[FAIL]  Unstable"}
 """
 
-    return TrackResult(
+    return build_track_result(
         track_id=44,
         name="Finite-Nudge EP",
         status=status,
         score=score,
         metrics={"initial_loss": initial_loss, "final_loss": final_loss},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
     )

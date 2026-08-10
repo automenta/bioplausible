@@ -10,6 +10,10 @@ from bioplausible.zoo.models.eqprop import (
     RecurrentEqPropLM,
 )
 from bioplausible.zoo.models.fa import AdaptiveFeedbackAlignment, EquilibriumAlignment
+from bioplausible.zoo.models.hebbian import DeepHebbianChain
+from bioplausible.zoo.propagators.hebbian import (
+    ContrastiveHebbianLearning,
+)
 
 from ..notebook import TrackResult
 
@@ -94,10 +98,7 @@ def track_51_nebc_feedback_alignment(verifier: object) -> TrackResult:
 
     result = verifier.evaluate_robustness(run_check, n_seeds=1)
 
-    if result["mean_score"] > 90:
-        status = "pass"
-    else:
-        status = "fail"
+    status = "pass" if result["mean_score"] > 90 else "fail"
 
     return TrackResult(
         track_id=51,
@@ -140,11 +141,6 @@ def track_52_nebc_direct_feedback_alignment(verifier: object) -> TrackResult:
         time_seconds=0.1,
     )
 
-
-from bioplausible.zoo.models.hebbian import DeepHebbianChain
-from bioplausible.zoo.propagators.hebbian import (
-    ContrastiveHebbianLearning,
-)
 
 __all__ = [
     "logger",

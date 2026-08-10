@@ -5,9 +5,10 @@ Aggregates all track definitions from various modules into a single lookup dicti
 This allows the Verifier to easily access all available experiments.
 """
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.registry import ComponentCategory, Registry
 
 # Import all KEPT track modules (Phase 4 deleted: advanced_tracks, analysis_tracks,
 # engine_validation_tracks, enhanced_validation_tracks, framework_validation,
@@ -24,6 +25,9 @@ from . import (
     signal_tracks,
     tradeoff_tracks,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger()
 
@@ -89,7 +93,6 @@ register_tracks_from_module(research_tracks)
 register_tracks_from_module(signal_tracks)
 
 # Sync into core Registry under ComponentCategory.TRACK for unified discovery.
-from bioplausible.core.registry import ComponentCategory, Registry
 
 __all__ = [
     "ALL_TRACKS",

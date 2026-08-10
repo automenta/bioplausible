@@ -35,6 +35,7 @@ try:
 except ImportError:
     VIS_AVAILABLE = False
 
+import bioplausible.core.utils.optimizer as _optimizer
 from bioplausible.core.logging import get_logger
 from bioplausible.core.metrics import BaseMetrics
 from bioplausible.core.utils.device import get_device
@@ -273,25 +274,34 @@ def create_optimizer(
     all_config = {**opt_config, **ep_config, **dion_config, **opt_overrides}
 
     if optimizer_name == "SGD":
-        return torch.optim.SGD(
-            model.parameters(),
-            lr=all_config.get("lr", 0.05),
-            momentum=all_config.get("momentum", 0.9),
-            weight_decay=all_config.get("weight_decay", 0.0005),
+        return _optimizer.create_optimizer(
+            model,
+            _optimizer.OptimizerConfig(
+                name="sgd",
+                lr=all_config.get("lr", 0.05),
+                momentum=all_config.get("momentum", 0.9),
+                weight_decay=all_config.get("weight_decay", 0.0005),
+            ),
         )
 
     elif optimizer_name == "Adam":
-        return torch.optim.Adam(
-            model.parameters(),
-            lr=all_config.get("lr", 0.001),
-            weight_decay=all_config.get("weight_decay", 0.0),
+        return _optimizer.create_optimizer(
+            model,
+            _optimizer.OptimizerConfig(
+                name="adam",
+                lr=all_config.get("lr", 0.001),
+                weight_decay=all_config.get("weight_decay", 0.0),
+            ),
         )
 
     elif optimizer_name == "AdamW":
-        return torch.optim.AdamW(
-            model.parameters(),
-            lr=all_config.get("lr", 0.001),
-            weight_decay=all_config.get("weight_decay", 0.01),
+        return _optimizer.create_optimizer(
+            model,
+            _optimizer.OptimizerConfig(
+                name="adamw",
+                lr=all_config.get("lr", 0.001),
+                weight_decay=all_config.get("weight_decay", 0.01),
+            ),
         )
 
     elif optimizer_name == "SMEP":

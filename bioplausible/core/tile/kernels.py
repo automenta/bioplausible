@@ -1,14 +1,8 @@
-"""
-EquiTile Kernels
-================
+"""Generic tile math kernels for local learning.
 
-Shared mathematical operations for EquiTile components.
-These kernels are used by:
-- Core EquiTile (core.py)
-- Async EquiTile (async_execution.py)
-- Distributed EquiTile (distributed.py)
-
-Consolidating these operations ensures consistency across different execution modes.
+Pure tensor operations shared by tile-based algorithms (EquiTile core, async,
+and distributed execution modes, plus any future FA/TP/PC on tiles). Moved from
+``equitile.core.kernels`` during generification.
 """
 
 import torch

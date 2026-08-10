@@ -1,5 +1,6 @@
 """Core EquiTile model, config, topology, and kernels."""
 
+from bioplausible.core.tile import TileGraph, TileState
 from bioplausible.equitile.core.config import (
     AsyncConfig,
     CurriculumConfig,
@@ -15,7 +16,6 @@ from bioplausible.equitile.core.config import (
     create_research_config,
 )
 from bioplausible.equitile.core.model import EquiTile, EquiTileEP
-from bioplausible.equitile.core.topology import TileGraph, TileState
 
 __all__ = [
     "AsyncConfig",

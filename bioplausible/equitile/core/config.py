@@ -8,6 +8,8 @@ Consolidated configuration for all EquiTile components.
 from dataclasses import dataclass, field, fields
 from typing import Literal
 
+from bioplausible.core.local_learning.config import LocalLearningConfig
+
 # =============================================================================
 # Core Configuration
 # =============================================================================
@@ -33,89 +35,50 @@ __all__ = [
 
 
 @dataclass(frozen=True, slots=True)
-class EquiTileConfig:
+class EquiTileConfig(LocalLearningConfig):
     """Main EquiTile configuration.
 
-    This class aggregates Architecture, Optimization, and Dynamics configurations.
-    Fields are kept flat for ease of use in CLI/Hyperopt.
+    Extends :class:`~bioplausible.core.local_learning.config.LocalLearningConfig`
+    (architecture, learning, dynamics, task fields inherited) with EquiTile's
+    PC/EP/backprop energy-dynamics and importance-sparsity knobs. Fields stay
+    flat for ease of use in CLI/Hyperopt.
 
-    Architecture
-    ------------
-    neurons_per_tile: Number of neurons per tile (64-256 typical)
-    num_layers: Total layers (input + hidden + output)
-    tiles_per_layer: Tiles per hidden layer
-
-    Learning & Regularization
-    -------------------------
-    learning_rate: Base learning rate for weight updates
-    importance_lr: Learning rate for tile importance weights
-    weight_decay: L2 regularization strength
-    gradient_clip: Gradient clipping threshold (0 = disabled)
-    dropout: Dropout probability (0 = disabled)
-    importance_decay: EMA decay for importance tracking
-    importance_reg_coef: Regularization coefficient for importance
-    sparsity_penalty_coef: Penalty for non-sparse importance
-    sparsity_threshold: Threshold for considering a tile "active"
-    min_active_fraction: Minimum fraction of active tiles
-
-    Dynamics & Mode
-    ---------------
+    Dynamics & Mode (EquiTile-specific)
+    ------------------------------------
     mode: 'pc' (predictive coding), 'ep' (equilibrium propagation), or 'backprop'
-    inference_steps: Number of relaxation steps during inference
-    step_size: Integration step size for relaxation
     lambda_error: Weight of prediction error term in energy
     beta: Nudge strength for EP mode
     beta_anneal: Beta decay factor per step/epoch
     inference_steps_free: Separate steps for free phase (EP)
     inference_steps_nudged: Separate steps for nudged phase (EP)
     use_symmetric_weights: Enforce symmetric weights (for strict energy function)
-    clamp_activities: Whether to clamp neuron activities
-    activity_clamp_min: Minimum activity value
-    activity_clamp_max: Maximum activity value
     ep_init_scale: Initialization scale for EP activities
-    relaxation_tolerance: Tolerance for early stopping relaxation
-    task_type: Literal["classification", "regression", "binary", "multilabel"] = "classification"
-    activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu"
+
+    Importance & Sparsity (EquiTile-specific)
+    ------------------------------------------
+    importance_decay: EMA decay for importance tracking
+    importance_reg_coef: Regularization coefficient for importance
+    sparsity_penalty_coef: Penalty for non-sparse importance
+    sparsity_threshold: Threshold for considering a tile "active"
+    min_active_fraction: Minimum fraction of active tiles
     """
 
-    # Architecture
-    neurons_per_tile: int = 64
-    num_layers: int = 4
-    tiles_per_layer: int = 4
-
-    # Learning
-    learning_rate: float = 0.01
-    importance_lr: float = 0.001
-    weight_decay: float = 1e-4
-    gradient_clip: float = 1.0
-    dropout: float = 0.1
+    # Importance & sparsity (EquiTile-specific)
     importance_decay: float = 0.95
     importance_reg_coef: float = 0.01
     sparsity_penalty_coef: float = 0.05
     sparsity_threshold: float = 0.01
     min_active_fraction: float = 0.1
 
-    # Dynamics
+    # Dynamics & mode (EquiTile-specific)
     mode: Literal["pc", "ep", "backprop"] = "pc"
-    inference_steps: int = 10
-    step_size: float = 0.1
     lambda_error: float = 0.1
     beta: float = 0.1
     beta_anneal: float = 1.0
     inference_steps_free: int | None = None
     inference_steps_nudged: int | None = None
     use_symmetric_weights: bool = False
-    clamp_activities: bool = True
-    activity_clamp_min: float = -5.0
-    activity_clamp_max: float = 5.0
     ep_init_scale: float = 0.1
-    relaxation_tolerance: float = 1e-4
-
-    # Task & Activation
-    task_type: Literal["classification", "regression", "binary", "multilabel"] = (
-        "classification"
-    )
-    activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu"
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -123,32 +86,8 @@ class EquiTileConfig:
 
     def validate(self):
         """Validate configuration parameters."""
-        if self.neurons_per_tile <= 0:
-            raise ValueError(
-                f"neurons_per_tile must be positive, got {self.neurons_per_tile}"
-            )
-        if self.num_layers <= 0:
-            raise ValueError(f"num_layers must be positive, got {self.num_layers}")
-        if self.tiles_per_layer <= 0:
-            raise ValueError(
-                f"tiles_per_layer must be positive, got {self.tiles_per_layer}"
-            )
+        super().validate()
 
-        if self.learning_rate < 0:
-            raise ValueError(
-                f"learning_rate must be non-negative, got {self.learning_rate}"
-            )
-        if self.importance_lr < 0:
-            raise ValueError(
-                f"importance_lr must be non-negative, got {self.importance_lr}"
-            )
-        if self.weight_decay < 0:
-            raise ValueError(
-                f"weight_decay must be non-negative, got {self.weight_decay}"
-            )
-
-        if not (0 <= self.dropout <= 1):
-            raise ValueError(f"dropout must be in [0, 1], got {self.dropout}")
         if not (0 <= self.sparsity_threshold <= 1):
             raise ValueError(
                 f"sparsity_threshold must be in [0, 1], got {self.sparsity_threshold}"
@@ -158,10 +97,6 @@ class EquiTileConfig:
                 f"importance_decay must be in [0, 1], got {self.importance_decay}"
             )
 
-        if self.inference_steps < 0:
-            raise ValueError(
-                f"inference_steps must be non-negative, got {self.inference_steps}"
-            )
         if self.mode not in ("pc", "ep", "backprop"):
             raise ValueError(
                 f"Invalid mode {self.mode}, must be one of 'pc', 'ep', 'backprop'"

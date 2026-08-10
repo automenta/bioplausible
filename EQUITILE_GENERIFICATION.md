@@ -3,6 +3,8 @@
 **Date**: 2026-08-10  
 **Goal**: Extract EquiTile's tile-based local learning primitives into general-purpose infrastructure usable by any bio-plausible algorithm (PC, EP, Hebbian, FA, Target Prop, etc.)
 
+**Status (2026-08-10, session 4)**: **Phases 1–3 COMPLETE.** Phase 1 landed `core/tile/` + `core/local_learning/` (session 3). **Phase 2 done (session 4)**: the 4 re-export shims were deleted — `equitile/core/__init__.py` and `equitile/__init__.py` now import directly from `core.tile`; `_internal/enhanced.py::_setup_optimizers` folded into `MultiOptimizerMixin` via `extra_importance_params()`/`importance_params()` hooks. **Phase 3.1 done (session 4)**: generic EquiTile-free feature extractors/attention/graph utils moved to `core/tile/feature_extractors.py` and `TemporalEquiTileLayer`/`GraphEquiTileLayer` are now param'd with a `TileModelFactory` — `core/` has **no runtime `equitile` dependency**. Next: zoo algorithms on the substrate (e.g. `TileFA`) + validation/docs.
+
 ---
 
 ## 1. Current Architecture Analysis
@@ -398,32 +400,32 @@ from bioplausible.core.tile.feature_extractors import GraphFeatureExtractor, Gra
 
 ## 6. Migration Plan (Phased)
 
-### Phase 1: Core Infrastructure (Week 1-2)
-| Step | Task | Files |
-|------|------|-------|
-| 1.1 | Create `core/tile/` directory structure | 4 new files |
-| 1.2 | Move `TileGraph`, `TileState` → `core/tile/topology.py` | 1 move |
-| 1.3 | Move kernels → `core/tile/kernels.py` + add FA/TP kernels | 1 move + extend |
-| 1.4 | Create `core/tile/state.py` for checkpointing | 1 new |
-| 1.5 | Move `TaskHandler` → `core/local_learning/task.py` | 1 move |
-| 1.6 | Create `LocalLearningConfig` base in `core/local_learning/config.py` | 1 new |
-| 1.7 | Create `MultiOptimizerMixin` / `LocalLearningMixin` in `core/local_learning/mixins.py` | 1 new |
+### Phase 1: Core Infrastructure (Week 1-2) — ✅ DONE (2026-08-10)
+| Step | Task | Files | Status |
+|------|------|-------|--------|
+| 1.1 | Create `core/tile/` directory structure | 4 new files | ✅ |
+| 1.2 | Move `TileGraph`, `TileState` → `core/tile/topology.py` | 1 move | ✅ (shim deleted session 4) |
+| 1.3 | Move kernels → `core/tile/kernels.py` + add FA/TP kernels | 1 move + extend | ✅ moved (shim deleted session 4); FA/TP kernels deferred until a consumer exists |
+| 1.4 | Create `core/tile/state.py` for checkpointing | 1 new | ⏭ deferred (no consumer yet; `EquiTileStateDict` stays put) |
+| 1.5 | Move `TaskHandler` → `core/local_learning/task.py` | 1 move | ✅ (shim deleted session 4) |
+| 1.6 | Create `LocalLearningConfig` base in `core/local_learning/config.py` | 1 new | ✅ |
+| 1.7 | Create `MultiOptimizerMixin` / `LocalLearningMixin` in `core/local_learning/mixins.py` | 1 new | ✅ (mixins.py; `LocalLearningMixin` protocol deferred — EquiTile's learning loop is too mode-specific to abstract yet) |
 
-### Phase 2: EquiTile Refactor (Week 2-3)
-| Step | Task | Files |
-|------|------|-------|
-| 2.1 | Update `EquiTileConfig` to extend `LocalLearningConfig` | 1 edit |
-| 2.2 | Refactor `EquiTile` to use `core.tile` + `core.local_learning` mixins | 1 major edit |
-| 2.3 | Update imports across `equitile/` modules | ~10 files |
-| 2.4 | Verify all 3 modes (PC/EP/Backprop) work | Tests |
+### Phase 2: EquiTile Refactor (Week 2-3) — ✅ DONE (session 4)
+| Step | Task | Files | Status |
+|------|------|-------|--------|
+| 2.1 | Update `EquiTileConfig` to extend `LocalLearningConfig` | 1 edit | ✅ (+ `validate()` chains `super()`) |
+| 2.2 | Refactor `EquiTile` to use `core.tile` + `core.local_learning` mixins | 1 major edit | ✅ (shims deleted; `enhanced.py` override folded into mixin hooks) |
+| 2.3 | Update imports across `equitile/` modules | ~10 files | ✅ (model, enhanced, async, distributed) |
+| 2.4 | Verify all 3 modes (PC/EP/Backprop) work | Tests | ✅ (68 equitile unit tests + integration pass) |
 
-### Phase 3: Deployments & Zoo Models (Week 3-4)
-| Step | Task | Files |
-|------|------|-------|
-| 3.1 | Move `_feature_extractors.py` → `core/tile/feature_extractors.py` | 1 move |
-| 3.2 | Update 4 deployment modules to import from core | 4 edits |
-| 3.3 | Enable `zoo/models/` to use tile kernels (FA, TP, PC) | ~5 files |
-| 3.4 | Add example: `TileFA`, `TileTargetProp` in zoo | 2 new |
+### Phase 3: Deployments & Zoo Models (Week 3-4) — ◑ PARTIAL (3.1+3.2 done; 3.3/3.4 pending zoo algorithms)
+| Step | Task | Files | Status |
+|------|------|-------|--------|
+| 3.1 | Move `_feature_extractors.py` → `core/tile/feature_extractors.py` | 1 move | ✅ (session 4) — EquiTile-free helpers moved to `core/tile/feature_extractors.py` (structural `Protocol` configs); `TemporalEquiTileLayer`/`GraphEquiTileLayer` + feature extractors param'd with `tile_model_factory`; `RLFeatureExtractor` stays in the slimmed `equitile/deployments/_feature_extractors.py` wiring (now 103 lines) |
+| 3.2 | Update 4 deployment modules to import from core | 4 edits | ✅ (timeseries/graph pass `tile_model_factory`; vision/rl re-export via wiring module) |
+| 3.3 | Enable `zoo/models/` to use tile kernels (FA, TP, PC) | ~5 files | after 3.2 (drop-in once `core.tile.kernels` is the sink) |
+| 3.4 | Add example: `TileFA`, `TileTargetProp` in zoo | 2 new | after 3.3 |
 
 ### Phase 4: Validation & Documentation (Week 4)
 | Step | Task | Files |
@@ -467,4 +469,4 @@ from bioplausible.core.tile.feature_extractors import GraphFeatureExtractor, Gra
 
 ---
 
-**Next Step**: Begin Phase 1.1 — create `core/tile/` directory and move topology/kernels.
+**Next Step**: (DONE session 4) — Phase 2 completion ((a) shims deleted after re-pointing at `core.tile`; (b) `enhanced.py` folded into `MultiOptimizerMixin`) and Phase 3 §3.1/3.2 (feature-extractor decoupling via `TileModelFactory`). Remaining: §3.3 — write the first zoo consumer on the substrate (`TileFA`), then §3.4 examples and Phase 4 validation/docs. Minor: flip `core/local_learning/mixins.py:20` off the `equitile.core.config.EquiTileConfig` TYPE_CHECKING import to make `core/` equitile-free at type-check too.

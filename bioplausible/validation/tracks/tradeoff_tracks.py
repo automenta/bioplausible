@@ -21,10 +21,13 @@ Honest verdict:
 - If EqProp wins on key metric → VALIDATE value proposition
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import psutil
 import torch
@@ -38,7 +41,10 @@ from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
 )
 
-from ..notebook import TrackResult
+from ._base import build_track_result, track_header
+
+if TYPE_CHECKING:
+    from ..notebook import TrackResult
 
 root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
@@ -183,14 +189,11 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
     Direct comparison of EqProp vs Backprop on SAME task.
     Measures EVERYTHING that matters for practical use.
     """
-    logger.info("\n%s", "=" * 70)
-    logger.info("TRACK 57: HONEST TRADE-OFF ANALYSIS - EqProp vs Backprop")
-    logger.info("%s", "=" * 70)
+    start = track_header(57, "HONEST TRADE-OFF ANALYSIS - EqProp vs Backprop", width=70)
     logger.info(
         "\n\u26a0\ufe0f  CRITICAL REALITY CHECK - Determines if research should continue\n"
     )
 
-    start = time.time()
     device = str(get_device())
 
     # Load MNIST
@@ -424,7 +427,7 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
 - {"Further research warranted" if score >= 70 else "Critical issues need resolution"}
 """
 
-    return TrackResult(
+    return build_track_result(
         track_id=57,
         name="Honest Trade-off Analysis",
         status=status,
@@ -436,6 +439,6 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
             "is_competitive": is_competitive,
         },
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=[] if score >= 80 else ["Address speed and/or accuracy gaps"],
     )

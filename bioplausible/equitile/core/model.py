@@ -22,16 +22,16 @@ from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 
 logger = get_logger()
-from bioplausible.equitile._internal.state_types import EquiTileStateDict
-from bioplausible.equitile.core.config import EquiTileConfig
-from bioplausible.equitile.core.kernels import (
+from bioplausible.core.local_learning.mixins import MultiOptimizerMixin
+from bioplausible.core.local_learning.task import TaskHandler
+from bioplausible.core.tile.kernels import (
     compute_activity_update,
     compute_hebbian_update,
     compute_tile_prediction,
 )
-from bioplausible.equitile.core.topology import TileGraph, TileState
-from bioplausible.equitile.training.optimizer_mixin import EquiTileOptimizerMixin
-from bioplausible.equitile.training.task_handler import TaskHandler
+from bioplausible.core.tile.topology import TileGraph, TileState
+from bioplausible.equitile._internal.state_types import EquiTileStateDict
+from bioplausible.equitile.core.config import EquiTileConfig
 from bioplausible.equitile.utils.init_utils import (
     initialize_edge_weights,
     initialize_io_projections,
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     typical_lr_range=(0.01, 0.1),
     tags=[status_tag("experimental")],
 )
-class EquiTile(BioModel, EquiTileOptimizerMixin):
+class EquiTile(BioModel, MultiOptimizerMixin):
     """EquiTile: Scalable Local-Learning Architecture."""
 
     algorithm_name = "EquiTile"

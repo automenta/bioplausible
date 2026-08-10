@@ -10,24 +10,28 @@ Compares signal propagation through different architectures:
 This provides definitive evidence about what architectures work for deep EqProp.
 """
 
+from __future__ import annotations
 import sys
-import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
 
 from bioplausible.core.logging import get_logger
+from bioplausible.zoo.models.eqprop import (
+    LoopedMLP,
+)
 
-from ..notebook import TrackResult
+from ._base import build_track_result, track_header
+
+if TYPE_CHECKING:
+    from ..notebook import TrackResult
 
 root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.zoo.models.eqprop import (
-    LoopedMLP,
-)
 
 __all__ = [
     "LinearChain",
@@ -110,11 +114,7 @@ def track_56_depth_architecture_comparison(verifier) -> TrackResult:
     Compares signal propagation with different activation functions.
     Answers: What architectures actually work for deep EqProp?
     """
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 56: Depth Architecture Comparison")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(56, "Depth Architecture Comparison")
 
     depth = 100 if verifier.quick_mode else 200
     dim = 64
@@ -274,7 +274,7 @@ SN enables stability.
 - The combination (SN + activations) enables arbitrary depth
 """
 
-    return TrackResult(
+    return build_track_result(
         track_id=56,
         name="Depth Architecture Comparison",
         status=status,
@@ -286,6 +286,6 @@ SN enables stability.
             "looped_works": looped_works,
         },
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=[],
     )

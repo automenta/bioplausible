@@ -48,12 +48,12 @@ import torch
 import torch.multiprocessing as mp
 
 from bioplausible.core.logging import get_logger
-from bioplausible.equitile.core.config import DistributedConfig, TileGrowthConfig
-from bioplausible.equitile.core.kernels import (
+from bioplausible.core.tile.kernels import (
     compute_activity_update,
     compute_hebbian_update,
     compute_tile_prediction,
 )
+from bioplausible.equitile.core.config import DistributedConfig, TileGrowthConfig
 from bioplausible.equitile.training._nccl import NCCLCommunicator
 
 __all__ = [

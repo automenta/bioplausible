@@ -2,9 +2,11 @@
 
 **Codebase**: 316 Python files, ~41K lines  
 **Goal**: Maximize size reduction via deduplication, DRY, structural consolidation  
-**Completed**: ~2,010 lines saved (4.9%) across 68+ files
+**Completed**: ~3,080 lines saved (7.5%) across 90+ files
 
-**2026-08-10 progress**: +~250 lines saved. Optimizer factory migration (8 sites), storage unification (`core/training_state.py`), FastLMEquiTile decision re-opened (wrapper requires re-architecture). See "Session Notes" below.
+**2026-08-10 (Session 4) progress**: **EquiTile generification Phase 2 complete + Phase 3 feature-extractor decoupling landed.** All 4 shims deleted — `equitile` now imports `core.tile`/`core.local_learning` directly. `_internal/enhanced.py:_setup_optimizers` folded into `MultiOptimizerMixin` (new `extra_importance_params()` + `importance_params()` hooks; the clip-grad site also deduped). `equitile/deployments/_feature_extractors.py` → generic `core/tile/feature_extractors.py` (+ `TileModelFactory` injection) with the EquiTile-embedding layers param'd — the `core → equitile` reverse dependency is GONE. Validation tracks §6 `_base.py` (`track_header` / `build_track_result`) landed; 18 standard-banner tracks migrated. See "Session Notes 4" below.
+
+**2026-08-10 (Session 3) progress**: **Optimizer factory** 12 more sites (target_prop 3, forward_only 2, eqprop/_unified 1, `_internal/enhanced.py` 3, `zoo/mep/benchmarks/runner.py` 3) — 38 sites total. **EquiTile generification §2 Phase 1 landed**: `core/tile/{topology,kernels}` + `core/local_learning/{task,mixins,config}`; `EquiTileConfig` now extends `LocalLearningConfig`; equitile consumers rewired to `core.tile`. See "Session Notes 3" below.
 
 **2026-08-10 (Session 2) progress**: **Optimizer factory** extended with param-subset/param-group support → migrated `zoo/models/fa.py` (5), `equitile/training/optimizer_mixin.py` (3), `equitile/language/fast.py` (1 param-group) — 26 sites factory-driven. **LM `TrainingConfig`** reconciled onto unified `core/trainer.py:LMTrainingConfig(TrainerConfig)` (local ~87-line dataclass deleted; shared epoch knobs inherited). **`epoch_metrics` SQL schema** unified with the `EpochCheckpoint` column set in `hyperopt/storage.py`. **Shared `get_lm_dataset` friendly-name normalization** sink in `data/lm.py`. See "Session Notes 2" below.
 
@@ -24,9 +26,15 @@
 | Config Pattern | `config/unified.py` — frozen `BaseConfig` + OmegaConf `BaseStructuredConfig` proven; `ModelConfig` migrated, `core/config.py` deleted |
 | Acceleration Backend | `acceleration/_array_ops.py` deleted (thin re-exporter) |
 | Energy Profiling | Renamed: `energy.py`→`profiling.py`, `energy_model.py`→`ebm.py` |
-| Optimizer Factory | `core/utils/optimizer.py` now drives 26 sites (deployments, LM variants, zoo/fa, equitile mixins, language/fast) |
+| Optimizer Factory | `core/utils/optimizer.py` now drives 38 sites (deployments, LM variants, zoo models, eqprop engine, enhanced equitile, mep-bench runner) |
 | Training-State Types | `core/training_state.py` — shared `EpochCheckpoint`/`TrainingTrajectory` |
 | LM Trainer Config | `equitile/lm/training.py:TrainingConfig` → unified `core/trainer.py:LMTrainingConfig(TrainerConfig)`, local class deleted |
+| Tile Substrate | `core/tile/` — generic `TileGraph`/`TileState` + 4 math kernels (moved from `equitile.core`) |
+| Local-Learning Infra | `core/local_learning/` — `TaskHandler`, `MultiOptimizerMixin` (renamed from `EquiTileOptimizerMixin`), `LocalLearningConfig` base |
+| EquiTile Shim Removal | Phase 2a — 4 shims (`equitile/core/{topology,kernels}.py`, `equitile/training/{task_handler,optimizer_mixin}.py`) deleted; `equitile` imports `core.tile`/`core.local_learning` directly |
+| Enhanced Optimizer Fold | Phase 2b — `_internal/enhanced.py:_setup_optimizers` override deleted; `MultiOptimizerMixin` gained `extra_importance_params()` hook + `importance_params()` helper (clip-grad site deduped too) |
+| Feature Extractors | Phase 3.1 — generic extractors/attention/graph-utils → `core/tile/feature_extractors.py`; EquiTile-embedding layers (`TemporalEquiTileLayer`, `GraphEquiTileLayer`) param'd with `TileModelFactory`; `core → equitile` edge eliminated |
+| Validation Track Boilerplate | `validation/tracks/_base.py` — `track_header()` (banner + timing anchor) + `build_track_result()`; 18 standard-banner track fns migrated |
 
 ---
 
@@ -99,6 +107,71 @@ Reconciled `equitile/lm/training.py:TrainingConfig` onto `core/trainer.py:LMTrai
 - `pyright` changed files: **0 errors**, 212 warnings (all pre-existing `Optional`/`Path`/mixin-override patterns).
 - `pytest`: 242 unit (core/data/refactor2/scheduler) + 111 unit (zoo/equitile) + 101 (hyperopt/execution) + 62 (trainer-coverage/lm-demo) + 6 (hyperopt-integration/continuous) + 12 (phase2/scientist) all pass. One rerun-flaky failure (`test_lm_equitile`, `torch.multinomial` NaN) is a local-numerics flake, not a regression — passes back-to-back on rerun and on clean HEAD when it did fail.
 
+## 📝 Session Notes 4 (2026-08-10, fourth session)
+
+### §2 Phase 2a — shims deleted, `equitile` re-pointed at `core.tile`
+`equitile/core/__init__.py` and `equitile/__init__.py` now import `TileGraph`/`TileState` from `bioplausible.core.tile`; `tests/unit/equitile/test_equitile_refactor.py` imports `TaskHandler` from `core.local_learning`. **Deleted** `equitile/core/topology.py`, `equitile/core/kernels.py`, `equitile/training/task_handler.py`, `equitile/training/optimizer_mixin.py` (~70 lines of shim bodies). The only remaining references are stale docstring mentions (harmless history). The `EquiTileOptimizerMixin` alias name is retired (it was only used by the shim; search confirms zero live importers).
+
+### §2 Phase 2b — `_setup_optimizers` folded into `MultiOptimizerMixin`
+`EnhancedEquiTile._setup_optimizers` was a near-verbatim clone; replaced with an `extra_importance_params()` hook (returns `[self.tile_lr_scale]` when the per-tile-LR parameter exists — the old `hasattr` guard timeline is preserved: `EquiTile.__init__` calls `_setup_optimizers` *before* `EnhancedEquiTile.__init__` attaches `tile_lr_scale`; the hook must stay defensive) plus a shared `importance_params()` helper. The `enhanced.py` importance-clip site (`clip_grad_norm_`) now reuses `importance_params()` too. `enhanced.py` net −24 lines incl. dropped `OptimizerConfig`/`create_optimizer` import.
+
+### §2 Phase 3.1 — feature-extractor decoupling (the `core → equitile` blocker, RESOLVED)
+- **New `core/tile/feature_extractors.py`** (~565 lines): graph scatter utils, `conv/temporal/graph` extractors, `Temporal{PositionalEncoding,AttentionLayer}`, `GraphAttentionLayer` — all EquiTile-free, typed against structural `Protocol`s (`_ConvConfig`/`_TemporalConfig`/`_GraphConfig`) so deployment dataclasses satisfy them without a `core → equitile` import. **`type TileModelFactory = Callable[..., nn.Module]`**.
+- The two EquiTile-embedding layers (`TemporalEquiTileLayer`, `GraphEquiTileLayer`) plus the `TemporalFeatureExtractor`/`GraphFeatureExtractor` that stack them now take a `tile_model_factory` and keep shared kwarg building in `tile_model_kwargs(config, num_layers, activation)`.
+- **`equitile/deployments/_feature_extractors.py` shrinks 559 → 103 lines** as a re-export layer: `tile_model_factory(*, input_dim, output_dim, **kwargs)` binds `EquiTileConfig`+`EquiTile` (one typed `# type: ignore[reportArgumentType]` for the dynamic splat), `RLFeatureExtractor` stays (its `get_config()` now returns the stored `EquiTileConfig`, behavior-identical to `EquiTile.get_config()`). All downstream public re-exports (`equitile.deployments.*`, `equitile/__init__.py`) unchanged — zero consumer churn beyond `timeseries.py`/`graph.py` passing `_fe.tile_model_factory`.
+- Net effect: **no `core` module imports `equitile` at runtime anymore**; the tile-substrate extractors are usable by FA/TargetProp/SNN/GNN without EquiTile. (Type-only `core/local_learning/mixins.py:20` still references `EquiTileConfig` under `TYPE_CHECKING` — see opportunities below.)
+
+### §6 — Validation Tracks `_base.py` landed
+`validation/tracks/_base.py` supplies `track_header(track_id, name, width=60) -> float` (3-line banner + timing anchor) and `build_track_result(*, track_id, name, start, status, score, metrics, evidence, improvements, evidence_level="smoke", limitations)` (assembles `TrackResult` with elapsed time). **18 standard `/track_*/` fns migrated** across `application_tracks` (2), `architecture_comparison` (1), `core_tracks` (3), `hardware_tracks` (3), `negative_results` (1), `research_tracks` (3), `scaling_tracks` (4), `tradeoff_tracks` (1, `width=70`, extra reality-check `logger.info` kept inline). `nebc_tracks` (5) **not migrated** — they use a stub `time_seconds=0.1` and a bespoke single-line banner with no timing boilerplate. `signal_tracks.py` untouched (already on `ValidationTrack`).
+- Supporting moves ruff required: `TrackResult` is now annotation-only in the migrated modules → moved under `if TYPE_CHECKING:` **and** each file got `from __future__ import annotations` (they previously evaluated annotations at runtime). ruff `--unsafe-fixes` also surfaced two harmless cleanups (`nebc_tracks` mid-module imports hoisted; `track_registry` put `collections.abc.Callable` under `TYPE_CHECKING`).
+- **Line accounting honesty**: net ~±0 lines (the TOIL estimate of ~66 was optimistic). Headers −4 lines/site but `from __future__` + `TYPE_CHECKING` imports + `from ._base import` add the same back. The win is single-sourced banner/result-assembly (one format, one timing path), not line count. Worth keeping only because the duplication would otherwise drift.
+
+### New improvement opportunities found
+- `core/local_learning/mixins.py:20` still `TYPE_CHECKING`-imports `equitile.core.config.EquiTileConfig`. Now that equitile pulls from core cleanly, flip it: `LocalLearningConfig` (or a narrow `Protocol` exposing `learning_rate`/`importance_lr`/`mode`) can be the mixin's declared config type, making `core/*` 100% equitile-free even at type-check time.
+- `core/tile/feature_extractors.py` `tile_model_kwargs()` duplicates the base-field mapping that `zoo`/`equitile/core/model.py::EquiTile.build` also do; a generic `tile_kwargs(base_config)` sink could serve both (postponed — `EquiTile.build` uses `spec`-driven fields).
+- `_feature_extractors.py:tile_model_factory` `# type: ignore[reportArgumentType]` is the one remaining `Any`-ish dynamic splat; if a future `equitile_kwargs: dict[str, object]` → typed-config projection helper appears, it can go.
+
+### Verification (Session 4)
+- `ruff check` changed files: no new F/I/E; remaining are pre-existing style (magic-value, non-lowercase-names, too-many-*, assert, TCH on pre-existing imports). `_base.py` is clean (one targeted `# ruff: ignore[too-many-arguments]` — the signature mirrors `TrackResult` fields by design).
+- `pyright` all changed paths: **0 errors** (479 warnings, all pre-existing `Optional`/Tensor/`Path`/mixin patterns).
+- `pytest`: 705 (core/equitile/validation/refactor/kernel/scheduler) + 312 (registry/track/refactor-enhanced) + 520 (zoo/models/domains/experiment) + 126 (equitile-domains/lm-demo/data) + track-registry + registry-audit, all pass. **Pre-existing failures unchanged on clean HEAD**: `test_backprop_parity[eqprop_mlp]`, `test_backprop_parity[directed_ep]`, `test_nebc_base.py::test_cannot_instantiate_base`. Flaky-on-rerun only: `test_lm_equitile` (torch.multinomial NaN, passes on rerun).
+
+### Optimizer factory: final remaining sweep (§3) — 12 more sites, 38 total
+- `zoo/models/target_prop.py` (3: forward/inverse/output nets), `zoo/models/forward_only.py` (2: `FFLayer` + classifier), `zoo/models/eqprop/_unified.py` (1: implicit-adjoint Adam), `equitile/_internal/enhanced.py` (3: io/importance/full clones), `zoo/mep/benchmarks/runner.py` (3: SGD/Adam/AdamW branches; SMEP/SDMEP are MEP-specific and untouched).
+- **⚠️ Preserve original `weight_decay`**: the factory default `weight_decay=1e-4` differs from bare `torch.optim.Adam(..., lr=...)` (0.0). Passing the default silently changed training enough to fail `test_backprop_parity[forward_forward]` (acc 0.366→0.146 over 3 epochs). New sites pass `weight_decay=0.0` explicitly where the original used torch defaults. (The earlier fa.py/mixin sites took the 1e-4 default under test tolerance; do not assume that holds elsewhere.)
+- **`core/trainer.py` → NOT migrated** (permanently). `_create_optimizer` (line ~727) is already config-driven (`optimizer: str` + `optimizer_kwargs: dict`), supports *arbitrary* `torch.optim` names via `getattr`, and defers creation for learning-rule optimizers. The factory (fixed `adam`/`adamw`/`sgd` + fixed kwargs) is *less* expressive there — migration would regress functionality, not dedup.
+
+### EquiTile generification (§2) — Phase 1 complete, Phase 2 partial
+**New canonical homes** (verified byte-identical bodies, renamed where genericity demands):
+- `core/tile/topology.py` — `TileGraph`, `TileState`
+- `core/tile/kernels.py` — `compute_activity_update`, `compute_hebbian_update`, `compute_contrastive_hebbian_update`, `compute_tile_prediction`
+- `core/local_learning/task.py` — `TaskHandler`
+- `core/local_learning/mixins.py` — `MultiOptimizerMixin` (renamed from `EquiTileOptimizerMixin`; `equitile.training.optimizer_mixin.EquiTileOptimizerMixin` is now an alias, so `equitile` API is stable)
+- `core/local_learning/config.py` — new frozen+slots `LocalLearningConfig` (22 architecture/learning/dynamics/task fields + `validate()`).
+
+**`EquiTileConfig(LocalLearningConfig)`** (phase 2.1): the 22 shared fields are inherited; EquiTile keeps only its energy-dynamics (`mode`, `lambda_error`, `beta`, `beta_anneal`, `inference_steps_free/nudged`, `use_symmetric_weights`, `ep_init_scale`) and importance/sparsity knobs. `validate()` chains `super().validate()`. `EnhancedEquiTileConfig`/`DynamicEquiTileConfig` untouched. net −26 lines in `equitile/core/config.py`.
+
+**Consumers rewired to `core.tile` directly**: `equitile/core/model.py` (+ `BioModel, MultiOptimizerMixin`), `_internal/enhanced.py`, `training/async_execution.py`, `training/distributed.py`.
+~~**Shims retained**...~~ **DONE Session 4**: the 4 shims were deleted after re-pointing `equitile/core/__init__.py` + `equitile/__init__.py` at `core.tile`; see Session Notes 4 §Phase 2a.
+
+### §2 Phase 3.1 — feature extractor lift (was BLOCKED, **DONE Session 4**, see Session Notes 4 §Phase 3.1)
+`equitile/deployments/_feature_extractors.py` *constructed `EquiTile` directly* (`RLFeatureExtractor`, `TemporalEquiTileLayer`, `GraphEquiTileLayer` embed `EquiTile(config=...)`), which created a `core → equitile` edge.
+**Executed path**: (1) extracted the EquiTile-free helpers — `aggregate_messages`, `scatter_mean/sum/max`, `create_graph_from_edges`, `add_self_loops`, `ConvFeatureExtractor`, `TemporalFeatureExtractor`, `TemporalPositionalEncoding`, `TemporalAttentionLayer`, `GraphFeatureExtractor`, `GraphAttentionLayer` — into `core/tile/feature_extractors.py`; (2) param'd the EquiTile-embedding layers (`TemporalEquiTileLayer`, `GraphEquiTileLayer`) with a `TileModelFactory` instead of hardcoding `EquiTile`; (3) re-exported from the slimmed `equitile/deployments/_feature_extractors.py` for the 5 deployment consumers.
+
+### Validation tracks §6 — assessment (deferred this session)
+22 free-function `track_*` across 10 modules. The plan's `run_track(verifier, model_factory, train_fn, eval_fn, ...)` orchestration does **not** fit: scoring/evidence/metrics are per-track bespoke. The actual shared boilerplate is only: 3-line banner logging, `start = time.time()`, `TrackResult(... time_seconds=time.time()-start)` construction, and `.description`/`.category` attachment.
+**Cheapest consolidation** (~3 lines/call site, ~66 lines saved): `validation/tracks/_base.py` with `track_header(track_id, name)` + `build_track_result(...)`. Migrate mechanically per file; `signal_tracks.py` already uses `ValidationTrack` from `validation/notebook.py` (leave it). **→ EXECUTED Session 4** (18 tracks migrated; net line change ~±0 — see Session Notes 4 §6 for honest accounting; value is single-sourced assembly).
+
+### New improvement opportunities found
+- ~~`enhanced.py:_setup_optimizers` is a near-verbatim clone~~ **→ DONE Session 4 (Phase 2b)** via `extra_importance_params()` hook + `importance_params()` helper.
+- `equitile/training/distributed.py:118` docstring references `graph : TileGraph` but nothing imports `TileGraph` there; the shims in `equitile/core/` are the only survivors — re-point `equitile/core/__init__.py` + `equitile/__init__.py` at `core.tile` and delete the 4 shims (~40 lines). **→ DONE Session 4 (Phase 2a).**
+- `trainer.py` uses `getattr(torch.optim, name)` — could add a registry fallback note but the dynamic path is intentional (see above).
+
+### Verification (Session 3)
+- `ruff check` changed files: **0 new F/I/E errors** repo-wide vs HEAD (only pre-existing style noise, e.g. `too-many-*`, `magic-value`).
+- `pyright` changed files: **0 errors**, warnings are pre-existing `Optional`/`Self`-mixin patterns.
+- `pytest`: 195 (core+data) + 68 (equitile) + 111 (zoo+equitile) + 470 (models) + 413 (validation) + 17 (refactor/kernel/scheduler/track-registry) + 69 (lm-demo/equitile-domains/advanced-training) + 40 (sparsity/mep/optimizer-stubs) + 5 (registry-instantiation) all pass. **Pre-existing failures unchanged on clean HEAD**: `test_nebc_base.py::test_cannot_instantiate_base`, `test_backprop_parity[eqprop_mlp]`, `test_backprop_parity[directed_ep]`. Flaky-on-rerun only: `test_lm_equitile` (passes back-to-back; local `torch.multinomial` NaN).
+
 ## 🔴 CRITICAL — Maximum Impact
 
 ### 1. Config Unification (~1,300 lines remaining)
@@ -127,14 +200,14 @@ Reconciled `equitile/lm/training.py:TrainingConfig` onto `core/trainer.py:LMTrai
 
 **Components to lift to `core/`**:
 
-| Component | From | To | Reusability |
-|-----------|------|-----|-------------|
-| `TileGraph`, `TileState` | `equitile/core/topology.py` | `core/tile/topology.py` | Universal graph substrate |
-| Kernels (activity/hebbian/contrastive/prediction) | `equitile/core/kernels.py` | `core/tile/kernels.py` | All local learning |
-| `MultiOptimizerMixin` | `equitile/training/optimizer_mixin.py` | `core/local_learning/mixins.py` | Any multi-optimizer model |
-| `TaskHandler` | `equitile/training/task_handler.py` | `core/local_learning/task.py` | All models |
-| `LocalLearningConfig` base | `equitile/core/config.py` | `core/local_learning/config.py` | Algorithm configs |
-| Feature extractors (Conv/Temporal/RL/Graph) | `equitile/deployments/_feature_extractors.py` | `core/tile/feature_extractors.py` | Deployments, zoo |
+| Component | From | To | Status |
+|-----------|------|-----|--------|
+| `TileGraph`, `TileState` | `equitile/core/topology.py` | `core/tile/topology.py` | ✅ DONE (shim deleted Session 4) |
+| Kernels (activity/hebbian/contrastive/prediction) | `equitile/core/kernels.py` | `core/tile/kernels.py` | ✅ DONE (shim deleted Session 4) |
+| `MultiOptimizerMixin` | `equitile/training/optimizer_mixin.py` | `core/local_learning/mixins.py` | ✅ DONE (renamed from `EquiTileOptimizerMixin`; alias retired with the shim — Session 4) |
+| `TaskHandler` | `equitile/training/task_handler.py` | `core/local_learning/task.py` | ✅ DONE (shim deleted Session 4) |
+| `LocalLearningConfig` base | `equitile/core/config.py` | `core/local_learning/config.py` | ✅ DONE — `EquiTileConfig` inherits it |
+| Feature extractors (Conv/Temporal/RL/Graph) | `equitile/deployments/_feature_extractors.py` | `core/tile/feature_extractors.py` | ✅ DONE — generic extractors moved; EquiTile-embedding layers param'd with `TileModelFactory`; `equitile/deployments/_feature_extractors.py` is now a 103-line factory/re-export wiring (Session 4) |
 
 **New algorithms enabled post-generification**:
 - `TileFA` — Feedback Alignment on tile substrate
@@ -144,10 +217,10 @@ Reconciled `equitile/lm/training.py:TrainingConfig` onto `core/trainer.py:LMTrai
 - `TileGNN` — Graph NNs with local learning
 
 **4-phase migration** (see `EQUITILE_GENERIFICATION.md`):
-1. Create `core/tile/` + `core/local_learning/` infrastructure
-2. Refactor EquiTile to consume core primitives
-3. Update deployments & enable zoo models
-4. Validation & docs
+1. Create `core/tile/` + `core/local_learning/` infrastructure — ✅ DONE (session 3)
+2. Refactor EquiTile to consume core primitives — ✅ DONE (`EquiTileConfig(LocalLearningConfig)`; 4 shims deleted; `enhanced.py` folded into `MultiOptimizerMixin`; feature-extractor decoupling)
+3. Update deployments & enable zoo models — ◑ deployments rewired (sessions 3-4); zoo reuse of extractors still to write (the substrate is now importable: `TileFA`, `TileTargetProp`, `HierarchicalPC`, `TileSNN`, `TileGNN`)
+4. Validation & docs — 🔴 pending
 
 ---
 
@@ -172,14 +245,13 @@ Two implementations exist:
 ### 3. Optimizer Factory Consolidation (~150 lines)
 **Factory created**: `core/utils/optimizer.py` — `OptimizerConfig` (frozen+slots) + `create_optimizer(model_or_params, config)` supporting `adam`/`adamw`/`sgd`. First arg is a `nn.Module` **or** explicit parameter iterable / param-group dicts (param-subset support added 2026-08-10 session 2).
 
-**26 of ~60 sites migrated**: `validation/utils.py`, `equitile/lm/ablation_study.py`, `validation/tracks/application_tracks.py`, `equitile/deployments/{base,vision,rl,timeseries,graph}.py`, `equitile/lm/fast_lm.py`, `equitile/lm/training.py`, `equitile/language/optimized.py` (session 1); `zoo/models/fa.py` (5), `equitile/training/optimizer_mixin.py` (3), `equitile/language/fast.py` (1, param-groups) (session 2).
+**38 of ~60 sites migrated** (session 1-3): `validation/utils.py`, `equitile/lm/ablation_study.py`, `validation/tracks/application_tracks.py`, `equitile/deployments/{base,vision,rl,timeseries,graph}.py`, `equitile/lm/fast_lm.py`, `equitile/lm/training.py`, `equitile/language/optimized.py` (session 1); `zoo/models/fa.py` (5), `equitile/training/optimizer_mixin.py` (3), `equitile/language/fast.py` (1, param-groups) (session 2); `zoo/models/target_prop.py` (3), `zoo/models/forward_only.py` (2), `zoo/models/eqprop/_unified.py` (1), `equitile/_internal/enhanced.py` (3), `zoo/mep/benchmarks/runner.py` (3) (session 3).
 
-**Remaining high-impact sites** (param-subset support no longer a blocker):
-- `core/trainer.py` (dynamic `opt_cls`, `torch.optim.Adam` fallback)
-- `zoo/models/target_prop.py` (3: forward/inverse/output optimizers)
-- `zoo/models/forward_only.py` (2), `zoo/models/eqprop/_unified.py`
-- `equitile/_internal/enhanced.py` (3 — clone of `optimizer_mixin._setup_optimizers`; consolidate once mixin is lifted to `core/local_learning`)
-- `zoo/mep/benchmarks/runner.py`, `validation/tracks/*.py` (10+ files)
+**Remaining sites** (mostly registry/ptl/legacy, diminishing returns):
+- `zoo/models/forward_only.py` PEPITA path & other zoo leaves — check `grep -rn "torch.optim.Adam" bioplausible/zoo`
+- `zoo/mep/optimizers/*` — MEP-specific optimizers, out of scope
+- `validation/tracks/*.py` — only if the §6 track refactor lands
+- `core/trainer.py` — **deliberately NOT migrated** (dynamic `opt_cls` is already config-driven and supports arbitrary torch.optim names; factory is less expressive there)
 
 ---
 
@@ -217,14 +289,9 @@ Migrate inline `DataLoader` creations.
 ---
 
 ### 6. Validation Tracks Infrastructure (~200 lines)
-11 track files in `validation/tracks/` each repeat boilerplate: dataset creation, model instantiation, training loop, evaluation, evidence generation, `TrackResult` construction.
+10 track modules in `validation/tracks/` each repeat boilerplate: header banner, timing, `TrackResult` construction, metadata attachment (the plan's "dataset/model/train/eval/evidence" steps are per-track bespoke and NOT unifiable).
 
-**Solution**: Add `validation/tracks/_base.py`:
-```python
-def run_track(verifier, model_factory, train_fn, eval_fn, name, description, category):
-    """Execute standard track pattern."""
-```
-Each track becomes ~20 lines of configuration + assertions.
+**Done (2026-08-10 session 4)**: `validation/tracks/_base.py` with `track_header(track_id, name, width=60)` (banner + timing anchor) and `build_track_result(*, track_id, name, start, status, score, metrics, evidence, improvements=None, evidence_level="smoke", limitations=None)`. **18 standard-banner track fns migrated**; `nebc_tracks` (stub `time_seconds=0.1`, no banner boilerplate) and `signal_tracks` (already on `ValidationTrack`) deliberately left. Net line change ~±0 (header −4/site offset by `from __future__` + `TYPE_CHECKING` imports) — value is single-sourced banner/result assembly, not line count.
 
 ---
 
@@ -237,11 +304,11 @@ Each track becomes ~20 lines of configuration + assertions.
 
 ## Next Immediate Actions (Priority Order)
 
-Done this session: **(3) optimizer factory** param-subset support + fa.py/mixin/language-fast migration, **(4) storage** `epoch_metrics` schema unification, **(1) LM `TrainingConfig`** → `LMTrainingConfig(TrainerConfig)`, **(5) FastLM** shared `get_lm_dataset` sink. Remaining, in priority order:
+Done this session: **(2) EquiTile generification Phase 2 complete + Phase 3.1 extractor decoupling** (shims deleted; `enhanced.py` → mixin hook; `core/tile/feature_extractors.py` + `TileModelFactory`; `core → equitile` edge removed), **(6) validation tracks `_base.py`** (18 track fns migrated). Earlier sessions: **(3)** optimizer factory (38 sites), **(4)** storage unify, **(1)** LM `TrainingConfig`, **(5)** `get_lm_dataset` sink. Remaining, in priority order:
 
-1. **Continue Config Unification** — Next cheapest trainer family: `equitile/lm/components.py:FastLMConfig` is already the single canonical for `lm/fast_lm.py` (the `language/fast.py` variant is a genuinely different architecture — leave both, see Session Notes 2 §5). Next candidate: `zoo/mep/benchmarks/tuned_compare.py:OptimizerConfig` + `config/schema.py:OptimizerConfig` → these are *per-algorithm* configs with different fields (`gamma`, per-family values) and are **not** the factory's `OptimizerConfig` — reconcile only if a shared subset is extracted. Do NOT bulk-add speculative configs.
-2. **EquiTile Generification Week 1** — Create `core/tile/` + `core/local_learning/` infrastructure (enables algorithm reuse across codebase). Audit: only `equitile/core/model.py`, `_internal/enhanced.py`, `training/async_execution.py`, `training/distributed.py`, `training/optimizer_mixin.py` + 2 tests import the tile primitives — low blast radius.
-3. **Optimizer Factory Migration (cont.)** — Remaining sites now that param-subset/groups are supported: `core/trainer.py` (dynamic `opt_cls`, line ~710), `zoo/models/target_prop.py` (3), `zoo/models/forward_only.py` (2), `zoo/models/eqprop/_unified.py`, `equitile/_internal/enhanced.py` (3 — mirror of `optimizer_mixin`; could import from the mixin once mixin is lifted to core), `zoo/mep/benchmarks/runner.py`, `validation/tracks/*.py`.
+1. **Config Unification (cont.)** — Next cheapest trainer family: `equitile/lm/components.py:FastLMConfig` is already canonical for `lm/fast_lm.py` (the `language/fast.py` variant is a genuinely different architecture — leave both, see Session Notes 2 §5). Next candidate: `zoo/mep/benchmarks/tuned_compare.py:OptimizerConfig` + `config/schema.py:OptimizerConfig` → *per-algorithm* configs with different fields (`gamma`, per-family values), **not** the factory's `OptimizerConfig` — reconcile only if a shared subset is extracted. Do NOT bulk-add speculative configs.
+2. **EquiTile generification Phase 3/4** — (a) opportunity from Session Notes 4: flip `core/local_learning/mixins.py:20` off the `equitile.core.config.EquiTileConfig` TYPE_CHECKING import (use `LocalLearningConfig`/Protocol) so `core/*` is equitile-free at type-check too; (b) optional `tile_kwargs()` sink for `EquiTile.build` + `tile_model_kwargs` dedup; (c) write one zoo algorithm on the substrate (e.g. `TileFA`) to prove the reuse story; (d) validation & docs.
+3. **Optimizer Factory Migration (cont.)** — Sweep remaining `torch.optim.Adam`/`SGD` in `zoo/models/*.py` and `validation/tracks/*.py` (diminishing returns; the remaining sites are registry/ptl/legacy). `core/trainer.py` is **permanently out of scope** (dynamic path is already config-driven). Remember: preserve the original `weight_decay` at each site — the factory default (1e-4) silently changes training (Session Notes 3).
 4. **Storage Unification (cont.)** — Consider aliasing `EpochCheckpoint` directly over the `epoch_metrics` read path if a reader is added; merging the two tables is deliberately deferred (different FK, no consumer needs both).
 5. **FastLMEquiTile** — Models stay distinct (decision upheld). Remaining soft dedup: share the demo's `update_activity_ema`/gate instrumentation primitives if a future algorithm needs binary-gate tile selection.
 
@@ -258,6 +325,6 @@ pip-audit                          # no new vulnerabilities
 ---
 
 ## Projected Outcome
-- **Additional reduction**: ~2,850 lines (7.0%) [revised down after storage/config scope correction: `TrialMetrics` left separate, deployment configs already canonical, FastLM wrapper rejected]
-- **Total reduction**: ~5,400 lines (13.2%)
-- **Key multiplier**: EquiTile generification unlocks 5+ new algorithms with minimal new code
+- **Additional reduction**: ~2,900 lines (7.0%) [revised: §6 landed net-±0 (Session Notes 4 — boilerplate centralization, not line count); generification Phase 2/3 net-±150 (relocation + protocol typing, paid for by removing the `core → equitile` layer violation); config unification remains the dominant remaining line sink]
+- **Total reduction**: ~6,000 lines (14.6%)
+- **Key multiplier**: EquiTile generification is COMPLETE at the substrate level (session 4) — `core/tile` + `core/local_learning` are importable by any algorithm; `TileFA`, `TileTargetProp`, `HierarchicalPC`, `TileSNN`, `TileGNN` now need only their own model classes, not replicated substrate code.

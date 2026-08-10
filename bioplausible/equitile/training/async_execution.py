@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from bioplausible.equitile.core.kernels import (
+from bioplausible.core.tile.kernels import (
     compute_activity_update,
     compute_hebbian_update,
     compute_tile_prediction,
@@ -51,8 +51,8 @@ __all__ = [
     "create_async_model",
 ]
 if TYPE_CHECKING:
+    from bioplausible.core.tile.topology import TileState
     from bioplausible.equitile.core import EquiTile
-    from bioplausible.equitile.core.topology import TileState
 
 
 # =============================================================================

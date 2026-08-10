@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import gc
 import sys
-import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
@@ -15,8 +17,11 @@ from bioplausible.zoo.models.eqprop import (
     NeuralCube,
 )
 
-from ..notebook import TrackResult
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
+from ._base import build_track_result, track_header
+
+if TYPE_CHECKING:
+    from ..notebook import TrackResult
 
 # Enhance import path
 root_path = Path(__file__).parent.parent.parent
@@ -40,11 +45,7 @@ _memory_partial_ratio = 2.0
 
 def track_5_neural_cube(verifier) -> TrackResult:
     """Track 3 (README): 3D Neural Cube with local connectivity."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 5: Neural Cube 3D Topology")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(5, "Neural Cube 3D Topology")
     cube_size = 6
     input_dim, output_dim = 64, 10
 
@@ -102,14 +103,14 @@ def track_5_neural_cube(verifier) -> TrackResult:
             f"Accuracy {acc * 100:.0f}% below expectations; tune hyperparameters"
         )
 
-    return TrackResult(
+    return build_track_result(
         track_id=5,
         name="Neural Cube 3D Topology",
         status=status,
         score=score,
         metrics={"accuracy": acc, "connection_reduction": topo["connection_reduction"]},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=improvements,
     )
 
@@ -270,11 +271,7 @@ def track_10_memory_scaling(verifier) -> TrackResult:
     The activation-memory delta (peak minus live baseline) isolates the scaling
     term: EqProp stays flat (O(1)) while Backprop grows (O(n)).
     """
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 10: O(1) Memory Scaling (measured)")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(10, "O(1) Memory Scaling (measured)")
     input_dim, hidden_dim, output_dim = 64, 128, 10
     batch = 128
     depths = [10, 25, 50, 100] if not verifier.quick_mode else [10, 25, 50]
@@ -331,7 +328,7 @@ every layer's input activation for the backward pass, growing linearly.
 **Why**: EqProp only stores current state; Backprop stores all intermediate activations.
 """
 
-    return TrackResult(
+    return build_track_result(
         track_id=10,
         name="O(1) Memory Scaling (measured)",
         status=status,
@@ -347,7 +344,7 @@ every layer's input activation for the backward pass, growing linearly.
             "metric": "activation_memory_delta_mb",
         },
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=[],
         evidence_level="conclusive" if torch.cuda.is_available() else "directional",
         limitations=limitations,
@@ -356,11 +353,7 @@ every layer's input activation for the backward pass, growing linearly.
 
 def track_11_deep_network(verifier) -> TrackResult:
     """Scaling: 100-layer network with gradient flow."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 11: Deep Network (100 layers)")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(11, "Deep Network (100 layers)")
 
     # Create deep model
     depth = 50 if verifier.quick_mode else 100
@@ -420,25 +413,21 @@ def track_11_deep_network(verifier) -> TrackResult:
     if grad_mag < 1e-6:
         improvements.append("Very small gradients; check for vanishing gradient issue")
 
-    return TrackResult(
+    return build_track_result(
         track_id=11,
         name="Deep Network (100 layers)",
         status=status,
         score=score,
         metrics={"depth": depth, "accuracy": acc, "grad_magnitude": grad_mag},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=improvements,
     )
 
 
 def track_12_lazy_updates(verifier) -> TrackResult:
     """Scaling: Lazy/Event-driven updates for FLOP savings."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 12: Lazy Event-Driven Updates")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(12, "Lazy Event-Driven Updates")
     input_dim, hidden_dim, output_dim = 64, 128, 10
 
     X_train, y_train = create_synthetic_dataset(
@@ -552,13 +541,13 @@ def track_12_lazy_updates(verifier) -> TrackResult:
             f"Accuracy gap {best['acc_gap'] * 100:.1f}% too large; reduce epsilon"
         )
 
-    return TrackResult(
+    return build_track_result(
         track_id=12,
         name="Lazy Event-Driven Updates",
         status=status,
         score=score,
         metrics={"best_eps": best_eps, "results": results},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=improvements,
     )

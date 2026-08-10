@@ -1,24 +1,29 @@
+from __future__ import annotations
+
 import sys
-import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
+from bioplausible.zoo.models.eqprop import (
+    LoopedMLP,
+)
 
-from ..notebook import TrackResult
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
+from ._base import build_track_result, track_header
+
+if TYPE_CHECKING:
+    from ..notebook import TrackResult
 
 # Enhance import path
 root_path = Path(__file__).parent.parent.parent
 if str(root_path) not in sys.path:
     sys.path.append(str(root_path))
 
-from bioplausible.zoo.models.eqprop import (
-    LoopedMLP,
-)
 
 __all__ = [
     "logger",
@@ -31,11 +36,7 @@ logger = get_logger()
 
 def track_20_transfer_learning(verifier) -> TrackResult:
     """Track 20: Transfer Learning Efficacy."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 20: Transfer Learning Efficacy")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(20, "Transfer Learning Efficacy")
     input_dim, hidden_dim = 64, 128
 
     # Task A: Classes 0-4
@@ -111,25 +112,21 @@ Compare against training from scratch on Task B.
 
 **Conclusion**: Pre-trained recurrent dynamics provide stable init for novel tasks.
 """
-    return TrackResult(
+    return build_track_result(
         track_id=20,
         name="Transfer Learning",
         status=status,
         score=score,
         metrics={"acc_transfer": acc_transfer, "acc_scratch": acc_scratch},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=[],
     )
 
 
 def track_21_continual_learning(verifier) -> TrackResult:
     """Track 21: Continual Learning Robustness with EWC."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 21: Continual Learning Robustness (EWC)")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(21, "Continual Learning Robustness (EWC)")
     input_dim, hidden_dim = 64, 128
 
     # Split task
@@ -241,7 +238,7 @@ that are important for previous tasks (measured by Fisher Information).
 
 **Key Finding**: EWC reduces catastrophic forgetting by protecting important weights.
 """
-    return TrackResult(
+    return build_track_result(
         track_id=21,
         name="Continual Learning",
         status=status,
@@ -252,6 +249,6 @@ that are important for previous tasks (measured by Fisher Information).
             "ewc_lambda": ewc_lambda,
         },
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=["Tune ewc_lambda for optimal balance"] if forgetting > 20 else [],
     )

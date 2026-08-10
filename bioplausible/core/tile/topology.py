@@ -1,9 +1,8 @@
-"""
-EquiTile Topology: Graph Structure and Tile State
-=================================================
+"""Generic tile graph topology and per-tile state containers.
 
-Defines the graph topology and state containers for EquiTile models.
-Moved from core.py to avoid circular dependencies and improve modularity.
+Algorithm-agnostic substrate for tile-based local learning (EquiTile,
+predictive coding, target propagation, graph NNs). Moved from
+``equitile.core.topology`` during generification.
 """
 
 import math

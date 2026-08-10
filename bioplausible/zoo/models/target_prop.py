@@ -12,6 +12,7 @@ from torch import nn
 
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 __all__ = [
@@ -29,8 +30,14 @@ class DTPLayer(nn.Module):
         self.inverse_net = nn.Sequential(
             nn.Linear(out_features, in_features), nn.Tanh()
         )
-        self.opt_f = torch.optim.Adam(self.forward_net.parameters(), lr=learning_rate)
-        self.opt_g = torch.optim.Adam(self.inverse_net.parameters(), lr=learning_rate)
+        self.opt_f = create_optimizer(
+            self.forward_net,
+            OptimizerConfig(name="adam", lr=learning_rate, weight_decay=0.0),
+        )
+        self.opt_g = create_optimizer(
+            self.inverse_net,
+            OptimizerConfig(name="adam", lr=learning_rate, weight_decay=0.0),
+        )
 
 
 @register_model(
@@ -67,7 +74,10 @@ class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
             self.layers.append(DTPLayer(hidden_dim, hidden_dim, learning_rate))
         self.out_layer = nn.Linear(hidden_dim, output_dim)
 
-        self.out_opt = torch.optim.Adam(self.out_layer.parameters(), lr=learning_rate)
+        self.out_opt = create_optimizer(
+            self.out_layer,
+            OptimizerConfig(name="adam", lr=learning_rate, weight_decay=0.0),
+        )
         self.criterion = nn.CrossEntropyLoss()
 
     @classmethod

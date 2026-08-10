@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import sys
-import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
@@ -13,8 +15,11 @@ from bioplausible.zoo.models.eqprop import (
     QuantizedLoopedMLP,
 )
 
-from ..notebook import TrackResult
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
+from ._base import build_track_result, track_header
+
+if TYPE_CHECKING:
+    from ..notebook import TrackResult
 
 # Enhance import path
 root_path = Path(__file__).parent.parent.parent
@@ -74,11 +79,7 @@ def _sink_hardware_track(
 
 def track_16_fpga_quantization(verifier) -> TrackResult:
     """Track 16: FPGA / Bit Precision - INT8 Quantization."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 16: FPGA Bit Precision (INT8)")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(16, "FPGA Bit Precision (INT8)")
     input_dim, hidden_dim, output_dim = 64, 128, 10
     bits = 8
 
@@ -115,14 +116,14 @@ def track_16_fpga_quantization(verifier) -> TrackResult:
 
 **Implication**: Runs on ultra-low power DSPs/FPGA without FPUs.
 """
-    result = TrackResult(
+    result = build_track_result(
         track_id=16,
         name="FPGA Bit Precision",
         status=status,
         score=score,
         metrics={"accuracy": acc, "bits": bits},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=[],
     )
     _sink_hardware_track(
@@ -133,11 +134,7 @@ def track_16_fpga_quantization(verifier) -> TrackResult:
 
 def track_17_analog_photonics(verifier) -> TrackResult:
     """Track 17: Analog/Photonics - Noise Robustness."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 17: Analog/Photonics Noise Robustness")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(17, "Analog/Photonics Noise Robustness")
     input_dim, hidden_dim, output_dim = 64, 128, 10
     noise_level = 0.05  # 5% signal noise is quite high for electronics
 
@@ -178,14 +175,14 @@ def track_17_analog_photonics(verifier) -> TrackResult:
 **Finding**: Attractor dynamics correct for injected noise continuously.
 """
 
-    result = TrackResult(
+    result = build_track_result(
         track_id=17,
         name="Analog/Photonics Noise",
         status=status,
         score=score,
         metrics={"accuracy": acc, "noise_level": noise_level},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=[],
     )
     _sink_hardware_track(
@@ -196,11 +193,7 @@ def track_17_analog_photonics(verifier) -> TrackResult:
 
 def track_18_thermodynamic_dna(verifier) -> TrackResult:
     """Track 18: DNA/Chemical - Thermodynamic Efficiency."""
-    logger.info("\n%s", "=" * 60)
-    logger.info("TRACK 18: DNA/Thermodynamic Constraints")
-    logger.info("%s", "=" * 60)
-
-    start = time.time()
+    start = track_header(18, "DNA/Thermodynamic Constraints")
     input_dim, hidden_dim, output_dim = 64, 128, 10
 
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
@@ -298,14 +291,14 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:
 Aligns with physical laws of dissipation.
 """
 
-    result = TrackResult(
+    result = build_track_result(
         track_id=18,
         name="DNA/Thermodynamic",
         status=status,
         score=score,
         metrics={"efficiency": efficiency, "final_energy": final_energy},
         evidence=evidence,
-        time_seconds=time.time() - start,
+        start=start,
         improvements=[],
     )
     _sink_hardware_track(
