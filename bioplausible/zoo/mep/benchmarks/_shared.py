@@ -15,15 +15,10 @@ from typing import Protocol
 
 from torch import nn
 from torch.utils.data import DataLoader, Subset
-from torchvision import datasets
 
 from bioplausible.config.unified import BaseConfig
 from bioplausible.core.metrics import EpochMetrics
-from bioplausible.data.transforms import (
-    CIFAR10_TRANSFORM,
-    FASHION_MNIST_TRANSFORM,
-    MNIST_TRANSFORM,
-)
+from bioplausible.data.vision import get_vision_dataset
 
 __all__ = [
     "BenchmarkConfig",
@@ -71,34 +66,22 @@ class BenchmarkConfig(BaseConfig):
 def get_dataloaders(config: BenchmarkConfig) -> tuple[DataLoader, DataLoader]:
     """Get data loaders for the specified dataset.
 
-    Builds MNIST / Fashion-MNIST / CIFAR-10 with their canonical
-    pre-trained-normalisation transforms, then wraps them in ``Subset``
+    Delegates dataset construction to the canonical
+    :func:`~bioplausible.data.vision.get_vision_dataset` cached tensor path
+    (same pre-trained-normalisation transforms), then wraps them in ``Subset``
     so callers can cheaply cap iteration cost via
     ``config.subset_train``/``subset_test``.
     """
-    if config.dataset == "mnist":
-        train_dataset = datasets.MNIST(
-            "./data", train=True, download=True, transform=MNIST_TRANSFORM
-        )
-        test_dataset = datasets.MNIST("./data", train=False, transform=MNIST_TRANSFORM)
-
-    elif config.dataset == "fashion":
-        train_dataset = datasets.FashionMNIST(
-            "./data", train=True, download=True, transform=FASHION_MNIST_TRANSFORM
-        )
-        test_dataset = datasets.FashionMNIST(
-            "./data", train=False, transform=FASHION_MNIST_TRANSFORM
-        )
-
-    elif config.dataset == "cifar10":
-        train_dataset = datasets.CIFAR10(
-            "./data", train=True, download=True, transform=CIFAR10_TRANSFORM
-        )
-        test_dataset = datasets.CIFAR10(
-            "./data", train=False, transform=CIFAR10_TRANSFORM
-        )
-    else:
+    canonical = {
+        "mnist": "mnist",
+        "fashion": "fashion_mnist",
+        "cifar10": "cifar10",
+    }.get(config.dataset)
+    if canonical is None:
         raise ValueError(f"Unknown dataset: {config.dataset}")
+
+    train_dataset = get_vision_dataset(canonical, train=True)
+    test_dataset = get_vision_dataset(canonical, train=False)
 
     train_indices = list(range(min(config.subset_train, len(train_dataset))))
     test_indices = list(range(min(config.subset_test, len(test_dataset))))

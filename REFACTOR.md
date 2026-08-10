@@ -3,7 +3,7 @@
 **Codebase**: 316 Python files, ~41K lines  
 **Goal**: Maximize size reduction via deduplication, DRY, structural consolidation  
 **Completed**: ~3,580 lines saved (8.7%) across 90+ files; **§1/§2/§4(metrics rename)/§7 complete**; §3 Config Unification target 1 (FastLMConfig), §4 type-clean, §10 data/mnist + toy dedup landed  
-**Status**: Data Transforms consolidated; Optimizer Factory final sweep complete; Strategy Optimizer Generification complete (generic framework in core/optimization); FastLMConfig frozen on the unified pattern; `core/` fully equitile-free at type-check (LocalLearningConfigProtocol); MEP benchmark + demo toy-dataset math shared via `generate_toy_points`; validation track 57 MNIST load migrated to `get_vision_dataset()`.
+**Status**: Data Transforms consolidated; Optimizer Factory final sweep complete; Strategy Optimizer Generification complete (generic framework in core/optimization); FastLMConfig frozen on the unified pattern; `core/` fully equitile-free at type-check (LocalLearningConfigProtocol); **Checkpoint/serialization unified on `core.checkpoint`** (CoreTrainer + LMTrainer + FastLMEquiTile); **training-loop PoC landed** (`core.training_mixin.supervised_step` drives `eqprop/_unified.py`); **MEP benchmark vision loads migrated to `get_vision_dataset()`**.
 
 ---
 
@@ -38,8 +38,13 @@
 | FastLMConfig Frozen | `equitile/lm/components.py:FastLMConfig` → `frozen=True, slots=True` on the unified config pattern (§3 target 1) | — |
 | Vision Data Load Migrations | `validation/tracks/tradeoff_tracks.py` direct `datasets.MNIST` → `get_vision_dataset()` (canonical cached tensor path) | ~12 |
 | Toy Dataset Dedup | `data/vision.py:generate_toy_points` shared by `_load_toy_dataset` + `demo/tasks.py:_xor/_spiral/_circles` | ~30 |
+| CoreTrainer CP Cohesion | `core/trainer.py` `_save_checkpoint`/`load_checkpoint` → `core.checkpoint.save_checkpoint`/`load_checkpoint`; `Checkpoint` TypedDict re-typed with `Required[model_state_dict]` (encoded invariant; kills `reportTypedDictNotRequiredAccess`) | ~10 |
+| LMTrainer CP Cohesion | `equitile/lm/training.py` save/load → `core.checkpoint`; `scaler_state_dict` + `extra_data` folded into `extra` slot (top-level `config`/`model_state_dict` preserved for `lm/demo.py:run_inference`) | ~10 |
+| FastLMEquiTile CP Cohesion | `equitile/language/fast.py` save/load → `core.checkpoint`; `step`→`global_step`, config object → `metadata["fast_config"]` | ~10 |
+| Training-Loop PoC (§3/§9) | `core/training_mixin.py:supervised_step()` — canonical zero-grad/forward/CE/backward/clip/step; adopted by `eqprop/_unified.py:EquilibriumMLP.train_step` | ~10 |
+| Vision-Load Migration (MEP) | `zoo/mep/benchmarks/_shared.py`/`runner.py`/`niche_benchmarks.py` → `get_vision_dataset()` cached tensor path (removes `torchvision.datasets` + canonical-transform imports) | ~30 |
 
-**Total verified reduction**: ~3,620 lines (8.8%)
+**Total verified reduction**: ~3,690 lines (9.0%)
 
 ---
 
@@ -53,12 +58,10 @@
 | Storage Unification | 2 systems | 1.5 | 0.5 | 🟢 Mostly done |
 | Data Transforms | ~8 duplicate sites | 8 | 0 | ✅ Complete |
 | Metrics Consolidation | ~10 classes | 2 | 8 | 🟢 Rename + audit done |
-| Training Loop Infra | ~20 implementations | 0 | 20 | 🔴 Not started |
+| Training Loop Infra | ~20 implementations | 1 (PoC) | 19 | 🔴 PoC landed (`supervised_step` → `eqprop/_unified.py`) |
 | Strategy Optimizer Generification | 4 strategy types | 4 | 0 | ✅ Complete |
 
 ---
-
-## 🎯 NEXT IMMEDIATE ACTIONS (Priority Order)
 
 ## 🎯 NEXT IMMEDIATE ACTIONS (Priority Order)
 
@@ -102,6 +105,8 @@ Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`s
 ---
 
 ### 3. Training Loop Infrastructure — Pattern Extraction
+**Status**: ✅ **PoC landed (session 7)** — `core/training_mixin.py:supervised_step()` is the canonical plain-BPTT step; adopted by `eqprop/_unified.py:EquilibriumMLP.train_step`. (Section 9 below duplicates this action; see session 7 future-work notes for rollout candidates.)
+
 **Observation**: 20+ `train_step` implementations across `zoo/models/*.py` with similar signatures but no shared base. The `core/trainer.py` `CoreTrainer` already exists but is not used by zoo models.
 
 **Opportunity**: Extract a minimal `TrainStepProtocol` or base mixin in `core/training_mixin.py` that standardizes:
@@ -155,6 +160,8 @@ Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`s
 ---
 
 ### 9. Training Loop Infrastructure — Pattern Extraction
+**Status**: ✅ Duplicate of §3 — PoC landed (session 7). See §3 and session-7 future-work rollout candidates.
+
 **Observation**: 20+ `train_step` implementations across `zoo/models/*.py` with similar signatures but no shared base. The `core/trainer.py` `CoreTrainer` already exists but is not used by zoo models.
 
 **Opportunity**: Extract a minimal `TrainStepProtocol` or base mixin in `core/training_mixin.py` that standardizes:
@@ -170,9 +177,9 @@ Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`s
 
 | Area | Files | Est. Lines | Effort |
 |------|-------|------------|--------|
-| **Vision Data Loading** | `data/vision.py` already canonical; ✅ `validation/tracks/tradeoff_tracks.py` migrated to `get_vision_dataset()` (session 6). Remaining: `domains/vision.py`, `zoo/mep/benchmarks/_shared.py`/`niche_benchmarks.py`/`continual_learning.py`/`runner.py` still construct `datasets.*` directly — each uses different transforms/subsetting so migrate case-by-case | ~12 done / ~40 left | Low |
+| **Vision Data Loading** | `data/vision.py` already canonical; ✅ `validation/tracks/tradeoff_tracks.py` (s6) + `zoo/mep/benchmarks/_shared.py`/`runner.py`/`niche_benchmarks.py` (s7) migrated to `get_vision_dataset()`. Remaining by design (differing semantics): `domains/vision.py` (custom train/val transforms), `continual_learning.py` (raw `/255` pixel space for permutation tasks) | ~35 left | Low |
 | **Toy Dataset Duplication** | ✅ `_load_toy_dataset` in `data/vision.py` + `demo/tasks.py:_xor/_spiral/_circles` → shared `generate_toy_points()` (session 6) | ~30 | Done |
-| **Checkpoint/Serialization** | `core/checkpoint.py` + `core/checkpoint_mixin.py` + `hyperopt/storage.py` save/load — unify serialization helpers | ~80 | Medium |
+| **Checkpoint/Serialization** | ✅ `core/trainer.py` + `equitile/lm/training.py` + `equitile/language/fast.py` unified on `core.checkpoint` (session 7). Remaining bespoke exporters: `deployment.py:237/299/691` (torchscript/state export), `equitile/deployments/deployment.py:191` (config-object export, dual-format tolerant loaders in `robustness.py`/`zoo/__init__.py:104`) | ~40 left | Medium |
 | **Device/Seed/Logging Imports** | Already consolidated; verify no remaining inline `torch.manual_seed`/`torch.device` calls | — | Done |
 | **Registry/Build Patterns** | `core/registry.py` + `core/construction.py` — `build` classmethods across zoo models follow similar pattern; could standardize | ~100 | Medium |
 | **Strategy Optimizer Permutations** | Implement `FAGradient`, `TargetPropGradient`, `HebbianGradient` as `GradientStrategy` to unlock Muon/Dion/Fisher + FA/TargetProp/Hebbian combos | ~150 | Medium |
@@ -201,10 +208,10 @@ pip-audit                          # no new vulnerabilities
 | EquiTile Reuse (§8) | ~300 lines (new algorithms, not dedup) |
 | Storage (§6) | ~50 lines |
 | Strategy Optimizer Generification (§7) | ~200 lines + permutations ✅ |
-| Training Loop (§9) | ~200 lines |
-| Additional (§10) | ~260 lines |
-| **Total Additional** | **~1,260 lines (3.1%)** |
-| **Cumulative** | **~4,340 lines (10.6%)** |
+| Training Loop (§9) | ~200 lines | 🟡 PoC landed (session 7) |
+| Additional (§10) | ~260 lines ✅ (checkpoint unify + vision MEP loads in s7) |
+| **Total Additional** | **~1,200 lines (2.9%)** |
+| **Cumulative** | **~4,330 lines (10.5%)** |
 
 **Key multiplier**: EquiTile generification is **complete at substrate level** — `core/tile` + `core/local_learning` are importable by any algorithm. `TileFA`, `TileTargetProp`, `HierarchicalPC`, `TileSNN`, `TileGNN` now need only their own model classes, not replicated substrate code. **Strategy Optimizer Generification complete** — `core/optimization/` provides generic strategy framework enabling Muon+FA, Hebbian+Muon, Dion+TargetProp, etc. permutations.
 
@@ -220,19 +227,23 @@ pip-audit                          # no new vulnerabilities
 | 4 | 2026-08-10 | EquiTile generification Phase 2/3 (shims deleted, enhanced fold, feature-extractor decoupling), validation tracks `_base.py` | **Zero `core → equitile` deps**; 18 tracks on shared boilerplate |
 | 5 | 2026-08-10 | **Data Transforms consolidation** (8 sites), **Optimizer Factory final sweep** (16 sites), **Strategy Optimizer Generification** (core/optimization + FAGradient) | §1/§2/§7 complete; generic framework for Muon+FA etc. |
 | 6 | 2026-08-10 | **LM Metrics rename** (`TrainingMetrics`→`LMTrainingMetrics` + imports), **mixin type-clean** (`LocalLearningConfigProtocol` — core equitile-free at type-check), **FastLMConfig frozen** (§3 target 1), **tradeoff_tracks → `get_vision_dataset`**, **toy-dataset dedup** (`generate_toy_points` shared across `data`+`demo`) | `core/*` equitile-free at type-check; ready for config targets 2–4; pyright @ baseline parity |
+| 7 | 2026-08-10 | **Checkpoint serialization unified** (`Checkpoint` typed `Required[model_state_dict]`; CoreTrainer + LMTrainer + FastLMEquiTile → `core.checkpoint` helpers), **training-loop PoC** (`supervised_step` in `core/training_mixin.py` → `eqprop/_unified.py`), **MEP vision loads → `get_vision_dataset`** (`_shared.py`/`runner.py`/`niche_benchmarks.py`; ~3 raw `datasets.*` sites + 3 transform imports removed) | 3 raw save/load sites unified (of the ~14 surveyed); `supervised_step` ready to roll out to other plain-BPTT train_steps; spec'd `domains/vision.py` + `continual_learning.py` as intentional non-migrations |
 
 ---
 
-## 🧭 FUTURE WORK NOTES (Session 6)
+## 🧭 FUTURE WORK NOTES (Session 7)
 
 **Verified blockers/preconditions for next sessions:**
-- **Config targets 2–4 are "no-merge" by design**: `schema.py:OptimizerConfig` (component-selection for YAML experiments) vs `core/utils/optimizer.py:OptimizerConfig` (frozen runtime hyperparams) are semantically different — reconcile *only* if a shared reader appears. `reproducibility.py:ExperimentConfig` (seed+dicts) vs `experiments/utils.py:ExperimentConfig` (model/optimizer/runner knobs) serve different purposes; only standardize field shapes, don't merge. `schema.py:TrainingConfig` stays OmegaConf-structured.
-- **Checkpoint/serialization unify** (`core/checkpoint.py` + `checkpoint_mixin.py` exist; ~14 raw `torch.save`/`torch.load` sites remain) — worth a sweep next: `core/trainer.py:1443`, `deployment.py`, `equitile/language/fast.py:582`, `equitile/deployments/deployment.py:191`, `execution/_lifecycle.py:153`, `zoo/__init__.py:104`. Each uses a bespoke dict format; adopt `core.checkpoint.Checkpoint` where the geometry fits.
-- **`BenchmarkConfig` in `zoo/mep/benchmarks/_shared.py` already extends `BaseConfig`** — the MEP benchmark family is the reference for migrating the remaining `datasets.*` calls (needs per-file subsetting/transform audit).
-- **Inline accuracy formulas** (~9 sites: `zoo/models/eqprop/_contrastive.py:278`, `hebbian.py:292`, `base.py:302`, `fa.py:1230`, `nebc_base.py:109/138`, `validation/utils.py:107/135`, `application_tracks.py:194`) still duplicate `core/losses.py:compute_accuracy` semantics — switch when touching those files (low priority).
-- **`demo/tests/` import quirk**: `demo/tests/*.py` do `from tasks import ...` and only collect when run with `demo/` as the rootdir (via `pytest demo/tests`), not when combined with other test dirs. Pre-existing; not caused by the refactor.
-- **Pre-existing failures to ignore** (present at baseline, unrelated to this session): `tests/unit/validation/test_backprop_parity.py::test_backprop_parity[eqprop_mlp|directed_ep]`; `DataLoader` undefined errors in `compare.py`/`tuned_compare.py` (they import it from `_shared` but use it before the import is visible to pyright).
-- **Zero-diff verification recipe** used this session: `git stash` → run `ruff check --output-format=concise` + `pyright .` + targeted `pytest --no-cov` → compute `comm` diffs. Keeps regression detection cheap without full-suite reruns.
+- **Config targets 2–4 remain "no-merge"**: reconfirmed session 7 — `schema.py:OptimizerConfig` (component-selection for YAML experiments) vs `tuned_compare.py:OptimizerConfig` (per-algorithm EP hyperparams: `beta`/`settle_steps`/`gamma`/…) share only `lr`; meaningful merge requires a shared reader. `reproducibility.py:ExperimentConfig` (seed+dicts) vs `experiments/utils.py:ExperimentConfig` (model/optimizer/runner knobs) vs `equitile/analysis/research.py:ExperimentConfig` (name/description/tags) serve three distinct purposes. `schema.py:TrainingConfig` stays OmegaConf-structured. **No further action unless a consumer merges them.**
+- **Checkpoint sweep is ~60% complete**: unified `core/trainer.py` (the canonical trainer), `equitile/lm/training.py` (scaler via `extra`), `equitile/language/fast.py` (config obj → `metadata`, `step`→`global_step`). Remaining raw sites are *bespoke exporters*, not trainer checkpoints: `deployment.py:237/299/691` (torchscript/state export), `equitile/deployments/deployment.py:191` (writes a config *object* → would need `metadata`), tolerant dual-format loaders `execution/robustness.py:130` + `zoo/__init__.py:104`. Each is self-consistent save/load with no cross-file reader except robustness (handles both bare state_dict and wrapped). **Adopt core.checkpoint there only if a shared reader for those exports appears.**
+- **`Checkpoint` TypedDict is now `Required[model_state_dict]`** (was `total=False`): pyright `reportTypedDictNotRequiredAccess` is enabled by this encode-the-invariant change; consumers must bind `.get()` to a local before narrowing (see `core/trainer.py:load_checkpoint`, `fast.py:load_checkpoint`).
+- **Training-loop PoC is the §3/§9 proof**: `core/training_mixin.py:supervised_step(model, optimizer, x, y, *, grad_clip)` canonicalizes the plain-BPTT `zero_grad→forward→CE→backward→(clip→)step` shape. **Rollout candidates** (train_step bodies that are exactly CE+optimizer, no custom physics): `predictive_coding.py:263` (`PredictiveCodingHybrid`), `core/ebm.py:146` fallback branch, `zoo/models/forward_only.py` classifier tail. Contrastive/EqProp/FA/PEPITA steps keep their bespoke bodies. **Caution: `supervised_step` returns only `{"loss","accuracy"}`**; models that currently return extra keys (e.g. `cls_loss`) need a small extension or their own tail call.
+- **`continual_learning.py` is NOT a `get_vision_dataset` candidate**: it flattens raw `.data`/255 (un-normalised pixel space) then indexes tensors directly for permutation tasks — different semantics from the canonical normalised cached path. `domains/vision.py:setup()` also can't drop to `get_vision_dataset` without losing custom `train_transform`/`val_transform` support. Both documented as intentional non-migrations.
+- **MEP benchmark dataset-name mapping**: `get_dataloaders`/get_dataloader now map `mnist|fashion→fashion_mnist|cifar10` (and `MNIST|FASHIONMNIST|CIFAR10|CIFAR100` in `runner.py`) via dicts — keep in sync if a new corpus is added to `data/vision.py:_get_dataset_class`.
+- **Toolchain note**: ruff config `[tool.ruff.lint] ignore` names (`line-too-long`, `lowercase-imported-as-non-lowercase`, `non-augmented-assignment`, `raise-vanilla-args`) fail on system ruff 0.15.9 but parse on the project venv (`uv run ruff`/`.venv/bin/ruff` = 0.16.0). **Always use the venv ruff**; pre-commit's pinned v0.7.0 also accepts older aliases. Consider standardizing the aliases to modern codes (`E501`, `N812`, `PLR6104`, `TRY003`) so any ruff works.
+- **Pre-existing failures to ignore** (confirmed still failing on clean tree in session 7): `tests/unit/validation/test_backprop_parity.py::test_backprop_parity[eqprop_mlp|directed_ep]`; `tests/unit/test_plan2_actions.py::test_sample_config_eqprop_has_equilibrium_params`; `DataLoader` undefined errors in `compare.py`/`tuned_compare.py` (they import it from `_shared` but use it before the import is visible to pyright).
+- **Session-7 targeted test matrix passed** (no full-suite reruns): `test_checkpoint.py` + `test_trainer_coverage.py` (29), `test_lm_demo.py` (38), `test_eqprop_models.py`+`_forward`+`_base` (25), `test_phase2_integration.py` (1), `test_lm_demo.py`+`test_zoo_integration.py` (68), `test_config_knobs.py`+`test_training_path.py` (17), `test_plan2_actions.py`+`test_domains.py` (51 pass / 1 pre-existing fail). ruff baseline 104→102 findings on touched files; pyright 0 errors across all touched files.
+- **Zero-diff verification recipe**: `git stash` → `ruff check` → `pyright` → targeted `pytest --no-cov` → `git stash pop`; compute `comm` diffs. Keeps regression detection cheap without full-suite reruns.
 
 ---
 

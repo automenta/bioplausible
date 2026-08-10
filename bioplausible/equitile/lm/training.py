@@ -35,6 +35,13 @@ import torch
 import torch.nn.functional as F
 from torch.amp import GradScaler, autocast
 
+from bioplausible.core.checkpoint import (
+    Checkpoint,
+    save_checkpoint,
+)
+from bioplausible.core.checkpoint import (
+    load_checkpoint as load_checkpoint_file,
+)
 from bioplausible.core.logging import get_logger
 from bioplausible.core.trainer import LMTrainingConfig as TrainingConfig
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
@@ -532,7 +539,7 @@ class LMTrainer:
         extra_data : dict, optional
             Additional data to save
         """
-        checkpoint = {
+        checkpoint: Checkpoint = {
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "metrics": self.metrics.get_summary(),
@@ -542,12 +549,15 @@ class LMTrainer:
         }
 
         if extra_data:
-            checkpoint.update(extra_data)
+            checkpoint["extra"] = dict(extra_data)
 
         if self.scaler:
-            checkpoint["scaler_state_dict"] = self.scaler.state_dict()
+            checkpoint["extra"] = {
+                **(checkpoint.get("extra") or {}),
+                "scaler_state_dict": self.scaler.state_dict(),
+            }
 
-        torch.save(checkpoint, path)
+        save_checkpoint(path, checkpoint)
 
     def load_checkpoint(self, path: str) -> None:
         """Load training checkpoint.
@@ -557,13 +567,16 @@ class LMTrainer:
         path : str
             Checkpoint path
         """
-        checkpoint = torch.load(path, map_location=self.device)
+        checkpoint = load_checkpoint_file(path, map_location=self.device)
 
         self.model.load_state_dict(checkpoint["model_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        opt_state = checkpoint.get("optimizer_state_dict")
+        if opt_state is not None:
+            self.optimizer.load_state_dict(opt_state)
 
-        if "scaler_state_dict" in checkpoint and self.scaler:
-            self.scaler.load_state_dict(checkpoint["scaler_state_dict"])
+        extra = checkpoint.get("extra") or {}
+        if "scaler_state_dict" in extra and self.scaler:
+            self.scaler.load_state_dict(extra["scaler_state_dict"])  # type: ignore[arg-type]
 
         self.metrics.global_step = checkpoint.get("global_step", 0)
         self.metrics.epoch = checkpoint.get("epoch", 0)

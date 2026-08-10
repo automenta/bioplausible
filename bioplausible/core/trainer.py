@@ -21,11 +21,17 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
 
-from bioplausible.core.profiling import EnergyTracker
+from bioplausible.core.checkpoint import (
+    load_checkpoint as load_checkpoint_file,
+)
+from bioplausible.core.checkpoint import (
+    save_checkpoint as save_checkpoint_file,
+)
 from bioplausible.core.ebm import EBMTrainer, EnergyModel
 from bioplausible.core.logging import get_logger
 from bioplausible.core.losses import compute_accuracy, compute_loss
 from bioplausible.core.metrics import BaseMetrics
+from bioplausible.core.profiling import EnergyTracker
 from bioplausible.core.registry import (
     ComponentCategory,
     IncompatibilityError,
@@ -1440,7 +1446,8 @@ class CoreTrainer:
             checkpoint_dir / f"epoch_{self.current_epoch}_val_{metrics.val_loss:.4f}.pt"
         )
 
-        torch.save(
+        save_checkpoint_file(
+            path,
             {
                 "epoch": self.current_epoch,
                 "model_state_dict": self.model.state_dict(),
@@ -1451,7 +1458,6 @@ class CoreTrainer:
                 "config": self.config.to_dict(),
                 "global_step": self.global_step,
             },
-            path,
         )
 
         logger.info("Checkpoint saved: %s", path)
@@ -1491,10 +1497,11 @@ class CoreTrainer:
 
     def load_checkpoint(self, path: str) -> None:
         """Load model checkpoint."""
-        checkpoint = torch.load(path, map_location=self.device)
+        checkpoint = load_checkpoint_file(path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
-        if self.optimizer and checkpoint.get("optimizer_state_dict"):
-            self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        opt_state = checkpoint.get("optimizer_state_dict")
+        if self.optimizer and opt_state is not None:
+            self.optimizer.load_state_dict(opt_state)
         self.current_epoch = checkpoint.get("epoch", 0)
         self.global_step = checkpoint.get("global_step", 0)
         self.history = [TrainingMetrics(**m) for m in checkpoint.get("metrics", [])]

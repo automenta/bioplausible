@@ -25,6 +25,7 @@ import torch
 from torch import nn
 
 from bioplausible.config.unified import ModelConfig
+from bioplausible.core.training_mixin import supervised_step
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.base import EqPropModel
 
@@ -97,19 +98,12 @@ class EquilibriumMLP(EqPropModel):
         """Train via the implicit-equilibrium adjoint + Adam (self-contained).
 
         Runs the O(1) implicit forward (through ``EquilibriumFunction``) then a
-        standard optimizer step, so the local equilibrium rule trains correctly
-        and returns the metrics dict the probe/tests expect.
+        standard optimizer step (canonical ``supervised_step``), so the local
+        equilibrium rule trains correctly and returns the metrics dict the
+        probe/tests expect.
         """
-        import torch.nn.functional as F
-
         if self.optimizer is None:
             self.optimizer = create_optimizer(
                 self, OptimizerConfig(name="adam", lr=self.hebbian_lr, weight_decay=0.0)
             )
-        logits = self.forward(x)
-        loss = F.cross_entropy(logits, y)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-        acc = (logits.argmax(1) == y).float().mean().item()
-        return {"loss": loss.item(), "accuracy": acc}
+        return supervised_step(self, self.optimizer, x, y)

@@ -13,12 +13,11 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader, Subset, TensorDataset
-from torchvision import datasets
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
-from bioplausible.data.transforms import MNIST_TRANSFORM
+from bioplausible.data.vision import get_vision_dataset
 from bioplausible.zoo.mep.presets import smep
 
 __all__ = [
@@ -325,12 +324,7 @@ def benchmark_adaptive_settling(
 
     # Load MNIST
     train_loader = DataLoader(
-        Subset(
-            datasets.MNIST(
-                "./data", train=True, download=True, transform=MNIST_TRANSFORM
-            ),
-            range(2000),
-        ),
+        Subset(get_vision_dataset("mnist", train=True), range(2000)),
         batch_size=64,
         shuffle=True,
     )

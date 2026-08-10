@@ -20,6 +20,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.checkpoint import load_checkpoint, save_checkpoint
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.data.lm import get_lm_dataset
@@ -577,16 +578,14 @@ class FastLMEquiTile(OptimizedLMEquiTile):
 
     def save_checkpoint(self, path: str) -> None:
         """Save model checkpoint."""
-        # Create directory if needed
-        Path(path).resolve().parent.mkdir(exist_ok=True, parents=True)
-        torch.save(
+        save_checkpoint(
+            path,
             {
                 "model_state_dict": self.state_dict(),
                 "optimizer_state_dict": self.optimizer.state_dict(),
-                "config": self.fast_config,
-                "step": self._step_counter,
+                "metadata": {"fast_config": self.fast_config},
+                "global_step": self._step_counter,
             },
-            path,
         )
         logger.info("Model saved to %s", path)
 
@@ -595,16 +594,18 @@ class FastLMEquiTile(OptimizedLMEquiTile):
         if not Path(path).exists():
             raise FileNotFoundError(f"Checkpoint not found: {path}")
 
-        checkpoint = torch.load(path, map_location="cpu")
+        checkpoint = load_checkpoint(path, map_location="cpu")
 
         self.load_state_dict(checkpoint["model_state_dict"], strict=False)
-        if "optimizer_state_dict" in checkpoint:
+        opt_state = checkpoint.get("optimizer_state_dict")
+        if opt_state is not None:
             try:
-                self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                self.optimizer.load_state_dict(opt_state)
             except (RuntimeError, ValueError, KeyError) as e:
                 logger.warning("Could not load optimizer state: %s", e)
 
-        if "step" in checkpoint:
-            self._step_counter = checkpoint["step"]
+        step = checkpoint.get("global_step")
+        if step is not None:
+            self._step_counter = int(step)
 
         logger.info("Model loaded from %s", path)

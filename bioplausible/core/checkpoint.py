@@ -7,7 +7,7 @@ the three ad-hoc formats in ``CoreTrainer``, ``EquiTile``, and
 """
 
 import pathlib
-from typing import TypedDict
+from typing import NotRequired, Required, TypedDict
 
 import torch
 from torch import Tensor
@@ -17,23 +17,23 @@ from bioplausible.core.logging import get_logger
 logger = get_logger()
 
 
-class Checkpoint(TypedDict, total=False):
+class Checkpoint(TypedDict):
     """Unified checkpoint format for all models and trainers.
 
-    All fields except ``model_state_dict`` are optional — the only
-    invariant is that ``model_state_dict`` is present.  Additional
+    ``model_state_dict`` is the only required key — the invariant every
+    checkpoint satisfies.  All other fields are optional; additional
     model-specific keys can be stored in ``extra``.
     """
 
-    model_state_dict: dict[str, Tensor]
-    optimizer_state_dict: dict[str, object] | None
-    scheduler_state_dict: dict[str, object] | None
-    config: dict[str, object]
-    epoch: int
-    global_step: int
-    metrics: dict[str, object]
-    metadata: dict[str, object]
-    extra: dict[str, object]
+    model_state_dict: Required[dict[str, Tensor]]
+    optimizer_state_dict: NotRequired[dict[str, object] | None]
+    scheduler_state_dict: NotRequired[dict[str, object] | None]
+    config: NotRequired[dict[str, object]]
+    epoch: NotRequired[int]
+    global_step: NotRequired[int]
+    metrics: NotRequired[dict[str, object]]
+    metadata: NotRequired[dict[str, object]]
+    extra: NotRequired[dict[str, object]]
 
 
 def save_checkpoint(

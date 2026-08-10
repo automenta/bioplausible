@@ -18,7 +18,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision import datasets
 
 try:
     import yaml
@@ -39,12 +38,7 @@ import bioplausible.core.utils.optimizer as _optimizer
 from bioplausible.core.logging import get_logger
 from bioplausible.core.metrics import BaseMetrics
 from bioplausible.core.utils.device import get_device
-from bioplausible.data.transforms import (
-    CIFAR10_TRANSFORM,
-    CIFAR100_TRANSFORM,
-    FASHION_MNIST_TRANSFORM,
-    MNIST_TRANSFORM,
-)
+from bioplausible.data.vision import get_vision_dataset
 from bioplausible.zoo.mep.presets import sdmep, smep
 
 __all__ = [
@@ -201,35 +195,22 @@ def get_dataloader(
     num_workers: int = 4,
     device: torch.device | None = None,
 ) -> tuple[DataLoader, DataLoader]:
-    """Create train and test dataloaders."""
+    """Create train and test dataloaders.
 
-    transform = {
-        "MNIST": MNIST_TRANSFORM,
-        "FASHIONMNIST": FASHION_MNIST_TRANSFORM,
-        "CIFAR10": CIFAR10_TRANSFORM,
-        "CIFAR100": CIFAR100_TRANSFORM,
+    Delegates dataset construction to the canonical
+    :func:`~bioplausible.data.vision.get_vision_dataset` cached tensor path.
+    """
+    canonical = {
+        "MNIST": "mnist",
+        "FASHIONMNIST": "fashion_mnist",
+        "CIFAR10": "cifar10",
+        "CIFAR100": "cifar100",
     }.get(dataset_name.upper())
-    if transform is None:
+    if canonical is None:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-    # Get dataset class
-    dataset_map = {
-        "MNIST": datasets.MNIST,
-        "FashionMNIST": datasets.FashionMNIST,
-        "CIFAR10": datasets.CIFAR10,
-        "CIFAR100": datasets.CIFAR100,
-    }
-
-    dataset_class = dataset_map.get(dataset_name.upper())
-    if dataset_class is None:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
-
-    train_dataset = dataset_class(
-        root, train=True, download=True, transform=transform
-    )
-    test_dataset = dataset_class(
-        root, train=False, download=True, transform=transform
-    )
+    train_dataset = get_vision_dataset(canonical, root=root, train=True)
+    test_dataset = get_vision_dataset(canonical, root=root, train=False)
 
     # Subset for faster benchmarking
     if subset_size and subset_size < len(train_dataset):
