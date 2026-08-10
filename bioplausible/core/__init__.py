@@ -36,6 +36,8 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "TrainingMixin": ("bioplausible.core.training_mixin", "TrainingMixin"),
     "SpectralMixin": ("bioplausible.core.spectral_mixin", "SpectralMixin"),
     "CheckpointMixin": ("bioplausible.core.checkpoint_mixin", "CheckpointMixin"),
+    "BaseMetrics": ("bioplausible.core.metrics", "BaseMetrics"),
+    "EpochMetrics": ("bioplausible.core.metrics", "EpochMetrics"),
 }
 
 __all__ = sorted(_LAZY)

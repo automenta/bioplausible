@@ -1,6 +1,6 @@
 """
 EquiTile Time Series: Sequential Data Modeling
-===============================================
+================================================
 
 Extends EquiTile for time series and sequential data:
 - TimeSeriesEquiTile: Recurrent and convolutional architectures
@@ -8,18 +8,14 @@ Extends EquiTile for time series and sequential data:
 - Support for forecasting, classification, and anomaly detection
 - Multi-variate time series support
 
-Examples
---------
->>> from bioplausible.equitile.timeseries import TimeSeriesEquiTile, TimeSeriesConfig
->>> config = TimeSeriesConfig(
-...     input_dim=10,
-...     seq_len=100,
-...     output_dim=1,
-...     model_type="forecasting",
-... )
->>> model = TimeSeriesEquiTile(config)
->>> predictions = model(sequence)
+The shared temporal layers now live in the private ``_feature_extractors``
+module and are re-exported; this module adds the time-series-specific model
+(output projections, forecasting, anomaly detection). The time-series model
+trains with standard backprop, so its config deliberately excludes the PC/EP
+dynamics fields.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
@@ -32,8 +28,13 @@ from bioplausible.core.config import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
-from bioplausible.equitile.core import EquiTile
-from bioplausible.equitile.core.config import EquiTileConfig
+from bioplausible.equitile.deployments import _feature_extractors as _fe
+
+# Re-export shared temporal components under their historical names so
+# ``from bioplausible.equitile.deployments.timeseries import ...`` keeps working.
+TemporalPositionalEncoding = _fe.TemporalPositionalEncoding
+TemporalAttentionLayer = _fe.TemporalAttentionLayer
+TimeSeriesEquiTileLayer = _fe.TemporalEquiTileLayer
 
 __all__ = [
     "TemporalAttentionLayer",
@@ -54,49 +55,14 @@ if TYPE_CHECKING:
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class TimeSeriesConfig:
     """Configuration for Time Series EquiTile.
 
-    Input/Output
-    ------------
-    input_dim : int
-        Input feature dimension
-    seq_len : int
-        Input sequence length
-    output_dim : int
-        Output dimension
-    pred_len : int
-        Prediction length (for forecasting)
-
-    Architecture
-    ------------
-    model_type : str
-        Model type: 'forecasting', 'classification', 'anomaly_detection'
-    hidden_dim : int
-        Hidden dimension
-    num_layers : int
-        Number of layers
-    neurons_per_tile : int
-        Neurons per tile
-    tiles_per_layer : int
-        Tiles per layer
-
-    Temporal Settings
-    -----------------
-    use_positional_encoding : bool
-        Use positional encoding
-    use_temporal_attention : bool
-        Use temporal attention
-    attention_heads : int
-        Number of attention heads
-
-    Learning
-    --------
-    learning_rate : float
-        Base learning rate
-    dropout : float
-        Dropout probability
+    The time-series model trains with standard backprop through its temporal
+    EquiTile layers, so it deliberately excludes the PC/EP dynamics fields
+    (``mode``, ``inference_steps``, ``step_size``, ``beta``, ``task_type``)
+    exposed by the vision/RL deployment configs.
     """
 
     # Input/Output
@@ -122,268 +88,8 @@ class TimeSeriesConfig:
     # Learning
     learning_rate: float = 1e-3
     dropout: float = 0.1
+    activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu"
     equitile_kwargs: dict[str, object] = field(default_factory=dict)
-
-
-# =============================================================================
-# Positional Encoding
-# =============================================================================
-
-
-class TemporalPositionalEncoding(nn.Module):
-    """Positional encoding for time series.
-
-    Parameters
-    ----------
-    embed_dim : int
-        Embedding dimension
-    max_len : int
-        Maximum sequence length
-    dropout : float
-        Dropout probability
-    """
-
-    def __init__(
-        self,
-        embed_dim: int,
-        max_len: int = 500,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-        self.dropout = nn.Dropout(dropout)
-
-        # Create positional encoding
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, embed_dim, 2)
-            * (-torch.log(torch.tensor(10000.0)) / embed_dim)
-        )
-
-        pe = torch.zeros(max_len, embed_dim)
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-
-        self.register_buffer("pe", pe.unsqueeze(0))
-
-    def forward(self, x: Tensor) -> Tensor:
-        """Add positional encoding.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor (batch, seq_len, embed_dim)
-
-        Returns
-        -------
-        torch.Tensor
-            Output with positional encoding
-        """
-        x = x + self.pe[:, : x.size(1), :]
-        return self.dropout(x)
-
-
-# =============================================================================
-# Temporal Attention
-# =============================================================================
-
-
-class TemporalAttentionLayer(nn.Module):
-    """Temporal attention layer for time series.
-
-    Parameters
-    ----------
-    embed_dim : int
-        Embedding dimension
-    num_heads : int
-        Number of attention heads
-    dropout : float
-        Dropout probability
-    """
-
-    def __init__(
-        self,
-        embed_dim: int,
-        num_heads: int = 4,
-        dropout: float = 0.1,
-    ) -> None:
-        super().__init__()
-        self.embed_dim = embed_dim
-        self.num_heads = num_heads
-        self.head_dim = embed_dim // num_heads
-
-        assert embed_dim % num_heads == 0, "embed_dim must be divisible by num_heads"
-
-        self.q_proj = nn.Linear(embed_dim, embed_dim)
-        self.k_proj = nn.Linear(embed_dim, embed_dim)
-        self.v_proj = nn.Linear(embed_dim, embed_dim)
-        self.out_proj = nn.Linear(embed_dim, embed_dim)
-
-        self.dropout = nn.Dropout(dropout)
-        self.scale = self.head_dim**-0.5
-
-    def forward(
-        self,
-        x: Tensor,
-        mask: Tensor | None = None,
-    ) -> Tensor:
-        """Forward pass.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor (batch, seq_len, embed_dim)
-        mask : torch.Tensor, optional
-            Attention mask
-
-        Returns
-        -------
-        torch.Tensor
-            Output tensor
-        """
-        batch_size, seq_len, _ = x.shape
-
-        # Project to Q, K, V
-        q = (
-            self
-            .q_proj(x)
-            .view(batch_size, seq_len, self.num_heads, self.head_dim)
-            .transpose(1, 2)
-        )
-        k = (
-            self
-            .k_proj(x)
-            .view(batch_size, seq_len, self.num_heads, self.head_dim)
-            .transpose(1, 2)
-        )
-        v = (
-            self
-            .v_proj(x)
-            .view(batch_size, seq_len, self.num_heads, self.head_dim)
-            .transpose(1, 2)
-        )
-
-        # Compute attention scores
-        scores = torch.matmul(q, k.transpose(-2, -1)) / self.scale
-
-        # Apply mask
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, float("-inf"))
-
-        # Compute attention weights
-        attn_weights = F.softmax(scores, dim=-1)
-        attn_weights = self.dropout(attn_weights)
-
-        # Apply attention to values
-        attn_output = torch.matmul(attn_weights, v)
-
-        # Reshape and project
-        attn_output = (
-            attn_output
-            .transpose(1, 2)
-            .contiguous()
-            .view(batch_size, seq_len, self.embed_dim)
-        )
-        return self.out_proj(attn_output)
-
-
-# =============================================================================
-# Time Series EquiTile Layer
-# =============================================================================
-
-
-class TimeSeriesEquiTileLayer(nn.Module):
-    """Time Series EquiTile layer.
-
-    Parameters
-    ----------
-    config : TimeSeriesConfig
-        Configuration
-    """
-
-    def __init__(self, config: TimeSeriesConfig) -> None:
-        super().__init__()
-        self.config = config
-
-        # Temporal attention
-        if config.use_temporal_attention:
-            self.attention = TemporalAttentionLayer(
-                embed_dim=config.hidden_dim,
-                num_heads=config.attention_heads,
-                dropout=config.dropout,
-            )
-            self.norm1 = nn.LayerNorm(config.hidden_dim)
-        else:
-            self.attention = None
-            self.norm1 = None
-
-        # Layer norm
-        self.norm2 = nn.LayerNorm(config.hidden_dim)
-
-        # Tile integration (Using Core EquiTile)
-        layer_equitile_kwargs = config.equitile_kwargs.copy()
-        layer_equitile_kwargs.update({
-            "neurons_per_tile": config.neurons_per_tile,
-            "num_layers": 2,  # Input -> Output
-            "tiles_per_layer": config.tiles_per_layer,
-            "learning_rate": config.learning_rate,
-            "dropout": config.dropout,
-        })
-
-        equitile_config = EquiTileConfig(**layer_equitile_kwargs)
-
-        self.equitile = EquiTile(
-            config=equitile_config,
-            input_dim=config.hidden_dim,
-            output_dim=config.hidden_dim,
-        )
-
-        # Feedforward
-        self.ffn = nn.Sequential(
-            nn.Linear(config.hidden_dim, config.hidden_dim * 4),
-            nn.GELU(),
-            nn.Dropout(config.dropout),
-            nn.Linear(config.hidden_dim * 4, config.hidden_dim),
-        )
-
-    def forward(
-        self,
-        x: Tensor,
-        mask: Tensor | None = None,
-    ) -> Tensor:
-        """Forward pass.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor
-        mask : torch.Tensor, optional
-            Attention mask
-
-        Returns
-        -------
-        torch.Tensor
-            Output tensor
-        """
-        # Temporal attention with residual
-        if self.attention is not None:
-            attn_output = self.attention(x, mask)
-            x = x + attn_output
-            x = self.norm1(x)
-
-        # Tile-based processing
-        # Note: EquiTile expects (batch, dim), here we use (batch * seq_len, dim)
-        batch_size, seq_len, hidden_dim = x.shape
-        x_flat = x.view(batch_size * seq_len, hidden_dim)
-
-        tile_output = self.equitile(x_flat)
-        x = x + tile_output.view(batch_size, seq_len, hidden_dim)
-
-        # Feedforward with residual
-        ffn_output = self.ffn(x)
-        x = x + ffn_output
-        x = self.norm2(x)
-
-        return x
 
 
 # =============================================================================
@@ -413,17 +119,6 @@ class TimeSeriesEquiTile(BioModel):
         Configuration
     **kwargs
         Additional configuration parameters
-
-    Examples
-    --------
-    >>> config = TimeSeriesConfig(
-    ...     input_dim=10,
-    ...     seq_len=100,
-    ...     output_dim=1,
-    ...     model_type="forecasting",
-    ... )
-    >>> model = TimeSeriesEquiTile(config)
-    >>> predictions = model(sequence)
     """
 
     algorithm_name = "TimeSeriesEquiTile"
@@ -459,7 +154,7 @@ class TimeSeriesEquiTile(BioModel):
         else:
             self.pos_encoding = None
 
-        # Time series layers
+        # Time series layers (shared layer implementation)
         self.layers = nn.ModuleList([
             TimeSeriesEquiTileLayer(config) for _ in range(config.num_layers)
         ])
@@ -482,7 +177,6 @@ class TimeSeriesEquiTile(BioModel):
             lr=config.learning_rate,
         )
 
-        # Initialize weights
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -550,26 +244,9 @@ class TimeSeriesEquiTile(BioModel):
         y: Tensor,
         mask: Tensor | None = None,
     ) -> dict[str, float]:
-        """Perform one training step.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor
-        y : torch.Tensor
-            Target tensor
-        mask : torch.Tensor, optional
-            Attention mask
-
-        Returns
-        -------
-        dict
-            Training statistics
-        """
-        # Forward pass
+        """Perform one training step."""
         predictions = self.forward(x, mask)
 
-        # Compute loss based on task
         if self.config.model_type == "forecasting":
             loss = F.mse_loss(predictions, y)
         elif self.config.model_type == "classification":
@@ -580,17 +257,13 @@ class TimeSeriesEquiTile(BioModel):
         else:
             loss = F.mse_loss(predictions, y)
 
-        # Backward pass
         self.optimizer.zero_grad()
         loss.backward()
 
-        # Gradient clipping
         torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
 
-        # Update
         self.optimizer.step()
 
-        # Compute metrics
         with torch.no_grad():
             if self.config.model_type == "forecasting":
                 mae = F.l1_loss(predictions, y).item()
@@ -688,24 +361,7 @@ def create_forecasting_model(
     pred_len: int,
     **kwargs: object,
 ) -> TimeSeriesEquiTile:
-    """Create forecasting model.
-
-    Parameters
-    ----------
-    input_dim : int
-        Input dimension
-    seq_len : int
-        Sequence length
-    pred_len : int
-        Prediction length
-    **kwargs
-        Additional arguments
-
-    Returns
-    -------
-    TimeSeriesEquiTile
-        Forecasting model
-    """
+    """Create forecasting model."""
     config = TimeSeriesConfig(
         input_dim=input_dim,
         seq_len=seq_len,
@@ -723,24 +379,7 @@ def create_classification_model(
     num_classes: int,
     **kwargs: object,
 ) -> TimeSeriesEquiTile:
-    """Create classification model.
-
-    Parameters
-    ----------
-    input_dim : int
-        Input dimension
-    seq_len : int
-        Sequence length
-    num_classes : int
-        Number of classes
-    **kwargs
-        Additional arguments
-
-    Returns
-    -------
-    TimeSeriesEquiTile
-        Classification model
-    """
+    """Create classification model."""
     config = TimeSeriesConfig(
         input_dim=input_dim,
         seq_len=seq_len,
@@ -756,22 +395,7 @@ def create_anomaly_detection_model(
     seq_len: int,
     **kwargs: object,
 ) -> TimeSeriesEquiTile:
-    """Create anomaly detection model.
-
-    Parameters
-    ----------
-    input_dim : int
-        Input dimension
-    seq_len : int
-        Sequence length
-    **kwargs
-        Additional arguments
-
-    Returns
-    -------
-    TimeSeriesEquiTile
-        Anomaly detection model
-    """
+    """Create anomaly detection model."""
     config = TimeSeriesConfig(
         input_dim=input_dim,
         seq_len=seq_len,

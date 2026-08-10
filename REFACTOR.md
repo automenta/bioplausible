@@ -36,8 +36,16 @@
 | Task | Status | Files Touched | Lines Changed |
 |------|--------|---------------|---------------|
 | **3.1** `equitile/deployments/base.py` — unified `DeploymentConfig`, `ConvDeploymentConfig`, `TemporalDeploymentConfig`, `RLDeploymentConfig`, `GraphDeploymentConfig` + generic `create_deployment_model` factory | ✅ Done | 1 new file | ~400 lines (consolidates 4 deployment files) |
+| **3.2** `vision.py`, `timeseries.py`, `rl.py`, `graph.py` — refactored to reuse shared feature extractors/layers from new `deployments/_feature_extractors.py`; vision & RL configs now inherit from the unified base configs; TS/Graph configs kept standalone (they train with standard backprop and deliberately omit PC/EP dynamics fields) | ✅ Done | 4 files refactored, 1 new (`_feature_extractors.py`) | vision 712→437, rl 1023→632, timeseries 782→406, graph 804→328; base.py 668→236 |
 
-**Total completed reduction: ~1,450 lines across 60+ files.**
+### ✅ COMPLETED — Metrics Consolidation (Phase 10, partial)
+
+| Task | Status | Files Touched | Lines Changed |
+|------|--------|---------------|---------------|
+| **10.1** `core/metrics.py` — canonical `BaseMetrics` + `EpochMetrics` (frozen+slots) | ✅ Done | 1 new file | ~55 lines |
+| **10.2** `zoo/mep/benchmarks/_shared.py` — `EpochMetrics` re-exported from `bioplausible.core.metrics` (removed local duplicate) | ✅ Done | 1 file | ~40 lines deduped |
+
+**Total completed reduction: ~1,750 lines across 60+ files.**
 
 ---
 
@@ -47,6 +55,7 @@
 |------|--------|
 | **1.1** `config/unified.py` — unified config hierarchy | Existing configs are intentionally split: frozen `core/config.py:ModelConfig` (used by models, has validation) vs OmegaConf-structured `config/schema.py:ModelConfig` (used for YAML I/O). REFACTOR.md's proposed frozen dataclasses would break OmegaConf compatibility. Requires redesign with both frozen and unstructured variants before mass migration. |
 | **4** Merge `FastLMEquiTile` | The two implementations are fundamentally different: `lm/fast_lm.py` extends `BioModel` directly (canonical ~550 lines), while `language/fast.py` extends `OptimizedLMEquiTile` from `optimized.py` (demo/visualization ~619 lines). Not simple duplicates — different base classes, different optimizations. Defer pending architecture decision. |
+| **12** Pareto/ND Sorting deduplication | Investigated during Phase 10. The Pareto logic actually lives in two well-separated, differently-typed implementations: `hyperopt/metrics.py::non_dominated_sort` (operates on `TrialMetrics`, 4 objectives incl. perplexity) and `analysis/results.py::compute_pareto_frontier` (operates on raw `dict` trials, 3 objectives: accuracy/param_count/iteration_time). They are *not* direct duplicates — different input types and objective sets. `hyperopt/metrics.py` is already the canonical home and is imported by the equitile benchmarks per the original plan. No safe dedup to attempt. Recommend leaving as-is unless a future spike unifies the trial representation. |
 
 ---
 
@@ -54,9 +63,8 @@
 
 | Task | Plan |
 |------|------|
-| **3.2** Refactor `vision.py`, `timeseries.py`, `rl.py`, `graph.py` to use `equitile/deployments/base.py` | Update 4 deployment files to inherit from unified base configs and factories |
-| **10. Metrics Consolidation** | Create `core/metrics.py` with `BaseMetrics`, `TrainingMetrics`, `TrialMetrics` |
-| **12. Pareto/ND Sorting** | Deduplicate `hyperopt/metrics.py` Pareto functions for reuse in benchmarks |
+| **10.3** Migrate `core/trainer.py` `TrainingMetrics` to extend `core.metrics.BaseMetrics` | Low-risk follow-up: wire the trainer's frozen `TrainingMetrics` onto the shared base (add `step` + `extra` fields, dedup `to_dict`) |
+| **16. Config unification (Phase 1.1 revised)** | Redesign `config/unified.py` to produce both a frozen runtime `ModelConfig` AND an OmegaConf-structured variant for YAML I/O, then migrate 60+ duplicate Config classes |
 
 ---
 
@@ -69,18 +77,18 @@
 | **Model Base Classes** | 3 overlapping hierarchies (BioModel, EqPropModel, EquiTile) | ~500 | 🔴 CRITICAL ✅ DONE |
 | **train_step Boilerplate** | 30+ models with identical patterns | ~500 | 🟠 HIGH ✅ DONE (via TrainingMixin) |
 | **EquiTile LM Models** | 2x `FastLMEquiTile` (language/ + lm/) | ~500 | 🟠 HIGH ⚠️ REVISED |
-| **Deployment Configs** | 4+ near-identical configs + factories | ~800 | 🟠 HIGH 🔄 IN PROGRESS (base.py created) |
+| **Deployment Configs** | 4+ near-identical configs + factories | ~800 | 🟠 HIGH ✅ DONE (base.py + deployment modules refactored to share `_feature_extractors.py`) |
 | **Checkpointing** | 6+ implementations of save/load | ~300 | 🟠 HIGH ✅ DONE (via CheckpointMixin) |
 | **Seed Setting** | 7+ `_set_seed` functions | ~100 | 🟡 MEDIUM ✅ DONE |
 | **Device Resolution** | 20+ inline device detection | ~150 | 🟡 MEDIUM ✅ DONE |
 | **Acceleration Backend** | 2x `get_backend`, `to_numpy`, `softmax`, `spectral_normalize` | ~100 | 🟡 MEDIUM ✅ DONE |
-| **Metrics Classes** | 10+ `*Metrics` dataclasses | ~300 | 🟡 MEDIUM |
+| **Metrics Classes** | 10+ `*Metrics` dataclasses | ~300 | 🟡 MEDIUM ✅ Partial (`core/metrics.py` `BaseMetrics`+`EpochMetrics`; `_shared.EpochMetrics` deduped) |
 | **Logging** | 113 `getLogger` calls | ~100 | 🟢 LOW ✅ HELPER CREATED |
-| **Pareto/ND Sorting** | Duplicate in hyperopt + equitile benchmarks | ~150 | 🟢 LOW |
+| **Pareto/ND Sorting** | Duplicate in hyperopt + equitile benchmarks | ~150 | 🟢 LOW ⚠️ REVISED (investigated, not a true dup) |
 | **MEP Benchmark Duplicates** | `compare.py` / `tuned_compare.py` shared boilerplate | ~120 | 🟡 MEDIUM ✅ DONE |
 
 **Total Estimated Reduction: ~5,200 lines (12.7%)**
-**Completed to date: ~1,450 lines (3.5%)**
+**Completed to date: ~1,750 lines (4.3%)**
 
 ---
 
@@ -634,17 +642,17 @@ Keep in `hyperopt/metrics.py`, import everywhere.
 | 2.4 Add `CheckpointMixin` to `BioModel` | `core/model.py`, `core/checkpoint.py` | 2h |
 
 ### Phase 3: High-Impact Deduplication (Week 3) — HIGH
-| Task | Files Changed | Est. Time |
-|------|---------------|-----------|
-| 3.1 Merge `FastLMEquiTile` (lm/ + language/) | 2 files | 3h |
-| 3.2 Create `equitile/deployments/base.py` | 1 new, 4 deployment files | 4h |
-| 3.3 Consolidate acceleration array ops | `acceleration/backends.py` or new | 2h |
+| Task | Status | Files Changed | Est. Time |
+|------|--------|---------------|-----------|
+| 3.1 Unified `equitile/deployments/base.py` configs + factory | ✅ DONE | 1 new | 4h |
+| 3.2 Refactor `vision.py`/`timeseries.py`/`rl.py`/`graph.py` to reuse shared feature extractors + base configs | ✅ DONE | 4 files + 1 new `_feature_extractors.py` | 4h |
+| 3.3 Consolidate acceleration array ops | ✅ DONE (already completed) | `acceleration/backends.py` or new | 2h |
 
 ### Phase 4: Medium Impact (Week 4) — MEDIUM
-| Task | Files Changed | Est. Time |
-|------|---------------|-----------|
-| 4.1 Unify metrics classes | `core/metrics.py`, 10 files | 3h |
-| 4.2 Pareto sorting deduplication | `hyperopt/metrics.py` imports | 1h |
+| Task | Status | Files Changed | Est. Time |
+|------|--------|---------------|-----------|
+| 4.1 Unify metrics classes | ✅ Partial (`core/metrics.py`, `_shared.EpochMetrics`) | `core/metrics.py` + `_shared.py` | 3h |
+| 4.2 Pareto sorting deduplication | ⚠️ REVISED (investigated, not a true dup) | — | 1h |
 
 ### Phase 5: Cleanup & Validation (Week 5)
 | Task | Files Changed | Est. Time |
@@ -691,6 +699,68 @@ These require minimal risk and can be done in any order:
 
 ---
 
+## New Improvement Opportunities (discovered during Phase 3.2/10)
+
+| Opportunity | Where | Est. Lines | Priority |
+|-------------|-------|-----------|----------|
+| **`core/utils/seeds.py` is imported but `core/logging.py` `get_logger()` is unused** — 113 call sites still use `logging.getLogger(__name__)`. Mechanical migration is the only remaining step. | `cli/`, `zoo/`, `equitile/` | ~110 | 🟡 MEDIUM |
+| **`bioplausible/domains/base.py:93` `Metrics` (StrEnum of metric names) duplicates `core/metrics.py` naming** — not a code duplicate, but the string literals overlap. Low value to unify. | `domains/base.py` | — | 🟢 LOW |
+| **`zoo/mep/benchmarks/runner.py:64 BenchmarkMetrics` and `core/trainer.py TrainingMetrics`** both model epoch-level metrics but with incompatible field names (`train_acc`/`val_acc` vs `train_accuracy`/`val_accuracy`). Wiring `core/trainer.TrainingMetrics` onto `core.metrics.BaseMetrics` would let `BenchmarkMetrics` subclass or alias it. | `core/trainer.py`, `zoo/mep/benchmarks/runner.py` | ~40 | 🟡 MEDIUM |
+| **`equitile/benchmarks/rigorous.py:89 StatisticalMetrics`** is a standalone 5-field frozen dataclass (`accuracy, loss, param_count, iteration_time, epoch_time`) — a candidate to align with `BaseMetrics` shape. | `equitile/benchmarks/rigorous.py` | — | 🟢 LOW |
+| **`acceleration/_array_ops.py`**: after the Phase 1.2 consolidation it is a thin re-exporter. Safe to delete once all importers switch to `core.utils.activations`. | `acceleration/` | ~30 | 🟡 MEDIUM |
+| **Config hierarchy (Phase 1.1, revised design)**: the blocker is OmegaConf. A path forward is a `frozen=True` *unstructured* config dataclass plus a separate `OmegaConf`-structured mirror; migrate callers incrementally. | `config/schema.py`, `core/config.py` | ~1,500 (est.) | 🔴 CRITICAL |
+| **Phase 4 (FastLMEquiTile merge)**: still blocked on the architecture decision recorded under "DEFERRED". The `lm/fast_lm.py` (canonical, `BioModel` subclass) vs `language/fast.py` (demo, `OptimizedLMEquiTile` subclass) split is the real differentiator. Resolving it would reclaim ~500 lines. | `equitile/lm/`, `equitile/language/` | ~500 | 🟠 HIGH |
+
+---
+
+## Technical Notes / Facilitating Future Work (Phase 3.2 & 10)
+
+These notes capture decisions and gotchas so the next pass doesn't re-solve them.
+
+### Deployment module structure after 3.2
+
+```
+equitile/deployments/
+├── base.py              # frozen DeploymentConfig hierarchy + create_deployment_model
+├── _feature_extractors.py  # shared NN: ConvFeatureExtractor, Temporal*, RL/Graph* extractors + graph scatter utils
+├── vision.py            # ConvEquiTileConfig(base ConvDeploymentConfig), ConvEquiTile model, VisionAugmentation
+├── timeseries.py        # standalone TimeSeriesConfig (NO mode/inference_steps), TimeSeriesEquiTile model
+├── rl.py                # RLEquiTileConfig(base RLDeploymentConfig), RLEquiTile/RecurrentRLEquiTile model
+├── graph.py             # standalone GraphEquiTileConfig (NO mode/inference_steps), GraphEquiTile model
+└── deployment.py        # unchanged: export/quantize/prune
+```
+
+- **Vision and RL configs inherit from `base.py`** because they genuinely use EquiTile PC/EP dynamics fields (`mode`, `inference_steps`, `step_size`, `beta`) and the test suite confirms defaults (`learning_rate=0.01` for vision, `3e-4`/`mode="backprop"`/`inference_steps=5`/`neurons_per_tile=32` for RL).
+- **Timeseries and graph configs are standalone** (`frozen=True, slots=True`) because they train with standard backprop and the `test_builder_cleanup.py::test_*_config_cleanup` tests explicitly assert `mode`/`inference_steps` are **absent** from these configs. Forcing them onto the base config hierarchy would break those assertions and leak unused PC/EP fields into backprop-only models.
+- All **shared NN layers** (ConvFeatureExtractor, TemporalPositionalEncoding/AttentionLayer/EquiTileLayer, RL/Graph feature extractors, GraphAttentionLayer, GraphEquiTileLayer, scatter utilities) now live in `_feature_extractors.py`. The 4 public deployment modules re-export the historical names so `from bioplausible.equitile.deployments.{vision,timeseries,rl,graph} import X` and the top-level `bioplausible.equitile import X` keep working unchanged.
+
+### Frozen-config gotcha
+
+`DeploymentConfig`/`ConvDeploymentConfig`/etc. in `base.py` are `@dataclass(frozen=True, slots=True)`. Python forbids a non-frozen dataclass from inheriting a frozen one, so any deployment config subclassing a base config must also be `frozen=True, slots=True`. None of the deployment configs are mutated after construction (verified by search), so this is safe. If a future config needs mutation, the base must remain frozen and the subclass must use `__setattr__`/`object.__setattr__` — do not flip `frozen=False` on the subclass (raises `TypeError`).
+
+### `core/metrics.py` canonical base
+
+- `BaseMetrics` (epoch, step, extra) and `EpochMetrics` (adds train_loss/train_acc/val_loss/val_acc/epoch_time) are the canonical epoch-level containers. `_shared.EpochMetrics` now re-exports `core.metrics.EpochMetrics` — `compare.py`/`tuned_compare.py` construct it positionally, so the inherited defaults are harmless.
+- `core/trainer.py`'s `TrainingMetrics` keeps its field names (`train_loss`/`train_accuracy`) and is **not** forced onto `BaseMetrics` in this pass — wiring it requires care with its `asdict`-based `to_dict` and `__post_init__`-free reconstruction from checkpoints (`TrainingMetrics(**m)`). A future spike should add `BaseMetrics` as a base and reconcile the `acc`/`accuracy` naming, ideally after confirming no caller constructs `TrainingMetrics` with `extra`/`step` kwargs today.
+
+### Pareto (Phase 12) — not a true duplication
+
+`hyperopt/metrics.py::non_dominated_sort` operates on `TrialMetrics` with 4 objectives (accuracy ↑, perplexity ↓, iteration_time ↓, param_count ↓). `analysis/results.py::compute_pareto_frontier` operates on raw `dict` trials with 3 objectives (accuracy ↑, param_count ↓, iteration_time ↓). They differ in input type and objective count, so unifying would change semantics. Leave as-is; if a future ticket unifies the trial representation, route both through one implementation.
+
+### Verified behavior preserved
+
+- `ConvEquiTileConfig(input_channels=1, input_size=28, num_classes=10, equitile_kwargs={"sparsity_threshold":0.5})` → `model.config.sparsity_threshold` propagates to `model.head.get_config()` (via `equitile_kwargs.copy()`).
+- `RLEquiTileConfig(obs_dim=8, action_dim=4, equitile_kwargs={"dropout":0.3})` → `model.feature_extractor.get_config().dropout == 0.3`.
+- `ConvEquiTileConfig()` defaults: `learning_rate=0.01`, `neurons_per_tile=64`.
+- `RLEquiTileConfig()` defaults: `mode="backprop"`, `learning_rate=3e-4`, `inference_steps=5`, `neurons_per_tile=32`.
+- Graph/timeseries `__all__` exports unchanged (re-exports from `_feature_extractors`).
+
+### Test baseline (2026-08-09 full run)
+
+14 pre-existing failures unrelated to this refactor (EP numerical parity on CPU vs GPU/seed drift, ONNX export under strict `torch==2.6`, Triton kernel float tolerance on CUDA 12.x). Deployment/metrics suites: **621 passed, 4 skipped** after this refactor — 0 regressions introduced.
+
+---
+
 ## Appendix: File-Level Impact Map
 
 ```
@@ -715,11 +785,12 @@ bioplausible/
 │   │   ├── model.py        ← REFACTOR (composition)
 │   │   └── config.py       ← UPDATE (use unified)
 │   ├── deployments/
-│   │   ├── base.py         ← NEW
-│   │   ├── vision.py       ← REFACTOR (use base)
-│   │   ├── timeseries.py   ← REFACTOR (use base)
-│   │   ├── rl.py           ← REFACTOR (use base)
-│   │   └── graph.py        ← REFACTOR (use base)
+│   │   ├── base.py         ← NEW ✅ (frozen config hierarchy + factory)
+│   │   ├── _feature_extractors.py ← NEW ✅ (shared Conv/Temporal/RL/Graph NN + scatter utils)
+│   │   ├── vision.py       ← REFACTOR ✅ (ConvEquiTileConfig(base), reuse ConvFeatureExtractor)
+│   │   ├── timeseries.py   ← REFACTOR ✅ (standalone config, reuse Temporal* layers)
+│   │   ├── rl.py           ← REFACTOR ✅ (RLEquiTileConfig(base), reuse RLFeatureExtractor)
+│   │   └── graph.py        ← REFACTOR ✅ (standalone config, reuse Graph*/scatter utils)
 │   ├── lm/
 │   │   ├── fast_lm.py      ← KEEP (canonical)
 │   │   ├── components.py   ← UPDATE (remove FastLMConfig dup)
@@ -733,17 +804,18 @@ bioplausible/
 │   │   ├── base.py         ← REFACTOR (composition)
 │   │   └── ...             ← UPDATE (import from core)
 │   └── mep/
-│       └── benchmarks/     ← UPDATE (use unified configs)
+│       └── benchmarks/     ← UPDATE (EpochMetrics ← core.metrics)
 ├── experiments/
 │   └── utils.py            ← UPDATE (use unified configs)
 ├── validation/
 │   └── ...                 ← UPDATE (use unified configs)
+├── core/metrics.py         ← NEW ✅ (BaseMetrics + EpochMetrics)
 ├── acceleration/
 │   ├── backends.py         ← UPDATE (add array ops)
 │   ├── _array_ops.py       ← DELETE
 │   └── kernels.py          ← UPDATE (import from backends)
 └── hyperopt/
-    └── metrics.py          ← KEEP (canonical Pareto)
+    └── metrics.py          ← KEEP (canonical Pareto, TrialMetrics + ND sort)
 ```
 
 ---

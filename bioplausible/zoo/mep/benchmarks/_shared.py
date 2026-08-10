@@ -5,11 +5,15 @@ The following were previously duplicated between ``compare.py`` and
 ``get_input_dim``, ``get_num_classes`` and the ``cnn`` branch of
 ``get_model``. Each pair of duplicates was byte-for-byte identical apart
 from whitespace/comments, so one canonical copy now lives here.
+
+``EpochMetrics`` is re-exported from :mod:`bioplausible.core.metrics` so the
+benchmark runners share a single canonical epoch-metrics container.
 """
 
 from dataclasses import dataclass
 from typing import Protocol
 
+from bioplausible.core.metrics import EpochMetrics
 from torch import nn
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
@@ -24,18 +28,6 @@ __all__ = [
     "get_input_dim",
     "get_num_classes",
 ]
-
-
-@dataclass(frozen=True, slots=True)
-class EpochMetrics:
-    """Metrics for a single epoch."""
-
-    epoch: int
-    train_loss: float
-    train_acc: float
-    val_loss: float
-    val_acc: float
-    epoch_time: float
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,19 +8,14 @@ Extends EquiTile with convolutional capabilities for vision tasks:
 - Image augmentation support
 - Vision benchmarks (MNIST, CIFAR-10, ImageNet)
 
-Examples
---------
->>> from bioplausible.equitile.vision import ConvEquiTile, ConvEquiTileConfig
->>> config = ConvEquiTileConfig(
-...     input_channels=3,
-...     input_size=32,
-...     num_classes=10,
-... )
->>> model = ConvEquiTile(config)
->>> stats = model.train_step(images, labels)
+The configuration and feature extractor now inherit from the unified
+``DeploymentConfig`` hierarchy in ``deployments/base``; this module only
+adds the vision-specific pieces (augmentation, the registered model).
 """
 
-from dataclasses import dataclass, field
+from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
@@ -32,6 +27,11 @@ from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig
+from bioplausible.equitile.deployments import _feature_extractors as _fe
+from bioplausible.equitile.deployments.base import ConvDeploymentConfig
+
+# Re-export the (now shared) feature extractor under its historical name.
+ConvFeatureExtractor = _fe.ConvFeatureExtractor
 
 __all__ = [
     "ConvEquiTile",
@@ -52,164 +52,16 @@ if TYPE_CHECKING:
 # =============================================================================
 
 
-@dataclass
-class ConvEquiTileConfig:
+@dataclass(frozen=True, slots=True)
+class ConvEquiTileConfig(ConvDeploymentConfig):
     """Configuration for Convolutional EquiTile.
 
-    Architecture
-    ------------
-    input_channels : int
-        Number of input channels (e.g., 3 for RGB, 1 for grayscale)
-    input_size : int
-        Input image size (assumed square)
-    num_classes : int
-        Number of output classes
-
-    Convolutional Settings
-    ----------------------
-    conv_channels : list of int
-        Channels per convolutional stage
-    kernel_sizes : list of int
-        Kernel sizes for each conv stage
-    use_pooling : bool
-        Use max pooling after convolutions
-    pooling_size : int
-        Pooling kernel size
-
-    Tile Settings
-    -------------
-    neurons_per_tile : int
-        Neurons per tile in fully-connected head
-    num_fc_layers : int
-        Number of FC layers after convolutions
-    tiles_per_layer : int
-        Tiles per FC layer
-
-    Learning
-    --------
-    learning_rate : float
-        Base learning rate
-    dropout : float
-        Dropout probability
-    weight_decay : float
-        Weight decay
+    Inherits the shared deployment fields from ``ConvDeploymentConfig`` and
+    keeps the same defaults the historical ``ConvEquiTileConfig`` exposed.
     """
 
-    # Input/Output
-    input_channels: int = 3
-    input_size: int = 32
-    num_classes: int = 10
-
-    # Convolutional settings
-    conv_channels: list[int] = field(default_factory=lambda: [32, 64, 128])
-    kernel_sizes: list[int] = field(default_factory=lambda: [3, 3, 3])
-    use_pooling: bool = True
-    pooling_size: int = 2
-
-    # Tile settings
-    neurons_per_tile: int = 64
-    num_fc_layers: int = 2
-    tiles_per_layer: int = 4
-
-    # Learning
+    # Historical vision default learning rate differs from the generic base.
     learning_rate: float = 0.01
-    dropout: float = 0.1
-    weight_decay: float = 1e-4
-
-    # EquiTile settings
-    mode: Literal["pc", "ep", "backprop"] = "pc"
-    inference_steps: int = 10
-    step_size: float = 0.1
-    beta: float = 0.1
-    activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu"
-    task_type: Literal["classification", "regression", "binary", "multilabel"] = (
-        "classification"
-    )
-    equitile_kwargs: dict[str, object] = field(default_factory=dict)
-
-
-# =============================================================================
-# Convolutional Feature Extractor
-# =============================================================================
-
-
-class ConvFeatureExtractor(nn.Module):
-    """Convolutional feature extractor for EquiTile.
-
-    Parameters
-    ----------
-    config : ConvEquiTileConfig
-        Configuration
-    """
-
-    def __init__(self, config: ConvEquiTileConfig) -> None:
-        super().__init__()
-        self.config = config
-
-        # Build convolutional stages
-        self.conv_stages = nn.ModuleList()
-        in_channels = config.input_channels
-
-        for i, (out_channels, kernel_size) in enumerate(
-            zip(config.conv_channels, config.kernel_sizes)
-        ):
-            stages = [
-                nn.Conv2d(
-                    in_channels,
-                    out_channels,
-                    kernel_size=kernel_size,
-                    padding=kernel_size // 2,
-                ),
-                nn.BatchNorm2d(out_channels),
-                nn.ReLU(inplace=True),
-            ]
-
-            if config.use_pooling:
-                stages.append(nn.MaxPool2d(config.pooling_size))
-
-            self.conv_stages.append(nn.Sequential(*stages))
-            in_channels = out_channels
-
-        # Calculate output size
-        self._output_size = self._compute_output_size(config)
-
-    def _compute_output_size(self, config: ConvEquiTileConfig) -> int:
-        """Compute feature map size after convolutions."""
-        size = config.input_size
-        channels = (
-            config.conv_channels[-1] if config.conv_channels else config.input_channels
-        )
-
-        for i in range(len(config.conv_channels)):
-            # Convolution (with padding): feature-map size is unchanged
-            # Pooling
-            if config.use_pooling:
-                size = size // config.pooling_size
-
-        return channels * size * size
-
-    def forward(self, x: Tensor) -> Tensor:
-        """Extract features from input.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor (batch, channels, height, width)
-
-        Returns
-        -------
-        torch.Tensor
-            Flattened features (batch, features)
-        """
-        for stage in self.conv_stages:
-            x = stage(x)
-
-        return x.view(x.size(0), -1)
-
-    @property
-    def output_size(self) -> int:
-        """Get output feature dimension."""
-        return self._output_size
 
 
 # =============================================================================
@@ -267,8 +119,6 @@ class ConvEquiTile(BioModel):
         **kwargs,
     ):
         """Build ConvEquiTile from factory arguments."""
-        # Infer input shape from flattened input_dim
-        # Common cases: 784 (1x28x28), 3072 (3x32x32), 1024 (1x32x32)
         if input_dim == 784:
             channels, size = 1, 28
         elif input_dim == 3072:
@@ -276,7 +126,6 @@ class ConvEquiTile(BioModel):
         elif input_dim == 1024:
             channels, size = 1, 32
         else:
-            # Fallback or assume passed in kwargs
             channels = kwargs.get("input_channels", 3)
             size = kwargs.get("input_size", int((input_dim / channels) ** 0.5))
 
@@ -287,17 +136,14 @@ class ConvEquiTile(BioModel):
             "learning_rate": kwargs.get("lr", spec.default_lr),
             "neurons_per_tile": kwargs.get("neurons_per_tile", 64),
             "tiles_per_layer": kwargs.get("tiles_per_layer", 4),
-            # ConvEquiTile uses num_fc_layers for the head
             "num_fc_layers": max(1, num_layers - 2),
         }
 
-        # Pass through valid config keys
         valid_keys = ConvEquiTileConfig.__annotations__.keys()
         for k, v in kwargs.items():
             if k in valid_keys:
                 config_kwargs[k] = v
 
-        # Spec custom hyperparams
         for k, v in spec.custom_hyperparams.items():
             if k in valid_keys:
                 config_kwargs[k] = v
@@ -325,7 +171,7 @@ class ConvEquiTile(BioModel):
 
         self.config = config
 
-        # Convolutional feature extractor
+        # Convolutional feature extractor (shared implementation)
         self.feature_extractor = ConvFeatureExtractor(config)
 
         # EquiTile classification head
@@ -337,7 +183,6 @@ class ConvEquiTile(BioModel):
             lr=config.learning_rate,
             weight_decay=config.weight_decay,
         )
-        # Use head parameters directly
         self._optim_head = torch.optim.Adam(
             self.head.parameters(),
             lr=config.learning_rate,
@@ -352,17 +197,9 @@ class ConvEquiTile(BioModel):
         self._step_count = 0
 
     def _build_tile_head(self, config: ConvEquiTileConfig) -> None:
-        """Build EquiTile classification head.
-
-        Parameters
-        ----------
-        config : ConvEquiTileConfig
-            Configuration
-        """
+        """Build EquiTile classification head."""
         feature_dim = self.feature_extractor.output_size
 
-        # Create EquiTile config
-        # We map num_fc_layers to EquiTile layers (input + fc + output)
         head_equitile_kwargs = config.equitile_kwargs.copy()
         head_equitile_kwargs.update({
             "neurons_per_tile": config.neurons_per_tile,
@@ -381,7 +218,6 @@ class ConvEquiTile(BioModel):
 
         head_config = EquiTileConfig(**head_equitile_kwargs)
 
-        # Create EquiTile instance
         self.head = EquiTile(
             config=head_config,
             input_dim=feature_dim,
@@ -389,18 +225,7 @@ class ConvEquiTile(BioModel):
         )
 
     def extract_features(self, x: Tensor) -> Tensor:
-        """Extract convolutional features.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input images
-
-        Returns
-        -------
-        torch.Tensor
-            Features
-        """
+        """Extract convolutional features."""
         return self.feature_extractor(x)
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
@@ -420,13 +245,10 @@ class ConvEquiTile(BioModel):
         """
         self._step_count += 1
 
-        # Extract features
         features = self.extract_features(x)
         features = self._dropout(features)
 
         if self.config.mode == "backprop":
-            # End-to-end backprop
-            # Use explicit steps for forward pass if provided in config
             steps = self.head.equitile_config.inference_steps
             logits = self.head(features, steps=steps)
             loss = self.head.task_handler.compute_loss(logits, y)
@@ -443,11 +265,7 @@ class ConvEquiTile(BioModel):
                 "mode": self.config.mode,
             }
         else:
-            # PC/EP mode for head, freeze CNN
-            # We detach features so gradients don't flow back to CNN
-            # (since PC/EP updates head locally and CNN needs backprop or separate training)
-            stats = self.head.train_step(features.detach(), y)
-            return stats
+            return self.head.train_step(features.detach(), y)
 
     def forward(
         self,
@@ -482,17 +300,7 @@ class ConvEquiTile(BioModel):
 
 
 class VisionAugmentation:
-    """Vision data augmentation utilities.
-
-    Examples
-    --------
-    >>> aug = VisionAugmentation(
-    ...     random_crop=True,
-    ...     random_flip=True,
-    ...     color_jitter=True,
-    ... )
-    >>> augmented = aug(images)
-    """
+    """Vision data augmentation utilities."""
 
     def __init__(
         self,
@@ -513,33 +321,16 @@ class VisionAugmentation:
         self.std = torch.tensor(std).view(1, 3, 1, 1)
 
     def __call__(self, x: Tensor, y: Tensor | None = None) -> Tensor:
-        """Apply augmentation.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input images
-        y : torch.Tensor, optional
-            Labels (for augmentation consistency)
-
-        Returns
-        -------
-        torch.Tensor
-            Augmented images
-        """
-        # Random crop
+        """Apply augmentation."""
         if self.random_crop and self.crop_size:
             x = self._random_crop(x)
 
-        # Random flip
         if self.random_flip:
             x = self._random_flip(x)
 
-        # Color jitter
         if self.color_jitter:
             x = self._color_jitter(x)
 
-        # Normalize
         if self.normalize:
             x = (x - self.mean.to(x.device)) / self.std.to(x.device)
 
@@ -560,15 +351,13 @@ class VisionAugmentation:
 
     def _color_jitter(self, x: Tensor) -> Tensor:
         """Simple color jitter."""
-        # Brightness
         brightness = torch.empty(1).uniform_(0.8, 1.2).item()
         x = x * brightness
 
-        # Contrast
         contrast = torch.empty(1).uniform_(0.8, 1.2).item()
         x = x * contrast
 
-        return x  # Don't clamp - input may not be in [0,1]
+        return x
 
 
 # =============================================================================
@@ -585,30 +374,7 @@ def create_vision_model(
     mode: Literal["pc", "ep"] = "pc",
     **kwargs: object,
 ) -> ConvEquiTile:
-    """Create a ConvEquiTile model for vision tasks.
-
-    Parameters
-    ----------
-    input_channels : int
-        Input channels
-    input_size : int
-        Input size
-    num_classes : int
-        Number of classes
-    conv_channels : list of int, optional
-        Convolutional channels
-    neurons_per_tile : int
-        Neurons per tile
-    mode : str
-        Learning mode
-    **kwargs
-        Additional arguments
-
-    Returns
-    -------
-    ConvEquiTile
-        Vision model
-    """
+    """Create a ConvEquiTile model for vision tasks."""
     config = ConvEquiTileConfig(
         input_channels=input_channels,
         input_size=input_size,
@@ -625,20 +391,7 @@ def create_mnist_model(
     neurons_per_tile: int = 64,
     **kwargs: object,
 ) -> ConvEquiTile:
-    """Create ConvEquiTile for MNIST.
-
-    Parameters
-    ----------
-    neurons_per_tile : int
-        Neurons per tile
-    **kwargs
-        Additional arguments
-
-    Returns
-    -------
-    ConvEquiTile
-        MNIST model
-    """
+    """Create ConvEquiTile for MNIST."""
     return create_vision_model(
         input_channels=1,
         input_size=28,
@@ -653,20 +406,7 @@ def create_cifar_model(
     neurons_per_tile: int = 128,
     **kwargs: object,
 ) -> ConvEquiTile:
-    """Create ConvEquiTile for CIFAR-10/100.
-
-    Parameters
-    ----------
-    neurons_per_tile : int
-        Neurons per tile
-    **kwargs
-        Additional arguments
-
-    Returns
-    -------
-    ConvEquiTile
-        CIFAR model
-    """
+    """Create ConvEquiTile for CIFAR-10/100."""
     return create_vision_model(
         input_channels=3,
         input_size=32,
@@ -683,29 +423,14 @@ def create_imagenet_model(
     num_classes: int = 1000,
     **kwargs: object,
 ) -> ConvEquiTile:
-    """Create ConvEquiTile for ImageNet.
-
-    Parameters
-    ----------
-    neurons_per_tile : int
-        Neurons per tile
-    num_classes : int
-        Number of classes
-    **kwargs
-        Additional arguments
-
-    Returns
-    -------
-    ConvEquiTile
-        ImageNet model
-    """
+    """Create ConvEquiTile for ImageNet."""
     conv_channels = [64, 128, 256, 512]
     return create_vision_model(
         input_channels=3,
         input_size=224,
         num_classes=num_classes,
         conv_channels=conv_channels,
-        kernel_sizes=[3] * len(conv_channels),  # Match kernel sizes to conv channels
+        kernel_sizes=[3] * len(conv_channels),
         neurons_per_tile=neurons_per_tile,
         use_pooling=True,
         **kwargs,
