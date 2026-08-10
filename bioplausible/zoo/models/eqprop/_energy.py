@@ -31,6 +31,7 @@ from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo._settling import settle_activations_list
 
 from ._contrastive import _contrastive_step
@@ -569,7 +570,9 @@ class EquilibriumMLP(BioModel):
 
     def _ensure_optimizer(self) -> None:
         if self.optimizer is None:
-            self.optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
+            self.optimizer = create_optimizer(
+                self, OptimizerConfig(name="sgd", lr=self.lr, weight_decay=0.0)
+            )
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Energy-contrastive free/nudged update (Scellier & Bengio).

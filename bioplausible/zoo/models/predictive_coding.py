@@ -16,6 +16,7 @@ from bioplausible.config.unified import (
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 # ============================================================================
 # fabricpc_graph_pcn.py - FabricPCGraphPCN
@@ -246,8 +247,9 @@ class PredictiveCodingHybrid(BioModel):
             layer = nn.Linear(dims[i + 1], dims[i])
             self.top_down.append(layer)
 
-        self.optimizer = torch.optim.Adam(
-            self.parameters(), lr=self.config.learning_rate
+        self.optimizer = create_optimizer(
+            self,
+            OptimizerConfig(name="adam", lr=self.config.learning_rate, weight_decay=0.0),
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:

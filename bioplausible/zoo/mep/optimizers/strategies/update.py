@@ -1,11 +1,10 @@
 """
 Update transformation strategies.
 
-Implements various methods for transforming gradients into updates:
-- Plain (vanilla SGD)
-- Muon (Newton-Schulz orthogonalization)
-- Dion (low-rank SVD)
-- Fisher-whitened Muon
+Plain SGD and Muon orthogonalization reuse the generic implementations from
+:mod:`bioplausible.core.optimization.strategies` (REFACTOR.md §7); the MEP
+subclass adds the CUDA Newton-Schulz fast path. Dion (low-rank SVD) and
+Fisher-whitened updates remain MEP-specific.
 """
 
 from typing import cast
@@ -13,7 +12,10 @@ from typing import cast
 import torch
 from torch import nn
 
-# Import CUDA kernels if available
+from bioplausible.core.optimization.strategies import (
+    MuonUpdate as _CoreMuonUpdate,
+    PlainUpdate,
+)
 
 __all__ = [
     "DionUpdate",
@@ -29,89 +31,20 @@ except ImportError:
     CUDA_AVAILABLE = False
 
 
-class PlainUpdate:
-    """
-    Vanilla SGD update (no transformation).
-
-    The gradient is used directly as the update direction.
-    """
-
-    def transform_gradient(
-        self,
-        param: nn.Parameter,
-        gradient: torch.Tensor,
-        state: dict,
-        group_config: dict,
-    ) -> torch.Tensor:
-        return gradient
-
-
-class MuonUpdate:
-    """
-    Newton-Schulz orthogonalization (Muon optimizer).
-
-    Applies iterative orthogonalization to the gradient:
-        X_{k+1} = 0.5 * X_k * (3I - X_k^T X_k)
-
-    This produces an orthogonal update matrix, improving conditioning.
-    """
+class MuonUpdate(_CoreMuonUpdate):
+    """Newton-Schulz orthogonalization with the MEP CUDA fast path."""
 
     def __init__(self, ns_steps: int = 5):
-        self.ns_steps = ns_steps
-
-    def transform_gradient(
-        self,
-        param: nn.Parameter,
-        gradient: torch.Tensor,
-        state: dict,
-        group_config: dict,
-    ) -> torch.Tensor:
-        orig_shape = None
-        if gradient.ndim > 2:
-            orig_shape = gradient.shape
-            gradient = gradient.view(gradient.shape[0], -1)
-        elif gradient.ndim < 2:
-            return gradient
-
-        update = self._newton_schulz(gradient, self.ns_steps)
-
-        if orig_shape is not None:
-            update = update.view(orig_shape)
-
-        return update
+        super().__init__(ns_steps=ns_steps)
 
     def _newton_schulz(
         self, G: torch.Tensor, steps: int, epsilon: float = 1e-4
     ) -> torch.Tensor:
-        """Newton-Schulz orthogonalization."""
         if CUDA_AVAILABLE and G.is_cuda:
             return cast(
                 "torch.Tensor", newton_schulz_cuda(G, steps=steps, epsilon=epsilon)
             )
-
-        r, c = G.shape
-        transposed = False
-
-        if r < c:
-            G = G.T
-            r, c = c, r
-            transposed = True
-
-        # Pre-normalize (Frobenius norm)
-        X = G.clone()
-        norm = X.norm().clamp(min=1e-4, max=1e4)
-        X = X / norm
-
-        # Iteration: X = 0.5 * X * (3I - X^T X)
-        identity = torch.eye(c, device=G.device, dtype=G.dtype)
-        for _ in range(steps):
-            A = X.T @ X
-            X = 0.5 * X @ (3 * identity - A)
-
-        if transposed:
-            X = X.T
-
-        return cast("torch.Tensor", X)
+        return super()._newton_schulz(G, steps, epsilon)
 
 
 class DionUpdate:
@@ -229,6 +162,7 @@ class FisherUpdate:
         self.ns_steps = ns_steps
         self.use_diagonal = use_diagonal
         self.beta = beta
+        self.muon = MuonUpdate(ns_steps=ns_steps)
 
     def transform_gradient(
         self,
@@ -278,40 +212,8 @@ class FisherUpdate:
         else:
             whitened = gradient
 
-        update = self._newton_schulz(whitened, self.ns_steps)
-
+        update = self.muon._newton_schulz(whitened, self.ns_steps)
         if orig_shape is not None:
             update = update.view(orig_shape)
 
         return update
-
-    def _newton_schulz(
-        self, G: torch.Tensor, steps: int, epsilon: float = 1e-4
-    ) -> torch.Tensor:
-        """Newton-Schulz orthogonalization."""
-        if CUDA_AVAILABLE and G.is_cuda:
-            return cast(
-                "torch.Tensor", newton_schulz_cuda(G, steps=steps, epsilon=epsilon)
-            )
-
-        r, c = G.shape
-        transposed = False
-
-        if r < c:
-            G = G.T
-            r, c = c, r
-            transposed = True
-
-        X = G.clone()
-        norm = X.norm().clamp(min=1e-4, max=1e4)
-        X = X / norm
-
-        identity = torch.eye(c, device=G.device, dtype=G.dtype)
-        for _ in range(steps):
-            A = X.T @ X
-            X = 0.5 * X @ (3 * identity - A)
-
-        if transposed:
-            X = X.T
-
-        return cast("torch.Tensor", X)

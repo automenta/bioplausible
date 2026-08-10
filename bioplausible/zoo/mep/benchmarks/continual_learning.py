@@ -23,10 +23,11 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-from torchvision import datasets, transforms
+from torchvision import datasets
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
+from bioplausible.data.transforms import MNIST_TRANSFORM
 from bioplausible.zoo.mep.optimizers import CompositeOptimizer
 from bioplausible.zoo.mep.optimizers.strategies.constraint import SpectralConstraint
 from bioplausible.zoo.mep.optimizers.strategies.feedback import (
@@ -107,16 +108,11 @@ class PermutedMNIST:
         if self._train_data is not None:
             return self._train_data, self._test_data
 
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,)),
-        ])
-
         train_dataset = datasets.MNIST(
-            self.data_dir, train=True, download=True, transform=transform
+            self.data_dir, train=True, download=True, transform=MNIST_TRANSFORM
         )
         test_dataset = datasets.MNIST(
-            self.data_dir, train=False, download=True, transform=transform
+            self.data_dir, train=False, download=True, transform=MNIST_TRANSFORM
         )
 
         # Convert to tensors

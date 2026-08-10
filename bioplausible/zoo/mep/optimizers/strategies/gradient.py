@@ -1,11 +1,11 @@
 """
 Gradient computation strategies.
 
-Implements various methods for computing gradients:
-- Standard backpropagation
-- Equilibrium Propagation (free/nudged contrast)
-- Layer-local EP (biologically plausible)
-- Natural gradient with Fisher whitening
+Backpropagation reuses the generic implementation from
+:mod:`bioplausible.core.optimization.strategies.gradient` (REFACTOR.md §7);
+equilibrium-propagation gradients (free/nudged contrast) remain MEP-specific
+and signal ``requires_energy = True`` so the generic optimizer forwards the
+input/energy context.
 """
 
 from collections.abc import Callable
@@ -14,7 +14,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from .base import GradientStrategy
+from bioplausible.core.optimization.strategies.gradient import BackpropGradient
+from bioplausible.core.optimization.strategies.base import GradientStrategy
 
 __all__ = [
     "BackpropGradient",
@@ -24,43 +25,8 @@ __all__ = [
 ]
 
 
-class BackpropGradient(GradientStrategy):
-    """
-    Standard backpropagation via .backward().
-
-    This is the default gradient computation for conventional deep learning.
-    """
-
-    def __init__(self, loss_fn: nn.Module | None = None):
-        self.loss_fn = loss_fn
-
-    def compute_gradients(
-        self,
-        model: nn.Module,
-        x: torch.Tensor,
-        target: torch.Tensor | None,
-        loss_fn: nn.Module | None = None,
-        **kwargs: object,
-    ) -> None:
-        """
-        Compute gradients via standard backpropagation.
-
-        Args:
-            model: Neural network module.
-            x: Input tensor.
-            target: Target tensor.
-            loss_fn: Loss function (override instance default).
-        """
-        loss_fn = loss_fn or self.loss_fn
-        if loss_fn is None:
-            raise ValueError("loss_fn must be provided to BackpropGradient")
-
-        output = model(x)
-        loss = loss_fn(output, target)
-        loss.backward()
-
-
 class EPGradient(GradientStrategy):
+    requires_energy = True
     """
     Equilibrium Propagation via free/nudged phase contrast.
 
@@ -235,6 +201,7 @@ class EPGradient(GradientStrategy):
 
 
 class LocalEPGradient:
+    requires_energy = True
     """
     Layer-local EP gradients (biologically plausible).
 
@@ -501,6 +468,8 @@ class NaturalGradient:
     Wraps a base gradient strategy and applies Fisher-based whitening
     to account for the geometry of the parameter space.
     """
+
+    requires_energy = True
 
     def __init__(
         self,

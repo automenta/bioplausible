@@ -18,7 +18,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
+from torchvision import datasets
 
 try:
     import yaml
@@ -39,6 +39,12 @@ import bioplausible.core.utils.optimizer as _optimizer
 from bioplausible.core.logging import get_logger
 from bioplausible.core.metrics import BaseMetrics
 from bioplausible.core.utils.device import get_device
+from bioplausible.data.transforms import (
+    CIFAR10_TRANSFORM,
+    CIFAR100_TRANSFORM,
+    FASHION_MNIST_TRANSFORM,
+    MNIST_TRANSFORM,
+)
 from bioplausible.zoo.mep.presets import sdmep, smep
 
 __all__ = [
@@ -197,24 +203,14 @@ def get_dataloader(
 ) -> tuple[DataLoader, DataLoader]:
     """Create train and test dataloaders."""
 
-    mean: tuple[float, ...]
-    std: tuple[float, ...]
-
-    # Normalize based on dataset
-    if dataset_name.upper() in {"MNIST", "FASHIONMNIST"}:
-        mean, std = (0.5,), (0.5,)
-    else:  # CIFAR10, CIFAR100
-        mean, std = (0.5, 0.5, 0.5), (0.5, 0.5, 0.5)
-
-    transform_train = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean, std),
-    ])
-
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean, std),
-    ])
+    transform = {
+        "MNIST": MNIST_TRANSFORM,
+        "FASHIONMNIST": FASHION_MNIST_TRANSFORM,
+        "CIFAR10": CIFAR10_TRANSFORM,
+        "CIFAR100": CIFAR100_TRANSFORM,
+    }.get(dataset_name.upper())
+    if transform is None:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
 
     # Get dataset class
     dataset_map = {
@@ -229,10 +225,10 @@ def get_dataloader(
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
     train_dataset = dataset_class(
-        root, train=True, download=True, transform=transform_train
+        root, train=True, download=True, transform=transform
     )
     test_dataset = dataset_class(
-        root, train=False, download=True, transform=transform_test
+        root, train=False, download=True, transform=transform
     )
 
     # Subset for faster benchmarking

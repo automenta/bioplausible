@@ -13,10 +13,12 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader, Subset, TensorDataset
-from torchvision import datasets, transforms
+from torchvision import datasets
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
+from bioplausible.data.transforms import MNIST_TRANSFORM
 from bioplausible.zoo.mep.presets import smep
 
 __all__ = [
@@ -90,8 +92,19 @@ def benchmark_regression(
 
     # Test different optimizers
     configs = [
-        ("SGD", lambda m: torch.optim.SGD(m.parameters(), lr=0.05, momentum=0.9)),
-        ("Adam", lambda m: torch.optim.Adam(m.parameters(), lr=0.001)),
+        (
+            "SGD",
+            lambda m: create_optimizer(
+                m,
+                OptimizerConfig(name="sgd", lr=0.05, momentum=0.9, weight_decay=0.0),
+            ),
+        ),
+        (
+            "Adam",
+            lambda m: create_optimizer(
+                m, OptimizerConfig(name="adam", lr=0.001, weight_decay=0.0)
+            ),
+        ),
         (
             "SMEP",
             lambda m: smep(
@@ -203,7 +216,12 @@ def benchmark_continual_learning(
     results: dict = {}
 
     configs = [
-        ("SGD", lambda m: torch.optim.SGD(m.parameters(), lr=0.05)),
+        (
+            "SGD",
+            lambda m: create_optimizer(
+                m, OptimizerConfig(name="sgd", lr=0.05, weight_decay=0.0)
+            ),
+        ),
         (
             "SMEP (no EF)",
             lambda m: smep(
@@ -306,15 +324,16 @@ def benchmark_adaptive_settling(
     _device = get_device(device)
 
     # Load MNIST
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,)),
-    ])
-    train_dataset = Subset(
-        datasets.MNIST("./data", train=True, download=True, transform=transform),
-        range(2000),
+    train_loader = DataLoader(
+        Subset(
+            datasets.MNIST(
+                "./data", train=True, download=True, transform=MNIST_TRANSFORM
+            ),
+            range(2000),
+        ),
+        batch_size=64,
+        shuffle=True,
     )
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
     def make_model():
         return nn.Sequential(

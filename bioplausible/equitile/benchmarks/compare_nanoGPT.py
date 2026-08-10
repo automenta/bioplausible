@@ -29,6 +29,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 logger = get_logger()
 
@@ -369,11 +370,14 @@ def benchmark_model(
     model = model.to(device)
     model.train()
 
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=learning_rate,
-        weight_decay=0.1,
-        betas=(0.9, 0.95),
+    optimizer = create_optimizer(
+        model,
+        OptimizerConfig(
+            name="adamw",
+            lr=learning_rate,
+            weight_decay=0.1,
+            betas=(0.9, 0.95),
+        ),
     )
 
     # Warmup

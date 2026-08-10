@@ -198,18 +198,15 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
 
     # Load MNIST
     from torch.utils.data import DataLoader, Subset
-    from torchvision import datasets, transforms
+    from torchvision import datasets
 
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,)),
-    ])
+    from bioplausible.data.transforms import MNIST_TRANSFORM
 
     train_dataset = datasets.MNIST(
-        root="./data", train=True, download=True, transform=transform
+        root="./data", train=True, download=True, transform=MNIST_TRANSFORM
     )
     test_dataset = datasets.MNIST(
-        root="./data", train=False, download=True, transform=transform
+        root="./data", train=False, download=True, transform=MNIST_TRANSFORM
     )
 
     # Use subset based on mode

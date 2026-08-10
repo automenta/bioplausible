@@ -8,8 +8,9 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
+from torchvision import datasets
 
+from bioplausible.data.transforms import build_transform, normalization
 from bioplausible.data.vision import get_vision_dataset
 from bioplausible.domains.base import (
     DomainSpec,
@@ -66,17 +67,12 @@ class VisionTask(DomainTask):
 
     def setup(self) -> None:
         """Load vision datasets."""
+        key = self.dataset_name.lower()
+        default_transform = build_transform(key) if key in normalization else None
         if self.train_transform is None:
-            self.train_transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.5,), (0.5,)),
-            ])
-
+            self.train_transform = default_transform
         if self.val_transform is None:
-            self.val_transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.5,), (0.5,)),
-            ])
+            self.val_transform = default_transform
 
         # Load dataset based on name
         if self.dataset_name.lower() == "mnist":

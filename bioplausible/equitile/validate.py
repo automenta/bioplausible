@@ -33,6 +33,7 @@ import torch
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.equitile.lm import (
     FastLMConfig,
     FastLMEquiTile,
@@ -267,7 +268,7 @@ class ValidationPipeline:
                 num_kv_heads=2,
             )
             model = FastLMEquiTile(config).to(self.device)
-            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+            optimizer = create_optimizer(model, OptimizerConfig(name="adamw", lr=1e-3, weight_decay=1e-2))
 
             initial_loss = None
             final_loss = None
@@ -358,7 +359,7 @@ class ValidationPipeline:
             model = FastLMEquiTile(config).to(self.device)
             model.train()
 
-            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+            optimizer = create_optimizer(model, OptimizerConfig(name="adamw", lr=1e-3, weight_decay=1e-2))
 
             # Warmup
             for _ in range(5):
@@ -432,7 +433,7 @@ class ValidationPipeline:
             input_ids = torch.randint(0, 1000, (32, 128)).to(self.device)
             target_ids = input_ids.clone()
 
-            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+            optimizer = create_optimizer(model, OptimizerConfig(name="adamw", lr=1e-3, weight_decay=1e-2))
             optimizer.zero_grad()
 
             output = model(input_ids)

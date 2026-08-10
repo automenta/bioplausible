@@ -9,6 +9,7 @@ import torch.nn.functional as F
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
     NoisyLoopedMLP,
@@ -199,7 +200,9 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
 
     model = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    optimizer = create_optimizer(
+        model, OptimizerConfig(name="sgd", lr=0.01, weight_decay=0.0)
+    )
 
     # Thermodynamic "Temperature" - controls stochastic noise
     T_start = 1.0

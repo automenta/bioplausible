@@ -15,6 +15,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from bioplausible.core.losses import compute_accuracy
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.graph.topology import GraphStructure
 
 __all__ = [
@@ -93,7 +94,9 @@ def train_backprop(
             param_list.append(p)
             param_to_key[id(p)] = (node_name, param_name)
 
-    optimizer = torch.optim.Adam(param_list, lr=lr)
+    optimizer = create_optimizer(
+        param_list, OptimizerConfig(name="adam", lr=lr, weight_decay=0.0)
+    )
 
     total_time = 0.0
     final_train_acc = 0.0
@@ -293,7 +296,9 @@ def train_pcn(
         for p in node_params.values():
             param_list.append(p)
 
-    optimizer = torch.optim.Adam(param_list, lr=lr)
+    optimizer = create_optimizer(
+        param_list, OptimizerConfig(name="adam", lr=lr, weight_decay=0.0)
+    )
 
     total_time = 0.0
     final_train_acc = 0.0

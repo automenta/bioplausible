@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.registry import register_propagator
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo._settling import energy_gradient_descent
 from bioplausible.zoo.mep.optimizers.strategies import UpdateStrategy
 
@@ -306,13 +307,6 @@ class AdamEqProp(EqProp):
         settle_lr: float = 0.15,
         loss_type: str = "mse",
     ):
-        # Store Adam hyperparams before super().__init__ sets momentum defaults.
-        self._adam_kwargs = {
-            "lr": lr,
-            "betas": betas,
-            "eps": eps,
-            "weight_decay": weight_decay,
-        }
         # Pass momentum=0 to base (we use Adam, not momentum-SGD).
         super().__init__(
             params,
@@ -325,7 +319,16 @@ class AdamEqProp(EqProp):
             settle_lr=settle_lr,
             loss_type=loss_type,
         )
-        self._adam = torch.optim.Adam(self.params, **self._adam_kwargs)
+        self._adam = create_optimizer(
+            self.params,
+            OptimizerConfig(
+                name="adam",
+                lr=lr,
+                betas=betas,
+                eps=eps,
+                weight_decay=weight_decay,
+            ),
+        )
 
     def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None:
         if target is None:

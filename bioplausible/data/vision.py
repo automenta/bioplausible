@@ -12,6 +12,8 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 
+from bioplausible.data.transforms import build_transform, create_dataloader
+
 __all__ = [
     "CharDataset",
     "create_data_loaders",
@@ -42,7 +44,7 @@ def _cached_vision(name: str, root: str, train: bool, download: bool) -> TensorD
     cached = _VISION_TENSOR_CACHE.get(key)
     if cached is not None:
         return cached
-    transform = _build_transforms(name, flatten=False)
+    transform = build_transform(name)
     dataset_class = _get_dataset_class(name)
     dataset = dataset_class(root, train=train, download=download, transform=transform)
     xs = torch.stack([dataset[i][0] for i in range(len(dataset))])
@@ -137,7 +139,7 @@ def get_vision_dataset(
     ):
         return _cached_vision(name, root, train, download)
 
-    transform = _build_transforms(name, flatten, augment=augment and train)
+    transform = build_transform(name, flatten=flatten, augment=augment and train)
     dataset_class = _get_dataset_class(name)
 
     if name == "svhn":
@@ -237,30 +239,6 @@ def _load_sklearn_digits(
     return TensorDataset(torch.from_numpy(X_data), torch.from_numpy(y_data))
 
 
-def _build_transforms(name: str, flatten: bool, augment: bool = False):
-    """Build the appropriate transforms for the given dataset."""
-    from torchvision import transforms
-
-    transform_list = []
-    if augment:
-        if name in ["cifar10", "cifar100", "svhn"]:
-            transform_list.append(transforms.RandomCrop(32, padding=4))
-            transform_list.append(transforms.RandomHorizontalFlip())
-        elif name in ["mnist", "fashion_mnist", "kmnist"]:
-            transform_list.append(
-                transforms.RandomAffine(degrees=5, translate=(0.1, 0.1))
-            )
-
-    transform_list.append(transforms.ToTensor())
-    if name in ["mnist", "fashion_mnist", "kmnist", "usps"]:
-        transform_list.append(transforms.Normalize((0.5,), (0.5,)))
-    elif name in ["cifar10", "cifar100", "svhn"]:
-        transform_list.append(transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
-    if flatten:
-        transform_list.append(transforms.Lambda(lambda x: x.view(-1)))
-    return transforms.Compose(transform_list)
-
-
 def _get_dataset_class(name: str) -> type:
     """Get the appropriate dataset class for the given name."""
     from torchvision import datasets
@@ -330,20 +308,20 @@ def create_data_loaders(  # ruff: ignore[too-many-arguments,too-many-positional-
     # is already resident — multiprocessing adds only IPC/copy cost). Non-cached
     # sets (generated toys, disk-backed) keep the operator's worker count.
     workers = 0 if dataset_name in _CACHEABLE_VISION else num_workers
-    train_loader = DataLoader(
+    train_loader = create_dataloader(
         train_data,
         batch_size=batch_size,
         shuffle=True,
         num_workers=workers,
         pin_memory=pin_memory,
-        persistent_workers=persistent_workers and workers > 0,
+        persistent_workers=persistent_workers,
     )
-    test_loader = DataLoader(
+    test_loader = create_dataloader(
         test_data,
         batch_size=batch_size,
         shuffle=False,
         num_workers=workers,
         pin_memory=pin_memory,
-        persistent_workers=persistent_workers and workers > 0,
+        persistent_workers=persistent_workers,
     )
     return train_loader, test_loader

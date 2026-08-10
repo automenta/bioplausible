@@ -18,6 +18,7 @@ from torch import nn
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 if TYPE_CHECKING:
     from torch.utils.data import DataLoader
@@ -189,7 +190,9 @@ def train_with_ewc(
     Returns:
         Final training accuracy
     """
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    optimizer = create_optimizer(
+        model, OptimizerConfig(name="sgd", lr=lr, momentum=0.9, weight_decay=0.0)
+    )
 
     model.train()
     correct = 0

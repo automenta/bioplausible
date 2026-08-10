@@ -15,10 +15,10 @@ import torch
 import torch.nn.functional as F
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.model import BioModel
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 logger = get_logger()
-
-from bioplausible.core.model import BioModel
 
 __all__ = [
     "NEBCBase",
@@ -92,7 +92,9 @@ def train_nebc_model(
 
     Returns list of losses for analysis.
     """
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = create_optimizer(
+        model, OptimizerConfig(name="adam", lr=lr, weight_decay=0.0)
+    )
     losses = []
 
     for epoch in range(epochs):

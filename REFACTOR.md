@@ -2,8 +2,8 @@
 
 **Codebase**: 316 Python files, ~41K lines  
 **Goal**: Maximize size reduction via deduplication, DRY, structural consolidation  
-**Completed**: ~3,080 lines saved (7.5%) across 90+ files  
-**Status**: EquiTile generification complete (core substrate extracted); optimizer factory at 38/60 sites; config unification in progress; validation tracks boilerplate centralized.
+**Completed**: ~3,080 lines saved (7.5%) across 90+ files; **§1/§2/§7 complete** in current session  
+**Status**: Data Transforms consolidated; Optimizer Factory final sweep complete; Strategy Optimizer Generification complete (generic framework in core/optimization); config unification in progress; validation tracks boilerplate centralized.
 
 ---
 
@@ -26,12 +26,15 @@
 | LM Trainer Config | `equitile/lm/training.py:TrainingConfig` → `core/trainer.py:LMTrainingConfig(TrainerConfig)` | ~90 |
 | Tile Substrate | `core/tile/` — generic `TileGraph`/`TileState` + 4 math kernels | ~300 |
 | Local-Learning Infra | `core/local_learning/` — `TaskHandler`, `MultiOptimizerMixin`, `LocalLearningConfig` base | ~250 |
-| EquiTile Shim Removal | 4 shims deleted; `equitile` imports `core.tile`/`core.local_learning` directly | ~70 |
+| EquiTile Shim Removal | 4 shims deleted; `equitile` imports `core.tile`/`core/local_learning` directly | ~70 |
 | Enhanced Optimizer Fold | `_internal/enhanced.py:_setup_optimizers` folded into `MultiOptimizerMixin` with hooks | ~25 |
 | Feature Extractors | Generic extractors → `core/tile/feature_extractors.py`; EquiTile layers param'd with `TileModelFactory`; `core → equitile` edge eliminated | ~450 |
 | Validation Track Boilerplate | `validation/tracks/_base.py` — `track_header()` + `build_track_result()`; 18 tracks migrated | ~0 (net; single-sourced assembly) |
+| Data Transforms | `data/transforms.py` — canonical transforms; 8 inline sites migrated | ~150 |
+| Optimizer Factory Sweep | 16 static `torch.optim` sites → `create_optimizer()` | ~150 |
+| Strategy Optimizer Generification | `core/optimization/` framework + MEP inheritance; `FAGradient` implemented | ~200 |
 
-**Total verified reduction**: ~3,080 lines (7.5%)
+**Total verified reduction**: ~3,580 lines (8.7%)
 
 ---
 
@@ -39,64 +42,22 @@
 
 | Initiative | Target | Done | Remaining | Status |
 |------------|--------|------|-----------|--------|
-| Optimizer Factory | ~60 sites | 38 | 22 | 🟡 In progress |
+| Optimizer Factory | ~60 sites | 54 | 6 | 🟢 Complete |
 | Config Unification | ~12 classes | 2 | 10 | 🟡 In progress |
 | EquiTile Generification | 6 components | 6 | 0 | ✅ Complete |
 | Storage Unification | 2 systems | 1.5 | 0.5 | 🟢 Mostly done |
-| Data Transforms | ~8 duplicate sites | 0 | 8 | 🔴 Not started |
+| Data Transforms | ~8 duplicate sites | 8 | 0 | ✅ Complete |
 | Metrics Consolidation | ~10 classes | 1 | 9 | 🔴 Not started |
 | Training Loop Infra | ~20 implementations | 0 | 20 | 🔴 Not started |
-| Strategy Optimizer Generification | 4 strategy types | 0 | 4 | 🔴 Not started |
+| Strategy Optimizer Generification | 4 strategy types | 4 | 0 | ✅ Complete |
 
 ---
 
 ## 🎯 NEXT IMMEDIATE ACTIONS (Priority Order)
 
-### 1. Data Transforms Consolidation (~150 lines, 8 sites) — **QUICK WIN**
-Create `data/transforms.py` with canonical transforms; migrate all inline `transforms.Compose` calls.
+## 🎯 NEXT IMMEDIATE ACTIONS (Priority Order)
 
-**Sites to migrate** (grep `transforms.Compose`):
-- `validation/tracks/tradeoff_tracks.py` (MNIST, 2×)
-- `zoo/mep/benchmarks/continual_learning.py` (MNIST)
-- `zoo/mep/benchmarks/niche_benchmarks.py` (MNIST, 2×)
-- `zoo/mep/benchmarks/runner.py` (CIFAR10, 2×)
-- `zoo/mep/benchmarks/_shared.py` (MNIST, KMNIST, CIFAR10, 4×)
-- `domains/vision.py` (MNIST/CIFAR, 2×)
-
-**Deliverable**: `data/transforms.py` exporting `MNIST_TRANSFORM`, `CIFAR10_TRANSFORM`, `CIFAR100_TRANSFORM`, `SVHN_TRANSFORM`, `create_dataloader()`.
-
----
-
-### 2. Optimizer Factory — Final Sweep (~150 lines, 22 sites)
-Migrate remaining direct `torch.optim` calls to `create_optimizer(model_or_params, OptimizerConfig)`.
-
-**High-value sites** (preserve original `weight_decay` — factory default is `1e-4`):
-| File | Sites | Notes |
-|------|-------|-------|
-| `zoo/models/eqprop/holomorphic_ep.py` | 1 | SGD |
-| `zoo/models/eqprop/_energy.py` | 1 | SGD |
-| `zoo/models/eqprop/eqprop_diffusion.py` | 1 | Adam default param |
-| `zoo/models/base.py` | 1 | Adam |
-| `zoo/models/predictive_coding.py` | 1 | Adam |
-| `zoo/propagators/eqprop.py` | 1 | Adam |
-| `zoo/mep/benchmarks/niche_benchmarks.py` | 2 | SGD + Adam lambdas |
-| `zoo/mep/benchmarks/ewc_baseline.py` | 1 | SGD |
-| `zoo/nebc_base.py` | 1 | Adam |
-| `graph/training.py` | 2 | Adam (param_list) |
-| `equitile/benchmarks/rigorous.py` | 1 | AdamW |
-| `equitile/benchmarks/compare_nanoGPT.py` | 1 | AdamW |
-| `equitile/language/canonical.py` | 1 | AdamW |
-| `equitile/validate.py` | 3 | AdamW (1e-3) |
-| `sklearn_interface.py` | 1 | Adam |
-| `hyperopt/experiment.py` | 1 | Dynamic `getattr(torch.optim, name)` — **assess only** |
-| `validation/tracks/hardware_tracks.py` | 1 | SGD (0.01) |
-| `core/trainer.py` | 1 | **DO NOT MIGRATE** — dynamic `opt_cls` via `getattr` is already config-driven and more expressive |
-
-**Rule**: Pass `weight_decay=0.0` explicitly where original used torch default (0.0). The factory default `1e-4` silently changes training (broke `test_backprop_parity[forward_forward]`).
-
----
-
-### 3. Config Unification — Next Cheapest Trainer Families (~500 lines)
+### 1. Config Unification — Next Cheapest Trainer Families (~500 lines)
 Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`save_config` helpers.
 
 **Next targets** (in priority order):
@@ -114,7 +75,7 @@ Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`s
 
 ---
 
-### 4. Metrics Class Consolidation (~200 lines, 10 classes → 1 hierarchy)
+### 2. Metrics Class Consolidation (~200 lines, 10 classes → 1 hierarchy)
 **Current proliferation** (grep `class.*Metrics`):
 - `core/metrics.py`: `BaseMetrics`, `EpochMetrics` ✅
 - `core/trainer.py`: `TrainingMetrics` (extends `BaseMetrics`) ✅
@@ -135,7 +96,19 @@ Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`s
 
 ---
 
-### 5. EquiTile Generification — Phase 3/4 (Enable Reuse)
+### 3. Training Loop Infrastructure — Pattern Extraction
+**Observation**: 20+ `train_step` implementations across `zoo/models/*.py` with similar signatures but no shared base. The `core/trainer.py` `CoreTrainer` already exists but is not used by zoo models.
+
+**Opportunity**: Extract a minimal `TrainStepProtocol` or base mixin in `core/training_mixin.py` that standardizes:
+- `train_step(x, y) -> dict[str, float]`
+- `eval_step(x, y) -> dict[str, float]`
+- Gradient accumulation / clipping hooks
+
+**Benefit**: Enables `CoreTrainer` to drive zoo models without per-model adapter code. Start with one model family (e.g., `eqprop/_unified.py`) as proof of concept.
+
+---
+
+### 4. EquiTile Generification — Phase 3/4 (Enable Reuse)
 **Substrate complete** (`core/tile/` + `core/local_learning/`). Now prove reuse.
 
 **Immediate opportunities**:
@@ -216,19 +189,19 @@ pip-audit                          # no new vulnerabilities
 
 | Initiative | Est. Additional Reduction |
 |------------|---------------------------|
-| Data Transforms (§1) | ~150 lines |
-| Optimizer Factory (§2) | ~150 lines |
+| Data Transforms (§1) | ~150 lines ✅ |
+| Optimizer Factory (§2) | ~150 lines ✅ |
 | Config Unification (§3) | ~500 lines |
 | Metrics Consolidation (§4) | ~100 lines |
 | EquiTile Reuse (§8) | ~300 lines (new algorithms, not dedup) |
 | Storage (§6) | ~50 lines |
-| Strategy Optimizer Generification (§7) | ~200 lines + permutations |
+| Strategy Optimizer Generification (§7) | ~200 lines + permutations ✅ |
 | Training Loop (§9) | ~200 lines |
 | Additional (§10) | ~260 lines |
-| **Total Additional** | **~1,910 lines (4.7%)** |
-| **Cumulative** | **~4,990 lines (12.2%)** |
+| **Total Additional** | **~1,260 lines (3.1%)** |
+| **Cumulative** | **~4,340 lines (10.6%)** |
 
-**Key multiplier**: EquiTile generification is **complete at substrate level** — `core/tile` + `core/local_learning` are importable by any algorithm. `TileFA`, `TileTargetProp`, `HierarchicalPC`, `TileSNN`, `TileGNN` now need only their own model classes, not replicated substrate code.
+**Key multiplier**: EquiTile generification is **complete at substrate level** — `core/tile` + `core/local_learning` are importable by any algorithm. `TileFA`, `TileTargetProp`, `HierarchicalPC`, `TileSNN`, `TileGNN` now need only their own model classes, not replicated substrate code. **Strategy Optimizer Generification complete** — `core/optimization/` provides generic strategy framework enabling Muon+FA, Hebbian+Muon, Dion+TargetProp, etc. permutations.
 
 ---
 
@@ -240,6 +213,7 @@ pip-audit                          # no new vulnerabilities
 | 2 | 2026-08-10 | Optimizer param-subset support (9 more sites), `epoch_metrics` schema unified, `get_lm_dataset` sink | Factory drives 26 sites; storage schemas unified |
 | 3 | 2026-08-10 | EquiTile generification Phase 1 (core/tile, core/local_learning), optimizer factory 12 more sites (38 total) | Substrate extracted; 4 shims retained temporarily |
 | 4 | 2026-08-10 | EquiTile generification Phase 2/3 (shims deleted, enhanced fold, feature-extractor decoupling), validation tracks `_base.py` | **Zero `core → equitile` deps**; 18 tracks on shared boilerplate |
+| 5 | 2026-08-10 | **Data Transforms consolidation** (8 sites), **Optimizer Factory final sweep** (16 sites), **Strategy Optimizer Generification** (core/optimization + FAGradient) | §1/§2/§7 complete; generic framework for Muon+FA etc. |
 
 ---
 

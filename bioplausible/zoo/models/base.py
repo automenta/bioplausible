@@ -7,6 +7,7 @@ from torch import autograd, nn
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.logging import get_logger
 from bioplausible.core.model import BioModel
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 from .._settling import EquilibriumFunction, settle_single_state
 
@@ -218,8 +219,8 @@ class EqPropModel(BioModel):
 
         # Initialize optimizer on first call
         if self.internal_optimizer is None:
-            self.internal_optimizer = torch.optim.Adam(
-                self.parameters(), lr=self.hebbian_lr
+            self.internal_optimizer = create_optimizer(
+                self, OptimizerConfig(name="adam", lr=self.hebbian_lr, weight_decay=0.0)
             )
 
         self.internal_optimizer.zero_grad()

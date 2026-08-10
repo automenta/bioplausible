@@ -25,6 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 try:
     from scipy import stats
@@ -309,11 +310,14 @@ class RigorousBenchmark:
             set_all_seeds(self.config.seed + run)
 
             # Create fresh optimizer for each run
-            optimizer = torch.optim.AdamW(
-                model.parameters(),
-                lr=self.config.learning_rate,
-                betas=(0.9, 0.95),
-                weight_decay=0.1,
+            optimizer = create_optimizer(
+                model,
+                OptimizerConfig(
+                    name="adamw",
+                    lr=self.config.learning_rate,
+                    betas=(0.9, 0.95),
+                    weight_decay=0.1,
+                ),
             )
 
             # Warmup

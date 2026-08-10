@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 __all__ = [
     "EqPropClassifier",
@@ -135,8 +136,9 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         if hasattr(self.model_, "eq_steps"):
             self.model_.eq_steps = self.steps
 
-        self.optimizer_ = torch.optim.Adam(
-            self.model_.parameters(), lr=self.learning_rate
+        self.optimizer_ = create_optimizer(
+            self.model_,
+            OptimizerConfig(name="adam", lr=self.learning_rate, weight_decay=0.0),
         )
 
     def _train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:

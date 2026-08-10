@@ -15,10 +15,15 @@ from typing import Protocol
 
 from torch import nn
 from torch.utils.data import DataLoader, Subset
-from torchvision import datasets, transforms
+from torchvision import datasets
 
 from bioplausible.config.unified import BaseConfig
 from bioplausible.core.metrics import EpochMetrics
+from bioplausible.data.transforms import (
+    CIFAR10_TRANSFORM,
+    FASHION_MNIST_TRANSFORM,
+    MNIST_TRANSFORM,
+)
 
 __all__ = [
     "BenchmarkConfig",
@@ -72,34 +77,26 @@ def get_dataloaders(config: BenchmarkConfig) -> tuple[DataLoader, DataLoader]:
     ``config.subset_train``/``subset_test``.
     """
     if config.dataset == "mnist":
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,)),
-        ])
         train_dataset = datasets.MNIST(
-            "./data", train=True, download=True, transform=transform
+            "./data", train=True, download=True, transform=MNIST_TRANSFORM
         )
-        test_dataset = datasets.MNIST("./data", train=False, transform=transform)
+        test_dataset = datasets.MNIST("./data", train=False, transform=MNIST_TRANSFORM)
 
     elif config.dataset == "fashion":
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.2860,), (0.3530,)),
-        ])
         train_dataset = datasets.FashionMNIST(
-            "./data", train=True, download=True, transform=transform
+            "./data", train=True, download=True, transform=FASHION_MNIST_TRANSFORM
         )
-        test_dataset = datasets.FashionMNIST("./data", train=False, transform=transform)
+        test_dataset = datasets.FashionMNIST(
+            "./data", train=False, transform=FASHION_MNIST_TRANSFORM
+        )
 
     elif config.dataset == "cifar10":
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
-        ])
         train_dataset = datasets.CIFAR10(
-            "./data", train=True, download=True, transform=transform
+            "./data", train=True, download=True, transform=CIFAR10_TRANSFORM
         )
-        test_dataset = datasets.CIFAR10("./data", train=False, transform=transform)
+        test_dataset = datasets.CIFAR10(
+            "./data", train=False, transform=CIFAR10_TRANSFORM
+        )
     else:
         raise ValueError(f"Unknown dataset: {config.dataset}")
 

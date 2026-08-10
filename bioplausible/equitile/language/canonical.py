@@ -33,6 +33,7 @@ from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig, LMEquiTileConfig
 from bioplausible.equitile.language.components import (
@@ -283,10 +284,13 @@ class LMEquiTile(BioModel):
         self.final_norm = nn.LayerNorm(config.embed_dim)
 
         # Optimizer
-        self.optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=config.learning_rate,
-            weight_decay=config.weight_decay,
+        self.optimizer = create_optimizer(
+            self,
+            OptimizerConfig(
+                name="adamw",
+                lr=config.learning_rate,
+                weight_decay=config.weight_decay,
+            ),
         )
 
         # Initialize weights
