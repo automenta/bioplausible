@@ -18,6 +18,7 @@ from bioplausible.config.unified import (
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 from ..nebc_base import NEBCBase
 from .base import EqPropModel
@@ -262,9 +263,9 @@ def _ensure_optimizer(model: nn.Module, lr: float) -> torch.optim.Optimizer:
     ``train_step`` call (losing momentum between steps).
     """
     if not hasattr(model, "optimizer") or model.optimizer is None:  # type: ignore[attr-defined]
-        model.optimizer = torch.optim.Adam(  # type: ignore[attr-defined]
+        model.optimizer = create_optimizer(  # type: ignore[attr-defined]
             [p for p in model.parameters() if p.requires_grad],
-            lr=lr,
+            OptimizerConfig(name="adam", lr=lr),
         )
     return model.optimizer  # type: ignore[attr-defined]
 
@@ -440,11 +441,12 @@ class AdaptiveFeedbackAlignment(BioModel):
 
         self.criterion = nn.CrossEntropyLoss()
 
-        self.w_optimizer = torch.optim.Adam(
-            self.layers.parameters(), lr=self.config.learning_rate
+        self.w_optimizer = create_optimizer(
+            self.layers, OptimizerConfig(name="adam", lr=self.config.learning_rate)
         )
-        self.b_optimizer = torch.optim.Adam(
-            self.feedback_weights.parameters(), lr=self.config.learning_rate * 0.001
+        self.b_optimizer = create_optimizer(
+            self.feedback_weights,
+            OptimizerConfig(name="adam", lr=self.config.learning_rate * 0.001),
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
@@ -628,8 +630,8 @@ class ContrastiveFeedbackAlignment(BioModel):
             B = torch.randn(dims[i + 1], dims[i]) * 0.1
             self.feedback_weights.append(nn.Parameter(B, requires_grad=False))
 
-        self.optimizer = torch.optim.Adam(
-            self.parameters(), lr=self.config.learning_rate
+        self.optimizer = create_optimizer(
+            self, OptimizerConfig(name="adam", lr=self.config.learning_rate)
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
@@ -864,9 +866,9 @@ class StandardFA(BioModel):
             self.feedback_weights.append(p)
 
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = torch.optim.Adam(
+        self.optimizer = create_optimizer(
             [p for p in self.parameters() if p.requires_grad],
-            lr=self.config.learning_rate,
+            OptimizerConfig(name="adam", lr=self.config.learning_rate),
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:

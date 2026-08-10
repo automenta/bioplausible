@@ -8,8 +8,9 @@ hyperparameters are config-driven rather than hardcoded per caller.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 import torch
 from torch import nn
@@ -17,6 +18,11 @@ from torch import nn
 __all__ = ["OptimizerConfig", "create_optimizer"]
 
 OptimizerName = Literal["adam", "adamw", "sgd"]
+
+# Type alias for an iterable acceptable as ``torch.optim`` ``params``:
+# either an iterable of parameters / tensors, or an iterable of param-group
+# dicts (``{"params": [...], "lr": ...}``).
+ParamSpec = Iterable["nn.Parameter | torch.Tensor | dict[str, Any]"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,21 +47,31 @@ class OptimizerConfig:
 
 
 def create_optimizer(
-    model: nn.Module, config: OptimizerConfig
+    model_or_params: nn.Module | ParamSpec,
+    config: OptimizerConfig,
 ) -> torch.optim.Optimizer:
-    """Create a ``torch.optim`` optimizer for *model* from *config*.
+    """Create a ``torch.optim`` optimizer from *config*.
 
     Args:
-        model: The module whose parameters the optimizer will update.
+        model_or_params: Either a ``nn.Module`` (uses ``model.parameters()``)
+            or an explicit iterable of parameters / param-group dicts. The
+            explicit form supports parameter subsets (e.g.
+            ``[p for p in model.parameters() if p.requires_grad]``) and
+            multi-group optimizers (e.g.
+            ``[{"params": W_in.parameters()}, {"params": W_out.parameters(), "lr": 1e-4}]``).
         config: Optimizer hyperparameters.
 
     Returns:
-        A configured ``torch.optim.Optimizer`` bound to ``model.parameters()``.
+        A configured ``torch.optim.Optimizer`` bound to the given parameters.
 
     Raises:
         ValueError: If ``config.name`` is not a supported optimizer family.
     """
-    params = model.parameters()
+    params = (
+        model_or_params.parameters()
+        if isinstance(model_or_params, nn.Module)
+        else model_or_params
+    )
     match config.name:
         case "adam":
             return torch.optim.Adam(

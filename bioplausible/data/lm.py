@@ -15,6 +15,29 @@ __all__ = [
 ]
 
 
+def _normalize_lm_name(name: str) -> str:
+    """Normalize a friendly LM dataset name to its canonical identifier.
+
+    Accepts display names ("Tiny Shakespeare", "WikiText-2", "PTB") and the
+    canonical IDs used by :func:`get_lm_dataset`.
+
+    Args:
+        name: Dataset name to normalize.
+
+    Returns:
+        The canonical dataset identifier ("tiny_shakespeare", "wikitext-2",
+        or "ptb").
+    """
+    lowered = name.lower().replace(" ", "_")
+    if "shakespeare" in lowered or lowered == "tiny_shakespeare":
+        return "tiny_shakespeare"
+    if "wikitext" in lowered or "wiki_text" in lowered:
+        return "wikitext-2"
+    if "ptb" in lowered or "penn" in lowered:
+        return "ptb"
+    return lowered
+
+
 def get_lm_dataset(
     name: str = "tiny_shakespeare",
     seq_len: int = 128,
@@ -25,14 +48,19 @@ def get_lm_dataset(
     """
     Load a language modeling dataset as a CharDataset.
 
+    Accepts friendly display names ("Tiny Shakespeare", "WikiText2") or the
+    canonical identifiers ("tiny_shakespeare", "wikitext-2", "ptb") — the
+    name is normalized before dispatch.
+
     Args:
-        name: Dataset name ('tiny_shakespeare', 'wikitext-2', 'ptb')
-        seq_len: Sequence length for training
-        split: 'train', 'validation', or 'test'
+        name: Dataset name ('tiny_shakespeare', 'wikitext-2', 'ptb').
+        seq_len: Sequence length for training.
+        split: 'train', 'validation', or 'test'.
 
     Returns:
-        CharDataset with vocab_size attribute
+        CharDataset with vocab_size attribute.
     """
+    name = _normalize_lm_name(name)
     try:
         from datasets import load_dataset
     except ImportError:

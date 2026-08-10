@@ -31,6 +31,7 @@ from bioplausible.core.registry import (
     IncompatibilityError,
     Registry,
 )
+from bioplausible.core.utils.device import get_device
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.data.vision import create_data_loaders
 from bioplausible.domains.base import DomainType
@@ -208,6 +209,56 @@ class TrainerConfig:
     def to_dict(self) -> dict[str, Any]:
         """Convert to plain dict."""
         return OmegaConf.to_container(OmegaConf.structured(self), resolve=True)
+
+
+@dataclass
+class LMTrainingConfig(TrainerConfig):
+    """LM trainer config — step-based knobs on the unified trainer config.
+
+    Reconciles the former ``equitile/lm/training.py:TrainingConfig`` onto the
+    shared :class:`TrainerConfig` hierarchy (REFACTOR.md §1): epoch-wise knobs
+    (``epochs``, ``device``, ``num_workers``, ``checkpoint_dir``) are inherited
+    unchanged; only step-based LM cadence and scheduler knobs remain local.
+
+    Attributes:
+        model: Optional registry name — the LM trainer binds an explicit model
+            instance, so this is normally ``None``.
+        learning_rate: Peak learning rate.
+        warmup_steps: Warmup steps for the LR schedule.
+        weight_decay: AdamW weight decay.
+        use_amp: Enable automatic mixed precision.
+        gradient_accumulation_steps: Steps over which gradients accumulate.
+        gradient_clip: Gradient clipping norm.
+        lr_schedule: LR schedule type ("cosine", "linear", "constant").
+        min_lr_ratio: Minimum LR ratio for the cosine schedule.
+        save_every: Save a checkpoint every N steps.
+        eval_every: Run validation every N steps.
+        log_every: Log metrics every N steps.
+        generate_every: Generate samples every N steps.
+    """
+
+    model: str | None = None
+
+    learning_rate: float = 3e-4
+    warmup_steps: int = 100
+    weight_decay: float = 0.1
+
+    use_amp: bool = True
+    gradient_accumulation_steps: int = 1
+    gradient_clip: float = 1.0
+
+    lr_schedule: str = "cosine"
+    min_lr_ratio: float = 0.1
+
+    save_every: int = 500
+    eval_every: int = 100
+    log_every: int = 10
+    generate_every: int = 200
+
+    def __post_init__(self) -> None:
+        """Resolve ``device="auto"`` to a concrete backend."""
+        if self.device == "auto":
+            self.device = str(get_device())
 
 
 @dataclass(frozen=True, slots=True)
@@ -1680,6 +1731,7 @@ def _run_runconfig_epochs(trainer: object, cfg: object) -> list[dict[str, object
 
 __all__ = [
     "CoreTrainer",
+    "LMTrainingConfig",
     "TrainerConfig",
     "TrainerProtocol",
     "TrainingMetrics",

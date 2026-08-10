@@ -10,10 +10,11 @@ from datetime import datetime
 from pathlib import Path
 
 from bioplausible.core.logging import get_logger
-
-logger = get_logger()
+from bioplausible.core.training_state import EpochCheckpoint
 
 from .metrics import TrialMetrics
+
+logger = get_logger()
 
 __all__ = [
     "HyperoptStorage",
@@ -58,16 +59,27 @@ class HyperoptStorage:
             )
         """)
 
-        # Epoch metrics table (for detailed logging)
+        # Epoch metrics table (for detailed logging) — unified with EpochCheckpoint
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS epoch_metrics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 trial_id INTEGER NOT NULL,
                 epoch INTEGER NOT NULL,
-                loss REAL,
-                accuracy REAL,
+                train_acc REAL,
+                val_acc REAL,
+                train_loss REAL,
+                val_loss REAL,
+                grad_norm_mean REAL,
+                grad_norm_std REAL,
+                weight_norm REAL,
+                learning_rate REAL,
+                train_val_gap REAL,
+                test_acc REAL,
                 perplexity REAL,
-                time REAL,
+                reward REAL,
+                wall_time_seconds REAL,
+                total_flops INTEGER,
+                samples_seen INTEGER DEFAULT 0,
                 FOREIGN KEY (trial_id) REFERENCES hyperopt_logs (trial_id)
             )
         """)
@@ -203,15 +215,95 @@ class HyperoptStorage:
         accuracy: float,
         perplexity: float,
         time: float,
-    ):
-        """Log metrics for a specific epoch."""
+        *,
+        train_acc: float = 0.0,
+        val_acc: float = 0.0,
+        train_loss: float = 0.0,
+        val_loss: float = 0.0,
+        grad_norm_mean: float = 0.0,
+        grad_norm_std: float = 0.0,
+        weight_norm: float = 0.0,
+        learning_rate: float = 0.0,
+        train_val_gap: float = 0.0,
+        test_acc: float | None = None,
+        reward: float | None = None,
+        wall_time_seconds: float = 0.0,
+        total_flops: int | None = None,
+        samples_seen: int = 0,
+    ) -> None:
+        """Log metrics for a specific epoch using EpochCheckpoint schema.
+
+        Args:
+            trial_id: Trial identifier.
+            epoch: Epoch number.
+            loss: Training loss (maps to val_loss for backward compatibility).
+            accuracy: Validation accuracy (maps to val_acc for backward compatibility).
+            perplexity: Perplexity metric.
+            time: Time for this epoch.
+            train_acc: Training accuracy (new, defaults to 0.0).
+            val_acc: Validation accuracy (new, defaults to accuracy if provided).
+            train_loss: Training loss (new, defaults to loss).
+            val_loss: Validation loss (new, defaults to loss).
+            grad_norm_mean: Mean gradient norm.
+            grad_norm_std: Std of gradient norm.
+            weight_norm: Weight norm.
+            learning_rate: Current learning rate.
+            train_val_gap: Train-val accuracy gap.
+            test_acc: Test accuracy (optional).
+            reward: Reward for RL tasks (optional).
+            wall_time_seconds: Cumulative wall time.
+            total_flops: Estimated FLOPs.
+            samples_seen: Total samples processed.
+        """
+        train_acc_eff = train_acc or accuracy
+        val_acc_eff = val_acc or accuracy
+        ckpt = EpochCheckpoint(
+            epoch=epoch,
+            train_acc=train_acc_eff,
+            val_acc=val_acc_eff,
+            train_loss=train_loss or loss,
+            val_loss=val_loss or loss,
+            grad_norm_mean=grad_norm_mean,
+            grad_norm_std=grad_norm_std,
+            weight_norm=weight_norm,
+            learning_rate=learning_rate,
+            train_val_gap=train_val_gap or (train_acc_eff - val_acc_eff),
+            test_acc=test_acc,
+            perplexity=perplexity or None,
+            reward=reward,
+            wall_time_seconds=wall_time_seconds or time,
+            total_flops=total_flops,
+            samples_seen=samples_seen,
+        )
+
         self.conn.execute(
             """
-            INSERT INTO epoch_metrics
-                (trial_id, epoch, loss, accuracy, perplexity, time)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO epoch_metrics (
+                trial_id, epoch, train_acc, val_acc, train_loss, val_loss,
+                grad_norm_mean, grad_norm_std, weight_norm, learning_rate,
+                train_val_gap, test_acc, perplexity, reward, wall_time_seconds,
+                total_flops, samples_seen
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-            (trial_id, epoch, loss, accuracy, perplexity, time),
+            (
+                trial_id,
+                ckpt.epoch,
+                ckpt.train_acc,
+                ckpt.val_acc,
+                ckpt.train_loss,
+                ckpt.val_loss,
+                ckpt.grad_norm_mean,
+                ckpt.grad_norm_std,
+                ckpt.weight_norm,
+                ckpt.learning_rate,
+                ckpt.train_val_gap,
+                ckpt.test_acc,
+                ckpt.perplexity,
+                ckpt.reward,
+                ckpt.wall_time_seconds,
+                ckpt.total_flops,
+                ckpt.samples_seen,
+            ),
         )
         self.conn.commit()
 

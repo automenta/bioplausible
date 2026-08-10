@@ -21,6 +21,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.data.lm import get_lm_dataset
 from bioplausible.equitile.language.optimized import (
     LMEquiTileConfig,
@@ -159,7 +160,7 @@ class FastLMEquiTile(OptimizedLMEquiTile):
 
         # Create optimizer with different learning rates
         # Importance learns faster to respond quickly to changes
-        self.optimizer = torch.optim.AdamW(
+        self.optimizer = create_optimizer(
             [
                 {"params": weight_params, "lr": config.learning_rate},
                 {
@@ -168,7 +169,7 @@ class FastLMEquiTile(OptimizedLMEquiTile):
                     "betas": (0.9, 0.999),
                 },
             ],
-            weight_decay=config.weight_decay,
+            OptimizerConfig(name="adamw", weight_decay=config.weight_decay),
         )
 
         self._tokens_per_sec = 0.0
@@ -190,18 +191,8 @@ class FastLMEquiTile(OptimizedLMEquiTile):
             return
 
         try:
-            # Map friendly names to internal IDs if needed
-            ds_name = name.lower().replace(" ", "_")
-            if "shakespeare" in ds_name:
-                ds_name = "tiny_shakespeare"
-            elif "wikitext" in ds_name:
-                ds_name = "wikitext-2"
-
-            self.dataset = get_lm_dataset(ds_name, seq_len=self._seq_len)
+            self.dataset = get_lm_dataset(name, seq_len=self._seq_len)
             logger.info("Loaded dataset: %s (%d samples)", name, len(self.dataset))
-
-            # Use simple random sampling for the demo loop
-            # We don't need a full DataLoader overhead for single steps
         except (OSError, ValueError, RuntimeError) as e:
             logger.warning(
                 "Failed to load dataset %s: %s. Falling back to Random.", name, e

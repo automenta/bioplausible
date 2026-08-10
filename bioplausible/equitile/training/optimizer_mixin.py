@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 import torch
 from torch import nn
 
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
+
 __all__ = [
     "EquiTileOptimizerMixin",
 ]
@@ -33,19 +35,20 @@ class EquiTileOptimizerMixin:
 
     def _setup_optimizers(self) -> None:
         """Initialize optimizers explicitly."""
-        self._optim_io = torch.optim.Adam(
+        self._optim_io = create_optimizer(
             list(self.W_in.parameters()) + list(self.W_out.parameters()),
-            lr=self.equitile_config.learning_rate,
+            OptimizerConfig(name="adam", lr=self.equitile_config.learning_rate),
         )
 
-        self._optim_importance = torch.optim.Adam(
+        self._optim_importance = create_optimizer(
             [self.tile_importance, self.edge_importance],
-            lr=self.equitile_config.importance_lr,
+            OptimizerConfig(name="adam", lr=self.equitile_config.importance_lr),
         )
 
         if self.equitile_config.mode in ("backprop", "ep"):
-            self._optim_full = torch.optim.Adam(
-                self.parameters(), lr=self.equitile_config.learning_rate
+            self._optim_full = create_optimizer(
+                self,
+                OptimizerConfig(name="adam", lr=self.equitile_config.learning_rate),
             )
 
     def reset_optimizers(self) -> None:

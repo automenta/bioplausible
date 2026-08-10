@@ -36,7 +36,7 @@ import torch.nn.functional as F
 from torch.amp import GradScaler, autocast
 
 from bioplausible.core.logging import get_logger
-from bioplausible.core.utils.device import get_device
+from bioplausible.core.trainer import LMTrainingConfig as TrainingConfig
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 logger = get_logger()
@@ -52,95 +52,9 @@ if TYPE_CHECKING:
 # =============================================================================
 # Training Configuration
 # =============================================================================
-
-
-@dataclass
-class TrainingConfig:
-    """Configuration for LM training.
-
-    Training Loop
-    -------------
-    epochs : int
-        Number of training epochs
-    learning_rate : float
-        Peak learning rate
-    warmup_steps : int
-        Warmup steps for LR schedule
-    weight_decay : float
-        Weight decay for AdamW
-
-    Optimization
-    ------------
-    use_amp : bool
-        Use automatic mixed precision
-    gradient_accumulation_steps : int
-        Steps to accumulate gradients
-    gradient_clip : float
-        Gradient clipping norm
-
-    Schedule
-    --------
-    lr_schedule : str
-        LR schedule type ('cosine', 'linear', 'constant')
-    min_lr_ratio : float
-        Minimum LR ratio for cosine schedule
-
-    Checkpointing
-    -------------
-    checkpoint_dir : str
-        Directory for checkpoints
-    save_every : int
-        Save checkpoint every N steps
-    eval_every : int
-        Evaluate every N steps
-
-    Logging
-    -------
-    log_every : int
-        Log metrics every N steps
-    generate_every : int
-        Generate samples every N steps
-
-    Hardware
-    --------
-    device : str
-        Device to train on
-    num_workers : int
-        Number of data workers
-    """
-
-    # Training loop
-    epochs: int = 10
-    learning_rate: float = 3e-4
-    warmup_steps: int = 100
-    weight_decay: float = 0.1
-
-    # Optimization
-    use_amp: bool = True
-    gradient_accumulation_steps: int = 1
-    gradient_clip: float = 1.0
-
-    # Schedule
-    lr_schedule: str = "cosine"
-    min_lr_ratio: float = 0.1
-
-    # Checkpointing
-    checkpoint_dir: str = "checkpoints"
-    save_every: int = 500
-    eval_every: int = 100
-
-    # Logging
-    log_every: int = 10
-    generate_every: int = 200
-
-    # Hardware
-    device: str = "auto"
-    num_workers: int = 4
-
-    def __post_init__(self) -> None:
-        """Validate and set defaults."""
-        if self.device == "auto":
-            self.device = str(get_device())
+# ``TrainingConfig`` lives in ``bioplausible.core.trainer`` (as
+# ``LMTrainingConfig``) — the LM-specific step-based knobs extend the unified
+# :class:`~bioplausible.core.trainer.TrainerConfig` hierarchy.
 
 
 # =============================================================================

@@ -6,6 +6,8 @@
 
 **2026-08-10 progress**: +~250 lines saved. Optimizer factory migration (8 sites), storage unification (`core/training_state.py`), FastLMEquiTile decision re-opened (wrapper requires re-architecture). See "Session Notes" below.
 
+**2026-08-10 (Session 2) progress**: **Optimizer factory** extended with param-subset/param-group support → migrated `zoo/models/fa.py` (5), `equitile/training/optimizer_mixin.py` (3), `equitile/language/fast.py` (1 param-group) — 26 sites factory-driven. **LM `TrainingConfig`** reconciled onto unified `core/trainer.py:LMTrainingConfig(TrainerConfig)` (local ~87-line dataclass deleted; shared epoch knobs inherited). **`epoch_metrics` SQL schema** unified with the `EpochCheckpoint` column set in `hyperopt/storage.py`. **Shared `get_lm_dataset` friendly-name normalization** sink in `data/lm.py`. See "Session Notes 2" below.
+
 ---
 
 ## ✅ COMPLETED (No Further Action)
@@ -22,8 +24,9 @@
 | Config Pattern | `config/unified.py` — frozen `BaseConfig` + OmegaConf `BaseStructuredConfig` proven; `ModelConfig` migrated, `core/config.py` deleted |
 | Acceleration Backend | `acceleration/_array_ops.py` deleted (thin re-exporter) |
 | Energy Profiling | Renamed: `energy.py`→`profiling.py`, `energy_model.py`→`ebm.py` |
-| Optimizer Factory | `core/utils/optimizer.py` now drives 14 sites (deployments, LM variants) |
+| Optimizer Factory | `core/utils/optimizer.py` now drives 26 sites (deployments, LM variants, zoo/fa, equitile mixins, language/fast) |
 | Training-State Types | `core/training_state.py` — shared `EpochCheckpoint`/`TrainingTrajectory` |
+| LM Trainer Config | `equitile/lm/training.py:TrainingConfig` → unified `core/trainer.py:LMTrainingConfig(TrainerConfig)`, local class deleted |
 
 ---
 
@@ -60,6 +63,41 @@ The "Option 2 wrapper" (`language/fast.py → DemoFastLMEquiTile(FastLMEquiTile)
 - `ruff check` on all changed files: neutral or improved vs baseline (training_dynamics 13→10).
 - `pyright` on all changed files: 0 errors (warnings are pre-existing `Optional` access patterns).
 - `pytest`: 121 unit/equitile + integration tests pass; the 7 pre-existing integration failures (onnx/smoke/triton/model-integration) are identical on clean HEAD — none introduced by this session.
+
+## 📝 Session Notes 2 (2026-08-10, second session)
+
+### Optimizer factory: param-subset/param-group support (§3) — 9 more sites
+`create_optimizer` signature changed from `(model, config)` to `(model_or_params, config)` — the first arg is now a `nn.Module` **or** an explicit iterable of parameters / param-group dicts. This unlocked every former "needs subset support" blocker with no API break (module path unchanged):
+
+- `zoo/models/fa.py` — 5 sites: `_ensure_optimizer`, `AdaptiveFeedbackAlignment.w_optimizer`/`b_optimizer`, `ContrastiveFeedbackAlignment`, `StandardFA` (incl. `[p for p in model.parameters() if p.requires_grad]` filters).
+- `equitile/training/optimizer_mixin.py` — 3 sites, `W_in+W_out`, `[tile_importance, edge_importance]`, full-model.
+- `equitile/language/fast.py` — 1 param-groups site (`AdamW` with `weight_params`/`importance_params` LR groups).
+
+Factory now drives **26 sites** total. Remaining high-value: `core/trainer.py` dynamic `opt_cls` (line 710, `torch.optim.Adam`), `zoo/models/target_prop.py` (3), `equitile/_internal/enhanced.py` (3, duplicate of `optimizer_mixin`), `zoo/mep/benchmarks/runner.py`, `validation/tracks/*.py`.
+
+### LM TrainingConfig → unified `LMTrainingConfig` (§1, cheapest config pair done)
+Reconciled `equitile/lm/training.py:TrainingConfig` onto `core/trainer.py:LMTrainingConfig(TrainerConfig)`. The local ~87-line dataclass (incl. 50-line docstring) is **deleted**; `equitile/lm/training.py` now imports `LMTrainingConfig as TrainingConfig` and re-exports unchanged (`equitile.lm.TrainingConfig` API stable). Key design points:
+
+- Shared epoch-wise knobs (`epochs`, `device`, `num_workers`, `checkpoint_dir`, `grad_clip`) are **inherited** from `TrainerConfig` rather than redeclared.
+- `model: str | None = None` override lets LM construction omit the registry-name (LMTrainer binds an explicit model instance).
+- `__post_init__` preserved the `device="auto"` → concrete-backend resolution so `equitile.lm.demo` and `tests/integration/test_lm_demo.py` (`TestTrainingConfig`) pass unmodified.
+
+**Do NOT do**: `config/schema.py:TrainingConfig` (OmegaConf structured, `log_every_n_steps`/`save_every_n_epochs`/early-stopping knobs) and the LM one are still different trainers with different knobs — leave schema's as-is. `FastLMConfig` dup itself remains (two distinct architectures, see below).
+
+### Storage: `epoch_metrics` schema unified with `EpochCheckpoint` (§4)
+`hyperopt/storage.py:epoch_metrics` table upgraded from 6 minimal columns (`loss`/`accuracy`/`perplexity`/`time`) to the full `EpochCheckpoint` column set — now a byte-for-byte schema twin of `training_checkpoints`. `log_epoch` now constructs an `EpochCheckpoint` internally (with legacy-arg fallbacks so `hyperopt/experiment.py` call site needs no change) and inserts the shared column set. Favoring the RUF013 cleanup, moved `.metrics` import to the top (E402 fixed), net lint −1.
+
+**Deliberately not done**: merging `epoch_metrics` INTO `training_checkpoints` — different FK (trial vs trajectory), both are write-only sinks consumed by different analysis paths; keeping both avoids a migration job. Existing DBs keep the old schema (backwards-compat is NONE per AGENTS.md; the CREATE TABLE IF NOT exists path just leaves old files untouched).
+
+### FastLM data plumbing (§5) — shared `get_lm_dataset` sink
+`data/lm.py` gained `_normalize_lm_name()`: friendly display names ("Tiny Shakespeare", "WikiText-2", "PTB") normalize to canonical IDs, centralizing the friendly-name → ID mapping that `equitile/language/fast.py:_load_data` previously inlined. Demo's `_load_data` dropped ~6 lines of mapping logic. Also migrated the demo's `torch.optim.AdamW` param-groups optimiser to the factory.
+
+**Config merge deliberately NOT attempted**: `language/fast.py:FastLMConfig(LMEquiTileConfig)` and `lm/components.py:FastLMConfig` describe different architectures (OptimizedLMEquiTile pre-norm + sigmoid gating vs BioModel MoT+SwiGLU) with different field defaults — force-merging would silently change demo behavior. The `FastLMConfig` dup line in §1.1 estimate is retained as a known, intentional duplicate.
+
+### Verification (Session 2)
+- `ruff check` changed files: neutral or better (storage 17→16, language/fast 20→19; trainer + equitile/lm/training unchanged at 50 pre-existing).
+- `pyright` changed files: **0 errors**, 212 warnings (all pre-existing `Optional`/`Path`/mixin-override patterns).
+- `pytest`: 242 unit (core/data/refactor2/scheduler) + 111 unit (zoo/equitile) + 101 (hyperopt/execution) + 62 (trainer-coverage/lm-demo) + 6 (hyperopt-integration/continuous) + 12 (phase2/scientist) all pass. One rerun-flaky failure (`test_lm_equitile`, `torch.multinomial` NaN) is a local-numerics flake, not a regression — passes back-to-back on rerun and on clean HEAD when it did fail.
 
 ## 🔴 CRITICAL — Maximum Impact
 
@@ -125,26 +163,23 @@ Two implementations exist:
 2. **Wrapper pattern**: `language/fast.py` → thin `DemoFastLMEquiTile(FastLMEquiTile)` subclass (~150 lines)
 3. **Unify base**: Extract common layer primitives to shared module
 
-**Decision (2026-08-10)**: Option 2 is **NOT** a thin wrapper — the demo extends `OptimizedLMEquiTile` (pre-norm transformer + tile-importance sigmoid gating) while canonical `lm/fast_lm.py` extends `BioModel` (Mixture-of-Tiles + SwiGLU). Retargeting the demo onto the canonical architecture changes demo behavior. **Chosen**: keep both models; the only clean dedup is the demo's private `FastLMConfig` (+) `_load_data`/dataset plumbing — merge those onto the shared `FastLMConfig` and a shared LM-data helper (~100 lines) while leaving the models distinct.
-
-Safe next step: make `language/fast.py`'s `FastLMConfig(LMEquiTileConfig)` import shared base fields instead of re-declaring, and route both through one `get_lm_dataset` path.
+**Decision (2026-08-10)**: Option 2 is **NOT** a thin wrapper — the demo extends `OptimizedLMEquiTile` (pre-norm transformer + tile-importance sigmoid gating) while canonical `lm/fast_lm.py` extends `BioModel` (Mixture-of-Tiles + SwiGLU). Retargeting the demo onto the canonical architecture changes demo behavior. **Chosen**: keep both models; the only clean dedup is the demo's `_load_data`/dataset plumbing — route both through one `get_lm_dataset` path while leaving the models and their configs distinct. **Done (2026-08-10 session 2)**: shared friendly-name normalization in `data/lm.py::_normalize_lm_name`; demo `_load_data` simplified. The demo optimizer (param-groups AdamW) migrated to the factory. Config merge of the two `FastLMConfig` dataclasses is **final-rejected**: different bases, different defaults, different architectures.
 
 ---
 
 ## 🟡 MEDIUM — High Leverage
 
 ### 3. Optimizer Factory Consolidation (~150 lines)
-**Factory created**: `core/utils/optimizer.py` — `OptimizerConfig` (frozen+slots) + `create_optimizer(model, config)` supporting `adam`/`adamw`/`sgd`.
+**Factory created**: `core/utils/optimizer.py` — `OptimizerConfig` (frozen+slots) + `create_optimizer(model_or_params, config)` supporting `adam`/`adamw`/`sgd`. First arg is a `nn.Module` **or** explicit parameter iterable / param-group dicts (param-subset support added 2026-08-10 session 2).
 
-**11 of ~60 sites migrated**: `validation/utils.py`, `equitile/lm/ablation_study.py`, `validation/tracks/application_tracks.py`, `equitile/deployments/base.py`, `equitile/deployments/vision.py`, `equitile/deployments/rl.py`, `equitile/deployments/timeseries.py`, `equitile/deployments/graph.py`, `equitile/lm/fast_lm.py`, `equitile/lm/training.py`, `equitile/language/optimized.py` (2026-08-10).
+**26 of ~60 sites migrated**: `validation/utils.py`, `equitile/lm/ablation_study.py`, `validation/tracks/application_tracks.py`, `equitile/deployments/{base,vision,rl,timeseries,graph}.py`, `equitile/lm/fast_lm.py`, `equitile/lm/training.py`, `equitile/language/optimized.py` (session 1); `zoo/models/fa.py` (5), `equitile/training/optimizer_mixin.py` (3), `equitile/language/fast.py` (1, param-groups) (session 2).
 
-**Remaining high-impact sites**:
-- `zoo/models/fa.py` (6 creations — need param-subset support in factory)
-- `validation/tracks/*.py` (10+ files)
-- `core/trainer.py` (dynamic `opt_cls`)
-- `equitile/training/optimizer_mixin.py` (3, uses `W_in+W_out` param subset)
-
-**Action**: Extend `create_optimizer` with an optional `params=`/`param_groups=` override so subset-sites (`fa.py`, `optimizer_mixin.py`) can migrate; then migrate the rest.
+**Remaining high-impact sites** (param-subset support no longer a blocker):
+- `core/trainer.py` (dynamic `opt_cls`, `torch.optim.Adam` fallback)
+- `zoo/models/target_prop.py` (3: forward/inverse/output optimizers)
+- `zoo/models/forward_only.py` (2), `zoo/models/eqprop/_unified.py`
+- `equitile/_internal/enhanced.py` (3 — clone of `optimizer_mixin._setup_optimizers`; consolidate once mixin is lifted to `core/local_learning`)
+- `zoo/mep/benchmarks/runner.py`, `validation/tracks/*.py` (10+ files)
 
 ---
 
@@ -158,9 +193,11 @@ Two independent checkpoint/trajectory systems:
 
 **Progress (2026-08-10)**: Shared `EpochCheckpoint` + `TrainingTrajectory` extracted to `core/training_state.py`. `execution/training_dynamics.py` (−150 lines) and `hyperopt/storage.py` both import from it. `TrialMetrics` intentionally left in `hyperopt/metrics.py` (whole-trial objectives, not epoch-level); revisit alongside §7 trial-representation unification.
 
+**Progress (2026-08-10 session 2)**: `epoch_metrics` SQL schema unified to the shared `EpochCheckpoint` column set; `log_epoch` builds an `EpochCheckpoint` and inserts the shared columns (legacy `loss`/`accuracy`/`perplexity`/`time` positional args kept, with keyword fallbacks for the richer fields).
+
 **Remaining**:
-1. Unify SQL schema in `hyperopt/storage.py` (epoch_metrics table → shared column set) — ~40 lines
-2. Consider `EpochCheckpoint` aliasing over the `epoch_metrics` insert path
+1. ~~Unify SQL schema in `hyperopt/storage.py`~~ DONE — `epoch_metrics` matches `training_checkpoints` column-for-column.
+2. Consider `EpochCheckpoint` aliasing over the `epoch_metrics` insert path — deferred: only write-only today; merge tables only if a shared reader appears.
 
 ---
 
@@ -200,11 +237,13 @@ Each track becomes ~20 lines of configuration + assertions.
 
 ## Next Immediate Actions (Priority Order)
 
-1. **Continue Config Unification** — Migrate ONE trainer family at a time (cheapest: `equitile/lm/training.py:TrainingConfig` → reconcile onto unified). Do NOT bulk-add speculative configs (see Session Notes).
+Done this session: **(3) optimizer factory** param-subset support + fa.py/mixin/language-fast migration, **(4) storage** `epoch_metrics` schema unification, **(1) LM `TrainingConfig`** → `LMTrainingConfig(TrainerConfig)`, **(5) FastLM** shared `get_lm_dataset` sink. Remaining, in priority order:
+
+1. **Continue Config Unification** — Next cheapest trainer family: `equitile/lm/components.py:FastLMConfig` is already the single canonical for `lm/fast_lm.py` (the `language/fast.py` variant is a genuinely different architecture — leave both, see Session Notes 2 §5). Next candidate: `zoo/mep/benchmarks/tuned_compare.py:OptimizerConfig` + `config/schema.py:OptimizerConfig` → these are *per-algorithm* configs with different fields (`gamma`, per-family values) and are **not** the factory's `OptimizerConfig` — reconcile only if a shared subset is extracted. Do NOT bulk-add speculative configs.
 2. **EquiTile Generification Week 1** — Create `core/tile/` + `core/local_learning/` infrastructure (enables algorithm reuse across codebase). Audit: only `equitile/core/model.py`, `_internal/enhanced.py`, `training/async_execution.py`, `training/distributed.py`, `training/optimizer_mixin.py` + 2 tests import the tile primitives — low blast radius.
-3. **Optimizer Factory Migration** — Add `params=`/`param_groups=` override to `create_optimizer`, then migrate `zoo/models/fa.py` (6) + `optimizer_mixin.py` (3).
-4. **Storage Unification** — Unify `epoch_metrics` SQL schema insert path over `EpochCheckpoint` (~40 lines).
-5. **FastLMEquiTile** — Merge the demo's `FastLMConfig` onto shared base + shared LM-data helper; keep the two models distinct.
+3. **Optimizer Factory Migration (cont.)** — Remaining sites now that param-subset/groups are supported: `core/trainer.py` (dynamic `opt_cls`, line ~710), `zoo/models/target_prop.py` (3), `zoo/models/forward_only.py` (2), `zoo/models/eqprop/_unified.py`, `equitile/_internal/enhanced.py` (3 — mirror of `optimizer_mixin`; could import from the mixin once mixin is lifted to core), `zoo/mep/benchmarks/runner.py`, `validation/tracks/*.py`.
+4. **Storage Unification (cont.)** — Consider aliasing `EpochCheckpoint` directly over the `epoch_metrics` read path if a reader is added; merging the two tables is deliberately deferred (different FK, no consumer needs both).
+5. **FastLMEquiTile** — Models stay distinct (decision upheld). Remaining soft dedup: share the demo's `update_activity_ema`/gate instrumentation primitives if a future algorithm needs binary-gate tile selection.
 
 ---
 
