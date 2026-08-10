@@ -1,4 +1,18 @@
-Implement NO **backwards compatibility** of *any* kind.
+# Code Guidelines
+
+- Elegant
+- Consolidated
+- Consistent
+- Organized
+- Deeply deduplicated: Don't repeat yourself (DRY)
+- Abstract
+- Modularized
+- Parameterized
+- Backwards compatibility: NONE
+- Few comments: rely on self-documenting code.
+- Purpose: professional, not explanatory/educational
+- Don't obsess over test coverage and other linty tediums: Working functionality is more important than coverage and cosmetic lint issues.
+- Prefer use of GPU over CPU where appropriate.
 
 ## Toolchain
 *   Language: **Python 3.14+**
@@ -61,7 +75,3 @@ Implement NO **backwards compatibility** of *any* kind.
 - [ ] `ruff format .` && `ruff check --fix .`
 - [ ] `pyright .` — zero errors in strict mode
 - [ ] `pytest --cov` — all tests pass, coverage floor met
-
-Don't obsess over test coverage and other linty tediums: Working functionality is more important than coverage and cosmetic lint issues.
-
-Prefer GPU over CPU, where appropriate.

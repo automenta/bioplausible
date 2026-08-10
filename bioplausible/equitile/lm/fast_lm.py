@@ -49,6 +49,7 @@ from bioplausible.core.logging import get_logger
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.equitile.lm.components import (
     FastEquiTileLayer,
     FastLMConfig,
@@ -142,11 +143,14 @@ class FastLMEquiTile(BioModel):
         self.dropout = nn.Dropout(config.dropout)
 
         # Optimizer
-        self.optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=config.learning_rate,
-            weight_decay=config.weight_decay,
-            betas=(0.9, 0.95),  # Better betas for transformers
+        self.optimizer = create_optimizer(
+            self,
+            OptimizerConfig(
+                name="adamw",
+                lr=config.learning_rate,
+                weight_decay=config.weight_decay,
+                betas=(0.9, 0.95),  # Better betas for transformers
+            ),
         )
 
         # Scheduler (set by trainer)

@@ -202,7 +202,7 @@ def compute_hidden_dims(
     return [hidden_dim] * min(num_layers, max_layers)
 
 
-def _build_model_config(
+def _build_model_config(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # contract for zoo models' build classmethods
     spec,
     input_dim: int,
     output_dim: int,

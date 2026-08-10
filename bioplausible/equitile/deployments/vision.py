@@ -25,6 +25,7 @@ from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig
 from bioplausible.equitile.deployments import _feature_extractors as _fe
@@ -178,14 +179,14 @@ class ConvEquiTile(BioModel):
         self._build_tile_head(config)
 
         # Optimizers
-        self._optim_conv = torch.optim.Adam(
-            self.feature_extractor.parameters(),
-            lr=config.learning_rate,
-            weight_decay=config.weight_decay,
+        self._optim_conv = create_optimizer(
+            self.feature_extractor,
+            OptimizerConfig(
+                name="adam", lr=config.learning_rate, weight_decay=config.weight_decay
+            ),
         )
-        self._optim_head = torch.optim.Adam(
-            self.head.parameters(),
-            lr=config.learning_rate,
+        self._optim_head = create_optimizer(
+            self.head, OptimizerConfig(name="adam", lr=config.learning_rate)
         )
 
         # Regularization

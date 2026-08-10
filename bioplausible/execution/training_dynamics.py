@@ -5,14 +5,14 @@ Captures detailed metrics during training (gradients, weight norms, loss curves)
 to analyze convergence behavior, detect overfitting, and measure sample efficiency.
 """
 
+import numpy as np
 from collections.abc import Callable
-from dataclasses import dataclass, field
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.training_state import EpochCheckpoint as TrainingCheckpoint
+from bioplausible.core.training_state import TrainingTrajectory
 
 logger = get_logger()
-
-import numpy as np
 
 __all__ = [
     "ContinuousTrainingSchedule",
@@ -20,161 +20,6 @@ __all__ = [
     "TrainingTrajectory",
     "logger",
 ]
-
-
-@dataclass
-class TrainingCheckpoint:
-    """
-    Metrics captured at a single checkpoint during training.
-
-    Attributes:
-        epoch: Epoch number.
-        train_acc: Training accuracy.
-        val_acc: Validation accuracy.
-        train_loss: Training loss.
-        val_loss: Validation loss.
-        grad_norm_mean: Mean gradient norm.
-        grad_norm_std: Standard deviation of gradient norm.
-        weight_norm: L2 norm of weights.
-        learning_rate: Current learning rate.
-        train_val_gap: Difference between training and validation accuracy.
-        test_acc: Test accuracy (optional).
-        perplexity: Perplexity for LM tasks (optional).
-        reward: Reward for RL tasks (optional).
-        wall_time_seconds: Cumulative training time.
-        total_flops: Estimated total FLOPs used.
-        samples_seen: Total samples processed.
-    """
-
-    epoch: int
-    train_acc: float
-    val_acc: float
-    train_loss: float
-    val_loss: float
-
-    # Training dynamics
-    grad_norm_mean: float = 0.0
-    grad_norm_std: float = 0.0
-    weight_norm: float = 0.0
-    learning_rate: float = 0.0  # May decay over time
-
-    # Overfitting indicators
-    train_val_gap: float = 0.0  # train_acc - val_acc
-
-    # Task-specific metrics
-    test_acc: float | None = None
-    perplexity: float | None = None  # For LM tasks
-    reward: float | None = None  # For RL tasks
-
-    # Efficiency metrics
-    wall_time_seconds: float = 0.0
-    total_flops: int | None = None
-    samples_seen: int = 0
-
-
-@dataclass
-class TrainingTrajectory:
-    """
-    Complete training history for one trial.
-
-    Attributes:
-        trial_id: Unique trial identifier.
-        model_name: Name of the model.
-        task_name: Name of the task.
-        config: Hyperparameter configuration.
-        checkpoints: List of recorded checkpoints.
-        convergence_epoch: Epoch where convergence was detected.
-        converged: Whether the training converged successfully.
-        overfitting_detected: Whether overfitting was detected.
-        unstable: Whether training was unstable (high variance).
-    """
-
-    trial_id: int
-    model_name: str
-    task_name: str
-    config: dict[str, object]
-    checkpoints: list[TrainingCheckpoint] = field(default_factory=list)
-
-    # Derived metrics (computed from checkpoints)
-    convergence_epoch: int | None = None  # Epoch where improvement plateaus
-    converged: bool = False
-    overfitting_detected: bool = False
-    unstable: bool = False  # Large loss variance
-
-    def compute_convergence_speed(self) -> float:
-        """
-        Calculate epochs to reach 90% of final accuracy.
-
-        Returns:
-            float: Epoch number, or infinity if never reached.
-        """
-        if not self.checkpoints:
-            return float("inf")
-
-        final_acc = self.checkpoints[-1].val_acc
-        target_acc = 0.9 * final_acc
-
-        for ckpt in self.checkpoints:
-            # We assume checkpoints are sorted by epoch
-            if ckpt.val_acc >= target_acc:
-                return float(ckpt.epoch)
-
-        return float("inf")
-
-    def compute_sample_efficiency(self) -> float:
-        """
-        Compute Area Under the Learning Curve (AUC).
-
-        Higher AUC indicates faster learning with fewer samples.
-
-        Returns:
-            float: Normalized AUC score.
-        """
-        if not self.checkpoints:
-            return 0.0
-
-        epochs = [c.epoch for c in self.checkpoints]
-        accs = [c.val_acc for c in self.checkpoints]
-
-        if epochs[-1] == 0:
-            return 0.0
-
-        try:
-            # New NumPy 2.0+
-            if hasattr(np, "trapezoid"):
-                area = np.trapezoid(accs, epochs)  # type: ignore[unknown]
-            # Old NumPy < 2.0
-            elif hasattr(np, "trapz"):
-                area = np.trapz(accs, epochs)  # type: ignore[unknown]
-            else:
-                raise AttributeError("No trapezoid function")
-        except AttributeError, TypeError:
-            # Manual implementation
-            area = 0.0
-            for i in range(len(epochs) - 1):
-                width = epochs[i + 1] - epochs[i]
-                height = (accs[i + 1] + accs[i]) / 2.0
-                area += width * height
-
-        return float(area) / epochs[-1]
-
-    def detect_overfitting(self, threshold: float = 0.1) -> bool:
-        """
-        Check if training/validation gap exceeds threshold.
-
-        Args:
-            threshold: Gap threshold (default 0.1).
-
-        Returns:
-            bool: True if overfitting detected.
-        """
-        if len(self.checkpoints) < 2:
-            return False
-
-        # Check last 3 checkpoints or fewer if not available
-        check_count = min(3, len(self.checkpoints))
-        recent_gaps = [c.train_val_gap for c in self.checkpoints[-check_count:]]
-        return any(gap > threshold for gap in recent_gaps)
 
 
 class ContinuousTrainingSchedule:

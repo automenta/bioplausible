@@ -26,6 +26,7 @@ from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.equitile.deployments import _feature_extractors as _fe
 
 # Re-export shared graph components under their historical names.
@@ -154,9 +155,8 @@ class GraphEquiTile(BioModel):
         self.output_proj = nn.Linear(config.hidden_dim, config.num_classes)
 
         # Optimizer
-        self.optimizer = torch.optim.Adam(
-            self.parameters(),
-            lr=config.learning_rate,
+        self.optimizer = create_optimizer(
+            self, OptimizerConfig(name="adam", lr=config.learning_rate)
         )
 
         self._init_weights()

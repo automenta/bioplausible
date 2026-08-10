@@ -12,10 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
-import torch
 from torch import nn
 
 from bioplausible.core.model import BioModel
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig
 
@@ -200,14 +200,16 @@ def create_deployment_model(
             self.head = head
             self._step_count = 0
 
-            self._optim_feature = torch.optim.Adam(
-                self.feature_extractor.parameters(),
-                lr=config.learning_rate,
-                weight_decay=config.weight_decay,
+            self._optim_feature = create_optimizer(
+                self.feature_extractor,
+                OptimizerConfig(
+                    name="adam",
+                    lr=config.learning_rate,
+                    weight_decay=config.weight_decay,
+                ),
             )
-            self._optim_head = torch.optim.Adam(
-                self.head.parameters(),
-                lr=config.learning_rate,
+            self._optim_head = create_optimizer(
+                self.head, OptimizerConfig(name="adam", lr=config.learning_rate)
             )
 
         def forward(self, x: Tensor, **kwargs) -> Tensor:

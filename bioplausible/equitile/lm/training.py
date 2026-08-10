@@ -37,6 +37,7 @@ from torch.amp import GradScaler, autocast
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 logger = get_logger()
 
@@ -390,11 +391,14 @@ class LMTrainer:
         self.scaler = GradScaler() if self.use_amp else None
 
         # Optimizer
-        self.optimizer = torch.optim.AdamW(
-            model.parameters(),
-            lr=config.learning_rate,
-            weight_decay=config.weight_decay,
-            betas=(0.9, 0.95),
+        self.optimizer = create_optimizer(
+            model,
+            OptimizerConfig(
+                name="adamw",
+                lr=config.learning_rate,
+                weight_decay=config.weight_decay,
+                betas=(0.9, 0.95),
+            ),
         )
 
         # Metrics

@@ -380,10 +380,10 @@ class HyperoptStorage:
     def get_all_trajectories(self):
         """
         Retrieve all training trajectories with their checkpoints.
-        Returns: List[TrainingTrajectory] (imported locally to avoid circular import)
+        Returns: List[TrainingTrajectory]
         """
-        from bioplausible.execution.training_dynamics import (
-            TrainingCheckpoint,
+        from bioplausible.core.training_state import (
+            EpochCheckpoint,
             TrainingTrajectory,
         )
 
@@ -415,7 +415,7 @@ class HyperoptStorage:
             checkpoints = []
             for cr in ckpt_rows:
                 checkpoints.append(
-                    TrainingCheckpoint(
+                    EpochCheckpoint(
                         epoch=cr["epoch"],
                         train_acc=cr["train_acc"],
                         val_acc=cr["val_acc"],
