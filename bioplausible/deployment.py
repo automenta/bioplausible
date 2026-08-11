@@ -15,6 +15,13 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import torch
+from torch import nn
+
+from bioplausible.core.checkpoint import (
+    load_checkpoint_into_model,
+    save_checkpoint,
+)
 from bioplausible.core.logging import get_logger
 
 
@@ -27,9 +34,6 @@ class InferenceRequest:
 
 
 logger = get_logger()
-
-import torch
-from torch import nn
 
 
 @dataclass
@@ -233,13 +237,14 @@ class ModelExporter:
         compiled_model = torch.compile(model, mode="reduce-overhead")
         # Run once to trigger compilation
         _ = compiled_model(dummy_input)
-        # Save state dict for compiled model
-        torch.save(
+        # Save state dict for compiled model via canonical checkpoint
+        save_checkpoint(
+            path,
             {
                 "model_state_dict": compiled_model.state_dict(),
                 "compiled": True,
             },
-            path,
+            mkdir=True,
         )
 
         if verbose:
@@ -289,14 +294,14 @@ class ModelExporter:
         """Export model and optimizer state."""
         path = str(Path(output_dir) / "checkpoint.pt")
 
-        checkpoint = {
+        ckpt: dict = {
             "model_state_dict": model.state_dict(),
         }
 
         if optimizer is not None:
-            checkpoint["optimizer_state_dict"] = optimizer.state_dict()
+            ckpt["optimizer_state_dict"] = optimizer.state_dict()
 
-        torch.save(checkpoint, path)
+        save_checkpoint(path, ckpt, mkdir=True)
 
         if verbose:
             logger.info("  ✓ State: %s", path)
@@ -366,10 +371,7 @@ class ModelLoader:
         # Load state dict if available
         state_path = config_path.replace("config.json", "checkpoint.pt")
         if Path(state_path).exists():
-            checkpoint = torch.load(
-                state_path, map_location=self.device, weights_only=True
-            )
-            model.load_state_dict(checkpoint["model_state_dict"])
+            load_checkpoint_into_model(state_path, model, map_location=self.device)
 
         return model, config
 
@@ -393,10 +395,7 @@ class ModelLoader:
         model = model_class(**model_params)
         model = model.to(self.device)
 
-        checkpoint = torch.load(
-            checkpoint_path, map_location=self.device, weights_only=True
-        )
-        model.load_state_dict(checkpoint["model_state_dict"])
+        load_checkpoint_into_model(checkpoint_path, model, map_location=self.device)
 
         return model
 
@@ -688,9 +687,9 @@ def export_to_torchscript(model, input_sample, path):
     model.eval()
     compiled_model = torch.compile(model, mode="reduce-overhead")
     _ = compiled_model(input_sample)
-    torch.save(
-        {"model_state_dict": compiled_model.state_dict(), "compiled": True},
+    save_checkpoint(
         path,
+        {"model_state_dict": compiled_model.state_dict(), "compiled": True},
     )
 
 

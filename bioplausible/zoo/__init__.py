@@ -4,7 +4,6 @@ All models, propagators, optimizers, sparsity methods are registered here
 with rich metadata enabling AutoScientist composition.
 """
 
-import torch
 from torch import nn
 
 from bioplausible.core.logging import get_logger
@@ -101,7 +100,11 @@ def load_weights(
         return
     try:
         logger.info("Loading weights from %s", path)
-        state_dict = torch.load(path, map_location=device)
+        from bioplausible.core.checkpoint import load_checkpoint
+
+        state_dict = load_checkpoint(path, map_location=device)
+        if "model_state_dict" in state_dict:
+            state_dict = state_dict["model_state_dict"]
         missing, unexpected = model.load_state_dict(state_dict, strict=strict)
         if missing:
             logger.info("Missing keys: %d", len(missing))

@@ -16,6 +16,7 @@ from . import (
     spiking,
     target_prop,
     tile_fa,
+    tile_models,
 )
 
 __all__: list[str] = [
@@ -32,4 +33,5 @@ __all__: list[str] = [
     "spiking",
     "target_prop",
     "tile_fa",
+    "tile_models",
 ]

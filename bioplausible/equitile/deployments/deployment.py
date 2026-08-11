@@ -187,17 +187,18 @@ class EquiTileExporter:
         compiled_model = torch.compile(self.model, mode="reduce-overhead")
         # Run once to trigger compilation
         _ = compiled_model(dummy_input)
-        # Save state dict for compiled model
-        torch.save(
-            {
-                "model_state_dict": compiled_model.state_dict(),
-                "config": (
-                    self.model.config if hasattr(self.model, "config") else None
-                ),
-                "compiled": True,
-            },
-            path,
-        )
+        # Save state dict for compiled model via canonical checkpoint
+        from bioplausible.core.checkpoint import save_checkpoint
+
+        ckpt: dict = {
+            "model_state_dict": compiled_model.state_dict(),
+            "compiled": True,
+        }
+        config = self.model.config if hasattr(self.model, "config") else None
+        if config is not None:
+            ckpt["metadata"] = {"config": config}
+        save_checkpoint(path, ckpt)
+
         logger.info("Compiled model saved to %s", path)
         return path
 

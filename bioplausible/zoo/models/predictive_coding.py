@@ -5,6 +5,8 @@ Combined Predictive Coding Models
 Aggregates all predictive coding models into a single module for the model zoo.
 """
 
+from __future__ import annotations
+
 import torch
 from torch import nn
 
@@ -15,6 +17,7 @@ from bioplausible.config.unified import (
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
+from bioplausible.core.training_mixin import supervised_step
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 # ============================================================================
@@ -236,32 +239,37 @@ class PredictiveCodingHybrid(BioModel):
         return h
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        self.optimizer.zero_grad()
+        return supervised_step(
+            self,
+            self.optimizer,
+            x,
+            y,
+            loss_fn=self._composite_loss,
+        )
 
+    @staticmethod
+    def _composite_loss(
+        model: PredictiveCodingHybrid,
+        x: torch.Tensor,
+        y: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward with intermediate activations + composite PC loss."""
         activations = [x]
         h = x
-        for i, layer in enumerate(self.layers):
+        for i, layer in enumerate(model.layers):
             h = layer(h)
-            if i < len(self.layers) - 1:
-                h = self.activation(h)
+            if i < len(model.layers) - 1:
+                h = model.activation(h)
             activations.append(h)
 
         output = activations[-1]
-        loss_cls = self.criterion(output, y)
+        loss_cls = model.criterion(output, y)
 
-        pc_loss = 0
-        for i in range(len(self.layers)):
+        pc_loss = torch.zeros((), device=output.device, dtype=output.dtype)
+        for i in range(len(model.layers)):
             upper = activations[i + 1].detach()
             lower_target = activations[i].detach()
+            prediction = model.top_down[i](upper)
+            pc_loss = pc_loss + nn.functional.mse_loss(prediction, lower_target)
 
-            prediction = self.top_down[i](upper)
-            pc_loss += nn.functional.mse_loss(prediction, lower_target)
-
-        total_loss = loss_cls + 0.1 * pc_loss
-        total_loss.backward()
-        self.optimizer.step()
-
-        return {
-            "loss": total_loss.item(),
-            "accuracy": (output.argmax(1) == y).float().mean().item(),
-        }
+        return loss_cls + 0.1 * pc_loss, output

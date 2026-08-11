@@ -127,7 +127,11 @@ class RobustnessEvaluator:
             # Load weights if provided, else train briefly
             if self.weights_path:
                 logger.info("Loading weights from %s", self.weights_path)
-                checkpoint = torch.load(self.weights_path, map_location=self.device)
+                from bioplausible.core.checkpoint import load_checkpoint
+
+                checkpoint = load_checkpoint(
+                    self.weights_path, map_location=self.device
+                )
                 # Handle full checkpoint vs state_dict
                 if "model_state_dict" in checkpoint:
                     model.load_state_dict(checkpoint["model_state_dict"])

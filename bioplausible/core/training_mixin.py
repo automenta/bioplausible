@@ -8,11 +8,14 @@ computation, metrics dict return).
 from __future__ import annotations
 
 from abc import abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, Self
 
 import torch
 from torch import nn
+
+type LossFn = Callable[[nn.Module, torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]
 
 
 class _HasTrainStep(Protocol):
@@ -28,13 +31,23 @@ class _HasTrainStep(Protocol):
     def compute_metrics(self, logits: torch.Tensor, y: torch.Tensor) -> float: ...
 
 
-def supervised_step(
+def _default_loss(
+    model: nn.Module, x: torch.Tensor, y: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    logits = model(x)
+    loss = torch.nn.functional.cross_entropy(logits, y)
+    return loss, logits
+
+
+def supervised_step(  # ruff: ignore[too-many-arguments]  # training-step contract: model, optimizer, x, y, + 2 kwargs
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
     x: torch.Tensor,
     y: torch.Tensor,
     *,
     grad_clip: float | None = None,
+    loss_fn: LossFn | None = None,
+    extra_keys: dict[str, float] | None = None,
 ) -> dict[str, float]:
     """Run one standard supervised optimizer step.
 
@@ -48,16 +61,24 @@ def supervised_step(
         x: Input batch.
         y: Target batch.
         grad_clip: Optional global gradient-norm clipping value.
+        loss_fn: Optional ``(model, x, y) -> (loss, logits)`` callable replacing
+            the default ``CE(model(x), y)``. Enables custom forward flows (e.g.
+            composite losses collecting intermediate activations).
+        extra_keys: Optional metrics to merge into the returned dict beyond
+            ``{"loss", "accuracy"}``.
     """
     optimizer.zero_grad()
-    logits = model(x)
-    loss = torch.nn.functional.cross_entropy(logits, y)
+    fn = loss_fn or _default_loss
+    loss, logits = fn(model, x, y)
     loss.backward()
     if grad_clip:
         nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
     optimizer.step()
     acc = float((logits.argmax(-1) == y).float().mean().item())
-    return {"loss": float(loss.item()), "accuracy": acc}
+    result = {"loss": float(loss.item()), "accuracy": acc}
+    if extra_keys:
+        result.update(extra_keys)
+    return result
 
 
 @dataclass(eq=False, unsafe_hash=True)

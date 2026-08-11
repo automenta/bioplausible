@@ -827,6 +827,7 @@ class StandardFA(BioModel):
             self.feedback_weights.append(p)
 
         self.criterion = nn.CrossEntropyLoss()
+        self.hebbian_lr = kwargs.get("hebbian_lr", 0.01)
         self.optimizer = create_optimizer(
             [p for p in self.parameters() if p.requires_grad],
             OptimizerConfig(name="adam", lr=self.config.learning_rate),

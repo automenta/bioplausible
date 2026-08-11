@@ -125,6 +125,40 @@ def _no_feedback(tile: TileState, graph: TileGraph, lookup: WeightLookup) -> lis
     return []
 
 
+def _spiking_activity_update(  # ruff: ignore[too-many-arguments]  # dynamics contract
+    tile: TileState,
+    *,
+    feedback: list[Tensor],
+    importance: float,
+    step_size: float,
+    lambda_error: float,
+    clamp_min: float,
+    clamp_max: float,
+    clamp: bool,
+) -> Tensor:
+    """Spiking activity: integrate input, fire above threshold, reset.
+
+    Neuron model: ``activity = ReLU(activity - threshold) * (1 - fired)``
+    then add the EP-style relaxation on the sub-threshold component.
+    """
+    if tile.activity is None or tile.error is None:
+        raise ValueError("_spiking_activity_update requires settled activity and error")
+    relaxed = compute_activity_update(
+        activity=tile.activity,
+        error=tile.error,
+        fwd_feedback=feedback,
+        importance=importance,
+        step_size=step_size,
+        lambda_error=lambda_error,
+        clamp_min=clamp_min,
+        clamp_max=clamp_max,
+        clamp=clamp,
+    )
+    spike_thresh = clamp_max if clamp else 1.0
+    fired = relaxed > spike_thresh
+    return torch.where(fired, torch.zeros_like(relaxed), relaxed)
+
+
 def _ep_activity_update(  # ruff: ignore[too-many-arguments]  # dynamics contract
     tile: TileState,
     *,
@@ -406,6 +440,8 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
         match self.config.algorithm:
             case "hebbian":
                 return _hebbian_activity_update
+            case "snn":
+                return _spiking_activity_update
             case _:
                 return _ep_activity_update
 
@@ -797,6 +833,68 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
         return cls(
             cls._build_config(
                 algorithm="tp",
+                mode="ep",
+                input_dim=input_dim,
+                output_dim=output_dim,
+                num_layers=num_layers,
+                neurons_per_tile=neurons_per_tile,
+                tiles_per_layer=tiles_per_layer,
+                learning_rate=learning_rate,
+                importance_lr=importance_lr,
+                beta=beta,
+                **kwargs,
+            )
+        )
+
+    @classmethod
+    def from_snn(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
+        cls,
+        input_dim: int,
+        output_dim: int,
+        *,
+        num_layers: int = 3,
+        neurons_per_tile: int = 48,
+        tiles_per_layer: int = 4,
+        learning_rate: float = 0.001,
+        importance_lr: float = 0.01,
+        beta: float = 0.1,
+        **kwargs,
+    ) -> TileAlgorithm:
+        """Spiking Neural Network (threshold-and-reset activity dynamics)."""
+        return cls(
+            cls._build_config(
+                algorithm="snn",
+                mode="ep",
+                input_dim=input_dim,
+                output_dim=output_dim,
+                num_layers=num_layers,
+                neurons_per_tile=neurons_per_tile,
+                tiles_per_layer=tiles_per_layer,
+                learning_rate=learning_rate,
+                importance_lr=importance_lr,
+                beta=beta,
+                **kwargs,
+            )
+        )
+
+    @classmethod
+    def from_gnn(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
+        cls,
+        input_dim: int,
+        output_dim: int,
+        *,
+        num_layers: int = 3,
+        neurons_per_tile: int = 48,
+        tiles_per_layer: int = 4,
+        learning_rate: float = 0.001,
+        importance_lr: float = 0.01,
+        beta: float = 0.1,
+        **kwargs,
+    ) -> TileAlgorithm:
+        """Graph Neural Network (message-passing across tile edges)."""
+        return cls(
+            cls._build_config(
+                algorithm="gnn",
                 mode="ep",
                 input_dim=input_dim,
                 output_dim=output_dim,
