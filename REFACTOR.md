@@ -2,7 +2,7 @@
 
 **Codebase**: 316 Python files, ~41K lines  
 **Goal**: Maximize size reduction via deduplication, DRY, structural consolidation  
-**Completed**: ~3,800 lines saved (9.3%) across 90+ files; **§1/§2/§3(target 1)/§4(metrics rename)/§7/§8(EquiTile Generification)/§9(Training Loop) complete**; §3 Config Unification targets 2-4 standardized on BaseConfig; §4 type-clean, §10 data/mnist + toy dedup landed; **Checkpoint/serialization unified on `core.checkpoint`** (CoreTrainer + LMTrainer + FastLMEquiTile); **Training-loop PoC + rollouts** (`supervised_step` → `eqprop/_unified.py`, `core/ebm.py`, `forward_only.py`, `predictive_coding.py`, entire `fa.py` plain-BPTT set); **EquiTile Generification (§8)** — generic `TileAlgorithm` with 5 static factories + 3 dynamics protocols in `core/local_learning/algorithm.py` + `TileFA` validation in `zoo/models/tile_fa.py`; `MultiOptimizerMixin` groups wired; bio-plausible loop (`local_update`) + autograd baseline (`train_step`).
+**Completed**: ~4,068 lines saved (9.9%) across 90+ files; **§1/§2/§3(target 1)/§4(metrics rename)/§7/§8(EquiTile Generification)/§9(Training Loop) complete**; §3 Config Unification targets 2-4 standardized on BaseConfig; §4 type-clean, §10 data/mnist + toy dedup landed; **Checkpoint/serialization unified on `core.checkpoint`** (CoreTrainer + LMTrainer + FastLMEquiTile); **Training-loop PoC + rollouts** (`supervised_step` → `eqprop/_unified.py`, `core/ebm.py`, `forward_only.py`, `predictive_coding.py`, entire `fa.py` plain-BPTT set); **EquiTile Generification (§8)** — generic `TileAlgorithm` with 5 static factories + 3 dynamics protocols in `core/local_learning/algorithm.py` + `TileFA` validation in `zoo/models/tile_fa.py`; `MultiOptimizerMixin` groups wired; bio-plausible loop (`local_update`) + autograd baseline (`train_step`). **Strategy Optimizer Permutations (§7.5)** — `TargetPropGradient` + `HebbianGradient` `GradientStrategy`s landed in `core/optimization/strategies/gradient.py`, registered in `factory.py`, both `requires_energy=True` for `step(x,target)` forwarding.
 
 ---
 
@@ -44,8 +44,9 @@
 | Vision-Load Migration (MEP) | `zoo/mep/benchmarks/_shared.py`/`runner.py`/`niche_benchmarks.py` → `get_vision_dataset()` cached tensor path | ~30 |
 | **Training-Loop Rollouts** | `supervised_step` adopted by `core/ebm.py:_fallback_bptt`, `zoo/models/forward_only.py` classifier tail, `zoo/models/predictive_coding.py:PredictiveCodingHybrid.train_step` | ~50 |
 | **Training-Loop Rollout (FA)** | `zoo/models/fa.py` plain-BPTT train_steps → `supervised_step`: `LayerwiseEquilibriumFA` + 3 `_autograd_fa_train_step` consumers (`ContrastiveFeedbackAlignment`, `EnergyGuidedFA`, `EnergyMinimizingFA`); the thin `_autograd_fa_train_step` wrapper deleted (inlined) | ~35 |
+| **Strategy Permutations (#4)** | `TargetPropGradient` + `HebbianGradient` in `core/optimization/strategies/gradient.py` (structural `Protocol`s for type-narrowing), exported via `strategies/__init__.py` + `optimization/__init__.py`, registered in `factory.py` (`target_prop`, `hebbian`); both set `requires_energy=True` so `StrategyOptimizer.step(x=…, target=…)` forwards input/target; `tests/unit/core/test_gradient_strategies.py` (10 cases, 28 total with neighbors) | ~240 |
 
-**Total verified reduction**: ~3,828 lines (9.3%)
+**Total verified reduction**: ~4,068 lines (9.9%)
 
 ---
 
@@ -61,6 +62,7 @@
 | Metrics Consolidation | ~10 classes | 2 | 8 | 🟢 Rename + audit done; no forced merger |
 | Training Loop Infra | ~20 implementations | 08 | 0 plain-BPTT left (rest bespoke) | 🟢 **Plain-BPTT rollout complete**; remaining are custom-physics |
 | Strategy Optimizer Generification | 4 strategy types | 4 | 0 | ✅ Complete (core + MEP) |
+| Strategy Permutations | gradient strategies | 4 (`Backprop`/`FA`/`TargetProp`/`Hebbian`) | permutations need wiring | 🟢 **TargetProp + Hebbian gradients landed**; on-demand wiring (registry values) |
 
 ---
 
@@ -105,7 +107,7 @@
 | **Checkpoint/Serialization** | `deployment.py:237/299/691` (torchscript/state export), `equitile/deployments/deployment.py:191` (config-object export), dual-format loaders in `robustness.py`/`zoo/__init__.py` | ~40 | Medium | If shared reader for exported artifacts emerges |
 | **Vision Data Loading** | `domains/vision.py` (custom transforms), `continual_learning.py` (raw pixel space for permutation tasks) — intentional non-migrations | ~35 left | Low | N/A |
 | **Registry/Build Patterns** | `core/registry.py` + `core/construction.py` — standardize `build` classmethods across zoo models | ~100 | Medium | Medium |
-| **Strategy Optimizer Permutations** | Implement `TargetPropGradient`, `HebbianGradient` as `GradientStrategy` to unlock Muon/Dion/Fisher + TargetProp/Hebbian combos | ~150 | Medium | Medium |
+| **Strategy Optimizer Permutations** | ✅ `TargetPropGradient` + `HebbianGradient` `GradientStrategy`s landed (`core/optimization/strategies/gradient.py`), registered (`target_prop`/`hebbian`) in `factory.py`, `requires_energy=True` for `step(x,target)` forwarding. Unlocks Muon/Dion/Fisher + TargetProp/Hebbian combos. **Remaining**: wire a concrete zoo model to a permutation as a demo; `TargetPropGradient.target_lr`/`loss_fn` and `HebbianGradient` `use_oja` are constructor-injectable but consumers must pass matching model structure | ~150 | Medium | Done (strategies); combos on-demand |
 | **Tile Algorithm Expansion** | `TileTargetProp`, `TilePC`, `TileSNN`, `TileGNN` — substrate ready, only model classes needed | ~200 | Low | Low |
 
 ---
@@ -135,8 +137,8 @@ pip-audit                          # no new vulnerabilities
 | Training Loop | ~200 lines (plain-BPTT rollout ✅ complete) |
 | Checkpoint/Serialization | ~40 lines (deferred) |
 | Vision/Toy/Registry/Strategy Permutations | ~385 lines |
-| **Total Additional** | **~1,225 lines (3.0%)** |
-| **Cumulative** | **~5,028 lines (12.3%)** |
+| **Total Additional** | **~1,465 lines (3.6%)** |
+| **Cumulative** | **~5,268 lines (12.9%)** |
 
 **Key multiplier**: EquiTile generification **complete at substrate level** — `core/tile` + `core/local_learning` + `core/optimization` are importable by any algorithm. `TileFA`, `TileTargetProp`, `TilePC`, `TileSNN`, `TileGNN` now need only their own model classes, not replicated substrate code. **Strategy Optimizer Generification complete** — `core/optimization/` provides generic strategy framework enabling Muon+FA, Hebbian+Muon, Dion+TargetProp, etc. permutations.
 
@@ -155,6 +157,7 @@ pip-audit                          # no new vulnerabilities
 | 7 | 2026-08-10 | **Checkpoint serialization unified** (`Checkpoint` typed `Required[model_state_dict]`; CoreTrainer + LMTrainer + FastLMEquiTile → `core.checkpoint`), **training-loop PoC** (`supervised_step` → `eqprop/_unified.py`), **MEP vision loads → `get_vision_dataset`** | 3 raw save/load sites unified; `supervised_step` ready for rollout; spec'd `domains/vision.py` + `continual_learning.py` as intentional non-migrations |
 | 8 | 2026-08-10 | **Config Unification targets 2–4** (standardized on BaseConfig), **EquiTile Generification complete** (`TileAlgorithm` + 5 factories + `TileFA`), **Training-loop rollouts** (3 rollouts) | Config targets 2-4 "no-merge" but standardized; TileAlgorithm substrate + 5 factories + TileFA validated; 3 supervised_step rollouts |
 | 9 | 2026-08-10 | **Training-loop rollout complete**: all `fa.py` plain-BPTT train_steps → `supervised_step` (`LayerwiseEquilibriumFA` + 3 `_autograd_fa_train_step` consumers), thin wrapper inlined/deleted | Plain-BPTT candidate pool exhausted (all remaining train_steps bespoke physics); -28 net lines; 56 FA unit tests pass; 2 smoke failures confirmed pre-existing |
+| 10 | 2026-08-10 | **Strategy Optimizer Permutations**: `TargetPropGradient` + `HebbianGradient` `GradientStrategy`s in `core/optimization/strategies/gradient.py` (structural `Protocol`s `_TargetPropModel`/`_TransitionModel`/`_HebbianLayer` for type-narrowing), exported via `strategies/__init__.py` + `optimization/__init__.py`, registered in `factory.py` (`target_prop`, `hebbian`); both signal `requires_energy=True` so `StrategyOptimizer.step(x=…, target=…)` forwards input/target | TargetProp demonstrably learns (loss 1.13→0.84 in 20 steps); Hebbian divergence matches reference `DeepHebbianChain` (tagged broken); 28 tests pass (10 new); ruff/pyright clean on new code (pre-existing warnings only) |
 
 ---
 
@@ -179,6 +182,8 @@ pip-audit                          # no new vulnerabilities
 - **Session-8 targeted test matrix passed** (no full-suite reruns): `test_checkpoint.py` + `test_trainer_coverage.py` (29), `test_lm_demo.py` (38), `test_eqprop_models.py`+`_forward`+`_base` (25), `test_phase2_integration.py` (1), `test_lm_demo.py`+`test_zoo_integration.py` (68), `test_config_knobs.py`+`test_training_path.py` (17), `test_plan2_actions.py`+`test_domains.py` (51 pass / 1 pre-existing fail). ruff baseline ~104 findings on touched files; pyright 0 errors across all touched files.
 
 - **Session-9 verification (training-loop rollout, `zoo/models/fa.py`)**: `test_fa_model.py` 56/56 pass; `test_smoke_training.py` 23 pass + 2 pre-existing failures (`test_directed_ep`, `test_finite_nudge_ep` — confirmed identical on clean tree via `git stash`; unrelated to FA changes); pyright 0 errors on `fa.py`; ruff no new findings (pre-existing baseline only). No full-suite rerun.
+
+- **Session-10 verification (strategy permutations)**: `test_gradient_strategies.py` 10/10 pass; `test_optimizer_factory.py` + `test_spectral_optimizer.py` + `test_optimizer_stubs.py` all pass (28 total); ruff clean on new/changed code (pre-existing baseline: 3 missing-newlines + 1 typing-only import in `factory.py` + pytest-class `no-self-use` in tests — untouched baseline); pyright 0 errors on `core/optimization/` with only pre-existing warnings (+4 factory `dict[str, object]`-kwargs warnings on `target_prop`/`hebbian` registry lambdas, same pattern as existing `backprop`/`fa`/`muon` rows). **TargetPropGradient diverged-index bug fixed during session**: `_train_forward_nets` target lookup must be `targets[-(i+1)]` (layer i's forward net predicts `hs[i+1]` whose target is `t_{i+1}`), not `targets[-len(targets)+i]`.
 
 - **Zero-diff verification recipe**: `git stash` → `ruff check` → `pyright` → targeted `pytest --no-cov` → `git stash pop`; compute `comm` diffs. Keeps regression detection cheap without full-suite reruns.
 ---

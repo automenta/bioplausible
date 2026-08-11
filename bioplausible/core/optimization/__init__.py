@@ -16,11 +16,13 @@ from .strategies import (
     FAGradient,
     FeedbackStrategy,
     GradientStrategy,
+    HebbianGradient,
     MuonUpdate,
     NoConstraint,
     NoFeedback,
     PlainUpdate,
     SpectralConstraint,
+    TargetPropGradient,
     UpdateStrategy,
 )
 
@@ -31,6 +33,7 @@ __all__ = [
     "FAGradient",
     "FeedbackStrategy",
     "GradientStrategy",
+    "HebbianGradient",
     "MuonUpdate",
     "NoConstraint",
     "NoFeedback",
@@ -40,6 +43,7 @@ __all__ = [
     "StrategyOptimizer",
     "StrategyOptimizerConfig",
     "StrategyRegistry",
+    "TargetPropGradient",
     "UpdateStrategy",
     "create_strategy_optimizer",
 ]

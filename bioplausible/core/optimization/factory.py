@@ -18,11 +18,13 @@ from .strategies import (
     BackpropGradient,
     ErrorFeedback,
     FAGradient,
+    HebbianGradient,
     MuonUpdate,
     NoConstraint,
     NoFeedback,
     PlainUpdate,
     SpectralConstraint,
+    TargetPropGradient,
 )
 
 __all__ = ["StrategyRegistry", "create_strategy_optimizer"]
@@ -34,6 +36,8 @@ StrategyFactory = Callable[[StrategyConfig], Any]
 StrategyRegistry: dict[str, StrategyFactory] = {
     "backprop": lambda c: BackpropGradient(**c.kwargs),
     "fa": lambda c: FAGradient(**c.kwargs),
+    "target_prop": lambda c: TargetPropGradient(**c.kwargs),
+    "hebbian": lambda c: HebbianGradient(**c.kwargs),
     "plain": lambda c: PlainUpdate(**c.kwargs),
     "muon": lambda c: MuonUpdate(**c.kwargs),
     "none": lambda _c: NoConstraint(),
@@ -50,8 +54,7 @@ def _resolve(
     factory = registry.get(spec.name)
     if factory is None:
         raise ValueError(
-            f"Unknown {kind} strategy: {spec.name!r}. "
-            f"Available: {sorted(registry)}"
+            f"Unknown {kind} strategy: {spec.name!r}. Available: {sorted(registry)}"
         )
     return factory(spec)
 
@@ -82,7 +85,9 @@ def create_strategy_optimizer(
         else None
     )
     feedback = (
-        _resolve(config.feedback, reg, "feedback") if config.feedback is not None else None
+        _resolve(config.feedback, reg, "feedback")
+        if config.feedback is not None
+        else None
     )
     return StrategyOptimizer(
         model.parameters() if model is not None else [],
