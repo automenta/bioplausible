@@ -18,8 +18,9 @@
 | Strategy Optimizer (`core/optimization/`) | ✅ Done | ~200 | Generic layer + `FAGradient`; `TargetPropGradient`+`HebbianGradient` landed w/ `requires_energy`; end-to-end wiring validated by `tests/unit/test_strategy_optimizer_wiring.py` (Sprint 0.9) |
 | Metrics/Data/Deployment/Logging/Activation | ✅ Done | ~980 | Unified metrics/logging/device/seeds/activations/transforms/extractors/tracks |
 | Zoo Build (`core/construction.build_from_standard_args`) | ✅ Done | ~105 | Canonical `build` signature; 7 redundant `build` classmethods deleted |
+| Vision Deployment Port (`equitile/deployments`) | ✅ Done | ~220 | `ConvEquiTile` + `create_deployment_model` heads ported to `TileAlgorithm` substrate; `EquiTile`/`EquiTileConfig` deps removed from `base.py` + `vision.py`; canonical `build_tile_head` helper shared (Sprint 1.0) |
 
-**Reduction so far**: ~4,173 lines (10.1%). **Target run-rate remaining**: ~1,365 lines (Registry/Build done) → next realizable ~950 lines (Checkpoint/Serialization ~40, Tile expansion ~200 new not dedup, Strategy wiring, supervised_step extension, Vision).
+**Reduction so far**: ~4,393 lines (10.6%). **Target run-rate remaining**: ~1,105 lines (Registry/Build done) → next realizable ~730 lines (Graph/Temporal/RL deployments, Language models, FastLM→TileLM).
 
 ---
 
@@ -66,7 +67,8 @@ equitile/                  # ← slated for FULL SUBSUMPTION (Endgame §12)
 Each `equitile/` component → one thin model class on the substrate, *not* a reimplementation.
 - `EquiTile` (EP mode) → `TileAlgorithm.from_ep()` ✅ done
 - `EquiTileConfig` + deployments → `TileAlgorithmConfig` + subclasses 🟡
-- Vision/Language/Graph/Temporal deployments → model classes 🟡
+- Vision deployments → `TileAlgorithm` substrate model classes ✅ done (Sprint 1.0)
+- Language/Graph/Temporal deployments → model classes 🟡
 - `FastLM` → `TileLM` (new) 🟡
 - `equitile/analysis/`, `equitile/benchmarks/` → substrate-native versions 🔴
 
@@ -88,6 +90,8 @@ Each `equitile/` component → one thin model class on the substrate, *not* a re
 
 **Zoo build unification:** `build_from_standard_args` canonicalizes the `build` contract; `BioModel.build` delegates; 7 redundant `build` classmethods deleted — keep the bespoke ones (custom `__init__` or non-`BioModel` bases: `FeedbackAlignmentEqProp`, `AdaptiveFeedbackAlignment`, `DeepDFAEqProp`, `EquilibriumAlignment`, Backprop/Hebbian/Direct-Feedback/forward-only/target-prop/spiking, `TileFA`).
 
+**Vision deployment port (Sprint 1.0):** `ConvEquiTile` (vision.py) + `create_deployment_model` (base.py) heads ported from legacy `EquiTile`/`EquiTileConfig` to the generic `TileAlgorithm` substrate. Canonical `build_tile_head(config, input_dim, output_dim, **kwargs)` helper shared in `base.py` deduplicates the duplicated head-construction logic. Removed `equitile.core` dependency from `deployments/vision.py` and `deployments/base.py`. Test `test_vision_kwargs` updated to substrate config surface (`extra["sparsity_threshold"]`). All 49 vision/deployment tests pass.
+
 ---
 
 ## Open Work — Ranked Plan
@@ -108,7 +112,7 @@ Wiring already landed with tests: `tests/unit/test_strategy_optimizer_wiring.py`
 - **Metrics field reconciliation** — `TrainingMetrics` `train_accuracy`/`val_accuracy` vs `BenchmarkMetrics`/`EpochMetrics` `train_acc`/`val_acc`. No shared reader exists.
 - **Storage table merge** — `epoch_metrics` (FK trial) vs `training_checkpoints` (FK trajectory). Only merge if a shared reader joins them.
 - **Remaining plain-BPTT cleanup** — `StandardFA._fa_train_step_body`/`_apply_fa_grads_to_optim` are bespoke FA loops; the generic `FAGradient` strategy (which requires `nn.Sequential`-style models) could subsume them, but `StandardFA` stores feedback weights as `ParameterList` with custom evolution hooks — conflation risk; leave until a concrete consumer needs it.
-- **Vision deployments** — `equitile/` Vision/Language/Graph/Temporal deployment classes still need model-class-on-substrate ports.
+- **Language/Graph/Temporal deployments** — `equitile/` Language/Graph/Temporal deployment classes still need model-class-on-substrate ports.
 
 ---
 
@@ -132,6 +136,7 @@ Always use the venv toolchain: `uv run ruff` (0.16.0) / `.venv/bin/pyright`; sys
 - **ARG001 lint pitfall (module-level `build`-contract fn)**: ruff reports `unused-function-argument` at the *parameter* line, not the `def` line — so a `def`-line `# ruff: ignore` cannot suppress it and `# noqa` on a param line is invalid. `build_from_standard_args` resolves this by threading the contract-only arg (`task_type`) into the config dict. Future zoo-contract module-level functions should do the same, or move the logic onto `BioModel` (a classmethod, where ARG003 works from the def line).
 - **`supervised_step` positional-order footgun**: signature is `(model, optimizer, x, y)` — `optimizer` is the *second* positional arg. Inlining must preserve this order (a prior draft swapped `optimizer`/`x` and failed at runtime with a confusing error). If extending with kwargs, keep `grad_clip`/etc. keyword-only.
 - **`TileGNN` gate bug (fixed in Sprint 0.7)**: `_gnn_activity_update` built a fresh `nn.Linear(2n, n)` on every settle call — weights recreated per-step, unregistered (not in `state_dict`/optimizer), and untrainable; pyright flagged `Tensor is not callable`. Fixed by a persistent per-tile `nn.ModuleDict` gate built in `__init__` (shares the substrate `_optim_io` via `add_param_group`). Template for the other tile model classes: any per-tile learnable projection must be built once in `__init__`, not inside the activity/feedback update fn (which runs per-settle-step and per-tile).
-- **Pre-existing failures (ignore, confirmed on clean tree via stash)**: `test_backprop_parity[eqprop_mlp|directed_ep]`, `test_sample_config_eqprop_has_equilibrium_params`; DataLoader `NameError`s in `compare.py`/`tuned_compare.py`; `test_smoke_training`'s `test_directed_ep`/`test_finite_nudge_ep` (model `train_step` returns `None` → harness crashes); `test_zoo_integration` equitile-family-query (lazy import). None are introduced by refactor work.
+- **Vision deployment port (Sprint 1.0)**: `ConvEquiTile` + `create_deployment_model` heads ported from legacy `EquiTile` to `TileAlgorithm` substrate. Canonical `build_tile_head` helper in `base.py` shared by both. Substrate enriched with head-facing API: public `task_handler`, `compute_loss`/`compute_metrics`, `get_config`, and `detach_input` control on `forward_logits`/`_clamp_input` for differentiable backprop through head into feature extractors. Test `test_vision_kwargs` updated to substrate config surface (`extra["sparsity_threshold"]`). All 49 vision/deployment tests pass.
+- **Pre-existing failures (ignore, confirmed on clean tree via stash)**: `test_backprop_parity[eqprop_mlp|directed_ep]`, `test_sample_config_eqprop_has_equilibrium_params`; DataLoader `NameError`s in `compare.py`/`tuned_compare.py`; `test_smoke_training`'s `test_directed_ep`/`test_finite_nudge_ep` (model `train_step` returns `None` → harness crashes); `test_zoo_integration` equitile-family-query (lazy import); `test_model_learns_synthetic[modern_conv_eqprop]` (grad flow issue). None are introduced by refactor work.
 
 *End of REFACTOR.md — update after each change; keep status + open-work tables current.*
