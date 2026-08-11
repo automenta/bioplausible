@@ -227,7 +227,9 @@ class PredictiveCodingHybrid(BioModel):
 
         self.optimizer = create_optimizer(
             self,
-            OptimizerConfig(name="adam", lr=self.config.learning_rate, weight_decay=0.0),
+            OptimizerConfig(
+                name="adam", lr=self.config.learning_rate, weight_decay=0.0
+            ),
         )
 
     def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
@@ -252,7 +254,7 @@ class PredictiveCodingHybrid(BioModel):
         model: PredictiveCodingHybrid,
         x: torch.Tensor,
         y: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, dict[str, float] | None]:
         """Forward with intermediate activations + composite PC loss."""
         activations = [x]
         h = x
@@ -272,4 +274,11 @@ class PredictiveCodingHybrid(BioModel):
             prediction = model.top_down[i](upper)
             pc_loss = pc_loss + nn.functional.mse_loss(prediction, lower_target)
 
-        return loss_cls + 0.1 * pc_loss, output
+        return (
+            loss_cls + 0.1 * pc_loss,
+            output,
+            {
+                "cls_loss": float(loss_cls.item()),
+                "pc_loss": float(pc_loss.item()),
+            },
+        )

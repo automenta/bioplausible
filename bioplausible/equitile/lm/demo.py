@@ -46,6 +46,7 @@ from pathlib import Path
 
 import torch
 
+from bioplausible.core.checkpoint import load_checkpoint
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.equitile.lm.data import (
@@ -675,7 +676,7 @@ def run_inference(
         device = str(get_device())
 
     logger.info("Loading model from %s...", checkpoint_path)
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = load_checkpoint(checkpoint_path, map_location=device)
 
     # Recreate model from config
     model_config = FastLMConfig(**checkpoint.get("config", {}))

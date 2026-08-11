@@ -15,7 +15,10 @@ from typing import Protocol, Self
 import torch
 from torch import nn
 
-type LossFn = Callable[[nn.Module, torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]
+type LossFn = Callable[
+    [nn.Module, torch.Tensor, torch.Tensor],
+    tuple[torch.Tensor, torch.Tensor, dict[str, float] | None],
+]
 
 
 class _HasTrainStep(Protocol):
@@ -33,10 +36,10 @@ class _HasTrainStep(Protocol):
 
 def _default_loss(
     model: nn.Module, x: torch.Tensor, y: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, dict[str, float] | None]:
     logits = model(x)
     loss = torch.nn.functional.cross_entropy(logits, y)
-    return loss, logits
+    return loss, logits, None
 
 
 def supervised_step(  # ruff: ignore[too-many-arguments]  # training-step contract: model, optimizer, x, y, + 2 kwargs
@@ -61,15 +64,16 @@ def supervised_step(  # ruff: ignore[too-many-arguments]  # training-step contra
         x: Input batch.
         y: Target batch.
         grad_clip: Optional global gradient-norm clipping value.
-        loss_fn: Optional ``(model, x, y) -> (loss, logits)`` callable replacing
-            the default ``CE(model(x), y)``. Enables custom forward flows (e.g.
-            composite losses collecting intermediate activations).
+        loss_fn: Optional ``(model, x, y) -> (loss, logits, extras)`` callable
+            replacing the default ``CE(model(x), y)``. Enables custom forward
+            flows (e.g. composite losses collecting intermediate activations).
+            The third element (``extras``) is merged into the returned dict.
         extra_keys: Optional metrics to merge into the returned dict beyond
             ``{"loss", "accuracy"}``.
     """
     optimizer.zero_grad()
     fn = loss_fn or _default_loss
-    loss, logits = fn(model, x, y)
+    loss, logits, fn_extras = fn(model, x, y)
     loss.backward()
     if grad_clip:
         nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
@@ -78,6 +82,8 @@ def supervised_step(  # ruff: ignore[too-many-arguments]  # training-step contra
     result = {"loss": float(loss.item()), "accuracy": acc}
     if extra_keys:
         result.update(extra_keys)
+    if fn_extras:
+        result.update(fn_extras)
     return result
 
 

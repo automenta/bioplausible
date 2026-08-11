@@ -14,6 +14,7 @@ from pathlib import Path
 
 import torch
 
+from bioplausible.core.checkpoint import save_checkpoint
 from bioplausible.core.logging import get_logger
 
 __all__ = [
@@ -150,7 +151,14 @@ class ExperimentArchiver:
             trial_dir.mkdir(exist_ok=True)
 
             checkpoint_path = trial_dir / "model.pt"
-            torch.save(model.state_dict(), checkpoint_path)
+            save_checkpoint(
+                checkpoint_path,
+                {
+                    "model_state_dict": model.state_dict(),
+                    "config": config,
+                    "metrics": dict(metrics),
+                },
+            )
 
             with Path(trial_dir / "config.json").open("w") as f:
                 json.dump(config, f, indent=2)

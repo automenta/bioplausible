@@ -242,9 +242,7 @@ class TileSNN(TileAlgorithm):
     _algorithm = "snn"
 
     def __init__(self, config: TileAlgorithmConfig, **kwargs) -> None:
-        handler = TaskHandler(
-            task_type="classification", output_dim=config.output_dim
-        )
+        handler = TaskHandler(task_type="classification", output_dim=config.output_dim)
         super().__init__(
             config,
             task_handler=handler,
@@ -329,9 +327,7 @@ class TileGNN(TileAlgorithm):
     _algorithm = "gnn"
 
     def __init__(self, config: TileAlgorithmConfig, **kwargs) -> None:
-        handler = TaskHandler(
-            task_type="classification", output_dim=config.output_dim
-        )
+        handler = TaskHandler(task_type="classification", output_dim=config.output_dim)
         super().__init__(
             config,
             task_handler=handler,
@@ -342,6 +338,12 @@ class TileGNN(TileAlgorithm):
         )
         self._msg_weights: nn.ParameterDict = nn.ParameterDict()
         self._build_message_weights()
+        self._gnn_gate: nn.ModuleDict = nn.ModuleDict()
+        self._build_gnn_gates()
+        self._optim_io.add_param_group({
+            "params": list(self._msg_weights.values())
+            + list(self._gnn_gate.parameters())
+        })
 
     def _build_message_weights(self) -> None:
         for src_id, dst_id in self.graph.edges:
@@ -349,6 +351,17 @@ class TileGNN(TileAlgorithm):
             dst = self.graph.tiles[dst_id]
             w = torch.randn(dst.neurons, src.neurons) * (1.0 / src.neurons**0.5)
             self._msg_weights[self._weight_key(src_id, dst_id)] = nn.Parameter(w)
+
+    def _build_gnn_gates(self) -> None:
+        """Per-tile gate over (activity, aggregated-message) -> activity delta.
+
+        Gate input width is ``2 * tile.neurons`` (``[activity, agg]`` concat);
+        output width is ``tile.neurons`` (gated delta added back to activity).
+        """
+        for tid, tile in self.graph.tiles.items():
+            if tile.is_input:
+                continue
+            self._gnn_gate[str(tid)] = nn.Linear(tile.neurons * 2, tile.neurons)
 
     def _gnn_activity_update(  # ruff: ignore[too-many-arguments]
         self,
@@ -373,10 +386,8 @@ class TileGNN(TileAlgorithm):
         if pred is not None:
             agg = agg + pred
         merged = torch.cat([tile.activity, agg], dim=-1)
-        gate = torch.sigmoid(
-            nn.Linear(merged.shape[-1], tile.activity.shape[-1])
-        )
-        gated = tile.activity + gate(merged) * agg
+        gate = torch.sigmoid(self._gnn_gate[str(tile.id)](merged))
+        gated = tile.activity + gate * agg
         return compute_activity_update(
             activity=gated,
             error=tile.error,
