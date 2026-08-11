@@ -18,6 +18,7 @@ from bioplausible.config.unified import (
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
+from bioplausible.core.training_mixin import supervised_step
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 from ..nebc_base import NEBCBase
@@ -144,28 +145,6 @@ def _fa_backward_loop(
         propagated_error = grad_h
 
     return weight_grads, bias_grads
-
-
-def _autograd_fa_train_step(
-    model: nn.Module,
-    x: torch.Tensor,
-    y: torch.Tensor,
-    optimizer: torch.optim.Optimizer,
-) -> dict[str, float]:
-    """Standard autograd train step for FA models.
-
-    Runs ``forward(x)``, computes cross-entropy loss, calls
-    ``loss.backward()``, and steps the optimizer.
-    """
-    optimizer.zero_grad()
-    output = model.forward(x)
-    loss = model.criterion(output, y)  # type: ignore[attr-defined]
-    loss.backward()
-    optimizer.step()
-    return {
-        "loss": loss.item(),
-        "accuracy": (output.argmax(1) == y).float().mean().item(),
-    }
 
 
 def _fa_train_step_body(
@@ -645,7 +624,7 @@ class ContrastiveFeedbackAlignment(BioModel):
         return h
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        return _autograd_fa_train_step(self, x, y, self.optimizer)
+        return supervised_step(self, self.optimizer, x, y)
 
 
 # ============================================================================
@@ -944,8 +923,9 @@ class EnergyGuidedFA(BioModel):
         return h
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        optimizer = _ensure_optimizer(self, self.config.learning_rate)
-        return _autograd_fa_train_step(self, x, y, optimizer)
+        return supervised_step(
+            self, _ensure_optimizer(self, self.config.learning_rate), x, y
+        )
 
     @classmethod
     def build(
@@ -1023,8 +1003,9 @@ class EnergyMinimizingFA(BioModel):
         return h
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        optimizer = _ensure_optimizer(self, self.config.learning_rate)
-        return _autograd_fa_train_step(self, x, y, optimizer)
+        return supervised_step(
+            self, _ensure_optimizer(self, self.config.learning_rate), x, y
+        )
 
     @classmethod
     def build(
@@ -1088,18 +1069,9 @@ class LayerwiseEquilibriumFA(BioModel):
         return h
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        optimizer = _ensure_optimizer(self, self.config.learning_rate)
-        optimizer.zero_grad()
-
-        output = self.forward(x)
-        loss = self.criterion(output, y)
-        loss.backward()
-        optimizer.step()
-
-        return {
-            "loss": loss.item(),
-            "accuracy": (output.argmax(1) == y).float().mean().item(),
-        }
+        return supervised_step(
+            self, _ensure_optimizer(self, self.config.learning_rate), x, y
+        )
 
     @classmethod
     def build(
