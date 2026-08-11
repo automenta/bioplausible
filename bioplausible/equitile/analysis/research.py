@@ -28,6 +28,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from bioplausible.config.unified import ExperimentConfig
+
 __all__ = [
     "AblationConfig",
     "AblationStudy",
@@ -48,25 +50,6 @@ if TYPE_CHECKING:
 # =============================================================================
 # Experiment Tracker
 # =============================================================================
-
-
-@dataclass
-class ExperimentConfig:
-    """Experiment configuration.
-
-    Attributes
-    ----------
-    name : str
-        Experiment name
-    description : str
-        Experiment description
-    tags : list of str
-        Experiment tags
-    """
-
-    name: str = ""
-    description: str = ""
-    tags: list[str] = field(default_factory=list)
 
 
 class ExperimentTracker:
@@ -919,7 +902,7 @@ def create_tracker(
     """
     config = ExperimentConfig(
         name=experiment_name,
-        tags=tags or [],
+        tags=tuple(tags or []),
     )
     return ExperimentTracker(experiment_name, log_dir, config)
 

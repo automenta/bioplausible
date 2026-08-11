@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.training_mixin import supervised_step
 
 __all__ = [
     "EBMTrainer",
@@ -142,6 +143,13 @@ class EBMTrainer:
         self.nudged_steps = nudged_steps or max(free_steps // 2, 1)
         self.beta = beta
         self.clip_grad_norm = clip_grad_norm
+        self._fallback_opt: torch.optim.Optimizer | None = None
+
+    def _get_fallback_optimizer(self) -> torch.optim.Optimizer:
+        """Lazily create the BPTT-fallback optimizer (canonical supervised path)."""
+        if self._fallback_opt is None:
+            self._fallback_opt = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        return self._fallback_opt
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Single training step: free phase → nudged phase → contrastive update.
@@ -178,16 +186,14 @@ class EBMTrainer:
         return self._compute_metrics(x, y, free_state)
 
     def _fallback_bptt(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        """Standard backprop-through-time fallback."""
-        logits = self.model(x)
-        loss = nn.functional.cross_entropy(logits, y)
-        loss.backward()
-        if self.clip_grad_norm is not None:
-            nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_grad_norm)
-        return {
-            "loss": loss.item(),
-            "accuracy": (logits.argmax(dim=1) == y).float().mean().item(),
-        }
+        """Standard backprop-through-time fallback (canonical supervised shape)."""
+        return supervised_step(
+            self.model,
+            self._get_fallback_optimizer(),
+            x,
+            y,
+            grad_clip=self.clip_grad_norm,
+        )
 
     def _compute_metrics(
         self,

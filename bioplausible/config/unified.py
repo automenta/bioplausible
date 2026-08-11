@@ -43,8 +43,11 @@ __all__ = [
     "BaseConfig",
     "BaseStructuredConfig",
     "DeviceStr",
+    "ExperimentConfig",
+    "ExperimentRunnerConfig",
     "LayerRole",
     "ModelConfig",
+    "ReproducibilityConfig",
     "compute_hidden_dims",
     "config_to_dict",
     "load_config",
@@ -314,3 +317,52 @@ def config_to_dict(obj: Any) -> dict[str, Any]:
     losslessly reconstructable.
     """
     return {k: v for k, v in asdict(obj).items() if v is not None}
+
+
+# ──────────────────────────────────────────────
+# Experiment configuration (standardized bases)
+# ──────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentConfig(BaseConfig):
+    """Base configuration for reproducible experiment tracking.
+
+    Standardized on :class:`BaseConfig` pattern (REFACTOR.md §1).
+    Fields common to all experiment configs: name, seed, device.
+    Domain-specific fields should be added in subclasses.
+    """
+
+    description: str = ""
+    tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ReproducibilityConfig(BaseConfig):
+    """Configuration for reproducibility tracking (equitile.utils.reproducibility).
+
+    Extends :class:`BaseConfig` with experiment-specific config dicts.
+    """
+
+    model_config: dict[str, object] = field(default_factory=dict)
+    training_config: dict[str, object] = field(default_factory=dict)
+    data_config: dict[str, object] = field(default_factory=dict)
+    hardware_config: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentRunnerConfig(BaseConfig):
+    """Configuration for experiment runner (experiments.utils).
+
+    Extends :class:`BaseConfig` with model/optimizer/training parameters.
+    """
+
+    model_name: str = ""
+    optimizer_name: str = ""
+    model_params: dict[str, object] = field(default_factory=dict)
+    optimizer_params: dict[str, object] = field(default_factory=dict)
+    epochs: int = 10
+    batches_per_epoch: int = 100
+    eval_batches: int = 20
+    track_metrics: bool = True
+    verbose: bool = True

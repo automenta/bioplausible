@@ -15,6 +15,7 @@ from . import (
     predictive_coding,
     spiking,
     target_prop,
+    tile_fa,
 )
 
 __all__: list[str] = [
@@ -30,4 +31,5 @@ __all__: list[str] = [
     "register_model",
     "spiking",
     "target_prop",
+    "tile_fa",
 ]

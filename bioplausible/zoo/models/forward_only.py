@@ -13,6 +13,7 @@ from torch import nn
 
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
+from bioplausible.core.training_mixin import supervised_step
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
@@ -173,19 +174,12 @@ class ForwardForwardNet(TransitionGraphMixin, nn.Module):
                 hidden_states.append(h)
         h_all = torch.cat(hidden_states, dim=1).detach()
 
-        logits = self.classifier(h_all)
-        cls_loss = nn.functional.cross_entropy(logits, y)
-
-        self.classifier_opt.zero_grad()
-        cls_loss.backward()
-        self.classifier_opt.step()
-
-        acc = (logits.argmax(1) == y).float().mean().item()
+        cls_metrics = supervised_step(self.classifier, self.classifier_opt, h_all, y)
 
         return {
             "loss": total_loss / len(self.layers),
-            "accuracy": acc,
-            "cls_loss": cls_loss.item(),
+            "accuracy": cls_metrics["accuracy"],
+            "cls_loss": cls_metrics["loss"],
         }
 
 

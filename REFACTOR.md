@@ -2,8 +2,7 @@
 
 **Codebase**: 316 Python files, ~41K lines  
 **Goal**: Maximize size reduction via deduplication, DRY, structural consolidation  
-**Completed**: ~3,580 lines saved (8.7%) across 90+ files; **§1/§2/§4(metrics rename)/§7 complete**; §3 Config Unification target 1 (FastLMConfig), §4 type-clean, §10 data/mnist + toy dedup landed  
-**Status**: Data Transforms consolidated; Optimizer Factory final sweep complete; Strategy Optimizer Generification complete (generic framework in core/optimization); FastLMConfig frozen on the unified pattern; `core/` fully equitile-free at type-check (LocalLearningConfigProtocol); **Checkpoint/serialization unified on `core.checkpoint`** (CoreTrainer + LMTrainer + FastLMEquiTile); **training-loop PoC landed** (`core.training_mixin.supervised_step` drives `eqprop/_unified.py`); **MEP benchmark vision loads migrated to `get_vision_dataset()`**.
+**Completed**: ~3,750 lines saved (9.1%) across 90+ files; **§1/§2/§3(target 1)/§4(metrics rename)/§7/§8(EquiTile Generification)/§9(training-loop PoC) complete**; §3 Config Unification targets 2-4 standardized on BaseConfig; §4 type-clean, §10 data/mnist + toy dedup landed; **Checkpoint/serialization unified on `core.checkpoint`** (CoreTrainer + LMTrainer + FastLMEquiTile); **training-loop PoC + 2 rollouts** (`supervised_step` → `eqprop/_unified.py`, `core/ebm.py`, `forward_only.py`); **EquiTile Generification (§8)** — generic `TileAlgorithm` with 5 static factories (`from_ep`/`from_fa`/`from_tp`/`from_pc`/`from_hebbian`) in `core/local_learning/algorithm.py` + `TileFA` validation in `zoo/models/tile_fa.py`; 3 dynamics protocols for full extensibility; `MultiOptimizerMixin` groups wired; bio-plausible loop (`local_update`) + autograd baseline (`train_step`).
 
 ---
 
@@ -69,12 +68,12 @@
 Pattern proven: frozen runtime configs in `config/unified.py` + `load_config`/`save_config` helpers.
 
 **Next targets** (in priority order):
-1. ✅ **`equitile/lm/components.py:FastLMConfig`** — **DONE (session 6): made `frozen=True, slots=True`** on the unified config pattern. `language/fast.py` variant is genuinely different architecture (pre-norm + sigmoid gating vs MoT + SwiGLU) — **leave both, dedup only shared fields**.
-2. **`zoo/mep/benchmarks/tuned_compare.py:OptimizerConfig`** + `config/schema.py:OptimizerConfig` — per-algorithm configs with different fields (`gamma`, per-family values); reconcile only shared subset if any.
-3. **`equitile/utils/reproducibility.py:ExperimentConfig`** + `experiments/utils.py:ExperimentConfig` — different purposes (seed+dicts vs model/optimizer/runner); no merge, but standardize on `BaseConfig` pattern.
+1. ✅ **`equitile/lm/components.py:FastLMConfig`** — **DONE (session 6)**: made `frozen=True, slots=True` on the unified config pattern. `language/fast.py` variant is genuinely different architecture (pre-norm + sigmoid gating vs MoT + SwiGLU) — **leave both, dedup only shared fields**.
+2. ✅ **`zoo/mep/benchmarks/tuned_compare.py:OptimizerConfig`** + `config/schema.py:OptimizerConfig` — reconfirmed **no-merge** (session 7): per-algorithm EP hyperparams (`beta`/`settle_steps`/`gamma`/…) share only `lr`; meaningful merge requires a shared reader.
+3. ✅ **`equitile/utils/reproducibility.py:ExperimentConfig`** + `experiments/utils.py:ExperimentConfig` — **standardized on `BaseConfig` pattern** (session 8): unified `ReproducibilityConfig` and `ExperimentRunnerConfig` in `config/unified.py`; no merge (different purposes: seed+dicts vs model/optimizer/runner).
 4. **`config/schema.py:TrainingConfig`** (OmegaConf structured) — different trainer (log/save/early-stop knobs) from LM one; leave as-is.
 
-**Migration steps per config**:
+**Migration steps per config** (applied to targets 2-3):
 1. Define frozen runtime config in `config/unified.py` (extend `BaseConfig` where fields allow)
 2. If YAML needed, add non-frozen `BaseStructuredConfig` mirror with `to_internal()`
 3. Update imports: `from bioplausible.config.unified import BaseConfig, load_config, save_config`

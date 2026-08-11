@@ -1,5 +1,9 @@
 """Generic local-learning infrastructure: task handling, multi-optimizer mixins."""
 
+from bioplausible.core.local_learning.algorithm import (
+    TileAlgorithm,
+    TileAlgorithmConfig,
+)
 from bioplausible.core.local_learning.mixins import (
     LocalLearningConfigProtocol,
     MultiOptimizerMixin,
@@ -10,4 +14,6 @@ __all__ = [
     "LocalLearningConfigProtocol",
     "MultiOptimizerMixin",
     "TaskHandler",
+    "TileAlgorithm",
+    "TileAlgorithmConfig",
 ]

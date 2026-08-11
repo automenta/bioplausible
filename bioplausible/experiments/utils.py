@@ -19,6 +19,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
+from bioplausible.config.unified import ExperimentRunnerConfig as ExperimentConfig
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 
@@ -62,26 +63,6 @@ class ExperimentResult:
             f" Steps/s: {self.steps_per_second:.1f}\n"
             f"  Parameters: {self.num_parameters:,}"
         )
-
-
-@dataclass
-class ExperimentConfig:
-    """Configuration for an experiment."""
-
-    model_name: str
-    optimizer_name: str
-    model_params: dict[str, object] = field(default_factory=dict)
-    optimizer_params: dict[str, object] = field(default_factory=dict)
-
-    # Training config
-    epochs: int = 10
-    batches_per_epoch: int = 100
-    eval_batches: int = 20
-    device: str = "auto"
-
-    # Tracking
-    track_metrics: bool = True
-    verbose: bool = True
 
 
 class ExperimentRunner:

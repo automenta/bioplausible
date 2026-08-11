@@ -26,11 +26,12 @@ from pathlib import Path
 
 import torch
 
+from bioplausible.config.unified import BaseConfig, ReproducibilityConfig
 from bioplausible.core.logging import get_logger
 
 __all__ = [
     "EnvironmentInfo",
-    "ExperimentConfig",
+    "ReproducibilityConfig",
     "ReproducibilityTracker",
     "ReproducibleConfig",
     "create_tracker",
@@ -56,15 +57,9 @@ class EnvironmentInfo:
     command_line: str
 
 
-@dataclass
-class ExperimentConfig:
-    """Experiment configuration for reproducibility."""
-
-    seed: int
-    model_config: dict[str, object]
-    training_config: dict[str, object]
-    data_config: dict[str, object]
-    hardware_config: dict[str, object]
+# =============================================================================
+# Configuration Utilities
+# =============================================================================
 
 
 class ReproducibilityTracker:
@@ -300,11 +295,9 @@ class ReproducibilityTracker:
 # =============================================================================
 
 
-@dataclass
-class ReproducibleConfig:
-    """Base configuration with reproducibility support."""
-
-    seed: int = 42
+@dataclass(frozen=True)
+class ReproducibleConfig(BaseConfig):
+    """Base configuration with reproducibility support (REFACTOR.md §1 pattern)."""
 
     def to_dict(self) -> dict[str, object]:
         """Convert to dictionary."""

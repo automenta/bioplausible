@@ -10,7 +10,7 @@ Utility modules for EquiTile:
 
 from .reproducibility import (
     EnvironmentInfo,
-    ExperimentConfig,
+    ReproducibilityConfig,
     ReproducibilityTracker,
     ReproducibleConfig,
     create_tracker,
@@ -19,7 +19,7 @@ from .reproducibility import (
 
 __all__ = [
     "EnvironmentInfo",
-    "ExperimentConfig",
+    "ReproducibilityConfig",
     "ReproducibilityTracker",
     "ReproducibleConfig",
     "create_tracker",
