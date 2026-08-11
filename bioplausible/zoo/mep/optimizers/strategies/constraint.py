@@ -12,6 +12,8 @@ from torch import nn
 
 from bioplausible.core.optimization.strategies import (
     NoConstraint,
+)
+from bioplausible.core.optimization.strategies import (
     SpectralConstraint as _CoreSpectralConstraint,
 )
 

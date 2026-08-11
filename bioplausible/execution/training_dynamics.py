@@ -5,8 +5,9 @@ Captures detailed metrics during training (gradients, weight norms, loss curves)
 to analyze convergence behavior, detect overfitting, and measure sample efficiency.
 """
 
-import numpy as np
 from collections.abc import Callable
+
+import numpy as np
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.training_state import EpochCheckpoint as TrainingCheckpoint

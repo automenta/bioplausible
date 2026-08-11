@@ -10,8 +10,8 @@ from abc import ABC
 import torch
 from torch import nn
 
-from bioplausible.core.checkpoint_mixin import CheckpointMixin
 from bioplausible.config.unified import ModelConfig
+from bioplausible.core.checkpoint_mixin import CheckpointMixin
 from bioplausible.core.construction import build_from_standard_args
 from bioplausible.core.spectral_mixin import SpectralMixin
 from bioplausible.core.training_mixin import TrainingMixin

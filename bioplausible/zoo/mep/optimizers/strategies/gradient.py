@@ -14,8 +14,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.core.optimization.strategies.gradient import BackpropGradient
 from bioplausible.core.optimization.strategies.base import GradientStrategy
+from bioplausible.core.optimization.strategies.gradient import BackpropGradient
 
 __all__ = [
     "BackpropGradient",

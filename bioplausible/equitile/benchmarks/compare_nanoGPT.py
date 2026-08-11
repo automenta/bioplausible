@@ -547,8 +547,8 @@ def compare_nanoGPT(
     dict
         Comparison results
     """
-    from bioplausible.equitile.lm.data import create_shakespeare_dataset
-    from bioplausible.equitile.lm.fast_lm import FastLMConfig, FastLMEquiTile
+    from bioplausible.data.lm import create_shakespeare_dataset
+    from bioplausible.zoo.models.tile_lm import TileLM
 
     if device == "auto":
         from bioplausible.core.utils.device import get_device
@@ -586,21 +586,14 @@ def compare_nanoGPT(
     logger.info(f"NanoGPT parameters: {nanogpt_params:,}")
 
     # EquiTile config (matched)
-    equitile_config = FastLMConfig(
+    equitile = TileLM.from_lm(
         vocab_size=vocab_size,
         embed_dim=192,
         num_layers=6,
-        hidden_dim=512,
         neurons_per_tile=48,
         tiles_per_layer=4,
-        mot_k=2,
-        num_heads=6,
-        num_kv_heads=2,
-        dropout=0.1,
         max_seq_len=seq_length,
     )
-    equitile = FastLMEquiTile(equitile_config)
-    equitile._init_weights()
     equitile_params = equitile.get_parameter_count()
     logger.info(f"EquiTile parameters: {equitile_params:,}")
 
@@ -713,21 +706,15 @@ def run_benchmark_comparison(
             )
             model = NanoGPTModel(nanogpt_config)
         elif model_type == "equitile":
-            from bioplausible.equitile.lm.fast_lm import (
-                FastLMConfig,
-                FastLMEquiTile,
-            )
+            from bioplausible.zoo.models.tile_lm import TileLM
 
-            equitile_config = FastLMConfig(
+            model = TileLM.from_lm(
                 vocab_size=config.get("vocab_size", 1000),
                 embed_dim=config.get("embed_dim", 192),
                 num_layers=config.get("num_layers", 6),
                 neurons_per_tile=config.get("neurons_per_tile", 48),
                 tiles_per_layer=config.get("tiles_per_layer", 4),
-                mot_k=config.get("mot_k", 2),
             )
-            model = FastLMEquiTile(equitile_config)
-            model._init_weights()
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 

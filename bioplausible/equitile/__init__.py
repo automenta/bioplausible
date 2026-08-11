@@ -40,7 +40,7 @@ builder : Fluent builder API
 research : Research utilities
 vision : Vision (ConvEquiTile)
 language : Language modeling (LMEquiTile)
-fast_lm : Fast visualization variant (FastLMEquiTile)
+fast_lm : Substrate-native language model (TileLM)
 rl : Reinforcement learning (RLEquiTile)
 graph : Graph neural networks (GraphEquiTile)
 timeseries : Time series modeling
@@ -98,14 +98,6 @@ from bioplausible.core.registry import (
     register_model,
 )
 from bioplausible.core.tile import TileGraph, TileState
-
-# Import the lm package so ``fast_lm.FastLMEquiTile`` (a distinct BioModel from
-# ``language.fast.FastLMEquiTile``) executes its ``@register_model("fast_lm_equitile")``
-# decorator at startup. Without this the registry omits the model and the audit
-# skips it entirely.
-from bioplausible.equitile import (  # ruff: ignore[unused-import]  (registers fast_lm)
-    lm,
-)
 
 # Internal: builder + enhanced
 from bioplausible.equitile._internal.builder import (
@@ -257,7 +249,6 @@ from bioplausible.equitile.language.canonical import (
     create_medium_lm,
     create_small_lm,
 )
-from bioplausible.equitile.language.fast import FastLMConfig, FastLMEquiTile
 
 # Training: async + distributed
 from bioplausible.equitile.training import NCCLCommunicator
@@ -287,6 +278,9 @@ from bioplausible.equitile.training.distributed import (
 from bioplausible.equitile.training.distributed import (
     TileGrowthConfig as DistributedGrowthConfig,
 )
+
+# Substrate-native language model (supersedes the demo-oriented language.fast).
+from bioplausible.zoo.models.tile_lm import TileLM
 
 __all__ = [
     # Core
@@ -394,8 +388,7 @@ __all__ = [
     "create_medium_lm",
     "create_large_lm",
     # Fast LM
-    "FastLMConfig",
-    "FastLMEquiTile",
+    "TileLM",
     # Optimized Language
     "OptimizedLMEquiTile",
     "OptimizedTileAttention",

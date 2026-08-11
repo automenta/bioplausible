@@ -261,25 +261,19 @@ def _optimized_lm_equitile():
     return build, lambda _m: (torch.randint(0, 20, (BATCH_SIZE, 8)),)
 
 
-@_reg("fast_lm_equitile")
-def _fast_lm_equitile():
-    from bioplausible.equitile.lm.components import FastLMConfig
-    from bioplausible.equitile.lm.fast_lm import FastLMEquiTile
+@_reg("tile_lm")
+def _tile_lm():
+    from bioplausible.zoo.models.tile_lm import TileLM
 
     def build():
-        config = FastLMConfig(
+        return TileLM.from_lm(
             vocab_size=20,
             embed_dim=16,
             num_layers=2,
-            hidden_dim=32,
             neurons_per_tile=8,
             tiles_per_layer=2,
-            num_heads=2,
-            num_kv_heads=1,
             max_seq_len=16,
-            mot_k=1,
         )
-        return FastLMEquiTile(config)
 
     return build, lambda _m: (torch.randint(0, 20, (BATCH_SIZE, 8)),)
 

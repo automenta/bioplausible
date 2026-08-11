@@ -34,8 +34,7 @@ def _get_structure(model: nn.Module) -> list[dict[str, object]]:
     if hasattr(model, "transition_modules"):
         try:
             return [
-                {"type": "layer", "module": mod}
-                for mod in model.transition_modules()
+                {"type": "layer", "module": mod} for mod in model.transition_modules()
             ]
         except NotImplementedError:
             pass

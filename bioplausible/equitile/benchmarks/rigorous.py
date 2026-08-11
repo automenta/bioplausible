@@ -35,9 +35,9 @@ except ImportError:
 import numpy as np
 import torch
 
+from bioplausible.data.lm import create_shakespeare_dataset
 from bioplausible.equitile.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
-from bioplausible.equitile.lm.data import create_shakespeare_dataset
-from bioplausible.equitile.lm.fast_lm import FastLMConfig, FastLMEquiTile
+from bioplausible.zoo.models.tile_lm import TileLM
 
 logger = get_logger()
 
@@ -503,19 +503,14 @@ class RigorousBenchmark:
         logger.info("-" * 70)
         logger.info("Benchmarking EquiTile...")
         logger.info("-" * 70)
-        equitile_config = FastLMConfig(
+        equitile = TileLM.from_lm(
             vocab_size=vocab_size,
             embed_dim=self.config.embed_dim,
             num_layers=self.config.num_layers,
-            num_heads=self.config.num_heads,
-            num_kv_heads=self.config.num_kv_heads,
-            attention_type=self.config.attention_type,
-            sliding_window=self.config.sliding_window,
-            use_compile=self.config.use_compile,
-            compile_mode=self.config.compile_mode,
-            use_gradient_checkpointing=self.config.use_gradient_checkpointing,
+            neurons_per_tile=48,
+            tiles_per_layer=4,
+            max_seq_len=self.config.seq_length,
         )
-        equitile = FastLMEquiTile(equitile_config)
         equitile_params = sum(p.numel() for p in equitile.parameters())
         logger.info(f"Parameters: {equitile_params:,}")
 

@@ -268,7 +268,6 @@ def test_all_models_honor_depth_or_are_knowingly_phantom() -> None:
             "graph_equitile",
             "lm_equitile",
             "optimized_lm_equitile",
-            "fast_lm_equitile",
             "rl_equitile",
             "timeseries_equitile",
             "custom_stacked_model",

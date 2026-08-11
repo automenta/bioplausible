@@ -14,6 +14,8 @@ from torch import nn
 
 from bioplausible.core.optimization.strategies import (
     MuonUpdate as _CoreMuonUpdate,
+)
+from bioplausible.core.optimization.strategies import (
     PlainUpdate,
 )
 

@@ -34,12 +34,9 @@ import torch
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
-from bioplausible.equitile.lm import (
-    FastLMConfig,
-    FastLMEquiTile,
-    create_shakespeare_dataset,
-)
+from bioplausible.data.lm import create_shakespeare_dataset
 from bioplausible.equitile.utils import ReproducibilityTracker, set_reproducible_mode
+from bioplausible.zoo.models.tile_lm import TileLM
 
 __all__ = [
     "ValidationPipeline",
@@ -133,14 +130,11 @@ class ValidationPipeline:
         # Test 1: Model creation
         start = time.time()
         try:
-            config = FastLMConfig(
+            model = TileLM.from_lm(
                 vocab_size=100,
                 embed_dim=64,
                 num_layers=2,
-                num_heads=4,  # Must divide embed_dim
-                num_kv_heads=2,
             )
-            model = FastLMEquiTile(config)
             params = model.get_parameter_count()
 
             self._add_result(
@@ -260,15 +254,14 @@ class ValidationPipeline:
         # Test 2: Full training loop (mini)
         start = time.time()
         try:
-            config = FastLMConfig(
+            model = TileLM.from_lm(
                 vocab_size=100,
                 embed_dim=64,
                 num_layers=2,
-                num_heads=4,
-                num_kv_heads=2,
+            ).to(self.device)
+            optimizer = create_optimizer(
+                model, OptimizerConfig(name="adamw", lr=1e-3, weight_decay=1e-2)
             )
-            model = FastLMEquiTile(config).to(self.device)
-            optimizer = create_optimizer(model, OptimizerConfig(name="adamw", lr=1e-3, weight_decay=1e-2))
 
             initial_loss = None
             final_loss = None
@@ -348,18 +341,16 @@ class ValidationPipeline:
         # Test 1: Throughput benchmark
         start = time.time()
         try:
-            config = FastLMConfig(
+            model = TileLM.from_lm(
                 vocab_size=1000,
                 embed_dim=128,
                 num_layers=4,
-                num_heads=4,
-                num_kv_heads=2,
-                use_compile=False,
-            )
-            model = FastLMEquiTile(config).to(self.device)
+            ).to(self.device)
             model.train()
 
-            optimizer = create_optimizer(model, OptimizerConfig(name="adamw", lr=1e-3, weight_decay=1e-2))
+            optimizer = create_optimizer(
+                model, OptimizerConfig(name="adamw", lr=1e-3, weight_decay=1e-2)
+            )
 
             # Warmup
             for _ in range(5):
@@ -420,20 +411,19 @@ class ValidationPipeline:
         # Test 2: Memory efficiency
         start = time.time()
         try:
-            config = FastLMConfig(
+            model = TileLM.from_lm(
                 vocab_size=1000,
                 embed_dim=128,
                 num_layers=4,
-                num_heads=4,
-                num_kv_heads=2,
-            )
-            model = FastLMEquiTile(config).to(self.device)
+            ).to(self.device)
             model.train()
 
             input_ids = torch.randint(0, 1000, (32, 128)).to(self.device)
             target_ids = input_ids.clone()
 
-            optimizer = create_optimizer(model, OptimizerConfig(name="adamw", lr=1e-3, weight_decay=1e-2))
+            optimizer = create_optimizer(
+                model, OptimizerConfig(name="adamw", lr=1e-3, weight_decay=1e-2)
+            )
             optimizer.zero_grad()
 
             output = model(input_ids)
@@ -478,14 +468,11 @@ class ValidationPipeline:
         try:
             set_reproducible_mode(seed=42)
 
-            config = FastLMConfig(
+            model1 = TileLM.from_lm(
                 vocab_size=100,
                 embed_dim=64,
                 num_layers=2,
-                num_heads=4,
-                num_kv_heads=2,
-            )
-            model1 = FastLMEquiTile(config).to(self.device)
+            ).to(self.device)
 
             input_ids = torch.randint(0, 100, (2, 16)).to(self.device)
 
@@ -496,7 +483,11 @@ class ValidationPipeline:
             # Reset and run again
             set_reproducible_mode(seed=42)
 
-            model2 = FastLMEquiTile(config).to(self.device)
+            model2 = TileLM.from_lm(
+                vocab_size=100,
+                embed_dim=64,
+                num_layers=2,
+            ).to(self.device)
             model2.eval()
             with torch.no_grad():
                 output2 = model2(input_ids)
@@ -525,8 +516,8 @@ class ValidationPipeline:
         # Test 2: Config logging
         start = time.time()
         try:
-            config = FastLMConfig(vocab_size=100, embed_dim=64)
-            self.tracker.log_config(config, "model")
+            model_cfg = TileLM.from_lm(vocab_size=100, embed_dim=64).get_config()
+            self.tracker.log_config(model_cfg, "model")
 
             passed = len(self.tracker.config_log) > 0
 

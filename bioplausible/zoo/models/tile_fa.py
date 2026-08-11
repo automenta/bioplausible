@@ -122,7 +122,7 @@ class TileFA(TileAlgorithm):
         return cls(config)
 
     @classmethod
-    def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, ARG002, ARG003]  # zoo build contract
+    def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # zoo build contract
         cls,
         spec,
         input_dim: int,
