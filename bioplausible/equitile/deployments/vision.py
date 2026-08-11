@@ -26,10 +26,11 @@ from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
-from bioplausible.equitile.core import EquiTile
-from bioplausible.equitile.core.config import EquiTileConfig
 from bioplausible.equitile.deployments import _feature_extractors as _fe
-from bioplausible.equitile.deployments.base import ConvDeploymentConfig
+from bioplausible.equitile.deployments.base import (
+    ConvDeploymentConfig,
+    build_tile_head,
+)
 
 # Re-export the (now shared) feature extractor under its historical name.
 ConvFeatureExtractor = _fe.ConvFeatureExtractor
@@ -198,32 +199,9 @@ class ConvEquiTile(BioModel):
         self._step_count = 0
 
     def _build_tile_head(self, config: ConvEquiTileConfig) -> None:
-        """Build EquiTile classification head."""
+        """Build the tile-substrate classification head."""
         feature_dim = self.feature_extractor.output_size
-
-        head_equitile_kwargs = config.equitile_kwargs.copy()
-        head_equitile_kwargs.update({
-            "neurons_per_tile": config.neurons_per_tile,
-            "num_layers": config.num_fc_layers + 2,
-            "tiles_per_layer": config.tiles_per_layer,
-            "learning_rate": config.learning_rate,
-            "dropout": config.dropout,
-            "weight_decay": config.weight_decay,
-            "mode": config.mode,
-            "inference_steps": config.inference_steps,
-            "step_size": config.step_size,
-            "beta": config.beta,
-            "activation": config.activation,
-            "task_type": config.task_type,
-        })
-
-        head_config = EquiTileConfig(**head_equitile_kwargs)
-
-        self.head = EquiTile(
-            config=head_config,
-            input_dim=feature_dim,
-            output_dim=config.num_classes,
-        )
+        self.head = build_tile_head(config, feature_dim, config.num_classes)
 
     def extract_features(self, x: Tensor) -> Tensor:
         """Extract convolutional features."""
@@ -250,9 +228,8 @@ class ConvEquiTile(BioModel):
         features = self._dropout(features)
 
         if self.config.mode == "backprop":
-            steps = self.head.equitile_config.inference_steps
-            logits = self.head(features, steps=steps)
-            loss = self.head.task_handler.compute_loss(logits, y)
+            logits = self.head.forward_logits(features, detach_input=False)
+            loss = self.head.compute_loss(logits, y)
 
             self._optim_conv.zero_grad()
             self._optim_head.zero_grad()
@@ -265,8 +242,7 @@ class ConvEquiTile(BioModel):
                 "accuracy": self.head.compute_metrics(logits, y),
                 "mode": self.config.mode,
             }
-        else:
-            return self.head.train_step(features.detach(), y)
+        return self.head.local_update(features.detach(), y)
 
     def forward(
         self,

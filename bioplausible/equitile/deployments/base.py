@@ -14,10 +14,13 @@ from typing import TYPE_CHECKING, Literal
 
 from torch import nn
 
+from bioplausible.core.local_learning import (
+    TaskHandler,
+    TileAlgorithm,
+    TileAlgorithmConfig,
+)
 from bioplausible.core.model import BioModel
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
-from bioplausible.equitile.core import EquiTile
-from bioplausible.equitile.core.config import EquiTileConfig
 
 if TYPE_CHECKING:
     from torch import Tensor
@@ -28,6 +31,7 @@ __all__ = [
     "GraphDeploymentConfig",
     "RLDeploymentConfig",
     "TemporalDeploymentConfig",
+    "build_tile_head",
     "create_deployment_model",
 ]
 
@@ -140,6 +144,53 @@ class GraphDeploymentConfig(DeploymentConfig):
 # =============================================================================
 
 
+def build_tile_head(
+    config: DeploymentConfig,
+    input_dim: int,
+    output_dim: int,
+    **kwargs,
+) -> TileAlgorithm:
+    """Build a substrate ``TileAlgorithm`` head from a deployment config.
+
+    Canonical head construction for the deployment model classes: maps the
+    shared deployment fields (topology, mode, optimizer knobs) onto
+    ``TileAlgorithmConfig`` and injects a ``TaskHandler`` for the target task.
+    ``equitile_kwargs`` and any explicit ``kwargs`` spill into the substrate
+    ``extra`` bucket (separate per-algorithm knobs).
+
+    Args:
+        config: DeploymentConfig subclass instance.
+        input_dim: Feature dimension the head consumes (extractor output).
+        output_dim: Model output dimension.
+        **kwargs: Additional substrate config field overrides.
+
+    Returns:
+        A configured TileAlgorithm head.
+    """
+    extra = dict(config.equitile_kwargs)
+    extra.update(kwargs)
+    algorithm = "pc" if config.mode == "pc" else "ep"
+    head_config = TileAlgorithmConfig(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        neurons_per_tile=config.neurons_per_tile,
+        tiles_per_layer=config.tiles_per_layer,
+        num_hidden_layers=config.num_fc_layers,
+        algorithm=algorithm,
+        mode=config.mode,
+        learning_rate=config.learning_rate,
+        beta=config.beta,
+        step_size=config.step_size,
+        free_steps=config.inference_steps,
+        nudged_steps=config.inference_steps,
+        extra=extra,
+    )
+    return TileAlgorithm(
+        head_config,
+        task_handler=TaskHandler(task_type=config.task_type, output_dim=output_dim),
+    )
+
+
 def create_deployment_model(
     config: DeploymentConfig,
     feature_extractor: nn.Module,
@@ -147,42 +198,19 @@ def create_deployment_model(
     head_output_dim: int,
     **kwargs,
 ) -> BioModel:
-    """Create a deployment model with a feature extractor and EquiTile head.
+    """Create a deployment model with a feature extractor and tile-substrate head.
 
     Args:
         config: DeploymentConfig subclass instance.
         feature_extractor: Module that extracts features from raw input.
-        head_input_dim: Input dimension for the EquiTile head (feature_extractor output).
-        head_output_dim: Output dimension for the EquiTile head.
-        **kwargs: Additional arguments passed to EquiTileConfig.
+        head_input_dim: Input dimension for the tile-substrate head (feature_extractor output).
+        head_output_dim: Output dimension for the tile-substrate head.
+        **kwargs: Additional arguments passed to the substrate head config.
 
     Returns:
         A BioModel with feature_extractor and head attributes.
     """
-    head_kwargs = config.equitile_kwargs.copy()
-    head_kwargs.update({
-        "neurons_per_tile": config.neurons_per_tile,
-        "tiles_per_layer": config.tiles_per_layer,
-        "num_layers": config.num_fc_layers + 2,  # input + fc + output
-        "learning_rate": config.learning_rate,
-        "dropout": config.dropout,
-        "weight_decay": config.weight_decay,
-        "mode": config.mode,
-        "inference_steps": config.inference_steps,
-        "step_size": config.step_size,
-        "beta": config.beta,
-        "activation": config.activation,
-        "task_type": config.task_type,
-    })
-    head_kwargs.update(kwargs)
-
-    head_config = EquiTileConfig(**head_kwargs)
-
-    head = EquiTile(
-        config=head_config,
-        input_dim=head_input_dim,
-        output_dim=head_output_dim,
-    )
+    head = build_tile_head(config, head_input_dim, head_output_dim, **kwargs)
 
     class DeploymentModel(BioModel):
         def __init__(self) -> None:
@@ -220,8 +248,8 @@ def create_deployment_model(
             self._step_count += 1
             features = self.feature_extractor(x)
             if config.mode == "backprop":
-                logits = self.head(features)
-                loss = self.head.task_handler.compute_loss(logits, y)
+                logits = self.head.forward_logits(features, detach_input=False)
+                loss = self.head.compute_loss(logits, y)
                 self._optim_feature.zero_grad()
                 self._optim_head.zero_grad()
                 loss.backward()
@@ -232,7 +260,6 @@ def create_deployment_model(
                     "accuracy": self.head.compute_metrics(logits, y),
                     "mode": config.mode,
                 }
-            else:
-                return self.head.train_step(features.detach(), y)
+            return self.head.local_update(features.detach(), y)
 
     return DeploymentModel()

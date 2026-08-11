@@ -20,7 +20,7 @@ class TestEquiTileCleanup(unittest.TestCase):
             equitile_kwargs={"sparsity_threshold": 0.5},
         )
         model = ConvEquiTile(config)
-        self.assertEqual(model.head.get_config().sparsity_threshold, 0.5)
+        self.assertEqual(model.head.get_config().extra["sparsity_threshold"], 0.5)
 
     def test_lm_kwargs(self):
         """Test passing kwargs to LMEquiTile."""
@@ -44,7 +44,7 @@ class TestEquiTileCleanup(unittest.TestCase):
             equitile_kwargs={"dropout": 0.3},
         )
         model = RLEquiTile(config)
-        self.assertEqual(model.feature_extractor.get_config().dropout, 0.3)
+        self.assertEqual(model.feature_extractor.get_config().extra["dropout"], 0.3)
 
     def test_core_get_config(self):
         """Test get_config on Core EquiTile."""

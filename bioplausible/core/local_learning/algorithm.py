@@ -25,7 +25,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 import torch
 import torch.nn.functional as F
@@ -35,6 +35,7 @@ from bioplausible.core.local_learning.mixins import (
     LocalLearningConfigProtocol,
     MultiOptimizerMixin,
 )
+from bioplausible.core.local_learning.task import TaskHandler
 from bioplausible.core.tile import TileGraph, TileState
 from bioplausible.core.tile.kernels import (
     compute_activity_update,
@@ -42,9 +43,6 @@ from bioplausible.core.tile.kernels import (
     compute_hebbian_update,
 )
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
-
-if TYPE_CHECKING:
-    from bioplausible.core.local_learning.task import TaskHandler
 
 __all__ = [
     "ActivityUpdateFn",
@@ -64,7 +62,9 @@ type WeightLookup = Callable[[int, int], Tensor]
 class FeedbackFn(Protocol):
     """Downstream error projected back into a tile's state space."""
 
-    def __call__(self, tile: TileState, graph: TileGraph, lookup: WeightLookup) -> list[Tensor]: ...
+    def __call__(
+        self, tile: TileState, graph: TileGraph, lookup: WeightLookup
+    ) -> list[Tensor]: ...
 
 
 class ActivityUpdateFn(Protocol):
@@ -108,7 +108,9 @@ class WeightUpdateFn(Protocol):
 # ──────────────────────────────────────────────
 
 
-def _symmetric_feedback(tile: TileState, graph: TileGraph, lookup: WeightLookup) -> list[Tensor]:
+def _symmetric_feedback(
+    tile: TileState, graph: TileGraph, lookup: WeightLookup
+) -> list[Tensor]:
     """Symmetric (transpose) backward projection; EP/PC/TB/Hebbian default."""
     feedback: list[Tensor] = []
     for dst_id in tile.fwd_neighbors:
@@ -120,7 +122,9 @@ def _symmetric_feedback(tile: TileState, graph: TileGraph, lookup: WeightLookup)
     return feedback
 
 
-def _no_feedback(tile: TileState, graph: TileGraph, lookup: WeightLookup) -> list[Tensor]:
+def _no_feedback(
+    tile: TileState, graph: TileGraph, lookup: WeightLookup
+) -> list[Tensor]:
     """No downstream coupling (pure feedforward Hebbian / single-pass settling)."""
     return []
 
@@ -362,6 +366,36 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
 
         self._setup_optimizers()
 
+    def _task_handler_ref(self) -> TaskHandler:
+        """Lazily construct a classification task handler when none was injected.
+
+        Exposed publicly (``task_handler``) so the substrate can act as a
+        drop-in ``head`` for deployment model classes that delegate loss and
+        metric computation to the handler.
+        """
+        if self._task_handler is None:
+            self._task_handler = TaskHandler(
+                task_type="classification", output_dim=self.config.output_dim
+            )
+        return self._task_handler
+
+    @property
+    def task_handler(self) -> TaskHandler:
+        """Public task handler (loss/metric computations for head consumers)."""
+        return self._task_handler_ref()
+
+    def compute_loss(self, logits: Tensor, y: Tensor) -> Tensor:
+        """Task-aware loss for a logits/target pair (head-facing API)."""
+        return self.task_handler.compute_loss(logits, y)
+
+    def compute_metrics(self, logits: Tensor, y: Tensor) -> float:
+        """Task-aware metric for a logits/target pair (head-facing API)."""
+        return self.task_handler.compute_metrics(logits, y)
+
+    def get_config(self) -> TileAlgorithmConfig:
+        """Return the model configuration (head-consumer contract)."""
+        return self.config
+
     # ── Topology construction ────────────────────────────────────────────────
 
     def _build_io_projections(self) -> None:
@@ -486,8 +520,17 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
             return None
         return acc + self._tile_biases[str(tid)].unsqueeze(0).expand(acc.shape[0], -1)
 
-    def _clamp_input(self, x: Tensor) -> None:
-        self._set_tile_activities(self.graph.input_tile_ids, self.W_in(x.detach()))
+    def _clamp_input(self, x: Tensor, *, detach_input: bool = True) -> None:
+        """Set input-tile activities to the projected input.
+
+        ``detach_input=True`` cuts the autograd graph at the model boundary
+        (the bio-plausible loop, whose weight updates are manual). Backprop
+        consumers (deployment model classes) pass ``False`` so gradients flow
+        into a preceding feature extractor.
+        """
+        self._set_tile_activities(
+            self.graph.input_tile_ids, self.W_in(x.detach() if detach_input else x)
+        )
 
     def _clamp_output_to_target(self, y: Tensor) -> Tensor:
         """Set output-tile activities to the (projected) one-hot target."""
@@ -607,8 +650,12 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
             out_free_acts = free[out_tiles[0]]
             out_nudged_acts = nudged[out_tiles[0]]
             scale = self.config.learning_rate / self.config.beta
-            w_out_up = scale * (out_free_acts - out_nudged_acts).T @ out_free_acts / batch_size
-            b_out_up = scale * (out_free_acts - out_nudged_acts).mean(dim=0) / batch_size
+            w_out_up = (
+                scale * (out_free_acts - out_nudged_acts).T @ out_free_acts / batch_size
+            )
+            b_out_up = (
+                scale * (out_free_acts - out_nudged_acts).mean(dim=0) / batch_size
+            )
             self.W_out.weight.sub_(w_out_up)
             self.W_out.bias.sub_(b_out_up)
 
@@ -635,9 +682,13 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
         self._step_count += 1
         return {"loss": loss.item(), "accuracy": self._accuracy(out, y)}
 
-    def forward_logits(self, x: Tensor) -> Tensor:
-        """Feedforward through the tile graph to logits."""
-        self._clamp_input(x)
+    def forward_logits(self, x: Tensor, *, detach_input: bool = True) -> Tensor:
+        """Feedforward through the tile graph to logits.
+
+        ``detach_input=False`` keeps the graph open to the input (backprop
+        consumers); the bio-plausible loop always uses the detached variant.
+        """
+        self._clamp_input(x, detach_input=detach_input)
         self._settle(1, nudged=False)
         out = self._tile_activities_to_tensor(self.graph.output_tile_ids)
         return self.W_out(out)

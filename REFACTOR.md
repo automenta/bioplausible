@@ -19,8 +19,9 @@
 | Metrics/Data/Deployment/Logging/Activation | ✅ Done | ~980 | Unified metrics/logging/device/seeds/activations/transforms/extractors/tracks |
 | Zoo Build (`core/construction.build_from_standard_args`) | ✅ Done | ~105 | Canonical `build` signature; 7 redundant `build` classmethods deleted |
 | Vision Deployment Port (`equitile/deployments`) | ✅ Done | ~220 | `ConvEquiTile` + `create_deployment_model` heads ported to `TileAlgorithm` substrate; `EquiTile`/`EquiTileConfig` deps removed from `base.py` + `vision.py`; canonical `build_tile_head` helper shared (Sprint 1.0) |
+| Deployment Substrate Wiring (`_feature_extractors`) | ✅ Done | ~60 | `tile_model_factory` + `RLFeatureExtractor` bound to `TileAlgorithm`/`TileAlgorithmConfig` instead of legacy `EquiTile`/`EquiTileConfig`; last runtime `equitile.core` dep removed from `equitile/deployments/` (graph/timeseries/rl now extract features via substrate). `num_layers` (total-layers legacy semantics) mapped to `num_hidden_layers = max(0, num_layers-2)` (Sprint 1.1) |
 
-**Reduction so far**: ~4,393 lines (10.6%). **Target run-rate remaining**: ~1,105 lines (Registry/Build done) → next realizable ~730 lines (Graph/Temporal/RL deployments, Language models, FastLM→TileLM).
+**Reduction so far**: ~4,463 lines (10.7%). **Target run-rate remaining**: ~1,035 lines (Registry/Build done) → next realizable (Language models, FastLM→TileLM, remaining `equitile/` subsumption).
 
 ---
 
@@ -68,7 +69,7 @@ Each `equitile/` component → one thin model class on the substrate, *not* a re
 - `EquiTile` (EP mode) → `TileAlgorithm.from_ep()` ✅ done
 - `EquiTileConfig` + deployments → `TileAlgorithmConfig` + subclasses 🟡
 - Vision deployments → `TileAlgorithm` substrate model classes ✅ done (Sprint 1.0)
-- Language/Graph/Temporal deployments → model classes 🟡
+- Language/Graph/Temporal/RL deployment *wiring* → substrate-bindings ✅ done (Sprint 1.1: `tile_model_factory`/`RLFeatureExtractor` on `TileAlgorithm`); top-level model classes still bespoke 🟡
 - `FastLM` → `TileLM` (new) 🟡
 - `equitile/analysis/`, `equitile/benchmarks/` → substrate-native versions 🔴
 
@@ -108,11 +109,14 @@ The four sites named in the prior plan (`deployment.py:237/299/691`, `equitile/d
 ### ✅ Sprint 0.9 — Strategy-Optimizer permutation wiring (done)
 Wiring already landed with tests: `tests/unit/test_strategy_optimizer_wiring.py` validates `DifferenceTargetProp → TargetPropGradient` (requires_energy forwarding, `target_lr`/`loss_fn` plumbing, missing-x/target errors), `StandardFA → HebbianGradient` (use_oja, hebbian_lr fallback, transition_modules discovery), and `StandardFA → BackpropGradient` via closure. 22 tests pass. The generic `StrategyOptimizer.step(x=, target=)` energy path is proven end-to-end.
 
+### ✅ Sprint 1.1 — Deployment substrate wiring (done)
+`_feature_extractors.py`'s `tile_model_factory` and `RLFeatureExtractor` were bound to the `TileAlgorithm`/`TileAlgorithmConfig` substrate instead of the legacy `EquiTile`/`EquiTileConfig`. Removed the last runtime `equitile.core` dependency from the `equitile/deployments/` package — graph/timeseries/rl feature extraction (and the shared `core.tile.feature_extractors` layers they pass the factory into) now produce substrate models. Key mapping: legacy `num_layers` (total layers incl. input/output) → substrate `num_hidden_layers = max(0, num_layers - 2)`. Dropped `dropout`/`activation` from config-field access (they live in `config.extra` now, like the Sprint 1.0 vision change). Test `test_rl_kwargs` updated to `extra["dropout"]`. Verified end-to-end (forward + backprop train_step) for `GraphEquiTile`, `TimeSeriesEquiTile` (forecast/classification), and `RLEquiTile`; full `tests/unit/equitile/` + `test_equitile_domains.py` + `test_equitile_sparsity_robustness.py` = 118 pass.
+
 ### Deferred (shared-reader-gated, do not do speculatively)
 - **Metrics field reconciliation** — `TrainingMetrics` `train_accuracy`/`val_accuracy` vs `BenchmarkMetrics`/`EpochMetrics` `train_acc`/`val_acc`. No shared reader exists.
 - **Storage table merge** — `epoch_metrics` (FK trial) vs `training_checkpoints` (FK trajectory). Only merge if a shared reader joins them.
 - **Remaining plain-BPTT cleanup** — `StandardFA._fa_train_step_body`/`_apply_fa_grads_to_optim` are bespoke FA loops; the generic `FAGradient` strategy (which requires `nn.Sequential`-style models) could subsume them, but `StandardFA` stores feedback weights as `ParameterList` with custom evolution hooks — conflation risk; leave until a concrete consumer needs it.
-- **Language/Graph/Temporal deployments** — `equitile/` Language/Graph/Temporal deployment classes still need model-class-on-substrate ports.
+- **Language/Graph/Temporal deployments** — `equitile/` Language/Graph/Temporal deployment *model classes* remain self-contained bespoke backprop models. Their feature-extraction substrate bindings (Sprint 1.1) are now `TileAlgorithm`-based, but the top-level model classes (`LMEquiTile`, `GraphEquiTile`, `TimeSeriesEquiTile`, `RLEquiTile`) are not yet consolidated onto the `BioModel`/substrate model-class platform.
 
 ---
 
@@ -137,6 +141,7 @@ Always use the venv toolchain: `uv run ruff` (0.16.0) / `.venv/bin/pyright`; sys
 - **`supervised_step` positional-order footgun**: signature is `(model, optimizer, x, y)` — `optimizer` is the *second* positional arg. Inlining must preserve this order (a prior draft swapped `optimizer`/`x` and failed at runtime with a confusing error). If extending with kwargs, keep `grad_clip`/etc. keyword-only.
 - **`TileGNN` gate bug (fixed in Sprint 0.7)**: `_gnn_activity_update` built a fresh `nn.Linear(2n, n)` on every settle call — weights recreated per-step, unregistered (not in `state_dict`/optimizer), and untrainable; pyright flagged `Tensor is not callable`. Fixed by a persistent per-tile `nn.ModuleDict` gate built in `__init__` (shares the substrate `_optim_io` via `add_param_group`). Template for the other tile model classes: any per-tile learnable projection must be built once in `__init__`, not inside the activity/feedback update fn (which runs per-settle-step and per-tile).
 - **Vision deployment port (Sprint 1.0)**: `ConvEquiTile` + `create_deployment_model` heads ported from legacy `EquiTile` to `TileAlgorithm` substrate. Canonical `build_tile_head` helper in `base.py` shared by both. Substrate enriched with head-facing API: public `task_handler`, `compute_loss`/`compute_metrics`, `get_config`, and `detach_input` control on `forward_logits`/`_clamp_input` for differentiable backprop through head into feature extractors. Test `test_vision_kwargs` updated to substrate config surface (`extra["sparsity_threshold"]`). All 49 vision/deployment tests pass.
+- **`num_layers` semantic mapping (Sprint 1.1)**: legacy `EquiTile`/`LocalLearningConfig.num_layers` counted *total* layers incl. input & output (`num_hidden = num_layers - 2` in `equitile/core/model.py:193`); substrate `TileAlgorithmConfig.num_hidden_layers` counts hidden layers only. `tile_model_factory` maps `max(0, num_layers - 2)`. The shared `tile_model_kwargs` in `core/tile/feature_extractors.py` passes `num_layers=2` (→ 0 hidden: pure input→output projection) for the per-layer temporal/graph tile models — preserved exactly.
 - **Pre-existing failures (ignore, confirmed on clean tree via stash)**: `test_backprop_parity[eqprop_mlp|directed_ep]`, `test_sample_config_eqprop_has_equilibrium_params`; DataLoader `NameError`s in `compare.py`/`tuned_compare.py`; `test_smoke_training`'s `test_directed_ep`/`test_finite_nudge_ep` (model `train_step` returns `None` → harness crashes); `test_zoo_integration` equitile-family-query (lazy import); `test_model_learns_synthetic[modern_conv_eqprop]` (grad flow issue). None are introduced by refactor work.
 
 *End of REFACTOR.md — update after each change; keep status + open-work tables current.*
