@@ -47,6 +47,7 @@ from bioplausible.config.unified import ModelConfig, compute_hidden_dims
 __all__ = [
     "KNOBS",
     "Consumption",
+    "build_from_standard_args",
     "build_model_config",
     "construct_model",
     "model_kwargs",
@@ -386,6 +387,57 @@ def construct_model(
     if not consumption.has_catch_all:
         kwargs = {k: v for k, v in kwargs.items() if k in consumption.accepted}
     return model_cls(**kwargs)  # type: ignore[operator]
+
+
+def build_from_standard_args(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # canonical zoo build contract
+    model_cls: type,
+    spec,
+    input_dim: int,
+    output_dim: int,
+    hidden_dim: int,
+    num_layers: int,
+    device: str = "cpu",
+    task_type: str = "vision",
+    **kwargs,
+) -> object:
+    """Build a model from the standard zoo ``build`` classmethod signature.
+
+    This is the single shared implementation for the common zoo build pattern.
+    It converts the standard arguments into a config dict and delegates to
+    :func:`construct_model`, which handles reflection-based kwarg filtering,
+    ``ModelConfig`` construction, and structural fallbacks.
+
+    Args:
+        model_cls: The model class to construct.
+        spec: Model spec from the registry (must have ``name`` attribute).
+        input_dim: Flattened input dimension.
+        output_dim: Output dimension.
+        hidden_dim: Hidden layer dimension.
+        num_layers: Number of hidden layers.
+        device: Target device (default: "cpu").
+        task_type: Task domain (default: "vision").
+        **kwargs: Additional hyperparameters (learning_rate, beta, etc.).
+
+    Returns:
+        The constructed model on the specified device.
+    """
+    config: dict[str, object] = {
+        "input_dim": input_dim,
+        "output_dim": output_dim,
+        "hidden_dim": hidden_dim,
+        "num_layers": num_layers,
+        "task_type": task_type,
+        **kwargs,
+    }
+    model_name = getattr(spec, "name", None) or getattr(model_cls, "__name__", "model")
+    model = construct_model(
+        model_cls,
+        config,
+        input_dim=input_dim,
+        output_dim=output_dim,
+        model_name=model_name,
+    )
+    return model.to(device)
 
 
 def phantom_knobs(

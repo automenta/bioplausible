@@ -11,10 +11,8 @@ import torch
 from torch import nn
 
 from bioplausible.core.checkpoint_mixin import CheckpointMixin
-from bioplausible.config.unified import (
-    ModelConfig,
-    _build_model_config,
-)
+from bioplausible.config.unified import ModelConfig
+from bioplausible.core.construction import build_from_standard_args
 from bioplausible.core.spectral_mixin import SpectralMixin
 from bioplausible.core.training_mixin import TrainingMixin
 
@@ -171,43 +169,22 @@ class BioModel(nn.Module, ABC, TrainingMixin, SpectralMixin, CheckpointMixin):
         task_type,
         **kwargs,
     ):
-        config = _build_model_config(
+        # BioModel-specific defaults (preserved from original BioModel.build)
+        kwargs.setdefault("learning_rate", getattr(spec, "default_lr", 0.001))
+        kwargs.setdefault("beta", 0.1)
+        kwargs.setdefault("max_steps", 20)
+        kwargs.setdefault("use_spectral_norm", True)
+        return build_from_standard_args(
+            cls,
             spec,
             input_dim,
             output_dim,
             hidden_dim,
             num_layers,
-            kwargs,
-            learning_rate=getattr(spec, "default_lr", 0.001),
-            beta=0.1,
-            max_steps=20,
-            use_spectral_norm=True,
+            device,
+            task_type,
+            **kwargs,
         )
-        import inspect as _inspect
-
-        sig = _inspect.signature(cls.__init__)
-        accepts_config = "config" in sig.parameters
-        structural = {
-            "input_dim": config.input_dim,
-            "hidden_dim": config.hidden_dims[0] if config.hidden_dims else 0,
-            "output_dim": config.output_dim,
-            "num_layers": max(len(config.hidden_dims), 1),
-        }
-        if accepts_config:
-            try:
-                return cls(config=config).to(device)
-            except TypeError:
-                return cls(**structural, config=config).to(device)
-        try:
-            return cls(**structural).to(device)
-        except TypeError:
-            kwargs["max_steps"] = 20
-            return cls(
-                input_dim=config.input_dim,
-                hidden_dim=config.hidden_dims[0] if config.hidden_dims else 0,
-                output_dim=config.output_dim,
-                **kwargs,
-            ).to(device)
 
     # ------------------------------------------------------------------
     # TransitionGraph protocol (REFACTOR3 §1)

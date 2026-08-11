@@ -5,7 +5,6 @@ from torch import nn
 
 from bioplausible.config.unified import (
     ModelConfig,
-    _build_model_config,
     resolve_hidden_dims,
 )
 from bioplausible.core.model import BioModel
@@ -148,21 +147,3 @@ class HolomorphicEP(BioModel):
             beta=self.beta,
             use_conj=True,
         )
-
-    @classmethod
-    def build(
-        cls,
-        spec,
-        input_dim,
-        output_dim,
-        hidden_dim,
-        num_layers,
-        device,
-        task_type,
-        **kwargs,
-    ):
-        return cls(
-            config=_build_model_config(
-                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
-            )
-        ).to(device)

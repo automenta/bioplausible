@@ -556,24 +556,6 @@ class StochasticFA(BioModel):
             "accuracy": (output.argmax(1) == y).float().mean().item(),
         }
 
-    @classmethod
-    def build(
-        cls,
-        spec,
-        input_dim,
-        output_dim,
-        hidden_dim,
-        num_layers,
-        device,
-        task_type,
-        **kwargs,
-    ):
-        return cls(
-            config=_build_model_config(
-                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
-            )
-        ).to(device)
-
 
 @register_model(
     "contrastive_feedback_alignment",
@@ -927,24 +909,6 @@ class EnergyGuidedFA(BioModel):
             self, _ensure_optimizer(self, self.config.learning_rate), x, y
         )
 
-    @classmethod
-    def build(
-        cls,
-        spec,
-        input_dim,
-        output_dim,
-        hidden_dim,
-        num_layers,
-        device,
-        task_type,
-        **kwargs,
-    ):
-        return cls(
-            config=_build_model_config(
-                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
-            )
-        ).to(device)
-
 
 # ============================================================================
 # em_fa.py - EnergyMinimizingFA
@@ -1007,24 +971,6 @@ class EnergyMinimizingFA(BioModel):
             self, _ensure_optimizer(self, self.config.learning_rate), x, y
         )
 
-    @classmethod
-    def build(
-        cls,
-        spec,
-        input_dim,
-        output_dim,
-        hidden_dim,
-        num_layers,
-        device,
-        task_type,
-        **kwargs,
-    ):
-        return cls(
-            config=_build_model_config(
-                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
-            )
-        ).to(device)
-
 
 # ============================================================================
 # leq_fa.py - LayerwiseEquilibriumFA
@@ -1072,24 +1018,6 @@ class LayerwiseEquilibriumFA(BioModel):
         return supervised_step(
             self, _ensure_optimizer(self, self.config.learning_rate), x, y
         )
-
-    @classmethod
-    def build(
-        cls,
-        spec,
-        input_dim,
-        output_dim,
-        hidden_dim,
-        num_layers,
-        device,
-        task_type,
-        **kwargs,
-    ):
-        return cls(
-            config=_build_model_config(
-                spec, input_dim, output_dim, hidden_dim, num_layers, kwargs
-            )
-        ).to(device)
 
 
 # ============================================================================
