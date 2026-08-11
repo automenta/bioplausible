@@ -813,7 +813,6 @@ def test_fixed_modules_import_without_error():
         "bioplausible.analysis.results",
         "bioplausible.core.trainer",
         "bioplausible.core.registry",
-        "bioplausible.equitile.language.canonical",
         "bioplausible.hyperopt.comparison",
         "bioplausible.hyperopt.storage",
         "bioplausible.execution._guards",

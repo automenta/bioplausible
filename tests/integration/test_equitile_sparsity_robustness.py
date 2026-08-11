@@ -16,10 +16,8 @@ import pytest
 import torch
 
 from bioplausible.equitile import (
-    ConvEquiTile,  # Language; Vision; RL
+    ConvEquiTile,  # Vision; RL
     ConvEquiTileConfig,
-    LMEquiTile,
-    LMEquiTileConfig,
     RLEquiTile,
     RLEquiTileConfig,
     RolloutBuffer,
@@ -29,6 +27,7 @@ from bioplausible.equitile import (
     create_mnist_model,
     create_rl_model,
 )
+from bioplausible.zoo.models.tile_lm import TileLM
 
 pytestmark = pytest.mark.gpu
 
@@ -40,16 +39,17 @@ pytestmark = pytest.mark.gpu
 class TestLMRobustness:
     """Language modeling robustness tests."""
 
+    def _lm_model(self, vocab_size=100, embed_dim=32, num_layers=1, max_seq_len=32):
+        return TileLM.from_lm(
+            vocab_size=vocab_size,
+            embed_dim=embed_dim,
+            num_layers=num_layers,
+            max_seq_len=max_seq_len,
+        )
+
     def test_lm_basic_functionality(self) -> None:
         """Test basic LM functionality."""
-        config = LMEquiTileConfig(
-            vocab_size=100,
-            embed_dim=32,
-            num_heads=2,
-            num_layers=1,
-            max_seq_len=32,
-        )
-        model = LMEquiTile(config)
+        model = self._lm_model()
 
         input_ids = torch.randint(0, 100, (2, 32))
         logits = model(input_ids)
@@ -62,14 +62,7 @@ class TestLMRobustness:
 
     def test_lm_long_sequences(self) -> None:
         """Test with long sequences."""
-        config = LMEquiTileConfig(
-            vocab_size=100,
-            embed_dim=32,
-            num_heads=2,
-            num_layers=1,
-            max_seq_len=256,
-        )
-        model = LMEquiTile(config)
+        model = self._lm_model(max_seq_len=256)
 
         input_ids = torch.randint(0, 100, (2, 256))
         logits = model(input_ids)
@@ -77,14 +70,7 @@ class TestLMRobustness:
 
     def test_lm_batch_sizes(self) -> None:
         """Test various batch sizes."""
-        config = LMEquiTileConfig(
-            vocab_size=100,
-            embed_dim=32,
-            num_heads=2,
-            num_layers=1,
-            max_seq_len=32,
-        )
-        model = LMEquiTile(config)
+        model = self._lm_model()
 
         for batch_size in [1, 2, 4, 8, 16]:
             input_ids = torch.randint(0, 100, (batch_size, 16))
@@ -94,17 +80,14 @@ class TestLMRobustness:
     def test_lm_numerical_stability(self) -> None:
         """Test numerical stability over multiple steps."""
         torch.manual_seed(1)
-        config = LMEquiTileConfig(
+        model = TileLM.from_lm(
             vocab_size=200,  # Smaller vocab for stability
             embed_dim=32,  # Smaller model
-            num_heads=2,
             num_layers=2,
             max_seq_len=16,  # Shorter sequences
             learning_rate=3e-4,
-            weight_decay=0.01,
-            dropout=0.1,
+            embed_dropout=0.1,
         )
-        model = LMEquiTile(config)
 
         for step in range(20):  # Fewer steps
             input_ids = torch.randint(0, 200, (2, 16))
@@ -121,13 +104,11 @@ class TestLMRobustness:
             torch.manual_seed(seed)
             np.random.seed(seed)
 
-            config = LMEquiTileConfig(
+            model = TileLM.from_lm(
                 vocab_size=100,
                 embed_dim=32,
-                num_heads=2,
                 num_layers=1,
             )
-            model = LMEquiTile(config)
 
             input_ids = torch.randint(0, 100, (2, 16))
             loss_dict = model.train_step(input_ids)
@@ -350,13 +331,11 @@ class TestCrossDomain:
 
     def test_device_compatibility(self) -> None:
         """Test CPU/CUDA compatibility."""
-        config = LMEquiTileConfig(
+        model = TileLM.from_lm(
             vocab_size=100,
             embed_dim=32,
-            num_heads=2,
             num_layers=1,
         )
-        model = LMEquiTile(config)
 
         # CPU
         input_ids = torch.randint(0, 100, (2, 32))
@@ -372,13 +351,11 @@ class TestCrossDomain:
 
     def test_gradient_flow(self) -> None:
         """Test gradient flow."""
-        config = LMEquiTileConfig(
+        model = TileLM.from_lm(
             vocab_size=100,
             embed_dim=32,
-            num_heads=2,
             num_layers=1,
         )
-        model = LMEquiTile(config)
 
         input_ids = torch.randint(0, 100, (2, 16))
         target_ids = input_ids.clone()
@@ -401,14 +378,12 @@ class TestCrossDomain:
         """Test memory efficiency (no leaks)."""
         import gc
 
-        config = LMEquiTileConfig(
+        model = TileLM.from_lm(
             vocab_size=256,
             embed_dim=64,
-            num_heads=2,
             num_layers=2,
             max_seq_len=32,
         )
-        model = LMEquiTile(config)
 
         # Get initial memory
         gc.collect()
@@ -438,14 +413,12 @@ class TestCrossDomain:
 
     def test_error_handling(self) -> None:
         """Test error handling."""
-        config = LMEquiTileConfig(
+        model = TileLM.from_lm(
             vocab_size=100,
             embed_dim=32,
-            num_heads=2,
             num_layers=1,
             max_seq_len=32,
         )
-        model = LMEquiTile(config)
 
         # Wrong input dtype should be handled
         try:

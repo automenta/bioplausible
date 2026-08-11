@@ -170,23 +170,40 @@ class TileLM(TileAlgorithm):
         """
         return self._forward_logits(input_ids)
 
-    def _forward_logits(self, input_ids: Tensor) -> Tensor:
-        batch, seq_len = input_ids.shape
+    def _embed_tokens(self, input_ids: Tensor) -> Tensor:
+        _, seq_len = input_ids.shape
         x = self.token_embedding(input_ids)
         x = x + self.positional_encoding[:, :seq_len, :]
-        x = self.embed_dropout(x)
+        return self.embed_dropout(x)
 
+    def _substrate_forward(self, hidden: Tensor) -> Tensor:
         # Run each position through the shared substrate backbone.
-        flat = x.reshape(batch * seq_len, self.config.input_dim)
         # `detach_input=False` so grads flow into the token embeddings when
         # callers chain a feature extractor; the substrate itself still runs
         # autograd BPTT (mode="backprop") over its internal parameters.
+        flat = hidden.reshape(-1, self.config.input_dim)
         out = super().forward_logits(flat, detach_input=False)
-        out = out.reshape(batch, seq_len, self.config.input_dim)
+        return out.reshape(hidden.shape)
 
+    def _forward_logits(self, input_ids: Tensor) -> Tensor:
+        hidden = self._substrate_forward(self._embed_tokens(input_ids))
         # Weight-tied output projection with a learned scale for stability.
-        logits = F.linear(out, self.token_embedding.weight * self.output_scale)
-        return logits
+        return F.linear(hidden, self.token_embedding.weight * self.output_scale)
+
+    def get_hidden_states(self, input_ids: Tensor) -> Tensor:
+        """Substrate feature maps before the output head.
+
+        Parameters
+        ----------
+        input_ids : Tensor
+            Integer token IDs of shape ``(batch, seq_len)``.
+
+        Returns
+        -------
+        Tensor
+            Per-position features of shape ``(batch, seq_len, embed_dim)``.
+        """
+        return self._substrate_forward(self._embed_tokens(input_ids))
 
     # `forward_logits` / `forward` of the substrate operate on flat (batch,
     # input_dim) tensors; LM callers must go through TileLM.forward instead.

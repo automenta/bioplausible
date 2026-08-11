@@ -22,7 +22,6 @@ __all__ = [
     "DynamicEquiTileConfig",
     "EnhancedEquiTileConfig",
     "EquiTileConfig",
-    "LMEquiTileConfig",
     "MultiGPUConfig",
     "NCCLConfig",
     "TileGrowthConfig",
@@ -464,79 +463,3 @@ def create_dynamic_config(
         ),
         **dynamic_kwargs,
     )
-
-
-@dataclass
-class LMEquiTileConfig:
-    """Configuration for Language Model EquiTile.
-
-    Vocabulary
-    ----------
-    vocab_size : int
-        Vocabulary size (default 50257 for GPT-2 tokenizer)
-    pad_token_id : int
-        Padding token ID
-
-    Embedding
-    ---------
-    embed_dim : int
-        Embedding dimension
-    dropout : float
-        Dropout rate
-
-    Architecture
-    ------------
-    num_heads : int
-        Number of attention heads
-    num_layers : int
-        Number of transformer layers
-    hidden_dim : int
-        Hidden dimension in feedforward
-    max_seq_len : int
-        Maximum sequence length
-
-    Tile Settings
-    -------------
-    neurons_per_tile : int
-        Neurons per tile
-    tiles_per_layer : int
-        Tiles per layer
-
-    Learning
-    --------
-    learning_rate : float
-        Base learning rate
-    weight_decay : float
-        Weight decay
-    mode : str
-        Learning mode ('pc', 'ep', or 'backprop')
-    inference_steps : int
-        Inference/equilibration steps
-    step_size : float
-        Step size for inference
-    beta : float
-        Beta parameter for EqProp
-    activation : str
-        Activation function
-    equitile_kwargs : dict
-        Additional keyword arguments for EquiTileConfig
-    """
-
-    vocab_size: int = 50257
-    pad_token_id: int = 0
-    embed_dim: int = 256
-    dropout: float = 0.1
-    num_heads: int = 4
-    num_layers: int = 4
-    hidden_dim: int = 512
-    max_seq_len: int = 128
-    neurons_per_tile: int = 64
-    tiles_per_layer: int = 4
-    learning_rate: float = 1e-4
-    weight_decay: float = 0.01
-    mode: Literal["pc", "ep", "backprop"] = "backprop"
-    inference_steps: int = 5
-    step_size: float = 0.1
-    beta: float = 0.1
-    activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu"
-    equitile_kwargs: dict[str, object] = field(default_factory=dict)

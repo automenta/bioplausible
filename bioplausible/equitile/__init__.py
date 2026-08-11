@@ -39,8 +39,7 @@ profiler : Performance profiling
 builder : Fluent builder API
 research : Research utilities
 vision : Vision (ConvEquiTile)
-language : Language modeling (LMEquiTile)
-fast_lm : Substrate-native language model (TileLM)
+tile_lm : Substrate-native language model (TileLM)
 rl : Reinforcement learning (RLEquiTile)
 graph : Graph neural networks (GraphEquiTile)
 timeseries : Time series modeling
@@ -226,29 +225,6 @@ from bioplausible.equitile.deployments.vision import (
     create_mnist_model,
     create_vision_model,
 )
-from bioplausible.equitile.language import (
-    OptimizedEquiTileTransformerLayer,
-    OptimizedLMEquiTile,
-    OptimizedTileAttention,
-    OptimizedTileFeedForward,
-    create_optimized_lm,
-    create_optimized_small_lm,
-)
-
-# Language models
-from bioplausible.equitile.language.canonical import (
-    EquiTileTransformerLayer,
-    LMEquiTile,
-    LMEquiTileConfig,
-    PositionalEncoding,
-    SimpleTokenizer,
-    TileAttention,
-    TileFeedForward,
-    create_large_lm,
-    create_lm_model,
-    create_medium_lm,
-    create_small_lm,
-)
 
 # Training: async + distributed
 from bioplausible.equitile.training import NCCLCommunicator
@@ -376,26 +352,7 @@ __all__ = [
     "create_cifar_model",
     "create_imagenet_model",
     # Domain-specific: Language
-    "LMEquiTile",
-    "LMEquiTileConfig",
-    "PositionalEncoding",
-    "TileAttention",
-    "TileFeedForward",
-    "EquiTileTransformerLayer",
-    "SimpleTokenizer",
-    "create_lm_model",
-    "create_small_lm",
-    "create_medium_lm",
-    "create_large_lm",
-    # Fast LM
     "TileLM",
-    # Optimized Language
-    "OptimizedLMEquiTile",
-    "OptimizedTileAttention",
-    "OptimizedTileFeedForward",
-    "OptimizedEquiTileTransformerLayer",
-    "create_optimized_lm",
-    "create_optimized_small_lm",
     # Domain-specific: RL
     "RLEquiTile",
     "RLEquiTileConfig",

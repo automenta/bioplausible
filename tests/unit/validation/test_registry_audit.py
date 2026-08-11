@@ -235,32 +235,6 @@ def _conv_equitile():
     )
 
 
-@_reg("lm_equitile")
-def _lm_equitile():
-    from bioplausible.equitile.language.canonical import LMEquiTile, LMEquiTileConfig
-
-    return (
-        lambda: LMEquiTile(
-            LMEquiTileConfig(vocab_size=20, embed_dim=16, num_layers=2, max_seq_len=16)
-        ),
-        lambda _m: (torch.randint(0, 20, (BATCH_SIZE, 8)),),
-    )
-
-
-@_reg("optimized_lm_equitile")
-def _optimized_lm_equitile():
-    from bioplausible.equitile.language.canonical import LMEquiTileConfig
-    from bioplausible.equitile.language.optimized import OptimizedLMEquiTile
-
-    def build():
-        return OptimizedLMEquiTile(
-            LMEquiTileConfig(vocab_size=20, embed_dim=16, num_layers=2, max_seq_len=16),
-            use_compile=False,
-        )
-
-    return build, lambda _m: (torch.randint(0, 20, (BATCH_SIZE, 8)),)
-
-
 @_reg("tile_lm")
 def _tile_lm():
     from bioplausible.zoo.models.tile_lm import TileLM

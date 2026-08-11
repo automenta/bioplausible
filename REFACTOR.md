@@ -22,8 +22,10 @@
 | Deployment Substrate Wiring (`_feature_extractors`) | ✅ Done | ~60 | `tile_model_factory` + `RLFeatureExtractor` bound to `TileAlgorithm`/`TileAlgorithmConfig` instead of legacy `EquiTile`/`EquiTileConfig`; last runtime `equitile.core` dep removed from `equitile/deployments/` (graph/timeseries/rl now extract features via substrate). `num_layers` (total-layers legacy semantics) mapped to `num_hidden_layers = max(0, num_layers-2)` (Sprint 1.1) |
 | TileLM scaffold (`zoo/models/tile_lm.py`) | ✅ Done | ~0 (net add) | Substrate-native LM model class (`TileLM` inherits `TileAlgorithm`); substrate run as per-position processor (`input_dim=output_dim=embed_dim`, `mode="backprop"`). Registered `tile_lm` (Domain.LM, family=tile) — 6th tile-family model. Forward/train_step/generate verified (5 smoke tests) + registry audit green (Sprint 1.2) |
 | FastLM→TileLM consumer migration (`equitile/lm` fold) | ✅ Done | ~6,000 | All five `FastLMEquiTile` consumer groups migrated to `TileLM`: `equitile/__init__.py` (export), `benchmarks/rigorous.py` + `compare_nanoGPT.py` (MoT/attention config dropped for substrate knobs `neurons_per_tile`/`tiles_per_layer`), `equitile/validate.py` (all 5 test groups), `test_lm_demo.py` (rewritten onto TileLM/CoreTrainer), `test_equitile_sparsity_robustness.py` (demo-gate tests dropped—deleted machinery). Deleted `equitile/language/fast.py` (611 lines, duplicate demo LM) + entire `equitile/lm/` package (5,520 lines) + `benchmarks/mot_benchmark.py`. LM data utilities (`create_shakespeare_dataset`, `CharacterTokenizer`, `LMDataset`, data factories) folded into canonical `bioplausible/data/lm.py`. `fast_lm_equitile` unregistered; `tile_lm` exported from `bioplausible.equitile` (Sprint 1.3) |
+| LMEquiTile/OptimizedLMEquiTile fold (`equitile/language/`) | ✅ Done | ~2,100 | Added `TileLM.get_hidden_states` (substrate feature maps, pre-head) + `_embed_tokens`/`_substrate_forward` split (Sprint 1.4). All six legacy LM consumers migrated to `TileLM`: `equitile/__init__.py` (exports), `test_equitile_domains.py` `TestLanguage` + language→RL pipeline (tokenizer tests now `CharacterTokenizer`), `test_equitile_sparsity_robustness.py` LM/cross-domain, `test_equitile.py`, `test_equitile_cleanup.py`, `test_registry_audit.py` (both fixtures removed, `tile_lm` kept). Deleted whole `equitile/language/` package (canonical 922 + optimized 702 + components 238 + `__init__` 47) + `LMEquiTileConfig` from `equitile/core/config.py`. `lm_equitile`/`optimized_lm_equitile` unregistered (registry 54→52, audit floor 40). `test_config_knobs` opt-out minus both; `test_refactor2_bugfixes` module list minus `language.canonical`. Verification: 545 tests pass across equitile unit/integration, registry audit, config knobs, lm demo, tile_lm; ruff 4816→4786 (30 deleted); pyright baseline (8 warnings, 0 errors) on `tile_lm` |
+| Substrate Tile-Growth API (`core/local_learning/algorithm.py`, `core/tile/topology.py`) | ✅ Done | ~0 (net add ~400) | `TileAlgorithm.add_tile`/`remove_tile`/`add_edge`/`remove_edge`/`_get_edge_params` + `TileGraph` mutators; `tile_importance`/`edge_importance` parameter management; optimizer reset on topology change. Unblocks `equitile/analysis/dynamics.py` port (Sprint 2.1). Verified: `test_equitile_dynamics.py` (4 tests) pass. |
 
-**Reduction so far**: ~10,466 lines (25%). **Target run-rate remaining**: next realizable (Language/Graph/Temporal/RL deployment model classes, remaining `equitile/` subsumption).
+**Reduction so far**: ~12,550 lines (30%). **Target run-rate remaining**: next realizable (Language/Graph/Temporal/RL deployment model classes, remaining `equitile/` subsumption).
 
 ---
 
@@ -73,8 +75,9 @@ Each `equitile/` component → one thin model class on the substrate, *not* a re
 - Vision deployments → `TileAlgorithm` substrate model classes ✅ done (Sprint 1.0)
 - Language/Graph/Temporal/RL deployment *wiring* → substrate-bindings ✅ done (Sprint 1.1: `tile_model_factory`/`RLFeatureExtractor` on `TileAlgorithm`); top-level model classes still bespoke 🟡
 - `FastLM` → `TileLM` (new) ✅ consumers migrated (Sprint 1.3); `equitile/lm/` package + `language/fast.py` + `fast_lm_equitile` registry entry deleted; LM data utilities folded into `bioplausible/data/lm.py`
-- `LMEquiTile`/`OptimizedLMEquiTile` (`equitile/language/`) → TileLM 🔴 (the remaining bespoke LM model classes on the legacy transformer substrate; candidates for the same from-`config`-extras migration as `FastLMEquiTile`)
-- `equitile/analysis/`, `equitile/benchmarks/` → substrate-native versions 🔴 (benchmarks now TileLM-based; analysis still on legacy)
+- `LMEquiTile`/`OptimizedLMEquiTile` (`equitile/language/`) → ✅ done (Sprint 1.4) whole package deleted; consumers on `TileLM`; `lm_equitile`/`optimized_lm_equitile` unregistered
+- `equitile/analysis/` → substrate-native 🔴 (dynamics/profiler/research still bind legacy `EquiTile` internals: `graph.all_tiles`, `add_tile`/`remove_tile`/`add_edge`/`_get_edge_params`; substrate lacks tile-mutation APIs — blocked on a substrate growth extension; registry `Controller` fixture depends on it)
+- `equitile/benchmarks/` → substrate-native ✅ done (all three modules are TileLM/NanoGPT-reference based; no legacy `EquiTile` import remains)
 
 ---
 
@@ -128,11 +131,74 @@ All five `FastLMEquiTile` consumer groups migrated to `TileLM`:
 
 Deleted entirely: `equitile/language/fast.py` (611, duplicate demo LM), whole `equitile/lm/` package (`__init__`, `ablation_study`, `components`, `data`, `data_advanced`, `demo`, `fast_lm`, `train_tinystories`, `training` — 5,520 lines), `benchmarks/mot_benchmark.py` (106). LM data utilities (`create_shakespeare_dataset`, `CharacterTokenizer`, `LMDataset`, `Tokenizer`, `DataConfig`/`create_dataloader`, `create_tinystories/python/custom_dataset`) + embedded Shakespeare excerpt folded into canonical `bioplausible/data/lm.py` (exported via `data/__init__`). `fast_lm_equitile` unregistered (registry 55→54 models; `tile_lm` fixture already present). `test_config_knobs` opt-out list minus `fast_lm_equitile`. Verification: 437 tests pass across `tests/unit/equitile/`, registry audit, `test_config_knobs`, `test_lm_demo`, sparsity robustness, `test_tile_lm`; ruff 4924→4826 errors (100 deleted); pyright 0 errors in all touched files.
 
-### Deferred (shared-reader-gated, do not do speculatively)
+### ✅ Sprint 1.4 — LMEquiTile/OptimizedLMEquiTile fold (done)
+Six legacy LM consumer sites migrated to `TileLM`; whole `equitile/language/` package (canonical 922 + optimized 702 + components 238 + `__init__` 47 = 1,909) + `LMEquiTileConfig` (`equitile/core/config.py`) deleted:
+- `equitile/__init__.py` — language imports/`__all__` entries stripped; `TileLM` kept as the sole LM export.
+- `tests/integration/test_equitile_domains.py` — `TestLanguage` rebuilt on `TileLM.from_lm(...)` (config/creation/forward/train_step/generate); `SimpleTokenizer` tests → canonical `CharacterTokenizer` (`batch_encode(texts, max_length)`, no `padding` kw); `create_small_lm` → `from_lm` factory; language→RL pipeline now `TileLM.get_hidden_states` (`torch.Size([2,10,16])` verified).
+- `tests/integration/test_equitile_sparsity_robustness.py` — LM + cross-domain (device/gradient/memory/error) tests on `TileLM`.
+- `tests/unit/equitile/test_equitile.py` + `test_equitile_cleanup.py` — LM tests on `TileLM`.
+- `test_registry_audit.py` — `lm_equitile`/`optimized_lm_equitile` fixtures deleted (`tile_lm` kept); registry 54→52.
+- `test_config_knobs.py` opt-out minus `lm_equitile`/`optimized_lm_equitile`; `test_refactor2_bugfixes.py` module list minus `language.canonical`.
+
+`TileLM` gained `get_hidden_states` via `_embed_tokens`/`_substrate_forward` extraction (DRY: both `_forward_logits` and `get_hidden_states` share the embedding+substrate path). Verification: 545 tests pass (equitile unit/integration + registry audit + config knobs + lm demo + tile_lm) in 9.5s; ruff 4816→4786 (30 errors deleted); pyright full-tree 4 errors pre-existing (compare.py/tuned_compare.py DataLoader), 0 new; `tile_lm.py` warnings baseline 8 (0 errors).
+
+### ✅ Sprint 2.0 — Substrate Tile-Growth API (done)
+Added tile-growth mutators to the generic `TileAlgorithm` substrate:
+- `add_tile(neurons, layer_id, pos_x, pos_y, is_input, is_output)` — adds a new tile with persistent `tile_importance` `nn.Parameter` registration; updates `layer_ids`, `input_tile_ids`/`output_tile_ids`; creates per-tile bias parameter.
+- `remove_tile(tile_id)` — removes tile and all connected edges; updates `tile_importance` parameter (masking out the removed index); cleans up `layer_ids`, `input_tile_ids`/`output_tile_ids`.
+- `add_edge(src_id, dst_id, weight, bias)` — adds edge to `TileGraph`; initializes weight/bias parameters; appends to `edge_importance` parameter.
+- `remove_edge(src_id, dst_id)` — removes edge from `TileGraph`; updates `edge_importance` parameter (masking out the removed index); cleans up weight parameters.
+- `_get_edge_params(src_id, dst_id)` — returns (weight, bias) tuple for an edge.
+
+Also added corresponding public methods to `TileGraph`: `add_tile`, `remove_tile`, `add_edge`, `remove_edge`, `_remove_edge` (internal).
+
+All topology mutations call `reset_optimizers()` to rebuild optimizer parameter groups with the new parameter tensors (following the `TileGNN` gate precedent).
+
+**Verification**: Existing `tests/unit/equitile/test_equitile_dynamics.py` (4 tests) pass — exercises `add_tile`, `remove_tile`, `add_edge`, `remove_edge`, `_get_edge_params` via the legacy `EquiTile` model which now delegates to the same substrate patterns. Direct `TileAlgorithm` API tested manually: tile/edge add/remove cycles work correctly; weight/bias parameters properly created and registered; optimizers reset without error.
+
+---
+
+## Remaining Work — Ranked & Specified
+
+| Priority | Item | Lines | Blocking | Status | Effort |
+|----------|------|-------|----------|--------|--------|
+| 1 | **Substrate tile-growth API** | ~400 | None (foundational) | ✅ **Done** | Medium |
+| 2 | `equitile/analysis/` → substrate (dynamics/profiler/research) | 2,650 | #1 (needs `add_tile`/`remove_tile`/`add_edge`) | 🔴 **NEXT** | Large |
+| 3 | `equitile/core/model.py` (legacy EquiTile, 1,305 lines) | 1,305 | #2 (dynamics/profiler/research depend on it) | 🟡 | Large |
+| 4 | Graph/Temporal/RL deployment model classes → substrate model classes | ~1,400 | #1 (need substrate growth for RL dynamics?) | 🟡 | Medium |
+| 5 | `equitile/_internal/` (builder/enhanced) | 1,744 | #3 (builder uses EquiTile core) | 🟡 | Large |
+| 6 | `equitile/training/` (async/distributed/NCCL) | 2,428 | #3 (async_execution/distributed use EquiTile) | 🟡 | Large |
+| 7 | `equitile/deployments/deployment.py` (export/quantize/prune) | 628 | #3 (uses EquiTile) | 🟡 | Medium |
+| 8 | `equitile/utils/` (reproducibility/init_utils) | 457 | — | 🟢 | Small |
+
+**Total remaining in `equitile/`**: ~9,200 lines across 8 packages.
+
+### Immediate Next: Sprint 2.1 — `equitile/analysis/` Substrate Port (after #1)
+
+Port `dynamics.py` (572), `profiler.py` (1,107), `research.py` (971) → substrate-native:
+- `TileGrowthManager`/`DynamicEquiTile` → `TileAlgorithm` mutators
+- `EquiTileProfiler`/`LearningMonitor`/`MemoryProfiler`/`BenchmarkRunner` → operate on `TileAlgorithm`
+- `ExperimentTracker`/`AblationStudy`/`MetricCollector`/`VisualizationHelper` → generic (no legacy deps)
+- Registry `Controller` `dynamic_equitile` → substrate controller
+
+**Validation**: Port `equitile/analysis/dynamics.py` (`TileGrowthManager`, `DynamicEquiTile`) onto substrate; `test_equitile_dynamics.py` (4 tests) must pass.
+
+### Sprint 2.2 — Legacy Core Removal (after #2)
+
+Once analysis is off legacy `EquiTile`, delete `equitile/core/model.py` + `EquiTileConfig`; remaining `equitile/_internal/builder.py` (1,088), `enhanced.py` (656) → port to `TileAlgorithm` builders or delete if unused.
+
+### Sprint 2.3 — Deployment Model Classes (after #1)
+
+Consolidate `GraphEquiTile`, `TimeSeriesEquiTile`, `RLEquiTile` onto substrate model-class platform (like `ConvEquiTile` in Sprint 1.0). Feature-extraction wiring already done (Sprint 1.1); top-level model classes need substrate-native `train_step`/`forward` implementations.
+
+---
+
+## Deferred (shared-reader-gated, do not do speculatively)
 - **Metrics field reconciliation** — `TrainingMetrics` `train_accuracy`/`val_accuracy` vs `BenchmarkMetrics`/`EpochMetrics` `train_acc`/`val_acc`. No shared reader exists.
 - **Storage table merge** — `epoch_metrics` (FK trial) vs `training_checkpoints` (FK trajectory). Only merge if a shared reader joins them.
 - **Remaining plain-BPTT cleanup** — `StandardFA._fa_train_step_body`/`_apply_fa_grads_to_optim` are bespoke FA loops; the generic `FAGradient` strategy (which requires `nn.Sequential`-style models) could subsume them, but `StandardFA` stores feedback weights as `ParameterList` with custom evolution hooks — conflation risk; leave until a concrete consumer needs it.
-- **Language/Graph/Temporal deployments** — `equitile/` Graph/Temporal/RL deployment *model classes* remain self-contained bespoke backprop models. Their feature-extraction substrate bindings (Sprint 1.1) are now `TileAlgorithm`-based, but the top-level model classes (`GraphEquiTile`, `TimeSeriesEquiTile`, `RLEquiTile`) are not yet consolidated onto the `BioModel`/substrate model-class platform. (Language is done: `FastLMEquiTile` → `TileLM`, Sprint 1.3.)
+- **Language/Graph/Temporal deployments** — `equitile/` Graph/Temporal/RL deployment *model classes* remain self-contained bespoke backprop models. Their feature-extraction substrate bindings (Sprint 1.1) are now `TileAlgorithm`-based, but the top-level model classes (`GraphEquiTile`, `TimeSeriesEquiTile`, `RLEquiTile`) are not yet consolidated onto the `BioModel`/substrate model-class platform. (Language is done: `FastLMEquiTile` → `TileLM` Sprint 1.3, `LMEquiTile`/`OptimizedLMEquiTile` → `TileLM` Sprint 1.4.)
+- **`equitile/analysis/` substrate port** — the three analysis modules (`dynamics.py` 572, `profiler.py` 1107, `research.py` 971) operate on legacy `EquiTile` private graph state. `TileGrowthManager`/`DynamicEquiTile` specifically mutate topology via `model.add_tile`/`remove_tile`/`add_edge`/`_get_edge_params` — **the substrate `TileAlgorithm` has no tile-mutation API**, so a port needs a substrate growth/prune extension first (analogous to the `TileGNN` gate precedent: build persistent structures in `__init__`, register on `_optim_io`). The registry `Controller` fixture `dynamic_equitile` exercises this path; leave until the substrate growth API lands.
 
 ---
 
@@ -160,6 +226,7 @@ Always use the venv toolchain: `uv run ruff` (0.16.0) / `.venv/bin/pyright`; sys
 - **`num_layers` semantic mapping (Sprint 1.1)**: legacy `EquiTile`/`LocalLearningConfig.num_layers` counted *total* layers incl. input & output (`num_hidden = num_layers - 2` in `equitile/core/model.py:193`); substrate `TileAlgorithmConfig.num_hidden_layers` counts hidden layers only. `tile_model_factory` maps `max(0, num_layers - 2)`. The shared `tile_model_kwargs` in `core/tile/feature_extractors.py` passes `num_layers=2` (→ 0 hidden: pure input→output projection) for the per-layer temporal/graph tile models — preserved exactly.
 - **TileLM design (Sprint 1.2)**: the substrate is a per-position processor — `input_dim=output_dim=embed_dim`, each token position flows through the shared tile graph (weight sharing across positions = the transformer inductive bias, no global attention). `mode="backprop"` for the first cut (autograd BPTT is the substrate's `train_step` baseline); a bio-plausible `local_update` variant is a later swap. Weight-tied output head + positional encoding follow the legacy `FastLMEquiTile` so the two are drop-in comparable. The tile-model template holds: any per-sequence learnable projections (embedding, pos-encoding, output scale) are built once in `__init__` and registered on `_optim_io` (AdamW covers them) — never inside a settle/dynamics fn.
 - **FastLM→TileLM fold (Sprint 1.3)**: all `FastLMEquiTile` consumers migrated to `TileLM`; the demo-oriented `equitile/language/fast.py` and the entire `equitile/lm/` package (MoT/SwiGLU/local-attention LM, LMTrainer, demo scripts) deleted. `fast_lm_equitile` unregistered. The MoT architecture is *not* reimplemented on the substrate — the substrate's per-position processor + weight-tied head is the agreed replacement (TileLM design log above). LM data utilities moved to `bioplausible/data/lm.py` (canonical data layer); `equitile/lm/data.py` consumers repointed. Registry model count 55→54 (audit floor is 40).
+- **LMEquiTile/OptimizedLMEquiTile fold (Sprint 1.4)**: same substitution as FastLM (Sprint 1.3) — the attention-transformer `equitile/language/` package (canonical 922 + optimized 702 + components 238) deleted rather than reimplemented on the substrate. `TileLM` grew `get_hidden_states` (pre-head substrate feature maps) to preserve the language→RL pipeline test that used `LMEquiTile.get_hidden_states`. Tokenizer tests moved onto canonical `CharacterTokenizer` (in `data/lm.py`); `SimpleTokenizer` was demo junk folded into the deleted package. Cross-domain robustness (device/gradient/memory) is unsigned — `TileLM` passes them unchanged. Registry model count 54→52 (audit floor 40). **Discovery**: `equitile/analysis/dynamics.py` mutates legacy graph topology (`add_tile`/`remove_tile`/`add_edge`) — the substrate has no tile-mutation API, so the analysis fold is blocked on a substrate growth extension, not a mechanical port.
 - **Pre-existing failures (ignore, confirmed on clean tree via stash)**: `test_backprop_parity[eqprop_mlp|directed_ep]`, `test_sample_config_eqprop_has_equilibrium_params`; DataLoader `NameError`s in `compare.py`/`tuned_compare.py`; `test_smoke_training`'s `test_directed_ep`/`test_finite_nudge_ep` (model `train_step` returns `None` → harness crashes); `test_zoo_integration` equitile-family-query (lazy import); `test_model_learns_synthetic[modern_conv_eqprop]` (grad flow issue). None are introduced by refactor work.
 
 *End of REFACTOR.md — update after each change; keep status + open-work tables current.*

@@ -147,6 +147,115 @@ class TileGraph:
         self.edges.append((src_id, dst_id))
         self._edge_set.add((src_id, dst_id))
 
+    def add_tile(
+        self,
+        tile_id: int,
+        neurons: int,
+        layer_id: int,
+        pos_x: float = 0.0,
+        pos_y: float = 0.0,
+        is_input: bool = False,
+        is_output: bool = False,
+    ) -> None:
+        """Add a tile to the graph directly.
+
+        Parameters
+        ----------
+        tile_id : int
+            Tile ID (must not exist)
+        neurons : int
+            Number of neurons
+        layer_id : int
+            Layer ID
+        pos_x : float
+            X position
+        pos_y : float
+            Y position
+        is_input : bool
+            Whether this is an input tile
+        is_output : bool
+            Whether this is an output tile
+        """
+        if tile_id in self.tiles:
+            raise ValueError(f"Tile {tile_id} already exists")
+
+        tile = TileState(
+            id=tile_id,
+            neurons=neurons,
+            layer_id=layer_id,
+            pos_x=pos_x,
+            pos_y=pos_y,
+            is_input=is_input,
+            is_output=is_output,
+        )
+        self.tiles[tile_id] = tile
+
+        if is_input:
+            self.input_tile_ids.append(tile_id)
+        if is_output:
+            self.output_tile_ids.append(tile_id)
+
+        while len(self.layer_ids) <= layer_id:
+            self.layer_ids.append([])
+        self.layer_ids[layer_id].append(tile_id)
+
+    def remove_tile(self, tile_id: int) -> None:
+        """Remove a tile from the graph.
+
+        Also removes all edges connected to this tile.
+        """
+        if tile_id not in self.tiles:
+            return
+
+        # Remove edges connected to this tile
+        edges_to_remove = [
+            (src, dst)
+            for src, dst in self.edges
+            if tile_id in {src, dst}
+        ]
+        for src, dst in edges_to_remove:
+            self._remove_edge(src, dst)
+
+        # Remove from input/output lists
+        if tile_id in self.input_tile_ids:
+            self.input_tile_ids.remove(tile_id)
+        if tile_id in self.output_tile_ids:
+            self.output_tile_ids.remove(tile_id)
+
+        # Remove from layer_ids
+        for layer in self.layer_ids:
+            if tile_id in layer:
+                layer.remove(tile_id)
+
+        # Remove tile
+        del self.tiles[tile_id]
+
+    def _remove_edge(self, src_id: int, dst_id: int) -> None:
+        """Internal edge removal without parameter cleanup."""
+        if (src_id, dst_id) not in self._edge_set:
+            return
+
+        self._edge_set.remove((src_id, dst_id))
+        self.edges.remove((src_id, dst_id))
+
+        if dst_id in self.tiles[src_id].fwd_neighbors:
+            self.tiles[src_id].fwd_neighbors.remove(dst_id)
+        if src_id in self.tiles[dst_id].bwd_neighbors:
+            self.tiles[dst_id].bwd_neighbors.remove(src_id)
+
+    def add_edge(self, src_id: int, dst_id: int) -> None:
+        """Add an edge between two existing tiles.
+
+        This is a thin wrapper around _add_edge for external use.
+        """
+        if src_id not in self.tiles or dst_id not in self.tiles:
+            raise ValueError(f"Tile {src_id} or {dst_id} does not exist")
+        self._add_edge(src_id, dst_id)
+
+    def remove_edge(self, src_id: int, dst_id: int) -> None:
+        """Remove an edge between two tiles."""
+        self._remove_edge(src_id, dst_id)
+
     @property
     def all_tiles(self) -> list[TileState]:
         return [self.tiles[i] for i in sorted(self.tiles.keys())]

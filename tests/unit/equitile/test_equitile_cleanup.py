@@ -4,7 +4,7 @@ from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.core.config import EquiTileConfig
 from bioplausible.equitile.deployments.rl import RLEquiTile, RLEquiTileConfig
 from bioplausible.equitile.deployments.vision import ConvEquiTile, ConvEquiTileConfig
-from bioplausible.equitile.language.canonical import LMEquiTile, LMEquiTileConfig
+from bioplausible.zoo.models.tile_lm import TileLM
 
 
 class TestEquiTileCleanup(unittest.TestCase):
@@ -23,18 +23,16 @@ class TestEquiTileCleanup(unittest.TestCase):
         self.assertEqual(model.head.get_config().extra["sparsity_threshold"], 0.5)
 
     def test_lm_kwargs(self):
-        """Test passing kwargs to LMEquiTile."""
-        config = LMEquiTileConfig(
+        """Test substrate LM knobs flow through config."""
+        model = TileLM.from_lm(
             vocab_size=100,
             embed_dim=16,
-            num_heads=2,
             num_layers=1,
-            max_seq_len=20,
-            equitile_kwargs={"importance_lr": 0.05},
+            importance_lr=0.05,
         )
-        model = LMEquiTile(config)
-        # Check first layer
-        self.assertEqual(model.layers[0].equitile.get_config().importance_lr, 0.05)
+        config = model.get_config()
+        self.assertEqual(config.importance_lr, 0.05)
+        self.assertEqual(config.extra["vocab_size"], 100)
 
     def test_rl_kwargs(self):
         """Test passing kwargs to RLEquiTile."""

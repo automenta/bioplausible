@@ -708,6 +708,251 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
         return self.forward_logits(x)
 
     # ──────────────────────────────────────────────
+    # Tile-growth API (for dynamic topology)
+    # ──────────────────────────────────────────────
+
+    def add_tile(
+        self,
+        *,
+        neurons: int,
+        layer_id: int,
+        pos_x: float = 0.0,
+        pos_y: float = 0.0,
+        is_input: bool = False,
+        is_output: bool = False,
+    ) -> int:
+        """Add a new tile to the graph.
+
+        Parameters
+        ----------
+        neurons : int
+            Number of neurons in the tile
+        layer_id : int
+            Layer ID
+        pos_x : float
+            X position (for visualization/topology)
+        pos_y : float
+            Y position
+        is_input : bool
+            Is input tile
+        is_output : bool
+            Is output tile
+
+        Returns
+        -------
+        int
+            New tile ID
+        """
+        new_id = max(self.graph.tiles.keys()) + 1 if self.graph.tiles else 0
+        tile = TileState(
+            id=new_id,
+            neurons=neurons,
+            layer_id=layer_id,
+            pos_x=pos_x,
+            pos_y=pos_y,
+            is_input=is_input,
+            is_output=is_output,
+        )
+        self.graph.tiles[new_id] = tile
+
+        if is_input:
+            self.graph.input_tile_ids.append(new_id)
+        if is_output:
+            self.graph.output_tile_ids.append(new_id)
+
+        # Ensure layer_ids has the layer
+        while len(self.graph.layer_ids) <= layer_id:
+            self.graph.layer_ids.append([])
+        self.graph.layer_ids[layer_id].append(new_id)
+
+        # Update tile importance
+        with torch.no_grad():
+            old_importance = self.tile_importance.data
+            self.tile_importance = nn.Parameter(
+                torch.cat([
+                    old_importance,
+                    torch.ones(1, device=old_importance.device),
+                ])
+            )
+
+        # Rebuild weight structures for the new tile if not input
+        if not is_input:
+            self._tile_biases[str(new_id)] = nn.Parameter(torch.zeros(neurons))
+            # Note: edges to/from this tile must be added via add_edge
+
+        self.reset_optimizers()
+        return new_id
+
+    def remove_tile(self, tile_id: int) -> None:
+        """Remove a tile from the graph.
+
+        Parameters
+        ----------
+        tile_id : int
+            Tile ID to remove
+        """
+        if tile_id not in self.graph.tiles:
+            return
+
+        # Remove edges connected to this tile
+        edges_to_remove = [
+            (src, dst)
+            for src, dst in self.graph.edges
+            if tile_id in {src, dst}
+        ]
+        for src, dst in edges_to_remove:
+            self.remove_edge(src, dst)
+
+        # Update tile importance
+        # graph.all_tiles is sorted by ID
+        sorted_ids = sorted(self.graph.tiles.keys())
+        try:
+            idx = sorted_ids.index(tile_id)
+            with torch.no_grad():
+                mask = torch.ones(
+                    len(self.tile_importance),
+                    dtype=torch.bool,
+                    device=self.tile_importance.device,
+                )
+                mask[idx] = False
+                self.tile_importance = nn.Parameter(self.tile_importance.data[mask])
+        except ValueError:
+            pass  # Should not happen if tile_id is in graph.tiles
+
+        # Remove from graph
+        del self.graph.tiles[tile_id]
+        if tile_id in self.graph.input_tile_ids:
+            self.graph.input_tile_ids.remove(tile_id)
+        if tile_id in self.graph.output_tile_ids:
+            self.graph.output_tile_ids.remove(tile_id)
+
+        # Remove from layer_ids
+        for layer in self.graph.layer_ids:
+            if tile_id in layer:
+                layer.remove(tile_id)
+
+        self.reset_optimizers()
+
+    def add_edge(
+        self,
+        src_id: int,
+        dst_id: int,
+        weight: Tensor | None = None,
+        bias: Tensor | None = None,
+    ) -> None:
+        """Add an edge between two tiles.
+
+        Parameters
+        ----------
+        src_id : int
+            Source tile ID
+        dst_id : int
+            Destination tile ID
+        weight : torch.Tensor, optional
+            Initial weight. If None, initialized randomly.
+        bias : torch.Tensor, optional
+            Initial bias. If None, initialized to zeros.
+        """
+        if src_id not in self.graph.tiles or dst_id not in self.graph.tiles:
+            return
+
+        # Add to graph
+        self.graph._add_edge(src_id, dst_id)
+
+        # Initialize parameters
+        src = self.graph.tiles[src_id]
+        dst = self.graph.tiles[dst_id]
+        key = self._weight_key(src_id, dst_id)
+
+        if weight is None:
+            bound = 1.0 / math.sqrt(src.neurons) if src.neurons > 0 else 0.0
+            weight = torch.empty(dst.neurons, src.neurons, device=self.tile_importance.device).uniform_(-bound, bound)
+
+        if not isinstance(weight, nn.Parameter):
+            weight = nn.Parameter(weight)
+
+        if bias is None:
+            bias = torch.zeros(dst.neurons, device=self.tile_importance.device)
+
+        if not isinstance(bias, nn.Parameter):
+            bias = nn.Parameter(bias)
+
+        self._tile_weights[key] = weight
+        self._tile_biases[str(dst_id)] = bias  # Note: biases are per-destination tile
+
+        # Update edge importance
+        with torch.no_grad():
+            old_importance = self.edge_importance.data
+            self.edge_importance = nn.Parameter(
+                torch.cat([
+                    old_importance,
+                    torch.ones(1, device=old_importance.device),
+                ])
+            )
+
+        self.reset_optimizers()
+
+    def remove_edge(self, src_id: int, dst_id: int) -> None:
+        """Remove an edge between two tiles.
+
+        Parameters
+        ----------
+        src_id : int
+            Source tile ID
+        dst_id : int
+            Destination tile ID
+        """
+        if (src_id, dst_id) not in self.graph._edge_set:
+            return
+
+        # Find index in graph.edges for importance removal
+        try:
+            idx = self.graph.edges.index((src_id, dst_id))
+            with torch.no_grad():
+                mask = torch.ones(
+                    len(self.edge_importance),
+                    dtype=torch.bool,
+                    device=self.edge_importance.device,
+                )
+                mask[idx] = False
+                self.edge_importance = nn.Parameter(self.edge_importance.data[mask])
+        except ValueError:
+            pass
+
+        # Remove from graph
+        self.graph._edge_set.remove((src_id, dst_id))
+        self.graph.edges.remove((src_id, dst_id))
+
+        # Update neighbors
+        if dst_id in self.graph.tiles[src_id].fwd_neighbors:
+            self.graph.tiles[src_id].fwd_neighbors.remove(dst_id)
+        if src_id in self.graph.tiles[dst_id].bwd_neighbors:
+            self.graph.tiles[dst_id].bwd_neighbors.remove(src_id)
+
+        # Remove parameters
+        key = self._weight_key(src_id, dst_id)
+        if key in self._tile_weights:
+            del self._tile_weights[key]
+        # Note: biases are per-dst tile, so we don't remove them here
+        # (they're shared across all incoming edges to the same dst)
+
+        self.reset_optimizers()
+
+    def _get_edge_params(
+        self, src_id: int, dst_id: int
+    ) -> tuple[Tensor | None, Tensor | None]:
+        """Get weight and bias for an edge.
+
+        Returns
+        -------
+        tuple
+            (weight, bias) or (None, None) if edge doesn't exist
+        """
+        weight = self._tile_weights.get(self._weight_key(src_id, dst_id))
+        bias = self._tile_biases.get(str(dst_id))
+        return weight, bias
+
+    # ──────────────────────────────────────────────
     # Static factories
     # ──────────────────────────────────────────────
 

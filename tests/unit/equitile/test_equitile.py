@@ -5,7 +5,7 @@ import torch
 from bioplausible.equitile.core import EquiTile
 from bioplausible.equitile.deployments.rl import RLEquiTile
 from bioplausible.equitile.deployments.vision import ConvEquiTile
-from bioplausible.equitile.language.canonical import LMEquiTile
+from bioplausible.zoo.models.tile_lm import TileLM
 
 
 class TestEquiTileRefactor(unittest.TestCase):
@@ -103,12 +103,11 @@ class TestEquiTileRefactor(unittest.TestCase):
         self.assertIn("loss", stats)
 
     def test_lm_equitile(self):
-        """Test LMEquiTile."""
+        """Test TileLM."""
         vocab_size = 50
-        model = LMEquiTile(
+        model = TileLM.from_lm(
             vocab_size=vocab_size,
             embed_dim=16,
-            num_heads=2,
             num_layers=2,
             max_seq_len=20,
             neurons_per_tile=16,

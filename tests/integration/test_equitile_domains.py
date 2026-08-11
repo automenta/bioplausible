@@ -4,7 +4,7 @@ Domain-Specific Tests for EquiTile
 
 Tests for:
 - Vision (ConvEquiTile)
-- Language Modeling (LMEquiTile)
+- Language Modeling (TileLM)
 - Reinforcement Learning (RLEquiTile)
 
 Usage:
@@ -14,23 +14,21 @@ Usage:
 import pytest
 import torch
 
+from bioplausible.data.lm import CharacterTokenizer
 from bioplausible.equitile import (
-    ConvEquiTile,  # Vision; Language; RL
+    ConvEquiTile,  # Vision; RL
     ConvEquiTileConfig,
-    LMEquiTile,
-    LMEquiTileConfig,
     RecurrentRLEquiTile,
     RLEquiTile,
     RLEquiTileConfig,
     RolloutBuffer,
-    SimpleTokenizer,
     VisionAugmentation,
     compute_gae,
     create_cifar_model,
     create_mnist_model,
     create_rl_model,
-    create_small_lm,
 )
+from bioplausible.zoo.models.tile_lm import TileLM
 
 # =============================================================================
 # Vision Tests
@@ -159,45 +157,40 @@ class TestVision:
 
 
 class TestLanguage:
-    """Tests for LMEquiTile language module."""
+    """Tests for the substrate-native LM module (TileLM)."""
 
-    def test_lm_equitile_config(self) -> None:
-        """Test LMEquiTileConfig."""
-        config = LMEquiTileConfig(
+    def test_lm_config(self) -> None:
+        """Test from_lm config mapping."""
+        model = TileLM.from_lm(
             vocab_size=1000,
             embed_dim=128,
-            num_heads=4,
             num_layers=2,
         )
+        config = model.get_config()
+        assert config.input_dim == 128
+        assert config.output_dim == 128
+        assert config.num_hidden_layers == 2
+        assert config.extra["vocab_size"] == 1000
 
-        assert config.vocab_size == 1000
-        assert config.embed_dim == 128
-        assert config.num_heads == 4
-
-    def test_lm_equitile_creation(self) -> None:
-        """Test LMEquiTile creation."""
-        config = LMEquiTileConfig(
+    def test_lm_creation(self) -> None:
+        """Test TileLM creation."""
+        model = TileLM.from_lm(
             vocab_size=100,
             embed_dim=32,
-            num_heads=2,
             num_layers=1,
             max_seq_len=16,
         )
-        model = LMEquiTile(config)
-
         assert model is not None
-        assert model.config.vocab_size == 100
+        assert model.lm_extra.vocab_size == 100
 
     def test_lm_equitile_forward(self) -> None:
-        """Test LMEquiTile forward pass."""
-        config = LMEquiTileConfig(
+        """Test TileLM forward pass."""
+        model = TileLM.from_lm(
             vocab_size=100,
             embed_dim=32,
-            num_heads=2,
             num_layers=1,
             max_seq_len=16,
         )
-        model = LMEquiTile(config)
         model.eval()
 
         # Create batch of token IDs
@@ -209,16 +202,14 @@ class TestLanguage:
         assert logits.shape == (4, 16, 100)
 
     def test_lm_equitile_train_step(self) -> None:
-        """Test LMEquiTile training step."""
+        """Test TileLM training step."""
         torch.manual_seed(42)
-        config = LMEquiTileConfig(
+        model = TileLM.from_lm(
             vocab_size=100,
             embed_dim=32,
-            num_heads=2,
             num_layers=1,
             max_seq_len=16,
         )
-        model = LMEquiTile(config)
 
         input_ids = torch.randint(0, 100, (4, 16))
         target_ids = torch.randint(0, 100, (4, 16))
@@ -235,9 +226,9 @@ class TestLanguage:
         loss = stats["loss"]
         assert loss > 0, f"Expected positive loss, got {loss}"
 
-    def test_simple_tokenizer(self) -> None:
-        """Test SimpleTokenizer."""
-        tokenizer = SimpleTokenizer()
+    def test_lm_tokenizer(self) -> None:
+        """Test the canonical character tokenizer."""
+        tokenizer = CharacterTokenizer()
 
         # Test encoding
         text = "hello world"
@@ -250,27 +241,25 @@ class TestLanguage:
 
         # Test batch encoding
         texts = ["hello", "world"]
-        batch = tokenizer.batch_encode(texts, max_length=10, padding=True)
+        batch = tokenizer.batch_encode(texts, max_length=10)
         assert batch.shape == (2, 10)
 
-    def test_create_small_lm(self) -> None:
-        """Test small LM factory."""
-        model = create_small_lm(vocab_size=500)
+    def test_from_lm_factory(self) -> None:
+        """Test from_lm factory."""
+        model = TileLM.from_lm(vocab_size=500, embed_dim=128, num_layers=2)
 
         assert model is not None
-        assert model.config.embed_dim == 128
-        assert model.config.num_layers == 2
+        assert model.get_config().input_dim == 128
+        assert model.get_config().num_hidden_layers == 2
 
     def test_lm_generate(self) -> None:
-        """Test LMEquiTile generation."""
-        config = LMEquiTileConfig(
+        """Test TileLM generation."""
+        model = TileLM.from_lm(
             vocab_size=100,
             embed_dim=32,
-            num_heads=2,
             num_layers=1,
             max_seq_len=16,
         )
-        model = LMEquiTile(config)
         model.eval()
 
         input_ids = torch.randint(1, 50, (1, 8))  # Start with some tokens
@@ -546,14 +535,12 @@ class TestDomainIntegration:
     def test_language_to_rl_pipeline(self) -> None:
         """Test language features can feed into RL."""
         # Create language model
-        lm_config = LMEquiTileConfig(
+        lm_model = TileLM.from_lm(
             vocab_size=100,
             embed_dim=32,
-            num_heads=2,
             num_layers=1,
             max_seq_len=16,
         )
-        lm_model = LMEquiTile(lm_config)
 
         # Create RL model
         rl_config = RLEquiTileConfig(
