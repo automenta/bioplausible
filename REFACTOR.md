@@ -181,6 +181,26 @@ pip-audit                          # no new vulnerabilities
 - **Session-8 targeted test matrix passed** (no full-suite reruns): `test_checkpoint.py` + `test_trainer_coverage.py` (29), `test_lm_demo.py` (38), `test_eqprop_models.py`+`_forward`+`_base` (25), `test_phase2_integration.py` (1), `test_lm_demo.py`+`test_zoo_integration.py` (68), `test_config_knobs.py`+`test_training_path.py` (17), `test_plan2_actions.py`+`test_domains.py` (51 pass / 1 pre-existing fail). ruff baseline ~104 findings on touched files; pyright 0 errors across all touched files.
 
 - **Zero-diff verification recipe**: `git stash` → `ruff check` → `pyright` → targeted `pytest --no-cov` → `git stash pop`; compute `comm` diffs. Keeps regression detection cheap without full-suite reruns.
+---
+
+## 🏛️ STRATEGIC ENDGAME: FULL EQUITILE SUBSUMPTION
+
+**Goal**: Eliminate `equitile/` entirely by migrating all functionality to the generic substrate (`core/tile` + `core/local_learning` + `core/optimization`).
+
+| equitile Component | Substrate Migration Target | Status |
+|--------------------|----------------------------|--------|
+| `EquiTile` (EP mode) | `TileAlgorithm.from_ep()` | ✅ Subsumed |
+| `EquiTileConfig` + deployment configs | `TileAlgorithmConfig` + deployment-specific subclasses | 🟡 Next |
+| Vision/Language/Graph/Temporal deployments | New model classes on `TileAlgorithm` substrate | 🟡 Next |
+| `FastLM` + components | `TileLM` (new) on substrate | 🟡 Next |
+| Async/Distributed training | Substrate execution infra (new `core/execution/`) | 🔴 Later |
+| Optimizer mixins | `MultiOptimizerMixin` + `StrategyOptimizer` | ✅ Subsumed |
+| Analysis/benchmarks | Rewrite against substrate APIs | 🔴 Later |
+| `equitile/analysis/`, `equitile/benchmarks/` | Replace with substrate-native versions | 🔴 Later |
+
+**Migration principle**: Each `equitile/` component becomes a *thin model class* on the substrate, not a reimplementation. The substrate provides topology, kernels, optimizers, tasks, and execution; models only compose dynamics + config.
+
+**End state**: `bioplausible/` has `core/` (generic substrate) + `zoo/models/` (algorithm implementations) + `data/` + `experiments/` — **no `equitile/` package**.
 
 ---
 
