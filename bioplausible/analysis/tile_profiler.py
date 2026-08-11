@@ -1,63 +1,34 @@
-"""
-EquiTile Profiler: Performance Diagnostics
-==========================================
+"""Substrate-native TileAlgorithm Profiler: Performance Diagnostics.
 
-Tools for profiling and diagnosing EquiTile performance:
-- Tile-level timing
-- Memory usage tracking
-- Activity statistics
-- Learning diagnostics
-- Memory profiling tools
-- Performance benchmarking
-
-Key Components
---------------
-- TileStats: Statistics for a single tile
-- ProfileResult: Results from a profiling session
-- EquiTileProfiler: Main profiler class
-- LearningMonitor: Monitors learning progress
-- MemoryProfiler: Memory usage profiling
-- BenchmarkRunner: Performance benchmarking
-
-Examples
---------
->>> from bioplausible.equitile import EquiTile, EquiTileProfiler
->>> model = EquiTile(
-...     neurons_per_tile=64, num_layers=4, tiles_per_layer=4, input_dim=784, output_dim=10
-... )
->>> profiler = EquiTileProfiler(model)
->>> with profiler.profile():
-...     model.train_step(X, y)
->>> profiler.print_report()
+Ported from equitile/analysis/profiler.py to work with TileAlgorithm substrate.
 """
 
 import time
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 import torch
 
+from bioplausible.core.local_learning.algorithm import TileAlgorithm
 from bioplausible.core.logging import get_logger
 
 __all__ = [
     "BenchmarkConfig",
     "BenchmarkResult",
     "BenchmarkRunner",
-    "EquiTileProfiler",
     "LearningMonitor",
     "MemoryProfiler",
     "ProfileResult",
+    "TileAlgorithmProfiler",
     "TileStats",
     "create_profiler",
     "logger",
     "run_benchmark",
 ]
-if TYPE_CHECKING:
-    from bioplausible.equitile.core import EquiTile
 
 logger = get_logger()
+
 
 # =============================================================================
 # Data Structures
@@ -186,7 +157,7 @@ class ProfileResult:
     n_edges: int = 0
     timestamp: float = field(default_factory=time.time)
 
-    def summary(self) -> dict[str, object]:
+    def summary(self) -> dict[str, int | float]:
         """Get summary statistics.
 
         Returns
@@ -214,22 +185,22 @@ class ProfileResult:
 
 
 # =============================================================================
-# EquiTile Profiler
+# TileAlgorithm Profiler
 # =============================================================================
 
 
-class EquiTileProfiler:
-    """Profiler for EquiTile models.
+class TileAlgorithmProfiler:
+    """Profiler for TileAlgorithm models.
 
     Tracks timing, memory, and activity statistics.
 
     Parameters
     ----------
-    model : EquiTile
+    model : TileAlgorithm
         Model to profile
     """
 
-    def __init__(self, model: EquiTile) -> None:
+    def __init__(self, model: TileAlgorithm) -> None:
         self.model = model
         self._profiling = False
         self._current_result: ProfileResult | None = None
@@ -254,7 +225,7 @@ class EquiTileProfiler:
 
         Yields
         ------
-        EquiTileProfiler
+        TileAlgorithmProfiler
             Self for use in context
         """
         self._start_profiling(batch_size)
@@ -319,7 +290,9 @@ class EquiTileProfiler:
         stats: dict[int, TileStats] = {}
 
         for tile in self.model.graph.all_tiles:
-            tile_idx = list(self.model.graph.tiles.keys()).index(tile.id)
+            # Find the index of this tile in the sorted tile list
+            sorted_ids = sorted(self.model.graph.tiles.keys())
+            tile_idx = sorted_ids.index(tile.id)
             importance = torch.sigmoid(self.model.tile_importance[tile_idx]).item()
 
             activity_mean = 0.0
@@ -357,21 +330,16 @@ class EquiTileProfiler:
     def _measure_memory(self) -> float:
         """Measure parameter memory in MB.
 
+        ``model.parameters()`` already includes the per-edge parameter dicts
+        (``_tile_weights``/``_tile_biases``), so the full parameter footprint.
+
         Returns
         -------
         float
             Memory in MB
         """
-        param_mem = sum(p.numel() * p.element_size() for p in self.model.parameters())
-
-        edge_mem = 0
-        for edge in self.model.graph.edges.values():
-            if edge.weight is not None:
-                edge_mem += edge.weight.numel() * edge.weight.element_size()
-            if edge.bias is not None:
-                edge_mem += edge.bias.numel() * edge.bias.element_size()
-
-        return (param_mem + edge_mem) / (1024 * 1024)
+        total_mem = sum(p.numel() * p.element_size() for p in self.model.parameters())
+        return total_mem / (1024 * 1024)
 
     def _measure_activation_memory(self) -> float:
         """Measure activation memory in MB.
@@ -481,12 +449,12 @@ class EquiTileProfiler:
         lines: list[str] = []
         lines.append("")
         lines.append("=" * 70)
-        lines.append("EquiTile Profiling Report")
+        lines.append("TileAlgorithm Profiling Report")
         lines.append("=" * 70)
         lines.append("")
 
         summary = result.summary()
-        total_time = summary["total_time_ms"] if summary["total_time_ms"] > 0 else 0.001
+        total_time = max(float(summary["total_time_ms"]), 0.001)
 
         lines.append("Summary:")
         lines.append(f"  Total time: {total_time:.2f} ms")
@@ -574,13 +542,13 @@ class LearningMonitor:
 
     Parameters
     ----------
-    model : EquiTile
+    model : TileAlgorithm
         Model to monitor
     window_size : int
         Window size for moving averages
     """
 
-    def __init__(self, model: EquiTile, window_size: int = 100) -> None:
+    def __init__(self, model: TileAlgorithm, window_size: int = 100) -> None:
         self.model = model
         self.window_size = window_size
 
@@ -711,17 +679,17 @@ class LearningMonitor:
 
 
 class MemoryProfiler:
-    """Memory profiling for EquiTile models.
+    """Memory profiling for TileAlgorithm models.
 
     Tracks memory usage over time and identifies memory bottlenecks.
 
     Parameters
     ----------
-    model : EquiTile
+    model : TileAlgorithm
         Model to profile
     """
 
-    def __init__(self, model: EquiTile) -> None:
+    def __init__(self, model: TileAlgorithm) -> None:
         self.model = model
         self._history: list[dict[str, float]] = []
 
@@ -747,13 +715,13 @@ class MemoryProfiler:
         param_mem = sum(p.numel() * p.element_size() for p in self.model.parameters())
         snapshot["param_memory_mb"] = param_mem / (1024 * 1024)
 
-        # Edge memory
+        # Edge memory (per-edge parameter dicts on the substrate)
         edge_mem = 0
-        for edge in self.model.graph.edges.values():
-            if edge.weight is not None:
-                edge_mem += edge.weight.numel() * edge.weight.element_size()
-            if edge.bias is not None:
-                edge_mem += edge.bias.numel() * edge.bias.element_size()
+        for container in ("_tile_weights", "_tile_biases"):
+            params = getattr(self.model, container, None)
+            if params is not None:
+                for p in params.values():
+                    edge_mem += p.numel() * p.element_size()
         snapshot["edge_memory_mb"] = edge_mem / (1024 * 1024)
 
         # Activation memory
@@ -902,11 +870,11 @@ class BenchmarkResult:
 
 
 class BenchmarkRunner:
-    """Performance benchmarking for EquiTile models.
+    """Performance benchmarking for TileAlgorithm models.
 
     Parameters
     ----------
-    model : EquiTile
+    model : TileAlgorithm
         Model to benchmark
     config : BenchmarkConfig, optional
         Benchmark configuration
@@ -914,7 +882,7 @@ class BenchmarkRunner:
 
     def __init__(
         self,
-        model: EquiTile,
+        model: TileAlgorithm,
         config: BenchmarkConfig | None = None,
     ) -> None:
         self.model = model
@@ -1045,15 +1013,15 @@ class BenchmarkRunner:
 
 
 def create_profiler(
-    model: EquiTile,
+    model: TileAlgorithm,
     enable_memory_profiling: bool = True,
     enable_learning_monitor: bool = True,
-) -> tuple[EquiTileProfiler, MemoryProfiler | None, LearningMonitor | None]:
+) -> tuple[TileAlgorithmProfiler, MemoryProfiler | None, LearningMonitor | None]:
     """Create a complete profiling setup.
 
     Parameters
     ----------
-    model : EquiTile
+    model : TileAlgorithm
         Model to profile
     enable_memory_profiling : bool
         Enable memory profiling
@@ -1063,9 +1031,9 @@ def create_profiler(
     Returns
     -------
     tuple
-        (EquiTileProfiler, MemoryProfiler, LearningMonitor)
+        (TileAlgorithmProfiler, MemoryProfiler, LearningMonitor)
     """
-    profiler = EquiTileProfiler(model)
+    profiler = TileAlgorithmProfiler(model)
 
     memory_profiler = None
     if enable_memory_profiling:
@@ -1079,7 +1047,7 @@ def create_profiler(
 
 
 def run_benchmark(
-    model: EquiTile,
+    model: TileAlgorithm,
     input_dim: int,
     output_dim: int,
     batch_sizes: list[int] | None = None,
@@ -1088,7 +1056,7 @@ def run_benchmark(
 
     Parameters
     ----------
-    model : EquiTile
+    model : TileAlgorithm
         Model to benchmark
     input_dim : int
         Input dimension

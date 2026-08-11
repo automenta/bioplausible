@@ -1,19 +1,24 @@
 import unittest
 
-from bioplausible.equitile.analysis.dynamics import (
-    DynamicEquiTile,
-    DynamicEquiTileConfig,
+import torch
+
+from bioplausible.analysis.tile_dynamics import (
+    DynamicTileAlgorithm,
+    DynamicTileConfig,
     TileGrowthConfig,
 )
-from bioplausible.equitile.core import EquiTile, EquiTileConfig
+from bioplausible.core.local_learning.algorithm import TileAlgorithm
 
 
-class TestEquiTileDynamics(unittest.TestCase):
+class TestTileAlgorithmDynamics(unittest.TestCase):
     def setUp(self):
-        self.config = EquiTileConfig(
-            neurons_per_tile=16, num_layers=3, tiles_per_layer=2, mode="pc"
+        self.model = TileAlgorithm.from_ep(
+            input_dim=8,
+            output_dim=4,
+            neurons_per_tile=16,
+            num_layers=2,
+            tiles_per_layer=2,
         )
-        self.model = EquiTile(config=self.config, input_dim=8, output_dim=4)
         self.growth_config = TileGrowthConfig(
             growth_enabled=True,
             prune_enabled=True,
@@ -22,8 +27,8 @@ class TestEquiTileDynamics(unittest.TestCase):
             growth_cooldown=0,  # No cooldown for testing
             min_age_for_modify=0,
         )
-        self.dynamic_config = DynamicEquiTileConfig(growth=self.growth_config)
-        self.dynamic = DynamicEquiTile(self.model, config=self.dynamic_config)
+        self.dynamic_config = DynamicTileConfig(growth=self.growth_config)
+        self.dynamic = DynamicTileAlgorithm(self.model, config=self.dynamic_config)
 
     def test_add_tile_via_api(self):
         """Test adding a tile via core API."""
@@ -42,7 +47,7 @@ class TestEquiTileDynamics(unittest.TestCase):
     def test_remove_tile_via_api(self):
         """Test removing a tile via core API."""
         # Add a dummy tile first
-        new_id = self.model.add_tile(16, 1)
+        new_id = self.model.add_tile(neurons=16, layer_id=1)
         initial_tiles = len(self.model.graph.tiles)
 
         self.model.remove_tile(new_id)
@@ -64,15 +69,6 @@ class TestEquiTileDynamics(unittest.TestCase):
         self.assertEqual(stats["grown"], 1)
         self.assertTrue(self.dynamic.tile_modified)
 
-        # Check if new tile exists
-        # We don't know the exact ID, but count should increase
-        # Initial tiles: 1 input layer (1 tile if input_dim=8, neurons=16? ceil(8/16)=1)
-        # 1 hidden layer (2 tiles)
-        # 1 output layer (1 tile if output_dim=4, neurons=16? ceil(4/16)=1)
-        # Total 4 tiles?
-        # Let's check current count
-        # dynamic.step() was called, so count increased
-
     def test_add_remove_edge(self):
         """Test adding/removing edges."""
         src = self.model.graph.input_tile_ids[0]
@@ -84,11 +80,24 @@ class TestEquiTileDynamics(unittest.TestCase):
 
         self.model.add_edge(src, dst)
         self.assertIn((src, dst), self.model.graph._edge_set)
-        self.assertIn(f"edge_{src}_{dst}", self.model.edge_weights)
+        self.assertIn(f"{src}_{dst}", self.model._tile_weights)
 
         self.model.remove_edge(src, dst)
         self.assertNotIn((src, dst), self.model.graph._edge_set)
-        self.assertNotIn(f"edge_{src}_{dst}", self.model.edge_weights)
+        self.assertNotIn(f"{src}_{dst}", self.model._tile_weights)
+
+    def test_train_step_after_growth(self):
+        """Substrate still trains after dynamic topology mutation."""
+        self.dynamic.growth_manager.error_ema[
+            self.model.graph.tiles[self.model.graph.input_tile_ids[0]].fwd_neighbors[0]
+        ] = 1.0
+        self.dynamic.step()
+
+        x = torch.randn(4, 8)
+        y = torch.randint(0, 4, (4,))
+        stats = self.model.train_step(x, y)
+        self.assertIn("loss", stats)
+        self.assertIn("accuracy", stats)
 
 
 if __name__ == "__main__":

@@ -1,34 +1,23 @@
-"""
-EquiTile Dynamics: Production Tile Growth/Pruning
-=================================================
+"""Substrate-native tile dynamics: Growth, Pruning, Merging, Splitting.
 
-Dynamic tile architecture that adapts during training:
-- Add tiles when error is persistently high
-- Remove tiles when error is persistently low
-- Merge similar tiles
-- Split overloaded tiles
-
-Key Components
---------------
-- TileGrowthManager: Manages tile lifecycle
-- TilePruner: Prunes underutilized tiles
-- TileMerger: Merges similar tiles
-- TileSplitter: Splits overloaded tiles
-- DynamicEquiTile: Full dynamic architecture
+Ported from equitile/analysis/dynamics.py to work with TileAlgorithm substrate.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
 
+from bioplausible.core.local_learning.algorithm import TileAlgorithm
 from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import Domain, LocalityLevel, register_controller
-from bioplausible.equitile.core.config import DynamicEquiTileConfig, TileGrowthConfig
 
 __all__ = [
-    "DynamicEquiTile",
+    "DynamicTileAlgorithm",
+    "DynamicTileConfig",
+    "TileGrowthConfig",
     "TileGrowthManager",
     "TileMerger",
     "TileMetrics",
@@ -36,10 +25,46 @@ __all__ = [
     "create_dynamic_model",
     "logger",
 ]
-if TYPE_CHECKING:
-    from bioplausible.equitile.core import EquiTile
 
 logger = get_logger()
+
+
+@dataclass(frozen=True, slots=True)
+class TileGrowthConfig:
+    """Configuration for tile growth/pruning dynamics."""
+
+    growth_enabled: bool = True
+    prune_enabled: bool = True
+    merge_enabled: bool = False
+    split_enabled: bool = False
+
+    max_tiles: int = 100
+    min_tiles: int = 2
+
+    max_tiles_per_layer: int = 8
+    min_tiles_per_layer: int = 1
+
+    growth_threshold: float = 0.5
+    prune_threshold: float = 0.05
+    merge_threshold: float = 0.8
+
+    growth_cooldown: int = 100
+    prune_cooldown: int = 100
+    merge_cooldown: int = 500
+    split_cooldown: int = 500
+
+    min_age_for_modify: int = 50
+
+    error_ema_decay: float = 0.9
+
+
+@dataclass(frozen=True, slots=True)
+class DynamicTileConfig:
+    """Configuration for dynamic tile algorithm wrapper."""
+
+    growth: TileGrowthConfig = TileGrowthConfig()
+    track_history: bool = True
+    max_history: int = 1000
 
 
 @dataclass
@@ -54,7 +79,7 @@ class TileMetrics:
     activity_std: float = 0.0
     importance: float = 0.0
     update_count: int = 0
-    age: int = 0  # Steps since creation
+    age: int = 0
     last_modified: int = 0
 
 
@@ -62,9 +87,10 @@ class TileGrowthManager:
     """Manages tile growth and pruning lifecycle.
 
     Tracks tile metrics and decides when to add/remove tiles.
+    Works with any TileAlgorithm-compatible model.
     """
 
-    def __init__(self, config: TileGrowthConfig = None):
+    def __init__(self, config: TileGrowthConfig | None = None):
         self.config = config or TileGrowthConfig()
         self.metrics: dict[int, TileMetrics] = {}
         self.error_ema: dict[int, float] = {}
@@ -74,7 +100,7 @@ class TileGrowthManager:
         self._last_merge_step = -self.config.merge_cooldown
         self._last_split_step = -self.config.split_cooldown
 
-    def update_metrics(self, model: EquiTile):
+    def update_metrics(self, model: TileAlgorithm):
         """Update metrics for all tiles."""
         for i, tile in enumerate(model.graph.all_tiles):
             if tile.id not in self.metrics:
@@ -91,6 +117,11 @@ class TileGrowthManager:
                 )
                 metrics.error_max = max(metrics.error_max, error_norm)
 
+            # Update activity statistics
+            if tile.activity is not None:
+                metrics.activity_mean = tile.activity.mean().item()
+                metrics.activity_std = tile.activity.std().item()
+
             # Update importance
             if i < len(model.tile_importance):
                 importance = torch.sigmoid(model.tile_importance[i]).item()
@@ -105,7 +136,7 @@ class TileGrowthManager:
                 + (1 - self.config.error_ema_decay) * metrics.error_mean
             )
 
-    def should_grow(self, model: EquiTile) -> int | None:
+    def should_grow(self, model: TileAlgorithm) -> int | None:
         """Check if we should add a tile. Returns parent tile ID or None."""
         if not self.config.growth_enabled:
             return None
@@ -143,7 +174,7 @@ class TileGrowthManager:
 
         return None
 
-    def should_prune(self, model: EquiTile) -> int | None:
+    def should_prune(self, model: TileAlgorithm) -> int | None:
         """Check if we should remove a tile. Returns tile ID or None."""
         if not self.config.prune_enabled:
             return None
@@ -181,7 +212,7 @@ class TileGrowthManager:
 
         return None
 
-    def step(self, model: EquiTile) -> dict[str, int]:
+    def step(self, model: TileAlgorithm) -> dict[str, int]:
         """Perform one step of tile dynamics.
 
         Returns dict with counts of tiles grown/pruned/merged/split.
@@ -206,11 +237,11 @@ class TileGrowthManager:
 
         return stats
 
-    def grow_tile(self, model: EquiTile, parent_id: int) -> int:
+    def grow_tile(self, model: TileAlgorithm, parent_id: int) -> int:
         """Add a new tile as a child of an existing tile."""
         parent = model.graph.tiles[parent_id]
 
-        # Use new model API
+        # Use substrate API
         new_id = model.add_tile(
             neurons=parent.neurons,
             layer_id=parent.layer_id,
@@ -237,13 +268,13 @@ class TileGrowthManager:
         logger.info("  Grew tile %s from parent %s", new_id, parent_id)
         return new_id
 
-    def prune_tile(self, model: EquiTile, tile_id: int) -> bool:
+    def prune_tile(self, model: TileAlgorithm, tile_id: int) -> bool:
         """Remove a tile and its connections."""
         tile = model.graph.tiles.get(tile_id)
         if tile is None or tile.is_input or tile.is_output:
             return False
 
-        # Use model API to remove
+        # Use substrate API to remove
         model.remove_tile(tile_id)
 
         # Clean up metrics
@@ -272,7 +303,7 @@ class TileMerger:
 
     def find_similar_tiles(
         self,
-        model: EquiTile,
+        model: TileAlgorithm,
     ) -> list[tuple[int, int, float]]:
         """Find pairs of similar tiles.
 
@@ -309,7 +340,7 @@ class TileMerger:
 
     def merge_tiles(
         self,
-        model: EquiTile,
+        model: TileAlgorithm,
         tile1_id: int,
         tile2_id: int,
     ) -> int:
@@ -367,7 +398,7 @@ class TileSplitter:
 
     def split_tile(
         self,
-        model: EquiTile,
+        model: TileAlgorithm,
         tile_id: int,
         n_splits: int = 2,
     ) -> list[int]:
@@ -410,24 +441,24 @@ class TileSplitter:
 
 
 @register_controller(
-    "dynamic_equitile",
+    "dynamic_tile_algorithm",
     domains=[Domain.VISION, Domain.RL],
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.85,
     requires_backward=False,
     credit_assignment_type="hebbian",
-    family="equitile",
+    family="tile",
     provides=["standard_autograd"],
 )
-class DynamicEquiTile:
-    """EquiTile with dynamic tile architecture.
+class DynamicTileAlgorithm:
+    """TileAlgorithm with dynamic tile architecture.
 
     Automatically grows, prunes, merges, and splits tiles during training
     based on error signals and utilization.
 
     Usage:
-        model = EquiTile(...)
-        dynamic = DynamicEquiTile(model)
+        model = TileAlgorithm.from_ep(...)
+        dynamic = DynamicTileAlgorithm(model)
 
         for X, y in dataloader:
             stats = model.train_step(X, y)
@@ -439,18 +470,18 @@ class DynamicEquiTile:
 
     def __init__(
         self,
-        model: EquiTile,
-        config: DynamicEquiTileConfig = None,
+        model: TileAlgorithm,
+        config: DynamicTileConfig | None = None,
     ):
         self.model = model
-        self.config = config or DynamicEquiTileConfig()
+        self.config = config or DynamicTileConfig()
 
         self.growth_manager = TileGrowthManager(self.config.growth)
         self.merger = TileMerger(threshold=self.config.growth.merge_threshold)
         self.splitter = TileSplitter()
 
         self.tile_modified = False
-        self._history: list[dict] = [] if self.config.track_history else None
+        self._history: list[dict] | None = [] if self.config.track_history else None
 
     def step(self) -> dict[str, int]:
         """Perform one step of tile dynamics.
@@ -461,7 +492,7 @@ class DynamicEquiTile:
         self.tile_modified = stats["grown"] > 0 or stats["pruned"] > 0
 
         # Check for merging
-        if self.config.merge_enabled and stats == {"grown": 0, "pruned": 0}:
+        if self.config.growth.merge_enabled and stats == {"grown": 0, "pruned": 0}:
             similar = self.merger.find_similar_tiles(self.model)
             if similar:
                 tile1, tile2, _ = similar[0]
@@ -529,8 +560,8 @@ def create_dynamic_model(
     input_dim: int,
     output_dim: int,
     **kwargs,
-) -> tuple[EquiTile, DynamicEquiTile]:
-    """Create EquiTile with dynamic tile architecture.
+) -> tuple[TileAlgorithm, DynamicTileAlgorithm]:
+    """Create TileAlgorithm with dynamic tile architecture.
 
     Usage:
         model, dynamic = create_dynamic_model(
@@ -543,14 +574,12 @@ def create_dynamic_model(
             prune_enabled=True,
         )
     """
-    from bioplausible.equitile.core import EquiTile
-
-    model = EquiTile(
+    model = TileAlgorithm.from_ep(
+        input_dim=input_dim,
+        output_dim=output_dim,
         neurons_per_tile=neurons_per_tile,
         num_layers=num_layers,
         tiles_per_layer=tiles_per_layer,
-        input_dim=input_dim,
-        output_dim=output_dim,
         **kwargs,
     )
 
@@ -564,9 +593,9 @@ def create_dynamic_model(
         prune_threshold=kwargs.get("prune_threshold", 0.05),
     )
 
-    dynamic = DynamicEquiTile(
+    dynamic = DynamicTileAlgorithm(
         model,
-        config=DynamicEquiTileConfig(growth=growth_config),
+        config=DynamicTileConfig(growth=growth_config),
     )
 
     return model, dynamic

@@ -413,6 +413,9 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
         """Per-tile and per-edge importance (sigmoid-gated plasticity)."""
         self.tile_importance = nn.Parameter(torch.zeros(len(self.graph.tiles)))
         self.edge_importance = nn.Parameter(torch.zeros(len(self.graph.edges)))
+        self._tile_idx = {
+            tid: i for i, tid in enumerate(sorted(self.graph.tiles))
+        }
 
     def _build_tile_weights(self) -> None:
         """Per-edge incoming weights and per-tile biases.
@@ -548,7 +551,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
     # ── Bio-plausible loop ───────────────────────────────────────────────────
 
     def _topic_importance(self, tid: int) -> float:
-        return torch.sigmoid(self.tile_importance[tid]).item()
+        return torch.sigmoid(self.tile_importance[self._tile_idx[tid]]).item()
 
     def _edge_importance(self, edge_index: int) -> float:
         return torch.sigmoid(self.edge_importance[edge_index]).item()
@@ -774,6 +777,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
                     torch.ones(1, device=old_importance.device),
                 ])
             )
+        self._tile_idx[new_id] = len(old_importance)
 
         # Rebuild weight structures for the new tile if not input
         if not is_input:
@@ -830,6 +834,11 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
         for layer in self.graph.layer_ids:
             if tile_id in layer:
                 layer.remove(tile_id)
+
+        # Rebuild the id->index mapping (indices shifted by the removal)
+        self._tile_idx = {
+            tid: i for i, tid in enumerate(sorted(self.graph.tiles))
+        }
 
         self.reset_optimizers()
 

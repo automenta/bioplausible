@@ -1,34 +1,20 @@
-"""
-EquiTile Research Utilities
-============================
+"""Substrate-native research utilities: tracking, metrics, visualization, ablation.
 
-Tools for facilitating research experiments:
-- Experiment tracking hooks
-- Metric collection APIs
-- Visualization helpers
-- Ablation study support
-
-Examples
---------
->>> from bioplausible.equitile.research import ExperimentTracker
->>> tracker = ExperimentTracker(experiment_name="my_experiment")
->>> tracker.log_params({"learning_rate": 0.01, "batch_size": 32})
->>> for epoch in range(100):
-...     stats = model.train_step(X, y)
-...     tracker.log_metrics(stats, epoch=epoch)
->>> tracker.save()
+Ported from equitile/analysis/research.py to work with TileAlgorithm substrate.
 """
 
 import json
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Literal, overload
 
 import torch
 
 from bioplausible.config.unified import ExperimentConfig
+from bioplausible.core.checkpoint import save_checkpoint
+from bioplausible.core.local_learning.algorithm import TileAlgorithm
 
 __all__ = [
     "AblationConfig",
@@ -43,8 +29,6 @@ __all__ = [
     "create_tracker",
     "create_visualization_helper",
 ]
-if TYPE_CHECKING:
-    from bioplausible.equitile.core import EquiTile
 
 
 # =============================================================================
@@ -156,7 +140,7 @@ class ExperimentTracker:
 
     def log_model(
         self,
-        model: EquiTile,
+        model: TileAlgorithm,
         name: str = "model",
         include_graph: bool = False,
     ) -> None:
@@ -164,7 +148,7 @@ class ExperimentTracker:
 
         Parameters
         ----------
-        model : EquiTile
+        model : TileAlgorithm
             Model to save
         name : str
             Model name
@@ -172,7 +156,16 @@ class ExperimentTracker:
             Include model graph
         """
         path = self.log_dir / f"{name}.pt"
-        model.save_checkpoint(str(path))
+        config = getattr(model, "get_config", lambda: None)()
+        config_dict: dict[str, object] = {}
+        if is_dataclass(config) and not isinstance(config, type):
+            config_dict = dict(asdict(config))
+        elif isinstance(config, dict):
+            config_dict = dict(config)
+        save_checkpoint(
+            path,
+            {"model_state_dict": model.state_dict(), "config": config_dict},
+        )
         self.log_artifact(str(path))
 
         if include_graph:
@@ -180,12 +173,12 @@ class ExperimentTracker:
             self._save_model_graph(model, str(graph_path))
             self.log_artifact(str(graph_path))
 
-    def _save_model_graph(self, model: EquiTile, path: str) -> None:
+    def _save_model_graph(self, model: TileAlgorithm, path: str) -> None:
         """Save model graph to JSON.
 
         Parameters
         ----------
-        model : EquiTile
+        model : TileAlgorithm
             Model
         path : str
             Output path
@@ -207,6 +200,16 @@ class ExperimentTracker:
         with Path(path).open("w") as f:
             json.dump(graph_data, f, indent=2)
 
+    @overload
+    def get_metrics(
+        self, metric_name: str, as_array: Literal[True] = True
+    ) -> list[float]: ...
+
+    @overload
+    def get_metrics(
+        self, metric_name: str, as_array: Literal[False]
+    ) -> list[dict[str, object]]: ...
+
     def get_metrics(
         self,
         metric_name: str,
@@ -227,7 +230,12 @@ class ExperimentTracker:
             Metrics
         """
         if as_array:
-            return [m.get(metric_name) for m in self._metrics if metric_name in m]
+            values: list[float] = []
+            for m in self._metrics:
+                v = m.get(metric_name)
+                if isinstance(v, (int, float)):
+                    values.append(float(v))
+            return values
         return [m for m in self._metrics if metric_name in m]
 
     def get_summary(self) -> dict[str, object]:
@@ -500,15 +508,15 @@ class MetricCollector:
 
 
 class VisualizationHelper:
-    """Visualization helpers for EquiTile.
+    """Visualization helpers for the tile substrate.
 
     Parameters
     ----------
-    model : EquiTile
+    model : TileAlgorithm
         Model to visualize
     """
 
-    def __init__(self, model: EquiTile) -> None:
+    def __init__(self, model: TileAlgorithm) -> None:
         self.model = model
 
     def get_tile_activities(self) -> dict[int, torch.Tensor]:
@@ -605,13 +613,13 @@ class VisualizationHelper:
                 "pos_y": tile.pos_y,
             })
 
-        for (src, dst), edge in self.model.graph.edges.items():
+        weights = getattr(self.model, "_tile_weights", None)
+        for src, dst in self.model.graph.edges:
+            weight = weights.get(f"{src}_{dst}") if weights is not None else None
             edges.append({
                 "source": src,
                 "target": dst,
-                "weight_norm": (
-                    edge.weight.norm().item() if edge.weight is not None else 0.0
-                ),
+                "weight_norm": weight.norm().item() if weight is not None else 0.0,
             })
 
         return {"nodes": nodes, "edges": edges}
@@ -635,7 +643,7 @@ class VisualizationHelper:
             raise ImportError("matplotlib required for visualization")
 
         if ax is None:
-            fig, ax = plt.subplots()
+            _, ax = plt.subplots()
 
         activities = self.get_tile_activities()
 
@@ -674,7 +682,7 @@ class VisualizationHelper:
             raise ImportError("matplotlib required for visualization")
 
         if ax is None:
-            fig, ax = plt.subplots()
+            _, ax = plt.subplots()
 
         errors = self.get_tile_errors()
 
@@ -776,8 +784,10 @@ class AblationStudy:
         # Run training
         results = train_fn(params)
 
-        # Log results
-        tracker.log_metrics(results)
+        # Log results (coerce to the float metric contract)
+        tracker.log_metrics({
+            k: float(v) for k, v in results.items() if isinstance(v, (int, float))
+        })
         tracker.save()
 
         self._results[variant_id] = results
@@ -923,12 +933,12 @@ def create_metric_collector(window_size: int = 100) -> MetricCollector:
     return MetricCollector(window_size)
 
 
-def create_visualization_helper(model: EquiTile) -> VisualizationHelper:
+def create_visualization_helper(model: TileAlgorithm) -> VisualizationHelper:
     """Create a visualization helper.
 
     Parameters
     ----------
-    model : EquiTile
+    model : TileAlgorithm
         Model
 
     Returns

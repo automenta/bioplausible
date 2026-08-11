@@ -78,8 +78,8 @@ Async execution:
 ...     stats = async_model.train_step(X, y)
 
 Profiling:
->>> from bioplausible.equitile import EquiTileProfiler
->>> profiler = EquiTileProfiler(model)
+>>> from bioplausible.equitile import TileAlgorithmProfiler
+>>> profiler = TileAlgorithmProfiler(model)
 >>> with profiler.profile():
 ...     model.train_step(X, y)
 >>> profiler.print_report()
@@ -91,6 +91,45 @@ Research utilities:
 >>> tracker.log_metrics({"loss": 0.5}, step=100)
 """
 
+# Analysis: dynamics + profiler + research (substrate-native, ported to
+# bioplausible.analysis in Sprint 2.1)
+from bioplausible.analysis.tile_dynamics import (
+    DynamicTileAlgorithm,
+    TileGrowthManager,
+    TileMetrics,
+    create_dynamic_model,
+)
+from bioplausible.analysis.tile_dynamics import (
+    DynamicTileConfig as DynamicsConfig,
+)
+from bioplausible.analysis.tile_dynamics import (
+    TileGrowthConfig as DynamicsTileGrowthConfig,
+)
+from bioplausible.analysis.tile_profiler import (
+    BenchmarkConfig,
+    BenchmarkResult,
+    BenchmarkRunner,
+    LearningMonitor,
+    MemoryProfiler,
+    ProfileResult,
+    TileAlgorithmProfiler,
+    TileStats,
+    create_profiler,
+    run_benchmark,
+)
+from bioplausible.analysis.tile_research import (
+    AblationConfig,
+    AblationStudy,
+    ExperimentConfig,
+    ExperimentTracker,
+    MetricCollector,
+    MetricEntry,
+    VisualizationHelper,
+    create_ablation_study,
+    create_metric_collector,
+    create_tracker,
+    create_visualization_helper,
+)
 from bioplausible.core.registry import (
     Domain,
     LocalityLevel,
@@ -111,45 +150,6 @@ from bioplausible.equitile._internal.enhanced import (
     EnhancedEquiTile,
     TileLayerNorm,
     create_enhanced_model,
-)
-
-# Analysis: dynamics + profiler + research
-from bioplausible.equitile.analysis.dynamics import (
-    DynamicEquiTile,
-    TileGrowthManager,
-    TileMetrics,
-    create_dynamic_model,
-)
-from bioplausible.equitile.analysis.dynamics import (
-    DynamicEquiTileConfig as DynamicsConfig,
-)
-from bioplausible.equitile.analysis.dynamics import (
-    TileGrowthConfig as DynamicsTileGrowthConfig,
-)
-from bioplausible.equitile.analysis.profiler import (
-    BenchmarkConfig,
-    BenchmarkResult,
-    BenchmarkRunner,
-    EquiTileProfiler,
-    LearningMonitor,
-    MemoryProfiler,
-    ProfileResult,
-    TileStats,
-    create_profiler,
-    run_benchmark,
-)
-from bioplausible.equitile.analysis.research import (
-    AblationConfig,
-    AblationStudy,
-    ExperimentConfig,
-    ExperimentTracker,
-    MetricCollector,
-    MetricEntry,
-    VisualizationHelper,
-    create_ablation_study,
-    create_metric_collector,
-    create_tracker,
-    create_visualization_helper,
 )
 
 # Core
@@ -291,7 +291,7 @@ __all__ = [
     "TileMetrics",
     "TileGrowthManager",
     "DynamicsConfig",
-    "DynamicEquiTile",
+    "DynamicTileAlgorithm",
     "create_dynamic_model",
     # Async execution
     "TileTask",
@@ -315,7 +315,7 @@ __all__ = [
     # Profiler
     "TileStats",
     "ProfileResult",
-    "EquiTileProfiler",
+    "TileAlgorithmProfiler",
     "LearningMonitor",
     "MemoryProfiler",
     "BenchmarkConfig",

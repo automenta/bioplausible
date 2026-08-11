@@ -45,9 +45,10 @@ def _reg(name: str) -> object:
     return _decorator
 
 
-# Per-controller construction fixtures. Controllers (e.g. ``dynamic_equitile``)
-# wrap a real model — here a genuine ``EquiTile`` — rather than an arbitrary
-# nn.Module, so the audit can drive ``step()`` for a meaningful topology update.
+# Per-controller construction fixtures. Controllers (e.g.
+# ``dynamic_tile_algorithm``) wrap a real model — here a genuine
+# ``TileAlgorithm`` — rather than an arbitrary nn.Module, so the audit can
+# drive ``step()`` for a meaningful topology update.
 CONTROLLER_FIXTURES: dict[str, object] = {}
 
 
@@ -59,28 +60,28 @@ def _creg(name: str) -> object:
     return _decorator
 
 
-@_creg("dynamic_equitile")
-def _dynamic_equitile():
-    from bioplausible.equitile.analysis.dynamics import DynamicEquiTile
-    from bioplausible.equitile.core import EquiTile
-    from bioplausible.equitile.core.config import (
-        DynamicEquiTileConfig,
+@_creg("dynamic_tile_algorithm")
+def _dynamic_tile_algorithm():
+    from bioplausible.analysis.tile_dynamics import (
+        DynamicTileAlgorithm,
+        DynamicTileConfig,
         TileGrowthConfig,
     )
+    from bioplausible.core.local_learning.algorithm import TileAlgorithm
 
     def build():
-        model = EquiTile(
+        model = TileAlgorithm.from_ep(
+            input_dim=8,
+            output_dim=4,
             neurons_per_tile=4,
             num_layers=2,
             tiles_per_layer=2,
-            input_dim=8,
-            output_dim=4,
         )
         growth = TileGrowthConfig(
             growth_enabled=False, prune_enabled=False, merge_enabled=False
         )
-        return DynamicEquiTile(
-            model, config=DynamicEquiTileConfig(growth=growth, track_history=True)
+        return DynamicTileAlgorithm(
+            model, config=DynamicTileConfig(growth=growth, track_history=True)
         )
 
     return build
@@ -253,7 +254,8 @@ def _tile_lm():
 
 
 # Models that cannot be audited through a forward() call at all. As of the
-# category-correctness sprint ``dynamic_equitile`` is no longer registered under
+# category-correctness sprint ``dynamic_equitile`` (now substrate-native as
+# ``dynamic_tile_algorithm``) is no longer registered under
 # MODEL — it moved to ComponentCategory.CONTROLLER (it is a training-side
 # topology controller, not an nn.Module with a forward pass). Any model left here
 # should have no forward() to exercise.
@@ -794,8 +796,8 @@ class TestControllerRegistry:
     def test_controller_step(self, name):
         """Controller step() runs against a real wrapped model and returns stats.
 
-        For fixtures providing a genuine wrapped model (``dynamic_equitile`` →
-        real ``EquiTile``), assert the returned stats dict shape and that the
+        For fixtures providing a genuine wrapped model (``dynamic_tile_algorithm`` →
+        real ``TileAlgorithm``), assert the returned stats dict shape and that the
         controller exposed state evolved (tile count stable, history tracked).
         """
         try:
