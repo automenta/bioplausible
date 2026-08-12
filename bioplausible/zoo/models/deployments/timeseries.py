@@ -29,14 +29,14 @@ from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
-from bioplausible.equitile.deployments import _feature_extractors as _fe
-from bioplausible.equitile.deployments.base import (
+from bioplausible.zoo.models.deployments import _feature_extractors as _fe
+from bioplausible.zoo.models.deployments.base import (
     TemporalDeploymentConfig,
     build_tile_head,
 )
 
 # Re-export shared temporal components under their historical names so
-# ``from bioplausible.equitile.deployments.timeseries import ...`` keeps working.
+# ``from bioplausible.zoo.models.deployments.timeseries import ...`` keeps working.
 TemporalPositionalEncoding = _fe.TemporalPositionalEncoding
 TemporalAttentionLayer = _fe.TemporalAttentionLayer
 TimeSeriesEquiTileLayer = _fe.TemporalEquiTileLayer

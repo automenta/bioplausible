@@ -1,0 +1,107 @@
+"""Substrate-native deployment model classes (vision, graph, RL, timeseries).
+
+These models extend :class:`~bioplausible.core.local_learning.TileAlgorithm`
+with domain-specific feature extractors and a ``build_tile_head`` head, then
+register under the ``equitile`` family (``conv_equitile``, ``graph_equitile``,
+``rl_equitile``, ``timeseries_equitile``).
+"""
+
+from bioplausible.zoo.models.deployments.base import (
+    ConvDeploymentConfig,
+    DeploymentConfig,
+    GraphDeploymentConfig,
+    RLDeploymentConfig,
+    TemporalDeploymentConfig,
+    build_tile_head,
+    create_deployment_model,
+)
+from bioplausible.zoo.models.deployments.graph import (
+    GraphAttentionLayer,
+    GraphEquiTile,
+    GraphEquiTileConfig,
+    GraphEquiTileLayer,
+    aggregate_messages,
+    create_graph_model,
+    create_molecule_model,
+    create_social_graph_model,
+    scatter_max,
+    scatter_mean,
+    scatter_sum,
+)
+from bioplausible.zoo.models.deployments.rl import (
+    RecurrentRLEquiTile,
+    RLEquiTile,
+    RLEquiTileConfig,
+    RolloutBuffer,
+    compute_gae,
+    create_atari_model,
+    create_mujoco_model,
+    create_recurrent_rl_model,
+    create_rl_model,
+)
+from bioplausible.zoo.models.deployments.timeseries import (
+    TemporalAttentionLayer,
+    TemporalPositionalEncoding,
+    TimeSeriesConfig,
+    TimeSeriesEquiTile,
+    TimeSeriesEquiTileLayer,
+    create_anomaly_detection_model,
+    create_classification_model,
+    create_forecasting_model,
+)
+from bioplausible.zoo.models.deployments.vision import (
+    ConvEquiTile,
+    ConvEquiTileConfig,
+    ConvFeatureExtractor,
+    VisionAugmentation,
+    create_cifar_model,
+    create_imagenet_model,
+    create_mnist_model,
+    create_vision_model,
+)
+
+__all__ = [
+    "ConvDeploymentConfig",
+    "DeploymentConfig",
+    "GraphDeploymentConfig",
+    "RLDeploymentConfig",
+    "TemporalDeploymentConfig",
+    "build_tile_head",
+    "create_deployment_model",
+    "GraphEquiTile",
+    "GraphEquiTileConfig",
+    "GraphAttentionLayer",
+    "GraphEquiTileLayer",
+    "aggregate_messages",
+    "scatter_mean",
+    "scatter_sum",
+    "scatter_max",
+    "create_graph_model",
+    "create_molecule_model",
+    "create_social_graph_model",
+    "RLEquiTile",
+    "RLEquiTileConfig",
+    "RecurrentRLEquiTile",
+    "RolloutBuffer",
+    "compute_gae",
+    "create_rl_model",
+    "create_recurrent_rl_model",
+    "create_atari_model",
+    "create_mujoco_model",
+    "TimeSeriesEquiTile",
+    "TimeSeriesConfig",
+    "TemporalPositionalEncoding",
+    "TemporalAttentionLayer",
+    "TimeSeriesEquiTileLayer",
+    "create_forecasting_model",
+    "create_classification_model",
+    "create_anomaly_detection_model",
+    "ConvEquiTile",
+    "ConvEquiTileConfig",
+    "ConvFeatureExtractor",
+    "VisionAugmentation",
+    "create_vision_model",
+    "create_mnist_model",
+    "create_cifar_model",
+    "create_imagenet_model",
+]

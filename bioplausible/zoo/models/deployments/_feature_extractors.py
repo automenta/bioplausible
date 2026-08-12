@@ -32,7 +32,7 @@ from bioplausible.core.tile.feature_extractors import (
 if TYPE_CHECKING:
     from torch import Tensor
 
-    from bioplausible.equitile.deployments.base import RLDeploymentConfig
+    from bioplausible.zoo.models.deployments.base import RLDeploymentConfig
 
 __all__ = [
     "ConvFeatureExtractor",

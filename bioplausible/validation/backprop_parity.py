@@ -765,7 +765,6 @@ def run_parity(  # ruff: ignore[too-many-arguments,too-many-locals]  # campaign 
     Raises:
         ValueError: On an unknown family.
     """
-    import bioplausible.equitile  # ruff: ignore[unused-import]  # registers equitile models
     import bioplausible.zoo  # ruff: ignore[unused-import]  # registration side effect
     from bioplausible.core.model_status import STATUS_TAG_PREFIX
     from bioplausible.core.registry import ComponentCategory, Registry

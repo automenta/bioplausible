@@ -20,9 +20,8 @@ import logging
 
 # Register the models the parity CLI trains against. With Sprint 0.5 lazy
 # imports, importing the top-level package is no longer a registration side
-# effect; both the zoo (pepita/FF/FA/eqprop_mlp/backprop_mlp) and the separate
-# equitile package must be imported explicitly.
-import bioplausible.equitile  # ruff: ignore[unused-import]
+# effect; the zoo must be imported explicitly (it now owns the substrate
+# deployment models that used to live in the separate equitile package).
 import bioplausible.zoo  # ruff: ignore[unused-import]
 from bioplausible.core.logging import get_logger
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig

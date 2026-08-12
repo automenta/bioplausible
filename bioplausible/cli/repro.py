@@ -122,10 +122,9 @@ def _instantiate(  # ruff: ignore[too-many-return-statements]  (one return per r
             num_steps=10,
         ).to(device)
 
-    # Register the equitile family: it lives in its own package (NOT zoo), so
-    # it is absent from the registry unless explicitly imported — a regression
-    # surfaced by the Sprint 0.5 lazy-import work.
-    import bioplausible.equitile  # ruff: ignore[unused-import]
+    # The deployment models are registered by importing the zoo (they moved
+    # from the separate equitile package into ``zoo.models.deployments``).
+    import bioplausible.zoo  # ruff: ignore[unused-import]
     from bioplausible.zoo import get_model_spec
 
     spec = get_model_spec(model_name)

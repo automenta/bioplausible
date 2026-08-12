@@ -1,7 +1,8 @@
 """Generic tile-substrate feature extractors, attention layers, and graph utilities.
 
 EquiTile-free building blocks lifted from ``equitile.deployments._feature_extractors``
-during generification. The tile-embedding layers are injected with a
+during generification (now canonical home: ``zoo.models.deployments._feature_extractors``).
+The tile-embedding layers are injected with a
 ``TileModelFactory`` so they can be bound to any local-learning model without a
 ``core -> equitile`` dependency.
 """

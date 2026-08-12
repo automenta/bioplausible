@@ -157,7 +157,7 @@ def _backprop_transformer_lm():
 
 @_reg("graph_equitile")
 def _graph_equitile():
-    from bioplausible.equitile.deployments.graph import (
+    from bioplausible.zoo.models.deployments.graph import (
         GraphEquiTile,
         GraphEquiTileConfig,
     )
@@ -185,7 +185,7 @@ def _graph_equitile():
 
 @_reg("timeseries_equitile")
 def _timeseries_equitile():
-    from bioplausible.equitile.deployments.timeseries import (
+    from bioplausible.zoo.models.deployments.timeseries import (
         TimeSeriesConfig,
         TimeSeriesEquiTile,
     )
@@ -207,7 +207,7 @@ def _timeseries_equitile():
 
 @_reg("conv_equitile")
 def _conv_equitile():
-    from bioplausible.equitile.deployments.vision import (
+    from bioplausible.zoo.models.deployments.vision import (
         ConvEquiTile,
         ConvEquiTileConfig,
     )

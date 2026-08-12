@@ -11,15 +11,8 @@ Comprehensive validation suite:
 
 Usage
 -----
-# Run all validations
-python -m bioplausible.models.equitile.validate
-
-# Run specific test category
-python -m bioplausible.models.equitile.validate --category performance
-python -m bioplausible.models.equitile.validate --category reproducibility
-
-# Run quick smoke test
-python -m bioplausible.models.equitile.validate --quick
+Run via ``python -m bioplausible.validation.equitile_validate``. Pass
+``--category <name>`` to run one category or ``--quick`` for a smoke test.
 """
 
 import argparse

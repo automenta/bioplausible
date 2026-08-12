@@ -79,7 +79,6 @@ class AuditRow:
 
 def _load_registry() -> None:
     """Import the registration modules so every component is present."""
-    import bioplausible.equitile  # ruff: ignore[unused-import]
     import bioplausible.zoo  # ruff: ignore[unused-import]
 
 

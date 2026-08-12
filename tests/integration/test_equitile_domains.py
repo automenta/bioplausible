@@ -15,7 +15,7 @@ import pytest
 import torch
 
 from bioplausible.data.lm import CharacterTokenizer
-from bioplausible.equitile import (
+from bioplausible.zoo.models.deployments import (
     ConvEquiTile,  # Vision; RL
     ConvEquiTileConfig,
     RecurrentRLEquiTile,

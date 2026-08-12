@@ -8,6 +8,7 @@ from bioplausible.core.registry import Domain, LocalityLevel, Registry, register
 
 from . import (
     backprop,
+    deployments,
     eqprop,
     fa,
     forward_only,
@@ -25,6 +26,7 @@ __all__: list[str] = [
     "LocalityLevel",
     "Registry",
     "backprop",
+    "deployments",
     "eqprop",
     "fa",
     "forward_only",

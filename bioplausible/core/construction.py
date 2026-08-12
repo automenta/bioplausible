@@ -366,7 +366,7 @@ def construct_model(
     """
     consumption = resolve_consumption(model_cls)
     # Tile-substrate models (``TileAlgorithm`` subclasses like ``tile_pc``/
-    # ``equitile``) declare a ``config`` parameter typed as
+    # ``tile_fa``/the deployment models) declare a ``config`` parameter typed as
     # ``TileAlgorithmConfig`` — not the unified ``ModelConfig`` — and construct
     # through their canonical ``build`` classmethod (which folds the standard
     # scalars into a domain-specific config). Route them through that contract

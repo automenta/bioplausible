@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 import torch
 
-from bioplausible.equitile import (
+from bioplausible.zoo.models.deployments import (
     ConvEquiTile,  # Vision; RL
     ConvEquiTileConfig,
     RLEquiTile,

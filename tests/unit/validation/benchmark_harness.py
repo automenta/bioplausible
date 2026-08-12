@@ -130,13 +130,10 @@ def _instantiate(model_name: str, input_dim: int, output_dim: int, device: str, 
             num_steps=10,
         ).to(device)
 
-    # Generic registry build (equitile, spiking, others).
+    # Generic registry build (equitile, spiking, others). The deployment
+    # models are registered by importing the zoo, so they need no special
+    # handling here.
     from bioplausible.zoo import get_model_spec
-
-    # equitile deployment models live in the equitile package (NOT zoo) so they
-    # must be imported to register; without this the benchmark silently skips.
-    if model_name.endswith("_equitile"):
-        import bioplausible.equitile  # ruff: ignore[unused-import]
 
     spec = get_model_spec(model_name)
     model_cls = Registry.get(ComponentCategory.MODEL, model_name)

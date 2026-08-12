@@ -155,18 +155,12 @@ def _query_registry_models(reg_family: str) -> list[str]:
 def _resolve_family_models(cli_family: str) -> tuple[str, list[str]]:
     """Resolve a CLI family label to (registry_family, [model_names]).
 
-    EquiTile models are registered only when ``bioplausible.equitile`` is
-    imported, so we trigger that import lazily here.
+    The deployment models (``*_equitile``) register under ``family="equitile"``
+    when the zoo package is imported, which the top of this module already does
+    via ``bioplausible.zoo.get_model_spec``.
     """
     reg_family = FAMILY_MAP.get(cli_family, cli_family)
     models = _query_registry_models(reg_family)
-    if not models and reg_family == "equitile":
-        try:
-            import bioplausible.equitile  # ruff: ignore[unused-import]  (triggers registration)
-        except ImportError:
-            logger.warning("EquiTile package not installed; skipping equitile")
-            return reg_family, []
-        models = _query_registry_models("equitile")
     # Exclude documented baselines that fail the learns-gate
     models = [m for m in models if m not in _BASELINE_MODELS]
     return reg_family, models

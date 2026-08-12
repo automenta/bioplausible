@@ -28,8 +28,8 @@ from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
-from bioplausible.equitile.deployments import _feature_extractors as _fe
-from bioplausible.equitile.deployments.base import RLDeploymentConfig
+from bioplausible.zoo.models.deployments import _feature_extractors as _fe
+from bioplausible.zoo.models.deployments.base import RLDeploymentConfig
 
 # Re-export the shared feature extractor under its historical usage.
 RLFeatureExtractor = _fe.RLFeatureExtractor

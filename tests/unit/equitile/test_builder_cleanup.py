@@ -1,7 +1,7 @@
 import unittest
 
-from bioplausible.equitile.deployments.graph import GraphEquiTile, GraphEquiTileConfig
-from bioplausible.equitile.deployments.timeseries import (
+from bioplausible.zoo.models.deployments.graph import GraphEquiTile, GraphEquiTileConfig
+from bioplausible.zoo.models.deployments.timeseries import (
     TimeSeriesConfig,
     TimeSeriesEquiTile,
 )
