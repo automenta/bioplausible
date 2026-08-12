@@ -13,6 +13,7 @@ from torch import nn
 
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, register_model
+from bioplausible.utils import count_parameters
 
 # ``BackpropMLP`` lives in ``zoo.models.eqprop.looped_mlp`` (it is built against
 # the equilibrating MLP machinery). Re-export it here for hygiene so callers that
@@ -228,7 +229,7 @@ class BackpropTransformerLM(TransitionGraphMixin, nn.Module):
         return generated
 
     def count_parameters(self) -> int:
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+        return count_parameters(self)
 
     @classmethod
     def build(
