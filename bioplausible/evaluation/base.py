@@ -62,8 +62,10 @@ class MetricFn:
 
 
 def accuracy_fn(outputs: torch.Tensor, targets: torch.Tensor) -> float:
-    """Standard accuracy metric."""
-    return (outputs.argmax(1) == targets).float().mean().item()
+    """Standard accuracy metric (canonical impl in :mod:`core.losses`)."""
+    from bioplausible.core.losses import compute_accuracy
+
+    return compute_accuracy(outputs, targets)
 
 
 def top5_accuracy_fn(outputs: torch.Tensor, targets: torch.Tensor) -> float:

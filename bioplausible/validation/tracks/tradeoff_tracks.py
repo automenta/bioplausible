@@ -36,6 +36,7 @@ from torch import optim
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
+from bioplausible.utils import count_parameters
 from bioplausible.zoo.models.eqprop import (
     BackpropMLP,
     LoopedMLP,
@@ -65,11 +66,6 @@ def get_memory_usage():
     """Get current process memory usage in MB."""
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / 1024 / 1024
-
-
-def count_parameters(model):
-    """Count trainable parameters."""
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 def train_and_measure(
