@@ -346,6 +346,22 @@ failures** (2003 collected) — all unrelated to the refactor and still present.
 
 ### Completed work (this session)
 
+**Pillar I first step — uniform Family A telemetry (commit `c32e15f`)**
+- `zoo/_settling.py` `settle_single_state` (Family A) now reports the same
+  dynamics surface as `settle_activations_list` (Family B): added
+  ``steps_taken`` / ``converged`` / ``settle_time_s`` to its dynamics dict,
+  alongside the existing ``deltas`` / ``final_delta``. Tracks the step counter
+  through the SN-freeze ``warmup``/``main_loop`` split and captures the
+  ``_inf_norm_converged`` break.
+- Purely additive to the dynamics dict — `test_oracle` (reads only ``deltas``)
+  and all eqprop/convergence tests remain green (87 pass across
+  `test_oracle`, `test_settle_speed`, `test_settling_memory`,
+  `test_eqprop*`, `test_finite_nudge`, `test_smoke_training`). Live smoke of a
+  Family A model confirms all 5 uniform keys are present.
+- Convergence loops are NOT merged (Family A uses inf-norm ``_inf_norm_converged``;
+  Family B uses max-relative per-layer norm) — only the reporting surface is now
+  uniform, per the documented low-risk first step.
+
 **Pillar D metrics sub-goal (commit `5cb626f`)**
 - `evaluation/base.py` `accuracy_fn` now delegates to the canonical
   `core/losses.compute_accuracy` (handles one-hot/reshaped targets) instead of
