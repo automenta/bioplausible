@@ -301,7 +301,7 @@ class CoreTrainer:
 
     Usage:
         config = TrainerConfig(
-            model="equitile",
+            model="tile_pc",
             model_kwargs={"input_dim": 784, "hidden_dim": 256, "output_dim": 10},
             optimizer="smep",
             optimizer_kwargs={"lr": 0.01, "beta": 0.5},

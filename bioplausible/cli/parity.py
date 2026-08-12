@@ -144,7 +144,7 @@ def _run_campaign_stage(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--config-a", default="equitile")
+    parser.add_argument("--config-a", default="tile_pc")
     parser.add_argument("--config-b", default="backprop_mlp")
     parser.add_argument("--task", default=_DEFAULT_TASK)
     parser.add_argument("--epochs", type=int, default=5)

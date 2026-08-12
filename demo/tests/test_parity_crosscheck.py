@@ -33,7 +33,7 @@ def _train_panel(model: str, seed: int) -> DemoPanel:
 
 def test_demo_gap_matches_cli_gap_pp() -> None:
     """The demo two-panel gap equals the CLI gap under one shared seed."""
-    model_a, model_b = "equitile", "backprop_mlp"
+    model_a, model_b = "tile_pc", "backprop_mlp"
     a, b = _train_panel(model_a, SEED), _train_panel(model_b, SEED)
     demo_gap = parity_gap(a, b)
     assert demo_gap is not None
@@ -46,7 +46,7 @@ def test_demo_gap_is_deterministic_under_seed() -> None:
     """Re-running both panels at the same seed reproduces the same gap."""
 
     def _gap() -> float | None:
-        a = _train_panel("equitile", SEED)
+        a = _train_panel("tile_pc", SEED)
         b = _train_panel("backprop_mlp", SEED)
         return parity_gap(a, b)
 

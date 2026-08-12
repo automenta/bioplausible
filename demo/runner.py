@@ -126,7 +126,7 @@ class _DemoCallback(BaseExecutionCallback):
 TRAINABLE_MODELS: tuple[str, ...] = (
     "backprop_mlp",
     "eqprop_mlp",
-    "equitile",
+    "tile_pc",
     "pepita",
     "forward_forward",
     "standard_fa",
@@ -164,7 +164,7 @@ def model_metadata(model: str) -> dict[str, object]:
 _DEFAULT_HIDDEN_DIM: dict[str, int] = {
     "backprop_mlp": 128,
     "eqprop_mlp": 128,
-    "equitile": 32,
+    "tile_pc": 32,
     "pepita": 32,
     "forward_forward": 32,
     "standard_fa": 128,

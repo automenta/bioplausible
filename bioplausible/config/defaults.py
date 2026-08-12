@@ -113,7 +113,10 @@ _register_default(
 _register_default(
     "vision_equitile",
     {
-        "model": {"name": "equitile", "kwargs": {"hidden_dim": 256, "num_tiles": 4}},
+        "model": {
+            "name": "tile_pc",
+            "kwargs": {"neurons_per_tile": 48, "tiles_per_layer": 4},
+        },
         "optimizer": {"name": "adam", "lr": 0.01},
         "dataset": {"name": "mnist", "batch_size": 64},
         "trainer": {"epochs": 10},

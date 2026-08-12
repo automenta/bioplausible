@@ -35,7 +35,7 @@ BENCH_MODELS = [
     "eqprop_mlp",
     "fa",
     "mep",
-    "equitile",
+    "tile_pc",
     "forward_forward",
     "pepita",
     "spiking",
@@ -133,9 +133,9 @@ def _instantiate(model_name: str, input_dim: int, output_dim: int, device: str, 
     # Generic registry build (equitile, spiking, others).
     from bioplausible.zoo import get_model_spec
 
-    # equitile lives in its own package (NOT zoo) so it must be imported to
-    # register; without this the benchmark silently skips it.
-    if model_name in ("equitile", "equitile_ep") or model_name.endswith("_equitile"):
+    # equitile deployment models live in the equitile package (NOT zoo) so they
+    # must be imported to register; without this the benchmark silently skips.
+    if model_name.endswith("_equitile"):
         import bioplausible.equitile  # ruff: ignore[unused-import]
 
     spec = get_model_spec(model_name)
@@ -274,7 +274,7 @@ def _family_of(model_name: str) -> str:
         "eqprop_mlp": "eqprop",
         "fa": "fa",
         "mep": "mep",
-        "equitile": "equitile",
+        "tile_pc": "tile",
         "forward_forward": "forward_only",
         "pepita": "forward_only",
         "spiking": "spiking",

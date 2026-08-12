@@ -7,7 +7,7 @@ Quick Start:
     from bioplausible import CoreTrainer, TrainerConfig
 
     config = TrainerConfig(
-        model="equitile",
+        model="tile_pc",
         model_kwargs={"input_dim": 784, "hidden_dim": 256, "output_dim": 10},
         optimizer="smep",
         optimizer_kwargs={"lr": 0.01},
@@ -115,8 +115,6 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "VisionTask": ("bioplausible.domains", "VisionTask"),
     "create_domain_task": ("bioplausible.domains", "create_domain_task"),
     "list_domains": ("bioplausible.domains", "list_domains"),
-    # EquiTile — importing registers all variants
-    "_EquiTile": ("bioplausible.equitile", "EquiTile"),
     # Evaluation
     "BenchmarkRegistry": ("bioplausible.evaluation", "BenchmarkRegistry"),
     "BenchmarkResult": ("bioplausible.evaluation", "BenchmarkResult"),

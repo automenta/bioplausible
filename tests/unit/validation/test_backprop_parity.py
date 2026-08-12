@@ -200,7 +200,7 @@ PARITY_MODELS = [
     "directed_ep",  # Directed EP
     "forward_forward",  # Forward-Forward
     "pepita",  # PEPITA
-    "equitile",  # EquiTile (base)
+    "tile_pc",  # Tile substrate Predictive Coding (PC)
 ]
 
 

@@ -166,6 +166,20 @@ def resolve_consumption(model_cls: object) -> Consumption:
     return Consumption(frozenset(params), has_catch_all, accepts_config)
 
 
+def _is_tile_substrate(model_cls: object) -> bool:
+    """Whether ``model_cls`` is a ``TileAlgorithm`` subclass (tile substrate).
+
+    Deferred import keeps this module acyclic (zoo/local_learning import this
+    module at load time; the check only runs at construction time).
+    """
+    from bioplausible.core.local_learning.algorithm import TileAlgorithm
+
+    try:
+        return isinstance(model_cls, type) and issubclass(model_cls, TileAlgorithm)
+    except TypeError:
+        return False
+
+
 def _normalize(config: dict[str, object]) -> dict[str, object]:
     """Return a copy of ``config`` with legacy knob aliases canonicalised."""
     if not any(alias in config for alias in _KNOB_ALIASES):
@@ -351,6 +365,39 @@ def construct_model(
         The constructed ``nn.Module``.
     """
     consumption = resolve_consumption(model_cls)
+    # Tile-substrate models (``TileAlgorithm`` subclasses like ``tile_pc``/
+    # ``equitile``) declare a ``config`` parameter typed as
+    # ``TileAlgorithmConfig`` — not the unified ``ModelConfig`` — and construct
+    # through their canonical ``build`` classmethod (which folds the standard
+    # scalars into a domain-specific config). Route them through that contract
+    # so the trainer/parity/demo can construct them generically.
+    if (
+        not consumption.accepts_config
+        and "config" in consumption.accepted
+        and _is_tile_substrate(model_cls)
+    ):
+        scalars = _normalize(config)
+        build_kwargs = {
+            "input_dim": input_dim,
+            "output_dim": output_dim,
+            "hidden_dim": _as_int(scalars, "hidden_dim", 64),
+            "num_layers": _as_int(scalars, "num_layers", 1),
+            "device": "cpu",
+            "task_type": str(scalars.get("task_type", "vision")),
+        }
+        for k, v in scalars.items():
+            if k not in build_kwargs:
+                build_kwargs[k] = v
+        # Deferred import: zoo imports this module at load time, so a lazy
+        # lookup keeps construction acyclic.
+        from bioplausible.zoo import (
+            get_model_spec,
+        )
+
+        return model_cls.build(  # type: ignore[attr-defined]
+            spec=get_model_spec(model_name or getattr(model_cls, "__name__", "model")),
+            **build_kwargs,
+        )
     if consumption.accepts_config:
         cfg = build_model_config(
             config,

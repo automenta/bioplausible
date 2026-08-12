@@ -205,22 +205,6 @@ def _timeseries_equitile():
     )
 
 
-@_reg("enhanced_equitile")
-def _enhanced_equitile():
-    from bioplausible.equitile._internal.enhanced import EnhancedEquiTile
-
-    return (
-        lambda: EnhancedEquiTile(
-            neurons_per_tile=8,
-            num_layers=2,
-            tiles_per_layer=2,
-            input_dim=64,
-            output_dim=10,
-        ),
-        lambda _m: (torch.randn(BATCH_SIZE, 64),),
-    )
-
-
 @_reg("conv_equitile")
 def _conv_equitile():
     from bioplausible.equitile.deployments.vision import (

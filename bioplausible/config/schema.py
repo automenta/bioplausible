@@ -183,7 +183,7 @@ class ExperimentConfig:
 
     Usage:
         config = ExperimentConfig(
-            model=ModelConfig(name="equitile"),
+            model=ModelConfig(name="tile_pc"),
             optimizer=OptimizerConfig(name="smep", lr=0.01),
             dataset=DatasetConfig(name="mnist", batch_size=128),
             trainer=TrainingConfig(epochs=20),

@@ -33,7 +33,7 @@ REPRO_MODELS = [
     "eqprop_mlp",
     "fa",
     "mep",
-    "equitile",
+    "tile_pc",
     "forward_forward",
     "pepita",
     "spiking",

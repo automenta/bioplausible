@@ -75,7 +75,7 @@ def test_cli_parity_end_to_end():
             "-m",
             "bioplausible.cli.parity",
             "--config-a",
-            "equitile",
+            "tile_pc",
             "--config-b",
             "backprop_mlp",
             "--task",
@@ -99,7 +99,7 @@ def test_cli_parity_end_to_end():
     import json
 
     report = json.loads(result.stdout)
-    assert report["config_a"] == "equitile"
+    assert report["config_a"] == "tile_pc"
     assert report["config_b"] == "backprop_mlp"
     # gap_pp == (B - A) * 100, mirroring demo/charts.py parity_gap (within
     # display-rounding tolerance: gap is computed pre-rounding of accuracies).

@@ -240,7 +240,7 @@ class TestAutoScientistBridge:
 
         proposal = ExperimentProposal(
             hypothesis="Test hypothesis",
-            model="equitile",
+            model="tile_pc",
             task="mnist",
             propagator="eqprop",
             optimizer="adam",
@@ -251,7 +251,7 @@ class TestAutoScientistBridge:
 
         config = bridge.proposal_to_task(proposal)
 
-        assert config["model"] == "equitile"
+        assert config["model"] == "tile_pc"
         assert config["task"] == "mnist"
         assert config["optimizer"] == "adam"
         assert config["propagator"] == "eqprop"

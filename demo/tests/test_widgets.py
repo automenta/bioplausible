@@ -67,7 +67,7 @@ class TestDictKnobs:
 
     def test_dict_knob_apply_writes_through_path(self):
         cfg = TrainerConfig(
-            model="equitile",
+            model="tile_pc",
             task="mnist",
             epochs=3,
             optimizer_kwargs={"lr": 0.001},

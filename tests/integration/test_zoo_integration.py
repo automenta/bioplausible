@@ -38,7 +38,7 @@ def test_registry_has_models():
     assert "model" in models
     assert len(models["model"]) > 0
     assert "eqprop_mlp" in models["model"]
-    assert "equitile" in models["model"]
+    assert "tile_pc" in models["model"]
 
 
 def test_registry_has_propagators():
@@ -120,10 +120,10 @@ def test_mlp_instantiation():
     assert out.shape == (4, 10)
 
 
-def test_equitile_instantiation():
-    """Test instantiating EquiTile."""
-    EqT_cls = Registry.get(ComponentCategory.MODEL, "equitile")
-    model = EqT_cls(input_dim=784, hidden_dim=256, output_dim=10)
+def test_tile_pc_instantiation():
+    """Test instantiating TilePC (tile substrate Predictive Coding)."""
+    EqT_cls = Registry.get(ComponentCategory.MODEL, "tile_pc")
+    model = EqT_cls.from_pc(input_dim=784, output_dim=10)
     assert model is not None
 
     x = torch.randn(4, 784)
@@ -156,9 +156,9 @@ def test_cross_domain_query():
         category=ComponentCategory.MODEL,
         domain=Domain.LM,
     )
-    # EquiTile is registered for LM
+    # TileLM is registered for LM
     names = [r["name"] for r in results]
-    assert "equitile" in names
+    assert "tile_lm" in names
 
 
 def test_bio_score_query():
@@ -261,12 +261,12 @@ def test_get_models_for_task_unknown_returns_empty():
 
 def test_query_by_family_filter():
     """Reg test for `family=` kwarg added together with ComponentMetadata.family."""
-    equitile_models = Registry.query(
-        category=ComponentCategory.MODEL, family="equitile"
+    tile_models = Registry.query(
+        category=ComponentCategory.MODEL, family="tile"
     )
-    assert len(equitile_models) > 0
-    for r in equitile_models:
-        assert r["metadata"].family == "equitile"
+    assert len(tile_models) > 0
+    for r in tile_models:
+        assert r["metadata"].family == "tile"
 
 
 # ----------------------------------------------------------------------------

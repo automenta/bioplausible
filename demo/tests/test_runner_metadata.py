@@ -17,7 +17,7 @@ class TestHiddenDimDefaults:
     def test_equitile_uses_small_default(self):
         # neurons_per_tile tracks hidden_dim → a 256 default builds huge tile
         # graphs; the flagship demo should start small (32) to stay snappy.
-        cfg = default_trainer_config(model="equitile")
+        cfg = default_trainer_config(model="tile_pc")
         assert cfg.model_kwargs["hidden_dim"] == 32
 
     def test_backprop_default_is_larger(self):
@@ -25,7 +25,7 @@ class TestHiddenDimDefaults:
         assert cfg.model_kwargs["hidden_dim"] == 128
 
     def test_explicit_override_wins(self):
-        cfg = default_trainer_config(model="equitile", hidden_dim=64)
+        cfg = default_trainer_config(model="tile_pc", hidden_dim=64)
         assert cfg.model_kwargs["hidden_dim"] == 64
 
     def test_fallback_for_unknown_model(self):
@@ -36,12 +36,10 @@ class TestPrepareTrainerConfig:
     """Sprint 3.2 wiring — live widget knob edits survive into the trained run."""
 
     def test_reuses_same_object_when_model_task_unchanged(self):
-        prev = default_trainer_config(
-            model="equitile", task="mnist", epochs=3, lr=0.001
-        )
+        prev = default_trainer_config(model="tile_pc", task="mnist", epochs=3, lr=0.001)
         # Simulate a widget edit on the live config object.
         prev.model_kwargs["hidden_dim"] = 64
-        cfg = prepare_trainer_config(prev, "equitile", "mnist", 3, 0.001)
+        cfg = prepare_trainer_config(prev, "tile_pc", "mnist", 3, 0.001)
         assert cfg is prev  # same object preserved → widget edits kept
         assert cfg.model_kwargs["hidden_dim"] == 64
 
@@ -54,9 +52,7 @@ class TestPrepareTrainerConfig:
         assert cfg.optimizer_kwargs["lr"] == 0.01
 
     def test_rebuilds_defaults_when_model_changes(self):
-        prev = default_trainer_config(
-            model="equitile", task="mnist", epochs=3, lr=0.001
-        )
+        prev = default_trainer_config(model="tile_pc", task="mnist", epochs=3, lr=0.001)
         prev.model_kwargs["hidden_dim"] = 64
         cfg = prepare_trainer_config(prev, "backprop_mlp", "mnist", 3, 0.001)
         assert cfg is not prev
@@ -70,8 +66,8 @@ class TestPrepareTrainerConfig:
 
 class TestModelMetadata:
     def test_known_model_returns_calibrated_fields(self):
-        m = model_metadata("equitile")
-        assert m["family"] == "equitile"
+        m = model_metadata("tile_pc")
+        assert m["family"] == "tile"
         assert 0.0 <= m["bio_plausibility_score"] <= 1.0
         assert m["locality_level"] in {"local", "global", "equilibrium", "forward-only"}
         assert m["requires_backward"] is False
@@ -87,16 +83,16 @@ class TestModelMetadata:
 
 class TestParityExplanation:
     def test_no_note_for_small_gap(self):
-        a = DemoPanel(trainer_config=default_trainer_config(model="equitile"))
+        a = DemoPanel(trainer_config=default_trainer_config(model="tile_pc"))
         b = DemoPanel(trainer_config=default_trainer_config(model="backprop_mlp"))
         assert parity_explanation(a, b, gap=2.0) == ""
 
     def test_note_when_backward_free_model_lags(self):
-        a = DemoPanel(trainer_config=default_trainer_config(model="equitile"))
+        a = DemoPanel(trainer_config=default_trainer_config(model="tile_pc"))
         b = DemoPanel(trainer_config=default_trainer_config(model="backprop_mlp"))
         note = parity_explanation(a, b, gap=12.0)
         assert "gap expected" in note
-        assert "equitile" in note
+        assert "tile_pc" in note
 
     def test_no_note_when_both_backward(self):
         a = DemoPanel(trainer_config=default_trainer_config(model="backprop_mlp"))

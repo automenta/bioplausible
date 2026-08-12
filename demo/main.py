@@ -115,7 +115,7 @@ def create_page(demo: DemoUi) -> None:
         task_sel = ui.select(
             [t.name for t in build_tasks()], value="mnist", label="Task"
         )
-        model_a = ui.select(DEMO_MODELS, value="equitile", label="Config A")
+        model_a = ui.select(DEMO_MODELS, value="tile_pc", label="Config A")
         model_b = ui.select(DEMO_MODELS, value="backprop_mlp", label="Config B")
         epochs = ui.number(value=5, min=1, max=50, label="Epochs")
         lr = ui.number(value=0.001, format="%.4f", label="Learning Rate")

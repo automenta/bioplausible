@@ -1,98 +1,21 @@
 """
-EquiTile: Scalable Local-Learning Architecture
-==============================================
+EquiTile: Substrate-Backed Scalable Local-Learning Architecture
+================================================================
 
-A production-ready, tile-based local learning framework featuring:
-- Tile-based parallel architecture
-- Local Hebbian weight updates (no global backprop)
-- Multi-GPU support with NCCL
-- Mixed precision training
-- Dynamic tile growth/pruning
-- Enhanced EP with LayerNorm and curriculum learning
-- Async execution support
-- Comprehensive profiling and benchmarking
-- Research utilities for experiments
+This package is the home of the substrate-backed deployments (vision, graph,
+RL, timeseries) and the ``TileLM`` language model, plus the analysis tooling
+that was ported onto the ``TileAlgorithm`` substrate in Sprint 2.1. The legacy
+``EquiTile``/``EquiTileEP``/``EnhancedEquiTile`` model hierarchies and their
+builder/training/deployment-exporter scaffolding were deleted in Sprint 2.2;
+the PC-mode substrate model is ``tile_pc`` (``zoo/models/tile_models.py``),
+constructible through the generic trainer via ``construct_model``.
 
-Quick Start
------------
->>> from bioplausible.equitile import EquiTile
->>> model = EquiTile(
-...     neurons_per_tile=64,
-...     num_layers=4,
-...     tiles_per_layer=4,
-...     input_dim=784,
-...     output_dim=10,
-... )
->>> for X, y in dataloader:
-...     stats = model.train_step(X, y)
-
-Modules
--------
-core : Core EquiTile implementation
-config : Configuration classes
-enhanced : Enhanced EP features
-dynamics : Tile growth/pruning
-async_execution : Async tile processing
-distributed : Multi-GPU training (merged with distributed)
-distributed : Distributed training
-profiler : Performance profiling
-builder : Fluent builder API
-research : Research utilities
-vision : Vision (ConvEquiTile)
-tile_lm : Substrate-native language model (TileLM)
-rl : Reinforcement learning (RLEquiTile)
-graph : Graph neural networks (GraphEquiTile)
-timeseries : Time series modeling
-deployment : Model export and optimization
-
-Examples
---------
-Basic usage:
->>> from bioplausible.equitile import EquiTile, create_production_config
->>> config = create_production_config()
->>> model = EquiTile(
-...     neurons_per_tile=config.neurons_per_tile,
-...     num_layers=config.num_layers,
-...     tiles_per_layer=config.tiles_per_layer,
-...     input_dim=784,
-...     output_dim=10,
-... )
-
-Builder pattern:
->>> from bioplausible.equitile.builder import EquiTileBuilder
->>> model = (
-...     EquiTileBuilder
-...     .production(input_dim=784, output_dim=10)
-...     .with_learning_rate(0.01)
-...     .build()
-... )
-
-Multi-GPU:
->>> from bioplausible.equitile import DistributedEquiTile, DistributedConfig
->>> multi_gpu = DistributedEquiTile(model, device_ids=[0, 1, 2, 3])
-
-Async execution:
->>> from bioplausible.equitile import AsyncEquiTile, AsyncConfig
->>> async_model = AsyncEquiTile(model, config=AsyncConfig(n_workers=4))
->>> with async_model.async_context():
-...     stats = async_model.train_step(X, y)
-
-Profiling:
->>> from bioplausible.equitile import TileAlgorithmProfiler
->>> profiler = TileAlgorithmProfiler(model)
->>> with profiler.profile():
-...     model.train_step(X, y)
->>> profiler.print_report()
-
-Research utilities:
->>> from bioplausible.equitile.research import ExperimentTracker
->>> tracker = ExperimentTracker("my_experiment")
->>> tracker.log_params({"lr": 0.01})
->>> tracker.log_metrics({"loss": 0.5}, step=100)
+Deployments: ConvEquiTile / GraphEquiTile / RLEquiTile / TimeSeriesEquiTile are
+stacked on the generic :class:`~bioplausible.core.local_learning.TileAlgorithm`
+substrate (feature extractor + ``build_tile_head`` head + split optimizers).
+TileLM is the per-position substrate language model (``zoo/models/tile_lm.py``).
 """
 
-# Analysis: dynamics + profiler + research (substrate-native, ported to
-# bioplausible.analysis in Sprint 2.1)
 from bioplausible.analysis.tile_dynamics import (
     DynamicTileAlgorithm,
     TileGrowthManager,
@@ -130,57 +53,9 @@ from bioplausible.analysis.tile_research import (
     create_tracker,
     create_visualization_helper,
 )
-from bioplausible.core.registry import (
-    Domain,
-    LocalityLevel,
-    register_model,
-)
 from bioplausible.core.tile import TileGraph, TileState
 
-# Internal: builder + enhanced
-from bioplausible.equitile._internal.builder import (
-    EnhancedEquiTileBuilder,
-    EquiTileBuilder,
-    InferenceContext,
-    TrainingContext,
-    build_enhanced_model,
-    build_model,
-)
-from bioplausible.equitile._internal.enhanced import (
-    EnhancedEquiTile,
-    TileLayerNorm,
-    create_enhanced_model,
-)
-
-# Core
-from bioplausible.equitile.core import EquiTile, EquiTileEP
-from bioplausible.equitile.core.config import (
-    AsyncConfig,
-    CurriculumConfig,
-    DistributedConfig,
-    DynamicEquiTileConfig,
-    EnhancedEquiTileConfig,
-    EquiTileConfig,
-    NCCLConfig,
-    TileGrowthConfig,
-    create_dynamic_config,
-    create_enhanced_config,
-    create_fast_config,
-    create_production_config,
-    create_research_config,
-)
-
 # Deployments
-from bioplausible.equitile.deployments.deployment import (
-    DeploymentChecker,
-    EquiTileExporter,
-    ExportConfig,
-    ModelPruner,
-    check_deployment,
-    export_model,
-    prune_model,
-    quantize_model,
-)
 from bioplausible.equitile.deployments.graph import (
     GraphAttentionLayer,
     GraphEquiTile,
@@ -225,94 +100,21 @@ from bioplausible.equitile.deployments.vision import (
     create_mnist_model,
     create_vision_model,
 )
-
-# Training: async + distributed
-from bioplausible.equitile.training import NCCLCommunicator
-from bioplausible.equitile.training.async_execution import (
-    AsyncConfig as AsyncExecutionConfig,
-)
-from bioplausible.equitile.training.async_execution import (
-    AsyncEquiTile,
-    TileProcessor,
-    TileResult,
-    TileScheduler,
-    TileTask,
-    create_async_model,
-)
-from bioplausible.equitile.training.distributed import (
-    AsyncTileExecutor,
-    DeviceAssignment,
-    DistributedEquiTile,
-    MixedPrecisionTrainer,
-    TileCommunicator,
-    create_distributed_model,
-    spawn_distributed_worker,
-)
-from bioplausible.equitile.training.distributed import (
-    DistributedConfig as DistributedConfigClass,
-)
-from bioplausible.equitile.training.distributed import (
-    TileGrowthConfig as DistributedGrowthConfig,
-)
-
-# Substrate-native language model (supersedes the demo-oriented language.fast).
 from bioplausible.zoo.models.tile_lm import TileLM
+from bioplausible.zoo.models.tile_models import TilePC
 
-__all__ = [
-    # Core
-    "EquiTile",
-    "EquiTileEP",
+__all__ = [  # ruff: ignore[unsorted-dunder-all]  (intentional domain-grouped export order)
     "TileGraph",
     "TileState",
-    # "EdgeParams",  # Removed
-    # Config
-    "EquiTileConfig",
-    "create_production_config",
-    "create_research_config",
-    "create_fast_config",
-    "create_enhanced_config",
-    "create_dynamic_config",
-    # Distributed configs
-    "DistributedConfig",
-    "NCCLConfig",
-    "AsyncConfig",
-    # Enhanced configs
-    "EnhancedEquiTileConfig",
-    "CurriculumConfig",
-    # Dynamics configs
-    "TileGrowthConfig",
-    "DynamicEquiTileConfig",
-    # Enhanced
-    "TileLayerNorm",
-    "EnhancedEquiTile",
-    "create_enhanced_model",
-    # Dynamics
-    "DynamicsTileGrowthConfig",
+    "TileLM",
+    "TilePC",
+    # Analysis (substrate-native, ported Sprint 2.1)
     "TileMetrics",
     "TileGrowthManager",
     "DynamicsConfig",
+    "DynamicsTileGrowthConfig",
     "DynamicTileAlgorithm",
     "create_dynamic_model",
-    # Async execution
-    "TileTask",
-    "TileResult",
-    "TileProcessor",
-    "TileScheduler",
-    "AsyncExecutionConfig",
-    "AsyncEquiTile",
-    "create_async_model",
-    # Distributed
-    "DeviceAssignment",
-    "DistributedConfigClass",
-    "TileCommunicator",
-    "MixedPrecisionTrainer",
-    "DistributedGrowthConfig",
-    "DistributedEquiTile",
-    "NCCLCommunicator",
-    "AsyncTileExecutor",
-    "spawn_distributed_worker",
-    "create_distributed_model",
-    # Profiler
     "TileStats",
     "ProfileResult",
     "TileAlgorithmProfiler",
@@ -323,14 +125,6 @@ __all__ = [
     "BenchmarkRunner",
     "create_profiler",
     "run_benchmark",
-    # Builder
-    "EquiTileBuilder",
-    "EnhancedEquiTileBuilder",
-    "TrainingContext",
-    "InferenceContext",
-    "build_model",
-    "build_enhanced_model",
-    # Research utilities
     "ExperimentConfig",
     "ExperimentTracker",
     "MetricEntry",
@@ -351,8 +145,6 @@ __all__ = [
     "create_mnist_model",
     "create_cifar_model",
     "create_imagenet_model",
-    # Domain-specific: Language
-    "TileLM",
     # Domain-specific: RL
     "RLEquiTile",
     "RLEquiTileConfig",
@@ -384,19 +176,4 @@ __all__ = [
     "create_forecasting_model",
     "create_classification_model",
     "create_anomaly_detection_model",
-    # Deployment
-    "EquiTileExporter",
-    "ExportConfig",
-    "ModelPruner",
-    "DeploymentChecker",
-    "export_model",
-    "quantize_model",
-    "prune_model",
-    "check_deployment",
-    # Registry
-    "register_model",
-    "Domain",
-    "LocalityLevel",
 ]
-
-# Version managed by top-level bioplausible package.

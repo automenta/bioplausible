@@ -297,15 +297,14 @@ SEARCH_SPACES = {
             "num_layers": [50, 100, 150],  # Test deep scaling
         },
     ),
-    "equitile": SearchSpace(
-        "equitile",
+    "tile_pc": SearchSpace(
+        "tile_pc",
         {
             "learning_rate": (1e-4, 1e-1, "log"),
-            "inference_steps": (5, 30, "int"),
+            "beta": (0.05, 0.5, "linear"),
             "neurons_per_tile": [32, 64, 128],
             "tiles_per_layer": [4, 8, 16],
             "num_layers": [3, 5, 8],
-            "sparsity_threshold": (0.01, 0.2, "linear"),
         },
     ),
     "EquiTile EP": SearchSpace(
