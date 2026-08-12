@@ -555,6 +555,20 @@ failures** (2003 collected) — all unrelated to the refactor and still present.
     refactor (commit `5df1436`). Worth converting to `except (OSError, RuntimeError, ...)`
     when next touching that file, but it is out of Pillar scope.
 
+**This session's completed pillars (verified green):**
+- **Pillar H** (prior; committed `c777549`): `SEARCH_SPACES` deleted, `get_search_space` family/rule-driven.
+- **Pillar I** (first step; `c32e15f`): `settle_single_state` now emits unified `steps_taken`/`converged`/`settle_time_s` dynamics, matching `settle_activations_list`.
+- **Pillar D** metrics: `accuracy_fn` → `core.losses.compute_accuracy`; `tradeoff_tracks.count_parameters` → `utils.count_parameters` (`5cb626f`).
+- **Pillar D** `count_parameters`: `BackpropTransformerLM.count_parameters` → `utils.count_parameters` (`77428fc`).
+- **Pillar D** Pareto unification (`fa62672`): single `hyperopt.metrics.non_dominated_indices` primitive (per-axis maximize + tolerance) replaces the three divergent frontier implementations; `_dominates` deleted; semantics locked by new `test_hyperopt_metrics.py` + 900 randomized verification cases.
+
+**Open residual gaps (documented for next session):**
+- **Pillar B** remains the critical blocker (needs dedicated session, XL/high-risk; `config/schema.py` facades vs `unified` frozen dataclasses collide on names; 5 direct consumers).
+- **Pillar C**'s two `create_model` mock.patch targets (`lightning_`/`robustness`) ride with **Pillar A** (trainer adapter) per finding #9.
+- **Pillar D** remaining: `BenchmarkResult` unification (5× classes, starts at `evaluation/base.py:191`), report-renderer consolidation.
+- **Pillar I** loop-merge still deferred (Family A inf-norm vs Family B max-relative convergence genuinely differ; telemetry surface now unified).
+- **Pillar A/E/G/K/L** not started; Pillar A (single training loop) is XL/High and blocks E, G.
+
 ### Facilitation for future work
 
 - **Test baseline**: full suite = `uv run pytest -q --no-cov`; **1996 pass / 9 fail /
