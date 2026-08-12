@@ -27,6 +27,7 @@ import optuna
 import torch
 
 from bioplausible.core.logging import get_logger
+from bioplausible.execution._guards import create_constrained_optuna_config
 from bioplausible.execution._state import DecisionLogger, ExperimentState, FailureRecord
 from bioplausible.execution.callbacks import ExecutionCallback
 from bioplausible.execution.dashboard import DASHBOARD
@@ -36,7 +37,6 @@ from bioplausible.execution.strategy import ExecutionStrategy
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import (
     PatientLevel,
-    create_constrained_optuna_config,
     get_evaluation_config,
 )
 from bioplausible.hyperopt.experiment import run_single_trial_task

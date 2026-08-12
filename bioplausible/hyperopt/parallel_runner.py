@@ -1,70 +1,16 @@
-import logging
-import multiprocessing
-import os
+from __future__ import annotations
 
-from bioplausible.core.logging import get_logger
-from bioplausible.execution.task import ExperimentTask
+import multiprocessing
+from typing import TYPE_CHECKING
+
 from bioplausible.hyperopt.experiment import run_single_trial_task
+
+if TYPE_CHECKING:
+    from bioplausible.execution.task import ExperimentTask
 
 __all__ = [
     "ParallelTrialRunner",
 ]
-
-
-def _worker_process_task(args: dict[str, object]) -> dict[str, float] | None:
-    """
-    Worker function to process a single task.
-    Args are passed as a dict to be picklable and extensible.
-    """
-    # Configure worker logger
-    worker_id = os.getpid()
-    logging.basicConfig(
-        format=f"%(asctime)s [Worker-{worker_id}] %(levelname)s: %(message)s",
-        level=logging.INFO,
-    )
-    logger = get_logger(f"Worker-{worker_id}")
-
-    # Extract args
-    # Note: args keys must match what is packed in run_batch
-    task_data = args.get("task_obj") or args.get("task")
-    config = args.get("config", {})
-    db_path = args["db_path"]
-
-    try:
-        task: ExperimentTask = task_data  # type: ignore[assignment]  # task_data is complex/task/None from worker payload
-
-        # Ensure config has minimal fields if not already populated
-        if not config and task.fixed_config:
-            config = task.fixed_config.copy()
-
-        config["tier"] = task.tier.value
-        config["task"] = task.task_name
-        config["model"] = task.model_name
-
-        logger.info(
-            f"Starting trial for {task.model_name} on {task.task_name}"
-            f" (Tier: {task.tier.name})"
-        )
-
-        metrics = run_single_trial_task(
-            task=task.task_name,
-            model_name=task.model_name,
-            config=config,
-            storage_path=db_path,
-            quick_mode=(task.tier.name == "SMOKE"),
-            verbose=False,
-        )
-
-        if metrics:
-            logger.info("Trial completed. Acc: %s", metrics.get("accuracy", 0.0))
-        else:
-            logger.warning("Trial returned no metrics (Failed).")
-
-        return metrics
-
-    except Exception as e:  # broad: worker isolation
-        logger.error("Worker process failed: %s", e, exc_info=True)
-        return None
 
 
 class ParallelTrialRunner:

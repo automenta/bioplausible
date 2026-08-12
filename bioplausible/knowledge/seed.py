@@ -1,15 +1,7 @@
-import json
-import os
-import pathlib
-import tempfile
+"""Static seed findings for the knowledge base."""
 
-# Statically seeded knowledge base containing key findings and empirical rules
+__all__ = ["KNOWLEDGE_BASE_SEED"]
 
-__all__ = [
-    "KNOWLEDGE_BASE_SEED",
-    "KnowledgeBase",
-    "get_default_kb",
-]
 KNOWLEDGE_BASE_SEED = [
     {
         "id": "KB-001",
@@ -49,90 +41,3 @@ KNOWLEDGE_BASE_SEED = [
         "tags": ["hyperparams", "forward-forward", "thresholds"],
     },
 ]
-
-
-def _default_storage_path() -> str:
-    """Get default storage path, using tempdir during pytest runs."""
-    if "PYTEST_CURRENT_TEST" in os.environ or "pytest" in os.environ.get("_", ""):
-        return str(
-            pathlib.Path(tempfile.gettempdir()) / "bioplausible-knowledgebase.json"
-        )
-    return "knowledgebase.json"
-
-
-class KnowledgeBase:
-    """
-    Structured repository of findings across experiments.
-    """
-
-    def __init__(self, storage_path: str | None = None, load_seed: bool = False):
-        self.storage_path = storage_path or _default_storage_path()
-        self.load_seed = load_seed
-        self.findings = []
-        self._load()
-
-    def _load(self):
-        if pathlib.Path(self.storage_path).exists():
-            with pathlib.Path(self.storage_path).open() as f:
-                self.findings = json.load(f)
-        else:
-            if self.load_seed:
-                self.findings = list(KNOWLEDGE_BASE_SEED)
-            else:
-                self.findings = []
-            self._save()
-
-    def _save(self):
-        with pathlib.Path(self.storage_path).open("w") as f:
-            json.dump(self.findings, f, indent=4)
-
-    def add_finding(
-        self,
-        topic: str,
-        model_family: str,
-        finding: str,
-        details: str,
-        confidence: float,
-        tags: list[str],
-    ):
-        new_id = f"KB-{len(self.findings) + 1:03d}"
-        entry = {
-            "id": new_id,
-            "topic": topic,
-            "model_family": model_family,
-            "finding": finding,
-            "details": details,
-            "confidence": confidence,
-            "tags": tags,
-        }
-        self.findings.append(entry)
-        self._save()
-        return new_id
-
-    def query(
-        self, tag: str = None, model_family: str = None
-    ) -> list[dict[str, object]]:
-        results = self.findings
-        if tag:
-            results = [r for r in results if tag in r.get("tags", [])]
-        if model_family:
-            results = [r for r in results if r.get("model_family") == model_family]
-        return results
-
-
-# Singleton instance (lazy — created on first access)
-_SEED_DEFAULT_KB: KnowledgeBase | None = None
-
-
-def get_default_kb() -> KnowledgeBase:
-    global _SEED_DEFAULT_KB
-    if _SEED_DEFAULT_KB is None:
-        _SEED_DEFAULT_KB = KnowledgeBase()
-    return _SEED_DEFAULT_KB
-
-
-# Make DEFAULT_KB accessible as a module attribute
-def __getattr__(name: str) -> object:
-    if name == "DEFAULT_KB":
-        return get_default_kb()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
