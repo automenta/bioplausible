@@ -12,6 +12,7 @@ __all__ = [
     "TrialMetrics",
     "crowding_distance",
     "get_pareto_frontier",
+    "non_dominated_indices",
     "non_dominated_sort",
     "rank_trials",
 ]
@@ -115,6 +116,68 @@ def non_dominated_sort(trials: list[TrialMetrics]) -> list[list[int]]:
         current_front = next_front
 
     return fronts
+
+
+def non_dominated_indices(
+    values: list[tuple[float, ...]],
+    *,
+    maximize: tuple[bool, ...],
+    tol: tuple[float, ...] | None = None,
+) -> list[int]:
+    """Indices of the Pareto-optimal points in ``values`` (order-preserving).
+
+    Generic non-dominated filter over a list of fixed-width objective tuples.
+    ``maximize[i]`` says whether axis ``i`` is to be maximised (True) or
+    minimised (False). ``tol[i]`` is an epsilon applied to the *at-least-as-good*
+    and *strictly-better* comparisons on axis ``i`` (default ``0.0``): a tuple
+    only dominates another if it is ``>=`` (resp ``<=``) on every axis under the
+    tolerance and strictly better on at least one. This is the single
+    dominance predicate shared by the various frontier sinks in the codebase
+    (``analysis.results``, ``experiment.reporting``, ``hyperopt.frontier``).
+
+    Args:
+        values: Objective tuples, all of the same width as ``maximize``.
+        maximize: Per-axis maximisation flag (True = higher is better).
+        tol: Per-axis tolerance; default all-zero.
+
+    Returns:
+        Indices of non-dominated points, in input order. An empty input yields
+        ``[]``.
+    """
+    n = len(values)
+    if n == 0:
+        return []
+    if tol is None:
+        tol = (0.0,) * len(maximize)
+    tol = tuple(tol)
+    m = len(maximize)
+    non_dominated: list[int] = []
+    for i, a in enumerate(values):
+        dominated = False
+        for j, b in enumerate(values):
+            if i == j:
+                continue
+            at_least_all = True
+            strictly_any = False
+            for k in range(m):
+                if maximize[k]:
+                    at_least, strict = (
+                        b[k] >= a[k] - tol[k],
+                        b[k] > a[k] + tol[k],
+                    )
+                else:
+                    at_least, strict = (
+                        b[k] <= a[k] + tol[k],
+                        b[k] < a[k] - tol[k],
+                    )
+                at_least_all = at_least_all and at_least
+                strictly_any = strictly_any or strict
+            if at_least_all and strictly_any:
+                dominated = True
+                break
+        if not dominated:
+            non_dominated.append(i)
+    return non_dominated
 
 
 def crowding_distance(

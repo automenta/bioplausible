@@ -16,6 +16,7 @@ from statistics import fmean
 from typing import TYPE_CHECKING
 
 from bioplausible.experiment.report import Report
+from bioplausible.hyperopt.metrics import non_dominated_indices
 from bioplausible.validation.statistics import bootstrap_ci, cliffs_delta, cohens_d
 
 if TYPE_CHECKING:
@@ -98,7 +99,13 @@ def parity_table(
 
 
 def pareto_frontier(results: Sequence[ProbeResult]) -> list[dict[str, str | float]]:
-    """Return the Pareto frontier points (maximise acc, minimise params)."""
+    """Return the Pareto frontier points (maximise acc, minimise params).
+
+    Delegates dominance to the shared
+    :func:`~bioplausible.hyperopt.metrics.non_dominated_indices` primitive,
+    keeping best-acc-per-config dedup and the ``{config_key, acc, param_count}``
+    output shape.
+    """
     best: dict[str, tuple[float, float]] = {}
     for r in results:
         if r.status != "ok" or not r.param_count:
@@ -107,21 +114,15 @@ def pareto_frontier(results: Sequence[ProbeResult]) -> list[dict[str, str | floa
         current = best.get(key)
         if current is None or r.final_acc > current[0]:
             best[key] = (r.final_acc, r.param_count)
-    dominated: set[str] = set()
     keys = list(best)
-    for key_a in keys:
-        acc_a, p_a = best[key_a]
-        for key_b in keys:
-            if key_a == key_b or key_b in dominated:
-                continue
-            acc_b, p_b = best[key_b]
-            if acc_b >= acc_a and p_b <= p_a and (acc_b > acc_a or p_b < p_a):
-                dominated.add(key_a)
-                break
+    values = [best[k] for k in keys]
+    frontier_keys = {
+        keys[i] for i in non_dominated_indices(values, maximize=(True, False))
+    }
     return [
         {"config_key": key, "acc": acc, "param_count": p}
         for key, (acc, p) in best.items()
-        if key not in dominated
+        if key in frontier_keys
     ]
 
 

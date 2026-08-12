@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from bioplausible.core.logging import get_logger
+from bioplausible.hyperopt.metrics import non_dominated_indices
 
 logger = get_logger()
 
@@ -205,37 +206,25 @@ def compute_statistics(trials: list[dict[str, object]]) -> dict[str, dict[str, f
 
 
 def compute_pareto_frontier(trials: list[dict[str, object]]) -> list[int]:
-    """Compute Pareto frontier trial IDs."""
+    """Compute Pareto frontier trial IDs (maximise acc, minimise params/time).
+
+    Delegates to the shared :func:`~bioplausible.hyperopt.metrics.non_dominated_indices`
+    primitive so every frontier sink uses one dominance predicate.
+    """
     if not trials:
         return []
-
-    pareto_ids = []
-
-    for i, trial_a in enumerate(trials):
-        is_dominated = False
-
-        for j, trial_b in enumerate(trials):
-            if i == j:
-                continue
-
-            better_acc = trial_b["accuracy"] >= trial_a["accuracy"]
-            better_params = trial_b["param_count"] <= trial_a["param_count"]
-            better_time = trial_b["iteration_time"] <= trial_a["iteration_time"]
-
-            strictly_better = (
-                trial_b["accuracy"] > trial_a["accuracy"]
-                or trial_b["param_count"] < trial_a["param_count"]
-                or trial_b["iteration_time"] < trial_a["iteration_time"]
-            )
-
-            if better_acc and better_params and better_time and strictly_better:
-                is_dominated = True
-                break
-
-        if not is_dominated:
-            pareto_ids.append(trial_a["trial_id"])
-
-    return pareto_ids
+    values = [
+        (
+            float(t["accuracy"]),
+            float(t["param_count"]),
+            float(t["iteration_time"]),
+        )
+        for t in trials
+    ]
+    return [
+        trials[i]["trial_id"]
+        for i in non_dominated_indices(values, maximize=(True, False, False))
+    ]
 
 
 def get_rankings(trials: list[dict[str, object]]) -> list[object]:

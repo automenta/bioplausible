@@ -19,6 +19,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from bioplausible.hyperopt.metrics import non_dominated_indices
+
 __all__ = [
     "RulePoint",
     "cost_of_plausibility",
@@ -50,26 +52,13 @@ class RulePoint:
         return dict(self.config)
 
 
-def _dominates(a: RulePoint, b: RulePoint) -> bool:
-    """True if ``a`` is >= b on accuracy and <= b on all three resources."""
-    acc_ge = a.accuracy >= b.accuracy - _ACCURACY_EPS
-    flops_le = a.total_flops <= b.total_flops
-    mem_le = a.peak_memory_mb <= b.peak_memory_mb
-    time_le = a.wall_time_s <= b.wall_time_s
-    strictly_better = (
-        a.accuracy > b.accuracy + _ACCURACY_EPS
-        or a.total_flops < b.total_flops
-        or a.peak_memory_mb < b.peak_memory_mb
-        or a.wall_time_s < b.wall_time_s
-    )
-    return acc_ge and flops_le and mem_le and time_le and strictly_better
-
-
 def pareto_frontier(points: list[RulePoint]) -> list[RulePoint]:
     """Return the Pareto-optimal subset of ``points`` (plan §11).
 
     A point is on the frontier if no other point achieves at least as high
     accuracy with no more FLOPs / memory / time (and strictly better on one).
+    Dominance is delegated to the shared
+    :func:`~bioplausible.hyperopt.metrics.non_dominated_indices` primitive.
 
     Args:
         points: Measured operating points for a single rule on a task.
@@ -77,12 +66,19 @@ def pareto_frontier(points: list[RulePoint]) -> list[RulePoint]:
     Returns:
         The non-dominated points preserving input order.
     """
-    non_dominated: list[RulePoint] = []
-    for p in points:
-        dominated = any(_dominates(q, p) for q in points)
-        if not dominated:
-            non_dominated.append(p)
-    return non_dominated
+    if not points:
+        return points
+    values = [
+        (p.accuracy, p.total_flops, p.peak_memory_mb, p.wall_time_s) for p in points
+    ]
+    keep = set(
+        non_dominated_indices(
+            values,
+            maximize=(True, False, False, False),
+            tol=(_ACCURACY_EPS, 0.0, 0.0, 0.0),
+        )
+    )
+    return [p for i, p in enumerate(points) if i in keep]
 
 
 def cost_of_plausibility(
