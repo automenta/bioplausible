@@ -354,9 +354,14 @@ def settle_single_state(
         - ``h_star`` is the final settled state.
         - ``trajectory`` is ``None`` or a ``list[Tensor]`` of state snapshots
           (``trajectory[0]`` is ``h_0``).
-        - ``dynamics`` is ``None`` or a dict with ``"deltas"`` and
-          ``"final_delta"`` keys.
+        - ``dynamics`` is ``None`` or a dict with the uniform telemetry surface
+          shared with :func:`settle_activations_list`: ``"deltas"``,
+          ``"final_delta"``, ``"steps_taken"``, ``"converged"`` and
+          ``"settle_time_s"``.
     """
+    import time
+
+    settle_start = time.monotonic()
     trajectory: list[torch.Tensor] | None = (
         cast("list[torch.Tensor]", [None] * (steps + 1)) if return_trajectory else None
     )
@@ -364,6 +369,8 @@ def settle_single_state(
         trajectory[0] = h_0
     deltas: list[float] | None = [] if return_dynamics else None
 
+    steps_taken = 0
+    converged = False
     h = h_0
 
     # Gradient checkpointing: during training the unrolled settling loop builds a
@@ -383,9 +390,10 @@ def settle_single_state(
     traj_idx = 0
 
     def warmup() -> None:
-        nonlocal h, traj_idx, remaining
+        nonlocal h, traj_idx, remaining, steps_taken
         h = _step(h)
         remaining -= 1
+        steps_taken += 1
         if deltas is not None:
             deltas.append(torch.dist(h, h_0, p=float("inf")).item())
         if trajectory is not None:
@@ -395,16 +403,18 @@ def settle_single_state(
     remaining = steps
 
     def main_loop() -> None:
-        nonlocal h, traj_idx, remaining
+        nonlocal h, traj_idx, remaining, steps_taken, converged
 
         for step_idx in range(remaining):
             h_new = _step(h)
+            steps_taken += 1
 
             if deltas is not None:
                 deltas.append(torch.dist(h_new, h, p=float("inf")).item())
 
             if _inf_norm_converged(h_new, h, step_idx):
                 h = h_new
+                converged = True
                 if trajectory is not None:
                     traj_idx += 1
                     trajectory[traj_idx] = h
@@ -429,6 +439,9 @@ def settle_single_state(
         dynamics = {
             "deltas": deltas,
             "final_delta": deltas[-1] if deltas else 0.0,
+            "steps_taken": steps_taken,
+            "converged": converged,
+            "settle_time_s": time.monotonic() - settle_start,
         }
 
     return h, trajectory, dynamics
