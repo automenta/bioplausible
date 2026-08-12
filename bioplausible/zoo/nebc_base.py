@@ -9,7 +9,7 @@ This module provides:
 All NEBC algorithms test spectral normalization as a "stability unlock".
 """
 
-from abc import ABC
+from abc import ABC, abstractmethod
 
 import torch
 import torch.nn.functional as F
@@ -64,6 +64,10 @@ class NEBCBase(BioModel, ABC):
     # _build_layers, forward, apply_spectral_norm, compute_lipschitz, etc.
     # are inherited from BioModel.
     # Subclasses must implement _build_layers and forward.
+
+    @abstractmethod
+    def _build_layers(self) -> None:
+        """Build the model's hidden layers (subclass responsibility)."""
 
     def get_stats(self) -> dict[str, float]:
         """Get algorithm-specific statistics for reporting."""
