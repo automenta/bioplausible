@@ -343,16 +343,32 @@ Pillars are ordered by value/effort and by dependency (each row de-risks the nex
 
 Last updated: 2026-08-12. Baseline when this log began: **13 pre-existing test
 failures** (2003 collected) — all unrelated to the refactor and still present.
-| Pillar | Status | Notes |
-|--------|--------|-------|
-| J | **partial** | Safe deletions done (commit `c1a68b3`); see log below. |
-| B | **partial** | Dead `ExperimentSchema`/`load_config` duplicate removed (commit `8bb4727`). Full merge deferred — see findings. |
-| H | **done** | `SEARCH_SPACES`/`SearchSpace` data dict deleted; `get_search_space` now family/rule-driven off `RULE_SPACES`; p2p pool registry-driven. Criterion #5 (`SEARCH_SPACES` → 0 hits) satisfied. See log below. |
-| C, A, D, E, F, G, I, K, L | not started | — |
 
-### Completed work
+### Completed work (this session)
 
-**Pillar H (this session; uncommitted as of this log)**
+**Pillar D metrics sub-goal (commit `5cb626f`)**
+- `evaluation/base.py` `accuracy_fn` now delegates to the canonical
+  `core/losses.compute_accuracy` (handles one-hot/reshaped targets) instead of
+  carrying a divergent inline `(outputs.argmax(1) == targets).float().mean()` copy.
+- `validation/tracks/tradeoff_tracks.py` local `count_parameters` (a duplicate of
+  `bioplausible.utils.count_parameters`) deleted; module imports the canonical
+  `count_parameters` from `bioplausible.utils`. `__all__` export retained.
+- Verified: `test_evaluation.py` (17 pass) + live smoke of both symbols + clean
+  whole-package import.
+
+**Pillar F verified done (no code change needed)**
+- The 6 variant models (`StandardEqProp`/`DirectedEP`/`FiniteNudgeEP`/`LazyEqProp`/
+  `MomentumEquilibrium`/`SparseEquilibrium`) already live as thin `EquilibriumMLP`
+  subclasses in `zoo/models/eqprop/_energy.py:624-710`, differing only by a
+  class-level `variant`. The directory's other eponymous files are 5-line re-export
+  shims. Verified green: 62 tests across `test_eqprop*.py` + `test_settling_memory.py`.
+  The plan's Pillar F table had it "not started"; corrected to done.
+- Confirmed Pillar J residual rows are already satisfied/abandoned: `experiments/`
+  and `campaign/` are empty/untracked (removed in `c1a68b3`); `knowledge/seed.py` is
+  now data-only (`KNOWLEDGE_BASE_SEED`, no second `KnowledgeBase`); `data/transforms.py`
+  is NOT orphaned (finding #1); `archive/` does not exist in-tree.
+
+**Pillar H (prior session; committed `c777549`)**
 - Deleted the ~245-line `SEARCH_SPACES` dict (a curated, hand-divergent model→coarse-grid
   pool) and the old heuristic `get_search_space`. New resolution in
   `hyperopt/search_space.py`: a model whose *name* is a `RULE_SPACES` key uses that rule
@@ -442,6 +458,23 @@ failures** (2003 collected) — all unrelated to the refactor and still present.
      - `test_triton_kernel::test_triton_match` (Triton kernel vs PyTorch numerical mismatch — `acceleration/` island, Non-Goals)
      - `tests/property/biology/test_biology_axioms.py::test_ep_gradient_matches_bptt[eqprop_mlp]` and `::test_deq_gradients_match_bptt_wired_up` (EP-BPTT cosine < 0.5)
      - `tests/unit/validation/test_backprop_parity.py::test_backprop_parity[eqprop_mlp]` and `[directed_ep]` (bio acc vs backprop baseline gap > tolerance)
+6. **Pillar F is already done in code — the plan's roadmap row is stale.** The 6 variant
+   models were already collapsed into thin `EquilibriumMLP` subclasses in
+   `zoo/models/eqprop/_energy.py` (verified green; see Completed work). The plan's
+   roadmap still lists F as pending (step #6) and the status table said "not started" —
+   corrected. The remaining Pillar F "nice-to-have" (an architecture registry so named
+   *non-MLP* eqprop variants are thin subclasses overriding only `_build_layers`/
+   `forward_dynamics`) is an optimization, not a correctness gap; defer unless a new
+   architecture is added. Similarly the `_PROPAGATOR_TO_MODEL` alias work (Pillar G)
+   is untouched and remains the real open work in the zoo.
+7. **Pillar D is best entered via the metrics/`count_parameters` seam** (this session
+   consolidated `accuracy_fn` and `tradeoff_tracks.count_parameters` to `core`). Next
+   low-risk D sub-goals in ascending size: (a) fold the remaining inline
+   `(logits.argmax(dim=1) == y).float().mean()` accuracy copies and the ~4
+   `count_parameters` variants (`validation/tracks/tradeoff_tracks.py` done;
+   `zoo/models/backprop.py:230` and `benchmarks/efficiency_analysis.py:91` are method
+   wrappers that can call `utils.count_parameters`); (b) the `BenchmarkResult` unification
+   (5 classes); (c) the report renderer consolidation. Each is independently shippable.
 
 ### Facilitation for future work
 
