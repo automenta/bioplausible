@@ -339,6 +339,48 @@ Pillars are ordered by value/effort and by dependency (each row de-risks the nex
 
 ---
 
+## Current Status & Progress Log
+
+Last updated: 2026-08-12. Baseline when this log began: **13 pre-existing test
+failures** (2003 collected) — all unrelated to the refactor and still present.
+
+| Pillar | Status | Notes |
+|--------|--------|-------|
+| J | **partial** | Safe deletions done (commit `c1a68b3`); see log below. |
+| B | **partial** | Dead `ExperimentSchema`/`load_config` duplicate removed (commit `8bb4727`). Full merge deferred — see findings. |
+| H | **partial** | Removed `hyperopt` lazy `__getattr__` re-export (commit `c1a68b3`). `SEARCH_SPACES`/`SearchSpace` deletion **blocked by p2p** — see findings. |
+| C, A, D, E, F, G, I, K, L | not started | — |
+
+### Completed work
+
+**Pillar J (commit `c1a68b3`)**
+- Deleted `execution/evolve_evaluator.py` — zero consumers (ASI-Evolve bridge).
+- Deleted `campaign/` package — re-export shim; `experiment.schema` is canonical.
+- Deleted `bioplausible/experiments/` (presets.py, utils.py) — orphaned; superseded by `domains/` + `experiment/`.
+- Deleted dead `_worker_process_task` twin from `hyperopt/parallel_runner.py` (near-copy of `_wrapped_worker`); moved `ExperimentTask` to `TYPE_CHECKING`.
+- Stripped the duplicate (JSON-file-based) `KnowledgeBase` from `knowledge/seed.py`; kept `KNOWLEDGE_BASE_SEED` data. Removed `SEED_KB` lazy re-export + `get_default_kb` from `knowledge/__init__.py`.
+- Removed `hyperopt/__init__.py` lazy `__getattr__` for `create_constrained_optuna_config`/`get_constrained_search_space` (dead re-export — nothing consumed them via `hyperopt`); `execution/engine.py` now imports them from `execution._guards` directly.
+
+**Pillar B micro-win (commit `8bb4727`)**
+- Deleted dead `ExperimentSchema` + `config/__init__.py:127 load_config` (a second `load_config` definition with zero consumers — YAML+ExperimentSchema loader). `config/unified.py` `load_config`/`save_config` is now the only I/O pair. Removed now-unused `yaml`/`pathlib`/`ValidationError` imports.
+
+### Findings that change the plan (important for future work)
+
+1. **`data/transforms.py` is NOT orphaned** (plan Pillar J table is wrong on this row): it is imported by `data/vision.py`, `domains/vision.py`, and `zoo/mep/benchmarks/continual_learning.py` (`build_transform`, `normalization`, `create_dataloader`, `MNIST_TRANSFORM`). Do not delete.
+2. **`hyperopt/comparator.py` vs `comparison.py` are NOT duplicates** (plan Pillar J row wrong): `comparator.py` is frontier-comparison (`compare_frontiers`, `FrontierComparison`, `OperatingPointMatch`); `comparison.py` is multi-algorithm ranking (`AlgorithmRanking`, `ComparisonStudy`, `compute_algorithm_rankings`). Different consumers (`analysis/results.py`+`cli/run.py` vs `hyperopt/__init__.py`+tests). No merge.
+3. **Pillar B merge is bigger than the plan implies and partially blocked by tests.** `config/schema.py` classes are **facades, not mirrors** of `config/unified.py`: schema `ModelConfig` (name/kwargs/compile/compile_mode) vs unified `ModelConfig` (name/input_dim/output_dim/hidden_dims/extra) differ field-for-field, and schema `ExperimentConfig` carries the OmegaConf structured section types (`DatasetConfig`, `TrainerConfig`, `LightningConfig`, …). `tests/unit/test_refactor2_bugfixes.py` (`test_config_schema_*`, ~3 tests) asserts `schema.py` contents exist as non-frozen dataclasses with a single resolver registration — deleting the file breaks those tests. **Recommended path**: migrate the OmegaConf facade classes into `unified.py` (keep names), make `config/__init__.py` re-export from unified, then delete `schema.py`; update `test_refactor2_bugfixes` accordingly. Needs a dedicated session (XL, high-risk).
+4. **Pillar H `SEARCH_SPACES`/`SearchSpace` deletion is blocked by p2p** (plan didn't account for it): `p2p/evolution.py` uses `list(SEARCH_SPACES.keys())`, `get_search_space()`, `space.sample()`, `space.apply_constraints()`, and (latent-broken) `space.crossover()`/`space.mutate()` — those last two don't exist on `SearchSpace` (only `sample`+`apply_constraints`), so p2p's crossover/mutate paths would `AttributeError` at runtime. Options: (a) keep `SearchSpace` as the genetic-op vehicle but build it from `RULE_SPACES` via `get_search_space(model)` resolving model→rule through registry `family` metadata; (b) reimplement p2p sampling against raw `RULE_SPACES` dicts. Tests: `tests/integration/test_p2p_constraints.py` constructs `SearchSpace` directly.
+5. **Pre-existing unrelated breakage** (not from this refactor): `bioplausible/execution/cli.py:12` imports `ReportOrchestrator` from `analysis/reporting.py` which no longer defines it → `bioplausible.execution.cli` is unimportable. `tests/integration/test_onnx.py` calls `LoopedMLP(...)` and `EquilibriumMLP.forward()` with 7 args (signature drift). `test_triton_kernel` + `test_equilibrium_parity` + several `backprop_parity`/`biology_axioms` acc-drift tests fail at baseline. NEBC `test_cannot_instantiate_base` expects abstract TypeError but class is concrete. These should be triaged separately.
+
+### Facilitation for future work
+
+- **Test baseline**: full suite = `uv run pytest -q --no-cov`; 1990 pass / 13 fail pre-refactor. Targeted fast check for config/construction work: `pytest tests/unit/core/test_config_*.py tests/unit/test_refactor2_bugfixes.py tests/unit/execution tests/unit/analysis`.
+- **Lint baseline**: repo has ~2100 pre-existing `ruff check` errors (mostly non-empty-init-module, long lines, typing-only imports). Keep edits to touched files clean; do not chase the global baseline.
+- `config/unified.py` already documents the proven OmegaConf frozen-dataclass round-trip (module docstring) — the single serialization path is ready to build Pillar B on.
+- `core/construction.construct_model` is already the canonical builder used by trainer/estimator/finders/probe; Pillar C's remaining `create_model` helpers (`lightning_/module.py:22`, `execution/robustness.py:33`) have **different signatures** (name+kwargs, and are `unittest.mock.patch` targets) vs `construct_model` (sampled-config + required dims) — consolidate by adapting call sites, not by deleting.
+
+---
+
 ## Non-Goals (kept in scope discipline)
 
 - No new learning algorithms, features, or research capability.
