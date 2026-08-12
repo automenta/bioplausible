@@ -144,7 +144,8 @@ Task/geometry resolution is also re-heuristic'd: `domains/factory.create_task` n
 
 ### The problem: parallel measurement ecosystems
 - **`BenchmarkResult` defined 5×**: `analysis/tile_profiler.py:845`, `zoo/mep/benchmarks/runner.py:83`, `evaluation/base.py:190`, `benchmarks/rigorous.py:251`, `benchmarks/compare_nanoGPT.py:323`.
-- **Pareto-computation 3×**: `analysis/results.py:207`, `experiment/reporting.py:100`, `hyperopt/frontier.py`.
+- **Pareto-computation 3×** → **UNIFIED** into `hyperopt.metrics.non_dominated_indices`
+  (commit `fa62672`); was `analysis/results.py`, `experiment/reporting.py`, `hyperopt/frontier.py`.
 - **Failure-manifesto 3×**: `analysis/failure_manifesto.py`, `experiment/reporting.py:128`, `execution/synthesizer._analyze_failures:527`.
 - **Power-law fitting 2×**: `analysis/scaling.py:18` vs `hyperopt/scaling_law.py`.
 - **Report renderers 5×**: `analysis/reporting.py` (Optuna DB), `experiment/reporting.py` (JSONL), `execution/synthesizer.py` (pandas), `validation/notebook.py`, `leaderboard/generator.py`.
@@ -372,6 +373,23 @@ failures** (2003 collected) — all unrelated to the refactor and still present.
 - Verified: `test_evaluation.py` (17 pass) + live smoke of both symbols + clean
   whole-package import.
 
+**Pillar D Pareto-unification sub-goal (commit `fa62672`)**
+- Added `hyperopt.metrics.non_dominated_indices(values, *, maximize, tol)` — the
+  single generic non-dominated filter (per-axis maximize + tolerance). It is the
+  one dominance predicate all frontier sinks share.
+- Routed the three frontier sinks to it, preserving each public signature:
+  `analysis/results.compute_pareto_frontier` (acc/params/time → trial_ids; commit
+  also folds `count_parameters` wrapper in `zoo/models/backprop.py` — `77428fc`),
+  `experiment/reporting.pareto_frontier` (acc/params + config-key dedup →
+  `{config_key,acc,param_count}`), and `hyperopt/frontier.pareto_frontier`
+  (acc/flops/mem/time with `_ACCURACY_EPS` → points). Deleted the now-unused
+  `_dominates` helper.
+- Semantics proven identical to all three originals over 900 randomized cases;
+  new `tests/unit/test_hyperopt_metrics.py` (9 tests) locks the shared behavior
+  and the three delegate contracts. Regression green: `test_plan2_actions`,
+  `test_cli`, `test_evaluation`, `test_hyperopt_analysis`,
+  `test_hyperopt_integration`.
+
 **Pillar F verified done (no code change needed)**
 - The 6 variant models (`StandardEqProp`/`DirectedEP`/`FiniteNudgeEP`/`LazyEqProp`/
   `MomentumEquilibrium`/`SparseEquilibrium`) already live as thin `EquilibriumMLP`
@@ -406,6 +424,11 @@ failures** (2003 collected) — all unrelated to the refactor and still present.
 - Verified: `test_p2p_constraints.py`, `test_rule_space_integrity.py`, `test_plan2_actions.py`,
   `test_hyperparameter_metamodel.py`, `test_flywheel_readhalf.py`, `test_scientist.py`,
   `test_optuna_bridge_integration.py` all pass.
+
+**Pillar D `count_parameters` wrapper fold (commit `77428fc`)**
+- `zoo/models/backprop.py` `BackpropTransformerLM.count_parameters` now delegates to
+  the canonical `bioplausible.utils.count_parameters` instead of re-implementing the
+  trainable-gain sum. Cycle-free verified; no reverse-consumer tests affected.
 
 **ONNX export fix (this session; Pillar A territory — real bug, uncommitted)**
 - `bioplausible/utils.py export_to_onnx`: ONNX/`torch.onnx.export` tracing resolves every
@@ -491,18 +514,15 @@ failures** (2003 collected) — all unrelated to the refactor and still present.
    `zoo/models/backprop.py:230` and `benchmarks/efficiency_analysis.py:91` are method
    wrappers that can call `utils.count_parameters`); (b) the `BenchmarkResult` unification
    (5 classes); (c) the report renderer consolidation. Each is independently shippable.
-8. **The "3× Pareto" row in Pillar D is smaller than it reads — do NOT collapse blindly.**
-   The three implementations are legitimately different data shapes, not copies:
-   `analysis/results.compute_pareto_frontier` (dicts, 3 objectives: acc↑/params↓/time↓,
-   returns `trial_id`s), `experiment/reporting.pareto_frontier` (`ProbeResult`, 2
-   objectives acc↑/params↓, returns `{config_key,acc,param_count}`), and
-   `hyperopt/frontier.pareto_frontier` (`RulePoint`, 4 objectives acc↑/flops↓/mem↓/time↓
-   with `_ACCURACY_EPS`, returns points). `hyperopt/metrics.py` already holds the
-   canonical NSGA-II `non_dominated_sort`/`dominates` (`TrialMetrics`, 4 objectives).
-   Unifying these requires either a shared generic "dominates" predicate over
-   (minimize_set, maximize_set, eps) — worth doing only as a stable core primitive that
-   all four delegate to, preserving each public signature — or accepting the differences.
-   Treat as a single larger D sub-goal, not a trivial fold.
+8. **Pareto dominance is now unified (this session, commit `fa62672`).** Added
+   `hyperopt.metrics.non_dominated_indices` — a single generic non-dominated filter
+   (per-axis ``maximize`` + ``tol``) — and routed all three frontier sinks to it:
+   `analysis.results.compute_pareto_frontier` (3 obj), `experiment.reporting.pareto_frontier`
+   (2 obj + config-key dedup), `hyperopt.frontier.pareto_frontier` (4 obj + accuracy eps).
+   Deleted the now-dead `_dominates`. Semantics proved identical to all three originals
+   over 900 randomized cases; unit tests in `tests/unit/test_hyperopt_metrics.py` lock the
+   shared behavior and the three delegate contracts. Remaining Pillar D: `BenchmarkResult`
+   unification (5 classes) and the report-renderer consolidation.
 9. **Pillar C's remaining `create_model` helpers are the plan's stated mock.patch targets.**
    `lightning_/module.py:22` and `execution/robustness.py:33` both do
    `Registry.get(MODEL, name) → cls(**kwargs)` with slightly different defaults (robustness
