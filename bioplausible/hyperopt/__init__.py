@@ -47,7 +47,6 @@ from .scaling_law import (
 )
 from .search_space import (
     RULE_SPACES,
-    SEARCH_SPACES,
     SearchSpace,
     get_rule_space,
     get_search_space,
@@ -66,7 +65,6 @@ __all__ = [
     "EVALUATION_TIERS",
     "HAS_OPTUNA",
     "RULE_SPACES",
-    "SEARCH_SPACES",
     "AccuracyScalingLaw",
     "EvaluationConfig",
     "FrontierComparison",

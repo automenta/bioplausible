@@ -125,6 +125,16 @@ def export_to_onnx(
     # Handle compiled models
     model = _get_model_for_processing(model)
 
+    parent = os.path.dirname(output_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+    # ONNX traces call every ``forward`` argument positionally — including the
+    # keyword-only defaults (e.g. ``return_dynamics``) of equilibrium models —
+    # which a ``forward(x, ..., *, kw_only)`` signature cannot accept. Wrap the
+    # model so the exporter sees only the tensor input and inference defaults.
+    model = _InferenceOnly(model)
+
     was_training = model.training
     model.eval()
     try:
@@ -231,6 +241,23 @@ def _get_model_for_processing(model: nn.Module) -> nn.Module:
     if hasattr(model, "_orig_mod"):
         return model._orig_mod
     return model
+
+
+class _InferenceOnly(nn.Module):
+    """Adapter exposing ``forward(x)`` only, for tracing/export.
+
+    ONNX and torchscript tracing resolve every default argument of the wrapped
+    model's ``forward`` and pass it positionally — including keyword-only
+    flags — which multi-arg signatures (equilibrium models, etc.) reject. This
+    adapter hides everything but the tensor input.
+    """
+
+    def __init__(self, model: nn.Module) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.model(x)
 
 
 def compute_gradient_norm(model: nn.Module) -> float:

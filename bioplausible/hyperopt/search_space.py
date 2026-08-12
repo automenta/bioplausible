@@ -18,7 +18,6 @@ from bioplausible.zoo import get_model_spec
 
 __all__ = [
     "RULE_SPACES",
-    "SEARCH_SPACES",
     "ConstructorSurface",
     "DiscreteChoice",
     "NumberRange",
@@ -184,312 +183,111 @@ class SearchSpace:
 
         new_params = copy.deepcopy(self.params)
 
-        mapping = {
-            "max_hidden": "hidden_dim",
-            "max_layers": "num_layers",
-            "max_steps": "steps",
-        }
+        # Constraint name → candidate param keys (RULE_SPACES names the settle
+        # budget ``max_steps``; the legacy evolution spaces used ``steps``).
+        mapping = [
+            ("max_hidden", "hidden_dim"),
+            ("max_layers", "num_layers"),
+            ("max_steps", "steps"),
+            ("max_steps", "max_steps"),
+        ]
 
-        for const_key, limit in constraints.items():
-            if const_key in mapping:
-                param_key = mapping[const_key]
-                if param_key in new_params:
-                    space = new_params[param_key]
-                    if isinstance(space, list):
-                        new_params[param_key] = [v for v in space if v <= limit]
-                    elif isinstance(space, tuple) and len(space) == _RANGE_LEN:
-                        min_val, max_val, scale = space
-                        new_max = min(max_val, limit)
-                        new_max = max(new_max, min_val)  # Safe fallback
-                        new_params[param_key] = (min_val, new_max, scale)
+        for const_key, param_key in mapping:
+            limit = constraints.get(const_key)
+            if limit is None or param_key not in new_params:
+                continue
+            space = new_params[param_key]
+            if isinstance(space, list):
+                new_params[param_key] = [v for v in space if v <= limit]
+            elif isinstance(space, tuple) and len(space) == _RANGE_LEN:
+                min_val, max_val, scale = space
+                new_max = min(max_val, limit)
+                new_max = max(new_max, min_val)  # Safe fallback
+                new_params[param_key] = (min_val, new_max, scale)
 
         return SearchSpace(self.name + "_constrained", new_params)
 
 
-# Define search spaces for all models
-SEARCH_SPACES = {
-    "backprop_mlp": SearchSpace(
-        "backprop_mlp",
-        {
-            "learning_rate": (1e-5, 1e-2, "log"),
-            "hidden_dim": [32, 64, 128, 256],
-            "num_layers": [1, 2, 4],
-        },
-    ),
-    "eqprop_mlp": SearchSpace(
-        "eqprop_mlp",
-        {
-            "learning_rate": (1e-5, 1e-2, "log"),
-            "beta": (0.05, 0.5, "linear"),
-            "steps": (5, 20, "int"),
-            "hidden_dim": [32, 64, 128],
-            "num_layers": [5, 10, 15],
-        },
-    ),
-    # Research Models
-    "Holomorphic EqProp": SearchSpace(
-        "Holomorphic EqProp",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "beta": (0.01, 0.3, "linear"),
-            "steps": (10, 40, "int"),
-            "hidden_dim": [64, 128],
-        },
-    ),
-    "Directed EqProp (Deep EP)": SearchSpace(
-        "Directed EqProp (Deep EP)",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "beta": (0.1, 0.5, "linear"),
-            "steps": (10, 40, "int"),
-            "hidden_dim": [64, 128],
-        },
-    ),
-    "Finite-Nudge EqProp": SearchSpace(
-        "Finite-Nudge EqProp",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "beta": (0.5, 3.0, "linear"),  # Large beta
-            "steps": (10, 40, "int"),
-            "hidden_dim": [64, 128],
-        },
-    ),
-    "Conv EqProp (CIFAR-10)": SearchSpace(
-        "Conv EqProp (CIFAR-10)",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "steps": (10, 25, "int"),
-            "hidden_dim": [128, 256],
-        },
-    ),
-    # Hybrid & Experimental
-    "Adaptive Feedback Alignment": SearchSpace(
-        "Adaptive Feedback Alignment",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "fa_scale": (0.5, 1.5, "linear"),
-            "adapt_rate": (0.001, 0.1, "log"),
-            "hidden_dim": [64, 128, 256],
-        },
-    ),
-    "Equilibrium Alignment": SearchSpace(
-        "Equilibrium Alignment",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "beta": (0.1, 0.5, "linear"),
-            "steps": (10, 30, "int"),
-            "align_weight": (0.1, 1.0, "linear"),
-        },
-    ),
-    # Add Missing Spaces
-    "Layerwise Equilibrium FA": SearchSpace(
-        "Layerwise Equilibrium FA",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "hidden_dim": [64, 128],
-            "num_layers": [2, 4, 6],
-        },
-    ),
-    "Energy Guided FA": SearchSpace(
-        "Energy Guided FA",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "energy_scale": (0.1, 1.0, "linear"),
-            "hidden_dim": [64, 128],
-        },
-    ),
-    "Predictive Coding Hybrid": SearchSpace(
-        "Predictive Coding Hybrid",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "steps": (10, 30, "int"),
-            "hidden_dim": [64, 128],
-        },
-    ),
-    "Sparse Equilibrium": SearchSpace(
-        "Sparse Equilibrium",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "beta": (0.05, 0.3, "linear"),
-            "sparsity": (0.1, 0.9, "linear"),
-            "hidden_dim": [128, 256],
-        },
-    ),
-    "Momentum Equilibrium": SearchSpace(
-        "Momentum Equilibrium",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "momentum": (0.5, 0.95, "linear"),
-            "steps": (10, 30, "int"),
-        },
-    ),
-    "Stochastic FA": SearchSpace(
-        "Stochastic FA",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "noise_scale": (0.01, 0.2, "log"),
-            "hidden_dim": [64, 128],
-        },
-    ),
-    "Energy Minimizing FA": SearchSpace(
-        "Energy Minimizing FA",
-        {"learning_rate": (1e-4, 1e-2, "log"), "hidden_dim": [64, 128]},
-    ),
-    # Transformers
-    "eqprop_transformer": SearchSpace(
-        "eqprop_transformer",
-        {
-            "learning_rate": (1e-5, 1e-2, "log"),
-            "steps": (5, 12, "int"),
-            "hidden_dim": [64, 128, 256],
-            "num_layers": [2, 3],
-        },
-    ),
-    "EqProp Transformer (Full)": SearchSpace(
-        "EqProp Transformer (Full)",
-        {
-            "learning_rate": (1e-5, 1e-2, "log"),
-            "steps": (5, 20, "int"),
-            "hidden_dim": [64, 128],
-            "num_layers": [2, 3],
-        },
-    ),
-    "EqProp Transformer (Hybrid)": SearchSpace(
-        "EqProp Transformer (Hybrid)",
-        {
-            "learning_rate": (1e-5, 1e-2, "log"),
-            "steps": (5, 15, "int"),
-            "hidden_dim": [128, 256],
-            "num_layers": [2, 3],
-        },
-    ),
-    "EqProp Transformer (Recurrent)": SearchSpace(
-        "EqProp Transformer (Recurrent)",
-        {
-            "learning_rate": (1e-5, 1e-2, "log"),
-            "steps": (10, 30, "int"),
-            "hidden_dim": [128, 256],
-            "num_layers": [1],  # Recurrent uses single block
-        },
-    ),
-    "DFA (Direct Feedback Alignment)": SearchSpace(
-        "DFA (Direct Feedback Alignment)",
-        {
-            "learning_rate": (1e-5, 1e-2, "log"),
-            "hidden_dim": [64, 128, 256],
-            "num_layers": [10, 20, 30],
-        },
-    ),
-    "CHL (Contrastive Hebbian)": SearchSpace(
-        "CHL (Contrastive Hebbian)",
-        {
-            "learning_rate": (1e-5, 1e-2, "log"),
-            "beta": (0.05, 0.3, "linear"),
-            "steps": (10, 30, "int"),
-            "hidden_dim": [64, 128, 256],
-            "num_layers": [10, 20, 30],
-        },
-    ),
-    "Deep Hebbian (Hundred-Layer)": SearchSpace(
-        "Deep Hebbian (Hundred-Layer)",
-        {
-            "learning_rate": (1e-5, 5e-3, "log"),
-            "hidden_dim": [64, 128],
-            "num_layers": [50, 100, 150],  # Test deep scaling
-        },
-    ),
-    "tile_pc": SearchSpace(
-        "tile_pc",
-        {
-            "learning_rate": (1e-4, 1e-1, "log"),
-            "beta": (0.05, 0.5, "linear"),
-            "neurons_per_tile": [32, 64, 128],
-            "tiles_per_layer": [4, 8, 16],
-            "num_layers": [3, 5, 8],
-        },
-    ),
-    "EquiTile EP": SearchSpace(
-        "EquiTile EP",
-        {
-            "learning_rate": (1e-4, 1e-1, "log"),
-            "beta": (0.05, 0.5, "linear"),
-            "inference_steps": (10, 50, "int"),
-            "neurons_per_tile": [32, 64, 128],
-            "tiles_per_layer": [4, 8, 16],
-            "num_layers": [3, 5, 8],
-        },
-    ),
-    "LM EquiTile": SearchSpace(
-        "LM EquiTile",
-        {
-            "learning_rate": (1e-5, 1e-3, "log"),
-            "neurons_per_tile": [64, 128],
-            "tiles_per_layer": [4, 8],
-            "num_layers": [4, 6],
-            "embed_dim": [128, 256],
-            "num_heads": [2, 4],
-        },
-    ),
-    "RL EquiTile": SearchSpace(
-        "RL EquiTile",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "neurons_per_tile": [32, 64],
-            "tiles_per_layer": [2, 4, 8],
-            "num_layers": [2, 3],
-            "entropy_coef": (0.001, 0.05, "log"),
-            "value_coef": (0.1, 1.0, "linear"),
-        },
-    ),
-    "Conv EquiTile": SearchSpace(
-        "Conv EquiTile",
-        {
-            "learning_rate": (1e-4, 1e-2, "log"),
-            "neurons_per_tile": [32, 64, 128],
-            "tiles_per_layer": [2, 4, 8],
-            "num_fc_layers": [1, 2, 3],
-            "dropout": (0.0, 0.5, "linear"),
-        },
-    ),
+# ---------------------------------------------------------------------------
+# Model → rule resolution (single source of truth is RULE_SPACES).
+# ---------------------------------------------------------------------------
+
+# Registered model family → RULE_SPACES rule key. A model whose family appears
+# here inherits the rule's continuous space verbatim, so sampling (evolution),
+# P0a auditing, and Optuna constraint injection all see the same ranges.
+_FAMILY_TO_RULE: dict[str, str] = {
+    "backprop": "backprop",
+    "baseline": "backprop",
+    "backpropagation": "backprop",
+    "eqprop": "eqprop",
+    "fa": "feedback_alignment",
+    "feedback_alignment": "feedback_alignment",
+    "target_prop": "target_prop",
+    "target-prop": "target_prop",
+    "forward_only": "forward_forward",
+    "forward-only": "forward_forward",
+    "mep": "forward_forward",
+}
+
+# Families that own a real learning rule but no RULE_SPACES entry yet get a
+# minimal, honest fallback rather than a hand-divergent curated grid.
+_FALLBACK_SPACE: dict[str, NumberRange | DiscreteChoice] = {
+    "learning_rate": (1e-5, 1e-1, "log"),
+    "hidden_dim": (32, 512, "log"),
+    "num_layers": (1, 6, "int"),
 }
 
 
-def get_search_space(model_name: str) -> SearchSpace:
-    """Get the search space for a model."""
-    # 1. Try hardcoded spaces first (for customized ranges)
-    if model_name in SEARCH_SPACES:
-        return SEARCH_SPACES[model_name]
+def _registered_families() -> dict[str, str]:
+    """Map registered model name → family, for pool/curation queries."""
+    out: dict[str, str] = {}
+    for name in Registry.list(ComponentCategory.MODEL)[ComponentCategory.MODEL.value]:
+        meta = Registry.get_metadata(ComponentCategory.MODEL, name)
+        out[name] = meta.family or "experimental"
+    return out
 
-    # 2. Try to generate from registry
-    # Check if exact name in registry
+
+def get_model_spec_for_space(model_name: str) -> tuple[str, str] | None:
+    """Resolve ``(family, rule)`` for a model name, or ``None`` if unregistered."""
     try:
         spec = get_model_spec(model_name)
     except ValueError:
-        spec = None
+        return None
+    family = spec.family.lower()
+    return family, _FAMILY_TO_RULE.get(family, "")
 
-    if spec:
-        params = {
-            "learning_rate": (1e-5, 1e-2, "log"),
-            "hidden_dim": [64, 128, 256],
-            "num_layers": [2, 4, 6],
-        }
 
-        return SearchSpace(model_name, params)
+def get_available_models() -> list[str]:
+    """Registered model names resolvable by :func:`get_search_space`.
 
-    # 3. Heuristic fallback: assume EqProp-ish defaults for unregistered models
-    if "EqProp" in model_name:
-        params = {
-            "learning_rate": (1e-5, 1e-2, "log"),
-            "beta": (0.05, 0.5, "linear"),
-            "steps": (5, 20, "int"),
-            "hidden_dim": [64, 128],
-        }
-        return SearchSpace(model_name, params)
+    The pool for evolutionary "new architecture" discovery: every registered
+    model, so a sampled config always carries a constructible name.
+    """
+    return sorted(_registered_families())
 
-    if "Backprop" in model_name:
-        return SEARCH_SPACES["backprop_mlp"]
 
-    raise ValueError(f"No search space defined for model: {model_name}")
+def get_search_space(model_name: str) -> SearchSpace:
+    """Resolve the search space for a model from its registered family.
+
+    When the model's family maps to a ``RULE_SPACES`` rule, the rule's space is
+    used verbatim (the single canonical range set). Registered families without
+    a rule fall back to :data:`_FALLBACK_SPACE`.
+
+    Raises:
+        ValueError: If ``model_name`` is neither a ``RULE_SPACES`` rule key nor
+        a registered model.
+    """
+    # A model name that is itself a ``RULE_SPACES`` key uses that rule verbatim,
+    # keeping sampling identical to the P0a constructor gate (which resolves
+    # rule→model via the same key).
+    if model_name in RULE_SPACES:
+        return SearchSpace(model_name, RULE_SPACES[model_name])
+    resolved = get_model_spec_for_space(model_name)
+    if resolved is None:
+        raise ValueError(f"No search space defined for model: {model_name}")
+    _, rule = resolved
+    params = RULE_SPACES[rule] if rule else _FALLBACK_SPACE
+    return SearchSpace(model_name, params)
 
 
 # Continuous, log-sampled search spaces per learning rule (plan §4A, §10).

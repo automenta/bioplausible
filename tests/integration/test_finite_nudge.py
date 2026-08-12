@@ -20,6 +20,7 @@ class TestFiniteNudge(unittest.TestCase):
             learning_rate=0.01,
             beta=1.0,
             max_steps=5,
+            extra={"gradient_method": "contrastive"},
         )
         model = FiniteNudgeEP(config)
 

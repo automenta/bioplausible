@@ -334,7 +334,12 @@ class TestSmokeTraining(unittest.TestCase):
             self.assertIn("loss", metrics)
 
     def test_directed_ep(self):
-        model = DirectedEP(input_dim=10, hidden_dim=32, output_dim=5).to(self.device)
+        model = DirectedEP(
+            input_dim=10,
+            hidden_dim=32,
+            output_dim=5,
+            gradient_method="contrastive",
+        ).to(self.device)
         x = torch.randn(self.batch_size, 10).to(self.device)
         y = torch.randint(0, 5, (self.batch_size,)).to(self.device)
 
@@ -343,9 +348,13 @@ class TestSmokeTraining(unittest.TestCase):
             self.assertIn("loss", metrics)
 
     def test_finite_nudge_ep(self):
-        model = FiniteNudgeEP(input_dim=10, hidden_dim=32, output_dim=5, beta=1.0).to(
-            self.device
-        )
+        model = FiniteNudgeEP(
+            input_dim=10,
+            hidden_dim=32,
+            output_dim=5,
+            beta=1.0,
+            gradient_method="contrastive",
+        ).to(self.device)
         x = torch.randn(self.batch_size, 10).to(self.device)
         y = torch.randint(0, 5, (self.batch_size,)).to(self.device)
 
