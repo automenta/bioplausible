@@ -526,7 +526,14 @@ failures** (2003 collected) — all unrelated to the refactor and still present.
     dict; Family A's `_inf_norm_converged` (step-thresholded 2e-4/1e-4) duplicates
     `settle_state`'s `_inf_norm_delta < convergence_threshold` gate. Low-risk first step:
     have `settle_single_state` reuse `settle_state`-style telemetry keys for uniform
-    reporting before any loop merge.
+    reporting before any loop merge. **DONE as of `c32e15f`** — Family A now emits the
+    same 5-key dynamics surface; loops still separate.
+11. **Pre-existing interpreter quirk (not refactor-related):** `hyperopt/experiment.py:130`
+    reads `except OSError, RuntimeError, ValueError, KeyError:` — historical Python-2
+    style that parses and *runs* ("caught OLD-STYLE") under this Python 3.14 dev build when
+    exercised directly, yet is a latent `SyntaxError` on standard CPython. It predates the
+    refactor (commit `5df1436`). Worth converting to `except (OSError, RuntimeError, ...)`
+    when next touching that file, but it is out of Pillar scope.
 
 ### Facilitation for future work
 
