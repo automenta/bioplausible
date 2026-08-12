@@ -475,6 +475,42 @@ failures** (2003 collected) — all unrelated to the refactor and still present.
    `zoo/models/backprop.py:230` and `benchmarks/efficiency_analysis.py:91` are method
    wrappers that can call `utils.count_parameters`); (b) the `BenchmarkResult` unification
    (5 classes); (c) the report renderer consolidation. Each is independently shippable.
+8. **The "3× Pareto" row in Pillar D is smaller than it reads — do NOT collapse blindly.**
+   The three implementations are legitimately different data shapes, not copies:
+   `analysis/results.compute_pareto_frontier` (dicts, 3 objectives: acc↑/params↓/time↓,
+   returns `trial_id`s), `experiment/reporting.pareto_frontier` (`ProbeResult`, 2
+   objectives acc↑/params↓, returns `{config_key,acc,param_count}`), and
+   `hyperopt/frontier.pareto_frontier` (`RulePoint`, 4 objectives acc↑/flops↓/mem↓/time↓
+   with `_ACCURACY_EPS`, returns points). `hyperopt/metrics.py` already holds the
+   canonical NSGA-II `non_dominated_sort`/`dominates` (`TrialMetrics`, 4 objectives).
+   Unifying these requires either a shared generic "dominates" predicate over
+   (minimize_set, maximize_set, eps) — worth doing only as a stable core primitive that
+   all four delegate to, preserving each public signature — or accepting the differences.
+   Treat as a single larger D sub-goal, not a trivial fold.
+9. **Pillar C's remaining `create_model` helpers are the plan's stated mock.patch targets.**
+   `lightning_/module.py:22` and `execution/robustness.py:33` both do
+   `Registry.get(MODEL, name) → cls(**kwargs)` with slightly different defaults (robustness
+   adds `hidden_dim`/`num_layers`/`.to(device)`). The canonical builder
+   `core/construction.construct_model(model_cls, config, input_dim, output_dim)` differs in
+   signature (sampled-config + required dims) and is `nyi` on the loose-kwargs path these
+   callers use, so adapting them is *not* a mechanical rename. Two options: (i) keep them as
+   thin per-site adapters that build a scalar config dict and call `construct_model`
+   behind the module-level patchable name (call sites unchanged); (ii) delete and rewrite
+   the ~6 consuming tests. Given `test_lightning_integration.py:368/417` and
+   `test_robustness.py:17` patch these symbols directly, option (i) with green tests is the
+   low-risk path — but it ships near-zero line reduction, so Pillar C should be bundled with
+   the trainer/lightning adapter work (Pillar A) rather than attempted in isolation.
+10. **Pillar I (settling unification) is numerics-sensitive — leave until F is fully tested
+    or bundle with G.** `_settling.py` already routes P1 single-hidden models through
+    `settle_state` (protocol `EquilibriumSettleProtocol`); `settle_single_state` (Family A,
+    with SN-freeze/trajectory/dynamics) and `settle_activations_list` (Family B, relative
+    per-layer norm) have genuinely different convergence semantics (inf-norm vs max-relative
+    p-norm), so a single `settle()` must keep both emitters. The convergence telemetry
+    ("steps_taken"/"converged"/"settle_time_s") is already unified in the Family B dynamics
+    dict; Family A's `_inf_norm_converged` (step-thresholded 2e-4/1e-4) duplicates
+    `settle_state`'s `_inf_norm_delta < convergence_threshold` gate. Low-risk first step:
+    have `settle_single_state` reuse `settle_state`-style telemetry keys for uniform
+    reporting before any loop merge.
 
 ### Facilitation for future work
 
