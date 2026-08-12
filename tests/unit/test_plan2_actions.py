@@ -448,6 +448,14 @@ def test_sample_config_eqprop_has_equilibrium_params():
         "tol": 1e-4,
         "convergence_threshold": 1e-2,
         "convergence_start": 2,
+        "sparse_ratio": 0.8,
+        "momentum": 0.1,
+        "update_scale": 1.0,
+        "update_scale_by_depth": 1.0,
+        "w_rec_init": "xavier",
+        "w_rec_gain": 0.5,
+        "feedback_gain": 1.0,
+        "feedback_init_gain": 0.1,
     })
     cfg = sample_config_for_rule(trial, "eqprop")
     assert cfg["beta"] == 0.5
