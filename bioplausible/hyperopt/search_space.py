@@ -35,6 +35,12 @@ NumberRange = tuple[
 ]  # (min, max, scale) where scale in ['log', 'linear', 'int']
 DiscreteChoice = list[int | float | str]
 
+#: Length of a :data:`NumberRange` spec ``(min, max, scale)``.
+_RANGE_LEN = 3
+
+#: Probability that a crossover picks from the first parent vs the second.
+_CROSSOVER_BIAS = 0.5
+
 
 class SearchSpace:
     """
@@ -49,30 +55,125 @@ class SearchSpace:
         self.name = name
         self.params = params
 
+    def _sample_param(self, name: str, space: NumberRange | DiscreteChoice) -> object:
+        """Draw a single value for a parameter from its spec."""
+        if isinstance(space, list):
+            return self._sample_discrete(space)
+        if isinstance(space, tuple) and len(space) == _RANGE_LEN:
+            # Number range
+            min_val, max_val, scale = space
+            if scale == "int":
+                return int(np.random.randint(min_val, max_val + 1))
+            if scale == "log":
+                # Log uniform
+                return float(
+                    np.exp(np.random.uniform(np.log(min_val), np.log(max_val)))
+                )
+            # Linear
+            return float(np.random.uniform(min_val, max_val))
+        raise ValueError(f"Invalid spec for '{name}': {space!r}")
+
+    @staticmethod
+    def _sample_discrete(space: DiscreteChoice) -> object:
+        """Pick a discrete choice, normalizing numpy scalar scalars."""
+        value = np.random.choice(space)
+        return value.item() if isinstance(value, np.generic) else value
+
     def sample(self) -> dict[str, object]:
         """Sample a random configuration from the search space."""
-        config = {}
+        return {
+            name: self._sample_param(name, space) for name, space in self.params.items()
+        }
+
+    def crossover(
+        self, config_a: dict[str, object], config_b: dict[str, object]
+    ) -> dict[str, object]:
+        """Uniform crossover: per-parameter pick from either parent, or resample if absent."""
+        child: dict[str, object] = {}
         for name, space in self.params.items():
-            if isinstance(space, list):
-                # Discrete choice
-                config[name] = np.random.choice(space)
-                # Convert numpy types to python native
-                if isinstance(config[name], (np.generic)):
-                    config[name] = config[name].item()
-            elif isinstance(space, tuple) and len(space) == 3:
-                # Number range
-                min_val, max_val, scale = space
-                if scale == "int":
-                    config[name] = int(np.random.randint(min_val, max_val + 1))
-                elif scale == "log":
-                    # Log uniform
-                    log_min = np.log(min_val)
-                    log_max = np.log(max_val)
-                    config[name] = float(np.exp(np.random.uniform(log_min, log_max)))
-                else:
-                    # Linear
-                    config[name] = float(np.random.uniform(min_val, max_val))
-        return config
+            if name in config_a and name in config_b:
+                child[name] = (
+                    config_a[name]
+                    if np.random.rand() < _CROSSOVER_BIAS
+                    else config_b[name]
+                )
+            elif name in config_a:
+                child[name] = config_a[name]
+            elif name in config_b:
+                child[name] = config_b[name]
+            else:
+                child[name] = self._sample_param(name, space)
+        return child
+
+    def _mutate_param(
+        self,
+        name: str,
+        space: NumberRange | DiscreteChoice,
+        value: object,
+        perturb: bool,
+    ) -> object:
+        """Return a mutated (or clamped) value for one parameter."""
+        if isinstance(space, list):
+            # Discrete choice: snap to nearest allowed value, then (optionally)
+            # jump to a different choice.
+            nearest = min(space, key=lambda choice: abs(float(choice) - float(value)))
+            if not perturb:
+                return nearest
+            others = [choice for choice in space if choice != nearest]
+            return np.random.choice(others) if others else nearest
+        if not (isinstance(space, tuple) and len(space) == _RANGE_LEN):
+            raise ValueError(f"Invalid spec for '{name}': {space!r}")
+        return self._mutate_range(space, value, perturb)
+
+    @staticmethod
+    def _mutate_range(
+        space: NumberRange,
+        value: object,
+        perturb: bool,
+    ) -> object:
+        """Clamp a numeric value to its range; optionally perturb it."""
+        min_val, max_val, scale = space
+        if scale == "int":
+            current = min(max(round(value), min_val), max_val)
+            if not perturb:
+                return current
+            delta = np.random.choice([-1, 0, 1])
+            return min(max(current + delta, min_val), max_val)
+        current = min(max(float(value), min_val), max_val)
+        if not perturb:
+            return current
+        if scale == "log":
+            factor = float(np.exp(np.random.uniform(-1.0, 1.0)))
+            return min(max(current * factor, min_val), max_val)
+        width = max_val - min_val
+        return min(
+            max(current + float(np.random.uniform(-width, width)), min_val),
+            max_val,
+        )
+
+    def mutate(
+        self,
+        config: dict[str, object],
+        mutation_rate: float = 0.1,
+        rng: object = None,
+    ) -> dict[str, object]:
+        """Mutate a config respecting bounds; clamp out-of-range values.
+
+        Args:
+            config: The configuration to mutate (not modified; a copy is returned).
+            mutation_rate: Fraction of parameters to perturb (0.0 = clamp-only).
+            rng: Optional random number generator (defaults to ``np.random``).
+        """
+        rand = rng if rng is not None else np.random
+        mutated = dict(config)
+        for name, space in self.params.items():
+            if name not in mutated:
+                continue
+            value = mutated[name]
+            mutated[name] = self._mutate_param(
+                name, space, value, perturb=rand.rand() < mutation_rate
+            )
+        return mutated
 
     def apply_constraints(self, constraints: dict[str, object]) -> SearchSpace:
         """
@@ -96,7 +197,7 @@ class SearchSpace:
                     space = new_params[param_key]
                     if isinstance(space, list):
                         new_params[param_key] = [v for v in space if v <= limit]
-                    elif isinstance(space, tuple) and len(space) == 3:
+                    elif isinstance(space, tuple) and len(space) == _RANGE_LEN:
                         min_val, max_val, scale = space
                         new_max = min(max_val, limit)
                         new_max = max(new_max, min_val)  # Safe fallback
