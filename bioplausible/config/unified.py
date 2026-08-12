@@ -339,7 +339,7 @@ class ExperimentConfig(BaseConfig):
 
 @dataclass(frozen=True, slots=True)
 class ReproducibilityConfig(BaseConfig):
-    """Configuration for reproducibility tracking (equitile.utils.reproducibility).
+    """Configuration for reproducibility tracking (core.utils.reproducibility).
 
     Extends :class:`BaseConfig` with experiment-specific config dicts.
     """

@@ -37,13 +37,3 @@ Run a full benchmark on GPU:
 ```bash
 ./run_benchmarks.sh --num-runs 5 --epochs 3 --batch-size 64 --seq-length 256 --device cuda
 ```
-
-## Interpreting Results
-
-The script outputs a comprehensive report including:
-- **Speedup**: How much faster EquiTile is compared to the baseline.
-- **Throughput**: Tokens processed per second.
-- **Perplexity (PPL)**: A measure of language model quality (lower is better).
-- **Statistical Significance**: Whether the observed differences are statistically significant (p-value < 0.05).
-
-The results are also saved as JSON files in the `benchmark_results` directory.

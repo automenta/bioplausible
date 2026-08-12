@@ -1,6 +1,6 @@
 """
-Reproducibility Framework for EquiTile
-=======================================
+Reproducibility Framework
+=========================
 
 Tools for ensuring reproducible research:
 - Seed management
@@ -10,7 +10,7 @@ Tools for ensuring reproducible research:
 
 Example
 -------
->>> from bioplausible.equitile.utils.reproducibility import ReproducibilityTracker
+>>> from bioplausible.core.utils.reproducibility import ReproducibilityTracker
 >>> tracker = ReproducibilityTracker(seed=42)
 >>> tracker.log_config(config)
 >>> tracker.save_results(results)

@@ -361,7 +361,7 @@ class TestBenchmarks:
 
     def test_nanoGPT_model(self):
         """Test NanoGPT model creation."""
-        from bioplausible.equitile.benchmarks.compare_nanoGPT import (
+        from bioplausible.benchmarks.compare_nanoGPT import (
             NanoGPTConfig,
             NanoGPTModel,
         )
@@ -380,7 +380,7 @@ class TestBenchmarks:
 
     def test_efficiency_analyzer(self):
         """Test efficiency analyzer."""
-        from bioplausible.equitile.benchmarks.efficiency_analysis import (
+        from bioplausible.benchmarks.efficiency_analysis import (
             EfficiencyAnalyzer,
         )
 

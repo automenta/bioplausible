@@ -34,8 +34,11 @@ import torch
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
+from bioplausible.core.utils.reproducibility import (
+    ReproducibilityTracker,
+    set_reproducible_mode,
+)
 from bioplausible.data.lm import create_shakespeare_dataset
-from bioplausible.equitile.utils import ReproducibilityTracker, set_reproducible_mode
 from bioplausible.zoo.models.tile_lm import TileLM
 
 __all__ = [

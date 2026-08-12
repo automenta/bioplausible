@@ -13,6 +13,14 @@ from bioplausible.core.utils.activations import (
 )
 from bioplausible.core.utils.device import get_device, get_optimal_backend
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
+from bioplausible.core.utils.reproducibility import (
+    EnvironmentInfo,
+    ReproducibilityConfig,
+    ReproducibilityTracker,
+    ReproducibleConfig,
+    create_tracker,
+    set_reproducible_mode,
+)
 from bioplausible.core.utils.seeds import set_all_seeds
 
 __all__ = [
@@ -33,6 +41,13 @@ __all__ = [
     # optimizer factory (REFACTOR.md §2.3)
     "OptimizerConfig",
     "create_optimizer",
+    # reproducibility
+    "EnvironmentInfo",
+    "ReproducibilityConfig",
+    "ReproducibilityTracker",
+    "ReproducibleConfig",
+    "create_tracker",
+    "set_reproducible_mode",
     # seeds
     "set_all_seeds",
 ]

@@ -12,7 +12,7 @@ NanoGPT Reference: https://github.com/karpathy/nanoGPT
 
 Example
 -------
->>> from bioplausible.equitile.benchmarks import compare_nanoGPT
+>>> from bioplausible.benchmarks import compare_nanoGPT
 >>> results = compare_nanoGPT(
 ...     task="shakespeare",
 ...     epochs=5,

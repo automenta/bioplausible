@@ -11,7 +11,7 @@ Scientific-grade benchmarking with:
 
 Example
 -------
->>> from bioplausible.equitile.benchmarks.rigorous import RigorousBenchmark
+>>> from bioplausible.benchmarks.rigorous import RigorousBenchmark
 >>> benchmark = RigorousBenchmark(num_runs=5, confidence=0.95)
 >>> results = benchmark.run_comparison()
 >>> benchmark.report(results)
@@ -35,8 +35,8 @@ except ImportError:
 import numpy as np
 import torch
 
+from bioplausible.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
 from bioplausible.data.lm import create_shakespeare_dataset
-from bioplausible.equitile.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
 from bioplausible.zoo.models.tile_lm import TileLM
 
 logger = get_logger()

@@ -10,7 +10,7 @@ Analyzes parameter and FLOP efficiency:
 
 Example
 -------
->>> from bioplausible.equitile.benchmarks import analyze_parameter_efficiency
+>>> from bioplausible.benchmarks import analyze_parameter_efficiency
 >>> result = analyze_parameter_efficiency(model, train_loader, val_loader)
 >>> print(f"Parameter efficiency score: {result.efficiency_score:.2f}")
 """
