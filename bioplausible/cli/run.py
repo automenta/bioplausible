@@ -698,8 +698,8 @@ def run_core_train(args):
         final = history[-1]
         logger.info(
             "Results: Train Acc=%.4f, Val Acc=%.4f",
-            final.train_accuracy,
-            final.val_accuracy,
+            final.train_acc,
+            final.val_acc,
         )
 
 
@@ -714,8 +714,8 @@ def run_from_yaml(args):
         final = history[-1]
         logger.info(
             "Results: Train Acc=%.4f, Val Acc=%.4f",
-            final.train_accuracy,
-            final.val_accuracy,
+            final.train_acc,
+            final.val_acc,
         )
 
 

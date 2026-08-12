@@ -12,9 +12,35 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 __all__ = [
+    "TRAINING_CHECKPOINTS_DDL",
     "EpochCheckpoint",
     "TrainingTrajectory",
 ]
+
+TRAINING_CHECKPOINTS_DDL = """
+    CREATE TABLE IF NOT EXISTS training_checkpoints (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trial_id INTEGER,
+        trajectory_id INTEGER NOT NULL DEFAULT -1,
+        epoch INTEGER NOT NULL,
+        train_acc REAL,
+        val_acc REAL,
+        test_acc REAL,
+        train_loss REAL,
+        val_loss REAL,
+        grad_norm_mean REAL,
+        grad_norm_std REAL,
+        weight_norm REAL,
+        learning_rate REAL,
+        train_val_gap REAL,
+        perplexity REAL,
+        reward REAL,
+        wall_time_seconds REAL,
+        total_flops INTEGER,
+        samples_seen INTEGER DEFAULT 0,
+        FOREIGN KEY (trajectory_id) REFERENCES training_trajectories(id)
+    )
+"""
 
 
 @dataclass(frozen=True, slots=True)

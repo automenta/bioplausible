@@ -209,9 +209,7 @@ class TileGraph:
 
         # Remove edges connected to this tile
         edges_to_remove = [
-            (src, dst)
-            for src, dst in self.edges
-            if tile_id in {src, dst}
+            (src, dst) for src, dst in self.edges if tile_id in {src, dst}
         ]
         for src, dst in edges_to_remove:
             self._remove_edge(src, dst)

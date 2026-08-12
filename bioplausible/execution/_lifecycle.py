@@ -16,6 +16,7 @@ import torch
 
 from bioplausible.core.checkpoint import save_checkpoint
 from bioplausible.core.logging import get_logger
+from bioplausible.core.training_state import TRAINING_CHECKPOINTS_DDL
 
 __all__ = [
     "ARTIFACTS_DIR",
@@ -310,29 +311,7 @@ class CheckpointManager:
                 samples_seen = r.metrics.get("samples_seen", 0)
                 timestamp = r.metrics.get("timestamp", 0.0)
 
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS training_checkpoints (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        trial_id INTEGER,
-                        trajectory_id INTEGER NOT NULL DEFAULT -1,
-                        epoch INTEGER NOT NULL,
-                        train_acc REAL,
-                        val_acc REAL,
-                        test_acc REAL,
-                        train_loss REAL,
-                        val_loss REAL,
-                        grad_norm_mean REAL,
-                        grad_norm_std REAL,
-                        weight_norm REAL,
-                        learning_rate REAL,
-                        train_val_gap REAL,
-                        perplexity REAL,
-                        reward REAL,
-                        wall_time_seconds REAL,
-                        total_flops INTEGER,
-                        samples_seen INTEGER DEFAULT 0
-                    )
-                """)
+                conn.execute(TRAINING_CHECKPOINTS_DDL)
 
                 data.append((
                     self.trial_id,

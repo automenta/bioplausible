@@ -340,10 +340,10 @@ class CoreTrainerDriver:
         # trajectory (best_epoch_acc >> final_acc, or acc_at_half << final_acc)
         # is *mid-convergence* — a training-budget (epochs) issue — not a model
         # failure. This distinguishes "needs more epochs" from "never learns".
-        accs = [float(m.train_accuracy or 0.0) for m in history if m.train_accuracy]
+        accs = [float(m.train_acc or 0.0) for m in history if m.train_acc]
         half_idx = max(1, len(accs) // 2) if accs else 0
         metrics = {
-            "final_acc": float(last.train_accuracy or last.val_accuracy or 0.0),
+            "final_acc": float(last.train_acc or last.val_acc or 0.0),
             "final_train_loss": float(last.train_loss or 0.0),
             "epoch_time_s": total_time,
             "param_count": param_count,
@@ -354,10 +354,10 @@ class CoreTrainerDriver:
             # CoreTrainer on CPU, so fall back to the summed epoch time so the
             # parity contract's `matched_by.reported: [wall_time_s]` is real.
             "wall_time_s": total_time,
-            "best_epoch_acc": max(accs) if accs else float(last.train_accuracy or 0.0),
+            "best_epoch_acc": max(accs) if accs else float(last.train_acc or 0.0),
             "acc_at_half": float(accs[half_idx - 1])
             if accs and half_idx
-            else float(last.train_accuracy or 0.0),
+            else float(last.train_acc or 0.0),
             "loss_epoch_0": loss_0,
             "loss_epoch_final": loss_final,
             # Self-diagnosis (EXPERIMENT_PLAN5 §1): the credit-assignment path

@@ -273,9 +273,9 @@ def load_trials_timeseries(db_path: str) -> dict[int, list[dict[str, object]]]:
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    # Check if tables exist first to avoid errors on empty DB
+    # Check if table exists first to avoid errors on empty DB
     cursor.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='epoch_metrics'"
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='training_checkpoints'"
     )
     if not cursor.fetchone():
         conn.close()
@@ -283,8 +283,10 @@ def load_trials_timeseries(db_path: str) -> dict[int, list[dict[str, object]]]:
 
     cursor.execute("""
         SELECT
-            trial_id, epoch, loss, accuracy, perplexity, time
-        FROM epoch_metrics
+            trial_id, epoch, train_loss AS loss, val_acc AS accuracy,
+            perplexity, wall_time_seconds AS time
+        FROM training_checkpoints
+        WHERE trajectory_id = -1
         ORDER BY trial_id, epoch
     """)
 

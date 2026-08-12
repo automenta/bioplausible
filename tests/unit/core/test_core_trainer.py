@@ -39,23 +39,23 @@ def test_training_metrics():
     metrics = TrainingMetrics(
         epoch=0,
         train_loss=0.5,
-        train_accuracy=0.8,
+        train_acc=0.8,
         val_loss=0.4,
-        val_accuracy=0.85,
+        val_acc=0.85,
         epoch_time=1.0,
     )
     assert metrics.train_loss == pytest.approx(0.5)
-    assert metrics.val_accuracy == pytest.approx(0.85)
+    assert metrics.val_acc == pytest.approx(0.85)
 
     d = metrics.to_dict()
     assert d["epoch"] == 0
     assert d["train_loss"] == pytest.approx(0.5)
-    assert d["val_accuracy"] == pytest.approx(0.85)
+    assert d["val_acc"] == pytest.approx(0.85)
 
 
 def test_training_metrics_partial():
     """Test TrainingMetrics with only required fields."""
-    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_accuracy=0.0)
+    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_acc=0.0)
     assert metrics.val_loss is None
     assert metrics.energy_proxy is None
 
@@ -142,7 +142,7 @@ def test_feedback_alignment_propagator_trains():
     )
     history = CoreTrainer(config).fit()
     assert len(history) == 1
-    assert history[-1].val_accuracy > 0.0
+    assert history[-1].val_acc > 0.0
 
 
 def test_configured_propagator_actually_drives_training():

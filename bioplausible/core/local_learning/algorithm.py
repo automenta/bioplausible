@@ -413,9 +413,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
         """Per-tile and per-edge importance (sigmoid-gated plasticity)."""
         self.tile_importance = nn.Parameter(torch.zeros(len(self.graph.tiles)))
         self.edge_importance = nn.Parameter(torch.zeros(len(self.graph.edges)))
-        self._tile_idx = {
-            tid: i for i, tid in enumerate(sorted(self.graph.tiles))
-        }
+        self._tile_idx = {tid: i for i, tid in enumerate(sorted(self.graph.tiles))}
 
     def _build_tile_weights(self) -> None:
         """Per-edge incoming weights and per-tile biases.
@@ -800,9 +798,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
 
         # Remove edges connected to this tile
         edges_to_remove = [
-            (src, dst)
-            for src, dst in self.graph.edges
-            if tile_id in {src, dst}
+            (src, dst) for src, dst in self.graph.edges if tile_id in {src, dst}
         ]
         for src, dst in edges_to_remove:
             self.remove_edge(src, dst)
@@ -836,9 +832,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
                 layer.remove(tile_id)
 
         # Rebuild the id->index mapping (indices shifted by the removal)
-        self._tile_idx = {
-            tid: i for i, tid in enumerate(sorted(self.graph.tiles))
-        }
+        self._tile_idx = {tid: i for i, tid in enumerate(sorted(self.graph.tiles))}
 
         self.reset_optimizers()
 
@@ -875,7 +869,9 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
 
         if weight is None:
             bound = 1.0 / math.sqrt(src.neurons) if src.neurons > 0 else 0.0
-            weight = torch.empty(dst.neurons, src.neurons, device=self.tile_importance.device).uniform_(-bound, bound)
+            weight = torch.empty(
+                dst.neurons, src.neurons, device=self.tile_importance.device
+            ).uniform_(-bound, bound)
 
         if not isinstance(weight, nn.Parameter):
             weight = nn.Parameter(weight)

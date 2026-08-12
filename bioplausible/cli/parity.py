@@ -37,8 +37,8 @@ def _per_epoch_accuracy(history: list[object]) -> list[float]:
     """Extract per-epoch accuracy using the demo's train-first rule."""
     out: list[float] = []
     for metrics in history:
-        train = getattr(metrics, "train_accuracy", None)
-        val = getattr(metrics, "val_accuracy", None)
+        train = getattr(metrics, "train_acc", None)
+        val = getattr(metrics, "val_acc", None)
         if train is not None:
             acc = float(train)
         elif val is not None:

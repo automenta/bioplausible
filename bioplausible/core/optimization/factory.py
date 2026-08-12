@@ -17,7 +17,6 @@ from .optimizer import StrategyOptimizer
 from .strategies import (
     BackpropGradient,
     ErrorFeedback,
-    FAGradient,
     HebbianGradient,
     MuonUpdate,
     NoConstraint,
@@ -35,7 +34,6 @@ StrategyFactory = Callable[[StrategyConfig], Any]
 #: generic factory for MEP-specific strategies.
 StrategyRegistry: dict[str, StrategyFactory] = {
     "backprop": lambda c: BackpropGradient(**c.kwargs),
-    "fa": lambda c: FAGradient(**c.kwargs),
     "target_prop": lambda c: TargetPropGradient(**c.kwargs),
     "hebbian": lambda c: HebbianGradient(**c.kwargs),
     "plain": lambda c: PlainUpdate(**c.kwargs),

@@ -9,6 +9,10 @@ seed/configuration, so a number shown in the UI is guaranteed to match what
 """
 
 import pytest
+
+pytest.importorskip("charts", reason="demo-local module; run from the demo venv")
+pytest.importorskip("runner", reason="demo-local module; run from the demo venv")
+
 from charts import parity_gap
 from runner import DemoPanel, default_trainer_config, run_headless
 

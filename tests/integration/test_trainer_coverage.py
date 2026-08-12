@@ -81,7 +81,7 @@ def test_core_trainer_run_callbacks():
     trainer = CoreTrainer(TrainerConfig(model="test", epochs=1, track_energy=False))
     callback = MagicMock()
     trainer.add_callback(callback)
-    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_accuracy=0.8)
+    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_acc=0.8)
     trainer._run_callbacks(metrics)
     # Callback receives (self, metrics)
     callback.assert_called_once_with(trainer, metrics)
@@ -180,7 +180,7 @@ def test_core_trainer_validate_with_task():
 def test_check_early_stopping_not_configured():
     """Returns False when early_stopping_patience is None."""
     trainer = CoreTrainer(TrainerConfig(model="test", epochs=10, track_energy=False))
-    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_accuracy=0.8, val_loss=0.5)
+    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_acc=0.8, val_loss=0.5)
     result = trainer._check_early_stopping(metrics)
     assert result is False
 
@@ -192,7 +192,7 @@ def test_check_early_stopping_val_loss_is_none():
             model="test", epochs=10, early_stopping_patience=3, track_energy=False
         )
     )
-    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_accuracy=0.8)
+    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_acc=0.8)
     result = trainer._check_early_stopping(metrics)
     assert result is False
 
@@ -211,7 +211,7 @@ def test_check_early_stopping_improving():
     )
     trainer.best_val_metric = 1.0
     trainer.patience_counter = 0
-    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_accuracy=0.8, val_loss=0.5)
+    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_acc=0.8, val_loss=0.5)
     result = trainer._check_early_stopping(metrics)
     assert result is False
     assert trainer.patience_counter == 0
@@ -231,7 +231,7 @@ def test_check_early_stopping_patience_exceeded():
     )
     trainer.best_val_metric = 0.3
     trainer.patience_counter = 2
-    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_accuracy=0.8, val_loss=0.5)
+    metrics = TrainingMetrics(epoch=0, train_loss=0.5, train_acc=0.8, val_loss=0.5)
     result = trainer._check_early_stopping(metrics)
     assert result is True
 
@@ -246,7 +246,7 @@ def test_should_save_checkpoint_disabled():
         )
     )
     trainer.current_epoch = 1
-    metrics = TrainingMetrics(epoch=1, train_loss=0.5, train_accuracy=0.8)
+    metrics = TrainingMetrics(epoch=1, train_loss=0.5, train_acc=0.8)
     result = trainer._should_save_checkpoint(metrics)
     assert result is False
 
@@ -263,7 +263,7 @@ def test_should_save_checkpoint_epoch_interval():
         )
     )
     trainer.current_epoch = 3
-    metrics = TrainingMetrics(epoch=3, train_loss=0.5, train_accuracy=0.8)
+    metrics = TrainingMetrics(epoch=3, train_loss=0.5, train_acc=0.8)
     result = trainer._should_save_checkpoint(metrics)
     assert result is True
 
@@ -283,7 +283,7 @@ def test_should_save_checkpoint_best_only_improving():
     )
     trainer.current_epoch = 1
     trainer.best_val_metric = 1.0
-    metrics = TrainingMetrics(epoch=1, train_loss=0.3, train_accuracy=0.9, val_loss=0.5)
+    metrics = TrainingMetrics(epoch=1, train_loss=0.3, train_acc=0.9, val_loss=0.5)
     result = trainer._should_save_checkpoint(metrics)
     assert result is True
 
@@ -301,7 +301,7 @@ def test_should_save_checkpoint_best_only_not_improving():
     )
     trainer.current_epoch = 1
     trainer.best_val_metric = 0.3
-    metrics = TrainingMetrics(epoch=1, train_loss=0.3, train_accuracy=0.9, val_loss=0.5)
+    metrics = TrainingMetrics(epoch=1, train_loss=0.3, train_acc=0.9, val_loss=0.5)
     result = trainer._should_save_checkpoint(metrics)
     assert result is False
 
@@ -310,7 +310,7 @@ def test_save_history_creates_json(tmp_path):
     trainer = CoreTrainer(TrainerConfig(model="test", epochs=1, track_energy=False))
     trainer.output_dir = tmp_path
     trainer.history = [
-        TrainingMetrics(epoch=0, train_loss=0.5, train_accuracy=0.8),
+        TrainingMetrics(epoch=0, train_loss=0.5, train_acc=0.8),
     ]
     trainer._save_history()
     assert (tmp_path / "history.json").exists()
@@ -338,8 +338,8 @@ def test_get_history_dataframe_empty():
 def test_get_history_dataframe_with_history():
     trainer = CoreTrainer(TrainerConfig(model="test", epochs=1, track_energy=False))
     trainer.history = [
-        TrainingMetrics(epoch=0, train_loss=0.5, train_accuracy=0.8),
-        TrainingMetrics(epoch=1, train_loss=0.4, train_accuracy=0.85),
+        TrainingMetrics(epoch=0, train_loss=0.5, train_acc=0.8),
+        TrainingMetrics(epoch=1, train_loss=0.4, train_acc=0.85),
     ]
     df = trainer.get_history_dataframe()
     assert len(df) == 2

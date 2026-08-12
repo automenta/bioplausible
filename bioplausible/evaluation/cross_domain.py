@@ -185,13 +185,13 @@ class CrossDomainBenchmarkSuite:
                     model_name=model_name,
                     task_name=task.name,
                     metrics={
-                        "accuracy": final.val_accuracy or 0.0,
+                        "accuracy": final.val_acc or 0.0,
                         "loss": final.val_loss or float("inf"),
                     },
                     params_count=sum(p.numel() for p in model.parameters()),
                     metadata={
                         "epochs": len(history),
-                        "train_accuracy": final.train_accuracy,
+                        "train_accuracy": final.train_acc,
                         "energy_proxy": final.energy_proxy,
                     },
                 )

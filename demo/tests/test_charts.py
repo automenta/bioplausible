@@ -1,5 +1,10 @@
 """Chart transform tests (Sprint 3.4)."""
 
+import pytest
+
+pytest.importorskip("charts", reason="demo-local module; run from the demo venv")
+pytest.importorskip("runner", reason="demo-local module; run from the demo venv")
+
 from charts import parity_gap, rolling_mean
 from runner import DemoPanel, default_trainer_config
 

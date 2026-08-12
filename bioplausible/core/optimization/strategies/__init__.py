@@ -5,7 +5,6 @@ from .constraint import NoConstraint, SpectralConstraint
 from .feedback import ErrorFeedback, NoFeedback
 from .gradient import (
     BackpropGradient,
-    FAGradient,
     HebbianGradient,
     TargetPropGradient,
 )
@@ -15,7 +14,6 @@ __all__ = [
     "BackpropGradient",
     "ConstraintStrategy",
     "ErrorFeedback",
-    "FAGradient",
     "FeedbackStrategy",
     "GradientStrategy",
     "HebbianGradient",

@@ -278,9 +278,9 @@ class TrainingMetrics(BaseMetrics):
     """
 
     train_loss: float = 0.0
-    train_accuracy: float = 0.0
+    train_acc: float = 0.0
     val_loss: float | None = None
-    val_accuracy: float | None = None
+    val_acc: float | None = None
     val_perplexity: float | None = None
     learning_rate: float | None = None
     epoch_time: float = 0.0
@@ -936,9 +936,9 @@ class CoreTrainer:
             epoch=epoch,
             step=self.global_step,
             train_loss=train_metrics.get("loss", 0.0),
-            train_accuracy=train_metrics.get("accuracy", 0.0),
+            train_acc=train_metrics.get("accuracy", 0.0),
             val_loss=val_metrics.get("val_loss"),
-            val_accuracy=val_metrics.get("val_accuracy"),
+            val_acc=val_metrics.get("val_accuracy"),
             val_perplexity=val_metrics.get("val_perplexity"),
             learning_rate=self._get_lr(),
             epoch_time=time.time() - epoch_start,
@@ -1331,12 +1331,12 @@ class CoreTrainer:
         msg = ("Epoch %d: Train Loss=%.4f, Train Acc=%.4f") % (
             metrics.epoch,
             metrics.train_loss,
-            metrics.train_accuracy,
+            metrics.train_acc,
         )
         if metrics.val_loss is not None:
             msg += ", Val Loss=%.4f, Val Acc=%.4f" % (
                 metrics.val_loss,
-                metrics.val_accuracy,
+                metrics.val_acc,
             )
         if metrics.val_perplexity is not None:
             msg += ", Val PPL=%.2f" % metrics.val_perplexity

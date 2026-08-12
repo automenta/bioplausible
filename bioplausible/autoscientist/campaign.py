@@ -172,9 +172,9 @@ class AutoScientistCampaign:
             },
             "status": "completed",
             "metrics": [m.to_dict() for m in history],
-            "final_accuracy": history[-1].val_accuracy if history else 0.0,
+            "final_accuracy": history[-1].val_acc if history else 0.0,
             "final_loss": history[-1].val_loss if history else 0.0,
-            "train_accuracy": history[-1].train_accuracy if history else 0.0,
+            "train_accuracy": history[-1].train_acc if history else 0.0,
             "epochs_completed": len(history),
         }
 

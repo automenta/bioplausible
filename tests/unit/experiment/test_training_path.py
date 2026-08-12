@@ -60,7 +60,7 @@ def test_probe_surfaces_dominant_training_path(monkeypatch) -> None:
         TrainingMetrics(
             epoch=0,
             train_loss=0.5,
-            train_accuracy=0.9,
+            train_acc=0.9,
             extra={"training_paths": {"bptt": 3}},
         )
     ]

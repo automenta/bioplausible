@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[3]
 
 class _FakeMetrics:
     def __init__(self, train=None, val=None):
-        self.train_accuracy = train
-        self.val_accuracy = val
+        self.train_acc = train
+        self.val_acc = val
 
 
 def test_per_epoch_accuracy_prefers_train():

@@ -45,4 +45,4 @@ def test_toy_task_trains_through_core_trainer(task):
     )
     history = CoreTrainer(config).fit()
     assert len(history) == 1
-    assert 0.0 <= history[-1].val_accuracy <= 1.0
+    assert 0.0 <= history[-1].val_acc <= 1.0

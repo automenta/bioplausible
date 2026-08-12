@@ -92,11 +92,9 @@ class _DemoCallback(BaseExecutionCallback):
         self._probe = _WeightProbe()
 
     def on_epoch_end(self, epoch: int, metrics: object) -> None:
-        # TrainingMetrics exposes train_accuracy/val_accuracy (no bare
-        # `accuracy`); accept both plus a bare `loss`/`train_loss`.
-        acc = getattr(metrics, "train_accuracy", None) or getattr(
-            metrics, "val_accuracy", None
-        )
+        # TrainingMetrics exposes train_acc/val_acc (no bare `accuracy`); accept
+        # both plus a bare `loss`/`train_loss`.
+        acc = getattr(metrics, "train_acc", None) or getattr(metrics, "val_acc", None)
         loss = getattr(metrics, "loss", None) or getattr(metrics, "train_loss", None)
         with self._lock:
             acc_val = float(acc) if acc is not None else float("nan")

@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from bioplausible.core.logging import get_logger
-from bioplausible.core.training_state import EpochCheckpoint
+from bioplausible.core.training_state import TRAINING_CHECKPOINTS_DDL, EpochCheckpoint
 
 from .metrics import TrialMetrics
 
@@ -59,33 +59,6 @@ class HyperoptStorage:
             )
         """)
 
-        # Epoch metrics table (for detailed logging) — unified with EpochCheckpoint
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS epoch_metrics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                trial_id INTEGER NOT NULL,
-                epoch INTEGER NOT NULL,
-                train_acc REAL,
-                val_acc REAL,
-                train_loss REAL,
-                val_loss REAL,
-                grad_norm_mean REAL,
-                grad_norm_std REAL,
-                weight_norm REAL,
-                learning_rate REAL,
-                train_val_gap REAL,
-                test_acc REAL,
-                perplexity REAL,
-                reward REAL,
-                wall_time_seconds REAL,
-                total_flops INTEGER,
-                samples_seen INTEGER DEFAULT 0,
-                FOREIGN KEY (trial_id) REFERENCES hyperopt_logs (trial_id)
-            )
-        """)
-
-        self.conn.commit()
-
         # Training trajectories table (Scientist++ Phase 2)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS training_trajectories (
@@ -103,30 +76,7 @@ class HyperoptStorage:
         """)
 
         # Training checkpoints table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS training_checkpoints (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                trial_id INTEGER,
-                trajectory_id INTEGER NOT NULL DEFAULT -1,
-                epoch INTEGER NOT NULL,
-                train_acc REAL,
-                val_acc REAL,
-                test_acc REAL,
-                train_loss REAL,
-                val_loss REAL,
-                grad_norm_mean REAL,
-                grad_norm_std REAL,
-                weight_norm REAL,
-                learning_rate REAL,
-                train_val_gap REAL,
-                perplexity REAL,
-                reward REAL,
-                wall_time_seconds REAL,
-                total_flops INTEGER,
-                samples_seen INTEGER DEFAULT 0,
-                FOREIGN KEY (trajectory_id) REFERENCES training_trajectories(id)
-            )
-        """)
+        cursor.execute(TRAINING_CHECKPOINTS_DDL)
 
         # Indices
         cursor.execute(
@@ -278,12 +228,12 @@ class HyperoptStorage:
 
         self.conn.execute(
             """
-            INSERT INTO epoch_metrics (
-                trial_id, epoch, train_acc, val_acc, train_loss, val_loss,
-                grad_norm_mean, grad_norm_std, weight_norm, learning_rate,
-                train_val_gap, test_acc, perplexity, reward, wall_time_seconds,
-                total_flops, samples_seen
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO training_checkpoints (
+                trial_id, trajectory_id, epoch, train_acc, val_acc, train_loss,
+                val_loss, grad_norm_mean, grad_norm_std, weight_norm,
+                learning_rate, train_val_gap, test_acc, perplexity, reward,
+                wall_time_seconds, total_flops, samples_seen
+            ) VALUES (?, -1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 trial_id,
@@ -383,11 +333,12 @@ class HyperoptStorage:
         self.conn.commit()
 
     def clear_all_trials(self):
-        """Clear all trials and associated epoch metrics from the database."""
+        """Clear all trials and associated checkpoints from the database."""
         cursor = self.conn.cursor()
 
-        # Clear epoch metrics first (due to foreign key constraint)
-        cursor.execute("DELETE FROM epoch_metrics")
+        # Clear derived rows first (due to foreign key constraints)
+        cursor.execute("DELETE FROM training_checkpoints")
+        cursor.execute("DELETE FROM training_trajectories")
 
         # Clear trials
         cursor.execute("DELETE FROM hyperopt_logs")

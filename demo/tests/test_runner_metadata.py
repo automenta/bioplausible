@@ -1,6 +1,10 @@
 """Registry-metadata surfacing tests (Sprint 2.5 -> demo 3.2 tooltips)."""
 
 import pytest
+
+pytest.importorskip("charts", reason="demo-local module; run from the demo venv")
+pytest.importorskip("runner", reason="demo-local module; run from the demo venv")
+
 from charts import parity_explanation
 from runner import (
     TRAINABLE_MODELS,

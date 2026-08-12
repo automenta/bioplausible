@@ -261,9 +261,7 @@ def test_get_models_for_task_unknown_returns_empty():
 
 def test_query_by_family_filter():
     """Reg test for `family=` kwarg added together with ComponentMetadata.family."""
-    tile_models = Registry.query(
-        category=ComponentCategory.MODEL, family="tile"
-    )
+    tile_models = Registry.query(category=ComponentCategory.MODEL, family="tile")
     assert len(tile_models) > 0
     for r in tile_models:
         assert r["metadata"].family == "tile"

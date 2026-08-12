@@ -19,8 +19,8 @@ def _fake_history(accuracy: float = 0.9) -> list[TrainingMetrics]:
         TrainingMetrics(
             epoch=0,
             train_loss=0.1,
-            train_accuracy=accuracy,
-            val_accuracy=accuracy,
+            train_acc=accuracy,
+            val_acc=accuracy,
             epoch_time=1.0,
             forward_flops=10,
             backward_flops=20,
