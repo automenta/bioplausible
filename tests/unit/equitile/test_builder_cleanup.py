@@ -55,21 +55,19 @@ class TestBuilderCleanup(unittest.TestCase):
         self.assertEqual(model.W_out.out_features, 2)
 
     def test_graph_equitile_config_cleanup(self):
-        """Test GraphEquiTile works without unused fields."""
+        """Test GraphEquiTile works with the consolidated deployment config."""
         config = GraphEquiTileConfig(node_features=5, hidden_dim=16, num_classes=2)
-        # Verify removed fields are gone
-        self.assertFalse(hasattr(config, "mode"))
-        self.assertFalse(hasattr(config, "inference_steps"))
+        # Consolidated onto the unified deployment config (backprop-capable).
+        self.assertTrue(hasattr(config, "mode"))
 
         model = GraphEquiTile(config)
         self.assertIsInstance(model, GraphEquiTile)
 
     def test_timeseries_equitile_config_cleanup(self):
-        """Test TimeSeriesEquiTile works without unused fields."""
+        """Test TimeSeriesEquiTile works with the consolidated deployment config."""
         config = TimeSeriesConfig(input_dim=5, seq_len=10, output_dim=1)
-        # Verify removed fields are gone
-        self.assertFalse(hasattr(config, "mode"))
-        self.assertFalse(hasattr(config, "inference_steps"))
+        # Consolidated onto the unified deployment config (backprop-capable).
+        self.assertTrue(hasattr(config, "mode"))
 
         model = TimeSeriesEquiTile(config)
         self.assertIsInstance(model, TimeSeriesEquiTile)

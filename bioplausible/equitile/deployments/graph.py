@@ -15,11 +15,10 @@ this module adds the graph-specific model (readout/forward over batches).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
-import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.config.unified import ModelConfig
@@ -28,6 +27,10 @@ from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.equitile.deployments import _feature_extractors as _fe
+from bioplausible.equitile.deployments.base import (
+    GraphDeploymentConfig,
+    build_tile_head,
+)
 
 # Re-export shared graph components under their historical names.
 GraphAttentionLayer = _fe.GraphAttentionLayer
@@ -65,35 +68,20 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class GraphEquiTileConfig:
+class GraphEquiTileConfig(GraphDeploymentConfig):
     """Configuration for Graph EquiTile.
 
-    The graph model trains with standard backprop through its attention + tile
-    layers, so it deliberately excludes the PC/EP dynamics fields (``mode``,
-    ``inference_steps``, ``step_size``, ``beta``, ``task_type``,
-    ``weight_decay``) exposed by the vision/RL deployment configs.
+    Inherits the shared deployment fields from ``GraphDeploymentConfig`` and
+    keeps the same defaults the historical ``GraphEquiTileConfig`` exposed.
     """
 
-    # Graph settings
-    node_features: int = 10
-    hidden_dim: int = 64
-    num_classes: int = 2
-
-    # Architecture
+    # Historical graph defaults differ from the generic base.
+    learning_rate: float = 1e-3
     num_layers: int = 3
     neurons_per_tile: int = 32
     tiles_per_layer: int = 4
     attention_heads: int = 4
-
-    # Aggregation
-    aggregation: Literal["mean", "sum", "max", "attention"] = "mean"
-    readout: Literal["mean", "sum", "max", "attention"] = "mean"
-
-    # Learning
-    learning_rate: float = 1e-3
-    dropout: float = 0.1
-    activation: Literal["tanh", "relu", "gelu", "silu"] = "gelu"
-    equitile_kwargs: dict[str, object] = field(default_factory=dict)
+    mode: Literal["pc", "ep", "backprop"] = "backprop"
 
 
 # =============================================================================
@@ -127,10 +115,49 @@ class GraphEquiTile(BioModel):
 
     algorithm_name = "GraphEquiTile"
 
+    @classmethod
+    def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+        cls,
+        spec,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        num_layers,
+        device,
+        task_type,
+        **kwargs,
+    ):
+        """Build GraphEquiTile from factory arguments."""
+        config_kwargs = {
+            "node_features": input_dim,
+            "hidden_dim": hidden_dim,
+            "num_classes": output_dim,
+            "num_layers": num_layers,
+            "task_type": task_type or "classification",
+            "learning_rate": kwargs.get("lr", spec.default_lr),
+            "neurons_per_tile": kwargs.get("neurons_per_tile", 32),
+            "tiles_per_layer": kwargs.get("tiles_per_layer", 4),
+            "attention_heads": kwargs.get("attention_heads", 4),
+        }
+
+        valid_keys = GraphEquiTileConfig.__annotations__.keys()
+        for k, v in kwargs.items():
+            if k in valid_keys:
+                config_kwargs[k] = v
+
+        for k, v in spec.custom_hyperparams.items():
+            if k in valid_keys:
+                config_kwargs[k] = v
+
+        config = GraphEquiTileConfig(**config_kwargs)
+
+        model = cls(config=config)
+        return model.to(device)
+
     def __init__(
         self,
         config: GraphEquiTileConfig | None = None,
-        **kwargs: object,
+        **kwargs,
     ) -> None:
         if config is None:
             config = GraphEquiTileConfig(**kwargs)
@@ -149,26 +176,31 @@ class GraphEquiTile(BioModel):
         # layers + attention), from the unified deployments module.
         self.feature_extractor = GraphFeatureExtractor(config, _fe.tile_model_factory)
 
-        # Output projection
-        if config.readout == "attention":
-            self.readout_attention = nn.Linear(config.hidden_dim, 1)
-        self.output_proj = nn.Linear(config.hidden_dim, config.num_classes)
+        # Tile-substrate classification head
+        self._build_tile_head(config)
 
-        # Optimizer
-        self.optimizer = create_optimizer(
-            self, OptimizerConfig(name="adam", lr=config.learning_rate)
+        # Optimizers
+        self._optim_feature = create_optimizer(
+            self.feature_extractor,
+            OptimizerConfig(
+                name="adam", lr=config.learning_rate, weight_decay=config.weight_decay
+            ),
+        )
+        self._optim_head = create_optimizer(
+            self.head, OptimizerConfig(name="adam", lr=config.learning_rate)
         )
 
-        self._init_weights()
+        # Readout attention (for attention-based readout)
+        if config.readout == "attention":
+            self.readout_attention = nn.Linear(config.hidden_dim, 1)
 
-    def _init_weights(self) -> None:
-        """Initialize weights."""
-        with torch.no_grad():
-            for module in self.modules():
-                if isinstance(module, nn.Linear):
-                    nn.init.xavier_uniform_(module.weight)
-                    if module.bias is not None:
-                        nn.init.zeros_(module.bias)
+        # State tracking
+        self._step_count = 0
+
+    def _build_tile_head(self, config: GraphEquiTileConfig) -> None:
+        """Build the tile-substrate classification head."""
+        feature_dim = config.hidden_dim
+        self.head = build_tile_head(config, feature_dim, config.num_classes)
 
     def forward(
         self,
@@ -213,7 +245,7 @@ class GraphEquiTile(BioModel):
         else:
             graph_features = x.mean(dim=0, keepdim=True)
 
-        logits = self.output_proj(graph_features)
+        logits = self.head.forward_logits(graph_features, detach_input=False)
 
         if return_node_embeddings:
             return logits, x
@@ -227,38 +259,45 @@ class GraphEquiTile(BioModel):
         batch: Tensor | None = None,
     ) -> dict[str, float]:
         """Perform one training step."""
-        logits = self.forward(node_features, edge_index, batch)
+        self._step_count += 1
 
-        if labels.dim() == 0 or labels.shape[0] == logits.shape[0]:
-            loss = F.cross_entropy(logits, labels)
-        else:
-            loss = F.cross_entropy(logits.view(-1, logits.shape[-1]), labels.view(-1))
+        x = self.feature_extractor(node_features, edge_index)
 
-        self.optimizer.zero_grad()
-        loss.backward()
-
-        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
-
-        self.optimizer.step()
-
-        with torch.no_grad():
-            if labels.dim() == 0 or labels.shape[0] == logits.shape[0]:
-                accuracy = (logits.argmax(dim=-1) == labels).float().mean().item()
+        # Graph readout
+        if batch is not None:
+            if self.config.readout == "attention":
+                attention = torch.sigmoid(self.readout_attention(x))
+                graph_features = scatter_mean(x * attention, batch, dim=0)
+            elif self.config.readout == "mean":
+                graph_features = scatter_mean(x, batch, dim=0)
+            elif self.config.readout == "sum":
+                graph_features = scatter_sum(x, batch, dim=0)
+            elif self.config.readout == "max":
+                graph_features = scatter_max(x, batch, dim=0)
             else:
-                accuracy = (
-                    (
-                        logits.view(-1, logits.shape[-1]).argmax(dim=-1)
-                        == labels.view(-1)
-                    )
-                    .float()
-                    .mean()
-                    .item()
-                )
+                graph_features = x
+        else:
+            graph_features = x.mean(dim=0, keepdim=True)
 
-        return {
-            "loss": loss.item(),
-            "accuracy": accuracy,
-        }
+        if self.config.mode == "backprop":
+            logits = self.head.forward_logits(graph_features, detach_input=False)
+            loss = self.head.compute_loss(logits, labels)
+
+            self._optim_feature.zero_grad()
+            self._optim_head.zero_grad()
+            loss.backward()
+
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+
+            self._optim_feature.step()
+            self._optim_head.step()
+
+            return {
+                "loss": loss.item(),
+                "accuracy": self.head.compute_metrics(logits, labels),
+                "mode": self.config.mode,
+            }
+        return self.head.local_update(graph_features.detach(), labels)
 
     def predict(
         self,
@@ -270,6 +309,8 @@ class GraphEquiTile(BioModel):
         self.eval()
         with torch.no_grad():
             logits = self.forward(node_features, edge_index, batch)
+            if isinstance(logits, tuple):
+                logits = logits[0]
             return logits.argmax(dim=-1)
 
 
@@ -283,7 +324,7 @@ def create_graph_model(
     num_classes: int,
     hidden_dim: int = 64,
     num_layers: int = 3,
-    **kwargs: object,
+    **kwargs,
 ) -> GraphEquiTile:
     """Create GraphEquiTile model."""
     config = GraphEquiTileConfig(
@@ -299,7 +340,7 @@ def create_graph_model(
 def create_molecule_model(
     atom_features: int = 9,
     num_classes: int = 2,
-    **kwargs: object,
+    **kwargs,
 ) -> GraphEquiTile:
     """Create GraphEquiTile for molecular property prediction."""
     return create_graph_model(
@@ -315,7 +356,7 @@ def create_molecule_model(
 def create_social_graph_model(
     user_features: int = 16,
     num_classes: int = 2,
-    **kwargs: object,
+    **kwargs,
 ) -> GraphEquiTile:
     """Create GraphEquiTile for social network analysis."""
     return create_graph_model(

@@ -100,7 +100,7 @@ class RLEquiTile(BioModel):
     algorithm_name = "RLEquiTile"
 
     @classmethod
-    def build(
+    def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         cls,
         spec,
         input_dim,
@@ -117,6 +117,7 @@ class RLEquiTile(BioModel):
             "action_dim": output_dim,
             "hidden_dim": hidden_dim,
             "num_layers": num_layers,
+            "task_type": task_type,
             "learning_rate": kwargs.get("lr", spec.default_lr),
             "neurons_per_tile": kwargs.get("neurons_per_tile", 32),
             "tiles_per_layer": kwargs.get("tiles_per_layer", 4),
@@ -139,7 +140,7 @@ class RLEquiTile(BioModel):
     def __init__(
         self,
         config: RLEquiTileConfig | None = None,
-        **kwargs: object,
+        **kwargs,
     ) -> None:
         if config is None:
             config = RLEquiTileConfig(**kwargs)
@@ -157,18 +158,35 @@ class RLEquiTile(BioModel):
         # Shared feature extractor (EquiTile-based, from the unified module)
         self.feature_extractor = RLFeatureExtractor(config)
 
-        # Actor (policy) head
+        # Actor (policy) head and Critic (value) head
         self.actor = self._build_actor(config)
-
-        # Critic (value) head
         self.critic = self._build_critic(config)
 
-        # Optimizer
-        self.optimizer = create_optimizer(
-            self, OptimizerConfig(name="adam", lr=config.learning_rate)
-        )
+        self._setup_optimizers()
 
         self._init_weights()
+
+    def _setup_optimizers(self) -> None:
+        """Build split optimizers: feature extractor vs actor/critic heads.
+
+        The recurrent subclass swaps its actor/critic heads and adds an ``rnn``
+        module; it re-runs this to bind the head group to the updated set.
+        """
+        self._optim_feature = create_optimizer(
+            self.feature_extractor,
+            OptimizerConfig(name="adam", lr=self.config.learning_rate),
+        )
+        head_modules = [self.actor, self.critic]
+        rnn = getattr(self, "rnn", None)
+        if rnn is not None:
+            head_modules.append(rnn)
+        head_params: list[nn.Parameter] = []
+        for module in head_modules:
+            head_params.extend(module.parameters())
+        self._optim_head = create_optimizer(
+            head_params,
+            OptimizerConfig(name="adam", lr=self.config.learning_rate),
+        )
 
     def _build_actor(self, config: RLEquiTileConfig) -> nn.Module:
         """Build actor (policy) head."""
@@ -334,12 +352,14 @@ class RLEquiTile(BioModel):
         """Perform one training step."""
         loss_dict = self.compute_loss(obs, actions, advantages, returns, old_log_probs)
 
-        self.optimizer.zero_grad()
+        self._optim_feature.zero_grad()
+        self._optim_head.zero_grad()
         loss_dict["total_loss"].backward()
 
         nn.utils.clip_grad_norm_(self.parameters(), self.config.max_grad_norm)
 
-        self.optimizer.step()
+        self._optim_feature.step()
+        self._optim_head.step()
 
         return {
             key: value.item() if isinstance(value, torch.Tensor) else value
@@ -389,6 +409,9 @@ class RecurrentRLEquiTile(RLEquiTile):
         self.critic = nn.Linear(rnn_hidden_dim, 1)
 
         self._hidden_state = None
+
+        # Rebind head optimizers to the swapped actor/critic + rnn.
+        self._setup_optimizers()
 
     def reset_hidden(self, batch_size: int, device: torch.device) -> None:
         """Reset hidden state."""
