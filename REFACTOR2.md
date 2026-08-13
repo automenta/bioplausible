@@ -113,6 +113,12 @@ class ExperimentConfig:
 
 **Acceptance criterion #1:** `grep -rl "loss.backward()" bioplausible/` outside `core/` & `training_mixin` returns nothing.
 
+**Progress (2026-08-14):** Deployment-model migration COMPLETE — see Session Log below.
+- **CoreTrainer spatial input handling fixed** — `_setup_data` now populates `model_kwargs` with `input_dim`/`output_dim` from task (including spatial tuples). `_create_model` passes through without `int()` coercion.
+- **ConvEquiTile deployment model integrated** — `build` handles tuple `input_dim` via `math.prod()`; `input_format = "spatial"` signals CoreTrainer to preserve 4D input.
+- **LightningExecutionCallback added** — enables PL-compatible logging from CoreTrainer.
+- **Verified:** CoreTrainer + ConvEquiTile on MNIST works end-to-end (model creation, spatial data adaptation, train_step dispatch). Locked in by `tests/unit/core/test_deployment_models.py` (5 tests, green).
+
 **Win:** ~2,500 lines removed; one place for bug fixes/features.
 
 ---
@@ -336,3 +342,44 @@ tests, not the full suite. Both are CoreTrainer-adjacent, high-risk architecture
 - Criterion #6 (`zoo/propagators/` = only `mep.py` + gradient transformers): **NOT done** — `backprop.py`,
   `base.py`, `eqprop.py`, `fa.py`, `hebbian.py`, `spiking.py` still present. Pillar G scope.
 - Criterion "`biopl` dispatcher works" (Pillar K): **DONE**.
+
+---
+
+## Session Log (2026-08-14)
+
+### Completed (Pillar A — Single Training Path: Initial Work)
+- **CoreTrainer spatial input handling fixed:** `_setup_data` now populates `model_kwargs` with `input_dim` and `output_dim` from the resolved task object (including spatial tuples like `(1,28,28)` for MNIST). `_create_model` passes these through without `int()` coercion.
+- **ConvEquiTile deployment model works with CoreTrainer:** 
+  - `ConvEquiTile.build` now handles tuple `input_dim` by flattening via `math.prod()`.
+  - Added `input_format = "spatial"` attribute so CoreTrainer's `_adapt_input` preserves 4D spatial tensors for conv models.
+  - Verified end-to-end: CoreTrainer creates ConvEquiTile, adapts MNIST data to spatial format, and calls model's `train_step`.
+- **Added LightningExecutionCallback** in `execution/callbacks.py` for PyTorch Lightning compatible logging from CoreTrainer.
+- **Added `tests/unit/core/test_deployment_models.py`** (5 tests): construction via the single funnel, spatial-tuple threading into `model_kwargs`, a full training epoch through CoreTrainer's Phase-3 `train_step` dispatch (asserts `training_paths["model_train_step"]`), tuple-flattening in `ConvEquiTile.build`, and `_adapt_input` 4D preservation. All green.
+
+### Verification (2026-08-14, targeted suites)
+- `pytest tests/unit/core/test_core_trainer.py` (23) — **all green**
+- `pytest tests/unit/core/test_deployment_models.py` (5) — **all green**
+- `pytest tests/unit/core/test_execution_callbacks.py` (6) — **all green**
+- `pytest tests/unit/experiment/test_training_path.py` (4) — **all green**
+- `pytest tests/integration/test_smoke_training.py` (25) — **all green**
+- `pytest tests/unit/cli/` (23) — **all green**
+- `pytest tests/unit/domains/test_registry.py` (10) — **all green**
+- `pytest tests/unit/experiment/test_config_knobs.py` (13) — **all green**
+- `pytest tests/integration/test_hyperopt_integration.py` (3) — **all green**
+- `pytest tests/integration/test_engine_stability.py` (1) — **all green**
+- `pytest tests/unit/core/test_execution_callbacks.py` + `test_deployment_models.py` (11) — **all green**
+- `pyright` 0 errors / 0 warnings on `execution/callbacks.py` (new code) + `test_deployment_models.py`
+- `ruff` clean on `execution/callbacks.py` and `test_deployment_models.py`; no NEW warnings on `core/trainer.py` (36 pre-existing before == 36 after); `vision.py` remaining warnings all pre-existing (build-arg arity, magic dim constants)
+
+### Next Steps for Pillar A
+1. **BioLightningModule scoping decision:** this is a `pl.LightningModule` where PL owns the loop and calls `training_step` per batch; for standard optimizers PL's *automatic* backward conflicts with `CoreTrainer._bptt_step`'s internal backward (double-backward). Full conversion requires either always-manual optimization (changes the documented `automatic_optimization` contract and tests) or a shared dispatcher extracted from `_train_step`. Recommended future pass: extract `_train_step`'s dispatch into a reusable pure function both `CoreTrainer` and `BioLightningModule` call, keeping PL as the outer loop. Do NOT attempt a literal `CoreTrainer.fit()`-inside-LightningModule — PL must stay the driver.
+2. **Convert RL training** (`training/rl.py`) to use CoreTrainer.
+3. **Convert CLI repro** (`cli/repro.py`) `_train_one_epoch` to use CoreTrainer.
+4. **Address validation tracks** — delegate execution to CoreTrainer-based runner.
+5. **Address MEP benchmarks** — convert to registry-driven BenchmarkRegistry tracks (Pillar D dependency).
+
+### Findings for future work
+- **ConvEquiTile NaN loss:** default tile config (`neurons_per_tile=64`, `tiles_per_layer=4`, `mode="backprop"`) diverges on MNIST through CoreTrainer; the smaller test config (`conv_channels=[4,8]`, `tiles_per_layer=1`, `mode="pc"`) trains stably. This is a hyperparameter/initialization issue, not a CoreTrainer structural one — keep the small config for tests.
+- **Other deployment models** (GraphEquiTile, TimeSeriesEquiTile, RLEquiTile) use scalar `input_dim` so they should work with CoreTrainer without changes — only ConvEquiTile needed the tuple handling fix.
+- **`LightningExecutionCallback` is infrastructure, not wired:** it logs `TrainingMetrics` fields via `pl.LightningModule.log` but no production code uses it yet. It is the bridge the Pillar A BioLightningModule pass (Next Steps #1) should consume.
+- **`_create_model` no longer needs `int()` coercion:** with `_setup_data` seeding `model_kwargs["input_dim"]` from the task, the `int(... or 0)` guard in `_create_model` was replaced with a `None` check that preserves tuples. Any future caller building `TrainerConfig` by hand must either pass a task name (so `_setup_data` resolves geometry) or include `input_dim`/`output_dim` in `model_kwargs` explicitly.

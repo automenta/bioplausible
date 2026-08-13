@@ -551,6 +551,12 @@ class CoreTrainer:
         if hasattr(task_obj, "vocab_size"):
             self.config.model_kwargs.setdefault("vocab_size", task_obj.vocab_size)
 
+        # Store input_dim and output_dim from task for model construction
+        # Pass spatial tuples straight through (do not flatten) — models handle
+        # flattening in their build methods via math.prod() where needed.
+        self.config.model_kwargs.setdefault("input_dim", task_obj.input_dim)
+        self.config.model_kwargs.setdefault("output_dim", task_obj.output_dim)
+
         train_len = len(self.train_loader) if self.train_loader else 0
         val_len = len(self.val_loader) if self.val_loader else 0
         logger.info("Data loaders created: train=%d, val=%d", train_len, val_len)
@@ -569,8 +575,13 @@ class CoreTrainer:
 
         # model_kwargs carries the resolved scalar input/output dims (build_model
         # path); fall back to 0 only if an unusual caller omitted them.
-        input_dim = int(self.config.model_kwargs.get("input_dim") or 0)
-        output_dim = int(self.config.model_kwargs.get("output_dim") or 0)
+        # input_dim may be a tuple (spatial) — pass through as-is.
+        input_dim = self.config.model_kwargs.get("input_dim")
+        output_dim = self.config.model_kwargs.get("output_dim")
+        if input_dim is None:
+            input_dim = 0
+        if output_dim is None:
+            output_dim = 0
         self.model = construct_model(
             model_cls,
             self.config.model_kwargs,

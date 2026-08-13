@@ -15,6 +15,7 @@ adds the vision-specific pieces (augmentation, the registered model).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -121,6 +122,9 @@ class ConvEquiTile(BioModel):
         **kwargs,
     ):
         """Build ConvEquiTile from factory arguments."""
+        # Handle spatial tuple input_dim (e.g., (1, 28, 28) for MNIST)
+        if isinstance(input_dim, tuple):
+            input_dim = math.prod(input_dim)
         if input_dim == 784:
             channels, size = 1, 28
         elif input_dim == 3072:
@@ -172,6 +176,7 @@ class ConvEquiTile(BioModel):
         )
 
         self.config = config
+        self.input_format = "spatial"  # Signal to CoreTrainer to preserve spatial input
 
         # Convolutional feature extractor (shared implementation)
         self.feature_extractor = ConvFeatureExtractor(config)
