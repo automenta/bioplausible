@@ -6,6 +6,7 @@ from torch import autograd, nn
 
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.logging import get_logger
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.model import BioModel
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
@@ -299,7 +300,7 @@ class EqPropModel(BioModel):
                     "Model collapse (NaN logits) — check weight initialization or gradient clipping"
                 )
             else:
-                acc = (logits_free.argmax(dim=1) == y).float().mean().item()
+                acc = compute_accuracy(logits_free, y)
                 loss_val = F.cross_entropy(logits_free, y).item()
 
         return {"loss": loss_val, "accuracy": acc}

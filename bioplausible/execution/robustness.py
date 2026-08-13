@@ -15,6 +15,7 @@ import torch
 from torch import nn
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device
 from bioplausible.domains import create_task
@@ -229,7 +230,7 @@ class RobustnessEvaluator:
 
             # Standard forward
             logits = model(h)
-            acc_base = (logits.argmax(1) == y).float().mean().item()
+            acc_base = compute_accuracy(logits, y)
 
         # If model supports noise injection (e.g. LoopedMLP)
         if hasattr(model, "inject_noise_and_relax"):
@@ -384,7 +385,7 @@ class RobustnessEvaluator:
         # Baseline accuracy
         with torch.no_grad():
             logits_clean = model(h_clean)
-            acc_clean = (logits_clean.argmax(1) == y).float().mean().item()
+            acc_clean = compute_accuracy(logits_clean, y)
 
         if acc_clean == 0:
             return 0.0
@@ -432,7 +433,7 @@ class RobustnessEvaluator:
             # Evaluate Adversarial
             with torch.no_grad():
                 logits_adv = model(h_adv)
-                acc_adv = (logits_adv.argmax(1) == y).float().mean().item()
+                acc_adv = compute_accuracy(logits_adv, y)
 
             return acc_adv / acc_clean
 

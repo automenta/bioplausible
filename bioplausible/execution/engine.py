@@ -20,6 +20,7 @@ import tempfile
 import time
 import traceback
 import zipfile
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -894,10 +895,11 @@ class ExecutionEngine:
             logger.error("Failed to generate reports: %s", e, exc_info=True)
 
 
-if __name__ == "__main__":
+def main(argv: Sequence[str] | None = None) -> int:
+    """Console-script entry point for ``biopl-scientist`` (AutoScientist launcher)."""
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="biopl-scientist")
     parser.add_argument("--report", action="store_true", help="Generate report only")
     parser.add_argument("--dir", default="reports", help="Output directory for reports")
     parser.add_argument(
@@ -906,7 +908,7 @@ if __name__ == "__main__":
         default=None,
         help="Limit maximum tier (smoke, shallow, standard, deep)",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     engine = ExecutionEngine(tier_limit=args.tier_limit)
 
@@ -914,3 +916,8 @@ if __name__ == "__main__":
         engine.generate_reports(args.dir)
     else:
         engine.run()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

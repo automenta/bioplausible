@@ -148,7 +148,7 @@ def test_core_trainer_validate_with_data_loader():
 
     dataset = TensorDataset(torch.randn(8, 10), torch.randint(0, 2, (8,)))
     loader = DataLoader(dataset, batch_size=4)
-    result = trainer._validate(loader)
+    result = trainer.validate(loader)
     assert isinstance(result, dict)
     assert "val_loss" in result
 
@@ -172,7 +172,7 @@ def test_core_trainer_validate_with_task():
             return torch.randn(4, 10), torch.randint(0, 2, (4,))
 
     trainer.task = _Task()
-    result = trainer._validate(2)
+    result = trainer.validate(2)
     assert isinstance(result, dict)
     assert "val_loss" in result
 

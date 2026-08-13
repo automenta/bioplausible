@@ -20,6 +20,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 __all__ = [
@@ -104,7 +105,7 @@ def train_model(
                 track_id, seed, epoch, f"{name}_grad_norm", grad_norm
             )
 
-        acc = (out.argmax(dim=1) == y).float().mean().item() * 100
+        acc = compute_accuracy(out, y, scale=100)
         logger.debug(
             "  %s: %s loss=%.3f acc=%.1f%%",
             name,
@@ -132,7 +133,7 @@ def evaluate_accuracy(model: nn.Module, X: torch.Tensor, y: torch.Tensor) -> flo
     try:
         with torch.no_grad():
             out = model(X)
-            acc = (out.argmax(dim=1) == y).float().mean().item()
+            acc = compute_accuracy(out, y)
     finally:
         if was_training:
             model.train()

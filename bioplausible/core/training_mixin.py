@@ -15,6 +15,8 @@ from typing import Protocol, Self
 import torch
 from torch import nn
 
+from bioplausible.core.losses import compute_accuracy
+
 type LossFn = Callable[
     [nn.Module, torch.Tensor, torch.Tensor],
     tuple[torch.Tensor, torch.Tensor, dict[str, float] | None],
@@ -78,7 +80,7 @@ def supervised_step(  # ruff: ignore[too-many-arguments]  # training-step contra
     if grad_clip:
         nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
     optimizer.step()
-    acc = float((logits.argmax(-1) == y).float().mean().item())
+    acc = compute_accuracy(logits, y)
     result = {"loss": float(loss.item()), "accuracy": acc}
     if extra_keys:
         result.update(extra_keys)

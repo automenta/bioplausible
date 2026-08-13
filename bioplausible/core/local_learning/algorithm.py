@@ -36,6 +36,7 @@ from bioplausible.core.local_learning.mixins import (
     MultiOptimizerMixin,
 )
 from bioplausible.core.local_learning.task import TaskHandler
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.tile import TileGraph, TileState
 from bioplausible.core.tile.kernels import (
     compute_activity_update,
@@ -702,7 +703,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
 
     @staticmethod
     def _accuracy(logits: Tensor, y: Tensor) -> float:
-        return (logits.argmax(dim=1) == y).float().mean().item()
+        return compute_accuracy(logits, y)
 
     def forward(self, x: Tensor) -> Tensor:
         """Alias of :meth:`forward_logits` for nn.Module interface."""

@@ -8,6 +8,7 @@ import torch
 from torch import nn
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
@@ -191,7 +192,7 @@ def track_21_continual_learning(verifier) -> TrackResult:
         total_loss.backward()
         optimizer.step()
 
-        acc = (out.argmax(dim=1) == y_B).float().mean().item() * 100
+        acc = compute_accuracy(out, y_B, scale=100)
         log_msg = (
             f"\r  TaskB+EWC: [{epoch + 1}/{verifier.epochs}] "
             f"ce={ce_loss.item():.3f} ewc={ewc_loss:.4f} acc={acc:.1f}%"

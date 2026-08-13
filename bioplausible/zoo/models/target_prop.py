@@ -10,6 +10,7 @@ import math
 import torch
 from torch import nn
 
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
@@ -171,5 +172,5 @@ class DifferenceTargetProp(TransitionGraphMixin, nn.Module):
 
             layer.opt_f.step()
 
-        acc = (out.argmax(1) == y).float().mean().item()
+        acc = compute_accuracy(out, y)
         return {"loss": loss.item(), "accuracy": acc}

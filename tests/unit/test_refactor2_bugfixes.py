@@ -542,7 +542,7 @@ def test_core_trainer_validate_supports_3d_logits_model():
     fake_task.compute_metrics = compute_metrics
     trainer.task_obj = fake_task
 
-    result = trainer._validate(val_batches=1)
+    result = trainer.validate(val_batches=1)
     assert "val_loss" in result
     assert "val_accuracy" in result
     assert math.isfinite(result["val_loss"])
@@ -862,7 +862,7 @@ def test_validate_returns_nan_when_no_validation_source():
     trainer.val_loader = None
     trainer.task_obj = None
 
-    result = trainer._validate(val_batches=5)
+    result = trainer.validate(val_batches=5)
     assert math.isnan(result["val_loss"]), (
         f"Expected NaN for empty validation, got {result['val_loss']!r}"
     )

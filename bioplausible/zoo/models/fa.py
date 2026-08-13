@@ -15,6 +15,7 @@ from bioplausible.config.unified import (
     _build_model_config,
     resolve_hidden_dims,
 )
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
@@ -460,7 +461,7 @@ class AdaptiveFeedbackAlignment(BioModel):
 
         return {
             "loss": loss.item(),
-            "accuracy": (output.argmax(1) == y).float().mean().item(),
+            "accuracy": compute_accuracy(output, y),
         }
 
     @classmethod
@@ -553,7 +554,7 @@ class StochasticFA(BioModel):
 
         return {
             "loss": loss.item(),
-            "accuracy": (output.argmax(1) == y).float().mean().item(),
+            "accuracy": compute_accuracy(output, y),
         }
 
 
@@ -859,7 +860,7 @@ class StandardFA(BioModel):
 
         return {
             "loss": loss.item(),
-            "accuracy": (output.argmax(1) == y).float().mean().item(),
+            "accuracy": compute_accuracy(output, y),
         }
 
 
@@ -1128,7 +1129,7 @@ class EquilibriumAlignment(EqPropModel):
 
             loss = nn.functional.cross_entropy(logits, y)
 
-            acc = (logits.argmax(dim=1) == y).float().mean().item()
+            acc = compute_accuracy(logits, y)
 
             if y.dim() == 1:
                 target = nn.functional.one_hot(y, self.output_dim).float()

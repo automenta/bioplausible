@@ -16,6 +16,7 @@ from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
@@ -156,7 +157,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         self.optimizer_.step()
 
         with torch.no_grad():
-            accuracy = (logits.argmax(1) == y).float().mean().item()
+            accuracy = compute_accuracy(logits, y)
 
         return {"loss": loss.item(), "accuracy": accuracy}
 

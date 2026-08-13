@@ -67,8 +67,11 @@ def compute_loss(
     return torch.nn.functional.cross_entropy(logits_ce, y_ce)
 
 
-def compute_accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
-    """Accuracy via argmax, handling one-hot and reshaped targets."""
+def compute_accuracy(logits: torch.Tensor, y: torch.Tensor, scale: int = 1) -> float:
+    """Accuracy via argmax, handling one-hot and reshaped targets.
+
+    Returns a 0-1 ratio by default; pass ``scale=100`` for a percentage.
+    """
     logits_ce, y_ce = reshape_for_cross_entropy(logits, y)
     with torch.no_grad():
-        return (logits_ce.argmax(1) == y_ce).float().mean().item()
+        return (logits_ce.argmax(1) == y_ce).float().mean().item() * scale

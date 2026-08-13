@@ -10,6 +10,8 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
+from bioplausible.core.losses import compute_accuracy
+
 __all__ = [
     "Batch",
     "DomainSpec",
@@ -273,7 +275,7 @@ class DomainTask(ABC):
         """
         if logits.dim() == 3:
             logits = logits[:, -1, :]
-        accuracy = (logits.argmax(1) == y).float().mean().item()
+        accuracy = compute_accuracy(logits, y)
         return {"loss": loss, "accuracy": accuracy}
 
     def compute_metrics_domain(

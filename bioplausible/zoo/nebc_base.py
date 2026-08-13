@@ -15,6 +15,7 @@ import torch
 import torch.nn.functional as F
 
 from bioplausible.core.logging import get_logger
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.model import BioModel
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
@@ -110,7 +111,7 @@ def train_nebc_model(
         losses.append(loss.item())
 
         if verbose and (epoch + 1) % max(1, epochs // 5) == 0:
-            acc = (out.argmax(dim=1) == y).float().mean().item() * 100
+            acc = compute_accuracy(out, y, scale=100)
             L = model.compute_lipschitz()
             logger.info(
                 "  [%s] Epoch %d/%d: loss=%.3f, acc=%.1f%%, L=%.3f",
@@ -139,7 +140,7 @@ def evaluate_nebc_model(
         with torch.no_grad():
             out = model(X)
             loss = F.cross_entropy(out, y).item()
-            acc = (out.argmax(dim=1) == y).float().mean().item()
+            acc = compute_accuracy(out, y)
             L = model.compute_lipschitz()
     finally:
         if was_training:

@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 
@@ -289,7 +290,7 @@ class DeepHebbianChain(NEBCBase):
                 )
 
         loss = F.cross_entropy(logits, y)
-        acc = (logits.argmax(dim=1) == y).float().mean().item()
+        acc = compute_accuracy(logits, y)
         return {"loss": loss.item(), "accuracy": acc}
 
 

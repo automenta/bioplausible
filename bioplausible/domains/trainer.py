@@ -138,7 +138,7 @@ class _TaskTrainer:
         metrics["val_loss"] = float("nan")
         metrics["val_accuracy"] = float("nan")
         try:
-            val_raw = self._trainer._validate(1)
+            val_raw = self._trainer.validate(1)
             metrics["val_loss"] = val_raw.get("val_loss", float("nan"))
             metrics["val_accuracy"] = val_raw.get("val_accuracy", float("nan"))
             if "val_perplexity" in val_raw:

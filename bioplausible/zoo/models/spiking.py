@@ -12,6 +12,7 @@ import torch
 from snntorch import surrogate
 from torch import nn
 
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
@@ -165,5 +166,5 @@ class SpikingSTDP(TransitionGraphMixin, nn.Module):
 
         out = torch.stack(spk2_rec, dim=0).sum(0)
         loss = (output_error**2).mean().item()
-        acc = (out.argmax(1) == y).float().mean().item()
+        acc = compute_accuracy(out, y)
         return {"loss": loss, "accuracy": acc}

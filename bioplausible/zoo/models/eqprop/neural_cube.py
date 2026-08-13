@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 from bioplausible.zoo._settling import settle_state
@@ -300,7 +301,7 @@ class NeuralCube(TransitionGraphMixin, nn.Module):
                 else:
                     p -= self.learning_rate * (gf_p - gn_p) / self.beta
 
-        acc = (logits_free.argmax(1) == y).float().mean().item()
+        acc = compute_accuracy(logits_free, y)
         return {"loss": loss_free.item(), "accuracy": acc}
 
     def get_topology_stats(self) -> dict:

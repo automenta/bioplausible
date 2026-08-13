@@ -13,6 +13,7 @@ from torch import nn
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.checkpoint_mixin import CheckpointMixin
 from bioplausible.core.construction import build_from_standard_args
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.spectral_mixin import SpectralMixin
 from bioplausible.core.training_mixin import TrainingMixin
 
@@ -130,7 +131,7 @@ class BioModel(nn.Module, ABC, TrainingMixin, SpectralMixin, CheckpointMixin):
 
     def compute_metrics(self, logits: torch.Tensor, y: torch.Tensor) -> float:
         """Compute accuracy from logits and targets."""
-        return (logits.argmax(dim=-1) == y).float().mean().item()
+        return compute_accuracy(logits, y)
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Execute one training step using TrainingMixin protocol."""

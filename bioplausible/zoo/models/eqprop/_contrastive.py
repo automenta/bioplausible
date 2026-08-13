@@ -12,6 +12,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.losses import compute_accuracy
+
 
 def _make_onehot_target(
     y: torch.Tensor,
@@ -275,7 +277,7 @@ def _contrastive_step(
     # Loss/accuracy on free-phase output
     ce_input = free_out.real if use_conj else free_out
     loss = F.cross_entropy(ce_input, y).item()
-    acc = (ce_input.argmax(dim=1) == y).float().mean().item()
+    acc = compute_accuracy(ce_input, y)
 
     result: dict[str, object] = {"loss": loss, "accuracy": acc}
 

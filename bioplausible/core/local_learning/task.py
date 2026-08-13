@@ -4,6 +4,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
+from bioplausible.core.losses import compute_accuracy
+
 __all__ = [
     "TaskHandler",
 ]
@@ -83,5 +85,5 @@ class TaskHandler:
                     # Multilabel: exact match per sample
                     accuracy = (preds == y).all(dim=-1).float().mean().item()
             else:
-                accuracy = (logits.argmax(dim=-1) == y).float().mean().item()
+                accuracy = compute_accuracy(logits, y)
         return accuracy

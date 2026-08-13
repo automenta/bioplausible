@@ -60,6 +60,98 @@ def _feedforward(
     return activities
 
 
+def _train_loop(
+    optimizer,
+    structure,
+    params,
+    train_loader,
+    test_loader,
+    epochs,
+    device,
+    step_fn,
+    eval_fn,
+) -> dict[str, float]:
+    """Run ``epochs`` of training plus optional test-set evaluation.
+
+    ``step_fn`` must perform one batch's forward + backward + optimizer update
+    and return ``(output, loss)`` for logging.  ``eval_fn`` returns the model
+    output for a batch (no grad).
+    """
+    total_time = 0.0
+    final_train_acc = 0.0
+    final_train_loss = 0.0
+
+    for _ in range(epochs):
+        epoch_start = time.time()
+        epoch_loss = 0.0
+        epoch_acc = 0.0
+        n_batches = 0
+
+        for batch_x, batch_y in train_loader:
+            batch_x = batch_x.to(device).float()
+            batch_y = batch_y.to(device)
+
+            optimizer.zero_grad()
+            output, loss = step_fn(optimizer, structure, params, batch_x, batch_y)
+
+            epoch_loss += loss.item()
+            epoch_acc += compute_accuracy(output, batch_y)
+            n_batches += 1
+
+        total_time += time.time() - epoch_start
+
+        if n_batches > 0:
+            final_train_loss = epoch_loss / n_batches
+            final_train_acc = epoch_acc / n_batches
+
+    test_acc = 0.0
+    if test_loader is not None:
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for batch_x, batch_y in test_loader:
+                batch_x = batch_x.to(device).float()
+                batch_y = batch_y.to(device)
+                output = eval_fn(structure, params, batch_x, batch_y)
+                correct += (output.argmax(dim=-1) == batch_y).sum().item()
+                total += batch_y.shape[0]
+        test_acc = correct / total if total > 0 else 0.0
+
+    return {
+        "train_acc": final_train_acc,
+        "test_acc": test_acc,
+        "train_loss": final_train_loss,
+        "time": total_time,
+    }
+
+
+def _collect_trainable(
+    params: dict[str, dict[str, torch.Tensor]], requires_grad: bool
+) -> list[torch.Tensor]:
+    """Flatten node params, optionally forcing ``requires_grad`` on each."""
+    param_list: list[torch.Tensor] = []
+    for node_params in params.values():
+        for p in node_params.values():
+            if requires_grad:
+                p.requires_grad_(True)
+            param_list.append(p)
+    return param_list
+
+
+def _backprop_step(optimizer, structure, params, x, y):
+    activities = _feedforward(structure, params, x)
+    output = activities[structure.task_map.y.name]
+    loss = F.cross_entropy(output, y)
+    loss.backward()
+    optimizer.step()
+    return output, loss
+
+
+def _backprop_eval(structure, params, x, y):
+    activities = _feedforward(structure, params, x)
+    return activities[structure.task_map.y.name]
+
+
 def train_backprop(
     structure: GraphStructure,
     params: dict[str, dict[str, torch.Tensor]],
@@ -85,74 +177,21 @@ def train_backprop(
     Returns:
         Dict with keys "train_acc", "test_acc", "train_loss", "time".
     """
-    # Collect all trainable parameters
-    param_list: list[torch.Tensor] = []
-    param_to_key: dict[int, tuple[str, str]] = {}
-    for node_name, node_params in params.items():
-        for param_name, p in node_params.items():
-            p.requires_grad_(True)
-            param_list.append(p)
-            param_to_key[id(p)] = (node_name, param_name)
-
+    param_list = _collect_trainable(params, requires_grad=True)
     optimizer = create_optimizer(
         param_list, OptimizerConfig(name="adam", lr=lr, weight_decay=0.0)
     )
-
-    total_time = 0.0
-    final_train_acc = 0.0
-    final_train_loss = 0.0
-
-    for epoch in range(epochs):
-        epoch_start = time.time()
-        epoch_loss = 0.0
-        epoch_acc = 0.0
-        n_batches = 0
-
-        for batch_x, batch_y in train_loader:
-            batch_x = batch_x.to(device).float()
-            batch_y = batch_y.to(device)
-
-            optimizer.zero_grad()
-
-            activities = _feedforward(structure, params, batch_x)
-            output = activities[structure.task_map.y.name]
-
-            loss = F.cross_entropy(output, batch_y)
-            loss.backward()
-            optimizer.step()
-
-            epoch_loss += loss.item()
-            epoch_acc += compute_accuracy(output, batch_y)
-            n_batches += 1
-
-        epoch_time = time.time() - epoch_start
-        total_time += epoch_time
-
-        if n_batches > 0:
-            final_train_loss = epoch_loss / n_batches
-            final_train_acc = epoch_acc / n_batches
-
-    # Evaluation
-    test_acc = 0.0
-    if test_loader is not None:
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for batch_x, batch_y in test_loader:
-                batch_x = batch_x.to(device).float()
-                batch_y = batch_y.to(device)
-                activities = _feedforward(structure, params, batch_x)
-                output = activities[structure.task_map.y.name]
-                correct += (output.argmax(dim=-1) == batch_y).sum().item()
-                total += batch_y.shape[0]
-        test_acc = correct / total if total > 0 else 0.0
-
-    return {
-        "train_acc": final_train_acc,
-        "test_acc": test_acc,
-        "train_loss": final_train_loss,
-        "time": total_time,
-    }
+    return _train_loop(
+        optimizer,
+        structure,
+        params,
+        train_loader,
+        test_loader,
+        epochs,
+        device,
+        _backprop_step,
+        _backprop_eval,
+    )
 
 
 def _compute_pc_weight_gradients(
@@ -290,79 +329,35 @@ def train_pcn(
     infer = InferenceSGD(eta_infer=eta_infer, infer_steps=infer_steps)
     structure.inference = infer
 
-    # Collect trainable parameters
-    param_list: list[torch.Tensor] = []
-    for node_params in params.values():
-        for p in node_params.values():
-            param_list.append(p)
-
+    param_list = _collect_trainable(params, requires_grad=False)
     optimizer = create_optimizer(
         param_list, OptimizerConfig(name="adam", lr=lr, weight_decay=0.0)
     )
 
-    total_time = 0.0
-    final_train_acc = 0.0
-    final_train_loss = 0.0
+    def _pcn_step(optimizer, structure, params, x, y):
+        settled = infer.settle(structure, params, x, y=y)
+        for node_p in params.values():
+            for p in node_p.values():
+                if p.grad is not None:
+                    p.grad.zero_()
+        _compute_pc_weight_gradients(structure, params, settled, targets=y)
+        optimizer.step()
+        output = settled[structure.task_map.y.name]
+        loss = F.cross_entropy(output, y)
+        return output, loss
 
-    for epoch in range(epochs):
-        epoch_start = time.time()
-        epoch_loss = 0.0
-        epoch_acc = 0.0
-        n_batches = 0
+    def _pcn_eval(structure, params, x, y):
+        settled = infer.settle(structure, params, x, y=y)
+        return settled[structure.task_map.y.name]
 
-        for batch_x, batch_y in train_loader:
-            batch_x = batch_x.to(device).float()
-            batch_y = batch_y.to(device)
-
-            optimizer.zero_grad()
-
-            # Settle activities
-            settled = infer.settle(structure, params, batch_x, y=batch_y)
-
-            # Zero out gradients on all params
-            for node_p in params.values():
-                for p in node_p.values():
-                    if p.grad is not None:
-                        p.grad.zero_()
-
-            # Compute PC weight gradients
-            _compute_pc_weight_gradients(structure, params, settled, targets=batch_y)
-
-            optimizer.step()
-
-            # Compute loss and accuracy for logging
-            output = settled[structure.task_map.y.name]
-            loss = F.cross_entropy(output, batch_y)
-
-            epoch_loss += loss.item()
-            epoch_acc += compute_accuracy(output, batch_y)
-            n_batches += 1
-
-        epoch_time = time.time() - epoch_start
-        total_time += epoch_time
-
-        if n_batches > 0:
-            final_train_loss = epoch_loss / n_batches
-            final_train_acc = epoch_acc / n_batches
-
-    # Evaluation
-    test_acc = 0.0
-    if test_loader is not None:
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for batch_x, batch_y in test_loader:
-                batch_x = batch_x.to(device).float()
-                batch_y = batch_y.to(device)
-                settled = infer.settle(structure, params, batch_x, y=batch_y)
-                output = settled[structure.task_map.y.name]
-                correct += (output.argmax(dim=-1) == batch_y).sum().item()
-                total += batch_y.shape[0]
-        test_acc = correct / total if total > 0 else 0.0
-
-    return {
-        "train_acc": final_train_acc,
-        "test_acc": test_acc,
-        "train_loss": final_train_loss,
-        "time": total_time,
-    }
+    return _train_loop(
+        optimizer,
+        structure,
+        params,
+        train_loader,
+        test_loader,
+        epochs,
+        device,
+        _pcn_step,
+        _pcn_eval,
+    )

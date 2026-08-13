@@ -11,6 +11,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.core.training_mixin import supervised_step
@@ -292,5 +293,5 @@ class PEPITA(TransitionGraphMixin, nn.Module):
                 self.out_layer.bias.data -= self.lr * error.mean(0)
 
         loss = (error**2).sum(1).mean().item()
-        acc = (out_s.argmax(1) == y).float().mean().item()
+        acc = compute_accuracy(out_s, y)
         return {"loss": loss, "accuracy": acc}

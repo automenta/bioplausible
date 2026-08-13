@@ -919,7 +919,7 @@ class CoreTrainer:
     ) -> TrainingMetrics | None:
         """Run a single training epoch and return its metrics (None if aborted)."""
         train_metrics = self._train_epoch(batches_per_epoch)
-        val_metrics = self._validate(val_batches) if self.config.run_validation else {}
+        val_metrics = self.validate(val_batches) if self.config.run_validation else {}
 
         extra_keys = [
             "loss",
@@ -1265,8 +1265,8 @@ class CoreTrainer:
 
         return metrics
 
-    def _validate(self, val_batches: int) -> dict[str, object]:
-        """Run validation."""
+    def validate(self, val_batches: int) -> dict[str, object]:
+        """Run ``val_batches`` batches of validation and return averaged metrics."""
         if self.val_loader is None and self.task_obj is None:
             return {"val_loss": float("nan"), "val_accuracy": float("nan")}
 
