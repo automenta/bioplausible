@@ -41,24 +41,34 @@ def create_model(
     task_type="vision",
     **kwargs,
 ) -> nn.Module:
-    """Instantiate a model from a (legacy or new) spec.
+    """Instantiate a model via the single construction layer.
 
     Accepts the legacy ``ModelSpec`` shape returned by :func:`get_model_spec`
-    and defers to :class:`Registry` for construction. Module-level symbol so
-    tests can patch ``bioplausible.execution.robustness.create_model``.
+    and defers to :func:`bioplausible.core.construction.construct_model`.
+    Module-level symbol so tests can patch
+    ``bioplausible.execution.robustness.create_model``.
     """
+    from bioplausible.core.construction import construct_model
+
     name = getattr(spec, "name", None) or str(spec)
     cls = Registry.get(ComponentCategory.MODEL, name)
-    build_kwargs = dict(kwargs)
+    config = dict(kwargs)
     if input_dim is not None:
-        build_kwargs.setdefault("input_dim", input_dim)
+        config.setdefault("input_dim", input_dim)
     if output_dim is not None:
-        build_kwargs.setdefault("output_dim", output_dim)
+        config.setdefault("output_dim", output_dim)
     if hidden_dim is not None:
-        build_kwargs.setdefault("hidden_dim", hidden_dim)
+        config.setdefault("hidden_dim", hidden_dim)
     if num_layers is not None:
-        build_kwargs.setdefault("num_layers", num_layers)
-    model = cls(**build_kwargs)
+        config.setdefault("num_layers", num_layers)
+    config.setdefault("task_type", task_type)
+    model = construct_model(
+        cls,
+        config,
+        input_dim=input_dim or 0,
+        output_dim=output_dim or 0,
+        model_name=name,
+    )
     return model.to(device)
 
 

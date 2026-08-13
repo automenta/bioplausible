@@ -30,3 +30,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+  - repo: local
+    hooks:
+      - id: check-imports
+        name: check-imports
+        entry: python tools/check_imports.py
+        language: system
+        pass_filenames: false
+        always_run: true

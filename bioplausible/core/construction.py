@@ -57,8 +57,10 @@ __all__ = [
 
 #: Legacy names accepted at the config boundary, mapped onto a canonical knob
 #: before any downstream logic. A single named constant (no scattered aliasing).
+#: TODO: Eliminate after migrating all config sites to use canonical names.
 _KNOB_ALIASES: dict[str, str] = {
     "steps": "max_steps",
+    "lr": "learning_rate",
 }
 
 #: ``ModelConfig`` fields that are identity/structure, not tuning knobs.

@@ -6,10 +6,13 @@ Module with manual optimization support for EqProp, Hebbian,
 FeedbackAlignment, and MEP-style optimizers.
 """
 
+from typing import cast
+
 import pytorch_lightning as pl
 import torch
 from torch import nn
 
+from bioplausible.core.construction import construct_model
 from bioplausible.core.registry import ComponentCategory, Registry
 
 __all__ = [
@@ -22,18 +25,28 @@ __all__ = [
 def create_model(
     name: str, input_dim: int | None = None, output_dim: int | None = None, **kwargs
 ) -> nn.Module:
-    """Instantiate a registered model from the Zoo registry.
+    """Instantiate a registered model via the single construction layer.
 
-    Thin Zoo helper used by lightning integration code. Tests patch this
-    symbol to bypass real construction.
+    Thin adapter over :func:`bioplausible.core.construction.construct_model`
+    used by lightning integration code. Tests patch this symbol to bypass
+    real construction, so the name stays module-level and patchable.
     """
     cls = Registry.get(ComponentCategory.MODEL, name)
-    build_kwargs = dict(kwargs)
+    config = dict(kwargs)
     if input_dim is not None:
-        build_kwargs.setdefault("input_dim", input_dim)
+        config.setdefault("input_dim", input_dim)
     if output_dim is not None:
-        build_kwargs.setdefault("output_dim", output_dim)
-    return cls(**build_kwargs)
+        config.setdefault("output_dim", output_dim)
+    return cast(
+        "nn.Module",
+        construct_model(
+            cls,
+            config,
+            input_dim=input_dim or 0,
+            output_dim=output_dim or 0,
+            model_name=name,
+        ),
+    )
 
 
 # Standard optimizers that follow PyTorch conventions

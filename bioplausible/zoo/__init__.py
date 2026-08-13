@@ -161,7 +161,6 @@ def get_optimizers_for_propagator(
 # ============================================================================
 # Legacy adapters removed (REFACTOR3). Callers now use core.registry.Registry
 # and core.registry.ComponentCategory directly. See:
-#   - bioplausible.experiments.utils
 #   - bioplausible.deployment
 #   - examples/tutorials.py
 # ============================================================================
