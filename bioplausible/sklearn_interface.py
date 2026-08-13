@@ -20,6 +20,7 @@ from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
+from bioplausible.utils import seed_everything
 
 __all__ = [
     "EqPropClassifier",
@@ -110,8 +111,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         self.n_features_in_ = X.shape[1]
 
         if self.random_state is not None:
-            torch.manual_seed(self.random_state)
-            np.random.seed(self.random_state)
+            seed_everything(self.random_state)
 
         if self.device is None:
             self.device = str(get_device())

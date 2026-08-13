@@ -7,6 +7,7 @@ import argparse
 import torch
 
 from bioplausible.core.logging import get_logger
+from bioplausible.utils import count_parameters
 
 logger = get_logger()
 
@@ -38,7 +39,9 @@ def inspect_model(args):
     model = model_cls(input_dim=task.input_dim, output_dim=task.output_dim).to(device)
 
     logger.info("Model Created: %s", model.__class__.__name__)
-    logger.info("Parameters: %.2fM", sum(p.numel() for p in model.parameters()) / 1e6)
+    logger.info(
+        "Parameters: %.2fM", count_parameters(model, trainable_only=False) / 1e6
+    )
 
     # Run Dummy Forward
     logger.info("Running Verification Inference...")

@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
+from bioplausible.utils import count_parameters
+
 __all__ = [
     "EnergyProfile",
     "EnergyTracker",
@@ -183,7 +185,7 @@ class EnergyTracker:
         if exc_type is not None:
             return False
 
-        params = sum(p.numel() for p in self.model.parameters())
+        params = count_parameters(self.model, trainable_only=False)
 
         # Heavy metrics are throttled to the first step of a probe and cached on
         # the model; standalone trackers (global_step=None) always measure.

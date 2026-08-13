@@ -22,6 +22,7 @@ from bioplausible.core.local_learning import TileAlgorithm, TileAlgorithmConfig
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
+from bioplausible.utils import count_parameters
 
 __all__ = [
     "TileLM",
@@ -298,7 +299,7 @@ class TileLM(TileAlgorithm):
 
     def get_parameter_count(self) -> int:
         """Get total parameter count."""
-        return sum(p.numel() for p in self.parameters())
+        return count_parameters(self, trainable_only=False)
 
     @classmethod
     def from_lm(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract

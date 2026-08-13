@@ -2,7 +2,7 @@
 
 ## Architecture Vision
 
-The codebase (~94k LOC, ~290 modules) has grown through 25+ sprint-style feature additions. The result is 7 parallel training stacks, 4 parallel config hierarchies, 5 duplicate `BenchmarkResult` classes, 4 visualization stacks, and 5 persistence layers. **Capability is not the problem — consolidation is.**
+The codebase (~78k LOC, ~297 modules; down from ~94k LOC when this plan began) has grown through 25+ sprint-style feature additions. The result is 7 parallel training stacks, 4 parallel config hierarchies, 5 duplicate `BenchmarkResult` classes, 4 visualization stacks, and 5 persistence layers. **Capability is not the problem — consolidation is.**
 
 The ideal target architecture is **a strict dependency-layered core with exactly one implementation of every cross-cutting concern**:
 
@@ -296,7 +296,7 @@ One **`SettleState` protocol** with two adapters (`TensorState`, `ActivationsLis
 ## Pillar K — Demo, CLI & Interface Hygiene (from v1, retained/expanded)
 
 ### Target
-- **`demo/` moves out of the package** to a sibling repo (or is excluded in `pyproject.toml` `exclude`), consuming only public API. Also removes NiceGUI/Plotly from any package import surface. **Note:** the demo header says it lives in package tree but is not part of `bioplausible.*` — verify `setuptools.find` already excludes it and make exclusion explicit.
+- **`demo/` moves out of the package** to a sibling repo (or is excluded in `pyproject.toml` `exclude`), consuming only public API. Also removes NiceGUI/Plotly from any package import surface. **Verified this revision:** `demo/` is a separate git-tracked sibling with its own `pyproject.toml` and is already excluded from the `bioplausible` wheel via `pyproject.toml` `include = ["bioplausible", "bioplausible.*"]` — the NiceGUI/Plotly surface is already out of the package; only the `DASHBOARD`-decouple work below remains.
 - **CLI consolidation**: 13 console scripts + 4 overlapping run loops + 3 "report" entry points. Introduce a **one-command dispatcher** (`biopl` with `run | report | parity | repro | hpo | audit | frontier | rank` subcommands) backed by a tiny argframework — no new deps (stdlib `argparse` subparsers are enough). Each `cli/` module becomes a thin adapter over `Pillars A-F`'s canonical APIs. Delete `cli/run.py`'s 6-subcommand monolith in favor of dispatch + shared `_resolve_targets`.
 - `sklearn_interface.py` stays but calls `construct_model`/`CoreTrainer` (it already does).
 - **`DASHBOARD` global singleton** (`execution/dashboard.py:349`) — decouple: decision modules (`strategy.py`, `engine.py`) accept an `EventSink` protocol (dashboard = one implementation); remove the global import from decision logic. This unblocks UI-free use (headless sweeps).
@@ -341,11 +341,64 @@ Three canonical primitives already exist but are bypassed at dozens of sites, so
 
 ---
 
+## Pillar N — Automated Layering & Import-DAG Enforcement (NEW)
+
+### The problem: the layered-core thesis is aspirational, not enforced
+The whole document rests on a **strict dependency-layered core** (L_N imports from L_{≤N−1} only) and acceptance criterion #7 (acyclic import graph), yet **nothing in CI verifies it**. Every acyclic-crisis so far was fixed by hand *after* the fact:
+- `config/schema.py` name-collision (Pillar B) — two same-named config classes coexisted because nothing caught the duplicate `ModelConfig`/`ExperimentConfig`.
+- The `execution/` and `hyperopt/` lazy-`__getattr__` loaders existed **because import cycles were silently tolerated**; they were removed manually, not by a gate that prevents their return.
+- The recurring "core imports zoo but zoo imports core" violation (trainer↔zoo) has no regression test.
+
+There is **no `import-linter`/layering tool** in `pyproject.toml`, `.pre-commit-config.yaml`, or CI today.
+
+### Target
+A small static import-DAG checker that runs before `pytest` (pre-commit + CI gate), using only stdlib `ast`/`importlib` (no new runtime dependency; `import-linter` is an acceptable dev-only alternative):
+- **Layering rule check** — parse every module's imports and assert the edge is `L_N → L_{≤N−1}`. Emit actionable errors: `zoo.models.fa imports core.trainer (L2 → L4 violation)`.
+- **Acyclicity check** — assert the full module graph is a DAG; any cycle fails the build (this is what makes lazy-loaders permanently unnecessary).
+- **Layer manifest** — one small `LAYERS.yaml`/dict mapping package→layer, single source of truth for the architecture diagram at the top of this document.
+
+### Win
+- Makes the layered-core vision **verifiable and regression-proof**; turns the diagram into a checked contract instead of a hope.
+- Deletes the recurring "why did we need a lazy-loader again" class of fixes; unblocks Pillars A/C/E/G *confident-by-construction* (each re-wire is validated against the layering contract on commit, not discovered months later).
+- Low risk: a read-only static check; can be introduced without touching runtime code.
+
+---
+
+## Pillar O — God-Object Decomposition of the Largest Modules (NEW)
+
+### The problem: 8 modules exceed ~1,000 lines with mixed responsibilities
+| Module | LOC | Mixed concerns |
+|--------|-----|----------------|
+| `core/trainer.py` | 1769 | canonical loop + config defaults + propagator wiring (defer — Pillar A/G may reshape it first) |
+| `cli/run.py` | 1686 | 6-subcommand monolith — already targeted by Pillar K |
+| `core/local_learning/algorithm.py` | 1211 | tile-algorithm substrate |
+| `knowledge/kb.py` | 1204 | schema + persistence + query + KB-domain ops |
+| `zoo/models/fa.py` | 1170 | FeedbackAlignment model |
+| `execution/strategy.py` | 1095 | AutoScientist decision + planning + launcher |
+| `analysis/tile_profiler.py` | 1075 | profiling + benchmark loop |
+| `validation/backprop_parity.py` | 1064 | parity harness |
+| `visualization.py` | 1005 | 4-stack viz (see Pillar D) |
+
+### Target
+Split by **cohesion boundary, not by size**, highest-ROI first:
+1. `knowledge/kb.py` — persistence/schema vs KB-domain operations (clean seam; independent consumers).
+2. `execution/strategy.py` — decision policy vs planner vs launcher (three distinct responsibilities currently tangled; Pillar E/result-funnel work touches this file).
+3. `zoo/models/fa.py` — extract shared eqprop/fa substrate if it is genuinely reused (else keep cohesive).
+Each split is **behavior-preserving** (pure file moves + re-exports; run the full suite + parity after each). Defer `core/trainer.py` until Pillar A/G have reshaped it to avoid churn-then-reshape.
+
+### Win
+- Smaller review surface and independently testable units; aligns with the "one implementation per concern" thesis (a concern gets a single home instead of sharing a 1,200-line file with unrelated logic).
+- De-risks Pillars A/D/E: the files they must edit are the very files whose entangled responsibilities make those edits conflict-prone.
+- **Caution (per AGENTS.md):** this is *organization*, not new capability — cap the effort (M) and stop when a module is cohesive even if still large. Do not split for its own sake.
+
+---
+
 ## Implementation Roadmap
 
 Pillars are ordered by value/effort and by dependency (each row de-risks the next). 
 Pillars J (dead code removal), H (single search space), and F (EqProp consolidation) are 
-marked DONE — see the "Completed work" log below. The remaining table reflects active work.
+marked DONE; Pillar M (micro-consolidation) is DONE except its remaining ~12 inline-accuracy
+folds — see the "Completed work" log below. The remaining table reflects active work.
 
 | # | Pillar | Primary Win | Effort | Risk | Blocks |
 |---|--------|-------------|--------|------|--------|
@@ -357,9 +410,11 @@ marked DONE — see the "Completed work" log below. The remaining table reflects
 | 6 | **G** Propagator/model unification | 800 lines, one interface | M | Med | A, F |
 | 7 | **L** Self-registration | zero-touch extensibility | M | Low | B, F |
 | 8 | **K** Demo/CLI/dashboard hygiene | boundaries | M | Low | A, B |
-| 9 | **M** Micro-consolidation (count/seed) | 3 drift classes eliminated | M | Low | none |
+| 9 | **M** Micro-consolidation (count/seed) | **DONE** — count_parameters (#14) + seeding merge (#16) complete; ~12 inline accuracy folds remain | M | Low | none |
+| 10 | **N** Layering & import-DAG enforcement | **NEW** — makes the layered-core thesis a checked CI contract | S | Low | none (run in parallel, early) |
+| 11 | **O** God-object decomposition | **NEW** — untangles 8 >1k-line modules | M | Low | A (defer trainer split) |
 
-**Suggested execution sequence:** B → C (foundations), then **A → E → D** (training + persistence → measurement), then **G** (propagator/model), then **L** (self-registration), then **K** (boundaries). Pillar M (micro-consolidation) runs parallel early: it is low-risk, dependency-free, and the count/seed consolidation unifies the exact primitives that Pillars A/D/G touch. Each pillar ships with `ruff format && ruff check && pyright && pytest --cov` green.
+**Suggested execution sequence:** N (layering gate) and M (remaining accuracy folds) run immediately and in parallel — N is low-risk, dependency-free, and makes every later pillar verifiable-by-construction. Then B → C (foundations), then **A → E → D** (training + persistence → measurement), then **G** (propagator/model), then **L** (self-registration), then **K** (boundaries). O (god-object decomposition) runs opportunistically between A/E/D edits (split the exact files those pillars must touch, so the edit surfaces are already clean), never blocking them. Each pillar ships with `ruff format && ruff check && pyright && pytest --cov` green.
 
 ---
 
@@ -371,21 +426,22 @@ marked DONE — see the "Completed work" log below. The remaining table reflects
 4. **One `BenchmarkResult`** and **one result funnel**: `record_experiment_result` is called by execution, hyperopt, validation, and mep-benchmarks; all five persistence backends written only from `result_sink`.
 5. **One search space**: `grep -rn "SEARCH_SPACES\\b"` → 0 hits.
 6. **zoo purity**: `zoo/propagators/` contains only `mep.py` and pure-gradient-transform submodules; `zoo/models/eqprop/` holds one registered engine + architecture subclasses.
-7. **Acyclic import graph**: `execution/__init__.py` and `hyperopt/__init__.py` lazy-loaders deleted; import-time side effects limited to registry decorators.
+7. **Acyclic import graph, enforced**: `execution/__init__.py` and `hyperopt/__init__.py` lazy-loaders deleted; import-time side effects limited to registry decorators; the **Pillar N static layering/DAG checker passes in CI** (no module imports a layer above itself; the module graph is a DAG).
 8. **No global UI mutation from decision code**: `strategy.py`/`engine.py` route events through an injected `EventSink`.
 9. **Dead code absent**: `execution/evolve_evaluator.py`, `knowledge/seed.py`, `campaign/`, `experiments/`, `data/transforms.py`, `search_space.SearchSpace` gone.
 10. **Full suite green**, including parity/validation/hyperopt cross-checks; AutoScientist end-to-end smoke run.
+11. **Layering thesis operationalized** (Pillar N): the architecture diagram at the top of this document maps 1:1 to the enforced `LAYERS` manifest; adding an import that crosses a layer fails pre-commit with an actionable message.
 
 ---
 
 ## Current Status & Progress Log
 
-Last updated: 2026-08-13 (this revision). Baseline when this log began:
+Last updated: 2026-08-13 (Pillar N/O added, baselines re-verified). Baseline when this log began:
 **13 pre-existing test failures** (2003 collected) — all unrelated to the
 refactor; since then 3 stale-test failures were fixed + the config relocation
-shipped, so the current full-suite baseline is **2008 pass / 6 fail / 10 skip /
-1 xfail** (the 6 remaining are all the documented numerical/parity drift — see
-finding #5).
+shipped. **Current verified full-suite baseline: 2002 pass / 6 fail / 10 skip /
+1 xfail** (full `--no-cov` run this revision; the 6 remaining are all the
+documented numerical/parity drift — see finding #5).
 
 ### Completed work (all sessions)
 
@@ -407,7 +463,7 @@ finding #5).
 - All 5 direct consumers updated (`config/__init__.py`, `defaults.py`, `analysis/ablation.py`, `core/trainer.py` docstring, `tests/integration/test_phase0.py`).
 - Pinned tests updated in `tests/unit/test_refactor2_bugfixes.py`.
 - **Acceptance criterion #2 now fully met:** `grep -rn "class ModelConfig"` → 1 hit (`unified.py:123`); `class ExperimentConfig` → 1 (`unified.py:328`); `def load_config` → 1 (`unified.py:274`) after renaming the unrelated `zoo/mep/benchmarks/runner.py` `load_config` → `load_benchmark_config`.
-- Verified: whole-package import clean; 2025 tests collect with 0 import errors; targeted runs green; full suite = 2008 pass / 6 fail (all pre-existing, finding #5).
+- Verified: whole-package import clean; 2025 tests collect with 0 import errors; targeted runs green; full suite = 2002 pass / 6 fail (all pre-existing, finding #5).
 - **Remaining Pillar B work:** (a) Delete `TrainerConfigSchema` (Pydantic, zero prod consumers) or regenerate via `TypeAdapter(TrainerConfig)`. (b) Eliminate `_KNOB_ALIASES` in `construction.py`. (c) Fold `unified.ExperimentConfig` into the facade's sectioned shape or vice versa.
 
 **Pillar I — Settling unification: first step done (commit `c32e15f`)**
@@ -445,10 +501,6 @@ finding #5).
 - Deleted the Pydantic `TrainerConfigSchema` + `validate_trainer_config` from `config/__init__.py` (~78 lines) and the only consumer `tests/unit/core/test_config_schema.py`. Verified zero production consumers via grep; removed the now-unused `pydantic`/`typing.Any` imports and both `__all__` entries. Whole-package import clean; `tests/unit/core/test_config_{unified,defaults}.py` green.
 - This resolves Pillar B remaining sub-goal **(a)** ("delete TrainerConfigSchema ... zero prod consumers"). The Pydantic schema is *superset* of `TrainerConfig`; deleting it is safe because nothing in production loads configs through it (OmegaConf `validate_config` is the live gate). Sub-goals **(b)** `_KNOB_ALIASES` elimination and **(c)** folding `unified.ExperimentConfig` into the facade remain, both blocked on the deeper config unification (XL).
 
-**Pillar B — Single config: dead `TrainerConfigSchema` deleted (this session, uncommitted)**
-- Deleted the Pydantic `TrainerConfigSchema` + `validate_trainer_config` from `config/__init__.py` (~78 lines) and the only consumer `tests/unit/core/test_config_schema.py`. Verified zero production consumers via grep; removed the now-unused `pydantic`/`typing.Any` imports and both `__all__` entries. Whole-package import clean; `tests/unit/core/test_config_{unified,defaults}.py` green.
-- This resolves Pillar B remaining sub-goal **(a)** ("delete TrainerConfigSchema ... zero prod consumers"). The Pydantic schema is *superset* of `TrainerConfig`; deleting it is safe because nothing in production loads configs through it (OmegaConf `validate_config` is the live gate). Sub-goals **(b)** `_KNOB_ALIASES` elimination and **(c)** folding `unified.ExperimentConfig` into the facade remain, both blocked on the deeper config unification (XL).
-
 **Pillar K — broken `biopl-scientist` console script fixed (this session, uncommitted; finding #11 resolved)**
 - `pyproject.toml` declared `biopl-scientist = "bioplausible.execution.cli:main_scientist"`, but `execution/cli.py` was deleted in `6ac0583`, so the installed script was a live broken public entry point (`ModuleNotFoundError` on import).
 - Refactored the `__main__` block of `bioplausible/execution/engine.py` into a real `main(argv=None) -> int` function (the AutoScientist launcher: `--report/--dir/--tier-limit`), added the `collections.abc.Sequence` import, and repointed the script to `bioplausible.execution.engine:main`. Verified `uv run biopl-scientist --help` works and `tests/unit/execution/*` stay green.
@@ -464,6 +516,30 @@ finding #5).
 - The `_TaskTrainer` adapter (`domains/trainer.py:141`) reached into the private `CoreTrainer._validate`. Renamed `_validate` → `validate` on `CoreTrainer` (`core/trainer.py:1268`), updated the internal call (`core/trainer.py:922`) and the adapter call, and updated the two test suites that poked the private name (`tests/integration/test_trainer_coverage.py`, `tests/unit/test_refactor2_bugfixes.py`). No `._validate(` references remain anywhere.
 - This is the API-hygiene half of finding #13: adapters now consume a public validation API. Verified: 0 new lint errors, pyright 0 errors, `test_core_trainer` + `tests/unit/domains` + `test_trainer_coverage` + `test_refactor2_bugfixes` green.
 - **Note:** the `train_*`/`val_*` metric re-keying in `_TaskTrainer.train_epoch` is *not* consolidated further — it is the adapter's contract for `hyperopt` callers (no other producer uses that exact shape today), so folding it into `CoreTrainer` would change `CoreTrainer`'s widely-used `loss`/`accuracy` return contract. Left as-is deliberately.
+
+**Pillar M — count_parameters fold completed (this session, uncommitted; finding #14 DONE)**
+- Folded the **13 remaining raw `sum(p.numel() for p in model.parameters())` sites across 13 files** into the canonical `bioplausible.utils.count_parameters(model, trainable_only=False)`.
+- `trainable_only=False` is explicit everywhere to preserve the original all-params semantics (the canonical default is trainable-only). The win: every site now gets the `_orig_mod` compile-unwrap for free, and the model classes' `get_parameter_count` methods (`NanoGPTModel`, `TileLM`) + the `compare_nanoGPT.py:511` fallback branch are uniform.
+- `core/spectral_mixin.py` required `cast("nn.Module", self)` because the mixin's `self` is only structurally a `nn.Module`.
+- Verified: ruff 178→178 (0 new), pyright 0 errors (0 new), import graph clean for all 13 modules, and green across ~14 targeted suites (see finding #14 update for the list).
+
+**Pillar M — seeding API merge completed (this session, uncommitted; finding #16 DONE)**
+- Merged the two divergent seeding APIs into one: `seed_everything(seed, device="cpu", deterministic=False)` (in `bioplausible/utils.py`) is now the master and gained a `deterministic` flag (`torch.use_deterministic_algorithms(True)` on CPU; cuDNN deterministic/benchmark-off on CUDA).
+- `set_all_seeds` (`core/utils/seeds.py`) is now a thin adapter over `seed_everything`: the `deterministic=True` path delegates verbatim; the non-deterministic path applies the minimal RNG seed subset. Its public re-exports (`core/utils/__init__.py`, `benchmarks/__init__.py`) are unchanged, so the public API surface is stable.
+- Migrated **all 12 raw `torch.manual_seed` / `np.random.seed` production sites** onto `seed_everything` (per finding #16): `cli/repro.py`, `training/rl.py`, `validation/{utils,core,gradient_check}.py`, `zoo/mep/benchmarks/{continual_learning,ewc_baseline,niche_benchmarks}.py`, `domains/{scientific,timeseries}.py`, `sklearn_interface.py`. `set_all_seeds` callers (`cli/run.py`, `core/trainer.py`, `core/utils/reproducibility.py`, `benchmarks/rigorous.py`) now route through the unified backend automatically.
+- Verified: 0 new ruff import-order/unused errors, pyright 0 errors (62 pre-existing warnings, unchanged), all 12 modules import clean, and the seed-focused suites green (`test_repro_check`, `test_advanced_training::test_seed_everything`). The only failures in a broader sweep are the documented pre-existing `test_backprop_parity` numerics-drift (finding #5), unrelated to seeding.
+
+**Pillar G — propagator/model alias compatibility map (this session, uncommitted; finding #18 first half)**
+- Replaced the `_PROPAGATOR_TO_MODEL` error-duality in `core/registry.py` with `_ALIASES`, a compatibility map `{name: (canonical_category, canonical_name)}`.
+- `Registry.get(PROPAGATOR, "ff")` now returns the model class `ForwardForwardNet` (a lookup, not a `ValueError`); `get_metadata` resolves aliases too. Added `Registry.aliases()` and `Registry.resolve_alias()` (chain-following, cycle-safe).
+- `CoreTrainer._create_propagator` skips propagator creation for model-side learners (info log instead of misleading "not in registry" warning); genuine propagators (eq_prop, hebbian, fa, spiking) still instantiate as `LearningRuleOptimizer`s. Updated the `_train_step` phase-2 comment + docstring and the `bioplausible/__init__.py` docstring.
+- Rewrote `tests/unit/models/test_propagator_stubs.py` to assert alias resolution (returns model class) instead of `pytest.raises(ValueError)`; added tests for `aliases()`/`resolve_alias()`/alias-aware `get_metadata`.
+- Verified: 0 new ruff errors (registry 9→9, trainer 35→35), pyright 0 errors, and green across `tests/unit/models/*`, `test_core_trainer`, `test_zoo_integration`, `test_smoke_training`, `test_scientist`/`test_phase2_autoscientist`, `tests/unit/execution/` (509 tests total). End-to-end smoke: `propagator="ff"` → no propagator created (model `train_step` owns training); `propagator="eq_prop"` → `EqProp` instance.
+
+**Pillar L — registry aliases + eqprop `__all__` auto-computation (this session, uncommitted; finding #19 partial)**
+- `Registry.aliases()` and `Registry.resolve_alias()` (above) give discovery code a single addressable view of every learning rule regardless of MODEL vs PROPAGATOR namespace.
+- `zoo/models/eqprop/__init__.py` computes its 43-item `__all__` from `vars(module)` (excluding `_`-prefixed + `ModuleType` names) instead of a hand-written list — byte-identical to the old literal. Requires a `pyproject.toml` per-file-ignore (`F401`, `RUF022`, `PLE0605`) for that single re-export module.
+- **Deliberately NOT converted:** `zoo/{models,propagators,optimizers,sparsity}/__init__.py` re-export *submodules*, so a `ModuleType`-excluded sweep would drop intended public submodule names from `__all__` (behavior change, no consumer) — kept literal.
 
 ### Findings that change the plan (important for future work)
 
@@ -482,7 +558,7 @@ finding #5).
    - **FIXED** stale eqprop `FixedTrial` test (`5e5d5a2`) and non-abstract `NEBCBase` (`1fcd637`).
    - **FIXED** `tests/integration/test_onnx.py` (this session) — forward-signature tracing + parent-dir creation; see Completed work.
    - **FIXED** `test_finite_nudge_execution`, `test_smoke_training::test_directed_ep`, `::test_finite_nudge_ep` (this session) — `metrics is None` because single-hidden eqprop `train_step` returns None under default `gradient_method="equilibrium"` (an O(1)-implicit vestige; `EquilibriumMLP` is not an `EnergyModel`, so no trainer phase consumes it). Tests now use `gradient_method="contrastive"` to exercise the model's own `train_step` contract.
-   - **OPEN** (full-suite `--no-cov` run, this session: **1996 pass / 9 fail / 10 skip / 1 xfail** — down from the 13-failure baseline): the 6 remaining are accuracy/parity drift or kernel mismatch, all training/numerics-dependent and out of scope:
+   - **OPEN** (full-suite `--no-cov` run, this revision: **2002 pass / 6 fail / 10 skip / 1 xfail**): the 6 remaining are accuracy/parity drift or kernel mismatch, all training/numerics-dependent and out of scope:
      - `test_equilibrium_parity::test_mlp_gradient_parity` (BPTT vs EqProp loss gap)
      - `test_triton_kernel::test_triton_match` (Triton kernel vs PyTorch numerical mismatch — `acceleration/` island, Non-Goals)
      - `tests/property/biology/test_biology_axioms.py::test_ep_gradient_matches_bptt[eqprop_mlp]` and `::test_deq_gradients_match_bptt_wired_up` (EP-BPTT cosine < 0.5)
@@ -504,17 +580,31 @@ finding #5).
 
 13. **`_TaskTrainer.train_epoch` re-implements metric normalization + validation (Pillar A tail).** **PARTIALLY RESOLVED (this session, uncommitted).** `domains/trainer.py:120` already delegates training to `CoreTrainer.from_task`, but its `train_epoch` hand-rolls the `train_loss`/`train_acc` re-keying and a manual `self._trainer._validate(1)` call. The private-API violation is fixed: `CoreTrainer._validate` is now public `validate` (see Completed work). The metric-shape re-keying remains but is deliberately left as the adapter's `hyperopt` contract (only producer of the `train_*` shape) — folding it into `CoreTrainer` would change its widely-consumed `loss`/`accuracy` return contract, so it is deferred unless/until Pillar A unifies all adapter metric shapes under one helper.
 
-14. **Micro-consolidation: count_parameters fold in progress.** The canonical `bioplausible.utils.count_parameters` (trainable-only default + `_orig_mod` compile unwrap) is now the strict single source of truth. Remaining raw `sum(p.numel() for p in model.parameters())` sites across `cli/lab.py`, `hyperopt/experiment.py`, `core/profiling.py`, `zoo/models/eqprop/eqprop_lm_variants.py`, `evaluation/{base,cross_domain}.py`, `deployment.py`, `benchmarks/{rigorous,compare_nanoGPT}.py`, and `experiment/param_estimator.py` should be replaced by calls to `count_parameters(model, trainable_only=...)` — adding `scale=100`/`as_score` params to the canonical fn where callers previously needed ×100 percent form, eliminating the drift hazard where some sites returned 0–1 ratios and others returned percentages. The `efficiency_analysis.py` breakdown and `hebbian.py:477` accumulation are genuinely different counting semantics (per-component attribution / running count) and should NOT be folded. Target: fold ≥15 sites into the canonical fn, eliminating redundant arithmetic and a class of correctness bugs.
+14. **Micro-consolidation: count_parameters fold COMPLETE (this session, uncommitted).** The canonical `bioplausible.utils.count_parameters` (trainable-only default + `_orig_mod` compile unwrap) is now the strict single source of truth. Folded **13 remaining raw `sum(p.numel() for p in model.parameters())` sites across 13 files** into `count_parameters(model, trainable_only=False)` (explicit `trainable_only=False` preserves the original all-params semantics, since the canonical default is trainable-only): `cli/lab.py`, `hyperopt/experiment.py`, `core/profiling.py`, `core/spectral_mixin.py`, `core/trainer.py`, `zoo/models/eqprop/eqprop_lm_variants.py`, `zoo/models/tile_lm.py`, `evaluation/{base,cross_domain}.py`, `deployment.py`, `benchmarks/{rigorous,compare_nanoGPT}.py`, `experiment/param_estimator.py`. This includes `NanoGPTModel.get_parameter_count` and `TileLM.get_parameter_count` (which now also get the `_orig_mod` compile unwrap for free) and the `benchmarks/compare_nanoGPT.py:511` fallback branch. `core/spectral_mixin.py` needed a `cast("nn.Module", self)` since the mixin's `self` is only structurally a Module. Verified: 0 net new ruff errors (178→178), 0 new pyright errors, and green across `test_core_trainer`, `test_evaluation`, `test_tile_lm`, `test_param_estimator`, `test_hyperopt_metrics`, `test_onnx`, `test_zoo_integration`, `test_phase2_integration`, `test_hyperopt_integration`, `test_optuna_bridge_integration`, `test_cross_domain_benchmark`, `test_scientist_refactor`, `test_refactor2_bugfixes`, `test_analysis`. The `efficiency_analysis.py` breakdown and `hebbian.py:477` accumulation remain deliberately unfolded (genuinely different counting semantics — per-component attribution / running count). **Remaining Pillar M:** the seeding API merge (finding 16) — `seed_everything` (utils.py) and `set_all_seeds` (core/utils/seeds.py) still coexist, and ~12 raw `torch.manual_seed`/`np.random.seed` sites remain.
 
 15. **Pillar B remaining sub-goals are now (b) and (c) only.** With `TrainerConfigSchema` deleted (sub-goal a done this session), the only remaining Pillar B work is `_KNOB_ALIASES` elimination (`core/construction.py`: `steps`→`max_steps`, `lr`→`learning_rate`) and folding `unified.ExperimentConfig` into the OmegaConf facade. Both are blocked on the same XL config-unification step and are independent of sub-goal (a), which is now fully resolved.
 
-16. **Micro-consolidation: seeding API merge.** Two divergent seeding APIs — `seed_everything(seed, device)` (bioplausible-wide fingerprint + CUDA guard, returns env dict) and `set_all_seeds(seed, deterministic=True)` (wraps `torch.manual_seed` + `torch.use_deterministic_algorithms`) — must be merged into a single entry point. All raw `torch.manual_seed` + `np.random.seed` call sites across `cli/repro.py`, `training/rl.py`, `validation/{core,utils,gradient_check}.py`, `zoo/mep/benchmarks/{continual_learning,ewc_baseline,niche_benchmarks}.py`, `domains/{scientific,timeseries}.py`, and `sklearn_interface.py` must migrate onto the unified API. The merged API: `seed_everything(seed, device="cpu")` becomes the master; `set_all_seeds(seed, deterministic=True)` becomes a thin wrapper that forwards to `seed_everything` when `deterministic=True` and device is `"cpu"`, otherwise calls the minimal RNG seed subset. This eliminates the seed-mismatch class of repro failures and unifies the fingerprint guarantee across the codebase.
+16. **Micro-consolidation: seeding API merge.** **RESOLVED (this session, uncommitted).** `seed_everything(seed, device="cpu", deterministic=False)` is now the single master (added `deterministic` flag); `set_all_seeds` is a thin adapter over it (deterministic path delegates verbatim, non-deterministic path applies the minimal RNG seed subset). All 12 raw `torch.manual_seed`/`np.random.seed` production sites migrated to `seed_everything` (`cli/repro.py`, `training/rl.py`, `validation/{core,utils,gradient_check}.py`, `zoo/mep/benchmarks/{continual_learning,ewc_baseline,niche_benchmarks}.py`, `domains/{scientific,timeseries}.py`, `sklearn_interface.py`). The seed-mismatch class of repro failures is eliminated and the fingerprint guarantee is uniform codebase-wide. Verified green (pyright 0 errors, seed-focused suites pass).
 
 17. **Pillar E: Single result & persistence funnel.** The `result_sink.record_experiment_result` (`experiment/result_sink.py:82`) is the canonical writer of trial outcomes; the remaining four persistence backends (Optuna SQLite, HyperoptStorage, JSONL Report, KB) are private details of `result_sink`'s implementation. All ad-hoc checkpoint save paths should become `core.checkpoint` calls; the `CheckpointManager` SQLite buffer in `execution/_lifecycle.py` should be evaluated against `core.checkpoint` for potential consolidation. Delete the second `KnowledgeBase` in `knowledge/seed.py` (already done) and ensure one artifact loader (`core/checkpoint.load_checkpoint` + `find_trial_artifact` helper) is used by engine and hyperopt. Target: eliminate the 3 remaining write paths outside `result_sink` and consolidate checkpoint saving.
 
-18. **Pillar G: Propagator/model unification.** The `_PROPAGATOR_TO_MODEL` hard-coded duality in `core/registry.py:300` should be replaced by a compatibility map: the model owns the learning rule, so `CoreTrainer._train_step` dispatches `energy-model → model.train_step → BPTT` (2 phases, not 5). Propagator modules (`zoo/propagators/`) should be converted to model-side `train_step` implementations or deleted if they are pure gradient transformers. The `LearningRuleOptimizer` base class and its 2-phase/4-phase trainer dispatch collapse to a single `model.train_step` interface. This unblocks AutoScientist composition: query MODEL by `credit_assignment_type`, no propagator branch.
+18. **Pillar G: Propagator/model unification.** **PARTIALLY RESOLVED (this session, uncommitted).** The `_PROPAGATOR_TO_MODEL` hard-coded error-duality in `core/registry.py` is gone: it is now `_ALIASES`, a **compatibility map** (`{name: (canonical_category, canonical_name)}`). `Registry.get(PROPAGATOR, "ff")` now returns the model class `ForwardForwardNet` (a lookup, not a `ValueError`); `get_metadata` resolves aliases too; and `_create_propagator` skips propagator creation for model-side learners (logging an info message instead of a misleading "not in registry" warning) — the model's `train_step` already owns training, so behavior is unchanged for genuine propagators (eq_prop/hebbian/fa/spiking still instantiate). Added `Registry.aliases()` and `Registry.resolve_alias()`. **Remaining Pillar G:** the actual 5→2 phase collapse of `_train_step` (phases 2 & 4, explicit `propagator=` / `learning-rule optimizer=`), and deleting/converting the `zoo/propagators/*` modules to model-side `train_step`s. These remain because they touch the trainer's hot path and require converting the registered eqprop/hebbian/fa/spiking propagators first — a larger, higher-risk change. AutoScientist composition already queries MODEL by `credit_assignment_type` for the model-side learners; the remaining propagator-branch in the AutoScientist only sees the *registered* propagators (which are untouched).
 
-19. **Pillar L: Self-registration eliminates hardcoded repetition.** With `ComponentMetadata` already carrying `family`/`alias` metadata, top-level `__init__` files (`bioplausible/__init__.py`, `core/__init__.py`) can be reduced to declared shortlists of the real public API. Registry gains `aliases()` and reverse-lookup (`get(name)` → alias chain) so named lookups (`"directed_ep"`, `"sparse_equilibrium"`) survive consolidation. `__all__` lists should be computed from module contents (`vars(module)`) for zoo subpackages instead of hand-written item lists. Target: adding a model/rule = one registration decorator; nothing else to touch.
+19. **Pillar L: Self-registration eliminates hardcoded repetition.** **PARTIALLY RESOLVED (this session, uncommitted).** Registry now exposes `aliases()` (read-only alias map) and `resolve_alias(category, name)` (chain-following, cycle-safe) so named lookups survive consolidation. `zoo/models/eqprop/__init__.py` now computes its 43-item `__all__` from `vars(module)` (excluding `_`-prefixed and `ModuleType` entries) instead of a hand-written list — verified byte-identical to the old literal and green across `tests/unit/models/*` + `test_zoo_integration` (389 pass). Requires a `pyproject.toml` per-file-ignore (`F401`, `RUF022`, `PLE0605`) for that one re-export module, because dynamic `__all__` defeats ruff's static analysis. **Deliberately NOT converted:** `zoo/models/__init__.py`, `zoo/propagators/__init__.py`, `zoo/optimizers/__init__.py`, `zoo/sparsity/__init__.py` — these re-export *submodules* (not leaf names), and a `ModuleType`-excluded `vars()` sweep would drop the intended public submodule names from `__all__` (a behavior change with no consumer); they keep their (stable, small) literal lists. **Remaining Pillar L:** reducing `bioplausible/__init__.py`/`core/__init__.py` `_LAZY` maps, and `core/registry.py`'s `_PROPAGATOR_TO_MODEL`→`_ALIASES`-driven `__all__` in other leaf re-export subpackages (e.g. `zoo/models/fa.py`-style ones that re-export leaf names), each gated on the same per-file-ignore pattern.
 
-20. **Pillar K: Demo, CLI & interface hygiene.** The `DASHBOARD` global singleton (`execution/dashboard.py:349`) must be decoupled: decision modules (`strategy.py`, `engine.py`) accept an `EventSink` protocol (dashboard = one implementation), removing the global import from decision logic. This unblocks UI-free use (headless sweeps). CLI consolidation: introduce a one-command dispatcher (`biopl` with `run | report | parity | repro | hpo | audit | frontier | rank` subcommands) backed by stdlib `argparse` subparsers; each `cli/` module becomes a thin adapter over Pillars A-F's canonical APIs. Delete `cli/run.py`'s 6-subcommand monolith in favor of dispatch + shared `_resolve_targets`. `demo/` moves out of the package tree (or is excluded in `pyproject.toml` `exclude`), consuming only public API and removing NiceGUI/Plotly from the package import surface.
+ 20. **Pillar K: Demo, CLI & interface hygiene.** The `DASHBOARD` global singleton (`execution/dashboard.py:349`) must be decoupled: decision modules (`strategy.py`, `engine.py`) accept an `EventSink` protocol (dashboard = one implementation), removing the global import from decision logic. This unblocks UI-free use (headless sweeps). CLI consolidation: introduce a one-command dispatcher (`biopl` with `run | report | parity | repro | hpo | audit | frontier | rank` subcommands) backed by stdlib `argparse` subparsers; each `cli/` module becomes a thin adapter over Pillars A-F's canonical APIs. Delete `cli/run.py`'s 6-subcommand monolith in favor of dispatch + shared `_resolve_targets`. `demo/` moves out of the package tree (or is excluded in `pyproject.toml` `exclude`), consuming only public API and removing NiceGUI/Plotly from the package import surface.
+
+21. **Finding #7b (`BenchmarkResult` 5-class unification) is NOT a mechanical dedup — scope-corrected (this session).** Investigation shows the five classes are semantically distinct, not interchangeable, so "delete 4 + import canonical" would break ~30 field-reads across 4 modules + their tests:
+    - `evaluation/base.py::BenchmarkResult` — eval *snapshot* of a model on a task (`metrics: dict`, `params_count`, `flops`, `energy_proxy`, `wall_time_s`, `peak_memory_mb`, `metadata`).
+    - `benchmarks/rigorous.py::BenchmarkResult` — training/throughput benchmark with `StatisticalMetrics` (`throughput_stats`, `time_per_epoch_stats`, `val_ppl`, `final_train_loss`, `system_info`, raw sample lists).
+    - `benchmarks/compare_nanoGPT.py::BenchmarkResult` — training-quality (`train_loss`, `val_ppl`, `tokens_per_sec`, `training_time_sec`, `memory_mb`).
+    - `analysis/tile_profiler.py::BenchmarkResult` — pure *timing profile* (`batch_size`, `mean/std/min/max_time_ms`, `throughput_samples_per_sec`).
+    - `zoo/mep/benchmarks/runner.py::BenchmarkResult` — *campaign* result (`config`, `optimizer_name`, `metrics: list[BenchmarkMetrics]`, `total_time`, `final_*_acc`).
+    **Conclusion:** this is full Pillar D work (convert the 4 into `BenchmarkRegistry` *tracks* that emit the canonical eval-snapshot shape), not a contained sub-goal. Do NOT attempt a literal class-delete; it would regress functionality. Recommended sequencing: fold #7b into the Pillar D track-conversion effort. The safe near-term posture is to keep `evaluation/base.py` as the single *imported* canonical name and treat the other four as domain-specific `BenchmarkResult` variants that should eventually subclass/compose it — but that requires aligning each construction site and is XL.
+
+22. **NEW — Pillar N (layering & import-DAG enforcement) added (this revision).** Verified there is **no** `import-linter`/layering tool in `pyproject.toml`, `.pre-commit-config.yaml`, or CI — the layered-core thesis and acceptance criterion #7 are aspirational. Every acyclic/lazy-loader crisis so far (`config/schema.py` name-collision, `execution/`/`hyperopt/` lazy `__getattr__`) was fixed by hand with no gate preventing regression. A stdlib-`ast` static DAG+layering checker as a pre-commit/CI gate (before `pytest`) makes the architecture diagram a checked contract. Low-risk, dependency-free; run in parallel early.
+
+23. **NEW — Pillar O (god-object decomposition) added (this revision).** Eight modules exceed ~1,000 lines, several mixing unrelated responsibilities (`knowledge/kb.py`, `execution/strategy.py`, `zoo/models/fa.py`, `core/local_learning/algorithm.py`, `analysis/tile_profiler.py`, `validation/backprop_parity.py`, `visualization.py`; `cli/run.py` is already Pillar K, `core/trainer.py` deferred to after A/G). Split by cohesion, behavior-preserving, cap effort per AGENTS.md. Run opportunistically between A/E/D edits (split exactly the files those pillars must touch).
+
+24. **Baseline re-verified (this revision): full suite = 2002 pass / 6 fail / 10 skip / 1 xfail.** All 6 failures are the documented numerical/parity drift (finding #5). The `2008`/`1996` figures previously in this document were stale/contradictory and have been reconciled to the measured number.
 

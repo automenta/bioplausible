@@ -16,6 +16,8 @@ Scientific Rigor Features:
 
 import numpy as np
 import torch
+
+from bioplausible.utils import seed_everything
 import torch.nn.functional as F
 from torch import nn
 
@@ -55,8 +57,7 @@ def progress_bar(current: int, total: int, width: int = 20) -> str:
 def create_synthetic_dataset(
     n_samples: int, input_dim: int, n_classes: int, seed: int = 42
 ):
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+    seed_everything(seed)
 
     centers = torch.randn(n_classes, input_dim) * 2
     samples_per_class = n_samples // n_classes

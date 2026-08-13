@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from bioplausible.core.logging import get_logger
+from bioplausible.utils import count_parameters
 
 logger = get_logger()
 
@@ -429,7 +430,7 @@ class TrialRunner:
         avg_iter_time = np.mean(epoch_times) / divisor if epoch_times else 0.0
 
         # Store raw parameter count (not millions)
-        param_count = sum(p.numel() for p in model.parameters())
+        param_count = count_parameters(model, trainable_only=False)
 
         self.storage.update_trial(
             trial_id,

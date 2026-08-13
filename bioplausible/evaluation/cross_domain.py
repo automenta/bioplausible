@@ -33,6 +33,7 @@ from bioplausible.domains import (
 from bioplausible.evaluation.base import BenchmarkResult
 from bioplausible.knowledge import KnowledgeBase, KnowledgeEntry
 from bioplausible.leaderboard.generator import LeaderboardEntry, LeaderboardGenerator
+from bioplausible.utils import count_parameters
 
 logger = get_logger()
 
@@ -188,7 +189,7 @@ class CrossDomainBenchmarkSuite:
                         "accuracy": final.val_acc or 0.0,
                         "loss": final.val_loss or float("inf"),
                     },
-                    params_count=sum(p.numel() for p in model.parameters()),
+                    params_count=count_parameters(model, trainable_only=False),
                     metadata={
                         "epochs": len(history),
                         "train_accuracy": final.train_acc,

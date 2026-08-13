@@ -31,6 +31,7 @@ from bioplausible.core.construction import (
     phantom_knobs as _phantom_knobs,
 )
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.utils import count_parameters
 
 if TYPE_CHECKING:
     import torch
@@ -105,7 +106,7 @@ class InstantiateEstimator:
             raise ParamEstimateError(  # descriptive message is the public API
                 f"Could not construct {model_name!r} for param counting: {exc}"
             ) from exc
-        return sum(p.numel() for p in model.parameters())  # type: ignore[attr-defined]
+        return count_parameters(model, trainable_only=False)  # type: ignore[arg-type]
 
 
 def estimate_param_count(

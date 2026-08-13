@@ -8,7 +8,7 @@ from bioplausible.core.registry import Domain, LocalityLevel, register_optimizer
 
 from . import ewc, muon, spectral, standard
 
-__all__ = [
+__all__: list[str] = [
     "Domain",
     "LocalityLevel",
     "ewc",

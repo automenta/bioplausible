@@ -180,7 +180,7 @@ def _synthetic_data(seed: int, device: str) -> tuple[torch.Tensor, torch.Tensor]
     n_samples = 256
     input_dim = 64
     n_classes = 10
-    torch.manual_seed(seed)
+    seed_everything(seed, device)
     x = torch.randn(n_samples, input_dim)
     y = torch.randint(0, n_classes, (n_samples,))
     if device != "cpu":

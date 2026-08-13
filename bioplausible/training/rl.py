@@ -7,6 +7,7 @@ from gymnasium.spaces import Box
 from torch import nn, optim
 
 from bioplausible.tracking import ExperimentTracker
+from bioplausible.utils import seed_everything
 
 # Constants
 
@@ -94,8 +95,7 @@ class RLTrainer:
                 self.env.seed(seed)
             self.env.reset()
 
-        torch.manual_seed(seed)
-        np.random.seed(seed)
+        seed_everything(seed)
 
     def _reset_env(self) -> np.ndarray:
         """Reset environment and return observation."""

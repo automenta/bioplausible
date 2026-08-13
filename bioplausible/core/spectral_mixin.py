@@ -6,11 +6,14 @@ duplicated across ``core/model.py`` and ``equitile/core/model.py``.
 
 from __future__ import annotations
 
+from typing import cast
+
 import torch
 from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
 from bioplausible.core.utils.activations import approx_spectral_norm
+from bioplausible.utils import count_parameters
 
 
 class SpectralMixin:
@@ -109,6 +112,8 @@ class SpectralMixin:
         """Get algorithm-specific statistics for reporting."""
         return {
             "lipschitz": self.compute_lipschitz(),
-            "num_params": sum(p.numel() for p in self.parameters()),
+            "num_params": count_parameters(
+                cast("nn.Module", self), trainable_only=False
+            ),
             "spectral_norm": self.use_spectral_norm,
         }

@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.acceleration.triton_kernels import TritonEqPropOps
+from bioplausible.utils import count_parameters
 
 from ...utils import spectral_linear
 from ..transitions import TransitionGraphMixin
@@ -557,7 +558,7 @@ def compare_variants(vocab_size: int = 65, seq_len: int = 64, batch_size: int = 
 
     for name in list_eqprop_lm_variants():
         model = get_eqprop_lm(name, vocab_size=vocab_size, hidden_dim=128, num_layers=2)
-        params = sum(p.numel() for p in model.parameters())
+        params = count_parameters(model, trainable_only=False)
 
         import time
 

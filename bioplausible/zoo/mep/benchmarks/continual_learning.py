@@ -27,6 +27,7 @@ from torchvision import datasets
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
+from bioplausible.utils import seed_everything
 from bioplausible.data.transforms import MNIST_TRANSFORM
 from bioplausible.zoo.mep.optimizers import CompositeOptimizer
 from bioplausible.zoo.mep.optimizers.strategies.constraint import SpectralConstraint
@@ -294,7 +295,7 @@ def run_permuted_mnist_benchmark(
     if device is None:
         device = get_device()
 
-    torch.manual_seed(seed)
+    seed_everything(seed)
 
     benchmark = PermutedMNIST(num_tasks=num_tasks, seed=seed)
 

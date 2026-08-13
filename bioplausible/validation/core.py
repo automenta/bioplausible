@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from bioplausible.core.logging import get_logger
+from bioplausible.utils import seed_everything
 
 from .notebook import VerificationNotebook
 from .tracks import track_registry
@@ -46,8 +47,7 @@ class Verifier:
         # Create output directory if it doesn't exist
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        torch.manual_seed(seed)
-        np.random.seed(seed)
+        seed_everything(seed)
 
         # Validation Mode Configuration
         # Quick:        ~2 min - mechanics only (smoke test)
@@ -165,8 +165,7 @@ class Verifier:
             self.current_seed = seed  # Update state for loggers
 
             # Temporarily set seed
-            torch.manual_seed(seed)
-            np.random.seed(seed)
+            seed_everything(seed)
 
             try:
                 score, metrics = track_fn()

@@ -1,5 +1,7 @@
 """Equilibrium Propagation Model Zoo Subpackage."""
 
+import types
+
 from .causal_transformer_eqprop import (
     CausalEqPropAttention,
     CausalTransformerEqProp,
@@ -42,48 +44,8 @@ from .temporal_resonance import TemporalResonanceEqProp
 from .ternary import TernaryEqProp, TernaryLinear, TernaryQuantize
 from .transformer_eqprop import EqPropAttention, TransformerEqProp
 
-__all__: list[str] = [
-    "BackpropMLP",
-    "CausalEqPropAttention",
-    "CausalMask",
-    "CausalTransformerEqProp",
-    "ConvEqProp",
-    "DirectedEP",
-    "EqPropAttention",
-    "EqPropAttentionLM",
-    "EqPropAttentionOnlyLM",
-    "EqPropDiffusion",
-    "FiniteNudgeEP",
-    "FullEqPropLM",
-    "GraphEqProp",
-    "HolomorphicEP",
-    "HomeostasisMetrics",
-    "HomeostaticEqProp",
-    "HybridEqPropLM",
-    "LazyEqProp",
-    "LazyStats",
-    "LoopedMLP",
-    "LoopedMLPForLM",
-    "MemoryEfficientEqPropModel",
-    "MemoryEfficientLoopedMLP",
-    "ModernConvEqProp",
-    "MomentumEquilibrium",
-    "NeuralCube",
-    "NoisyLoopedMLP",
-    "QuantizedLoopedMLP",
-    "RecurrentEqPropLM",
-    "SimpleConvEqProp",
-    "SparseEquilibrium",
-    "StandardEqProp",
-    "TemporalResonanceEqProp",
-    "TernaryEqProp",
-    "TernaryLinear",
-    "TernaryQuantize",
-    "TransformerEqProp",
-    "compare_variants",
-    "create_eqprop_lm",
-    "create_memory_efficient_model",
-    "get_eqprop_lm",
-    "list_eqprop_lm_variants",
-    "register_eqprop_lm",
-]
+__all__: list[str] = sorted(
+    name
+    for name, obj in vars().items()
+    if not name.startswith("_") and not isinstance(obj, types.ModuleType)
+)

@@ -17,6 +17,8 @@ from bioplausible.domains.base import (
     TaskSplit,
 )
 
+from bioplausible.utils import seed_everything
+
 __all__ = [
     "TimeSeriesTask",
 ]
@@ -64,7 +66,7 @@ class TimeSeriesTask(DomainTask):
 
     def _setup_synthetic(self) -> None:
         """Create synthetic sine wave forecasting data."""
-        np.random.seed(42)
+        seed_everything(42)
         t = np.linspace(0, 100, 5000)
         data = np.sin(t) + 0.1 * np.random.randn(5000)
 

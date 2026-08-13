@@ -24,6 +24,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.utils import seed_everything
+
 __all__ = [
     "GradientCheckError",
     "GradientEquivalenceMLP",
@@ -165,7 +167,7 @@ def check_gradient_equivalence(
         GradientCheckError: If FD machinery diverges from autograd or the rule
             direction drifts below ``threshold``.
     """
-    torch.manual_seed(0)
+    seed_everything(0)
     x = torch.randn(16, 8)
     y = torch.randint(0, 5, (16,))
 

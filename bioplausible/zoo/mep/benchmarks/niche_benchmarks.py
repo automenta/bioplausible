@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader, Subset, TensorDataset
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
+from bioplausible.utils import seed_everything
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.data.vision import get_vision_dataset
 from bioplausible.zoo.mep.presets import smep
@@ -50,7 +51,7 @@ def benchmark_regression(
     device_ = get_device(device)
 
     # Generate synthetic regression data
-    torch.manual_seed(42)
+    seed_everything(42)
     X_train = torch.randn(n_train, n_features, device=device_)
     # Target: sum of features + noise
     y_train = X_train.sum(dim=1, keepdim=True) + 0.1 * torch.randn(
@@ -194,7 +195,7 @@ def benchmark_continual_learning(
     """
     device_ = get_device(device)
 
-    torch.manual_seed(42)
+    seed_everything(42)
 
     # Generate tasks: each task predicts different feature combinations
     tasks = []

@@ -16,7 +16,7 @@ from . import (
     spiking,
 )
 
-__all__ = [
+__all__: list[str] = [
     "backprop",
     "base",
     "eqprop",

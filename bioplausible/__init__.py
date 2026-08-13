@@ -39,8 +39,9 @@ The zoo provides two complementary interfaces for bio-plausible learning:
 
 Some algorithms (FF, PEPITA, TargetProp, PCN) inherently require model-level
 control and are registered as models, not propagators. Querying them via
-`Registry.get(ComponentCategory.PROPAGATOR, "pepita")` raises a
-`ValueError` with a cross-reference to the correct model-side registration.
+`Registry.get(ComponentCategory.PROPAGATOR, "pepita")` resolves through the
+compatibility alias map to the model-side registration
+(`Registry.get(ComponentCategory.MODEL, "pepita")`) — no `ValueError` raised.
 """
 
 # Lazy top-level API (Sprint 0.5 module-boundary hardening). `import

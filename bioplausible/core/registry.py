@@ -286,34 +286,26 @@ class Registry:
 
     Some learning rules (FF, PEPITA, TargetProp, PCN) require model-level
     control and are registered as models, not propagators. When queried as
-    propagators, ``get()`` raises with a cross-reference to the model-side
-    implementation.
+    propagators, ``get()`` resolves them to the model-side implementation
+    via the :attr:`_ALIASES` compatibility map (a lookup, not an error).
     """
 
     _components: dict[
         str, dict[str, dict[str, object]]
     ] = {}  # category -> {name: {cls, metadata}}
 
-    # Cross-reference: propagator names that map to model-side implementations.
-    # These are not registered directly as propagators because they require
-    # model-level control of the forward/training loop.
-    _PROPAGATOR_TO_MODEL: dict[str, tuple[str, str]] = {
-        "ff": (
-            "forward_forward",
-            "bioplausible.zoo.models.forward_only.ForwardForwardNet",
-        ),
-        "pepita": ("pepita", "bioplausible.zoo.models.forward_only.PEPITA"),
-        "target_prop": (
-            "diff_target_prop",
-            "bioplausible.zoo.models.target_prop.DifferenceTargetProp",
-        ),
-        "difference_target_prop": (
-            "diff_target_prop",
-            "bioplausible.zoo.models.target_prop.DifferenceTargetProp",
-        ),
+    # Compatibility map: names that alias to a registered component in a
+    # *different* category. Currently propagator names that map to
+    # model-side implementations (the learning rule lives in the model's
+    # ``train_step``, not in a separate propagator object).
+    _ALIASES: dict[str, tuple[ComponentCategory, str]] = {
+        "ff": (ComponentCategory.MODEL, "forward_forward"),
+        "pepita": (ComponentCategory.MODEL, "pepita"),
+        "target_prop": (ComponentCategory.MODEL, "diff_target_prop"),
+        "difference_target_prop": (ComponentCategory.MODEL, "diff_target_prop"),
         "predictive_coding": (
+            ComponentCategory.MODEL,
             "predictive_coding_hybrid",
-            "bioplausible.zoo.models.predictive_coding.PredictiveCodingHybrid",
         ),
     }
 
@@ -391,34 +383,89 @@ class Registry:
 
     @classmethod
     def get(cls, category: ComponentCategory | str, name: str) -> object:
-        """Get a registered component (class or factory callable) by name."""
+        """Get a registered component (class or factory callable) by name.
+
+        If ``name`` is a known alias (see :attr:`_ALIASES`), the lookup
+        transparently follows it to the canonical component.
+        """
         cat = cls._resolve_category(category)
         if cat not in cls._components:
             raise ValueError(f"Unknown category: {cat}")
         if name not in cls._components[cat]:
-            # Check cross-reference for propagator→model mappings.
-            cross_ref = cls._PROPAGATOR_TO_MODEL.get(name)
-            if cross_ref is not None and cat == ComponentCategory.PROPAGATOR:
-                model_name, model_path = cross_ref
-                raise ValueError(
-                    f"Propagator {name!r} is not registered as a propagator "
-                    f"because it requires model-level control of the "
-                    f"forward/training loop.\n"
-                    f"Use Registry.get(ComponentCategory.MODEL, {model_name!r}) instead.\n"
-                    f"Model-side class: {model_path}"
+            # Follow compatibility aliases (e.g. propagator "ff" → model "forward_forward").
+            alias = cls._ALIASES.get(name)
+            if alias is not None and alias[0] == cat:
+                target_cat, target_name = alias
+                logger.info(
+                    "Component %r not registered directly under %s; "
+                    "resolving alias to %s/%s.",
+                    name,
+                    cat.value,
+                    target_cat.value,
+                    target_name,
                 )
+                return cls.get(target_cat, target_name)
+            if alias is not None and cat == ComponentCategory.PROPAGATOR:
+                target_cat, target_name = alias
+                logger.info(
+                    "Propagator %r is a model-side learner (registered as "
+                    "%s/%r); the model's train_step handles training — "
+                    "no propagator object is created.",
+                    name,
+                    target_cat.value,
+                    target_name,
+                )
+                return cls.get(target_cat, target_name)
             available = list(cls._components[cat].keys())
             raise ValueError(f"Unknown {cat.value}: {name}. Available: {available}")
         return cls._components[cat][name]["class"]
 
     @classmethod
+    def aliases(cls) -> dict[str, tuple[ComponentCategory, str]]:
+        """Return the compatibility alias map (read-only view).
+
+        Maps alias names to ``(canonical_category, canonical_name)`` tuples.
+        Used by discovery code (e.g. AutoScientist) to enumerate every
+        addressable learning rule regardless of whether it lives in the
+        MODEL or PROPAGATOR namespace.
+        """
+        return dict(cls._ALIASES)
+
+    @classmethod
+    def resolve_alias(
+        cls, category: ComponentCategory | str, name: str
+    ) -> tuple[ComponentCategory, str]:
+        """Resolve ``name`` in ``category`` through any alias chain.
+
+        Returns the canonical ``(category, name)`` without instantiating.
+        If ``name`` is not an alias, it is returned unchanged.
+        """
+        cat = cls._resolve_category(category)
+        seen: set[str] = set()
+        current: tuple[ComponentCategory, str] = (cat, name)
+        while current[1] in cls._ALIASES and (alias := cls._ALIASES.get(current[1])):
+            if current[1] in seen:
+                logger.warning("Alias cycle detected at %r", current[1])
+                break
+            seen.add(current[1])
+            current = alias
+        return current
+
+    @classmethod
     def get_metadata(
         cls, category: ComponentCategory | str, name: str
     ) -> ComponentMetadata:
-        """Get metadata for a registered component."""
+        """Get metadata for a registered component.
+
+        Resolves alias names transparently by delegating to
+        :meth:`resolve_alias`.
+        """
         cat = cls._resolve_category(category)
         if cat not in cls._components:
             raise ValueError(f"Unknown category: {cat}")
+        # Resolve aliases (e.g. propagator "ff" → model "forward_forward").
+        resolved_cat, resolved_name = cls.resolve_alias(cat, name)
+        cat, name = resolved_cat, resolved_name
         if name not in cls._components[cat]:
             available = list(cls._components[cat].keys())
             raise ValueError(f"Unknown {cat.value}: {name}. Available: {available}")

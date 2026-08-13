@@ -195,6 +195,10 @@ ignore = ["line-too-long", "lowercase-imported-as-non-lowercase", "non-augmented
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["assert", "too-many-arguments", "too-many-statements", "magic-value-comparison", "float-equality-comparison"]
 "tests/**/conftest.py" = ["too-many-arguments", "too-many-statements"]
+# eqprop __init__.py is a pure re-export module: __all__ is computed
+# dynamically from vars() (Pillar L self-registration), so per-line F401
+# annotations and literal-sorted __all__ checks do not apply.
+"bioplausible/zoo/models/eqprop/__init__.py" = ["F401", "RUF022", "PLE0605"]
 "examples/legacy/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
 "examples/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
 "scripts/legacy/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]

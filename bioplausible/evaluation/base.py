@@ -17,6 +17,7 @@ from torch import nn
 
 from bioplausible.core.logging import get_logger
 from bioplausible.domains.base import DomainTask, TaskSplit
+from bioplausible.utils import count_parameters
 
 __all__ = [
     "BenchmarkResult",
@@ -303,7 +304,7 @@ def evaluate_model_on_task(
     """
     model.eval()
     metrics = task.evaluate(model, split=split, max_batches=max_batches)
-    params_count = sum(p.numel() for p in model.parameters())
+    params_count = count_parameters(model, trainable_only=False)
 
     metric_dict = metrics.to_dict()
     if metric_suite:

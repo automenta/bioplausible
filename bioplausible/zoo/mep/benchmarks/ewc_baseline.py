@@ -18,6 +18,7 @@ from torch import nn
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
+from bioplausible.utils import seed_everything
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 if TYPE_CHECKING:
@@ -302,7 +303,7 @@ def run_ewc_benchmark(
     if device is None:
         device = get_device()
 
-    torch.manual_seed(seed)
+    seed_everything(seed)
 
     benchmark = PermutedMNIST(num_tasks=num_tasks, seed=seed)
     model = MLP(hidden_dims=(256, 128)).to(device)

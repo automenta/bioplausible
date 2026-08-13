@@ -19,20 +19,26 @@ import torch
 from torch import nn
 
 
-def seed_everything(seed: int = 42, device: str = "cpu") -> dict[str, str]:
+def seed_everything(
+    seed: int = 42, device: str = "cpu", deterministic: bool = False
+) -> dict[str, str]:
     """
     Seed all random number generators for reproducibility.
 
-    Single consolidated seeding API (Sprint 1.4): seeds Python's ``random``,
-    NumPy, PyTorch (CPU), and — when ``device`` is ``cuda``/``gpu`` and CUDA is
+    Single consolidated seeding API: seeds Python's ``random``, NumPy,
+    PyTorch (CPU), and — when ``device`` is ``cuda``/``gpu`` and CUDA is
     present — the CUDA generator(s) plus cuDNN deterministic/benchmark flags.
     Also captures the environment fingerprint so a ``biopl-repro-check`` run can
     prove two runs are bitwise identical.
 
     Args:
-        seed: Random seed (default: 42)
+        seed: Random seed (default: 42).
         device: ``"cpu"`` (default), ``"cuda"``/``"gpu"`` (also seeds CUDA +
             cuDNN, and refuses to pretend determinism without CUDA).
+        deterministic: When ``True``, also enables
+            ``torch.use_deterministic_algorithms`` (CPU) and the cuDNN
+            deterministic mode (CUDA). Use only when bit-exact reproducibility
+            is required — it can slow or fail some non-deterministic ops.
 
     Returns:
         Environment fingerprint dict (see :func:`capture_environment`).
@@ -45,6 +51,9 @@ def seed_everything(seed: int = 42, device: str = "cpu") -> dict[str, str]:
     want_cuda = device in ("cuda", "gpu") or device.startswith("cuda:")
     if want_cuda and not torch.cuda.is_available():
         raise RuntimeError(f"seed_everything device={device!r} but CUDA is unavailable")
+
+    if deterministic:
+        torch.use_deterministic_algorithms(True)
 
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)

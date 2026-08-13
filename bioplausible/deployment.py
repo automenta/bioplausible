@@ -23,6 +23,7 @@ from bioplausible.core.checkpoint import (
     save_checkpoint,
 )
 from bioplausible.core.logging import get_logger
+from bioplausible.utils import count_parameters
 
 
 @dataclass
@@ -119,7 +120,7 @@ class ModelExporter:
         model.eval()
 
         # Count parameters
-        num_params = sum(p.numel() for p in model.parameters())
+        num_params = count_parameters(model, trainable_only=False)
 
         # Export to each format
         export_paths = {}

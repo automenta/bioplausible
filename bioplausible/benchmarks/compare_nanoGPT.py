@@ -30,6 +30,7 @@ from torch import nn
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
+from bioplausible.utils import count_parameters
 
 logger = get_logger()
 
@@ -218,7 +219,7 @@ class NanoGPTModel(nn.Module):
 
     def get_parameter_count(self) -> int:
         """Get total parameter count."""
-        return sum(p.numel() for p in self.parameters())
+        return count_parameters(self, trainable_only=False)
 
 
 class Block(nn.Module):
@@ -508,7 +509,7 @@ def benchmark_model(
         parameter_count=(
             model.get_parameter_count()
             if hasattr(model, "get_parameter_count")
-            else sum(p.numel() for p in model.parameters())
+            else count_parameters(model, trainable_only=False)
         ),
         train_loss=final_train_loss,
         val_loss=val_loss,

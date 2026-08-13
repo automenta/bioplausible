@@ -18,6 +18,8 @@ from bioplausible.domains.base import (
     TaskSplit,
 )
 
+from bioplausible.utils import seed_everything
+
 __all__ = [
     "ScientificTask",
 ]
@@ -67,7 +69,7 @@ class ScientificTask(DomainTask):
 
     def _setup_pendulum(self) -> None:
         """Simple pendulum ODE: predict next state from current state."""
-        np.random.seed(42)
+        seed_everything(42)
         g = 9.81
         L = 1.0
         dt = 0.05
@@ -107,7 +109,7 @@ class ScientificTask(DomainTask):
 
     def _setup_lorenz(self) -> None:
         """Lorenz system: predict next state from current state."""
-        np.random.seed(42)
+        seed_everything(42)
 
         def lorenz(x, y, z, sigma=10, rho=28, beta=8 / 3):
             dx = sigma * (y - x)

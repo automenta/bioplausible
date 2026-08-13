@@ -37,6 +37,7 @@ import torch
 
 from bioplausible.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
 from bioplausible.data.lm import create_shakespeare_dataset
+from bioplausible.utils import count_parameters
 from bioplausible.zoo.models.tile_lm import TileLM
 
 logger = get_logger()
@@ -432,7 +433,7 @@ class RigorousBenchmark:
         )
 
         # Parameter count
-        param_count = sum(p.numel() for p in model.parameters())
+        param_count = count_parameters(model, trainable_only=False)
 
         return BenchmarkResult(
             model_name=model_name,
@@ -488,7 +489,7 @@ class RigorousBenchmark:
             compile_mode=self.config.compile_mode,
         )
         nanogpt = NanoGPTModel(nanogpt_config)
-        nanogpt_params = sum(p.numel() for p in nanogpt.parameters())
+        nanogpt_params = count_parameters(nanogpt, trainable_only=False)
         logger.info(f"Parameters: {nanogpt_params:,}")
 
         results["nanogpt"] = self.run_single_model(
@@ -511,7 +512,7 @@ class RigorousBenchmark:
             tiles_per_layer=4,
             max_seq_len=self.config.seq_length,
         )
-        equitile_params = sum(p.numel() for p in equitile.parameters())
+        equitile_params = count_parameters(equitile, trainable_only=False)
         logger.info(f"Parameters: {equitile_params:,}")
 
         results["equitile"] = self.run_single_model(

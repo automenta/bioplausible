@@ -42,6 +42,7 @@ from bioplausible.data.lm import get_lm_dataset
 from bioplausible.data.vision import create_data_loaders
 from bioplausible.domains.base import DomainType
 from bioplausible.execution.callbacks import ExecutionCallback
+from bioplausible.utils import count_parameters
 
 if TYPE_CHECKING:
     from bioplausible.domains import TaskProtocol
@@ -598,7 +599,7 @@ class CoreTrainer:
         logger.info(
             "Model created: %s (%d params)",
             self.model.__class__.__name__,
-            sum(p.numel() for p in self.model.parameters()),
+            count_parameters(self.model, trainable_only=False),
         )
 
     def _apply_hardware(self, model: nn.Module) -> nn.Module:
@@ -654,14 +655,32 @@ class CoreTrainer:
         return getattr(self.model, "backend", "pytorch") == "kernel"
 
     def _create_propagator(self) -> None:
-        """Create propagator/learning rule if specified."""
+        """Create propagator/learning rule if specified.
+
+        If the configured propagator name is a *model-side* learning rule
+        (registered in ``Registry._ALIASES``, e.g. ``"ff"`` → model
+        ``"forward_forward"``), the model already owns the training step via
+        its ``train_step`` method — no propagator object is needed and this
+        is a no-op. Genuine propagators (eqprop, hebbian, etc.) are
+        instantiated as ``LearningRuleOptimizer`` instances.
+        """
         if not self.config.propagator:
             return
 
-        logger.info("Creating propagator: %s", self.config.propagator)
+        prop_name = self.config.propagator
+
+        # Model-side learners: the model's train_step handles training.
+        if prop_name in Registry.aliases():
+            logger.info(
+                "Propagator %r is a model-side learner — "
+                "the model's train_step handles training; skipping propagator.",
+                prop_name,
+            )
+            return
+
+        logger.info("Creating propagator: %s", prop_name)
 
         # Check capability compatibility (REFACTOR3 §4-5).
-        prop_name = self.config.propagator
         model_name = self.config.model
 
         try:
@@ -682,13 +701,9 @@ class CoreTrainer:
             pass
 
         try:
-            prop_cls = Registry.get(
-                ComponentCategory.PROPAGATOR, self.config.propagator
-            )
+            prop_cls = Registry.get(ComponentCategory.PROPAGATOR, prop_name)
         except ValueError:
-            logger.warning(
-                "Propagator %s not in registry, skipping", self.config.propagator
-            )
+            logger.warning("Propagator %s not in registry, skipping", prop_name)
             return
         # Every registered propagator is a LearningRuleOptimizer with the
         # signature `(params, model, **kwargs)` (params first, then the model).
@@ -1123,12 +1138,18 @@ class CoreTrainer:
     def _train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Single training step.
 
-        Dispatches to the appropriate training algorithm via:
-        1. EnergyModel protocol (structural match/case).
-        2. Explicit propagator= (explicit learning-rule knob; preferred).
-        3. Model-side train_step (bio-plausible model's own rule).
-        4. Learning-rule optimizer (optimizer= that is a LearningRuleOptimizer).
-        5. Standard BPTT fallback.
+        Dispatches via a structural match to the active learning rule:
+        1. EnergyModel protocol (match/case) — energy-based models.
+        2. Explicit propagator= — a registered LearningRuleOptimizer
+           (e.g. eq_prop, feedback_alignment). Model-side rules
+           (``"ff"``, ``"pepita"``, …) are aliases that resolve to the
+           model's own train_step (Phase 3), so no propagator object is
+           created for them.
+        3. Model-side train_step — bio-plausible models that own their
+           learning rule (``ForwardForwardNet``, ``DifferenceTargetProp``, …).
+        4. Learning-rule optimizer= — an optimizer that *is* a learning
+           rule (collapsed toward Phase 3 as propagator logic migrates).
+        5. Standard BPTT fallback — plain ``forward`` + ``loss.backward()``.
         """
         x = self._adapt_input(x)
 
@@ -1138,8 +1159,10 @@ class CoreTrainer:
                 self._record_path("energy")
                 return _make_ebm_trainer(self.config, self.model).train_step(x, y)
 
-        # Phase 2: Explicit propagator= — the explicit "learning rule" knob;
-        # prefer it over the model's own train_step or a learning-rule optimizer=.
+        # Phase 2: Explicit propagator= — a registered LearningRuleOptimizer
+        # (eq_prop, hebbian, etc.). Model-side rules ("ff", "pepita", …) are
+        # aliases resolved in _create_propagator, so self.propagator is None
+        # for them and we fall through to Phase 3.
         rule = self.propagator
         if rule is not None and _is_learning_rule_optimizer(rule):
             self._record_path("propagator")
