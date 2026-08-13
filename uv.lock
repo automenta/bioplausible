@@ -286,6 +286,7 @@ vision = [
 [package.dev-dependencies]
 dev = [
     { name = "hypothesis" },
+    { name = "pytest-cov" },
 ]
 
 [package.metadata]
@@ -357,7 +358,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "hypothesis", specifier = ">=6.161.2" }]
+dev = [
+    { name = "hypothesis", specifier = ">=6.161.2" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+]
 
 [[package]]
 name = "boolean-py"

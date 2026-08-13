@@ -25,7 +25,6 @@ import torch
 from bioplausible.core.construction import construct_model
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device
-from bioplausible.domains import create_task
 from bioplausible.execution._guards import SafetyConfig
 from bioplausible.execution._lifecycle import CheckpointManager, ExperimentArchiver
 from bioplausible.execution._state import FailureRecord, FailureTracker
@@ -79,11 +78,23 @@ class TrialRunner:
         return device
 
     def _setup_task(self):
-        """Initialize and setup the task object."""
-        self.task_obj = create_task(
-            self.task_name, self.device, self.quick_mode, **self.task_kwargs
+        """Initialize and setup the task object via unified resolution."""
+        from bioplausible.config.unified import DataConfig
+        from bioplausible.domains.registry import resolve_task_from_data_config
+
+        data_config = DataConfig(
+            name=self.task_name,
+            task=self.task_name,
+            batch_size=64,
+            val_batch_size=None,
+            num_workers=4,
+            seq_len=self.task_kwargs.get("seq_len", 64),
+            augment=False,
+            data_fraction=self.task_kwargs.get("data_fraction", 1.0),
+            data_kwargs=self.task_kwargs,
         )
-        self.task_obj.setup()
+
+        self.task_obj = resolve_task_from_data_config(data_config, device=self.device)
         self.input_dim = self.task_obj.input_dim
         self.output_dim = self.task_obj.output_dim
 

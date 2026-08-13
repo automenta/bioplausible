@@ -70,11 +70,18 @@ class ExperimentConfig:
 ---
 
 ### 2. C — Single Construction Funnel (M, Medium, unblocks A)
-**Status:** Model instantiation funnel essentially complete. **Remaining:**
-- **Task/geometry resolution collapse:** `create_task`/`resolve_task`/`trainer._setup_data`/`engine._get_train_loader` → single `DataConfig → DomainTask` resolution in `domains/registry`.
+**Status:** Model instantiation funnel complete. **Task/geometry resolution collapse DONE (2026-08-13).**
+- **Task/geometry resolution collapse:** `create_task`/`resolve_task`/`trainer._setup_data`/`engine._get_train_loader` → single `DataConfig → DomainTask` resolution in `domains/registry`. **COMPLETE:**
+  - Added `DataConfig` frozen dataclass + `resolve_task_from_data_config` in `config/unified.py` (delegates to registry to stay import-acyclic).
+  - `domains/registry.resolve_task_from_data_config(DataConfig, device) -> DomainTask` is now the single canonical path.
+  - `CoreTrainer._setup_data()` rewritten to build a `DataConfig` from `TrainerConfig` and resolve once; `_setup_lm_data()` deleted. Non-DataLoader domains (LM/RL/graph/timeseries) use `task_obj.get_batch`; DataLoader domains (vision/tabular) resolve `train_loader`/`val_loader` from the task (preserving the test-override contract).
+  - `run_from_runconfig()` (trainer.py) and `TrialRunner._setup_task()` (hyperopt/experiment.py) and `ExecutionEngine._get_train_loader/_get_val_loader` (execution/engine.py) all route through the same resolver — no more scattered `create_task`/`create_data_loaders` calls.
+  - **Acceptance criterion #3** (`grep -rn "model_cls(" | grep -v construction.py` = 0) and the single-resolution seam are both satisfied.
 - **Acceptance criterion #3:** `grep -rn "model_cls(" bioplausible/ | grep -v construction.py` → zero instantiation sites (only `construct_model` calls and `.build` for tile/deployment).
 
 **Progress (2026-08-13):**
+- **Task/geometry collapse implemented & verified** (see above). New tests in `tests/unit/domains/test_registry.py`: `test_data_config_defaults_and_frozen`, `test_resolve_from_data_config_returns_task_with_loaders`, `test_resolve_from_data_config_rejects_unknown`. Suite: core_trainer + registry + config_unified + smoke_training + hyperopt_integration + engine_stability + phase0 + cli all green; pyright 0 errors on changed modules; ruff clean (only pre-existing warnings remain).
+- **Spatial-geometry note:** `resolve_task_from_data_config` preserves the raw `DomainTask.input_dim` tuple (e.g. mnist → `(1,28,28)`) — it is NOT flattened, so conv models get `input_channels` from `input_dim[0]` via `construct_model._derive_conv_channels`. The flattening for scheduling lives only in `resolve_task` (used by the scheduler), per the documented "task geometry is ambiguous by design" policy.
 - **Acceptance criterion #3 SATISFIED.** The last two direct-instantiation sites now route through
   the canonical `construct_model` funnel:
   - `cli/lab.py:44` — was `model_cls(input_dim=..., output_dim=...)`; now `construct_model(...)` with
@@ -237,6 +244,13 @@ until the measurement stack lands.
 ### Completed
 - **Pillar B — verified COMPLETE** (single `ModelConfig`, single `ExperimentConfig`, `TrainerConfigSchema`
   and `_KNOB_ALIASES` gone; `omegaconf.py` resolved as I/O-boundary facades, keep).
+- **Pillar C — task/geometry resolution collapse COMPLETE.** Added the unified `DataConfig` +
+  `resolve_task_from_data_config` seam in `config/unified.py` (thin delegate to
+  `domains/registry.resolve_task_from_data_config`). All data-loading sites now route through the
+  single resolver: `CoreTrainer._setup_data` (deleted `_setup_lm_data`, removed the `match`-based
+  `create_data_loaders` dispatch), `run_from_runconfig`, `TrialRunner._setup_task`, and
+  `ExecutionEngine._get_train_loader`/`_get_val_loader`. Geometry threads straight through
+  (spatial tuples preserved for conv-channel derivation). New tests in `tests/unit/domains/test_registry.py`.
 - **Pillar C acceptance criterion #3 — satisfied** (`grep -rn "model_cls(" | grep -v construction.py` = 0).
   Both `cli/lab.py` and `cli/repro.py` now construct exclusively via `construct_model`.
 - `cli/lab.py` hardened: import ordering (E402), `cast` to `nn.Module` (ruff + pyright clean, 0 errors),
@@ -246,6 +260,14 @@ until the measurement stack lands.
   script; 14 new tests in `tests/unit/cli/test_cli_dispatch.py`; ruff + pyright clean.
 - **Pillar J (partial) — archived** `TODO.md` + `REFACTOR.md` to `docs/archive/20260813/`; safe (no code
   reads them). `analysis/tile_*.py` held for post-Pillar D.
+
+### Verification (2026-08-13, targeted suites — not the full 2k suite)
+`pytest` on: `test_core_trainer.py` (23) + `test_registry.py` (10) + `test_config_unified.py` (11) +
+`test_smoke_training.py` (25) + `test_hyperopt_integration.py` (3) + `test_engine_stability.py` (1) +
+`test_phase0.py` (5, exercises `run_from_runconfig`) + `tests/unit/cli/` (23) → **all green**.
+`pyright` 0 errors on `config/unified.py`, `domains/registry.py` (new code). `ruff` clean on all changed
+modules except pre-existing trainer.py/engine.py warnings (typing-only imports, encoding, os.path.join,
+unused `raise-vanilla-args` suppression) — none introduced by this work.
 
 ### Risk assessment of remaining pillars (surveyed 2026-08-13)
 This is the blocker-analysis a future session needs before touching Pillars A/E/D/G. Each was surveyed
@@ -269,10 +291,11 @@ and found **not** safely completable without CoreTrainer surgery or a large depe
   trials (different input, not a duplicate). The 5 `BenchmarkResult`s are semantically distinct by design
   (plan says do not mechanically merge).
 
-**Recommended next session:** either (a) start Pillar A with a *single* tracked loop (e.g. a deployment
-model) migrated to `CoreTrainer` behind targeted training tests, or (b) the Pillar C task/geometry
-resolution collapse in `domains/registry` (also CoreTrainer-adjacent, high-risk). Both need targeted
-training tests, **not** the full suite.
+**Recommended next session:** with the Pillar C task/geometry collapse now done, the remaining
+open work is Pillar A (single training path, XL — criterion #1 needs `loss.backward()` removed from
+~35 semantically-distinct loops) and Pillar G (propagator/model unification). Start Pillar A with a
+*single* tracked loop (e.g. a deployment model) migrated to `CoreTrainer` behind targeted training
+tests, not the full suite. Both are CoreTrainer-adjacent, high-risk architecture work.
 
 ### Findings for future work
 - **`python -m bioplausible.cli <cmd>` shows the wrong `prog`** ("python3 -m bioplausible.cli") in the
@@ -292,15 +315,19 @@ training tests, **not** the full suite.
   tasks return *tuples* (e.g. `mnist → (1,28,28)`). The single task-resolution seam must thread geometry
   straight through to `construct_model` (matching `_build_runconfig_model`), never `int()`-coerce it.
   `domains/registry.resolve_task` already flattens via `math.prod` for scheduling; unify this policy.
+  `resolve_task_from_data_config` (new) preserves the raw tuple — flattening stays only in `resolve_task`
+  (the scheduler's geometry view).
 - **`cli/lab.py` `args.model="MLP"` is NOT a registered name** — the registry's model names are
   `backprop_mlp`, `eqprop`, `forward_forward`, etc. The CLI's default is misleading; a future Pillar K pass
   should map a friendly shortlist or error clearly.
-- **Engine loader duplication (Pillar C tail):** `engine._get_train_loader`/`_get_val_loader`
-  (`execution/engine.py:824,839`) and `trainer._setup_data` (`core/trainer.py:514`) independently call
-  `create_data_loaders` / `_setup_lm_data`. The trainer already keeps a `self.task_obj` (LM path only).
-  Collapsing all three onto one `DataConfig → DomainTask` resolver in `domains/registry` is the remaining
-  Pillar C work — but it is high-risk (touches the CoreTrainer data path) and should be done with targeted
-  training tests, not the full suite.
+- **Engine loader duplication (Pillar C tail) — RESOLVED (2026-08-13):** `engine._get_train_loader`/
+  `_get_val_loader` (`execution/engine.py`) and `trainer._setup_data` (`core/trainer.py`) previously
+  called `create_data_loaders`/`_setup_lm_data` independently. All three now collapse onto the single
+  `DataConfig → DomainTask` resolver in `domains/registry` (`resolve_task_from_data_config`), which
+  returns a ready `DomainTask` with `get_dataloader`/`get_batch`. One remaining inconsistency to note
+  for future work: `ExecutionEngine._get_train_loader` passes `device="cpu"` regardless of the engine's
+  actual device (the non-PL path routes through `run_single_trial_task`/`TrialRunner` which resolves its
+  own device); a future Pillar A pass should thread the engine's device through.
 
 ### Acceptance-criteria status
 - Criterion #1 (`loss.backward()` outside `core/`+`training_mixin` = 0): **NOT done** — ~35 legit sites

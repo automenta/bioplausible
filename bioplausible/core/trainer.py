@@ -38,8 +38,6 @@ from bioplausible.core.registry import (
     Registry,
 )
 from bioplausible.core.utils.device import get_device
-from bioplausible.data.lm import get_lm_dataset
-from bioplausible.data.vision import create_data_loaders
 from bioplausible.domains.base import DomainType
 from bioplausible.execution.callbacks import ExecutionCallback
 from bioplausible.utils import count_parameters
@@ -512,64 +510,50 @@ class CoreTrainer:
         logger.info("Setup complete")
 
     def _setup_data(self) -> None:
-        """Setup data loaders."""
+        """Setup data loaders via unified task resolution."""
         logger.info("Setting up data for task: %s", self.config.task)
 
-        batch_size = self.config.batch_size
-        val_batch_size = self.config.val_batch_size or batch_size
+        from bioplausible.config.unified import DataConfig
+        from bioplausible.domains.base import DomainType, TaskSplit
+        from bioplausible.domains.registry import resolve_task_from_data_config
 
-        match self.config.task:
-            case "mnist" | "cifar10" | "fashion_mnist" | "kmnist" | "digits":
-                self.train_loader, self.val_loader = create_data_loaders(
-                    dataset_name=self.config.task,
-                    batch_size=batch_size,
-                    num_workers=self.config.num_workers,
-                    **self.config.data_kwargs,
-                )
-            case "shakespeare" | "tiny_shakespeare" | "wikitext":
-                self._setup_lm_data(batch_size, val_batch_size)
-            case _:
-                try:
-                    self.train_loader, self.val_loader = create_data_loaders(
-                        dataset_name=self.config.task,
-                        batch_size=batch_size,
-                        num_workers=self.config.num_workers,
-                        **self.config.data_kwargs,
-                    )
-                except (OSError, ValueError, RuntimeError) as e:
-                    logger.warning("Could not load dataset %s: %s", self.config.task, e)
-                    raise
+        data_config = DataConfig(
+            name=self.config.task,
+            task=self.config.task,
+            batch_size=self.config.batch_size,
+            val_batch_size=self.config.val_batch_size,
+            num_workers=self.config.num_workers,
+            seq_len=self.config.data_kwargs.get("seq_len", 64),
+            augment=self.config.data_kwargs.get("augment", False),
+            data_fraction=self.config.data_kwargs.get("data_fraction", 1.0),
+            data_kwargs=self.config.data_kwargs,
+        )
 
-        train_len = len(self.train_loader)
+        task_obj = resolve_task_from_data_config(data_config, device=str(self.device))
+
+        # For LM tasks (and other non-DataLoader tasks), store task_obj and use get_batch
+        # For vision/tabular tasks, use DataLoaders directly so test overrides work
+        if task_obj.spec.domain_type in (
+            DomainType.LM,
+            DomainType.RL,
+            DomainType.GRAPH,
+            DomainType.TIMESERIES,
+        ):
+            self.task_obj = task_obj
+            self.train_loader = None
+            self.val_loader = None
+        else:
+            self.task_obj = None
+            self.train_loader = task_obj.get_dataloader(TaskSplit.TRAIN)
+            self.val_loader = task_obj.get_dataloader(TaskSplit.VAL)
+
+        # Store vocab_size for model creation (LM tasks)
+        if hasattr(task_obj, "vocab_size"):
+            self.config.model_kwargs.setdefault("vocab_size", task_obj.vocab_size)
+
+        train_len = len(self.train_loader) if self.train_loader else 0
         val_len = len(self.val_loader) if self.val_loader else 0
         logger.info("Data loaders created: train=%d, val=%d", train_len, val_len)
-
-    def _setup_lm_data(self, batch_size: int, val_batch_size: int) -> None:
-        """Setup language modeling data."""
-        # Get dataset
-        dataset = get_lm_dataset(self.config.task, **self.config.data_kwargs)
-
-        # Create train/val split
-
-        # Get vocab size
-        vocab_size = dataset.vocab_size
-
-        # Store for model creation
-        self.config.model_kwargs.setdefault("vocab_size", vocab_size)
-
-        # Create simple data loaders
-        from bioplausible.domains import LMTask
-
-        self.task_obj = LMTask(
-            name=self.config.task,
-            device=str(self.device),
-            seq_len=self.config.data_kwargs.get("seq_len", 64),
-        )
-        self.task_obj.setup()
-
-        # We'll use the task's get_batch method in training loop
-        self.train_loader = None  # Signal to use task.get_batch
-        self.val_loader = None
 
     def _create_model(self) -> None:
         """Create model from registry via the single construction layer."""
@@ -1615,14 +1599,26 @@ def run_from_runconfig(cfg: object) -> dict[str, object]:
     """
     import json
 
-    from bioplausible.domains import create_task
+    from bioplausible.config.unified import DataConfig
+    from bioplausible.domains.registry import resolve_task_from_data_config
 
     torch.manual_seed(cfg.seed)
 
     device = _resolve_runconfig_device(cfg)
 
-    task = create_task(cfg.data.task, device=device)
-    task.setup()
+    data_config = DataConfig(
+        name=cfg.data.task,
+        task=cfg.data.task,
+        batch_size=cfg.data.batch_size,
+        val_batch_size=None,
+        num_workers=4,
+        seq_len=cfg.data.seq_len,
+        augment=cfg.data.augment,
+        data_fraction=cfg.data.data_fraction,
+        data_kwargs={},
+    )
+
+    task = resolve_task_from_data_config(data_config, device=device)
 
     model = _build_runconfig_model(cfg, task, device)
     optimizer = _build_runconfig_optimizer(cfg, model)

@@ -33,15 +33,19 @@ from __future__ import annotations
 import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from omegaconf import OmegaConf
+
+if TYPE_CHECKING:
+    from bioplausible.domains.base import DomainTask
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "BaseConfig",
     "BaseStructuredConfig",
+    "DataConfig",
     "DeviceStr",
     "ExperimentConfig",
     "ExperimentRunnerConfig",
@@ -52,6 +56,7 @@ __all__ = [
     "config_to_dict",
     "load_config",
     "resolve_hidden_dims",
+    "resolve_task_from_data_config",
     "save_config",
 ]
 
@@ -317,6 +322,47 @@ def config_to_dict(obj: Any) -> dict[str, Any]:
     losslessly reconstructable.
     """
     return {k: v for k, v in asdict(obj).items() if v is not None}
+
+
+# ──────────────────────────────────────────────
+# Data configuration (unified task/geometry resolution)
+# ──────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class DataConfig(BaseConfig):
+    """Unified data/task configuration.
+
+    This is the single source of truth for task specification across all
+    entry points (CoreTrainer, ExecutionEngine, run_from_runconfig, CLI).
+    All task/geometry resolution flows through :func:`resolve_task_from_data_config`.
+    """
+
+    task: str = "mnist"
+    batch_size: int = 64
+    val_batch_size: int | None = None
+    num_workers: int = 4
+    seq_len: int = 64
+    augment: bool = False
+    data_fraction: float = 1.0
+    data_kwargs: dict[str, object] = field(default_factory=dict)
+
+
+def resolve_task_from_data_config(
+    config: DataConfig, device: str = "cpu"
+) -> DomainTask:
+    """Resolve a :class:`DataConfig` to a concrete :class:`DomainTask`.
+
+    This is the single canonical resolution path for all task/geometry
+    derivation. It replaces the scattered ``create_task``/``resolve_task``/
+    ``_setup_data``/``_get_train_loader`` calls.
+
+    Delegates to :func:`bioplausible.domains.registry.resolve_task_from_data_config`
+    to avoid circular imports (domains.factory imports unified for ModelConfig).
+    """
+    from bioplausible.domains.registry import resolve_task_from_data_config as _resolve
+
+    return _resolve(config, device)
 
 
 # ──────────────────────────────────────────────

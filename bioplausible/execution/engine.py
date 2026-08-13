@@ -77,7 +77,7 @@ class ExecutionEngine:
     CIRCUIT_BREAKER_THRESHOLD = 10
     CIRCUIT_BREAKER_RESET_INTERVAL = 300  # 5 minutes
 
-    def __init__(  # noqa: PLR0913, PLR0917  # injected EventSink for headless decoupling
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # injected EventSink for headless decoupling
         self,
         db_path: str = DB_PATH,
         task_filter: str | None = None,
@@ -822,34 +822,62 @@ class ExecutionEngine:
         )
 
     def _get_train_loader(self, task: ExperimentTask):
-        """Get training DataLoader for a task."""
-        from bioplausible.data.vision import create_data_loaders
+        """Get training DataLoader for a task via unified resolution."""
+        from bioplausible.config.unified import DataConfig
+        from bioplausible.domains.base import TaskSplit
+        from bioplausible.domains.registry import resolve_task_from_data_config
 
         batch_size = (
             task.fixed_config.get("batch_size", 64) if task.fixed_config else 64
         )
 
-        train_loader, _ = create_data_loaders(
-            dataset_name=task.task_name,
+        data_config = DataConfig(
+            name=task.task_name,
+            task=task.task_name,
             batch_size=batch_size,
-            flatten=True,
+            val_batch_size=None,
+            num_workers=4,
+            seq_len=task.fixed_config.get("seq_len", 64) if task.fixed_config else 64,
+            augment=task.fixed_config.get("augment", False)
+            if task.fixed_config
+            else False,
+            data_fraction=task.fixed_config.get("data_fraction", 1.0)
+            if task.fixed_config
+            else 1.0,
+            data_kwargs=task.fixed_config or {},
         )
-        return train_loader
+
+        domain_task = resolve_task_from_data_config(data_config, device="cpu")
+        return domain_task.get_dataloader(TaskSplit.TRAIN)
 
     def _get_val_loader(self, task: ExperimentTask):
-        """Get validation DataLoader for a task."""
-        from bioplausible.data.vision import create_data_loaders
+        """Get validation DataLoader for a task via unified resolution."""
+        from bioplausible.config.unified import DataConfig
+        from bioplausible.domains.base import TaskSplit
+        from bioplausible.domains.registry import resolve_task_from_data_config
 
         batch_size = (
             task.fixed_config.get("batch_size", 64) if task.fixed_config else 64
         )
 
-        _, val_loader = create_data_loaders(
-            dataset_name=task.task_name,
+        data_config = DataConfig(
+            name=task.task_name,
+            task=task.task_name,
             batch_size=batch_size,
-            flatten=True,
+            val_batch_size=None,
+            num_workers=4,
+            seq_len=task.fixed_config.get("seq_len", 64) if task.fixed_config else 64,
+            augment=task.fixed_config.get("augment", False)
+            if task.fixed_config
+            else False,
+            data_fraction=task.fixed_config.get("data_fraction", 1.0)
+            if task.fixed_config
+            else 1.0,
+            data_kwargs=task.fixed_config or {},
         )
-        return val_loader
+
+        domain_task = resolve_task_from_data_config(data_config, device="cpu")
+        return domain_task.get_dataloader(TaskSplit.VAL)
 
     def generate_reports(self, output_dir: str = "reports") -> None:
         """

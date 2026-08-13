@@ -9,7 +9,13 @@ from __future__ import annotations
 
 import pytest
 
-from bioplausible.domains.registry import SUPPORTED_TASKS, TaskSpec, resolve_task
+from bioplausible.config.unified import DataConfig
+from bioplausible.domains.registry import (
+    SUPPORTED_TASKS,
+    TaskSpec,
+    resolve_task,
+    resolve_task_from_data_config,
+)
 
 
 def test_every_supported_name_resolves_offline():
@@ -61,3 +67,33 @@ def test_task_spec_is_frozen_and_ownable():
     spec = TaskSpec(name="xor", input_dim=2, output_dim=2)
     with pytest.raises(Exception):
         spec.input_dim = 3  # frozen dataclass
+
+
+def test_data_config_defaults_and_frozen():
+    cfg = DataConfig()
+    assert cfg.task == "mnist"
+    assert cfg.batch_size == 64
+    assert cfg.val_batch_size is None
+    assert cfg.num_workers == 4
+    assert cfg.seq_len == 64
+    assert cfg.data_fraction == 1.0
+    with pytest.raises(Exception):
+        cfg.task = "cifar10"  # frozen dataclass
+
+
+def test_resolve_from_data_config_returns_task_with_loaders():
+    cfg = DataConfig(task="mnist", batch_size=32)
+    task = resolve_task_from_data_config(cfg, device="cpu")
+    assert task is not None
+    # Spatial geometry is preserved as a tuple (threaded straight through to
+    # construct_model for conv-channel derivation, never int()-coerced).
+    assert task.input_dim == (1, 28, 28)
+    assert task.output_dim == 10
+    # A vision task exposes DataLoader-backed splits
+    assert task.get_dataloader("train") is not None
+
+
+def test_resolve_from_data_config_rejects_unknown():
+    cfg = DataConfig(task="does_not_exist")
+    with pytest.raises(ValueError):
+        resolve_task_from_data_config(cfg, device="cpu")

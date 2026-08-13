@@ -10,11 +10,17 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bioplausible.config.unified import DataConfig
+    from bioplausible.domains.base import DomainTask
 
 __all__ = [
     "SUPPORTED_TASKS",
     "TaskSpec",
     "resolve_task",
+    "resolve_task_from_data_config",
 ]
 
 # Network-fetching tasks (cifar100/svhn, the graph datasets) are excluded:
@@ -90,3 +96,34 @@ def resolve_task(name: str) -> TaskSpec:
     return TaskSpec(
         name=name, input_dim=int(input_dim), output_dim=int(task.output_dim)
     )
+
+
+def resolve_task_from_data_config(
+    config: DataConfig, device: str = "cpu"
+) -> DomainTask:
+    """Resolve a :class:`DataConfig` to a concrete :class:`DomainTask`.
+
+    This is the single canonical resolution path for all task/geometry
+    derivation. It replaces the scattered ``create_task``/``resolve_task``/
+    ``_setup_data``/``_get_train_loader`` calls.
+
+    Args:
+        config: Data configuration specifying the task and loading parameters.
+        device: Target device for the task.
+
+    Returns:
+        A fully set up :class:`DomainTask` with data loaders ready.
+    """
+    from bioplausible.domains.factory import create_task
+
+    if config.task not in SUPPORTED_TASKS:
+        raise ValueError(
+            f"unknown task {config.task!r}; available: {sorted(SUPPORTED_TASKS)}"
+        )
+
+    task = create_task(
+        config.task, device=device, quick_mode=False, **config.data_kwargs
+    )
+    task.batch_size = config.batch_size
+    task.setup()
+    return task
