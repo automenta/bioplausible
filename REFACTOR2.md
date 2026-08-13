@@ -1,3 +1,92 @@
+Here is a rewritten, strategically prioritized architectural plan for the `bioplausible` codebase. This revision shifts the focus from "perfection and exhaustive deduplication" to **high-ROI consolidation, correctness, and architectural enforcement**. 
+
+We have grouped the original 15 pillars into three execution phases and explicitly deprioritized cosmetic or low-leverage tasks.
+
+---
+
+# REFACTOR3: Strategic Consolidation & Execution Plan
+
+## Core Philosophy
+The codebase has achieved functional maturity but suffers from parallel implementations of the same concepts. The goal of this phase is not to rewrite everything, but to **enforce a single source of truth for core execution paths** and **prevent architectural regression**. We will accept localized duplication if unifying it requires disproportionate risk or yields minimal architectural benefit.
+
+---
+
+## Phase 1: Guardrails & Foundations (The "Stop the Bleeding" Phase)
+*Goal: Prevent the architecture from fracturing further and remove dead weight before touching the hot paths.*
+
+**1. Automated Layering Enforcement (Formerly Pillar N)**
+*   **Action:** Implement a lightweight static Import-DAG checker (stdlib `ast` or `import-linter`) in CI.
+*   **Why Essential:** The 7-layer architecture (L1-L7) is currently aspirational. Without a gate, every refactor risks introducing new cyclic dependencies or upward imports.
+*   **Deliverable:** A CI check that fails if `L_N` imports from `L_{>N}`.
+
+**2. Finalize Configuration Unification (Formerly Pillar B)**
+*   **Action:** Complete the remaining sub-goals of the config hierarchy. Eliminate the `_KNOB_ALIASES` hack in `construction.py` and fold the `unified.ExperimentConfig` cleanly into the OmegaConf facade. 
+*   **Why Essential:** Drifting configs cause silent hyperparameter bugs. We already deleted the duplicate `TrainerConfigSchema`; finishing the alias removal ensures a single, canonical parameter namespace.
+
+**3. Ruthless Dead Code Purge (Formerly Pillar J)**
+*   **Action:** Delete remaining legacy artifacts (e.g., `analysis/tile_*.py` legacy systems superseded by `evaluation/`, stale `TODO.md`, unreachable `archive/` references). 
+*   **Correction applied:** Keep `data/transforms.py` (Finding #1) and do *not* merge `comparator.py` with `comparison.py` (Finding #2).
+
+---
+
+## Phase 2: Core Execution Unification (The "Single Source of Truth" Phase)
+*Goal: Consolidate the heavy lifting. These are the highest-impact changes that reduce the ~78k LOC footprint and eliminate split-brain logic.*
+
+**1. Single Training Path (Formerly Pillar A)**
+*   **Action:** Make `CoreTrainer` the *only* training loop in the codebase. Convert `TrialRunner`, `Verifier`, `StaircaseRunner`, `BenchmarkRunner`, and `BioLightningModule` into thin adapters that call `CoreTrainer.fit()`.
+*   **Why Essential:** Maintaining 7 parallel training loops means every bug fix (e.g., mixed precision, gradient clipping, memory tracking) must be implemented 7 times. 
+*   **Pragmatic limit:** Leave `graph/training.py`'s custom PCN/BPTT loops alone unless they can be trivially adapted; do not rewrite custom graph dynamics just for the sake of unification.
+
+**2. Single Construction Funnel (Formerly Pillar C)**
+*   **Action:** Force all model instantiation through `core/construction.construct_model`. Eliminate the 3 scattered `create_model` helpers in `lightning_`, `execution/robustness`, and `hyperopt`.
+*   **Why Essential:** Bypassing the constructor means bypassing registry validation, config defaults, and device placement logic.
+
+**3. Single Result & Persistence Funnel (Formerly Pillar E)**
+*   **Action:** Route all trial outcomes (successes and failures) exclusively through `experiment/result_sink.py`. The 4 other write paths (Optuna SQLite, HyperoptStorage, JSONL, KB) become private implementation details of the sink.
+*   **Why Essential:** Split-brain audit trails make it impossible to reliably trace why an AutoScientist experiment failed. 
+
+---
+
+## Phase 3: Conceptual Clarity & Ecosystem (The "Refinement" Phase)
+*Goal: Align the code's mental model with its actual behavior and clean up the boundaries.*
+
+**1. Propagator/Model Unification (Formerly Pillar G)**
+*   **Action:** Complete the 5-phase to 2-phase collapse in `CoreTrainer._train_step`. Convert registered propagators (EqProp, Hebbian, FA) into model-side `train_step` methods.
+*   **Why Essential:** The current "Propagator vs. Model" duality is confusing and forces the trainer to manage state it shouldn't own. The model must own its learning rule.
+
+**2. Pragmatic Measurement & Tracks (Formerly Pillar D)**
+*   **Action:** Do *not* attempt to mechanically merge the 5 distinct `BenchmarkResult` classes (per Finding #21). Instead, establish `evaluation/base.BenchmarkResult` as the canonical interface, and refactor the other 4 classes (throughput, timing, campaign) as specific *Tracks* or composites that implement or wrap the base interface.
+*   **Why Essential:** Forcing semantically distinct data (e.g., a timing profile vs. an accuracy snapshot) into one mega-class creates bloated objects. Interfaces solve the reporting problem without breaking domain logic.
+
+**3. Headless Execution Decoupling (Formerly Pillar K - Partial)**
+*   **Action:** Decouple the `DASHBOARD` global singleton from `execution/strategy.py` and `engine.py` by introducing an `EventSink` protocol. Consolidate the 13 CLI scripts into a single `biopl` dispatcher using stdlib `argparse`.
+*   **Why Essential:** Global UI singletons prevent headless CI and distributed sweeps. The CLI dispatcher is a minor QoL improvement but good for maintainability.
+
+---
+
+## Deprioritized / Backlog (The "Not Now" List)
+*These tasks are cosmetic, over-engineered, or carry high risk for low reward. They are explicitly deferred.*
+
+*   **God-Object Decomposition (Formerly Pillar O):** Do not split `core/trainer.py` (1769 LOC) or `knowledge/kb.py` (1204 LOC) just because they are long. If they are cohesive and pass tests, leave them alone. Splitting them creates module boundary churn that complicates Phase 2.
+*   **Micro-Consolidation Remainder (Formerly Pillar M):** The remaining ~12 inline accuracy folds and minor parameter counting cleanups are cosmetic. The major drift hazards (seeding, compiled-model param counts) are already fixed.
+*   **Self-Registration Automation (Formerly Pillar L):** Generating `__init__.py` `__all__` lists dynamically via `vars(module)` is clever but unnecessary. Manual registry decorators work fine and are easier to debug.
+*   **Deep Settling Loop Merges (Formerly Pillar I):** Merging `settle_single_state` (Family A) and `settle_activations_list` (Family B) convergence loops carries high numerical regression risk for minimal architectural gain. The telemetry unification (already done) is sufficient.
+*   **Visualization Stack Consolidation:** Merging 4 visualization stacks (Plotly, Matplotlib, NiceGUI, Pandas) is a UI preference issue, not a core architectural flaw. Leave them unless they block headless execution.
+
+## Execution Sequence & Success Metrics
+
+1.  **Weeks 1-2 (Phase 1):** Implement the Import-DAG CI gate. Purge dead code. Finalize Config aliases. *Metric: CI blocks any new upward imports; LOC drops by ~1.5k.*
+2.  **Weeks 3-6 (Phase 2):** Attack the Training and Construction paths. Convert runners to adapters. *Metric: `grep -r "def train_epoch"` drops from 7 to 1. `grep -r "create_model"` drops to 0.*
+3.  **Weeks 7-8 (Phase 3):** Propagator phase collapse and Result Funnel routing. *Metric: 100% of trial outcomes route through `result_sink`; 0 propagator-only training loops.*
+
+**Acceptance Criteria for the Refactor:**
+1.  The Import-DAG checker passes on `main`.
+2.  `CoreTrainer` is the sole owner of the BPTT/optimizer step logic.
+3.  No "split-brain" persistence (all writes flow through `result_sink`).
+4.  The 6 pre-existing numerical parity test failures remain the *only* test failures (no new regressions introduced by adapter conversions).
+
+----
+
 # REFACTOR2: Toward an Ideal Architecture — Consolidation, Layering & Single-Source-of-Truth
 
 ## Architecture Vision
