@@ -29,7 +29,7 @@ from bioplausible.domains import create_task
 from bioplausible.execution._guards import SafetyConfig
 from bioplausible.execution._lifecycle import CheckpointManager, ExperimentArchiver
 from bioplausible.execution._state import FailureRecord, FailureTracker
-from bioplausible.execution.dashboard import DASHBOARD
+from bioplausible.execution.events import EventSink, NullEventSink
 from bioplausible.execution.monitoring import InterferenceMonitor
 from bioplausible.hyperopt.storage import HyperoptStorage
 from bioplausible.tracking import ExperimentTracker
@@ -55,6 +55,7 @@ class TrialRunner:
         task_kwargs: dict = None,
         timeout: float = 3600.0,
         epochs: int = 3,
+        event_sink: EventSink | None = None,
     ):
         self.storage = storage or HyperoptStorage()
         self.checkpoint_db_path = checkpoint_db_path
@@ -64,6 +65,9 @@ class TrialRunner:
         self.epochs = epochs
         self.task_kwargs = task_kwargs or {}
         self.timeout = timeout
+        self._events: EventSink = (
+            event_sink if event_sink is not None else NullEventSink()
+        )
 
         # Initialize Task abstraction
         self._setup_task()
@@ -87,50 +91,22 @@ class TrialRunner:
         self, transfer_from: int, model: torch.nn.Module, config: dict
     ):
         """Helper to find and load weights from a previous trial."""
-        import zipfile
-        from pathlib import Path
+        from bioplausible.core.checkpoint import find_trial_artifact
 
-        artifact_dir = Path("artifacts")
-        if not artifact_dir.exists():
-            logger.warning("Artifacts directory not found.")
-            return
-
-        def _load_state_dict(path: Path, model: torch.nn.Module, freeze_layers: bool):
-            load_weights(
-                model,
-                str(path),
-                device=self.device,
-                strict=False,
-                freeze_layers=freeze_layers,
-            )
-
-        try:
-            # Find matching zip or dir
-            for item in artifact_dir.iterdir():
-                # Expected format: trial_{id}_{model_name}
-                if item.name.startswith(f"trial_{transfer_from}_"):
-                    freeze_layers = config.get("freeze_layers", False)
-                    if item.is_dir():
-                        found_path = item / "model.pt"
-                        if found_path.exists():
-                            _load_state_dict(found_path, model, freeze_layers)
-                            return
-                    elif item.suffix == ".zip":
-                        # Unzip to temp context
-                        with tempfile.TemporaryDirectory() as temp_dir:
-                            temp_path = Path(temp_dir)
-                            with zipfile.ZipFile(item, "r") as zip_ref:
-                                zip_ref.extract("model.pt", temp_path)
-                                found_path = temp_path / "model.pt"
-                                if found_path.exists():
-                                    _load_state_dict(found_path, model, freeze_layers)
-                                    return
-                    break
-
-            logger.warning("Could not find artifact for trial %s", transfer_from)
-
-        except OSError, RuntimeError, ValueError, KeyError:
-            logger.exception("Error loading transfer weights")
+        with find_trial_artifact(transfer_from) as weights_path:
+            if weights_path is None:
+                logger.warning("Could not find artifact for trial %s", transfer_from)
+                return
+            try:
+                load_weights(
+                    model,
+                    weights_path,
+                    device=self.device,
+                    strict=False,
+                    freeze_layers=config.get("freeze_layers", False),
+                )
+            except OSError, RuntimeError, ValueError, KeyError:
+                logger.exception("Error loading transfer weights")
 
     def run_trial(self, trial_id: int, pruning_callback=None) -> bool:
         """Run a single trial and record results."""
@@ -199,7 +175,7 @@ class TrialRunner:
                 epoch_times.append(metrics["time"])
                 if checkpoint_manager:
                     checkpoint_manager.log_metric(epoch, 0, metrics)
-                DASHBOARD.update_progress(epoch, self.epochs, metrics)
+                self._events.update_progress(epoch, self.epochs, metrics)
 
             def wrapped_pruning_callback(tid, epoch, m):
                 if pruning_callback and pruning_callback(tid, epoch, m):
@@ -448,6 +424,7 @@ def run_single_trial_task(
     storage_path: str | None = None,
     quick_mode: bool = True,
     verbose: bool = False,
+    event_sink: EventSink | None = None,
 ) -> dict[str, float] | None:
     """
     Execute a single trial for a given task and model configuration.
@@ -499,6 +476,7 @@ def run_single_trial_task(
             checkpoint_db_path=str(db_path),
             task_kwargs=task_kwargs,
             timeout=timeout,
+            event_sink=event_sink,
         )
 
         # Override epochs if present

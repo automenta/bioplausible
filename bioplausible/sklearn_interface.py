@@ -125,11 +125,17 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
             )
 
         factory_kwargs = self.kwargs.copy()
-        factory_kwargs.setdefault("input_dim", self.n_features_in_)
-        factory_kwargs.setdefault("output_dim", self.n_classes_)
         factory_kwargs.setdefault("hidden_dim", self.hidden_dim)
 
-        self.model_ = model_cls(**factory_kwargs)
+        from bioplausible.core.construction import construct_model
+
+        self.model_ = construct_model(
+            model_cls,
+            factory_kwargs,
+            input_dim=int(self.n_features_in_),
+            output_dim=int(self.n_classes_),
+            model_name=resolved,
+        )
         self.model_ = self.model_.to(self.device)
 
         if hasattr(self.model_, "max_steps"):

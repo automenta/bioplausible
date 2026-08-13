@@ -14,7 +14,7 @@ from bioplausible.execution._guards import (
 )
 from bioplausible.execution._lifecycle import CurriculumManager, PromotionGate
 from bioplausible.execution._state import DecisionLogger, ExperimentState
-from bioplausible.execution.dashboard import DASHBOARD
+from bioplausible.execution.events import EventSink, NullEventSink
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel
 
@@ -106,16 +106,20 @@ class ExecutionStrategy:
         "rl": ["cartpole", "pendulum", "acrobot"],
     }
 
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917  # injected EventSink for headless decoupling
         self,
         state: ExperimentState,
         decision_logger: DecisionLogger | None = None,
         task_filter: str | None = None,
         tier_limit: str | None = None,
         model_filter: str | None = None,  # Comma-separated list of models to exclude
+        event_sink: EventSink | None = None,
     ):
         self.state = state
         self.decision_logger = decision_logger
+        self._events: EventSink = (
+            event_sink if event_sink is not None else NullEventSink()
+        )
         self.task_filter = task_filter
         self.tier_limit = tier_limit.lower() if tier_limit else None
         self.model_filter = set(model_filter.split(",")) if model_filter else set()
@@ -142,8 +146,7 @@ class ExecutionStrategy:
                 self.decision_logger.log_decision(event_type, desc, meta)
             self._logged_events.add(key)
 
-        # Update Dashboard Insight
-        DASHBOARD.set_insight(desc)
+        self._events.set_insight(desc)
 
     def _check_criterion(self, tier: PatientLevel, task: str, acc: float) -> bool:
         """

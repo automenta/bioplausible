@@ -1696,18 +1696,22 @@ def _resolve_runconfig_device(cfg: object) -> str:
 
 def _build_runconfig_model(cfg: object, task: object, device: str) -> nn.Module:
     """Instantiate and move a model to ``device`` from a RunConfig."""
+    from bioplausible.core.construction import construct_model
+
     extra_kwargs = _convert_dictconfig(cfg.model.extra)
-    kwargs: dict[str, object] = {
-        "input_dim": task.input_dim,
-        "hidden_dim": cfg.model.hidden_dim,
-        "output_dim": task.output_dim,
-    }
+    config: dict[str, object] = {"hidden_dim": cfg.model.hidden_dim}
     if hasattr(cfg.model, "num_layers"):
-        kwargs["num_layers"] = cfg.model.num_layers
-    kwargs.update(extra_kwargs)
+        config["num_layers"] = cfg.model.num_layers
+    config.update(extra_kwargs)
 
     model_cls = Registry.get(ComponentCategory.MODEL, cfg.model.name)
-    model = model_cls(**kwargs)
+    model = construct_model(
+        model_cls,
+        config,
+        input_dim=task.input_dim,
+        output_dim=task.output_dim,
+        model_name=cfg.model.name,
+    )
     return model.to(device)
 
 

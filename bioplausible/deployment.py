@@ -366,7 +366,7 @@ class ModelLoader:
         model_params = config["model_params"]
 
         model_cls = Registry.get(ComponentCategory.MODEL, model_name)
-        model = model_cls(**model_params)
+        model = self._construct(model_cls, model_params, model_name)
         model = model.to(self.device)
 
         # Load state dict if available
@@ -375,6 +375,27 @@ class ModelLoader:
             load_checkpoint_into_model(state_path, model, map_location=self.device)
 
         return model, config
+
+    def _construct(
+        self, model_cls: object, model_params: dict[str, object], model_name: str
+    ) -> nn.Module:
+        """Build a registered model through the single construction funnel."""
+        from typing import cast
+
+        from bioplausible.core.construction import construct_model
+
+        input_dim = model_params.get("input_dim", 0)
+        output_dim = model_params.get("output_dim", 0)
+        return cast(
+            "nn.Module",
+            construct_model(
+                model_cls,
+                model_params,
+                input_dim=int(input_dim or 0),
+                output_dim=int(output_dim or 0),
+                model_name=model_name,
+            ),
+        )
 
     def load_from_checkpoint(
         self,
@@ -393,7 +414,7 @@ class ModelLoader:
         Returns:
             Loaded model.
         """
-        model = model_class(**model_params)
+        model = self._construct(model_class, model_params, getattr(model_class, "__name__", "model"))
         model = model.to(self.device)
 
         load_checkpoint_into_model(checkpoint_path, model, map_location=self.device)

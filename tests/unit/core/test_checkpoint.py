@@ -9,6 +9,7 @@ from torch import nn
 
 from bioplausible.core.checkpoint import (
     Checkpoint,
+    find_trial_artifact,
     load_checkpoint,
     load_checkpoint_into_model,
     save_checkpoint,
@@ -102,3 +103,55 @@ def test_checkpoint_minimal_fields(tmp_path_obj):
     loaded = load_checkpoint(path)
     assert "model_state_dict" in loaded
     assert torch.equal(loaded["model_state_dict"]["w"], torch.tensor(1.0))  # type: ignore[index]
+
+
+def test_find_trial_artifact_directory(tmp_path_obj):
+    """A directory artifact resolves to its model.pt and survives the context."""
+    art = tmp_path_obj / "artifacts"
+    art.mkdir()
+    d = art / "trial_7_mlp"
+    d.mkdir()
+    target = d / "model.pt"
+    target.write_text("weights")
+    with find_trial_artifact(7, art) as p:
+        assert p == str(target)
+        assert pathlib.Path(p).read_text(encoding="utf-8") == "weights"
+
+
+def test_find_trial_artifact_zip_cleans_temp(tmp_path_obj):
+    """A zipped artifact extracts to a temp dir that is removed on exit."""
+    import zipfile
+
+    art = tmp_path_obj / "artifacts"
+    art.mkdir()
+    with zipfile.ZipFile(art / "trial_9_mlp.zip", "w") as zf:
+        zf.writestr("model.pt", "zipped")
+    with find_trial_artifact(9, art) as p:
+        assert p is not None and pathlib.Path(p).read_text(encoding="utf-8") == "zipped"
+        assert list(art.glob("tmp*")) == []
+    assert not pathlib.Path(p).exists()
+
+
+def test_find_trial_artifact_prefers_dir(tmp_path_obj):
+    """A directory artifact wins over a same-suffix zip when both exist."""
+    import zipfile
+
+    art = tmp_path_obj / "artifacts"
+    art.mkdir()
+    d = art / "trial_8_mlp"
+    d.mkdir()
+    (d / "model.pt").write_text("dir")
+    with zipfile.ZipFile(art / "trial_8_mlp.zip", "w") as zf:
+        zf.writestr("model.pt", "zip")
+    with find_trial_artifact(8, art) as p:
+        assert p == str(d / "model.pt")
+
+
+def test_find_trial_artifact_missing(tmp_path_obj):
+    """Returns None (yielded, not raised) when no artifact or no dir exists."""
+    art = tmp_path_obj / "artifacts"
+    art.mkdir()
+    with find_trial_artifact(99, art) as p:
+        assert p is None
+    with find_trial_artifact(1, tmp_path_obj / "nope") as p:
+        assert p is None

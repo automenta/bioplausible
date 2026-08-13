@@ -14,24 +14,21 @@ import gc
 import json
 import logging
 import random
-import shutil
 import signal
-import tempfile
 import time
 import traceback
-import zipfile
 from collections.abc import Sequence
 from datetime import datetime
-from pathlib import Path
 
 import optuna
 import torch
 
+from bioplausible.core.checkpoint import find_trial_artifact
 from bioplausible.core.logging import get_logger
 from bioplausible.execution._guards import create_constrained_optuna_config
 from bioplausible.execution._state import DecisionLogger, ExperimentState, FailureRecord
 from bioplausible.execution.callbacks import ExecutionCallback
-from bioplausible.execution.dashboard import DASHBOARD
+from bioplausible.execution.events import EventSink, NullEventSink, dashboard_sink
 from bioplausible.execution.resources import ResourceMonitor
 from bioplausible.execution.robustness import run_robustness_check
 from bioplausible.execution.strategy import ExecutionStrategy
@@ -80,17 +77,21 @@ class ExecutionEngine:
     CIRCUIT_BREAKER_THRESHOLD = 10
     CIRCUIT_BREAKER_RESET_INTERVAL = 300  # 5 minutes
 
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917  # injected EventSink for headless decoupling
         self,
         db_path: str = DB_PATH,
         task_filter: str | None = None,
         tier_limit: str | None = None,
         num_workers: int = 1,
         report_interval: int = 50,
+        event_sink: EventSink | None = None,
     ):
         self.db_path = db_path
         self.num_workers = num_workers
         self.report_interval = report_interval
+        self._events: EventSink = (
+            event_sink if event_sink is not None else NullEventSink()
+        )
         self.trial_count = 0
         self.last_report_trial = 0
         self.state = ExperimentState(db_path)
@@ -159,16 +160,16 @@ class ExecutionEngine:
         Start the continuous discovery loop.
         """
         logger.info("AutoScientist initialized. Starting continuous discovery...")
-        DASHBOARD.start()
-        DASHBOARD.log("AutoScientist Started", style="bold green")
-        DASHBOARD.set_system_status("Active", "bold green")
+        self._events.start()
+        self._events.log("AutoScientist Started", style="bold green")
+        self._events.set_system_status("Active", "bold green")
 
         self._print_resume_context()
 
         try:
             self._run_discovery_loop()
         finally:
-            DASHBOARD.stop()
+            self._events.stop()
             logger.info("AutoScientist shutting down. Cleaning up...")
             self.state.close()
             logger.info("Shutdown complete.")
@@ -182,7 +183,9 @@ class ExecutionEngine:
             self._circuit_open = False
             self._circuit_failure_count = 0
             logger.info("Circuit breaker reset after cooldown period")
-            DASHBOARD.log("Circuit breaker reset - resuming operations", style="green")
+            self._events.log(
+                "Circuit breaker reset - resuming operations", style="green"
+            )
             return False
         return True
 
@@ -207,7 +210,7 @@ class ExecutionEngine:
     def _run_discovery_loop(self) -> None:
         """The main loop execution logic."""
         while self.running:
-            DASHBOARD.update()
+            self._events.update()
 
             if self._check_circuit_breaker():
                 continue
@@ -238,7 +241,7 @@ class ExecutionEngine:
         if (self.trial_count - self.last_report_trial) < self.report_interval:
             return
         logger.info("Generating periodic research reports...")
-        DASHBOARD.log("Generating Periodic Reports...", style="cyan")
+        self._events.log("Generating Periodic Reports...", style="cyan")
         try:
             self.generate_reports()
             self.last_report_trial = self.trial_count
@@ -307,11 +310,11 @@ class ExecutionEngine:
                 - (time.time() - self._circuit_tripped_at)
             )
             logger.warning("Circuit breaker open. Cooling down for %ss", remaining)
-            DASHBOARD.set_system_status(
+            self._events.set_system_status(
                 f"Circuit Breaker - Cooldown {remaining}s", "yellow"
             )
             for i in range(min(remaining, 10), 0, -1):
-                DASHBOARD.set_system_status(
+                self._events.set_system_status(
                     f"Circuit Breaker - Cooldown {i}s", "yellow"
                 )
                 time.sleep(1)
@@ -321,39 +324,39 @@ class ExecutionEngine:
     def _check_resources_pause(self) -> bool:
         """Check if resources are exhausted and pause if necessary."""
         if self.resources.should_pause():
-            DASHBOARD.log("Resources exhausted. Pausing...", style="yellow")
+            self._events.log("Resources exhausted. Pausing...", style="yellow")
             for i in range(60, 0, -1):
-                DASHBOARD.set_system_status(f"Paused - Retry in {i}s", "yellow")
+                self._events.set_system_status(f"Paused - Retry in {i}s", "yellow")
                 time.sleep(1)
             return True
-        DASHBOARD.set_system_status("Active", "bold green")
+        self._events.set_system_status("Active", "bold green")
         return False
 
     def _check_failures_pause(self) -> bool:
         """Check if too many consecutive failures have occurred."""
         if self.consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
-            DASHBOARD.log(
+            self._events.log(
                 f"Too many consecutive failures"
                 f" ({self.consecutive_failures}). Triggering Safe Mode...",
                 style="bold red",
             )
-            DASHBOARD.set_system_status("Safe Mode (Diagnostic)", "bold yellow")
+            self._events.set_system_status("Safe Mode (Diagnostic)", "bold yellow")
 
             # Run Diagnostic
             success = self._run_diagnostic_task()
             if success:
-                DASHBOARD.log(
+                self._events.log(
                     "Diagnostic Passed. Resuming operations.", style="bold green"
                 )
-                DASHBOARD.set_system_status("Active", "bold green")
+                self._events.set_system_status("Active", "bold green")
                 self.consecutive_failures = 0
                 return False
             else:
                 logger.critical("Diagnostic Failed! System unstable. Terminating.")
-                DASHBOARD.log(
+                self._events.log(
                     "CRITICAL: Diagnostic Failed. Terminating Agent.", style="bold red"
                 )
-                DASHBOARD.set_system_status("Terminated", "bold red")
+                self._events.set_system_status("Terminated", "bold red")
                 self.running = False
                 return True
 
@@ -371,7 +374,7 @@ class ExecutionEngine:
             fixed_config={"epochs": 1, "batch_size": 32, "hidden_dim": 16},
         )
         try:
-            DASHBOARD.log("Running Diagnostic Task (Digits/MLP)...", style="yellow")
+            self._events.log("Running Diagnostic Task (Digits/MLP)...", style="yellow")
             metrics = self._process_task(task)
             return metrics is not None
         except Exception:  # broad: best-effort
@@ -381,9 +384,9 @@ class ExecutionEngine:
     def _handle_no_task(self, task: ExperimentTask | None) -> bool:
         """Handle the case where no task is available."""
         if not task:
-            DASHBOARD.log("No viable experiments. Sleeping 60s...")
+            self._events.log("No viable experiments. Sleeping 60s...")
             for i in range(60, 0, -1):
-                DASHBOARD.set_system_status(
+                self._events.set_system_status(
                     f"Waiting for Tasks - Retry in {i}s", "yellow"
                 )
                 time.sleep(1)
@@ -414,7 +417,7 @@ class ExecutionEngine:
             f" | {task.task_name} | {task.tier.name}"
         )
         logger.info(msg)
-        DASHBOARD.log(msg, style="blue")
+        self._events.log(msg, style="blue")
 
     def _process_with_retry(self, task: ExperimentTask) -> dict[str, float] | None:
         """Process a task with retry logic and exponential backoff.
@@ -434,7 +437,7 @@ class ExecutionEngine:
                         task.task_name,
                         wait,
                     )
-                    DASHBOARD.log(
+                    self._events.log(
                         f"Retry {attempt}/{self.MAX_RETRIES} in {wait:.1f}s",
                         style="yellow",
                     )
@@ -467,7 +470,7 @@ class ExecutionEngine:
                         task.model_name,
                         task.task_name,
                     )
-                    DASHBOARD.log(f"Permanent failure: {e}", style="bold red")
+                    self._events.log(f"Permanent failure: {e}", style="bold red")
                     break
 
                 if failure_type == "instability":
@@ -482,7 +485,7 @@ class ExecutionEngine:
                             task.model_name,
                             task.task_name,
                         )
-                        DASHBOARD.log(
+                        self._events.log(
                             f"Model {task.model_name} unstable, skipping future trials",
                             style="red",
                         )
@@ -497,14 +500,14 @@ class ExecutionEngine:
                         task.model_name,
                         task.task_name,
                     )
-                    DASHBOARD.log(f"All retries exhausted: {e}", style="bold red")
+                    self._events.log(f"All retries exhausted: {e}", style="bold red")
                     # Trip circuit breaker on repeated failures
                     self._circuit_failure_count += 1
                     if self._circuit_failure_count >= self.CIRCUIT_BREAKER_THRESHOLD:
                         self._circuit_open = True
                         self._circuit_tripped_at = time.time()
                         logger.critical("Circuit breaker tripped! Too many failures.")
-                        DASHBOARD.log("CIRCUIT BREAKER TRIPPED", style="bold red")
+                        self._events.log("CIRCUIT BREAKER TRIPPED", style="bold red")
 
         return None
 
@@ -699,7 +702,7 @@ class ExecutionEngine:
             "continual_step",
         }
         interesting_params = {k: v for k, v in config.items() if k not in ignore_keys}
-        DASHBOARD.set_trial(
+        self._events.set_trial(
             str(job_id),
             task.model_name,
             task.task_name,
@@ -714,18 +717,20 @@ class ExecutionEngine:
         if metrics:
             acc = metrics.get("accuracy", 0.0)
             loss = metrics.get("loss", float("inf"))
-            DASHBOARD.log(f"Result: Acc={acc:.2%}, Loss={loss:.4f}", style="bold green")
-            DASHBOARD.complete_trial("completed", metrics)
+            self._events.log(
+                f"Result: Acc={acc:.2%}, Loss={loss:.4f}", style="bold green"
+            )
+            self._events.complete_trial("completed", metrics)
             self.consecutive_failures = 0
         else:
-            DASHBOARD.log("Trial failed.", style="bold red")
-            DASHBOARD.complete_trial("failed", {"accuracy": 0.0})
+            self._events.log("Trial failed.", style="bold red")
+            self._events.complete_trial("failed", {"accuracy": 0.0})
             self.consecutive_failures += 1
 
     def _handle_error(self, e: Exception) -> None:
         """Handle exceptions during trial execution."""
         logger.error("Error executing trial: %s", e, exc_info=True)
-        DASHBOARD.log(f"Error: {e}", style="bold red")
+        self._events.log(f"Error: {e}", style="bold red")
         self.consecutive_failures += 1
         time.sleep(5)
 
@@ -739,7 +744,7 @@ class ExecutionEngine:
         self, task: ExperimentTask, config: dict[str, object]
     ) -> dict[str, float]:
         """Run robustness suite and return metrics."""
-        DASHBOARD.log("Running Robustness Suite...")
+        self._events.log("Running Robustness Suite...")
 
         ctx = contextlib.nullcontext()
         if task.verification_of_trial_id:
@@ -776,45 +781,9 @@ class ExecutionEngine:
 
     @contextlib.contextmanager
     def _get_weights_context(self, trial_id: int):
-        """
-        Context manager to find and yield path to weights for a trial.
-        Handles extraction from zip artifacts if necessary.
-        """
-        artifact_dir = Path("artifacts")
-        found_path = None
-        temp_dir = None
-
-        if artifact_dir.exists():
-            # 1. Check directories
-            for item in artifact_dir.iterdir():
-                if item.is_dir() and item.name.startswith(f"trial_{trial_id}_"):
-                    p = item / "model.pt"
-                    if p.exists():
-                        found_path = str(p)
-                        break
-
-            # 2. Check zips if not found
-            if not found_path:
-                for item in artifact_dir.iterdir():
-                    if item.suffix == ".zip" and item.name.startswith(
-                        f"trial_{trial_id}_"
-                    ):
-                        temp_dir = tempfile.mkdtemp()
-                        try:
-                            with zipfile.ZipFile(item, "r") as zf:
-                                zf.extract("model.pt", temp_dir)
-                                found_path = str(Path(temp_dir) / "model.pt")
-                        except (
-                            Exception
-                        ) as e:  # broad: best-effort  # artifact formats vary
-                            logger.warning("Failed to extract artifact: %s", e)
-                        break
-
-        try:
-            yield found_path
-        finally:
-            if temp_dir:
-                shutil.rmtree(temp_dir)
+        """Find and yield the path to a trial's weights (dir or zipped artifact)."""
+        with find_trial_artifact(trial_id) as weights_path:
+            yield weights_path
 
     def _execute_standard_trial(
         self,
@@ -849,6 +818,7 @@ class ExecutionEngine:
             config=config,
             storage_path=DB_PATH,
             quick_mode=quick,
+            event_sink=self._events,
         )
 
     def _get_train_loader(self, task: ExperimentTask):
@@ -910,7 +880,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    engine = ExecutionEngine(tier_limit=args.tier_limit)
+    engine = ExecutionEngine(tier_limit=args.tier_limit, event_sink=dashboard_sink())
 
     if args.report:
         engine.generate_reports(args.dir)

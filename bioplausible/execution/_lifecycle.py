@@ -222,12 +222,18 @@ def reproduce():
     task.setup()
 
     logger.info("Creating model...")
+    from bioplausible.core.construction import construct_model
+
     model_cls = Registry.get(ComponentCategory.MODEL, config["model"])
-    model = model_cls(
+    model = construct_model(
+        model_cls,
+        {
+            "hidden_dim": config.get("hidden_dim", 128),
+            "num_layers": config.get("num_layers", 4),
+        },
         input_dim=task.input_dim,
         output_dim=task.output_dim,
-        hidden_dim=config.get("hidden_dim", 128),
-        num_layers=config.get("num_layers", 4),
+        model_name=config["model"],
     ).to(device)
 
     if "beta" in config and hasattr(model, "beta"):
