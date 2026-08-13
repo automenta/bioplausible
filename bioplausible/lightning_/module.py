@@ -14,6 +14,7 @@ from torch import nn
 
 from bioplausible.core.construction import construct_model
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.trainer import dispatch_train_step
 
 __all__ = [
     "STANDARD_OPTIMIZERS",
@@ -135,12 +136,12 @@ class BioLightningModule(pl.LightningModule):
         self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
         """
-        Training step.
+        Training step, routed through the shared train-step dispatcher.
 
-        Handles three cases:
-        1. Model has custom train_step (e.g., EqProp models)
-        2. Bio-plausible optimizer (x/target kwargs)
-        3. Standard PyTorch optimizer (automatic by PL)
+        ``CoreTrainer`` and this module share one dispatch (model-side
+        ``train_step`` vs BPTT fallback). PL stays the outer loop: manual
+        optimization zeroes/steps its own optimizer around the dispatch;
+        automatic optimization returns the loss for PL to backprop.
         """
         x, y = batch
 
@@ -149,43 +150,19 @@ class BioLightningModule(pl.LightningModule):
             x = x.view(x.size(0), -1)
 
         opt = self._optimizer
-
-        # For bio-optimizers with manual optimization
         if not self.automatic_optimization:
             opt.zero_grad()
 
-            # Check for model-specific train_step (EqProp models, etc.)
-            if hasattr(self.model, "train_step"):
-                metrics = self.model.train_step(x, y)
-            else:
-                logits = self.model(x)
-                loss = nn.functional.cross_entropy(logits, y)
-                acc = (logits.argmax(dim=1) == y).float().mean()
-                metrics = {"loss": loss, "accuracy": acc.item()}
+        metrics = dispatch_train_step(
+            model=self.model,
+            x=x,
+            y=y,
+            adapt_input=lambda t: t,  # already flattened above
+            bptt_step=self._bptt_forward,
+        )
 
-            # Step optimizer manually
+        if not self.automatic_optimization:
             opt.step()
-
-            if metrics is None:
-                metrics = {}
-
-            loss = metrics.get("loss", 0.0)
-            acc = metrics.get("accuracy", 0.0)
-
-            self.log("train_loss", loss, prog_bar=True, on_step=True)
-            self.log("train_acc", acc, prog_bar=True, on_step=True)
-
-            return metrics.get("loss", torch.tensor(0.0))
-
-        # Standard PyTorch training - return loss for automatic backward
-        if hasattr(self.model, "train_step"):
-            metrics = self.model.train_step(x, y)
-        else:
-            logits = self.model(x)
-            loss = nn.functional.cross_entropy(logits, y)
-
-            acc = (logits.argmax(dim=1) == y).float().mean()
-            metrics = {"loss": loss, "accuracy": acc.item()}
 
         if metrics is None:
             metrics = {}
@@ -197,6 +174,16 @@ class BioLightningModule(pl.LightningModule):
         self.log("train_acc", acc, prog_bar=True, on_step=True)
 
         return metrics.get("loss", torch.tensor(0.0))
+
+    def _bptt_forward(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, object]:
+        """Plain forward + cross-entropy metrics.
+
+        Backward/step is handled by PL (automatic) or the caller (manual).
+        """
+        logits = self.model(x)
+        loss = nn.functional.cross_entropy(logits, y)
+        acc = (logits.argmax(dim=1) == y).float().mean()
+        return {"loss": loss, "accuracy": acc.item()}
 
     def validation_step(
         self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx: int

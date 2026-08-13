@@ -372,7 +372,7 @@ tests, not the full suite. Both are CoreTrainer-adjacent, high-risk architecture
 - `ruff` clean on `execution/callbacks.py` and `test_deployment_models.py`; no NEW warnings on `core/trainer.py` (36 pre-existing before == 36 after); `vision.py` remaining warnings all pre-existing (build-arg arity, magic dim constants)
 
 ### Next Steps for Pillar A
-1. **BioLightningModule scoping decision:** this is a `pl.LightningModule` where PL owns the loop and calls `training_step` per batch; for standard optimizers PL's *automatic* backward conflicts with `CoreTrainer._bptt_step`'s internal backward (double-backward). Full conversion requires either always-manual optimization (changes the documented `automatic_optimization` contract and tests) or a shared dispatcher extracted from `_train_step`. Recommended future pass: extract `_train_step`'s dispatch into a reusable pure function both `CoreTrainer` and `BioLightningModule` call, keeping PL as the outer loop. Do NOT attempt a literal `CoreTrainer.fit()`-inside-LightningModule — PL must stay the driver.
+1. **BioLightningModule scoping decision — DONE (2026-08-14 continuation):** the shared `dispatch_train_step` seam is extracted and both `CoreTrainer` and `BioLightningModule` route through it (PL stays the outer loop; manual vs. automatic optimization handled externally). The `LightningExecutionCallback` from the previous session is the natural bridge for any remaining PL logging deltas.
 2. **Convert RL training** (`training/rl.py`) to use CoreTrainer.
 3. **Convert CLI repro** (`cli/repro.py`) `_train_one_epoch` to use CoreTrainer.
 4. **Address validation tracks** — delegate execution to CoreTrainer-based runner.
@@ -383,3 +383,31 @@ tests, not the full suite. Both are CoreTrainer-adjacent, high-risk architecture
 - **Other deployment models** (GraphEquiTile, TimeSeriesEquiTile, RLEquiTile) use scalar `input_dim` so they should work with CoreTrainer without changes — only ConvEquiTile needed the tuple handling fix.
 - **`LightningExecutionCallback` is infrastructure, not wired:** it logs `TrainingMetrics` fields via `pl.LightningModule.log` but no production code uses it yet. It is the bridge the Pillar A BioLightningModule pass (Next Steps #1) should consume.
 - **`_create_model` no longer needs `int()` coercion:** with `_setup_data` seeding `model_kwargs["input_dim"]` from the task, the `int(... or 0)` guard in `_create_model` was replaced with a `None` check that preserves tuples. Any future caller building `TrainerConfig` by hand must either pass a task name (so `_setup_data` resolves geometry) or include `input_dim`/`output_dim` in `model_kwargs` explicitly.
+
+---
+
+## Session Log (2026-08-14, continuation — Shared train-step dispatch)
+
+### Completed (Pillar A, Next Step #1 — single dispatch seam)
+- **Extracted the canonical 5-phase `train_step` dispatcher into a module-level pure function** `dispatch_train_step` in `core/trainer.py`. It owns the order-of-routing (energy-model → learning-rule propagator → model-side `train_step` → learning-rule optimizer → BPTT fallback) previously inlined in `CoreTrainer._train_step`. Callers inject `adapt_input`, a `bptt_step` callback, and an optional `record_path` recorder, keeping the dispatch pure and reusable.
+- **`CoreTrainer._train_step` now delegates** to `dispatch_train_step` (behavior identical — verified by the training-path / propagator / energy / deployment suites).
+- **`BioLightningModule.training_step` now routes through the same dispatcher** — PL stays the outer loop. Manual-optimization mode zeroes its own optimizer before dispatch and steps after; automatic mode returns the tensor loss for PL to backprop. Added a small `_bptt_forward` helper. This directly implements the documented "extract `_train_step`'s dispatch into a reusable pure function both CoreTrainer and BioLightningModule call, keeping PL as the driver."
+
+### Verification (targeted suites)
+- `pytest` `test_core_trainer.py` + `test_deployment_models.py` + `test_training_path.py` + `test_lightning_integration.py` → **58 passed** (1 skipped).
+- `pytest` `test_energy_model.py` + `test_energies.py` + `test_execution_callbacks.py` + `test_registry.py` → **41 passed**.
+- `pytest` `test_smoke_training.py` → **25 passed**.
+- `pyright` strict: **0 errors** on both files; warnings **net decreased** (113→111) across `core/trainer.py` + `lightning_/module.py` — no new warnings introduced.
+- `ruff format` + `ruff check --select E,F`: no new errors (only the two pre-existing line-too-long docstrings in `trainer.py:591,1042`).
+- **Pillar A Next Step #3 (`cli/repro.py` `_train_one_epoch` → `dispatch_train_step`):** `tests/unit/validation/test_repro_check.py` → **9 passed** (bitwise gate intact); `pytest tests/unit/cli/` → **23 passed**; `pyright` 0 errors on `cli/repro.py`; `ruff` clean.
+
+### Findings for future work
+- **The dispatch is typed for `dict[str, object]` by design:** PL's automatic path must return a *tensor* loss (for PL's backward), while `CoreTrainer`'s paths yield floats. So `dispatch_train_step` and its `bptt_step` callback are typed `dict[str, object]`, and `CoreTrainer._train_step` casts the result back to `dict[str, float]`. New callers should be aware of this split and pick the appropriate typing.
+- **`BioLightningModule` passes `propagator=None`/`optimizer=None` to the dispatcher and steps its own optimizer externally.** This deliberately suppresses Phase-4 (learning-rule optimizer) so its bio-optimizers keep their prior `model.train_step`→`opt.step()` semantics rather than switching to `rule.step(x=, target=)` — a behavior-preserving choice worth re-evaluating once Pillar G lands (Phase-4 is the intended home for those optimizers).
+- **The EnergyModel branch is guarded by `config is not None`:** CoreTrainer passes config (enabling the `_make_ebm_trainer` energy path); `BioLightningModule` passes none, so EnergyModels fall through to model-side `train_step`, matching its prior behavior. A future pass could give the module a minimal config facade to unlock the energy path.
+- **`BioLightningModule.create_model` helper was deliberately kept** — `tests/integration/test_lightning_integration.py:368,417` patch `bioplausible.lightning_.module.create_model`; deleting it requires updating those tests (the Pillar A "Delete its create_model helper" item).
+- **Next Step #3 (convert `cli/repro.py` `_train_one_epoch`, was lines 146-172) — DONE (2026-08-14 continuation).** The hand-rolled train_step-vs-Adam-BPTT loop now routes each batch through `dispatch_train_step` (its `_bptt` closure supplies the Adam BPTT fallback). This removes the duplicated train-step dispatch, not the BPTT backward itself — repro.py still contains a `loss.backward()` inside the `_bptt` closure, because the non-`train_step` families (e.g. `fa`) legitimately train via plain BPTT. So **criterion #1 is NOT advanced by this change**; the remaining `loss.backward()` sites are the documented Pillar A scope (mep benchmarks, propagators, deployment models, validation tracks).
+  - **Determinism gate verified:** `tests/unit/validation/test_repro_check.py` → **9 passed**, including `test_json_report_all_pass` which runs all 7 REPRO_MODELS through `_train_one_epoch` twice and asserts bitwise-identical state dicts. Both passes share the new path under one seed, so reproducibility holds despite the changed batch ordering.
+  - `ruff` clean, `pyright` 0 errors (warnings 6→4); `pytest tests/unit/cli/` → **23 passed**.
+- **Next Step #2 (convert RL `training/rl.py` to CoreTrainer) is questionable:** `RLTrainer` is REINFORCE policy-gradient from *environment trajectories* (no fixed DataLoader), so a `CoreTrainer` adapter is architecturally inappropriate. Recommend keeping `RLTrainer` self-contained unless a policy-loss BPTT step emerges that should route through the shared dispatcher.
+- **Next Steps #4/#5 (validation tracks, MEP benchmarks)** remain Pillar D-dependent and untouched.

@@ -294,6 +294,63 @@ class TrainingMetrics(BaseMetrics):
     requires_backward: bool | None = None
 
 
+def dispatch_train_step(
+    model: nn.Module,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    adapt_input: Callable[[torch.Tensor], torch.Tensor],
+    bptt_step: Callable[[torch.Tensor, torch.Tensor], dict[str, object]],
+    propagator: object | None = None,
+    optimizer: object | None = None,
+    config: TrainerConfig | None = None,
+    record_path: Callable[[str], None] | None = None,
+) -> dict[str, object]:
+    """Dispatch one training step to the active learning rule.
+
+    The single canonical ``train_step`` dispatcher shared by ``CoreTrainer``
+    and ``BioLightningModule``. Routes through, in order: the energy-model
+    path, an explicit learning-rule propagator, a model-side ``train_step``,
+    a learning-rule optimizer, then plain BPTT (``bptt_step``). Callers pass
+    their own input adapter, BPTT fallback, and optional path recorder so the
+    dispatch itself stays a pure, reusable function.
+    """
+    x = adapt_input(x)
+
+    def _record(path: str) -> None:
+        if record_path is not None:
+            record_path(path)
+
+    match model:
+        case EnergyModel() if config is not None:
+            _record("energy")
+            return _make_ebm_trainer(config, model).train_step(x, y)
+
+    rule = propagator
+    if rule is not None and _is_learning_rule_optimizer(rule):
+        _record("propagator")
+        return rule.step(x=x, target=y) or {}
+
+    if hasattr(model, "train_step"):
+        try:
+            metrics = model.train_step(x, y)
+        except NotImplementedError:
+            metrics = None
+        if metrics is not None:
+            _record("model_train_step")
+            return metrics
+
+    rule = optimizer
+    if rule is not None and _is_learning_rule_optimizer(rule):
+        _record("propagator")
+        return rule.step(x=x, target=y) or {}
+
+    if getattr(model, "gradient_method", None) == "equilibrium":
+        _record("implicit_equilibrium")
+    else:
+        _record("bptt")
+    return bptt_step(x, y)
+
+
 class CoreTrainer:
     """
     Unified training interface for all bioplausible models.
@@ -1131,64 +1188,23 @@ class CoreTrainer:
         return x.view(x.size(0), -1)
 
     def _train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        """Single training step.
-
-        Dispatches via a structural match to the active learning rule:
-        1. EnergyModel protocol (match/case) — energy-based models.
-        2. Explicit propagator= — a registered LearningRuleOptimizer
-           (e.g. eq_prop, feedback_alignment). Model-side rules
-           (``"ff"``, ``"pepita"``, …) are aliases that resolve to the
-           model's own train_step (Phase 3), so no propagator object is
-           created for them.
-        3. Model-side train_step — bio-plausible models that own their
-           learning rule (``ForwardForwardNet``, ``DifferenceTargetProp``, …).
-        4. Learning-rule optimizer= — an optimizer that *is* a learning
-           rule (collapsed toward Phase 3 as propagator logic migrates).
-        5. Standard BPTT fallback — plain ``forward`` + ``loss.backward()``.
-        """
-        x = self._adapt_input(x)
-
-        # Phase 1: EnergyModel — clean structural dispatch
-        match self.model:
-            case EnergyModel():
-                self._record_path("energy")
-                return _make_ebm_trainer(self.config, self.model).train_step(x, y)
-
-        # Phase 2: Explicit propagator= — a registered LearningRuleOptimizer
-        # (eq_prop, hebbian, etc.). Model-side rules ("ff", "pepita", …) are
-        # aliases resolved in _create_propagator, so self.propagator is None
-        # for them and we fall through to Phase 3.
-        rule = self.propagator
-        if rule is not None and _is_learning_rule_optimizer(rule):
-            self._record_path("propagator")
-            return rule.step(x=x, target=y) or {}
-
-        # Phase 3: Model-side custom train_step (bio-plausible models)
-        # Probe with real data — the only reliable way to verify
-        # that train_step returns meaningful metrics vs NotImplementedError/None.
-        # A base-class train_step raises NotImplementedError to signal "use BPTT";
-        # catch it and fall through to Phase 4/5 rather than aborting the epoch.
-        if hasattr(self.model, "train_step"):
-            try:
-                metrics = self.model.train_step(x, y)
-            except NotImplementedError:
-                metrics = None
-            if metrics is not None:
-                self._record_path("model_train_step")
-                return metrics
-
-        # Phase 4: Learning-rule optimizer (optimizer= that is a LearningRuleOptimizer)
-        rule = self.optimizer
-        if rule is not None and _is_learning_rule_optimizer(rule):
-            self._record_path("propagator")
-            return rule.step(x=x, target=y) or {}
-
-        # Phase 5: Standard forward/backward
-        if getattr(self.model, "gradient_method", None) == "equilibrium":
-            self._record_path("implicit_equilibrium")
-        else:
-            self._record_path("bptt")
-        return self._bptt_step(x, y)
+        """Single training step, routed through the shared dispatcher."""
+        # Every CoreTrainer path yields float metrics; the shared dispatcher is
+        # typed for object values so PL can return tensor losses, so cast here.
+        return cast(
+            "dict[str, float]",
+            dispatch_train_step(
+                model=cast("nn.Module", self.model),
+                x=x,
+                y=y,
+                adapt_input=self._adapt_input,
+                bptt_step=self._bptt_step,
+                propagator=self.propagator,
+                optimizer=self.optimizer,
+                config=self.config,
+                record_path=self._record_path,
+            ),
+        )
 
     def _record_path(self, path: str) -> None:
         """Increment the credit-assignment path counter for self-diagnosis."""
@@ -1228,7 +1244,7 @@ class CoreTrainer:
         if total_grad_norm > 100:
             raise optuna.TrialPruned(f"Gradient explosion (norm={total_grad_norm:.1f})")
 
-    def _bptt_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+    def _bptt_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, object]:
         """Standard backpropagation training step."""
         x = self._adapt_input(x)
 
@@ -1271,7 +1287,7 @@ class CoreTrainer:
             self.optimizer.step()
 
         # Compute metrics
-        metrics: dict[str, float] = {"loss": loss.item()}
+        metrics: dict[str, object] = {"loss": loss.item()}
         if self.task_obj is not None and hasattr(self.task_obj, "compute_metrics"):
             with torch.no_grad():
                 task_metrics = self.task_obj.compute_metrics(
