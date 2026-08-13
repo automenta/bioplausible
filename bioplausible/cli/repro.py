@@ -122,24 +122,25 @@ def _instantiate(  # ruff: ignore[too-many-return-statements]  (one return per r
             num_steps=10,
         ).to(device)
 
-    # The deployment models are registered by importing the zoo (they moved
-    # from the separate equitile package into ``zoo.models.deployments``).
-    import bioplausible.zoo  # ruff: ignore[unused-import]
-    from bioplausible.zoo import get_model_spec
+    # Every remaining registered family (tile substrate like ``tile_pc`` and the
+    # deployment ``BioModel`` family like ``conv_equitile``) constructs through
+    # its canonical ``build`` classmethod, routed via the single construction
+    # funnel so registry validation + device placement stay uniform.
+    from bioplausible.core.construction import construct_model
 
-    spec = get_model_spec(model_name)
-    model_cls = Registry.get(ComponentCategory.MODEL, model_name)
-
-    model = model_cls.build(
-        spec=spec,
+    model = construct_model(
+        Registry.get(ComponentCategory.MODEL, model_name),
+        {
+            "hidden_dim": 64,
+            "num_layers": 2,
+            "device": device,
+            "task_type": "vision",
+        },
         input_dim=input_dim,
         output_dim=output_dim,
-        hidden_dim=64,
-        num_layers=2,
-        device=device,
-        task_type="vision",
+        model_name=model_name,
     )
-    return model
+    return model  # type: ignore[return-value]  # construct_model returns object; every branch yields an nn.Module
 
 
 def _train_one_epoch(model: torch.nn.Module, x: torch.Tensor, y: torch.Tensor) -> None:

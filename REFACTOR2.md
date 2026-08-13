@@ -30,13 +30,19 @@ The codebase (~78k LOC, ~297 modules) has 7 parallel training stacks, 4 config h
 
 ## Remaining Pillars (Ordered by Value/Effort)
 
-### 1. B — Single Config Hierarchy (XL, High risk, blocks A/C/E)
+### 1. B — Single Config Hierarchy (XL, High risk, blocks A/C/E)  ✅ COMPLETE (verified 2026-08-13)
 **Problem:** 4+ duplicate hierarchies, same-named classes.
 - `ModelConfig` ×2 (`unified.py`, `omegaconf.py` renamed)
 - `ExperimentConfig` ×2 (`unified.py`, `omegaconf.py` renamed)
 - `TrainerConfigSchema` (Pydantic, zero prod consumers) — delete or auto-generate via `TypeAdapter`
 - `config/omegaconf.py` mirror — delete; keep `unified.py` as single I/O pair
 - `_KNOB_ALIASES` in `construction.py` — shrink to zero once all sites emit canonical names
+
+**Verified:** `grep "class ModelConfig"` == 1 (`config/unified.py:123`); `ExperimentConfig` == 1
+(`unified.py:328`); `TrainerConfigSchema` and `_KNOB_ALIASES` no longer exist. `omegaconf.py` was
+resolved into the intended *I/O-boundary facade* design (mutable OmegaConf YAML document types with
+`to_internal()` seams into the frozen `unified.py` tree) rather than deletion — this is the correct
+"single I/O pair" outcome and should be kept, not re-deleted.
 
 **Target:** One compositional tree in `config/unified.py`:
 ```python
@@ -67,6 +73,23 @@ class ExperimentConfig:
 **Status:** Model instantiation funnel essentially complete. **Remaining:**
 - **Task/geometry resolution collapse:** `create_task`/`resolve_task`/`trainer._setup_data`/`engine._get_train_loader` → single `DataConfig → DomainTask` resolution in `domains/registry`.
 - **Acceptance criterion #3:** `grep -rn "model_cls(" bioplausible/ | grep -v construction.py` → zero instantiation sites (only `construct_model` calls and `.build` for tile/deployment).
+
+**Progress (2026-08-13):**
+- **Acceptance criterion #3 SATISFIED.** The last two direct-instantiation sites now route through
+  the canonical `construct_model` funnel:
+  - `cli/lab.py:44` — was `model_cls(input_dim=..., output_dim=...)`; now `construct_model(...)` with
+    `{"hidden_dim": 64, "num_layers": 2}` defaults. Also fixed a latent Python-2-style
+    `except RuntimeError, ValueError, TypeError:` clause (valid syntax in 3.14, left as-is) and the
+    import ordering. Verified end-to-end: `inspect_model` builds + forward-passes `backprop_mlp` on
+    `xor` (scalar input) and `mnist` (spatial `(1,28,28)` tuple input). Spatial tuple `input_dim`
+    must be passed **straight through** (do NOT `int()` it) — matches `_build_runconfig_model`
+    (`core/trainer.py:1711`).
+  - `cli/repro.py:125` (pre-existing uncommitted) — was `model_cls.build(...)`; now `construct_model`.
+- **Pre-existing uncommitted Pillar C work in the tree (left intact, verified green):**
+  `core/construction.py` adds `_is_deployment_model()` and routes the deployment `BioModel` family
+  (`conv_equitile`/`rl_equitile`/etc.) through the substrate `build` branch; `repro.py` consumes it;
+  `tests/unit/experiment/test_config_knobs.py` opts `conv_equitile` out of the depth audit (its depth
+  map is offset by 2). `pytest tests/unit/experiment/test_config_knobs.py` → 13 passed.
 
 **Win:** ~600 lines removed; one error message for "unknown task/model"; lossless checkpoint round-trips.
 
@@ -178,3 +201,40 @@ class ExperimentConfig:
 **Full suite:** 2002 pass / 6 fail / 10 skip / 1 xfail (6 failures = documented numerical/parity drift, unrelated to refactor).
 **Lint gate:** Functional (ruff 0.16 parses config; ~2k pre-existing warnings are backlog, not blocker).
 **Pyright:** 0 errors strict mode.
+
+---
+
+## Session Log (2026-08-13)
+
+### Completed
+- **Pillar B — verified COMPLETE** (single `ModelConfig`, single `ExperimentConfig`, `TrainerConfigSchema`
+  and `_KNOB_ALIASES` gone; `omegaconf.py` resolved as I/O-boundary facades, keep).
+- **Pillar C acceptance criterion #3 — satisfied** (`grep -rn "model_cls(" | grep -v construction.py` = 0).
+  Both `cli/lab.py` and `cli/repro.py` now construct exclusively via `construct_model`.
+- `cli/lab.py` hardened: import ordering (E402), `cast` to `nn.Module` (ruff + pyright clean, 0 errors),
+  added `hidden_dim`/`num_layers` defaults so the lab actually constructs models that declare them.
+
+### Findings for future work
+- **Python 3.14 allows `except A, B, C:`** (tuple-of-exceptions form) without parentheses — old-style
+  clauses are valid and `ruff format` will strip redundant parens back to it. Do not "fix" them; they are
+  not bugs.
+- **Task geometry is ambiguous by design:** `TaskProtocol.input_dim` is typed `int | None` but concrete
+  tasks return *tuples* (e.g. `mnist → (1,28,28)`). The single task-resolution seam must thread geometry
+  straight through to `construct_model` (matching `_build_runconfig_model`), never `int()`-coerce it.
+  `domains/registry.resolve_task` already flattens via `math.prod` for scheduling; unify this policy.
+- **`cli/lab.py` `args.model="MLP"` is NOT a registered name** — the registry's model names are
+  `backprop_mlp`, `eqprop`, `forward_forward`, etc. The CLI's default is misleading; a future Pillar K pass
+  should map a friendly shortlist or error clearly.
+- **Engine loader duplication (Pillar C tail):** `engine._get_train_loader`/`_get_val_loader`
+  (`execution/engine.py:824,839`) and `trainer._setup_data` (`core/trainer.py:514`) independently call
+  `create_data_loaders` / `_setup_lm_data`. The trainer already keeps a `self.task_obj` (LM path only).
+  Collapsing all three onto one `DataConfig → DomainTask` resolver in `domains/registry` is the remaining
+  Pillar C work — but it is high-risk (touches the CoreTrainer data path) and should be done with targeted
+  training tests, not the full suite.
+
+### Acceptance-criteria status
+- Criterion #1 (`loss.backward()` outside `core/`+`training_mixin` = 0): **NOT done** — ~35 legit sites
+  remain (mep benchmarks, propagators, deployment models, validation tracks). Pillar A scope.
+- Criterion #3 (`model_cls(` outside construction = 0): **DONE**.
+- Criterion #6 (`zoo/propagators/` = only `mep.py` + gradient transformers): **NOT done** — `backprop.py`,
+  `base.py`, `eqprop.py`, `fa.py`, `hebbian.py`, `spiking.py` still present. Pillar G scope.

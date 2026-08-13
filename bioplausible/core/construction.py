@@ -182,6 +182,28 @@ def _is_tile_substrate(model_cls: object) -> bool:
         return False
 
 
+def _is_deployment_model(model_cls: object) -> bool:
+    """Whether ``model_cls`` is a deployment ``BioModel`` with a custom ``build``.
+
+    The deployment family (``ConvEquiTile``/``RLEquiTile``/``GraphEquiTile``/
+    ``TimeSeriesEquiTile``) subclasses :class:`BioModel` and overrides ``build``
+    with a domain-specific geometry (conv channels, RL/vision/graph/timeseries).
+    It is *not* a ``TileAlgorithm`` substrate, so ``_is_tile_substrate`` misses
+    it, yet it constructs through the same ``build(spec, input_dim, ...)``
+    contract and must route through ``construct_model`` for a single funnel.
+    """
+    from bioplausible.core.model import BioModel
+
+    try:
+        return (
+            isinstance(model_cls, type)
+            and issubclass(model_cls, BioModel)
+            and getattr(model_cls, "build", None) is not getattr(BioModel, "build", None)
+        )
+    except TypeError:
+        return False
+
+
 def _normalize(config: dict[str, object]) -> dict[str, object]:
     """Return a copy of ``config`` with legacy knob aliases canonicalised."""
     if not any(alias in config for alias in _KNOB_ALIASES):
@@ -367,16 +389,17 @@ def construct_model(
         The constructed ``nn.Module``.
     """
     consumption = resolve_consumption(model_cls)
-    # Tile-substrate models (``TileAlgorithm`` subclasses like ``tile_pc``/
-    # ``tile_fa``/the deployment models) declare a ``config`` parameter typed as
-    # ``TileAlgorithmConfig`` — not the unified ``ModelConfig`` — and construct
-    # through their canonical ``build`` classmethod (which folds the standard
-    # scalars into a domain-specific config). Route them through that contract
-    # so the trainer/parity/demo can construct them generically.
+    # Substrate models (``TileAlgorithm`` subclasses like ``tile_pc``/``tile_fa``
+    # and the deployment ``BioModel`` family like ``conv_equitile``) declare a
+    # ``config`` parameter typed as a domain-specific config — not the unified
+    # ``ModelConfig`` — and construct through their canonical ``build``
+    # classmethod (which folds the standard scalars into a domain-specific
+    # config). Route them through that contract so the trainer/parity/demo can
+    # construct them generically.
     if (
         not consumption.accepts_config
         and "config" in consumption.accepted
-        and _is_tile_substrate(model_cls)
+        and (_is_tile_substrate(model_cls) or _is_deployment_model(model_cls))
     ):
         scalars = _normalize(config)
         build_kwargs = {
@@ -384,7 +407,7 @@ def construct_model(
             "output_dim": output_dim,
             "hidden_dim": _as_int(scalars, "hidden_dim", 64),
             "num_layers": _as_int(scalars, "num_layers", 1),
-            "device": "cpu",
+            "device": str(scalars.get("device", "cpu")),
             "task_type": str(scalars.get("task_type", "vision")),
         }
         for k, v in scalars.items():
