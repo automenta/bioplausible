@@ -123,6 +123,7 @@ repository = "https://github.com/bioplausible/bioplausible"
 documentation = "https://bioplausible.readthedocs.io"
 
 [project.scripts]
+biopl = "bioplausible.cli.__main__:main"
 eqprop-verify = "bioplausible.cli:main"
 biopl-hpo = "bioplausible.cli.hpo:main"
 biopl-run = "bioplausible.experiment.cli:main"

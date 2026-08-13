@@ -153,6 +153,26 @@ class ExperimentConfig:
 **Status:** `DASHBOARD` global decoupled via `EventSink` protocol (`execution/events.py`). **Remaining:**
 - **`biopl` dispatcher:** Consolidate 13 console scripts + `cli/run.py` 6-subcommand monolith into one `argparse` subcommand dispatcher (`run | report | parity | repro | hpo | audit | frontier | rank`). Each `cli/` module becomes thin adapter over Pillars A–F APIs.
 
+**Progress (2026-08-13):** The **`biopl` dispatcher is implemented and verified.**
+- `bioplausible/cli/__main__.py` rewritten as a single lazy dispatcher over
+  `run | report | parity | repro | hpo | audit | frontier | rank | lab`. Each
+  sub-command is resolved lazily (no zoo/execution import at dispatch time) and
+  delegates to its module `main`, rewriting `sys.argv` so each adapter parses its
+  own flags. `SystemExit` (e.g. `--help`) is caught and re-mapped to its code.
+- Added `biopl = "bioplausible.cli.__main__:main"` to `pyproject.toml`
+  `[project.scripts]` as the canonical public entry point.
+- Added `tests/unit/cli/test_cli_dispatch.py` (14 tests): subcommand set, unknown
+  command, no-args, `--help`, per-command `--help` exit 0, and sys.argv passthrough.
+  Verified green: `uv run biopl --help` / `biopl rank --help` / `biopl lab --help` /
+  `biopl audit` / `biopl run list` all route correctly with correct `prog` strings.
+- `ruff` + `pyright` clean on changed files; CLI suite (dispatch + parity + experiment
+  cli + audit) = 46 passed.
+
+**Remaining (optional, additive):** The individual `biopl-*` console scripts are
+**kept** because CI (`.github/workflows/ci.yml`) and docs reference
+`biopl-registry-audit`, `biopl-repro-check`, `eqprop-verify`. They are now thin
+adapters, so `biopl` can be adopted in CI later without breaking the current gate.
+
 **Win:** Clean public API boundary; headless CI/sweeps work.
 
 ---
@@ -169,6 +189,14 @@ class ExperimentConfig:
 ### 9. J — Dead Code Tail (S, Low)
 - `analysis/tile_*.py` legacy systems → superseded by `evaluation/` + `mep/benchmarks` (post-Pillar D).
 - `TODO.md`, `REFACTOR.md`, stale `docs/` → archive out of tree.
+
+**Progress (2026-08-13):** `TODO.md` and `REFACTOR.md` (the two superseded plans — the active plan is
+`REFACTOR2.md`) archived to `docs/archive/20260813/` following the dated-dir convention already used by
+`docs/archive/2026MMDD/`. Verified no code/tests read these files (all references are docstring/comment
+prose); README does not link them; `tools/check_imports.py` unaffected.
+
+**Remaining:** `analysis/tile_*.py` supersession is explicitly gated on Pillar D — do **not** archive
+until the measurement stack lands.
 
 ---
 
@@ -213,8 +241,50 @@ class ExperimentConfig:
   Both `cli/lab.py` and `cli/repro.py` now construct exclusively via `construct_model`.
 - `cli/lab.py` hardened: import ordering (E402), `cast` to `nn.Module` (ruff + pyright clean, 0 errors),
   added `hidden_dim`/`num_layers` defaults so the lab actually constructs models that declare them.
+- **Pillar K — `biopl` dispatcher implemented** (see §7): single lazy dispatch entry point over
+  `run | report | parity | repro | hpo | audit | frontier | rank | lab`, added as the `biopl` console
+  script; 14 new tests in `tests/unit/cli/test_cli_dispatch.py`; ruff + pyright clean.
+- **Pillar J (partial) — archived** `TODO.md` + `REFACTOR.md` to `docs/archive/20260813/`; safe (no code
+  reads them). `analysis/tile_*.py` held for post-Pillar D.
+
+### Risk assessment of remaining pillars (surveyed 2026-08-13)
+This is the blocker-analysis a future session needs before touching Pillars A/E/D/G. Each was surveyed
+and found **not** safely completable without CoreTrainer surgery or a large dependency cascade:
+- **Pillar A (single training path, XL):** Criterion #1 needs `loss.backward()` removed from ~35 sites
+  across mep benchmarks, propagators, deployment models, validation tracks. These are *semantically
+  different* training loops (energy/dual-phase, spiking, tile substrate), so they cannot be mechanically
+  folded into `CoreTrainer.train_epoch`. This is a multi-session architectural effort, not a bounded edit.
+- **Pillar G (propagator/model unification):** verified `zoo/propagators/{backprop,base,fa,eqprop,hebbian,
+  spiking}.py` are **NOT dead code** — heavily imported by ~20 tests, `cli/repro.py:232-243`,
+  `validation/tracks/nebc_tracks.py`, and `bioplausible/__init__.py`. The plan's "or delete" path is
+  unavailable without first migrating those consumers to model-side `train_step` (risky). Criterion #6
+  remains open.
+- **Pillar E (persistence funnel):** the `execution/engine.py` Optuna `study.tell/ask` (lines 558,597,639)
+  and `state.failure_tracker.log_failure` (451) are the engine's *online HPO loop itself*, not outcome
+  recording — folding them into `record_experiment_result` would conflate the search loop with the KB
+  audit trail. `result_sink` already owns KB + FailureTracker and is called from hyperopt, validation
+  tracks, trainer, and probe. Treat the remaining unification as architectural, not mechanical.
+- **Pillar D (measurement/reporting):** `experiment/reporting.render_report` (JSONL) is already the
+  canonical `biopl-report` renderer; `analysis/reporting.generate_experiment_report` consumes Optuna
+  trials (different input, not a duplicate). The 5 `BenchmarkResult`s are semantically distinct by design
+  (plan says do not mechanically merge).
+
+**Recommended next session:** either (a) start Pillar A with a *single* tracked loop (e.g. a deployment
+model) migrated to `CoreTrainer` behind targeted training tests, or (b) the Pillar C task/geometry
+resolution collapse in `domains/registry` (also CoreTrainer-adjacent, high-risk). Both need targeted
+training tests, **not** the full suite.
 
 ### Findings for future work
+- **`python -m bioplausible.cli <cmd>` shows the wrong `prog`** ("python3 -m bioplausible.cli") in the
+  adapter's `--help` usage line, but the **installed `biopl` script shows the correct one** ("biopl rank",
+  "biopl lab"). Cause: runpy vs. entry-script `sys.argv[0]` differences under argparse. Cosmetic only;
+  do not chase it — verify via `uv run biopl ...`, not `python -m`.
+- **argparse `--help` raises `SystemExit(0)`** before the adapter body runs, so a dispatcher that calls
+  the adapter `main` directly must catch `SystemExit` and remap `exc.code` or the CLI's exit status is
+  wrong under the console script.
+- **CI pins 3 legacy scripts** (`.github/workflows/ci.yml:31,33,59`: `biopl-registry-audit`,
+  `biopl-repro-check`, `eqprop-verify`). Any future script-removal pass must update CI + README/docs
+  references or keep them as thin `biopl`-delegating shims.
 - **Python 3.14 allows `except A, B, C:`** (tuple-of-exceptions form) without parentheses — old-style
   clauses are valid and `ruff format` will strip redundant parens back to it. Do not "fix" them; they are
   not bugs.
@@ -238,3 +308,4 @@ class ExperimentConfig:
 - Criterion #3 (`model_cls(` outside construction = 0): **DONE**.
 - Criterion #6 (`zoo/propagators/` = only `mep.py` + gradient transformers): **NOT done** — `backprop.py`,
   `base.py`, `eqprop.py`, `fa.py`, `hebbian.py`, `spiking.py` still present. Pillar G scope.
+- Criterion "`biopl` dispatcher works" (Pillar K): **DONE**.

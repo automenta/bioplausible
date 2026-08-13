@@ -1,47 +1,75 @@
-"""
-Bioplausible CLI Entry Point
+"""Bioplausible CLI dispatcher (``biopl``).
+
+Single public command surface over the Pillar-K thin adapters. Every top-level
+command maps to one module ``main``; the console-script table in
+``pyproject.toml`` points at this entry point so the public API boundary stays
+one place.
 
 Usage::
 
-    python -m bioplausible.cli <command> [args]
-
-Supported commands:
-
-- ``run`` — run a training experiment from config
-- ``rank`` — rank completed experiments
-- ``lab`` — interactive model inspection
-
-Also serves as the ``eqprop-verify`` console-script entry point.
+    biopl <run|report|parity|repro|hpo|audit|frontier|rank|lab> [args]
 """
 
+from __future__ import annotations
+
 import sys
+from typing import TYPE_CHECKING
 
-from bioplausible.cli.lab import main as lab_main
-from bioplausible.cli.rank import main as rank_main
-from bioplausible.cli.run import main as run_main
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+# command -> (module, attribute). Resolved lazily to keep the import graph
+# shallow: the dispatcher itself must not drag in the zoo/execution layer.
+_SUBCOMMANDS: dict[str, tuple[str, str]] = {
+    "run": ("bioplausible.cli.run", "main"),
+    "report": ("bioplausible.experiment.cli", "main_report"),
+    "parity": ("bioplausible.cli.parity", "main"),
+    "repro": ("bioplausible.cli.repro", "main"),
+    "hpo": ("bioplausible.cli.hpo", "main"),
+    "audit": ("bioplausible.core.audit", "main"),
+    "frontier": ("bioplausible.cli.frontier", "main"),
+    "rank": ("bioplausible.cli.rank", "main"),
+    "lab": ("bioplausible.cli.lab", "main"),
+}
+
+_USAGE = "biopl <" + "|".join(_SUBCOMMANDS) + "> [args]"
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python -m bioplausible.cli <run|rank|lab> [args]")
-        sys.exit(1)
+def _load(command: str) -> Callable[[], int]:
+    module_name, attr = _SUBCOMMANDS[command]
+    module = __import__(module_name, fromlist=[attr])
+    return getattr(module, attr)
 
-    command = sys.argv[1]
 
-    # Strip the sub-command from argv so argparse in modules sees their own args
-    sys.argv = [sys.argv[0]] + sys.argv[2:]
+def main(argv: Sequence[str] | None = None) -> int:
+    """Dispatch to the sub-command's module ``main``.
 
-    if command == "run":
-        run_main()
-    elif command == "rank":
-        rank_main()
-    elif command == "lab":
-        lab_main()
-    else:
-        print(f"Unknown command: {command}")
-        print("Available: run, rank, lab")
-        sys.exit(1)
+    Args:
+        argv: Argument list (defaults to ``sys.argv[1:]``). The first element
+            selects the command; the remainder are forwarded unchanged so each
+            adapter parses its own flags.
+
+    Returns:
+        The adapter's exit code (``0`` when it returns ``None``).
+    """
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not args or args[0] in {"-h", "--help"}:
+        print(_USAGE)
+        return 0 if args and args[0] in {"-h", "--help"} else 1
+
+    command, rest = args[0], args[1:]
+    if command not in _SUBCOMMANDS:
+        print(f"biopl: unknown command {command!r}\n{_USAGE}")
+        return 2
+
+    # Each adapter's argparse reads sys.argv[1:] when called with no explicit
+    # argv, so rewrite it to look like the command was invoked directly.
+    sys.argv = [f"biopl {command}", *rest]
+    try:
+        return int(_load(command)() or 0)
+    except SystemExit as exc:
+        return int(exc.code or 0)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
