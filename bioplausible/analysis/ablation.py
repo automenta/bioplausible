@@ -8,7 +8,7 @@ import pandas as pd
 import seaborn as sns
 from tqdm import tqdm
 
-from bioplausible.config.schema import RunConfig
+from bioplausible.config.omegaconf import RunConfig
 from bioplausible.core.trainer import run_from_runconfig as run_from_config
 
 # Maps dimension names to config attribute paths for dynamic resolution.
@@ -36,7 +36,7 @@ def _set_nested(cfg: RunConfig, path: tuple[str, ...], value: object) -> None:
     final = path[-1]
     try:
         setattr(obj, final, value)
-    except AttributeError, TypeError:
+    except (AttributeError, TypeError):
         obj[final] = value
 
 

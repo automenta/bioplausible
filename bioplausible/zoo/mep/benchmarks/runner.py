@@ -49,7 +49,7 @@ __all__ = [
     "evaluate",
     "get_dataloader",
     "get_spectral_norm",
-    "load_config",
+    "load_benchmark_config",
     "logger",
     "main",
     "plot_results",
@@ -104,7 +104,7 @@ class BenchmarkResult:
         }
 
 
-def load_config(config_path: str) -> dict[str, object]:
+def load_benchmark_config(config_path: str) -> dict[str, object]:
     """Load configuration from YAML file."""
     if not YAML_AVAILABLE:
         raise ImportError(
@@ -698,7 +698,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # Load config
-    config = load_config(args.config)
+    config = load_benchmark_config(args.config)
 
     # Apply overrides
     if args.epochs:

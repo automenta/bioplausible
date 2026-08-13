@@ -630,12 +630,12 @@ def test_config_schema_dataclasses_are_dataclasses():
     types, not internal value objects — OmegaConf requires mutability)."""
     import dataclasses
 
-    from bioplausible.config.schema import (
+    from bioplausible.config.omegaconf import (
         DatasetConfig,
         DomainConfig,
-        ExperimentConfig,
+        ExperimentModelConfig,
+        ExperimentSchemaConfig,
         LightningConfig,
-        ModelConfig,
         OptimizerConfig,
         PropagatorConfig,
         RunConfig,
@@ -651,9 +651,9 @@ def test_config_schema_dataclasses_are_dataclasses():
     config_classes = [
         DatasetConfig,
         DomainConfig,
-        ExperimentConfig,
+        ExperimentModelConfig,
+        ExperimentSchemaConfig,
         LightningConfig,
-        ModelConfig,
         OptimizerConfig,
         PropagatorConfig,
         RunConfig,
@@ -717,17 +717,17 @@ def test_package_init_defines_all(pkg_path: str):
 
 
 # ---------------------------------------------------------------------------
-# Regression: config/schema.py must have no duplicate-code / module-level I/O.
+# Regression: config/omegaconf.py must have no duplicate-code / module-level I/O.
 # ---------------------------------------------------------------------------
 
 
 def test_config_schema_no_duplicate_code():
-    """config/schema.py must not contain duplicate resolver registrations or
+    """config/omegaconf.py must not contain duplicate resolver registrations or
     duplicate imports."""
     import ast
     from pathlib import Path
 
-    src = Path("bioplausible/config/schema.py").read_text()
+    src = Path("bioplausible/config/omegaconf.py").read_text()
     tree = ast.parse(src)
 
     # Count `register_new_resolver("now", ...)` calls
@@ -771,7 +771,7 @@ def test_config_schema_no_module_level_io():
     import ast
     from pathlib import Path
 
-    src = Path("bioplausible/config/schema.py").read_text()
+    src = Path("bioplausible/config/omegaconf.py").read_text()
     tree = ast.parse(src)
 
     # Find the register_new_resolver call — it should be inside a function def

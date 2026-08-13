@@ -14,12 +14,12 @@ from bioplausible.config.defaults import (
     list_named_configs,
     register_default_config,
 )
-from bioplausible.config.schema import (
+from bioplausible.config.omegaconf import (
     DatasetConfig,
     DomainConfig,
-    ExperimentConfig,
+    ExperimentModelConfig as ModelConfig,
+    ExperimentSchemaConfig as ExperimentConfig,
     LightningConfig,
-    ModelConfig,
     OptimizerConfig,
     PropagatorConfig,
     ScientistConfig,

@@ -2,7 +2,7 @@
 Default experiment configurations for common scenarios.
 
 Named presets registered here extend the schema-level defaults returned by
-:func:`bioplausible.config.schema.get_default_config`. External code can
+:func:`bioplausible.config.omegaconf.get_default_config`. External code can
 register additional presets by calling :func:`register_default_config` at
 import time (e.g., in a plugin or site-customization module) and then look
 them up by name via :func:`get_named_config`.
@@ -14,7 +14,7 @@ without breaking direct-dict manipulation.
 
 from omegaconf import OmegaConf
 
-from bioplausible.config.schema import ExperimentConfig
+from bioplausible.config.omegaconf import ExperimentSchemaConfig
 from bioplausible.core.logging import get_logger
 
 __all__ = [
@@ -23,7 +23,7 @@ __all__ = [
     "list_named_configs",
     "register_default_config",
 ]
-DEFAULT_CONFIGS: dict[str, ExperimentConfig] = {}
+DEFAULT_CONFIGS: dict[str, ExperimentSchemaConfig] = {}
 
 _logger = get_logger()
 
@@ -42,7 +42,7 @@ def register_default_config(name: str, overrides: dict) -> None:
         raise ValueError(f"overrides must be a dict, got {type(overrides).__name__}")
     if name in DEFAULT_CONFIGS:
         _logger.warning("Overwriting default config preset %r", name)
-    base = OmegaConf.structured(ExperimentConfig)
+    base = OmegaConf.structured(ExperimentSchemaConfig)
     merged = OmegaConf.merge(base, OmegaConf.create(overrides))
     DEFAULT_CONFIGS[name] = OmegaConf.to_object(merged)
 
@@ -52,7 +52,7 @@ def _register_default(name: str, overrides: dict) -> None:
     register_default_config(name, overrides)
 
 
-def get_named_config(name: str) -> ExperimentConfig:
+def get_named_config(name: str) -> ExperimentSchemaConfig:
     """Look up a registered named preset.
 
     Returns a deep copy: mutating the returned object does not affect the

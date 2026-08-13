@@ -1,8 +1,14 @@
 """
-OmegaConf-based configuration schemas for the Bioplausible platform.
+OmegaConf-based configuration facades for the Bioplausible platform.
 
-Replaces the legacy config_schema.py and config_loader.py with
-a unified, validated configuration system.
+These are the mutable, OmegaConf-structured *document formats* consumed at
+the I/O boundary (YAML presets, ``OmegaConf.merge``/``OmegaConf.structured``,
+CLI overrides). They are deliberately NOT the canonical internal runtime
+configs in :mod:`bioplausible.config.unified` — each facade's ``to_internal()``
+(where one exists) is the single seam into the frozen unified hierarchy.
+
+Renamed from the historical ``config.schema`` module so its classes cannot
+collide with the same-named frozen canonical classes in ``unified``.
 """
 
 import time
@@ -17,9 +23,9 @@ from bioplausible.core.logging import get_logger
 __all__ = [
     "DatasetConfig",
     "DomainConfig",
-    "ExperimentConfig",
+    "ExperimentModelConfig",
+    "ExperimentSchemaConfig",
     "LightningConfig",
-    "ModelConfig",
     "OptimizerConfig",
     "PropagatorConfig",
     "RunConfig",
@@ -55,7 +61,7 @@ _register_resolvers()
 
 
 @dataclass
-class ModelConfig:
+class ExperimentModelConfig:
     """Configuration for a model component."""
 
     name: str = "MLP"
@@ -177,13 +183,13 @@ class ScientistConfig:
 
 
 @dataclass
-class ExperimentConfig:
+class ExperimentSchemaConfig:
     """
     Top-level experiment configuration.
 
     Usage:
-        config = ExperimentConfig(
-            model=ModelConfig(name="tile_pc"),
+        config = ExperimentSchemaConfig(
+            model=ExperimentModelConfig(name="tile_pc"),
             optimizer=OptimizerConfig(name="smep", lr=0.01),
             dataset=DatasetConfig(name="mnist", batch_size=128),
             trainer=TrainingConfig(epochs=20),
@@ -192,7 +198,7 @@ class ExperimentConfig:
         OmegaConf.save(cfg, "config.yaml")
     """
 
-    model: ModelConfig = field(default_factory=ModelConfig)
+    model: ExperimentModelConfig = field(default_factory=ExperimentModelConfig)
     propagator: PropagatorConfig = field(default_factory=PropagatorConfig)
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
     sparsity: SparsityConfig = field(default_factory=SparsityConfig)
@@ -213,33 +219,33 @@ class ExperimentConfig:
     deterministic: bool = False
 
 
-def get_default_config() -> ExperimentConfig:
+def get_default_config() -> ExperimentSchemaConfig:
     """Get the default experiment configuration."""
-    return ExperimentConfig()
+    return ExperimentSchemaConfig()
 
 
-def validate_config(cfg: Any) -> ExperimentConfig:
+def validate_config(cfg: Any) -> ExperimentSchemaConfig:
     """
-    Validate and convert a configuration to ExperimentConfig.
+    Validate and convert a configuration to ExperimentSchemaConfig.
 
     Args:
-        cfg: Dict, OmegaConf DictConfig, or ExperimentConfig.
+        cfg: Dict, OmegaConf DictConfig, or ExperimentSchemaConfig.
 
     Returns:
-        Validated ExperimentConfig.
+        Validated ExperimentSchemaConfig.
     """
-    if isinstance(cfg, ExperimentConfig):
+    if isinstance(cfg, ExperimentSchemaConfig):
         return cfg
     if isinstance(cfg, dict):
         return OmegaConf.to_object(
             OmegaConf.merge(
-                OmegaConf.structured(ExperimentConfig),
+                OmegaConf.structured(ExperimentSchemaConfig),
                 OmegaConf.create(cfg),
             )
         )
     return OmegaConf.to_object(
         OmegaConf.merge(
-            OmegaConf.structured(ExperimentConfig),
+            OmegaConf.structured(ExperimentSchemaConfig),
             cfg,
         )
     )

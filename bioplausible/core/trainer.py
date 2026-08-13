@@ -1579,7 +1579,7 @@ def _convert_dictconfig(obj):
 def run_from_runconfig(cfg: object) -> dict[str, object]:
     """Run an experiment from an OmegaConf-based ``RunConfig``.
 
-    Accepts a ``RunConfig`` (defined in :mod:`bioplausible.config.schema`)
+    Accepts a ``RunConfig`` (defined in :mod:`bioplausible.config.omegaconf`)
     produced by loading the YAML experiment configs in ``configs/``.
 
     Args:

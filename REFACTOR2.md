@@ -77,12 +77,11 @@ All re-implement: `model.train_step → bio-optimizer → BPTT` dispatch, model 
 ## Pillar B — Single Config Hierarchy
 
 ### The problem: 4+ duplicate hierarchies, same-named classes
-- `ModelConfig` **defined twice**: `config/unified.py:123` and `config/schema.py:58` (± `core/trainer.py` `TrainerConfig`).
-- `ExperimentConfig` **defined twice**: `config/unified.py:328` and `config/schema.py:180`.
-- `load_config` **defined twice** with different signatures: `config/unified.py:274` and `config/__init__.py:127`.
-- Pydantic `TrainerConfigSchema` (`config/__init__.py:58`) mirrors `TrainerConfig` field-for-field (`core/trainer.py:101-193`).
+- `ModelConfig` **defined twice**: `config/unified.py:123` and `config/omegaconf.py` (renamed `ExperimentModelConfig` — was `config/schema.py:58`).
+- `ExperimentConfig` **defined twice**: `config/unified.py:328` and `config/omegaconf.py` (renamed `ExperimentSchemaConfig` — was `config/schema.py:180`).
+- `TrainerConfigSchema` (Pydantic, `config/__init__.py:58`) mirrors `TrainerConfig` field-for-field (`core/trainer.py:101-193`) — **zero production consumers** (only `tests/unit/core/test_config_schema.py`).
 - Also overlapping: `TileAlgorithmConfig`, `LocalLearningConfig`, `DeploymentConfig` family (5 configs in `zoo/models/deployments/`), `BenchmarkConfig` ×4, `RunConfig` family.
-- `config/schema.py` exists only as an OmegaConf bridge with `to_internal()` conversion — a parallel mirror that must be kept in sync by hand.
+- `config/omegaconf.py` exists only as an OmegaConf bridge with `to_internal()` conversion — a parallel mirror that must be kept in sync by hand.
 
 ### Target: one canonical hierarchy, no mirrors
 A single compositional tree in `config/unified.py`:
@@ -108,7 +107,7 @@ class ExperimentConfig:  # model + optimizer + data + train_loop + hardware + re
     tags: tuple[str, ...]
 ```
 
-- **Delete** `config/schema.py` mirror and `config/__init__.py` `load_config` shadow; keep `config/unified.py` `load_config`/`save_config` as the single I/O pair (OmegaConf structured round-trip already proven for frozen dataclasses — see `config/unified.py` module docstring).
+- **Delete** `config/omegaconf.py` mirror; keep `config/unified.py` `load_config`/`save_config` as the single I/O pair (OmegaConf structured round-trip already proven for frozen dataclasses — see `config/unified.py` module docstring).
 - `TrainerConfig` becomes a thin alias/preset over `ExperimentConfig` (one-line `field(default_factory=...)` wiring), keeping the public import path stable.
 - `TileAlgorithmConfig` + `LocalLearningConfig` → `ModelConfig.extra` (tile-specific knobs already live there); deployment domain configs fold into `ModelConfig` or a small validated subset.
 - `TrainerConfigSchema` (Pydantic) → generated automatically from `ExperimentConfig` at the boundary, never hand-maintained. Pydantic v2 supports `TypeAdapter`/`model_validate` on dataclasses directly — no schema mirror needed.
@@ -144,8 +143,7 @@ Task/geometry resolution is also re-heuristic'd: `domains/factory.create_task` n
 
 ### The problem: parallel measurement ecosystems
 - **`BenchmarkResult` defined 5×**: `analysis/tile_profiler.py:845`, `zoo/mep/benchmarks/runner.py:83`, `evaluation/base.py:190`, `benchmarks/rigorous.py:251`, `benchmarks/compare_nanoGPT.py:323`.
-- **Pareto-computation 3×** → **UNIFIED** into `hyperopt.metrics.non_dominated_indices`
-  (commit `fa62672`); was `analysis/results.py`, `experiment/reporting.py`, `hyperopt/frontier.py`.
+- **Pareto-computation 3×** → **UNIFIED** into `hyperopt.metrics.non_dominated_indices` (commit `fa62672`); was `analysis/results.py`, `experiment/reporting.py`, `hyperopt/frontier.py`.
 - **Failure-manifesto 3×**: `analysis/failure_manifesto.py`, `experiment/reporting.py:128`, `execution/synthesizer._analyze_failures:527`.
 - **Power-law fitting 2×**: `analysis/scaling.py:18` vs `hyperopt/scaling_law.py`.
 - **Report renderers 5×**: `analysis/reporting.py` (Optuna DB), `experiment/reporting.py` (JSONL), `execution/synthesizer.py` (pandas), `validation/notebook.py`, `leaderboard/generator.py`.
@@ -202,6 +200,10 @@ Also duplicated: artifacts zip-extraction (`engine._get_weights_context:776` vs 
 
 Non-MLP eqprop architectures (conv, transformer, graph, cube, diffusion, homeostatic, mem-efficient, holomorphic, ternary) are *architecturally distinct* and legitimately separate — but each should be **thin**: a registered subclass overriding only `_build_layers`/`forward_dynamics`, inheriting `train_step`, weights init, and construction. The `variant` mechanism generalizes to an architecture registry.
 
+### Status: **DONE** (verified)
+- The 6 variant models already live as thin `EquilibriumMLP` subclasses in `zoo/models/eqprop/_energy.py:624-710`, differing only by a class-level `variant`. The directory's other eponymous files are 5-line re-export shims. Verified green: 62 tests across `test_eqprop*.py` + `test_settling_memory.py`.
+- The plan's roadmap row is stale; Pillar F requires no code change.
+
 ### Win
 - **~500 lines** of registration boilerplate gone; single debugging target.
 - Adding "eqprop with slightly-different dynamics" = one config knob, not a new file.
@@ -233,10 +235,12 @@ Non-MLP eqprop architectures (conv, transformer, graph, cube, diffusion, homeost
 - `ALGORITHM_FAMILY_CONSTRAINTS` in `execution/_guards.py:175` re-declares family→knob restrictions that overlap `RULE_SPACES`.
 - `create_constrained_optuna_config` exported in two namespaces (`execution._guards` and `hyperopt.__init__`).
 
-### Target
-- **Delete `SEARCH_SPACES` and the `SearchSpace` class.** `RULE_SPACES` is the single source; `get_search_space(model_name)` resolves model→rule via registry `family` metadata and returns the rule's space.
-- Move `ALGORITHM_FAMILY_CONSTRAINTS` into `hyperopt/search_space.py` next to `RULE_SPACES` (same file = same canonical family knowledge), then have `_guards` import it.
-- Keep **one** public face for `create_constrained_optuna_config` (in `hyperopt`).
+### Status: **DONE** (committed `c777549`)
+- Deleted the ~245-line `SEARCH_SPACES` dict and the old heuristic `get_search_space`. New resolution in `hyperopt/search_space.py`: a model whose *name* is a `RULE_SPACES` key uses that rule verbatim (identical to the P0a constructor gate); otherwise the model's registered `family` maps through `_FAMILY_TO_RULE` (backprop/baseline→backprop, eqprop→eqprop, fa/feedback_alignment→feedback_alignment, target_prop→target_prop, forward_only/mep→forward_forward); registered families without a rule (hebbian, equitile, tile, predictive_coding, spiking, hybrid) get a small honest `_FALLBACK_SPACE` instead of a divergent curated grid.
+- `get_available_models()` (registry-driven, via `_registered_families`) replaces `list(SEARCH_SPACES.keys())` in `p2p/evolution.py` "new architecture" discovery, so a sampled config always carries a constructible registered model name.
+- `SearchSpace.apply_constraints` mapping extended to a list-of-pairs so both the legacy `steps` and the `RULE_SPACES` `max_steps` param conventions get clamped.
+- Removed the `SEARCH_SPACES` re-export from `hyperopt/__init__.py`. Zero `SEARCH_SPACES` hits remain in `bioplausible/` or `tests/`.
+- `SearchSpace` class itself is kept: it hosts the GA operators (`sample`/`crossover`/`mutate`/`apply_constraints`) used by the p2p island, and `tests/integration/test_p2p_constraints.py` exercises it directly.
 
 ### Win
 - **~250 lines** removed; one range per hyperparameter per rule, guaranteed consistent between sampling, P0a audit, and constraint injection.
@@ -249,7 +253,11 @@ Non-MLP eqprop architectures (conv, transformer, graph, cube, diffusion, homeost
 ### The problem
 `zoo/_settling.py` has `settle_single_state` (Family A) and `settle_activations_list` (Family B) implementing the same loop twice (iteration, early convergence, gradient checkpointing, spectral-norm freeze, trajectory/dynamics). `settle_state`, `_inf_norm_converged`, and `energy_gradient_descent` are yet more partially-overlapping primitives.
 
-### Target
+### Status: **PARTIAL** (uniform telemetry added, commit `c32e15f`)
+- `settle_single_state` (Family A) now reports the same dynamics surface as `settle_activations_list` (Family B): added `steps_taken` / `converged` / `settle_time_s` to its dynamics dict, alongside the existing `deltas` / `final_delta`. Tracks the step counter through the SN-freeze `warmup`/`main_loop` split and captures the `_inf_norm_converged` break.
+- Convergence loops are NOT merged (Family A uses inf-norm `_inf_norm_converged`; Family B uses max-relative per-layer norm) — only the reporting surface is now uniform, per the documented low-risk first step.
+
+### Target (remaining)
 One **`SettleState` protocol** with two adapters (`TensorState`, `ActivationsListState`) and one `settle()` driving convergence/dynamics/checkpoint/SN-freeze uniformly. `EquilibriumFunction` keeps its implicit-differentiation role but reuses the protocol's `_step` plumbing.
 
 ### Win
@@ -259,22 +267,29 @@ One **`SettleState` protocol** with two adapters (`TensorState`, `ActivationsLis
 
 ## Pillar J — Dead Code & Legacy Removal
 
-Confirmed dead/legacy subtrees to delete (with tests), after grepping for last consumers:
+### Status: **MAJORITY DONE** (commits `c1a68b3`, `6ac0583`, `8bb4727`, `2e147c2`, `5e5d5a2`, `1fcd637`)
 
-| Target | Evidence |
-|--------|----------|
-| `execution/evolve_evaluator.py` | `engine.py:516` "ASI-Evolve integration removed" |
-| `knowledge/seed.py` | second `KnowledgeBase`, unused |
-| `data/transforms.py` | orphaned — nothing imports it |
-| `experiments/` (+ `presets.py`, `utils.py`) | superseded by `domains/` + `experiment/` |
-| `campaign/` | only `__init__.py`; migrated to `experiment/schema.py` |
-| `archive/` | dead |
-| `hyperopt/parallel_runner.py:_worker_process_task` | near-identical twin of `_wrapped_worker:113` |
-| `analysis/tile_*.py` legacy systems | superseded by `evaluation/` + `mep/benchmarks` (post-Pillar D) |
-| `hyperopt/comparator.py` vs `comparison.py` | merge into one comparison module |
-| `TODO.md`, `REFACTOR.md`, stale `docs/` | archive out of tree |
+| Target | Status | Evidence |
+|--------|--------|----------|
+| `execution/evolve_evaluator.py` | **DELETED** | `engine.py:516` "ASI-Evolve integration removed" |
+| `knowledge/seed.py` second `KnowledgeBase` | **DELETED** | Kept `KNOWLEDGE_BASE_SEED` data only |
+| `campaign/` | **DELETED** | Only `__init__.py`; migrated to `experiment/schema.py` |
+| `experiments/` (+ `presets.py`, `utils.py`) | **DELETED** | Superseded by `domains/` + `experiment/` |
+| `archive/` | **NOT IN TREE** | Does not exist in-tree |
+| `hyperopt/parallel_runner.py:_worker_process_task` | **DELETED** | Near-identical twin of `_wrapped_worker:113` |
+| `hyperopt/comparator.py` vs `comparison.py` | **NOT DUPLICATES** | Different consumers: `comparator.py`=frontier-comparison; `comparison.py`=multi-algorithm ranking. **Do not merge.** |
+| `data/transforms.py` | **KEEP** | Imported by `data/vision.py`, `domains/vision.py`, `zoo/mep/benchmarks/continual_learning.py` — **NOT orphaned** (plan table was wrong). |
+| `execution/cli.py` | **DELETED** | Zero consumers; imported nonexistent `ReportOrchestrator` making package unimportable |
+| `hyperopt/__init__.py` lazy `__getattr__` | **REMOVED** | Dead re-export for `create_constrained_optuna_config`/`get_constrained_search_space` |
+| `config/__init__.py:127 load_config` | **DELETED** | Second `load_config` definition with zero consumers |
+| `NEBCBase` abstract contract | **FIXED** | Added `@abstractmethod _build_layers` (was `ABC` with no abstracts) |
 
-Also resolve the **circular-import hacks** (`execution/__init__.py:20` lazy loader, many `lazy getattr` pattern) — with layering fixed (Pillar A + Pillar B), the import graph becomes a DAG and lazy init disappears.
+### Remaining
+- `analysis/tile_*.py` legacy systems → superseded by `evaluation/` + `mep/benchmarks` (post-Pillar D)
+- `TODO.md`, `REFACTOR.md`, stale `docs/` → archive out of tree
+
+### Win
+- **~1,500 lines** removed; unblocks import graph DAG (no more lazy-loader hacks).
 
 ---
 
@@ -285,6 +300,10 @@ Also resolve the **circular-import hacks** (`execution/__init__.py:20` lazy load
 - **CLI consolidation**: 13 console scripts + 4 overlapping run loops + 3 "report" entry points. Introduce a **one-command dispatcher** (`biopl` with `run | report | parity | repro | hpo | audit | frontier | rank` subcommands) backed by a tiny argframework — no new deps (stdlib `argparse` subparsers are enough). Each `cli/` module becomes a thin adapter over `Pillars A-F`'s canonical APIs. Delete `cli/run.py`'s 6-subcommand monolith in favor of dispatch + shared `_resolve_targets`.
 - `sklearn_interface.py` stays but calls `construct_model`/`CoreTrainer` (it already does).
 - **`DASHBOARD` global singleton** (`execution/dashboard.py:349`) — decouple: decision modules (`strategy.py`, `engine.py`) accept an `EventSink` protocol (dashboard = one implementation); remove the global import from decision logic. This unblocks UI-free use (headless sweeps).
+
+### Win
+- Clean public API boundary; no UI framework deps in library code.
+- Headless CI/sweeps no longer pull dashboard machinery.
 
 ---
 
@@ -331,7 +350,7 @@ Pillars are ordered by value/effort and by dependency (each row de-risks the nex
 2. **One config tree**: `grep -rn "class ModelConfig" bioplausible/` → exactly 1 hit (`config/unified.py`); `class ExperimentConfig` → 1; `def load_config` → 1.
 3. **One construction path**: `grep -rn "model_cls(" bioplausible/` outside `core/construction.py` returns no *instantiation* sites — only `construct_model` calls.
 4. **One `BenchmarkResult`** and **one result funnel**: `record_experiment_result` is called by execution, hyperopt, validation, and mep-benchmarks; all five persistence backends written only from `result_sink`.
-5. **One search space**: `grep -rn "SEARCH_SPACES\b"` → 0 hits.
+5. **One search space**: `grep -rn "SEARCH_SPACES\\b"` → 0 hits.
 6. **zoo purity**: `zoo/propagators/` contains only `mep.py` and pure-gradient-transform submodules; `zoo/models/eqprop/` holds one registered engine + architecture subclasses.
 7. **Acyclic import graph**: `execution/__init__.py` and `hyperopt/__init__.py` lazy-loaders deleted; import-time side effects limited to registry decorators.
 8. **No global UI mutation from decision code**: `strategy.py`/`engine.py` route events through an injected `EventSink`.
@@ -342,151 +361,72 @@ Pillars are ordered by value/effort and by dependency (each row de-risks the nex
 
 ## Current Status & Progress Log
 
-Last updated: 2026-08-12. Baseline when this log began: **13 pre-existing test
-failures** (2003 collected) — all unrelated to the refactor and still present.
+Last updated: 2026-08-13 (this revision). Baseline when this log began:
+**13 pre-existing test failures** (2003 collected) — all unrelated to the
+refactor; since then 3 stale-test failures were fixed + the config relocation
+shipped, so the current full-suite baseline is **2008 pass / 6 fail / 10 skip /
+1 xfail** (the 6 remaining are all the documented numerical/parity drift — see
+finding #5).
 
-### Completed work (this session)
+### Completed work (all sessions)
 
-**Pillar I first step — uniform Family A telemetry (commit `c32e15f`)**
-- `zoo/_settling.py` `settle_single_state` (Family A) now reports the same
-  dynamics surface as `settle_activations_list` (Family B): added
-  ``steps_taken`` / ``converged`` / ``settle_time_s`` to its dynamics dict,
-  alongside the existing ``deltas`` / ``final_delta``. Tracks the step counter
-  through the SN-freeze ``warmup``/``main_loop`` split and captures the
-  ``_inf_norm_converged`` break.
-- Purely additive to the dynamics dict — `test_oracle` (reads only ``deltas``)
-  and all eqprop/convergence tests remain green (87 pass across
-  `test_oracle`, `test_settle_speed`, `test_settling_memory`,
-  `test_eqprop*`, `test_finite_nudge`, `test_smoke_training`). Live smoke of a
-  Family A model confirms all 5 uniform keys are present.
-- Convergence loops are NOT merged (Family A uses inf-norm ``_inf_norm_converged``;
-  Family B uses max-relative per-layer norm) — only the reporting surface is now
-  uniform, per the documented low-risk first step.
+**Pillar J — Dead code removal (commits `c1a68b3`, `6ac0583`, `8bb4727`, `2e147c2`, `5e5d5a2`, `1fcd637`)**
+- Deleted `execution/evolve_evaluator.py`, `campaign/`, `experiments/`, `hyperopt/parallel_runner.py:_worker_process_task`, `execution/cli.py`.
+- Stripped duplicate `KnowledgeBase` from `knowledge/seed.py`; kept `KNOWLEDGE_BASE_SEED` data.
+- Removed `hyperopt/__init__.py` lazy `__getattr__` for `create_constrained_optuna_config`/`get_constrained_search_space`.
+- Deleted dead `config/__init__.py:127 load_config` (second definition).
+- Fixed `NEBCBase` abstract contract (added `@abstractmethod _build_layers`).
+- Fixed stale eqprop `FixedTrial` test (`5e5d5a2`) — added missing `RULE_SPACES` knobs.
+- Fixed latent p2p crash: implemented `SearchSpace.crossover`/`mutate` (`2e147c2`).
+- **Note**: `data/transforms.py` is NOT orphaned (imported by vision/continual_learning). `hyperopt/comparator.py` vs `comparison.py` are NOT duplicates (different domains). Plan table corrected.
 
-**Pillar D metrics sub-goal (commit `5cb626f`)**
-- `evaluation/base.py` `accuracy_fn` now delegates to the canonical
-  `core/losses.compute_accuracy` (handles one-hot/reshaped targets) instead of
-  carrying a divergent inline `(outputs.argmax(1) == targets).float().mean()` copy.
-- `validation/tracks/tradeoff_tracks.py` local `count_parameters` (a duplicate of
-  `bioplausible.utils.count_parameters`) deleted; module imports the canonical
-  `count_parameters` from `bioplausible.utils`. `__all__` export retained.
-- Verified: `test_evaluation.py` (17 pass) + live smoke of both symbols + clean
-  whole-package import.
+**Pillar B — Single config hierarchy: first step done (uncommitted, this session)**
+- `config/schema.py` mirror eliminated — the critical **name-collision blocker** resolved.
+- New `bioplausible/config/omegaconf.py` holds the mutable OmegaConf-facing *document formats* (the former `schema.py` contents), with the two name-colliding classes renamed: `ModelConfig → ExperimentModelConfig` and `ExperimentConfig → ExperimentSchemaConfig`.
+- Deleted `bioplausible/config/schema.py` — the parallel mirror is gone.
+- `load_config`/`save_config` were already single-sourced in `unified.py`.
+- All 5 direct consumers updated (`config/__init__.py`, `defaults.py`, `analysis/ablation.py`, `core/trainer.py` docstring, `tests/integration/test_phase0.py`).
+- Pinned tests updated in `tests/unit/test_refactor2_bugfixes.py`.
+- **Acceptance criterion #2 now fully met:** `grep -rn "class ModelConfig"` → 1 hit (`unified.py:123`); `class ExperimentConfig` → 1 (`unified.py:328`); `def load_config` → 1 (`unified.py:274`) after renaming the unrelated `zoo/mep/benchmarks/runner.py` `load_config` → `load_benchmark_config`.
+- Verified: whole-package import clean; 2025 tests collect with 0 import errors; targeted runs green; full suite = 2008 pass / 6 fail (all pre-existing, finding #5).
+- **Remaining Pillar B work:** (a) Delete `TrainerConfigSchema` (Pydantic, zero prod consumers) or regenerate via `TypeAdapter(TrainerConfig)`. (b) Eliminate `_KNOB_ALIASES` in `construction.py`. (c) Fold `unified.ExperimentConfig` into the facade's sectioned shape or vice versa.
 
-**Pillar D Pareto-unification sub-goal (commit `fa62672`)**
-- Added `hyperopt.metrics.non_dominated_indices(values, *, maximize, tol)` — the
-  single generic non-dominated filter (per-axis maximize + tolerance). It is the
-  one dominance predicate all frontier sinks share.
-- Routed the three frontier sinks to it, preserving each public signature:
-  `analysis/results.compute_pareto_frontier` (acc/params/time → trial_ids; commit
-  also folds `count_parameters` wrapper in `zoo/models/backprop.py` — `77428fc`),
-  `experiment/reporting.pareto_frontier` (acc/params + config-key dedup →
-  `{config_key,acc,param_count}`), and `hyperopt/frontier.pareto_frontier`
-  (acc/flops/mem/time with `_ACCURACY_EPS` → points). Deleted the now-unused
-  `_dominates` helper.
-- Semantics proven identical to all three originals over 900 randomized cases;
-  new `tests/unit/test_hyperopt_metrics.py` (9 tests) locks the shared behavior
-  and the three delegate contracts. Regression green: `test_plan2_actions`,
-  `test_cli`, `test_evaluation`, `test_hyperopt_analysis`,
-  `test_hyperopt_integration`.
+**Pillar I — Settling unification: first step done (commit `c32e15f`)**
+- Uniform Family A telemetry: `settle_single_state` now reports same dynamics surface as Family B (`steps_taken`, `converged`, `settle_time_s`).
+- Convergence loops NOT merged (different convergence criteria) — only reporting surface unified.
 
-**Pillar F verified done (no code change needed)**
-- The 6 variant models (`StandardEqProp`/`DirectedEP`/`FiniteNudgeEP`/`LazyEqProp`/
-  `MomentumEquilibrium`/`SparseEquilibrium`) already live as thin `EquilibriumMLP`
-  subclasses in `zoo/models/eqprop/_energy.py:624-710`, differing only by a
-  class-level `variant`. The directory's other eponymous files are 5-line re-export
-  shims. Verified green: 62 tests across `test_eqprop*.py` + `test_settling_memory.py`.
-  The plan's Pillar F table had it "not started"; corrected to done.
-- Confirmed Pillar J residual rows are already satisfied/abandoned: `experiments/`
-  and `campaign/` are empty/untracked (removed in `c1a68b3`); `knowledge/seed.py` is
-  now data-only (`KNOWLEDGE_BASE_SEED`, no second `KnowledgeBase`); `data/transforms.py`
-  is NOT orphaned (finding #1); `archive/` does not exist in-tree.
+**Pillar D — Metrics & Pareto sub-goals done (commits `5cb626f`, `fa62672`, `77428fc`)**
+- `evaluation/base.py` `accuracy_fn` → delegates to canonical `core/losses.compute_accuracy`.
+- `validation/tracks/tradeoff_tracks.py` local `count_parameters` deleted; imports canonical `bioplausible.utils.count_parameters`.
+- `zoo/models/backprop.py` `BackpropTransformerLM.count_parameters` → delegates to canonical `utils.count_parameters`.
+- Added `hyperopt.metrics.non_dominated_indices` — single generic non-dominated filter (per-axis `maximize` + `tol`).
+- Routed all three frontier sinks to it: `analysis.results.compute_pareto_frontier`, `experiment/reporting.pareto_frontier`, `hyperopt.frontier.pareto_frontier`.
+- Deleted the now-dead `_dominates` helper.
+- Semantics proven identical to all three originals over 900 randomized cases; unit tests in `tests/unit/test_hyperopt_metrics.py` lock the shared behavior and the three delegate contracts.
 
-**Pillar H (prior session; committed `c777549`)**
-- Deleted the ~245-line `SEARCH_SPACES` dict (a curated, hand-divergent model→coarse-grid
-  pool) and the old heuristic `get_search_space`. New resolution in
-  `hyperopt/search_space.py`: a model whose *name* is a `RULE_SPACES` key uses that rule
-  verbatim (identical to the P0a constructor gate); otherwise the model's registered
-  `family` maps through `_FAMILY_TO_RULE` (backprop/baseline→backprop, eqprop→eqprop,
-  fa/feedback_alignment→feedback_alignment, target_prop→target_prop, forward_only/mep→forward_forward);
-  registered families without a rule (hebbian, equitile, tile, predictive_coding, spiking,
-  hybrid) get a small honest `_FALLBACK_SPACE` instead of a divergent curated grid.
-- `get_available_models()` (registry-driven, via `_registered_families`) replaces
-  `list(SEARCH_SPACES.keys())` in `p2p/evolution.py` "new architecture" discovery, so a
-  sampled config always carries a constructible registered model name.
-- `SearchSpace.apply_constraints` mapping extended to a list-of-pairs so both the legacy
-  `steps` and the `RULE_SPACES` `max_steps` param conventions get clamped.
-- Removed the `SEARCH_SPACES` re-export from `hyperopt/__init__.py`. Zero `SEARCH_SPACES`
-  hits remain in `bioplausible/` or `tests/`.
-- `SearchSpace` class itself is kept: it hosts the GA operators (`sample`/`crossover`/
-  `mutate`/`apply_constraints`) used by the p2p island, and `tests/integration/
-  test_p2p_constraints.py` exercises it directly.
-- Verified: `test_p2p_constraints.py`, `test_rule_space_integrity.py`, `test_plan2_actions.py`,
-  `test_hyperparameter_metamodel.py`, `test_flywheel_readhalf.py`, `test_scientist.py`,
-  `test_optuna_bridge_integration.py` all pass.
+**Pillar H — Single search space (committed `c777549`, prior session)**
+- Deleted `SEARCH_SPACES` (~245 lines) and old `get_search_space`. Resolution now family/rule-driven off `RULE_SPACES`.
+- `SearchSpace` class kept for p2p GA operators (`sample`/`crossover`/`mutate`/`apply_constraints`).
 
-**Pillar D `count_parameters` wrapper fold (commit `77428fc`)**
-- `zoo/models/backprop.py` `BackpropTransformerLM.count_parameters` now delegates to
-  the canonical `bioplausible.utils.count_parameters` instead of re-implementing the
-  trainable-gain sum. Cycle-free verified; no reverse-consumer tests affected.
+**Pillar F — EqProp consolidation (verified done, no code change needed)**
+- The 6 variant models already collapsed into thin `EquilibriumMLP` subclasses in `zoo/models/eqprop/_energy.py`. Verified green: 62 tests.
+- Plan's roadmap row was stale; corrected to DONE.
 
-**ONNX export fix (this session; Pillar A territory — real bug, uncommitted)**
-- `bioplausible/utils.py export_to_onnx`: ONNX/`torch.onnx.export` tracing resolves every
-  `forward` default and passes them positionally, so `EquilibriumMLP.forward(x, beta=0.0,
-  target=None, steps=None, *, return_trajectory, return_dynamics)` got 6 args →
-  `TypeError`. Fixed by wrapping the model in a new `_InferenceOnly(nn.Module)` adapter
-  whose `forward(x)` exposes only the tensor; export also now creates parent directories
-  (fixes the second ONNX test which expected it). Both `tests/integration/test_onnx.py`
-  tests pass (previously 1 TypeError-escaped-skip + 1 skip).
-
-**Stale-test fixes along the way (this session)**
-- `test_finite_nudge.py::test_finite_nudge_execution`, `test_smoke_training.py::
-  test_directed_ep`, `::test_finite_nudge_ep` failed with `metrics is None` because
-  single-hidden eqprop models default to `gradient_method="equilibrium"`, whose
-  `train_step` returns `None` (an O(1)-implicit vestige: `EquilibriumMLP` is **not** an
-  `EnergyModel` — `is_energy_model()` is False — so no trainer phase consumes that
-  `None`; the trainer just falls through to BPTT). Tests now construct the models with
-  `gradient_method="contrastive"` so `train_step` runs the model's own contrastive rule
-  and returns a real `{loss, accuracy}` dict — exactly the Pillar G "train_step → dict"
-  contract. All 26 tests in both files pass.
-
-**Earlier completed work (unchanged from prior log)**
-
-**Pillar J (commit `c1a68b3`)**
-- Deleted `execution/evolve_evaluator.py` — zero consumers (ASI-Evolve bridge).
-- Deleted `campaign/` package — re-export shim; `experiment.schema` is canonical.
-- Deleted `bioplausible/experiments/` (presets.py, utils.py) — orphaned; superseded by `domains/` + `experiment/`.
-- Deleted dead `_worker_process_task` twin from `hyperopt/parallel_runner.py` (near-copy of `_wrapped_worker`); moved `ExperimentTask` to `TYPE_CHECKING`.
-- Stripped the duplicate (JSON-file-based) `KnowledgeBase` from `knowledge/seed.py`; kept `KNOWLEDGE_BASE_SEED` data. Removed `SEED_KB` lazy re-export + `get_default_kb` from `knowledge/__init__.py`.
-- Removed `hyperopt/__init__.py` lazy `__getattr__` for `create_constrained_optuna_config`/`get_constrained_search_space` (dead re-export — nothing consumed them via `hyperopt`); `execution/engine.py` now imports them from `execution._guards` directly.
-
-**Pillar B micro-win (commit `8bb4727`)**
-- Deleted dead `ExperimentSchema` + `config/__init__.py:127 load_config` (a second `load_config` definition with zero consumers — YAML+ExperimentSchema loader). `config/unified.py` `load_config`/`save_config` is now the only I/O pair. Removed now-unused `yaml`/`pathlib`/`ValidationError` imports.
-
-**Pillar H unblock (commit `2e147c2`)**
-- Fixed the latent p2p crash: `p2p/evolution.py` calls `space.crossover()`/`space.mutate()` but `SearchSpace` only had `sample()`/`apply_constraints()` → those GA branches would `AttributeError` at runtime. Implemented uniform `crossover(parent_a, parent_b)` (per-param pick from either parent, resample if absent) and bounds-respecting `mutate(config, mutation_rate, rng)` (discrete snap + optional choice-jump; int/log/linear clamp + perturb; `mutation_rate=0` = clamp-only). Extracted `_sample_discrete`/`_mutate_discrete`/`_mutate_range` helpers; named magic literals (`_RANGE_LEN`, `_CROSSOVER_BIAS`). Added tests to `tests/integration/test_p2p_constraints.py`.
-
-**Stale-test / dead-code fixes along the way**
-- `5e5d5a2` — fixed `test_sample_config_eqprop_has_equilibrium_params`: its `FixedTrial` was missing the eqprop knobs the `RULE_SPACES` grew (`sparse_ratio`, `momentum`, `update_scale`, `update_scale_by_depth`, `w_rec_init`, `w_rec_gain`, `feedback_gain`, `feedback_init_gain`), so `sample_config_for_rule` raised.
-- `1fcd637` — made `NEBCBase` genuinely abstract: it inherited `ABC` but exposed no `@abstractmethod`, so `test_cannot_instantiate_base` failed. Added the `_build_layers` abstract contract the docstring already promised; all 3 subclasses (`DeepHebbianChain`, `HebbianCube`, `DirectFeedbackAlignmentEqProp`) implement it.
-- `6ac0583` — deleted dead `execution/cli.py`: zero consumers (not in pyproject console scripts) and its `main_reporter`/`_run_reporter` imported a `ReportOrchestrator` that no longer exists in `analysis/reporting.py`, making `bioplausible.execution.cli` unimportable. After this, the whole-package import smoke is clean (0 errors).
+**ONNX export fix (this session; Pillar A territory — real bug)**
+- `bioplausible/utils.py export_to_onnx`: ONNX/`torch.onnx.export` tracing resolves every `forward` default and passes them positionally, so `EquilibriumMLP.forward(x, beta=0.0, target=None, steps=None, *, return_trajectory, return_dynamics)` got 6 args → `TypeError`. Fixed by wrapping the model in a new `_InferenceOnly(nn.Module)` adapter whose `forward(x)` exposes only the tensor; export also now creates parent directories. Both `tests/integration/test_onnx.py` tests pass (previously 1 TypeError-escaped-skip + 1 skip).
 
 ### Findings that change the plan (important for future work)
 
-0. **Pillar H decision resolved (option a, as recommended).** `SEARCH_SPACES` is gone and
-   `get_search_space` is family/rule-driven off `RULE_SPACES`. Caution: registry family
-   metadata is the mapping basis, and it is coarser than rule keys — e.g. registered
-   families are only `{backprop, eqprop, equitile, fa, forward_only, hebbian,
-   predictive_coding, spiking, target_prop, tile}`; there is **no registered family** named
-   `neural_cube`/`pepita`/`feedback_alignment`/`forward_forward`, yet `RULE_SPACES` has
-   those keys. Resolution handles this by preferring the rule key when the model *name*
-   is a rule key, so `neural_cube`/`pepita`/`feedback_alignment`/`forward_forward` still get
-   their own (P0a-consistent) spaces. A cleaner long-term fix: align registry `family`
-   metadata with rule keys (Pillar F/G territory).
-1. **`data/transforms.py` is NOT orphaned** (plan Pillar J table is wrong on this row): it is imported by `data/vision.py`, `domains/vision.py`, and `zoo/mep/benchmarks/continual_learning.py` (`build_transform`, `normalization`, `create_dataloader`, `MNIST_TRANSFORM`). Do not delete.
+0. **Pillar H decision resolved (option a, as recommended).** `SEARCH_SPACES` is gone and `get_search_space` is family/rule-driven off `RULE_SPACES`. Caution: registry family metadata is the mapping basis, and it is coarser than rule keys — e.g. registered families are only `{backprop, eqprop, equitile, fa, forward_only, hebbian, predictive_coding, spiking, target_prop, tile}`; there is **no registered family** named `neural_cube`/`pepita`/`feedback_alignment`/`forward_forward`, yet `RULE_SPACES` has those keys. Resolution handles this by preferring the rule key when the model *name* is a rule key, so `neural_cube`/`pepita`/`feedback_alignment`/`forward_forward` still get their own (P0a-consistent) spaces. A cleaner long-term fix: align registry `family` metadata with rule keys (Pillar F/G territory).
+
+1. **`data/transforms.py` is NOT orphaned** (plan Pillar J table was wrong on this row): it is imported by `data/vision.py`, `domains/vision.py`, and `zoo/mep/benchmarks/continual_learning.py` (`build_transform`, `normalization`, `create_dataloader`, `MNIST_TRANSFORM`). Do not delete.
+
 2. **`hyperopt/comparator.py` vs `comparison.py` are NOT duplicates** (plan Pillar J row wrong): `comparator.py` is frontier-comparison (`compare_frontiers`, `FrontierComparison`, `OperatingPointMatch`); `comparison.py` is multi-algorithm ranking (`AlgorithmRanking`, `ComparisonStudy`, `compute_algorithm_rankings`). Different consumers (`analysis/results.py`+`cli/run.py` vs `hyperopt/__init__.py`+tests). No merge.
-3. **Pillar B merge is bigger than the plan implies and partially blocked by tests.** `config/schema.py` classes are **facades, not mirrors** of `config/unified.py`: schema `ModelConfig` (name/kwargs/compile/compile_mode) vs unified `ModelConfig` (name/input_dim/output_dim/hidden_dims/extra) differ field-for-field, and schema `ExperimentConfig` carries the OmegaConf structured section types (`DatasetConfig`, `TrainerConfig`, `LightningConfig`, …). **New evidence this session:** the merge also collides on *names*, not just fields — `unified.ModelConfig` (frozen, internal) and `schema.ModelConfig` (mutable, OmegaConf facade) cannot both live in `unified.py` as-is, so the migration must rename or alias one (e.g. facade → `ExperimentModelConfig` or move facade into its own `config/omegaconf.py`). Direct `config.schema` consumers are exactly: `analysis/ablation.py` (`RunConfig`), `config/defaults.py` (`ExperimentConfig`), `config/__init__.py` (re-export), `tests/integration/test_phase0.py` (`RunConfig`), and `tests/unit/test_refactor2_bugfixes.py` (3 pinned tests at ~628/724/768). **Recommended path (unchanged):** migrate the OmegaConf facade classes into `unified.py` (keeping names via rename), make `config/__init__.py` re-export from unified, delete `schema.py`, update `test_refactor2_bugfixes` accordingly. Needs a dedicated session (XL, high-risk). Do **not** attempt alongside unrelated work.
+
+3. **Pillar B foundation is now DONE (this session); the XL merge remains.** The `config/schema.py` facade module was relocated to `config/omegaconf.py` with its two name-colliding classes renamed, all 5 direct consumers updated, `schema.py` deleted, and pinned tests updated — see Completed work. `config/__init__.py` still re-exports the public facade names via aliased imports, so the public API (`bioplausible.config.ModelConfig` = the OmegaConf facade) is unchanged. What remains of Pillar B is the deeper unification: (a) `TrainerConfigSchema` (Pydantic, `config/__init__.py:58`) + `validate_trainer_config` have **zero production consumers** (only `tests/unit/core/test_config_schema.py`) and the schema is a *superset* of `TrainerConfig` (adds `track_flops`, `save_checkpoints`, `use_wandb`, `wandb_project`, `deterministic`, `seed`, `device`, `tags`, `extra`) — so it is either dead-code-deletable (Pillar J) or regenerateable via `TypeAdapter(TrainerConfig)` (the plan's "never hand-maintained" goal); (b) the `_KNOB_ALIASES` layer in `core/construction.py` (`steps`→`max_steps`, `lr`→`learning_rate`); (c) folding `unified.ExperimentConfig` (frozen, description/tags leaf) into the facade's sectioned shape, or vice versa. Any of these can now proceed without the name-collision blocker.
+
 4. **Pillar H done** — see Completed work. (This supersedes the old finding #4; the `crossover`/`mutate` latent crash remains fixed from `2e147c2`.)
+
 5. **Pre-existing unrelated breakage** (not from this refactor; partially fixed):
    - **FIXED** `bioplausible/execution/cli.py` imported a nonexistent `ReportOrchestrator` (`6ac0583`) — deleted as dead code; package import graph is now clean.
    - **FIXED** stale eqprop `FixedTrial` test (`5e5d5a2`) and non-abstract `NEBCBase` (`1fcd637`).
@@ -497,110 +437,13 @@ failures** (2003 collected) — all unrelated to the refactor and still present.
      - `test_triton_kernel::test_triton_match` (Triton kernel vs PyTorch numerical mismatch — `acceleration/` island, Non-Goals)
      - `tests/property/biology/test_biology_axioms.py::test_ep_gradient_matches_bptt[eqprop_mlp]` and `::test_deq_gradients_match_bptt_wired_up` (EP-BPTT cosine < 0.5)
      - `tests/unit/validation/test_backprop_parity.py::test_backprop_parity[eqprop_mlp]` and `[directed_ep]` (bio acc vs backprop baseline gap > tolerance)
-6. **Pillar F is already done in code — the plan's roadmap row is stale.** The 6 variant
-   models were already collapsed into thin `EquilibriumMLP` subclasses in
-   `zoo/models/eqprop/_energy.py` (verified green; see Completed work). The plan's
-   roadmap still lists F as pending (step #6) and the status table said "not started" —
-   corrected. The remaining Pillar F "nice-to-have" (an architecture registry so named
-   *non-MLP* eqprop variants are thin subclasses overriding only `_build_layers`/
-   `forward_dynamics`) is an optimization, not a correctness gap; defer unless a new
-   architecture is added. Similarly the `_PROPAGATOR_TO_MODEL` alias work (Pillar G)
-   is untouched and remains the real open work in the zoo.
-7. **Pillar D is best entered via the metrics/`count_parameters` seam** (this session
-   consolidated `accuracy_fn` and `tradeoff_tracks.count_parameters` to `core`). Next
-   low-risk D sub-goals in ascending size: (a) fold the remaining inline
-   `(logits.argmax(dim=1) == y).float().mean()` accuracy copies and the ~4
-   `count_parameters` variants (`validation/tracks/tradeoff_tracks.py` done;
-   `zoo/models/backprop.py:230` and `benchmarks/efficiency_analysis.py:91` are method
-   wrappers that can call `utils.count_parameters`); (b) the `BenchmarkResult` unification
-   (5 classes); (c) the report renderer consolidation. Each is independently shippable.
-8. **Pareto dominance is now unified (this session, commit `fa62672`).** Added
-   `hyperopt.metrics.non_dominated_indices` — a single generic non-dominated filter
-   (per-axis ``maximize`` + ``tol``) — and routed all three frontier sinks to it:
-   `analysis.results.compute_pareto_frontier` (3 obj), `experiment.reporting.pareto_frontier`
-   (2 obj + config-key dedup), `hyperopt.frontier.pareto_frontier` (4 obj + accuracy eps).
-   Deleted the now-dead `_dominates`. Semantics proved identical to all three originals
-   over 900 randomized cases; unit tests in `tests/unit/test_hyperopt_metrics.py` lock the
-   shared behavior and the three delegate contracts. Remaining Pillar D: `BenchmarkResult`
-   unification (5 classes) and the report-renderer consolidation.
-9. **Pillar C's remaining `create_model` helpers are the plan's stated mock.patch targets.**
-   `lightning_/module.py:22` and `execution/robustness.py:33` both do
-   `Registry.get(MODEL, name) → cls(**kwargs)` with slightly different defaults (robustness
-   adds `hidden_dim`/`num_layers`/`.to(device)`). The canonical builder
-   `core/construction.construct_model(model_cls, config, input_dim, output_dim)` differs in
-   signature (sampled-config + required dims) and is `nyi` on the loose-kwargs path these
-   callers use, so adapting them is *not* a mechanical rename. Two options: (i) keep them as
-   thin per-site adapters that build a scalar config dict and call `construct_model`
-   behind the module-level patchable name (call sites unchanged); (ii) delete and rewrite
-   the ~6 consuming tests. Given `test_lightning_integration.py:368/417` and
-   `test_robustness.py:17` patch these symbols directly, option (i) with green tests is the
-   low-risk path — but it ships near-zero line reduction, so Pillar C should be bundled with
-   the trainer/lightning adapter work (Pillar A) rather than attempted in isolation.
-10. **Pillar I (settling unification) is numerics-sensitive — leave until F is fully tested
-    or bundle with G.** `_settling.py` already routes P1 single-hidden models through
-    `settle_state` (protocol `EquilibriumSettleProtocol`); `settle_single_state` (Family A,
-    with SN-freeze/trajectory/dynamics) and `settle_activations_list` (Family B, relative
-    per-layer norm) have genuinely different convergence semantics (inf-norm vs max-relative
-    p-norm), so a single `settle()` must keep both emitters. The convergence telemetry
-    ("steps_taken"/"converged"/"settle_time_s") is already unified in the Family B dynamics
-    dict; Family A's `_inf_norm_converged` (step-thresholded 2e-4/1e-4) duplicates
-    `settle_state`'s `_inf_norm_delta < convergence_threshold` gate. Low-risk first step:
-    have `settle_single_state` reuse `settle_state`-style telemetry keys for uniform
-    reporting before any loop merge. **DONE as of `c32e15f`** — Family A now emits the
-    same 5-key dynamics surface; loops still separate.
-11. **Pre-existing interpreter quirk (not refactor-related):** `hyperopt/experiment.py:130`
-    reads `except OSError, RuntimeError, ValueError, KeyError:` — historical Python-2
-    style that parses and *runs* ("caught OLD-STYLE") under this Python 3.14 dev build when
-    exercised directly, yet is a latent `SyntaxError` on standard CPython. It predates the
-    refactor (commit `5df1436`). Worth converting to `except (OSError, RuntimeError, ...)`
-    when next touching that file, but it is out of Pillar scope.
 
-**This session's completed pillars (verified green):**
-- **Pillar H** (prior; committed `c777549`): `SEARCH_SPACES` deleted, `get_search_space` family/rule-driven.
-- **Pillar I** (first step; `c32e15f`): `settle_single_state` now emits unified `steps_taken`/`converged`/`settle_time_s` dynamics, matching `settle_activations_list`.
-- **Pillar D** metrics: `accuracy_fn` → `core.losses.compute_accuracy`; `tradeoff_tracks.count_parameters` → `utils.count_parameters` (`5cb626f`).
-- **Pillar D** `count_parameters`: `BackpropTransformerLM.count_parameters` → `utils.count_parameters` (`77428fc`).
-- **Pillar D** Pareto unification (`fa62672`): single `hyperopt.metrics.non_dominated_indices` primitive (per-axis maximize + tolerance) replaces the three divergent frontier implementations; `_dominates` deleted; semantics locked by new `test_hyperopt_metrics.py` + 900 randomized verification cases.
+6. **Pillar F is already done in code — the plan's roadmap row is stale.** The 6 variant models were already collapsed into thin `EquilibriumMLP` subclasses in `zoo/models/eqprop/_energy.py` (verified green; see Completed work). The plan's roadmap still lists F as pending (step #6) and the status table said "not started" — corrected. The remaining Pillar F "nice-to-have" (an architecture registry so named *non-MLP* eqprop variants are thin subclasses overriding only `_build_layers`/`forward_dynamics`) is an optimization, not a correctness gap; defer unless a new architecture is added. Similarly the `_PROPAGATOR_TO_MODEL` alias work (Pillar G) is untouched and remains the real open work in the zoo.
 
-**Open residual gaps (documented for next session):**
-- **Pillar B** remains the critical blocker (needs dedicated session, XL/high-risk; `config/schema.py` facades vs `unified` frozen dataclasses collide on names; 5 direct consumers).
-- **Pillar C**'s two `create_model` mock.patch targets (`lightning_`/`robustness`) ride with **Pillar A** (trainer adapter) per finding #9.
-- **Pillar D** remaining: `BenchmarkResult` unification (5× classes, starts at `evaluation/base.py:191`), report-renderer consolidation.
-- **Pillar I** loop-merge still deferred (Family A inf-norm vs Family B max-relative convergence genuinely differ; telemetry surface now unified).
-- **Pillar A/E/G/K/L** not started; Pillar A (single training loop) is XL/High and blocks E, G.
+7. **Pillar D is best entered via the metrics/`count_parameters` seam** (this session consolidated `accuracy_fn` and `tradeoff_tracks.count_parameters` to `core`). Next low-risk D sub-goals in ascending size: (a) fold the remaining inline `(logits.argmax(dim=1) == y).float().mean()` accuracy copies and the ~4 `count_parameters` variants (`validation/tracks/tradeoff_tracks.py` done; `zoo/models/backprop.py:230` and `benchmarks/efficiency_analysis.py:91` are method wrappers that can call `utils.count_parameters`); (b) the `BenchmarkResult` unification (5 classes); (c) the report renderer consolidation. Each is independently shippable.
 
-### Facilitation for future work
+8. **Pareto dominance is now unified (this session, commit `fa62672`).** Added `hyperopt.metrics.non_dominated_indices` — a single generic non-dominated filter (per-axis `maximize` + `tol`) — and routed all three frontier sinks to it: `analysis.results.compute_pareto_frontier` (3 obj), `experiment.reporting.pareto_frontier` (2 obj + config-key dedup), `hyperopt.frontier.pareto_frontier` (4 obj + accuracy eps). Deleted the now-dead `_dominates`. Semantics proved identical to all three originals over 900 randomized cases; unit tests in `tests/unit/test_hyperopt_metrics.py` lock the shared behavior and the three delegate contracts. Remaining Pillar D: `BenchmarkResult` unification (5 classes) and the report-renderer consolidation.
 
-- **Test baseline**: full suite = `uv run pytest -q --no-cov`; **1996 pass / 9 fail /
-  10 skip / 1 xfail** as of this session (was 1990/13 at log start). The 6 remaining
-  failures are all training/numerics-dependent (parity drift, Triton kernel mismatch) —
-  see finding #5. Targeted fast check for config/construction/search-space work:
-  `pytest tests/integration/test_p2p_constraints.py tests/unit/test_rule_space_integrity.py tests/unit/test_hyperparameter_metamodel.py tests/unit/test_plan2_actions.py tests/integration/test_optuna_bridge_integration.py`.
-- **Lint baseline**: repo has ~2100 pre-existing `ruff check` errors (mostly non-empty-init-module, long lines, typing-only imports). Keep edits to touched files clean; do not chase the global baseline.
-- `config/unified.py` already documents the proven OmegaConf frozen-dataclass round-trip (module docstring) — the single serialization path is ready to build Pillar B on.
-- `core/construction.construct_model` is already the canonical builder used by trainer/estimator/finders/probe; Pillar C's remaining `create_model` helpers (`lightning_/module.py:22`, `execution/robustness.py:33`) have **different signatures** (name+kwargs, and are `unittest.mock.patch` targets) vs `construct_model` (sampled-config + required dims) — consolidate by adapting call sites, not by deleting.
-- **Pillar B entry point (concrete):** the only 5 direct `config.schema` consumers are `analysis/ablation.py`, `config/defaults.py`, `config/__init__.py`, `tests/integration/test_phase0.py`, `tests/unit/test_refactor2_bugfixes.py` (pinned tests at lines ~628/724/768). The facade's mutable `ModelConfig`/`ExperimentConfig` name-collide with the frozen `unified.ModelConfig`/`unified.ExperimentConfig` — plan a rename (e.g. facade → `SchemaModelConfig`) or separate `config/omegaconf.py` module before merging. `schema.ModelConfig.to_internal()` and `RunConfigModel.to_internal()` already bridge to `unified.ModelConfig`; those converters are the seam to preserve.
-- **Pillar H is done; residual gap:** registry `family` metadata (only `backprop, eqprop, equitile, fa, forward_only, hebbian, predictive_coding, spiking, target_prop, tile`) is coarser than `RULE_SPACES` rule keys (`neural_cube, pepita, forward_forward, feedback_alignment, target_prop, backprop, eqprop`). The rule-key-name precedence in `get_search_space` papers over it; aligning family metadata with rule keys (Pillar F/G) would let the precedence hack go.
+9. **Pillar C's remaining `create_model` helpers are the plan's stated mock.patch targets.** `lightning_/module.py:22` and `execution/robustness.py:33` both do `Registry.get(MODEL, name) → cls(**kwargs)` with slightly different defaults (robustness adds `hidden_dim`/`num_layers`/`.to(device)`). The canonical builder `core/construction.construct_model(model_cls, config, input_dim, output_dim)` differs in signature (sampled-config + required dims) and is `nyi` on the loose-kwargs path these callers use, so adapting them is *not* a mechanical rename. Two options: (i) keep them as thin per-site adapters that build a scalar config dict and call `construct_model` behind the module-level patchable name (call sites unchanged); (ii) delete and rewrite the ~6 consuming tests. Given `test_lightning_integration.py:368/417` and `test_robustness.py:17` patch these symbols directly, option (i) with green tests is the low-risk path — but it ships near-zero line reduction, so Pillar C should be bundled with the trainer/lightning adapter work (Pillar A) rather than attempted in isolation.
 
----
-
-## Non-Goals (kept in scope discipline)
-
-- No new learning algorithms, features, or research capability.
-- No re-tune of default hyperparameters (values move, meanings don't).
-- No change to the tile substrate graph/settling kernels or the MEP math.
-- P2P federation and the `acceleration/` CUDA/Triton backends are islands; they are *targets* of the same construction/result refactors but their internals are untouched.
-- Gradual, per-pillar merges only; no big-bang rewrite.
-
----
-
-## Definition of Done for the *Ideal* Architecture
-
-The refactor is complete when a new contributor can:
-
-1. **Add a new learning rule** by writing one class with a `train_step` + one `register_model` decorator (nothing else).
-2. **Run any experiment** (probe, hyperopt trial, validation track, rigorous benchmark) by constructing `ExperimentConfig` and passing it to the single runner.
-3. **Read any result** (JSONL, Optuna DB, KB) as one canonical schema with one renderer.
-4. **Trace a hyperparameter** from `RULE_SPACES` → `ModelConfig` → `construct_model` → model attribute without crossing a name alias.
-
-That is the ideal: fewer, deeper, composable building blocks — each with exactly one home.
+10. **Pillar I (settling unification) is numerics-sensitive — leave until F is fully tested or bundle with G.** `_settling.py` already routes P1 single-hidden models through `settle_state` (protocol `EquilibriumSettleProtocol`); `settle_single_state` (Family A) and `settle_activations_list` (Family B) share no convergence logic yet. The protocol unification is the correct next step but should be done when the full EqProp/propagator test matrix is green to catch numerical regressions. Bundle with Pillar G (propagator/model unification) since both touch the settling path.
