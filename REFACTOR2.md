@@ -321,6 +321,26 @@ One **`SettleState` protocol** with two adapters (`TensorState`, `ActivationsLis
 
 ---
 
+## Pillar M — Micro-Consolidation: the ~60 hand-rolled one-liners
+
+### The problem (newly quantified — highest raw repetition in the tree)
+Three canonical primitives already exist but are bypassed at dozens of sites, so the same one-liner is copied with silent *semantic drift*:
+
+1. **Accuracy (~40 sites)** — `core.losses.compute_accuracy` (handles one-hot/reshaped/3-D targets) is canonical, yet `zoo/models/{fa.py,forward_only.py,target_prop.py,spiking.py,hebbian.py,base.py}`, `core/ebm.py`, `core/training_mixin.py`, `domains/*.py`, `lightning_/module.py`, `validation/utils.py`, `validation/tracks/*`, `execution/robustness.py`, `zoo/mep/benchmarks/*`, `zoo/models/eqprop/_contrastive.py` all hand-roll `(logits.argmax(dim=1) == y).float().mean()`. **Drift hazard:** some sites return a 0–1 ratio, others `× 100` (e.g. `validation/utils.py:107`, `nebc_base.py:113`, `application_tracks.py:194`), some `.item()`, some call `argmax(-1)` vs `argmax(1)` — two different correctness bugs depending on target layout. Every site should call `core.losses.compute_accuracy`.
+2. **`count_parameters` (~17 sites)** — `bioplausible.utils.count_parameters` (handles `_orig_mod` unwrap + trainable-only) is canonical, yet `deployment.py:122`, `benchmarks/rigorous.py:435/491/514`, `benchmarks/compare_nanoGPT.py:221/511`, `hyperopt/experiment.py:432`, `evaluation/{base,cross_domain}.py`, `core/{trainer,profiling,spectral_mixin}.py`, `zoo/models/tile_lm.py`, `zoo/models/eqprop/eqprop_lm_variants.py` all re-`sum(p.numel() for p in model.parameters())`. The compiled-model unwrap (`_get_model_for_processing`) is silently lost at most sites.
+3. **Seeding (two divergent APIs + ~10 raw sites)** — `bioplausible.utils.seed_everything(seed, device)` (returns an env fingerprint, refuses silent CPU fallback; used by `cli/repro`, `cli/parity`, `experiment/probe`) *and* `core.utils.seeds.set_all_seeds(seed, deterministic)` (sets `use_deterministic_algorithms`; used by `cli/run`, `core/trainer`, `benchmarks`) seed the same RNGs with incompatible behavior/shapes. `cli/repro.py:183` and `validation/{utils,core,gradient_check}.py`, `training/rl.py`, `sklearn_interface.py`, `domains/{timeseries,scientific}.py`, `zoo/mep/benchmarks/{niche_benchmarks,ewc_baseline,continual_learning}.py` still call raw `torch.manual_seed(seed) + np.random.seed(seed)`.
+
+### Target
+- **One `compute_accuracy`** — fold the ~40 inline accuracy one-liners; where the caller genuinely needs a `×100` or score-ratio form, add `scale=100`/`as_score` params to the canonical fn instead of re-implementing. One target-layout rule, one return convention.
+- **One `count_parameters`** — all sites call `bioplausible.utils.count_parameters`; the `_orig_mod` unwrap and trainable-only semantics become uniform.
+- **One seeding API** — merge `seed_everything` and `set_all_seeds` into a single `core.utils.seeds` entry point (one returns the fingerprint + determinism flag; the other is a thin wrapper), then move every raw `torch.manual_seed` site onto it.
+
+### Win
+- **~250 lines** of near-identical arithmetic removed and, more importantly, **three silent-drift classes eliminated**: accuracy target-layout bugs, param-count-with-compiled-model undercounts, and seed-mismatch repro failures.
+- Highest *researchability* win per line: correctness of a finding depends on these three primitives being right and uniformly computed.
+
+---
+
 ## Implementation Roadmap
 
 Pillars are ordered by value/effort and by dependency (each row de-risks the next).
@@ -339,8 +359,9 @@ Pillars are ordered by value/effort and by dependency (each row de-risks the nex
 | 10 | **D** Single measurement/reporting stack | 4k lines | XL | High | E |
 | 11 | **L** Self-registration | zero-touch extensibility | M | Low | B, F, G |
 | 12 | **K** Demo/CLI/dashboard hygiene | boundaries | M | Low | A, B |
+| 13 | **M** Micro-consolidation (accuracy/params/seed) | ~60 one-liners, 3 drift classes | M | Low | none |
 
-**Suggested execution sequence:** J → B → C (foundations), then **F → I → G** (zoo purity), then **A → E → H** (training + persistence), then **D** (measurement), then **L, K** (extensibility + boundary). Each pillar ships with `ruff format && ruff check && pyright && pytest --cov` green.
+**Suggested execution sequence:** J → B → C (foundations), then **M → F → I → G** (micro-DRY + zoo purity), then **A → E → H** (training + persistence), then **D** (measurement), then **L, K** (extensibility + boundary). Pillar M is deliberately placed early: it is low-risk, dependency-free, and the accuracy/count/seed consolidation unifies the exact primitives that Pillars A/D/G touch. Each pillar ships with `ruff format && ruff check && pyright && pytest --cov` green.
 
 ---
 
@@ -447,3 +468,10 @@ finding #5).
 9. **Pillar C's remaining `create_model` helpers are the plan's stated mock.patch targets.** `lightning_/module.py:22` and `execution/robustness.py:33` both do `Registry.get(MODEL, name) → cls(**kwargs)` with slightly different defaults (robustness adds `hidden_dim`/`num_layers`/`.to(device)`). The canonical builder `core/construction.construct_model(model_cls, config, input_dim, output_dim)` differs in signature (sampled-config + required dims) and is `nyi` on the loose-kwargs path these callers use, so adapting them is *not* a mechanical rename. Two options: (i) keep them as thin per-site adapters that build a scalar config dict and call `construct_model` behind the module-level patchable name (call sites unchanged); (ii) delete and rewrite the ~6 consuming tests. Given `test_lightning_integration.py:368/417` and `test_robustness.py:17` patch these symbols directly, option (i) with green tests is the low-risk path — but it ships near-zero line reduction, so Pillar C should be bundled with the trainer/lightning adapter work (Pillar A) rather than attempted in isolation.
 
 10. **Pillar I (settling unification) is numerics-sensitive — leave until F is fully tested or bundle with G.** `_settling.py` already routes P1 single-hidden models through `settle_state` (protocol `EquilibriumSettleProtocol`); `settle_single_state` (Family A) and `settle_activations_list` (Family B) share no convergence logic yet. The protocol unification is the correct next step but should be done when the full EqProp/propagator test matrix is green to catch numerical regressions. Bundle with Pillar G (propagator/model unification) since both touch the settling path.
+
+11. **Broken console-script entry point — `biopl-scientist` references a deleted module (regression from `6ac0583`).** `pyproject.toml` still declares `biopl-scientist = "bioplausible.execution.cli:main_scientist"`, but `execution/cli.py` was deleted as dead code in commit `6ac0583` (its `main_reporter`/`_run_reporter` imported a nonexistent `ReportOrchestrator`). Verified: `import bioplausible.execution.cli` → `ModuleNotFoundError`. So the `biopl-scientist` console script is **installed but unusable**. Two fixes: (a) point it at the AutoScientist entry (`bioplausible.execution.engine` run path) if a scientist-launcher is still wanted, or (b) delete the `biopl-scientist` script (the `ExecutionEngine` is already driven programmatically / via `bioplausible.experiment.cli`). This is Pillar K (CLI hygiene) and should be the first fix there — it is a live broken public entry point.
+
+12. **`graph/training.py` has two near-identical BPTT+eval loops (Pillar A evidence).** Both `train_gradient_descent`-style paths (feedforward `_feedforward` branch at ~line 120 and settle/inference branch at ~line 340) duplicate the same epoch loop: manual `loss.backward(); optimizer.step()`, per-epoch averaging, and a `torch.no_grad()` eval loop with `correct += (...).sum()`. Together with `training/rl.py` and `zoo/models/deployments/{base,vision,graph,timeseries}.py`, this is a direct `loss.backward()` violation of acceptance criterion #1 and belongs in the Pillar A adapter sweep. The two loops should collapse to one shared `train_epoch`/`evaluate` helper (the only difference is the forward: `_feedforward` vs `infer.settle`).
+
+13. **`_TaskTrainer.train_epoch` re-implements metric normalization + validation (Pillar A tail).** `domains/trainer.py:120` already delegates training to `CoreTrainer.from_task`, but its `train_epoch` hand-rolls the `train_loss`/`train_acc` re-keying and a manual `self._trainer._validate(1)` call with its own `try/except`. This metric-shape normalization should live once (either as a CoreTrainer option or a shared helper) so every adapter (`_TaskTrainer`, probe, verifier) reports identical keys. Low-risk, small, and strengthens the "one loop, many thin adapters" story.
+
