@@ -59,8 +59,9 @@ def _train_kernel(X, y, X_test, y_test, epochs, batch_size, use_gpu):
         input_dim=X.shape[1],
         hidden_dim=128,
         output_dim=10,
-        max_steps=15,
+        max_steps=20,  # tuned: 20 > 15 for accuracy; beta=0.22 (both tuned 2026-08-14)
         lr=0.02,  # tuned: default 0.001 under-trains the kernel path
+        beta=0.22,
         use_gpu=use_gpu,
         use_spectral_norm=True,
     )
