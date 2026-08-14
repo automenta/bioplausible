@@ -11,7 +11,6 @@ from typing import cast
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.multiclass import unique_labels
 from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
@@ -155,29 +154,18 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
 
     def _train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Single training step, routed through the shared dispatch seam."""
-        self.optimizer_.zero_grad()
-
-        def _bptt(x: torch.Tensor, y: torch.Tensor) -> dict[str, object]:
-            logits = self.model_(x)
-            loss = F.cross_entropy(logits, y)
-            loss.backward()
-            self.optimizer_.step()
-            with torch.no_grad():
-                accuracy = compute_accuracy(logits, y)
-            return {"loss": loss.item(), "accuracy": accuracy}
-
-        return cast(
-            "dict[str, float]",
-            dispatch_train_step(
-                model=self.model_,
-                x=x,
-                y=y,
-                adapt_input=lambda x: x,
-                bptt_step=_bptt,
-                optimizer=self.optimizer_,
-                config=None,
-            ),
+        metrics = dispatch_train_step(
+            model=self.model_,
+            x=x,
+            y=y,
+            adapt_input=lambda x: x,
+            optimizer=self.optimizer_,
+            config=None,
         )
+        if "logits" in metrics:
+            logits = metrics["logits"]
+            metrics["accuracy"] = compute_accuracy(logits, y)
+        return cast("dict[str, float]", metrics)
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> EqPropClassifier:
         """

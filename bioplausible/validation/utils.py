@@ -18,7 +18,6 @@ import numpy as np
 import torch
 
 from bioplausible.utils import seed_everything
-import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.logging import get_logger
@@ -89,22 +88,11 @@ def train_model(
 
     Each epoch delegates to :func:`dispatch_train_step`, so models exposing a
     ``train_step`` (learning-rule) use it while plain models fall back to the
-    BPTT path below.
+    canonical BPTT fallback.
     """
     optimizer = create_optimizer(model, OptimizerConfig(name="adam", lr=lr))
     losses = []
     perfect_streak = 0  # Track consecutive 100% accuracy epochs
-
-    def _bptt_step(x: torch.Tensor, y: torch.Tensor) -> dict[str, object]:
-        optimizer.zero_grad()
-        out = model(x)
-        loss = F.cross_entropy(out, y)
-        loss.backward()
-        grad_norm = sum(
-            p.grad.norm().item() for p in model.parameters() if p.grad is not None
-        )
-        optimizer.step()
-        return {"loss": loss.item(), "grad_norm": grad_norm, "out": out}
 
     for epoch in range(epochs):
         metrics = dispatch_train_step(
@@ -112,24 +100,26 @@ def train_model(
             x=X,
             y=y,
             adapt_input=lambda x: x,
-            bptt_step=_bptt_step,
             optimizer=optimizer,
             config=None,
         )
         loss = float(metrics.get("loss", 0.0))
         losses.append(loss)
 
+        grad_norm = sum(
+            p.grad.norm().item() for p in model.parameters() if p.grad is not None
+        )
+
         if verifier:
             verifier.record_metric(track_id, seed, epoch, f"{name}_loss", loss)
-            grad_norm = float(metrics.get("grad_norm", 0.0))
             verifier.record_metric(
                 track_id, seed, epoch, f"{name}_grad_norm", grad_norm
             )
 
-        out = metrics.get("out")
-        if out is None:
-            out = model(X)
-        acc = compute_accuracy(out, y, scale=100)
+        logits = metrics.get("logits")
+        if logits is None:
+            logits = model(X)
+        acc = compute_accuracy(logits, y, scale=100)
         logger.debug(
             "  %s: %s loss=%.3f acc=%.1f%%",
             name,

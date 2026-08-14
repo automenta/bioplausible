@@ -294,12 +294,48 @@ class TrainingMetrics(BaseMetrics):
     requires_backward: bool | None = None
 
 
+def bptt_step(
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    loss_fn: Callable[..., torch.Tensor] | None = None,
+) -> dict[str, object]:
+    """Canonical BPTT fallback shared by all lightweight training loops.
+
+    Performs the standard forward / backward / optimizer-step sequence and
+    returns the scalar loss plus raw logits. `CoreTrainer` layers its own
+    diagnostics (numerical-health checks, gradient clipping, rule-honesty
+    warnings) over a config-aware path via its bound ``_bptt_step`` and does
+    not call this directly; standalone callers route their BPTT through here
+    via `dispatch_train_step` instead of hand-rolling ``loss.backward()``.
+    """
+    optimizer.zero_grad()
+    logits = model(x)
+    loss = compute_loss(loss_fn, logits, y)
+    loss.backward()
+    optimizer.step()
+    return {"loss": loss.item(), "logits": logits}
+
+
+def _default_bptt_step(
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+) -> Callable[[torch.Tensor, torch.Tensor], dict[str, object]]:
+    """Build the canonical BPTT closure bound to ``model`` and ``optimizer``."""
+
+    def _step(x: torch.Tensor, y: torch.Tensor) -> dict[str, object]:
+        return bptt_step(model, optimizer, x, y)
+
+    return _step
+
+
 def dispatch_train_step(
     model: nn.Module,
     x: torch.Tensor,
     y: torch.Tensor,
     adapt_input: Callable[[torch.Tensor], torch.Tensor],
-    bptt_step: Callable[[torch.Tensor, torch.Tensor], dict[str, object]],
+    bptt_step: Callable[[torch.Tensor, torch.Tensor], dict[str, object]] | None = None,
     propagator: object | None = None,
     optimizer: object | None = None,
     config: TrainerConfig | None = None,
@@ -312,9 +348,19 @@ def dispatch_train_step(
     path, an explicit learning-rule propagator, a model-side ``train_step``,
     a learning-rule optimizer, then plain BPTT (``bptt_step``). Callers pass
     their own input adapter, BPTT fallback, and optional path recorder so the
-    dispatch itself stays a pure, reusable function.
+    dispatch itself stays a pure, reusable function. When ``bptt_step`` is
+    ``None`` the canonical :func:`bptt_step` is bound to ``model`` and
+    ``optimizer``; an optimizer is required to reach the BPTT fallback.
     """
     x = adapt_input(x)
+
+    if bptt_step is None:
+        if optimizer is None or not isinstance(optimizer, torch.optim.Optimizer):
+            raise ValueError(
+                "dispatch_train_step reached the BPTT fallback with no "
+                "torch optimizer; pass bptt_step or an optimizer."
+            )
+        bptt_step = _default_bptt_step(model, optimizer)
 
     def _record(path: str) -> None:
         if record_path is not None:

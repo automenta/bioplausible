@@ -58,10 +58,10 @@ class BioLightningModule(pl.LightningModule):
     """
     LightningModule for biologically plausible learning rules.
 
-    Because EqProp, Hebbian, and MEP optimizers do not follow the
-    standard ``loss.backward()`` paradigm, this module disables
-    *automatic* optimization and implements a manual ``training_step``
-    that delegates to the model/optimizer native interfaces.
+    Because EqProp, Hebbian, and MEP optimizers do not follow the standard
+    forward-and-backprop paradigm, this module keeps *automatic* optimization
+    disabled and implements a manual ``training_step`` that delegates to the
+    model/optimizer native interfaces; PL performs the backward pass itself.
 
     Example:
         >>> module = BioLightningModule(

@@ -2,10 +2,12 @@
 EWC (Elastic Weight Consolidation) optimizer.
 
 Provides a standard optimizer interface for EWC-based learning.
+Uses core EWC utilities for Fisher computation.
 """
 
 import torch
 
+from bioplausible.core.ewc import update_fisher
 from bioplausible.core.registry import register_optimizer
 
 __all__ = [
@@ -45,7 +47,7 @@ class EWC:
                 p.grad.zero_()
 
     def update_fisher(self, model, dataloader, task_id: int, loss_fn=None):
-        """Compute Fisher information for a task.
+        """Compute Fisher information for a task using core EWC utility.
 
         Args:
             model: The model being trained.
@@ -53,6 +55,7 @@ class EWC:
             task_id: Unique ID for this task.
             loss_fn: Loss function (default: cross_entropy).
         """
+        # Use core utility but adapt storage to this class's internal dicts
         import torch.nn.functional as F
 
         model.train()

@@ -150,7 +150,7 @@ def _train_one_epoch(model: torch.nn.Module, x: torch.Tensor, y: torch.Tensor) -
     models that own a ``train_step`` use it and the rest fall back to the Adam
     BPTT path — no hand-rolled copy of the training loop.
     """
-    from torch import nn, optim
+    from torch import optim
 
     from bioplausible.core.trainer import dispatch_train_step
 
@@ -159,15 +159,6 @@ def _train_one_epoch(model: torch.nn.Module, x: torch.Tensor, y: torch.Tensor) -
     batch_size = 64
     perm = torch.randperm(n)
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    criterion = nn.CrossEntropyLoss()
-
-    def _bptt(xb: torch.Tensor, yb: torch.Tensor) -> dict[str, object]:
-        optimizer.zero_grad()
-        logits = model(xb)
-        loss = criterion(logits, yb)
-        loss.backward()
-        optimizer.step()
-        return {"loss": loss.item()}
 
     for i in range(0, n, batch_size):
         idx = perm[i : i + batch_size]
@@ -176,7 +167,6 @@ def _train_one_epoch(model: torch.nn.Module, x: torch.Tensor, y: torch.Tensor) -
             x=x[idx],
             y=y[idx],
             adapt_input=lambda t: t,  # repro data is already flat 2D
-            bptt_step=_bptt,
             optimizer=optimizer,
         )
 
