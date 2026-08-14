@@ -64,9 +64,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "ExperimentProposer": ("bioplausible.autoscientist", "ExperimentProposer"),
     "Hypothesis": ("bioplausible.autoscientist", "Hypothesis"),
     "HypothesisReasoner": ("bioplausible.autoscientist", "HypothesisReasoner"),
-    "LLMHypothesisGenerator": ("bioplausible.autoscientist", "LLMHypothesisGenerator"),
     # Config
-    "DEFAULT_CONFIGS": ("bioplausible.config", "DEFAULT_CONFIGS"),
     "DatasetConfig": ("bioplausible.config", "DatasetConfig"),
     "ExperimentConfig": ("bioplausible.config", "ExperimentConfig"),
     "ModelConfig": ("bioplausible.config", "ModelConfig"),
@@ -116,24 +114,6 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "VisionTask": ("bioplausible.domains", "VisionTask"),
     "create_domain_task": ("bioplausible.domains", "create_domain_task"),
     "list_domains": ("bioplausible.domains", "list_domains"),
-    # Evaluation
-    "BenchmarkRegistry": ("bioplausible.evaluation", "BenchmarkRegistry"),
-    "BenchmarkResult": ("bioplausible.evaluation", "BenchmarkResult"),
-    "BenchmarkSuiteConfig": ("bioplausible.evaluation", "BenchmarkSuiteConfig"),
-    "BenchmarkSuiteResult": ("bioplausible.evaluation", "BenchmarkSuiteResult"),
-    "CrossDomainBenchmarkSuite": (
-        "bioplausible.evaluation",
-        "CrossDomainBenchmarkSuite",
-    ),
-    "EvaluatorBase": ("bioplausible.evaluation", "EvaluatorBase"),
-    "MetricSuite": ("bioplausible.evaluation", "MetricSuite"),
-    "evaluate_model_on_task": ("bioplausible.evaluation", "evaluate_model_on_task"),
-    "get_benchmark": ("bioplausible.evaluation", "get_benchmark"),
-    "list_benchmarks": ("bioplausible.evaluation", "list_benchmarks"),
-    "run_cross_domain_benchmark": (
-        "bioplausible.evaluation",
-        "run_cross_domain_benchmark",
-    ),
     # Execution engine / callbacks
     "BaseExecutionCallback": (
         "bioplausible.execution.callbacks",
@@ -145,8 +125,6 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     # Knowledge Base
     "KnowledgeBase": ("bioplausible.knowledge", "KnowledgeBase"),
     "KnowledgeEntry": ("bioplausible.knowledge", "KnowledgeEntry"),
-    "DEFAULT_KB": ("bioplausible.knowledge", "DEFAULT_KB"),
-    "create_knowledge_base": ("bioplausible.knowledge", "create_knowledge_base"),
     # Leaderboard
     "LeaderboardEntry": ("bioplausible.leaderboard.generator", "LeaderboardEntry"),
     "LeaderboardGenerator": (
@@ -158,7 +136,6 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "BioOptunaPruner": ("bioplausible.lightning_", "BioOptunaPruner"),
     "BioPrecisionCallback": ("bioplausible.lightning_", "BioPrecisionCallback"),
     "BioPrecisionMixin": ("bioplausible.lightning_", "BioPrecisionMixin"),
-    "BioPredictionWriter": ("bioplausible.lightning_", "BioPredictionWriter"),
     "BioRayTuneSearch": ("bioplausible.lightning_", "BioRayTuneSearch"),
     "EnergyConvergenceCallback": (
         "bioplausible.lightning_",
@@ -170,11 +147,6 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "run_pl_trial_with_wandb": ("bioplausible.lightning_", "run_pl_trial_with_wandb"),
     # Utilities
     "count_parameters": ("bioplausible.utils", "count_parameters"),
-    # Zoo module aliases
-    "zoo_models": ("bioplausible.zoo.models", None),
-    "zoo_optimizers": ("bioplausible.zoo.optimizers", None),
-    "zoo_propagators": ("bioplausible.zoo.propagators", None),
-    "zoo_sparsity": ("bioplausible.zoo.sparsity", None),
     # Select zoo symbols (mep presets + eqprop/fa models & propagators)
     "muon_backprop": ("bioplausible.zoo.mep.presets", "muon_backprop"),
     "smep": ("bioplausible.zoo.mep.presets", "smep"),

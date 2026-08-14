@@ -7,6 +7,8 @@ Supports incremental learning via .partial_fit().
 
 # ruff: file-ignore[invalid-argument-name, non-lowercase-variable-in-function, too-many-arguments, too-many-positional-arguments] — sklearn convention uses uppercase X
 
+from typing import cast
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -18,6 +20,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.trainer import dispatch_train_step
 from bioplausible.core.utils.device import get_device
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.utils import seed_everything
@@ -59,7 +62,7 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
 
     def __init__(
         self,
-        model_name: str = "EqProp MLP",
+        model_name: str = "eqprop_mlp",
         hidden_dim: int = 256,
         steps: int = 30,
         learning_rate: float = 0.001,
@@ -116,6 +119,8 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         if self.device is None:
             self.device = str(get_device())
 
+        import bioplausible.zoo  # ruff: ignore[unused-import]  # trigger component registration
+
         resolved = self._resolve_model_name()
         model_cls = Registry.get(ComponentCategory.MODEL, resolved)
         if model_cls is None:
@@ -149,23 +154,30 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         )
 
     def _train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
-        """Single training step. Handles bio-plausible model train_step if present."""
+        """Single training step, routed through the shared dispatch seam."""
         self.optimizer_.zero_grad()
 
-        if hasattr(self.model_, "train_step"):
-            metrics = self.model_.train_step(x, y)
-            if metrics is not None:
-                return metrics
+        def _bptt(x: torch.Tensor, y: torch.Tensor) -> dict[str, object]:
+            logits = self.model_(x)
+            loss = F.cross_entropy(logits, y)
+            loss.backward()
+            self.optimizer_.step()
+            with torch.no_grad():
+                accuracy = compute_accuracy(logits, y)
+            return {"loss": loss.item(), "accuracy": accuracy}
 
-        logits = self.model_(x)
-        loss = F.cross_entropy(logits, y)
-        loss.backward()
-        self.optimizer_.step()
-
-        with torch.no_grad():
-            accuracy = compute_accuracy(logits, y)
-
-        return {"loss": loss.item(), "accuracy": accuracy}
+        return cast(
+            "dict[str, float]",
+            dispatch_train_step(
+                model=self.model_,
+                x=x,
+                y=y,
+                adapt_input=lambda x: x,
+                bptt_step=_bptt,
+                optimizer=self.optimizer_,
+                config=None,
+            ),
+        )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> EqPropClassifier:
         """

@@ -1419,7 +1419,7 @@ def main():  # ruff: ignore[too-many-statements, complex-structure]  (argparse s
         "core-train", help="Train using CoreTrainer (new)"
     )
     core_parser.add_argument(
-        "--model", default="MLP", help="Model name from Zoo registry"
+        "--model", default="backprop_mlp", help="Model name from Zoo registry"
     )
     core_parser.add_argument("--task", default="mnist", help="Task/dataset name")
     core_parser.add_argument("--epochs", type=int, default=5, help="Number of epochs")

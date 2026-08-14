@@ -25,6 +25,7 @@ import torch
 
 from bioplausible.core.checkpoint import find_trial_artifact
 from bioplausible.core.logging import get_logger
+from bioplausible.core.utils.device import get_device
 from bioplausible.execution._guards import create_constrained_optuna_config
 from bioplausible.execution._state import DecisionLogger, ExperimentState, FailureRecord
 from bioplausible.execution.callbacks import ExecutionCallback
@@ -85,10 +86,12 @@ class ExecutionEngine:
         num_workers: int = 1,
         report_interval: int = 50,
         event_sink: EventSink | None = None,
+        device: str = "auto",
     ):
         self.db_path = db_path
         self.num_workers = num_workers
         self.report_interval = report_interval
+        self.device: str = str(get_device()) if device == "auto" else device
         self._events: EventSink = (
             event_sink if event_sink is not None else NullEventSink()
         )
@@ -847,7 +850,7 @@ class ExecutionEngine:
             data_kwargs=task.fixed_config or {},
         )
 
-        domain_task = resolve_task_from_data_config(data_config, device="cpu")
+        domain_task = resolve_task_from_data_config(data_config, device=self.device)
         return domain_task.get_dataloader(TaskSplit.TRAIN)
 
     def _get_val_loader(self, task: ExperimentTask):
@@ -876,7 +879,7 @@ class ExecutionEngine:
             data_kwargs=task.fixed_config or {},
         )
 
-        domain_task = resolve_task_from_data_config(data_config, device="cpu")
+        domain_task = resolve_task_from_data_config(data_config, device=self.device)
         return domain_task.get_dataloader(TaskSplit.VAL)
 
     def generate_reports(self, output_dir: str = "reports") -> None:
