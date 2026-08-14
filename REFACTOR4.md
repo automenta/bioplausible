@@ -1,0 +1,414 @@
+```markdown
+# REFACTOR4 — final
+
+`bioplausible` (~78k LOC, ~297 modules) grew through 25+ feature sprints. Every cross-cutting
+concern — training, config, construction, persistence, measurement — exists in parallel copies.
+**Capability is not the problem. Consolidation is.**
+
+Goal: one canonical implementation (**seam**) per concern, all callers routed through it, in a
+strictly layered core (L1–L7, imports only downward, enforced by `tools/check_imports.py` in CI).
+
+Maintenance: status lives only in the table below. Finished work → Ledger. New trap → one line in
+Ground rules. No session logs, ever.
+
+---
+
+## Status
+
+| Stream | What | Status | Blocked by |
+|--------|------|--------|------------|
+| **LOOP** | One training loop | 🔄 in progress | steps 1–2: — · steps 3+: GATE-0 |
+| **FUNNEL** | One result sink | ⬜ open | — |
+| **CHECKPOINT** | Early-exit decision | ⬜ open | LOOP + FUNNEL |
+| **MEASURE** | One measurement stack | ⬜ open | CHECKPOINT · FUNNEL |
+| **RULE** | Model owns the learning rule | ⬜ open | CHECKPOINT · LOOP · GATE-0 |
+| CONFIG · BUILD · CLI | Config / construction / CLI seams | ✅ done | — |
+| REGISTER · PRUNE | Self-registration / dead code (backlog) | ⚠️ partial | PRUNE ← MEASURE |
+
+---
+
+## Re-entry playbook (read this first every session)
+
+How to resume REFACTOR4 without re-deriving the codebase. Order of operations:
+
+```bash
+# 0. Env + gates (always)
+cd /home/me/bioplausible
+uv sync                                    # restore lockfile env
+python tools/check_imports.py              # gate: must be 0 violations / 0 cycles
+
+# 1. Snapshot baseline truth (run, don't assume)
+uv run python -m pytest tests/unit/core/test_core_trainer.py \
+  tests/unit/core/test_deployment_models.py \
+  tests/integration/test_smoke_training.py -o addopts="" -q   # expect all green
+uv run python -m pytest \
+  tests/unit/validation/test_backprop_parity.py \
+  tests/integration/test_equilibrium_parity.py \
+  tests/integration/test_equilibrium_implicit_learns.py -o addopts="" -q
+#  -> 3 pre-existing fails (GATE-0 list). Anything else = YOUR regression.
+
+# 2. LOOP grep truth
+grep -rln "loss.backward()" bioplausible/ \
+  | grep -v core/ | grep -v training_mixin \
+  | grep -v "validation/tracks/" | grep -v "analysis/" \
+  | grep -v "execution/robustness" | grep -v "execution/interpretability" | grep -v "execution/_guards" \
+  | grep -v "benchmarks/" | grep -v "zoo/mep/benchmarks/" \
+  | grep -v "training/rl.py" | grep -v "zoo/propagators/"
+
+# 3. Route through the seam FIRST, then satisfy the grep (rule 14). Never bend code to hit zero.
+```
+
+**Where the plan stands** lives only in the Status table + Ledger below. Never re-derive "done" work.
+A task is "done" only when its **Verify** command is green AND its criterion is satisfied.
+
+**Stream handoff map (do these in this order):**
+1. LOOP steps 1–2 (structural, no GATE-0) → **FUNNEL** (structural) → **GATE-0** (lock parity) →
+2. LOOP steps 3–5 → **CHECKPOINT** (reassess: stop here or continue) →
+3. If continuing: **MEASURE** then **RULE** (both need parity locked).
+Do NOT start MEASURE or RULE until CHECKPOINT + their blockers pass (see Status table).
+
+---
+
+## GATE-0 — lock parity before semantic work ⚠️
+
+The plan's regression defense ("zero new failures") is **blind in the danger zone**: the 6 baseline
+failures are numerical/parity drift, and they sit exactly where LOOP step 3 and all of RULE will
+perturb. You cannot tell "pre-existing drift" from "I just broke EqProp parity" without archaeology.
+
+**The 6 failing parity tests** (run these in one shot on a fixed seed). This exact list must be
+recognized as pre-existing *before* any semantic work; anything outside it is YOUR regression:
+
+```bash
+cd /home/me/bioplausible && uv run python -m pytest \
+  tests/unit/validation/test_backprop_parity.py \
+  tests/integration/test_equilibrium_parity.py \
+  tests/integration/test_equilibrium_implicit_learns.py \
+  -o addopts="" -q
+```
+
+Current failures (verified 2026-08-14, Python 3.14.6):
+1. `test_backprop_parity[eqprop_mlp]`  — acc 0.198 vs baseline 0.366 (diff 0.168 > 0.05)
+2. `test_backprop_parity[directed_ep]` — acc 0.114 vs baseline 0.366 (diff 0.252 > 0.20)
+3. `test_mlp_gradient_parity` — loss BPTT 1.4868 vs EqProp 1.5384 (places=4)
+   (the remaining 3 of the "6" are flaky/seed/other-model drift — re-run this command to refresh truth.)
+
+**Before LOOP step 3 or any RULE step, do one of:**
+- **(a)** Fix the failing parity tests, **or**
+- **(b)** `xfail` them with a locked reason, and add **numerical snapshots**: pin loss / accuracy /
+  gradient-norm for `backprop_mlp`, `eqprop_mlp`, `directed_ep` on a fixed seed + task with tight
+  tolerances, so a semantic regression fails loudly.
+
+**May proceed before GATE-0:** LOOP steps 1–2 and all of FUNNEL (structural, no semantic change).
+
+---
+
+## Do this now
+
+1. **LOOP step 1** — delete backprop-mode `train_step` from the 4 deployment files (~15 lines each).
+2. **FUNNEL** is unblocked and parallel-safe: route the 3 hyperopt failure writes through the sink.
+3. **Schedule GATE-0.** It gates everything semantic.
+4. Do not start MEASURE or RULE until CHECKPOINT + their blockers pass.
+
+---
+
+## The map
+
+### Layers
+`L_N` imports only from `L_{≤N−1}`.
+
+```
+L7 Interfaces    cli · deployment · sklearn · lightning      ← public API
+L6 Measurement   evaluation · validation · benchmarks · analysis · reporting · leaderboard
+L5 Orchestration execution · hyperopt · autoscientist        ← adapters over the runner
+L4 Training      CoreTrainer — THE single train path
+L3 Data/Domains  data · domains                              ← one task abstraction
+L2 Zoo           models · propagators · optimizers · mep     ← registered components
+L1 Core          registry · construction · config · checkpoint · metrics · result_sink
+```
+
+### Seams
+Learn these nine functions and you know the system. All work = "route callers through the seam."
+
+| Concern | Seam | Layer | Status |
+|---------|------|-------|--------|
+| Config tree | `config/unified.py` (frozen dataclasses) | L1 | ✅ |
+| Config I/O | `config/omegaconf.py` facade → `to_internal()` | L1 | ✅ |
+| Model construction | `core/construction.construct_model` | L1 | ✅ |
+| Task/data resolution | `domains/registry.resolve_task_from_data_config` | L3 | ✅ |
+| Train-step dispatch | `core/trainer.dispatch_train_step` | L4 | 🔄 |
+| Outcome persistence | `experiment/result_sink.record_experiment_result` | L1 | ⬜ |
+| Measurement result | `evaluation/base.BenchmarkResult` (interface) | L6 | ⬜ |
+| Learning rule | `model.train_step` | L2 | ⬜ |
+| CLI entry | `biopl` dispatcher (`cli/__main__.py`) | L7 | ✅ |
+
+---
+
+## LOOP — one training loop
+
+**Goal.** `CoreTrainer` is the only training loop. Every other run stack (`TrialRunner`, `Verifier`,
+`StaircaseRunner`, `BenchmarkRunner`, `BioLightningModule`, `graph/training.py`) is a thin adapter.
+
+**Seam.** `core/trainer.dispatch_train_step` — pure function owning dispatch
+(energy-model → propagator → model `train_step` → learning-rule optimizer → BPTT fallback).
+New loops route through it. Never hand-roll dispatch.
+
+**Steps.**
+1. Delete backprop-mode `train_step` from `zoo/models/deployments/{base,graph,vision,timeseries}.py`
+   (~15 lines each). Falls through to BPTT. Verify: `tests/unit/core/test_deployment_models.py`.
+   Each file's `train_step` = the `mode == "backprop"` branch that calls `loss.backward()`. The
+   non-backprop branch (`head.local_update(...)`) must be KEPT, and the method body becomes:
+   ```python
+   def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+       self._step_count += 1
+       features = self.feature_extractor(x)
+       return self.head.local_update(features.detach(), y)
+   ```
+   Exact edits (delete only the `if ... == "backprop": ...` block, keep the rest):
+   - `base.py:250-262` — inside a shared `DeploymentModel` factory; drop the `if`/`return` branch
+   - `graph.py:282-299` — `train_step(self, node_features, edge_index, labels, batch=None)`; keep
+     the graph-readout computation above the `if`, keep the trailing `local_update`
+   - `vision.py:235-249` — **keep the `_dropout(features)` line** (only drop the `if/return`)
+   - `timeseries.py:306-343` — keep `_pool_features` and the `model_type` reshape logic ABOVE the
+     `if`; only drop the backprop branch. Note this one also returns `head.local_update(features.detach(), y)`.
+   Do not touch `mode` handling or the `forward_logits` path in `forward()` — the dispatcher's BPTT
+   fallback owns `loss.backward()` after this.
+2. Delete `TileLM.train_step` (`zoo/models/tile_lm.py:228-246`) — same rationale, `mode="backprop"`.
+   Remove the entire `train_step` method; the dispatcher routes tile models through BPTT fallback.
+3. **[GATE-0] Centralize the BPTT fallback.** Default `dispatch_train_step`'s `bptt_step` to the
+   core `_bptt_step`; delete the local `_bptt` closures from `cli/repro.py`, `validation/utils.py`,
+   `lightning_/module.py`, `sklearn_interface.py`. This removes `loss.backward()` from those four
+   files. Signature stays frozen (param remains, default changes).
+4. Route `graph/training.py` through `dispatch_train_step` **only if it fits cleanly.** Graph PCN
+   dynamics are bespoke (like RL). If routing contorts the dispatcher, **exempt it** and note the
+   exemption here. Goal = one canonical *default* path, not literally one.
+5. Move `train_nebc_model` (`zoo/nebc_base.py:109`) and `update_fisher` (`zoo/optimizers/ewc.py:68`)
+   to `core/`.
+6. `target_prop`: implement pure local `train_step` or delete and fall through — decide when touched,
+   coordinate with RULE.
+7. `eqprop_diffusion` is tagged broken: delete or defer. Don't invest.
+8. `zoo/mep/{__init__,optimizers/__init__}` inline loops: convert when touched.
+
+Propagator files (`backprop, fa, eqprop, hebbian, spiking`) are RULE's job — excluded from the LOOP
+grep so nothing is double-tracked.
+
+**Criterion #1 — a proxy, not the goal.** The real goal is *all loops dispatch through
+`dispatch_train_step`*. Zero `loss.backward()` is the measurable stand-in. **If a site routes through
+the seam but legitimately keeps its own backward (RL, tracks), that is correct even if it needs an
+exclusion. Never distort real code to satisfy the grep.**
+
+```bash
+grep -rln "loss.backward()" bioplausible/ \
+  | grep -v core/ | grep -v training_mixin \
+  | grep -v "validation/tracks/" | grep -v "analysis/" \
+  | grep -v "execution/robustness" | grep -v "execution/interpretability" | grep -v "execution/_guards" \
+  | grep -v "benchmarks/" | grep -v "zoo/mep/benchmarks/" \
+  | grep -v "training/rl.py" | grep -v "zoo/propagators/"
+```
+
+Green when steps 1–5 land (if graph is exempted per step 4, add `| grep -v graph/`).
+`benchmarks/`, `zoo/mep/benchmarks/` clear with MEASURE; `zoo/propagators/` clears with RULE.
+
+**Current convert-set (baseline 2026-08-14):** the grep returns these non-excluded files after
+applying `-v` for the excludes above:
+`cli/repro.py · validation/utils.py · lightning_/module.py · sklearn_interface.py ·
+zoo/models/deployments/{base,graph,vision,timeseries}.py · zoo/models/eqprop/eqprop_diffusion.py ·
+zoo/models/forward_only.py · zoo/models/target_prop.py · zoo/models/tile_lm.py ·
+zoo/optimizers/ewc.py · zoo/mep/{__init__,optimizers/__init__}.py · zoo/nebc_base.py ·
+graph/training.py`
+Step 1 clears the 4 `deployments/*` entries; step 2 clears `tile_lm.py`. `graph/training.py` pending
+step 4's exemption decision. Note `zoo/optimizers/ewc.py` and `zoo/nebc_base.py` are handled by step 5
+(move to `core/`), not by deleting `train_step`.
+
+**Verify.** `pytest tests/unit/core/test_core_trainer.py tests/integration/test_smoke_training.py tests/unit/core/test_deployment_models.py` + the grep + GATE-0 snapshots.
+Concrete run (after steps 1–2):
+```bash
+cd /home/me/bioplausible && uv run python -m pytest \
+  tests/unit/core/test_core_trainer.py \
+  tests/integration/test_smoke_training.py \
+  tests/unit/core/test_deployment_models.py -o addopts="" -q
+```
+Expected: all pass (181 core + 25 smoke + 5 deployment). The 3 **pre-existing** parity failures
+(GATE-0) are the only reds allowed.
+
+**Feature-flag check for step 1:** `grep -rn "mode == \"backprop\"\|local_update" bioplausible/zoo/models/deployments/` — after edits, each of the 4 files must retain only the `local_update` call site (no `loss.backward()`, no `mode == "backprop"` branch). `rg -n "loss.backward" bioplausible/zoo/models/deployments/` must return nothing.
+
+---
+
+## FUNNEL — one result sink
+
+**Goal.** `result_sink.record_experiment_result` is the only writer of trial outcomes. The five
+backends (Optuna SQLite, HyperoptStorage, JSONL, KB, execution_state.db) are private details of the sink.
+
+**Steps.**
+1. Route `hyperopt/experiment.py:523,541,564` (per-trial `FailureTracker.log_failure` for
+   training_failed/timeout/exception) into `record_experiment_result(status="failed")`. The sink's
+   `_record_failure` already captures failure_type, stack trace, and tier.
+   Concretely, in `hyperopt/experiment.py` replace each `failure_tracker.log_failure(FailureRecord(...))`
+   (at lines ~523, ~541, ~564) with a single call to `record_experiment_result(...)`, mapping:
+   - `status="failed"` for the training_failed case (line ~523)
+   - `status="error"` for the timeout case (line ~541, `failure_type="timeout"`)
+   - `status="error"` for the exception case (line ~564)
+   Keep the existing `model_name`, `task`, `config` (→ `config=`), and `stack_trace` (→
+   `extra={"error": ...}` / `extra={"tier": ...}`) values. The sink derives `failure_type` internally.
+   Verify the three call sites are gone:
+   `grep -n "failure_tracker.log_failure" bioplausible/hyperopt/experiment.py` → empty.
+2. Replace ad-hoc checkpoint saves with `core.checkpoint` / `CheckpointMixin` calls. Evaluate
+   `CheckpointManager` (`execution/_lifecycle.py`) against `core.checkpoint`; keep only if it earns it.
+
+**Already routed (don't touch):** `hyperopt/experiment.py:620`, `validation/tracks/hardware_tracks.py:56`,
+`core/trainer.py:1698`, `experiment/probe.py:422`.
+
+**Do not fold in:**
+- `execution/engine.py` Optuna `tell`/`ask` (558, 597, 639) and `failure_tracker` (451/454) — that is
+  the online HPO loop, not outcome recording.
+- `hyperopt/search_space.py:599` (rule-surface KB entries) and `evaluation/cross_domain.py:296`
+  (benchmark KB entries) — different knowledge types, MEASURE scope.
+
+**Criterion #3b** — every outcome write goes through `result_sink`:
+`grep -rn "record_experiment_result" bioplausible/`, then confirm no backend is written outside it.
+
+---
+
+## CHECKPOINT — early-exit decision
+
+After **LOOP (steps 1–5)** and **FUNNEL** are green, **stop and reassess** before MEASURE/RULE.
+
+Consolidation adds no capability; it reduces future cost. If the debt has stopped hurting, **stopping
+here is a legitimate success** — you keep one loop and one audit trail at modest risk. MEASURE and RULE
+are decisions made later with fresh evidence, not commitments made now.
+
+---
+
+## MEASURE — one measurement stack
+
+**Step 0 — design note (~30 min, before coding).** Decide concretely how the four non-canonical
+`BenchmarkResult` classes relate to the base: **compose, subclass, or coexist.** Do not force
+composition. If a class doesn't fit the interface cleanly, coexistence is acceptable. This note is the
+difference between a clean consolidation and an XL rework.
+
+**Steps.**
+1. Establish `evaluation/base.BenchmarkResult` as the canonical **interface** per the Step-0 decision.
+2. Convert benchmark loops (`benchmarks/`, `zoo/mep/benchmarks/`) to `BenchmarkRegistry` tracks, routing
+   their outcomes through `result_sink`. This clears LOOP's excluded benchmark rows and completes #3b.
+3. Report renderers → `experiment/report.py` (JSONL) as canonical; others become thin adapters.
+   (`analysis/reporting.py` consumes Optuna trials — different input, keep as adapter.)
+4. Leaderboard/ranking → one implementation, rendered by `leaderboard/` and `cli/rank.py`.
+5. Fold remaining inline accuracy copies into `core.losses.compute_accuracy` where semantics match.
+   The 3-D-per-token / accumulation / PL-raw-tensor sites are legitimately different — leave them.
+
+Unblocks: PRUNE's tile archive.
+
+**Verify.** One `BenchmarkResult` interface imported by all benchmark code; `biopl-report` renders the
+canonical JSONL.
+
+---
+
+## RULE — model owns the learning rule
+
+**Done.** Alias map: `_PROPAGATOR_TO_MODEL` → `_ALIASES`; `Registry.get(PROPAGATOR, "ff")` returns the
+model class.
+
+**Steps 1–3 — do these (gated on GATE-0).**
+1. Migrate consumers off `zoo/propagators/{backprop,base,fa,eqprop,hebbian,spiking}.py` — they are
+   **not dead code**: ~20 tests, `cli/repro.py:_gradient_gate`, `validation/tracks/nebc_tracks.py`,
+   `bioplausible/__init__.py`.
+2. Convert `fa`, `eqprop`, `hebbian`, `spiking` to model-side `train_step`s on their models.
+3. Delete the converted files plus `backprop.py` (BPTT fallback covers backprop models).
+
+**Step 4 — optional, go/no-go.** Collapse `dispatch_train_step` from 5 phases to 2
+(energy-model → model `train_step` → BPTT). **Internal change only — signature frozen.**
+Do this **only if** parity is locked (GATE-0) **and** LOOP is green. If parity isn't locked, **stop
+after step 3.** The payoff (simpler AutoScientist composition) may not justify the parity risk.
+
+**Criterion #6** — `zoo/propagators/` contains only `mep.py` + pure gradient transformers:
+`ls zoo/propagators/` and `grep -rn "from bioplausible.zoo.propagators" bioplausible/ tests/`.
+
+---
+
+## Backlog
+
+- **REGISTER** — remaining `_LAZY` re-exports: before trimming any name, grep for
+  `from bioplausible import NAME`; trim only names confined to their own subpackage. Adopt the
+  `vars(module)` `__all__` pattern in other re-export subpackages (with per-file ruff ignores).
+- **PRUNE** — archive `analysis/tile_*.py` only after MEASURE lands.
+
+## Not doing
+
+- God-object splits (`core/trainer.py`, `knowledge/kb.py`, `execution/strategy.py`) — only if a stream
+  above forces it; stop when cohesive.
+- Settling-loop merge (Family A/B) — numerics risk, low gain. Telemetry already unified.
+- Visualization consolidation — UI preference, not architecture.
+- Anything in the Ledger below.
+
+---
+
+## Ground rules
+
+1. **GATE-0 gates all semantic work.** Baseline has 6 failing parity tests; they are exactly where
+   LOOP step 3 and RULE perturb. Lock parity (fix, or xfail + numerical snapshots) before touching
+   training semantics. **Zero new failures is the bar.**
+2. `loss.backward()` in `validation/tracks/`, `analysis/{dynamics,energy_landscape}.py`, and
+   `execution/{robustness,interpretability,_guards}.py` is measurement, not training. **Do not touch.**
+3. `training/rl.py` is REINFORCE from env trajectories. Never wrap it in `CoreTrainer`.
+   `graph/training.py` gets the same exemption if `dispatch_train_step` doesn't fit it cleanly.
+4. Task geometry is ambiguous by design: `input_dim` may be a tuple (`mnist → (1,28,28)`). Thread it
+   straight to `construct_model`. Never `int()`-coerce. Flattening (`math.prod`) lives only in
+   `domains/registry.resolve_task`.
+5. `BioLightningModule`: PL owns the outer loop. Route it through `dispatch_train_step`; never nest
+   `CoreTrainer.fit` inside PL. It passes `propagator=None`/`optimizer=None` on purpose — revisit when
+   RULE lands.
+6. `BioLightningModule.create_model` stays — `test_lightning_integration.py:368,417` patch it.
+7. Never fold the engine's Optuna `tell`/`ask` into `result_sink`. Search loop ≠ audit trail.
+8. The five `BenchmarkResult` classes are semantically distinct. Interface + tracks, not mechanical
+   merging. See MEASURE Step 0.
+9. `dispatch_train_step`'s signature is frozen:
+   `(model, x, y, adapt_input, bptt_step, propagator, optimizer, config, record_path)`.
+   RULE's phase collapse is internal.
+10. `ConvEquiTile` NaNs on MNIST with the default tile config. Use the small test config
+    (`conv_channels=[4,8]`, `tiles_per_layer=1`, `mode="pc"`). Hyperparameters, not structure.
+11. `LoopedMLP.train_step` returns `None` for single-hidden `gradient_method="equilibrium"` → dispatcher
+    falls through to BPTT. Correct behavior, not a regression.
+12. `sklearn_interface.EqPropClassifier` was broken standalone; fixed (local `zoo` import to trigger
+    lazy registration; default model `"eqprop_mlp"`). Don't revert.
+13. Python 3.14 allows `except A, B, C:` without parentheses. `ruff format` produces it. Not a bug.
+14. **Criterion greps are proxies.** Route through the seam first; only then satisfy the grep. Never
+    bend real code to hit zero.
+
+---
+
+## Acceptance
+
+| # | Check | Status |
+|---|-------|--------|
+| gate | `tools/check_imports.py` passes in CI | always |
+| GATE-0 | Parity locked (fixed, or xfail + numerical snapshots) | before LOOP-3 / RULE |
+| 1 | LOOP grep = 0 (convertible set; proxy — see rule 14) | after LOOP 1–5 |
+| 3 | `grep -rn "model_cls(" bioplausible/ \| grep -v construction.py` = 0 | ✅ |
+| 3b | All outcome writes via `result_sink` | FUNNEL + MEASURE |
+| 6 | `zoo/propagators/` = `mep.py` + gradient transformers | RULE |
+| K | `biopl` dispatcher works | ✅ |
+| — | Zero new test failures | always |
+
+**Baseline:** 2002 pass / 6 fail / 10 skip / 1 xfail · Pyright 0 errors (strict) ·
+~2k pre-existing ruff warnings = backlog, not blockers.
+
+---
+
+## Ledger (done — don't redo)
+
+- **CONFIG** — single `ModelConfig`/`ExperimentConfig`; `TrainerConfigSchema` and `_KNOB_ALIASES` gone.
+  `omegaconf.py` is the I/O facade by design — keep it.
+- **BUILD** — zero `model_cls(` outside `construction.py`; task/geometry resolution collapsed to
+  `resolve_task_from_data_config`; `cli/lab.py` and `cli/repro.py` build via `construct_model`.
+- **CLI** — `biopl` lazy dispatcher over all subcommands; `DASHBOARD` decoupled via `EventSink`;
+  `cli/run.py` default model fixed (`"MLP"` → `"backprop_mlp"`). CI still pins three legacy shim
+  scripts — fine, they delegate.
+- **LOOP so far** — `dispatch_train_step` exists and is used by CoreTrainer, BioLightningModule,
+  `cli/repro.py`, `validation/utils.train_model`, and the sklearn classifier; `ConvEquiTile` trains
+  through CoreTrainer (spatial input preserved); `LightningExecutionCallback` added (not yet wired);
+  engine device threaded.
+- **RULE so far** — alias map live; `Registry.aliases()` / `resolve_alias()` available.
+- **REGISTER so far** — dead `_LAZY` re-exports trimmed (`__all__` 103→83 top, 28→27 core);
+  `zoo/models/eqprop/__init__.py` computes `__all__` from `vars(module)`.
+- **PRUNE so far** — `TODO.md` / `REFACTOR.md` archived to `docs/archive/20260813/`.
+```
