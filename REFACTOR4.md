@@ -21,9 +21,9 @@ Ground rules. No session logs, ever.
 | **FUNNEL** | One result sink | ✅ done | step 1: ✅ · step 2 (CheckpointManager eval): ✅ (keep as telemetry) |
 | **CHECKPOINT** | Early-exit decision | ✅ done — STOP here 2026-08-14 | decision: stop semantic consolidation; keep LOOP+FUNNEL at modest risk |
 | **MEASURE** | One measurement stack | ✅ done 2026-08-14 | Step 0: coexist decision confirmed; Step 5: accuracy fold done |
-| **RULE** | Model owns the learning rule | ✅ done 2026-08-14 | relocation to core/local_learning/rules/ (zero semantic change) |
+| **RULE** | Model owns the learning rule | ✅ done (relocation) | — |
 | CONFIG · BUILD · CLI | Config / construction / CLI seams | ✅ done | — |
-| REGISTER · PRUNE | Self-registration / dead code (backlog) | 🔄 PRUNE: dead code + redundant tests deleted 2026-08-14 | PRUNE-tile ← MEASURE |
+| REGISTER · PRUNE | Self-registration / dead code (backlog) | ✅ REGISTER done 2026-08-14 (top `_LAZY` 84→5) · PRUNE done | — |
 
 ---
 
@@ -406,9 +406,11 @@ after step 3.** The payoff (simpler AutoScientist composition) may not justify t
 
 ## Backlog
 
-- **REGISTER** — remaining `_LAZY` re-exports: before trimming any name, grep for
-  `from bioplausible import NAME`; trim only names confined to their own subpackage. Adopt the
-  `vars(module)` `__all__` pattern in other re-export subpackages (with per-file ruff ignores).
+- **REGISTER** — ~~remaining `_LAZY` re-exports~~ **done 2026-08-14**: top `_LAZY` trimmed 84→5
+  (only `CoreTrainer`, `TrainerConfig`, `smep`, `smep_fast`, `muon_backprop` used via top-level
+  import; all other names remain reachable via their canonical submodules). The remaining open item —
+  adopting the `vars(module)` `__all__` pattern in other re-export subpackages — is a cosmetic lint
+  nicety, not required for correctness; defer until a concrete need (per "Not doing" discipline).
 - **PRUNE** — archive `analysis/tile_*.py` only after MEASURE lands. **Done 2026-08-14:** dead
   `zoo/mep/benchmarks/` subpackage (~3.8k LOC), `visualization.py` (~1k LOC),
   `eqprop/_unified.py` (legacy duplicate engine), `analysis/scaling.py`,
@@ -437,9 +439,11 @@ until a concrete pain point appears.
 - **`graph/training.py` exemption** is the only bespoke non-`dispatch_train_step` loop left. If a second
   such loop ever appears, revisit whether the dispatcher should grow a graph mode vs. keep the exemption.
 - **`check_imports.py`** reports "6 lazy loader(s) found (may mask cycles)" — a latent cycle-detection
-  blind spot. Worth a `# TODO` to surface what the lazy loaders are; low priority.
-- **MEASURE Step 5** (fold inline accuracy copies into `core.losses.compute_accuracy`) is the lowest-risk
-  item in MEASURE and could be done opportunistically later without the rest of MEASURE.
+  blind spot. Worth a `# TODO` to surface what the lazy loaders are; low priority. (After the REGISTER
+  trim, top-level `bioplausible/__init__.py` still counts because PEP 562 `__getattr__` is present.)
+- ~~**MEASURE Step 5**~~ **done 2026-08-14**: re-audited every inline accuracy site — all remaining
+  copies are legitimately different (PL raw-tensor, accumulation, masked, top-5, cupy, binary/multilabel)
+  and stay; nothing further is foldable without distorting real code (rule 14).
 
 ## Facilitating future work
 
@@ -587,13 +591,31 @@ first-class and visible, never silently accumulated.
   All 4 gates green; `check_imports.py` + `check_seams.py` are the two CI guardians (§ CI gates).
 - **CHECKPOINT** — decided 2026-08-14: **STOP semantic consolidation here** (LOOP+FUNNEL done, MEASURE/RULE deferred). See CHECKPOINT section for the full evidence (MEASURE Step-0 assessed → coexist; RULE = parity risk not worth it absent a pain point).
 - **RE-ENTRY STATE (2026-08-14)** — verified: `check_imports.py` = 0 violations / 0 cycles; `check_seams.py` all 4 gates green (LOOP 7 violators ⊆ allowlist); GATE-0 + LOOP suites = `90 passed, 3 xfailed`. LOOP grep returns exactly the documented allowlisted set (see CHECKPOINT). The repo is cleanly parked at a green, gate-enforced checkpoint.
-- **MEASURE** — **completed 2026-08-14** (reassessed): canonical `evaluation/base.BenchmarkResult` is the sole live interface (wired to KB + leaderboard + registry + cross_domain); the 3 non-canonical `BenchmarkResult` classes (`benchmarks/rigorous.py`, `benchmarks/compare_nanoGPT.py`, `analysis/tile_profiler.py`) are dead code (zero external consumers/tests) — Step-0 coexist decision confirmed per ground rule 8; **Step 5** folded `hebbian.py:477` accuracy into `core.losses.compute_accuracy`; cross_domain KB write kept as sanctioned distinct knowledge type (ground rule 8); no forced merge.
-- **RULE** — **completed 2026-08-14 via relocation** (no semantic change): moved 6 propagator implementations (`backprop`, `base`, `eqprop`, `fa`, `hebbian`, `spiking`) from `zoo/propagators/` to canonical `core/local_learning/rules/`; moved `zoo/_settling.py` → `core/local_learning/settling.py` (core-only deps); updated 8 importers; updated 13 consumers (2 prod + 11 test) + `__init__.py` lazy exports; `PROPAGATORS_ALLOW` ratcheted to empty; all 12 propagator tests + 12 integration tests + GATE-0 suite pass. Models already owned `train_step` for all families — the propagator files were parallel external drivers; relocation satisfies criterion #6 (`zoo/propagators/` = `mep.py` + gradient transformers) with zero numerical-semantics change.
+- **MEASURE** — **completed 2026-08-14** (reassessed): canonical `evaluation/base.BenchmarkResult` is the sole live interface (wired to KB + leaderboard + registry + cross_domain); the 3 non-canonical `BenchmarkResult` classes (`benchmarks/rigorous.py`, `benchmarks/compare_nanoGPT.py`, `analysis/tile_profiler.py`) are dead code (zero external consumers/tests) — Step-0 coexist decision confirmed per ground rule 8; **Step 5** folded `hebbian.py:477` accuracy into `core.losses.compute_accuracy`; cross_domain KB write kept as sanctioned distinct knowledge type (ground rule 8); no forced merge. **Step 5 re-verified 2026-08-14:** audited every remaining inline accuracy site — all fall in the plan's explicitly-exempted categories (`lightning_/module.py` PL raw-tensor, `domains/{lm,tabular,vision}.py` accumulation loops, `graph/training.py` + `validation/tracks/tradeoff_tracks.py` accumulation, `zoo/models/eqprop/graph_eqprop.py` masked nodes, `evaluation/base.py` top-5, `acceleration/kernels.py` cupy, `core/local_learning/task.py` binary/multilabel). No further foldable copy remains without distorting real code (rule 14).
+- **RULE** — **completed 2026-08-15 via relocation** (no semantic change): moved 6 propagator
+  implementations (`backprop`, `base`, `eqprop`, `fa`, `hebbian`, `spiking`) from
+  `zoo/propagators/` to canonical `core/local_learning/rules/`; moved `zoo/_settling.py` →
+  `core/local_learning/settling.py` (core-only deps); updated 8 importers; updated 13 consumers
+  (2 prod + 11 test) + `__init__.py` lazy exports; `PROPAGATORS_ALLOW` ratcheted to empty; all
+  12 propagator tests + 12 integration tests + GATE-0 suite pass. Models already owned
+  `train_step` for all families — the propagator files were parallel external drivers;
+  relocation satisfies criterion #6 with zero numerical-semantics change. The 5→2 phase
+  collapse in `dispatch_train_step` remains gated (high-risk, low-payoff) and should only be
+  pursued if a concrete research need forces it.
 - **RE-ENTRY STATE (2026-08-14)** — verified: `check_imports.py` = 0 violations / 0 cycles; `check_seams.py` all 4 gates green (LOOP 7 violators ⊆ allowlist, PROPAGATORS_ALLOW empty); GATE-0 + LOOP suites = `134 passed, 2 xfailed, 1 xpassed`. The repo is cleanly parked at a green, gate-enforced checkpoint with RULE structural consolidation complete.
 - **CORE EXTENSIONS** — `core/nebc.py` (NEBC training utilities), `core/ewc.py` (EWC Fisher utilities), `core/local_learning/rules/` (learning-rule optimizers), `core/local_learning/settling.py` (settling dynamics) added as canonical L1 locations.
 - **RULE so far** — alias map live; `Registry.aliases()` / `resolve_alias()` available; propagator registry entries all active under `core.local_learning.rules`.
 - **REGISTER so far** — dead `_LAZY` re-exports trimmed (`__all__` 103→83 top, 28→27 core);
   `zoo/models/eqprop/__init__.py` computes `__all__` from `vars(module)`.
+  **2026-08-14 final trim:** top-level `bioplausible/__init__.py` `_LAZY` reduced 84 → 5. Kept only
+  names actually consumed via `from bioplausible import X` / `bioplausible.X`: `CoreTrainer`,
+  `TrainerConfig` (docstring + `test_module_boundary.py` lazy-load assertions), `smep`, `smep_fast`,
+  `muon_backprop` (`test_mep_integration.py`). All other 79 names remain importable from their
+  canonical submodules (`bioplausible.config.*`, `bioplausible.core.registry`, `bioplausible.domains`,
+  `bioplausible.zoo.models.*`, `bioplausible.core.local_learning.rules.*`, etc.) — verified by direct
+  import. `from bioplausible import zoo` still works (submodule auto-import; `test_audit.py`). Backwards
+  compat: NONE per AGENTS.md. Verify: `test_module_boundary`, `test_audit`, `test_mep_integration`,
+  `test_core_trainer` all green.
 - **PRUNE so far** — `TODO.md` / `REFACTOR.md` archived to `docs/archive/20260813/`.
   **2026-08-14 dead-code + redundant-test prune** (see PRUNE backlog item): removed ~4.9k LOC of
   dead code (`zoo/mep/benchmarks/` subpackage incl. config/, `visualization.py`,
@@ -610,3 +632,11 @@ first-class and visible, never silently accumulated.
   - `property/test_energies.py` (9) → `tests/unit/core/test_energies.py` (12 deterministic tests, strict superset of hypothesis assertions)
   - `test_engine_stability.py` + `test_stress_equilibrium.py` (2) → `test_validation_all.py::test_looped_mlp_equilibrium_learns` (same model/mode, parametrized)
   - `TestEnvironmentCapture` block (5) → `test_repro_check.py::TestCaptureEnvironment` (tests the real `bioplausible.utils.capture_environment`, not local duplicates)
+- **2026-08-14 settling test fix** — `tests/integration/test_settling_memory.py` imported from
+  removed `bioplausible.zoo._settling`; updated to `bioplausible.core.local_learning.settling`
+  (RULE relocation target). Verified: settling memory tests pass, all gates green.
+- **RE-ENTRY STATE (2026-08-14, REGISTER + MEASURE Step 5 final)** — verified: `check_imports.py` =
+  0 violations / 0 cycles; `check_seams.py` all 4 gates green (LOOP 7 violators ⊆ allowlist);
+  top-level `_LAZY` trimmed to 5; GATE-0 + LOOP + deployment + smoke + settling suites =
+  `69 passed, 2 xfailed, 1 xpassed`; `unit/core` + `unit/zoo` = 229 passed; module-boundary/audit/MEP
+  suites green. Repo cleanly parked at a green, gate-enforced checkpoint with REGISTER complete.
