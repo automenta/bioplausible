@@ -34,7 +34,7 @@ def test_driver_threads_compute_settings_into_trainer_config(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeCoreTrainer:
-        def __init__(self, cfg) -> None:
+        def __init__(self, cfg, dataset_cache=None, model_cache=None) -> None:
             captured["cfg"] = cfg
 
         @staticmethod
@@ -83,7 +83,7 @@ def test_driver_all_off_disables_profiling(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeCoreTrainer:
-        def __init__(self, cfg) -> None:
+        def __init__(self, cfg, dataset_cache=None, model_cache=None) -> None:
             captured["cfg"] = cfg
 
         @staticmethod
@@ -114,7 +114,7 @@ def test_driver_surfaces_phantom_knobs(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeCoreTrainer:
-        def __init__(self, cfg) -> None:
+        def __init__(self, cfg, dataset_cache=None, model_cache=None) -> None:
             captured["cfg"] = cfg
 
         @staticmethod
@@ -139,7 +139,7 @@ def test_driver_surfaces_param_count(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeCoreTrainer:
-        def __init__(self, cfg) -> None:
+        def __init__(self, cfg, dataset_cache=None, model_cache=None) -> None:
             captured["cfg"] = cfg
 
         @staticmethod
@@ -170,7 +170,7 @@ def test_driver_raises_on_nan_divergence(monkeypatch):
     from bioplausible.core.exceptions import NumericalInstabilityError
 
     class FakeCoreTrainer:
-        def __init__(self, cfg) -> None:
+        def __init__(self, cfg, dataset_cache=None, model_cache=None) -> None:
             pass
 
         @staticmethod

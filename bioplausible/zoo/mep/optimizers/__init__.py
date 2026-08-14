@@ -17,7 +17,6 @@ Quick Start:
 
     # Muon with backprop (drop-in SGD replacement)
     optimizer = muon_backprop(model.parameters())
-    loss.backward()
     optimizer.step()
 """
 

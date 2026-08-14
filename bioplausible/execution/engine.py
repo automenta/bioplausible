@@ -23,6 +23,7 @@ from datetime import datetime
 import optuna
 import torch
 
+from bioplausible.core._paths import db_path
 from bioplausible.core.checkpoint import find_trial_artifact
 from bioplausible.core.logging import get_logger
 from bioplausible.core.utils.device import get_device
@@ -59,7 +60,7 @@ logging.basicConfig(
 )
 logger = get_logger("AutoScientist")
 
-DB_PATH = "bioplausible.db"
+DB_PATH = db_path("bioplausible.db")
 
 
 class ExecutionEngine:

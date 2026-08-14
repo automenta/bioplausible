@@ -16,6 +16,7 @@ from typing import TypedDict
 import numpy as np
 from pydantic import BaseModel, Field, ValidationError
 
+from bioplausible.core._paths import db_path
 from bioplausible.core.exceptions import ConditionalQueryError, KnowledgeBaseError
 from bioplausible.core.logging import get_logger
 
@@ -174,7 +175,7 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
 
     def __init__(
         self,
-        db_path: str = "bioplausible_kb.db",
+        db_path: str = db_path("bioplausible_kb.db"),
         vector_dim: int = 384,
         embedding_model: str = "all-MiniLM-L6-v2",
         auto_embed: bool = True,
@@ -1172,7 +1173,7 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
 
 # Factory function
 def create_knowledge_base(
-    db_path: str = "bioplausible_kb.db", **kwargs
+    db_path: str = db_path("bioplausible_kb.db"), **kwargs
 ) -> KnowledgeBase:
     """Create a KnowledgeBase instance."""
     return KnowledgeBase(db_path=db_path, **kwargs)

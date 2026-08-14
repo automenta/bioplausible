@@ -43,6 +43,7 @@ from bioplausible.execution.callbacks import ExecutionCallback
 from bioplausible.utils import count_parameters
 
 if TYPE_CHECKING:
+    from bioplausible.core._caching import DatasetCache, ModelCache
     from bioplausible.domains import TaskProtocol
 
 logger = get_logger()
@@ -419,12 +420,23 @@ class CoreTrainer:
         history = trainer.fit()
     """
 
-    def __init__(self, config: TrainerConfig | dict[str, Any] | str):
+    def __init__(
+        self,
+        config: TrainerConfig | dict[str, Any] | str,
+        dataset_cache: DatasetCache | None = None,
+        model_cache: ModelCache | None = None,
+    ):
         """
         Initialize trainer.
 
         Args:
-            config: TrainerConfig, dict, or path to YAML config file
+            config: TrainerConfig, dict, or path to YAML config file.
+            dataset_cache: Optional cache to reuse resolved datasets across
+                probes (skips re-download/re-transform). ``None`` preserves the
+                default per-probe construction.
+            model_cache: Optional cache to reuse constructed model templates
+                across probes (fresh params per hit). ``None`` preserves the
+                default per-probe construction.
         """
         if isinstance(config, str):
             self.config = TrainerConfig.from_yaml(config)
@@ -434,6 +446,9 @@ class CoreTrainer:
             self.config = config
         else:
             raise TypeError(f"Expected TrainerConfig, dict, or str, got {type(config)}")
+
+        self.dataset_cache = dataset_cache
+        self.model_cache = model_cache
 
         # Set seed
         self._set_seed(self.config.seed)
@@ -632,7 +647,25 @@ class CoreTrainer:
             data_kwargs=self.config.data_kwargs,
         )
 
-        task_obj = resolve_task_from_data_config(data_config, device=str(self.device))
+        cache_key = (
+            self.dataset_cache.key(
+                self.config.task,
+                self.config.data_kwargs,
+                self.config.batch_size,
+                self.config.num_workers,
+                self.config.seed,
+                str(self.device),
+            )
+            if self.dataset_cache is not None
+            else None
+        )
+        task_obj = self.dataset_cache.get(cache_key) if cache_key is not None else None
+        if task_obj is None:
+            task_obj = resolve_task_from_data_config(
+                data_config, device=str(self.device)
+            )
+            if cache_key is not None:
+                self.dataset_cache.put(cache_key, task_obj)
 
         # For LM tasks (and other non-DataLoader tasks), store task_obj and use get_batch
         # For vision/tabular tasks, use DataLoaders directly so test overrides work
@@ -685,14 +718,32 @@ class CoreTrainer:
             input_dim = 0
         if output_dim is None:
             output_dim = 0
-        self.model = construct_model(
-            model_cls,
-            self.config.model_kwargs,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            model_name=self.config.model,
+        cache_key = (
+            self.model_cache.key(
+                self.config.model,
+                self.config.model_kwargs,
+                input_dim,
+                output_dim,
+                self.config.device,
+            )
+            if self.model_cache is not None
+            else None
         )
-        self.model = self._apply_hardware(cast("nn.Module", self.model))
+        model = self.model_cache.get(cache_key) if cache_key is not None else None
+        if model is None:
+            model = cast(
+                "nn.Module",
+                construct_model(
+                    model_cls,
+                    self.config.model_kwargs,
+                    input_dim=input_dim,
+                    output_dim=output_dim,
+                    model_name=self.config.model,
+                ),
+            )
+            if cache_key is not None:
+                self.model_cache.put(cache_key, model)
+        self.model = self._apply_hardware(cast("nn.Module", model))
 
         logger.info(
             "Model created: %s (%d params)",

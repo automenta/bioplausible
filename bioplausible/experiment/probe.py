@@ -19,6 +19,7 @@ import os
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+from bioplausible.core._caching import DatasetCache, ModelCache
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 
 # Whether probes persist results to the knowledge layer (KnowledgeBase /
@@ -157,6 +158,8 @@ class CoreTrainerDriver:
         target_hardware: str | None = None,
         allow_bptt_fallback: bool = True,
         max_epoch_time: float = 0.0,
+        dataset_cache: DatasetCache | None = None,
+        model_cache: ModelCache | None = None,
     ) -> None:
         self.num_workers = num_workers
         self.batch_size = batch_size
@@ -168,6 +171,8 @@ class CoreTrainerDriver:
         self.target_hardware = target_hardware
         self.allow_bptt_fallback = allow_bptt_fallback
         self.max_epoch_time = max_epoch_time
+        self._dataset_cache = dataset_cache or DatasetCache()
+        self._model_cache = model_cache or ModelCache()
 
     def train(  # ruff: ignore[too-many-arguments]  (probe driver signature is the public protocol contract)
         self,
@@ -288,7 +293,9 @@ class CoreTrainerDriver:
             target_hardware=self.target_hardware,
         )
         try:
-            history = CoreTrainer(cfg).fit()
+            history = CoreTrainer(
+                cfg, dataset_cache=self._dataset_cache, model_cache=self._model_cache
+            ).fit()
         except NumericalInstabilityError as exc:
             self._record(
                 model=model,

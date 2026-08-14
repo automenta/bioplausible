@@ -13,7 +13,7 @@ Key Components:
 Usage:
     from bioplausible.execution import ExecutionEngine
 
-    engine = ExecutionEngine(db_path="bioplausible.db")
+    engine = ExecutionEngine(db_path="artifacts/bioplausible.db")
     engine.run()  # Start continuous discovery
 """
 

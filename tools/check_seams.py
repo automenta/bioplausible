@@ -19,7 +19,6 @@ Exit codes:
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -56,17 +55,16 @@ LOOP_EXCLUSIONS: tuple[str, ...] = (
 # step 6 -> target_prop.py: KEPT (pure local train_step implements target propagation;
 #   loss.backward() is part of local rule, not BPTT fallback).
 # step 7 -> eqprop_diffusion.py: KEPT (tagged broken, deferred — don't invest).
-# step 8 -> mep inline loops: deferred (convert when touched).
+# step 8 -> mep inline loops: CLEARED (loss.backward() only in docstring examples;
+#   no executable training loops — MEP routes through CompositeOptimizer/StrategyOptimizer).
+# step 9 -> ewc.py: CLEARED (EWC.update_fisher delegates to core/ewc.update_fisher).
 LOOP_ALLOW: set[str] = {
     "zoo/models/eqprop/eqprop_diffusion.py",  # step 7: broken, deferred
-    "zoo/models/forward_only.py",             # step 6: local greedy loss
-    "zoo/models/target_prop.py",              # step 6: local train_step
-    "zoo/optimizers/ewc.py",                  # step 5: optimizer Fisher util (core alt exists)
-    "zoo/mep/__init__.py",                    # step 8: inline MEP loops (deferred)
-    "zoo/mep/optimizers/__init__.py",         # step 8: inline MEP loops (deferred)
-    "graph/training.py",                      # step 4: EXEMPT (bespoke GraphStructure
-                                              # training + Predictive Coding local gradients;
-                                              # does not fit dispatch_train_step seam)
+    "zoo/models/forward_only.py",  # step 6: local greedy loss
+    "zoo/models/target_prop.py",  # step 6: local train_step
+    "graph/training.py",  # step 4: EXEMPT (bespoke GraphStructure
+    # training + Predictive Coding local gradients;
+    # does not fit dispatch_train_step seam)
 }
 
 # ── seam:model-cls ───────────────────────────────────────────────────────────
@@ -163,9 +161,7 @@ def main() -> int:
     )
 
     sink_hits = _grep("record_experiment_result", ())
-    sink_violators = [
-        p for p in sink_hits if "result_sink" not in p
-    ]
+    sink_violators = [p for p in sink_hits if "result_sink" not in p]
     failures += _check(
         "seam:result-sink",
         sink_violators,
@@ -175,7 +171,9 @@ def main() -> int:
 
     print("\n" + "=" * 60)
     if failures:
-        print(f"FAILED: {failures} seam gate(s) have violators outside their allowlist.")
+        print(
+            f"FAILED: {failures} seam gate(s) have violators outside their allowlist."
+        )
         return 1
     print("PASSED: all seam gates hold (violators within allowlists).")
     return 0

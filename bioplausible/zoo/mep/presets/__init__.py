@@ -17,6 +17,9 @@ from collections.abc import Iterable
 
 from torch import nn
 
+from bioplausible.core.local_learning.rules.composite_adapter import (
+    CompositeOptimizerAdapter,
+)
 from bioplausible.zoo.mep.optimizers import (
     BackpropGradient,
     CompositeOptimizer,
@@ -52,7 +55,7 @@ def smep(
     loss_type: str = "mse",  # MSE for stable EP energy
     softmax_temperature: float = 1.0,
     **kwargs: object,
-) -> CompositeOptimizer:
+) -> CompositeOptimizerAdapter:
     """
     SMEP: Spectral Muon Equilibrium Propagation.
 
@@ -119,17 +122,19 @@ def smep(
     # Feedback strategy
     feedback = ErrorFeedback(beta=error_beta) if use_error_feedback else NoFeedback()
 
-    return CompositeOptimizer(
-        params,
-        gradient=gradient,
-        update=update,
-        constraint=constraint,
-        feedback=feedback,
-        lr=lr,
-        momentum=momentum,
-        weight_decay=weight_decay,
-        model=model,
-        **kwargs,
+    return CompositeOptimizerAdapter(
+        CompositeOptimizer(
+            params,
+            gradient=gradient,
+            update=update,
+            constraint=constraint,
+            feedback=feedback,
+            lr=lr,
+            momentum=momentum,
+            weight_decay=weight_decay,
+            model=model,
+            **kwargs,
+        )
     )
 
 
@@ -152,7 +157,7 @@ def sdmep(
     loss_type: str = "cross_entropy",
     softmax_temperature: float = 1.0,
     **kwargs: object,
-) -> CompositeOptimizer:
+) -> CompositeOptimizerAdapter:
     """
     SDMEP: Spectral Dion-Muon Equilibrium Propagation.
 
@@ -201,17 +206,19 @@ def sdmep(
 
     feedback = ErrorFeedback(beta=error_beta) if use_error_feedback else NoFeedback()
 
-    return CompositeOptimizer(
-        params,
-        gradient=gradient,
-        update=update,
-        constraint=constraint,
-        feedback=feedback,
-        lr=lr,
-        momentum=momentum,
-        weight_decay=weight_decay,
-        model=model,
-        **kwargs,
+    return CompositeOptimizerAdapter(
+        CompositeOptimizer(
+            params,
+            gradient=gradient,
+            update=update,
+            constraint=constraint,
+            feedback=feedback,
+            lr=lr,
+            momentum=momentum,
+            weight_decay=weight_decay,
+            model=model,
+            **kwargs,
+        )
     )
 
 
@@ -228,7 +235,7 @@ def local_ep(
     gamma: float = 0.95,
     loss_type: str = "mse",
     **kwargs: object,
-) -> CompositeOptimizer:
+) -> CompositeOptimizerAdapter:
     """
     LocalEPMuon: Layer-local EP with Muon orthogonalization.
 
@@ -261,17 +268,19 @@ def local_ep(
     constraint = SpectralConstraint(gamma=gamma)
     feedback = NoFeedback()  # Local EP doesn't use error feedback
 
-    return CompositeOptimizer(
-        params,
-        gradient=gradient,
-        update=update,
-        constraint=constraint,
-        feedback=feedback,
-        lr=lr,
-        momentum=momentum,
-        weight_decay=weight_decay,
-        model=model,
-        **kwargs,
+    return CompositeOptimizerAdapter(
+        CompositeOptimizer(
+            params,
+            gradient=gradient,
+            update=update,
+            constraint=constraint,
+            feedback=feedback,
+            lr=lr,
+            momentum=momentum,
+            weight_decay=weight_decay,
+            model=model,
+            **kwargs,
+        )
     )
 
 
@@ -291,7 +300,7 @@ def natural_ep(
     use_diagonal_fisher: bool = False,
     loss_type: str = "mse",
     **kwargs: object,
-) -> CompositeOptimizer:
+) -> CompositeOptimizerAdapter:
     """
     NaturalEPMuon: Natural gradient EP with Fisher whitening.
 
@@ -338,17 +347,19 @@ def natural_ep(
     constraint = SpectralConstraint(gamma=gamma)
     feedback = NoFeedback()
 
-    return CompositeOptimizer(
-        params,
-        gradient=gradient,
-        update=update,
-        constraint=constraint,
-        feedback=feedback,
-        lr=lr,
-        momentum=momentum,
-        weight_decay=weight_decay,
-        model=model,
-        **kwargs,
+    return CompositeOptimizerAdapter(
+        CompositeOptimizer(
+            params,
+            gradient=gradient,
+            update=update,
+            constraint=constraint,
+            feedback=feedback,
+            lr=lr,
+            momentum=momentum,
+            weight_decay=weight_decay,
+            model=model,
+            **kwargs,
+        )
     )
 
 
@@ -414,7 +425,7 @@ def smep_fast(
     loss_type: str = "mse",
     softmax_temperature: float = 1.0,
     **kwargs: object,
-) -> CompositeOptimizer:
+) -> CompositeOptimizerAdapter:
     """
     SMEP-Fast: Optimized SMEP for faster training.
 
@@ -459,15 +470,17 @@ def smep_fast(
     constraint = SpectralConstraint(gamma=gamma, timing=spectral_timing)
     feedback = ErrorFeedback(beta=error_beta) if use_error_feedback else NoFeedback()
 
-    return CompositeOptimizer(
-        params,
-        gradient=gradient,
-        update=update,
-        constraint=constraint,
-        feedback=feedback,
-        lr=lr,
-        momentum=momentum,
-        weight_decay=weight_decay,
-        model=model,
-        **kwargs,
+    return CompositeOptimizerAdapter(
+        CompositeOptimizer(
+            params,
+            gradient=gradient,
+            update=update,
+            constraint=constraint,
+            feedback=feedback,
+            lr=lr,
+            momentum=momentum,
+            weight_decay=weight_decay,
+            model=model,
+            **kwargs,
+        )
     )

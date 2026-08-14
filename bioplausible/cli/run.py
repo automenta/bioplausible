@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import optuna
 
+from bioplausible.core._paths import db_path
 from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
@@ -76,8 +77,8 @@ logger = get_logger()
 
 # Optuna stores studies in SQLite via SQLAlchemy-style URLs; the same file is
 # also read by HyperoptStorage (``trial_id`` PK matches Optuna's trial number).
-_DB_PATH = "bioplausible.db"
-_STORAGE_URL = "sqlite:///bioplausible.db"
+_DB_PATH = db_path("bioplausible.db")
+_STORAGE_URL = f"sqlite:///{_DB_PATH}"
 
 
 def _set_storage(db_path: str | None = None) -> tuple[str, str]:

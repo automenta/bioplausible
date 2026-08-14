@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from bioplausible.core._paths import db_path
 from bioplausible.execution._state import FailureTracker
 
 __all__ = [
@@ -130,7 +131,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Generate a markdown failure-mode manifesto from the DB."
     )
-    parser.add_argument("--db", default="bioplausible.db", help="Path to the DB.")
+    parser.add_argument(
+        "--db", default=db_path("bioplausible.db"), help="Path to the DB."
+    )
     parser.add_argument(
         "--model",
         default=None,

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import optuna
 
+from bioplausible.core._paths import db_path
 from bioplausible.core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -337,7 +338,7 @@ class FailureTracker:
 class DecisionLogger:
     """Logs high-level scientific decisions to a persistent SQLite database."""
 
-    def __init__(self, db_path: str = "bioplausible.db") -> None:
+    def __init__(self, db_path: str = db_path("bioplausible.db")) -> None:
         self.db_path = db_path
         self._init_db()
 

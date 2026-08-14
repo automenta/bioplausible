@@ -7,7 +7,7 @@ Uses core EWC utilities for Fisher computation.
 
 import torch
 
-from bioplausible.core.ewc import update_fisher
+from bioplausible.core.ewc import update_fisher as _core_update_fisher
 from bioplausible.core.registry import register_optimizer
 
 __all__ = [
@@ -47,7 +47,7 @@ class EWC:
                 p.grad.zero_()
 
     def update_fisher(self, model, dataloader, task_id: int, loss_fn=None):
-        """Compute Fisher information for a task using core EWC utility.
+        """Compute Fisher information for a task via the core EWC utility.
 
         Args:
             model: The model being trained.
@@ -55,27 +55,8 @@ class EWC:
             task_id: Unique ID for this task.
             loss_fn: Loss function (default: cross_entropy).
         """
-        # Use core utility but adapt storage to this class's internal dicts
-        import torch.nn.functional as F
-
-        model.train()
-        fisher = {}
-        for p in model.parameters():
-            fisher[id(p)] = torch.zeros_like(p)
-
-        for x, y in dataloader:
-            model.zero_grad()
-            output = model(x)
-            loss_f = loss_fn or F.cross_entropy
-            loss = loss_f(output, y)
-            loss.backward()
-            for p in model.parameters():
-                if p.grad is not None:
-                    fisher[id(p)] += p.grad.pow(2) / len(dataloader)
-
-        self._fisher[task_id] = {}
-        self._optimal_params[task_id] = {}
-        for p in model.parameters():
-            pid = id(p)
-            self._fisher[task_id][pid] = fisher[pid]
-            self._optimal_params[task_id][pid] = p.data.clone()
+        # core/ewc.update_fisher stores per-parameter Fisher/optimal snapshots
+        # in the model's EWC buffers; adopt them into this optimizer's dicts.
+        _core_update_fisher(model, dataloader, task_id, loss_fn)
+        self._fisher[task_id] = model._ewc_fisher[task_id]
+        self._optimal_params[task_id] = model._ewc_optimal_params[task_id]

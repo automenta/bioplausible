@@ -11,23 +11,79 @@
 
 | Stream | State | Blockers |
 |--------|-------|----------|
-| **LOOP** | Core done; 4 allowlisted sites remain | `zoo/mep` inline loops, `target_prop`, `eqprop_diffusion`, `graph/training`, `zoo/optimizers/ewc.py` |
+| **LOOP** | 7→4 allowlist entries cleared | `eqprop_diffusion` deferred (broken); `forward_only`/`target_prop`/`graph/training` KEEP/EXEMPT |
 | **FUNNEL** | Complete | — |
 | **MEASURE** | Complete (coexist decision) | 3 distinct `BenchmarkResult` classes kept as-is |
 | **RULE** | Structural relocation done; phase collapse gated | 5→2 dispatch collapse only if research need forces it |
 | **REGISTER** | Complete (top `_LAZY` 84→5) | — |
 | **PRUNE** | Complete (dead code + redundant tests) | — |
-| **NEW: STRATEGY DEDUP** | **Active** | `core/optimization/strategies` ↔ `zoo/mep/optimizers/strategies` |
-| **NEW: EQPROP UNIFICATION** | **Active** | 3 engine variants: `EquilibriumMLP` / `LoopedMLP` / `EqPropKernel` |
-| **NEW: OPTIMIZER SURFACE** | **Active** | `register_optimizer` (learning-rule) vs `CompositeOptimizer` (MEP presets) |
-| **NEW: EXPERIMENT CACHING** | **Active** | Data/model construction per-probe without reuse |
-| **NEW: ROOT HYGIENE** | **Active** | 12+ `.db` files in project root |
+| **STRATEGY DEDUP** | **Complete** | MEP keeps CUDA subclasses + MEP-specific strategies (Dion/Fisher/EP) |
+| **EQPROP UNIFICATION** | Complete (backend routing already landed) | `backend="kernel"` parity on GPU/numpy is a manual benchmark, not yet run |
+| **OPTIMIZER SURFACE** | **Adapter landed** | MEP presets wrapped in `CompositeOptimizerAdapter`; OPTIMIZER registration deferred (audit-test contract) |
+| **EXPERIMENT CACHING** | **Complete** | `DatasetCache` + `ModelCache` opt-in via `CoreTrainer`; timing benchmark is manual |
+| **ROOT HYGIENE** | **Complete** | All DBs → `artifacts/`; `BIOPL_DB_DIR` env override |
+
+---
+
+## Session Progress (2026-08-14)
+
+Implemented and verified (all gates green):
+
+### ROOT HYGIENE — DONE
+- New `bioplausible/core/_paths.py`: `artifacts_dir()` + `db_path(name)` honoring `BIOPL_DB_DIR` (default `artifacts/`), idempotent `mkdir`.
+- Defaults updated to `db_path(...)`: `cli/run.py` `_DB_PATH`/`_STORAGE_URL`, `execution/engine.py` `DB_PATH`, `execution/_state.py` `DecisionLogger`, `knowledge/kb.py` `KnowledgeBase` + `create_knowledge_base`, `experiment/result_sink.py` KB/Failures paths, `analysis/results_cli.py` + `failure_manifesto.py` `--db` defaults.
+- Moved all 13 root `.db`/`.db-shm`/`.db-wal` files into `artifacts/`. `.gitignore` already covered `*.db`, `*.db-*`, `artifacts/`.
+- `config/omegaconf.py` `knowledge_base_path` left as a static config default (resolved at use).
+
+### LOOP ALLOWLIST — 7→4 entries
+- `zoo/mep/__init__.py` + `zoo/mep/optimizers/__init__.py`: removed from `LOOP_ALLOW` (the `loss.backward()` hits were **docstring Quick-Start examples only**, no executable training loops).
+- `zoo/optimizers/ewc.py`: `EWC.update_fisher` now delegates to `core.ewc.update_fisher` (was re-implementing with a raw `loss.backward()`); removed from allowlist. `test_optimizer_stubs.py` still passes.
+- `zoo/models/eqprop/eqprop_diffusion.py`: **KEPT in allowlist (deferred)** — tagged `status_tag("broken")`, but has 6+ test files (test_eqprop_models, test_diffusion, test_diffusion_integration, test_registry_audit, test_broad_sweep, test_config_knobs) and is referenced in `cli/run.py` baselines. Deleting requires removing those tests; the plan's "confirm zero imports" assumption was false. Deferred per the plan's own "don't invest" guidance.
+- Remaining allowlist: `{eqprop_diffusion, forward_only, target_prop, graph/training}`. `check_seams.py` passes (4 violators ⊆ allowlist).
+
+### OPTIMIZER SURFACE — ADAPTER LANDED
+- New `bioplausible/core/local_learning/rules/composite_adapter.py`: `CompositeOptimizerAdapter(LearningRuleOptimizer)` wraps a MEP `CompositeOptimizer`, exposes `step(x=None, target=None)` (preserves both EP `step(x,target)` and backprop `step()` modes) + `zero_grad`. Dependency-free (structural `_CompositeLike` Protocol, no zoo import).
+- `zoo/mep/presets/__init__.py`: the 5 EP presets (`smep`, `sdmep`, `local_ep`, `natural_ep`, `smep_fast`) now return `CompositeOptimizerAdapter`. `muon_backprop` stays a raw `CompositeOptimizer` (backprop/gradient mode — wrapping would break its `loss.backward(); step()` contract).
+- Export added to `core/local_learning/rules/__init__.py`.
+- `CoreTrainer(propagator="smep")` now routes MEP presets through `dispatch_train_step` (adapter carries the `_is_learning_rule` marker).
+- **Deferred (documented):** registering MEP presets under `ComponentCategory.OPTIMIZER` via `register_optimizer`. Rationale: `test_registry_audit.py::test_optimizer_runs_one_step` parametrizes every OPTIMIZER entry and calls `opt.step()` with no args; a wrapped adapter raises `TypeError`. MEP presets remain under `PROPAGATOR` only.
+
+### EXPERIMENT CACHING — DONE
+- New `bioplausible/core/_caching.py` (L1 so `CoreTrainer` can import without an upward edge): `DatasetCache` (keys `task/data_kwargs_hash/batch_size/num_workers/seed/device`, LRU 16, thread-safe) and `ModelCache` (keys `model/config_hash/input_dim/output_dim/device`, stores CPU templates, returns `deepcopy` fresh params, LRU 32, thread-safe). `key()` staticmethods with targeted `# noqa: PLR0913, PLR0917`.
+- `CoreTrainer.__init__` accepts optional `dataset_cache`/`model_cache` (default `None` = unchanged behavior). `_setup_data` checks the dataset cache before `resolve_task_from_data_config`; `_create_model` checks the model cache before `construct_model`.
+- `CoreTrainerDriver` accepts + defaults `dataset_cache`/`model_cache` (auto-created) and threads them into `CoreTrainer(cfg, ...)`. Test fakes in `test_probe.py` updated to the new constructor.
+- New `tests/unit/core/test_caching.py` (4 tests: roundtrip/eviction, order-independent keys, fresh-params isolation, LRU).
+
+### STRATEGY DEDUP & EQPROP UNIFICATION — CONFIRMED COMPLETE
+- Strategy dedup already in the tree: `base`/`feedback` re-export from core; `constraint`/`update`/`gradient` subclass core with CUDA fast paths + MEP-specific strategies (`DionUpdate`, `FisherUpdate`, `EPGradient`, `LocalEPGradient`, `NaturalGradient`, `SettlingSpectralPenalty`). No work needed.
+- EqProp backend routing already landed: `LoopedMLP.backend` field + `_kernel_backend_step` (tensor↔numpy at the boundary) + `TritonEqPropOps` GPU path. GATE-0 passes (`test_backprop_parity`, `test_equilibrium_parity`, `test_equilibrium_implicit_learns`, `test_parity_snapshots`: 37 passed, 2 xfailed, 1 xpassed — the xpass is the documented pre-existing `eqprop_mlp` parity-drift test). `backend="kernel"` MNIST parity (1%-accuracy) remains a manual GPU/numpy benchmark.
+
+---
+
+## New Improvement Opportunities (discovered this session)
+
+1. **`test_registry_audit` OPTIMIZER contract blocks MEP-as-optimizer.** `test_optimizer_runs_one_step` calls `opt.step()` (no args) on every OPTIMIZER registration. If you want `CoreTrainer(optimizer="smep")` to work, either (a) relax that audit to allow learning-rule step signatures, or (b) register a dedicated `register_optimizer` factory that adapts. Currently the propagator path already achieves the goal; this is optional.
+2. **`eqprop_diffusion.py` deletion is blocked by test churn.** The plan assumed zero consumers; reality is 6+ test files. If deletion is desired, delete together with `tests/unit/models/test_diffusion.py`, the `EqPropDiffusion` bits in `test_eqprop_models.py`, `test_diffusion_integration.py`, and the registry-audit fixture. Recommend a dedicated cleanup PR.
+3. **`_caching.py` hashes `data_kwargs`/`model_kwargs` via JSON; configs containing non-JSON-serializable values (e.g. custom objects) degrade via `default=str`.** Fine for the sweep path; a `pickle`-based or recursive-canonical hash would be more robust if exotic config values appear.
+4. **ModelCache stores a CPU `deepcopy`-able template; `_apply_hardware` facade swaps run after cache put.** Verified correct, but the facade is not cached — a `target_hardware` sweep re-builds facades per probe. Low priority.
+5. **`core._paths.db_path` is a good shared home for the `BIOPL_DB_DIR` knob; `config/omegaconf.py::knowledge_base_path` still hardcodes `"bioplausible_kb.db"`.** Wire it through `db_path()` if consistency is wanted.
+
+---
+
+## Details Facilitating Future Work
+
+- **Re-entry is unchanged and green:** `uv run python tools/check_imports.py` (exit 0), `tools/check_seams.py` (exit 0), GATE-0 (`uv run pytest tests/unit/validation/test_backprop_parity.py tests/integration/test_equilibrium_parity.py tests/integration/test_equilibrium_implicit_learns.py tests/unit/validation/test_parity_snapshots.py -o addopts="" -q` → 37 passed, 2 xfailed, 1 xpassed).
+- **Affected files to watch in future diffs:** `core/_caching.py`, `core/_paths.py`, `core/local_learning/rules/composite_adapter.py`, `core/local_learning/rules/__init__.py`, `core/trainer.py` (constructor + `_setup_data`/`_create_model`), `experiment/probe.py` (`CoreTrainerDriver`), `zoo/mep/presets/__init__.py`, `zoo/optimizers/ewc.py`, `zoo/mep/__init__.py`, `zoo/mep/optimizers/__init__.py`, `execution/{engine,_state,__init__}.py`, `cli/run.py`, `knowledge/kb.py`, `experiment/result_sink.py`, `analysis/{results_cli,failure_manifesto}.py`, `tools/check_seams.py`, `tests/unit/core/test_caching.py`, `tests/unit/experiment/test_probe.py`.
+- **Ruff/pyright cleanliness:** all newly added files are ruff-clean and pyright-clean (0 errors). Edited pre-existing files are at their exact baseline ruff counts (no new violations introduced). Remaining lint warnings in `core/trainer.py`/`experiment/probe.py` are pre-existing project debt.
+- **Verification set run this session:** `test_caching`, `test_core_trainer`, `test_probe`, `test_optimizer_stubs`, `test_mep_integration`, `test_smoke_training`, `test_deployment_models` (80 passed); `test_gradient_equivalence` + `test_refactor2_bugfixes` + `test_eqprop_models` (64 passed); GATE-0 green; `check_imports` + `check_seams` exit 0.
+
+---
 
 ---
 
 ## Work Streams
 
-### 1. STRATEGY DEDUP — Unify Gradient/Update/Constraint/Feedback Strategies
+### 1. STRATEGY DEDUP — Unify Gradient/Update/Constraint/Feedback Strategies  **[DONE]**
 
 **Problem**: Two parallel hierarchies implementing the same concepts:
 
@@ -49,7 +105,7 @@
 
 ---
 
-### 2. EQPROP UNIFICATION — Single Engine with Backend Selection
+### 2. EQPROP UNIFICATION — Single Engine with Backend Selection  **[DONE — kernel routing landed]**
 
 **Problem**: Three EqProp implementations with overlapping capability:
 
@@ -73,7 +129,7 @@
 
 ---
 
-### 3. OPTIMIZER SURFACE — Single Learning-Rule Optimizer Protocol
+### 3. OPTIMIZER SURFACE — Single Learning-Rule Optimizer Protocol  **[ADAPTER DONE; OPTIMIZER reg deferred]**
 
 **Problem**: Two incompatible calling conventions for learning-rule optimizers:
 
@@ -94,7 +150,7 @@
 
 ---
 
-### 4. EXPERIMENT CACHING — Eliminate Per-Probe Redundancy
+### 4. EXPERIMENT CACHING — Eliminate Per-Probe Redundancy  **[DONE]**
 
 **Problem**: Each probe in `StaircaseRunner` re-instantiates:
 - `DomainTask` + `DataLoader` (dataset download, transform, split)
@@ -114,7 +170,7 @@
 
 ---
 
-### 5. ROOT HYGIENE — Artifact Organization
+### 5. ROOT HYGIENE — Artifact Organization  **[DONE]**
 
 **Problem**: 12+ `.db` files in project root:
 ```
@@ -142,7 +198,7 @@ smoke.db, smoke_p15.db
 
 ---
 
-### 6. LOOP ALLOWLIST — Resolve Remaining Exemptions
+### 6. LOOP ALLOWLIST — Resolve Remaining Exemptions  **[7→4; eqprop_diffusion deferred]**
 
 **Current `LOOP_ALLOW` entries** (from `tools/check_seams.py`):
 
@@ -189,14 +245,20 @@ smoke.db, smoke_p15.db
 ## Implementation Order
 
 ```
-1. ROOT HYGIENE          (independent, zero risk)
-2. STRATEGY DEDUP        (enables MEP conversion, internal only)
-3. OPTIMIZER SURFACE     (depends on STRATEGY DEDUP)
-4. LOOP ALLOWLIST        (depends on STRATEGY DEDUP + OPTIMIZER SURFACE)
-5. EQPROP UNIFICATION    (depends on OPTIMIZER SURFACE for backend routing)
-6. EXPERIMENT CACHING    (independent, L5 only)
+1. ROOT HYGIENE          ✅ DONE
+2. STRATEGY DEDUP        ✅ DONE (confirmed in-tree)
+3. OPTIMIZER SURFACE     ✅ Adapter + EP-preset wrapping; OPTIMIZER reg deferred
+4. LOOP ALLOWLIST        ✅ 7→4 (eqprop_diffusion deferred as documented)
+5. EQPROP UNIFICATION    ✅ Complete (kernel backend routing already landed)
+6. EXPERIMENT CACHING    ✅ DONE
 7. RULE PHASE COLLAPSE   (gated — only if triggered)
 ```
+
+## Remaining Work (see "Session Progress" above for detail)
+
+- **LOOP stream:** only `eqprop_diffusion.py` deletion remains, blocked by test churn (see Improvement #2).
+- **OPTIMIZER SURFACE (optional):** register MEP presets under `ComponentCategory.OPTIMIZER` for `CoreTrainer(optimizer="smep")`; requires relaxing `test_registry_audit.py::test_optimizer_runs_one_step` (see Improvement #1).
+- **EQPROP:** run the manual `backend="kernel"` MNIST parity benchmark (accuracy within 1% of PyTorch path).
 
 ---
 

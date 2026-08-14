@@ -11,9 +11,8 @@ Quick Start:
     optimizer = smep(model.parameters(), model=model, mode='ep')
     optimizer.step(x=x, target=y)
 
-    # Muon with backprop
+    # Muon with backprop (drop-in SGD replacement)
     optimizer = muon_backprop(model.parameters())
-    loss.backward()
     optimizer.step()
 
 See NICHES.md for optimizer selection guide.

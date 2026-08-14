@@ -22,11 +22,11 @@ from __future__ import annotations
 
 import os
 
-_KB_PATH = os.environ.get(
-    "BIOPLAUSIBLE_KB_PATH", os.path.join(os.getcwd(), "bioplausible_kb.db")
-)
+from bioplausible.core._paths import db_path
+
+_KB_PATH = os.environ.get("BIOPLAUSIBLE_KB_PATH", db_path("bioplausible_kb.db"))
 _FAILURE_PATH = os.environ.get(
-    "BIOPLAUSIBLE_FAILURES_PATH", os.path.join(os.getcwd(), "execution_state.db")
+    "BIOPLAUSIBLE_FAILURES_PATH", db_path("execution_state.db")
 )
 
 # Lazily-cached sink instances (one per process) — avoids re-opening the DB and

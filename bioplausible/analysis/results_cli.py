@@ -7,6 +7,7 @@ Usage:
 import argparse
 
 from bioplausible.analysis.results import get_rankings, load_trials, print_rankings
+from bioplausible.core._paths import db_path
 
 __all__ = [
     "main",
@@ -38,7 +39,9 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     rank_parser = subparsers.add_parser("rank", help="Show algorithm rankings")
-    rank_parser.add_argument("--db", default="bioplausible.db", help="Path to database")
+    rank_parser.add_argument(
+        "--db", default=db_path("bioplausible.db"), help="Path to database"
+    )
     rank_parser.add_argument("--tier", help="Filter by patience tier")
     rank_parser.add_argument("--task", help="Filter by task (e.g. mnist, lm)")
 
