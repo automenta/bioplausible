@@ -1,17 +1,12 @@
 """Reproducibility Unit Tests.
 
-Validates:
-1. Fixed seed → identical model weights, identical loss trajectory (5 steps)
-2. Environment capture (git commit, torch version, deps hash) serializes correctly
+Validates fixed-seed reproducibility: identical model weights, identical loss
+trajectory (5 steps), and identical outputs after training. (Environment-capture
+coverage lives in ``test_repro_check.py`` against the real ``bioplausible.utils``
+helpers.)
 
 Target: <10s total.
 """
-
-import hashlib
-import json
-import subprocess
-import sys
-from typing import Any
 
 import pytest
 import torch
@@ -27,10 +22,6 @@ SEED_FULL = 12345
 LOSS_TOL = 1e-6
 OUTPUT_RTOL = 1e-5
 OUTPUT_ATOL = 1e-7
-COMMIT_MIN_LEN = 8
-HASH_LEN = 16
-TIMEOUT_DEPS = 30
-TIMEOUT_GIT = 10
 
 # =============================================================================
 # Helpers
@@ -54,63 +45,6 @@ def _instantiate_model(model_name: str, input_dim: int = 64, output_dim: int = 1
         device="cpu",
         task_type="vision",
     )
-
-
-def _get_deps_hash() -> str:
-    """Get a hash of installed dependencies for reproducibility."""
-    try:
-        # Use uv to get dependencies
-        result = subprocess.run(
-            ["uv", "pip", "freeze"],
-            capture_output=True,
-            text=True,
-            timeout=TIMEOUT_DEPS,
-            check=False,
-        )
-        if result.returncode == 0:
-            return hashlib.sha256(result.stdout.encode()).hexdigest()[:HASH_LEN]
-    except Exception:
-        pass
-
-    # Fallback: hash of key package versions
-    key_packages = ["torch", "numpy", "pytest"]
-    versions = {}
-    for pkg in key_packages:
-        try:
-            versions[pkg] = __import__(pkg).__version__
-        except Exception:
-            versions[pkg] = "unknown"
-    return hashlib.sha256(str(versions).encode()).hexdigest()[:HASH_LEN]
-
-
-def _get_git_commit() -> str:
-    """Get current git commit hash."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd="/home/me/bioplausible",
-            timeout=TIMEOUT_GIT,
-            check=False,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()[:12]
-    except Exception:
-        pass
-    return "unknown"
-
-
-def _get_environment_info() -> dict[str, Any]:
-    """Capture environment information for reproducibility."""
-    return {
-        "git_commit": _get_git_commit(),
-        "torch_version": torch.__version__,
-        "python_version": sys.version.split()[0],
-        "deps_hash": _get_deps_hash(),
-        "cuda_available": torch.cuda.is_available(),
-        "device": "cpu",
-    }
 
 
 # =============================================================================
@@ -222,60 +156,6 @@ class TestReproducibility:
         assert torch.allclose(out1, out2, rtol=OUTPUT_RTOL, atol=OUTPUT_ATOL), (
             f"{model_name}: non-deterministic output after training with fixed seed"
         )
-
-
-class TestEnvironmentCapture:
-    """Tests for environment capture serialization."""
-
-    def test_environment_capture_contains_required_fields(self):
-        """Environment info should contain all required fields."""
-        env = _get_environment_info()
-
-        required_fields = [
-            "git_commit",
-            "torch_version",
-            "python_version",
-            "deps_hash",
-            "cuda_available",
-            "device",
-        ]
-
-        for field in required_fields:
-            assert field in env, f"Missing field: {field}"
-            assert env[field] is not None, f"Field {field} is None"
-            assert env[field] != "", f"Field {field} is empty"
-
-    def test_environment_capture_serializes_to_json(self):
-        """Environment info should be JSON serializable."""
-        env = _get_environment_info()
-
-        # Should not raise
-        json_str = json.dumps(env)
-        assert isinstance(json_str, str)
-
-        # Should be able to deserialize
-        env2 = json.loads(json_str)
-        assert env2 == env
-
-    def test_git_commit_is_valid(self):
-        """Git commit should be a valid hash."""
-        commit = _get_git_commit()
-        assert commit != "unknown", "Should be able to get git commit"
-        assert len(commit) >= COMMIT_MIN_LEN, f"Commit hash too short: {commit}"
-        # Should be hex
-        int(commit, 16)  # Will raise if not hex
-
-    def test_deps_hash_is_consistent(self):
-        """Deps hash should be consistent across calls."""
-        hash1 = _get_deps_hash()
-        hash2 = _get_deps_hash()
-        assert hash1 == hash2, "Deps hash should be deterministic"
-
-    def test_environment_capture_deterministic(self):
-        """Multiple calls should produce identical environment info."""
-        env1 = _get_environment_info()
-        env2 = _get_environment_info()
-        assert env1 == env2, "Environment capture should be deterministic"
 
 
 class TestModelStateSerialization:
