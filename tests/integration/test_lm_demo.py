@@ -26,6 +26,7 @@ from bioplausible.data.lm import (
     create_shakespeare_dataset,
 )
 from bioplausible.zoo.models.tile_lm import TileLM
+from tests.conftest import lm_train_step
 
 pytestmark = pytest.mark.gpu
 
@@ -109,7 +110,7 @@ class TestTileLM:
         model = _tiny_lm(vocab_size=100).train()
         input_ids = torch.randint(0, 100, (2, 10))
         target_ids = torch.randint(0, 100, (2, 10))
-        stats = model.train_step(input_ids, target_ids)
+        stats = lm_train_step(model, input_ids, target_ids)
         assert "loss" in stats
         assert "perplexity" in stats
         assert stats["loss"] > 0
@@ -336,7 +337,7 @@ class TestIntegration:
         input_ids = torch.randint(0, tokenizer.vocab_size, (4, 16))
         target_ids = input_ids.clone()
         for _ in range(4):
-            stats = model.train_step(input_ids, target_ids)
+            stats = lm_train_step(model, input_ids, target_ids)
             assert "loss" in stats
         # Just verify it runs without error
         assert True

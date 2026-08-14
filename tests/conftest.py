@@ -18,8 +18,45 @@ sys.modules["cupy"] = MagicMock()
 import pytest
 import torch
 from torch import nn
+from typing import cast
 
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
+
+
+def lm_train_step(
+    model: nn.Module, input_ids: torch.Tensor, target_ids: torch.Tensor | None = None
+) -> dict[str, float]:
+    """Route a TileLM-style token-id training step through ``dispatch_train_step``.
+
+    TileLM exposes no self-owned learning rule (``train_step`` raises
+    ``NotImplementedError``), so the dispatcher's BPTT fallback owns the step.
+    This mirrors the historical standalone ``train_step`` contract.
+    """
+    from bioplausible.core.trainer import dispatch_train_step
+
+    if target_ids is None:
+        target_ids = input_ids.clone()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+
+    def bptt_step(x: torch.Tensor, y: torch.Tensor) -> dict[str, object]:
+        logits = model(x)
+        loss = model.compute_loss(logits, y)
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
+        with torch.no_grad():
+            perplexity = torch.exp(torch.clamp(loss, max=80)).item()
+        return {"loss": loss.item(), "perplexity": perplexity}
+
+    return dispatch_train_step(
+        model=cast("nn.Module", model),
+        x=input_ids,
+        y=target_ids,
+        adapt_input=lambda x: x,
+        bptt_step=bptt_step,
+    )
+
 
 # --- Shared Model Fixtures ---
 

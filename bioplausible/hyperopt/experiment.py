@@ -11,7 +11,6 @@ import shutil
 import tempfile
 import time
 import traceback
-from datetime import datetime
 from pathlib import Path
 
 from bioplausible.core.logging import get_logger
@@ -27,7 +26,6 @@ from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device
 from bioplausible.execution._guards import SafetyConfig
 from bioplausible.execution._lifecycle import CheckpointManager, ExperimentArchiver
-from bioplausible.execution._state import FailureRecord, FailureTracker
 from bioplausible.execution.events import EventSink, NullEventSink
 from bioplausible.execution.monitoring import InterferenceMonitor
 from bioplausible.hyperopt.storage import HyperoptStorage
@@ -450,7 +448,6 @@ def run_single_trial_task(
         db_path = Path(storage_path)
 
     storage = None
-    failure_tracker = FailureTracker(str(db_path))
 
     try:
         storage = HyperoptStorage(str(db_path))
@@ -520,39 +517,12 @@ def run_single_trial_task(
                 logger.warning("Trial %s returned success=False", trial_id)
 
             # Log logical failure (e.g. NaN, divergence)
-            failure_tracker.log_failure(
-                FailureRecord(
-                    timestamp=datetime.now().isoformat(),
-                    model_name=model_name,
-                    task_name=task,
-                    tier=config.get("tier", "unknown"),
-                    trial_id=trial_id,
-                    failure_type="training_failed",
-                    failure_epoch=config.get("epochs", 0),  # approx
-                    failure_batch=None,
-                    config=config,
-                    last_metrics={},
-                )
-            )
+            _sink_failure(model_name, task, config, "failed", trial_id=trial_id)
             return None
 
     except TimeoutError as e:
         logger.exception("Timeout Error")
-        failure_tracker.log_failure(
-            FailureRecord(
-                timestamp=datetime.now().isoformat(),
-                model_name=model_name,
-                task_name=task,
-                tier=config.get("tier", "unknown"),
-                trial_id=config.get("job_id"),
-                failure_type="timeout",
-                failure_epoch=None,
-                failure_batch=None,
-                config=config,
-                last_metrics={},
-                stack_trace=str(e),
-            )
-        )
+        _sink_failure(model_name, task, config, "error", error=str(e))
         return None
 
     except Exception:  # broad: top-level executor safety net
@@ -561,20 +531,8 @@ def run_single_trial_task(
             traceback.print_exc()
 
         # Log exception failure
-        failure_tracker.log_failure(
-            FailureRecord(
-                timestamp=datetime.now().isoformat(),
-                model_name=model_name,
-                task_name=task,
-                tier=config.get("tier", "unknown"),
-                trial_id=config.get("job_id"),  # might be None
-                failure_type="exception",
-                failure_epoch=None,
-                failure_batch=None,
-                config=config,
-                last_metrics={},
-                stack_trace=traceback.format_exc(),
-            )
+        _sink_failure(
+            model_name, task, config, "error", error=traceback.format_exc()
         )
         return None
     finally:
@@ -629,6 +587,39 @@ def _sink_completed(
             epochs=config.get("epochs"),
             device="auto",
             extra={"source": "execution_engine"},
+        )
+    except Exception:  # pragma: no cover  # best-effort persistence
+        logger.exception("result_sink failed for %s/%s", model_name, task)
+
+
+def _sink_failure(
+    model_name: str,
+    task: str,
+    config: dict[str, object],
+    status: str,
+    *,
+    error: str = "",
+    trial_id: object | None = None,
+) -> None:
+    """Persist a failed ExecutionEngine trial through the single result sink."""
+    if os.environ.get("BIOPLAUSIBLE_RECORD_RESULTS", "1") == "0":
+        return
+    try:
+        from bioplausible.experiment.result_sink import record_experiment_result
+
+        extra: dict[str, object] = {"source": "execution_engine", "tier": config.get("tier", "unknown")}
+        if error:
+            extra["error"] = error
+        record_experiment_result(
+            model=model_name,
+            task=task,
+            config=config,
+            metrics={},
+            status=status,
+            seed=config.get("job_id", trial_id),
+            epochs=config.get("epochs"),
+            device="auto",
+            extra=extra,
         )
     except Exception:  # pragma: no cover  # best-effort persistence
         logger.exception("result_sink failed for %s/%s", model_name, task)

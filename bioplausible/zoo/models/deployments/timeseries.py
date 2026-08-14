@@ -21,14 +21,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
-import torch.nn.functional as F
+
 from torch import nn
 
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
-from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.deployments import _feature_extractors as _fe
 from bioplausible.zoo.models.deployments.base import (
     TemporalDeploymentConfig,
@@ -220,17 +219,6 @@ class TimeSeriesEquiTile(BioModel):
         # Tile-substrate output head
         self.head = build_tile_head(config, config.hidden_dim, head_output_dim)
 
-        # Split optimizers: feature extractor + head.
-        self._optim_feature = create_optimizer(
-            self.feature_extractor,
-            OptimizerConfig(
-                name="adam", lr=config.learning_rate, weight_decay=config.weight_decay
-            ),
-        )
-        self._optim_head = create_optimizer(
-            self.head, OptimizerConfig(name="adam", lr=config.learning_rate)
-        )
-
         self._step_count = 0
         self._init_weights()
 
@@ -301,47 +289,6 @@ class TimeSeriesEquiTile(BioModel):
         self._step_count += 1
 
         features = self.feature_extractor(x)
-        head_ready = self._pool_features(features)
-
-        if self.config.mode == "backprop":
-            head_out = self.head.forward_logits(head_ready, detach_input=False)
-
-            if self.config.model_type == "forecasting":
-                logits = head_out.view(x.shape[0], self.config.pred_len, -1)
-                target = y.view(x.shape[0], self.config.pred_len, -1)
-            elif self.config.model_type == "classification":
-                logits = head_out
-                target = y
-            elif self.config.model_type == "anomaly_detection":
-                batch = x.shape[0]
-                logits = head_out.view(batch, x.shape[1], self.config.input_dim)
-                target = x
-            else:
-                logits = head_out
-                target = y
-
-            loss = self.head.compute_loss(logits, target)
-
-            self._optim_feature.zero_grad()
-            self._optim_head.zero_grad()
-            loss.backward()
-
-            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
-
-            self._optim_feature.step()
-            self._optim_head.step()
-
-            metrics = {"loss": loss.item(), "mode": self.config.mode}
-            with torch.no_grad():
-                if self.config.model_type == "forecasting":
-                    metrics["mae"] = F.l1_loss(logits, target).item()
-                elif self.config.model_type == "classification":
-                    metrics["accuracy"] = (
-                        (logits.argmax(dim=-1) == target).float().mean().item()
-                    )
-
-            return metrics
-
         return self.head.local_update(features.detach(), y)
 
     def forecast(

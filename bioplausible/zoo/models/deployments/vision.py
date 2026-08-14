@@ -26,7 +26,6 @@ from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
-from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.deployments import _feature_extractors as _fe
 from bioplausible.zoo.models.deployments.base import (
     ConvDeploymentConfig,
@@ -184,17 +183,6 @@ class ConvEquiTile(BioModel):
         # EquiTile classification head
         self._build_tile_head(config)
 
-        # Optimizers
-        self._optim_conv = create_optimizer(
-            self.feature_extractor,
-            OptimizerConfig(
-                name="adam", lr=config.learning_rate, weight_decay=config.weight_decay
-            ),
-        )
-        self._optim_head = create_optimizer(
-            self.head, OptimizerConfig(name="adam", lr=config.learning_rate)
-        )
-
         # Regularization
         self._dropout = (
             nn.Dropout(config.dropout) if config.dropout > 0 else nn.Identity()
@@ -232,21 +220,6 @@ class ConvEquiTile(BioModel):
         features = self.extract_features(x)
         features = self._dropout(features)
 
-        if self.config.mode == "backprop":
-            logits = self.head.forward_logits(features, detach_input=False)
-            loss = self.head.compute_loss(logits, y)
-
-            self._optim_conv.zero_grad()
-            self._optim_head.zero_grad()
-            loss.backward()
-            self._optim_conv.step()
-            self._optim_head.step()
-
-            return {
-                "loss": loss.item(),
-                "accuracy": self.head.compute_metrics(logits, y),
-                "mode": self.config.mode,
-            }
         return self.head.local_update(features.detach(), y)
 
     def forward(

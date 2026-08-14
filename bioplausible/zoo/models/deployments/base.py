@@ -20,7 +20,6 @@ from bioplausible.core.local_learning import (
     TileAlgorithmConfig,
 )
 from bioplausible.core.model import BioModel
-from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 if TYPE_CHECKING:
     from torch import Tensor
@@ -228,18 +227,6 @@ def create_deployment_model(
             self.head = head
             self._step_count = 0
 
-            self._optim_feature = create_optimizer(
-                self.feature_extractor,
-                OptimizerConfig(
-                    name="adam",
-                    lr=config.learning_rate,
-                    weight_decay=config.weight_decay,
-                ),
-            )
-            self._optim_head = create_optimizer(
-                self.head, OptimizerConfig(name="adam", lr=config.learning_rate)
-            )
-
         def forward(self, x: Tensor, **kwargs) -> Tensor:
             features = self.feature_extractor(x)
             return self.head(features, **kwargs)
@@ -247,19 +234,6 @@ def create_deployment_model(
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
             self._step_count += 1
             features = self.feature_extractor(x)
-            if config.mode == "backprop":
-                logits = self.head.forward_logits(features, detach_input=False)
-                loss = self.head.compute_loss(logits, y)
-                self._optim_feature.zero_grad()
-                self._optim_head.zero_grad()
-                loss.backward()
-                self._optim_feature.step()
-                self._optim_head.step()
-                return {
-                    "loss": loss.item(),
-                    "accuracy": self.head.compute_metrics(logits, y),
-                    "mode": config.mode,
-                }
             return self.head.local_update(features.detach(), y)
 
     return DeploymentModel()

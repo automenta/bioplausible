@@ -21,7 +21,6 @@ from torch import Tensor, nn
 from bioplausible.core.local_learning import TileAlgorithm, TileAlgorithmConfig
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
-from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.utils import count_parameters
 
 __all__ = [
@@ -131,24 +130,6 @@ class TileLM(TileAlgorithm):
         )
         self._init_lm_weights()
 
-        # Replace the substrate optimizer with an AdamW that covers everything
-        # (substrate uses Adam by default; transformers want AdamW + weight_decay).
-        self._optim_io = create_optimizer(
-            list(self.W_in.parameters())
-            + list(self.W_out.parameters())
-            + list(self._tile_weights.values())
-            + list(self._tile_biases.values())
-            + list(self.token_embedding.parameters())
-            + [self.positional_encoding]
-            + [self.output_scale],
-            OptimizerConfig(
-                name="adamw",
-                lr=config.learning_rate,
-                weight_decay=0.1,
-                betas=(0.9, 0.95),
-            ),
-        )
-
     # ── Init ─────────────────────────────────────────────────────────────────
 
     def _init_lm_weights(self) -> None:
@@ -225,25 +206,9 @@ class TileLM(TileAlgorithm):
             logits, target_ids, ignore_index=self.lm_extra.pad_token_id
         )
 
-    def train_step(
-        self,
-        input_ids: Tensor,
-        target_ids: Tensor | None = None,
-    ) -> dict[str, float]:
-        """Autograd training step; returns ``{"loss", "perplexity"}``."""
-        self.train()
-        if target_ids is None:
-            target_ids = input_ids.clone()
-        logits = self.forward(input_ids)
-        loss = self.compute_loss(logits, target_ids)
-        self._optim_io.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
-        self._optim_io.step()
-        self._step_count += 1
-        with torch.no_grad():
-            perplexity = torch.exp(torch.clamp(loss, max=80)).item()
-        return {"loss": loss.item(), "perplexity": perplexity}
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Token-id models train via the dispatcher's BPTT fallback."""
+        raise NotImplementedError
 
     # ── Generation ───────────────────────────────────────────────────────────
 

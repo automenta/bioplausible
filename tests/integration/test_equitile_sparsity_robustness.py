@@ -28,6 +28,7 @@ from bioplausible.zoo.models.deployments import (
     create_rl_model,
 )
 from bioplausible.zoo.models.tile_lm import TileLM
+from tests.conftest import lm_train_step
 
 pytestmark = pytest.mark.gpu
 
@@ -56,7 +57,7 @@ class TestLMRobustness:
 
         assert logits.shape == (2, 32, 100)
 
-        loss_dict = model.train_step(input_ids)
+        loss_dict = lm_train_step(model, input_ids)
         assert "loss" in loss_dict
         assert not np.isnan(loss_dict["loss"])
 
@@ -91,7 +92,7 @@ class TestLMRobustness:
 
         for step in range(20):  # Fewer steps
             input_ids = torch.randint(0, 200, (2, 16))
-            loss_dict = model.train_step(input_ids)
+            loss_dict = lm_train_step(model, input_ids)
             loss = loss_dict["loss"]
 
             assert not np.isnan(loss), f"NaN at step {step}"
@@ -111,7 +112,7 @@ class TestLMRobustness:
             )
 
             input_ids = torch.randint(0, 100, (2, 16))
-            loss_dict = model.train_step(input_ids)
+            loss_dict = lm_train_step(model, input_ids)
             return loss_dict["loss"]
 
         # Same seed should give same result
@@ -396,7 +397,7 @@ class TestCrossDomain:
         # Run training steps
         for _ in range(5):
             input_ids = torch.randint(0, 256, (2, 32))
-            _ = model.train_step(input_ids)
+            _ = lm_train_step(model, input_ids)
 
         # Check memory growth
         gc.collect()

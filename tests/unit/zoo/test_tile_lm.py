@@ -5,6 +5,7 @@ from __future__ import annotations
 import torch
 
 from bioplausible.zoo.models.tile_lm import TileLM
+from tests.conftest import lm_train_step
 
 
 def _tiny() -> TileLM:
@@ -31,7 +32,7 @@ def test_tile_lm_train_step() -> None:
     model = _tiny()
     ids = torch.randint(0, 100, (2, 8))
     target = torch.randint(0, 100, (2, 8))
-    stats = model.train_step(ids, target)
+    stats = lm_train_step(model, ids, target)
     assert "loss" in stats and "perplexity" in stats
     assert stats["loss"] > 0.0
 

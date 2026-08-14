@@ -29,6 +29,7 @@ from bioplausible.zoo.models.deployments import (
     create_rl_model,
 )
 from bioplausible.zoo.models.tile_lm import TileLM
+from tests.conftest import lm_train_step
 
 # =============================================================================
 # Vision Tests
@@ -219,7 +220,7 @@ class TestLanguage:
             logits = model(input_ids)
         assert not logits.isnan().any(), "Forward pass produced NaN"
 
-        stats = model.train_step(input_ids, target_ids)
+        stats = lm_train_step(model, input_ids, target_ids)
 
         assert "loss" in stats
         assert "perplexity" in stats
