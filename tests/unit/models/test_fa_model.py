@@ -508,7 +508,7 @@ class TestEquilibriumAlignment:
 
     def test_equilibrium_backward_via_fa_propagator(self):
         """The sweep's FA-propagation path trains EquilibriumAlignment in-graph."""
-        from bioplausible.zoo.propagators.fa import FeedbackAlignment
+        from bioplausible.core.local_learning.rules.fa import FeedbackAlignment
 
         model = EquilibriumAlignment(10, 20, 3, max_steps=4, learning_rate=0.01)
         optimizer = FeedbackAlignment(list(model.parameters()), model, lr=0.01)

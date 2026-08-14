@@ -4,7 +4,7 @@ import torch
 from hypothesis import given
 from hypothesis import strategies as st
 
-from bioplausible.zoo._settling import (
+from bioplausible.core.local_learning.settling import (
     _inf_norm_converged,
     settle_activations_list,
     settle_single_state,

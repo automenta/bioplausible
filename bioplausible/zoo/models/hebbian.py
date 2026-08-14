@@ -473,7 +473,5 @@ class ThreeFactorHebbian(TransitionGraphMixin, nn.Module):
                 self.lr * torch.mm(error.T, hs[-1]) / x.shape[0]
             )
 
-        preds = out.argmax(1)
-        correct = (preds == y).float()
         loss = nn.functional.cross_entropy(out, y).item()
-        return {"loss": loss, "accuracy": correct.mean().item()}
+        return {"loss": loss, "accuracy": compute_accuracy(out, y)}

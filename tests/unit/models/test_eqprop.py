@@ -5,8 +5,8 @@ import torch
 from torch import nn
 
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
-from bioplausible.zoo.propagators.base import LearningRuleOptimizer
-from bioplausible.zoo.propagators.eqprop import (
+from bioplausible.core.local_learning.rules.base import LearningRuleOptimizer
+from bioplausible.core.local_learning.rules.eqprop import (
     AdamEqProp,
     EqProp,
     FiniteNudgeEqProp,

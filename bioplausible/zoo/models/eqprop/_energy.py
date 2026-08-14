@@ -32,7 +32,7 @@ from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
-from bioplausible.zoo._settling import settle_activations_list
+from bioplausible.core.local_learning.settling import settle_activations_list
 
 from ._contrastive import _contrastive_step
 
@@ -479,7 +479,7 @@ class EquilibriumMLP(BioModel):
         self, x: torch.Tensor, steps: int | None = None
     ) -> torch.Tensor:
         """O(1)-in-steps implicit settle for the single-hidden case."""
-        from bioplausible.zoo._settling import EquilibriumFunction
+        from bioplausible.core.local_learning.settling import EquilibriumFunction
 
         xf = _flatten(x)
         n_steps = steps if steps is not None else self.max_steps

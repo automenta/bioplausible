@@ -11,7 +11,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.zoo._settling import energy_gradient_descent
+from bioplausible.core.local_learning.settling import energy_gradient_descent
 
 __all__ = [
     "Settler",

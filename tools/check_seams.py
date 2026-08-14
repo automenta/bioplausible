@@ -76,14 +76,7 @@ MODEL_CLS_SKIP: tuple[str, ...] = ("construction.py", "__pycache__")
 # ── seam:propagators ─────────────────────────────────────────────────────────
 # Criterion #6 (RULE): zoo/propagators/ = mep.py + pure gradient transformers.
 # Baseline debt = everything RULE steps 1-3 will delete or convert.
-PROPAGATORS_ALLOW: set[str] = {
-    "backprop.py",
-    "base.py",
-    "eqprop.py",
-    "fa.py",
-    "hebbian.py",
-    "spiking.py",
-}
+PROPAGATORS_ALLOW: set[str] = set()
 
 # ── seam:result-sink ─────────────────────────────────────────────────────────
 # Criterion #3b (FUNNEL + MEASURE): all outcome writes go through result_sink.

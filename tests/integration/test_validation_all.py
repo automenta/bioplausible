@@ -21,7 +21,7 @@ from bioplausible.zoo.models.eqprop import (
     TransformerEqProp,
 )
 from bioplausible.zoo.models.fa import FeedbackAlignmentEqProp
-from bioplausible.zoo.propagators.fa import AdaptiveFA
+from bioplausible.core.local_learning.rules.fa import AdaptiveFA
 
 
 class TestValidationAll(unittest.TestCase):

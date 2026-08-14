@@ -11,7 +11,7 @@ from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 
-from ....zoo._settling import settle_activations_list
+from bioplausible.core.local_learning.settling import settle_activations_list
 from ._contrastive import _contrastive_step
 
 __all__ = [

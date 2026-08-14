@@ -39,8 +39,8 @@ from bioplausible.zoo.models.fa import (
     FeedbackAlignmentEqProp,
 )
 from bioplausible.zoo.models.hebbian import DeepHebbianChain
-from bioplausible.zoo.propagators.fa import AdaptiveFA
-from bioplausible.zoo.propagators.hebbian import ContrastiveHebbianLearning
+from bioplausible.core.local_learning.rules.fa import AdaptiveFA
+from bioplausible.core.local_learning.rules.hebbian import ContrastiveHebbianLearning
 
 
 class TestSmokeTraining(unittest.TestCase):

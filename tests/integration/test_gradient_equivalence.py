@@ -19,22 +19,22 @@ from bioplausible.zoo.mep.presets import (
 from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
 )
-from bioplausible.zoo.propagators.backprop import (
+from bioplausible.core.local_learning.rules.backprop import (
     Backprop as _Backprop,
 )
-from bioplausible.zoo.propagators.eqprop import (
+from bioplausible.core.local_learning.rules.eqprop import (
     EqProp as _EqProp,
 )
-from bioplausible.zoo.propagators.fa import (  # ruff: ignore[module-import-not-at-top-of-file]
+from bioplausible.core.local_learning.rules.fa import (  # ruff: ignore[module-import-not-at-top-of-file]
     DirectFA as _DirectFA,
 )
-from bioplausible.zoo.propagators.fa import (
+from bioplausible.core.local_learning.rules.fa import (
     FeedbackAlignment as _FeedbackAlignment,
 )
-from bioplausible.zoo.propagators.fa import (
+from bioplausible.core.local_learning.rules.fa import (
     StochasticFA as _StochasticFA,
 )
-from bioplausible.zoo.propagators.hebbian import (  # ruff: ignore[module-import-not-at-top-of-file]
+from bioplausible.core.local_learning.rules.hebbian import (  # ruff: ignore[module-import-not-at-top-of-file]
     ContrastiveHebbianLearning as _CHL,
 )
 

@@ -42,7 +42,7 @@ from bioplausible.core.registry import (  # ruff: ignore[module-import-not-at-to
     ComponentCategory,
     Registry,
 )
-from bioplausible.zoo._settling import (
+from bioplausible.core.local_learning.settling import (
     settle_activations_list,
 )
 from scripts import (

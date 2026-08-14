@@ -9,7 +9,7 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.zoo.propagators.fa import (
+from bioplausible.core.local_learning.rules.fa import (
     AdaptiveFA,
     ContrastiveFA,
     DirectFA,

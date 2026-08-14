@@ -25,7 +25,7 @@ Two-Tier Propagator/Model Architecture:
 --------------------------------------
 The zoo provides two complementary interfaces for bio-plausible learning:
 
-1. **Propagator side** (`bioplausible.zoo.propagators`): Learning rules implemented
+1. **Learning rules** (``bioplausible.core.local_learning.rules``): Learning rules implemented
    as drop-in `torch.optim.Optimizer` subclasses (`BioOptimizer` /
    `LearningRuleOptimizer`). These mutate parameters of *any* model:
    Backprop, FeedbackAlignment, EqProp, ContrastiveHebbianLearning, MEP
@@ -159,9 +159,9 @@ _LAZY: dict[str, tuple[str, str | None]] = {
         "MemoryEfficientLoopedMLP",
     ),
     "TransformerEqProp": ("bioplausible.zoo.models.eqprop", "TransformerEqProp"),
-    "EqProp": ("bioplausible.zoo.propagators.eqprop", "EqProp"),
-    "DirectFA": ("bioplausible.zoo.propagators.fa", "DirectFA"),
-    "FeedbackAlignment": ("bioplausible.zoo.propagators.fa", "FeedbackAlignment"),
+    "EqProp": ("bioplausible.core.local_learning.rules.eqprop", "EqProp"),
+    "DirectFA": ("bioplausible.core.local_learning.rules.fa", "DirectFA"),
+    "FeedbackAlignment": ("bioplausible.core.local_learning.rules.fa", "FeedbackAlignment"),
 }
 
 __all__ = sorted(_LAZY) + ["__version__"]

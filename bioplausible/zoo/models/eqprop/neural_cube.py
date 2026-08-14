@@ -8,7 +8,7 @@ from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
-from bioplausible.zoo._settling import settle_state
+from bioplausible.core.local_learning.settling import settle_state
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 __all__ = [

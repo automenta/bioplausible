@@ -19,7 +19,7 @@ import torch
 import torch.nn.functional as F
 
 from bioplausible.graph.topology import GraphStructure
-from bioplausible.zoo._settling import _inf_norm_converged
+from bioplausible.core.local_learning.settling import _inf_norm_converged
 
 __all__ = [
     "InferenceSGD",

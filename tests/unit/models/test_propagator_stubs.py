@@ -53,7 +53,7 @@ class TestPropagatorCrossReference:
 
     def test_working_propagators_still_resolve(self):
         """Working propagators that ARE registered still resolve normally."""
-        from bioplausible.zoo.propagators.eqprop import EqProp
+        from bioplausible.core.local_learning.rules.eqprop import EqProp
 
         result = Registry.get(ComponentCategory.PROPAGATOR, "eq_prop")
         assert result is EqProp

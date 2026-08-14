@@ -7,7 +7,7 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.zoo.propagators.backprop import Backprop
+from bioplausible.core.local_learning.rules.backprop import Backprop
 
 # =============================================================================
 # Fixtures

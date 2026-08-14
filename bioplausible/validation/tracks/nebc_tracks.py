@@ -11,7 +11,7 @@ from bioplausible.zoo.models.eqprop import (
 )
 from bioplausible.zoo.models.fa import AdaptiveFeedbackAlignment, EquilibriumAlignment
 from bioplausible.zoo.models.hebbian import DeepHebbianChain
-from bioplausible.zoo.propagators.hebbian import (
+from bioplausible.core.local_learning.rules.hebbian import (
     ContrastiveHebbianLearning,
 )
 

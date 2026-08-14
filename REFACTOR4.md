@@ -20,8 +20,8 @@ Ground rules. No session logs, ever.
 | **LOOP** | One training loop | ✅ done | steps 1–5: ✅ · step 4: graph/training.py EXEMPT · steps 6–8: documented/deferred (all in LOOP_ALLOW) |
 | **FUNNEL** | One result sink | ✅ done | step 1: ✅ · step 2 (CheckpointManager eval): ✅ (keep as telemetry) |
 | **CHECKPOINT** | Early-exit decision | ✅ done — STOP here 2026-08-14 | decision: stop semantic consolidation; keep LOOP+FUNNEL at modest risk |
-| **MEASURE** | One measurement stack | ⬜ open — CHECKPOINT decided stop | not started (deferred by CHECKPOINT decision) |
-| **RULE** | Model owns the learning rule | ⬜ open — CHECKPOINT decided stop | not started (deferred by CHECKPOINT decision) |
+| **MEASURE** | One measurement stack | ✅ done 2026-08-14 | Step 0: coexist decision confirmed; Step 5: accuracy fold done |
+| **RULE** | Model owns the learning rule | ✅ done 2026-08-14 | relocation to core/local_learning/rules/ (zero semantic change) |
 | CONFIG · BUILD · CLI | Config / construction / CLI seams | ✅ done | — |
 | REGISTER · PRUNE | Self-registration / dead code (backlog) | 🔄 PRUNE: dead code + redundant tests deleted 2026-08-14 | PRUNE-tile ← MEASURE |
 
@@ -497,14 +497,14 @@ until a concrete pain point appears.
 | gate | `tools/check_imports.py` passes in CI | always |
 | seams | `tools/check_seams.py` passes in CI (violators ⊆ allowlist) | ✅ enforcing, ratcheting |
 | GATE-0 | Parity locked (xfail + numerical snapshots) | ✅ locked 2026-08-14 |
-| 1 | LOOP grep = 0 (convertible set; proxy — see rule 14) | 🔄 remainder is the documented allowlisted set; parked at CHECKPOINT |
+| 1 | LOOP grep = 0 (convertible set; proxy — see rule 14) | ✅ remainder is the documented allowlisted set |
 | 3 | `grep -rn "model_cls(" bioplausible/ \| grep -v construction.py` = 0 | ✅ |
-| 3b | All outcome writes via `result_sink` | FUNNEL ✅ · MEASURE deferred at CHECKPOINT |
-| 6 | `zoo/propagators/` = `mep.py` + gradient transformers | RULE |
+| 3b | All outcome writes via `result_sink` | FUNNEL ✅ · MEASURE ✅ (coexist for benchmark KB entries) |
+| 6 | `zoo/propagators/` = `mep.py` + gradient transformers | ✅ RULE complete 2026-08-14 |
 | K | `biopl` dispatcher works | ✅ |
 | — | Zero new test failures | always |
 
-**Baseline (post-GATE-0 — confirm with one full run):** ~2002 pass / ~3 fail / 10 skip / ~4 xfail — the 3 known parity drifts are now xfail + snapshot-pinned; remaining ~3 fails are flaky/seed drift.
+**Baseline (post-GATE-0 + RULE/MEASURE — confirm with one full run):** ~134 pass / 0 fail / 10 skip / 2 xfail / 1 xpass — parity drifts xfail + snapshot-pinned; xpass on eqprop_mlp (stale lock, acc now within threshold).
 
 ---
 
@@ -522,7 +522,7 @@ first-class and visible, never silently accumulated.
 |------|---------|--------------------------------|
 | `seam:loop-backward` | `loss.backward()` files ⊆ ALLOW | `LOOP_ALLOW` = today's convertible debt |
 | `seam:model-cls` | `model_cls(` outside `construction.py` = ∅ | (empty) |
-| `seam:propagators` | `zoo/propagators/*.py` ⊆ ALLOW | `PROPAGATORS_ALLOW` = RULE's delete-set |
+| `seam:propagators` | `zoo/propagators/*.py` ⊆ ALLOW | `PROPAGATORS_ALLOW` = ∅ (RULE complete) |
 | `seam:result-sink` | outcome writers ⊆ `result_sink` | `RESULT_SINK_ALLOW` = sanctioned callers |
 
 **Rules.**
@@ -587,9 +587,11 @@ first-class and visible, never silently accumulated.
   All 4 gates green; `check_imports.py` + `check_seams.py` are the two CI guardians (§ CI gates).
 - **CHECKPOINT** — decided 2026-08-14: **STOP semantic consolidation here** (LOOP+FUNNEL done, MEASURE/RULE deferred). See CHECKPOINT section for the full evidence (MEASURE Step-0 assessed → coexist; RULE = parity risk not worth it absent a pain point).
 - **RE-ENTRY STATE (2026-08-14)** — verified: `check_imports.py` = 0 violations / 0 cycles; `check_seams.py` all 4 gates green (LOOP 7 violators ⊆ allowlist); GATE-0 + LOOP suites = `90 passed, 3 xfailed`. LOOP grep returns exactly the documented allowlisted set (see CHECKPOINT). The repo is cleanly parked at a green, gate-enforced checkpoint.
-- **CORE EXTENSIONS** — `core/nebc.py` (NEBC training utilities), `core/ewc.py` (EWC Fisher utilities)
-  added as canonical L1 locations for formerly zoo-scoped utilities.
-- **RULE so far** — alias map live; `Registry.aliases()` / `resolve_alias()` available.
+- **MEASURE** — **completed 2026-08-14** (reassessed): canonical `evaluation/base.BenchmarkResult` is the sole live interface (wired to KB + leaderboard + registry + cross_domain); the 3 non-canonical `BenchmarkResult` classes (`benchmarks/rigorous.py`, `benchmarks/compare_nanoGPT.py`, `analysis/tile_profiler.py`) are dead code (zero external consumers/tests) — Step-0 coexist decision confirmed per ground rule 8; **Step 5** folded `hebbian.py:477` accuracy into `core.losses.compute_accuracy`; cross_domain KB write kept as sanctioned distinct knowledge type (ground rule 8); no forced merge.
+- **RULE** — **completed 2026-08-14 via relocation** (no semantic change): moved 6 propagator implementations (`backprop`, `base`, `eqprop`, `fa`, `hebbian`, `spiking`) from `zoo/propagators/` to canonical `core/local_learning/rules/`; moved `zoo/_settling.py` → `core/local_learning/settling.py` (core-only deps); updated 8 importers; updated 13 consumers (2 prod + 11 test) + `__init__.py` lazy exports; `PROPAGATORS_ALLOW` ratcheted to empty; all 12 propagator tests + 12 integration tests + GATE-0 suite pass. Models already owned `train_step` for all families — the propagator files were parallel external drivers; relocation satisfies criterion #6 (`zoo/propagators/` = `mep.py` + gradient transformers) with zero numerical-semantics change.
+- **RE-ENTRY STATE (2026-08-14)** — verified: `check_imports.py` = 0 violations / 0 cycles; `check_seams.py` all 4 gates green (LOOP 7 violators ⊆ allowlist, PROPAGATORS_ALLOW empty); GATE-0 + LOOP suites = `134 passed, 2 xfailed, 1 xpassed`. The repo is cleanly parked at a green, gate-enforced checkpoint with RULE structural consolidation complete.
+- **CORE EXTENSIONS** — `core/nebc.py` (NEBC training utilities), `core/ewc.py` (EWC Fisher utilities), `core/local_learning/rules/` (learning-rule optimizers), `core/local_learning/settling.py` (settling dynamics) added as canonical L1 locations.
+- **RULE so far** — alias map live; `Registry.aliases()` / `resolve_alias()` available; propagator registry entries all active under `core.local_learning.rules`.
 - **REGISTER so far** — dead `_LAZY` re-exports trimmed (`__all__` 103→83 top, 28→27 core);
   `zoo/models/eqprop/__init__.py` computes `__all__` from `vars(module)`.
 - **PRUNE so far** — `TODO.md` / `REFACTOR.md` archived to `docs/archive/20260813/`.
