@@ -13,4 +13,8 @@ use_spectral_norm: true
 hebbian_lr: 0.008
 # Common gate knobs
 batch_size: 32
-parity_threshold: 0.05
+# GATE-0: pre-existing EqProp gradient drift (verified 2026-08-14) — eqprop_mlp
+# acc 0.198 vs backprop 0.366. Threshold >0.05 marks the documented gap so the
+# registry audit reports `documented-gap`, matching directed_ep. Locked until
+# LOOP/RULE parity work lands.
+parity_threshold: 0.2

@@ -8,13 +8,7 @@ class TestTransferLoading(unittest.TestCase):
         # Patch dependencies for TrialRunner instantiation
 
         self.patches = [
-            patch(
-                "bioplausible.hyperopt.experiment.create_task",
-                return_value=MagicMock(input_dim=10, output_dim=2),
-            ),
-            patch(
-                "bioplausible.hyperopt.experiment.ExperimentTracker"
-            ),  # Prevent tracker init
+            patch("bioplausible.hyperopt.experiment.ExperimentTracker"),
             patch("bioplausible.hyperopt.experiment.ExperimentArchiver"),
         ]
 

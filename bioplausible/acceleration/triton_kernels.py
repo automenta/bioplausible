@@ -41,6 +41,7 @@ class TritonEqPropOps:
                     out_ptr,
                     alpha,
                     n_elements,
+                    bias_n,
                     BLOCK_SIZE: tl.constexpr,
                 ):
                     pid = tl.program_id(0)
@@ -51,7 +52,7 @@ class TritonEqPropOps:
                     h = tl.load(h_ptr + offsets, mask=mask)
                     pre_act = tl.load(pre_act_ptr + offsets, mask=mask)
                     bias = (
-                        tl.load(bias_ptr + offsets, mask=mask)
+                        tl.load(bias_ptr + offsets % bias_n, mask=mask)
                         if bias_ptr is not None
                         else 0.0
                     )
@@ -79,6 +80,7 @@ class TritonEqPropOps:
                 BLOCK_SIZE = 1024
                 grid = (math.ceil(n_elements / BLOCK_SIZE),)
                 bias_ptr = bias if bias is not None else None
+                bias_n = bias.numel() if bias is not None else 0
                 cls._triton_kernel[grid](
                     h,
                     pre_act,
@@ -86,6 +88,7 @@ class TritonEqPropOps:
                     out,
                     alpha,
                     n_elements,
+                    bias_n,
                     BLOCK_SIZE=BLOCK_SIZE,
                 )
                 return out
