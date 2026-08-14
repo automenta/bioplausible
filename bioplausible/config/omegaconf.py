@@ -178,7 +178,6 @@ class ScientistConfig:
     num_workers: int = 1
     report_interval: int = 50
     human_approval_gate: bool = False
-    knowledge_base_path: str = "bioplausible_kb.db"
     llm_backend: str | None = None
 
 

@@ -1,4 +1,4 @@
-"""Hypothesis property-based tests for settling utilities in zoo/_settling.py."""
+"""Hypothesis property-based tests for settling utilities in core/local_learning/settling.py."""
 
 import torch
 from hypothesis import given
