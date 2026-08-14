@@ -8,13 +8,13 @@ Moved from ``zoo/propagators/`` as the canonical home for learning rules.
 """
 
 # Import all rules to trigger @register_propagator registration
-from . import base, backprop, eqprop, fa, hebbian, spiking
+from . import backprop, base, eqprop, fa, hebbian, spiking
 from .composite_adapter import CompositeOptimizerAdapter
 
 __all__ = [
-    "base",
-    "backprop",
     "CompositeOptimizerAdapter",
+    "backprop",
+    "base",
     "eqprop",
     "fa",
     "hebbian",

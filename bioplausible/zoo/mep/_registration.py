@@ -6,6 +6,7 @@ from bioplausible.core.registry import (
     Domain,
     LocalityLevel,
     Registry,
+    register_optimizer,
 )
 
 from .optimizers import DionUpdate, FisherUpdate, MuonUpdate, PlainUpdate
@@ -154,3 +155,37 @@ Registry.register(
     memory_complexity="O(N^2)",
     family="mep",
 )(FisherUpdate)
+
+
+# OPTIMIZER-category registrations: expose the EP presets to ``CoreTrainer`` so
+# ``optimizer="smep"`` (etc.) drives the learning-rule path. The wrapper forces
+# ``mode="ep"`` by default so ``dispatch_train_step``'s ``step(x, target)`` call
+# computes gradients — the raw preset defaults to backprop mode, which would be a
+# silent no-op under the learning-rule calling convention. An explicit ``mode``
+# passed via ``optimizer_kwargs`` still wins (setdefault).
+def _ep_optimizer_factory(preset):
+    def factory(params, model=None, **kwargs):
+        kwargs.setdefault("mode", "ep")
+        return preset(params, model=model, **kwargs)
+
+    return factory
+
+
+for _name, _preset in (
+    ("smep", smep),
+    ("smep_fast", smep_fast),
+    ("sdmep", sdmep),
+    ("local_ep", local_ep),
+    ("natural_ep", natural_ep),
+):
+    register_optimizer(
+        _name,
+        domains=[Domain.VISION, Domain.TABULAR],
+        locality_level=LocalityLevel.EQUILIBRIUM,
+        compute_profile=ComputeProfile.GPU,
+        bio_plausibility_score=0.9,
+        credit_assignment_type="equilibrium",
+        requires_backward=False,
+        memory_complexity="O(1)",
+        family="mep",
+    )(_ep_optimizer_factory(_preset))

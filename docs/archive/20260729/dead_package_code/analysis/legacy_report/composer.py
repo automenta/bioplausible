@@ -19,7 +19,6 @@ import numpy as np
 import pandas as pd
 from bioplausible.analysis.legacy_report.analysis import BayesianRanker, MLAnalyzer
 from bioplausible.analysis.legacy_report.latex import LatexGenerator
-
 from bioplausible.visualization import ResultVisualizer
 
 

@@ -4,7 +4,6 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.zoo.models.transitions import TransitionGraphMixin
 from bioplausible.core.local_learning.rules.base import LearningRuleOptimizer
 from bioplausible.core.local_learning.rules.eqprop import (
     AdamEqProp,
@@ -13,6 +12,7 @@ from bioplausible.core.local_learning.rules.eqprop import (
     HolomorphicEqProp,
     LazyEqProp,
 )
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 
 class SimpleMLP(TransitionGraphMixin, nn.Module):

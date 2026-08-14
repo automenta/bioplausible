@@ -222,12 +222,6 @@ def _gradient_gate() -> dict[str, bool]:
     task loss; forward-only (FF/PEPITA) and spiking families are excluded by
     design. Returns family -> passed.
     """
-    from bioplausible.validation.gradient_check import (
-        check_gradient_equivalence,
-        loss_ce,
-        loss_mse,
-    )
-    from bioplausible.zoo.mep.presets import smep as _smep
     from bioplausible.core.local_learning.rules.backprop import Backprop as _Backprop
     from bioplausible.core.local_learning.rules.eqprop import EqProp as _EqProp
     from bioplausible.core.local_learning.rules.fa import (
@@ -239,7 +233,15 @@ def _gradient_gate() -> dict[str, bool]:
     from bioplausible.core.local_learning.rules.fa import (
         StochasticFA as _StochasticFA,
     )
-    from bioplausible.core.local_learning.rules.hebbian import ContrastiveHebbianLearning
+    from bioplausible.core.local_learning.rules.hebbian import (
+        ContrastiveHebbianLearning,
+    )
+    from bioplausible.validation.gradient_check import (
+        check_gradient_equivalence,
+        loss_ce,
+        loss_mse,
+    )
+    from bioplausible.zoo.mep.presets import smep as _smep
 
     def _lro_driver(opt, model, x, y) -> None:  # ruff: ignore[unused-function-argument]  (driver protocol fixes the signature)
         opt.step(x=x, target=y)

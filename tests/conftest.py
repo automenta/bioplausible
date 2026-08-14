@@ -15,10 +15,11 @@ from unittest.mock import MagicMock  # ruff: ignore[module-import-not-at-top-of-
 
 sys.modules["cupy"] = MagicMock()
 
+from typing import cast
+
 import pytest
 import torch
 from torch import nn
-from typing import cast
 
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 

@@ -10,6 +10,8 @@ from torch.utils.data import DataLoader, TensorDataset
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
+from bioplausible.core.local_learning.rules.fa import AdaptiveFA
+from bioplausible.core.local_learning.rules.hebbian import ContrastiveHebbianLearning
 from bioplausible.core.trainer import CoreTrainer
 from bioplausible.zoo.models.backprop import BackpropTransformerLM
 from bioplausible.zoo.models.eqprop import (
@@ -39,8 +41,6 @@ from bioplausible.zoo.models.fa import (
     FeedbackAlignmentEqProp,
 )
 from bioplausible.zoo.models.hebbian import DeepHebbianChain
-from bioplausible.core.local_learning.rules.fa import AdaptiveFA
-from bioplausible.core.local_learning.rules.hebbian import ContrastiveHebbianLearning
 
 
 class TestSmokeTraining(unittest.TestCase):

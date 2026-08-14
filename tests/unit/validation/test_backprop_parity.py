@@ -201,7 +201,13 @@ _XFAIL_PARITY = pytest.mark.xfail(
     "Locked until LOOP/RULE parity work lands.",
     strict=False,
 )
-PARITY_MODEL_NAMES = ["eqprop_mlp", "directed_ep", "forward_forward", "pepita", "tile_pc"]
+PARITY_MODEL_NAMES = [
+    "eqprop_mlp",
+    "directed_ep",
+    "forward_forward",
+    "pepita",
+    "tile_pc",
+]
 PARITY_MODELS = [
     pytest.param("eqprop_mlp", marks=_XFAIL_PARITY),
     pytest.param("directed_ep", marks=_XFAIL_PARITY),

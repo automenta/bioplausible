@@ -54,12 +54,13 @@ LOOP_EXCLUSIONS: tuple[str, ...] = (
 # step 5 -> {ewc,nebc_base}: CLEARED (train_nebc_model & update_fisher moved to core/).
 # step 6 -> target_prop.py: KEPT (pure local train_step implements target propagation;
 #   loss.backward() is part of local rule, not BPTT fallback).
-# step 7 -> eqprop_diffusion.py: KEPT (tagged broken, deferred — don't invest).
+# step 7 -> eqprop_diffusion.py: KEEP (tagged broken; kept as a sanctioned local-rule
+#   exemption — restoreable/fixable later, so not a deletion target).
 # step 8 -> mep inline loops: CLEARED (loss.backward() only in docstring examples;
 #   no executable training loops — MEP routes through CompositeOptimizer/StrategyOptimizer).
 # step 9 -> ewc.py: CLEARED (EWC.update_fisher delegates to core/ewc.update_fisher).
 LOOP_ALLOW: set[str] = {
-    "zoo/models/eqprop/eqprop_diffusion.py",  # step 7: broken, deferred
+    "zoo/models/eqprop/eqprop_diffusion.py",  # step 7: KEEP (broken, fixable later)
     "zoo/models/forward_only.py",  # step 6: local greedy loss
     "zoo/models/target_prop.py",  # step 6: local train_step
     "graph/training.py",  # step 4: EXEMPT (bespoke GraphStructure

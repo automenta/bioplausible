@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
-
 from torch import nn
 
 from bioplausible.config.unified import ModelConfig

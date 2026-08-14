@@ -17,7 +17,6 @@ from bioplausible.domains.base import (
     Metrics,
     TaskSplit,
 )
-
 from bioplausible.utils import seed_everything
 
 __all__ = [

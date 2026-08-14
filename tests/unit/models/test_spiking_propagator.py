@@ -7,8 +7,8 @@ correlated pre/post activity strengthens the corresponding weight.
 
 import torch
 
-from bioplausible.zoo.models.eqprop import BackpropMLP
 from bioplausible.core.local_learning.rules.spiking import STDPLearningRule
+from bioplausible.zoo.models.eqprop import BackpropMLP
 
 
 def _make_model(input_dim=8, hidden_dim=8, output_dim=4):

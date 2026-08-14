@@ -16,14 +16,13 @@ Scientific Rigor Features:
 
 import numpy as np
 import torch
-
-from bioplausible.utils import seed_everything
 from torch import nn
 
 from bioplausible.core.logging import get_logger
 from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.trainer import dispatch_train_step
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
+from bioplausible.utils import seed_everything
 
 __all__ = [
     "classify_evidence_level",

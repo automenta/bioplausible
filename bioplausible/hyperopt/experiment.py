@@ -531,9 +531,7 @@ def run_single_trial_task(
             traceback.print_exc()
 
         # Log exception failure
-        _sink_failure(
-            model_name, task, config, "error", error=traceback.format_exc()
-        )
+        _sink_failure(model_name, task, config, "error", error=traceback.format_exc())
         return None
     finally:
         if storage:
@@ -607,7 +605,10 @@ def _sink_failure(
     try:
         from bioplausible.experiment.result_sink import record_experiment_result
 
-        extra: dict[str, object] = {"source": "execution_engine", "tier": config.get("tier", "unknown")}
+        extra: dict[str, object] = {
+            "source": "execution_engine",
+            "tier": config.get("tier", "unknown"),
+        }
         if error:
             extra["error"] = error
         record_experiment_result(

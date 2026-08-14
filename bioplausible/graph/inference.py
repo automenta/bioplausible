@@ -18,8 +18,8 @@ Uses gradient-based activity updates for non-feedforward topologies.
 import torch
 import torch.nn.functional as F
 
-from bioplausible.graph.topology import GraphStructure
 from bioplausible.core.local_learning.settling import _inf_norm_converged
+from bioplausible.graph.topology import GraphStructure
 
 __all__ = [
     "InferenceSGD",
@@ -147,7 +147,7 @@ class InferenceSGD:
                         error = activities[node.name] - total_pred
                         new_activities[node.name] = activities[node.name] - eta * error
 
-                # Early convergence via shared utility (zoo/_settling.py)
+                # Early convergence via shared utility (core/local_learning/settling.py)
                 all_converged = True
                 for node_name in new_activities:
                     if node_name == structure.task_map.x.name:

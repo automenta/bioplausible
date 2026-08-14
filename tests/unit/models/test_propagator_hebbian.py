@@ -7,8 +7,8 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.zoo.models.transitions import TransitionGraphMixin
 from bioplausible.core.local_learning.rules.hebbian import ContrastiveHebbianLearning
+from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 # =============================================================================
 # Fixtures

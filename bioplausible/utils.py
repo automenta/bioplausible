@@ -14,6 +14,8 @@ from bioplausible.core.logging import get_logger
 
 logger = get_logger()
 
+import pathlib
+
 import numpy as np
 import torch
 from torch import nn
@@ -136,7 +138,7 @@ def export_to_onnx(
 
     parent = os.path.dirname(output_path)
     if parent:
-        os.makedirs(parent, exist_ok=True)
+        pathlib.Path(parent).mkdir(exist_ok=True, parents=True)
 
     # ONNX traces call every ``forward`` argument positionally — including the
     # keyword-only defaults (e.g. ``return_dynamics``) of equilibrium models —

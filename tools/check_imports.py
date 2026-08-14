@@ -126,7 +126,7 @@ def parse_imports(file_path: Path) -> list[str]:
     """Extract all import names from a Python file."""
     try:
         source = file_path.read_text()
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return []
 
     tree = ast.parse(source, filename=str(file_path))
@@ -137,10 +137,9 @@ def parse_imports(file_path: Path) -> list[str]:
             for alias in node.names:
                 name = alias.name.split(".")[0] if alias.name else ""
                 imports.append(name)
-        elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                name = node.module.split(".")[0] if node.module else ""
-                imports.append(name)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            name = node.module.split(".")[0] if node.module else ""
+            imports.append(name)
 
     return imports
 
@@ -176,38 +175,149 @@ def check_layer_violations(
         for imp in imports:
             # Convert short import name to full module path if possible
             full_import = imp
-            if imp not in ("torch", "numpy", "typing", "dataclasses", "collections",
-                          "enum", "functools", "itertools", "logging", "math",
-                          "pathlib", "sys", "time", "abc", "re", "json", "os",
-                          "ast", "typing_extensions", "contextlib", "copy",
-                          "operator", "warnings", "weakref", "heapq", "bisect",
-                          "array", "io", "pickle", "shutil", "tempfile", "subprocess",
-                          "threading", "multiprocessing", "concurrent", "asyncio",
-                          "socket", "http", "urllib", "xml", "csv", "sqlite3",
-                          "hashlib", "hmac", "secrets", "random", "statistics",
-                          "fractions", "decimal", "numbers", "typing", "string",
-                          "textwrap", "unicodedata", "struct", "codecs",
-                          "glob", "fnmatch", "linecache", "shlex", "argparse",
-                          "getopt", "configparser", "platform", "errno",
-                          "ctypes", "unittest", "doctest", "pdb", "trace",
-                          "gc", "inspect", "dis", "pickletools", "symtable",
-                          "token", "_keyword", "_thread", "_socket", "_ctypes",
-                          "_weakref", "_collections", "_abc", "_codecs",
-                          "_io", "_json", "_pickle", "_sqlite3", "_ssl",
-                          "_hashlib", "_hmac", "_struct", "_datetime",
-                          "_ssl", "_socketserver", "_multiprocessing",
-                          "_threading", "_asyncio", "_contextlib",
-                          "_decimal", "_fractions", "_statistics",
-                          "_random", "_glob", "_fnmatch", "_linecache",
-                          "_shlex", "_warnings", "_codecs", "_unittest",
-                          "_doctest", "_pdb", "_gc", "_inspect", "_dis",
-                          "_pickletools", "_symtable", "_tokenize",
-                          "ruff", "hypothesis", "optuna", "pydantic", "omegaconf",
-                          "torchvision", "sklearn", "scipy", "snntorch",
-                          "pandas", "matplotlib", "seaborn", "tabulate",
-                          "psutil", "gymnasium", "fastapi", "uvicorn",
-                          "kademlia", "onnxruntime", "datasets", "tqdm",
-                          "rich", "networkx"):
+            if imp not in (
+                "torch",
+                "numpy",
+                "typing",
+                "dataclasses",
+                "collections",
+                "enum",
+                "functools",
+                "itertools",
+                "logging",
+                "math",
+                "pathlib",
+                "sys",
+                "time",
+                "abc",
+                "re",
+                "json",
+                "os",
+                "ast",
+                "typing_extensions",
+                "contextlib",
+                "copy",
+                "operator",
+                "warnings",
+                "weakref",
+                "heapq",
+                "bisect",
+                "array",
+                "io",
+                "pickle",
+                "shutil",
+                "tempfile",
+                "subprocess",
+                "threading",
+                "multiprocessing",
+                "concurrent",
+                "asyncio",
+                "socket",
+                "http",
+                "urllib",
+                "xml",
+                "csv",
+                "sqlite3",
+                "hashlib",
+                "hmac",
+                "secrets",
+                "random",
+                "statistics",
+                "fractions",
+                "decimal",
+                "numbers",
+                "typing",
+                "string",
+                "textwrap",
+                "unicodedata",
+                "struct",
+                "codecs",
+                "glob",
+                "fnmatch",
+                "linecache",
+                "shlex",
+                "argparse",
+                "getopt",
+                "configparser",
+                "platform",
+                "errno",
+                "ctypes",
+                "unittest",
+                "doctest",
+                "pdb",
+                "trace",
+                "gc",
+                "inspect",
+                "dis",
+                "pickletools",
+                "symtable",
+                "token",
+                "_keyword",
+                "_thread",
+                "_socket",
+                "_ctypes",
+                "_weakref",
+                "_collections",
+                "_abc",
+                "_codecs",
+                "_io",
+                "_json",
+                "_pickle",
+                "_sqlite3",
+                "_ssl",
+                "_hashlib",
+                "_hmac",
+                "_struct",
+                "_datetime",
+                "_ssl",
+                "_socketserver",
+                "_multiprocessing",
+                "_threading",
+                "_asyncio",
+                "_contextlib",
+                "_decimal",
+                "_fractions",
+                "_statistics",
+                "_random",
+                "_glob",
+                "_fnmatch",
+                "_linecache",
+                "_shlex",
+                "_warnings",
+                "_codecs",
+                "_unittest",
+                "_doctest",
+                "_pdb",
+                "_gc",
+                "_inspect",
+                "_dis",
+                "_pickletools",
+                "_symtable",
+                "_tokenize",
+                "ruff",
+                "hypothesis",
+                "optuna",
+                "pydantic",
+                "omegaconf",
+                "torchvision",
+                "sklearn",
+                "scipy",
+                "snntorch",
+                "pandas",
+                "matplotlib",
+                "seaborn",
+                "tabulate",
+                "psutil",
+                "gymnasium",
+                "fastapi",
+                "uvicorn",
+                "kademlia",
+                "onnxruntime",
+                "datasets",
+                "tqdm",
+                "rich",
+                "networkx",
+            ):
                 # These are external or stdlib, check with known modules
                 pass
             import_layer = get_layer(full_import)
@@ -217,7 +327,7 @@ def check_layer_violations(
                 edges.add((module_path, full_import, f"{module_path} → {full_import}"))
 
             # Check layer violation: importing from higher layer
-            if import_layer > from_layer and from_layer > 0:
+            if import_layer > from_layer > 0:
                 violations.append(
                     f"{module_path} (L{from_layer}) imports {full_import} (L{import_layer})"
                 )
@@ -274,7 +384,7 @@ def find_lazy_loaders(root: Path) -> list[str]:
     for file_path in files:
         try:
             source = file_path.read_text()
-        except (OSError, UnicodeDecodeError):
+        except OSError, UnicodeDecodeError:
             continue
 
         tree = ast.parse(source)

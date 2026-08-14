@@ -414,7 +414,9 @@ class ModelLoader:
         Returns:
             Loaded model.
         """
-        model = self._construct(model_class, model_params, getattr(model_class, "__name__", "model"))
+        model = self._construct(
+            model_class, model_params, getattr(model_class, "__name__", "model")
+        )
         model = model.to(self.device)
 
         load_checkpoint_into_model(checkpoint_path, model, map_location=self.device)

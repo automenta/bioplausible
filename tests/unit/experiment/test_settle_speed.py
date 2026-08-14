@@ -38,12 +38,12 @@ def _silence_settle_logs():
 from bioplausible.core.construction import (
     construct_model,
 )
+from bioplausible.core.local_learning.settling import (
+    settle_activations_list,
+)
 from bioplausible.core.registry import (  # ruff: ignore[module-import-not-at-top-of-file]
     ComponentCategory,
     Registry,
-)
-from bioplausible.core.local_learning.settling import (
-    settle_activations_list,
 )
 from scripts import (
     broad_sweep as sweep,

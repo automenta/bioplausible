@@ -8,17 +8,6 @@ import bioplausible.acceleration
 
 bioplausible.acceleration._check_compile_works = lambda: False
 
-from bioplausible.validation.gradient_check import (
-    check_gradient_equivalence,
-    loss_ce,
-    loss_mse,
-)
-from bioplausible.zoo.mep.presets import (
-    smep as _smep,
-)
-from bioplausible.zoo.models.eqprop import (
-    LoopedMLP,
-)
 from bioplausible.core.local_learning.rules.backprop import (
     Backprop as _Backprop,
 )
@@ -36,6 +25,17 @@ from bioplausible.core.local_learning.rules.fa import (
 )
 from bioplausible.core.local_learning.rules.hebbian import (  # ruff: ignore[module-import-not-at-top-of-file]
     ContrastiveHebbianLearning as _CHL,
+)
+from bioplausible.validation.gradient_check import (
+    check_gradient_equivalence,
+    loss_ce,
+    loss_mse,
+)
+from bioplausible.zoo.mep.presets import (
+    smep as _smep,
+)
+from bioplausible.zoo.models.eqprop import (
+    LoopedMLP,
 )
 
 

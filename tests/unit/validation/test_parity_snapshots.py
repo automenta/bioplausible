@@ -50,7 +50,9 @@ def _train_model(model, x, y, epochs=3, batch_size=32):
         for _ in range(epochs):
             perm = torch.randperm(len(x))
             for i in range(0, len(x), batch_size):
-                model.train_step(x[perm[i : i + batch_size]], y[perm[i : i + batch_size]])
+                model.train_step(
+                    x[perm[i : i + batch_size]], y[perm[i : i + batch_size]]
+                )
     else:
         opt = optim.Adam(model.parameters(), lr=1e-3)
         criterion = nn.CrossEntropyLoss()
@@ -72,9 +74,13 @@ def _eqprop_mlp_acc():
     from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
 
     m = LoopedMLP(
-        input_dim=input_dim, hidden_dim=64, output_dim=n_classes,
-        use_spectral_norm=True, max_steps=20,
-        gradient_method="contrastive", backend="pytorch",
+        input_dim=input_dim,
+        hidden_dim=64,
+        output_dim=n_classes,
+        use_spectral_norm=True,
+        max_steps=20,
+        gradient_method="contrastive",
+        backend="pytorch",
     )
     m.hebbian_lr = 0.008
     m.beta = 0.03
@@ -89,8 +95,13 @@ def _directed_ep_acc():
 
     m = DirectedEP(
         ModelConfig(
-            name="directed_ep", input_dim=input_dim, output_dim=n_classes,
-            hidden_dims=[64, 64], learning_rate=0.03, beta=0.3, max_steps=20,
+            name="directed_ep",
+            input_dim=input_dim,
+            output_dim=n_classes,
+            hidden_dims=[64, 64],
+            learning_rate=0.03,
+            beta=0.3,
+            max_steps=20,
         )
     )
     return _train_model(m, x, y)
@@ -99,13 +110,28 @@ def _directed_ep_acc():
 def _mlp_gradient_losses():
     torch.manual_seed(42)
     from torch import nn
+
     from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
 
     input_dim, hidden_dim, output_dim, batch_size, max_steps = 10, 20, 5, 4, 100
     x = torch.randn(batch_size, input_dim)
     y = torch.randint(0, output_dim, (batch_size,))
-    m_bptt = LoopedMLP(input_dim, hidden_dim, output_dim, max_steps=max_steps, gradient_method="bptt", use_spectral_norm=False)
-    m_eq = LoopedMLP(input_dim, hidden_dim, output_dim, max_steps=max_steps, gradient_method="equilibrium", use_spectral_norm=False)
+    m_bptt = LoopedMLP(
+        input_dim,
+        hidden_dim,
+        output_dim,
+        max_steps=max_steps,
+        gradient_method="bptt",
+        use_spectral_norm=False,
+    )
+    m_eq = LoopedMLP(
+        input_dim,
+        hidden_dim,
+        output_dim,
+        max_steps=max_steps,
+        gradient_method="equilibrium",
+        use_spectral_norm=False,
+    )
     m_eq.load_state_dict(m_bptt.state_dict())
     crit = nn.CrossEntropyLoss()
     m_bptt.zero_grad()
@@ -128,4 +154,6 @@ def test_mlp_gradient_loss_snapshot() -> None:
     actual = _mlp_gradient_losses()
     ref = SNAPSHOTS["mlp_gradient_parity"]
     for k in ("loss_bptt", "loss_eqprop"):
-        assert abs(actual[k] - ref[k]) < 1e-3, f"mlp_gradient {k} {actual[k]:.6f} != {ref[k]:.6f}"
+        assert abs(actual[k] - ref[k]) < 1e-3, (
+            f"mlp_gradient {k} {actual[k]:.6f} != {ref[k]:.6f}"
+        )

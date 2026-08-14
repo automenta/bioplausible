@@ -315,12 +315,12 @@ def test_registry_model_get_unknown_raises_value_error():
 
 
 def test_registry_optimizer_get_resolves_propagator_preset():
-    """smep is registered as PROPAGATOR (not OPTIMIZER); fallback must find it."""
+    """smep resolves as a learning-rule optimizer (CompositeOptimizerAdapter)."""
     model = _instantiate_model(
         "backprop_mlp", input_dim=784, hidden_dim=32, output_dim=10
     )
     opt = _instantiate_optimizer("smep", model.parameters(), model=model)
-    assert opt.__class__.__name__ == "CompositeOptimizer"
+    assert opt.__class__.__name__ == "CompositeOptimizerAdapter"
 
 
 def test_registry_optimizer_get_resolves_plain_optimizer():

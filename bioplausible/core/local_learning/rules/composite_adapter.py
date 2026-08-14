@@ -8,13 +8,14 @@ those presets as learning-rule optimizers, unifying the calling convention with
 L1 core layering rule.
 """
 
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import Protocol, cast
+
+import torch  # ruff: ignore[typing-only-third-party-import]  # runtime import: inspect.signature() evaluates the step() annotations
+from torch import (
+    nn,  # ruff: ignore[typing-only-third-party-import]  # (test_registry_audit inspects prop.step's signature)
+)
 
 from .base import LearningRuleOptimizer
-
-if TYPE_CHECKING:
-    import torch
-    from torch import nn
 
 __all__ = ["CompositeOptimizerAdapter"]
 
@@ -25,7 +26,9 @@ class _CompositeLike(Protocol):
     param_groups: list[dict[str, object]]
     model: nn.Module
 
-    def step(self, *, x: torch.Tensor | None, target: torch.Tensor | None) -> float | None: ...
+    def step(
+        self, *, x: torch.Tensor | None, target: torch.Tensor | None
+    ) -> float | None: ...
 
     def zero_grad(self, set_to_none: bool = True) -> None: ...
 
@@ -44,7 +47,9 @@ class CompositeOptimizerAdapter(LearningRuleOptimizer):
         super().__init__(params, model=composite.model)
         self._composite = composite
 
-    def step(self, x: torch.Tensor | None = None, target: torch.Tensor | None = None) -> None:
+    def step(
+        self, x: torch.Tensor | None = None, target: torch.Tensor | None = None
+    ) -> None:
         # ``x``/``target`` are optional so the adapter preserves the composite's
         # backprop mode (``loss.backward(); step()``) as well as its EP mode
         # (``step(x=x, target=y)``).

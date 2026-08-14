@@ -83,7 +83,12 @@ class TestP2PConstraints(unittest.TestCase):
         )
         # mutation_rate=0 must clamp out-of-range values without tossing them.
         clamped = space.mutate(
-            {"hidden_dim": 999, "num_layers": 99, "learning_rate": 1e-3, "momentum": 0.5},
+            {
+                "hidden_dim": 999,
+                "num_layers": 99,
+                "learning_rate": 1e-3,
+                "momentum": 0.5,
+            },
             mutation_rate=0.0,
         )
         self.assertIn(clamped["hidden_dim"], [64, 128, 256])
@@ -93,7 +98,12 @@ class TestP2PConstraints(unittest.TestCase):
         # mutation_rate=1 must keep every value within bounds.
         for _ in range(20):
             mutated = space.mutate(
-                {"hidden_dim": 128, "num_layers": 3, "learning_rate": 1e-3, "momentum": 0.5},
+                {
+                    "hidden_dim": 128,
+                    "num_layers": 3,
+                    "learning_rate": 1e-3,
+                    "momentum": 0.5,
+                },
                 mutation_rate=1.0,
             )
             self.assertIn(mutated["hidden_dim"], [64, 128, 256])

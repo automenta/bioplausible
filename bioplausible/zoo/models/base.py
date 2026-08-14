@@ -5,12 +5,14 @@ import torch.nn.functional as F
 from torch import autograd, nn
 
 from bioplausible.config.unified import ModelConfig
+from bioplausible.core.local_learning.settling import (
+    EquilibriumFunction,
+    settle_single_state,
+)
 from bioplausible.core.logging import get_logger
 from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.model import BioModel
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
-
-from bioplausible.core.local_learning.settling import EquilibriumFunction, settle_single_state
 
 __all__ = [
     "EqPropModel",

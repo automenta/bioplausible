@@ -198,7 +198,8 @@ def _is_deployment_model(model_cls: object) -> bool:
         return (
             isinstance(model_cls, type)
             and issubclass(model_cls, BioModel)
-            and getattr(model_cls, "build", None) is not getattr(BioModel, "build", None)
+            and getattr(model_cls, "build", None)
+            is not getattr(BioModel, "build", None)
         )
     except TypeError:
         return False

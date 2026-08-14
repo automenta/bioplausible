@@ -66,7 +66,12 @@ def test_probe_surfaces_dominant_training_path(monkeypatch) -> None:
     ]
 
     class FakeCoreTrainer:
-        def __init__(self, cfg: object) -> None:
+        def __init__(
+            self,
+            cfg: object,
+            dataset_cache: object = None,
+            model_cache: object = None,
+        ) -> None:
             self.cfg = cfg
 
         @staticmethod

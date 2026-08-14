@@ -8,10 +8,10 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.core.registry import register_propagator
-from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.core.local_learning.settling import energy_gradient_descent
 from bioplausible.core.optimization.strategies import UpdateStrategy
+from bioplausible.core.registry import register_propagator
+from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 from .base import LearningRuleOptimizer
 

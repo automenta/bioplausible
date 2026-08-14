@@ -200,7 +200,7 @@ ignore = ["line-too-long", "lowercase-imported-as-non-lowercase", "non-augmented
 # eqprop __init__.py is a pure re-export module: __all__ is computed
 # dynamically from vars() (Pillar L self-registration), so per-line F401
 # annotations and literal-sorted __all__ checks do not apply.
-"bioplausible/zoo/models/eqprop/__init__.py" = ["F401", "RUF022", "PLE0605"]
+"bioplausible/zoo/models/eqprop/__init__.py" = ["unused-import", "unsorted-dunder-all", "invalid-all-format"]
 "examples/legacy/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
 "examples/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]
 "scripts/legacy/**/*.py" = ["assert", "too-many-arguments", "too-many-statements"]

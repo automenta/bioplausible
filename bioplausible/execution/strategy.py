@@ -106,7 +106,7 @@ class ExecutionStrategy:
         "rl": ["cartpole", "pendulum", "acrobot"],
     }
 
-    def __init__(  # noqa: PLR0913, PLR0917  # injected EventSink for headless decoupling
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # injected EventSink for headless decoupling
         self,
         state: ExperimentState,
         decision_logger: DecisionLogger | None = None,

@@ -13,7 +13,6 @@ Usage:
 """
 
 import torch
-
 from bioplausible.equitile import (
     AsyncConfig,
     AsyncEquiTile,

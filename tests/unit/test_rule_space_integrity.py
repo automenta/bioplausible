@@ -154,7 +154,8 @@ def test_emitter_writes_honest_surface_records_to_kb(tmp_path):
 
 def test_convergence_knob_is_a_wired_lever():
     """Perturbing convergence_threshold changes settling (no-op-free knob)."""
-    from bioplausible.zoo._settling import settle_state
+    from bioplausible.core.local_learning.settling import settle_state
+
     from bioplausible.zoo.models.eqprop.neural_cube import NeuralCube
 
     x = torch.randn(3, 8)

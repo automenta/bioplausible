@@ -6,8 +6,8 @@ Canonical NEBC training utilities moved from zoo/nebc_base.py to core/ per REFAC
 
 import torch
 
-from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.logging import get_logger
+from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 logger = get_logger()

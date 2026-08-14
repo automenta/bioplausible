@@ -11,8 +11,6 @@ All NEBC algorithms test spectral normalization as a "stability unlock".
 
 from abc import ABC, abstractmethod
 
-import torch
-
 from bioplausible.core.logging import get_logger
 from bioplausible.core.model import BioModel
 from bioplausible.core.nebc import (

@@ -6,8 +6,6 @@ frontier sink shares one dominance predicate. These tests lock in the shared
 behavior and the three delegate contract.
 """
 
-import pytest
-
 from bioplausible.hyperopt.metrics import non_dominated_indices
 
 
