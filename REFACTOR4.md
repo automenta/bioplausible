@@ -17,11 +17,11 @@ Ground rules. No session logs, ever.
 
 | Stream | What | Status | Blocked by |
 |--------|------|--------|------------|
-| **LOOP** | One training loop | 🔄 in progress | steps 1–5: ✅ done · step 4: graph/training.py EXEMPT · steps 6–8: documented/deferred |
-| **FUNNEL** | One result sink | 🔄 in progress | step 1: ✅ done · step 2 (CheckpointManager eval): ✅ done (keep as telemetry) |
-| **CHECKPOINT** | Early-exit decision | ⬜ open | — |
-| **MEASURE** | One measurement stack | ⬜ open | CHECKPOINT |
-| **RULE** | Model owns the learning rule | ⬜ open | CHECKPOINT · GATE-0 |
+| **LOOP** | One training loop | ✅ done | steps 1–5: ✅ · step 4: graph/training.py EXEMPT · steps 6–8: documented/deferred (all in LOOP_ALLOW) |
+| **FUNNEL** | One result sink | ✅ done | step 1: ✅ · step 2 (CheckpointManager eval): ✅ (keep as telemetry) |
+| **CHECKPOINT** | Early-exit decision | ✅ done — STOP here 2026-08-14 | decision: stop semantic consolidation; keep LOOP+FUNNEL at modest risk |
+| **MEASURE** | One measurement stack | ⬜ open — CHECKPOINT decided stop | not started (deferred by CHECKPOINT decision) |
+| **RULE** | Model owns the learning rule | ⬜ open — CHECKPOINT decided stop | not started (deferred by CHECKPOINT decision) |
 | CONFIG · BUILD · CLI | Config / construction / CLI seams | ✅ done | — |
 | REGISTER · PRUNE | Self-registration / dead code (backlog) | 🔄 PRUNE: dead code + redundant tests deleted 2026-08-14 | PRUNE-tile ← MEASURE |
 
@@ -326,6 +326,35 @@ Consolidation adds no capability; it reduces future cost. If the debt has stoppe
 here is a legitimate success** — you keep one loop and one audit trail at modest risk. MEASURE and RULE
 are decisions made later with fresh evidence, not commitments made now.
 
+**DECISION: STOP 2026-08-14 — do not start MEASURE or RULE.** Evidence:
+- **LOOP done** — one canonical default train path (`dispatch_train_step` + central BPTT fallback).
+  Every remaining `loss.backward()` is a documented keep/defer/exempt site (in `LOOP_ALLOW`):
+  `ewc.py` (moved? no — see below), `forward_only.py`, `target_prop.py`, `eqprop_diffusion.py`,
+  `mep/*`, `graph/training.py`. Gates enforced in CI.
+- **FUNNEL done** — every hyperopt trial outcome (success + 3 failure paths) writes via
+  `record_experiment_result`. `CheckpointManager` = telemetry, kept as-is.
+- **MEASURE cost vs. payoff** — Step-0 note (assessed): the three non-canonical `BenchmarkResult`
+  classes are semantically distinct and do **not** map cleanly onto the canonical `metrics`-dict base:
+  `benchmarks/rigorous.py` (statistical perf distributions + raw samples + system info),
+  `benchmarks/compare_nanoGPT.py` (loss/ppl/tokens-per-sec), `analysis/tile_profiler.py` (tile timing
+  distribution). Ground rule 8 already sanctions coexistence ("interface + tracks, not mechanical
+  merging"). Forcing them into one class is an XL rework for zero new capability.
+- **RULE risk vs. payoff** — converting `fa/eqprop/hebbian/spiking` to model-side `train_step`s and
+  deleting files that ~20 tests + `cli/repro._gradient_gate` + `validation/tracks/nebc_tracks.py` +
+  `bioplausible/__init__.py` consume is a numerical-semantics change. GATE-0 pins only 3 specific
+  values; it cannot guarantee a *semantic* drift elsewhere goes unnoticed at low effort. AGENTS.md
+  prioritizes working functionality over consolidation.
+
+**Reopening MEASURE/RULE** should require a concrete pain point (e.g. a 6th `BenchmarkResult` is added,
+or a new training loop hand-rolls dispatch). Fresh evidence, not momentum. The CI gates (`check_seams.py`
+allowlists) will fail fast on any new violation, so the consolidated state stays enforced while dormant.
+
+**Criterion-1 note (current LOOP grep truth, 2026-08-14):** returns exactly the documented allowlisted
+set — `zoo/optimizers/ewc.py`, `zoo/models/forward_only.py`, `zoo/models/target_prop.py`,
+`zoo/models/eqprop/eqprop_diffusion.py`, `zoo/mep/{__init__,optimizers/__init__}.py`,
+`graph/training.py`. (`ewc.py` still matches `loss.backward()` because it is the EWC *loss rule*
+body, not the Fisher-move step that went to `core/`; see LOOP step 5 / Ledger.)
+
 ---
 
 ## MEASURE — one measurement stack
@@ -396,6 +425,35 @@ after step 3.** The payoff (simpler AutoScientist composition) may not justify t
 
 ---
 
+## Improvement opportunities (2026-08-14, non-blocking)
+
+Collected during CHECKPOINT; none are started, none are required. Keep them out of the "Not doing" list
+until a concrete pain point appears.
+
+- **`zoo/optimizers/ewc.py`** still matches the LOOP grep (`loss.backward()`) because it holds the EWC
+  *loss-rule* body; only the Fisher-move step went to `core/ewc.py`. When RULE is ever resumed, the
+  `update_fisher` → `register_ewc` → `compute_ewc_loss` trio should be reviewed for a single canonical
+  owner. Currently fine as-is (documented in `LOOP_ALLOW`).
+- **`graph/training.py` exemption** is the only bespoke non-`dispatch_train_step` loop left. If a second
+  such loop ever appears, revisit whether the dispatcher should grow a graph mode vs. keep the exemption.
+- **`check_imports.py`** reports "6 lazy loader(s) found (may mask cycles)" — a latent cycle-detection
+  blind spot. Worth a `# TODO` to surface what the lazy loaders are; low priority.
+- **MEASURE Step 5** (fold inline accuracy copies into `core.losses.compute_accuracy`) is the lowest-risk
+  item in MEASURE and could be done opportunistically later without the rest of MEASURE.
+
+## Facilitating future work
+
+- Re-entry = playbook at top: `uv sync --extra dev` → `check_imports.py` → `check_seams.py` → GATE-0
+  suite (`90 passed, 3 xfailed`). Do not re-derive LOOP/FUNNEL — they are done.
+- Status truth lives **only** in the Status table + Ledger. MEASURE/RULE remain open but are
+  deliberately deferred by the CHECKPOINT decision; the CI allowlists keep the achieved state enforced.
+- If resuming MEASURE: start with the Step-0 note (already assessed → coexist), then
+  `evaluation/base.BenchmarkResult` as the canonical interface, then `benchmarks/` tracks via
+  `BenchmarkRegistry` + `result_sink`. If resuming RULE: start with GATE-0 green check, then migrate
+  propagator consumers before deleting any file.
+
+---
+
 ## Ground rules
 
 1. **GATE-0 gates all semantic work — LOCKED 2026-08-14 (xfail + snapshots).** The 3 drifting parity tests are xfail; test_parity_snapshots.py pins their values. Zero new failures outside the locked xfails is the bar.
@@ -439,9 +497,9 @@ after step 3.** The payoff (simpler AutoScientist composition) may not justify t
 | gate | `tools/check_imports.py` passes in CI | always |
 | seams | `tools/check_seams.py` passes in CI (violators ⊆ allowlist) | ✅ enforcing, ratcheting |
 | GATE-0 | Parity locked (xfail + numerical snapshots) | ✅ locked 2026-08-14 |
-| 1 | LOOP grep = 0 (convertible set; proxy — see rule 14) | after LOOP 1–5 |
+| 1 | LOOP grep = 0 (convertible set; proxy — see rule 14) | 🔄 remainder is the documented allowlisted set; parked at CHECKPOINT |
 | 3 | `grep -rn "model_cls(" bioplausible/ \| grep -v construction.py` = 0 | ✅ |
-| 3b | All outcome writes via `result_sink` | FUNNEL + MEASURE |
+| 3b | All outcome writes via `result_sink` | FUNNEL ✅ · MEASURE deferred at CHECKPOINT |
 | 6 | `zoo/propagators/` = `mep.py` + gradient transformers | RULE |
 | K | `biopl` dispatcher works | ✅ |
 | — | Zero new test failures | always |
@@ -527,6 +585,8 @@ first-class and visible, never silently accumulated.
   Verify: `37 passed, 3 xfailed` on the GATE-0 command.
 - **CI SEAMS** — `tools/check_seams.py` created, locked to today's baseline, wired into pre-commit.
   All 4 gates green; `check_imports.py` + `check_seams.py` are the two CI guardians (§ CI gates).
+- **CHECKPOINT** — decided 2026-08-14: **STOP semantic consolidation here** (LOOP+FUNNEL done, MEASURE/RULE deferred). See CHECKPOINT section for the full evidence (MEASURE Step-0 assessed → coexist; RULE = parity risk not worth it absent a pain point).
+- **RE-ENTRY STATE (2026-08-14)** — verified: `check_imports.py` = 0 violations / 0 cycles; `check_seams.py` all 4 gates green (LOOP 7 violators ⊆ allowlist); GATE-0 + LOOP suites = `90 passed, 3 xfailed`. LOOP grep returns exactly the documented allowlisted set (see CHECKPOINT). The repo is cleanly parked at a green, gate-enforced checkpoint.
 - **CORE EXTENSIONS** — `core/nebc.py` (NEBC training utilities), `core/ewc.py` (EWC Fisher utilities)
   added as canonical L1 locations for formerly zoo-scoped utilities.
 - **RULE so far** — alias map live; `Registry.aliases()` / `resolve_alias()` available.

@@ -45,22 +45,28 @@ LOOP_EXCLUSIONS: tuple[str, ...] = (
     "training/rl.py",
     "zoo/propagators/",
 )
-# Baseline convertible debt (verified 2026-08-14). Remove entries as LOOP steps
-# clear them: step 3 -> {cli/repro,validation/utils,lightning_/module,sklearn_interface};
-# step 4 -> graph/training.py (or exempt + note); step 5 -> ewc,nebc_base; 6-8 -> rest.
+# Baseline convertible debt (locked 2026-08-14). Entries are removed as LOOP
+# steps clear them; the allowlist ratchets down monotonically.
+# step 3 -> {cli/repro,validation/utils,lightning_/module,sklearn_interface}: CLEARED
+#   (route through dispatch_train_step with canonical core bptt_step; lightning keeps
+#    forward-only step since PL owns the backward pass).
+# step 4 -> graph/training.py: EXEMPT (bespoke GraphStructure+param-dict training,
+#   Predictive Coding with local gradients — does not fit dispatch_train_step seam).
+# step 5 -> {ewc,nebc_base}: CLEARED (train_nebc_model & update_fisher moved to core/).
+# step 6 -> target_prop.py: KEPT (pure local train_step implements target propagation;
+#   loss.backward() is part of local rule, not BPTT fallback).
+# step 7 -> eqprop_diffusion.py: KEPT (tagged broken, deferred — don't invest).
+# step 8 -> mep inline loops: deferred (convert when touched).
 LOOP_ALLOW: set[str] = {
-    "cli/repro.py",
-    "validation/utils.py",
-    "lightning_/module.py",
-    "sklearn_interface.py",
-    "zoo/models/eqprop/eqprop_diffusion.py",
-    "zoo/models/forward_only.py",
-    "zoo/models/target_prop.py",
-    "zoo/optimizers/ewc.py",
-    "zoo/mep/__init__.py",
-    "zoo/mep/optimizers/__init__.py",
-    "zoo/nebc_base.py",
-    "graph/training.py",
+    "zoo/models/eqprop/eqprop_diffusion.py",  # step 7: broken, deferred
+    "zoo/models/forward_only.py",             # step 6: local greedy loss
+    "zoo/models/target_prop.py",              # step 6: local train_step
+    "zoo/optimizers/ewc.py",                  # step 5: optimizer Fisher util (core alt exists)
+    "zoo/mep/__init__.py",                    # step 8: inline MEP loops (deferred)
+    "zoo/mep/optimizers/__init__.py",         # step 8: inline MEP loops (deferred)
+    "graph/training.py",                      # step 4: EXEMPT (bespoke GraphStructure
+                                              # training + Predictive Coding local gradients;
+                                              # does not fit dispatch_train_step seam)
 }
 
 # ── seam:model-cls ───────────────────────────────────────────────────────────
