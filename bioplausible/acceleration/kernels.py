@@ -417,6 +417,37 @@ class EqPropKernel:
         xp = self.xp
 
         if self.architecture == "layered":
+            if (
+                HAS_TRITON_OPS
+                and self.use_gpu
+                and HAS_CUPY
+                and isinstance(h, cp.ndarray)
+            ):
+                # Fused single-launch layered MLP block: layernorm, W1, tanh,
+                # W2, residual — replaces ~6 separate CuPy launches per settle
+                # step (the previous code only fused the residual update).
+                # Returns (h_next, h_norm, ffn_hidden) for the Hebbian update.
+                res = TritonEqPropOps.step_layered_cupy(
+                    h,
+                    x_emb,
+                    weights["W1"],
+                    self.biases["W1"],
+                    weights["W2"],
+                    self.biases["W2"],
+                    self.gamma,
+                )
+                if res is not None:
+                    h_next, h_norm, ffn_hidden = res
+                    if return_activations:
+                        activations = {
+                            "h_norm": h_norm,
+                            "ffn_hidden": ffn_hidden,
+                            "h": h,
+                            "h_next": h_next,
+                        }
+                        return h_next, activations
+                    return h_next, None
+
             h_mean = xp.mean(h, axis=-1, keepdims=True)
             h_std = xp.std(h, axis=-1, keepdims=True) + 1e-5
             h_norm = (h - h_mean) / h_std

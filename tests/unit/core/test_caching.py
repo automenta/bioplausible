@@ -1,9 +1,10 @@
 """Tests for the REFACTOR5 experiment cache layer."""
 
+import numpy as np
 import torch
 from torch import nn
 
-from bioplausible.core._caching import DatasetCache, ModelCache
+from bioplausible.core._caching import DatasetCache, ModelCache, _stable_hash
 
 
 def test_dataset_cache_roundtrip_and_eviction():
@@ -60,3 +61,21 @@ def test_model_cache_lru_eviction():
     cache.put(k3, nn.Linear(1, 1))
     assert cache.get(k2) is None
     assert cache.get(k1) is not None
+
+
+def test_stable_hash_handles_non_json_and_nested():
+    # Nested dicts + lists are order-independent and hash alike.
+    a = _stable_hash({"cfg": {"b": 1, "a": [1, 2, 3]}, "n": 5})
+    b = _stable_hash({"n": 5, "cfg": {"a": [1, 2, 3], "b": 1}})
+    assert a == b
+    # Non-JSON-serializable values degrade to a stable repr-based token.
+    c = _stable_hash({"t": torch.zeros(2, 2)})
+    d = _stable_hash({"t": torch.zeros(2, 2)})
+    assert c == d
+    # Distinguishing types must not collide even with equal repr.
+    e = _stable_hash({"v": {"a": 1}})
+    f = _stable_hash({"v": {"a": 1.0}})
+    assert e != f
+    # NumPy scalars/arrays are supported.
+    g = _stable_hash({"arr": np.array([1, 2])})
+    assert g == _stable_hash({"arr": np.array([1, 2])})

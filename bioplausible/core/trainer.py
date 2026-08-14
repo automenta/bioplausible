@@ -718,10 +718,13 @@ class CoreTrainer:
             input_dim = 0
         if output_dim is None:
             output_dim = 0
+        # The hardware facade is part of the cached artifact: include the
+        # target_hardware knob in the key so a hardware sweep reuses (rather
+        # than rebuilds) the substrate facade on cache hits.
         cache_key = (
             self.model_cache.key(
                 self.config.model,
-                self.config.model_kwargs,
+                {**self.config.model_kwargs, "_hardware": self.config.target_hardware},
                 input_dim,
                 output_dim,
                 self.config.device,
@@ -741,9 +744,18 @@ class CoreTrainer:
                     model_name=self.config.model,
                 ),
             )
+            self._hardware_meta = self._hardware_meta_for(
+                self.config.model_kwargs, model
+            )
+            model = self._apply_hardware(model)
             if cache_key is not None:
                 self.model_cache.put(cache_key, model)
-        self.model = self._apply_hardware(cast("nn.Module", model))
+        else:
+            # Cache hit: the facade was cached, so re-derive the meta.
+            self._hardware_meta = self._hardware_meta_for(
+                self.config.model_kwargs, model
+            )
+        self.model = model
 
         logger.info(
             "Model created: %s (%d params)",
@@ -759,12 +771,8 @@ class CoreTrainer:
         from it), so the knob is a no-op for every other model. The facade is
         rebuilt from the same ``model_kwargs`` plus the hardware depth default
         (``bits`` for FPGA, ``noise_level`` for analog).
-
-        The chosen substrate is recorded on ``self._hardware_meta`` so each
-        epoch's :class:`TrainingMetrics.extra` exposes it to the probe driver.
         """
         hardware = self.config.target_hardware
-        self._hardware_meta = {}
         if not hardware or hardware == "gpu":
             return model
 
@@ -780,24 +788,41 @@ class CoreTrainer:
         if hardware == "fpga":
             kwargs = dict(self.config.model_kwargs)
             kwargs.setdefault("bits", 8)
-            self._hardware_meta = {
-                "target_hardware": "fpga",
-                "bits": int(kwargs["bits"]),
-            }
             swapped: nn.Module = QuantizedLoopedMLP(**kwargs)
         elif hardware == "analog":
             kwargs = dict(self.config.model_kwargs)
             kwargs.setdefault("noise_level", 0.05)
-            self._hardware_meta = {
-                "target_hardware": "analog",
-                "noise_level": float(kwargs["noise_level"]),
-            }
             swapped = NoisyLoopedMLP(**kwargs)
         else:  # pragma: no cover  # Literal type narrows the possible values
             return model
 
         logger.info("Hardware target '%s': %s", hardware, swapped.__class__.__name__)
         return swapped
+
+    def _hardware_meta_for(self, model_kwargs: dict, model: nn.Module) -> dict:
+        """Return the substrate metadata to expose for the current hardware.
+
+        Mirrors ``_apply_hardware``'s depth selection (bits / noise_level) so
+        a cached-facade hit can re-derive the same ``TrainingMetrics.extra``
+        payload without re-running the facade constructor.
+        """
+        hardware = self.config.target_hardware
+        if not hardware or hardware == "gpu":
+            return {}
+        if not isinstance(model, nn.Module):
+            return {}
+        from bioplausible.zoo.models.eqprop import LoopedMLP
+
+        if not isinstance(model, LoopedMLP):
+            return {}
+        if hardware == "fpga":
+            return {"target_hardware": "fpga", "bits": int(model_kwargs.get("bits", 8))}
+        if hardware == "analog":
+            return {
+                "target_hardware": "analog",
+                "noise_level": float(model_kwargs.get("noise_level", 0.05)),
+            }
+        return {}
 
     def _is_kernal_model(self) -> bool:
         """Check if model uses kernel backend (not compatible with torch.compile)."""

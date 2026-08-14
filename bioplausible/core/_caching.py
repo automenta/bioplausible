@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import json
 import threading
 from collections import OrderedDict
 from typing import TYPE_CHECKING
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -24,9 +24,38 @@ if TYPE_CHECKING:
 
 
 def _stable_hash(obj: object) -> str:
-    """Order-independent SHA256 of a JSON-serializable object."""
-    canonical = json.dumps(obj, sort_keys=True, default=str)
-    return hashlib.sha256(canonical.encode()).hexdigest()[:16]
+    """Order-independent SHA256 of a config value (arbitrary nesting).
+
+    Recursively canonicalizes dicts (sorted keys) and sequences so equivalent
+    structures hash alike regardless of insertion order, and degrades to a
+    stable ``repr``-based token for values that are not JSON-serializable (e.g.
+    custom objects, tensors) instead of silently stringifying them.
+    """
+    return hashlib.sha256(_canonical(obj).encode()).hexdigest()[:16]
+
+
+def _canonical(obj: object) -> str:
+    """Return an order-independent string form of ``obj`` for hashing."""
+    if isinstance(obj, dict):
+        return (
+            "{"
+            + ",".join(
+                f"{_canonical(k)}:{_canonical(v)}"
+                for k, v in sorted(obj.items(), key=repr)
+            )
+            + "}"
+        )
+    if isinstance(obj, (list, tuple)):
+        return "[" + ",".join(_canonical(x) for x in obj) + "]"
+    if isinstance(obj, set):
+        return "{" + ",".join(sorted(_canonical(x) for x in obj)) + "}"
+    if isinstance(obj, (np.ndarray, torch.Tensor)):
+        return f"{type(obj).__name__}:{repr(obj.shape)}:{obj.tolist()!r}"
+    if isinstance(obj, bool) or obj is None:
+        return repr(obj)
+    if isinstance(obj, (int, float, str)):
+        return f"{type(obj).__name__}:{obj!r}"
+    return f"{type(obj).__name__}:{obj!r}"
 
 
 class DatasetCache:

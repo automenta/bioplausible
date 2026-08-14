@@ -151,6 +151,7 @@ name = "bioplausible"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cupy-cuda13x" },
     { name = "numpy" },
     { name = "omegaconf" },
     { name = "pydantic" },
@@ -294,6 +295,7 @@ requires-dist = [
     { name = "bioplausible", extras = ["vision", "lm", "rl", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "spiking", "llm"], marker = "extra == 'full'" },
     { name = "botorch", marker = "extra == 'knowledgebase'" },
     { name = "build", marker = "extra == 'dev'" },
+    { name = "cupy-cuda13x", specifier = ">=14.1.1" },
     { name = "datasets", marker = "extra == 'dev'" },
     { name = "datasets", marker = "extra == 'lm'" },
     { name = "fastapi", marker = "extra == 'deploy'" },
@@ -743,6 +745,22 @@ nvrtc = [
 ]
 nvtx = [
     { name = "nvidia-nvtx", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+]
+
+[[package]]
+name = "cupy-cuda13x"
+version = "14.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cuda-pathfinder" },
+    { name = "numpy" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/ca/9bc8d6d40003640653161e2dba78740f2055df8bb48e216eed5584cecc3c/cupy_cuda13x-14.1.1-cp314-cp314-manylinux2014_aarch64.whl", hash = "sha256:8b068f6958811bc50d81bd0a83267ec4cffc3d7e842120b9646ec547f5a69298", size = 72680680 },
+    { url = "https://files.pythonhosted.org/packages/e8/2d/8c79c577e9b35c60e5600217d1a849ab76c18a289f99a4145aa85388a531/cupy_cuda13x-14.1.1-cp314-cp314-manylinux2014_x86_64.whl", hash = "sha256:39f8aeeb5bad16603956f8ec00094e058a9dd5db92ab514975686750363c3692", size = 68432306 },
+    { url = "https://files.pythonhosted.org/packages/c4/03/8d4d77138eb5f60a2a1fb5484a89dad2bc6bc6283682179994d722cfb4b5/cupy_cuda13x-14.1.1-cp314-cp314-win_amd64.whl", hash = "sha256:dae6f77edfe96ab8e014d3e589dca33906d212fdf8f72e66850d4612bc031783", size = 35323057 },
+    { url = "https://files.pythonhosted.org/packages/c4/c4/eb46fec30fffd7a57a80cc7f027e50a1d530b332e81362a8b874905da2d1/cupy_cuda13x-14.1.1-cp314-cp314t-manylinux2014_aarch64.whl", hash = "sha256:509f378c865c0b6bc9ed1dfe9e94b08b4511e9865363fdac55f9d66fe341e91d", size = 72984246 },
+    { url = "https://files.pythonhosted.org/packages/24/59/e0098ca2e1ba99a0086ad4b515b2d7dbb8ae0f13b9721c02eed0db4adec5/cupy_cuda13x-14.1.1-cp314-cp314t-manylinux2014_x86_64.whl", hash = "sha256:6c0d19789e9f9515988d51dffaff70af8b3dcdddcdf2fbafa9eff08df7be0a51", size = 68662887 },
 ]
 
 [[package]]

@@ -27,20 +27,17 @@ classifiers = [
 dependencies = [
     # Core ML framework
     "torch>=2.0.0",
-
     # Numerical
     "numpy",
-
     # CLI / progress / output
     "tqdm",
     "rich",
-
     # Configuration & validation
     "pydantic>=2.0",
     "omegaconf>=2.3",
-
     # Spiking neural networks (LIF kinetics for SpikingSTDP)
     "snnTorch>=0.8",
+    "cupy-cuda13x>=14.1.1",
 ]
 
 [project.optional-dependencies]
