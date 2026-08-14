@@ -19,7 +19,7 @@ A strict dependency-layered core with **exactly one implementation of every cros
 | ID | Work stream | Former pillar | Status | Blocked by |
 |----|-------------|---------------|--------|-----------|
 | **LOOP** | One training loop | A | 🔄 in progress | — |
-| **FUNNEL** | One result/persistence funnel | E | ⬜ open | LOOP |
+| **FUNNEL** | One result/persistence funnel (a: hyperopt failures — unblocked; b: mep outcome routing — blocked) | E | ⬜ open | a: — · b: MEASURE |
 | **MEASURE** | One measurement stack | D | ⬜ open | FUNNEL |
 | **RULE** | One learning-rule interface (propagator→model) | G | ⬜ open | LOOP |
 | **REGISTER** | Self-registration | L | ⚠️ partial | — |
@@ -31,7 +31,7 @@ A strict dependency-layered core with **exactly one implementation of every cros
 Legend: ✅ done · 🔄 in progress · ⬜ open · ⚠️ partial · ⛔ deferred
 
 ### 0.4 Start here (next concrete action)
-Work **LOOP**. The two unblocked steps from the previous revision are **done** (validation tracks → seam; engine device threading). Next: **§2.1 step 1** — delete backprop-mode `train_step` in `zoo/models/deployments/base.py:250-257` (~15 lines). Steps 4 & 6 (propagator deletion/migration) advance both LOOP #1 and RULE #6 — coordinate with RULE.
+Work **LOOP**. Next: **§2.1 step 1** (delete backprop-mode `train_step` in `zoo/models/deployments/base.py`, ~15 lines, test-verified). Steps 4–6 advance both LOOP #1 and RULE #6 — do them as one coordinated pass. FUNNEL-a (hyperopt failure consolidation) is unblocked and can be picked up in parallel.
 
 ### 0.5 Baseline (what "green" means)
 - **Tests:** 2002 pass / 6 fail / 10 skip / 1 xfail. The 6 fails are documented numerical/parity drifts, unrelated to this refactor. **Zero new failures is the bar.**
@@ -113,37 +113,46 @@ Each brief is self-contained: goal → seam → state → next steps → gotchas
 - `cli/repro.py:_train_one_epoch` now uses `dispatch_train_step`. **Note:** this did *not* advance criterion #1 — its `_bptt` fallback `loss.backward()` remains (non-`train_step` families like `fa` legitimately use BPTT).
 - **Validation tracks delegate to the seam.** `validation/utils.train_model` now routes each epoch through `dispatch_train_step` (BPTT fallback closure retained; identical behavior). All declarative `track_*` specs call `train_model` unchanged, so execution now flows through the seam without touching the ~40 specs. This mirrors the `cli/repro.py` pattern — does *not* reduce the criterion-#1 file count (the `_bptt_step` closure keeps `loss.backward()`).
 - **Engine device threaded.** `ExecutionEngine.__init__` gained a `device: str = "auto"` param (resolved once via `get_device()` → `self.device: str`); `_get_train_loader` and `_get_val_loader` now pass `device=self.device` instead of hardcoded `"cpu"`. Default `"auto"` preserves all existing callers.
-- **`sklearn_interface.EqPropClassifier._train_step` routed through the seam.** It hand-rolled the exact dispatch logic (zero-grad → `model.train_step` → BPTT fallback). Now delegates to `dispatch_train_step`; behavior preserved (verified both paths: `backprop_mlp` → BPTT fallback `{"loss","accuracy"}`; `eqprop_mlp` → model `train_step` metrics). BPTT fallback closure still holds `loss.backward()` (counts toward criterion #1's ~40).
+- **`sklearn_interface.EqPropClassifier._train_step` routed through the seam.** It hand-rolled the exact dispatch logic (zero-grad → `model.train_step` → BPTT fallback). Now delegates to `dispatch_train_step`; behavior preserved (verified both paths: `backprop_mlp` → BPTT fallback `{"loss","accuracy"}`; `eqprop_mlp` → model `train_step` metrics). BPTT fallback closure still holds `loss.backward()` (counts toward criterion #1).
 
-**The hard part.** Criterion #1 requires removing `loss.backward()` from **~40 files** outside `core/`+`training_mixin`. These are **not mechanical duplicates**—each is a distinct algorithm with legitimate reasons for owning its backward pass. The work is **architectural rerouting** through `dispatch_train_step`, not deletion.
+**Next steps.**
+1. Delete backprop-mode `train_step` in `zoo/models/deployments/base.py:250-257` (~15 lines) — falls through to BPTT fallback. Verify with `tests/unit/core/test_deployment_models.py`.
+2. Delete `TileLM.train_step` (`zoo/models/tile_lm.py:228-246`) — same rationale (it's `mode="backprop"`).
+3. Route `graph/training.py` loops through `dispatch_train_step` (not CoreTrainer.fit — graph dynamics stay custom).
+4. Delete `zoo/propagators/backprop.py` (BPTT fallback covers it) — **coordinate with RULE.**
+5. Decide target_prop: pure local `train_step` or delete + propagator path — **coordinate with RULE.**
+6. Convert `zoo/propagators/{fa,eqprop,hebbian,spiking}.py` to model-side `train_step`s, then delete — **this is the shared LOOP∩RULE work.**
 
-**Categorized hit list (verified by grep):**
+**The hard part.** Criterion #1 requires removing `loss.backward()` from **~20 files** outside `core/`+`training_mixin` (the convertible set). These are **not mechanical duplicates**—each is a distinct algorithm with legitimate reasons for owning its backward pass. The work is **architectural rerouting** through `dispatch_train_step`, not deletion.
+
+**Categorized hit list (verified by grep — REPRESENTATIVE categories, not exhaustive; run the criterion-#1 grep for the authoritative list):**
 
 | Category | Files | Strategy |
 |----------|-------|----------|
-| **Model-side `train_step` with `loss.backward()` (convert to pure local update OR delete `train_step` to fall through to BPTT fallback)** | | |
-| EquiTile deployments (backprop mode) | `zoo/models/deployments/base.py:250-257` | Delete `train_step` for `mode="backprop"`; falls through to BPTT |
+| **Model-side `train_step` with `loss.backward()` (~8: convert to pure local update OR delete `train_step` to fall through to BPTT fallback)** | | |
+| EquiTile deployments (backprop mode) | `zoo/models/deployments/{base,graph,vision,timeseries}.py` | Delete `train_step` for `mode="backprop"`; falls through to BPTT |
 | TileLM (BPTT mode) | `zoo/models/tile_lm.py:228-246` | Delete `train_step`; it's `mode="backprop"` anyway |
 | Difference Target Prop | `zoo/models/target_prop.py:111-175` | Implement pure target-prop (no autograd) in `train_step` OR delete `train_step` + use model-side propagator (per RULE) |
 | ForwardForwardNet classifier head | `zoo/models/forward_only.py:161-163` | Classifier uses `supervised_step`→backward; move to separate optimizer or keep as legitimate local update |
 | EqPropDiffusion (tagged **broken**) | `zoo/models/eqprop/eqprop_diffusion.py:104-129` | Low priority—tagged broken; delete or fix later |
-| **Propagators (per RULE §2.4: convert to model-side `train_step` OR delete—let BPTT fallback handle backprop)** | | |
+| **Propagators (~3 code files; base.py is docstring-only, not counted)** | | |
 | Backprop propagator | `zoo/propagators/backprop.py:65` | **Delete**—backprop models fall through to BPTT fallback |
-| FA / EqProp / Hebbian / Spiking propagators | `zoo/propagators/{fa,eqprop,hebbian,spiking}.py` | Convert to model-side `train_step` on respective models, then delete propagator |
-| **Graph training (used by `predictive_coding.py:FabricPCGraphPCN.train_step`)** | | |
-| `train_backprop` / `train_pcn` | `graph/training.py:145,346` | Delegate to `CoreTrainer` instead of hand-rolled loops |
+| FA / EqProp / Hebbian / Spiking propagators | `zoo/propagators/{fa,eqprop,spiking}.py` | Convert to model-side `train_step` on respective models, then delete propagator |
+| **Graph training** | | |
+| `train_backprop` / `train_pcn` | `graph/training.py:145,346` | Route through `dispatch_train_step` instead of hand-rolled loops |
+| **Utilities (move to `core/`)** | | |
+| `train_nebc_model` | `zoo/nebc_base.py:109` | Move to `core/`; used by tests |
+| `update_fisher` | `zoo/optimizers/ewc.py:68` | Move to `core/` or accept pre-computed gradients |
+| `mep/__init__` + `mep/optimizers/__init__` | `zoo/mep/__init__.py:16`, `zoo/mep/optimizers/__init__.py:20` | Inline loops inside mep package (not mep/benchmarks); convert when touched |
+| **Already seam-routed (BPTT-fallback closures — the 4 files keep `loss.backward()` as the allowed fallback)** | | |
+| `cli/repro.py`, `validation/utils.py`, `lightning_/module.py`, `sklearn_interface.py` | BPTT fallback closure | **HOLD** — closures mirror `core/trainer.py:_bptt_step`; only the fallback wiring should be centralized, not removed |
 | **Diagnostic / measurement loops (EXPLICITLY PERMITTED — do NOT convert; they measure specific semantics)** | | |
 | Validation tracks (6 files) | `validation/tracks/{scaling,hardware,application,tradeoff,nebc,architecture_comparison}_tracks.py` | **KEEP**—gradient-flow/Lipschitz, memory-geometry, Fisher, EWC, thermal-noise, plain-BPTT-intent, forward-only smoke checks |
 | Analysis diagnostics | `analysis/dynamics.py`, `analysis/energy_landscape.py` | **KEEP**—measurement tools, not training loops |
 | Adversarial/interpretability | `execution/{robustness,interpretability,_guards}.py` | **KEEP**—gradient analysis (FGSM/PGD/saliency/IG), not training |
 | Benchmarks | `benchmarks/{rigorous,efficiency_analysis}.py` | Convert to `BenchmarkRegistry` tracks (**blocked on MEASURE**) |
 | MEP benchmarks (7 files) | `zoo/mep/benchmarks/*.py` | Convert to `BenchmarkRegistry` tracks (**blocked on MEASURE**) |
-| **Utilities (move to `core/`)** | | |
-| `train_nebc_model` | `zoo/nebc_base.py:109` | Move to `core/`; used by tests |
-| `update_fisher` | `zoo/optimizers/ewc.py:68` | Move to `core/` or accept pre-computed gradients |
-| **Already routed / not applicable** | | |
-| `sklearn_interface.py` | Fixed—routes through seam; BPTT fallback in `core/` | **DONE** |
-| `lightning_/module.py` | Uses `dispatch_train_step` | **DONE** |
+| **Not applicable** | | |
 | `training/rl.py` | RL (REINFORCE from env trajectories) | **NOT CONVERTING**—architecturally inappropriate |
 
 **Acceptance criterion #1.** 0 `loss.backward()` in the *convertible* set (i.e. excluding explicitly-permitted and blocked files):
@@ -162,7 +171,7 @@ grep -rln "loss.backward()" bioplausible/ \
   → 0 files
 ```
 
-(Currently ~40 in the convertible set. The `dispatch_train_step` BPTT fallback in `core/trainer.py:_bptt_step` is **allowed**—it's in `core/`. MEASURE-blocked files in `benchmarks/` and `zoo/mep/benchmarks/` are tracked separately; `training/rl.py` is not converting.)
+(Currently ~20 in the convertible set, excluding `.pyc` caches. The `dispatch_train_step` BPTT fallback in `core/trainer.py:_bptt_step` is **allowed**—it's in `core/`. The 4 already-seam-routed files' fallback closures (`cli/repro.py`, `validation/utils.py`, `lightning_/module.py`, `sklearn_interface.py`) are **HOLD** — see table. MEASURE-blocked files in `benchmarks/` and `zoo/mep/benchmarks/` are tracked separately; `training/rl.py` is not converting.)
 
 **Verify.** `pytest tests/unit/core/test_core_trainer.py tests/integration/test_smoke_training.py tests/unit/core/test_deployment_models.py`; run the grep above.
 
@@ -192,14 +201,18 @@ grep -rln "loss.backward()" bioplausible/ \
 
 **Win.** ~700 lines removed; split-brain audit trails eliminated.
 
+**Split (dependency de-cycle).** FUNNEL splits into two independently-schedulable halves:
+- **FUNNEL-a** — hyperopt failure consolidation (`experiment.py:523,541,564` → `record_experiment_result(status="failed")`). **Unblocked, parallelizable with LOOP.**
+- **FUNNEL-b** — mep-benchmark outcome routing (the five backends written only from `result_sink`, including mep-benchmarks). **Blocked on MEASURE** (the mep/benchmarks files are MEASURE scope).
+
 **Risk assessment — do NOT do this mechanically.** The `execution/engine.py` Optuna `study.tell/ask` (lines 558, 597, 639) and `state.failure_tracker.log_failure` (451) are the engine's **online HPO loop itself**, not outcome recording — folding them into `record_experiment_result` would conflate the search loop with the KB audit trail. `result_sink` already owns KB + FailureTracker and is called from hyperopt, validation tracks, trainer, and probe. **Treat the remaining unification as architectural, not mechanical.**
 
 **Audit (done — split-brain map for the next session).** `record_experiment_result` is already called from `hyperopt/experiment.py:620`, `validation/tracks/hardware_tracks.py:56`, `core/trainer.py:1698`, `experiment/probe.py:422`. Remaining out-of-sink writers, classified:
-- **Genuine outcome-recording (FUNNEL candidates — route through the sink):** `hyperopt/experiment.py:523,541,564` write per-trial `FailureTracker.log_failure` (training_failed/timeout/exception). These ARE trial outcomes duplicating `record_experiment_result(status="failed")` — NOT the engine's online HPO loop. Consolidating requires the sink's failure path to capture `failure_type`, `trial_id`, `stack_trace` (it already does — `_record_failure` maps status→type and reads `extra["tier"]`/`extra["error"]`).
+- **Genuine outcome-recording (FUNNEL-a candidates — route through the sink):** `hyperopt/experiment.py:523,541,564` write per-trial `FailureTracker.log_failure` (training_failed/timeout/exception). These ARE trial outcomes duplicating `record_experiment_result(status="failed")` — NOT the engine's online HPO loop. Consolidating requires the sink's failure path to capture `failure_type`, `trial_id`, `stack_trace` (it already does — `_record_failure` maps status→type and reads `extra["tier"]`/`extra["error"]`).
 - **Semantically-distinct KB writes (do NOT fold into the outcome sink):** `hyperopt/search_space.py:599` records *rule-surface* validator entries (phantom detection); `evaluation/cross_domain.py:296` records *benchmark* entries — different knowledge types than experiment outcomes; folding needs schema extension (MEASURE-scope).
 - **Online HPO loop (do NOT fold):** `execution/engine.py:454` (failure_tracker) + `558,597,639` (Optuna tell/ask), per risk assessment.
 
-**Acceptance criterion #3.** `record_experiment_result` called by execution, hyperopt, validation, mep-benchmarks; all five backends written only from `result_sink`.
+**Acceptance criterion #3b.** `record_experiment_result` called by execution, hyperopt, validation, mep-benchmarks; all five backends written only from `result_sink`.
 
 **Verify.** `grep -rn "record_experiment_result" bioplausible/`; confirm no backend is written from outside the sink.
 
@@ -291,6 +304,7 @@ Single `ModelConfig`, single `ExperimentConfig`; `TrainerConfigSchema` and `_KNO
 - **Task geometry is ambiguous by design.** `TaskProtocol.input_dim` is typed `int | None` but concrete tasks return *tuples* (e.g. `mnist → (1,28,28)`). The resolution seam (`resolve_task_from_data_config`) must thread geometry **straight through** to `construct_model` (matching `_build_runconfig_model`) — never `int()`-coerce it. Flattening (`math.prod`) lives only in `domains/registry.resolve_task` (the scheduler's geometry view).
 - **`_create_model` needs no `int()` coercion.** `_setup_data` seeds `model_kwargs["input_dim"]` from the task; `_create_model` uses a `None` check that preserves tuples. Any caller hand-building `TrainerConfig` must pass a task name (so geometry resolves) or include `input_dim`/`output_dim` in `model_kwargs`.
 - **`dispatch_train_step` is the single train-step seam.** New loops must route through it.
+- **`dispatch_train_step`'s call signature is frozen.** RULE's 5→2 phase collapse is internal to the dispatcher — it must not change the `dispatch_train_step(model, x, y, adapt_input, bptt_step, propagator, optimizer, config, record_path)` signature. LOOP wiring (~20 callers) survives RULE untouched.
 
 ### 6.2 Environment / toolchain gotchas
 - **`python -m bioplausible.cli <cmd>` shows the wrong `prog`** ("python3 -m bioplausible.cli") vs the installed `biopl` script ("biopl rank"). Cosmetic runpy vs. entry-script difference; verify via `uv run biopl ...`, not `python -m`.
@@ -301,12 +315,14 @@ Single `ModelConfig`, single `ExperimentConfig`; `TrainerConfigSchema` and `_KNO
 | # | Criterion | Status |
 |---|-----------|--------|
 | gate | Import-DAG checker passes in CI | required always |
-| 1 | `loss.backward()` outside `core/`+`training_mixin` = 0 (convertible set only; see §2.1 for exclusions) | ⬜ ~40 files (LOOP) |
+| 1 | `loss.backward()` outside `core/`+`training_mixin` = 0 (convertible set only; see §2.1 for exclusions) | ⬜ ~20 files (LOOP) |
 | 3 | `model_cls(` outside construction = 0 | ✅ |
 | 3b | No split-brain persistence (all writes via `result_sink`) | ⬜ (FUNNEL) |
 | 6 | `zoo/propagators/` = `mep.py` + gradient transformers only | ⬜ (RULE) |
 | K | `biopl` dispatcher works | ✅ |
 | — | Zero new test failures beyond the 6 pre-existing drifts | required always |
+
+*Criterion #2 (config name collision) was retired into CONFIG; #4 and #5 were retired/absorbed by BUILD and CLI respectively. The IDs are intentionally not renumbered — see §5 Ledger.*
 
 ---
 
