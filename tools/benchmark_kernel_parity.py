@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Manual REFACTOR5 EQPROP parity benchmark: kernel backend vs PyTorch on MNIST.
 
-The kernel backend (``EqPropKernel``, NumPy/CuPy) is the O(1)-memory
+The kernel backend (``EqPropKernel``, NumPy/CuPy on GPU) is the O(1)-memory
 contrastive-Hebbian path; the PyTorch engine (``LoopedMLP``) is the canonical
 layered engine. GATE-0 already proves *gradient/equilibrium* parity; this
 benchmark checks the *learning* parity the plan requires: final MNIST accuracy
-within 1 percentage point of the PyTorch path.
+within 1 percentage point of the PyTorch path, plus the GPU time/memory story.
 
 This is a manual benchmark (not CI-gated): it downloads MNIST, trains both
-paths on a fixed subset, and reports the accuracy delta.
+paths on a fixed subset, and reports the accuracy delta + timing.
 
 Usage:
-    uv run python tools/benchmark_kernel_parity.py [--train-samples N] [--epochs K]
+    uv run python tools/benchmark_kernel_parity.py [--train-samples N] [--epochs K] [--gpu]
 """
 
 from __future__ import annotations

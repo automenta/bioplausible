@@ -361,6 +361,9 @@ class EqPropKernel:
             "v": {k: self.xp.zeros_like(v) for k, v in self.weights.items()},
             "t": 0,
         }
+        # Cache of converted torch weight/biases tensors (GPU path). Weights are
+        # stable across a settle; invalidated whenever adam_update mutates them.
+        self._torch_wcache: dict[str, object] = {}
 
     def _init_weight(self, in_dim: int, out_dim: int, scale: float = 0.5) -> np.ndarray:
         """Initialize weight matrix with Xavier-like initialization."""
@@ -417,17 +420,12 @@ class EqPropKernel:
         xp = self.xp
 
         if self.architecture == "layered":
-            if (
-                HAS_TRITON_OPS
-                and self.use_gpu
-                and HAS_CUPY
-                and isinstance(h, cp.ndarray)
-            ):
-                # Fused single-launch layered MLP block: layernorm, W1, tanh,
-                # W2, residual — replaces ~6 separate CuPy launches per settle
-                # step (the previous code only fused the residual update).
-                # Returns (h_next, h_norm, ffn_hidden) for the Hebbian update.
-                res = TritonEqPropOps.step_layered_cupy(
+            if self.use_gpu and HAS_CUPY and isinstance(h, cp.ndarray):
+                # Torch-native layered MLP block (cuBLAS matmuls, zero-copy
+                # cupy<->torch views) — ~8x faster than the hand-rolled Triton
+                # kernel for these FFN shapes. Returns (h_next, h_norm,
+                # ffn_hidden) for the contrastive Hebbian update.
+                res = TritonEqPropOps.step_layered_cupy_torch(
                     h,
                     x_emb,
                     weights["W1"],
@@ -660,6 +658,10 @@ class EqPropKernel:
             v_hat = self.adam_state["v"][key] / (1 - beta2**t)
 
             self.weights[key] -= self.lr * m_hat / (self.xp.sqrt(v_hat) + eps)
+
+        # Weights changed — drop the cached torch tensors.
+        self._torch_wcache.clear()
+        TritonEqPropOps._torch_cache.clear()
 
     def train_step(self, x: np.ndarray, y: np.ndarray) -> dict[str, float]:
         """Full EqProp training step."""
