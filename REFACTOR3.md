@@ -22,7 +22,7 @@ A strict dependency-layered core with **exactly one implementation of every cros
 | **FUNNEL** | One result/persistence funnel | E | ⬜ open | LOOP |
 | **MEASURE** | One measurement stack | D | ⬜ open | FUNNEL |
 | **RULE** | One learning-rule interface (propagator→model) | G | ⬜ open | LOOP |
-| **REGISTER** | Self-registration | L | ⬜ open (low) | — |
+| **REGISTER** | Self-registration | L | ⚠️ partial | — |
 | **PRUNE** | Dead-code removal | J | ⚠️ partial | MEASURE |
 | CONFIG | One config hierarchy | B | ✅ done | — |
 | BUILD | One construction funnel | C | ✅ done | — |
@@ -31,24 +31,7 @@ A strict dependency-layered core with **exactly one implementation of every cros
 Legend: ✅ done · 🔄 in progress · ⬜ open · ⚠️ partial · ⛔ deferred
 
 ### 0.4 Start here (next concrete action)
-Work **LOOP**. The two unblocked §0.4 steps are **done** (validation tracks → seam; engine device threading). The next concrete actions, in tractability order:
-
-1. **`zoo/models/deployments/base.py`** — Remove `train_step` for `config.mode == "backprop"` (lines 250-257). Falls through to BPTT fallback. ~15 lines deleted.
-2. **`zoo/models/tile_lm.py`** — Delete `train_step` (lines 228-246). It's `mode="backprop"`; falls through to BPTT fallback. ~20 lines deleted.
-3. **`zoo/models/target_prop.py`** — Implement pure target-prop in `train_step` (no `loss.backward()`). The algorithm already computes targets via inverse nets; `loss_f.backward()`/`loss_g.backward()` are for inverse-net training only. Refactor to explicit gradients. ~60 lines changed.
-4. **`zoo/propagators/backprop.py`** — **Delete entire file**. Update any configs referencing `propagator: "backprop"` to remove it. Backprop models fall through to BPTT fallback automatically. ~70 lines deleted.
-5. **Move `train_nebc_model` + `update_fisher` to `core/`** — Create `core/training_utils.py`. Update imports in tests. ~50 lines moved.
-6. **`zoo/propagators/{fa,eqprop,hebbian,spiking}.py`** — Per-model `train_step` migration (RULE workstream). Requires corresponding model changes. Coordinate with RULE.
-7. **`graph/training.py`** — Make `FabricPCGraphPCN.train_step` delegate to `CoreTrainer.from_task()` instead of calling `train_backprop`/`train_pcn` directly. ~30 lines changed.
-
-**Do NOT start:**
-- MEP benchmarks → `BenchmarkRegistry` (**blocked on MEASURE**)
-- Benchmarks → `BenchmarkRegistry` (**blocked on MEASURE**)
-- Validation track inline loops — **EXPLICITLY PERMITTED**, do not convert (they measure Lipschitz, memory geometry, Fisher, EWC, thermal noise, plain BPTT cost, forward-only smoke)
-- Execution gradient-analysis tools — **EXPLICITLY PERMITTED** (FGSM/PGD, saliency, IG, gradient health)
-- RL training — **NOT CONVERTING** (architecturally inappropriate)
-
-See §2.1 "Next steps" for full categorized hit list with strategies.
+Work **LOOP**. The two unblocked steps from the previous revision are **done** (validation tracks → seam; engine device threading). Next: **§2.1 step 1** — delete backprop-mode `train_step` in `zoo/models/deployments/base.py:250-257` (~15 lines). Steps 4 & 6 (propagator deletion/migration) advance both LOOP #1 and RULE #6 — coordinate with RULE.
 
 ### 0.5 Baseline (what "green" means)
 - **Tests:** 2002 pass / 6 fail / 10 skip / 1 xfail. The 6 fails are documented numerical/parity drifts, unrelated to this refactor. **Zero new failures is the bar.**
@@ -130,7 +113,7 @@ Each brief is self-contained: goal → seam → state → next steps → gotchas
 - `cli/repro.py:_train_one_epoch` now uses `dispatch_train_step`. **Note:** this did *not* advance criterion #1 — its `_bptt` fallback `loss.backward()` remains (non-`train_step` families like `fa` legitimately use BPTT).
 - **Validation tracks delegate to the seam.** `validation/utils.train_model` now routes each epoch through `dispatch_train_step` (BPTT fallback closure retained; identical behavior). All declarative `track_*` specs call `train_model` unchanged, so execution now flows through the seam without touching the ~40 specs. This mirrors the `cli/repro.py` pattern — does *not* reduce the criterion-#1 file count (the `_bptt_step` closure keeps `loss.backward()`).
 - **Engine device threaded.** `ExecutionEngine.__init__` gained a `device: str = "auto"` param (resolved once via `get_device()` → `self.device: str`); `_get_train_loader` and `_get_val_loader` now pass `device=self.device` instead of hardcoded `"cpu"`. Default `"auto"` preserves all existing callers.
-- **`sklearn_interface.EqPropClassifier._train_step` routed through the seam.** It hand-rolled the exact dispatch logic (zero-grad → `model.train_step` → BPTT fallback). Now delegates to `dispatch_train_step`; behavior preserved (verified both paths: `backprop_mlp` → BPTT fallback `{"loss","accuracy"}`; `eqprop_mlp` → model `train_step` metrics). BPTT fallback closure still holds `loss.backward()` (counts toward criterion #1's ~41).
+- **`sklearn_interface.EqPropClassifier._train_step` routed through the seam.** It hand-rolled the exact dispatch logic (zero-grad → `model.train_step` → BPTT fallback). Now delegates to `dispatch_train_step`; behavior preserved (verified both paths: `backprop_mlp` → BPTT fallback `{"loss","accuracy"}`; `eqprop_mlp` → model `train_step` metrics). BPTT fallback closure still holds `loss.backward()` (counts toward criterion #1's ~40).
 
 **The hard part.** Criterion #1 requires removing `loss.backward()` from **~40 files** outside `core/`+`training_mixin`. These are **not mechanical duplicates**—each is a distinct algorithm with legitimate reasons for owning its backward pass. The work is **architectural rerouting** through `dispatch_train_step`, not deletion.
 
@@ -163,28 +146,25 @@ Each brief is self-contained: goal → seam → state → next steps → gotchas
 | `lightning_/module.py` | Uses `dispatch_train_step` | **DONE** |
 | `training/rl.py` | RL (REINFORCE from env trajectories) | **NOT CONVERTING**—architecturally inappropriate |
 
-**Next steps (ordered by tractability — do these in sequence):**
+**Acceptance criterion #1.** 0 `loss.backward()` in the *convertible* set (i.e. excluding explicitly-permitted and blocked files):
 
-1. **`zoo/models/deployments/base.py`** — Remove `train_step` for `config.mode == "backprop"` (lines 250-257). Falls through to BPTT fallback. Clean win, ~15 lines deleted.
+```bash
+grep -rln "loss.backward()" bioplausible/ \
+  | grep -v core/ | grep -v training_mixin \
+  | grep -v "validation/tracks/" \
+  | grep -v "analysis/" \
+  | grep -v "execution/robustness" \
+  | grep -v "execution/interpretability" \
+  | grep -v "execution/_guards" \
+  | grep -v "benchmarks/" \
+  | grep -v "zoo/mep/benchmarks/" \
+  | grep -v "training/rl.py" \
+  → 0 files
+```
 
-2. **`zoo/models/tile_lm.py`** — Delete `train_step` (lines 228-246). It's `mode="backprop"`; falls through to BPTT fallback. ~20 lines deleted.
+(Currently ~40 in the convertible set. The `dispatch_train_step` BPTT fallback in `core/trainer.py:_bptt_step` is **allowed**—it's in `core/`. MEASURE-blocked files in `benchmarks/` and `zoo/mep/benchmarks/` are tracked separately; `training/rl.py` is not converting.)
 
-3. **`zoo/models/target_prop.py`** — Implement pure target-prop in `train_step` (no `loss.backward()`). The algorithm already computes targets via inverse nets; `loss_f.backward()`/`loss_g.backward()` are for inverse-net training only. Refactor to explicit gradients. ~60 lines changed.
-
-4. **`zoo/propagators/backprop.py`** — **Delete entire file**. Update any configs referencing `propagator: "backprop"` to remove it. Backprop models fall through to BPTT fallback automatically. ~70 lines deleted.
-
-5. **Move `train_nebc_model` + `update_fisher` to `core/`** — Create `core/training_utils.py` (or similar). Update imports in tests. ~50 lines moved.
-
-6. **`zoo/propagators/{fa,eqprop,hebbian,spiking}.py`** — Per-model `train_step` migration (RULE workstream). Requires corresponding model changes. Coordinate with RULE.
-
-7. **`graph/training.py`** — Make `FabricPCGraphPCN.train_step` delegate to `CoreTrainer.from_task()` instead of calling `train_backprop`/`train_pcn` directly. ~30 lines changed.
-
-**Blocked (do not start):**
-- MEP benchmarks → `BenchmarkRegistry` (**blocked on MEASURE**)
-- Benchmarks → `BenchmarkRegistry` (**blocked on MEASURE**)
-- Validation track inline loops — **EXPLICITLY PERMITTED**, do not convert
-
-**Acceptance criterion #1.** `grep -rln "loss.backward()" bioplausible/ | grep -v core/ | grep -v training_mixin` → **0 files**. (Currently ~40. The `dispatch_train_step` BPTT fallback in `core/trainer.py:_bptt_step` is **allowed**—it's in `core/`.)
+**Verify.** `pytest tests/unit/core/test_core_trainer.py tests/integration/test_smoke_training.py tests/unit/core/test_deployment_models.py`; run the grep above.
 
 **Gotchas (item-specific).**
 - **`validation/utils.py` line-count / module identity:** the module is the shared training executor for all validation tracks. Keep it as the single place track specs call — do not duplicate its seam-routing in each track. The `X`/`y` uppercase arg names and `100.0` magic comparisons are pre-existing ruff warnings (backlog, not blockers).
@@ -201,10 +181,6 @@ Each brief is self-contained: goal → seam → state → next steps → gotchas
 - **Validation track inline loops are EXPLICITLY PERMITTED.** The `loss.backward()` calls in `validation/tracks/{scaling,hardware,application,tradeoff,nebc,architecture_comparison}_tracks.py` and `analysis/{dynamics,energy_landscape}.py` measure specific semantics (Lipschitz, memory geometry, Fisher, EWC, thermal noise, plain BPTT cost, forward-only smoke). **Converting them changes what they measure. Do not touch.**
 - **Execution gradient-analysis tools are EXPLICITLY PERMITTED.** `execution/{robustness,interpretability,_guards}.py` use `loss.backward()` for FGSM/PGD attacks, saliency maps, integrated gradients, and gradient health checks — not for training. Keep as-is.
 - **RL training is NOT CONVERTING.** `training/rl.py` uses REINFORCE from environment trajectories (no DataLoader). CoreTrainer adapter is architecturally inappropriate.
-
-**Acceptance criterion #1.** `grep -rln "loss.backward()" bioplausible/` outside `core/` + `training_mixin` → **0**. *(Currently ~40 files.)*
-
-**Verify.** `pytest tests/unit/core/test_core_trainer.py tests/integration/test_smoke_training.py tests/unit/core/test_deployment_models.py`; `grep -rln "loss.backward()" bioplausible/ | grep -v core/ | grep -v training_mixin`.
 
 ---
 
@@ -325,7 +301,7 @@ Single `ModelConfig`, single `ExperimentConfig`; `TrainerConfigSchema` and `_KNO
 | # | Criterion | Status |
 |---|-----------|--------|
 | gate | Import-DAG checker passes in CI | required always |
-| 1 | `loss.backward()` outside `core/`+`training_mixin` = 0 | ⬜ ~41 files (LOOP) |
+| 1 | `loss.backward()` outside `core/`+`training_mixin` = 0 (convertible set only; see §2.1 for exclusions) | ⬜ ~40 files (LOOP) |
 | 3 | `model_cls(` outside construction = 0 | ✅ |
 | 3b | No split-brain persistence (all writes via `result_sink`) | ⬜ (FUNNEL) |
 | 6 | `zoo/propagators/` = `mep.py` + gradient transformers only | ⬜ (RULE) |
