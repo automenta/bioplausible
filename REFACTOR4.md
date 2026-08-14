@@ -34,8 +34,9 @@ How to resume REFACTOR4 without re-deriving the codebase. Order of operations:
 ```bash
 # 0. Env + gates (always)
 cd /home/me/bioplausible
-uv sync                                    # restore lockfile env
-python tools/check_imports.py              # gate: must be 0 violations / 0 cycles
+uv sync --extra dev                    # restore lockfile env (+ dev deps: optuna etc.)
+python tools/check_imports.py          # gate: must be 0 violations / 0 cycles
+python tools/check_seams.py            # gate: violators ⊆ allowlist (see § CI gates)
 
 # 1. Snapshot baseline truth (run, don't assume)
 uv run python -m pytest tests/unit/core/test_core_trainer.py \
@@ -135,8 +136,13 @@ pin is the reliable signal. Do not add grad-norm snapshots for directed_ep.
 1. **LOOP step 1** — ✅ done (2026-08-14). See Ledger.
 2. **FUNNEL step 1** — ✅ done (2026-08-14). See Ledger.
 3. **GATE-0** — ✅ locked (option b). Parity is now xfail + snapshots; LOOP step 3 and RULE are unblocked.
-4. **Next: LOOP step 3** — centralize the BPTT fallback (`dispatch_train_step.bptt_step` → core `_bptt_step`; delete local `_bptt` from `cli/repro.py`, `validation/utils.py`, `lightning_/module.py`, `sklearn_interface.py`). GATE-0 is no longer a blocker.
-5. Do not start MEASURE or RULE until CHECKPOINT + their blockers pass.
+4. **CI ratchet (`tools/check_seams.py`)** — ✅ created + locked to today's baseline + wired into
+   pre-commit. All 4 gates pass now; keep the allowlists shrinking, never growing (§ CI gates).
+5. **Next: LOOP step 3** — centralize the BPTT fallback (`dispatch_train_step.bptt_step` → core
+   `_bptt_step`; delete local `_bptt` from `cli/repro.py`, `validation/utils.py`,
+   `lightning_/module.py`, `sklearn_interface.py`). GATE-0 is no longer a blocker. Then remove those
+   4 entries from `LOOP_ALLOW` in `check_seams.py` (ratchet forward).
+6. Do not start MEASURE or RULE until CHECKPOINT + their blockers pass.
 
 ---
 
@@ -413,6 +419,7 @@ after step 3.** The payoff (simpler AutoScientist composition) may not justify t
 | # | Check | Status |
 |---|-------|--------|
 | gate | `tools/check_imports.py` passes in CI | always |
+| seams | `tools/check_seams.py` passes in CI (violators ⊆ allowlist) | ✅ enforcing, ratcheting |
 | GATE-0 | Parity locked (xfail + numerical snapshots) | ✅ locked 2026-08-14 |
 | 1 | LOOP grep = 0 (convertible set; proxy — see rule 14) | after LOOP 1–5 |
 | 3 | `grep -rn "model_cls(" bioplausible/ \| grep -v construction.py` = 0 | ✅ |
@@ -426,28 +433,36 @@ after step 3.** The payoff (simpler AutoScientist composition) may not justify t
 
 ---
 
-## Ledger (done — don't redo)
+## CI gates — keep it won
 
-### Session notes — 2026-08-14 (LOOP 1–2, FUNNEL 1, GATE-0)
+Integration won by a manual grep is a one-time event; a future sprint will re-add a sixth
+`BenchmarkResult` or a hand-rolled training loop. The acceptance greps must run in CI so the
+consolidated state is **enforced, not just achieved once**.
 
-**Toolchain gotchas for future sessions:**
-- The `dev` extra is required to run tests (`uv sync --extra dev`); `uv sync` alone does NOT
-  install `optuna`, which `core/trainer.py` imports at module load. Symptom:
-  `ModuleNotFoundError: No module named 'optuna'` on the first test run. Use `uv sync --extra dev`.
-- `ruff` currently fails to parse `pyproject.toml` (`Unknown rule selector: line-too-long` on
-  ruff 0.15.9). This is pre-existing and unrelated to refactor edits — do not chase it. Work around
-  with targeted manual checks or a pinned ruff version if needed.
-- `test_parity_snapshots.py` reproduces the exact harness RNG ordering of its backing tests:
-  create `x, y` *before* constructing models. Reordering changes the loss values (e.g. 1.4868 vs
-  1.6953 for the same test) and breaks the pins.
+`tools/check_seams.py` encodes each criterion as **violator-set ⊆ versioned allowlist**. The
+allowlist is the explicit, committed home for legitimate exceptions (rule 14) — exceptions are
+first-class and visible, never silently accumulated.
 
-**Findings that inform RULE / later LOOP steps:**
-- TileLM's inheritance of `TileAlgorithm.train_step` (see LOOP step 2 note) is the canonical example
-  of the "mysterious design" to consolidate under RULE: a base-class `train_step` that is semantically
-  wrong for one subclass, papered over by a `NotImplementedError` override. RULE should make the
-  learning-rule seam explicit per model rather than rely on inheritance defaults.
-- `directed_ep` yields non-finite gradients post-training — do not pin gradient-norm for it; accuracy
-  is the reliable signal.
+| Gate | Asserts | Allowlist (lives in the script) |
+|------|---------|--------------------------------|
+| `seam:loop-backward` | `loss.backward()` files ⊆ ALLOW | `LOOP_ALLOW` = today's convertible debt |
+| `seam:model-cls` | `model_cls(` outside `construction.py` = ∅ | (empty) |
+| `seam:propagators` | `zoo/propagators/*.py` ⊆ ALLOW | `PROPAGATORS_ALLOW` = RULE's delete-set |
+| `seam:result-sink` | outcome writers ⊆ `result_sink` | `RESULT_SINK_ALLOW` = sanctioned callers |
+
+**Rules.**
+- **Lock the baseline first.** Each allowlist = today's violator set. The gate passes immediately
+  and can only tighten.
+- **Ratchet.** Completing a stream step = *remove* its entries from the allowlist. The gate then
+  enforces the smaller set forever. Allowlists shrink monotonically; growing one is a visible diff
+  that requires review justification.
+- **New violations fail fast.** A file not in an allowlist that introduces a violation fails CI —
+  the regression guard (verified: dropping a stray `loss.backward()` in a new file fails).
+- Wired into pre-commit (`id: check-seams`). `check_imports.py` (layering) + `check_seams.py`
+  (criteria) are the two CI guardians; both must pass on every merge.
+- **GOTCHA:** the dev deps are required to run tests (`uv sync --extra dev`); a bare `uv sync` omits
+  `optuna`, which `core/trainer.py` imports at module load and breaks every test run with
+  `ModuleNotFoundError`.
 
 ---
 
@@ -477,8 +492,32 @@ after step 3.** The payoff (simpler AutoScientist composition) may not justify t
 - **GATE-0** — locked 2026-08-14 (option b): the 3 known-drifting parity tests are `xfail`ed with
   locked reasons and `tests/unit/validation/test_parity_snapshots.py` pins their baseline values.
   Verify: `37 passed, 3 xfailed` on the GATE-0 command.
+- **CI SEAMS** — `tools/check_seams.py` created, locked to today's baseline, wired into pre-commit.
+  All 4 gates green; `check_imports.py` + `check_seams.py` are the two CI guardians (§ CI gates).
 - **RULE so far** — alias map live; `Registry.aliases()` / `resolve_alias()` available.
 - **REGISTER so far** — dead `_LAZY` re-exports trimmed (`__all__` 103→83 top, 28→27 core);
   `zoo/models/eqprop/__init__.py` computes `__all__` from `vars(module)`.
 - **PRUNE so far** — `TODO.md` / `REFACTOR.md` archived to `docs/archive/20260813/`.
-```
+
+### Session notes — 2026-08-14 (LOOP 1–2, FUNNEL 1, GATE-0, CI seams)
+
+**Toolchain gotchas for future sessions:**
+- The `dev` extra is required to run tests (`uv sync --extra dev`); `uv sync` alone does NOT
+  install `optuna`, which `core/trainer.py` imports at module load. Symptom:
+  `ModuleNotFoundError: No module named 'optuna'` on the first test run. Use `uv sync --extra dev`.
+- `ruff` currently fails to parse `pyproject.toml` (`Unknown rule selector: line-too-long` on
+  ruff 0.15.9). This is pre-existing and unrelated to refactor edits — do not chase it. Work around
+  with targeted manual checks or a pinned ruff version if needed.
+- `test_parity_snapshots.py` reproduces the exact harness RNG ordering of its backing tests:
+  create `x, y` *before* constructing models. Reordering changes the loss values (e.g. 1.4868 vs
+  1.6953 for the same test) and breaks the pins.
+
+**Findings that inform RULE / later LOOP steps:**
+- TileLM's inheritance of `TileAlgorithm.train_step` (see LOOP step 2 note) is the canonical example
+  of the "mysterious design" to consolidate under RULE: a base-class `train_step` that is semantically
+  wrong for one subclass, papered over by a `NotImplementedError` override. RULE should make the
+  learning-rule seam explicit per model rather than rely on inheritance defaults.
+- `directed_ep` yields non-finite gradients post-training — do not pin gradient-norm for it; accuracy
+  is the reliable signal.
+- A working `git` hook auto-commits edits; the plan (`REFACTOR4.md`) and this session's work were
+  committed automatically as `3db76846`. Don't be surprised when `git status` shows a clean tree.

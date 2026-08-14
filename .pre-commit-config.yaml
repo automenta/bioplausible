@@ -39,3 +39,9 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: check-seams
+        name: check-seams
+        entry: python tools/check_seams.py
+        language: system
+        pass_filenames: false
+        always_run: true
