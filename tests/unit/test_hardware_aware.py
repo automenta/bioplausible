@@ -20,6 +20,12 @@ from bioplausible.zoo.models.eqprop import (
     NoisyLoopedMLP,
     QuantizedLoopedMLP,
 )
+from bioplausible.zoo.models.eqprop.hardware_variants import (
+    CrossbarLoopedMLP,
+    OpticalLoopedMLP,
+    QuantumLoopedMLP,
+    SpikingLoopedMLP,
+)
 
 
 def _kpw(**kwargs):
@@ -89,6 +95,10 @@ def test_noisy_step_injects_stochastic_noise():
     [
         ("fpga", QuantizedLoopedMLP, "bits"),
         ("analog", NoisyLoopedMLP, "noise_level"),
+        ("neuromorphic", SpikingLoopedMLP, "spike_threshold"),
+        ("optical", OpticalLoopedMLP, "phase_noise"),
+        ("crossbar", CrossbarLoopedMLP, "adc_bits"),
+        ("quantum", QuantumLoopedMLP, "shot_noise"),
     ],
 )
 def test_target_hardware_swaps_eqprop_model(target, expected_cls, meta_key):
@@ -121,6 +131,34 @@ def test_target_hardware_none_is_inert():
         trainer._create_model()
         assert type(trainer.model) is LoopedMLP
         assert trainer._hardware_meta == {}
+
+
+@pytest.mark.parametrize(
+    "facade",
+    [SpikingLoopedMLP, OpticalLoopedMLP, CrossbarLoopedMLP, QuantumLoopedMLP],
+)
+def test_new_facades_settle_finite(facade):
+    """Each new facade's forward_dynamics runs and keeps hidden states finite."""
+    model = facade(**_kpw())
+    x = torch.randn(8, 32)
+    model.eval()
+    with torch.no_grad():
+        acts = model._initial_activations(x)
+        for _ in range(5):
+            acts = model.forward_dynamics(acts, beta=0.0, target=None)
+            assert all(torch.isfinite(h).all() for h in acts[1:-1])
+
+
+def test_facades_are_registered_models():
+    """The new hardware facades are first-class registry members."""
+    for name in (
+        "spiking_looped_mlp",
+        "optical_looped_mlp",
+        "crossbar_looped_mlp",
+        "quantum_looped_mlp",
+    ):
+        cls = Registry.get(ComponentCategory.MODEL, name)
+        assert issubclass(cls, LoopedMLP)
 
 
 def test_target_hardware_inert_for_non_looped_model():

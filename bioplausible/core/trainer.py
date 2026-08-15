@@ -793,8 +793,12 @@ class CoreTrainer:
 
         from bioplausible.zoo.models.eqprop import LoopedMLP
         from bioplausible.zoo.models.eqprop.hardware_variants import (
+            CrossbarLoopedMLP,
             NoisyLoopedMLP,
+            OpticalLoopedMLP,
+            QuantumLoopedMLP,
             QuantizedLoopedMLP,
+            SpikingLoopedMLP,
         )
 
         if not isinstance(model, LoopedMLP):
@@ -808,6 +812,22 @@ class CoreTrainer:
             kwargs = dict(self.config.model_kwargs)
             kwargs.setdefault("noise_level", 0.05)
             swapped = NoisyLoopedMLP(**kwargs)
+        elif hardware == "neuromorphic":
+            kwargs = dict(self.config.model_kwargs)
+            kwargs.setdefault("spike_threshold", 1.0)
+            swapped = SpikingLoopedMLP(**kwargs)
+        elif hardware == "optical":
+            kwargs = dict(self.config.model_kwargs)
+            kwargs.setdefault("phase_noise", 0.01)
+            swapped = OpticalLoopedMLP(**kwargs)
+        elif hardware == "crossbar":
+            kwargs = dict(self.config.model_kwargs)
+            kwargs.setdefault("adc_bits", 8)
+            swapped = CrossbarLoopedMLP(**kwargs)
+        elif hardware == "quantum":
+            kwargs = dict(self.config.model_kwargs)
+            kwargs.setdefault("shot_noise", 1000)
+            swapped = QuantumLoopedMLP(**kwargs)
         else:  # pragma: no cover  # Literal type narrows the possible values
             return model
 
@@ -836,6 +856,26 @@ class CoreTrainer:
             return {
                 "target_hardware": "analog",
                 "noise_level": float(model_kwargs.get("noise_level", 0.05)),
+            }
+        if hardware == "neuromorphic":
+            return {
+                "target_hardware": "neuromorphic",
+                "spike_threshold": float(model_kwargs.get("spike_threshold", 1.0)),
+            }
+        if hardware == "optical":
+            return {
+                "target_hardware": "optical",
+                "phase_noise": float(model_kwargs.get("phase_noise", 0.01)),
+            }
+        if hardware == "crossbar":
+            return {
+                "target_hardware": "crossbar",
+                "adc_bits": int(model_kwargs.get("adc_bits", 8)),
+            }
+        if hardware == "quantum":
+            return {
+                "target_hardware": "quantum",
+                "shot_noise": int(model_kwargs.get("shot_noise", 1000)),
             }
         return {}
 

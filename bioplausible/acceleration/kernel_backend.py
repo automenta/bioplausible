@@ -144,9 +144,7 @@ class KernelRegistry:
         cls._backends[algorithm][hardware] = backend_cls
 
     @classmethod
-    def get(
-        cls, algorithm: AlgorithmFamily, hardware: HardwareTarget
-    ) -> object | None:
+    def get(cls, algorithm: AlgorithmFamily, hardware: HardwareTarget) -> object | None:
         """Get or create a backend instance."""
         key = (algorithm, hardware)
         if key in cls._instances:
@@ -221,12 +219,12 @@ def infer_algorithm_family(model_name: str) -> AlgorithmFamily | None:
         return AlgorithmFamily.PEPITA
     if "target" in name or "tp" in name:
         return AlgorithmFamily.TP
+    if "tile" in name or "equitile" in name:
+        return AlgorithmFamily.TILE
     if "predictive" in name or "pc" in name:
         return AlgorithmFamily.PC
     if "spiking" in name or "snn" in name or "stdp" in name:
         return AlgorithmFamily.SNN
-    if "tile" in name or "equitile" in name:
-        return AlgorithmFamily.TILE
     if (
         "mep" in name
         or "o1memory" in name

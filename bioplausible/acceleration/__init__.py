@@ -166,6 +166,12 @@ def get_algorithm_kernels() -> dict[str, type[object]]:
         kernels["o1memory"] = O1MemoryEPv2KernelBackend
     except ImportError:
         pass
+    try:
+        from bioplausible.acceleration.backprop_kernels import BackpropKernelBackend
+
+        kernels["backprop"] = BackpropKernelBackend
+    except ImportError:
+        pass
     return kernels
 
 
