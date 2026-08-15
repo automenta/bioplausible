@@ -11,12 +11,12 @@
 
 | Stream | State | REFACTOR7 Goal |
 |--------|-------|----------------|
-| **KERNEL GENERALIZATION** | EqProp + FA/Hebbian/FF/PEPITA/TP/PC/SNN/Tile/MEP/O1Memory/Backprop registered | Extend to all 13 families ✅ (protocol backends registered) |
+| **KERNEL GENERALIZATION** | EqProp + FA/Hebbian/FF/PEPITA/TP/PC/SNN/Tile/MEP/O1Memory/Backprop registered | Extend to all 13 families ✅ (protocol backends registered + parity suites) |
 | **MEP KERNEL PATH** | PyTorch only | CuPy/Triton kernels for Muon/Dion/Fisher updates + EP settling |
 | **UNIFIED KERNEL REGISTRY** | `KernelRegistry` + `KernelConfig` + enums live | Single `KernelBackend` protocol + auto-selection ✅ (Phase 1) |
 | **HARDWARE TARGET EXPANSION** | FPGA/Analog + Neuromorphic/Optical/Crossbar/Quantum facades | Neuromorphic (Loihi), Optical, Analog crossbar mappings ✅ (Phase 11 partial) |
 | **MEMORY-O(1) UNIFICATION** | EqProp contrastive | Contrastive Hebbian updates for all local rules |
-| **CONVERGENCE INSTRUMENTATION** | Per-model | Unified telemetry via `SettleProtocol` |
+| **CONVERGENCE INSTRUMENTATION** | Per-model | Unified telemetry via `SettleProtocol` ✅ (backends surface settle telemetry) |
 | **DEPLOYMENT PIPELINE** | ONNX/TorchScript | Kernel export (HLS/Verilog for FPGA, ONNX for edge) |
 
 ## Session Progress (this working session)
@@ -26,26 +26,45 @@
 - **Phase 10 (Backprop Baseline)**: created `acceleration/backprop_kernels.py` — `BackpropKernelBackend` (fused manual BPTT, exact autograd parity ~1e-8) registered for `AlgorithmFamily.BACKPROP` (CPU/CUDA/TRITON) and surfaced via `get_algorithm_kernels()`.
 - **Phase 11 (Hardware Facades, partial)**: added `SpikingLoopedMLP` (neuromorphic, LIF spike-and-reset), `OpticalLoopedMLP` (phase+detector noise), `CrossbarLoopedMLP` (ADC-quantised conductance + IR-drop), `QuantumLoopedMLP` (shot-noise) to `hardware_variants.py`; wired all six targets (`fpga/analog/neuromorphic/optical/crossbar/quantum`) into `core/trainer.py::_apply_hardware`/`_hardware_meta_for`; registered each via `@register_model`.
 
-**Verified:** `check_imports`/`check_seams` green; 19 hardware tests, 36 kernel/parity tests, 24 trainer tests, 55 combined pass; pyright clean (0 errors) on new source files.
+**Completed (this session):**
+- **Phase 2-9 Parity Suites (unified, DRY)**: created `tests/unit/validation/test_family_kernel_parity.py` — one parametrised harness driving every non-backprop `KernelBackend` (FA, HEBBIAN, FF, PEPITA, TP, PC, SNN, TILE, MEP, O1MEMORY). Validates registry contract, `initialize` + finite memory stats, finite forward/backward/update-weights, and (for settling families) that `get_settle_telemetry()` returns the settle loop's recorded telemetry. 48 tests.
+- **Phase 2-9 Kernel Dispatch Integration**: created `tests/integration/test_kernel_dispatch.py` — verifies `CoreTrainer._wrap_with_kernel` attaches a `KernelBackend` to the model when `use_kernel=True` (FA + BACKPROP families) and leaves the model untouched by default. 4 tests. This closes the "backends exist but aren't consumed" gap for the trainer seam.
+- **Phase 12 Settle Telemetry**: wired the settle loops (which already built telemetry dicts) into `get_settle_telemetry()` for PC/Tile/MEP/O1Memory/SNN backends via a `_last_settle_telemetry` field, replacing the `-> None` stubs. Asserted by the parity harness.
+- **Fixed `stdp_update` latent bug** (flagged in prior plan): was returning a **1-D per-post-neuron vector** and calling deprecated `.T` on a 1-D tensor; now returns a proper `[N_post, N_pre]` correlation matrix via `torch.einsum` (no deprecated `.T`). Updated the shape test + added a symmetric-pair test.
+
+**Verified:** `check_imports`/`check_seams` green; pyright strict 0 errors on all new/modified source files; ruff clean on all new test files (kernel modules retain documented pre-existing leniency). Tests: `test_family_kernel_parity` (48), `test_kernel_parity_base` (5+1), `test_kernel_backend` (26), `test_kernel_dispatch` (4), `test_caching` — 89 passed, 2 skipped.
 
 ## Improvement Opportunities & Notes for Future Work
 
 **Bugs found & fixed this session:**
 - `infer_algorithm_family` matched `"pc"` before `"tile"`, so `tile_pc` mis-inferred as `PC` — reordered the tile check ahead of the PC check in `acceleration/kernel_backend.py`.
+- `stdp_update` (`acceleration/contrastive_primitives.py`) returned a **1-D per-post-neuron vector** and called deprecated `.T` on a 1-D tensor. Rewrote it to return a proper `[N_post, N_pre]` correlation matrix via `torch.einsum` (`"bit,bjt->ij"`), matching the SNN kernel's downstream `weight.add_(lr*grad)` shape expectation.
+- **Writing the per-family parity harness surfaced genuine dimension/orientation bugs in the speculative kernel backends (now fixed):**
+  - `FAKernelBackend.backward` applied an erroneous `.T` to the feedback weight (`error @ B_eff.T`); the reference `_fa_backward_loop` uses `torch.mm(error, B)` (no transpose). `feedback_weights[i]` is shaped `[D_{i+1}, D_i]` (from `randn(dims[i+1], dims[i])`), so the backprojection must be `error @ B` with B=`feedback_weights[i+1]` mapping output→hidden.
+  - `FFKernelBackend.forward_positive/negative` embedded a one-hot label of `num_classes=x.shape[1]` (input dim) and applied the deprecated/incorrect label dim; now uses `output_dim` (matching the `ForwardForwardNet` reference) and requires the first layer to accept `input_dim + output_dim`.
+  - `PEPITAKernelBackend.backward` used `pepita_error_modulation(error, B)` which is dimensionally inconsistent with the layer stack; rewrote it as a purely contrastive `(err_grad - std_grad)` update over all layers (matches the reference `delta_a.T @ inp / B`).
+  - `TPKernelBackend` iterated inverse layers in **reverse**, but DTP inverse nets are ordered output→input and must be applied forward; `compute_targets` had an off-by-one in target indexing and the inverse update loop referenced the wrong forward activation. Rewrote `forward_inverse`/`compute_targets`/`backward` for L-1 inverse layers mapping `output→hidden`.
+  - `PCKernelBackend.compute_energy`/`backward` applied the wrong weight orientation (`.T` both ways) and predicted layer 0 from layer 1 with the wrong bias; rewrote to the standard PCN energy/update (predict layer i from layer i-1 via `W[i-1]`), and rewrote the shared `predictive_coding_inference_step` primitive (was dimensionally broken — `W[0].T @ error` with mismatched shapes; now clamps `mu[0]=x` and pulls each state toward its parent's prediction).
+  - `SNNKernelBackend.simulate` allocated every `spike_trains[i]`/`voltage_traces[i]` with the **last** layer's width; now sizes per-layer (input layer uses input width, hidden/output use `out_features`).
 
 **Latent issues to address (pre-existing, NOT fixed here):**
-- `stdp_update` (`acceleration/contrastive_primitives.py`) returns a **1-D per-post-neuron vector**, not a `[N_post, N_pre]` weight matrix, and calls `.T` on a 1-D tensor (torch deprecation warning, will become an error). Future work: return a proper correlation matrix `[N_post, N_pre]` and drop the deprecated `.T`.
-- **EQPROP is not a `KernelBackend`**: it uses the standalone NumPy/CuPy `EqPropKernel` engine (`acceleration/kernels.py`), which has a different lifecycle (`train_step`/`evaluate`, own internal weights). It is intentionally excluded from `test_all_families_register_backends`. Future work: decide whether to (a) add a thin `EqPropKernelBackend` adapter, or (b) keep EQPROP on the standalone engine and document it. Option (b) is current; adding a non-consumed adapter would be dead surface.
+- **EQPROP is not a `KernelBackend`**: it uses the standalone NumPy/CuPy `EqPropKernel` engine (`acceleration/kernels.py`), which has a different lifecycle (`train_step`/`evaluate`, own internal weights). It is intentionally excluded from `test_all_families_register_backends`. Future work: decide whether to (a) add a thin `EqPropKernelBackend` adapter, or (b) keep EQPROP on the standalone engine and document it. Option (b) is current.
+- **`predictive_coding_inference_step` was rewritten this session** — confirm the PCN inference still converges correctly under the reference `FabricPCGraphPCN` (`graph/inference.py`) with an end-to-end accuracy test (the parity suite only checks finite/well-shaped outputs, not convergence quality).
+- **MEP `contrastive_update`/`backward_contrastive` reference `self._lr`** which is never set in `initialize` (only `learning_rate` is read from `extra`). The parity harness does not exercise this path (it runs Muon/Fisher/EP-settle), so the bug is latent — fix by setting `self._lr` from `extra` or removing the dead path.
 - The tree is **not strictly ruff-clean** (pre-existing `S101` in tests, `non-augmented-assignment` across the kernel modules, `x.dim() > 2` guards). New kernel code mirrors the sibling modules' conventions (tuples for hardware membership, non-augmented updates) deliberately — matching style over lint churn (AGENTS.md: don't obsess over linty tediums). pyright strict is the hard gate and passes on new files.
 
 **Facilitates future work:**
-- Kernel modules register themselves lazily at import time; registry-backed tests must call `get_algorithm_kernels()` first (see the module-scoped `_populate_kernel_registry` autouse fixture in `test_kernel_parity_base.py`).
+- Kernel modules register themselves lazily at import time; registry-backed tests must call `get_algorithm_kernels()` first (see the module-scoped `_populate_kernel_registry` autouse fixtures in `test_kernel_parity_base.py`, `test_family_kernel_parity.py`, and `test_kernel_dispatch.py`).
+- `test_family_kernel_parity.py` is the **DRY multi-family harness**: each family is a `_Harness(family, _make, _run, requires_settle)`. Adding a new backend = add a `_make_*`/`_run_*` pair and register it in `HARNESSES`. It replaces the per-family module-per-algorithm scaffolding the plan's §9 lists, keeping the parity surface consolidated.
+- Each harness **must pass matching `KernelConfig.extra` dims** (`input_dim`/`hidden_dim`/`output_dim`/`num_layers`) for backends that build internal matrices (FA feedback weights, FF label embedding, PEPITA feedback matrix). The parity harness documents the correct config-to-model-ref contract per family.
+- `test_kernel_dispatch.py` exercises the **trainer-level dispatch seam**: `CoreTrainer(use_kernel=True)` attaches `model._kernel_backend`. The `kernel_backend` config string maps to a `HardwareTarget` (`triton`→TRITON, `cupy`→CUDA, `pytorch`→CPU). Use it as the template for end-to-end kernel training tests.
+- Settling backends now surface recorded settle telemetry via `get_settle_telemetry()` (`_last_settle_telemetry`); the parity harness asserts it is non-empty. This is the seam Phase 12's `SettleProtocol`/`TrainingMetrics.extra["settle_telemetry"]` should consume.
 - Hardware facades follow the `forward_dynamics` override pattern: call `super().forward_dynamics(...)` then transform the hidden activations (layers `1..len-1`), keeping the output layer clean. Validated in `tests/unit/test_hardware_aware.py`.
 - `SpikingLoopedMLP` needs **batch-shaped** refractory counters (a 1-D vector fails when the batch dimension exceeds the neuron count); the `_refractory_for` helper lazily (re)allocates on batch/shape change.
 - The `BackpropKernelBackend` is the exact-gradient reference (~1e-8 vs autograd) — reuse it as the ground truth for every fused/settled kernel's parity gate, not just as a benchmark.
-- `tests/unit/validation/test_kernel_parity_base.py::KernelParityBase` is the reusable base for per-family parity suites: subclass it, set `algorithm`, implement `_make_backend`, and inherit the registry-contract + finite-forward checks.
+- `tests/unit/validation/test_kernel_parity_base.py::KernelParityBase` remains the per-family parity base for backends needing bespoke gradient-vs-autograd checks (BACKPROP uses it); the consolidated `test_family_kernel_parity.py` covers the rest.
 
-**Next phases to pick up:** Phase 2-9 parity tests + `backend=` opt-in wiring (the kernel backends exist but aren't yet consumed by the zoo models); Phase 11 export pipeline; Phase 12 settle telemetry / canonical hash fix / dead-code sweep.
+**Next phases to pick up:** Phase 2-9 end-to-end **accuracy** parity (MNIST/CIFAR) for each family — the kernel backends now run correctly (finite, well-shaped ops) but no suite yet proves they *learn* within 1% of the PyTorch reference; `backend=` opt-in consumed by the zoo models' `train_step` (the trainer dispatch seam is wired, but zoo models don't yet call their attached `_kernel_backend`); Phase 11 export pipeline (`acceleration/export.py`); Phase 12 `SettleProtocol`/`settle_universal` consolidation + `TrainingMetrics.extra["settle_telemetry"]` + canonical-hash content fix + dead-code sweep (the 7.4 greps are already clean; the 7.3 canonicalizer already handles tensors via `.tolist()`).
 
 ---
 
@@ -653,41 +672,41 @@ For multi-GPU / multi-node (P2P, Lightning):
 ### Phase 2: Feedback Alignment Kernel (Week 3)
 - [x] `acceleration/fa_kernels.py` — fused `_fa_backward_loop` (matmul + activation derivative)
 - [x] `FAKernelBackend` implementing `KernelBackend` protocol
-- [ ] Parity tests: `test_fa_kernel_parity.py` (MNIST, CIFAR-10)
+- [x] Parity (finite/shape): `tests/unit/validation/test_family_kernel_parity.py` (FA covered by consolidated harness). Accuracy parity vs PyTorch (MNIST, CIFAR-10) still open.
 - [ ] Integration: `StandardFA` / `AdaptiveFA` / `StochasticFA` opt-in via `optimizer_kwargs.backend="triton"`
 - [ ] Benchmark: memory/time vs PyTorch at B=128..8192
 
 ### Phase 3: Hebbian / 3-Factor Kernel (Week 4)
 - [x] `acceleration/hebbian_kernels.py` — batched outer products (`src.T @ dst`)
 - [x] `HebbianKernelBackend`, `ThreeFactorKernelBackend`
-- [ ] Parity tests: `test_hebbian_kernel_parity.py`
+- [x] Parity (finite/shape): covered by `test_family_kernel_parity.py`
 - [ ] Integration: `DeepHebbianChain` / `HebbianCube` / `ThreeFactorHebbian` opt-in
 
 ### Phase 4: Forward-Forward / PEPITA Kernel (Week 5)
 - [x] `acceleration/ff_kernels.py` — fused goodness (FF) / error-modulated (PEPITA) updates
 - [x] `FFKernelBackend`, `PEPITAKernelBackend`
-- [ ] Parity tests: `test_ff_kernel_parity.py`, `test_pepita_kernel_parity.py`
+- [x] Parity (finite/shape): covered by `test_family_kernel_parity.py`
 
 ### Phase 5: Target Propagation Kernel (Week 6)
 - [x] `acceleration/tp_kernels.py` — inverse net forward + target propagation
 - [x] `TPKernelBackend`
-- [ ] Parity tests: `test_tp_kernel_parity.py`
+- [x] Parity (finite/shape): covered by `test_family_kernel_parity.py`
 
 ### Phase 6: Predictive Coding Kernel (Week 7)
 - [x] `acceleration/pc_kernels.py` — graph-parallel inference + PCN loss
 - [x] `PCKernelBackend` (wraps FabricPC `InferenceSGD`)
-- [ ] Parity tests: `test_pc_kernel_parity.py`
+- [x] Parity (finite/shape): covered by `test_family_kernel_parity.py`
 
 ### Phase 7: Spiking STDP Kernel (Week 8)
 - [x] `acceleration/snn_kernels.py` — LIF dynamics + 3-factor STDP
 - [x] `SNNKernelBackend`
-- [ ] Parity tests: `test_snn_kernel_parity.py`
+- [x] Parity (finite/shape): covered by `test_family_kernel_parity.py`
 - [x] Neuromorphic facade: `SpikingLoopedMLP` in `hardware_variants.py`
 
 ### Phase 8: Tile Substrate Kernel (Week 9)
 - [x] `acceleration/tile_kernels.py` — tile-parallel contrastive updates (extends `core/tile/kernels.py`)
 - [x] `TileKernelBackend` (wraps `TileAlgorithm.local_update`)
-- [ ] Parity tests: `test_tile_kernel_parity.py`
+- [x] Parity (finite/shape): covered by `test_family_kernel_parity.py`
 - [ ] EquiTile variants: TileFA, TileLM, TilePC, TileSNN, TileGNN opt-in
 
 ### Phase 9: MEP Kernel Suite (Weeks 10-11)
@@ -695,7 +714,7 @@ For multi-GPU / multi-node (P2P, Lightning):
 - [x] `MEPKernelBackend`
 - [ ] Core strategies Triton: `core/optimization/strategies/` Triton implementations
 - [ ] Learning rules Triton: `core/local_learning/rules/` Triton implementations
-- [ ] Parity tests for each preset + O1Memory + core strategies
+- [x] Parity (finite/shape): MEP + O1Memory covered by `test_family_kernel_parity.py` (Muon ortho, Fisher whiten, EP settle, O1 settle)
 - [ ] Integration: `smep`/`sdmep`/`local_ep`/`natural_ep`/`muon_backprop`/`o1memory` `backend="triton"`
 
 ### Phase 10: Backprop Baseline Kernel (Week 12)
@@ -711,9 +730,9 @@ For multi-GPU / multi-node (P2P, Lightning):
 - [ ] Documentation: Kernel development guide + Hardware target guide
 
 ### Phase 12: Cross-Cutting Polish (Week 15)
-- [ ] Unified settle telemetry (`SettleProtocol`, `settle_universal`)
+- [x] Settle telemetry surfaced: settling backends (PC/Tile/MEP/O1Memory/SNN) record and expose settle-loop telemetry via `get_settle_telemetry()`; asserted by `test_family_kernel_parity.py`. Unified `SettleProtocol`/`settle_universal` + `TrainingMetrics.extra["settle_telemetry"]` still open.
 - [ ] Benchmark harness automation (`benchmark_all_kernels.py`)
-- [ ] Canonical hash fix (`core/_caching.py`)
+- [x] Canonical hash: `core/_caching.py::_canonical` already handles tensors/np.ndarray via `.tolist()`, bool/int/float/str type-tagging, and nested dict/list/set — §7.3 concern largely satisfied; verified `test_caching.py` green.
 - [ ] Dead code sweep (stale imports, broken tags)
 - [ ] Mixed precision validation (FP16/BF16/INT8)
 - [ ] Documentation update
@@ -801,6 +820,7 @@ tools/
 tests/
 ├── unit/validation/
 │   ├── test_kernel_parity_base.py # Base parity test class
+│   ├── test_family_kernel_parity.py  # ✅ Consolidated multi-family parity harness (FA/HEBBIAN/FF/PEPITA/TP/PC/SNN/TILE/MEP/O1MEMORY) — replaces the per-family files below
 │   ├── test_fa_kernel_parity.py
 │   ├── test_hebbian_kernel_parity.py
 │   ├── test_ff_kernel_parity.py
@@ -822,7 +842,7 @@ tests/
 │   ├── test_settle_protocol.py
 │   └── test_caching_canonical_hash.py
 └── integration/
-    ├── test_kernel_dispatch.py
+    ├── test_kernel_dispatch.py   # ✅ trainer-level kernel dispatch (use_kernel=True attaches backend)
     └── test_hardware_facades.py
 ```
 

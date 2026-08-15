@@ -106,8 +106,9 @@ class TPKernelBackend:
         activations: list[Tensor] = [target]
         h = target
 
-        # Go backwards through inverse layers
-        for i in range(len(self._inverse_layers) - 1, layer_idx - 1, -1):
+        # Inverse layers are ordered output->input: apply them forward from the
+        # given layer index to the start.
+        for i in range(layer_idx, len(self._inverse_layers)):
             h = self._inverse_layers[i](h)
             if i > 0:
                 h = self._activation(h)
@@ -127,21 +128,24 @@ class TPKernelBackend:
             output_target: Target at output layer (e.g., one-hot labels)
 
         Returns:
-            List of targets for each layer [target_h1, target_h2, ..., target_output]
+            List of targets, one per forward layer, where ``targets[-1]`` is the
+            output target and ``targets[i]`` is the target for the post-activation
+            of forward layer ``i``.
         """
-        targets: list[Tensor] = [None] * len(self._forward_layers)  # type: ignore
+        L = len(self._forward_layers)
+        targets: list[Tensor] = [None] * L  # type: ignore
         targets[-1] = output_target
 
-        # Backpropagate target through inverse network
+        # Propagate target backward through inverse layers (ordered output->input).
+        # inverse_layers[k] maps a target at layer k+1 to a target at layer k.
         current_target = output_target
-        for i in range(len(self._inverse_layers) - 1, -1, -1):
-            # Target for layer i = inverse_layer_i(target_{i+1})
-            inverse_layer = self._inverse_layers[i]
+        for k in range(L - 1):
+            inverse_layer = self._inverse_layers[k]
             with torch.no_grad():
                 current_target = inverse_layer(current_target)
-                if i > 0:
+                if k > 0:
                     current_target = self._activation(current_target)
-            targets[i] = current_target
+            targets[L - 2 - k] = current_target
 
         return targets  # type: ignore
 
@@ -175,12 +179,13 @@ class TPKernelBackend:
                 updates[f"forward.{i}.bias"] = self._target_lr * diff.mean(dim=0)
 
         # Inverse network updates
-        # Inverse tries to reconstruct pre from post
+        # inverse_layers[i] reconstructs forward activation i+1 from the target
+        # at layer i+1.
         for i in range(len(self._inverse_layers)):
             # Inverse input is target at layer i+1
             inv_input = targets[i + 1] if i + 1 < len(targets) else targets[-1]
-            # Inverse target is forward activation at layer i
-            inv_target = forward_activations[i]
+            # Inverse target is the forward activation at layer i+1
+            inv_target = forward_activations[i + 1]
 
             with torch.no_grad():
                 inv_output = self._inverse_layers[i](inv_input)

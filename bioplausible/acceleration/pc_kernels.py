@@ -48,6 +48,7 @@ class PCKernelBackend:
         self._dtype: torch.dtype = torch.float32
         self._activation: str = "tanh"
         self._mu: list[Tensor] | None = None  # State estimates
+        self._last_settle_telemetry: dict[str, object] | None = None
 
     def initialize(self, config: KernelConfig) -> None:
         """Initialize backend with configuration."""
@@ -145,27 +146,27 @@ class PCKernelBackend:
                     break
 
         telemetry["final_error"] = self.compute_energy(x)
+        self._last_settle_telemetry = telemetry
         return self._mu, telemetry
 
     def compute_energy(self, x: Tensor) -> float:
-        """Compute total prediction error (energy)."""
+        """Compute total prediction error (energy).
+
+        Standard PCN energy: each non-input state is compared to its prediction
+        from the layer below, ``E = sum_i 0.5 * ||mu_i - f(mu_{i-1} W_{i-1})||^2``.
+        """
         if self._mu is None:
             return 0.0
 
         energy = 0.0
         W = [layer.weight.data for layer in self._layers]
 
-        # Input layer error
-        pred_x = _apply_activation(self._mu[1] @ W[0].T, self._activation)
-        if self._layers[0].bias is not None:
-            pred_x = pred_x + self._layers[0].bias.data
-        energy += 0.5 * (x - pred_x).pow(2).sum().item()
-
-        # Hidden layer errors
-        for i in range(1, len(self._mu) - 1):
-            pred = _apply_activation(self._mu[i + 1] @ W[i].T, self._activation)
-            if self._layers[i].bias is not None:
-                pred = pred + self._layers[i].bias.data
+        for i in range(1, len(self._mu)):
+            pred = _apply_activation(
+                self._mu[i - 1] @ W[i - 1].T, self._activation
+            )
+            if self._layers[i - 1].bias is not None:
+                pred = pred + self._layers[i - 1].bias.data
             energy += 0.5 * (self._mu[i] - pred).pow(2).sum().item()
 
         return energy
@@ -178,45 +179,45 @@ class PCKernelBackend:
     ) -> dict[str, Tensor]:
         """Compute weight updates from free and nudged phases.
 
-        Contrastive update: Delta W = eta * (free_error - nudged_error) @ prev.T
+        Contrastive update: each weight W_{l-1} is driven by the prediction
+        error at layer l (``mu_l - f(mu_{l-1} W_{l-1} + b)``); the free and
+        nudged errors are contrasted. Matches the inference primitive's
+        convention (predict layer i from layer i-1 via ``W[i-1]``).
 
         Returns:
             Weight deltas for all layers
         """
         weight_deltas: dict[str, Tensor] = {}
+        L = len(self._layers)
 
-        for i in range(len(self._layers)):
-            free_pre = free_mu[i]
-            free_post = free_mu[i + 1]
-            nudged_pre = nudged_mu[i]
-            nudged_post = nudged_mu[i + 1]
-
-            # Prediction errors
+        for l in range(1, L + 1):
+            # Error at layer l predicts mu_l from mu_{l-1} via W[l-1].
+            free_pre = free_mu[l - 1]
             free_pred = _apply_activation(
-                free_post @ self._layers[i].weight.data.T, self._activation
+                free_pre @ self._layers[l - 1].weight.data.T, self._activation
             )
-            if self._layers[i].bias is not None:
-                free_pred = free_pred + self._layers[i].bias.data
-            free_error = free_pre - free_pred
+            if self._layers[l - 1].bias is not None:
+                free_pred = free_pred + self._layers[l - 1].bias.data
+            free_error = free_mu[l] - free_pred
 
+            nudged_pre = nudged_mu[l - 1]
             nudged_pred = _apply_activation(
-                nudged_post @ self._layers[i].weight.data.T, self._activation
+                nudged_pre @ self._layers[l - 1].weight.data.T, self._activation
             )
-            if self._layers[i].bias is not None:
-                nudged_pred = nudged_pred + self._layers[i].bias.data
-            nudged_error = nudged_pre - nudged_pred
+            if self._layers[l - 1].bias is not None:
+                nudged_pred = nudged_pred + self._layers[l - 1].bias.data
+            nudged_error = nudged_mu[l] - nudged_pred
 
-            # Contrastive weight update
-            free_grad = batched_outer_product(free_error, free_post)
-            nudged_grad = batched_outer_product(nudged_error, nudged_post)
+            # Weight delta for W[l-1] [D_l, D_{l-1}]
+            free_grad = batched_outer_product(free_pre, free_error)
+            nudged_grad = batched_outer_product(nudged_pre, nudged_error)
             delta = self._eta_weight * contrastive_delta(
-                nudged_grad, free_grad, beta=1.0
+                free_grad, nudged_grad, beta=1.0
             )
+            weight_deltas[f"layers.{l-1}.weight"] = delta
 
-            weight_deltas[f"layers.{i}.weight"] = delta
-
-            if self._layers[i].bias is not None:
-                weight_deltas[f"layers.{i}.bias"] = self._eta_weight * (
+            if self._layers[l - 1].bias is not None:
+                weight_deltas[f"layers.{l-1}.bias"] = self._eta_weight * (
                     nudged_error.mean(dim=0) - free_error.mean(dim=0)
                 )
 
@@ -247,7 +248,8 @@ class PCKernelBackend:
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:
-        return None
+        """Return the most recent settle loop's telemetry, if any."""
+        return self._last_settle_telemetry
 
 
 def _apply_activation(x: Tensor, activation: str) -> Tensor:

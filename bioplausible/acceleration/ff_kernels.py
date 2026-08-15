@@ -55,6 +55,8 @@ class FFKernelBackend:
         extra = config.extra
         self._threshold = extra.get("threshold", 1.0)
         self._num_layers = extra.get("num_layers", 3)
+        self._input_dim = extra.get("input_dim", 784)
+        self._output_dim = extra.get("output_dim", 10)
         self._activation = _get_activation(extra.get("activation", "relu"))
 
     def set_model_ref(
@@ -82,8 +84,10 @@ class FFKernelBackend:
             x = x.view(x.size(0), -1)
 
         # Embed label into input (concatenate or add)
-        # Standard FF: concatenate one-hot label to input
-        y_onehot = torch.nn.functional.one_hot(y, num_classes=x.shape[1]).float()
+        # Standard FF: concatenate one-hot label to input (output_dim classes)
+        y_onehot = torch.nn.functional.one_hot(
+            y, num_classes=self._output_dim
+        ).float().to(device=self._device, dtype=self._dtype)
         x_pos = torch.cat([x, y_onehot], dim=1)
 
         return self._forward_layers(x_pos)
@@ -95,8 +99,10 @@ class FFKernelBackend:
             x = x.view(x.size(0), -1)
 
         # Use incorrect label (shift by 1)
-        y_wrong = (y + 1) % x.shape[1]  # Simplified wrong label
-        y_onehot = torch.nn.functional.one_hot(y_wrong, num_classes=x.shape[1]).float()
+        y_wrong = (y + 1) % self._output_dim
+        y_onehot = torch.nn.functional.one_hot(
+            y_wrong, num_classes=self._output_dim
+        ).float().to(device=self._device, dtype=self._dtype)
         x_neg = torch.cat([x, y_onehot], dim=1)
 
         return self._forward_layers(x_neg)
@@ -301,22 +307,16 @@ class PEPITAKernelBackend:
         error_activations: list[Tensor],
         error: Tensor,
     ) -> dict[str, Tensor]:
-        """PEPITA backward: error-modulated update.
+        """PEPITA backward: error-modulated contrastive update.
 
-        Delta W = scale * error @ feedback_matrix.T (for first layer)
-        For hidden layers: propagate error through feedback
+        For every layer, Delta W = scale * (a_err.T @ pre - a_std.T @ pre) / B,
+        i.e. the difference in pre-synaptic x post-synaptic correlation between
+        the error-modulated and standard passes (mirrors the reference's
+        ``layer.weight -= lr * delta_a.T @ inp / B``).
         """
         weight_deltas: dict[str, Tensor] = {}
 
-        # First layer: direct error modulation
-        if self._feedback_matrix is not None:
-            delta = pepita_error_modulation(error, self._feedback_matrix, self._scale)
-            weight_deltas["layers.0.weight"] = delta
-            if self._layers[0].bias is not None:
-                weight_deltas["layers.0.bias"] = self._scale * error.mean(dim=0)
-
-        # Hidden layers: contrastive between standard and error-modulated
-        for i in range(1, len(self._layers)):
+        for i in range(len(self._layers)):
             std_pre = standard_activations[i]
             std_post = standard_activations[i + 1]
             err_pre = error_activations[i]
@@ -324,14 +324,14 @@ class PEPITAKernelBackend:
 
             std_grad = batched_outer_product(std_pre, std_post)
             err_grad = batched_outer_product(err_pre, err_post)
-            delta = contrastive_delta(std_grad, err_grad, beta=1.0)
+            delta = self._scale * contrastive_delta(std_grad, err_grad, beta=1.0)
 
             weight_deltas[f"layers.{i}.weight"] = delta
 
             if self._layers[i].bias is not None:
-                weight_deltas[f"layers.{i}.bias"] = err_post.mean(
-                    dim=0
-                ) - std_post.mean(dim=0)
+                weight_deltas[f"layers.{i}.bias"] = self._scale * (
+                    err_post.mean(dim=0) - std_post.mean(dim=0)
+                )
 
         return weight_deltas
 

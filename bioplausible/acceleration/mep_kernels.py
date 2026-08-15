@@ -44,6 +44,7 @@ class MEPKernelBackend:
         self._settle_lr: float = 0.1
         self._device: torch.device = torch.device("cpu")
         self._dtype: torch.dtype = torch.float32
+        self._last_settle_telemetry: dict[str, object] | None = None
 
     def initialize(self, config: KernelConfig) -> None:
         self._config = config
@@ -190,6 +191,7 @@ class MEPKernelBackend:
             h = h_new
 
         telemetry["final_delta"] = (h - prev_h).abs().max().item()
+        self._last_settle_telemetry = telemetry
         return h, telemetry
 
     # ============================================================
@@ -309,7 +311,8 @@ class MEPKernelBackend:
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:
-        return None
+        """Return the most recent EP settle loop's telemetry, if any."""
+        return self._last_settle_telemetry
 
 
 # ============================================================
@@ -337,6 +340,7 @@ class O1MemoryEPv2KernelBackend:
         self._settle_lr: float = 0.1
         self._device: torch.device = torch.device("cpu")
         self._dtype: torch.dtype = torch.float32
+        self._last_settle_telemetry: dict[str, object] | None = None
 
     def initialize(self, config: KernelConfig) -> None:
         self._config = config
@@ -387,6 +391,7 @@ class O1MemoryEPv2KernelBackend:
                 break
 
         telemetry["final_delta"] = max_delta
+        self._last_settle_telemetry = telemetry
         return states, telemetry
 
     def analytic_state_grad(
@@ -463,7 +468,8 @@ class O1MemoryEPv2KernelBackend:
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:
-        return None
+        """Return the most recent O(1) settle loop's telemetry, if any."""
+        return self._last_settle_telemetry
 
 
 def _activation_deriv(state: Tensor, activation: str) -> Tensor:

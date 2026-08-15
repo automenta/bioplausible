@@ -151,9 +151,18 @@ class TestContrastivePrimitives:
         assert torch.isfinite(delta).all()
 
     def test_stdp_update_shape(self):
-        # Simplified STDP returns a per-post-neuron correlation vector.
+        # STDP returns a proper [N_post, N_pre] correlation matrix.
         pre = torch.rand(8, 16, 5)
-        post = torch.rand(8, 16, 5)
+        post = torch.rand(8, 8, 5)
         delta = stdp_update(pre, post)
-        assert delta.shape == (16,)
+        assert delta.shape == (8, 16)
+        assert torch.isfinite(delta).all()
+
+    def test_stdp_update_symmetric_pair(self):
+        # A spiking pre-before-post pair should give symmetric LTP/LTD cancellation
+        # when A_plus == A_minus and the spike trains are identical.
+        spikes = torch.zeros(4, 6, 10)
+        spikes[..., 2] = 1.0  # a single simultaneous spike across all neurons
+        delta = stdp_update(spikes, spikes, A_plus=0.01, A_minus=0.01)
+        assert delta.shape == (6, 6)
         assert torch.isfinite(delta).all()

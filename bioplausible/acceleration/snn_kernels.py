@@ -50,6 +50,7 @@ class SNNKernelBackend:
         self._device: torch.device = torch.device("cpu")
         self._dtype: torch.dtype = torch.float32
         self._spike_grad: str = "surrogate"
+        self._last_settle_telemetry: dict[str, object] | None = None
 
     def initialize(self, config: KernelConfig) -> None:
         self._config = config
@@ -124,12 +125,16 @@ class SNNKernelBackend:
             v_list.append(v)
             i_syn_list.append(i_syn)
 
-        # Storage
-        for _ in range(num_layers + 1):
+        # Storage (per-layer width: layer 0 is the input layer, layers 1..N
+        # use each Linear layer's out_features).
+        widths = [v_list[0].shape[1]] + [
+            layer.out_features for layer in self._layers
+        ]
+        for width in widths:
             spike_trains.append(
                 torch.zeros(
                     batch_size,
-                    v_list[-1].shape[1],
+                    width,
                     self._num_steps,
                     device=self._device,
                     dtype=self._dtype,
@@ -138,7 +143,7 @@ class SNNKernelBackend:
             voltage_traces.append(
                 torch.zeros(
                     batch_size,
-                    v_list[-1].shape[1],
+                    width,
                     self._num_steps,
                     device=self._device,
                     dtype=self._dtype,
@@ -208,6 +213,7 @@ class SNNKernelBackend:
             / len(spike_trains),
             "total_spikes": sum(s.sum().item() for s in spike_trains),
         }
+        self._last_settle_telemetry = telemetry
 
         return spike_trains, voltage_traces, telemetry
 
@@ -315,7 +321,8 @@ class SNNKernelBackend:
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:
-        return None
+        """Return the most recent SNN simulation's telemetry, if any."""
+        return self._last_settle_telemetry
 
 
 # Register backend

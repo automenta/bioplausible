@@ -46,6 +46,7 @@ class TileKernelBackend:
         self._lr: float = 0.01
         self._device: torch.device = torch.device("cpu")
         self._dtype: torch.dtype = torch.float32
+        self._last_settle_telemetry: dict[str, object] | None = None
 
     def initialize(self, config: KernelConfig) -> None:
         self._config = config
@@ -180,6 +181,7 @@ class TileKernelBackend:
 
             prev_tile_states = [s.clone() for s in tile_states]
 
+        self._last_settle_telemetry = telemetry
         return tile_states, telemetry
 
     def backward_contrastive(
@@ -238,7 +240,8 @@ class TileKernelBackend:
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:
-        return None
+        """Return the most recent settle loop's telemetry, if any."""
+        return self._last_settle_telemetry
 
 
 # Register backend

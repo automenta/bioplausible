@@ -276,22 +276,22 @@ def predictive_coding_inference_step(
 ) -> list[Tensor]:
     """Predictive Coding inference step (PCN).
 
-    Updates all mu levels simultaneously:
-    mu_l = mu_l + eta_infer * (W_l^T @ (mu_{l+1} - f(mu_l)) - (mu_l - f(mu_{l-1})))
+    Each state chases its prediction from the layer below: the input state is
+    clamped to ``x`` and never updated; every other state is pulled toward its
+    parent's prediction, ``mu_l = mu_l - eta * (mu_l - f(mu_{l-1} W_{l-1} + b))``.
 
     Args:
-        mu: List of state estimates per layer
-        x: Input
-        W: List of forward weights
-        b: List of biases
-        eta_infer: Inference learning rate
-        activation: Activation function
+        mu: List of state estimates per layer (``mu[0]`` is the clamped input).
+        x: Input (must match ``mu[0]``).
+        W: List of forward weight matrices ``[D_l, D_{l-1}]``.
+        b: List of biases per layer.
+        eta_infer: Inference learning rate.
+        activation: Activation function.
 
     Returns:
-        Updated mu list
+        Updated ``mu`` list (``mu[0]`` unchanged).
     """
     L = len(mu)
-    mu_new = [m.clone() for m in mu]
 
     def act(z: Tensor) -> Tensor:
         if activation == "relu":
@@ -307,25 +307,15 @@ def predictive_coding_inference_step(
             return 1 - torch.tanh(z) ** 2
         return torch.ones_like(z)
 
-    # Bottom-up prediction errors
-    for layer_idx in range(L):
-        if layer_idx == 0:
-            pred = act(mu[0])
-            error = x - pred
-            mu_new[0] += eta_infer * (W[0].T @ error * act_deriv(mu[0]))
-        elif layer_idx == L - 1:
-            pred = act(mu[layer_idx])
-            error = mu[layer_idx - 1] - pred
-            mu_new[layer_idx] += eta_infer * (error * act_deriv(mu[layer_idx]))
-        else:
-            pred_up = act(mu[layer_idx + 1])
-            pred_down = act(mu[layer_idx])
-            error_up = mu[layer_idx] - pred_up
-            error_down = mu[layer_idx - 1] - pred_down
-            mu_new[layer_idx] += eta_infer * (
-                W[layer_idx].T @ error_up * act_deriv(mu[layer_idx])
-                - error_down * act_deriv(mu[layer_idx])
-            )
+    mu_new = [m.clone() for m in mu]
+    mu_new[0] = x.clone()
+
+    for layer_idx in range(1, L):
+        pred = act(
+            mu[layer_idx - 1] @ W[layer_idx - 1].T + b[layer_idx - 1]
+        )
+        error = mu[layer_idx] - pred
+        mu_new[layer_idx] = mu[layer_idx] - eta_infer * error * act_deriv(mu[layer_idx])
 
     return mu_new
 
@@ -351,16 +341,13 @@ def stdp_update(
     Returns:
         Weight delta [N_post, N_pre]
     """
-    # Correlation-based approximation
-    # LTP: pre before post
-    pre_rolled = torch.roll(pre_spikes, shifts=1, dims=2)
-    ltp = (pre_rolled * post_spikes).sum(dim=(0, 2))
+    # Correlation-based approximation over (batch, time):
+    # LTP: post at t+1 with pre at t -> [N_post, N_pre]
+    ltp = torch.einsum("bit,bjt->ij", post_spikes[:, :, 1:], pre_spikes[:, :, :-1])
+    # LTD: post at t with pre at t+1 -> [N_post, N_pre]
+    ltd = torch.einsum("bit,bjt->ij", post_spikes[:, :, :-1], pre_spikes[:, :, 1:])
 
-    # LTD: post before pre
-    post_rolled = torch.roll(post_spikes, shifts=1, dims=2)
-    ltd = (pre_spikes * post_rolled).sum(dim=(0, 2))
-
-    return A_plus * ltp.T - A_minus * ltd.T
+    return A_plus * ltp - A_minus * ltd
 
 
 __all__ = [

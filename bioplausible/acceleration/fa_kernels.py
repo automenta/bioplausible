@@ -143,7 +143,9 @@ class FAKernelBackend:
                 else:
                     B_eff = B
 
-                grad_h = propagated_error @ B_eff.T
+                # Feedback weight B maps output-of-layer-(i+1) back to layer i:
+                # B = feedback_weights[i+1] is shaped [D_{i+1}, D_i].
+                grad_h = propagated_error @ B_eff
 
                 h_curr = activations[i + 1]
                 grad_h = _apply_activation_derivative(grad_h, h_curr, self._activation)
