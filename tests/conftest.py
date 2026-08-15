@@ -1,5 +1,6 @@
 """Shared test fixtures and configuration."""
 
+import logging
 import shutil
 import sys
 import tempfile
@@ -8,6 +9,13 @@ from pathlib import Path
 # Add project root to path
 ROOT_DIR = Path(__file__).parent.parent
 sys.path.append(str(ROOT_DIR))
+
+# Configure logging for tests
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(name)s - %(levelname)s - %(message)s",
+    stream=sys.stdout,
+)
 
 # Hard dependencies — no mock stubs needed
 # bioplausible.acceleration checks for cupy

@@ -143,10 +143,10 @@ def _measure_epoch(  # ruff: ignore[too-many-arguments,too-many-positional-argum
             param_count=0,
         )
     except Exception as exc:  # broad: a broken calibration probe is a 0.0, not an abort
-        print(f"    {model}: ERROR {exc}")
+        logger.error("Model %s: ERROR %s", model, exc)
         return 0.0
     if result.status != "ok":
-        print(f"    {model}: FAILED ({result.error})")
+        logger.error(t"    {model}: FAILED ({result.error})")
         return 0.0
     per_batch = max(result.epoch_time_s, 0.0) / (_CALIB_EPOCHS * calib_batches)
     return per_batch * epoch_batches
@@ -187,16 +187,15 @@ def _calibrate_epoch_times(
     for task in tasks:
         stage = next(s for s in campaign.stages if s.task == task)
         rep_config = min(producer.configs_for(stage) or [{}], key=_config_size)
-        print(
-            f"  Calibrating task '{task}' on {device} with config: "
-            f"{rep_config} ({calib_batches} batches)"
+        logger.info(
+            t"Calibrating task '{task}' on {device} with config: {rep_config} ({calib_batches} batches)"
         )
         task_times: dict[str, float] = {}
         for model in reps:
             task_times[model] = _measure_epoch(
                 driver, model, task, rep_config, device, calib_batches, epoch_batches
             )
-            print(f"    {model}: {task_times[model]:.1f}s/epoch (est)")
+            logger.info(t"    {model}: {task_times[model]:.1f}s/epoch (est)")
 
         valid = [t for t in task_times.values() if t > 0]
         avg = sum(valid) / len(valid) if valid else 30.0  # defensive floor
@@ -262,7 +261,7 @@ def _reduce_stage_epochs(
     new_epochs = max(min_epochs, int(stage.epochs * scale_factor))
     if new_epochs >= stage.epochs:
         return False
-    print(f"    Stage {stage.name}: epochs {stage.epochs} -> {new_epochs}")
+    logger.info(t"    Stage {stage.name}: epochs {stage.epochs} -> {new_epochs}")
     stage.epochs = new_epochs
     return True
 
@@ -326,7 +325,7 @@ def _reduce_stage_configs(stage: Stage, scale_factor: float) -> bool:
         _, key, drop = best
         grid[key] = [v for v in grid[key] if v != drop]
 
-    print(f"    Stage {stage.name}: configs reduced")
+    logger.info(t"    Stage {stage.name}: configs reduced")
     stage.configs = grid
     return True
 
@@ -336,7 +335,7 @@ def _reduce_stage_seeds(stage: Stage, scale_factor: float) -> bool:
     new_seeds = max(_min_seeds_for(stage), int(stage.seeds * scale_factor))
     if new_seeds >= stage.seeds:
         return False
-    print(f"    Stage {stage.name}: seeds {stage.seeds} -> {new_seeds}")
+    logger.info(t"    Stage {stage.name}: seeds {stage.seeds} -> {new_seeds}")
     stage.seeds = new_seeds
     return True
 
@@ -365,9 +364,8 @@ def _auto_scale_campaign(
     scaled = copy.deepcopy(campaign)
 
     current = _estimate_total_wall_time(scaled, epoch_times, models, producer)
-    print(
-        f"  Current estimate: {current / 60:.1f}min, "
-        f"target: {target_seconds / 60:.1f}min"
+    logger.info(
+        t"  Current estimate: {current / 60:.1f}min, target: {target_seconds / 60:.1f}min"
     )
     if current <= target_seconds:
         return scaled  # already fits
@@ -404,9 +402,8 @@ def _auto_scale_campaign(
 
     current = _estimate_total_wall_time(scaled, epoch_times, models, producer)
     if current > target_seconds:
-        print(
-            f"  WARNING: cannot fit {target_seconds / 60:.1f}min with these "
-            f"minimums; estimate {current / 60:.1f}min"
+        logger.warning(
+            t"  WARNING: cannot fit {target_seconds / 60:.1f}min with these minimums; estimate {current / 60:.1f}min"
         )
     return scaled
 
@@ -574,9 +571,8 @@ def _cmd_validate(config: str) -> int:
     campaign = load_campaign(config)
     arms = ", ".join(sorted(campaign.arms))
     stage_summary = ", ".join(f"{s.name}:{s.task}" for s in campaign.stages)
-    print(
-        f"OK: campaign {campaign.meta.name!r} valid\n"
-        f"  arms: [{arms}]\n  stages: {stage_summary}"
+    logger.info(
+        t"OK: campaign {campaign.meta.name!r} valid\n  arms: [{arms}]\n  stages: {stage_summary}"
     )
     return 0
 
@@ -595,7 +591,7 @@ def _cmd_plan(
     if time_budget:
         target_seconds = _parse_time_budget(time_budget)
         device = _resolve_device(campaign, None)
-        print(f"Calibrating on {device} to fit {time_budget} budget...")
+        logger.info(t"Calibrating on {device} to fit {time_budget} budget...")
         epoch_times = _calibrate_epoch_times(
             campaign, device, models, producer, target_seconds
         )
@@ -603,35 +599,31 @@ def _cmd_plan(
             campaign, target_seconds, epoch_times, models, producer
         )
         producer = _producer(campaign, producer_kind, candidates)
-        print("Scaled campaign:")
+        logger.info("Scaled campaign:")
 
     total = 0
-    print(f"campaign: {campaign.meta.name!r}")
+    logger.info(f"campaign: {campaign.meta.name!r}")
     for stage in campaign.stages:
         pairs = _in_budget_pairs(campaign, stage, models, producer)
         n_seeds = stage.seeds
         n_probes = len(pairs) * n_seeds
         total += n_probes
-        print(
-            f"  stage {stage.name:<16}{len(pairs)} in-budget (model, config) "
-            f"pairs x {n_seeds} seeds = {n_probes} probes"
+        logger.info(
+            f"  stage {stage.name:<16}{len(pairs)} in-budget (model, config) pairs x {n_seeds} seeds = {n_probes} probes"
         )
-    print(f"total probes: {total}")
+    logger.info(f"total probes: {total}")
 
     if time_budget:
         # Report the device-calibrated estimate (matches run's actual cost),
         # not the heuristic tier table.
         est = _estimate_total_wall_time(campaign, epoch_times, models, producer)
-        print(
-            f"calibrated total time: {est:.0f}s "
-            f"({est / 60:.1f} min) vs {time_budget} target"
+        logger.info(
+            f"calibrated total time: {est:.0f}s ({est / 60:.1f} min) vs {time_budget} target"
         )
     else:
         budget = _time_budget(campaign)
-        print(
-            f"estimated total time: {budget['estimated_completion']} "
-            f"({budget['minutes']:.0f} min across {budget['trials_per_model']} "
-            "trials_per_model)"
+        logger.info(
+            f"estimated total time: {budget['estimated_completion']} ({budget['minutes']:.0f} min across {budget['trials_per_model']} trials_per_model)"
         )
     return 0
 
@@ -652,18 +644,18 @@ def _cmd_run(  # ruff: ignore[too-many-arguments,too-many-locals,too-many-positi
         resolved_device = _resolve_device(campaign, device)
         models = _all_models(campaign)
         producer = _producer(campaign, producer_kind, candidates)
-        print(f"Calibrating on {resolved_device} to fit {time_budget} budget...")
+        logger.info(t"Calibrating on {resolved_device} to fit {time_budget} budget...")
         epoch_times = _calibrate_epoch_times(
             campaign, resolved_device, models, producer, target_seconds
         )
         campaign = _auto_scale_campaign(
             campaign, target_seconds, epoch_times, models, producer
         )
-        print("Scaled campaign will be executed.")
+        logger.info(t"Scaled campaign will be executed.")
 
     report_path = _report_path(campaign, report_override)
     if report_path.exists() and report_path.stat().st_size:
-        print(f"resuming report {report_path} (finished probes are no-ops)")
+        logger.info(t"resuming report {report_path} (finished probes are no-ops)")
 
     wants_energy = any(bool(stage.energy) for stage in campaign.stages)
     report = Report(report_path)
@@ -685,13 +677,13 @@ def _cmd_run(  # ruff: ignore[too-many-arguments,too-many-locals,too-many-positi
 
     start = time.time()
     effective = _resolve_device(campaign, device)
-    print(f"running on {effective}")
+    logger.info(t"running on {effective}")
     try:
         outcomes = runner.run()
     except KeyboardInterrupt:
-        print(  # '--report' path is the resume contract; a partial run must be re-runnable
-            f"interrupted: {report_path} holds {len(report.finished_keys())} "
-            f"finished probes; rerun to resume"
+        logger.info(
+            "#'--report' path is the resume contract; a partial run must be re-runnable; interrupted: %s holds %d finished probes; rerun to resume",
+            f"{report_path} holds {len(report.finished_keys())} finished probes; rerun to resume",
         )
         return 130
     except Exception as exc:  # broad: a long overnight run must not lose the resume contract to a single probe/driver crash
@@ -701,19 +693,18 @@ def _cmd_run(  # ruff: ignore[too-many-arguments,too-many-locals,too-many-positi
             exc,
             exc_info=True,
         )
-        print(
-            f"run aborted: {report_path} holds {len(report.finished_keys())} "
-            f"finished probes and is resumable (rerun to continue)"
+        logger.error(
+            t"run aborted: {report_path} holds {len(report.finished_keys())} finished probes and is resumable (rerun to continue)"
         )
         return 1
     elapsed = time.time() - start
 
     for outcome in outcomes:
         verdict = outcome.verdict.value
-        print(f"  [{verdict:>6}] {outcome.model:<24} {outcome.reason}")
+        logger.info(t"  [{verdict:>6}] {outcome.model:<24} {outcome.reason}")
     n_pass = sum(1 for o in outcomes if o.verdict is Verdict.PASS)
-    print(f"report written: {report_path}")
-    print(f"{n_pass}/{len(outcomes)} PASS; completed in {elapsed:.1f}s")
+    logger.info(t"report written: {report_path}")
+    logger.info(t"{n_pass}/{len(outcomes)} PASS; completed in {elapsed:.1f}s")
     return 0
 
 

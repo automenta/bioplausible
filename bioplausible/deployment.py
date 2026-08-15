@@ -26,7 +26,7 @@ from bioplausible.core.logging import get_logger
 from bioplausible.utils import count_parameters
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class InferenceRequest:
     """Request body for deployment prediction endpoint."""
 
@@ -37,7 +37,7 @@ class InferenceRequest:
 logger = get_logger()
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ModelInfo:
     """Metadata about an exported model."""
 

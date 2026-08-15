@@ -59,19 +59,18 @@ def test_validate_rejects_unknown_task(tmp_path: Path):
     assert main(["validate", str(_write(tmp_path, yaml_text))]) == 1
 
 
-def test_plan_reports_probe_count(tmp_path: Path, capsys):
+def test_plan_reports_probe_count(tmp_path: Path, caplog):
     rc = main(["plan", str(_write(tmp_path, _SMOKE_YAML))])
-    out = capsys.readouterr().out
     assert rc == 0
-    assert "total probes: 1" in out
-    assert "estimated total time" in out
+    assert "total probes: 1" in caplog.text
+    assert "estimated total time" in caplog.text
 
 
 def test_plan_unknown_config_fails(tmp_path: Path):
     assert main(["plan", str(tmp_path / "missing.yaml")]) == 1
 
 
-def test_plan_unexpected_error_resume_hint(tmp_path: Path, capsys):
+def test_plan_unexpected_error_resume_hint(tmp_path: Path, caplog):
     """A mid-run driver crash must not lose the resume contract.
 
     Regression for the overnight run: an unexpected exception inside the
@@ -96,10 +95,9 @@ def test_plan_unexpected_error_resume_hint(tmp_path: Path, capsys):
     finally:
         cli.StaircaseRunner = original  # type: ignore[assignment]
 
-    out = capsys.readouterr().out
     assert rc == 1
-    assert "resumable" in out
-    assert "rerun to continue" in out
+    assert "resumable" in caplog.text
+    assert "rerun to continue" in caplog.text
 
 
 def test_report_renders_parity_and_pareto(tmp_path: Path, capsys):

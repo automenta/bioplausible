@@ -43,7 +43,7 @@ logger = get_logger()
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class SafetyConfig:
     """Safety configuration for training."""
 

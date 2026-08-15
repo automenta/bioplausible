@@ -8,7 +8,6 @@ registry with equilibrium-propagation strategies (no core dependency).
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
 
 from torch import nn
 
@@ -16,7 +15,10 @@ from .config import StrategyConfig, StrategyOptimizerConfig
 from .optimizer import StrategyOptimizer
 from .strategies import (
     BackpropGradient,
+    ConstraintStrategy,
     ErrorFeedback,
+    FeedbackStrategy,
+    GradientStrategy,
     HebbianGradient,
     MuonUpdate,
     NoConstraint,
@@ -24,11 +26,16 @@ from .strategies import (
     PlainUpdate,
     SpectralConstraint,
     TargetPropGradient,
+    UpdateStrategy,
 )
 
 __all__ = ["StrategyRegistry", "create_strategy_optimizer"]
 
-StrategyFactory = Callable[[StrategyConfig], Any]
+GradientFactory = Callable[[StrategyConfig], GradientStrategy]
+UpdateFactory = Callable[[StrategyConfig], UpdateStrategy]
+ConstraintFactory = Callable[[StrategyConfig], ConstraintStrategy]
+FeedbackFactory = Callable[[StrategyConfig], FeedbackStrategy]
+StrategyFactory = GradientFactory | UpdateFactory | ConstraintFactory | FeedbackFactory
 
 #: name -> constructor mapping; populate a copy before delegating to the
 #: generic factory for MEP-specific strategies.
@@ -48,7 +55,7 @@ StrategyRegistry: dict[str, StrategyFactory] = {
 
 def _resolve(
     spec: StrategyConfig, registry: dict[str, StrategyFactory], kind: str
-) -> Any:
+) -> GradientStrategy | UpdateStrategy | ConstraintStrategy | FeedbackStrategy:
     factory = registry.get(spec.name)
     if factory is None:
         raise ValueError(

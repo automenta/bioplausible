@@ -6,8 +6,8 @@ Defines curriculum schedules for progressive training (easy to hard).
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from collections.abc import Callable
+from typing import Protocol
 
 __all__ = [
     "CURRICULA",
@@ -19,19 +19,16 @@ __all__ = [
 ]
 
 
-class Curriculum(ABC):
-    """Base class for curriculum schedules."""
+class Curriculum(Protocol):
+    """Protocol for curriculum schedules.
 
-    @abstractmethod
-    def get_difficulty(self, epoch: int, total_epochs: int) -> float:
-        """
-        Return difficulty level in [0.0, 1.0] for the given epoch.
-        0.0 = easiest, 1.0 = hardest.
-        """
+    Returns difficulty level in [0.0, 1.0] for the given epoch.
+    0.0 = easiest, 1.0 = hardest.
+    """
 
-    @abstractmethod
-    def description(self) -> str:
-        """Human-readable description of this curriculum."""
+    def get_difficulty(self, epoch: int, total_epochs: int) -> float: ...
+
+    def description(self) -> str: ...
 
 
 class FixedCurriculum(Curriculum):
@@ -40,7 +37,7 @@ class FixedCurriculum(Curriculum):
     def __init__(self, difficulty: float = 1.0):
         self._difficulty = difficulty
 
-    def get_difficulty(self, epoch: int, total_epochs: int) -> float:
+    def get_difficulty(self, epoch: int, total_epochs: int) -> float:  # ruff: ignore[unused-method-argument]
         return self._difficulty
 
     def description(self) -> str:

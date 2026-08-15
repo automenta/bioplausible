@@ -98,7 +98,7 @@ def _make_ebm_trainer(config: TrainerConfig, model: nn.Module) -> EBMTrainer:
     )
 
 
-@dataclass
+@dataclass(slots=True)
 class TrainerConfig:
     """Configuration for CoreTrainer."""
 
@@ -217,7 +217,7 @@ class TrainerConfig:
         return OmegaConf.to_container(OmegaConf.structured(self), resolve=True)
 
 
-@dataclass
+@dataclass(slots=True)
 class LMTrainingConfig(TrainerConfig):
     """LM trainer config — step-based knobs on the unified trainer config.
 

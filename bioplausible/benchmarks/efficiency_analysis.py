@@ -37,7 +37,7 @@ __all__ = [
 ]
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ParameterEfficiencyResult:
     """Results from parameter efficiency analysis."""
 
@@ -51,7 +51,7 @@ class ParameterEfficiencyResult:
     mlp_params: int
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class FLOPEfficiencyResult:
     """Results from FLOP efficiency analysis."""
 
@@ -63,7 +63,7 @@ class FLOPEfficiencyResult:
     measured_flops: int
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class MemoryEfficiencyResult:
     """Results from memory efficiency analysis."""
 
@@ -508,7 +508,7 @@ def compare_efficiency(
     }
 
     for name, model in models:
-        logger.info(f"\nAnalyzing {name}...")
+        logger.info(t"\nAnalyzing {name}...")
 
         # Parameter efficiency
         param_result = analyze_parameter_efficiency(model, val_loader, device)

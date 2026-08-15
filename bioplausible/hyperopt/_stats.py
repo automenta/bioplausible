@@ -47,7 +47,7 @@ def estimate_param_count(model_name: str) -> int:
     return _PARAM_ESTIMATES.get(model_name, 0)
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class StudyStats:
     """Snapshot of a study's progress at a moment in time."""
 

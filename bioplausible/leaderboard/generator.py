@@ -19,7 +19,7 @@ __all__ = [
 logger = get_logger()
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class LeaderboardEntry:
     """An entry in the benchmark leaderboard."""
 

@@ -165,12 +165,13 @@ def main(argv: list[str] | None = None) -> int:
             stats["n_probes"],
         )
     for name, cost in sorted(report["cost_of_plausibility"].items()):
-        if cost <= _VIABLE_THRESHOLD:
-            label = "viable"
-        elif cost >= _CURIOSITY_THRESHOLD:
-            label = "curiosity"
-        else:
-            label = "neutral"
+        match cost <= _VIABLE_THRESHOLD, cost >= _CURIOSITY_THRESHOLD:
+            case True, _:
+                label = "viable"
+            case _, True:
+                label = "curiosity"
+            case _:
+                label = "neutral"
         logger.info("cost_of_plausibility %s = %.2f (%s)", name, cost, label)
     return 0
 

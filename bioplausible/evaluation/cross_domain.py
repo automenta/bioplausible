@@ -15,7 +15,7 @@ Integrates with KnowledgeBase for persistent storage and LeaderboardGenerator.
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from bioplausible.core.logging import get_logger
@@ -38,7 +38,7 @@ from bioplausible.utils import count_parameters
 logger = get_logger()
 
 
-@dataclass
+@dataclass(slots=True)
 class BenchmarkSuiteConfig:
     """Configuration for running the benchmark suite."""
 
@@ -54,7 +54,7 @@ class BenchmarkSuiteConfig:
     output_dir: str = "benchmark_results"
 
 
-@dataclass
+@dataclass(slots=True)
 class BenchmarkSuiteResult:
     """Results from running the benchmark suite."""
 
@@ -65,7 +65,7 @@ class BenchmarkSuiteResult:
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "config": self.config.__dict__,
+            "config": asdict(self.config),
             "n_results": len(self.results),
             "total_time_s": self.total_time_s,
             "results": [r.to_dict() for r in self.results],

@@ -28,6 +28,16 @@ DEFAULT_CONFIGS: dict[str, ExperimentSchemaConfig] = {}
 _logger = get_logger()
 
 
+def _make_writable(node) -> None:
+    """Recursively make an OmegaConf config writable."""
+    if not OmegaConf.is_config(node):
+        return
+    node._set_flag("readonly", False)
+    node._set_flag("struct", False)
+    for k in node:
+        _make_writable(node[k])
+
+
 def register_default_config(name: str, overrides: dict) -> None:
     """Register a named experiment preset by merging overrides into the base.
 
@@ -43,6 +53,7 @@ def register_default_config(name: str, overrides: dict) -> None:
     if name in DEFAULT_CONFIGS:
         _logger.warning("Overwriting default config preset %r", name)
     base = OmegaConf.structured(ExperimentSchemaConfig)
+    _make_writable(base)
     merged = OmegaConf.merge(base, OmegaConf.create(overrides))
     DEFAULT_CONFIGS[name] = OmegaConf.to_object(merged)
 

@@ -52,6 +52,7 @@ from bioplausible.core.utils.activations import (
 
 def get_kernel_classes() -> tuple[type[object], type[object]]:
     """Lazily import kernel classes to avoid circular imports."""
+    # ruff: file-ignore[RUF067] - lazy import pattern keeps module lightweight
     from bioplausible.acceleration.kernels import EqPropKernel as _EqPropKernel
     from bioplausible.acceleration.kernels import (
         EqPropKernelBPTT as _EqPropKernelBPTT,
@@ -62,6 +63,7 @@ def get_kernel_classes() -> tuple[type[object], type[object]]:
 
 def get_triton_ops() -> type[object] | None:
     """Lazily import Triton ops, returning None if unavailable."""
+    # ruff: file-ignore[RUF067] - lazy import pattern keeps module lightweight
     try:
         from bioplausible.acceleration.triton_kernels import (
             TritonEqPropOps as _TritonEqPropOps,

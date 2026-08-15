@@ -202,12 +202,17 @@ def _resolve_targets_from_config(
             continue
         # Per-model budget: config can override per-model
         cfg_budget = budget
-        if cli_family in family_budgets:
-            cfg_budget = family_budgets[cli_family]
-        elif "__default__" in tier_budgets:
-            cfg_budget = tier_budgets["__default__"]
-        elif config and "budget" in config:
-            cfg_budget = int(config["budget"])
+        match [
+            cli_family in family_budgets,
+            "__default__" in tier_budgets,
+            config is not None and "budget" in config,
+        ]:
+            case [True, _, _]:
+                cfg_budget = family_budgets[cli_family]
+            case [False, True, _]:
+                cfg_budget = tier_budgets["__default__"]
+            case [False, False, True]:
+                cfg_budget = int(config["budget"])
 
         # The model_budgets table acts as BOTH a per-model budget override AND an
         # allowlist filter. When present, only the models it names are targeted —
@@ -666,16 +671,22 @@ def _format_values(values: list[float] | tuple[float, ...] | None) -> str:
     names = _objective_names()
     parts: list[str] = []
     for name, value in zip(names, values):
-        if "param" in name or "param_count" in name:
-            parts.append(f"params={value:,.0f}")
-        elif "time" in name or "epoch" in name:
-            parts.append(f"time={value:.2f}s")
-        elif "loss" in name:
-            parts.append(f"loss={value:.4f}")
-        elif "acc" in name:
-            parts.append(f"acc={value:.4f}")
-        else:
-            parts.append(f"{name}={value:.4f}")
+        match [
+            "param" in name or "param_count" in name,
+            "time" in name or "epoch" in name,
+            "loss" in name,
+            "acc" in name,
+        ]:
+            case [True, _, _, _]:
+                parts.append(f"params={value:,.0f}")
+            case [False, True, _, _]:
+                parts.append(f"time={value:.2f}s")
+            case [False, False, True, _]:
+                parts.append(f"loss={value:.4f}")
+            case [False, False, False, True]:
+                parts.append(f"acc={value:.4f}")
+            case _:
+                parts.append(f"{name}={value:.4f}")
     return " ".join(parts)
 
 

@@ -118,8 +118,6 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         if self.device is None:
             self.device = str(get_device())
 
-        import bioplausible.zoo  # ruff: ignore[unused-import]  # trigger component registration
-
         resolved = self._resolve_model_name()
         model_cls = Registry.get(ComponentCategory.MODEL, resolved)
         if model_cls is None:

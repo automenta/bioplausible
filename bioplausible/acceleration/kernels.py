@@ -127,7 +127,7 @@ def _from_windows() -> pathlib.Path | None:
     """Fallback for Windows NVIDIA GPU Computing Toolkit."""
     if sys.platform != "win32":
         return None
-    pg_files = pathlib.Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+    pg_files = pathlib.Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
     nvidia_root = pg_files / "NVIDIA GPU Computing Toolkit" / "CUDA"
     if not nvidia_root.exists():
         return None
@@ -248,7 +248,11 @@ def tanh_deriv(x: np.ndarray, xp: object = np) -> np.ndarray:
 
 
 def spectral_normalize(
-    W: np.ndarray, num_iters: int = 1, u: np.ndarray | None = None, xp: object = np
+    # ruff: file-ignore[N803] - W is conventional notation for weight matrix in spectral normalization
+    W: np.ndarray,
+    num_iters: int = 1,
+    u: np.ndarray | None = None,
+    xp: object = np,
 ) -> tuple[np.ndarray, np.ndarray | None, float]:
     """Power iteration spectral normalization.
 
@@ -290,6 +294,7 @@ class EqPropKernel:
         ...     print(f"Loss: {metrics['loss']:.4f}")
     """
 
+    # ruff: file-ignore[PLR0913, PLR0917] - domain-specific kernel with many config params
     def __init__(
         self,
         input_dim: int,
@@ -353,7 +358,7 @@ class EqPropKernel:
             }
             self.sn_state: dict[str, np.ndarray | None] = {"W_rec_u": None}
         else:
-            raise ValueError(f"Unknown architecture: {self.architecture}")
+            raise ValueError(f"Unknown architecture: {self.architecture}")  # ruff: ignore[raise-vanilla-args]
 
         # Adam state
         self.adam_state = {
@@ -369,7 +374,7 @@ class EqPropKernel:
         """Initialize weight matrix with Xavier-like initialization."""
         xp = self.xp
         std = scale * np.sqrt(2.0 / (in_dim + out_dim))
-        W = xp.random.randn(out_dim, in_dim).astype(np.float32) * std
+        W = xp.random.randn(out_dim, in_dim).astype(np.float32) * std  # ruff: ignore[non-lowercase-variable-in-function] - W is conventional notation for weight matrix
         return W
 
     def _get_normalized_weights(self) -> dict[str, np.ndarray]:
@@ -392,9 +397,9 @@ class EqPropKernel:
         if not self.use_spectral_norm:
             return False
         if self.architecture == "layered":
-            return weight_key in ["W1", "W2"]
+            return weight_key in {"W1", "W2"}
         elif self.architecture == "rnn":
-            return weight_key in ["W_rec"]
+            return weight_key in {"W_rec"}
         return False
 
     def _normalize_weight(self, weight_key: str, sn_state_key: str) -> np.ndarray:
@@ -571,7 +576,7 @@ class EqPropKernel:
         )
 
         if nudge_grad is not None:
-            h = h - self.beta * nudge_grad
+            h -= self.beta * nudge_grad
 
         return h, activations
 

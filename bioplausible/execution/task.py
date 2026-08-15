@@ -7,7 +7,7 @@ __all__ = [
 ]
 
 
-@dataclass
+@dataclass(slots=True)
 class ExperimentTask:
     """
     Represents a single planned experiment task.

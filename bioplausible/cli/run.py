@@ -598,8 +598,8 @@ def _write_study_jsonl(study: optuna.Study, stem: str, out_dir: str) -> None:
                 "model_name": trial.user_attrs.get("model_name"),
                 "family": trial.user_attrs.get("family"),
                 "params": trial.params,
-                "accuracy": trial.values[0] if trial.values else 0.0,  # ruff: ignore[pandas-use-of-dot-values]  (optuna Trial.values is a tuple)
-                "loss": trial.values[1] if len(trial.values) > 1 else None,  # ruff: ignore[pandas-use-of-dot-values]  (optuna)
+                "accuracy": trial.values[0] if trial.values else 0.0,
+                "loss": trial.values[1] if len(trial.values) > 1 else None,
                 "param_count": trial.user_attrs.get("param_count"),
                 "iteration_time": trial.user_attrs.get("iteration_time"),
             }
@@ -757,7 +757,7 @@ def _load_study_trials(study_name: str) -> list[dict]:
     for t in study.trials:
         if t.state != optuna.trial.TrialState.COMPLETE:
             continue
-        values = t.values or ()  # ruff: ignore[pandas-use-of-dot-values]  (optuna Trial.values is a tuple)
+        values = t.values or ()
         model_name = t.user_attrs.get("model_name", "unknown")
         family = t.user_attrs.get("family")
         if not family:
@@ -1133,7 +1133,7 @@ def run_verify(  # ruff: ignore[too-many-locals]  (verification bookkeeping: see
         logger.warning("No complete trials in study '%s'", args.study)
         return
 
-    complete.sort(key=lambda t: (t.values or [0.0])[0], reverse=True)  # ruff: ignore[pandas-use-of-dot-values]  (optuna)
+    complete.sort(key=lambda t: (t.values or [0.0])[0], reverse=True)
     top_k = complete[: args.top_k]
     epochs = getattr(args, "epochs", None)
     base_seed = getattr(args, "seed", 42)
@@ -1153,7 +1153,7 @@ def run_verify(  # ruff: ignore[too-many-locals]  (verification bookkeeping: see
             "[VERIFY] %s trial#%d  acc=%.4f  (re-running %d seeds)",
             model_name,
             t.number,
-            (t.values or [0.0])[0],  # ruff: ignore[pandas-use-of-dot-values]  (optuna Trial.values is a tuple)
+            (t.values or [0.0])[0],
             args.seeds,
         )
         seed_accs: list[float] = []

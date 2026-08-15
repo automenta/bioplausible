@@ -50,7 +50,7 @@ def _canonical(obj: object) -> str:
     if isinstance(obj, set):
         return "{" + ",".join(sorted(_canonical(x) for x in obj)) + "}"
     if isinstance(obj, (np.ndarray, torch.Tensor)):
-        return f"{type(obj).__name__}:{repr(obj.shape)}:{obj.tolist()!r}"
+        return f"{type(obj).__name__}:{obj.shape!r}:{obj.tolist()!r}"
     if isinstance(obj, bool) or obj is None:
         return repr(obj)
     if isinstance(obj, (int, float, str)):

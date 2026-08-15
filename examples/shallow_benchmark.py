@@ -8,6 +8,7 @@ Supports both Pareto multi-objective and scalarized(weighted) modes.
 """
 
 import argparse
+import logging
 import time
 
 import optuna
@@ -21,6 +22,8 @@ from bioplausible.hyperopt import (
 )
 from bioplausible.hyperopt.experiment import run_single_trial_task
 from bioplausible.hyperopt.optuna_bridge import scalarize_objectives
+
+logger = logging.getLogger(__name__)
 
 # Parse arguments
 parser = argparse.ArgumentParser(description="Benchmark bioplausible algorithms")
@@ -58,7 +61,7 @@ print_evaluation_summary(patience, n_models=len(models_to_test))
 
 # Task
 task = "mnist"
-print(f"Task: {task}")
+logger.info(t"Task: {task}")
 print(f"Models: {', '.join(models_to_test)}\n")
 
 # Storage

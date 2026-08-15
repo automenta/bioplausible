@@ -92,7 +92,7 @@ class EpochCheckpoint:
     samples_seen: int = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class TrainingTrajectory:
     """Complete training history for one trial.
 

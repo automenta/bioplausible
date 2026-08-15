@@ -5,7 +5,7 @@ Ported from equitile/analysis/dynamics.py to work with TileAlgorithm substrate.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 import torch.nn.functional as F
@@ -29,7 +29,7 @@ __all__ = [
 logger = get_logger()
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class TileGrowthConfig:
     """Configuration for tile growth/pruning dynamics."""
 
@@ -58,16 +58,16 @@ class TileGrowthConfig:
     error_ema_decay: float = 0.9
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class DynamicTileConfig:
     """Configuration for dynamic tile algorithm wrapper."""
 
-    growth: TileGrowthConfig = TileGrowthConfig()
+    growth: TileGrowthConfig = field(default_factory=TileGrowthConfig)
     track_history: bool = True
     max_history: int = 1000
 
 
-@dataclass
+@dataclass(slots=True)
 class TileMetrics:
     """Metrics for a single tile."""
 

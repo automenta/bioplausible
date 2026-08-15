@@ -127,7 +127,7 @@ def main() -> int:
 
     delta = abs(kernel_acc - pt_acc)
     print(
-        f"kernel[{args.gpu and 'gpu' or 'cpu'}] acc: {kernel_acc:.4f} | pytorch {pt_acc:.4f} | delta {delta:.4f}"
+        f"kernel[{(args.gpu and 'gpu') or 'cpu'}] acc: {kernel_acc:.4f} | pytorch {pt_acc:.4f} | delta {delta:.4f}"
     )
     print(f"kernel time {t_kernel:.1f}s | pytorch time {t_pt:.1f}s")
     ok = delta <= ACCURACY_BUDGET

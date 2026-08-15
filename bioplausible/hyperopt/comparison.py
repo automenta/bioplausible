@@ -34,7 +34,7 @@ class ComparisonMetric(Enum):
     TIME_EFFICIENCY = "time_efficiency"  # accuracy / time
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class AlgorithmRanking:
     """Ranking of a single algorithm family."""
 
@@ -49,7 +49,7 @@ class AlgorithmRanking:
     pareto_count: int  # Trials on Pareto frontier
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ComparisonStudy:
     """Multi-algorithm comparison experiment."""
 

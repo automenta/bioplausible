@@ -4,7 +4,7 @@ Multi-Objective Metrics
 Implements Pareto dominance, non-dominated sorting, and composite scoring.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -18,7 +18,7 @@ __all__ = [
 ]
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class TrialMetrics:
     """Metrics for a single trial."""
 
@@ -37,14 +37,17 @@ class TrialMetrics:
     final_loss: float
     status: str  # 'completed', 'failed', 'running'
 
+    # Computed objectives (not part of init)
+    objectives: np.ndarray = field(init=False, repr=False, default=None)
+
     def __post_init__(self):
         # Normalize for comparison
-        self.objectives = np.array([
+        object.__setattr__(self, 'objectives', np.array([
             self.accuracy,  # Higher is better
             -self.perplexity,  # Convert to maximization (higher is better)
             -self.iteration_time,  # Convert to maximization
             -self.param_count,  # Convert to maximization
-        ])
+        ]))
 
     def dominates(self, other: TrialMetrics) -> bool:
         """Check if this trial Pareto-dominates another.

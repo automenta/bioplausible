@@ -268,7 +268,7 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class CheckpointRecord:
     epoch: int
     step: int

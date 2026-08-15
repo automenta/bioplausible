@@ -123,7 +123,6 @@ def estimate_param_count(
     and its named parameters are summed. Used for the pre-training ``max_params``
     budget filter (§5.3) and for constraint expressions.
     """
-    import bioplausible.zoo  # ruff: ignore[unused-import]  (ensure the model registry is populated before construction)
 
     key = (model_name, input_dim, output_dim, _freeze_config(config))
     cached = _PARAM_COUNT_CACHE.get(key)

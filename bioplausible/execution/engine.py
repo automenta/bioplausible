@@ -400,21 +400,31 @@ class ExecutionEngine:
     def _log_task_start(self, task: ExperimentTask) -> None:
         """Log the start of a task."""
         is_fixed = task.fixed_config is not None
-        type_str = "EXPLORATION"
-        if task.tier == PatientLevel.CROSS_VAL:
-            type_str = f"CROSS_VAL (Fold {task.fold_index})"
-        elif is_fixed:
-            type_str = "VERIFICATION"
-        elif task.is_robustness_check:
-            type_str = "ROBUSTNESS"
-        elif task.is_ablation:
-            type_str = f"ABLATION ({task.ablation_param})"
-        elif task.is_transfer:
-            type_str = f"TRANSFER (From #{task.transfer_from_trial})"
-        elif task.is_continual:
-            type_str = f"CONTINUAL (Step {task.continual_step})"
-        elif task.fixed_config and "data_fraction" in task.fixed_config:
-            type_str = f"LOW_DATA ({task.fixed_config['data_fraction']:.0%})"
+        match [
+            task.tier == PatientLevel.CROSS_VAL,
+            is_fixed,
+            task.is_robustness_check,
+            task.is_ablation,
+            task.is_transfer,
+            task.is_continual,
+            task.fixed_config and "data_fraction" in task.fixed_config,
+        ]:
+            case [True, _, _, _, _, _, _]:
+                type_str = f"CROSS_VAL (Fold {task.fold_index})"
+            case [_, True, _, _, _, _, _]:
+                type_str = "VERIFICATION"
+            case [_, _, True, _, _, _, _]:
+                type_str = "ROBUSTNESS"
+            case [_, _, _, True, _, _, _]:
+                type_str = f"ABLATION ({task.ablation_param})"
+            case [_, _, _, _, True, _, _]:
+                type_str = f"TRANSFER (From #{task.transfer_from_trial})"
+            case [_, _, _, _, _, True, _]:
+                type_str = f"CONTINUAL (Step {task.continual_step})"
+            case [_, _, _, _, _, _, True]:
+                type_str = f"LOW_DATA ({task.fixed_config['data_fraction']:.0%})"
+            case _:
+                type_str = "EXPLORATION"
 
         msg = (
             f"Starting {type_str}: {task.model_name}"
@@ -576,18 +586,25 @@ class ExecutionEngine:
             config["fold"] = task.fold_index
 
         # Determine Job ID
-        if task.tier == PatientLevel.CROSS_VAL:
-            job_id = f"CV-{task.verification_of_trial_id}-F{task.fold_index}"
-        elif task.verification_of_trial_id:
-            job_id = f"Ver-{task.verification_of_trial_id}"
-        elif task.is_transfer:
-            job_id = f"Transfer-{task.transfer_from_trial}"
-        elif task.is_continual:
-            job_id = f"CL-{task.continual_step}"
-        elif "data_fraction" in config:
-            job_id = f"LowData-{config['data_fraction']}"
-        else:
-            job_id = f"Fixed-{task.study_name}"
+        match [
+            task.tier,
+            task.verification_of_trial_id,
+            task.is_transfer,
+            task.is_continual,
+            "data_fraction" in config,
+        ]:
+            case [PatientLevel.CROSS_VAL, _, _, _, _]:
+                job_id = f"CV-{task.verification_of_trial_id}-F{task.fold_index}"
+            case [_, verification_id, _, _, _] if verification_id is not None:
+                job_id = f"Ver-{verification_id}"
+            case [_, _, True, _, _]:
+                job_id = f"Transfer-{task.transfer_from_trial}"
+            case [_, _, _, True, _]:
+                job_id = f"CL-{task.continual_step}"
+            case [_, _, _, _, _] if "data_fraction" in config:
+                job_id = f"LowData-{config['data_fraction']}"
+            case _:
+                job_id = f"Fixed-{task.study_name}"
 
         return config, job_id
 

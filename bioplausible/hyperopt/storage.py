@@ -153,7 +153,8 @@ class HyperoptStorage:
 
         if updates:
             values.append(trial_id)
-            query = f"UPDATE hyperopt_logs SET {', '.join(updates)} WHERE trial_id = ?"
+            set_clause = ", ".join(updates)
+            query = "UPDATE hyperopt_logs SET " + set_clause + " WHERE trial_id = ?"
             self.conn.execute(query, values)
             self.conn.commit()
 

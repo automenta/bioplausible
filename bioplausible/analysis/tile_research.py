@@ -342,7 +342,7 @@ class ExperimentTracker:
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class MetricEntry:
     """Single metric entry.
 
@@ -706,7 +706,7 @@ class VisualizationHelper:
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class AblationConfig:
     """Ablation study configuration.
 

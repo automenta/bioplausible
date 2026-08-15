@@ -60,7 +60,7 @@ def _register_resolvers() -> None:
 _register_resolvers()
 
 
-@dataclass
+@dataclass(slots=True)
 class ExperimentModelConfig:
     """Configuration for a model component."""
 
@@ -90,7 +90,7 @@ class ExperimentModelConfig:
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class PropagatorConfig:
     """Configuration for a propagator/learning rule component."""
 
@@ -98,7 +98,7 @@ class PropagatorConfig:
     kwargs: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class OptimizerConfig:
     """Configuration for an optimizer component."""
 
@@ -108,7 +108,7 @@ class OptimizerConfig:
     kwargs: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class SparsityConfig:
     """Configuration for a sparsity component."""
 
@@ -116,7 +116,7 @@ class SparsityConfig:
     kwargs: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class DatasetConfig:
     """Configuration for datasets."""
 
@@ -127,7 +127,7 @@ class DatasetConfig:
     kwargs: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class TrainingConfig:
     """Configuration for training."""
 
@@ -147,7 +147,7 @@ class TrainingConfig:
     early_stopping_mode: str = "min"
 
 
-@dataclass
+@dataclass(slots=True)
 class LightningConfig:
     """Configuration for PyTorch Lightning integration."""
 
@@ -159,7 +159,7 @@ class LightningConfig:
     strategy: str = "auto"
 
 
-@dataclass
+@dataclass(slots=True)
 class DomainConfig:
     """Configuration for domain-specific settings."""
 
@@ -167,7 +167,7 @@ class DomainConfig:
     task_specific: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(slots=True)
 class ScientistConfig:
     """Configuration for the Scientist / AutoScientist."""
 
@@ -181,7 +181,7 @@ class ScientistConfig:
     llm_backend: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class ExperimentSchemaConfig:
     """
     Top-level experiment configuration.
@@ -255,7 +255,7 @@ def validate_config(cfg: Any) -> ExperimentSchemaConfig:
 # ──────────────────────────────────────────────
 
 
-@dataclass
+@dataclass(slots=True)
 class RunConfigData:
     """Data section of a :class:`RunConfig` YAML experiment."""
 
@@ -266,7 +266,7 @@ class RunConfigData:
     data_fraction: float = 1.0
 
 
-@dataclass
+@dataclass(slots=True)
 class RunConfigModel:
     """Model section of a :class:`RunConfig` YAML experiment."""
 
@@ -288,7 +288,7 @@ class RunConfigModel:
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class RunConfigOptimizer:
     """Optimizer section of a :class:`RunConfig` YAML experiment."""
 
@@ -300,7 +300,7 @@ class RunConfigOptimizer:
     mode: str = "ep"
 
 
-@dataclass
+@dataclass(slots=True)
 class RunConfigTrainer:
     """Trainer section of a :class:`RunConfig` YAML experiment."""
 
@@ -312,7 +312,7 @@ class RunConfigTrainer:
     track_energy: bool = True
 
 
-@dataclass
+@dataclass(slots=True)
 class RunConfig:
     """Top-level YAML-driven configuration consumed by ``run_from_runconfig``."""
 

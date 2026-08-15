@@ -1,4 +1,3 @@
-import copy
 from dataclasses import dataclass
 from enum import Enum
 
@@ -33,7 +32,7 @@ class HyperparamScope(Enum):
     PREDICTIVE_CODING = "predictive_coding"  # PCN / FPC
 
 
-@dataclass
+@dataclass(slots=True)
 class HyperparamSpec:
     """Specification for a single hyperparameter."""
 
@@ -369,21 +368,29 @@ class HyperparameterMetamodel:
             # Create a copy to not modify the global spec
             act_spec = self._spec_dict["activation"]
             # We need a deep copy or just a new instance if we modify it
-            constrained_act = copy.deepcopy(act_spec)
-            constrained_act.choices = ["tanh"]
-            constrained_act = copy.deepcopy(act_spec)
-            constrained_act.choices = ["tanh"]
+            # Create a new HyperparamSpec instance with modified choices
+            # (cannot modify frozen dataclass fields in place)
+            constrained_act = HyperparamSpec(
+                name=act_spec.name,
+                scope=act_spec.scope,
+                param_type=act_spec.param_type,
+                choices=["tanh"],
+            )
             search_space["activation"] = constrained_act
 
         # Constraint: EqProp is computationally heavy (steps * layers), so limit depth
         if family == "eqprop" or "eqprop" in model_spec.name.lower():
             if "num_layers" in search_space:
                 layer_spec = self._spec_dict["num_layers"]
-                constrained_layers = copy.deepcopy(layer_spec)
                 # EqProp effectively unrolls network 'steps' times.
                 # 6 layers * 30 steps = 180 effective layers.
-                constrained_layers.range_max = 6
-                constrained_layers.default = 3
+                constrained_layers = HyperparamSpec(
+                    name=layer_spec.name,
+                    scope=layer_spec.scope,
+                    param_type=layer_spec.param_type,
+                    range_max=6,
+                    default=3,
+                )
                 search_space["num_layers"] = constrained_layers
 
         # Constraint: Small Tasks (Efficiency)
@@ -400,58 +407,50 @@ class HyperparameterMetamodel:
             # Max Hidden Dim: 128
             if "hidden_dim" in search_space:
                 hd_spec = search_space["hidden_dim"]
-                constrained_hd = copy.deepcopy(hd_spec)
-                # Filter choices <= 128
-                if constrained_hd.choices:
-                    constrained_hd.choices = [
-                        c for c in constrained_hd.choices if c <= 128
-                    ]
-                    if not constrained_hd.choices:
-                        constrained_hd.choices = [64]  # Fallback
-                    constrained_hd.default = min(constrained_hd.default, 128)
+                constrained_hd = HyperparamSpec(
+                    name=hd_spec.name,
+                    scope=hd_spec.scope,
+                    param_type=hd_spec.param_type,
+                    choices=[c for c in hd_spec.choices if c <= 128] or [64],
+                    default=min(hd_spec.default, 128),
+                )
                 search_space["hidden_dim"] = constrained_hd
 
             # Max Layers: 4
             if "num_layers" in search_space:
                 nl_spec = search_space["num_layers"]
-                constrained_nl = copy.deepcopy(nl_spec)
-                if constrained_nl.range_max is not None:
-                    constrained_nl.range_max = min(constrained_nl.range_max, 4)
-                constrained_nl.default = min(constrained_nl.default, 4)
+                constrained_nl = HyperparamSpec(
+                    name=nl_spec.name,
+                    scope=nl_spec.scope,
+                    param_type=nl_spec.param_type,
+                    range_max=min(nl_spec.range_max, 4) if nl_spec.range_max else None,
+                    default=min(nl_spec.default, 4),
+                )
                 search_space["num_layers"] = constrained_nl
 
         # Heuristics: Vision (Wider Layers)
         # Only apply if NOT small task (which forces small), or carefully merge
-        if is_vision and "hidden_dim" in search_space:
-            # If we haven't already deep-copied it for small task constraint
-            if not is_small_task:
-                hd_spec = search_space["hidden_dim"]
-                constrained_hd = copy.deepcopy(hd_spec)
-
-                # Floor lowered to 16 so equilibrium/low-width models can sample
-                # small configs and compete with backprop on parameter count
-                # (Phase 1.5 fairness). Keep 256 max to bound compute.
-                if constrained_hd.choices:
-                    constrained_hd.choices = [
-                        c for c in constrained_hd.choices if 16 <= c <= 256
-                    ]
-                    # Fallback if empty (unlikely with standard choices)
-                    if not constrained_hd.choices:
-                        constrained_hd.choices = [16]
-
-                # Cap at 256
-                search_space["hidden_dim"] = constrained_hd
+        if is_vision and "hidden_dim" in search_space and not is_small_task:
+            hd_spec = search_space["hidden_dim"]
+            constrained_hd = HyperparamSpec(
+                name=hd_spec.name,
+                scope=hd_spec.scope,
+                param_type=hd_spec.param_type,
+                choices=[c for c in hd_spec.choices if 16 <= c <= 256] or [16],
+                default=min(hd_spec.default, 256),
+            )
+            search_space["hidden_dim"] = constrained_hd
 
         # Heuristics: RL (Specific LR Range)
         if is_rl and "lr" in search_space:
             lr_spec = search_space["lr"]
-            constrained_lr = copy.deepcopy(lr_spec)
-            # RL often needs higher LRs for simple tasks
-            # LogUniform(1e-3, 1e-1)
-            if constrained_lr.range_min is not None and constrained_lr.range_min < 1e-3:
-                constrained_lr.range_min = 1e-3
-            if constrained_lr.range_max is not None and constrained_lr.range_max > 1e-1:
-                constrained_lr.range_max = 1e-1
+            constrained_lr = HyperparamSpec(
+                name=lr_spec.name,
+                scope=lr_spec.scope,
+                param_type=lr_spec.param_type,
+                range_min=max(lr_spec.range_min, 1e-3) if lr_spec.range_min else None,
+                range_max=min(lr_spec.range_max, 1e-1) if lr_spec.range_max else None,
+            )
             search_space["lr"] = constrained_lr
 
         return search_space

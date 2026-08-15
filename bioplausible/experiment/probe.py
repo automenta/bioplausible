@@ -211,7 +211,6 @@ class CoreTrainerDriver:
         Raises:
             RuntimeError: If training raises or returns no history.
         """
-        import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect; mirrors cli/parity.py)
         from bioplausible.core.exceptions import NumericalInstabilityError
         from bioplausible.core.registry import ComponentCategory, Registry
         from bioplausible.domains.registry import resolve_task

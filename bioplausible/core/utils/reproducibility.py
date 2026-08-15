@@ -41,7 +41,7 @@ __all__ = [
 logger = get_logger()
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class EnvironmentInfo:
     """Captured environment information."""
 

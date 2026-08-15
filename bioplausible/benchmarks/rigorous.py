@@ -87,7 +87,7 @@ def get_system_info() -> dict[str, str]:
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class StatisticalMetrics:
     """Statistical metrics for benchmark results."""
 
@@ -200,7 +200,7 @@ def compute_speedup_with_uncertainty(
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class BenchmarkConfig:
     """Configuration for rigorous benchmarking."""
 
@@ -455,9 +455,9 @@ class RigorousBenchmark:
         logger.info("=" * 70)
         logger.info("Rigorous Benchmark: EquiTile vs NanoGPT")
         logger.info("=" * 70)
-        logger.info(f"Number of runs: {self.config.num_runs}")
-        logger.info(f"Confidence level: {self.config.confidence_level * 100:.0f}%")
-        logger.info(f"Device: {self.config.device}")
+        logger.info(t"Number of runs: {self.config.num_runs}")
+        logger.info(t"Confidence level: {self.config.confidence_level * 100:.0f}%")
+        logger.info(t"Device: {self.config.device}")
         logger.info()
 
         # Create dataset (same for both models)
@@ -468,9 +468,9 @@ class RigorousBenchmark:
             num_workers=0,
         )
         vocab_size = tokenizer.vocab_size
-        logger.info(f"Vocabulary size: {vocab_size}")
-        logger.info(f"Train batches: {len(train_loader)}")
-        logger.info(f"Val batches: {len(val_loader)}")
+        logger.info(t"Vocabulary size: {vocab_size}")
+        logger.info(t"Train batches: {len(train_loader)}")
+        logger.info(t"Val batches: {len(val_loader)}")
         logger.info()
 
         results = {}
@@ -490,7 +490,7 @@ class RigorousBenchmark:
         )
         nanogpt = NanoGPTModel(nanogpt_config)
         nanogpt_params = count_parameters(nanogpt, trainable_only=False)
-        logger.info(f"Parameters: {nanogpt_params:,}")
+        logger.info(t"Parameters: {nanogpt_params:,}")
 
         results["nanogpt"] = self.run_single_model(
             nanogpt, "NanoGPT", train_loader, val_loader
@@ -513,7 +513,7 @@ class RigorousBenchmark:
             max_seq_len=self.config.seq_length,
         )
         equitile_params = count_parameters(equitile, trainable_only=False)
-        logger.info(f"Parameters: {equitile_params:,}")
+        logger.info(t"Parameters: {equitile_params:,}")
 
         results["equitile"] = self.run_single_model(
             equitile, "equitile", train_loader, val_loader
@@ -567,7 +567,7 @@ class RigorousBenchmark:
         with Path(filepath).open("w") as f:
             json.dump(data, f, indent=2)
 
-        logger.info(f"Results saved to {filepath}")
+        logger.info(t"Results saved to {filepath}")
 
     def report(self, results: dict[str, BenchmarkResult]) -> str:
         """Generate comprehensive report."""

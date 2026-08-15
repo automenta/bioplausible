@@ -410,7 +410,7 @@ class StreamingLMDataset(IterableDataset):
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class DataConfig:
     """Configuration for data loading."""
 

@@ -35,7 +35,7 @@ logger = get_logger()
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class TileStats:
     """Statistics for a single tile.
 
@@ -108,7 +108,7 @@ class TileStats:
         return self.predict_time + self.update_time
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ProfileResult:
     """Results from a profiling session.
 
@@ -822,7 +822,7 @@ class MemoryProfiler:
 # =============================================================================
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class BenchmarkConfig:
     """Configuration for benchmarking.
 
@@ -841,7 +841,7 @@ class BenchmarkConfig:
     n_iterations: int = 20
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class BenchmarkResult:
     """Results from a benchmark run.
 

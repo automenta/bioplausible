@@ -79,7 +79,7 @@ class BaseConfig:
     device: DeviceStr = "auto"
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class BaseStructuredConfig:
     """OmegaConf-compatible mirror of :class:`BaseConfig`.
 
@@ -163,7 +163,7 @@ class ModelConfig:
     output_scaling_mode: Literal["uniform", "mupc"] = "mupc"
 
     # Additional kwargs
-    extra: dict[str, object] = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Validate configuration."""
@@ -345,7 +345,7 @@ class DataConfig(BaseConfig):
     seq_len: int = 64
     augment: bool = False
     data_fraction: float = 1.0
-    data_kwargs: dict[str, object] = field(default_factory=dict)
+    data_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 def resolve_task_from_data_config(
@@ -390,10 +390,10 @@ class ReproducibilityConfig(BaseConfig):
     Extends :class:`BaseConfig` with experiment-specific config dicts.
     """
 
-    model_config: dict[str, object] = field(default_factory=dict)
-    training_config: dict[str, object] = field(default_factory=dict)
-    data_config: dict[str, object] = field(default_factory=dict)
-    hardware_config: dict[str, object] = field(default_factory=dict)
+    model_config: dict[str, Any] = field(default_factory=dict)
+    training_config: dict[str, Any] = field(default_factory=dict)
+    data_config: dict[str, Any] = field(default_factory=dict)
+    hardware_config: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -405,8 +405,8 @@ class ExperimentRunnerConfig(BaseConfig):
 
     model_name: str = ""
     optimizer_name: str = ""
-    model_params: dict[str, object] = field(default_factory=dict)
-    optimizer_params: dict[str, object] = field(default_factory=dict)
+    model_params: dict[str, Any] = field(default_factory=dict)
+    optimizer_params: dict[str, Any] = field(default_factory=dict)
     epochs: int = 10
     batches_per_epoch: int = 100
     eval_batches: int = 20

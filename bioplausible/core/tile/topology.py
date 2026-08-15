@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from torch import Tensor
 
 
-@dataclass
+@dataclass(slots=True)
 class TileState:
     """State for a single tile."""
 

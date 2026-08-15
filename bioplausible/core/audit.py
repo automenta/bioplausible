@@ -27,7 +27,10 @@ import sys
 from dataclasses import dataclass
 from typing import TextIO, cast
 
+from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import ComponentCategory, ComponentMetadata, Registry
+
+logger = get_logger()
 
 # Critical calibration fields that must never be empty (Sprint 2.5 CI gate).
 CRITICAL_FIELDS: tuple[str, ...] = ("bio_plausibility_score", "locality_level")
@@ -79,7 +82,6 @@ class AuditRow:
 
 def _load_registry() -> None:
     """Import the registration modules so every component is present."""
-    import bioplausible.zoo  # ruff: ignore[unused-import]
 
 
 def _parity_status(name: str) -> str:
@@ -211,13 +213,13 @@ def main(argv: list[str] | None = None) -> int:
     rows = audit_rows()
     missing = _missing_critical(rows)
     if missing:
-        print(
-            f"Registry audit FAILED: {len(missing)} component(s) missing a critical "
+        logger.error(
+            "Registry audit FAILED: %d component(s) missing a critical "
             f"field ({'/'.join(CRITICAL_FIELDS)}):",
-            file=sys.stderr,
+            len(missing),
         )
         for row in missing:
-            print(f"  - {row.category}/{row.name}", file=sys.stderr)
+            logger.error("  - %s/%s", row.category, row.name)
         return 1
 
     if args.markdown:

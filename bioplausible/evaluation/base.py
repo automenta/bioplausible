@@ -8,9 +8,10 @@ Provides:
 - registry_evaluator: decorator for registering evaluators
 """
 
-from abc import ABC, abstractmethod
+# TC003: collections.abc.Callable used with from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Protocol
 
 import torch
 from torch import nn
@@ -231,9 +232,9 @@ class BenchmarkResult:
 # ---------------------------------------------------------------------------
 
 
-class EvaluatorBase(ABC):
+class EvaluatorBase(Protocol):
     """
-    Base class for domain-specific evaluators.
+    Protocol for domain-specific evaluators.
 
     Subclasses implement evaluate_model() for a specific domain/task.
     """
@@ -242,11 +243,10 @@ class EvaluatorBase(ABC):
         self,
         task: DomainTask,
         metric_suite: MetricSuite | None = None,
-    ):
+    ) -> None:
         self.task = task
         self.metric_suite = metric_suite or MetricSuite.classification()
 
-    @abstractmethod
     def evaluate_model(
         self,
         model: nn.Module,
@@ -285,11 +285,6 @@ def registry_evaluator(name: str) -> Callable:
     return decorator
 
 
-# ---------------------------------------------------------------------------
-# Convenience: evaluate_model_on_task
-# ---------------------------------------------------------------------------
-
-
 def evaluate_model_on_task(
     model: nn.Module,
     task: DomainTask,
@@ -313,11 +308,11 @@ def evaluate_model_on_task(
         loader = task.get_dataloader(split)
         if loader:
             with torch.no_grad():
-                for i, (inputs, targets) in enumerate(loader):
+                for i, (batch_inputs, batch_targets) in enumerate(loader):
                     if max_batches and i >= max_batches:
                         break
-                    inputs = inputs.to(task.device)
-                    targets = targets.to(task.device)
+                    inputs = batch_inputs.to(task.device)
+                    targets = batch_targets.to(task.device)
                     outputs = model(inputs)
                     batch_metrics = metric_suite.evaluate(outputs, targets)
                     for k, v in batch_metrics.items():

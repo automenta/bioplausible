@@ -8,7 +8,7 @@ Defines Slot, NodeBase, and built-in node types (Linear, ReLU, Tanh).
 Node forward methods are pure functions: no in-place mutation, no side effects.
 """
 
-from abc import ABC, abstractmethod
+from typing import Protocol
 
 import torch
 import torch.nn.functional as F
@@ -36,8 +36,8 @@ class Slot:
         return f"Slot({self.owner.name}.{self.name})"
 
 
-class NodeBase(ABC):
-    """Abstract base for all graph nodes in the topology system.
+class NodeBase(Protocol):
+    """Protocol for all graph nodes in the topology system.
 
     Subclasses must implement:
         - forward(**slot_inputs) -> torch.Tensor  (pure function)
@@ -49,37 +49,15 @@ class NodeBase(ABC):
     def __init__(self, name: str) -> None:
         self.name = name
 
-    @abstractmethod
     def forward(self, **slot_inputs: torch.Tensor) -> torch.Tensor:
         """Compute forward pass from slot inputs. MUST be a pure function."""
 
-    @abstractmethod
     def get_slots(self) -> dict[str, Slot]:
         """Return dict of {slot_name: Slot} for this node."""
 
-    def slot(self, name: str) -> Slot:
-        """Get a specific Slot by name."""
-        slots = self.get_slots()
-        if name not in slots:
-            raise KeyError(
-                f"Node '{self.name}' has no slot '{name}'. "
-                f"Available slots: {list(slots.keys())}"
-            )
-        return slots[name]
+    def slot(self, name: str) -> Slot: ...
 
-    @abstractmethod
-    def initialize_params(self, rng_key: torch.Generator) -> dict[str, torch.Tensor]:
-        """Initialize trainable parameters for this node.
-
-        Args:
-            rng_key: A torch.Generator for deterministic initialization.
-
-        Returns:
-            Dict mapping param_name -> tensor. Empty dict if no params.
-        """
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(name={self.name})"
+    def initialize_params(self, rng_key) -> dict[str, torch.Tensor]: ...
 
 
 class Linear(NodeBase):
@@ -100,6 +78,14 @@ class Linear(NodeBase):
     def get_slots(self) -> dict[str, Slot]:
         return dict(self._slots)
 
+    def slot(self, name: str) -> Slot:
+        if name not in self._slots:
+            raise KeyError(f"Slot '{name}' not found on node '{self.name}'")
+        return self._slots[name]
+
+    def __repr__(self) -> str:
+        return f"Linear({self.name}, {self.shape})"
+
     def forward(self, **slot_inputs: torch.Tensor) -> torch.Tensor:
         in_t = slot_inputs.get("input")
         if in_t is None:
@@ -108,7 +94,7 @@ class Linear(NodeBase):
         bias = slot_inputs.get("bias")
         return F.linear(in_t, weight, bias)
 
-    def initialize_params(self, rng_key: torch.Generator) -> dict[str, torch.Tensor]:
+    def initialize_params(self, rng_key) -> dict[str, torch.Tensor]:
         in_features, out_features = self.shape
         weight = torch.empty(out_features, in_features)
         weight = torch.nn.init.kaiming_uniform_(weight, a=0, generator=rng_key)
@@ -132,13 +118,21 @@ class ReLU(NodeBase):
     def get_slots(self) -> dict[str, Slot]:
         return dict(self._slots)
 
+    def slot(self, name: str) -> Slot:
+        if name not in self._slots:
+            raise KeyError(f"Slot '{name}' not found on node '{self.name}'")
+        return self._slots[name]
+
+    def __repr__(self) -> str:
+        return f"ReLU({self.name})"
+
     def forward(self, **slot_inputs: torch.Tensor) -> torch.Tensor:
         in_t = slot_inputs.get("input")
         if in_t is None:
             raise ValueError(f"ReLU node '{self.name}' missing 'input' slot")
         return F.relu(in_t)
 
-    def initialize_params(self, rng_key: torch.Generator) -> dict[str, torch.Tensor]:
+    def initialize_params(self, rng_key) -> dict[str, torch.Tensor]:
         return {}
 
 
@@ -157,11 +151,19 @@ class Tanh(NodeBase):
     def get_slots(self) -> dict[str, Slot]:
         return dict(self._slots)
 
+    def slot(self, name: str) -> Slot:
+        if name not in self._slots:
+            raise KeyError(f"Slot '{name}' not found on node '{self.name}'")
+        return self._slots[name]
+
+    def __repr__(self) -> str:
+        return f"Tanh({self.name})"
+
     def forward(self, **slot_inputs: torch.Tensor) -> torch.Tensor:
         in_t = slot_inputs.get("input")
         if in_t is None:
             raise ValueError(f"Tanh node '{self.name}' missing 'input' slot")
         return torch.tanh(in_t)
 
-    def initialize_params(self, rng_key: torch.Generator) -> dict[str, torch.Tensor]:
+    def initialize_params(self, rng_key) -> dict[str, torch.Tensor]:
         return {}
