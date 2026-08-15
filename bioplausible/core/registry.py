@@ -53,6 +53,8 @@ class ComponentCategory(str, Enum):
     METRIC = "metric"
     TASK = "task"
     TRACK = "track"
+    # Kernel acceleration backends for bio-plausible algorithms
+    KERNEL_BACKEND = "kernel_backend"
 
 
 class Domain(str, Enum):
