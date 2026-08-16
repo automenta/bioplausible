@@ -1127,5 +1127,180 @@ Models using propagators/optimizers (EqProp, FA, Hebbian, MEP) get kernel accele
 
 ---
 
-**Status**: Planning phase complete. Phase 1 (Kernel Backend Infrastructure) ready to start.
+## 16. IMPROVEMENT OPPORTUNITIES (Post-Session #13)
+
+### 16.1 Hardware Target Coverage Gaps
+
+**Standard KernelBackend registration incomplete**: All 11 standard kernel backends (FA, HEBBIAN, FF, PEPITA, TP, PC, SNN, TILE, MEP, O1MEMORY, BACKPROP) only register for **CPU/CUDA/TRITON**. They do **not** register for the 5 substrate targets: **FPGA, NEUROMORPHIC, OPTICAL, CROSSBAR, QUANTUM**. This means `KernelRegistry.get_best(family, HardwareTarget.FPGA)` returns `None` for all families, blocking hardware-targeted kernel experiments.
+
+**Fix**: Each kernel module should register for all 8 `HardwareTarget` values. For substrate targets, the same backend class can be reused (dispatching to CPU/CUDA kernels) or specialized Triton/CuPy kernels can be added later.
+
+```python
+# In each kernel module (fa_kernels.py, hebbian_kernels.py, etc.):
+for hw in HardwareTarget:
+    KernelRegistry.register(AlgorithmFamily.FA, hw, FAKernelBackend)
+```
+
+**Contrastive kernels same gap**: `register_contrastive_kernels()` only loops over CPU/CUDA/TRITON.
+
+---
+
+### 16.2 Contrastive Kernel Auto-Registration Missing
+
+**`register_contrastive_kernels()` is never called on import** — the comment explicitly says "NOT called on import to avoid conflicts". This means contrastive kernels are **invisible to `KernelRegistry`** unless a user manually calls `register_contrastive_kernels()`. The standard `KernelBackend` implementations self-register at module level via `KernelRegistry.register()`.
+
+**Fix**: Add a `get_contrastive_kernels()` function (mirroring `get_algorithm_kernels()`) that imports and returns all contrastive kernel classes, triggering their module-level registration. Call this from `__init__.py` or provide as public API.
+
+```python
+# In contrastive_kernels.py:
+def get_contrastive_kernels() -> dict[str, type[BaseContrastiveKernel]]:
+    """Import and return all contrastive kernels (triggers self-registration)."""
+    from bioplausible.acceleration.contrastive_kernels import (
+        FAContrastiveKernel, HebbianContrastiveKernel, FFContrastiveKernel,
+        PEPITAContrastiveKernel, TPContrastiveKernel, PCContrastiveKernel,
+        SNNContrastiveKernel, TileContrastiveKernel, MEPContrastiveKernel,
+        O1MemoryContrastiveKernel,
+    )
+    return {
+        "fa": FAContrastiveKernel, "hebbian": HebbianContrastiveKernel,
+        "ff": FFContrastiveKernel, "pepita": PEPITAContrastiveKernel,
+        "tp": TPContrastiveKernel, "pc": PCContrastiveKernel,
+        "snn": SNNContrastiveKernel, "tile": TileContrastiveKernel,
+        "mep": MEPContrastiveKernel, "o1memory": O1MemoryContrastiveKernel,
+    }
+```
+
+---
+
+### 16.3 Benchmark Harness Incomplete Permutation Coverage
+
+**`tools/benchmark_all_kernels.py` only tests standard `KernelBackend`**, not contrastive kernels. It iterates `AlgorithmFamily × HardwareTarget` for registered backends, but:
+- Contrastive kernels aren't registered → not benchmarked
+- No `kernel_type` dimension (standard vs contrastive)
+- No accuracy gate (only finite/shape/telemetry)
+
+**Fix**: Extend `_RUNNERS` and `_BIND` with contrastive kernel entry points (`contrastive_step`), add `kernel_type` loop, and emit a unified report covering `(family, hardware, kernel_type)` triplets.
+
+```python
+# Add to benchmark tool:
+_KERNEL_TYPES = ["standard", "contrastive"]
+# For each family, try both kernel types if registered
+for kernel_type in _KERNEL_TYPES:
+    if kernel_type == "standard":
+        backend = KernelRegistry.get_best(family, hw)
+        runner = _RUNNERS[family]
+    else:
+        backend = get_contrastive_kernel(family)  # if registered
+        runner = _RUN_CONTRASTIVE[family]
+```
+
+---
+
+### 16.4 HardwareTarget → Device Mapping Incomplete
+
+**`_device_for(hw)` in benchmark tool only handles CUDA/TRITON → `cuda`, else `cpu`**. No mapping for:
+- `FPGA` → should map to `cpu` (simulation) or raise
+- `NEUROMORPHIC` → `cpu` (event sim) or dedicated device
+- `OPTICAL` → `cpu` (wave optics sim)
+- `CROSSBAR` → `cpu` (SPICE/circuit sim) or `cuda` (conductance matrix)
+- `QUANTUM` → `cpu` (state vector sim) or QPU
+
+This limits experimental permutations — neuromorphic/optical/crossbar/quantum kernels cannot be probed on their native simulation backends.
+
+**Fix**: Centralize `HardwareTarget → torch.device` mapping in `kernel_backend.py` as a protocol function, used by trainer, benchmark, and export.
+
+---
+
+### 16.5 KernelConfig Extra Validation Missing
+
+**`KernelConfig.extra` is a raw `dict[str, object]`** with algorithm-specific keys documented only in comments (FA: `dropout_prob`, Hebbian: `use_oja`, FF: `threshold`, etc.). No schema validation means:
+- Typos in config keys silently ignored
+- No IDE autocomplete for extra params
+- Benchmark/probe configs may omit required dims (`input_dim`, `hidden_dim`, `output_dim`, `num_layers`)
+
+**Fix**: Use Pydantic v2 `TypedDict` per `AlgorithmFamily` for `extra`, or add a `_validate_extra()` method to `KernelConfig` that checks required keys per family.
+
+---
+
+### 16.6 Contrastive Kernel Dispatch Limited to FA
+
+**`dispatch_train_step` only has a tested contrastive path for FA** (`test_contrastive_kernel_attached_and_consumed` + `test_contrastive_kernel_learns`). The other 9 contrastive kernels (Hebbian, FF, PEPITA, TP, PC, SNN, Tile, MEP, O1Memory) are registered but **never exercised through the trainer dispatch seam**. The `_run_contrastive_kernel_step` helper is generic but untested for non-FA families.
+
+**Fix**: Add dispatch tests for each contrastive kernel family in `test_kernel_dispatch.py`, using plain `nn.Linear` stack models (not `standard_fa` which has spectral norm/Adam mismatch).
+
+---
+
+### 16.7 Systematic Permutation Test Matrix
+
+No tool exists to verify **all valid `(AlgorithmFamily × HardwareTarget × KernelType) × TestType` combinations**:
+
+| Dimension | Values |
+|-----------|--------|
+| AlgorithmFamily | 12 (EQPROP + 11 standard + 10 contrastive, noting EQPROP is standalone) |
+| HardwareTarget | 8 (CPU, CUDA, TRITON, FPGA, NEUROMORPHIC, OPTICAL, CROSSBAR, QUANTUM) |
+| KernelType | 2 (standard `KernelBackend`, contrastive `ContrastiveKernel`) |
+| TestType | 4 (finite/shape parity, learning parity, bench speed/mem, export artifact) |
+
+**12 × 8 × 2 × 4 = 768 theoretical test cells**. Currently covered: ~200 (standard kernels × 3 hardware × finite/shape/learning). Missing: contrastive kernels, substrate hardware targets, export validation, mixed precision.
+
+**Fix**: Add a permutation matrix generator to `benchmark_all_kernels.py` or a new `tools/verify_kernel_permutations.py` that emits a coverage report showing which cells are implemented/tested/green.
+
+---
+
+### 16.8 Pyright / Ruff Technical Debt (Clarity & Consistency)
+
+**`kernel_backend.py`** (ruff):
+- `infer_algorithm_family` too complex (12 branches, 12 returns) — extract to data-driven lookup table
+- Mutable class defaults `_backends: dict = {}`, `_instances: dict = {}` — use `ClassVar` + `__init_subclass__` or module-level
+- `__all__` not sorted
+- Commented-out-code in `KernelConfig.__post_init__` docstring
+
+**`trainer.py`** (ruff + pyright):
+- 78 ruff violations (complexity, branches, statements, locals, args, magic values, formatting)
+- 20+ pyright warnings (type narrowing, optional calls, attribute access)
+- `_run_kernel_train_step` 68 statements, 25 locals, 25 branches — extract `_bind_backend`, `_compute_error`, `_apply_grads`, `_collect_metrics`
+- `dispatch_train_step` 18 branches, 9 args, 8 returns — extract per-path handlers
+- Unused `config` param in `_run_kernel_train_step` and `_run_contrastive_kernel_step`
+- `AlgorithmFamily` imported but unused in `_wrap_with_kernel`
+
+**Fix**: Run `ruff check --fix` on both files, then manually address complexity by extracting pure helpers (per AGENTS.md: "Extract `_`-prefixed helpers rather than nesting deeper").
+
+---
+
+### 16.9 Mixed Precision Validation Not Implemented
+
+**`supported_dtypes` tagged per backend** (FA: fp32/fp16/bf16, etc.) but **no parity tests run at fp16/bf16/int8**. The `KernelConfig.dtype` field is plumbed through but only FP32 is tested.
+
+**Fix**: Add `test_family_kernel_parity_fp16.py` / `bf16.py` / `int8.py` parametrized over dtype, or extend `test_family_kernel_parity.py` with a `dtype` fixture. Requires CUDA for fp16/bf16 (CPU falls back to fp32).
+
+---
+
+### 16.10 Export Pipeline: Trained Weight Binding Missing
+
+**`biopl-export-kernel` CLI writes manifest-only for unbound backends** ("Kernel X has no bound Linear stack; writing manifest only"). To export trained weights, the CLI needs to:
+1. Build a model via `CoreTrainer(use_kernel=True)`
+2. Run a few train steps (or load checkpoint)
+3. Export the bound backend's state dict
+
+Currently left as future work in the export module.
+
+---
+
+### 16.11 EQPROP Standalone Engine Not Unified
+
+**EQPROP uses `EqPropKernel` (`acceleration/kernels.py`)** with its own lifecycle (`train_step`/`evaluate`, internal weights, NumPy/CuPy/Triton backends). It does **not** implement `KernelBackend` protocol and is excluded from `test_all_families_register_backends`. This creates two parallel kernel infrastructures.
+
+**Decision needed**: (a) Add thin `EqPropKernelBackend` adapter implementing `KernelBackend` protocol, or (b) Document EQPROP as intentionally separate (current). Option (a) enables unified benchmark/export/dispatch for EQPROP.
+
+---
+
+### 16.12 SettleProtocol Adoption Incomplete
+
+**Phase 12 `SettleProtocol`/`settle_universal` implemented** in `core/local_learning/settling.py` but **existing models (EqProp, MEP, O1Memory, Tile, PC) have not been migrated** to adopt the protocol. The unified `SettleTelemetry` is not yet wired into `TrainingMetrics.extra["settle_telemetry"]` for these models.
+
+**Fix**: For each settling model family, implement `SettleProtocol` methods and call `settle_universal` in their `train_step`. Wire telemetry to metrics.
+
+---
+
+**Status**: REFACTOR7 core implementation complete. Above items are post-completion improvement opportunities for clarity, consistency, experimental coverage, and technical debt reduction.
 ```
