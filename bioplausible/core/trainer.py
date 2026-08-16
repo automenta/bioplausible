@@ -164,7 +164,7 @@ class TrainerConfig:
 
     # Kernel acceleration (REFACTOR7): opt-in kernel backend for bio-plausible algorithms
     use_kernel: bool = False
-    kernel_backend: str = "triton"  # "triton", "cupy", "pytorch"
+    kernel_backend: str = "triton"  # "triton", "cupy", "pytorch", "contrastive"
     kernel_dtype: str = "float32"  # "float32", "float16", "bfloat16"
 
     # Checkpointing
@@ -489,6 +489,59 @@ def lr_for(model: nn.Module) -> float:
     return 0.01
 
 
+def _run_contrastive_kernel_step(
+    model: nn.Module,
+    backend: object,
+    config: TrainerConfig,
+    x: torch.Tensor,
+    y: torch.Tensor,
+) -> dict[str, object] | None:
+    """Run one O(1)-memory contrastive Hebbian step through a contrastive kernel.
+
+    ``ContrastiveKernel`` backends (REFACTOR7 §5 MEMORY-O(1) UNIFICATION)
+    expose ``contrastive_step(x, target)`` (free -> nudged -> local weight
+    update) with no activation storage. Binds the backend to the model's
+    Linear stack, runs the step, and returns ``{loss, accuracy, logits}``.
+    Returns ``None`` when the stack cannot be resolved or the step fails, so
+    the caller falls through to the model's own ``train_step``.
+    """
+    contrastive_step = getattr(backend, "contrastive_step", None)
+    if contrastive_step is None:
+        return None
+
+    layers = _resolve_kernel_layers(model)
+    if not layers:
+        return None
+
+    set_ref = getattr(backend, "set_model_ref", None)
+    if set_ref is None:
+        return None
+    activation = getattr(model, "activation", None)
+    try:
+        if activation is not None and _set_ref_accepts_two(set_ref):
+            set_ref(layers, activation)
+        else:
+            set_ref(layers)
+    except TypeError:
+        return None
+
+    try:
+        dev = next(iter(layers)).weight.device
+        x = x.to(dev)
+        y = y.to(dev)
+        metrics = contrastive_step(x, y)
+        with torch.no_grad():
+            logits = backend.predict(x)
+        accuracy = (logits.argmax(dim=1) == y).float().mean().item()
+        return {
+            "loss": float(metrics.get("loss", float("nan"))),
+            "accuracy": accuracy,
+            "logits": logits,
+        }
+    except RuntimeError, ValueError, AttributeError, IndexError:
+        return None
+
+
 def _set_ref_accepts_two(set_ref: Callable[..., object]) -> bool:
     """Check whether ``set_model_ref`` takes a second (activation) argument."""
     import inspect
@@ -618,8 +671,17 @@ def dispatch_train_step(
         # consumer below, whose ``(activations, error)`` backtrack would
         # mis-bind a bespoke ``backward`` (e.g. FF's ``(pos, neg)``).
         bespoke_step = getattr(model._kernel_backend, "kernel_train_step", None)
+        contrastive_step_fn = getattr(model._kernel_backend, "contrastive_step", None)
         if bespoke_step is not None:
             kernel_metrics = bespoke_step(model, config, x, y, optimizer)
+            if kernel_metrics is not None:
+                return kernel_metrics
+        elif contrastive_step_fn is not None:
+            # O(1)-memory contrastive Hebbian kernels (REFACTOR7 §5): consume
+            # via free/nudged/update directly, no autograd, no activation store.
+            kernel_metrics = _run_contrastive_kernel_step(
+                model, model._kernel_backend, config, x, y
+            )
             if kernel_metrics is not None:
                 return kernel_metrics
         else:
@@ -861,6 +923,9 @@ class CoreTrainer:
     def setup(self) -> None:
         """Setup model, optimizer, data loaders, and propagator."""
         logger.info("Setting up trainer components...")
+
+        # Set seed FIRST so model initialization is reproducible
+        torch.manual_seed(self.config.seed)
 
         # 1. Setup data
         self._setup_data()
@@ -1151,12 +1216,51 @@ class CoreTrainer:
             logger.warning("Could not infer algorithm family for %s", self.config.model)
             return model
 
-        # Map kernel backend string to HardwareTarget
+        # Map kernel backend string to HardwareTarget (or "contrastive" for the
+        # O(1)-memory contrastive kernels from REFACTOR7 §5)
         backend_map = {
             "triton": HardwareTarget.TRITON,
             "cupy": HardwareTarget.CUDA,
             "pytorch": HardwareTarget.CPU,
         }
+
+        if self.config.kernel_backend == "contrastive":
+            from bioplausible.acceleration.contrastive_kernels import (
+                ContrastiveConfig,
+                get_contrastive_kernel,
+            )
+
+            contrastive = get_contrastive_kernel(family)
+            if contrastive is None:
+                logger.warning("No contrastive kernel for %s", family.value)
+                return model
+            lr = float(
+                self.config.optimizer_kwargs.get(
+                    "lr",
+                    self.config.optimizer_kwargs.get("learning_rate", 0.01),
+                )
+            )
+            contrastive_config = ContrastiveConfig(
+                algorithm=family,
+                hardware=HardwareTarget.CPU,
+                dtype=torch.float32,
+                beta=self.config.extra.get("beta", 0.5),
+                lr=lr,
+                settle_steps=self.config.extra.get("max_steps", 30),
+                gamma=self.config.extra.get("gamma", 1.0),
+                extra={
+                    **self.config.model_kwargs,
+                    **self.config.optimizer_kwargs,
+                    **self.config.data_kwargs,
+                },
+            )
+            contrastive.initialize(contrastive_config)
+            model._kernel_backend = contrastive
+            model._kernel_config = contrastive_config
+            model.backend = "kernel"
+            logger.info("Wrapped model with %s contrastive kernel", family.value)
+            return model
+
         hw = backend_map.get(self.config.kernel_backend, HardwareTarget.TRITON)
 
         # Get best available backend

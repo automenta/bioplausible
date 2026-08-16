@@ -20,10 +20,12 @@ def _populate_kernel_registry():
     get_algorithm_kernels()
     yield
 
+
 @pytest.fixture(autouse=True)
 def _clear_kernel_cache():
     """Clear kernel registry cache between tests to avoid state pollution."""
     from bioplausible.acceleration.kernel_backend import KernelRegistry
+
     KernelRegistry.clear_cache()
     yield
     KernelRegistry.clear_cache()
@@ -544,4 +546,102 @@ def test_kernel_tp_learns():
     )
     assert kernel_acc >= 0.2, (
         f"kernel-driven TP reached only {kernel_acc:.3f} accuracy (chance=0.1)"
+    )
+
+
+def test_contrastive_kernel_attached_and_consumed():
+    """``kernel_backend="contrastive"`` attaches an O(1)-memory contrastive
+    kernel and drives it through the dispatch seam (REFACTOR7 §5).
+
+    The contrastive path runs free/nudged/update with no autograd and no
+    activation storage, returning ``{loss, accuracy, logits}`` via the
+    ``_run_contrastive_kernel_step`` branch. Guards the MEMORY-O(1)
+    unification consumer wiring end-to-end (attach + step + weight change).
+    """
+    import torch
+
+    config = TrainerConfig(
+        model="standard_fa",
+        task="digits",
+        model_kwargs={
+            "input_dim": 64,
+            "hidden_dim": 16,
+            "output_dim": 10,
+            "num_layers": 2,
+        },
+        epochs=1,
+        use_kernel=True,
+        kernel_backend="contrastive",
+        track_energy=False,
+    )
+    trainer = CoreTrainer(config)
+    trainer.setup()
+    backend = getattr(trainer.model, "_kernel_backend", None)
+    assert backend is not None
+    assert hasattr(backend, "contrastive_step")
+    assert backend._config is not None  # initialized
+
+    before = [p.clone() for p in trainer.model.layers[0].parameters()]
+    x = torch.randn(8, 64)
+    y = torch.randint(0, 10, (8,))
+    metrics = trainer._train_step(x, y)
+    assert "loss" in metrics
+    assert torch.isfinite(torch.tensor(metrics["loss"]))
+
+    after = list(trainer.model.layers[0].parameters())
+    assert any(not torch.equal(b, a) for b, a in zip(before, after)), (
+        "contrastive kernel train step did not update the model weights"
+    )
+    assert trainer._training_path_counts.get("kernel", 0) >= 1
+
+
+def test_contrastive_kernel_learns():
+    """The contrastive FA kernel genuinely learns on a separable task.
+
+    ``standard_fa`` consumed via ``kernel_backend="contrastive"`` (free/nudged
+    contrastive Hebbian updates, no autograd) must push accuracy above chance
+    after a few epochs, proving the O(1) path is a real learning route.
+    """
+    import torch
+
+    torch.manual_seed(7)
+    n, dim, classes = 400, 64, 10
+    x = torch.randn(n, dim)
+    y = torch.randint(0, classes, (n,))
+    for c in range(classes):
+        mask = y == c
+        if mask.any():
+            direction = torch.randn(dim)
+            direction = direction / direction.norm() * 2.0
+            x[mask] += direction * 0.8
+
+    cfg = TrainerConfig(
+        model="standard_fa",
+        task="digits",
+        model_kwargs={
+            "input_dim": dim,
+            "hidden_dim": 64,
+            "output_dim": classes,
+            "num_layers": 2,
+        },
+        epochs=1,
+        use_kernel=True,
+        kernel_backend="contrastive",
+        optimizer_kwargs={"lr": 0.001},
+        track_energy=False,
+    )
+    trainer = CoreTrainer(cfg)
+    trainer.setup()
+    dev = next(trainer.model.parameters()).device
+    xd, yd = x.to(dev), y.to(dev)
+    for _ in range(12):
+        perm = torch.randperm(n)
+        for i in range(0, n, 32):
+            idx = perm[i : i + 32]
+            trainer._train_step(xd[idx], yd[idx])
+    trainer.model.eval()
+    with torch.no_grad():
+        acc = (trainer.model(xd).argmax(1) == yd).float().mean().item()
+    assert acc >= 0.2, (
+        f"contrastive-kernel path reached only {acc:.3f} accuracy (chance=0.1)"
     )

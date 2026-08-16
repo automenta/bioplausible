@@ -46,6 +46,40 @@ class TestMuonBackend:
         err = (out.T @ out - torch.eye(16)).abs().max()
         assert err < 1e-4
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(), reason="CUDA required for the Triton GEMM path"
+    )
+    def test_triton_gemm_path_matches_reference_on_cuda(self):
+        """Exercise the genuine Triton GEMM kernels (not the PyTorch fallback).
+
+        The CPU tests above fall through to the PyTorch path because the
+        kernels require CUDA tensors; on CUDA, ``muon_orthogonalize`` launches
+        the tiled Gram/update kernels. Verify parity with the core reference
+        for both orientations (tall and wide).
+        """
+        from bioplausible.acceleration.triton_kernels import MEP_TritonOps
+
+        torch.manual_seed(0)
+        for shape in ((32, 32), (64, 32), (12, 20), (128, 64)):
+            G = torch.randn(*shape, device="cuda")
+            ref = MuonUpdate(ns_steps=5, backend="pytorch")._newton_schulz(G, 5)
+            trit = MEP_TritonOps.muon_orthogonalize(G, ns_steps=5)
+            assert torch.isfinite(trit).all()
+            assert (ref - trit).abs().max() < 1e-5
+
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(), reason="CUDA required for the kernel GEMM path"
+    )
+    def test_triton_gemm_path_converges_to_orthogonal(self):
+        """Newton-Schulz through the Triton GEMM path converges to orthonormal."""
+        from bioplausible.acceleration.triton_kernels import MEP_TritonOps
+
+        torch.manual_seed(1)
+        G = torch.randn(24, 24, device="cuda")
+        out = MEP_TritonOps.muon_orthogonalize(G, ns_steps=20)
+        err = (out.T @ out - torch.eye(24, device="cuda")).abs().max()
+        assert err < 1e-4
+
 
 class TestDionBackend:
     def test_subspace_alignment_well_separated(self):
@@ -54,8 +88,12 @@ class TestDionBackend:
         grad = core + 0.05 * torch.randn(64, 40)
         ref = DionUpdate(rank_frac=0.2, threshold=1000, backend="pytorch")
         trit = DionUpdate(rank_frac=0.2, threshold=1000, backend="triton")
-        a = ref.transform_gradient(None, grad.clone(), {}, {"use_error_feedback": False})
-        b = trit.transform_gradient(None, grad.clone(), {}, {"use_error_feedback": False})
+        a = ref.transform_gradient(
+            None, grad.clone(), {}, {"use_error_feedback": False}
+        )
+        b = trit.transform_gradient(
+            None, grad.clone(), {}, {"use_error_feedback": False}
+        )
         assert torch.isfinite(b).all()
         assert (a - b).abs().max() < 1e-4
 
@@ -86,21 +124,21 @@ class TestPresetBackendKwarg:
     @pytest.mark.parametrize(
         "factory",
         [
-            lambda m: __import__("bioplausible.zoo.mep.presets", fromlist=["smep"]).smep(
-                m.parameters(), model=m, backend="triton", mode="ep"
-            ),
-            lambda m: __import__("bioplausible.zoo.mep.presets", fromlist=["sdmep"]).sdmep(
-                m.parameters(), model=m, backend="triton"
-            ),
-            lambda m: __import__("bioplausible.zoo.mep.presets", fromlist=["local_ep"]).local_ep(
-                m.parameters(), model=m, backend="triton"
-            ),
-            lambda m: __import__("bioplausible.zoo.mep.presets", fromlist=["natural_ep"]).natural_ep(
-                m.parameters(), model=m, backend="triton"
-            ),
-            lambda m: __import__("bioplausible.zoo.mep.presets", fromlist=["muon_backprop"]).muon_backprop(
-                m.parameters(), backend="triton"
-            ),
+            lambda m: __import__(
+                "bioplausible.zoo.mep.presets", fromlist=["smep"]
+            ).smep(m.parameters(), model=m, backend="triton", mode="ep"),
+            lambda m: __import__(
+                "bioplausible.zoo.mep.presets", fromlist=["sdmep"]
+            ).sdmep(m.parameters(), model=m, backend="triton"),
+            lambda m: __import__(
+                "bioplausible.zoo.mep.presets", fromlist=["local_ep"]
+            ).local_ep(m.parameters(), model=m, backend="triton"),
+            lambda m: __import__(
+                "bioplausible.zoo.mep.presets", fromlist=["natural_ep"]
+            ).natural_ep(m.parameters(), model=m, backend="triton"),
+            lambda m: __import__(
+                "bioplausible.zoo.mep.presets", fromlist=["muon_backprop"]
+            ).muon_backprop(m.parameters(), backend="triton"),
         ],
         ids=["smep", "sdmep", "local_ep", "natural_ep", "muon_backprop"],
     )

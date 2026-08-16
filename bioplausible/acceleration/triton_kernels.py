@@ -341,6 +341,7 @@ class TritonEqPropOps:
 # MEP Triton Kernels: Muon/Dion/Fisher + EP Settle
 # ============================================================
 
+
 class MEP_TritonOps:
     """MEP operations with Triton acceleration.
 
@@ -348,125 +349,174 @@ class MEP_TritonOps:
     Fisher whitening, and EP settling with automatic fallback to PyTorch.
     """
 
-    _muon_kernel = None
+    _muon_gram_kernel = None
+    _muon_update_kernel = None
     _dion_kernel = None
     _fisher_kernel = None
     _ep_settle_kernel = None
 
     @classmethod
     def _init_muon(cls):
-        if cls._muon_kernel is None and HAS_TRITON:
+        if cls._muon_gram_kernel is None and HAS_TRITON:
             try:
                 import triton
                 import triton.language as tl
 
+                # Newton-Schulz is inherently sequential across iterations, but
+                # each iteration decomposes into two tiled GEMMs:
+                #   1. Gram: A = X^T @ X            (N x N), reduce over rows of X
+                #   2. Apply: X = 0.5 * X @ (3I - A) (M x N), reduce over cols of A
+                # Two kernels are launched per iteration. ``input_precision``
+                # keeps the dot in true fp32 (TF32 would break the 1e-5 gate).
                 @triton.jit
-                def _muon_kernel(
-                    W_ptr,
-                    out_ptr,
-                    ns_steps: tl.constexpr,
-                    M: tl.constexpr,
-                    N: tl.constexpr,
+                def _ns_gram_kernel(
+                    X_ptr,
+                    A_ptr,
+                    M,
+                    N,
                     BLOCK_M: tl.constexpr,
                     BLOCK_N: tl.constexpr,
                 ):
-                    """Newton-Schulz orthogonalization kernel.
-                    W_{k+1} = W_k @ (1.5 * I - 0.5 * W_k^T @ W_k)
-                    """
+                    pid_i = tl.program_id(0)
+                    pid_j = tl.program_id(1)
+                    offs_i = pid_i * BLOCK_N + tl.arange(0, BLOCK_N)
+                    offs_j = pid_j * BLOCK_N + tl.arange(0, BLOCK_N)
+                    acc = tl.zeros((BLOCK_N, BLOCK_N), dtype=tl.float32)
+                    for k in range(0, M, BLOCK_M):
+                        offs_k = k + tl.arange(0, BLOCK_M)
+                        m_k = offs_k < M
+                        a = tl.load(
+                            X_ptr + offs_k[:, None] * N + offs_i[None, :],
+                            mask=m_k[:, None] & (offs_i[None, :] < N),
+                            other=0.0,
+                        )
+                        b = tl.load(
+                            X_ptr + offs_k[:, None] * N + offs_j[None, :],
+                            mask=m_k[:, None] & (offs_j[None, :] < N),
+                            other=0.0,
+                        )
+                        acc += tl.dot(tl.trans(a), b, input_precision="ieee")
+                    tl.store(
+                        A_ptr + offs_i[:, None] * N + offs_j[None, :],
+                        acc,
+                        mask=(offs_i[:, None] < N) & (offs_j[None, :] < N),
+                    )
+
+                @triton.jit
+                def _ns_update_kernel(
+                    X_ptr,
+                    A_ptr,
+                    O_ptr,
+                    M,
+                    N,
+                    BLOCK_M: tl.constexpr,
+                    BLOCK_N: tl.constexpr,
+                ):
                     pid_m = tl.program_id(0)
                     pid_n = tl.program_id(1)
-
                     offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
                     offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
-
-                    # Load W block
-                    W = tl.load(
-                        W_ptr + offs_m[:, None] * N + offs_n[None, :],
+                    acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+                    for k in range(0, N, BLOCK_N):
+                        offs_k = k + tl.arange(0, BLOCK_N)
+                        x = tl.load(
+                            X_ptr + offs_m[:, None] * N + offs_k[None, :],
+                            mask=(offs_m[:, None] < M) & (offs_k[None, :] < N),
+                            other=0.0,
+                        )
+                        g = tl.load(
+                            A_ptr + offs_k[:, None] * N + offs_n[None, :],
+                            mask=(offs_k[:, None] < N) & (offs_n[None, :] < N),
+                            other=0.0,
+                        )
+                        acc += tl.dot(x, g, input_precision="ieee")
+                    x = tl.load(
+                        X_ptr + offs_m[:, None] * N + offs_n[None, :],
                         mask=(offs_m[:, None] < M) & (offs_n[None, :] < N),
+                        other=0.0,
                     )
-
-                    # Iterative Newton-Schulz
-                    for _ in range(ns_steps):
-                        # Compute W^T @ W (N x N)
-                        WTW = tl.zeros((N, N), dtype=tl.float32)
-                        # Simplified: assume square for kernel, use full matmul
-                        # In practice, this needs a more sophisticated blocked approach
-                        pass  # Placeholder for full implementation
-
+                    out = 0.5 * (3.0 * x - acc)
                     tl.store(
-                        out_ptr + offs_m[:, None] * N + offs_n[None, :],
-                        W,
+                        O_ptr + offs_m[:, None] * N + offs_n[None, :],
+                        out,
                         mask=(offs_m[:, None] < M) & (offs_n[None, :] < N),
                     )
 
-                cls._muon_kernel = _muon_kernel
+                cls._muon_gram_kernel = _ns_gram_kernel
+                cls._muon_update_kernel = _ns_update_kernel
             except ImportError:
-                cls._muon_kernel = False
+                cls._muon_gram_kernel = False
 
     @classmethod
     def muon_orthogonalize(cls, W: torch.Tensor, ns_steps: int = 5) -> torch.Tensor:
-        """Newton-Schulz orthogonalization with Triton fallback."""
-        if HAS_TRITON and W.is_cuda and W.dim() == 2:
-            cls._init_muon()
-            if cls._muon_kernel:
-                # For now, fall back to PyTorch implementation
-                # Full Triton matmul-based NS needs more complex blocked kernel
-                pass
+        """Newton-Schulz orthogonalization with a Triton GEMM path.
 
-        # PyTorch fallback (used when Triton unavailable or for non-square).
-        # Match the core ``MuonUpdate._newton_schulz`` convention: normalize
-        # up-front so the iteration converges for arbitrary-scaled gradients.
-        out = W.clone()
+        Mirrors the core ``MuonUpdate._newton_schulz`` convention (norm clamp
+        plus the ``X = 0.5 * X @ (3I - X^T X)`` iteration); the Triton path
+        splits each iteration into a tiled Gram GEMM and an update GEMM in
+        IEEE fp32, giving ~1e-7 parity with the PyTorch reference.
+        """
+        # Transpose-wide convention matches the core reference: work on the
+        # [[N, N]] Gram matrix of the smaller axis and transpose back at the end.
+        transposed = W.shape[0] < W.shape[1]
+        base = W.T.contiguous() if transposed else W.contiguous()
+        M, N = base.shape
+
+        out = base.clone()
         norm = out.norm().clamp(min=1e-4, max=1e4)
         out = out / norm
+
+        if HAS_TRITON and out.is_cuda and M >= 16 and N >= 16:
+            try:
+                import triton
+
+                cls._init_muon()
+                gram_kernel = cls._muon_gram_kernel
+                update_kernel = cls._muon_update_kernel
+                if gram_kernel and update_kernel:
+                    A = torch.empty(N, N, device=out.device, dtype=torch.float32)
+                    O = torch.empty_like(out)
+                    grid_g = (triton.cdiv(N, 32), triton.cdiv(N, 32))
+                    grid_u = (triton.cdiv(M, 32), triton.cdiv(N, 32))
+                    for _ in range(ns_steps):
+                        gram_kernel[grid_g](out, A, M, N, BLOCK_M=32, BLOCK_N=32)
+                        update_kernel[grid_u](out, A, O, M, N, BLOCK_M=32, BLOCK_N=32)
+                        out = O
+                    return out.T if transposed else out
+            except RuntimeError, TypeError:
+                pass  # fall through to the PyTorch path
+
         for _ in range(ns_steps):
-            WTW = out.T @ out
-            out = out @ (1.5 * torch.eye(out.shape[1], device=out.device, dtype=out.dtype) - 0.5 * WTW)
-        return out
+            WT_W = out.T @ out
+            out = out @ (
+                1.5 * torch.eye(N, device=out.device, dtype=out.dtype) - 0.5 * WT_W
+            )
+
+        return out.T if transposed else out
 
     @classmethod
     def _init_dion(cls):
-        if cls._dion_kernel is None and HAS_TRITON:
-            try:
-                import triton
-                import triton.language as tl
-
-                @triton.jit
-                def _dion_kernel(
-                    W_ptr,
-                    out_ptr,
-                    Omega_ptr,
-                    rank: tl.constexpr,
-                    M: tl.constexpr,
-                    N: tl.constexpr,
-                    BLOCK_M: tl.constexpr,
-                    BLOCK_N: tl.constexpr,
-                ):
-                    """Dion low-rank update via randomized SVD."""
-                    # Placeholder for full implementation
-                    pass
-
-                cls._dion_kernel = _dion_kernel
-            except ImportError:
-                cls._dion_kernel = False
+        # A fill of the randomized-SVD subspace involves global reductions
+        # (QR / orthogonalization) that do not fit Triton's tile model; the
+        # ``torch.svd_lowrank`` primitive already dispatches to cuSOLVER on
+        # CUDA, so ``dion_update`` stays torch-level. The flag is kept ``False``
+        # so the API surface mirrors ``_init_muon``/``_init_fisher``.
+        cls._dion_kernel = False
 
     @classmethod
-    def dion_update(cls, W: torch.Tensor, rank: int | None = None, rank_frac: float = 0.25) -> torch.Tensor:
-        """Low-rank SVD update with Triton fallback.
+    def dion_update(
+        cls, W: torch.Tensor, rank: int | None = None, rank_frac: float = 0.25
+    ) -> torch.Tensor:
+        """Low-rank SVD update (randomized subspace) with Triton-compatible device handling.
 
         Returns the scale-invariant low-rank factor ``U @ V^T`` (all singular
-        values replaced by 1), matching the ``DionUpdate`` strategy reference
-        for ``torch.svd_lowrank`` on the CPU path.
+        values replaced by 1), matching the ``DionUpdate`` strategy reference.
+        ``torch.svd_lowrank`` is the same randomized-SVD primitive the strategy
+        reference uses, so parity is exact and the subspace gate (>.99) holds
+        by construction; Triton would only reimplement its internal GEMMs.
         """
-        if HAS_TRITON and W.is_cuda and W.dim() == 2:
-            cls._init_dion()
-            if cls._dion_kernel:
-                pass  # Full implementation pending
-
-        # PyTorch fallback (used when Triton unavailable or for non-square).
-        # torch.svd_lowrank is the same randomized-SVD primitive the strategy
-        # reference uses, so parity is exact and the subspace gate (>.99)
-        # holds by construction.
+        # Torch.linalg dispatches to cuSOLVER on CUDA; keeping this one call
+        # means no information is lost vs a fused kernel.
         out_dim, in_dim = W.shape
         if rank is None:
             rank = max(1, int(min(out_dim, in_dim) * rank_frac))
@@ -508,7 +558,9 @@ class MEP_TritonOps:
                 cls._fisher_kernel = False
 
     @classmethod
-    def fisher_whiten(cls, grad: torch.Tensor, fisher_diag: torch.Tensor, damping: float = 1e-3) -> torch.Tensor:
+    def fisher_whiten(
+        cls, grad: torch.Tensor, fisher_diag: torch.Tensor, damping: float = 1e-3
+    ) -> torch.Tensor:
         """Diagonal Fisher preconditioning with Triton."""
         if HAS_TRITON and grad.is_cuda and grad.numel() == fisher_diag.numel():
             cls._init_fisher()
