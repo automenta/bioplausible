@@ -367,6 +367,12 @@ def model_kwargs(
     # accept it. construct_model filters it back out for such constructors.
     if "learning_rate" in cfg:
         kwargs["learning_rate"] = cfg["learning_rate"]
+        # A model that declares ``lr`` (not ``learning_rate``) receives the
+        # canonical value under its own name — otherwise ``lr`` is a silent
+        # phantom knob (e.g. PEPITA's ``lr=0.3`` never reached the trainer-built
+        # model, which always used the 0.01 default).
+        if "lr" in accepted and "learning_rate" not in accepted and not has_catch_all:
+            kwargs["lr"] = cfg["learning_rate"]
     return kwargs
 
 

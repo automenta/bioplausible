@@ -207,24 +207,32 @@ class KernelRegistry:
 def infer_algorithm_family(model_name: str) -> AlgorithmFamily | None:
     """Infer algorithm family from model registry name."""
     name = model_name.lower()
-    if "eqprop" in name or "looped" in name or "eqprop" in name:
+    if "eqprop" in name or "looped" in name:
         return AlgorithmFamily.EQPROP
-    if "fa" in name or "feedback" in name or "dfa" in name:
-        return AlgorithmFamily.FA
+    # ``tile_pc``/``tile_snn``/``tile_target_prop`` must resolve to TILE — the
+    # tile marker is the most specific prefix, so check it before the generic
+    # family substrings those names also carry.
+    if "tile" in name or "equitile" in name:
+        return AlgorithmFamily.TILE
+    # ``fabricpc_graph_pcn`` carries a "pc" substring and should be PC, while
+    # ``predictive_coding_hybrid`` carries neither "pc" nor "fa" — check both
+    # before the generic FA substring (which the "fabric" prefix would match).
+    if "predictive" in name or "pc" in name:
+        return AlgorithmFamily.PC
+    if "spiking" in name or "snn" in name or "stdp" in name:
+        return AlgorithmFamily.SNN
+    # Hebbian before FA: ``three_factor_hebbian`` carries "fa" (in "factor")
+    # and must not be mis-resolved to the FA family.
     if "hebbian" in name:
         return AlgorithmFamily.HEBBIAN
-    if "forward" in name and "forward_only" in name:
+    if "fa" in name or "feedback" in name or "dfa" in name:
+        return AlgorithmFamily.FA
+    if "forward_only" in name or "forward_forward" in name or name == "ff":
         return AlgorithmFamily.FF
     if "pepita" in name:
         return AlgorithmFamily.PEPITA
     if "target" in name or "tp" in name:
         return AlgorithmFamily.TP
-    if "tile" in name or "equitile" in name:
-        return AlgorithmFamily.TILE
-    if "predictive" in name or "pc" in name:
-        return AlgorithmFamily.PC
-    if "spiking" in name or "snn" in name or "stdp" in name:
-        return AlgorithmFamily.SNN
     if (
         "mep" in name
         or "o1memory" in name

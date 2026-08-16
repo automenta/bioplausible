@@ -4,12 +4,16 @@ Provides reusable helpers for the three common settling patterns:
 1. Single-hidden-state settling (Family A — ``EqPropModel`` subclasses)
 2. Activations-list settling (Family B — ``StandardEqProp``, ``DirectedEP``, etc.)
 3. Implicit differentiation via ``EquilibriumFunction`` (autograd.Function)
+
+Phase 3 (REFACTOR7): Unified SettleProtocol + settle_universal primitive
+for cross-algorithm convergence instrumentation.
 """
 
 from collections.abc import (
     Callable,  # ruff: ignore[typing-only-standard-library-import]  (used in runtime-evaluated annotations; module has no `from __future__ import annotations`)
 )
-from typing import Protocol, cast, runtime_checkable
+from dataclasses import dataclass
+from typing import Literal, Protocol, cast, runtime_checkable
 
 import torch
 from torch import autograd, nn
@@ -22,9 +26,80 @@ logger = get_logger()
 _DynamicsDict = dict[str, object]
 
 
+# ============================================================
+# Phase 3: Unified SettleProtocol for all settling families
+# ============================================================
+
+@dataclass(frozen=True, slots=True)
+class SettleConfig:
+    """Unified settling configuration (sweepable hyperparameters)."""
+
+    max_steps: int = 30
+    convergence_threshold: float = 1e-4
+    convergence_start: int = 5
+    convergence_norm: int = 2
+    convergence_relative: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class SettleTelemetry:
+    """Unified settling telemetry surface (JSON-serializable)."""
+
+    algorithm: str
+    family: Literal["A", "B", "energy", "o1memory", "ep"]
+    steps_taken: int
+    max_steps: int
+    converged: bool
+    final_delta: float
+    deltas: list[float]
+    settle_time_ms: float
+    memory_mb: float
+    hardware: str
+    backend: str
+
+
+@runtime_checkable
+class SettleProtocol(Protocol):
+    """Unified settling / compute telemetry surface for all bio-plausible algorithms.
+
+    Extends EquilibriumSettleProtocol to cover:
+    - Family A: single-hidden-state (EqProp, LoopedMLP)
+    - Family B: activations-list (StandardEqProp, DirectedEP)
+    - Energy-based: PCN, Tile, Hopfield
+    - O(1) Memory: O1MemoryEPv2 analytic
+    - EP: MEP EP settling
+
+    Implementations provide algorithm-specific dynamics; the shared
+    ``settle_universal`` primitive handles iteration, convergence, checkpointing,
+    and telemetry.
+    """
+
+    # Config knobs (sweepable)
+    convergence_threshold: float
+    convergence_start: int
+    max_steps: int
+
+    # Core dynamics (algorithm-specific signature)
+    def _initialize_state(self, x: torch.Tensor) -> torch.Tensor | list[torch.Tensor]: ...
+    def _transform_input(self, x: torch.Tensor) -> torch.Tensor: ...
+    def _step(
+        self, state: torch.Tensor | list[torch.Tensor], x_transformed: torch.Tensor
+    ) -> torch.Tensor | list[torch.Tensor]: ...
+
+    # Optional: algorithm-specific convergence check
+    def _check_converged(
+        self, state_new: torch.Tensor | list[torch.Tensor], state_old: torch.Tensor | list[torch.Tensor], step: int
+    ) -> bool: ...
+
+    # Telemetry hooks (called by shared primitive)
+    def _on_step_end(self, step: int, state: torch.Tensor | list[torch.Tensor], delta: float): ...
+    def _on_converged(self, step: int, final_delta: float): ...
+    def _on_max_steps(self, step: int, final_delta: float): ...
+
+
 @runtime_checkable
 class EquilibriumSettleProtocol(Protocol):
-    """Structural contract for a single-hidden-state equilibrium rule.
+    """Structural contract for a single-hidden-state equilibrium rule (Family A).
 
     A model adopting this protocol routes its settling loop through the shared
     :func:`settle_state` primitive (P1), inheriting early convergence stopping
@@ -117,6 +192,145 @@ def settle_state(
         h = h_new
 
     return h, steps_taken, converged
+
+
+def settle_universal(
+    model: SettleProtocol,
+    x: torch.Tensor,
+    *,
+    config: SettleConfig | None = None,
+    algorithm: str = "unknown",
+    family: Literal["A", "B", "energy", "o1memory", "ep"] = "A",
+    hardware: str = "cpu",
+    backend: str = "pytorch",
+    return_trajectory: bool = False,
+) -> tuple[torch.Tensor | list[torch.Tensor], int, bool, SettleTelemetry]:
+    """Universal settling primitive for all bio-plausible algorithms.
+
+    Runs the model's recurrence with unified early convergence detection,
+    gradient checkpointing, and telemetry collection. Works with any model
+    satisfying :class:`SettleProtocol`.
+
+    Args:
+        model: A model satisfying :class:`SettleProtocol`.
+        x: Raw input batch.
+        config: Optional :class:`SettleConfig` (uses model's knobs if None).
+        algorithm: Algorithm name for telemetry.
+        family: Settling family for telemetry.
+        hardware: Hardware target for telemetry.
+        backend: Backend name for telemetry.
+        return_trajectory: If True, return per-step state snapshots.
+
+    Returns:
+        ``(state_final, steps_taken, converged, telemetry)``:
+        - ``state_final`` is the settled state(s).
+        - ``steps_taken`` is the number of iterations executed.
+        - ``converged`` is True if early-stop triggered.
+        - ``telemetry`` is a :class:`SettleTelemetry` with full convergence profile.
+    """
+    import time
+
+    config = config or SettleConfig(
+        max_steps=model.max_steps,
+        convergence_threshold=model.convergence_threshold,
+        convergence_start=model.convergence_start,
+    )
+
+    settle_start = time.monotonic()
+    max_steps = config.max_steps
+    threshold = config.convergence_threshold
+    start = config.convergence_start
+
+    x_transformed = model._transform_input(x)
+    state = model._initialize_state(x)
+
+    deltas: list[float] = []
+    trajectory: list = [] if return_trajectory else None
+
+    def _step_fn(s):
+        if torch.is_grad_enabled():
+            return _checkpoint(model._step, s, x_transformed, use_reentrant=False)
+        return model._step(s, x_transformed)
+
+    converged = False
+    steps_taken = 0
+    for step_idx in range(max_steps):
+        state_new = _step_fn(state)
+        steps_taken += 1
+
+        # Compute convergence delta
+        if isinstance(state_new, list) and isinstance(state, list):
+            # Multi-state: max relative delta across layers
+            max_delta = 0.0
+            for s_new, s_old in zip(state_new, state):
+                abs_delta = torch.dist(s_new, s_old, p=config.convergence_norm).item()
+                if config.convergence_relative:
+                    norm = s_old.norm(p=config.convergence_norm).item() + 1e-8
+                    rel_delta = abs_delta / norm
+                else:
+                    rel_delta = abs_delta
+                max_delta = max(max_delta, rel_delta)
+            delta = max_delta
+        else:
+            # Single-state
+            delta = torch.dist(state_new, state, p=config.convergence_norm).item()
+
+        deltas.append(delta)
+
+        if trajectory is not None:
+            if isinstance(state_new, list):
+                trajectory.append([s.detach().cpu() for s in state_new])
+            else:
+                trajectory.append(state_new.detach().cpu())
+
+        # Check convergence (with custom hook if provided)
+        converged_check = False
+        custom_check = getattr(model, "_check_converged", None)
+        if custom_check is not None:
+            converged_check = custom_check(state_new, state, step_idx)
+        else:
+            if step_idx > start and delta < threshold:
+                converged_check = True
+
+        if converged_check:
+            state = state_new
+            converged = True
+            if hasattr(model, "_on_converged"):
+                model._on_converged(steps_taken, delta)
+            break
+
+        if hasattr(model, "_on_step_end"):
+            model._on_step_end(steps_taken, state_new, delta)
+
+        state = state_new
+
+    if not converged and hasattr(model, "_on_max_steps"):
+        model._on_max_steps(steps_taken, deltas[-1] if deltas else 0.0)
+
+    settle_time_ms = (time.monotonic() - settle_start) * 1000
+
+    # Estimate memory (rough: state size in MB)
+    if isinstance(state, list):
+        total_elements = sum(s.numel() for s in state)
+    else:
+        total_elements = state.numel()
+    memory_mb = total_elements * 4 / 1e6  # float32
+
+    telemetry = SettleTelemetry(
+        algorithm=algorithm,
+        family=family,
+        steps_taken=steps_taken,
+        max_steps=max_steps,
+        converged=converged,
+        final_delta=deltas[-1] if deltas else 0.0,
+        deltas=deltas,
+        settle_time_ms=settle_time_ms,
+        memory_mb=memory_mb,
+        hardware=hardware,
+        backend=backend,
+    )
+
+    return state, steps_taken, converged, telemetry
 
 
 # ---------------------------------------------------------------------------
@@ -744,9 +958,13 @@ class EquilibriumFunction(autograd.Function):
 __all__ = [
     "EquilibriumFunction",
     "EquilibriumSettleProtocol",
+    "SettleProtocol",
+    "SettleConfig",
+    "SettleTelemetry",
     "_run_with_sn_freeze",
     "energy_gradient_descent",
     "settle_activations_list",
     "settle_single_state",
     "settle_state",
+    "settle_universal",
 ]

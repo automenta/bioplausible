@@ -279,3 +279,150 @@ def test_backprop_kernel_learns():
     assert acc >= 0.2, (
         f"kernel-driven backprop reached only {acc:.3f} accuracy (chance=0.1)"
     )
+
+
+def test_kernel_uses_trainer_optimizer_lr():
+    """The consumed kernel path trains through the trainer's optimizer, not a
+    raw-SGD fallback at ``config.learning_rate``.
+
+    Guards the documented REFACTOR7 open item (uniform models **without** a
+    model-side ``optimizer`` — here ``backprop_mlp`` — should learn at the
+    reference optimizer's LR, so ``_train_step`` eagerly ensures the standard
+    optimizer when a kernel backend drives the model). We set ``optimizer=
+    "sgd"`` at lr=0.5: a raw-SGD fallback at ``lr_for(model)`` (config LR,
+    ~1e-3) would move weights ~500x less, proving the kernel gradients route
+    through the trainer optimizer.
+    """
+    import torch
+
+    config = TrainerConfig(
+        model="backprop_mlp",
+        task="digits",
+        model_kwargs={
+            "input_dim": 64,
+            "hidden_dim": 16,
+            "output_dim": 10,
+            "num_layers": 2,
+        },
+        epochs=1,
+        use_kernel=True,
+        kernel_backend="cpu",
+        track_energy=False,
+        optimizer="sgd",
+        optimizer_kwargs={"lr": 0.5},
+    )
+    trainer = CoreTrainer(config)
+    trainer.setup()
+    assert getattr(trainer.model, "_kernel_backend", None) is not None
+    assert getattr(trainer.model, "optimizer", None) is None
+
+    before = trainer.model.net[0].weight.data.clone()
+    x = torch.randn(8, 64)
+    y = torch.randint(0, 10, (8,))
+    trainer._train_step(x, y)
+    assert trainer.optimizer is not None
+    assert type(trainer.optimizer).__name__ == "SGD"
+    assert trainer.optimizer.param_groups[0]["lr"] == 0.5
+    delta = (trainer.model.net[0].weight.data - before).abs().max().item()
+    assert delta > 0.05, (
+        f"kernel path did not apply the trainer optimizer LR (max delta={delta:.3e})"
+    )
+
+
+def test_bespoke_kernel_train_step_consumed():
+    """A bespoke-dynamics backend (``kernel_train_step``) is driven through the
+    dispatch seam, not the uniform consumer.
+
+    PEPITA is a forward-only local learner: its two-pass dynamics can't fit
+    ``forward(x) → backward(acts, error) → update_weights``, so the backend
+    exposes ``kernel_train_step`` and the dispatcher prefers it. Guards the
+    REFACTOR7 bespoke-family consumption wiring.
+    """
+    import torch
+
+    config = TrainerConfig(
+        model="pepita",
+        task="digits",
+        model_kwargs={
+            "input_dim": 64,
+            "hidden_dim": 16,
+            "output_dim": 10,
+            "num_layers": 2,
+            "learning_rate": 0.3,
+        },
+        epochs=1,
+        use_kernel=True,
+        kernel_backend="cpu",
+        track_energy=False,
+    )
+    trainer = CoreTrainer(config)
+    trainer.setup()
+    backend = getattr(trainer.model, "_kernel_backend", None)
+    assert backend is not None
+    assert hasattr(backend, "kernel_train_step")
+
+    before = [p.data.clone() for p in trainer.model.layers[0].parameters()]
+    x = torch.randn(8, 64)
+    y = torch.randint(0, 10, (8,))
+    metrics = trainer._train_step(x, y)
+    assert "loss" in metrics
+    assert torch.isfinite(torch.tensor(metrics["loss"]))
+
+    after = [p.data.clone() for p in trainer.model.layers[0].parameters()]
+    assert any(not torch.equal(b, a) for b, a in zip(before, after)), (
+        "kernel_train_step did not update the model weights"
+    )
+    assert trainer._training_path_counts.get("kernel", 0) >= 1
+
+
+def test_kernel_pepita_learns():
+    """Kernel-driven PEPITA learns on a separable task (above chance), matching
+    the reference's forward-only update dynamics via ``kernel_train_step``.
+
+    The Bespoke family mirrors the model's ``train_step`` exactly, so its
+    accuracy must rise well above chance — proving the bespoke seam is a real
+    learning path, not a no-op.
+    """
+    import torch
+
+    torch.manual_seed(7)
+    n, dim, classes = 400, 64, 10
+    x = torch.randn(n, dim)
+    y = torch.randint(0, classes, (n,))
+    for c in range(classes):
+        mask = y == c
+        if mask.any():
+            direction = torch.randn(dim)
+            direction = direction / direction.norm() * 2.0
+            x[mask] += direction * 0.8
+
+    cfg = TrainerConfig(
+        model="pepita",
+        task="digits",
+        model_kwargs={
+            "input_dim": dim,
+            "hidden_dim": 64,
+            "output_dim": classes,
+            "num_layers": 2,
+            "learning_rate": 0.3,
+        },
+        epochs=1,
+        use_kernel=True,
+        kernel_backend="cpu",
+        track_energy=False,
+    )
+    trainer = CoreTrainer(cfg)
+    trainer.setup()
+    dev = next(trainer.model.parameters()).device
+    xd, yd = x.to(dev), y.to(dev)
+    for _ in range(8):
+        perm = torch.randperm(n)
+        for i in range(0, n, 32):
+            idx = perm[i : i + 32]
+            trainer._train_step(xd[idx], yd[idx])
+    trainer.model.eval()
+    with torch.no_grad():
+        acc = (trainer.model(xd).argmax(1) == yd).float().mean().item()
+    assert acc >= 0.3, (
+        f"kernel-driven PEPITA reached only {acc:.3f} accuracy (chance=0.1)"
+    )

@@ -342,6 +342,7 @@ def _run_kernel_train_step(
     config: TrainerConfig,
     x: torch.Tensor,
     y: torch.Tensor,
+    optimizer: torch.optim.Optimizer | None = None,
 ) -> dict[str, object] | None:
     """Run one train step through an attached uniform ``KernelBackend``.
 
@@ -416,23 +417,41 @@ def _run_kernel_train_step(
     error = output - _F.one_hot(y, output_dim).float()
     grads = backward(activations, error)
 
-    # Route the kernel-computed gradients through the model's optimizer when
-    # available (matching the reference PyTorch training dynamics: set .grad,
-    # then optimizer.step). Falls back to backend.update_weights otherwise.
-    optimizer = getattr(model, "optimizer", None)
-    if optimizer is not None and hasattr(optimizer, "step"):
-        name_to_param = dict(model.named_parameters())
-        mapped = {
-            name: grad
-            for name, grad in grads.items()
-            if name in name_to_param and grad.shape == name_to_param[name].shape
-        }
-        if mapped:
-            optimizer.zero_grad()
+    # Route the kernel-computed gradients through a torch optimizer when one is
+    # available (the model's own, else the trainer's), so the kernel path trains
+    # with the same optimizer + learning rate as the reference — not a raw-SGD
+    # fallback at ``config.learning_rate``. Grads are keyed ``layers.<i>.<w|b>``
+    # by every uniform backend (FA/Backprop/Hebbian), so they map positionally
+    # onto the bound ``layers`` rather than by ``named_parameters`` key (which
+    # would miss ``.net``/``transition_modules()`` stacks).
+    model_optimizer = getattr(model, "optimizer", None)
+    if model_optimizer is not None and not isinstance(
+        model_optimizer, torch.optim.Optimizer
+    ):
+        model_optimizer = None
+    opt = model_optimizer or (
+        optimizer if isinstance(optimizer, torch.optim.Optimizer) else None
+    )
+    if opt is not None:
+        assignments: dict[torch.nn.Parameter, torch.Tensor] = {}
+        for name, grad in grads.items():
+            parts = name.split(".")
+            if len(parts) == 3 and parts[0] == "layers":
+                try:
+                    layer = layers[int(parts[1])]
+                except IndexError, ValueError:
+                    continue
+                if parts[2] == "weight":
+                    assignments[layer.weight] = grad
+                elif parts[2] == "bias" and layer.bias is not None:
+                    assignments[layer.bias] = grad
+        if assignments:
+            opt.zero_grad()
             with torch.no_grad():
-                for name, grad in mapped.items():
-                    name_to_param[name].grad = grad.to(name_to_param[name].device)
-            optimizer.step()
+                for param, grad in assignments.items():
+                    if grad.shape == param.shape:
+                        param.grad = grad.to(param.device)
+            opt.step()
         else:
             update_weights(grads, lr_for(model))
     else:
@@ -591,11 +610,24 @@ def dispatch_train_step(
         and model._kernel_backend is not None
     ):
         _record("kernel")
-        kernel_metrics = _run_kernel_train_step(
-            model, model._kernel_backend, config, x, y
-        )
-        if kernel_metrics is not None:
-            return kernel_metrics
+        # Bespoke-dynamics backends (FF/PEPITA two-pass, TP inverse nets, PC
+        # inference, SNN simulate, Tile/MEP settle) implement their own
+        # ``kernel_train_step(model, config, x, y, optimizer)``. When present it
+        # is authoritative: if it declines (returns None) the caller falls
+        # through to the model's own ``train_step`` — never to the uniform
+        # consumer below, whose ``(activations, error)`` backtrack would
+        # mis-bind a bespoke ``backward`` (e.g. FF's ``(pos, neg)``).
+        bespoke_step = getattr(model._kernel_backend, "kernel_train_step", None)
+        if bespoke_step is not None:
+            kernel_metrics = bespoke_step(model, config, x, y, optimizer)
+            if kernel_metrics is not None:
+                return kernel_metrics
+        else:
+            kernel_metrics = _run_kernel_train_step(
+                model, model._kernel_backend, config, x, y, optimizer=optimizer
+            )
+            if kernel_metrics is not None:
+                return kernel_metrics
 
     match model:
         case EnergyModel() if config is not None:
@@ -1655,6 +1687,16 @@ class CoreTrainer:
 
     def _train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
         """Single training step, routed through the shared dispatcher."""
+        # A uniform model driven by an attached kernel backend never reaches the
+        # BPTT fallback that lazily builds the standard optimizer — ensure it
+        # exists up front so the kernel path routes its gradients through the
+        # reference optimizer/LR (raw-SGD at ``config.learning_rate`` would
+        # otherwise silently train off-parity).
+        if (
+            self.config.use_kernel
+            and getattr(self.model, "_kernel_backend", None) is not None
+        ):
+            self._ensure_optimizer()
         # Every CoreTrainer path yields float metrics; the shared dispatcher is
         # typed for object values so PL can return tensor losses, so cast here.
         return cast(
