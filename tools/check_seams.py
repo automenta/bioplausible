@@ -63,6 +63,10 @@ LOOP_ALLOW: set[str] = {
     "zoo/models/eqprop/eqprop_diffusion.py",  # step 7: KEEP (broken, fixable later)
     "zoo/models/forward_only.py",  # step 6: local greedy loss
     "zoo/models/target_prop.py",  # step 6: local train_step
+    "acceleration/tp_kernels.py",  # step 10: TPKernelBackend.kernel_train_step
+    # mirrors zoo/models/target_prop.py's local DTP rule (output-layer
+    # autograd + inverse-net target propagation), fetched by dispatch_train_step
+    # via the bespoke seam — loss.backward() is part of the local rule.
     "graph/training.py",  # step 4: EXEMPT (bespoke GraphStructure
     # training + Predictive Coding local gradients;
     # does not fit dispatch_train_step seam)

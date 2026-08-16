@@ -220,6 +220,118 @@ class TPKernelBackend:
                 elif param_type == "bias" and layer.bias is not None:
                     layer.bias.add_(grad)
 
+    def kernel_train_step(
+        self,
+        model: torch.nn.Module,
+        config: KernelConfig | None,
+        x: Tensor,
+        y: Tensor,
+        optimizer: object | None = None,
+    ) -> dict[str, object] | None:
+        """Bespoke Difference-Target-Propagation step (REFACTOR7 bespoke seam).
+
+        DTP's dynamics (per-layer output-layer autograd update, target
+        propagation through the trained inverse nets, then forward/inverse
+        net fitting) don't fit the uniform ``forward → backward(acts, error)
+        → update_weights`` contract, so the dispatch seam delegates here when
+        present. It mirrors the reference ``DifferenceTargetProp.train_step``
+        exactly: the output layer is updated first via its own Adam, a
+        difference target ``h - target_lr * dL/dh`` is built from the output
+        layer, then propagated backward through the inverse nets while each
+        forward (and inverse, for cycle consistency) net is fitted with its
+        own Adam.
+
+        Args:
+            model: The bound ``DifferenceTargetProp`` model (``layers``
+                ModuleList of ``DTPLayer`` with ``forward_net``/``inverse_net``
+                Sequentials + per-net ``opt_f``/``opt_g``, plus ``out_layer``,
+                ``out_opt``, ``criterion``, ``target_lr``).
+            config: KernelConfig (kept for seam parity with other bespoke
+                backends; the reference dynamics read the model).
+            x: Input batch.
+            y: Target labels.
+            optimizer: Ignored — DTP owns per-layer optimizers on the model.
+
+        Returns:
+            ``{"loss", "accuracy", "logits"}`` or ``None`` when the model does
+            not expose the DTP surface (caller falls through to ``train_step``).
+        """
+        layers = getattr(model, "layers", None)
+        out_layer = getattr(model, "out_layer", None)
+        if not layers or out_layer is None:
+            return None
+
+        self._forward_layers = [layer.forward_net[0] for layer in layers]
+        self._inverse_layers = [layer.inverse_net[0] for layer in layers]
+
+        out_opt = getattr(model, "out_opt", None)
+        criterion = getattr(model, "criterion", None) or torch.nn.CrossEntropyLoss()
+        target_lr = float(getattr(model, "target_lr", self._target_lr))
+
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
+        x = x.to(device=self._device, dtype=self._dtype)
+        y = y.to(device=self._device)
+
+        hs: list[Tensor] = [x]
+        h = x
+        for layer in layers:
+            h = layer.forward_net(h)
+            hs.append(h)
+        out = out_layer(h)
+
+        loss = criterion(out, y)
+
+        if out_opt is not None:
+            out_opt.zero_grad()
+            loss.backward()
+            out_opt.step()
+
+        t = h.clone().detach().requires_grad_(True)
+        with torch.enable_grad():
+            out_t = out_layer(t)
+            loss_t = criterion(out_t, y)
+            grad_t = torch.autograd.grad(loss_t, t)[0]
+        with torch.no_grad():
+            t_target = h - target_lr * grad_t
+
+        targets: list[Tensor] = [t_target]
+
+        for i in reversed(range(len(layers))):
+            layer = layers[i]
+            if i > 0:
+                h_prev = hs[i].detach()
+                h_curr = hs[i + 1].detach()
+                t_curr = targets[-1]
+                with torch.no_grad():
+                    t_prev = (
+                        h_prev - layer.inverse_net(h_curr) + layer.inverse_net(t_curr)
+                    )
+                    targets.append(t_prev)
+
+            t_curr = targets[-len(targets)]
+            h_prev_det = hs[i].detach()
+            layer.opt_f.zero_grad()
+            pred_h = layer.forward_net(h_prev_det)
+            loss_f = torch.nn.functional.mse_loss(pred_h, t_curr)
+            loss_f.backward()
+
+            if i > 0:
+                layer.opt_g.zero_grad()
+                inv_out = layer.inverse_net(pred_h.detach())
+                loss_g = torch.nn.functional.mse_loss(inv_out, h_prev_det)
+                loss_g.backward()
+                layer.opt_g.step()
+
+            layer.opt_f.step()
+
+        accuracy = (out.argmax(dim=1) == y).float().mean().item()
+        return {
+            "loss": loss.item(),
+            "accuracy": accuracy,
+            "logits": out.detach(),
+        }
+
     def get_memory_stats(self) -> dict[str, float]:
         fwd_params = sum(
             p.numel() for layer in self._forward_layers for p in layer.parameters()

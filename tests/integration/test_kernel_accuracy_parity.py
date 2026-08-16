@@ -24,28 +24,65 @@ def _populate_kernel_registry():
 # Families with registered KernelBackends and models that expose Linear stacks
 # for the generic consumer. Each entry: (model_name, family, model_kwargs)
 KERNEL_FAMILIES = [
-    ("standard_fa", "fa", {
-        "input_dim": 64, "hidden_dim": 64, "output_dim": 10, "num_layers": 2,
-        "use_spectral_norm": False,
-    }),
-    ("backprop_mlp", "backprop", {
-        "input_dim": 64, "hidden_dim": 64, "output_dim": 10, "num_layers": 2,
-    }),
+    (
+        "standard_fa",
+        "fa",
+        {
+            "input_dim": 64,
+            "hidden_dim": 64,
+            "output_dim": 10,
+            "num_layers": 2,
+            "use_spectral_norm": False,
+        },
+    ),
+    (
+        "backprop_mlp",
+        "backprop",
+        {
+            "input_dim": 64,
+            "hidden_dim": 64,
+            "output_dim": 10,
+            "num_layers": 2,
+        },
+    ),
     # PEPITA is the first bespoke-dynamics family consumed through the
     # dispatch seam (``kernel_train_step`` instead of the uniform consumer).
     # It learns in-place at the model's own ``lr`` (forward-only, no optimizer);
     # pass a tuned LR so the parity gate runs a real learning comparison.
-    ("pepita", "pepita", {
-        "input_dim": 64, "hidden_dim": 64, "output_dim": 10, "num_layers": 2,
-        "learning_rate": 0.3,
-    }),
+    (
+        "pepita",
+        "pepita",
+        {
+            "input_dim": 64,
+            "hidden_dim": 64,
+            "output_dim": 10,
+            "num_layers": 2,
+            "learning_rate": 0.3,
+        },
+    ),
+    # Difference Target Propagation is consumed through the same bespoke seam:
+    # ``TPKernelBackend.kernel_train_step`` mirrors the reference DTP dynamics
+    # (output-layer Adam + inverse-net target propagation + per-layer fitting),
+    # so kernel and reference must land on the same accuracy.
+    (
+        "diff_target_prop",
+        "tp",
+        {
+            "input_dim": 64,
+            "hidden_dim": 64,
+            "output_dim": 10,
+            "num_layers": 2,
+            "learning_rate": 1e-3,
+            "target_lr": 0.1,
+        },
+    ),
 ]
 
 # Families that require the reference to use the model's own ``train_step``
 # dynamics (forward-only learners like PEPITA route their updates in-place and
 # never touch the trainer optimizer). The generic ``_train_and_eval`` helper
 # handles them identically via ``_train_step`` → ``dispatch_train_step``.
-BESPOKE_FAMILIES = {"pepita"}
+BESPOKE_FAMILIES = {"pepita", "tp"}
 
 
 def _train_and_eval(
@@ -92,10 +129,14 @@ def test_kernel_accuracy_parity_digits(model_name, family, model_kwargs):
     This is the end-to-end learning parity gate for each kernel backend family.
     """
     ref_acc = _train_and_eval(model_name, model_kwargs, use_kernel=False, seed=42)
-    kernel_acc = _train_and_eval(model_name, model_kwargs, use_kernel=True, kernel_backend="cpu", seed=42)
+    kernel_acc = _train_and_eval(
+        model_name, model_kwargs, use_kernel=True, kernel_backend="cpu", seed=42
+    )
 
     diff = abs(kernel_acc - ref_acc)
-    print(f"\n{model_name} ({family}): ref_acc={ref_acc:.4f}, kernel_acc={kernel_acc:.4f}, diff={diff:.4f}")
+    print(
+        f"\n{model_name} ({family}): ref_acc={ref_acc:.4f}, kernel_acc={kernel_acc:.4f}, diff={diff:.4f}"
+    )
 
     # Allow kernel to be within 1% OR better than reference (kernel can outperform)
     assert diff <= 0.01 or kernel_acc >= ref_acc, (
@@ -107,6 +148,7 @@ def test_kernel_accuracy_parity_digits(model_name, family, model_kwargs):
 # ---------------------------------------------------------------------------
 # Synthetic separable task parity (fast, no data download)
 # ---------------------------------------------------------------------------
+
 
 def _train_synthetic(
     model_name: str,
@@ -163,10 +205,14 @@ def _train_synthetic(
 def test_kernel_accuracy_parity_synthetic(model_name, family, model_kwargs):
     """Fast synthetic-task parity gate (same as test_kernel_dispatch but DRY)."""
     ref_acc = _train_synthetic(model_name, model_kwargs, use_kernel=False, seed=42)
-    kernel_acc = _train_synthetic(model_name, model_kwargs, use_kernel=True, kernel_backend="cpu", seed=42)
+    kernel_acc = _train_synthetic(
+        model_name, model_kwargs, use_kernel=True, kernel_backend="cpu", seed=42
+    )
 
     diff = abs(kernel_acc - ref_acc)
-    print(f"\n{model_name} ({family}) synthetic: ref={ref_acc:.4f}, kernel={kernel_acc:.4f}, diff={diff:.4f}")
+    print(
+        f"\n{model_name} ({family}) synthetic: ref={ref_acc:.4f}, kernel={kernel_acc:.4f}, diff={diff:.4f}"
+    )
 
     # Allow kernel to be within 1% OR better than reference
     assert diff <= 0.01 or kernel_acc >= ref_acc, (

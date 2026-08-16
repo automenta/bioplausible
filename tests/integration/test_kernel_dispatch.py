@@ -426,3 +426,114 @@ def test_kernel_pepita_learns():
     assert acc >= 0.3, (
         f"kernel-driven PEPITA reached only {acc:.3f} accuracy (chance=0.1)"
     )
+
+
+def test_tp_kernel_train_step_consumed():
+    """The ``TPKernelBackend`` bespoke step is driven through the dispatch
+    seam for ``diff_target_prop``.
+
+    Target Propagation is a layerwise learner whose per-layer optimizers and
+    inverse-net target propagation can't fit the uniform forward/backward
+    contract, so its backend exposes ``kernel_train_step`` mirroring the
+    reference DTP dynamics, and the dispatcher prefers it.
+    """
+    import torch
+
+    config = TrainerConfig(
+        model="diff_target_prop",
+        task="digits",
+        model_kwargs={
+            "input_dim": 64,
+            "hidden_dim": 16,
+            "output_dim": 10,
+            "num_layers": 2,
+            "learning_rate": 1e-3,
+            "target_lr": 0.1,
+        },
+        epochs=1,
+        use_kernel=True,
+        kernel_backend="cpu",
+        track_energy=False,
+    )
+    trainer = CoreTrainer(config)
+    trainer.setup()
+    backend = getattr(trainer.model, "_kernel_backend", None)
+    assert backend is not None
+    assert hasattr(backend, "kernel_train_step")
+
+    # diff_target_prop owns per-layer optimizers; grab a sampled first-layer
+    # forward weight before / after the step.
+    layer0 = trainer.model.layers[0]
+    before = [p.data.clone() for p in layer0.forward_net.parameters()]
+    x = torch.randn(8, 64)
+    y = torch.randint(0, 10, (8,))
+    metrics = trainer._train_step(x, y)
+    assert "loss" in metrics
+    assert torch.isfinite(torch.tensor(metrics["loss"]))
+
+    after = [p.data.clone() for p in layer0.forward_net.parameters()]
+    assert any(not torch.equal(b, a) for b, a in zip(before, after)), (
+        "TP kernel_train_step did not update the model weights"
+    )
+    assert trainer._training_path_counts.get("kernel", 0) >= 1
+
+
+def test_kernel_tp_learns():
+    """Kernel-driven Difference Target Propagation learns on a separable task.
+
+    ``diff_target_prop`` is consumed through the bespoke ``kernel_train_step``
+    seam (which mirrors the reference DTP target-propagation dynamics). Its
+    accuracy must rise above chance, and stay within 1% of the reference path.
+    """
+    import torch
+
+    torch.manual_seed(7)
+    n, dim, classes = 400, 64, 10
+    x = torch.randn(n, dim)
+    y = torch.randint(0, classes, (n,))
+    for c in range(classes):
+        mask = y == c
+        if mask.any():
+            direction = torch.randn(dim)
+            direction = direction / direction.norm() * 2.0
+            x[mask] += direction * 0.8
+
+    def _final_acc(use_kernel: bool) -> float:
+        cfg = TrainerConfig(
+            model="diff_target_prop",
+            task="digits",
+            model_kwargs={
+                "input_dim": dim,
+                "hidden_dim": 64,
+                "output_dim": classes,
+                "num_layers": 2,
+                "learning_rate": 1e-3,
+                "target_lr": 0.1,
+            },
+            epochs=1,
+            use_kernel=use_kernel,
+            kernel_backend="cpu",
+            track_energy=False,
+        )
+        trainer = CoreTrainer(cfg)
+        trainer.setup()
+        dev = next(trainer.model.parameters()).device
+        xd, yd = x.to(dev), y.to(dev)
+        for _ in range(6):
+            perm = torch.randperm(n)
+            for i in range(0, n, 32):
+                idx = perm[i : i + 32]
+                trainer._train_step(xd[idx], yd[idx])
+        trainer.model.eval()
+        with torch.no_grad():
+            return (trainer.model(xd).argmax(1) == yd).float().mean().item()
+
+    kernel_acc = _final_acc(True)
+    ref_acc = _final_acc(False)
+    assert abs(kernel_acc - ref_acc) <= 0.01, (
+        f"TP kernel acc={kernel_acc:.3f} vs reference acc={ref_acc:.3f} "
+        f"drifted beyond 1% parity"
+    )
+    assert kernel_acc >= 0.2, (
+        f"kernel-driven TP reached only {kernel_acc:.3f} accuracy (chance=0.1)"
+    )
