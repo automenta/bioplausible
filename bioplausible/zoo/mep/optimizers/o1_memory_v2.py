@@ -16,6 +16,8 @@ Created: 2026-02-18 (v2: 2026-02-25)
 Refactored: 2026-07-28 to use TransitionGraph protocol (transition_modules())
 """
 
+from typing import Literal
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -466,6 +468,7 @@ class O1MemoryEPv2:
         settle_lr: float = 0.15,
         beta: float = 0.5,
         loss_type: str = "cross_entropy",
+        backend: Literal["pytorch", "triton"] = "pytorch",
     ):
         self.params = list(params)
         self.model = model
@@ -476,6 +479,7 @@ class O1MemoryEPv2:
         self.settle_lr = settle_lr
         self.beta = beta
         self.loss_type = loss_type
+        self.backend = backend
 
         # Get transition modules directly from model (TransitionGraph protocol)
         if not hasattr(model, "transition_modules"):

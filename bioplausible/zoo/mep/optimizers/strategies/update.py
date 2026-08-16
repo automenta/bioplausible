@@ -7,11 +7,12 @@ subclass adds the CUDA Newton-Schulz fast path. Dion (low-rank SVD) and
 Fisher-whitened updates remain MEP-specific.
 """
 
-from typing import cast
+from typing import Literal, cast
 
 import torch
 from torch import nn
 
+from bioplausible.acceleration.triton_kernels import MEP_TritonOps
 from bioplausible.core.optimization.strategies import (
     MuonUpdate as _CoreMuonUpdate,
 )
@@ -25,6 +26,8 @@ __all__ = [
     "MuonUpdate",
     "PlainUpdate",
 ]
+
+type Backend = Literal["pytorch", "triton"]
 try:
     from ...cuda.kernels import dion_update_cuda, newton_schulz_cuda
 
@@ -34,14 +37,19 @@ except ImportError:
 
 
 class MuonUpdate(_CoreMuonUpdate):
-    """Newton-Schulz orthogonalization with the MEP CUDA fast path."""
+    """Newton-Schulz orthogonalization with the MEP CUDA/Triton fast path."""
 
-    def __init__(self, ns_steps: int = 5):
+    def __init__(self, ns_steps: int = 5, backend: Backend = "pytorch"):
         super().__init__(ns_steps=ns_steps)
+        self.backend = backend
 
     def _newton_schulz(
         self, G: torch.Tensor, steps: int, epsilon: float = 1e-4
     ) -> torch.Tensor:
+        if self.backend == "triton":
+            return cast(
+                "torch.Tensor", MEP_TritonOps.muon_orthogonalize(G, ns_steps=steps)
+            )
         if CUDA_AVAILABLE and G.is_cuda:
             return cast(
                 "torch.Tensor", newton_schulz_cuda(G, steps=steps, epsilon=epsilon)
@@ -65,10 +73,27 @@ class DionUpdate:
         rank_frac: float = 0.2,
         threshold: int = 100000,
         muon_fallback: MuonUpdate | None = None,
+        backend: Backend = "pytorch",
     ):
         self.rank_frac = rank_frac
         self.threshold = threshold
-        self.muon_fallback = muon_fallback or MuonUpdate()
+        self.backend = backend
+        self.muon_fallback = muon_fallback or MuonUpdate(backend=backend)
+
+    @staticmethod
+    def _apply_error_feedback(
+        gradient: torch.Tensor,
+        update: torch.Tensor,
+        state: dict,
+        group_config: dict,
+    ) -> None:
+        if not group_config.get("use_error_feedback", True):
+            return
+        residual = gradient - update
+        error_beta = group_config.get("error_beta", 0.9)
+        if "error_buffer" not in state:
+            state["error_buffer"] = torch.zeros_like(residual)
+        state["error_buffer"].mul_(error_beta).add_(residual)
 
     def transform_gradient(
         self,
@@ -104,7 +129,10 @@ class DionUpdate:
                 gradient = gradient * (max_norm / (grad_norm + 1e-8))
 
             # Low-rank SVD
-            if CUDA_AVAILABLE and gradient.is_cuda:
+            if self.backend == "triton":
+                update = MEP_TritonOps.dion_update(gradient, rank=rank)
+                self._apply_error_feedback(gradient, update, state, group_config)
+            elif CUDA_AVAILABLE and gradient.is_cuda:
                 error_buf = state.get("error_buffer")
                 error_beta = group_config.get("error_beta", 0.9)
                 use_feedback = group_config.get("use_error_feedback", True)
@@ -123,13 +151,7 @@ class DionUpdate:
                 U, S, V = torch.svd_lowrank(gradient, q=rank)
                 update = U @ V.T
 
-                # Error feedback on CPU
-                if group_config.get("use_error_feedback", True):
-                    residual = gradient - update
-                    error_beta = group_config.get("error_beta", 0.9)
-                    if "error_buffer" not in state:
-                        state["error_buffer"] = torch.zeros_like(residual)
-                    state["error_buffer"].mul_(error_beta).add_(residual)
+                self._apply_error_feedback(gradient, update, state, group_config)
 
             if orig_shape is not None:
                 update = update.view(orig_shape)
@@ -159,12 +181,14 @@ class FisherUpdate:
         ns_steps: int = 5,
         use_diagonal: bool = False,
         beta: float = 0.95,
+        backend: Backend = "pytorch",
     ):
         self.damping = damping
         self.ns_steps = ns_steps
         self.use_diagonal = use_diagonal
         self.beta = beta
-        self.muon = MuonUpdate(ns_steps=ns_steps)
+        self.backend = backend
+        self.muon = MuonUpdate(ns_steps=ns_steps, backend=backend)
 
     def transform_gradient(
         self,

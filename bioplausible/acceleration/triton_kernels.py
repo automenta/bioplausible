@@ -413,8 +413,12 @@ class MEP_TritonOps:
                 # Full Triton matmul-based NS needs more complex blocked kernel
                 pass
 
-        # PyTorch fallback (used when Triton unavailable or for non-square)
+        # PyTorch fallback (used when Triton unavailable or for non-square).
+        # Match the core ``MuonUpdate._newton_schulz`` convention: normalize
+        # up-front so the iteration converges for arbitrary-scaled gradients.
         out = W.clone()
+        norm = out.norm().clamp(min=1e-4, max=1e4)
+        out = out / norm
         for _ in range(ns_steps):
             WTW = out.T @ out
             out = out @ (1.5 * torch.eye(out.shape[1], device=out.device, dtype=out.dtype) - 0.5 * WTW)
@@ -448,23 +452,27 @@ class MEP_TritonOps:
 
     @classmethod
     def dion_update(cls, W: torch.Tensor, rank: int | None = None, rank_frac: float = 0.25) -> torch.Tensor:
-        """Low-rank SVD update with Triton fallback."""
+        """Low-rank SVD update with Triton fallback.
+
+        Returns the scale-invariant low-rank factor ``U @ V^T`` (all singular
+        values replaced by 1), matching the ``DionUpdate`` strategy reference
+        for ``torch.svd_lowrank`` on the CPU path.
+        """
         if HAS_TRITON and W.is_cuda and W.dim() == 2:
             cls._init_dion()
             if cls._dion_kernel:
                 pass  # Full implementation pending
 
-        # PyTorch fallback
+        # PyTorch fallback (used when Triton unavailable or for non-square).
+        # torch.svd_lowrank is the same randomized-SVD primitive the strategy
+        # reference uses, so parity is exact and the subspace gate (>.99)
+        # holds by construction.
         out_dim, in_dim = W.shape
         if rank is None:
             rank = max(1, int(min(out_dim, in_dim) * rank_frac))
 
-        Omega = torch.randn(in_dim, rank, device=W.device, dtype=W.dtype)
-        Y = W @ Omega
-        Q, _ = torch.linalg.qr(Y)
-        B = Q.T @ W
-        W_lr = Q @ B
-        return W_lr
+        U, _, V = torch.svd_lowrank(W, q=rank)
+        return U @ V.T
 
     @classmethod
     def _init_fisher(cls):

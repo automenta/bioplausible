@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 import torch
 from torch import nn
 
@@ -17,7 +18,16 @@ from bioplausible.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
+    KernelRegistry,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_kernel_cache():
+    """Clear kernel registry cache between tests to avoid state pollution."""
+    KernelRegistry.clear_cache()
+    yield
+    KernelRegistry.clear_cache()
 
 
 def _bound_backprop(tmp_path) -> object:

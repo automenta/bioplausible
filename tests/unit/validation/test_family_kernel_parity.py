@@ -35,6 +35,14 @@ def _populate_kernel_registry():
     get_algorithm_kernels()
     yield
 
+@pytest.fixture(autouse=True)
+def _clear_kernel_cache():
+    """Clear kernel registry cache between tests to avoid state pollution."""
+    from bioplausible.acceleration.kernel_backend import KernelRegistry
+    KernelRegistry.clear_cache()
+    yield
+    KernelRegistry.clear_cache()
+
 
 def _linear_stack(dims: tuple[int, ...], seed: int = 0) -> list[nn.Linear]:
     """A fresh stack of ``nn.Linear`` layers with fixed init."""

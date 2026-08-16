@@ -22,6 +22,15 @@ from bioplausible.acceleration import (
     infer_algorithm_family,
     stdp_update,
 )
+from bioplausible.acceleration.kernel_backend import KernelRegistry as _KernelRegistry
+
+
+@pytest.fixture(autouse=True)
+def _clear_kernel_cache():
+    """Clear kernel registry cache between tests to avoid state pollution."""
+    _KernelRegistry.clear_cache()
+    yield
+    _KernelRegistry.clear_cache()
 
 
 class TestKernelConfig:

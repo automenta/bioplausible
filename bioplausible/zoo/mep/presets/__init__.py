@@ -35,6 +35,9 @@ from bioplausible.zoo.mep.optimizers import (
     NoFeedback,
     SpectralConstraint,
 )
+from bioplausible.zoo.mep.optimizers.strategies.update import (
+    Backend,  # ruff: ignore[typing-only-first-party-import]  # annotation name resolved at runtime (no future-annotations import)
+)
 
 
 def smep(
@@ -54,6 +57,7 @@ def smep(
     use_error_feedback: bool = False,  # Disabled by default - only for Dion/CL
     loss_type: str = "mse",  # MSE for stable EP energy
     softmax_temperature: float = 1.0,
+    backend: Backend = "pytorch",
     **kwargs: object,
 ) -> CompositeOptimizerAdapter:
     """
@@ -92,6 +96,8 @@ def smep(
         use_error_feedback: Enable error feedback (for Dion/CL only).
         loss_type: 'mse' or 'cross_entropy'.
         softmax_temperature: Temperature for softmax in classification.
+        backend: Update-strategy compute backend. "pytorch" (default, safe) or
+            "triton" (opt-in; routed through ``MEP_TritonOps`` kernels).
 
     Returns:
         Configured CompositeOptimizer.
@@ -111,7 +117,7 @@ def smep(
         gradient = BackpropGradient()
 
     # Update strategy
-    update = MuonUpdate(ns_steps=ns_steps)
+    update = MuonUpdate(ns_steps=ns_steps, backend=backend)
 
     # Constraint strategy
     constraint = SpectralConstraint(
@@ -156,6 +162,7 @@ def sdmep(
     use_error_feedback: bool = True,  # Enabled for Dion (recovers lost info)
     loss_type: str = "cross_entropy",
     softmax_temperature: float = 1.0,
+    backend: Backend = "pytorch",
     **kwargs: object,
 ) -> CompositeOptimizerAdapter:
     """
@@ -185,6 +192,8 @@ def sdmep(
         error_beta: Error feedback decay.
         use_error_feedback: Enable error feedback for Dion (default: True).
         loss_type: 'mse' or 'cross_entropy'.
+        backend: Update-strategy compute backend. "pytorch" (default, safe) or
+            "triton" (opt-in; routed through ``MEP_TritonOps`` kernels).
 
     Returns:
         Configured CompositeOptimizer.
@@ -199,7 +208,8 @@ def sdmep(
     update = DionUpdate(
         rank_frac=rank_frac,
         threshold=dion_thresh,
-        muon_fallback=MuonUpdate(ns_steps=ns_steps),
+        muon_fallback=MuonUpdate(ns_steps=ns_steps, backend=backend),
+        backend=backend,
     )
 
     constraint = SpectralConstraint(gamma=gamma)
@@ -234,6 +244,7 @@ def local_ep(
     settle_lr: float = 0.05,
     gamma: float = 0.95,
     loss_type: str = "mse",
+    backend: Backend = "pytorch",
     **kwargs: object,
 ) -> CompositeOptimizerAdapter:
     """
@@ -252,6 +263,8 @@ def local_ep(
         settle_steps: EP settling iterations.
         settle_lr: Settling learning rate.
         gamma: Spectral norm bound.
+        backend: Update-strategy compute backend. "pytorch" (default, safe) or
+            "triton" (opt-in; routed through ``MEP_TritonOps`` kernels).
         loss_type: 'mse' or 'cross_entropy'.
 
     Returns:
@@ -264,7 +277,7 @@ def local_ep(
         loss_type=loss_type,
     )
 
-    update = MuonUpdate(ns_steps=ns_steps)
+    update = MuonUpdate(ns_steps=ns_steps, backend=backend)
     constraint = SpectralConstraint(gamma=gamma)
     feedback = NoFeedback()  # Local EP doesn't use error feedback
 
@@ -299,6 +312,7 @@ def natural_ep(
     fisher_damping: float = 1e-3,
     use_diagonal_fisher: bool = False,
     loss_type: str = "mse",
+    backend: Backend = "pytorch",
     **kwargs: object,
 ) -> CompositeOptimizerAdapter:
     """
@@ -321,6 +335,8 @@ def natural_ep(
         fisher_damping: Damping for Fisher matrix inversion.
         use_diagonal_fisher: Use diagonal Fisher approximation.
         loss_type: 'mse' or 'cross_entropy'.
+        backend: Update-strategy compute backend. "pytorch" (default, safe) or
+            "triton" (opt-in; routed through ``MEP_TritonOps`` kernels).
 
     Returns:
         Configured CompositeOptimizer.
@@ -342,6 +358,7 @@ def natural_ep(
         damping=fisher_damping,
         ns_steps=ns_steps,
         use_diagonal=use_diagonal_fisher,
+        backend=backend,
     )
 
     constraint = SpectralConstraint(gamma=gamma)
@@ -371,6 +388,7 @@ def muon_backprop(
     ns_steps: int = 5,
     gamma: float = 0.95,
     use_spectral: bool = True,
+    backend: Backend = "pytorch",
     **kwargs: object,
 ) -> CompositeOptimizer:
     """
@@ -383,6 +401,8 @@ def muon_backprop(
         lr: Learning rate.
         momentum: Momentum factor.
         weight_decay: Weight decay.
+        backend: Update-strategy compute backend. "pytorch" (default, safe) or
+            "triton" (opt-in; routed through ``MEP_TritonOps`` kernels).
         ns_steps: Newton-Schulz iterations.
         gamma: Spectral norm bound.
         use_spectral: Enable spectral constraints.
@@ -391,7 +411,7 @@ def muon_backprop(
         Configured CompositeOptimizer.
     """
     gradient = BackpropGradient()
-    update = MuonUpdate(ns_steps=ns_steps)
+    update = MuonUpdate(ns_steps=ns_steps, backend=backend)
     constraint = SpectralConstraint(gamma=gamma) if use_spectral else NoConstraint()
     feedback = NoFeedback()
 
@@ -424,6 +444,7 @@ def smep_fast(
     use_error_feedback: bool = False,
     loss_type: str = "mse",
     softmax_temperature: float = 1.0,
+    backend: Backend = "pytorch",
     **kwargs: object,
 ) -> CompositeOptimizerAdapter:
     """
@@ -454,6 +475,8 @@ def smep_fast(
         use_error_feedback: Enable error feedback.
         loss_type: 'mse' or 'cross_entropy'.
         softmax_temperature: Temperature for softmax.
+        backend: Update-strategy compute backend. "pytorch" (default, safe) or
+            "triton" (opt-in; routed through ``MEP_TritonOps`` kernels).
 
     Returns:
         Configured CompositeOptimizer.
@@ -466,7 +489,7 @@ def smep_fast(
         softmax_temperature=softmax_temperature,
     )
 
-    update = MuonUpdate(ns_steps=ns_steps)
+    update = MuonUpdate(ns_steps=ns_steps, backend=backend)
     constraint = SpectralConstraint(gamma=gamma, timing=spectral_timing)
     feedback = ErrorFeedback(beta=error_beta) if use_error_feedback else NoFeedback()
 
