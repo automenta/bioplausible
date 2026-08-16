@@ -184,3 +184,98 @@ def test_kernel_backend_matches_reference_learning():
         f"kernel acc={kernel_acc:.3f} vs reference acc={ref_acc:.3f} "
         f"drifted beyond 1% parity"
     )
+
+
+def test_backprop_kernel_consumed_in_train_step():
+    """The generalized consumer binds ``backprop_mlp``'s ``.net`` Linear stack
+    and drives it through the attached Backprop kernel (REFACTOR7 Phase 10).
+
+    ``backprop_mlp`` has no ``.layers`` attribute — its stack lives on
+    ``.net`` — so this guards the consumer's generic ``_resolve_kernel_layers``
+    fallback (uniform backends are now consumable beyond ``standard_fa``).
+    """
+    import torch
+
+    config = TrainerConfig(
+        model="backprop_mlp",
+        task="digits",
+        model_kwargs={
+            "input_dim": 64,
+            "hidden_dim": 16,
+            "output_dim": 10,
+            "num_layers": 2,
+        },
+        epochs=1,
+        use_kernel=True,
+        kernel_backend="cpu",
+        track_energy=False,
+    )
+    trainer = CoreTrainer(config)
+    trainer.setup()
+    backend = getattr(trainer.model, "_kernel_backend", None)
+    assert backend is not None
+
+    before = [p.clone() for p in trainer.model.net[0].parameters()]
+    x = torch.randn(8, 64)
+    y = torch.randint(0, 10, (8,))
+    metrics = trainer._train_step(x, y)
+    assert "loss" in metrics
+    assert torch.isfinite(torch.tensor(metrics["loss"]))
+
+    after = list(trainer.model.net[0].parameters())
+    assert any(not torch.equal(b, a) for b, a in zip(before, after)), (
+        "backprop kernel train step did not update the model weights"
+    )
+    assert trainer._training_path_counts.get("kernel", 0) >= 1
+
+
+def test_backprop_kernel_learns():
+    """The kernel-driven backprop path genuinely learns on a separable task.
+
+    ``backprop_mlp`` is trained through ``_train_step`` with ``use_kernel=True``
+    (the generic consumer routes the Backprop kernel's exact BPTT gradients
+    into the model's weights). Accuracy must rise well above chance, proving
+    the uniform-interface consumer is a real learning path for a second family.
+    """
+    import torch
+
+    torch.manual_seed(7)
+    n, dim, classes = 400, 64, 10
+    x = torch.randn(n, dim)
+    y = torch.randint(0, classes, (n,))
+    for c in range(classes):
+        mask = y == c
+        if mask.any():
+            direction = torch.randn(dim)
+            direction = direction / direction.norm() * 2.0
+            x[mask] += direction * 0.8
+
+    cfg = TrainerConfig(
+        model="backprop_mlp",
+        task="digits",
+        model_kwargs={
+            "input_dim": dim,
+            "hidden_dim": 64,
+            "output_dim": classes,
+            "num_layers": 2,
+        },
+        epochs=1,
+        use_kernel=True,
+        kernel_backend="cpu",
+        track_energy=False,
+    )
+    trainer = CoreTrainer(cfg)
+    trainer.setup()
+    dev = next(trainer.model.parameters()).device
+    xd, yd = x.to(dev), y.to(dev)
+    for _ in range(8):
+        perm = torch.randperm(n)
+        for i in range(0, n, 32):
+            idx = perm[i : i + 32]
+            trainer._train_step(xd[idx], yd[idx])
+    trainer.model.eval()
+    with torch.no_grad():
+        acc = (trainer.model(xd).argmax(1) == yd).float().mean().item()
+    assert acc >= 0.2, (
+        f"kernel-driven backprop reached only {acc:.3f} accuracy (chance=0.1)"
+    )

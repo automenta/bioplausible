@@ -364,11 +364,11 @@ def _run_kernel_train_step(
 
     # The generic consumer only binds to a plain nn.Linear layer stack; more
     # exotic stacks (conv / feedback-alignment / eqprop) keep their own
-    # train_step and are never routed here.
-    layers = getattr(model, "layers", None)
-    if not isinstance(layers, (list, torch.nn.ModuleList)) or not layers:
-        return None
-    if not all(isinstance(l, torch.nn.Linear) for l in layers):
+    # train_step and are never routed here. The stack is resolved generically
+    # so any model exposing its Linear layers (via ``.layers``, ``.net``, or
+    # ``transition_modules()``) can be driven by a uniform-interface backend.
+    layers = _resolve_kernel_layers(model)
+    if not layers:
         return None
 
     set_ref = getattr(backend, "set_model_ref", None)
@@ -382,6 +382,16 @@ def _run_kernel_train_step(
         except TypeError:
             return None
 
+        # Keep the backend's internal activation aligned with the model's so
+        # its recomputed forward matches the model's dynamics (matters when
+        # the stack came from ``.net`` / ``transition_modules()`` where the
+        # activation lives between the Linear layers, not on ``model.activation``).
+        model_activation = _resolve_model_activation(model)
+        if model_activation is not None and isinstance(
+            getattr(backend, "_activation", None), torch.nn.Module
+        ):
+            setattr(backend, "_activation", model_activation)
+
     # FA-family: the backend's fixed random feedback matrix must be shared with
     # the model's own ``feedback_weights`` (the reference trains against those).
     # Without this, the kernel uses an independent B and drifts off-parity.
@@ -392,10 +402,12 @@ def _run_kernel_train_step(
 
     try:
         output, activations = forward(x)
-    except (TypeError, ValueError, RuntimeError):
+    except TypeError, ValueError, RuntimeError:
         return None
 
     output_dim = getattr(getattr(model, "config", None), "output_dim", None)
+    if output_dim is None and output.dim() >= 2:
+        output_dim = output.shape[1]
     if output_dim is None:
         return None
     import torch.nn.functional as _F
@@ -428,11 +440,22 @@ def _run_kernel_train_step(
 
     loss = _F.cross_entropy(output, y)
     accuracy = (output.argmax(dim=1) == y).float().mean().item()
-    return {
+    metrics: dict[str, object] = {
         "loss": loss.item(),
         "accuracy": accuracy,
         "logits": output,
     }
+
+    # Surface the backend's settle-loop telemetry (REFACTOR7 Phase 12 seam):
+    # settling backends record a ``get_settle_telemetry()`` dict during their
+    # forward pass; uniform-interface backends return None and stay clean.
+    get_telemetry = getattr(backend, "get_settle_telemetry", None)
+    if get_telemetry is not None:
+        telemetry = get_telemetry()
+        if telemetry:
+            metrics["extra"] = {"settle_telemetry": telemetry}
+
+    return metrics
 
 
 def lr_for(model: nn.Module) -> float:
@@ -453,8 +476,80 @@ def _set_ref_accepts_two(set_ref: Callable[..., object]) -> bool:
 
     try:
         return len(inspect.signature(set_ref).parameters) >= 2
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return True
+
+
+def _resolve_kernel_layers(model: nn.Module) -> list[torch.nn.Linear] | None:
+    """Resolve the model's forward-order Linear stack for a kernel backend.
+
+    Tries, in order: ``model.layers`` (a ``list``/``ModuleList`` of ``nn.Linear``),
+    ``model.net`` (an ``nn.Sequential``, filtered to its Linear members), then
+    ``transition_modules()`` when it yields an all-Linear stack. Returns ``None``
+    when no such stack exists, so non-uniform models fall through to their own
+    ``train_step``.
+    """
+    layers = getattr(model, "layers", None)
+    if (
+        isinstance(layers, (list, torch.nn.ModuleList))
+        and layers
+        and all(isinstance(layer, torch.nn.Linear) for layer in layers)
+    ):
+        linear_stack: list[torch.nn.Linear] = []
+        for layer in layers:
+            if isinstance(layer, torch.nn.Linear):
+                linear_stack.append(layer)
+        return linear_stack
+
+    net = getattr(model, "net", None)
+    if isinstance(net, torch.nn.Sequential):
+        linear_stack = []
+        for module in net:
+            if isinstance(module, torch.nn.Linear):
+                linear_stack.append(module)
+        if linear_stack:
+            return linear_stack
+
+    transition = getattr(model, "transition_modules", None)
+    if transition is not None:
+        try:
+            stack = transition()
+        except TypeError, ValueError:
+            return None
+        if stack and all(isinstance(m, torch.nn.Linear) for m in stack):
+            linear_stack = []
+            for module in stack:
+                if isinstance(module, torch.nn.Linear):
+                    linear_stack.append(module)
+            return linear_stack
+
+    return None
+
+
+def _resolve_model_activation(model: nn.Module) -> torch.nn.Module | None:
+    """Resolve the model's inter-layer activation module, if unambiguous."""
+    activation = getattr(model, "activation", None)
+    if isinstance(activation, torch.nn.Module):
+        return activation
+
+    net = getattr(model, "net", None)
+    if isinstance(net, torch.nn.Sequential):
+        found: torch.nn.Module | None = None
+        for m in net:
+            if isinstance(m, torch.nn.Module) and type(m).__name__ in {
+                "ReLU",
+                "Tanh",
+                "SiLU",
+                "GELU",
+                "Sigmoid",
+                "LeakyReLU",
+            }:
+                if found is not None and type(m) is not type(found):
+                    return None
+                found = m
+        return found
+
+    return None
 
 
 def dispatch_train_step(

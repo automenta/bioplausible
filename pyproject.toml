@@ -132,6 +132,7 @@ biopl-repro-check = "bioplausible.cli.repro:main"
 biopl-parity = "bioplausible.cli.parity:main"
 biopl-frontier = "bioplausible.cli.frontier:main"
 biopl-failure-manifesto = "bioplausible.analysis.failure_manifesto:main"
+biopl-export-kernel = "bioplausible.cli.export_kernel:main"
 
 [dependency-groups]
 dev = [
