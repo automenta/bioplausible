@@ -42,6 +42,7 @@ class MEPKernelBackend:
         self._gamma: float = 1.0
         self._settle_steps: int = 30
         self._settle_lr: float = 0.1
+        self._lr: float = 0.01
         self._device: torch.device = torch.device("cpu")
         self._dtype: torch.dtype = torch.float32
         self._last_settle_telemetry: dict[str, object] | None = None
@@ -64,6 +65,7 @@ class MEPKernelBackend:
         self._gamma = config.gamma
         self._settle_steps = config.settle_steps or extra.get("settle_steps", 30)
         self._settle_lr = extra.get("settle_lr", 0.1)
+        self._lr = extra.get("learning_rate", 0.01)
 
     def set_model_ref(self, transition_modules: list[torch.nn.Module]) -> None:
         self._transition_modules = transition_modules

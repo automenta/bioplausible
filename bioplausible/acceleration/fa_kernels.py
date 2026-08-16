@@ -79,11 +79,29 @@ class FAKernelBackend:
     def set_model_ref(
         self,
         layers: list[torch.nn.Linear],
-        activation: torch.nn.Module,
+        activation: torch.nn.Module | None = None,
     ) -> None:
-        """Set reference to model layers for weight updates."""
+        """Set reference to model layers for weight updates.
+
+        Feedback weights are (re)built from the bound layers' actual shapes so
+        the backend stays consistent with the real model depth regardless of
+        the ``num_layers`` hint in the kernel config. They are built **once**
+        (only when empty) — FA's feedback weights are fixed across steps, so a
+        per-step rebuild would inject fresh randomness into every update.
+        """
         self._layers = layers
-        self._activation = activation
+        if activation is not None:
+            self._activation = activation
+        if self._layers and not self._feedback_weights:
+            device = self._layers[0].weight.device
+            dtype = self._layers[0].weight.dtype
+            self._feedback_weights = [
+                torch.randn(
+                    layer.out_features, layer.in_features, device=device, dtype=dtype
+                )
+                * 0.1
+                for layer in self._layers
+            ]
 
     def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         """Forward pass returning output and per-layer activations.

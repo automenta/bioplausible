@@ -336,6 +336,127 @@ def _default_bptt_step(
     return _step
 
 
+def _run_kernel_train_step(
+    model: nn.Module,
+    backend: object,
+    config: TrainerConfig,
+    x: torch.Tensor,
+    y: torch.Tensor,
+) -> dict[str, object] | None:
+    """Run one train step through an attached uniform ``KernelBackend``.
+
+    Applies the reference forward / error / backward / update_weights loop to
+    backends that expose the uniform interface (``forward`` returning
+    ``(output, activations)``, ``backward(activations, error)`` returning a
+    ``{param: grad}`` dict, and ``update_weights(grads, lr)``). The backend is
+    bound to the model's layer stack via ``set_model_ref`` so weight updates
+    mutate the live model parameters.
+
+    Returns ``None`` when the backend does not conform (caller falls through
+    to the model's own ``train_step``), so non-uniform families are never
+    disrupted.
+    """
+    forward = getattr(backend, "forward", None)
+    backward = getattr(backend, "backward", None)
+    update_weights = getattr(backend, "update_weights", None)
+    if not all((forward, backward, update_weights)):
+        return None
+
+    # The generic consumer only binds to a plain nn.Linear layer stack; more
+    # exotic stacks (conv / feedback-alignment / eqprop) keep their own
+    # train_step and are never routed here.
+    layers = getattr(model, "layers", None)
+    if not isinstance(layers, (list, torch.nn.ModuleList)) or not layers:
+        return None
+    if not all(isinstance(l, torch.nn.Linear) for l in layers):
+        return None
+
+    set_ref = getattr(backend, "set_model_ref", None)
+    if set_ref is not None:
+        activation = getattr(model, "activation", None)
+        try:
+            if activation is not None and _set_ref_accepts_two(set_ref):
+                set_ref(layers, activation)
+            else:
+                set_ref(layers)
+        except TypeError:
+            return None
+
+    # FA-family: the backend's fixed random feedback matrix must be shared with
+    # the model's own ``feedback_weights`` (the reference trains against those).
+    # Without this, the kernel uses an independent B and drifts off-parity.
+    model_fb = getattr(model, "feedback_weights", None)
+    backend_fb = getattr(backend, "_feedback_weights", None)
+    if model_fb is not None and backend_fb is not None:
+        backend_fb[:] = list(model_fb)
+
+    try:
+        output, activations = forward(x)
+    except (TypeError, ValueError, RuntimeError):
+        return None
+
+    output_dim = getattr(getattr(model, "config", None), "output_dim", None)
+    if output_dim is None:
+        return None
+    import torch.nn.functional as _F
+
+    y = y.to(output.device)
+    error = output - _F.one_hot(y, output_dim).float()
+    grads = backward(activations, error)
+
+    # Route the kernel-computed gradients through the model's optimizer when
+    # available (matching the reference PyTorch training dynamics: set .grad,
+    # then optimizer.step). Falls back to backend.update_weights otherwise.
+    optimizer = getattr(model, "optimizer", None)
+    if optimizer is not None and hasattr(optimizer, "step"):
+        name_to_param = dict(model.named_parameters())
+        mapped = {
+            name: grad
+            for name, grad in grads.items()
+            if name in name_to_param and grad.shape == name_to_param[name].shape
+        }
+        if mapped:
+            optimizer.zero_grad()
+            with torch.no_grad():
+                for name, grad in mapped.items():
+                    name_to_param[name].grad = grad.to(name_to_param[name].device)
+            optimizer.step()
+        else:
+            update_weights(grads, lr_for(model))
+    else:
+        update_weights(grads, lr_for(model))
+
+    loss = _F.cross_entropy(output, y)
+    accuracy = (output.argmax(dim=1) == y).float().mean().item()
+    return {
+        "loss": loss.item(),
+        "accuracy": accuracy,
+        "logits": output,
+    }
+
+
+def lr_for(model: nn.Module) -> float:
+    """Resolve the effective learning rate from a model's config or optimizer."""
+    cfg_lr = getattr(getattr(model, "config", None), "learning_rate", None)
+    if cfg_lr is not None:
+        return float(cfg_lr)
+    optimizer = getattr(model, "optimizer", None)
+    if optimizer is not None:
+        for group in optimizer.param_groups:
+            return float(group.get("lr", 0.01))
+    return 0.01
+
+
+def _set_ref_accepts_two(set_ref: Callable[..., object]) -> bool:
+    """Check whether ``set_model_ref`` takes a second (activation) argument."""
+    import inspect
+
+    try:
+        return len(inspect.signature(set_ref).parameters) >= 2
+    except (TypeError, ValueError):
+        return True
+
+
 def dispatch_train_step(
     model: nn.Module,
     x: torch.Tensor,
@@ -368,14 +489,18 @@ def dispatch_train_step(
         if record_path is not None:
             record_path(path)
 
-    # Kernel backend path (REFACTOR7) - checked before model train_step
-    if hasattr(model, "_kernel_backend") and model._kernel_backend is not None:
+    # Kernel backend path (REFACTOR7) - consumes the attached backend directly
+    if (
+        config is not None
+        and hasattr(model, "_kernel_backend")
+        and model._kernel_backend is not None
+    ):
         _record("kernel")
-        backend = model._kernel_backend
-        # Kernel backend handles forward + backward + update internally
-        # For now, fall through to model.train_step which should use the backend
-        # This is a hook for future direct kernel backend dispatch
-        pass
+        kernel_metrics = _run_kernel_train_step(
+            model, model._kernel_backend, config, x, y
+        )
+        if kernel_metrics is not None:
+            return kernel_metrics
 
     match model:
         case EnergyModel() if config is not None:
