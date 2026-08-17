@@ -359,10 +359,9 @@ def _get_activation(name: str) -> torch.nn.Module:
     return activations.get(name.lower(), torch.nn.Tanh())
 
 
-# Register backend
-KernelRegistry.register(AlgorithmFamily.TP, HardwareTarget.CPU, TPKernelBackend)
-KernelRegistry.register(AlgorithmFamily.TP, HardwareTarget.CUDA, TPKernelBackend)
-KernelRegistry.register(AlgorithmFamily.TP, HardwareTarget.TRITON, TPKernelBackend)
+# Register backend for all HardwareTargets
+for hw in HardwareTarget:
+    KernelRegistry.register(AlgorithmFamily.TP, hw, TPKernelBackend)
 
 
 __all__ = ["TPKernelBackend"]

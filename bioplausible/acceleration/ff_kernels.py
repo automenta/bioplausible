@@ -519,18 +519,10 @@ def _get_activation(name: str) -> torch.nn.Module:
     return activations.get(name.lower(), torch.nn.ReLU())
 
 
-# Register backends
-KernelRegistry.register(AlgorithmFamily.FF, HardwareTarget.CPU, FFKernelBackend)
-KernelRegistry.register(AlgorithmFamily.FF, HardwareTarget.CUDA, FFKernelBackend)
-KernelRegistry.register(AlgorithmFamily.FF, HardwareTarget.TRITON, FFKernelBackend)
-
-KernelRegistry.register(AlgorithmFamily.PEPITA, HardwareTarget.CPU, PEPITAKernelBackend)
-KernelRegistry.register(
-    AlgorithmFamily.PEPITA, HardwareTarget.CUDA, PEPITAKernelBackend
-)
-KernelRegistry.register(
-    AlgorithmFamily.PEPITA, HardwareTarget.TRITON, PEPITAKernelBackend
-)
+# Register backends for all HardwareTargets
+for hw in HardwareTarget:
+    KernelRegistry.register(AlgorithmFamily.FF, hw, FFKernelBackend)
+    KernelRegistry.register(AlgorithmFamily.PEPITA, hw, PEPITAKernelBackend)
 
 
 __all__ = ["FFKernelBackend", "PEPITAKernelBackend"]

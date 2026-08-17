@@ -282,19 +282,12 @@ class ThreeFactorKernelBackend(HebbianKernelBackend):
         return all_grads
 
 
-# Register backends
-KernelRegistry.register(
-    AlgorithmFamily.HEBBIAN, HardwareTarget.CPU, HebbianKernelBackend
-)
-KernelRegistry.register(
-    AlgorithmFamily.HEBBIAN, HardwareTarget.CUDA, HebbianKernelBackend
-)
-KernelRegistry.register(
-    AlgorithmFamily.HEBBIAN, HardwareTarget.TRITON, HebbianKernelBackend
-)
-
-# Three-factor uses same family but different class
-# Could register with a sub-key if needed
+# Register backends for all HardwareTargets
+for hw in HardwareTarget:
+    KernelRegistry.register(AlgorithmFamily.HEBBIAN, hw, HebbianKernelBackend)
+# ThreeFactorKernelBackend is a variant; register explicitly if needed by users
+# for hw in HardwareTarget:
+#     KernelRegistry.register(AlgorithmFamily.HEBBIAN, hw, ThreeFactorKernelBackend)
 
 
 __all__ = ["HebbianKernelBackend", "ThreeFactorKernelBackend"]

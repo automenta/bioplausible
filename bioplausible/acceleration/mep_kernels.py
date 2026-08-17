@@ -433,20 +433,10 @@ def _activation_deriv(state: Tensor, activation: str) -> Tensor:
     return (state > 0).float()
 
 
-# Register backends
-KernelRegistry.register(AlgorithmFamily.MEP, HardwareTarget.CPU, MEPKernelBackend)
-KernelRegistry.register(AlgorithmFamily.MEP, HardwareTarget.CUDA, MEPKernelBackend)
-KernelRegistry.register(AlgorithmFamily.MEP, HardwareTarget.TRITON, MEPKernelBackend)
-
-KernelRegistry.register(
-    AlgorithmFamily.O1MEMORY, HardwareTarget.CPU, O1MemoryEPv2KernelBackend
-)
-KernelRegistry.register(
-    AlgorithmFamily.O1MEMORY, HardwareTarget.CUDA, O1MemoryEPv2KernelBackend
-)
-KernelRegistry.register(
-    AlgorithmFamily.O1MEMORY, HardwareTarget.TRITON, O1MemoryEPv2KernelBackend
-)
+# Register backends for all HardwareTargets
+for hw in HardwareTarget:
+    KernelRegistry.register(AlgorithmFamily.MEP, hw, MEPKernelBackend)
+    KernelRegistry.register(AlgorithmFamily.O1MEMORY, hw, O1MemoryEPv2KernelBackend)
 
 
 __all__ = ["MEPKernelBackend", "O1MemoryEPv2KernelBackend"]

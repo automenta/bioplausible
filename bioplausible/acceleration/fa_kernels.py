@@ -321,11 +321,9 @@ except ImportError:
     HAS_TRITON_FA = False
 
 
-# Register the backend
-KernelRegistry.register(AlgorithmFamily.FA, HardwareTarget.CPU, FAKernelBackend)
-KernelRegistry.register(AlgorithmFamily.FA, HardwareTarget.CUDA, FAKernelBackend)
-if HAS_TRITON_FA:
-    KernelRegistry.register(AlgorithmFamily.FA, HardwareTarget.TRITON, FAKernelBackend)
+# Register the backend for all HardwareTargets
+for hw in HardwareTarget:
+    KernelRegistry.register(AlgorithmFamily.FA, hw, FAKernelBackend)
 
 
 __all__ = ["FAKernelBackend", "HAS_TRITON_FA"]

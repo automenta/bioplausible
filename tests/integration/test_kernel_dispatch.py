@@ -624,17 +624,18 @@ def test_contrastive_kernel_learns():
             "output_dim": classes,
             "num_layers": 2,
         },
-        epochs=1,
+        epochs=50,
         use_kernel=True,
         kernel_backend="contrastive",
-        optimizer_kwargs={"lr": 0.001},
+        optimizer_kwargs={"lr": 0.1},
         track_energy=False,
     )
     trainer = CoreTrainer(cfg)
     trainer.setup()
     dev = next(trainer.model.parameters()).device
     xd, yd = x.to(dev), y.to(dev)
-    for _ in range(12):
+    # Run ~50 epochs
+    for _ in range(50):
         perm = torch.randperm(n)
         for i in range(0, n, 32):
             idx = perm[i : i + 32]

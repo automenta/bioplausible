@@ -325,13 +325,9 @@ class SNNKernelBackend:
         return self._last_settle_telemetry
 
 
-# Register backend
-KernelRegistry.register(AlgorithmFamily.SNN, HardwareTarget.CPU, SNNKernelBackend)
-KernelRegistry.register(AlgorithmFamily.SNN, HardwareTarget.CUDA, SNNKernelBackend)
-KernelRegistry.register(AlgorithmFamily.SNN, HardwareTarget.TRITON, SNNKernelBackend)
-KernelRegistry.register(
-    AlgorithmFamily.SNN, HardwareTarget.NEUROMORPHIC, SNNKernelBackend
-)
+# Register backend for all HardwareTargets
+for hw in HardwareTarget:
+    KernelRegistry.register(AlgorithmFamily.SNN, hw, SNNKernelBackend)
 
 
 __all__ = ["SNNKernelBackend"]

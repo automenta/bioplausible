@@ -163,14 +163,8 @@ def _activation_deriv(h: Tensor, activation: nn.Module) -> Tensor:
     return (h > 0).to(h.dtype)
 
 
-KernelRegistry.register(
-    AlgorithmFamily.BACKPROP, HardwareTarget.CPU, BackpropKernelBackend
-)
-KernelRegistry.register(
-    AlgorithmFamily.BACKPROP, HardwareTarget.CUDA, BackpropKernelBackend
-)
-KernelRegistry.register(
-    AlgorithmFamily.BACKPROP, HardwareTarget.TRITON, BackpropKernelBackend
-)
+# Register backend for all HardwareTargets
+for hw in HardwareTarget:
+    KernelRegistry.register(AlgorithmFamily.BACKPROP, hw, BackpropKernelBackend)
 
 __all__ = ["BackpropKernelBackend"]

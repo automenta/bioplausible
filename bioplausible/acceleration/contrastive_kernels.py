@@ -255,6 +255,7 @@ class FAContrastiveKernel(BaseContrastiveKernel):
     name = AlgorithmFamily.FA
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = False
+    _update_sign = 1  # Hebbian-style: delta is a descent direction, W += delta
 
     def __init__(self) -> None:
         super().__init__()
@@ -324,6 +325,29 @@ class FAContrastiveKernel(BaseContrastiveKernel):
             error = error @ self._layers[i + 1].weight
 
         return nudged_acts
+
+    def compute_update(
+        self, free_acts: list[Tensor], nudged_acts: list[Tensor]
+    ) -> dict[str, Tensor]:
+        """FA contrastive update: (h_nudged - h_free).T @ h_free / beta."""
+        updates: dict[str, Tensor] = {}
+
+        for i in range(len(self._layers)):
+            free_pre = free_acts[i]
+            free_post = free_acts[i + 1]
+            nudged_post = nudged_acts[i + 1]
+
+            # FA contrastive: delta = (h_nudged - h_free) / beta
+            delta_post = (nudged_post - free_post) / self._beta
+            # Weight update: delta_post.T @ free_pre * lr
+            weight_delta = self._lr * (delta_post.T @ free_pre) / free_pre.shape[0]
+            updates[f"layers.{i}.weight"] = weight_delta
+
+            if self._layers[i].bias is not None:
+                bias_delta = self._lr * delta_post.mean(dim=0)
+                updates[f"layers.{i}.bias"] = bias_delta
+
+        return updates
 
 
 class HebbianContrastiveKernel(BaseContrastiveKernel):
@@ -1112,17 +1136,48 @@ def get_contrastive_kernel(algorithm: AlgorithmFamily) -> BaseContrastiveKernel 
 def register_contrastive_kernels() -> None:
     """Register all contrastive kernels in the global KernelRegistry.
 
-    NOTE: This is NOT called on import to avoid conflicts with the standard
-    KernelBackend implementations. Users who want to use contrastive kernels
-    should call this function explicitly, or use get_contrastive_kernel() directly.
+    Called on import to make contrastive kernels visible to KernelRegistry
+    alongside standard KernelBackend implementations.
     """
     for algorithm, cls in _CONTRASTIVE_KERNEL_CLASSES.items():
-        for hardware in (
-            HardwareTarget.CPU,
-            HardwareTarget.CUDA,
-            HardwareTarget.TRITON,
-        ):
+        for hardware in HardwareTarget:
             KernelRegistry.register(algorithm, hardware, cls)
+
+
+def get_contrastive_kernels() -> dict[str, type[BaseContrastiveKernel]]:
+    """Import and return all contrastive kernels (triggers self-registration).
+
+    Mirrors ``get_algorithm_kernels()`` pattern for standard kernels.
+    """
+    from bioplausible.acceleration.contrastive_kernels import (
+        FAContrastiveKernel,
+        HebbianContrastiveKernel,
+        FFContrastiveKernel,
+        PEPITAContrastiveKernel,
+        TPContrastiveKernel,
+        PCContrastiveKernel,
+        SNNContrastiveKernel,
+        TileContrastiveKernel,
+        MEPContrastiveKernel,
+        O1MemoryContrastiveKernel,
+    )
+
+    return {
+        "fa": FAContrastiveKernel,
+        "hebbian": HebbianContrastiveKernel,
+        "ff": FFContrastiveKernel,
+        "pepita": PEPITAContrastiveKernel,
+        "tp": TPContrastiveKernel,
+        "pc": PCContrastiveKernel,
+        "snn": SNNContrastiveKernel,
+        "tile": TileContrastiveKernel,
+        "mep": MEPContrastiveKernel,
+        "o1memory": O1MemoryContrastiveKernel,
+    }
+
+
+# Auto-register on import
+register_contrastive_kernels()
 
 
 __all__ = [

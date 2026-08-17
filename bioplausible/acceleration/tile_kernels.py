@@ -244,10 +244,9 @@ class TileKernelBackend:
         return self._last_settle_telemetry
 
 
-# Register backend
-KernelRegistry.register(AlgorithmFamily.TILE, HardwareTarget.CPU, TileKernelBackend)
-KernelRegistry.register(AlgorithmFamily.TILE, HardwareTarget.CUDA, TileKernelBackend)
-KernelRegistry.register(AlgorithmFamily.TILE, HardwareTarget.TRITON, TileKernelBackend)
+# Register backend for all HardwareTargets
+for hw in HardwareTarget:
+    KernelRegistry.register(AlgorithmFamily.TILE, hw, TileKernelBackend)
 
 
 __all__ = ["TileKernelBackend"]

@@ -264,10 +264,9 @@ def _apply_activation(x: Tensor, activation: str) -> Tensor:
     return torch.tanh(x)
 
 
-# Register backend
-KernelRegistry.register(AlgorithmFamily.PC, HardwareTarget.CPU, PCKernelBackend)
-KernelRegistry.register(AlgorithmFamily.PC, HardwareTarget.CUDA, PCKernelBackend)
-KernelRegistry.register(AlgorithmFamily.PC, HardwareTarget.TRITON, PCKernelBackend)
+# Register backend for all HardwareTargets
+for hw in HardwareTarget:
+    KernelRegistry.register(AlgorithmFamily.PC, hw, PCKernelBackend)
 
 
 __all__ = ["PCKernelBackend"]
