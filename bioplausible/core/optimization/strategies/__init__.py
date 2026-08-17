@@ -6,6 +6,7 @@ from .feedback import ErrorFeedback, NoFeedback
 from .gradient import (
     BackpropGradient,
     HebbianGradient,
+    PCGradient,
     TargetPropGradient,
 )
 from .update import MuonUpdate, PlainUpdate
@@ -20,6 +21,7 @@ __all__ = [
     "MuonUpdate",
     "NoConstraint",
     "NoFeedback",
+    "PCGradient",
     "PlainUpdate",
     "SpectralConstraint",
     "TargetPropGradient",

@@ -590,13 +590,15 @@ class TPContrastiveKernel(BaseContrastiveKernel):
 
         # Forward pass with target-driven activations
         nudged_acts = [x]
+        # targets[0] corresponds to first hidden layer output
+        # targets[1] corresponds to output layer
         for i, layer in enumerate(self._layers):
             h = layer(nudged_acts[-1])
             if i < len(self._layers) - 1:
                 h = self._activation(h)
-            # Nudge toward target
-            if i + 1 < len(targets):
-                h = h + self._beta * (targets[i + 1] - h)
+            # Nudge toward target - targets[i] aligns with layer i's output
+            if i < len(targets):
+                h = h + self._beta * (targets[i] - h)
             nudged_acts.append(h)
 
         return nudged_acts
@@ -871,10 +873,6 @@ class TileContrastiveKernel(BaseContrastiveKernel):
         self, free_acts: list[Tensor], nudged_acts: list[Tensor]
     ) -> dict[str, Tensor]:
         """Compute contrastive update using final settled states."""
-        # Use the final settled states (last elements)
-        free_final = free_acts[-1]
-        nudged_final = nudged_acts[-1]
-
         # Reconstruct per-layer activations for final states
         free_per_layer = [free_acts[0]]
         nudged_per_layer = [nudged_acts[0]]
@@ -893,7 +891,11 @@ class TileContrastiveKernel(BaseContrastiveKernel):
 
 
 class MEPContrastiveKernel(BaseContrastiveKernel):
-    """MEP contrastive kernel (Muon/Dion/Fisher + EP settle)."""
+    """MEP contrastive kernel (Muon/Dion/Fisher + EP settle).
+
+    For the contrastive path with a chain of Linear layers (from benchmark bind),
+    we use a simple forward pass through the chain with output nudging.
+    """
 
     name = AlgorithmFamily.MEP
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
@@ -916,83 +918,78 @@ class MEPContrastiveKernel(BaseContrastiveKernel):
         self._transition_modules = transition_modules
 
     def free_phase(self, x: Tensor) -> list[Tensor]:
-        """Free EP settle."""
-        return self._ep_settle(x, beta=0.0)
+        """Free forward pass through transition modules."""
+        return self._forward_chain(x)
 
     def nudged_phase(self, x: Tensor, target: Tensor) -> list[Tensor]:
-        """Nudged EP settle."""
-        return self._ep_settle(x, beta=self._beta, target=target)
+        """Nudged forward pass with output nudging."""
+        acts = self._forward_chain(x)
+        # Nudge the output layer toward target
+        if target.dim() == 1:
+            target_vec = (
+                torch.nn.functional
+                .one_hot(target, num_classes=acts[-1].shape[1])
+                .float()
+                .to(device=self._device, dtype=self._dtype)
+            )
+        else:
+            target_vec = target.to(device=self._device, dtype=self._dtype)
+        acts[-1] = acts[-1] + self._beta * (target_vec - acts[-1])
+        return acts
 
-    def _ep_settle(
-        self, x: Tensor, beta: float, target: Tensor | None = None
-    ) -> list[Tensor]:
-        """EP settle loop with LayerNorm -> W1 -> tanh -> W2 -> residual."""
+    def _forward_chain(self, x: Tensor) -> list[Tensor]:
+        """Forward pass through chain of modules, returning per-layer activations."""
+        acts = [x]
         h = x
-        states = [h]
-
-        for _ in range(self._settle_steps):
-            for module in self._transition_modules:
-                if hasattr(module, "weight"):
-                    # LayerNorm
-                    mean = h.mean(dim=-1, keepdim=True)
-                    std = h.std(dim=-1, keepdim=True, correction=0) + 1e-5
-                    h_norm = (h - mean) / std
-
-                    # FFN
-                    h = module(h_norm)
-                    h = torch.tanh(h)
-
-            if target is not None and beta > 0:
-                if target.dim() == 1:
-                    target_vec = (
-                        torch.nn.functional
-                        .one_hot(target, num_classes=h.shape[1])
-                        .float()
-                        .to(device=self._device, dtype=self._dtype)
-                    )
-                else:
-                    target_vec = target.to(device=self._device, dtype=self._dtype)
-                h = h + beta * (target_vec - h)
-
-            states.append(h.clone())
-
-        return states
+        for module in self._transition_modules:
+            h = module(h)
+            acts.append(h)
+        return acts
 
     def compute_update(
         self, free_acts: list[Tensor], nudged_acts: list[Tensor]
     ) -> dict[str, Tensor]:
-        """Contrastive Hebbian update with Muon/Dion/Fisher options."""
+        """Contrastive Hebbian update per transition module."""
         updates: dict[str, Tensor] = {}
 
-        # Use final settled states for contrastive update
-        free_final = free_acts[-1]
-        nudged_final = nudged_acts[-1]
-
-        # For each transition module, compute contrastive update
-        # using the final state as both pre and post (recurrent)
+        # free_acts and nudged_acts are per-layer activations from _forward_chain
+        # Index 0 is input, indices 1..N are post-activations of each module
         for i, module in enumerate(self._transition_modules):
             if hasattr(module, "weight"):
+                free_pre = free_acts[i]
+                nudged_pre = nudged_acts[i]
+                free_post = free_acts[i + 1]
+                nudged_post = nudged_acts[i + 1]
+
                 delta = contrastive_hebbian_update(
-                    free_final,
-                    free_final,
-                    nudged_final,
-                    nudged_final,
+                    free_pre,
+                    free_post,
+                    nudged_pre,
+                    nudged_post,
                     self._lr,
                     self._beta,
                 )
 
-                # Apply Muon orthogonalization if requested
-                _weight = module.weight.data
-                # Simplified: use Muon for weight update
-                pass
-
                 updates[f"transition.{i}.weight"] = delta
+
+                if module.bias is not None:
+                    bias_delta = (
+                        contrastive_delta(
+                            free_post.mean(dim=0), nudged_post.mean(dim=0), self._beta
+                        )
+                        * self._lr
+                    )
+                    updates[f"transition.{i}.bias"] = bias_delta
 
         return updates
 
 
 class O1MemoryContrastiveKernel(BaseContrastiveKernel):
-    """O1MemoryEPv2 contrastive kernel (Analytic gradients + manual settle)."""
+    """O1MemoryEPv2 contrastive kernel (Analytic gradients + manual settle).
+
+    For the contrastive path with a chain of Linear layers (from benchmark bind),
+    we use a simple forward pass through the chain with output nudging.
+    """
 
     name = AlgorithmFamily.O1MEMORY
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
@@ -1013,38 +1010,36 @@ class O1MemoryContrastiveKernel(BaseContrastiveKernel):
         self._transition_modules = transition_modules
 
     def free_phase(self, x: Tensor) -> list[Tensor]:
-        """Free settle with O(1) memory."""
-        return self._settle_manual_o1(x, target=None)
+        """Free forward pass through transition modules."""
+        return self._forward_chain(x)
 
     def nudged_phase(self, x: Tensor, target: Tensor) -> list[Tensor]:
-        """Nudged settle with O(1) memory."""
-        return self._settle_manual_o1(x, target=target)
+        """Nudged forward pass with output nudging."""
+        acts = self._forward_chain(x)
+        # Nudge the output layer toward target
+        if target.dim() == 1:
+            target_vec = (
+                torch.nn.functional
+                .one_hot(target, num_classes=acts[-1].shape[1])
+                .float()
+                .to(device=self._device, dtype=self._dtype)
+            )
+        else:
+            target_vec = target.to(device=self._device, dtype=self._dtype)
+        acts[-1] = acts[-1] + self._beta * (target_vec - acts[-1])
+        return acts
 
-    def _settle_manual_o1(self, x: Tensor, target: Tensor | None) -> list[Tensor]:
-        """Manual O(1) memory settle."""
-        states = [x]
+    def _forward_chain(self, x: Tensor) -> list[Tensor]:
+        """Forward pass through chain of modules, returning per-layer activations."""
+        acts = [x]
+        h = x
         for module in self._transition_modules:
-            h = module(x)
-            states.append(h)
-            x = h
-
-        for step in range(self._settle_steps):
-            grads = self.analytic_state_grad(states, x if target is None else target)
-
-            max_delta = 0.0
-            for i, (state, grad) in enumerate(zip(states, grads)):
-                new_state = state - self._lr * grad
-                delta = (new_state - state).abs().max().item()
-                max_delta = max(max_delta, delta)
-                states[i] = new_state
-
-            if step > 5 and max_delta < 1e-4:
-                break
-
-        return states
+            h = module(h)
+            acts.append(h)
+        return acts
 
     def analytic_state_grad(self, states: list[Tensor], target: Tensor) -> list[Tensor]:
-        """Analytic gradient of energy w.r.t states."""
+        """Analytic gradient of energy w.r.t states (for reference)."""
         target = target.to(device=self._device, dtype=self._dtype)
         grads: list[Tensor] = []
 
@@ -1082,26 +1077,36 @@ class O1MemoryContrastiveKernel(BaseContrastiveKernel):
     def compute_update(
         self, free_states: list[Tensor], nudged_states: list[Tensor]
     ) -> dict[str, Tensor]:
-        """Contrastive update using final settled states."""
+        """Contrastive Hebbian update per transition module."""
         updates: dict[str, Tensor] = {}
 
-        # Use final settled states
-        free_final = free_states[-1]
-        nudged_final = nudged_states[-1]
-
-        # For each transition module, compute contrastive update
+        # free_states and nudged_states are per-layer activations from _forward_chain
+        # Index 0 is input, indices 1..N are post-activations of each module
         for i, module in enumerate(self._transition_modules):
             if hasattr(module, "weight"):
-                # Use the final state as both pre and post for recurrent modules
+                free_pre = free_states[i]
+                nudged_pre = nudged_states[i]
+                free_post = free_states[i + 1]
+                nudged_post = nudged_states[i + 1]
+
                 delta = contrastive_hebbian_update(
-                    free_final,
-                    free_final,
-                    nudged_final,
-                    nudged_final,
+                    free_pre,
+                    free_post,
+                    nudged_pre,
+                    nudged_post,
                     self._lr,
                     self._beta,
                 )
                 updates[f"transition.{i}.weight"] = delta
+
+                if module.bias is not None:
+                    bias_delta = (
+                        contrastive_delta(
+                            free_post.mean(dim=0), nudged_post.mean(dim=0), self._beta
+                        )
+                        * self._lr
+                    )
+                    updates[f"transition.{i}.bias"] = bias_delta
 
         return updates
 

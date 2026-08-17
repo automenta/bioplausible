@@ -601,6 +601,8 @@ def test_contrastive_kernel_learns():
     ``standard_fa`` consumed via ``kernel_backend="contrastive"`` (free/nudged
     contrastive Hebbian updates, no autograd) must push accuracy above chance
     after a few epochs, proving the O(1) path is a real learning route.
+    Uses ``use_spectral_norm=False`` to avoid spectral norm overwriting the
+    contrastive kernel's weight updates.
     """
     import torch
 
@@ -623,6 +625,7 @@ def test_contrastive_kernel_learns():
             "hidden_dim": 64,
             "output_dim": classes,
             "num_layers": 2,
+            "use_spectral_norm": False,
         },
         epochs=50,
         use_kernel=True,
@@ -634,8 +637,8 @@ def test_contrastive_kernel_learns():
     trainer.setup()
     dev = next(trainer.model.parameters()).device
     xd, yd = x.to(dev), y.to(dev)
-    # Run ~50 epochs
-    for _ in range(50):
+    # Run ~20 epochs (enough to exceed chance)
+    for _ in range(20):
         perm = torch.randperm(n)
         for i in range(0, n, 32):
             idx = perm[i : i + 32]

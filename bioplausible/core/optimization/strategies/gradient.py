@@ -12,7 +12,7 @@ from torch import nn
 
 from .base import GradientStrategy
 
-__all__ = ["BackpropGradient", "HebbianGradient", "TargetPropGradient"]
+__all__ = ["BackpropGradient", "HebbianGradient", "TargetPropGradient", "PCGradient"]
 
 
 class _ForwardNetLayer(Protocol):
@@ -336,3 +336,91 @@ class HebbianGradient(GradientStrategy):
         # But StrategyOptimizer expects gradients to exist. Set zero grads
         # for params not touched by local updates so optimizer doesn't error.
         self._zero_missing_grads(model)
+
+
+class _PCModel(Protocol):
+    """Structural interface for Predictive Coding hybrid models."""
+
+    layers: list[nn.Module]
+    top_down: list[nn.Module]
+    criterion: nn.Module
+    pc_weight: float
+
+
+class PCGradient(GradientStrategy):
+    """Predictive Coding gradient with composite loss.
+
+    Combines supervised classification loss with layer-wise prediction errors:
+    - Forward pass through ``model.layers`` collects activations
+    - Top-down predictions from ``model.top_down`` generate PC losses
+    - Composite loss = cls_loss + pc_weight * pc_loss
+    - Standard autograd backward computes gradients
+
+    Assumes the model has a structure compatible with PredictiveCodingHybrid:
+    - ``model.layers``: list of forward modules
+    - ``model.top_down``: list of top-down prediction modules (same length)
+    - ``model.criterion``: supervised loss function
+    - ``model.pc_weight``: weight for PC loss term
+    """
+
+    def __init__(
+        self,
+        loss_fn: nn.Module | None = None,
+        pc_weight: float = 0.1,
+    ):
+        self.loss_fn = loss_fn
+        self.pc_weight = pc_weight
+
+    @staticmethod
+    def _validate_model(model: _PCModel) -> None:
+        if not hasattr(model, "layers") or not hasattr(model, "top_down"):
+            raise ValueError(
+                "PCGradient requires model with 'layers' and 'top_down' attributes"
+            )
+        if len(model.layers) != len(model.top_down):
+            raise ValueError(
+                f"layers ({len(model.layers)}) and top_down "
+                f"({len(model.top_down)}) must have same length"
+            )
+        if not hasattr(model, "criterion"):
+            raise ValueError("PCGradient requires model with 'criterion'")
+
+    def compute_gradients(
+        self,
+        model: nn.Module,
+        x: torch.Tensor,
+        target: torch.Tensor | None,
+        loss_fn: nn.Module | None = None,
+        **kwargs: object,  # ruff: ignore[unused-method-argument]
+    ) -> None:
+        """Compute Predictive Coding composite gradients."""
+        fn = loss_fn or self.loss_fn
+        if fn is None:
+            raise ValueError("loss_fn must be provided to PCGradient")
+        if target is None:
+            raise ValueError("target must be provided to PCGradient")
+
+        pc_model = cast("_PCModel", model)
+        self._validate_model(pc_model)
+
+        # Forward pass collecting activations
+        activations = [x]
+        h = x
+        for layer in pc_model.layers:
+            h = layer(h)
+            activations.append(h)
+
+        output = activations[-1]
+        cls_loss = fn(output, target)
+
+        # PC loss: top-down predictions vs lower-layer activations
+        pc_loss = torch.zeros((), device=output.device, dtype=output.dtype)
+        for i in range(len(pc_model.layers)):
+            upper = activations[i + 1].detach()
+            lower_target = activations[i].detach()
+            prediction = pc_model.top_down[i](upper)
+            pc_loss = pc_loss + F.mse_loss(prediction, lower_target)
+
+        # Composite loss
+        loss = cls_loss + self.pc_weight * pc_loss
+        loss.backward()
