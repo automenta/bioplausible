@@ -65,6 +65,11 @@ class FAKernelBackend:
         input_dim = extra.get("input_dim", 784)
         output_dim = extra.get("output_dim", 10)
 
+        # Flatten input_dim if it's a tuple (spatial format like (C, H, W))
+        if isinstance(input_dim, tuple):
+            import math
+            input_dim = math.prod(input_dim)
+
         dims = [input_dim] + [hidden_dim] * (self._num_layers - 1) + [output_dim]
         self._feedback_weights = []
         for i in range(len(dims) - 1):

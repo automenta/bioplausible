@@ -113,21 +113,34 @@ def _build_export_module(
 
 
 def _onnx_export(module: nn.Module, input_tensor: torch.Tensor, path: Path) -> None:
-    """Best-effort ONNX export, suppressing the legacy-exporter deprecation."""
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=r".*TorchScript-based ONNX export.*")
-        warnings.filterwarnings("ignore", message=r".*The feature will be removed.*")
-        torch.onnx.export(
-            module,
-            (input_tensor,),
+    """Best-effort ONNX export using torch.export (PyTorch 2.5+)."""
+    try:
+        # New export path: torch.export.export() -> torch.onnx.export_from_ep()
+        exported = torch.export.export(module, (input_tensor,))
+        torch.onnx.export_from_ep(
+            exported,
             str(path),
-            export_params=True,
             opset_version=11,
             input_names=["input"],
             output_names=["output"],
             dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
-            dynamo=False,
         )
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        # Fallback to legacy exporter for older PyTorch versions or unsupported ops
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=r".*TorchScript-based ONNX export.*")
+            warnings.filterwarnings("ignore", message=r".*The feature will be removed.*")
+            torch.onnx.export(
+                module,
+                (input_tensor,),
+                str(path),
+                export_params=True,
+                opset_version=11,
+                input_names=["input"],
+                output_names=["output"],
+                dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
+                dynamo=False,
+            )
 
 
 def _build_manifest(
@@ -198,6 +211,7 @@ def export_kernel(
     if stack is not None:
         # Serialize trained weights (the source of truth for the target).
         module = _build_export_module(stack, _activation_of(kernel))
+        module_device = next(module.parameters()).device
         torch.save({"state_dict": module.state_dict()}, state_dict_path)
 
         if include_onnx:
@@ -205,7 +219,7 @@ def export_kernel(
                 onnx_name = f"{base}.onnx"
                 module.eval()
                 sample = torch.zeros(
-                    1, stack[0].in_features, dtype=config.dtype, device="cpu"
+                    1, stack[0].in_features, dtype=config.dtype, device=module_device
                 )
                 _onnx_export(module, sample, out / onnx_name)
             except (RuntimeError, TypeError, ValueError) as exc:  # pragma: no cover

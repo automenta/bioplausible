@@ -47,6 +47,8 @@ from bioplausible.acceleration.backends import (
     enable_tf32,
     get_optimal_backend,
 )
+# Import to trigger EQPROP kernel backend registration
+from bioplausible.acceleration import eqprop_kernel_backend  # noqa: F401
 from bioplausible.acceleration.compile import compile_model, compile_settling_loop
 from bioplausible.acceleration.contrastive_kernels import (
     BaseContrastiveKernel,
@@ -185,6 +187,14 @@ def get_algorithm_kernels() -> dict[str, type[object]]:
         from bioplausible.acceleration.backprop_kernels import BackpropKernelBackend
 
         kernels["backprop"] = BackpropKernelBackend
+    except ImportError:
+        pass
+    try:
+        from bioplausible.acceleration.eqprop_kernel_backend import (
+            EqPropKernelBackend,
+        )
+
+        kernels["eqprop"] = EqPropKernelBackend
     except ImportError:
         pass
     return kernels

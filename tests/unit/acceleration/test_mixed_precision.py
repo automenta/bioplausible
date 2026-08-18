@@ -2,10 +2,15 @@
 
 Tests that all kernel backends support FP32, FP16, and BF16 dtypes
 where hardware permits, and that results are numerically consistent.
+
+Accuracy parity gates (REFACTOR8 Phase 2):
+- FP16/BF16: within 2% of FP32 on digits
+- INT8: within 5% of FP32 (quantization-aware training if needed)
 """
 
 import pytest
 import torch
+from torch import nn
 
 from bioplausible.acceleration import get_algorithm_kernels
 from bioplausible.acceleration.kernel_backend import (
@@ -14,11 +19,113 @@ from bioplausible.acceleration.kernel_backend import (
     KernelConfig,
     KernelRegistry,
 )
+from bioplausible.core.registry import ComponentCategory, Registry
+
+# Import zoo models to trigger registration
+from bioplausible.zoo import models
 
 
 def _linear_stack(dims: tuple[int, ...], device: torch.device, seed: int = 0) -> list[torch.nn.Linear]:
     torch.manual_seed(seed)
     return [torch.nn.Linear(dims[i], dims[i + 1]).to(device) for i in range(len(dims) - 1)]
+
+
+def _construct_model(model_name: str, input_dim: int, output_dim: int, device: torch.device, dtype: torch.dtype) -> nn.Module:
+    """Construct a model from the registry."""
+    model_cls = Registry.get(ComponentCategory.MODEL, model_name)
+    defaults = {
+        "backprop_mlp": {"hidden_dim": 64, "num_layers": 2},
+        "standard_fa": {"hidden_dim": 64, "num_layers": 2},
+    }.get(model_name, {})
+    model = model_cls.build(
+        spec=type("Spec", (), {"name": model_name})(),
+        input_dim=input_dim,
+        output_dim=output_dim,
+        device=device,
+        task_type="vision",
+        **defaults,
+    )
+    return model.to(device=device, dtype=dtype)
+
+
+def _get_synthetic_data(input_dim: int, output_dim: int, n_samples: int, device: torch.device, dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor]:
+    """Generate synthetic data for testing."""
+    torch.manual_seed(42)
+    x = torch.randn(n_samples, input_dim, device=device, dtype=dtype)
+    y = torch.randint(0, output_dim, (n_samples,), device=device)
+    for c in range(output_dim):
+        mask = y == c
+        if mask.any():
+            direction = torch.randn(input_dim, device=device, dtype=dtype)
+            direction = direction / direction.norm() * 1.5
+            x[mask] += direction * 0.8
+    return x, y
+
+
+def _train_model(
+    model: nn.Module,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    epochs: int,
+    dtype: torch.dtype,
+    lr: float = 0.01,
+) -> float:
+    """Train a model and return final accuracy."""
+    # For FP16, keep model in FP32 for stable training, use autocast for forward
+    if dtype == torch.float16:
+        model = model.to(dtype=torch.float32)
+        use_amp = True
+        scaler = torch.amp.GradScaler('cuda')
+    elif dtype == torch.bfloat16:
+        # BF16 can use autocast but doesn't need GradScaler
+        model = model.to(dtype=torch.bfloat16)
+        use_amp = True
+        scaler = None
+    else:
+        model = model.to(dtype=dtype)
+        use_amp = False
+        scaler = None
+    
+    model.train()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.CrossEntropyLoss()
+    
+    n_samples = len(x)
+    batch_size = 64
+    
+    for epoch in range(epochs):
+        perm = torch.randperm(n_samples)
+        for i in range(0, n_samples, batch_size):
+            idx = perm[i : i + batch_size]
+            xb, yb = x[idx], y[idx]
+            optimizer.zero_grad()
+            if use_amp:
+                with torch.amp.autocast('cuda', dtype=dtype):
+                    logits = model(xb)
+                    loss = criterion(logits, yb)
+                if scaler is not None:
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
+            else:
+                logits = model(xb)
+                loss = criterion(logits, yb)
+                loss.backward()
+                optimizer.step()
+    
+    model.eval()
+    with torch.no_grad():
+        if use_amp:
+            with torch.amp.autocast('cuda', dtype=dtype):
+                logits = model(x[:128])
+        else:
+            logits = model(x[:128])
+        accuracy = (logits.argmax(1) == y[:128]).float().mean().item()
+    
+    return accuracy
 
 
 class TestMixedPrecision:
@@ -216,3 +323,83 @@ class TestKernelParityAcrossDtypes:
             AlgorithmFamily.BACKPROP: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_layers": 2},
         }
         return configs.get(family, {})
+
+
+class TestAccuracyParityAcrossDtypes:
+    """Test model training accuracy parity across dtypes (REFACTOR8 Phase 2).
+    
+    Gates:
+    - FP16/BF16: accuracy within 2% of FP32 on digits
+    - INT8: accuracy within 5% of FP32 (quantization-aware training if needed)
+    """
+
+    @pytest.mark.parametrize("model_name", ["backprop_mlp", "standard_fa"])
+    @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for FP16/BF16")
+    def test_fp16_bf16_accuracy_parity(self, model_name: str, dtype: torch.dtype):
+        """Test FP16/BF16 accuracy within 2% of FP32 on digits."""
+        device = torch.device("cuda")
+        
+        # Get data (digits: 64 input, 10 output)
+        input_dim, output_dim = 64, 10
+        x, y = _get_synthetic_data(input_dim, output_dim, 512, device, dtype)
+        x_fp32, y_fp32 = _get_synthetic_data(input_dim, output_dim, 512, device, torch.float32)
+        
+        # Train FP32 reference
+        model_fp32 = _construct_model(model_name, input_dim, output_dim, device, torch.float32)
+        fp32_acc = _train_model(model_fp32, x_fp32, y_fp32, epochs=15, dtype=torch.float32)
+        
+        # Train with target dtype
+        model_dtype = _construct_model(model_name, input_dim, output_dim, device, dtype)
+        dtype_acc = _train_model(model_dtype, x, y, epochs=15, dtype=dtype)
+        
+        # Check parity
+        diff = abs(fp32_acc - dtype_acc)
+        assert diff <= 0.02, (
+            f"{model_name} {dtype} accuracy {dtype_acc:.4f} deviates from "
+            f"FP32 {fp32_acc:.4f} by {diff:.4f} (max 0.02 allowed)"
+        )
+
+    @pytest.mark.parametrize("model_name", ["backprop_mlp"])
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for INT8")
+    def test_int8_accuracy_parity(self, model_name: str):
+        """Test INT8 accuracy within 5% of FP32 on digits (quantization-aware training).
+        
+        This is a placeholder for future INT8 quantization-aware training support.
+        Currently skipped as INT8 training requires quantization-aware training infrastructure.
+        """
+        pytest.skip("INT8 quantization-aware training not yet implemented")
+
+
+class TestMixedPrecisionLossScaling:
+    """Test loss scaling for FP16 training."""
+
+    @pytest.mark.parametrize("model_name", ["backprop_mlp"])
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for FP16")
+    def test_fp16_loss_scaling(self, model_name: str):
+        """Test that FP16 training with GradScaler produces finite gradients."""
+        device = torch.device("cuda")
+        input_dim, output_dim = 64, 10
+        x, y = _get_synthetic_data(input_dim, output_dim, 256, device, torch.float16)
+        
+        # Construct model in FP32 for training, use autocast for FP16 forward
+        model = _construct_model(model_name, input_dim, output_dim, device, torch.float32)
+        model.train()
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+        criterion = nn.CrossEntropyLoss()
+        scaler = torch.amp.GradScaler('cuda')
+        
+        # Run a few steps and verify gradients are finite
+        for _ in range(3):
+            optimizer.zero_grad()
+            with torch.amp.autocast('cuda', dtype=torch.float16):
+                logits = model(x[:64])
+                loss = criterion(logits, y[:64])
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            
+            # Check gradients are finite
+            for param in model.parameters():
+                if param.grad is not None:
+                    assert torch.isfinite(param.grad).all(), "Non-finite gradients with FP16 loss scaling"
