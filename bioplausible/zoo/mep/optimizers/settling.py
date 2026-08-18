@@ -111,8 +111,17 @@ class Settler:
         model: nn.Module,
         x: torch.Tensor,
         transition_modules: list[nn.Module],
+        forward_fn: Callable | None = None,
     ) -> list[torch.Tensor]:
-        """Capture initial states from transition modules."""
+        """Capture initial states from transition modules.
+
+        Args:
+            model: Neural network module.
+            x: Input tensor.
+            transition_modules: List of transition modules.
+            forward_fn: Optional custom forward function to avoid recursion.
+                If None, tries model._forward_impl, then model(x).
+        """
         states: list[torch.Tensor] = []
         handles: list[object] = []
 
@@ -128,7 +137,12 @@ class Settler:
 
         try:
             with torch.no_grad():
-                model(x)
+                if forward_fn is not None:
+                    forward_fn(x)
+                elif hasattr(model, "_forward_impl"):
+                    model._forward_impl(x)
+                else:
+                    model(x)
         finally:
             for h in handles:
                 h.remove()
@@ -142,6 +156,7 @@ class Settler:
         target: torch.Tensor | None,
         beta: float,
         energy_fn: Callable,
+        forward_fn: Callable | None = None,
     ) -> list[torch.Tensor]:
         """
         Settle network activations to energy minimum.
@@ -152,6 +167,7 @@ class Settler:
             target: Target tensor (None for free phase).
             beta: Nudging strength.
             energy_fn: Function to compute energy.
+            forward_fn: Optional custom forward function to avoid recursion.
 
         Returns:
             List of settled state tensors for each layer.
@@ -169,7 +185,7 @@ class Settler:
         transition_modules = self._resolve_transition_modules(model)
 
         # Capture initial states
-        states = self._capture_states_from_transitions(model, x, transition_modules)
+        states = self._capture_states_from_transitions(model, x, transition_modules, forward_fn)
 
         if not states:
             if transition_modules:

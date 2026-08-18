@@ -28,7 +28,13 @@ from torch import nn
 from torch.nn.utils.parametrizations import spectral_norm
 
 from bioplausible.config.unified import ModelConfig
-from bioplausible.core.local_learning.settling import settle_activations_list
+from bioplausible.core.local_learning.settling import (
+    SettleConfig,
+    SettleProtocol,
+    SettleTelemetry,
+    settle_activations_list,
+    settle_universal,
+)
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
@@ -536,9 +542,37 @@ class EquilibriumMLP(BioModel):
         | tuple[torch.Tensor, list[list[torch.Tensor]]]
         | tuple[torch.Tensor, dict[str, object]]
     ):
-        """Settle the (possibly deep) activations list explicitly."""
+        """Settle the (possibly deep) activations list explicitly.
+
+        Uses settle_activations_list by default for backward compatibility.
+        When return_dynamics is True, uses settle_universal for richer telemetry.
+        """
         if x.dtype not in (torch.float32, torch.float64, torch.float16):
             x = x.float()
+
+        # Use settle_universal when detailed telemetry is requested
+        if return_dynamics:
+            out, steps_taken, converged, telemetry = self._run_settle_universal(
+                x,
+                beta=beta,
+                target=target,
+                steps=steps,
+                return_trajectory=return_trajectory,
+                return_dynamics=return_dynamics,
+            )
+            if telemetry:
+                dynamics = {
+                    "deltas": telemetry.deltas,
+                    "final_delta": telemetry.final_delta,
+                    "steps_taken": telemetry.steps_taken,
+                    "converged": telemetry.converged,
+                    "settle_time_s": telemetry.settle_time_ms / 1000.0,
+                }
+            else:
+                dynamics = {}
+            return out, dynamics
+
+        # Default path: use settle_activations_list (existing behavior)
         activations = self._initial_activations(x)
         n_steps = steps if steps is not None else self.max_steps
         settled, trajectory, dynamics = settle_activations_list(
@@ -559,6 +593,115 @@ class EquilibriumMLP(BioModel):
         if return_trajectory:
             return out, trajectory
         return out
+
+    # ------------------------------------------------------------------
+    # SettleProtocol implementation (Family B: activations list)
+    # ------------------------------------------------------------------
+
+    def _initialize_state(self, x: torch.Tensor) -> list[torch.Tensor]:
+        """Return initial activations list for settle_universal.
+
+        Family B pattern: state is a list of per-layer activations [x, h1, ..., out].
+        """
+        x = _flatten(x)
+        return self._initial_activations(x)
+
+    def _step(
+        self,
+        state: list[torch.Tensor],
+        x_transformed: torch.Tensor,
+    ) -> list[torch.Tensor]:
+        """Single settle step for settle_universal.
+
+        Uses stored _settle_beta and _settle_target for the dynamics.
+        """
+        return self.forward_dynamics(state, beta=self._settle_beta, target=self._settle_target)
+
+    def _check_converged(
+        self,
+        state_new: list[torch.Tensor],
+        state_old: list[torch.Tensor],
+        step: int,
+    ) -> bool:
+        """Custom convergence check matching settle_activations_list behavior.
+
+        Convergence is based on max relative change across hidden+output layers.
+        """
+        if step <= self.convergence_start:
+            return False
+
+        convergence_norm = 2
+        max_rel_delta = 0.0
+        for k in range(1, len(state_new)):
+            abs_delta = torch.dist(state_new[k], state_old[k], p=convergence_norm).item()
+            norm = state_old[k].norm(p=convergence_norm).item() + 1e-8
+            rel_delta = abs_delta / norm
+            max_rel_delta = max(max_rel_delta, rel_delta)
+
+        return max_rel_delta < self.convergence_threshold
+
+    def _on_step_end(
+        self,
+        step: int,
+        state: list[torch.Tensor],
+        delta: float,
+    ) -> None:
+        """Telemetry hook: called after each step."""
+        pass  # Telemetry is collected by settle_universal
+
+    def _on_converged(self, step: int, final_delta: float) -> None:
+        """Telemetry hook: called when convergence is detected."""
+        self._last_settle_converged = True
+        self._last_settle_steps = step
+        self._last_settle_final_delta = final_delta
+
+    def _on_max_steps(self, step: int, final_delta: float) -> None:
+        """Telemetry hook: called when max steps reached without convergence."""
+        self._last_settle_converged = False
+        self._last_settle_steps = step
+        self._last_settle_final_delta = final_delta
+
+    def _run_settle_universal(
+        self,
+        x: torch.Tensor,
+        *,
+        beta: float = 0.0,
+        target: torch.Tensor | None = None,
+        steps: int | None = None,
+        return_trajectory: bool = False,
+        return_dynamics: bool = False,
+    ) -> tuple[torch.Tensor, int, bool, SettleTelemetry | None]:
+        """Run settle using the universal primitive with full telemetry.
+
+        Stores beta/target for the _step method, then calls settle_universal.
+        """
+        self._settle_beta = beta
+        self._settle_target = target
+
+        # Use model's convergence knobs
+        config = SettleConfig(
+            max_steps=steps if steps is not None else self.max_steps,
+            convergence_threshold=self.convergence_threshold,
+            convergence_start=self.convergence_start,
+        )
+
+        state, steps_taken, converged, telemetry = settle_universal(
+            self,
+            x,
+            config=config,
+            algorithm="eqprop",
+            family="B",
+            hardware=self.config.device if hasattr(self.config, "device") else "cpu",
+            backend="pytorch",
+            return_trajectory=return_trajectory,
+        )
+
+        # Return in the format expected by existing code
+        settled_activations = state
+        out = settled_activations[-1]
+        self._last_activations = settled_activations
+
+        return out, steps_taken, converged, telemetry
 
     def transition_modules(self) -> list[nn.Module]:
         """Forward ``Linear`` layers in order — used by propagator/audit."""

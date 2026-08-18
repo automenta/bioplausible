@@ -35,6 +35,12 @@ from bioplausible.core.local_learning.mixins import (
     LocalLearningConfigProtocol,
     MultiOptimizerMixin,
 )
+from bioplausible.core.local_learning.settling import (
+    SettleConfig,
+    SettleProtocol,
+    SettleTelemetry,
+    settle_universal,
+)
 from bioplausible.core.local_learning.task import TaskHandler
 from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.tile import TileGraph, TileState
@@ -308,7 +314,7 @@ class TileAlgorithmConfig(LocalLearningConfigProtocol):
 # ──────────────────────────────────────────────
 
 
-class TileAlgorithm(nn.Module, MultiOptimizerMixin):
+class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
     """Generic tile-based local learning model.
 
     Builds a layered :class:`~bioplausible.core.tile.TileGraph` with per-edge
@@ -366,6 +372,21 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
         self._weight = weight_fn or self._resolve_weight()
 
         self._setup_optimizers()
+
+        # SettleProtocol attributes
+        self.convergence_threshold: float = getattr(config, "convergence_threshold", 1e-3)
+        self.convergence_start: int = getattr(config, "convergence_start", 5)
+        self.max_steps: int = config.free_steps
+
+        # Transient state for settle_universal
+        self._settle_beta: float = 0.0
+        self._settle_target: Tensor | None = None
+        self._output_clamped: bool = False
+        self._last_activations: list[Tensor] | None = None
+        self._last_settle_converged: bool = False
+        self._last_settle_steps: int = 0
+        self._last_settle_final_delta: float = 0.0
+        self._last_settle_telemetry: SettleTelemetry | None = None
 
     def _task_handler_ref(self) -> TaskHandler:
         """Lazily construct a classification task handler when none was injected.
@@ -661,6 +682,167 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
             self.W_out.weight.sub_(w_out_up)
             self.W_out.bias.sub_(b_out_up)
 
+    # ── SettleProtocol Implementation (Family B: activations list) ─────────────
+
+    def _get_settle_state(self) -> list[Tensor]:
+        """Get current tile activities as a flat list for SettleProtocol.
+
+        Returns activities in layer order (input, hidden..., output).
+        """
+        state: list[Tensor] = []
+        for layer_tiles in self.graph.layer_ids:
+            for tid in layer_tiles:
+                act = self.graph.tiles[tid].activity
+                if act is not None:
+                    state.append(act.clone())
+        return state
+
+    def _set_settle_state(self, state: list[Tensor]) -> None:
+        """Set tile activities from a flat list."""
+        idx = 0
+        for layer_tiles in self.graph.layer_ids:
+            for tid in layer_tiles:
+                if idx < len(state):
+                    self.graph.tiles[tid].activity = state[idx]
+                    idx += 1
+
+    def _initialize_state(self, x: Tensor) -> list[Tensor]:
+        """Return initial tile activities for settle_universal."""
+        self._clamp_input(x)
+        self._forward_propagation()
+        return self._get_settle_state()
+
+    def _transform_input(self, x: Tensor) -> Tensor:
+        """Transform input (stored for _step)."""
+        return x
+
+    def _step(
+        self,
+        state: list[Tensor],
+        x_transformed: Tensor,
+    ) -> list[Tensor]:
+        """Single settle step for settle_universal.
+
+        Runs one iteration over all non-input tiles.
+        """
+        self._set_settle_state(state)
+        nudged = self._settle_beta > 0 and self._settle_target is not None
+
+        if nudged and not hasattr(self, "_output_clamped"):
+            self._clamp_output_to_target(self._settle_target)
+            self._output_clamped = True
+
+        # One settle iteration
+        for layer_tiles in self.graph.layer_ids[1:]:
+            for tid in layer_tiles:
+                tile = self.graph.tiles[tid]
+                if nudged and tid in self.graph.output_tile_ids:
+                    continue
+                pred = self._predict_tile(tid)
+                if tile.activity is None or pred is None:
+                    continue
+                tile.prediction = pred
+                tile.error = tile.activity - pred
+                feedback = self._feedback(tile, self.graph, self._weight_lookup)
+                tile.activity = self._activity(
+                    tile,
+                    feedback=feedback,
+                    importance=self._topic_importance(tid),
+                    step_size=self.config.step_size,
+                    lambda_error=self.config.lambda_error,
+                    clamp_min=self.config.clamp_min,
+                    clamp_max=self.config.clamp_max,
+                    clamp=self.config.clamp,
+                )
+
+        return self._get_settle_state()
+
+    def _check_converged(
+        self,
+        state_new: list[Tensor],
+        state_old: list[Tensor],
+        step: int,
+    ) -> bool:
+        """Custom convergence check for tile activities."""
+        if step <= self.convergence_start:
+            return False
+
+        convergence_norm = 2
+        max_rel_delta = 0.0
+        for s_new, s_old in zip(state_new, state_old):
+            abs_delta = torch.dist(s_new, s_old, p=convergence_norm).item()
+            norm = s_old.norm(p=convergence_norm).item() + 1e-8
+            rel_delta = abs_delta / norm
+            max_rel_delta = max(max_rel_delta, rel_delta)
+
+        return max_rel_delta < self.convergence_threshold
+
+    def _on_step_end(
+        self,
+        step: int,
+        state: list[Tensor],
+        delta: float,
+    ) -> None:
+        """Telemetry hook: called after each step."""
+        # Telemetry collected by settle_universal
+
+    def _on_converged(self, step: int, final_delta: float) -> None:
+        """Telemetry hook: called when convergence is detected."""
+        self._last_settle_converged = True
+        self._last_settle_steps = step
+        self._last_settle_final_delta = final_delta
+
+    def _on_max_steps(self, step: int, final_delta: float) -> None:
+        """Telemetry hook: called when max steps reached without convergence."""
+        self._last_settle_converged = False
+        self._last_settle_steps = step
+        self._last_settle_final_delta = final_delta
+
+    def _run_settle_universal(
+        self,
+        x: Tensor,
+        *,
+        beta: float = 0.0,
+        target: Tensor | None = None,
+        steps: int | None = None,
+        return_trajectory: bool = False,
+        return_dynamics: bool = False,
+    ) -> tuple[Tensor, int, bool, SettleTelemetry | None]:
+        """Run settle using the universal primitive with full telemetry."""
+        self._settle_beta = beta
+        self._settle_target = target
+        self._output_clamped = False
+
+        config = SettleConfig(
+            max_steps=steps if steps is not None else self.max_steps,
+            convergence_threshold=self.convergence_threshold,
+            convergence_start=self.convergence_start,
+        )
+
+        state, steps_taken, converged, telemetry = settle_universal(
+            self,
+            x,
+            config=config,
+            algorithm="tile",
+            family="B",
+            hardware=self.config.device if hasattr(self.config, "device") else "cpu",
+            backend="pytorch",
+            return_trajectory=return_trajectory,
+        )
+
+        self._last_activations = state
+        self._last_settle_telemetry = telemetry
+
+        # Project output tile activities to logits
+        out_acts = self._tile_activities_to_tensor(self.graph.output_tile_ids)
+        out = self.W_out(out_acts)
+
+        return out, steps_taken, converged, telemetry
+
+    def get_settle_telemetry(self) -> SettleTelemetry | None:
+        """Return the last settle telemetry for external consumers."""
+        return self._last_settle_telemetry
+
     # ── Public training entry points ─────────────────────────────────────────
 
     def local_update(self, x: Tensor, y: Tensor) -> dict[str, float]:
@@ -684,12 +866,43 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
         self._step_count += 1
         return {"loss": loss.item(), "accuracy": self._accuracy(out, y)}
 
-    def forward_logits(self, x: Tensor, *, detach_input: bool = True) -> Tensor:
+    def forward_logits(
+        self,
+        x: Tensor,
+        *,
+        detach_input: bool = True,
+        beta: float = 0.0,
+        target: Tensor | None = None,
+        steps: int | None = None,
+        return_trajectory: bool = False,
+        return_dynamics: bool = False,
+    ) -> Tensor | tuple[Tensor, list[list[Tensor]]] | tuple[Tensor, dict[str, object]]:
         """Feedforward through the tile graph to logits.
 
         ``detach_input=False`` keeps the graph open to the input (backprop
         consumers); the bio-plausible loop always uses the detached variant.
         """
+        if return_dynamics:
+            out, steps_taken, converged, telemetry = self._run_settle_universal(
+                x,
+                beta=beta,
+                target=target,
+                steps=steps,
+                return_trajectory=return_trajectory,
+                return_dynamics=return_dynamics,
+            )
+            if telemetry:
+                dynamics = {
+                    "deltas": telemetry.deltas,
+                    "final_delta": telemetry.final_delta,
+                    "steps_taken": telemetry.steps_taken,
+                    "converged": telemetry.converged,
+                    "settle_time_s": telemetry.settle_time_ms / 1000.0,
+                }
+            else:
+                dynamics = {}
+            return out, dynamics
+
         self._clamp_input(x, detach_input=detach_input)
         self._settle(1, nudged=False)
         out = self._tile_activities_to_tensor(self.graph.output_tile_ids)
@@ -705,9 +918,29 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin):
     def _accuracy(logits: Tensor, y: Tensor) -> float:
         return compute_accuracy(logits, y)
 
-    def forward(self, x: Tensor) -> Tensor:
-        """Alias of :meth:`forward_logits` for nn.Module interface."""
-        return self.forward_logits(x)
+    def forward(
+        self,
+        x: Tensor,
+        *,
+        beta: float = 0.0,
+        target: Tensor | None = None,
+        steps: int | None = None,
+        return_trajectory: bool = False,
+        return_dynamics: bool = False,
+    ) -> Tensor | tuple[Tensor, list[list[Tensor]]] | tuple[Tensor, dict[str, object]]:
+        """Feedforward through the tile graph to logits.
+
+        Supports SettleProtocol dynamics via ``return_dynamics``.
+        """
+        return self.forward_logits(
+            x,
+            detach_input=True,
+            beta=beta,
+            target=target,
+            steps=steps,
+            return_trajectory=return_trajectory,
+            return_dynamics=return_dynamics,
+        )
 
     # ──────────────────────────────────────────────
     # Tile-growth API (for dynamic topology)

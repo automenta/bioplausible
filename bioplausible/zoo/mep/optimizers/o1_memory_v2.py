@@ -35,6 +35,7 @@ def _capture_states_no_grad(
     model: nn.Module,
     x: torch.Tensor,
     transition_modules: list[nn.Module],
+    forward_fn: Callable | None = None,
 ) -> list[torch.Tensor]:
     """Capture initial layer states without autograd using hooks on transition modules."""
     states: list[torch.Tensor] = []
@@ -52,7 +53,12 @@ def _capture_states_no_grad(
 
     try:
         with torch.no_grad():
-            model(x)
+            if forward_fn is not None:
+                forward_fn(x)
+            elif hasattr(model, "_forward_impl"):
+                model._forward_impl(x)
+            else:
+                model(x)
     finally:
         for h in handles:
             h.remove()
@@ -171,6 +177,7 @@ def settle_manual_o1(
     momentum: float = 0.5,
     loss_type: str = "cross_entropy",
     softmax_temperature: float = 1.0,
+    forward_fn: Callable | None = None,
 ) -> list[torch.Tensor]:
     """
     O(1) memory settling using analytic gradients.
@@ -189,6 +196,7 @@ def settle_manual_o1(
         momentum: Momentum factor.
         loss_type: 'mse' or 'cross_entropy'.
         softmax_temperature: Temperature for softmax.
+        forward_fn: Optional custom forward function to avoid recursion.
 
     Returns:
         List of settled state tensors.
@@ -196,7 +204,7 @@ def settle_manual_o1(
 
     # Capture initial states (no_grad)
     with torch.no_grad():
-        states = _capture_states_no_grad(model, x, transition_modules)
+        states = _capture_states_no_grad(model, x, transition_modules, forward_fn)
 
     if not states:
         if len(transition_modules) > 0:

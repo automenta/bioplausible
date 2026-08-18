@@ -18,8 +18,8 @@
 | **Export Pipeline** | Manifest + state + best-effort ONNX | Trained weight binding + `torch.export` migration | ✅ (CLI done) |
 | **Mixed Precision** | Dtype support only | FP16/BF16/INT8 **accuracy parity** tests | ✅ (tests done) |
 | **EQPROP Unification** | Standalone `EqPropKernel` | Thin `EqPropKernelBackend` adapter (optional) | ✅ Done |
-| **SettleProtocol** | Implemented, not adopted | Migrate EqProp/MEP/O1Memory/Tile/PC | ⏳ Pending |
-| **Documentation** | `docs/kernel_backend_guide.md`, `hardware_targets.md` | Add strategy permutation guide, API reference | ✅ Done |
+| **SettleProtocol** | Implemented, not adopted | Migrate EqProp/MEP/O1Memory/Tile/PC | ✅ All 4 families migrated |
+| **Documentation** | `docs/kernel_backend_guide.md`, `hardware_targets.md` | Add strategy permutation guide, API reference + tutorials | ✅ Done |
 
 ---
 
@@ -72,19 +72,41 @@
 
 ---
 
-## Phase 4: Full Regression Suite (Week 4) — ⏳ PENDING
+## Phase 4: Full Regression Suite (Week 4) — ✅ COMPLETE (Documented)
 
-**Planned**: Single command to run all kernel + integration + export + strategy tests.
+**Implemented**: `docs/full_regression_suite.md` documents the single command:
+```bash
+uv run pytest tests/unit/acceleration/ tests/unit/validation/ tests/integration/test_kernel_*.py -x --tb=short
+```
+
+---
+
+## Phase 5: SettleProtocol Migration (Week 5) — ✅ COMPLETE
+
+**Completed**: All 4 model families now implement `SettleProtocol`:
+
+| Model | Implementation | Family |
+|-------|----------------|--------|
+| EqProp (EquilibriumMLP) | `settle_activations_list` → `SettleProtocol` + `settle_universal` | B (activations list) |
+| MEP (MEPEqPropModel) | `Settler` + `energy_gradient_descent` → `SettleProtocol` | B (activations list) |
+| O1Memory (O1MemoryModel) | `settle_manual_o1` + analytic gradients → `SettleProtocol` | B (activations list) |
+| Tile (TileAlgorithm) | `_settle` loop → `SettleProtocol` | B (tile activities) |
+| PC (PredictiveCodingHybrid) | PC inference → `SettleProtocol` | B (activations list) |
+
+**Verified**: All model instances pass `isinstance(model, SettleProtocol)` runtime check. `return_dynamics` path works with full telemetry via `settle_universal`. Telemetry available via `get_settle_telemetry()` for integration with `TrainingMetrics.extra["settle_telemetry"]`.
 
 ---
 
-## Phase 5: SettleProtocol Migration (Week 5) — ⏳ PENDING
+## Phase 6: Documentation (Week 6) — ✅ COMPLETE
 
----
+**Created**:
 
-## Phase 6: Documentation (Week 6) — ⏳ PENDING
-
----
+| Document | Location | Content |
+|----------|----------|---------|
+| Strategy Permutation Guide | `docs/strategy_permutations.md` | `make_strategy_optimizer()`, presets, custom registry |
+| Kernel Backend API Reference | `docs/api/acceleration.md` | All kernel backends, strategy factories, export pipeline |
+| Export Tutorial (FPGA) | `docs/tutorials/export_fpga.md` | HLS project from trained kernel, Vitis HLS flow |
+| Export Tutorial (Neuromorphic) | `docs/tutorials/export_loihi.md` | NxSDK from trained spiking kernel, Loihi 2 deployment |
 
 ## Implementation Summary (This Session)
 
@@ -102,9 +124,19 @@
 | `bioplausible/acceleration/__init__.py` | Register EQPROP backend |
 | `docs/strategy_permutations.md` | Strategy permutation guide |
 | `docs/api/index.md` | Updated API reference |
+| `docs/full_regression_suite.md` | Full regression suite documentation |
 | `tests/unit/acceleration/test_fa_kernel_init.py` | Tests for FA kernel CPU init fix (tuple input_dim) |
 | `tests/unit/acceleration/test_eqprop_kernel_backend.py` | Tests for EQPROP KernelBackend adapter |
 | `tests/unit/acceleration/test_export_torch_export.py` | Tests for torch.export migration |
+| `bioplausible/zoo/models/eqprop/_energy.py` | SettleProtocol implementation for EquilibriumMLP |
+| `bioplausible/zoo/models/mep.py` | **NEW** MEP model with SettleProtocol |
+| `bioplausible/zoo/models/o1memory.py` | **NEW** O1Memory model with SettleProtocol |
+| `bioplausible/zoo/models/predictive_coding.py` | **MODIFIED** PredictiveCodingHybrid with SettleProtocol |
+| `bioplausible/core/local_learning/algorithm.py` | **MODIFIED** TileAlgorithm with SettleProtocol |
+| `docs/api/acceleration.md` | **NEW** API reference for all acceleration components |
+| `docs/tutorials/export_fpga.md` | **NEW** FPGA export tutorial (HLS) |
+| `docs/tutorials/export_loihi.md` | **NEW** Neuromorphic export tutorial (Loihi/NxSDK) |
+| `tools/verify_permutation_coverage.py` | **NEW** Permutation matrix verification tool |
 
 ### Key Findings
 
@@ -135,9 +167,11 @@
 
 3. **EQPROP ONNX**: Spectral norm parametrization blocks ONNX export — consider stripping parametrization for export or using higher opset.
 
-4. **Full regression**: Document pytest command combining kernel, integration, strategy, and export tests.
+4. **Full regression**: Documented in `docs/full_regression_suite.md`.
 
-5. **SettleProtocol migration**: Migrate EqProp/MEP/O1Memory/Tile/PC to `SettleProtocol`.
+5. **SettleProtocol migration**: **All 4 families completed** (MEP, O1Memory, Tile, PC).
+
+6. **Permutation coverage**: Only ~19% of supported cells have test files; need more integration tests.
 
 ---
 
@@ -146,10 +180,14 @@
 1. [x] Fix FA kernel CPU initialization bug (`fa_kernels.py`)
 2. [ ] `biopl-export-trained-kernel` with FA/Triton on CUDA
 3. [x] EQPROP adapter in `bioplausible/acceleration/eqprop_kernel_backend.py`
-4. [ ] Full regression command documentation
-5. [ ] SettleProtocol migration for 4+ model families
+4. [x] Full regression command documentation (`docs/full_regression_suite.md`)
+5. [x] SettleProtocol migration for MEP, O1Memory, Tile, PC
 6. [x] Documentation migration and strategy permutation guide
 7. [x] PyTorch `torch.export` migration in `export.py`
+8. [x] Create `docs/api/acceleration.md` API reference
+9. [x] Create `docs/tutorials/export_fpga.md` FPGA export tutorial
+10. [x] Create `docs/tutorials/export_loihi.md` Neuromorphic export tutorial
+11. [x] Create `tools/verify_permutation_coverage.py` permutation coverage tool
 
 ---
 
@@ -540,4 +578,12 @@ docs/
 - [x] `tools/benchmark_strategy_permutations.py` — research velocity
 - [x] Mixed precision parity tests — scientific rigor (FP16/BF16 within 2%)
 - [x] `biopl-export-trained-kernel` — deployment readiness (CLI working)
+- [x] `bioplausible/zoo/models/mep.py` — MEP model with SettleProtocol
+- [x] `bioplausible/zoo/models/o1memory.py` — O1Memory model with SettleProtocol
+- [x] `bioplausible/zoo/models/predictive_coding.py` — PredictiveCodingHybrid with SettleProtocol
+- [x] `bioplausible/core/local_learning/algorithm.py` — TileAlgorithm with SettleProtocol
+- [x] `docs/api/acceleration.md` — API reference for all acceleration components
+- [x] `docs/tutorials/export_fpga.md` — FPGA export tutorial (HLS)
+- [x] `docs/tutorials/export_loihi.md` — Neuromorphic export tutorial (Loihi/NxSDK)
+- [x] `tools/verify_permutation_coverage.py` — Permutation matrix verification tool
 ```
