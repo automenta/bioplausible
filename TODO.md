@@ -1,0 +1,335 @@
+# Bioplausible Development Plan
+
+**Generated**: 2026-08-18  
+**Status**: Living document — update as work progresses
+
+---
+
+## Executive Summary
+
+Bioplausible is a mature research framework with excellent architectural foundations (registry-driven components, validation tracks, AutoScientist, kernel acceleration). The codebase has ~306 Python files across 24 modules.
+
+**Critical finding**: The "EquiTile" deployment family is **not** tightly coupled to EqProp as feared. The underlying `TileAlgorithm` substrate in `core/local_learning/algorithm.py` is a **generic, algorithm-agnostic tile framework** supporting 6 algorithms via injectable dynamics:
+- `ep` (Equilibrium Propagation)
+- `fa` (Feedback Alignment)
+- `tp` (Target Propagation)
+- `pc` (Predictive Coding)
+- `hebbian` (Pure Hebbian)
+- `snn` (Spiking)
+
+**However**, the deployment models (`conv_equitile`, `graph_equitile`, `rl_equitile`, `timeseries_equitile`, `tile_lm`) **hardcode the head to only "pc" or "ep"** in `build_tile_head()` (base.py:171), ignoring the substrate's full algorithm support. Registry metadata is also incorrect (all claim `credit_assignment_type="hebbian"`).
+
+---
+
+## P0 — Foundation Hardening (Credibility Gates)
+
+*Must complete before claiming publishable results*
+
+| # | Task | File/Module | Status | Verification |
+|---|------|-------------|--------|--------------|
+| P0.1 | **Gradient equivalence testing** — finite-difference verification for every propagator family | `tests/integration/test_gradient_equivalence.py` (NEW) | ❌ Missing | `pytest tests/integration/test_gradient_equivalence.py` |
+| P0.2 | **Backprop parity benchmark suite** — compute-matched comparisons with CIs/effect sizes | `bioplausible/validation/backprop_parity.py` | 🔄 Partial | `biopl-parity --model eqprop --tasks mnist,cifar10 --seeds 10` |
+| P0.3 | **Registry metadata audit** — CI gate for all 100+ components | `bioplausible/validation/registry_audit.py` (NEW) | ❌ Missing | `biopl-registry-audit` exits 0 |
+| P0.4 | **Deterministic reproducibility utilities** — global seed, config hash, env capture | `bioplausible/utils/reproducibility.py` (NEW) | ❌ Missing | `biopl-repro-check` runs 1-epoch parity on all models |
+| P0.5 | **Statistical utilities** — bootstrap CIs, Cohen's d, Cliff's delta, BH correction | `bioplausible/validation/statistics.py` | 🔄 Partial | Used by parity suite |
+| P0.6 | **Fix existing LSP/type errors** — Pyright strict mode compliance | `bioplausible/execution/engine.py`, `bioplausible/hyperopt/metrics.py`, `bioplausible/core/local_learning/settling.py`, `bioplausible/zoo/mep/optimizers/o1_memory_v2.py` | ❌ Not started | `pyright .` — zero errors |
+
+---
+
+## P1 — Architecture Recrystallization (Elegant Generalization)
+
+*Fix the "EquiTile = EqProp" misconception; make tile substrate truly algorithm-agnostic*
+
+| # | Task | File/Module | Status | Verification |
+|---|------|-------------|--------|--------------|
+| P1.1 | **Rename "EquiTile" → "TileNet" (or "TileSubstrate")** — the deployment family name implies EqProp-only; the substrate is generic | `zoo/models/deployments/*.py`, `core/local_learning/algorithm.py`, registry entries | ❌ Not started | All registry `family="tile"` (not "equitile"); model names `conv_tile`, `graph_tile`, etc. |
+| P1.2 | **Fix `build_tile_head()` to respect `config.algorithm`** — currently hardcodes `"pc" if mode=="pc" else "ep"` | `zoo/models/deployments/base.py:171` | ❌ Not started | Head supports `fa`, `tp`, `hebbian`, `snn` via config |
+| P1.3 | **Correct registry metadata** — all 4 deployment models claim `credit_assignment_type="hebbian"` but run PC/EP/backprop | `zoo/models/deployments/vision.py:80`, `graph.py:97`, `rl.py:82`, `timeseries.py:121` | ❌ Not started | Metadata matches actual `config.mode` + `config.algorithm` |
+| P1.4 | **Add FA/TP/Hebbian/SNN deployment variants** — substrate supports them; no deployment models expose them | New model registrations in each deployment module | ❌ Not started | `conv_tile_fa`, `graph_tile_tp`, `rl_tile_hebbian`, `timeseries_tile_snn` registered |
+| P1.5 | **Unify `algorithm` vs `mode` config fields** — overlapping semantics in `TileAlgorithmConfig` and `DeploymentConfig` | `core/local_learning/algorithm.py:291`, `zoo/models/deployments/base.py:69` | ❌ Not started | Single source of truth for dynamics selection |
+| P1.6 | **RL model uses custom Linear heads instead of TileAlgorithm head** — breaks substrate uniformity | `zoo/models/deployments/rl.py:191-209` | ❌ Not started | Actor/critic built via `build_tile_head` with task-specific heads |
+| P1.7 | **TileLM config inconsistency** — `algorithm="ep"` but `mode="backprop"` | `zoo/models/tile_lm.py:301-302` | ❌ Not started | Config matches actual training mode |
+| P1.8 | **Expand `TRAINABLE_MODELS` in demo** — currently only 6 models; should include all tile variants | `demo/runner.py:124-131` | ❌ Not started | Demo trains all tile algorithm families |
+| P1.9 | **Add missing tasks to domain registry** — CIFAR-100, SVHN, graph datasets (Cora, PubMed), more LM/RL tasks | `bioplausible/domains/registry.py:29-51`, `bioplausible/domains/factory.py` | ❌ Not started | `SUPPORTED_TASKS` includes all benchmark datasets |
+
+---
+
+## P1 — Flagship Experiments (Runnable Now, High Visibility)
+
+*Produce publishable results demonstrating bio-plausible parity/excellence*
+
+| # | Experiment | File | Status | Target |
+|---|------------|------|--------|--------|
+| P1.10 | **TileNet Scaling Sweep** — depth/width scaling on MNIST/CIFAR-10 across PC, EP, FA, TP, Hebbian, backprop | `bioplausible/experiments/tile_scaling.py` (NEW) | ❌ Missing | Scaling law plots + Pareto frontiers |
+| P1.11 | **EqProp Family Vision Parity** — all EqProp variants on MNIST/Fashion-MNIST/CIFAR-10/SVHN | `bioplausible/experiments/eqprop_vision_parity.py` (NEW) | ❌ Missing | Variant recommendation matrix per task/budget |
+| P1.12 | **MEP Preset Tournament** — factorized: gradient×update×constraint×feedback | `bioplausible/experiments/mep_tournament.py` (NEW) | ❌ Missing | Factor importance analysis + recommended presets |
+| P1.13 | **Feedback Alignment Depth Scaling** — 10→1000 layers, MNIST + synthetic parity | `bioplausible/experiments/fa_depth_scaling.py` (NEW) | ❌ Missing | Depth-scaling curves proving FA viability |
+| P1.14 | **Mixture-of-Tiles (MoT) Ablation** — dense vs sparse tile routing (OptimizedLMEquiTile exists) | `bioplausible/experiments/mot_ablation.py` (NEW) | ❌ Missing | Does sparse routing help or just add overhead? |
+| P1.15 | **Cross-Domain Transfer** — vision→LM/RL/graph transfer efficiency | `bioplausible/experiments/cross_domain_transfer.py` (NEW) | ❌ Missing | Local learning representations transfer better? |
+| P1.16 | **Tile Algorithm Family Comparison** — PC vs EP vs FA vs TP vs Hebbian vs SNN on same tile substrate | `bioplausible/experiments/tile_algorithm_comparison.py` (NEW) | ❌ Missing | Fair comparison isolating credit assignment |
+
+---
+
+## P1 — Validation Tracks Completion
+
+*Automated scientific rigor across all dimensions*
+
+| # | Track | File | Status | Notes |
+|---|-------|------|--------|-------|
+| P1.17 | **Scaling track** — depth/width/data scaling laws | `bioplausible/validation/tracks/scaling_tracks.py` | 🔄 Partial | Auto-extract power laws from experiments |
+| P1.18 | **Signal track** — gradient alignment, dynamics, convergence | `bioplausible/validation/tracks/signal_tracks.py` | 🔄 Partial | Per-layer cosine similarity, energy trajectories |
+| P1.19 | **Tradeoffs track** — accuracy vs FLOPs vs memory vs energy | `bioplausible/validation/tracks/tradeoff_tracks.py` | 🔄 Partial | Pareto frontiers per model family |
+| P1.20 | **Hardware track** — GPU/CPU/neuromorphic validation | `bioplausible/validation/tracks/hardware_tracks.py` | ❌ Missing | Kernel backend parity, TF32, Triton |
+| P1.21 | **NEBC track** — "Nobody Ever Bothered to Check" | `bioplausible/validation/tracks/nebc_tracks.py` | 🔄 Partial | Systematic negative result documentation |
+| P1.22 | **Core track** — correctness, unit, integration | `bioplausible/validation/tracks/core_tracks.py` | 🔄 Partial | Expand coverage to all new components |
+| P1.23 | **Research track** — novel algorithm evaluation | `bioplausible/validation/tracks/research_tracks.py` | 🔄 Partial | Standardized protocol for new models |
+| P1.24 | **Application track** — vision, language, RL, graph, timeseries | `bioplausible/validation/tracks/application_tracks.py` | 🔄 Partial | Domain-specific benchmarks |
+| P1.25 | **Architecture Comparison track** — model-to-model comparisons | `bioplausible/validation/tracks/architecture_comparison.py` | 🔄 Partial | Automated pairwise comparisons |
+| P1.26 | **Negative Results track** — structured failure documentation | `bioplausible/validation/tracks/negative_results.py` | 🔄 Partial | Integrate with FailureManifestoGenerator |
+
+---
+
+## P1 — Analysis Toolkit (Insight Generation)
+
+*Turn raw experiments into publications*
+
+| # | Tool | File | Status | Target |
+|---|------|------|--------|--------|
+| P1.27 | **Dynamics Analyzer** — energy trajectories, gradient alignment, tile heatmaps | `bioplausible/analysis/dynamics.py` | 🔄 Partial | Interactive Plotly + summary stats |
+| P1.28 | **Scaling Law Fitter** — `fit_power_law()`, Chinchilla curves, extrapolation | `bioplausible/analysis/scaling.py` (NEW) | ❌ Missing | α, β, γ with confidence intervals |
+| P1.29 | **Pareto Frontier** — multi-objective (acc, FLOPs, mem, energy, time) | `bioplausible/analysis/pareto.py` (NEW) | ❌ Missing | Interactive Plotly + knee detection |
+| P1.30 | **Ablation Framework** — leave-one-out, Sobol indices, automated reports | `bioplausible/analysis/ablation.py` | 🔄 Partial | Component contribution + sensitivity |
+| P1.31 | **Algorithm Genealogy** — hyperparameter fingerprints → embeddings → phylogeny | `bioplausible/analysis/genealogy.py` (NEW) | ❌ Missing | Algorithm map for paper figures |
+| P1.32 | **Interpretability Toolkit** — receptive fields, weight spectra, info flow | `bioplausible/analysis/interpretability.py` (NEW) | ❌ Missing | Concept alignment, causal mediation |
+| P1.33 | **Energy Landscape Plotter** — 2D slices of loss/energy surfaces | `bioplausible/analysis/energy_landscape.py` | 🔄 Partial | Visualize basins, barriers, transitions |
+
+---
+
+## P1 — Hardware Acceleration (GPU-First)
+
+| # | Task | File | Status | Target |
+|---|------|------|--------|--------|
+| P1.34 | **Triton kernels for EqProp/MEP** — fused relaxation, Muon NS, Dion SVD, Fisher | `bioplausible/acceleration/triton_kernels.py` | 🔄 Partial | 2-5x speedup on GPU |
+| P1.35 | **Backend auto-dispatch** — CUDA→Triton→CPU→NumPy fallback chain | `bioplausible/acceleration/backends.py` | 🔄 Partial | Profile-guided selection |
+| P1.36 | **torch.compile integration** — custom EqProp backward, dynamic shapes | `bioplausible/acceleration/compile.py` | 🔄 Partial | Graph break minimization |
+| P1.37 | **Reference NumPy/CuPy kernels** — correctness testing, CPU fallback for CI | `bioplausible/acceleration/kernels.py` | 🔄 Partial | Gradient equivalence on every commit |
+| P1.38 | **TileNet kernel backend** — tile-specific fused kernels (activity update, weight update) | `bioplausible/acceleration/tile_kernels.py` | ❌ Missing | Accelerate tile substrate families |
+
+---
+
+## P1 — AutoScientist Enhancement
+
+| # | Task | File | Status |
+|---|------|------|--------|
+| P1.39 | **Chain-of-thought templates** — failure analysis, transfer reasoning, composition | `bioplausible/autoscientist/reasoner.py` | 🔄 Partial |
+| P1.40 | **Literature retrieval** — arXiv API + semantic search for prior art | `bioplausible/autoscientist/proposer.py` | ❌ Missing |
+| P1.41 | **Counterfactual generator** — "What if β schedule changed?" | `bioplausible/autoscientist/proposer.py` | ❌ Missing |
+| P1.42 | **Knowledge Base meta-analysis** — scaling law fits, algorithm fingerprints, failure manifold | `bioplausible/knowledge/kb.py` | 🔄 Partial |
+| P1.43 | **Campaign persistence/resume** — YAML+SQLite, git-like branching | `bioplausible/autoscientist/campaign.py` | 🔄 Partial |
+| P1.44 | **Human-in-the-loop interface** — web dashboard for hypothesis review/approval | `bioplausible/autoscientist/` (NEW) | ❌ Missing |
+| P1.45 | **Local LLM support** — llama.cpp, ollama integration (no API key required) | `bioplausible/autoscientist/reasoner.py` | ❌ Missing |
+
+---
+
+## P2 — Novel Algorithms (Addressing Gaps)
+
+| # | Idea | Family | Effort | Status |
+|---|------|--------|--------|--------|
+| P2.1 | **Sign-Symmetric FA** — feedback = sign(forward), hardware-friendly | FA | Low | ❌ Not started |
+| P2.2 | **TileNet + MEP** — spectral-constrained tile updates | Tile+MEP | Medium | ❌ Not started |
+| P2.3 | **Spiking TileNet** — LIF neurons, STDP, surrogate gradients | Spiking+Tile | High | ❌ Not started |
+| P2.4 | **3D Cortical Column TileNet** — mini-columns, local inhibition | Tile | Medium | ❌ Not started |
+| P2.5 | **Continual TileNet** — EWC + dynamic tile growth | Tile | Medium | ❌ Not started |
+| P2.6 | **Progressive Locality** — start backprop, anneal to EqProp | Hybrid | Medium | ❌ Not started |
+| P2.7 | **Equilibrium Alignment (EqAlign) + TileNet** — native local alignment | FA+Tile | Medium | ❌ Not started |
+| P2.8 | **Forward-Forward on TileNet** — zero backward pass tiles | FF+Tile | Low | ❌ Not started |
+| P2.9 | **Predictive Coding on Tile Graph** — local prediction errors | PC+Tile | Low | ❌ Not started |
+| P2.10 | **Meta-Learned β Schedule** — learned nudge annealing | EqProp | Medium | ❌ Not started |
+| P2.11 | **Hybrid Local-Global** — EqProp body + backprop head (last 1-2 layers) | Hybrid | Medium | ❌ Not started |
+| P2.12 | **Spectral/Normalization Variants** — Lipschitz-1 guarantee for 1000+ layers | Spectral | Medium | ❌ Not started |
+| P2.13 | **Structured Topology Variants** — small-world, hierarchical, modular TileNet | Tile | Medium | ❌ Not started |
+
+---
+
+## P2 — Deployment & Export
+
+| # | Task | File | Status |
+|---|------|------|--------|
+| P2.14 | **ONNX export** — dynamic axes, opset 17+, TileNet support | `bioplausible/zoo/models/deployments/base.py` | 🔄 Partial |
+| P2.15 | **TorchScript export** | Same | 🔄 Partial |
+| P2.16 | **INT8 quantization** (PTQ + QAT) | Same | ❌ Missing |
+| P2.17 | **Ternary weight quantization** (neuromorphic) | Same | ❌ Missing |
+| P2.18 | **Inference server** — FastAPI, batching, TensorRT path | `bioplausible/deployment.py` | ❌ Missing |
+
+---
+
+## P2 — Distributed & P2P
+
+| # | Task | File | Status |
+|---|------|------|--------|
+| P2.19 | **DDP wrapper** for all models | `bioplausible/lightning_/` | 🔄 Partial |
+| P2.20 | **FSDP for large TileNet** (>1B params) | Same | ❌ Missing |
+| P2.21 | **P2P Coordinator** — Kademlia DHT, task dispatch, fault tolerance | `bioplausible/p2p/` | ❌ Missing |
+
+---
+
+## Quick Wins (1-2 days each, High Recruitment Value)
+
+| # | Task | Impact |
+|---|------|--------|
+| QW.1 | **`biopl-scientist --demo`** — 5-min Colab-ready demo (MNIST, TileNet, AutoScientist proposes 3 variants) | Immediate user recruitment |
+| QW.2 | **Leaderboard auto-generation** — GitHub Pages, nightly CI, embeddable | Continuous visibility |
+| QW.3 | **Colab notebooks** — "Train TileNet in browser" per domain (vision, LM, RL, graph, timeseries) | Zero-friction trial |
+| QW.4 | **Parity benchmark CI** — nightly GitHub Action, publishes markdown table to README | Credibility signal |
+| QW.5 | **Failure manifesto gallery** — "What we tried that didn't work" | Trust building |
+| QW.6 | **Sign-Symmetric FA implementation** — ~50 lines, hardware-friendly weight transport solution | Novel algorithm, low effort |
+| QW.7 | **Expand demo `TRAINABLE_MODELS`** — add all tile variants to NiceGUI demo | Showcase algorithm diversity |
+| QW.8 | **Fix LSP/type errors** — clean pyright strict mode | Code quality signal |
+
+---
+
+## Verification Checklist (Per Task Completion)
+
+- [ ] `ruff format . && ruff check --fix .` — formatting/linting
+- [ ] `pyright .` — zero errors in strict mode
+- [ ] `pytest tests/ bioplausible/tests/ --cov=bioplausible --cov-fail-under=55` — tests pass, coverage floor
+- [ ] `pip-audit` — no vulnerable dependencies
+- [ ] Registry metadata complete & accurate (`biopl-registry-audit`)
+- [ ] Gradient equivalence passes for any new propagator (`test_gradient_equivalence.py`)
+- [ ] Parity benchmark runs for any new model family (`biopl-parity`)
+- [ ] Documentation updated (README, relevant .md files)
+- [ ] Demo works with new models (`uv run python demo/main.py`)
+
+---
+
+## Architecture Recrystallization Notes
+
+### Current State (What Exists)
+```
+TileAlgorithm (core/local_learning/algorithm.py)
+├── Supports 6 algorithms via injectable dynamics:
+│   ├── ep  → _ep_activity_update + _contrastive_weight_update + _symmetric_feedback
+│   ├── fa  → _ep_activity_update + _contrastive_weight_update + _no_feedback
+│   ├── tp  → _ep_activity_update + _contrastive_weight_update + custom inverse feedback
+│   ├── pc  → _ep_activity_update + _contrastive_weight_update + _symmetric_feedback
+│   ├── hebbian → _hebbian_activity_update + _hebbian_weight_update + _no_feedback
+│   └── snn → _spiking_activity_update + _contrastive_weight_update + _symmetric_feedback
+├── SettleProtocol implementation (settle_universal)
+├── local_update() — bio-plausible loop (free→nudged→contrastive)
+├── train_step() — autograd BPTT baseline
+└── Tile growth/pruning API
+
+Deployment Models (zoo/models/deployments/)
+├── conv_equitile (vision)  → CNN feature extractor + TileAlgorithm head
+├── graph_equitile (graph)  → GNN feature extractor + TileAlgorithm head
+├── rl_equitile (RL)        → RL feature extractor + custom Linear actor/critic (NOT TileAlgorithm head!)
+├── timeseries_equitile     → Temporal feature extractor + TileAlgorithm head
+└── tile_lm (LM)            → Token embedding + TileAlgorithm (mode=backprop)
+
+Tile-Substrate Models (zoo/models/tile_models.py)
+├── TilePC      — algorithm="pc"
+├── TileTargetProp — algorithm="tp"
+├── TileSNN     — algorithm="snn"
+└── TileGNN     — algorithm="gnn" (uses _symmetric_feedback + custom message passing)
+```
+
+### Target State (After Recrystallization)
+```
+TileNet / TileSubstrate (core/local_learning/algorithm.py) — RENAMED
+├── Single config field: `algorithm: Literal["ep","fa","tp","pc","hebbian","snn"]`
+├── `mode` field removed (redundant with algorithm + training path)
+├── All dynamics injectable, no hardcoded defaults in deployment base
+
+Deployment Models (zoo/models/deployments/)
+├── conv_tile, conv_tile_fa, conv_tile_tp, conv_tile_hebbian, conv_tile_snn
+├── graph_tile, graph_tile_fa, graph_tile_tp, graph_tile_hebbian, graph_tile_snn
+├── rl_tile, rl_tile_fa, rl_tile_tp, rl_tile_hebbian, rl_tile_snn (actor/critic via TileAlgorithm head)
+├── timeseries_tile, timeseries_tile_fa, ...
+└── tile_lm (algorithm configurable, not hardcoded)
+
+Registry Metadata
+├── family = "tile" (not "equitile")
+├── credit_assignment_type matches actual algorithm
+├── locality_level = LOCAL for all tile algorithms
+└── bio_plausibility_score calibrated per algorithm
+```
+
+### Key Inconsistencies to Fix
+1. **`build_tile_head()` ignores `config.algorithm`** — hardcodes PC/EP only (base.py:171)
+2. **Deployment models registered as `family="equitile"`** — should be `"tile"`
+3. **All deployment models claim `credit_assignment_type="hebbian"`** — false for PC/EP/backprop
+4. **RL model bypasses TileAlgorithm head** — uses custom Linear layers
+5. **`algorithm` vs `mode` config overlap** — `TileAlgorithmConfig.algorithm` + `DeploymentConfig.mode` both control dynamics
+6. **TileLM uses `algorithm="ep"` + `mode="backprop"`** — contradictory
+7. **`tile_model_factory` in `_feature_extractors.py` passes both correctly** — but deployment heads don't use it
+8. **Demo `TRAINABLE_MODELS` limited to 6 models** — should showcase all tile algorithms
+9. **Domain registry missing benchmark datasets** — CIFAR-100, SVHN, Cora, PubMed, etc.
+
+---
+
+## Configuration System Notes
+
+The unified config system (`bioplausible/config/unified.py`) is well-designed with:
+- Frozen dataclasses (`@dataclass(frozen=True, slots=True)`) compatible with OmegaConf
+- `BaseConfig` / `BaseStructuredConfig` / `BaseStructuredDefaults` hierarchy
+- `ModelConfig` with all training hyperparameters
+- `load_config` / `save_config` helpers for YAML round-trip
+
+**Inconsistencies to address:**
+- `TileAlgorithmConfig` (core) vs `DeploymentConfig` (deployments) vs `ModelConfig` (unified) — three overlapping config hierarchies
+- `DeploymentConfig.mode` ("pc", "ep", "backprop") vs `TileAlgorithmConfig.algorithm` ("ep", "fa", "tp", "pc", "hebbian", "snn") — redundant
+- `tile_model_factory` in `_feature_extractors.py` correctly maps both, but `build_tile_head()` ignores `algorithm`
+
+---
+
+## Domain/Task System Notes
+
+The domain factory (`bioplausible/domains/factory.py`) uses a match/case pattern with heuristics:
+- Vision: `VisionTask` with dataset_name normalization
+- LM: `LMTask` with tiny_shakespeare, char_ngram
+- RL: `RLTask` with Gymnasium environments
+- Graph: `GraphTask` with Cora, PubMed, Citeseer
+- Tabular: `TabularTask` with sklearn datasets
+
+**Missing from `SUPPORTED_TASKS` (registry.py:29-51):**
+- CIFAR-100, SVHN (vision)
+- WikiText-2, Penn Treebank (LM)
+- Atari environments (RL)
+- ogbn-arxiv (graph)
+- More tabular datasets
+
+---
+
+## Dependencies & Ordering
+
+```
+P0.1, P0.3, P0.4, P0.5, P0.6  →  P0.2 (parity needs stats + gradient check + audit + clean types)
+P1.1, P1.2, P1.3, P1.5  →  P1.4 (new variants need substrate fixes first)
+P1.1, P1.2             →  P1.6 (RL head unification needs substrate fix)
+P1.1, P1.2             →  P1.7 (TileLM consistency needs substrate fix)
+P1.1, P1.2             →  P1.8 (demo expansion needs substrate fix)
+P1.1, P1.9             →  P1.10-P1.16 (experiments need tasks + substrate)
+P1.24-P1.26            →  Need P0.1-P0.4 complete (credible numbers required)
+P1.34-P1.38            →  Independent, can parallelize
+P1.39-P1.45            →  Need P0.1-P0.4 complete (credible numbers required)
+P2.1-P2.13             →  Need P1.1-P1.4 (substrate must support all algorithms)
+```
+
+---
+
+## Success Metrics (Track in Knowledge Base)
+
+| Metric | 6-month Target | 12-month Target |
+|--------|----------------|-----------------|
+| Backprop parity (CIFAR-10) | ≥ 95% of BP accuracy | ≥ 100% (match) |
+| TileNet CIFAR-100 | ≥ 75% | ≥ 80% |
+| TileNet Tiny Shakespeare | ≤ 1.2 BPB | ≤ 1.0 BPB |
+| AutoScientist hypotheses/week | 50 | 200 |
+| Registered algorithms | 100 | 200 |
+| Active contributors | 10 | 30 |
+| Neuromorphic deployments | 1 (Loihi 2) | 3 |
+| Citations/papers using framework | 5 | 20 |
+
+---
+
+*This plan is adaptive. Priorities shift based on experimental results. The Knowledge Base meta-analysis continuously informs what to pursue next.*
