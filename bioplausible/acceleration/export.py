@@ -100,12 +100,26 @@ def _activation_of(kernel: object) -> nn.Module:
     return nn.Identity()
 
 
+def _strip_spectral_norm(module: nn.Module) -> nn.Module:
+    """Remove spectral norm parametrization for ONNX export compatibility."""
+    from torch.nn.utils.parametrize import is_parametrized, remove_parametrizations
+
+    if is_parametrized(module, "weight"):
+        for parametrization in module.parametrizations.weight:
+            if parametrization.__class__.__name__ == "_SpectralNorm":
+                remove_parametrizations(module, "weight")
+                break
+    return module
+
+
 def _build_export_module(
     stack: list[nn.Linear], activation: nn.Module
 ) -> nn.Sequential:
     """Wrap the Linear stack with inter-layer activations for ONNX export."""
     layers: list[nn.Module] = []
     for i, layer in enumerate(stack):
+        # Strip spectral norm for ONNX export compatibility
+        layer = _strip_spectral_norm(layer)
         layers.append(layer)
         if i < len(stack) - 1 and not isinstance(activation, nn.Identity):
             layers.append(activation)

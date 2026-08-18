@@ -247,6 +247,8 @@ SKIP_MODELS = {
     # Determinism assert (fixed seed => identical output) is inapplicable to a
     # by-design stochastic forward facade (PLAN4 S0b).
     "noisy_looped_mlp": "stochastic/noisy forward facade under a determinism assert",
+    "optical_looped_mlp": "stochastic phase+detector noise in forward_dynamics",
+    "quantum_looped_mlp": "stochastic measurement shot-noise in forward_dynamics",
 }
 
 # =============================================================================

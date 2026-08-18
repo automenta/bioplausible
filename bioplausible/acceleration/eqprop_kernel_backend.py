@@ -174,7 +174,10 @@ class EqPropKernelBackend:
         xp = kernel.xp
 
         def to_torch(arr):
-            if hasattr(arr, "__array__"):
+            # Handle CuPy arrays explicitly
+            if hasattr(arr, "get"):  # CuPy array
+                arr = arr.get()
+            elif hasattr(arr, "__array__"):
                 arr = np.asarray(arr)
             return torch.from_numpy(arr).to(device=self._device, dtype=self._dtype)
 
@@ -224,27 +227,32 @@ class EqPropKernelBackend:
         h_free, act_log, info = kernel.solve_equilibrium(x_np)
         logits_np = kernel.compute_output(h_free)
 
-        # Convert logits to torch
-        if isinstance(logits_np, xp.ndarray):
-            logits = torch.from_numpy(np.asarray(logits_np)).to(
-                device=self._device, dtype=self._dtype
-            )
-        else:
-            logits = torch.from_numpy(logits_np).to(device=self._device, dtype=self._dtype)
+        # Convert logits to torch (handle CuPy arrays)
+        if hasattr(logits_np, "get"):  # CuPy array
+            logits_np = logits_np.get()
+        elif hasattr(logits_np, "__array__"):
+            logits_np = np.asarray(logits_np)
+        logits = torch.from_numpy(logits_np).to(device=self._device, dtype=self._dtype)
 
         # Build activations list for compatibility
         activations = [x]
         if act_log:
             last_acts = act_log[-1]
             if "h" in last_acts:
-                h_tensor = torch.from_numpy(
-                    np.asarray(last_acts["h"])
-                ).to(device=self._device, dtype=self._dtype)
+                h_arr = last_acts["h"]
+                if hasattr(h_arr, "get"):
+                    h_arr = h_arr.get()
+                elif hasattr(h_arr, "__array__"):
+                    h_arr = np.asarray(h_arr)
+                h_tensor = torch.from_numpy(h_arr).to(device=self._device, dtype=self._dtype)
                 activations.append(h_tensor)
             if "h_next" in last_acts:
-                h_next = torch.from_numpy(
-                    np.asarray(last_acts["h_next"])
-                ).to(device=self._device, dtype=self._dtype)
+                h_next_arr = last_acts["h_next"]
+                if hasattr(h_next_arr, "get"):
+                    h_next_arr = h_next_arr.get()
+                elif hasattr(h_next_arr, "__array__"):
+                    h_next_arr = np.asarray(h_next_arr)
+                h_next = torch.from_numpy(h_next_arr).to(device=self._device, dtype=self._dtype)
                 activations.append(h_next)
         activations.append(logits)
 
@@ -317,12 +325,11 @@ class EqPropKernelBackend:
         h_star, _, _ = kernel.solve_equilibrium(x_np)
         logits_np = kernel.compute_output(h_star)
 
-        if isinstance(logits_np, xp.ndarray):
-            logits = torch.from_numpy(np.asarray(logits_np)).to(
-                device=self._device, dtype=self._dtype
-            )
-        else:
-            logits = torch.from_numpy(logits_np).to(device=self._device, dtype=self._dtype)
+        if hasattr(logits_np, "get"):
+            logits_np = logits_np.get()
+        elif hasattr(logits_np, "__array__"):
+            logits_np = np.asarray(logits_np)
+        logits = torch.from_numpy(logits_np).to(device=self._device, dtype=self._dtype)
 
         return logits
 

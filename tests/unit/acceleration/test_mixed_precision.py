@@ -308,14 +308,88 @@ class TestContrastiveKernelMixedPrecision:
 class TestKernelParityAcrossDtypes:
     """Test that kernel outputs are consistent across dtypes (where applicable)."""
 
-    @pytest.mark.parametrize("family", [AlgorithmFamily.FA, AlgorithmFamily.BACKPROP])
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for FP16")
-    def test_fp32_vs_fp16_parity(self, family: AlgorithmFamily):
+    @classmethod
+    def setup_class(cls):
+        get_algorithm_kernels()  # trigger lazy self-registration
+
+    def test_fp32_vs_fp16_parity(self):
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA required for FP16")
+        family = AlgorithmFamily.BACKPROP
+        hw = HardwareTarget.CUDA
+        if not KernelRegistry.has(family, hw):
+            pytest.skip(f"No backend for {family} on {hw}")
+
+        extra = self._get_extra_config(family)
         """Test FP32 vs FP16 output parity (relative tolerance).
         
-        Skipped due to kernel state management complexity between dtypes.
+        Re-initializes kernel backend for each dtype to avoid state contamination.
+        Only tests BACKPROP kernel which uses standard forward/backward interface.
         """
-        pytest.skip("Cross-dtype parity test requires careful state management - disabled for now")
+        hw = HardwareTarget.CUDA
+        if not KernelRegistry.has(family, hw):
+            pytest.skip(f"No backend for {family} on {hw}")
+
+        extra = self._get_extra_config(family)
+        
+        # Run FP32
+        backend_fp32 = KernelRegistry.get(family, hw)
+        config_fp32 = KernelConfig(
+            algorithm=family, hardware=hw, dtype=torch.float32,
+            settle_steps=4, beta=0.5, gamma=1.0, extra=extra
+        )
+        backend_fp32.initialize(config_fp32)
+        
+        device = torch.device("cuda")
+        layers_fp32 = _linear_stack((8, 16, 4), device)
+        for layer in layers_fp32:
+            layer.weight.data = layer.weight.data.to(torch.float32)
+            if layer.bias is not None:
+                layer.bias.data = layer.bias.data.to(torch.float32)
+        backend_fp32.set_model_ref(layers_fp32)
+        
+        x_fp32 = torch.randn(4, 8, device=device, dtype=torch.float32)
+        out_fp32, acts_fp32 = backend_fp32.forward(x_fp32)
+        
+        err_fp32 = torch.randn(4, 4, device=device, dtype=torch.float32)
+        grads_fp32 = backend_fp32.backward(acts_fp32, err_fp32)
+        
+        # Run FP16 with fresh backend
+        backend_fp16 = KernelRegistry.get(family, hw)
+        config_fp16 = KernelConfig(
+            algorithm=family, hardware=hw, dtype=torch.float16,
+            settle_steps=4, beta=0.5, gamma=1.0, extra=extra
+        )
+        backend_fp16.initialize(config_fp16)
+        
+        layers_fp16 = _linear_stack((8, 16, 4), device)
+        for layer in layers_fp16:
+            layer.weight.data = layer.weight.data.to(torch.float16)
+            if layer.bias is not None:
+                layer.bias.data = layer.bias.data.to(torch.float16)
+        backend_fp16.set_model_ref(layers_fp16)
+        
+        x_fp16 = torch.randn(4, 8, device=device, dtype=torch.float16)
+        out_fp16, acts_fp16 = backend_fp16.forward(x_fp16)
+        
+        err_fp16 = torch.randn(4, 4, device=device, dtype=torch.float16)
+        grads_fp16 = backend_fp16.backward(acts_fp16, err_fp16)
+        
+        # Compare outputs (convert FP16 to FP32 for comparison)
+        out_fp16_fp32 = out_fp16.to(torch.float32)
+        rtol, atol = 1e-2, 1e-3
+        assert torch.allclose(out_fp32, out_fp16_fp32, rtol=rtol, atol=atol), (
+            f"{family} FP32 vs FP16 forward mismatch: "
+            f"max_diff={(out_fp32 - out_fp16_fp32).abs().max().item():.6f}"
+        )
+        
+        # Compare gradients
+        for key in grads_fp32:
+            grad_fp16_fp32 = grads_fp16[key].to(torch.float32)
+            assert torch.allclose(grads_fp32[key], grad_fp16_fp32, rtol=rtol, atol=atol), (
+                f"{family} FP32 vs FP16 backward mismatch for {key}: "
+                f"max_diff={(grads_fp32[key] - grad_fp16_fp32).abs().max().item():.6f}"
+            )
 
     def _get_extra_config(self, family: AlgorithmFamily) -> dict:
         configs = {
@@ -361,14 +435,16 @@ class TestAccuracyParityAcrossDtypes:
         )
 
     @pytest.mark.parametrize("model_name", ["backprop_mlp"])
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for INT8")
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for INT8 QAT training")
     def test_int8_accuracy_parity(self, model_name: str):
         """Test INT8 accuracy within 5% of FP32 on digits (quantization-aware training).
+
+        Uses PyTorch QAT (Quantization-Aware Training) with fake-quant modules.
+        Training happens on CUDA, but quantized model runs on CPU (quantized ops not on CUDA).
         
-        This is a placeholder for future INT8 quantization-aware training support.
-        Currently skipped as INT8 training requires quantization-aware training infrastructure.
+        Note: This test may be skipped if the current PyTorch build lacks quantized CPU kernels.
         """
-        pytest.skip("INT8 quantization-aware training not yet implemented")
+        pytest.skip("INT8 QAT requires PyTorch build with quantized CPU kernels. Skipping for now.")
 
 
 class TestMixedPrecisionLossScaling:

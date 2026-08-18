@@ -210,6 +210,19 @@ def _train_with_strategy(
     n_samples = len(x)
     model.train()
     
+    # Baseline memory (after model setup, before training)
+    model_device = next(model.parameters()).device
+    use_cuda = model_device.type == 'cuda'
+    
+    if use_cuda:
+        torch.cuda.reset_peak_memory_stats()
+        baseline_mb = torch.cuda.max_memory_allocated() / 1e6
+    else:
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        baseline_mb = process.memory_info().rss / 1e6
+    
     start_time = time.perf_counter()
     total_energy = 0.0
     
@@ -247,19 +260,22 @@ def _train_with_strategy(
         logits = model(x[:128])
         accuracy = (logits.argmax(1) == y[:128]).float().mean().item()
     
-    # Peak memory
-    if torch.cuda.is_available():
-        peak_mb = torch.cuda.max_memory_allocated() / 1e6
+    # Peak memory (delta from baseline)
+    if use_cuda:
+        peak_mb = (torch.cuda.max_memory_allocated() / 1e6) - baseline_mb
         torch.cuda.reset_peak_memory_stats()
     else:
-        import resource
-        peak_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        current_rss = process.memory_info().rss
+        peak_mb = (current_rss / 1e6) - baseline_mb
     
     return {
         "status": "ok",
         "accuracy": accuracy,
         "time_per_epoch_ms": elapsed_ms / epochs if epochs > 0 else 0,
-        "peak_memory_mb": peak_mb,
+        "peak_memory_mb": max(0.0, peak_mb),
         "energy_proxy": total_energy / epochs if epochs > 0 else 0,
         "epochs_trained": epochs,
     }
