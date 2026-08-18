@@ -38,16 +38,20 @@ class TrialMetrics:
     status: str  # 'completed', 'failed', 'running'
 
     # Computed objectives (not part of init)
-    objectives: np.ndarray = field(init=False, repr=False, default=None)
+    objectives: np.ndarray | None = field(init=False, repr=False, default=None)
 
     def __post_init__(self):
         # Normalize for comparison
-        object.__setattr__(self, 'objectives', np.array([
-            self.accuracy,  # Higher is better
-            -self.perplexity,  # Convert to maximization (higher is better)
-            -self.iteration_time,  # Convert to maximization
-            -self.param_count,  # Convert to maximization
-        ]))
+        object.__setattr__(
+            self,
+            "objectives",
+            np.array([
+                self.accuracy,  # Higher is better
+                -self.perplexity,  # Convert to maximization (higher is better)
+                -self.iteration_time,  # Convert to maximization
+                -self.param_count,  # Convert to maximization
+            ]),
+        )
 
     def dominates(self, other: TrialMetrics) -> bool:
         """Check if this trial Pareto-dominates another.

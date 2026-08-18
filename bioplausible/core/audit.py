@@ -82,6 +82,7 @@ class AuditRow:
 
 def _load_registry() -> None:
     """Import the registration modules so every component is present."""
+    import bioplausible.zoo  # ruff: ignore[unused-import] (registration side effect)
 
 
 def _parity_status(name: str) -> str:

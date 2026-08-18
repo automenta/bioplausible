@@ -30,6 +30,7 @@ _DynamicsDict = dict[str, object]
 # Phase 3: Unified SettleProtocol for all settling families
 # ============================================================
 
+
 @dataclass(frozen=True, slots=True)
 class SettleConfig:
     """Unified settling configuration (sweepable hyperparameters)."""
@@ -80,7 +81,9 @@ class SettleProtocol(Protocol):
     max_steps: int
 
     # Core dynamics (algorithm-specific signature)
-    def _initialize_state(self, x: torch.Tensor) -> torch.Tensor | list[torch.Tensor]: ...
+    def _initialize_state(
+        self, x: torch.Tensor
+    ) -> torch.Tensor | list[torch.Tensor]: ...
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor: ...
     def _step(
         self, state: torch.Tensor | list[torch.Tensor], x_transformed: torch.Tensor
@@ -88,11 +91,16 @@ class SettleProtocol(Protocol):
 
     # Optional: algorithm-specific convergence check
     def _check_converged(
-        self, state_new: torch.Tensor | list[torch.Tensor], state_old: torch.Tensor | list[torch.Tensor], step: int
+        self,
+        state_new: torch.Tensor | list[torch.Tensor],
+        state_old: torch.Tensor | list[torch.Tensor],
+        step: int,
     ) -> bool: ...
 
     # Telemetry hooks (called by shared primitive)
-    def _on_step_end(self, step: int, state: torch.Tensor | list[torch.Tensor], delta: float): ...
+    def _on_step_end(
+        self, step: int, state: torch.Tensor | list[torch.Tensor], delta: float
+    ): ...
     def _on_converged(self, step: int, final_delta: float): ...
     def _on_max_steps(self, step: int, final_delta: float): ...
 
@@ -245,7 +253,7 @@ def settle_universal(
     state = model._initialize_state(x)
 
     deltas: list[float] = []
-    trajectory: list = [] if return_trajectory else None
+    trajectory: list[object] | None = [] if return_trajectory else None
 
     def _step_fn(s):
         if torch.is_grad_enabled():
