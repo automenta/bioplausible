@@ -127,9 +127,7 @@ class SNNKernelBackend:
 
         # Storage (per-layer width: layer 0 is the input layer, layers 1..N
         # use each Linear layer's out_features).
-        widths = [v_list[0].shape[1]] + [
-            layer.out_features for layer in self._layers
-        ]
+        widths = [v_list[0].shape[1]] + [layer.out_features for layer in self._layers]
         for width in widths:
             spike_trains.append(
                 torch.zeros(
@@ -172,9 +170,7 @@ class SNNKernelBackend:
                 i_syn = i_syn_list[layer_idx]
 
                 # Refractory handling
-                v = torch.where(
-                    refractory_count[layer_idx] > 0, torch.zeros_like(v), v
-                )
+                v = torch.where(refractory_count[layer_idx] > 0, torch.zeros_like(v), v)
 
                 # LIF step
                 v_new, i_syn_new, spikes = lif_step(

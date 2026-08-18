@@ -37,17 +37,29 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "kmnist",
     "usps",
     "cifar10",
+    "cifar100",
+    "svhn",
     # language
     "tiny_shakespeare",
     "char_ngram",
+    "wikitext2",
+    "penn_treebank",
     # rl
     "pendulum",
     "acrobot",
     "cartpole",
+    "mountain_car",
+    "lunar_lander",
+    # graph
+    "cora",
+    "citeseer",
+    "pubmed",
     # tabular
     "breast_cancer",
     "iris",
     "wine",
+    "diabetes",
+    "california_housing",
 })
 
 

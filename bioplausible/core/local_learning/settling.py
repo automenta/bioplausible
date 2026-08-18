@@ -296,9 +296,8 @@ def settle_universal(
         custom_check = getattr(model, "_check_converged", None)
         if custom_check is not None:
             converged_check = custom_check(state_new, state, step_idx)
-        else:
-            if step_idx > start and delta < threshold:
-                converged_check = True
+        elif step_idx > start and delta < threshold:
+            converged_check = True
 
         if converged_check:
             state = state_new
@@ -966,8 +965,8 @@ class EquilibriumFunction(autograd.Function):
 __all__ = [
     "EquilibriumFunction",
     "EquilibriumSettleProtocol",
-    "SettleProtocol",
     "SettleConfig",
+    "SettleProtocol",
     "SettleTelemetry",
     "_run_with_sn_freeze",
     "energy_gradient_descent",

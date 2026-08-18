@@ -124,6 +124,7 @@ class TestEQPROPKernelBackendInitialization:
         # Note: use_gpu depends on CuPy availability, not just CUDA
         # If CuPy is available, it should be True
         from bioplausible.acceleration.kernels import HAS_CUPY
+
         if HAS_CUPY:
             assert backend._kernel.use_gpu is True
 
@@ -279,8 +280,12 @@ class TestEQPROPKernelBackendWeightSync:
         # Check kernel weights were updated from model
         kernel_embed = backend._kernel.weights["embed"]
         kernel_head = backend._kernel.weights["head"]
-        assert torch.allclose(torch.from_numpy(kernel_embed), layers[0].weight, atol=1e-5)
-        assert torch.allclose(torch.from_numpy(kernel_head), layers[1].weight, atol=1e-5)
+        assert torch.allclose(
+            torch.from_numpy(kernel_embed), layers[0].weight, atol=1e-5
+        )
+        assert torch.allclose(
+            torch.from_numpy(kernel_head), layers[1].weight, atol=1e-5
+        )
 
     def test_weight_sync_back_to_model_on_contrastive_step(self):
         """Weights should sync from kernel back to model after training."""
@@ -288,7 +293,13 @@ class TestEQPROPKernelBackendWeightSync:
         config = KernelConfig(
             algorithm=AlgorithmFamily.EQPROP,
             hardware=HardwareTarget.CPU,
-            extra={"input_dim": 64, "hidden_dim": 64, "output_dim": 10, "max_steps": 10, "lr": 0.5},
+            extra={
+                "input_dim": 64,
+                "hidden_dim": 64,
+                "output_dim": 10,
+                "max_steps": 10,
+                "lr": 0.5,
+            },
         )
         backend.initialize(config)
 

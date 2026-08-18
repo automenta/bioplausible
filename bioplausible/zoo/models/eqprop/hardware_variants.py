@@ -37,8 +37,8 @@ __all__ = [
     "CrossbarLoopedMLP",
     "NoisyLoopedMLP",
     "OpticalLoopedMLP",
-    "QuantumLoopedMLP",
     "QuantizedLoopedMLP",
+    "QuantumLoopedMLP",
     "SpikingLoopedMLP",
 ]
 

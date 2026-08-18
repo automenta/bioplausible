@@ -1,22 +1,21 @@
 """
-EquiTile Time Series: Sequential Data Modeling
-==============================================
+TileNet Time Series: Sequential Data Modeling
+=============================================
 
-Extends EquiTile for time series and sequential data:
-- TimeSeriesEquiTile: Recurrent and convolutional architectures
+Extends TileNet for time series and sequential data:
+- TimeSeriesTileNet: Recurrent and convolutional architectures
 - Temporal attention mechanisms
 - Support for forecasting, classification, and anomaly detection
 - Multi-variate time series support
 
 The shared temporal layers now live in the private ``_feature_extractors``
 module and are re-exported; this module adds the time-series-specific model
-(output projections, forecasting, anomaly detection). The time-series model
-trains with standard backprop, so its config deliberately excludes the PC/EP
-dynamics fields.
+(output projections, forecasting, anomaly detection).
 """
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -43,8 +42,8 @@ __all__ = [
     "TemporalAttentionLayer",
     "TemporalPositionalEncoding",
     "TimeSeriesConfig",
-    "TimeSeriesEquiTile",
     "TimeSeriesEquiTileLayer",
+    "TimeSeriesTileNet",
     "create_anomaly_detection_model",
     "create_classification_model",
     "create_forecasting_model",
@@ -60,7 +59,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class TimeSeriesConfig(TemporalDeploymentConfig):
-    """Configuration for Time Series EquiTile.
+    """Configuration for Time Series TileNet.
 
     Inherits the shared deployment fields from ``TemporalDeploymentConfig`` and
     keeps the same defaults the historical ``TimeSeriesConfig`` exposed.
@@ -108,24 +107,37 @@ class _TimeSeriesEncoder(nn.Module):
 
 
 # =============================================================================
-# Time Series EquiTile
+# Time Series TileNet
 # =============================================================================
 
 
+def _credit_assignment_type(algorithm: str) -> str:
+    """Map algorithm to credit assignment type."""
+    mapping = {
+        "ep": "equilibrium",
+        "pc": "equilibrium",
+        "fa": "target",
+        "tp": "target",
+        "hebbian": "hebbian",
+        "snn": "spiking",
+    }
+    return mapping.get(algorithm, "equilibrium")
+
+
 @register_model(
-    "timeseries_equitile",
+    "timeseries_tile",
     domains=[Domain.TIMESERIES],
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.75,
     requires_backward=False,
-    credit_assignment_type="hebbian",
-    family="equitile",
+    credit_assignment_type="equilibrium",
+    family="tile",
     tags=[status_tag("experimental")],
 )
-class TimeSeriesEquiTile(BioModel):
-    """Time Series EquiTile for sequential data.
+class TimeSeriesTileNet(BioModel):
+    """Time Series TileNet for sequential data.
 
-    Combines temporal attention with EquiTile's tile-based
+    Combines temporal attention with TileNet's tile-based
     processing for forecasting, classification, and anomaly detection.
 
     Parameters
@@ -136,7 +148,7 @@ class TimeSeriesEquiTile(BioModel):
         Additional configuration parameters
     """
 
-    algorithm_name = "TimeSeriesEquiTile"
+    algorithm_name = "TimeSeriesTileNet"
 
     @classmethod
     def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
@@ -150,7 +162,7 @@ class TimeSeriesEquiTile(BioModel):
         task_type,
         **kwargs,
     ):
-        """Build TimeSeriesEquiTile from factory arguments."""
+        """Build TimeSeriesTileNet from factory arguments."""
         model_type = kwargs.get("model_type", "forecasting")
         pred_len = kwargs.get("pred_len", 10)
 
@@ -205,7 +217,7 @@ class TimeSeriesEquiTile(BioModel):
 
         super().__init__(
             ModelConfig(
-                name="timeseries_equitile",
+                name="timeseries_tile",
                 input_dim=config.input_dim,
                 output_dim=head_output_dim,
             )
@@ -369,7 +381,7 @@ def create_forecasting_model(
     seq_len: int,
     pred_len: int,
     **kwargs,
-) -> TimeSeriesEquiTile:
+) -> TimeSeriesTileNet:
     """Create forecasting model."""
     config = TimeSeriesConfig(
         input_dim=input_dim,
@@ -379,7 +391,7 @@ def create_forecasting_model(
         model_type="forecasting",
         **kwargs,
     )
-    return TimeSeriesEquiTile(config)
+    return TimeSeriesTileNet(config)
 
 
 def create_classification_model(
@@ -387,7 +399,7 @@ def create_classification_model(
     seq_len: int,
     num_classes: int,
     **kwargs,
-) -> TimeSeriesEquiTile:
+) -> TimeSeriesTileNet:
     """Create classification model."""
     config = TimeSeriesConfig(
         input_dim=input_dim,
@@ -396,14 +408,14 @@ def create_classification_model(
         model_type="classification",
         **kwargs,
     )
-    return TimeSeriesEquiTile(config)
+    return TimeSeriesTileNet(config)
 
 
 def create_anomaly_detection_model(
     input_dim: int,
     seq_len: int,
     **kwargs,
-) -> TimeSeriesEquiTile:
+) -> TimeSeriesTileNet:
     """Create anomaly detection model."""
     config = TimeSeriesConfig(
         input_dim=input_dim,
@@ -412,4 +424,48 @@ def create_anomaly_detection_model(
         model_type="anomaly_detection",
         **kwargs,
     )
-    return TimeSeriesEquiTile(config)
+    return TimeSeriesTileNet(config)
+
+
+# =============================================================================
+# Algorithm-specific Variants (registered separately for discovery)
+# =============================================================================
+
+
+def _register_variant(name: str, algorithm: str, credit_type: str, bio_score: float):
+    """Helper to register algorithm-specific TimeSeriesTileNet variants."""
+
+    @register_model(
+        name,
+        domains=[Domain.TIMESERIES],
+        locality_level=LocalityLevel.LOCAL,
+        bio_plausibility_score=bio_score,
+        requires_backward=False,
+        credit_assignment_type=credit_type,
+        family="tile",
+        tags=[status_tag("experimental")],
+    )
+    class _TimeSeriesTileNetVariant(TimeSeriesTileNet):
+        algorithm_name = f"TimeSeriesTileNet-{algorithm.upper()}"
+
+        def __init__(
+            self,
+            config: TimeSeriesConfig | None = None,
+            **kwargs: object,
+        ) -> None:
+            if config is None:
+                kwargs.setdefault("algorithm", algorithm)
+                config = TimeSeriesConfig(**kwargs)
+            elif config.algorithm != algorithm:
+                config = dataclasses.replace(config, algorithm=algorithm)
+            super().__init__(config=config)
+
+    return _TimeSeriesTileNetVariant
+
+
+# Register algorithm-specific variants
+_register_variant("timeseries_tile_fa", "fa", "target", 0.7)
+_register_variant("timeseries_tile_tp", "tp", "target", 0.65)
+_register_variant("timeseries_tile_hebbian", "hebbian", "hebbian", 0.6)
+_register_variant("timeseries_tile_snn", "snn", "spiking", 0.65)
+_register_variant("timeseries_tile_pc", "pc", "equilibrium", 0.75)

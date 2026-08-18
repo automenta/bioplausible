@@ -709,6 +709,6 @@ class MEP_TritonOps:
 __all__ = [
     "HAS_CUPY",
     "HAS_TRITON",
-    "TritonEqPropOps",
     "MEP_TritonOps",
+    "TritonEqPropOps",
 ]

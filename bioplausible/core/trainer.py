@@ -1113,8 +1113,8 @@ class CoreTrainer:
             CrossbarLoopedMLP,
             NoisyLoopedMLP,
             OpticalLoopedMLP,
-            QuantumLoopedMLP,
             QuantizedLoopedMLP,
+            QuantumLoopedMLP,
             SpikingLoopedMLP,
         )
 
@@ -1201,14 +1201,14 @@ class CoreTrainer:
         if not self.config.use_kernel:
             return model
 
+        import torch
+
         from bioplausible.acceleration import (
+            HardwareTarget,
             KernelConfig,
             KernelRegistry,
-            AlgorithmFamily,
-            HardwareTarget,
             infer_algorithm_family,
         )
-        import torch
 
         # Infer algorithm family from model name
         family = infer_algorithm_family(self.config.model)

@@ -139,11 +139,15 @@ def _onnx_export(module: nn.Module, input_tensor: torch.Tensor, path: Path) -> N
             output_names=["output"],
             dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
         )
-    except (AttributeError, RuntimeError, TypeError, ValueError):
+    except AttributeError, RuntimeError, TypeError, ValueError:
         # Fallback to legacy exporter for older PyTorch versions or unsupported ops
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message=r".*TorchScript-based ONNX export.*")
-            warnings.filterwarnings("ignore", message=r".*The feature will be removed.*")
+            warnings.filterwarnings(
+                "ignore", message=r".*TorchScript-based ONNX export.*"
+            )
+            warnings.filterwarnings(
+                "ignore", message=r".*The feature will be removed.*"
+            )
             torch.onnx.export(
                 module,
                 (input_tensor,),

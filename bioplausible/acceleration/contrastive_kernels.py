@@ -149,12 +149,10 @@ class BaseContrastiveKernel(ABC):
     @abstractmethod
     def free_phase(self, x: Tensor) -> list[Tensor]:
         """Run free phase forward pass. Returns per-layer activations."""
-        pass
 
     @abstractmethod
     def nudged_phase(self, x: Tensor, target: Tensor) -> list[Tensor]:
         """Run nudged/clamped phase forward pass. Returns per-layer activations."""
-        pass
 
     def compute_update(
         self, free_acts: list[Tensor], nudged_acts: list[Tensor]
@@ -1156,15 +1154,15 @@ def get_contrastive_kernels() -> dict[str, type[BaseContrastiveKernel]]:
     """
     from bioplausible.acceleration.contrastive_kernels import (
         FAContrastiveKernel,
-        HebbianContrastiveKernel,
         FFContrastiveKernel,
-        PEPITAContrastiveKernel,
-        TPContrastiveKernel,
-        PCContrastiveKernel,
-        SNNContrastiveKernel,
-        TileContrastiveKernel,
+        HebbianContrastiveKernel,
         MEPContrastiveKernel,
         O1MemoryContrastiveKernel,
+        PCContrastiveKernel,
+        PEPITAContrastiveKernel,
+        SNNContrastiveKernel,
+        TileContrastiveKernel,
+        TPContrastiveKernel,
     )
 
     return {
@@ -1186,19 +1184,19 @@ register_contrastive_kernels()
 
 
 __all__ = [
+    "BaseContrastiveKernel",
     "ContrastiveConfig",
     "ContrastiveKernel",
-    "BaseContrastiveKernel",
     "FAContrastiveKernel",
-    "HebbianContrastiveKernel",
     "FFContrastiveKernel",
-    "PEPITAContrastiveKernel",
-    "TPContrastiveKernel",
-    "PCContrastiveKernel",
-    "SNNContrastiveKernel",
-    "TileContrastiveKernel",
+    "HebbianContrastiveKernel",
     "MEPContrastiveKernel",
     "O1MemoryContrastiveKernel",
+    "PCContrastiveKernel",
+    "PEPITAContrastiveKernel",
+    "SNNContrastiveKernel",
+    "TPContrastiveKernel",
+    "TileContrastiveKernel",
     "get_contrastive_kernel",
     "register_contrastive_kernels",
 ]

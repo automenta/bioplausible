@@ -249,9 +249,9 @@ def infer_algorithm_family(model_name: str) -> AlgorithmFamily | None:
 __all__ = [
     "AlgorithmFamily",
     "HardwareTarget",
-    "LocalityLevel",
-    "KernelConfig",
     "KernelBackend",
+    "KernelConfig",
     "KernelRegistry",
+    "LocalityLevel",
     "infer_algorithm_family",
 ]

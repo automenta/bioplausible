@@ -115,12 +115,7 @@ class _DemoCallback(BaseExecutionCallback):
 
 
 # Models the demo can train through the generic CoreTrainer path on the
-# supported tasks. Started as backprop+eqprop; EquiTile/pepita/FF/FA were
-# excluded because their core flattening was broken (they received raw image
-# tensors [B,1,H,W] while their Linear layers expect [B, input_dim]). That root
-# bug is now fixed in the zoo models + equitile (see TODO), so the flagship
-# backward-free families train again — the EquiTile-vs-backprop comparison is
-# the recruitment story.
+# supported tasks. Started as backprop+eqprop; TileNet families now included.
 TRAINABLE_MODELS: tuple[str, ...] = (
     "backprop_mlp",
     "eqprop_mlp",
@@ -128,6 +123,11 @@ TRAINABLE_MODELS: tuple[str, ...] = (
     "pepita",
     "forward_forward",
     "standard_fa",
+    "conv_tile",
+    "graph_tile",
+    "rl_tile",
+    "timeseries_tile",
+    "tile_lm",
 )
 
 
@@ -156,7 +156,7 @@ def model_metadata(model: str) -> dict[str, object]:
 
 # Per-model default hidden_dim. The shared 256 default is wasteful/slow for
 # tile-based families where `neurons_per_tile`/`num_tiles` track hidden_dim
-# (EquiTile builds a graph proportional to it), and for tiny forward-only
+# (TileNet builds a graph proportional to it), and for tiny forward-only
 # nets (PEPITA/FF) that are best explored at small scale. Kept central so the
 # demo stays snappy while still allowing the widget tree to override.
 _DEFAULT_HIDDEN_DIM: dict[str, int] = {
@@ -166,6 +166,11 @@ _DEFAULT_HIDDEN_DIM: dict[str, int] = {
     "pepita": 32,
     "forward_forward": 32,
     "standard_fa": 128,
+    "conv_tile": 32,
+    "graph_tile": 32,
+    "rl_tile": 32,
+    "timeseries_tile": 32,
+    "tile_lm": 192,
 }
 
 

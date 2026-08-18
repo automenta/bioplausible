@@ -15,33 +15,30 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import torch
 
 from bioplausible.acceleration import (
     AlgorithmFamily,
     HardwareTarget,
-    KernelConfig,
     KernelRegistry,
     get_algorithm_kernels,
 )
-from bioplausible.acceleration.export import export_kernel, KernelExport
+from bioplausible.acceleration.export import export_kernel
 from bioplausible.core.logging import get_logger
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 
 # Import zoo models to trigger registration
-from bioplausible.zoo import models
 
-if TYPE_CHECKING:
-    from bioplausible.acceleration.kernel_backend import KernelBackend
 
 logger = get_logger()
 
 
 def main(argv: list[str] | None = None) -> int:
     """Run the trained-kernel export CLI."""
-    parser = argparse.ArgumentParser(description="Train a kernel-backed model and export its weights")
+    parser = argparse.ArgumentParser(
+        description="Train a kernel-backed model and export its weights"
+    )
     parser.add_argument(
         "--algorithm",
         default="backprop",
@@ -145,10 +142,15 @@ def main(argv: list[str] | None = None) -> int:
         HardwareTarget.CROSSBAR: torch.device("cpu"),
         HardwareTarget.QUANTUM: torch.device("cpu"),
     }
-    device = device_map.get(target, torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+    device = device_map.get(
+        target, torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    )
 
     # Skip CUDA-only targets on CPU
-    if target in (HardwareTarget.TRITON, HardwareTarget.CUDA) and not torch.cuda.is_available():
+    if (
+        target in (HardwareTarget.TRITON, HardwareTarget.CUDA)
+        and not torch.cuda.is_available()
+    ):
         logger.warning("%s requires CUDA; falling back to CPU", target.value)
         target = HardwareTarget.CPU
         device = torch.device("cpu")
@@ -207,7 +209,10 @@ def main(argv: list[str] | None = None) -> int:
     trainer.setup()
 
     # The model should now have the kernel backend attached
-    if not hasattr(trainer.model, "_kernel_backend") or trainer.model._kernel_backend is None:
+    if (
+        not hasattr(trainer.model, "_kernel_backend")
+        or trainer.model._kernel_backend is None
+    ):
         logger.error("Model does not have a kernel backend attached")
         return 1
 

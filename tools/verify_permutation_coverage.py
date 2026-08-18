@@ -48,14 +48,14 @@ HARDWARE_TARGETS = [
 ]
 
 KERNEL_TYPES = [
-    "standard",      # Standard kernel
-    "contrastive",   # Contrastive/O(1) memory kernel
+    "standard",  # Standard kernel
+    "contrastive",  # Contrastive/O(1) memory kernel
 ]
 
 TEST_TYPES = [
-    "unit",           # Unit tests (parity, init, etc.)
-    "integration",    # Integration tests (training, export)
-    "benchmark",      # Performance benchmarks
+    "unit",  # Unit tests (parity, init, etc.)
+    "integration",  # Integration tests (training, export)
+    "benchmark",  # Performance benchmarks
     "accuracy_parity",  # FP16/BF16/INT8 accuracy parity
 ]
 
@@ -186,11 +186,20 @@ EXPORT_SUPPORT = {
 @dataclass
 class CellStatus:
     """Status of a single matrix cell."""
+
     algorithm: str
     hardware: str
     kernel_type: str
     test_type: str
-    status: Literal["supported", "not_supported", "implemented", "tested", "passing", "failing", "skipped"]
+    status: Literal[
+        "supported",
+        "not_supported",
+        "implemented",
+        "tested",
+        "passing",
+        "failing",
+        "skipped",
+    ]
     test_file: str | None = None
     test_result: str | None = None
     notes: str = ""
@@ -199,6 +208,7 @@ class CellStatus:
 @dataclass
 class CoverageReport:
     """Full coverage report."""
+
     timestamp: str
     total_cells: int
     supported_cells: int
@@ -211,6 +221,7 @@ class CoverageReport:
 # ──────────────────────────────────────────────────────────────────────────────
 # Coverage Analysis
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def check_file_exists(path: str) -> bool:
     """Check if a test file exists."""
@@ -236,7 +247,7 @@ def analyze_cell(
     hardware: str,
     kernel_type: str,
     test_type: str,
-    run_tests: bool = False
+    run_tests: bool = False,
 ) -> CellStatus:
     """Analyze a single matrix cell."""
 
@@ -249,7 +260,7 @@ def analyze_cell(
             kernel_type=kernel_type,
             test_type=test_type,
             status="not_supported",
-            notes=f"{algorithm} does not support {hardware}"
+            notes=f"{algorithm} does not support {hardware}",
         )
 
     # Check test file exists
@@ -261,7 +272,7 @@ def analyze_cell(
             kernel_type=kernel_type,
             test_type=test_type,
             status="implemented",
-            notes=f"No test file defined for {algorithm}/{kernel_type}/{test_type}"
+            notes=f"No test file defined for {algorithm}/{kernel_type}/{test_type}",
         )
 
     file_exists = check_file_exists(test_file)
@@ -273,7 +284,7 @@ def analyze_cell(
             test_type=test_type,
             status="implemented",
             test_file=test_file,
-            notes=f"Test file missing: {test_file}"
+            notes=f"Test file missing: {test_file}",
         )
 
     # Test file exists
@@ -287,7 +298,7 @@ def analyze_cell(
                 test_type=test_type,
                 status="passing",
                 test_file=test_file,
-                test_result=output[:200]
+                test_result=output[:200],
             )
         else:
             return CellStatus(
@@ -297,7 +308,7 @@ def analyze_cell(
                 test_type=test_type,
                 status="failing",
                 test_file=test_file,
-                test_result=output[:500]
+                test_result=output[:500],
             )
     else:
         return CellStatus(
@@ -307,7 +318,7 @@ def analyze_cell(
             test_type=test_type,
             status="tested",
             test_file=test_file,
-            notes="Test file exists (not executed)"
+            notes="Test file exists (not executed)",
         )
 
 
@@ -317,8 +328,12 @@ def generate_report(run_tests: bool = False) -> CoverageReport:
 
     cells = []
 
-    print(f"Analyzing {len(ALGORITHMS)} algorithms × {len(HARDWARE_TARGETS)} hardware × {len(KERNEL_TYPES)} kernel types × {len(TEST_TYPES)} test types...")
-    print(f"Total theoretical cells: {len(ALGORITHMS) * len(HARDWARE_TARGETS) * len(KERNEL_TYPES) * len(TEST_TYPES)}")
+    print(
+        f"Analyzing {len(ALGORITHMS)} algorithms × {len(HARDWARE_TARGETS)} hardware × {len(KERNEL_TYPES)} kernel types × {len(TEST_TYPES)} test types..."
+    )
+    print(
+        f"Total theoretical cells: {len(ALGORITHMS) * len(HARDWARE_TARGETS) * len(KERNEL_TYPES) * len(TEST_TYPES)}"
+    )
 
     for algo in ALGORITHMS:
         for hw in HARDWARE_TARGETS:
@@ -330,7 +345,9 @@ def generate_report(run_tests: bool = False) -> CoverageReport:
     # Count statistics
     total = len(cells)
     supported = sum(1 for c in cells if c.status != "not_supported")
-    implemented = sum(1 for c in cells if c.status in ("implemented", "tested", "passing", "failing"))
+    implemented = sum(
+        1 for c in cells if c.status in ("implemented", "tested", "passing", "failing")
+    )
     tested = sum(1 for c in cells if c.status in ("tested", "passing", "failing"))
     passing = sum(1 for c in cells if c.status == "passing")
 
@@ -341,7 +358,7 @@ def generate_report(run_tests: bool = False) -> CoverageReport:
         implemented_cells=implemented,
         tested_cells=tested,
         passing_cells=passing,
-        cells=cells
+        cells=cells,
     )
 
 
@@ -352,10 +369,18 @@ def print_summary(report: CoverageReport) -> None:
     print("=" * 80)
     print(f"Timestamp: {report.timestamp}")
     print(f"Total cells: {report.total_cells}")
-    print(f"Supported:   {report.supported_cells:4d} ({report.supported_cells / report.total_cells * 100:.1f}%)")
-    print(f"Implemented: {report.implemented_cells:4d} ({report.implemented_cells / report.total_cells * 100:.1f}%)")
-    print(f"Tested:      {report.tested_cells:4d} ({report.tested_cells / report.total_cells * 100:.1f}%)")
-    print(f"Passing:     {report.passing_cells:4d} ({report.passing_cells / report.total_cells * 100:.1f}%)")
+    print(
+        f"Supported:   {report.supported_cells:4d} ({report.supported_cells / report.total_cells * 100:.1f}%)"
+    )
+    print(
+        f"Implemented: {report.implemented_cells:4d} ({report.implemented_cells / report.total_cells * 100:.1f}%)"
+    )
+    print(
+        f"Tested:      {report.tested_cells:4d} ({report.tested_cells / report.total_cells * 100:.1f}%)"
+    )
+    print(
+        f"Passing:     {report.passing_cells:4d} ({report.passing_cells / report.total_cells * 100:.1f}%)"
+    )
     print("=" * 80)
 
     # Per-algorithm summary
@@ -366,11 +391,17 @@ def print_summary(report: CoverageReport) -> None:
         if not algo_cells:
             continue
         sup = sum(1 for c in algo_cells if c.status != "not_supported")
-        imp = sum(1 for c in algo_cells if c.status in ("implemented", "tested", "passing", "failing"))
+        imp = sum(
+            1
+            for c in algo_cells
+            if c.status in ("implemented", "tested", "passing", "failing")
+        )
         tst = sum(1 for c in algo_cells if c.status in ("tested", "passing", "failing"))
         pas = sum(1 for c in algo_cells if c.status == "passing")
         total_algo = len(algo_cells)
-        print(f"  {algo:15s}: {sup:3d}/{total_algo:3d} supported, {imp:3d} implemented, {tst:3d} tested, {pas:3d} passing")
+        print(
+            f"  {algo:15s}: {sup:3d}/{total_algo:3d} supported, {imp:3d} implemented, {tst:3d} tested, {pas:3d} passing"
+        )
 
     # Per-hardware summary
     print("\nPer-Hardware Summary:")
@@ -380,11 +411,17 @@ def print_summary(report: CoverageReport) -> None:
         if not hw_cells:
             continue
         sup = sum(1 for c in hw_cells if c.status != "not_supported")
-        imp = sum(1 for c in hw_cells if c.status in ("implemented", "tested", "passing", "failing"))
+        imp = sum(
+            1
+            for c in hw_cells
+            if c.status in ("implemented", "tested", "passing", "failing")
+        )
         tst = sum(1 for c in hw_cells if c.status in ("tested", "passing", "failing"))
         pas = sum(1 for c in hw_cells if c.status == "passing")
         total_hw = len(hw_cells)
-        print(f"  {hw:15s}: {sup:3d}/{total_hw:3d} supported, {imp:3d} implemented, {tst:3d} tested, {pas:3d} passing")
+        print(
+            f"  {hw:15s}: {sup:3d}/{total_hw:3d} supported, {imp:3d} implemented, {tst:3d} tested, {pas:3d} passing"
+        )
 
 
 def print_failing(report: CoverageReport) -> None:
@@ -394,7 +431,9 @@ def print_failing(report: CoverageReport) -> None:
         print("\nFailing Cells:")
         print("-" * 80)
         for c in failing:
-            print(f"  {c.algorithm:12s} | {c.hardware:12s} | {c.kernel_type:12s} | {c.test_type:15s}")
+            print(
+                f"  {c.algorithm:12s} | {c.hardware:12s} | {c.kernel_type:12s} | {c.test_type:15s}"
+            )
             if c.test_result:
                 print(f"    Error: {c.test_result[:200]}")
 
@@ -415,10 +454,18 @@ def save_markdown(report: CoverageReport, output_path: Path) -> None:
         f.write("# Permutation Matrix Coverage Report\n\n")
         f.write(f"Generated: {report.timestamp}\n\n")
         f.write(f"**Total cells:** {report.total_cells}\n")
-        f.write(f"**Supported:** {report.supported_cells} ({report.supported_cells / report.total_cells * 100:.1f}%)\n")
-        f.write(f"**Implemented:** {report.implemented_cells} ({report.implemented_cells / report.total_cells * 100:.1f}%)\n")
-        f.write(f"**Tested:** {report.tested_cells} ({report.tested_cells / report.total_cells * 100:.1f}%)\n")
-        f.write(f"**Passing:** {report.passing_cells} ({report.passing_cells / report.total_cells * 100:.1f}%)\n\n")
+        f.write(
+            f"**Supported:** {report.supported_cells} ({report.supported_cells / report.total_cells * 100:.1f}%)\n"
+        )
+        f.write(
+            f"**Implemented:** {report.implemented_cells} ({report.implemented_cells / report.total_cells * 100:.1f}%)\n"
+        )
+        f.write(
+            f"**Tested:** {report.tested_cells} ({report.tested_cells / report.total_cells * 100:.1f}%)\n"
+        )
+        f.write(
+            f"**Passing:** {report.passing_cells} ({report.passing_cells / report.total_cells * 100:.1f}%)\n\n"
+        )
 
         # Status legend
         f.write("## Status Legend\n\n")
@@ -441,15 +488,20 @@ def save_markdown(report: CoverageReport, output_path: Path) -> None:
             f.write("| Hardware | Kernel Type | Test Type | Status | Test File |\n")
             f.write("|----------|-------------|-----------|--------|-----------|\n")
 
-            for c in sorted(algo_cells, key=lambda x: (x.hardware, x.kernel_type, x.test_type)):
+            for c in sorted(
+                algo_cells, key=lambda x: (x.hardware, x.kernel_type, x.test_type)
+            ):
                 test_file = c.test_file or "-"
-                f.write(f"| {c.hardware} | {c.kernel_type} | {c.test_type} | {c.status} | {test_file} |\n")
+                f.write(
+                    f"| {c.hardware} | {c.kernel_type} | {c.test_type} | {c.status} | {test_file} |\n"
+                )
             f.write("\n")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CLI
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def main():
     import argparse
@@ -458,24 +510,25 @@ def main():
         description="Verify permutation matrix coverage for bioplausible kernels"
     )
     parser.add_argument(
-        "--run-tests", action="store_true",
-        help="Actually run tests (slow but accurate)"
+        "--run-tests",
+        action="store_true",
+        help="Actually run tests (slow but accurate)",
     )
     parser.add_argument(
-        "--output", type=Path, default=Path("artifacts/permutation_coverage.json"),
-        help="Output JSON report path"
+        "--output",
+        type=Path,
+        default=Path("artifacts/permutation_coverage.json"),
+        help="Output JSON report path",
     )
     parser.add_argument(
-        "--markdown", type=Path, default=Path("artifacts/permutation_coverage.md"),
-        help="Output Markdown report path"
+        "--markdown",
+        type=Path,
+        default=Path("artifacts/permutation_coverage.md"),
+        help="Output Markdown report path",
     )
+    parser.add_argument("--algorithm", type=str, help="Filter to specific algorithm")
     parser.add_argument(
-        "--algorithm", type=str,
-        help="Filter to specific algorithm"
-    )
-    parser.add_argument(
-        "--hardware", type=str,
-        help="Filter to specific hardware target"
+        "--hardware", type=str, help="Filter to specific hardware target"
     )
 
     args = parser.parse_args()
@@ -492,9 +545,17 @@ def main():
     # Recalculate stats after filtering
     if args.algorithm or args.hardware:
         report.total_cells = len(report.cells)
-        report.supported_cells = sum(1 for c in report.cells if c.status != "not_supported")
-        report.implemented_cells = sum(1 for c in report.cells if c.status in ("implemented", "tested", "passing", "failing"))
-        report.tested_cells = sum(1 for c in report.cells if c.status in ("tested", "passing", "failing"))
+        report.supported_cells = sum(
+            1 for c in report.cells if c.status != "not_supported"
+        )
+        report.implemented_cells = sum(
+            1
+            for c in report.cells
+            if c.status in ("implemented", "tested", "passing", "failing")
+        )
+        report.tested_cells = sum(
+            1 for c in report.cells if c.status in ("tested", "passing", "failing")
+        )
         report.passing_cells = sum(1 for c in report.cells if c.status == "passing")
 
     # Print and save

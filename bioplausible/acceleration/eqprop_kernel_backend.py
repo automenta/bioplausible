@@ -190,19 +190,18 @@ class EqPropKernelBackend:
                 self._layers[-1].weight.data.copy_(to_torch(kernel.weights["head"]))
                 if self._layers[-1].bias is not None:
                     self._layers[-1].bias.data.copy_(to_torch(kernel.biases["head"]))
-        elif kernel.architecture == "rnn":
-            if len(self._layers) >= 3:
-                self._layers[0].weight.data.copy_(to_torch(kernel.weights["W_in"]))
-                if self._layers[0].bias is not None:
-                    self._layers[0].bias.data.copy_(to_torch(kernel.biases["W_in"]))
+        elif kernel.architecture == "rnn" and len(self._layers) >= 3:
+            self._layers[0].weight.data.copy_(to_torch(kernel.weights["W_in"]))
+            if self._layers[0].bias is not None:
+                self._layers[0].bias.data.copy_(to_torch(kernel.biases["W_in"]))
 
-                self._layers[1].weight.data.copy_(to_torch(kernel.weights["W_rec"]))
-                if self._layers[1].bias is not None:
-                    self._layers[1].bias.data.copy_(to_torch(kernel.biases["W_rec"]))
+            self._layers[1].weight.data.copy_(to_torch(kernel.weights["W_rec"]))
+            if self._layers[1].bias is not None:
+                self._layers[1].bias.data.copy_(to_torch(kernel.biases["W_rec"]))
 
-                self._layers[-1].weight.data.copy_(to_torch(kernel.weights["W_out"]))
-                if self._layers[-1].bias is not None:
-                    self._layers[-1].bias.data.copy_(to_torch(kernel.biases["W_out"]))
+            self._layers[-1].weight.data.copy_(to_torch(kernel.weights["W_out"]))
+            if self._layers[-1].bias is not None:
+                self._layers[-1].bias.data.copy_(to_torch(kernel.biases["W_out"]))
 
     def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         """Forward pass returning output and activations (for uniform interface).
@@ -244,7 +243,9 @@ class EqPropKernelBackend:
                     h_arr = h_arr.get()
                 elif hasattr(h_arr, "__array__"):
                     h_arr = np.asarray(h_arr)
-                h_tensor = torch.from_numpy(h_arr).to(device=self._device, dtype=self._dtype)
+                h_tensor = torch.from_numpy(h_arr).to(
+                    device=self._device, dtype=self._dtype
+                )
                 activations.append(h_tensor)
             if "h_next" in last_acts:
                 h_next_arr = last_acts["h_next"]
@@ -252,7 +253,9 @@ class EqPropKernelBackend:
                     h_next_arr = h_next_arr.get()
                 elif hasattr(h_next_arr, "__array__"):
                     h_next_arr = np.asarray(h_next_arr)
-                h_next = torch.from_numpy(h_next_arr).to(device=self._device, dtype=self._dtype)
+                h_next = torch.from_numpy(h_next_arr).to(
+                    device=self._device, dtype=self._dtype
+                )
                 activations.append(h_next)
         activations.append(logits)
 
@@ -264,9 +267,7 @@ class EqPropKernelBackend:
 
         return logits, activations
 
-    def backward(
-        self, activations: list[Tensor], error: Tensor
-    ) -> dict[str, Tensor]:
+    def backward(self, activations: list[Tensor], error: Tensor) -> dict[str, Tensor]:
         """Not used for EqProp - uses contrastive_step instead."""
         # EqProp uses contrastive Hebbian updates, not standard backward
         # This is a placeholder for the uniform interface
@@ -335,7 +336,6 @@ class EqPropKernelBackend:
 
     def update_weights(self, gradients: dict[str, Tensor], lr: float) -> None:
         """Not used for EqProp - weights updated in contrastive_step."""
-        pass
 
     def get_memory_stats(self) -> dict[str, float]:
         """Return memory usage stats."""

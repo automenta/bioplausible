@@ -84,9 +84,12 @@ class FFKernelBackend:
 
         # Embed label into input (concatenate or add)
         # Standard FF: concatenate one-hot label to input (output_dim classes)
-        y_onehot = torch.nn.functional.one_hot(
-            y, num_classes=self._output_dim
-        ).float().to(device=self._device, dtype=self._dtype)
+        y_onehot = (
+            torch.nn.functional
+            .one_hot(y, num_classes=self._output_dim)
+            .float()
+            .to(device=self._device, dtype=self._dtype)
+        )
         x_pos = torch.cat([x, y_onehot], dim=1)
 
         return self._forward_layers(x_pos)
@@ -99,9 +102,12 @@ class FFKernelBackend:
 
         # Use incorrect label (shift by 1)
         y_wrong = (y + 1) % self._output_dim
-        y_onehot = torch.nn.functional.one_hot(
-            y_wrong, num_classes=self._output_dim
-        ).float().to(device=self._device, dtype=self._dtype)
+        y_onehot = (
+            torch.nn.functional
+            .one_hot(y_wrong, num_classes=self._output_dim)
+            .float()
+            .to(device=self._device, dtype=self._dtype)
+        )
         x_neg = torch.cat([x, y_onehot], dim=1)
 
         return self._forward_layers(x_neg)

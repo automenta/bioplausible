@@ -162,9 +162,7 @@ class PCKernelBackend:
         W = [layer.weight.data for layer in self._layers]
 
         for i in range(1, len(self._mu)):
-            pred = _apply_activation(
-                self._mu[i - 1] @ W[i - 1].T, self._activation
-            )
+            pred = _apply_activation(self._mu[i - 1] @ W[i - 1].T, self._activation)
             if self._layers[i - 1].bias is not None:
                 pred = pred + self._layers[i - 1].bias.data
             energy += 0.5 * (self._mu[i] - pred).pow(2).sum().item()
@@ -214,10 +212,10 @@ class PCKernelBackend:
             delta = self._eta_weight * contrastive_delta(
                 free_grad, nudged_grad, beta=1.0
             )
-            weight_deltas[f"layers.{l-1}.weight"] = delta
+            weight_deltas[f"layers.{l - 1}.weight"] = delta
 
             if self._layers[l - 1].bias is not None:
-                weight_deltas[f"layers.{l-1}.bias"] = self._eta_weight * (
+                weight_deltas[f"layers.{l - 1}.bias"] = self._eta_weight * (
                     nudged_error.mean(dim=0) - free_error.mean(dim=0)
                 )
 

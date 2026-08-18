@@ -311,9 +311,7 @@ def predictive_coding_inference_step(
     mu_new[0] = x.clone()
 
     for layer_idx in range(1, L):
-        pred = act(
-            mu[layer_idx - 1] @ W[layer_idx - 1].T + b[layer_idx - 1]
-        )
+        pred = act(mu[layer_idx - 1] @ W[layer_idx - 1].T + b[layer_idx - 1])
         error = mu[layer_idx] - pred
         mu_new[layer_idx] = mu[layer_idx] - eta_infer * error * act_deriv(mu[layer_idx])
 
@@ -352,15 +350,15 @@ def stdp_update(
 
 __all__ = [
     "batched_outer_product",
-    "contrastive_delta",
-    "spectral_norm_power_iteration",
-    "lif_step",
-    "phase_encode",
     "conductance_matmul",
+    "contrastive_delta",
     "contrastive_hebbian_update",
     "forward_forward_goodness",
+    "lif_step",
     "pepita_error_modulation",
-    "target_propagation_target",
+    "phase_encode",
     "predictive_coding_inference_step",
+    "spectral_norm_power_iteration",
     "stdp_update",
+    "target_propagation_target",
 ]

@@ -155,16 +155,16 @@ def _backprop_transformer_lm():
     )
 
 
-@_reg("graph_equitile")
-def _graph_equitile():
+@_reg("graph_tile")
+def _graph_tile():
     from bioplausible.zoo.models.deployments.graph import (
-        GraphEquiTile,
-        GraphEquiTileConfig,
+        GraphTileNet,
+        GraphTileNetConfig,
     )
 
     def build():
-        return GraphEquiTile(
-            GraphEquiTileConfig(
+        return GraphTileNet(
+            GraphTileNetConfig(
                 node_features=10,
                 hidden_dim=32,
                 num_classes=10,
@@ -183,15 +183,15 @@ def _graph_equitile():
     return build, inp
 
 
-@_reg("timeseries_equitile")
-def _timeseries_equitile():
+@_reg("timeseries_tile")
+def _timeseries_tile():
     from bioplausible.zoo.models.deployments.timeseries import (
         TimeSeriesConfig,
-        TimeSeriesEquiTile,
+        TimeSeriesTileNet,
     )
 
     return (
-        lambda: TimeSeriesEquiTile(
+        lambda: TimeSeriesTileNet(
             TimeSeriesConfig(
                 input_dim=10,
                 seq_len=16,
@@ -205,16 +205,16 @@ def _timeseries_equitile():
     )
 
 
-@_reg("conv_equitile")
-def _conv_equitile():
+@_reg("conv_tile")
+def _conv_tile():
     from bioplausible.zoo.models.deployments.vision import (
-        ConvEquiTile,
-        ConvEquiTileConfig,
+        ConvTileNet,
+        ConvTileNetConfig,
     )
 
     return (
-        lambda: ConvEquiTile(
-            ConvEquiTileConfig(input_channels=1, input_size=16, num_classes=10)
+        lambda: ConvTileNet(
+            ConvTileNetConfig(input_channels=1, input_size=16, num_classes=10)
         ),
         lambda _m: (torch.randn(BATCH_SIZE, 1, 16, 16),),
     )
@@ -235,6 +235,110 @@ def _tile_lm():
         )
 
     return build, lambda _m: (torch.randint(0, 20, (BATCH_SIZE, 8)),)
+
+
+# Fixtures for TileNet algorithm variants (graph, vision, timeseries, RL)
+# These share the same input formats as their base models.
+
+for _name, _algo in [
+    ("graph_tile_fa", "fa"), ("graph_tile_tp", "tp"), ("graph_tile_hebbian", "hebbian"),
+    ("graph_tile_snn", "snn"), ("graph_tile_pc", "pc"),
+]:
+    @_reg(_name)
+    def _make_graph_tile_variant(algo=_algo):
+        from bioplausible.zoo.models.deployments.graph import GraphTileNet, GraphTileNetConfig
+
+        def build():
+            return GraphTileNet(
+                GraphTileNetConfig(
+                    node_features=10,
+                    hidden_dim=32,
+                    num_classes=10,
+                    num_layers=2,
+                    neurons_per_tile=8,
+                    tiles_per_layer=2,
+                    algorithm=algo,
+                )
+            )
+
+        def inp(_m):
+            num_nodes = BATCH_SIZE * 5
+            batch = torch.arange(BATCH_SIZE).repeat(5)
+            edge_index = torch.randint(0, num_nodes, (2, 40))
+            return (torch.randn(num_nodes, 10), edge_index, batch)
+
+        return build, inp
+
+
+for _name, _algo in [
+    ("conv_tile_fa", "fa"), ("conv_tile_tp", "tp"), ("conv_tile_hebbian", "hebbian"),
+    ("conv_tile_snn", "snn"), ("conv_tile_pc", "pc"),
+]:
+    @_reg(_name)
+    def _make_conv_tile_variant(algo=_algo):
+        from bioplausible.zoo.models.deployments.vision import ConvTileNet, ConvTileNetConfig
+
+        def build():
+            return ConvTileNet(
+                ConvTileNetConfig(
+                    input_channels=1,
+                    input_size=16,
+                    num_classes=10,
+                    neurons_per_tile=8,
+                    tiles_per_layer=2,
+                    num_fc_layers=2,
+                    algorithm=algo,
+                )
+            )
+
+        return build, lambda _m: (torch.randn(BATCH_SIZE, 1, 16, 16),)
+
+
+for _name, _algo in [
+    ("timeseries_tile_fa", "fa"), ("timeseries_tile_tp", "tp"), ("timeseries_tile_hebbian", "hebbian"),
+    ("timeseries_tile_snn", "snn"), ("timeseries_tile_pc", "pc"),
+]:
+    @_reg(_name)
+    def _make_timeseries_tile_variant(algo=_algo):
+        from bioplausible.zoo.models.deployments.timeseries import TimeSeriesTileNet, TimeSeriesConfig
+
+        return (
+            lambda: TimeSeriesTileNet(
+                TimeSeriesConfig(
+                    input_dim=10,
+                    seq_len=16,
+                    output_dim=10,
+                    pred_len=2,
+                    hidden_dim=32,
+                    num_layers=2,
+                    algorithm=algo,
+                )
+            ),
+            lambda _m: (torch.randn(BATCH_SIZE, 16, 10),),
+        )
+
+
+for _name, _algo in [
+    ("rl_tile_fa", "fa"), ("rl_tile_hebbian", "hebbian"), ("rl_tile_snn", "snn"),
+    ("rl_tile_pc", "pc"),
+]:
+    @_reg(_name)
+    def _make_rl_tile_variant(algo=_algo):
+        from bioplausible.zoo.models.deployments.rl import RLTIleNet, RLTIleNetConfig
+
+        def build():
+            return RLTIleNet(
+                RLTIleNetConfig(
+                    obs_dim=8,
+                    action_dim=4,
+                    neurons_per_tile=8,
+                    tiles_per_layer=2,
+                    num_fc_layers=2,
+                    algorithm=algo,
+                )
+            )
+
+        return build, lambda _m: (torch.randn(BATCH_SIZE, 8),)
 
 
 # Models that cannot be audited through a forward() call at all. As of the

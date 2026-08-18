@@ -1,9 +1,9 @@
 """
-EquiTile RL: EquiTile for Reinforcement Learning
-=================================================
+TileNet RL: TileNet for Reinforcement Learning
+===============================================
 
-Extends EquiTile with reinforcement learning capabilities:
-- RLEquiTile: Policy and value networks for RL
+Extends TileNet with reinforcement learning capabilities:
+- RLTIleNet: Policy and value networks for RL
 - Actor-Critic architecture with tile-based learning
 - Support for discrete and continuous action spaces
 - Integration with Gymnasium environments
@@ -15,6 +15,7 @@ RL-specific pieces (actor/critic heads, rollout buffer, GAE).
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -24,6 +25,11 @@ from torch import nn
 from torch.distributions import Categorical, Normal
 
 from bioplausible.config.unified import ModelConfig
+from bioplausible.core.local_learning import (
+    TaskHandler,
+    TileAlgorithm,
+    TileAlgorithmConfig,
+)
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
@@ -35,9 +41,9 @@ from bioplausible.zoo.models.deployments.base import RLDeploymentConfig
 RLFeatureExtractor = _fe.RLFeatureExtractor
 
 __all__ = [
-    "RLEquiTile",
-    "RLEquiTileConfig",
-    "RecurrentRLEquiTile",
+    "RLTileNet",
+    "RLTileNetConfig",
+    "RecurrentRLTileNet",
     "RolloutBuffer",
     "compute_gae",
     "create_atari_model",
@@ -55,8 +61,8 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class RLEquiTileConfig(RLDeploymentConfig):
-    """Configuration for RL EquiTile.
+class RLTIleNetConfig(RLDeploymentConfig):
+    """Configuration for RL TileNet.
 
     Inherits the shared deployment fields from ``RLDeploymentConfig`` and
     keeps the historical RL defaults (backprop mode, larger lr, 32 tiles).
@@ -69,35 +75,48 @@ class RLEquiTileConfig(RLDeploymentConfig):
 
 
 # =============================================================================
-# RL EquiTile Network
+# RL TileNet Network
 # =============================================================================
 
 
+def _credit_assignment_type(algorithm: str) -> str:
+    """Map algorithm to credit assignment type."""
+    mapping = {
+        "ep": "equilibrium",
+        "pc": "equilibrium",
+        "fa": "target",
+        "tp": "target",
+        "hebbian": "hebbian",
+        "snn": "spiking",
+    }
+    return mapping.get(algorithm, "equilibrium")
+
+
 @register_model(
-    "rl_equitile",
+    "rl_tile",
     domains=[Domain.RL],
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.75,
     requires_backward=False,
-    credit_assignment_type="hebbian",
-    family="equitile",
+    credit_assignment_type="gradient",  # RL uses gradient-based (backprop) training
+    family="tile",
     tags=[status_tag("experimental")],
 )
-class RLEquiTile(BioModel):
-    """EquiTile for Reinforcement Learning.
+class RLTIleNet(BioModel):
+    """TileNet for Reinforcement Learning.
 
     Implements actor-critic architecture with tile-based local learning
     for both policy and value functions.
 
     Parameters
     ----------
-    config : RLEquiTileConfig, optional
+    config : RLTIleNetConfig, optional
         Configuration
     **kwargs
         Additional configuration parameters
     """
 
-    algorithm_name = "RLEquiTile"
+    algorithm_name = "RLTileNet"
 
     @classmethod
     def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
@@ -111,7 +130,7 @@ class RLEquiTile(BioModel):
         task_type,
         **kwargs,
     ):
-        """Build RLEquiTile from factory arguments."""
+        """Build RLTIleNet from factory arguments."""
         config_kwargs = {
             "obs_dim": input_dim,
             "action_dim": output_dim,
@@ -123,7 +142,7 @@ class RLEquiTile(BioModel):
             "tiles_per_layer": kwargs.get("tiles_per_layer", 4),
         }
 
-        valid_keys = RLEquiTileConfig.__annotations__.keys()
+        valid_keys = RLTIleNetConfig.__annotations__.keys()
         for k, v in kwargs.items():
             if k in valid_keys:
                 config_kwargs[k] = v
@@ -132,22 +151,22 @@ class RLEquiTile(BioModel):
             if k in valid_keys:
                 config_kwargs[k] = v
 
-        config = RLEquiTileConfig(**config_kwargs)
+        config = RLTIleNetConfig(**config_kwargs)
 
         model = cls(config=config)
         return model.to(device)
 
     def __init__(
         self,
-        config: RLEquiTileConfig | None = None,
+        config: RLTIleNetConfig | None = None,
         **kwargs,
     ) -> None:
         if config is None:
-            config = RLEquiTileConfig(**kwargs)
+            config = RLTIleNetConfig(**kwargs)
 
         super().__init__(
             ModelConfig(
-                name="rl_equitile",
+                name="rl_tile",
                 input_dim=config.obs_dim,
                 output_dim=config.action_dim,
             )
@@ -155,28 +174,75 @@ class RLEquiTile(BioModel):
 
         self.config = config
 
-        # Shared feature extractor (EquiTile-based, from the unified module)
+        # Shared feature extractor (TileNet-based, from the unified module)
         self.feature_extractor = RLFeatureExtractor(config)
 
-        # Actor (policy) head and Critic (value) head
-        self.actor = self._build_actor(config)
-        self.critic = self._build_critic(config)
+        # Actor (policy) head and Critic (value) head using TileAlgorithm substrate
+        tile_dim = config.neurons_per_tile * config.tiles_per_layer
+        self.actor_head = self._build_actor_head(config, tile_dim)
+        self.critic_head = self._build_critic_head(config, tile_dim)
 
         self._setup_optimizers()
 
         self._init_weights()
 
-    def _setup_optimizers(self) -> None:
-        """Build split optimizers: feature extractor vs actor/critic heads.
+    def _build_actor_head(
+        self, config: RLTIleNetConfig, input_dim: int
+    ) -> TileAlgorithm:
+        """Build actor (policy) head using TileAlgorithm substrate."""
+        head_config = TileAlgorithmConfig(
+            input_dim=input_dim,
+            output_dim=config.action_dim,
+            neurons_per_tile=config.neurons_per_tile,
+            tiles_per_layer=config.tiles_per_layer,
+            num_hidden_layers=max(0, config.num_fc_layers),
+            algorithm=config.algorithm,
+            mode=config.mode,
+            learning_rate=config.learning_rate,
+            beta=config.beta,
+            step_size=config.step_size,
+            free_steps=config.inference_steps,
+            nudged_steps=config.inference_steps,
+            extra=config.equitile_kwargs,
+        )
+        return TileAlgorithm(
+            head_config,
+            task_handler=TaskHandler(
+                task_type=config.task_type, output_dim=config.action_dim
+            ),
+        )
 
-        The recurrent subclass swaps its actor/critic heads and adds an ``rnn``
-        module; it re-runs this to bind the head group to the updated set.
-        """
+    def _build_critic_head(
+        self, config: RLTIleNetConfig, input_dim: int
+    ) -> TileAlgorithm:
+        """Build critic (value) head using TileAlgorithm substrate."""
+        head_config = TileAlgorithmConfig(
+            input_dim=input_dim,
+            output_dim=1,
+            neurons_per_tile=config.neurons_per_tile,
+            tiles_per_layer=config.tiles_per_layer,
+            num_hidden_layers=max(0, config.num_fc_layers),
+            algorithm=config.algorithm,
+            mode=config.mode,
+            learning_rate=config.learning_rate,
+            beta=config.beta,
+            step_size=config.step_size,
+            free_steps=config.inference_steps,
+            nudged_steps=config.inference_steps,
+            extra=config.equitile_kwargs,
+        )
+        return TileAlgorithm(
+            head_config,
+            task_handler=TaskHandler(task_type="regression", output_dim=1),
+        )
+
+    def _setup_optimizers(self) -> None:
+        """Build split optimizers: feature extractor vs actor/critic heads."""
         self._optim_feature = create_optimizer(
             self.feature_extractor,
             OptimizerConfig(name="adam", lr=self.config.learning_rate),
         )
-        head_modules = [self.actor, self.critic]
+        head_modules = [self.actor_head, self.critic_head]
         rnn = getattr(self, "rnn", None)
         if rnn is not None:
             head_modules.append(rnn)
@@ -187,26 +253,6 @@ class RLEquiTile(BioModel):
             head_params,
             OptimizerConfig(name="adam", lr=self.config.learning_rate),
         )
-
-    def _build_actor(self, config: RLEquiTileConfig) -> nn.Module:
-        """Build actor (policy) head."""
-        tile_dim = config.neurons_per_tile * config.tiles_per_layer
-
-        if config.action_type == "discrete":
-            return nn.Linear(tile_dim, config.action_dim)
-        else:
-            actor = nn.Linear(tile_dim, config.action_dim)
-            nn.init.orthogonal_(actor.weight, gain=0.01)
-            nn.init.zeros_(actor.bias)
-            return actor
-
-    def _build_critic(self, config: RLEquiTileConfig) -> nn.Module:
-        """Build critic (value) head."""
-        tile_dim = config.neurons_per_tile * config.tiles_per_layer
-        critic = nn.Linear(tile_dim, 1)
-        nn.init.orthogonal_(critic.weight, gain=1.0)
-        nn.init.zeros_(critic.bias)
-        return critic
 
     def _init_weights(self) -> None:
         """Initialize weights."""
@@ -231,11 +277,13 @@ class RLEquiTile(BioModel):
         """Select action."""
         features = self.extract_features(obs)
 
+        # Actor head forward
+        action_logits = self.actor_head.forward_logits(features, detach_input=False)
+
         if self.config.action_type == "discrete":
-            action_logits = self.actor(features)
             dist = Categorical(logits=action_logits)
         else:
-            action_mean = self.actor(features)
+            action_mean = action_logits
             action_log_std = torch.clamp(
                 torch.ones_like(action_mean) * self.config.log_std_init,
                 self.config.log_std_min,
@@ -252,7 +300,10 @@ class RLEquiTile(BioModel):
         else:
             action = dist.sample()
 
-        value = self.critic(features).squeeze(-1)
+        # Critic head forward
+        value = self.critic_head.forward_logits(features, detach_input=False).squeeze(
+            -1
+        )
 
         if self.config.action_type == "discrete":
             log_prob = dist.log_prob(action)
@@ -271,13 +322,15 @@ class RLEquiTile(BioModel):
         """Evaluate actions for PPO-style updates."""
         features = self.extract_features(obs)
 
+        # Actor head forward
+        action_logits = self.actor_head.forward_logits(features, detach_input=False)
+
         if self.config.action_type == "discrete":
-            action_logits = self.actor(features)
             dist = Categorical(logits=action_logits)
             log_prob = dist.log_prob(actions)
             entropy = dist.entropy()
         else:
-            action_mean = self.actor(features)
+            action_mean = action_logits
             action_log_std = torch.clamp(
                 torch.ones_like(action_mean) * self.config.log_std_init,
                 self.config.log_std_min,
@@ -288,14 +341,17 @@ class RLEquiTile(BioModel):
             log_prob = dist.log_prob(actions).sum(dim=-1)
             entropy = dist.entropy().sum(dim=-1)
 
-        value = self.critic(features).squeeze(-1)
+        # Critic head forward
+        value = self.critic_head.forward_logits(features, detach_input=False).squeeze(
+            -1
+        )
 
         return log_prob, entropy, value
 
     def get_value(self, obs: Tensor) -> Tensor:
         """Get value estimate."""
         features = self.extract_features(obs)
-        return self.critic(features).squeeze(-1)
+        return self.critic_head.forward_logits(features, detach_input=False).squeeze(-1)
 
     def forward(self, obs: Tensor) -> Tensor:
         """Forward pass (return logits).
@@ -303,7 +359,7 @@ class RLEquiTile(BioModel):
         Compatible with generic RLTrainer (REINFORCE).
         """
         features = self.extract_features(obs)
-        return self.actor(features)
+        return self.actor_head.forward_logits(features, detach_input=False)
 
     def compute_loss(
         self,
@@ -368,18 +424,18 @@ class RLEquiTile(BioModel):
 
 
 # =============================================================================
-# Recurrent RL EquiTile (for Partial Observability)
+# Recurrent RL TileNet (for Partial Observability)
 # =============================================================================
 
 
-class RecurrentRLEquiTile(RLEquiTile):
-    """Recurrent EquiTile for partially observable environments.
+class RecurrentRLTileNet(RLTIleNet):
+    """Recurrent TileNet for partially observable environments.
 
     Adds LSTM/GRU layers for temporal memory.
 
     Parameters
     ----------
-    config : RLEquiTileConfig
+    config : RLTIleNetConfig
         Configuration
     rnn_type : str
         RNN type: 'lstm' or 'gru'
@@ -389,7 +445,7 @@ class RecurrentRLEquiTile(RLEquiTile):
 
     def __init__(
         self,
-        config: RLEquiTileConfig,
+        config: RLTIleNetConfig,
         rnn_type: Literal["lstm", "gru"] = "lstm",
         rnn_hidden_dim: int = 128,
     ) -> None:
@@ -404,9 +460,9 @@ class RecurrentRLEquiTile(RLEquiTile):
         else:
             self.rnn = nn.GRU(tile_dim, rnn_hidden_dim, batch_first=True)
 
-        # Update actor and critic for rnn output
-        self.actor = nn.Linear(rnn_hidden_dim, config.action_dim)
-        self.critic = nn.Linear(rnn_hidden_dim, 1)
+        # Rebuild actor and critic heads for RNN output dimension
+        self.actor_head = self._build_actor_head(config, rnn_hidden_dim)
+        self.critic_head = self._build_critic_head(config, rnn_hidden_dim)
 
         self._hidden_state = None
 
@@ -592,16 +648,16 @@ def create_rl_model(
     action_type: Literal["discrete", "continuous"] = "discrete",
     hidden_dim: int = 128,
     **kwargs: object,
-) -> RLEquiTile:
-    """Create RLEquiTile model."""
-    config = RLEquiTileConfig(
+) -> RLTIleNet:
+    """Create RLTIleNet model."""
+    config = RLTIleNetConfig(
         obs_dim=obs_dim,
         action_dim=action_dim,
         action_type=action_type,
         hidden_dim=hidden_dim,
         **kwargs,
     )
-    return RLEquiTile(config)
+    return RLTIleNet(config)
 
 
 def create_recurrent_rl_model(
@@ -610,23 +666,23 @@ def create_recurrent_rl_model(
     action_type: Literal["discrete", "continuous"] = "discrete",
     rnn_hidden_dim: int = 128,
     **kwargs: object,
-) -> RecurrentRLEquiTile:
-    """Create RecurrentRLEquiTile model."""
-    config = RLEquiTileConfig(
+) -> RecurrentRLTileNet:
+    """Create RecurrentRLTileNet model."""
+    config = RLTIleNetConfig(
         obs_dim=obs_dim,
         action_dim=action_dim,
         action_type=action_type,
         **kwargs,
     )
-    return RecurrentRLEquiTile(config, rnn_hidden_dim=rnn_hidden_dim)
+    return RecurrentRLTileNet(config, rnn_hidden_dim=rnn_hidden_dim)
 
 
 def create_atari_model(
     obs_shape: tuple[int, int, int] = (4, 84, 84),
     action_dim: int = 4,
     **kwargs: object,
-) -> RLEquiTile:
-    """Create RLEquiTile for Atari games.
+) -> RLTIleNet:
+    """Create RLTIleNet for Atari games.
 
     Note: Flattens the image observation to a 1D vector.
     """
@@ -644,8 +700,8 @@ def create_mujoco_model(
     obs_dim: int,
     action_dim: int,
     **kwargs: object,
-) -> RLEquiTile:
-    """Create RLEquiTile for MuJoCo environments (continuous action space)."""
+) -> RLTIleNet:
+    """Create RLTIleNet for MuJoCo environments (continuous action space)."""
     return create_rl_model(
         obs_dim=obs_dim,
         action_dim=action_dim,
@@ -653,3 +709,46 @@ def create_mujoco_model(
         hidden_dim=256,
         **kwargs,
     )
+
+
+# =============================================================================
+# Algorithm-specific Variants (registered separately for discovery)
+# =============================================================================
+
+
+def _register_variant(name: str, algorithm: str, credit_type: str, bio_score: float):
+    """Helper to register algorithm-specific RLTIleNet variants."""
+
+    @register_model(
+        name,
+        domains=[Domain.RL],
+        locality_level=LocalityLevel.LOCAL,
+        bio_plausibility_score=bio_score,
+        requires_backward=False,
+        credit_assignment_type=credit_type,
+        family="tile",
+        tags=[status_tag("experimental")],
+    )
+    class _RLTileNetVariant(RLTIleNet):
+        algorithm_name = f"RLTileNet-{algorithm.upper()}"
+
+        def __init__(
+            self,
+            config: RLTIleNetConfig | None = None,
+            **kwargs: object,
+        ) -> None:
+            if config is None:
+                kwargs.setdefault("algorithm", algorithm)
+                config = RLTIleNetConfig(**kwargs)
+            elif config.algorithm != algorithm:
+                config = dataclasses.replace(config, algorithm=algorithm)
+            super().__init__(config=config)
+
+    return _RLTileNetVariant
+
+
+# Register algorithm-specific variants (RL primarily uses gradient/backprop)
+_register_variant("rl_tile_fa", "fa", "target", 0.7)
+_register_variant("rl_tile_hebbian", "hebbian", "hebbian", 0.6)
+_register_variant("rl_tile_snn", "snn", "spiking", 0.65)
+_register_variant("rl_tile_pc", "pc", "equilibrium", 0.75)

@@ -95,13 +95,6 @@ def test_kernel_backend_consumed_in_train_step():
     """
     import torch
 
-    from bioplausible.acceleration import (
-        AlgorithmFamily,
-        HardwareTarget,
-        KernelConfig,
-        KernelRegistry,
-    )
-
     config = TrainerConfig(
         model="standard_fa",
         task="digits",

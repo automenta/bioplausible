@@ -130,9 +130,7 @@ class MEPKernelBackend:
             (W2(tanh(LayerNorm(h_t) @ W1 + b1)) + b2 + x_emb)
         """
         steps = steps or self._settle_steps
-        h = MEP_TritonOps.ep_settle(
-            h, x_emb, W1, b1, W2, b2, self._gamma, steps
-        )
+        h = MEP_TritonOps.ep_settle(h, x_emb, W1, b1, W2, b2, self._gamma, steps)
 
         # For telemetry, we need to run again or compute delta
         # Simplified: return basic telemetry

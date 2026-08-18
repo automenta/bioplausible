@@ -337,7 +337,9 @@ class PredictiveCodingHybrid(BioModel, SettleProtocol):
                     # Back-propagate error through top-down weights
                     w_next = self.top_down[i].weight
                     error_prop = error_below @ w_next
-                    new_h = activations[i + 1] + self.eta_infer * (error_this - error_prop)
+                    new_h = activations[i + 1] + self.eta_infer * (
+                        error_this - error_prop
+                    )
                 else:
                     # First hidden layer: error is in input space, backproject using forward weight
                     # forward weight is layers[0].weight (input -> hidden), shape (hidden, input)
@@ -500,8 +502,12 @@ class PredictiveCodingHybrid(BioModel, SettleProtocol):
         self._settle_activations = state
         self._last_settle_telemetry = telemetry
 
-        out = state[-1] if state else torch.zeros(
-            x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+        out = (
+            state[-1]
+            if state
+            else torch.zeros(
+                x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+            )
         )
 
         return out, steps_taken, converged, telemetry

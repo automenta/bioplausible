@@ -30,7 +30,6 @@ from torch.nn.utils.parametrizations import spectral_norm
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.local_learning.settling import (
     SettleConfig,
-    SettleProtocol,
     SettleTelemetry,
     settle_activations_list,
     settle_universal,
@@ -615,7 +614,9 @@ class EquilibriumMLP(BioModel):
 
         Uses stored _settle_beta and _settle_target for the dynamics.
         """
-        return self.forward_dynamics(state, beta=self._settle_beta, target=self._settle_target)
+        return self.forward_dynamics(
+            state, beta=self._settle_beta, target=self._settle_target
+        )
 
     def _check_converged(
         self,
@@ -633,7 +634,9 @@ class EquilibriumMLP(BioModel):
         convergence_norm = 2
         max_rel_delta = 0.0
         for k in range(1, len(state_new)):
-            abs_delta = torch.dist(state_new[k], state_old[k], p=convergence_norm).item()
+            abs_delta = torch.dist(
+                state_new[k], state_old[k], p=convergence_norm
+            ).item()
             norm = state_old[k].norm(p=convergence_norm).item() + 1e-8
             rel_delta = abs_delta / norm
             max_rel_delta = max(max_rel_delta, rel_delta)
@@ -647,7 +650,7 @@ class EquilibriumMLP(BioModel):
         delta: float,
     ) -> None:
         """Telemetry hook: called after each step."""
-        pass  # Telemetry is collected by settle_universal
+        # Telemetry is collected by settle_universal
 
     def _on_converged(self, step: int, final_delta: float) -> None:
         """Telemetry hook: called when convergence is detected."""

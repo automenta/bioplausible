@@ -35,15 +35,15 @@ from bioplausible.acceleration import (
     get_algorithm_kernels,
     get_contrastive_kernels,
 )
+from bioplausible.acceleration.contrastive_kernels import (
+    ContrastiveConfig,
+    get_contrastive_kernel,
+)
 from bioplausible.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
     KernelRegistry,
-)
-from bioplausible.acceleration.contrastive_kernels import (
-    ContrastiveConfig,
-    get_contrastive_kernel,
 )
 
 
@@ -165,7 +165,9 @@ def _run_o1memory(b: object) -> dict[str, object]:
         _rand(6, 16, b=b, normal=True),
         _rand(6, 4, b=b, normal=True),
     ]
-    states, telemetry = b.settle_manual_o1(states, _rand(6, 4, b=b, normal=True), steps=4)
+    states, telemetry = b.settle_manual_o1(
+        states, _rand(6, 4, b=b, normal=True), steps=4
+    )
     return {"states": states, "telemetry": telemetry}
 
 
@@ -191,7 +193,7 @@ def _run_contrastive(b: object, family: AlgorithmFamily) -> dict[str, object]:
     """Run a contrastive step for any ContrastiveKernel."""
     torch.manual_seed(0)
     device = getattr(b, "_device", torch.device("cpu"))
-    
+
     # Per-family input dimensions (matching parity harness)
     if family == AlgorithmFamily.FF:
         x = torch.randn(6, 12, device=device)  # input_dim + output_dim
@@ -199,10 +201,7 @@ def _run_contrastive(b: object, family: AlgorithmFamily) -> dict[str, object]:
     elif family == AlgorithmFamily.TILE:
         x = torch.randn(6, 16, device=device)  # input_dim = 16
         y = torch.randint(0, 4, (6,), device=device)
-    elif family == AlgorithmFamily.MEP:
-        x = torch.randn(6, 16, device=device)  # input_dim = 16 (hidden_dim)
-        y = torch.randint(0, 4, (6,), device=device)
-    elif family == AlgorithmFamily.O1MEMORY:
+    elif family == AlgorithmFamily.MEP or family == AlgorithmFamily.O1MEMORY:
         x = torch.randn(6, 16, device=device)  # input_dim = 16 (hidden_dim)
         y = torch.randint(0, 4, (6,), device=device)
     elif family == AlgorithmFamily.TP:
@@ -211,7 +210,7 @@ def _run_contrastive(b: object, family: AlgorithmFamily) -> dict[str, object]:
     else:
         x = torch.randn(6, 8, device=device)
         y = torch.randint(0, 4, (6,), device=device)
-    
+
     metrics = b.contrastive_step(x, y)
     logits = b.predict(x)
     acc = (logits.argmax(dim=1) == y).float().mean().item() if y.dim() == 1 else 0.0
@@ -259,9 +258,7 @@ _STANDARD_BIND: dict[AlgorithmFamily, tuple[dict[str, object], object]] = {
     ),
     AlgorithmFamily.FF: (
         {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_layers": 2},
-        lambda b, d: b.set_model_ref(
-            _linear_stack((8 + 4, 16, 4), d), nn.ReLU()
-        ),
+        lambda b, d: b.set_model_ref(_linear_stack((8 + 4, 16, 4), d), nn.ReLU()),
     ),
     AlgorithmFamily.PEPITA: (
         {
@@ -306,9 +303,7 @@ _STANDARD_BIND: dict[AlgorithmFamily, tuple[dict[str, object], object]] = {
     AlgorithmFamily.MEP: ({"ns_steps": 3}, None),
     AlgorithmFamily.O1MEMORY: (
         {"loss_type": "mse"},
-        lambda b, d: b.set_model_ref(
-            [nn.Linear(16, 16).to(d), nn.Linear(16, 4).to(d)]
-        ),
+        lambda b, d: b.set_model_ref([nn.Linear(16, 16).to(d), nn.Linear(16, 4).to(d)]),
     ),
     AlgorithmFamily.BACKPROP: (
         {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_layers": 2},
@@ -332,9 +327,7 @@ _CONTRASTIVE_BIND: dict[AlgorithmFamily, tuple[dict[str, object], object]] = {
     ),
     AlgorithmFamily.FF: (
         {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_layers": 2},
-        lambda b, d: b.set_model_ref(
-            _linear_stack((8 + 4, 16, 4), d), nn.ReLU()
-        ),
+        lambda b, d: b.set_model_ref(_linear_stack((8 + 4, 16, 4), d), nn.ReLU()),
     ),
     AlgorithmFamily.PEPITA: (
         {
@@ -374,21 +367,15 @@ _CONTRASTIVE_BIND: dict[AlgorithmFamily, tuple[dict[str, object], object]] = {
             "tiles_per_layer": 2,
             "num_hidden_layers": 2,
         },
-        lambda b, d: b.set_model_ref(
-            _linear_stack((16, 16, 16, 4), d)
-        ),
+        lambda b, d: b.set_model_ref(_linear_stack((16, 16, 16, 4), d)),
     ),
     AlgorithmFamily.MEP: (
         {"ns_steps": 3},
-        lambda b, d: b.set_model_ref(
-            _linear_stack((16, 16, 4), d)
-        ),
+        lambda b, d: b.set_model_ref(_linear_stack((16, 16, 4), d)),
     ),
     AlgorithmFamily.O1MEMORY: (
         {"loss_type": "mse"},
-        lambda b, d: b.set_model_ref(
-            _linear_stack((16, 16, 4), d)
-        ),
+        lambda b, d: b.set_model_ref(_linear_stack((16, 16, 4), d)),
     ),
 }
 
@@ -397,11 +384,11 @@ _DEVICE_FOR_HW: dict[HardwareTarget, torch.device] = {
     HardwareTarget.CPU: torch.device("cpu"),
     HardwareTarget.CUDA: torch.device("cuda"),
     HardwareTarget.TRITON: torch.device("cuda"),
-    HardwareTarget.FPGA: torch.device("cpu"),         # HLS simulation
+    HardwareTarget.FPGA: torch.device("cpu"),  # HLS simulation
     HardwareTarget.NEUROMORPHIC: torch.device("cpu"),  # Event sim (Loihi/NxSDK)
-    HardwareTarget.OPTICAL: torch.device("cpu"),       # Wave optics sim
-    HardwareTarget.CROSSBAR: torch.device("cpu"),      # SPICE/circuit sim on CPU
-    HardwareTarget.QUANTUM: torch.device("cpu"),       # State vector sim
+    HardwareTarget.OPTICAL: torch.device("cpu"),  # Wave optics sim
+    HardwareTarget.CROSSBAR: torch.device("cpu"),  # SPICE/circuit sim on CPU
+    HardwareTarget.QUANTUM: torch.device("cpu"),  # State vector sim
 }
 
 
@@ -425,18 +412,24 @@ def _jsonable(value: object) -> object:
     return str(value)
 
 
-def _make_kernel_config(family: AlgorithmFamily, hw: HardwareTarget, extra: dict) -> KernelConfig:
+def _make_kernel_config(
+    family: AlgorithmFamily, hw: HardwareTarget, extra: dict
+) -> KernelConfig:
     return KernelConfig(
         algorithm=family,
         hardware=hw,
         settle_steps=extra.get("settle_steps", 4),
         beta=extra.get("beta", 0.5),
         gamma=extra.get("gamma", 0.95),
-        extra={k: v for k, v in extra.items() if k not in ("settle_steps", "beta", "gamma")},
+        extra={
+            k: v for k, v in extra.items() if k not in ("settle_steps", "beta", "gamma")
+        },
     )
 
 
-def _make_contrastive_config(family: AlgorithmFamily, hw: HardwareTarget, extra: dict) -> ContrastiveConfig:
+def _make_contrastive_config(
+    family: AlgorithmFamily, hw: HardwareTarget, extra: dict
+) -> ContrastiveConfig:
     return ContrastiveConfig(
         algorithm=family,
         hardware=hw,
@@ -444,7 +437,11 @@ def _make_contrastive_config(family: AlgorithmFamily, hw: HardwareTarget, extra:
         lr=extra.get("lr", 0.01),
         settle_steps=extra.get("settle_steps", 30),
         gamma=extra.get("gamma", 1.0),
-        extra={k: v for k, v in extra.items() if k not in ("beta", "lr", "settle_steps", "gamma")},
+        extra={
+            k: v
+            for k, v in extra.items()
+            if k not in ("beta", "lr", "settle_steps", "gamma")
+        },
     )
 
 
@@ -463,7 +460,9 @@ def _probe_standard(family: AlgorithmFamily, hw: HardwareTarget) -> dict[str, ob
     return result
 
 
-def _probe_contrastive(family: AlgorithmFamily, hw: HardwareTarget) -> dict[str, object]:
+def _probe_contrastive(
+    family: AlgorithmFamily, hw: HardwareTarget
+) -> dict[str, object]:
     backend = get_contrastive_kernel(family)
     if backend is None:
         raise ValueError(f"No contrastive kernel for {family.value}")

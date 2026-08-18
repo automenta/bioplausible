@@ -35,7 +35,9 @@ def _bound_backprop(tmp_path) -> object:
     from bioplausible.acceleration.backprop_kernels import BackpropKernelBackend
 
     backend = BackpropKernelBackend()
-    config = KernelConfig(algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU)
+    config = KernelConfig(
+        algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU
+    )
     backend.initialize(config)
     stack = [nn.Linear(4, 8), nn.Linear(8, 3)]
     backend.set_model_ref(stack)
@@ -45,8 +47,12 @@ def _bound_backprop(tmp_path) -> object:
 def test_export_kernel_writes_manifest_and_state(tmp_path):
     """Export writes a JSON manifest + state dict and reports both paths."""
     backend = _bound_backprop(tmp_path)
-    config = KernelConfig(algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU)
-    result = export_kernel(backend, config, target=HardwareTarget.CPU, output_dir=str(tmp_path))
+    config = KernelConfig(
+        algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU
+    )
+    result = export_kernel(
+        backend, config, target=HardwareTarget.CPU, output_dir=str(tmp_path)
+    )
 
     manifest = json.loads((tmp_path / "backprop_cpu_manifest.json").read_text())
     assert manifest["algorithm"] == "backprop"
@@ -78,7 +84,9 @@ def test_export_kernel_without_stack_writes_manifest_only(tmp_path):
     from bioplausible.acceleration.backprop_kernels import BackpropKernelBackend
 
     backend = BackpropKernelBackend()
-    config = KernelConfig(algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU)
+    config = KernelConfig(
+        algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU
+    )
     backend.initialize(config)
 
     result = export_kernel(backend, config, output_dir=str(tmp_path))

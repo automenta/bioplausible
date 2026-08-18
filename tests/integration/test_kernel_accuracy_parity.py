@@ -6,7 +6,6 @@ PyTorch reference for each algorithm family with a registered KernelBackend.
 
 import pytest
 import torch
-from torch import nn
 
 from bioplausible.acceleration import get_algorithm_kernels
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig

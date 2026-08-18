@@ -185,7 +185,9 @@ class Settler:
         transition_modules = self._resolve_transition_modules(model)
 
         # Capture initial states
-        states = self._capture_states_from_transitions(model, x, transition_modules, forward_fn)
+        states = self._capture_states_from_transitions(
+            model, x, transition_modules, forward_fn
+        )
 
         if not states:
             if transition_modules:

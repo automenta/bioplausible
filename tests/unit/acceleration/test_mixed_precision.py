@@ -22,15 +22,24 @@ from bioplausible.acceleration.kernel_backend import (
 from bioplausible.core.registry import ComponentCategory, Registry
 
 # Import zoo models to trigger registration
-from bioplausible.zoo import models
 
 
-def _linear_stack(dims: tuple[int, ...], device: torch.device, seed: int = 0) -> list[torch.nn.Linear]:
+def _linear_stack(
+    dims: tuple[int, ...], device: torch.device, seed: int = 0
+) -> list[torch.nn.Linear]:
     torch.manual_seed(seed)
-    return [torch.nn.Linear(dims[i], dims[i + 1]).to(device) for i in range(len(dims) - 1)]
+    return [
+        torch.nn.Linear(dims[i], dims[i + 1]).to(device) for i in range(len(dims) - 1)
+    ]
 
 
-def _construct_model(model_name: str, input_dim: int, output_dim: int, device: torch.device, dtype: torch.dtype) -> nn.Module:
+def _construct_model(
+    model_name: str,
+    input_dim: int,
+    output_dim: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> nn.Module:
     """Construct a model from the registry."""
     model_cls = Registry.get(ComponentCategory.MODEL, model_name)
     defaults = {
@@ -48,7 +57,13 @@ def _construct_model(model_name: str, input_dim: int, output_dim: int, device: t
     return model.to(device=device, dtype=dtype)
 
 
-def _get_synthetic_data(input_dim: int, output_dim: int, n_samples: int, device: torch.device, dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor]:
+def _get_synthetic_data(
+    input_dim: int,
+    output_dim: int,
+    n_samples: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Generate synthetic data for testing."""
     torch.manual_seed(42)
     x = torch.randn(n_samples, input_dim, device=device, dtype=dtype)
@@ -75,7 +90,7 @@ def _train_model(
     if dtype == torch.float16:
         model = model.to(dtype=torch.float32)
         use_amp = True
-        scaler = torch.amp.GradScaler('cuda')
+        scaler = torch.amp.GradScaler("cuda")
     elif dtype == torch.bfloat16:
         # BF16 can use autocast but doesn't need GradScaler
         model = model.to(dtype=torch.bfloat16)
@@ -85,14 +100,14 @@ def _train_model(
         model = model.to(dtype=dtype)
         use_amp = False
         scaler = None
-    
+
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
-    
+
     n_samples = len(x)
     batch_size = 64
-    
+
     for epoch in range(epochs):
         perm = torch.randperm(n_samples)
         for i in range(0, n_samples, batch_size):
@@ -100,7 +115,7 @@ def _train_model(
             xb, yb = x[idx], y[idx]
             optimizer.zero_grad()
             if use_amp:
-                with torch.amp.autocast('cuda', dtype=dtype):
+                with torch.amp.autocast("cuda", dtype=dtype):
                     logits = model(xb)
                     loss = criterion(logits, yb)
                 if scaler is not None:
@@ -115,16 +130,16 @@ def _train_model(
                 loss = criterion(logits, yb)
                 loss.backward()
                 optimizer.step()
-    
+
     model.eval()
     with torch.no_grad():
         if use_amp:
-            with torch.amp.autocast('cuda', dtype=dtype):
+            with torch.amp.autocast("cuda", dtype=dtype):
                 logits = model(x[:128])
         else:
             logits = model(x[:128])
         accuracy = (logits.argmax(1) == y[:128]).float().mean().item()
-    
+
     return accuracy
 
 
@@ -136,19 +151,22 @@ class TestMixedPrecision:
         get_algorithm_kernels()  # trigger lazy self-registration
 
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-    @pytest.mark.parametrize("family", [
-        AlgorithmFamily.FA,
-        AlgorithmFamily.HEBBIAN,
-        AlgorithmFamily.FF,
-        AlgorithmFamily.PEPITA,
-        AlgorithmFamily.TP,
-        AlgorithmFamily.PC,
-        AlgorithmFamily.SNN,
-        AlgorithmFamily.TILE,
-        AlgorithmFamily.MEP,
-        AlgorithmFamily.O1MEMORY,
-        AlgorithmFamily.BACKPROP,
-    ])
+    @pytest.mark.parametrize(
+        "family",
+        [
+            AlgorithmFamily.FA,
+            AlgorithmFamily.HEBBIAN,
+            AlgorithmFamily.FF,
+            AlgorithmFamily.PEPITA,
+            AlgorithmFamily.TP,
+            AlgorithmFamily.PC,
+            AlgorithmFamily.SNN,
+            AlgorithmFamily.TILE,
+            AlgorithmFamily.MEP,
+            AlgorithmFamily.O1MEMORY,
+            AlgorithmFamily.BACKPROP,
+        ],
+    )
     def test_kernel_dtype_support(self, family: AlgorithmFamily, dtype: torch.dtype):
         """Test that kernel backend supports the given dtype."""
         # Skip BF16 on CPU (not well supported)
@@ -187,24 +205,73 @@ class TestMixedPrecision:
     def _get_extra_config(self, family: AlgorithmFamily) -> dict:
         """Get algorithm-specific extra config."""
         configs = {
-            AlgorithmFamily.FA: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_layers": 2},
-            AlgorithmFamily.HEBBIAN: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_layers": 2},
-            AlgorithmFamily.FF: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_layers": 2},
-            AlgorithmFamily.PEPITA: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "feedback_matrix_scale": 0.1},
-            AlgorithmFamily.TP: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "activation": "tanh"},
-            AlgorithmFamily.PC: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "activation": "tanh", "infer_steps": 4},
-            AlgorithmFamily.SNN: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_steps": 5},
-            AlgorithmFamily.TILE: {"input_dim": 16, "neurons_per_tile": 8, "tiles_per_layer": 2, "num_hidden_layers": 2},
+            AlgorithmFamily.FA: {
+                "input_dim": 8,
+                "hidden_dim": 16,
+                "output_dim": 4,
+                "num_layers": 2,
+            },
+            AlgorithmFamily.HEBBIAN: {
+                "input_dim": 8,
+                "hidden_dim": 16,
+                "output_dim": 4,
+                "num_layers": 2,
+            },
+            AlgorithmFamily.FF: {
+                "input_dim": 8,
+                "hidden_dim": 16,
+                "output_dim": 4,
+                "num_layers": 2,
+            },
+            AlgorithmFamily.PEPITA: {
+                "input_dim": 8,
+                "hidden_dim": 16,
+                "output_dim": 4,
+                "feedback_matrix_scale": 0.1,
+            },
+            AlgorithmFamily.TP: {
+                "input_dim": 8,
+                "hidden_dim": 16,
+                "output_dim": 4,
+                "activation": "tanh",
+            },
+            AlgorithmFamily.PC: {
+                "input_dim": 8,
+                "hidden_dim": 16,
+                "output_dim": 4,
+                "activation": "tanh",
+                "infer_steps": 4,
+            },
+            AlgorithmFamily.SNN: {
+                "input_dim": 8,
+                "hidden_dim": 16,
+                "output_dim": 4,
+                "num_steps": 5,
+            },
+            AlgorithmFamily.TILE: {
+                "input_dim": 16,
+                "neurons_per_tile": 8,
+                "tiles_per_layer": 2,
+                "num_hidden_layers": 2,
+            },
             AlgorithmFamily.MEP: {"ns_steps": 3},
             AlgorithmFamily.O1MEMORY: {"loss_type": "mse"},
-            AlgorithmFamily.BACKPROP: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_layers": 2},
+            AlgorithmFamily.BACKPROP: {
+                "input_dim": 8,
+                "hidden_dim": 16,
+                "output_dim": 4,
+                "num_layers": 2,
+            },
         }
         return configs.get(family, {})
 
-    @pytest.mark.parametrize("family", [
-        AlgorithmFamily.FA,
-        AlgorithmFamily.BACKPROP,
-    ])
+    @pytest.mark.parametrize(
+        "family",
+        [
+            AlgorithmFamily.FA,
+            AlgorithmFamily.BACKPROP,
+        ],
+    )
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
     def test_finite_outputs(self, family: AlgorithmFamily, dtype: torch.dtype):
         """Test that kernel produces finite outputs in different precisions."""
@@ -227,7 +294,9 @@ class TestMixedPrecision:
         )
         backend.initialize(config)
 
-        device = torch.device("cuda" if hw in (HardwareTarget.CUDA, HardwareTarget.TRITON) else "cpu")
+        device = torch.device(
+            "cuda" if hw in (HardwareTarget.CUDA, HardwareTarget.TRITON) else "cpu"
+        )
         layers = _linear_stack((8, 16, 4), device)
         # Convert layer weights to the test dtype
         for layer in layers:
@@ -254,13 +323,18 @@ class TestContrastiveKernelMixedPrecision:
     """Test mixed precision for contrastive kernels."""
 
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-    @pytest.mark.parametrize("family", [
-        AlgorithmFamily.FA,
-        AlgorithmFamily.HEBBIAN,
-        AlgorithmFamily.FF,
-        AlgorithmFamily.PEPITA,
-    ])
-    def test_contrastive_kernel_dtype(self, family: AlgorithmFamily, dtype: torch.dtype):
+    @pytest.mark.parametrize(
+        "family",
+        [
+            AlgorithmFamily.FA,
+            AlgorithmFamily.HEBBIAN,
+            AlgorithmFamily.FF,
+            AlgorithmFamily.PEPITA,
+        ],
+    )
+    def test_contrastive_kernel_dtype(
+        self, family: AlgorithmFamily, dtype: torch.dtype
+    ):
         """Test contrastive kernel dtype support."""
         if dtype == torch.bfloat16 and not torch.cuda.is_available():
             pytest.skip("BF16 requires CUDA")
@@ -268,8 +342,8 @@ class TestContrastiveKernelMixedPrecision:
             pytest.skip("FP16 requires CUDA")
 
         from bioplausible.acceleration.contrastive_kernels import (
-            get_contrastive_kernel,
             ContrastiveConfig,
+            get_contrastive_kernel,
         )
 
         kernel = get_contrastive_kernel(family)
@@ -278,7 +352,9 @@ class TestContrastiveKernelMixedPrecision:
 
         config = ContrastiveConfig(
             algorithm=family,
-            hardware=HardwareTarget.CUDA if torch.cuda.is_available() else HardwareTarget.CPU,
+            hardware=HardwareTarget.CUDA
+            if torch.cuda.is_available()
+            else HardwareTarget.CPU,
             dtype=dtype,
             beta=0.5,
             lr=0.01,
@@ -331,15 +407,20 @@ class TestKernelParityAcrossDtypes:
             pytest.skip(f"No backend for {family} on {hw}")
 
         extra = self._get_extra_config(family)
-        
+
         # Run FP32
         backend_fp32 = KernelRegistry.get(family, hw)
         config_fp32 = KernelConfig(
-            algorithm=family, hardware=hw, dtype=torch.float32,
-            settle_steps=4, beta=0.5, gamma=1.0, extra=extra
+            algorithm=family,
+            hardware=hw,
+            dtype=torch.float32,
+            settle_steps=4,
+            beta=0.5,
+            gamma=1.0,
+            extra=extra,
         )
         backend_fp32.initialize(config_fp32)
-        
+
         device = torch.device("cuda")
         layers_fp32 = _linear_stack((8, 16, 4), device)
         for layer in layers_fp32:
@@ -347,34 +428,39 @@ class TestKernelParityAcrossDtypes:
             if layer.bias is not None:
                 layer.bias.data = layer.bias.data.to(torch.float32)
         backend_fp32.set_model_ref(layers_fp32)
-        
+
         x_fp32 = torch.randn(4, 8, device=device, dtype=torch.float32)
         out_fp32, acts_fp32 = backend_fp32.forward(x_fp32)
-        
+
         err_fp32 = torch.randn(4, 4, device=device, dtype=torch.float32)
         grads_fp32 = backend_fp32.backward(acts_fp32, err_fp32)
-        
+
         # Run FP16 with fresh backend
         backend_fp16 = KernelRegistry.get(family, hw)
         config_fp16 = KernelConfig(
-            algorithm=family, hardware=hw, dtype=torch.float16,
-            settle_steps=4, beta=0.5, gamma=1.0, extra=extra
+            algorithm=family,
+            hardware=hw,
+            dtype=torch.float16,
+            settle_steps=4,
+            beta=0.5,
+            gamma=1.0,
+            extra=extra,
         )
         backend_fp16.initialize(config_fp16)
-        
+
         layers_fp16 = _linear_stack((8, 16, 4), device)
         for layer in layers_fp16:
             layer.weight.data = layer.weight.data.to(torch.float16)
             if layer.bias is not None:
                 layer.bias.data = layer.bias.data.to(torch.float16)
         backend_fp16.set_model_ref(layers_fp16)
-        
+
         x_fp16 = torch.randn(4, 8, device=device, dtype=torch.float16)
         out_fp16, acts_fp16 = backend_fp16.forward(x_fp16)
-        
+
         err_fp16 = torch.randn(4, 4, device=device, dtype=torch.float16)
         grads_fp16 = backend_fp16.backward(acts_fp16, err_fp16)
-        
+
         # Compare outputs (convert FP16 to FP32 for comparison)
         out_fp16_fp32 = out_fp16.to(torch.float32)
         rtol, atol = 1e-2, 1e-3
@@ -382,26 +468,38 @@ class TestKernelParityAcrossDtypes:
             f"{family} FP32 vs FP16 forward mismatch: "
             f"max_diff={(out_fp32 - out_fp16_fp32).abs().max().item():.6f}"
         )
-        
+
         # Compare gradients
         for key in grads_fp32:
             grad_fp16_fp32 = grads_fp16[key].to(torch.float32)
-            assert torch.allclose(grads_fp32[key], grad_fp16_fp32, rtol=rtol, atol=atol), (
+            assert torch.allclose(
+                grads_fp32[key], grad_fp16_fp32, rtol=rtol, atol=atol
+            ), (
                 f"{family} FP32 vs FP16 backward mismatch for {key}: "
                 f"max_diff={(grads_fp32[key] - grad_fp16_fp32).abs().max().item():.6f}"
             )
 
     def _get_extra_config(self, family: AlgorithmFamily) -> dict:
         configs = {
-            AlgorithmFamily.FA: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_layers": 2},
-            AlgorithmFamily.BACKPROP: {"input_dim": 8, "hidden_dim": 16, "output_dim": 4, "num_layers": 2},
+            AlgorithmFamily.FA: {
+                "input_dim": 8,
+                "hidden_dim": 16,
+                "output_dim": 4,
+                "num_layers": 2,
+            },
+            AlgorithmFamily.BACKPROP: {
+                "input_dim": 8,
+                "hidden_dim": 16,
+                "output_dim": 4,
+                "num_layers": 2,
+            },
         }
         return configs.get(family, {})
 
 
 class TestAccuracyParityAcrossDtypes:
     """Test model training accuracy parity across dtypes (REFACTOR8 Phase 2).
-    
+
     Gates:
     - FP16/BF16: accuracy within 2% of FP32 on digits
     - INT8: accuracy within 5% of FP32 (quantization-aware training if needed)
@@ -409,24 +507,32 @@ class TestAccuracyParityAcrossDtypes:
 
     @pytest.mark.parametrize("model_name", ["backprop_mlp", "standard_fa"])
     @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for FP16/BF16")
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(), reason="CUDA required for FP16/BF16"
+    )
     def test_fp16_bf16_accuracy_parity(self, model_name: str, dtype: torch.dtype):
         """Test FP16/BF16 accuracy within 2% of FP32 on digits."""
         device = torch.device("cuda")
-        
+
         # Get data (digits: 64 input, 10 output)
         input_dim, output_dim = 64, 10
         x, y = _get_synthetic_data(input_dim, output_dim, 512, device, dtype)
-        x_fp32, y_fp32 = _get_synthetic_data(input_dim, output_dim, 512, device, torch.float32)
-        
+        x_fp32, y_fp32 = _get_synthetic_data(
+            input_dim, output_dim, 512, device, torch.float32
+        )
+
         # Train FP32 reference
-        model_fp32 = _construct_model(model_name, input_dim, output_dim, device, torch.float32)
-        fp32_acc = _train_model(model_fp32, x_fp32, y_fp32, epochs=15, dtype=torch.float32)
-        
+        model_fp32 = _construct_model(
+            model_name, input_dim, output_dim, device, torch.float32
+        )
+        fp32_acc = _train_model(
+            model_fp32, x_fp32, y_fp32, epochs=15, dtype=torch.float32
+        )
+
         # Train with target dtype
         model_dtype = _construct_model(model_name, input_dim, output_dim, device, dtype)
         dtype_acc = _train_model(model_dtype, x, y, epochs=15, dtype=dtype)
-        
+
         # Check parity
         diff = abs(fp32_acc - dtype_acc)
         assert diff <= 0.02, (
@@ -435,16 +541,20 @@ class TestAccuracyParityAcrossDtypes:
         )
 
     @pytest.mark.parametrize("model_name", ["backprop_mlp"])
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for INT8 QAT training")
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(), reason="CUDA required for INT8 QAT training"
+    )
     def test_int8_accuracy_parity(self, model_name: str):
         """Test INT8 accuracy within 5% of FP32 on digits (quantization-aware training).
 
         Uses PyTorch QAT (Quantization-Aware Training) with fake-quant modules.
         Training happens on CUDA, but quantized model runs on CPU (quantized ops not on CUDA).
-        
+
         Note: This test may be skipped if the current PyTorch build lacks quantized CPU kernels.
         """
-        pytest.skip("INT8 QAT requires PyTorch build with quantized CPU kernels. Skipping for now.")
+        pytest.skip(
+            "INT8 QAT requires PyTorch build with quantized CPU kernels. Skipping for now."
+        )
 
 
 class TestMixedPrecisionLossScaling:
@@ -457,25 +567,29 @@ class TestMixedPrecisionLossScaling:
         device = torch.device("cuda")
         input_dim, output_dim = 64, 10
         x, y = _get_synthetic_data(input_dim, output_dim, 256, device, torch.float16)
-        
+
         # Construct model in FP32 for training, use autocast for FP16 forward
-        model = _construct_model(model_name, input_dim, output_dim, device, torch.float32)
+        model = _construct_model(
+            model_name, input_dim, output_dim, device, torch.float32
+        )
         model.train()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
         criterion = nn.CrossEntropyLoss()
-        scaler = torch.amp.GradScaler('cuda')
-        
+        scaler = torch.amp.GradScaler("cuda")
+
         # Run a few steps and verify gradients are finite
         for _ in range(3):
             optimizer.zero_grad()
-            with torch.amp.autocast('cuda', dtype=torch.float16):
+            with torch.amp.autocast("cuda", dtype=torch.float16):
                 logits = model(x[:64])
                 loss = criterion(logits, y[:64])
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-            
+
             # Check gradients are finite
             for param in model.parameters():
                 if param.grad is not None:
-                    assert torch.isfinite(param.grad).all(), "Non-finite gradients with FP16 loss scaling"
+                    assert torch.isfinite(param.grad).all(), (
+                        "Non-finite gradients with FP16 loss scaling"
+                    )

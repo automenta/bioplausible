@@ -36,6 +36,10 @@ Usage:
     model = compile_model(model, mode='reduce-overhead')
 """
 
+# Import to trigger EQPROP kernel backend registration
+from bioplausible.acceleration import (
+    eqprop_kernel_backend,  # ruff: ignore[unused-import]
+)
 from bioplausible.acceleration.backends import (
     HAS_CUPY,
     HAS_TRITON,
@@ -47,8 +51,6 @@ from bioplausible.acceleration.backends import (
     enable_tf32,
     get_optimal_backend,
 )
-# Import to trigger EQPROP kernel backend registration
-from bioplausible.acceleration import eqprop_kernel_backend  # noqa: F401
 from bioplausible.acceleration.compile import compile_model, compile_settling_loop
 from bioplausible.acceleration.contrastive_kernels import (
     BaseContrastiveKernel,

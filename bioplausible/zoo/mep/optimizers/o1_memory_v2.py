@@ -16,7 +16,8 @@ Created: 2026-02-18 (v2: 2026-02-25)
 Refactored: 2026-07-28 to use TransitionGraph protocol (transition_modules())
 """
 
-from typing import Callable, Literal
+from collections.abc import Callable
+from typing import Literal
 
 import torch
 import torch.nn.functional as F

@@ -14,6 +14,8 @@ swapping in a contrastive ``train_step``.
 
 from __future__ import annotations
 
+from typing import Literal
+
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
@@ -282,6 +284,7 @@ class TileLM(TileAlgorithm):
         pad_token_id: int = 0,
         embed_dropout: float = 0.1,
         output_scale: float = 2.0,
+        algorithm: Literal["ep", "fa", "tp", "pc", "hebbian", "snn"] = "ep",
         **kwargs,
     ) -> TileLM:
         extra = {
@@ -298,7 +301,7 @@ class TileLM(TileAlgorithm):
             neurons_per_tile=neurons_per_tile,
             tiles_per_layer=tiles_per_layer,
             num_hidden_layers=num_layers,
-            algorithm="ep",
+            algorithm=algorithm,
             mode="backprop",
             learning_rate=learning_rate,
             importance_lr=importance_lr,

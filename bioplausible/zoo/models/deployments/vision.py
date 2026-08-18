@@ -1,9 +1,9 @@
 """
-EquiTile Vision: Convolutional EquiTile for Image Processing
-=============================================================
+TileNet Vision: Convolutional TileNet for Image Processing
+===========================================================
 
-Extends EquiTile with convolutional capabilities for vision tasks:
-- ConvEquiTile: Convolutional tile architecture
+Extends TileNet with convolutional capabilities for vision tasks:
+- ConvTileNet: Convolutional tile architecture
 - Vision-specific tile configurations
 - Image augmentation support
 - Vision benchmarks (MNIST, CIFAR-10, ImageNet)
@@ -15,6 +15,7 @@ adds the vision-specific pieces (augmentation, the registered model).
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
@@ -36,9 +37,9 @@ from bioplausible.zoo.models.deployments.base import (
 ConvFeatureExtractor = _fe.ConvFeatureExtractor
 
 __all__ = [
-    "ConvEquiTile",
-    "ConvEquiTileConfig",
     "ConvFeatureExtractor",
+    "ConvTileNet",
+    "ConvTileNetConfig",
     "VisionAugmentation",
     "create_cifar_model",
     "create_imagenet_model",
@@ -55,8 +56,8 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class ConvEquiTileConfig(ConvDeploymentConfig):
-    """Configuration for Convolutional EquiTile.
+class ConvTileNetConfig(ConvDeploymentConfig):
+    """Configuration for Convolutional TileNet.
 
     Inherits the shared deployment fields from ``ConvDeploymentConfig`` and
     keeps the same defaults the historical ``ConvEquiTileConfig`` exposed.
@@ -67,46 +68,59 @@ class ConvEquiTileConfig(ConvDeploymentConfig):
 
 
 # =============================================================================
-# Convolutional EquiTile
+# Convolutional TileNet
 # =============================================================================
 
 
+def _credit_assignment_type(algorithm: str) -> str:
+    """Map algorithm to credit assignment type."""
+    mapping = {
+        "ep": "equilibrium",
+        "pc": "equilibrium",
+        "fa": "target",
+        "tp": "target",
+        "hebbian": "hebbian",
+        "snn": "spiking",
+    }
+    return mapping.get(algorithm, "equilibrium")
+
+
 @register_model(
-    "conv_equitile",
+    "conv_tile",
     domains=[Domain.VISION],
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.8,
     requires_backward=False,
-    credit_assignment_type="hebbian",
-    family="equitile",
+    credit_assignment_type="equilibrium",
+    family="tile",
     tags=[status_tag("experimental")],
 )
-class ConvEquiTile(BioModel):
-    """Convolutional EquiTile for vision tasks.
+class ConvTileNet(BioModel):
+    """Convolutional TileNet for vision tasks.
 
-    Combines convolutional feature extraction with EquiTile's
+    Combines convolutional feature extraction with TileNet's
     tile-based local learning for the classification head.
 
     Parameters
     ----------
-    config : ConvEquiTileConfig, optional
+    config : ConvTileNetConfig, optional
         Configuration
     **kwargs
         Additional configuration parameters
 
     Examples
     --------
-    >>> config = ConvEquiTileConfig(
+    >>> config = ConvTileNetConfig(
     ...     input_channels=3,
     ...     input_size=32,
     ...     num_classes=10,
     ... )
-    >>> model = ConvEquiTile(config)
+    >>> model = ConvTileNet(config)
     >>> for images, labels in dataloader:
     ...     stats = model.train_step(images, labels)
     """
 
-    algorithm_name = "ConvEquiTile"
+    algorithm_name = "ConvTileNet"
 
     @classmethod
     def build(
@@ -120,7 +134,7 @@ class ConvEquiTile(BioModel):
         task_type,
         **kwargs,
     ):
-        """Build ConvEquiTile from factory arguments."""
+        """Build ConvTileNet from factory arguments."""
         # Handle spatial tuple input_dim (e.g., (1, 28, 28) for MNIST)
         if isinstance(input_dim, tuple):
             input_dim = math.prod(input_dim)
@@ -144,7 +158,7 @@ class ConvEquiTile(BioModel):
             "num_fc_layers": max(1, num_layers - 2),
         }
 
-        valid_keys = ConvEquiTileConfig.__annotations__.keys()
+        valid_keys = ConvTileNetConfig.__annotations__.keys()
         for k, v in kwargs.items():
             if k in valid_keys:
                 config_kwargs[k] = v
@@ -153,22 +167,22 @@ class ConvEquiTile(BioModel):
             if k in valid_keys:
                 config_kwargs[k] = v
 
-        config = ConvEquiTileConfig(**config_kwargs)
+        config = ConvTileNetConfig(**config_kwargs)
 
         model = cls(config=config)
         return model.to(device)
 
     def __init__(
         self,
-        config: ConvEquiTileConfig | None = None,
+        config: ConvTileNetConfig | None = None,
         **kwargs: object,
     ) -> None:
         if config is None:
-            config = ConvEquiTileConfig(**kwargs)
+            config = ConvTileNetConfig(**kwargs)
 
         super().__init__(
             ModelConfig(
-                name="conv_equitile",
+                name="conv_tile",
                 input_dim=config.input_channels * config.input_size * config.input_size,
                 output_dim=config.num_classes,
             )
@@ -180,7 +194,7 @@ class ConvEquiTile(BioModel):
         # Convolutional feature extractor (shared implementation)
         self.feature_extractor = ConvFeatureExtractor(config)
 
-        # EquiTile classification head
+        # TileNet classification head
         self._build_tile_head(config)
 
         # Regularization
@@ -191,7 +205,7 @@ class ConvEquiTile(BioModel):
         # State tracking
         self._step_count = 0
 
-    def _build_tile_head(self, config: ConvEquiTileConfig) -> None:
+    def _build_tile_head(self, config: ConvTileNetConfig) -> None:
         """Build the tile-substrate classification head."""
         feature_dim = self.feature_extractor.output_size
         self.head = build_tile_head(config, feature_dim, config.num_classes)
@@ -327,26 +341,28 @@ def create_vision_model(
     conv_channels: list[int] | None = None,
     neurons_per_tile: int = 64,
     mode: Literal["pc", "ep"] = "pc",
+    algorithm: Literal["ep", "fa", "tp", "pc", "hebbian", "snn"] = "ep",
     **kwargs: object,
-) -> ConvEquiTile:
-    """Create a ConvEquiTile model for vision tasks."""
-    config = ConvEquiTileConfig(
+) -> ConvTileNet:
+    """Create a ConvTileNet model for vision tasks."""
+    config = ConvTileNetConfig(
         input_channels=input_channels,
         input_size=input_size,
         num_classes=num_classes,
         conv_channels=conv_channels or [32, 64, 128],
         neurons_per_tile=neurons_per_tile,
         mode=mode,
+        algorithm=algorithm,
         **kwargs,
     )
-    return ConvEquiTile(config)
+    return ConvTileNet(config)
 
 
 def create_mnist_model(
     neurons_per_tile: int = 64,
     **kwargs: object,
-) -> ConvEquiTile:
-    """Create ConvEquiTile for MNIST."""
+) -> ConvTileNet:
+    """Create ConvTileNet for MNIST."""
     return create_vision_model(
         input_channels=1,
         input_size=28,
@@ -360,8 +376,8 @@ def create_mnist_model(
 def create_cifar_model(
     neurons_per_tile: int = 128,
     **kwargs: object,
-) -> ConvEquiTile:
-    """Create ConvEquiTile for CIFAR-10/100."""
+) -> ConvTileNet:
+    """Create ConvTileNet for CIFAR-10/100."""
     return create_vision_model(
         input_channels=3,
         input_size=32,
@@ -377,8 +393,8 @@ def create_imagenet_model(
     neurons_per_tile: int = 256,
     num_classes: int = 1000,
     **kwargs: object,
-) -> ConvEquiTile:
-    """Create ConvEquiTile for ImageNet."""
+) -> ConvTileNet:
+    """Create ConvTileNet for ImageNet."""
     conv_channels = [64, 128, 256, 512]
     return create_vision_model(
         input_channels=3,
@@ -390,3 +406,48 @@ def create_imagenet_model(
         use_pooling=True,
         **kwargs,
     )
+
+
+# =============================================================================
+# Algorithm-specific Variants (registered separately for discovery)
+# =============================================================================
+
+
+def _register_variant(name: str, algorithm: str, credit_type: str, bio_score: float):
+    """Helper to register algorithm-specific ConvTileNet variants."""
+
+    @register_model(
+        name,
+        domains=[Domain.VISION],
+        locality_level=LocalityLevel.LOCAL,
+        bio_plausibility_score=bio_score,
+        requires_backward=False,
+        credit_assignment_type=credit_type,
+        family="tile",
+        tags=[status_tag("experimental")],
+    )
+    class _ConvTileNetVariant(ConvTileNet):
+        algorithm_name = f"ConvTileNet-{algorithm.upper()}"
+
+        def __init__(
+            self,
+            config: ConvTileNetConfig | None = None,
+            **kwargs: object,
+        ) -> None:
+            if config is None:
+                kwargs.setdefault("algorithm", algorithm)
+                config = ConvTileNetConfig(**kwargs)
+            elif config.algorithm != algorithm:
+                # Create new config with the variant's algorithm
+                config = dataclasses.replace(config, algorithm=algorithm)
+            super().__init__(config=config)
+
+    return _ConvTileNetVariant
+
+
+# Register algorithm-specific variants
+_register_variant("conv_tile_fa", "fa", "target", 0.75)
+_register_variant("conv_tile_tp", "tp", "target", 0.7)
+_register_variant("conv_tile_hebbian", "hebbian", "hebbian", 0.65)
+_register_variant("conv_tile_snn", "snn", "spiking", 0.7)
+_register_variant("conv_tile_pc", "pc", "equilibrium", 0.8)

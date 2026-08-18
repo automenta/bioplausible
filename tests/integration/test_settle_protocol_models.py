@@ -9,27 +9,26 @@ from __future__ import annotations
 import pytest
 import torch
 
+from bioplausible.core.local_learning.algorithm import (
+    TileAlgorithm,
+    TileAlgorithmConfig,
+)
 from bioplausible.core.local_learning.settling import (
-    SettleConfig,
     SettleProtocol,
     SettleTelemetry,
-    settle_universal,
 )
-from bioplausible.core.trainer import TrainingMetrics
 
 # Import zoo models to trigger registration
-from bioplausible.zoo import models
 from bioplausible.zoo.models.mep import MEPEqPropModel
 from bioplausible.zoo.models.o1memory import O1MemoryModel
 from bioplausible.zoo.models.predictive_coding import PredictiveCodingHybrid
-from bioplausible.core.local_learning.algorithm import TileAlgorithm, TileAlgorithmConfig
 from bioplausible.zoo.models.tile_models import TilePC
 
 
 def _run_model_settle(model, x, max_steps=10, convergence_threshold=1e-3, **kwargs):
     """Run settle using the model's internal _run_settle_universal method."""
     # Update model convergence settings if provided
-    if hasattr(model, 'convergence_threshold'):
+    if hasattr(model, "convergence_threshold"):
         model.convergence_threshold = convergence_threshold
     return model._run_settle_universal(x, steps=max_steps, **kwargs)
 
@@ -56,7 +55,9 @@ class TestMEPEqPropModelSettleProtocol:
     def test_settle_universal_returns_telemetry(self, model):
         """_run_settle_universal returns (output, steps_taken, converged, telemetry)."""
         x = torch.randn(4, 20)
-        out, steps_taken, converged, telemetry = _run_model_settle(model, x, max_steps=10)
+        out, steps_taken, converged, telemetry = _run_model_settle(
+            model, x, max_steps=10
+        )
         assert isinstance(out, torch.Tensor)
         assert out.shape == (4, 4)
         assert isinstance(steps_taken, int)
@@ -133,7 +134,9 @@ class TestO1MemoryModelSettleProtocol:
     def test_settle_universal_returns_telemetry(self, model):
         """_run_settle_universal returns (output, steps_taken, converged, telemetry)."""
         x = torch.randn(4, 20)
-        out, steps_taken, converged, telemetry = _run_model_settle(model, x, max_steps=10)
+        out, steps_taken, converged, telemetry = _run_model_settle(
+            model, x, max_steps=10
+        )
         assert isinstance(out, torch.Tensor)
         assert out.shape == (4, 4)
         assert isinstance(steps_taken, int)
@@ -209,7 +212,9 @@ class TestPredictiveCodingHybridSettleProtocol:
     def test_settle_universal_returns_telemetry(self, model):
         """_run_settle_universal returns (output, steps_taken, converged, telemetry)."""
         x = torch.randn(4, 20)
-        out, steps_taken, converged, telemetry = _run_model_settle(model, x, max_steps=10)
+        out, steps_taken, converged, telemetry = _run_model_settle(
+            model, x, max_steps=10
+        )
         assert isinstance(out, torch.Tensor)
         assert out.shape == (4, 4)
         assert isinstance(steps_taken, int)
@@ -292,7 +297,9 @@ class TestTileAlgorithmSettleProtocol:
     def test_settle_universal_returns_telemetry(self, model):
         """_run_settle_universal returns (output, steps_taken, converged, telemetry)."""
         x = torch.randn(4, 20)
-        out, steps_taken, converged, telemetry = _run_model_settle(model, x, max_steps=10)
+        out, steps_taken, converged, telemetry = _run_model_settle(
+            model, x, max_steps=10
+        )
         assert isinstance(out, torch.Tensor)
         assert out.shape == (4, 4)
         assert isinstance(steps_taken, int)
@@ -337,10 +344,18 @@ class TestTileAlgorithmSettleProtocol:
 
     def test_tile_pc_subclass(self):
         """TilePC subclass also implements SettleProtocol."""
-        model = TilePC.from_pc(input_dim=20, output_dim=4, num_layers=2, neurons_per_tile=16, tiles_per_layer=2)
+        model = TilePC.from_pc(
+            input_dim=20,
+            output_dim=4,
+            num_layers=2,
+            neurons_per_tile=16,
+            tiles_per_layer=2,
+        )
         assert isinstance(model, SettleProtocol)
         x = torch.randn(4, 20)
-        state, steps_taken, converged, telemetry = _run_model_settle(model, x, max_steps=10)
+        state, steps_taken, converged, telemetry = _run_model_settle(
+            model, x, max_steps=10
+        )
         assert isinstance(telemetry, SettleTelemetry)
 
     def test_training_metrics_includes_settle_telemetry(self, model):
@@ -357,16 +372,62 @@ class TestTileAlgorithmSettleProtocol:
 class TestSettleProtocolMultiEpochLearning:
     """Test that models with SettleProtocol can learn over multiple epochs."""
 
-    @pytest.mark.parametrize("model_cls,model_kwargs", [
-        (MEPEqPropModel, {"input_dim": 16, "hidden_dim": 12, "output_dim": 3, "settle_steps": 8, "settle_lr": 0.1}),
-        (O1MemoryModel, {"input_dim": 16, "hidden_dim": 12, "output_dim": 3, "settle_steps": 8, "settle_lr": 0.1}),
-        (PredictiveCodingHybrid, {"input_dim": 16, "hidden_dim": 12, "output_dim": 3, "infer_steps": 8, "eta_infer": 0.05}),
-        (TileAlgorithm, {"config": TileAlgorithmConfig(input_dim=16, output_dim=3, neurons_per_tile=12, tiles_per_layer=2, num_hidden_layers=2, algorithm="pc", mode="ep", free_steps=8, nudged_steps=8, learning_rate=0.001)}),
-    ])
+    @pytest.mark.parametrize(
+        "model_cls,model_kwargs",
+        [
+            (
+                MEPEqPropModel,
+                {
+                    "input_dim": 16,
+                    "hidden_dim": 12,
+                    "output_dim": 3,
+                    "settle_steps": 8,
+                    "settle_lr": 0.1,
+                },
+            ),
+            (
+                O1MemoryModel,
+                {
+                    "input_dim": 16,
+                    "hidden_dim": 12,
+                    "output_dim": 3,
+                    "settle_steps": 8,
+                    "settle_lr": 0.1,
+                },
+            ),
+            (
+                PredictiveCodingHybrid,
+                {
+                    "input_dim": 16,
+                    "hidden_dim": 12,
+                    "output_dim": 3,
+                    "infer_steps": 8,
+                    "eta_infer": 0.05,
+                },
+            ),
+            (
+                TileAlgorithm,
+                {
+                    "config": TileAlgorithmConfig(
+                        input_dim=16,
+                        output_dim=3,
+                        neurons_per_tile=12,
+                        tiles_per_layer=2,
+                        num_hidden_layers=2,
+                        algorithm="pc",
+                        mode="ep",
+                        free_steps=8,
+                        nudged_steps=8,
+                        learning_rate=0.001,
+                    )
+                },
+            ),
+        ],
+    )
     def test_multi_epoch_learning(self, model_cls, model_kwargs):
         """Model learns over multiple epochs (loss decreases, accuracy improves)."""
         model = model_cls(**model_kwargs)
-        if hasattr(model, 'convergence_threshold'):
+        if hasattr(model, "convergence_threshold"):
             model.convergence_threshold = 1e-3
             model.convergence_start = 3
         x = torch.randn(32, 16)

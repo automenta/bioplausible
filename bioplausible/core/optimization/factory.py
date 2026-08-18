@@ -109,8 +109,12 @@ def make_strategy_optimizer(
     config = StrategyOptimizerConfig(
         gradient=StrategyConfig(name=gradient, kwargs=gradient_kwargs),
         update=StrategyConfig(name=update, kwargs=update_kwargs),
-        constraint=StrategyConfig(name=constraint, kwargs=constraint_kwargs) if constraint else None,
-        feedback=StrategyConfig(name=feedback, kwargs=feedback_kwargs) if feedback else None,
+        constraint=StrategyConfig(name=constraint, kwargs=constraint_kwargs)
+        if constraint
+        else None,
+        feedback=StrategyConfig(name=feedback, kwargs=feedback_kwargs)
+        if feedback
+        else None,
         lr=lr,
         momentum=momentum,
         weight_decay=weight_decay,
@@ -320,16 +324,16 @@ def backprop_plain(
 
 __all__ = [
     "StrategyRegistry",
-    "create_strategy_optimizer",
-    "make_strategy_optimizer",
-    "muon_tp",
-    "muon_pc",
-    "muon_hebbian",
-    "plain_tp",
-    "plain_pc",
-    "plain_hebbian",
     "backprop_muon",
     "backprop_plain",
+    "create_strategy_optimizer",
+    "make_strategy_optimizer",
+    "muon_hebbian",
+    "muon_pc",
+    "muon_tp",
+    "plain_hebbian",
+    "plain_pc",
+    "plain_tp",
 ]
 
 

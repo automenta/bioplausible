@@ -15,7 +15,6 @@ from bioplausible.acceleration import (
     HardwareTarget,
     KernelConfig,
     KernelRegistry,
-    LocalityLevel,
     batched_outer_product,
     contrastive_delta,
     contrastive_hebbian_update,

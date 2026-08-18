@@ -61,9 +61,7 @@ class BackpropKernelBackend:
         self._device = torch.device("cuda" if is_cuda else "cpu")
         self._dtype = config.dtype
         activation_name = config.extra.get("activation", "relu")
-        self._activation = _ACTIVATIONS.get(
-            str(activation_name), nn.ReLU()
-        )
+        self._activation = _ACTIVATIONS.get(str(activation_name), nn.ReLU())
 
     def set_model_ref(self, layers: list[nn.Linear]) -> None:
         """Set reference to the model's linear layer stack."""

@@ -124,7 +124,9 @@ class O1MemoryModel(BioModel, SettleProtocol):
         )
 
         # SettleProtocol attributes
-        self.convergence_threshold = 1e-4  # O1Memory doesn't have built-in convergence check
+        self.convergence_threshold = (
+            1e-4  # O1Memory doesn't have built-in convergence check
+        )
         self.convergence_start = 3
         self.max_steps = self.settle_steps
 
@@ -237,8 +239,12 @@ class O1MemoryModel(BioModel, SettleProtocol):
         )
 
         # Output is the last state
-        out = states[-1] if states else torch.zeros(
-            x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+        out = (
+            states[-1]
+            if states
+            else torch.zeros(
+                x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+            )
         )
         self._last_activations = states
 
@@ -255,7 +261,9 @@ class O1MemoryModel(BioModel, SettleProtocol):
 
         Captures initial states from transition modules without autograd.
         """
-        return _capture_states_no_grad(self, x, list(self.transition_modules()), forward_fn=self._forward_impl)
+        return _capture_states_no_grad(
+            self, x, list(self.transition_modules()), forward_fn=self._forward_impl
+        )
 
     def _transform_input(self, x: torch.Tensor) -> torch.Tensor:
         """Transform input (beta/target stored instead)."""
@@ -386,8 +394,12 @@ class O1MemoryModel(BioModel, SettleProtocol):
         self._last_activations = state
         self._last_settle_telemetry = telemetry
 
-        out = state[-1] if state else torch.zeros(
-            x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+        out = (
+            state[-1]
+            if state
+            else torch.zeros(
+                x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+            )
         )
 
         return out, steps_taken, converged, telemetry
@@ -405,16 +417,28 @@ class O1MemoryModel(BioModel, SettleProtocol):
         with torch.no_grad():
             transition_modules = self.transition_modules()
             states_free = settle_manual_o1(
-                self, x, None, 0.0, transition_modules,
-                steps=self.settle_steps, lr=self.settle_lr, momentum=self.momentum,
-                loss_type=self.loss_type, softmax_temperature=self.softmax_temperature,
+                self,
+                x,
+                None,
+                0.0,
+                transition_modules,
+                steps=self.settle_steps,
+                lr=self.settle_lr,
+                momentum=self.momentum,
+                loss_type=self.loss_type,
+                softmax_temperature=self.softmax_temperature,
                 forward_fn=self._forward_impl,
             )
-            out = states_free[-1] if states_free else torch.zeros(
-                x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+            out = (
+                states_free[-1]
+                if states_free
+                else torch.zeros(
+                    x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+                )
             )
             loss = F.cross_entropy(out, y).item() if out.numel() > 0 else 0.0
             from bioplausible.core.losses import compute_accuracy
+
             acc = compute_accuracy(out, y) if out.numel() > 0 else 0.0
 
         return {"loss": loss, "accuracy": acc}

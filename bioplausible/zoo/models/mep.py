@@ -248,7 +248,9 @@ class MEPEqPropModel(BioModel, SettleProtocol):
         )
 
         if not states:
-            out = torch.zeros(x.shape[0], self.output_dim, device=x.device, dtype=x.dtype)
+            out = torch.zeros(
+                x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+            )
             self._last_activations = []
             if return_trajectory:
                 return out, [[]]
@@ -268,6 +270,7 @@ class MEPEqPropModel(BioModel, SettleProtocol):
             )
 
         from bioplausible.core.local_learning.settling import energy_gradient_descent
+
         states = energy_gradient_descent(
             states,
             wrapped_energy_fn,
@@ -281,8 +284,12 @@ class MEPEqPropModel(BioModel, SettleProtocol):
             step_size_decay=self.settler.step_size_decay,
         )
 
-        out = states[-1] if states else torch.zeros(
-            x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+        out = (
+            states[-1]
+            if states
+            else torch.zeros(
+                x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+            )
         )
         self._last_activations = states
 
@@ -431,8 +438,12 @@ class MEPEqPropModel(BioModel, SettleProtocol):
         self._last_settle_telemetry = telemetry
 
         # Return output (last state)
-        out = state[-1] if state else torch.zeros(
-            x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+        out = (
+            state[-1]
+            if state
+            else torch.zeros(
+                x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+            )
         )
 
         return out, steps_taken, converged, telemetry
@@ -444,7 +455,10 @@ class MEPEqPropModel(BioModel, SettleProtocol):
     def _ensure_optimizer(self) -> None:
         if self.optimizer is None:
             self.optimizer = create_optimizer(
-                self, OptimizerConfig(name="adam", lr=self.config.learning_rate, weight_decay=0.0)
+                self,
+                OptimizerConfig(
+                    name="adam", lr=self.config.learning_rate, weight_decay=0.0
+                ),
             )
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
@@ -478,11 +492,16 @@ class MEPEqPropModel(BioModel, SettleProtocol):
 
         # Metrics
         with torch.no_grad():
-            out = states_nudged[-1] if states_nudged else torch.zeros(
-                x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+            out = (
+                states_nudged[-1]
+                if states_nudged
+                else torch.zeros(
+                    x.shape[0], self.output_dim, device=x.device, dtype=x.dtype
+                )
             )
             loss = F.cross_entropy(out, y).item() if out.numel() > 0 else 0.0
             from bioplausible.core.losses import compute_accuracy
+
             acc = compute_accuracy(out, y) if out.numel() > 0 else 0.0
 
         return {"loss": loss, "accuracy": acc}

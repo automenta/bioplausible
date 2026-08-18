@@ -68,6 +68,7 @@ class FAKernelBackend:
         # Flatten input_dim if it's a tuple (spatial format like (C, H, W))
         if isinstance(input_dim, tuple):
             import math
+
             input_dim = math.prod(input_dim)
 
         dims = [input_dim] + [hidden_dim] * (self._num_layers - 1) + [output_dim]
@@ -319,7 +320,7 @@ try:
         BLOCK_D: tl.constexpr,
     ):
         """Fused FA backward kernel."""
-        pass  # Implementation would go here for production
+        # Implementation would go here for production
 
     HAS_TRITON_FA = True
 except ImportError:
@@ -331,4 +332,4 @@ for hw in HardwareTarget:
     KernelRegistry.register(AlgorithmFamily.FA, hw, FAKernelBackend)
 
 
-__all__ = ["FAKernelBackend", "HAS_TRITON_FA"]
+__all__ = ["HAS_TRITON_FA", "FAKernelBackend"]

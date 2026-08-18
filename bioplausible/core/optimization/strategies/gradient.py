@@ -12,7 +12,7 @@ from torch import nn
 
 from .base import GradientStrategy
 
-__all__ = ["BackpropGradient", "HebbianGradient", "TargetPropGradient", "PCGradient"]
+__all__ = ["BackpropGradient", "HebbianGradient", "PCGradient", "TargetPropGradient"]
 
 
 class _ForwardNetLayer(Protocol):

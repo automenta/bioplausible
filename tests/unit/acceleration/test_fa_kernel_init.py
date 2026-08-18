@@ -6,6 +6,7 @@ Ensures FA kernel backend handles tuple input_dim (spatial format) correctly.
 from __future__ import annotations
 
 import math
+
 import pytest
 import torch
 

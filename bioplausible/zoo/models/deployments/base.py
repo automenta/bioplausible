@@ -1,4 +1,4 @@
-"""Unified base configuration and factory for EquiTile deployments.
+"""Unified base configuration and factory for TileNet deployments.
 
 Consolidates the configuration hierarchies and factory patterns shared across
 the vision, time-series, RL, and graph deployment modules. Shared NN modules
@@ -42,7 +42,7 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class DeploymentConfig:
-    """Base configuration shared by all EquiTile deployments.
+    """Base configuration shared by all TileNet deployments.
 
     Attributes:
         neurons_per_tile: Number of neurons in each tile.
@@ -51,6 +51,7 @@ class DeploymentConfig:
         learning_rate: Base learning rate.
         dropout: Dropout probability.
         weight_decay: Weight decay coefficient.
+        algorithm: Tile algorithm (ep, fa, tp, pc, hebbian, snn).
         mode: Learning mode (pc, ep, backprop).
         inference_steps: Number of inference/relaxation steps.
         step_size: Step size for relaxation dynamics.
@@ -66,6 +67,7 @@ class DeploymentConfig:
     learning_rate: float = 1e-3
     dropout: float = 0.1
     weight_decay: float = 1e-4
+    algorithm: Literal["ep", "fa", "tp", "pc", "hebbian", "snn"] = "ep"
     mode: Literal["pc", "ep", "backprop"] = "pc"
     inference_steps: int = 10
     step_size: float = 0.1
@@ -152,7 +154,7 @@ def build_tile_head(
     """Build a substrate ``TileAlgorithm`` head from a deployment config.
 
     Canonical head construction for the deployment model classes: maps the
-    shared deployment fields (topology, mode, optimizer knobs) onto
+    shared deployment fields (topology, algorithm, optimizer knobs) onto
     ``TileAlgorithmConfig`` and injects a ``TaskHandler`` for the target task.
     ``equitile_kwargs`` and any explicit ``kwargs`` spill into the substrate
     ``extra`` bucket (separate per-algorithm knobs).
@@ -168,7 +170,7 @@ def build_tile_head(
     """
     extra = dict(config.equitile_kwargs)
     extra.update(kwargs)
-    algorithm = "pc" if config.mode == "pc" else "ep"
+    algorithm = getattr(config, "algorithm", config.mode)
     head_config = TileAlgorithmConfig(
         input_dim=input_dim,
         output_dim=output_dim,

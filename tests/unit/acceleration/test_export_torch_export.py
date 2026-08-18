@@ -6,7 +6,6 @@ works correctly and falls back to legacy exporter when needed.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -45,6 +44,7 @@ class TestOnnxExportTorchExport:
 
         # Verify ONNX model loads
         import onnx
+
         onnx_model = onnx.load(str(output_path))
         assert onnx_model.graph.input[0].name == "input"
         assert onnx_model.graph.output[0].name == "output"
@@ -60,6 +60,7 @@ class TestOnnxExportTorchExport:
         _onnx_export(model, sample, output_path)
 
         import onnx
+
         onnx_model = onnx.load(str(output_path))
         # Check dynamic axes
         input_shape = onnx_model.graph.input[0].type.tensor_type.shape
@@ -95,7 +96,9 @@ class TestExportKernelWithTorchExport:
         from bioplausible.acceleration.backprop_kernels import BackpropKernelBackend
 
         backend = BackpropKernelBackend()
-        config = KernelConfig(algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU)
+        config = KernelConfig(
+            algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU
+        )
         backend.initialize(config)
         stack = [nn.Linear(4, 8), nn.Linear(8, 3)]
         backend.set_model_ref(stack)
@@ -104,15 +107,20 @@ class TestExportKernelWithTorchExport:
     def test_export_kernel_creates_onnx_with_torch_export(self, tmp_path):
         """export_kernel should create ONNX using torch.export path."""
         backend = self._bound_backprop()
-        config = KernelConfig(algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU)
+        config = KernelConfig(
+            algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU
+        )
 
-        result = export_kernel(backend, config, target=HardwareTarget.CPU, output_dir=str(tmp_path))
+        result = export_kernel(
+            backend, config, target=HardwareTarget.CPU, output_dir=str(tmp_path)
+        )
 
         assert result.onnx_path is not None
         assert (tmp_path / "backprop_cpu.onnx").exists()
 
         # Verify ONNX model is valid
         import onnx
+
         onnx_model = onnx.load(result.onnx_path)
         assert onnx_model.graph.input[0].name == "input"
         assert onnx_model.graph.output[0].name == "output"
@@ -120,14 +128,18 @@ class TestExportKernelWithTorchExport:
     def test_export_kernel_state_dict_matches_model(self, tmp_path):
         """Exported state dict should match the bound model's weights."""
         backend = self._bound_backprop()
-        config = KernelConfig(algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU)
+        config = KernelConfig(
+            algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU
+        )
 
         # Get original weights
         original_weights = {}
         for i, layer in enumerate(backend._layers):
-            original_weights[f"{i*2}.weight"] = layer.weight.clone()  # Sequential: Linear, ReLU, Linear
+            original_weights[f"{i * 2}.weight"] = (
+                layer.weight.clone()
+            )  # Sequential: Linear, ReLU, Linear
             if layer.bias is not None:
-                original_weights[f"{i*2}.bias"] = layer.bias.clone()
+                original_weights[f"{i * 2}.bias"] = layer.bias.clone()
 
         result = export_kernel(backend, config, output_dir=str(tmp_path))
 
@@ -158,6 +170,7 @@ class TestExportKernelWithTorchExport:
 
         # Manifest should record the requested dtype
         import json
+
         manifest = json.loads((tmp_path / "backprop_cpu_manifest.json").read_text())
         assert manifest["dtype"] == "torch.float16"
 
@@ -167,6 +180,7 @@ class TestExportKernelWithTorchExport:
 
     def test_export_kernel_onnx_fallback_legacy(self, tmp_path, monkeypatch):
         """Should fall back to legacy exporter if torch.export fails."""
+
         # Mock torch.export.export to raise AttributeError (simulating old PyTorch)
         def mock_export(*args, **kwargs):
             raise AttributeError("torch.export.export not available")
@@ -174,7 +188,9 @@ class TestExportKernelWithTorchExport:
         monkeypatch.setattr(torch.export, "export", mock_export)
 
         backend = self._bound_backprop()
-        config = KernelConfig(algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU)
+        config = KernelConfig(
+            algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU
+        )
 
         result = export_kernel(backend, config, output_dir=str(tmp_path))
 
@@ -195,7 +211,9 @@ class TestExportKernelEdgeCases:
         from bioplausible.acceleration.backprop_kernels import BackpropKernelBackend
 
         backend = BackpropKernelBackend()
-        config = KernelConfig(algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU)
+        config = KernelConfig(
+            algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU
+        )
         backend.initialize(config)
         stack = [nn.Linear(4, 8), nn.Linear(8, 3)]
         backend.set_model_ref(stack)
@@ -206,7 +224,9 @@ class TestExportKernelEdgeCases:
         from bioplausible.acceleration.backprop_kernels import BackpropKernelBackend
 
         backend = BackpropKernelBackend()
-        config = KernelConfig(algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU)
+        config = KernelConfig(
+            algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU
+        )
         backend.initialize(config)
         # Don't call set_model_ref
 
@@ -233,6 +253,7 @@ class TestExportKernelEdgeCases:
         result = export_kernel(backend, config, output_dir=str(tmp_path))
 
         import json
+
         manifest = json.loads((tmp_path / "backprop_cpu_manifest.json").read_text())
 
         assert manifest["algorithm"] == "backprop"
@@ -250,7 +271,9 @@ class TestExportKernelEdgeCases:
     def test_export_different_hardware_targets(self, tmp_path):
         """Export should work for different hardware targets."""
         backend = self._bound_backprop()
-        config = KernelConfig(algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU)
+        config = KernelConfig(
+            algorithm=AlgorithmFamily.BACKPROP, hardware=HardwareTarget.CPU
+        )
 
         for hw in [HardwareTarget.CPU, HardwareTarget.CUDA, HardwareTarget.TRITON]:
             hw_path = tmp_path / hw.value
@@ -263,8 +286,15 @@ class TestExportKernelEdgeCases:
             assert onnx_file.exists()
 
             import json
-            manifest = json.loads((hw_path / f"backprop_{config.hardware.value}_manifest.json").read_text())
+
+            manifest = json.loads(
+                (
+                    hw_path / f"backprop_{config.hardware.value}_manifest.json"
+                ).read_text()
+            )
             # Manifest records config.hardware for hardware_target (current behavior)
             # target_spec uses config.hardware for the descriptor (current behavior)
             assert manifest["hardware_target"] == config.hardware.value
-            assert manifest["target_spec"] == _TARGET_SPECS.get(config.hardware, config.hardware.value)
+            assert manifest["target_spec"] == _TARGET_SPECS.get(
+                config.hardware, config.hardware.value
+            )

@@ -1,9 +1,9 @@
 """
-EquiTile Graph: Graph Neural Networks with EquiTile
-====================================================
+TileNet Graph: Graph Neural Networks with TileNet
+==================================================
 
-Extends EquiTile for graph-structured data:
-- GraphEquiTile: Graph neural network with tile-based message passing
+Extends TileNet for graph-structured data:
+- GraphTileNet: Graph neural network with tile-based message passing
 - Graph attention mechanisms
 - Support for node/graph classification
 - Integration with networkx and torch_geometric
@@ -15,6 +15,7 @@ this module adds the graph-specific model (readout/forward over batches).
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -44,9 +45,9 @@ add_self_loops = _fe.add_self_loops
 
 __all__ = [
     "GraphAttentionLayer",
-    "GraphEquiTile",
-    "GraphEquiTileConfig",
     "GraphEquiTileLayer",
+    "GraphTileNet",
+    "GraphTileNetConfig",
     "add_self_loops",
     "aggregate_messages",
     "create_graph_from_edges",
@@ -67,8 +68,8 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class GraphEquiTileConfig(GraphDeploymentConfig):
-    """Configuration for Graph EquiTile.
+class GraphTileNetConfig(GraphDeploymentConfig):
+    """Configuration for Graph TileNet.
 
     Inherits the shared deployment fields from ``GraphDeploymentConfig`` and
     keeps the same defaults the historical ``GraphEquiTileConfig`` exposed.
@@ -84,35 +85,48 @@ class GraphEquiTileConfig(GraphDeploymentConfig):
 
 
 # =============================================================================
-# Graph EquiTile
+# Graph TileNet
 # =============================================================================
 
 
+def _credit_assignment_type(algorithm: str) -> str:
+    """Map algorithm to credit assignment type."""
+    mapping = {
+        "ep": "equilibrium",
+        "pc": "equilibrium",
+        "fa": "target",
+        "tp": "target",
+        "hebbian": "hebbian",
+        "snn": "spiking",
+    }
+    return mapping.get(algorithm, "equilibrium")
+
+
 @register_model(
-    "graph_equitile",
+    "graph_tile",
     domains=[Domain.GRAPH],
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.75,
     requires_backward=False,
-    credit_assignment_type="hebbian",
-    family="equitile",
+    credit_assignment_type="equilibrium",
+    family="tile",
     tags=[status_tag("experimental")],
 )
-class GraphEquiTile(BioModel):
-    """Graph EquiTile for graph-structured data.
+class GraphTileNet(BioModel):
+    """Graph TileNet for graph-structured data.
 
-    Combines graph attention with EquiTile's tile-based
+    Combines graph attention with TileNet's tile-based
     message passing for node and graph classification.
 
     Parameters
     ----------
-    config : GraphEquiTileConfig, optional
+    config : GraphTileNetConfig, optional
         Configuration
     **kwargs
         Additional configuration parameters
     """
 
-    algorithm_name = "GraphEquiTile"
+    algorithm_name = "GraphTileNet"
 
     @classmethod
     def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
@@ -126,7 +140,7 @@ class GraphEquiTile(BioModel):
         task_type,
         **kwargs,
     ):
-        """Build GraphEquiTile from factory arguments."""
+        """Build GraphTileNet from factory arguments."""
         config_kwargs = {
             "node_features": input_dim,
             "hidden_dim": hidden_dim,
@@ -139,7 +153,7 @@ class GraphEquiTile(BioModel):
             "attention_heads": kwargs.get("attention_heads", 4),
         }
 
-        valid_keys = GraphEquiTileConfig.__annotations__.keys()
+        valid_keys = GraphTileNetConfig.__annotations__.keys()
         for k, v in kwargs.items():
             if k in valid_keys:
                 config_kwargs[k] = v
@@ -148,22 +162,22 @@ class GraphEquiTile(BioModel):
             if k in valid_keys:
                 config_kwargs[k] = v
 
-        config = GraphEquiTileConfig(**config_kwargs)
+        config = GraphTileNetConfig(**config_kwargs)
 
         model = cls(config=config)
         return model.to(device)
 
     def __init__(
         self,
-        config: GraphEquiTileConfig | None = None,
+        config: GraphTileNetConfig | None = None,
         **kwargs,
     ) -> None:
         if config is None:
-            config = GraphEquiTileConfig(**kwargs)
+            config = GraphTileNetConfig(**kwargs)
 
         super().__init__(
             ModelConfig(
-                name="graph_equitile",
+                name="graph_tile",
                 input_dim=config.node_features,
                 output_dim=config.num_classes,
             )
@@ -185,7 +199,7 @@ class GraphEquiTile(BioModel):
         # State tracking
         self._step_count = 0
 
-    def _build_tile_head(self, config: GraphEquiTileConfig) -> None:
+    def _build_tile_head(self, config: GraphTileNetConfig) -> None:
         """Build the tile-substrate classification head."""
         feature_dim = config.hidden_dim
         self.head = build_tile_head(config, feature_dim, config.num_classes)
@@ -295,24 +309,24 @@ def create_graph_model(
     hidden_dim: int = 64,
     num_layers: int = 3,
     **kwargs,
-) -> GraphEquiTile:
-    """Create GraphEquiTile model."""
-    config = GraphEquiTileConfig(
+) -> GraphTileNet:
+    """Create GraphTileNet model."""
+    config = GraphTileNetConfig(
         node_features=node_features,
         hidden_dim=hidden_dim,
         num_classes=num_classes,
         num_layers=num_layers,
         **kwargs,
     )
-    return GraphEquiTile(config)
+    return GraphTileNet(config)
 
 
 def create_molecule_model(
     atom_features: int = 9,
     num_classes: int = 2,
     **kwargs,
-) -> GraphEquiTile:
-    """Create GraphEquiTile for molecular property prediction."""
+) -> GraphTileNet:
+    """Create GraphTileNet for molecular property prediction."""
     return create_graph_model(
         node_features=atom_features,
         num_classes=num_classes,
@@ -327,8 +341,8 @@ def create_social_graph_model(
     user_features: int = 16,
     num_classes: int = 2,
     **kwargs,
-) -> GraphEquiTile:
-    """Create GraphEquiTile for social network analysis."""
+) -> GraphTileNet:
+    """Create GraphTileNet for social network analysis."""
     return create_graph_model(
         node_features=user_features,
         num_classes=num_classes,
@@ -337,3 +351,47 @@ def create_social_graph_model(
         aggregation="attention",
         **kwargs,
     )
+
+
+# =============================================================================
+# Algorithm-specific Variants (registered separately for discovery)
+# =============================================================================
+
+
+def _register_variant(name: str, algorithm: str, credit_type: str, bio_score: float):
+    """Helper to register algorithm-specific GraphTileNet variants."""
+
+    @register_model(
+        name,
+        domains=[Domain.GRAPH],
+        locality_level=LocalityLevel.LOCAL,
+        bio_plausibility_score=bio_score,
+        requires_backward=False,
+        credit_assignment_type=credit_type,
+        family="tile",
+        tags=[status_tag("experimental")],
+    )
+    class _GraphTileNetVariant(GraphTileNet):
+        algorithm_name = f"GraphTileNet-{algorithm.upper()}"
+
+        def __init__(
+            self,
+            config: GraphTileNetConfig | None = None,
+            **kwargs: object,
+        ) -> None:
+            if config is None:
+                kwargs.setdefault("algorithm", algorithm)
+                config = GraphTileNetConfig(**kwargs)
+            elif config.algorithm != algorithm:
+                config = dataclasses.replace(config, algorithm=algorithm)
+            super().__init__(config=config)
+
+    return _GraphTileNetVariant
+
+
+# Register algorithm-specific variants
+_register_variant("graph_tile_fa", "fa", "target", 0.7)
+_register_variant("graph_tile_tp", "tp", "target", 0.65)
+_register_variant("graph_tile_hebbian", "hebbian", "hebbian", 0.6)
+_register_variant("graph_tile_snn", "snn", "spiking", 0.65)
+_register_variant("graph_tile_pc", "pc", "equilibrium", 0.75)

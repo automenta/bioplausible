@@ -2,8 +2,8 @@
 
 These models extend :class:`~bioplausible.core.local_learning.TileAlgorithm`
 with domain-specific feature extractors and a ``build_tile_head`` head, then
-register under the ``equitile`` family (``conv_equitile``, ``graph_equitile``,
-``rl_equitile``, ``timeseries_equitile``).
+register under the ``tile`` family (``conv_tile``, ``graph_tile``,
+``rl_tile``, ``timeseries_tile``).
 """
 
 from bioplausible.zoo.models.deployments.base import (
@@ -17,9 +17,10 @@ from bioplausible.zoo.models.deployments.base import (
 )
 from bioplausible.zoo.models.deployments.graph import (
     GraphAttentionLayer,
-    GraphEquiTile,
-    GraphEquiTileConfig,
     GraphEquiTileLayer,
+    GraphTileNet,
+    GraphTileNetConfig,
+    add_self_loops,
     aggregate_messages,
     create_graph_model,
     create_molecule_model,
@@ -29,9 +30,9 @@ from bioplausible.zoo.models.deployments.graph import (
     scatter_sum,
 )
 from bioplausible.zoo.models.deployments.rl import (
-    RecurrentRLEquiTile,
-    RLEquiTile,
-    RLEquiTileConfig,
+    RecurrentRLTileNet,
+    RLTIleNet,
+    RLTIleNetConfig,
     RolloutBuffer,
     compute_gae,
     create_atari_model,
@@ -43,16 +44,16 @@ from bioplausible.zoo.models.deployments.timeseries import (
     TemporalAttentionLayer,
     TemporalPositionalEncoding,
     TimeSeriesConfig,
-    TimeSeriesEquiTile,
     TimeSeriesEquiTileLayer,
+    TimeSeriesTileNet,
     create_anomaly_detection_model,
     create_classification_model,
     create_forecasting_model,
 )
 from bioplausible.zoo.models.deployments.vision import (
-    ConvEquiTile,
-    ConvEquiTileConfig,
     ConvFeatureExtractor,
+    ConvTileNet,
+    ConvTileNetConfig,
     VisionAugmentation,
     create_cifar_model,
     create_imagenet_model,
@@ -62,27 +63,28 @@ from bioplausible.zoo.models.deployments.vision import (
 
 __all__ = [
     "ConvDeploymentConfig",
-    "ConvEquiTile",
-    "ConvEquiTileConfig",
     "ConvFeatureExtractor",
+    "ConvTileNet",
+    "ConvTileNetConfig",
     "DeploymentConfig",
     "GraphAttentionLayer",
     "GraphDeploymentConfig",
-    "GraphEquiTile",
-    "GraphEquiTileConfig",
     "GraphEquiTileLayer",
+    "GraphTileNet",
+    "GraphTileNetConfig",
     "RLDeploymentConfig",
-    "RLEquiTile",
-    "RLEquiTileConfig",
-    "RecurrentRLEquiTile",
+    "RLTIleNet",
+    "RLTIleNetConfig",
+    "RecurrentRLTileNet",
     "RolloutBuffer",
     "TemporalAttentionLayer",
     "TemporalDeploymentConfig",
     "TemporalPositionalEncoding",
     "TimeSeriesConfig",
-    "TimeSeriesEquiTile",
     "TimeSeriesEquiTileLayer",
+    "TimeSeriesTileNet",
     "VisionAugmentation",
+    "add_self_loops",
     "aggregate_messages",
     "build_tile_head",
     "compute_gae",

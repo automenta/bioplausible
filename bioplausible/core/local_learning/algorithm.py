@@ -374,7 +374,9 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         self._setup_optimizers()
 
         # SettleProtocol attributes
-        self.convergence_threshold: float = getattr(config, "convergence_threshold", 1e-3)
+        self.convergence_threshold: float = getattr(
+            config, "convergence_threshold", 1e-3
+        )
         self.convergence_start: int = getattr(config, "convergence_start", 5)
         self.max_steps: int = config.free_steps
 
