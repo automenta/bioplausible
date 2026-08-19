@@ -9,7 +9,6 @@ from bioplausible.acceleration.triton_kernels import TritonEqPropOps
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 
-from ....acceleration import compile_settling_loop
 from ...utils import spectral_conv2d
 from ..base import EqPropModel
 
@@ -198,7 +197,6 @@ class ModernConvEqProp(EqPropModel):
         h_next = torch.tanh(self.eq_conv(h_norm) + x_transformed)
         return torch.lerp(h, h_next, self.gamma)
 
-    @compile_settling_loop
     def forward_step(
         self, h: torch.Tensor, x_transformed: torch.Tensor
     ) -> torch.Tensor:
@@ -328,7 +326,6 @@ class SimpleConvEqProp(EqPropModel):
         h_next = torch.tanh(self.W_rec(h_norm) + x_transformed)
         return torch.lerp(h, h_next, self.gamma)
 
-    @compile_settling_loop
     def forward_step(
         self, h: torch.Tensor, x_transformed: torch.Tensor
     ) -> torch.Tensor:

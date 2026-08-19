@@ -273,7 +273,7 @@ class LlamaCppBackend(LocalLLMBackend):
     def _try_import_llama_cpp(self) -> bool:
         """Try to import llama_cpp."""
         try:
-            from llama_cpp import Llama  # noqa: F401
+            from llama_cpp import Llama  # ruff: ignore[unused-import]
 
             return True
         except ImportError:
@@ -454,7 +454,7 @@ class VLLMBackend(LocalLLMBackend):
     def is_available(self) -> bool:
         """Check if vLLM is available."""
         try:
-            import vllm  # noqa: F401
+            import vllm  # ruff: ignore[unused-import]
 
             return True
         except ImportError:

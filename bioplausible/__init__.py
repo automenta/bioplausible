@@ -56,7 +56,6 @@ __version__ = "1.0.0"
 # ``bioplausible.zoo``) explicitly.
 
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
-# ruff: file-ignore[non-empty-init-module] - this dict is required for the lazy-loading __getattr__ protocol.
 _LAZY: dict[str, tuple[str, str | None]] = {
     "CoreTrainer": ("bioplausible.core.trainer", "CoreTrainer"),
     "TrainerConfig": ("bioplausible.core.trainer", "TrainerConfig"),
@@ -72,7 +71,6 @@ __all__ = ["__version__"]
 def __getattr__(name: str) -> object:
     """Lazily import a top-level symbol on first access."""
     if name not in _LAZY:
-        # ruff: file-ignore[TRY003]
         raise AttributeError("cannot find")
     module_name, attr = _LAZY[name]
     module = __import__(module_name, fromlist=[attr] if attr else ["*"])

@@ -6,9 +6,8 @@ and predicting outcomes using surrogate models and causal analysis.
 """
 
 import copy
-import itertools
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -57,7 +56,7 @@ class CounterfactualGenerator:
     3. Domain knowledge to propose meaningful perturbations
     """
 
-    def __init__(self, knowledge_base: "KnowledgeBase | None" = None):
+    def __init__(self, knowledge_base: KnowledgeBase | None = None):
         self.kb = knowledge_base
 
     def generate_from_experiment(
@@ -251,7 +250,7 @@ class CounterfactualGenerator:
                     modifications={"hidden_dim": hidden},
                     predicted_outcome=predicted,
                     confidence=0.6 if hidden > current_hidden else 0.5,
-                    reasoning=f"Larger hidden dim increases capacity but may overfit; smaller is more efficient",
+                    reasoning="Larger hidden dim increases capacity but may overfit; smaller is more efficient",
                     category="architecture",
                 )
             )
@@ -271,13 +270,13 @@ class CounterfactualGenerator:
                     modifications={"num_layers": layers},
                     predicted_outcome=predicted,
                     confidence=0.55,
-                    reasoning=f"Deeper networks may capture more complex patterns but harder to train with local rules",
+                    reasoning="Deeper networks may capture more complex patterns but harder to train with local rules",
                     category="architecture",
                 )
             )
 
         # Spectral norm variations
-        current_spectral = base_config.get("spectral_bound_gamma", None)
+        current_spectral = base_config.get("spectral_bound_gamma")
         for gamma in [0.9, 0.95, 0.99, 1.0, None]:
             if gamma == current_spectral:
                 continue
@@ -312,7 +311,7 @@ class CounterfactualGenerator:
         counterfactuals = []
 
         current_model = base_config.get("model", "eqprop_mlp")
-        current_propagator = base_config.get("propagator", None)
+        current_propagator = base_config.get("propagator")
 
         # Model family alternatives
         model_alternatives = {
@@ -365,7 +364,7 @@ class CounterfactualGenerator:
                         modifications={"propagator": alt_prop},
                         predicted_outcome=predicted,
                         confidence=0.5,
-                        reasoning=f"Different propagators implement different update strategies",
+                        reasoning="Different propagators implement different update strategies",
                         category="algorithm",
                     )
                 )
@@ -706,15 +705,15 @@ def generate_what_if_report(
 ) -> str:
     """Generate a human-readable report of counterfactual hypotheses."""
     lines = [
-        f"# Counterfactual Analysis Report",
-        f"",
+        "# Counterfactual Analysis Report",
+        "",
         f"Base Experiment: {batch.base_experiment_id}",
         f"Base Config: {json.dumps(batch.base_config, indent=2, default=str)}",
         f"Base Outcome: {json.dumps(batch.base_outcome, indent=2, default=str)}",
         f"Generation Strategy: {batch.generation_strategy}",
-        f"",
+        "",
         f"## Counterfactual Hypotheses ({len(batch.counterfactuals)})",
-        f"",
+        "",
     ]
 
     for i, cf in enumerate(batch.counterfactuals, 1):
@@ -739,7 +738,7 @@ def generate_what_if_report(
             else f"**Delta vs Base:** {delta}",
             f"**Confidence:** {cf.confidence:.0%}",
             f"**Reasoning:** {cf.reasoning}",
-            f"",
+            "",
         ])
 
     report = "\n".join(lines)
@@ -752,9 +751,9 @@ def generate_what_if_report(
 
 
 __all__ = [
+    "BetaScheduleCounterfactuals",
     "Counterfactual",
     "CounterfactualBatch",
     "CounterfactualGenerator",
-    "BetaScheduleCounterfactuals",
     "generate_what_if_report",
 ]

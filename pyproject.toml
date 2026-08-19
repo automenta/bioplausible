@@ -190,6 +190,7 @@ select = [
     "RSE",  # flake8-raise
     "SIM",  # flake8-simplify
 ]
+ignore = ["non-empty-init-module"]
 
 [tool.ruff.lint.flake8-type-checking]
 

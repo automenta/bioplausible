@@ -22,7 +22,7 @@ import sys
 import time
 import uuid
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -396,7 +396,7 @@ class AutoScientistCampaign:
 
     def __init__(
         self,
-        knowledge_base: "KnowledgeBase | None" = None,
+        knowledge_base: KnowledgeBase | None = None,
         output_dir: str = "autoscientist_campaigns",
         db_path: str | Path | None = None,
         branch_name: str = "main",
@@ -505,9 +505,9 @@ class AutoScientistCampaign:
         source_branch: str,
         new_branch: str,
         db_path: str | Path,
-        knowledge_base: "KnowledgeBase | None" = None,
+        knowledge_base: KnowledgeBase | None = None,
         output_dir: str = "autoscientist_campaigns",
-    ) -> "AutoScientistCampaign":
+    ) -> AutoScientistCampaign:
         """
         Create a new branch from an existing branch (git-like).
 
@@ -999,7 +999,7 @@ class AutoScientistCampaign:
 
 
 def create_campaign(
-    knowledge_base: "KnowledgeBase | None" = None,
+    knowledge_base: KnowledgeBase | None = None,
     output_dir: str = "autoscientist_campaigns",
     branch: str = "main",
     resume: bool = False,
@@ -1029,12 +1029,12 @@ def list_branches(db_path: str | Path) -> list[str]:
 
 __all__ = [
     "AutoScientistCampaign",
-    "CampaignDatabase",
     "CampaignCheckpointer",
+    "CampaignDatabase",
     "CampaignState",
     "IterationRecord",
     "create_campaign",
-    "list_campaigns",
     "list_branches",
+    "list_campaigns",
     "logger",
 ]

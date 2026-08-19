@@ -2,8 +2,8 @@ import pathlib
 
 import numpy as np
 import pandas as pd
-from bioplausible.analysis.scaling import plot_scaling_curves
 
+from bioplausible.analysis.scaling import plot_scaling_curves
 from bioplausible.knowledge.metamodel import KnowledgebaseMetamodel
 from bioplausible.leaderboard.generator import LeaderboardEntry, LeaderboardGenerator
 

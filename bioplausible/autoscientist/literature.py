@@ -9,7 +9,7 @@ import logging
 import time
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -217,7 +217,7 @@ class LiteratureRetriever:
 
     def __init__(
         self,
-        knowledge_base: "KnowledgeBase | None" = None,
+        knowledge_base: KnowledgeBase | None = None,
         cache_dir: str | Path = "cache/literature",
         embedding_model: str = "all-MiniLM-L6-v2",
     ):
@@ -557,7 +557,7 @@ class LiteratureCache:
 __all__ = [
     "ArxivClient",
     "ArxivPaper",
+    "LiteratureCache",
     "LiteratureRetriever",
     "LiteratureSearchResult",
-    "LiteratureCache",
 ]

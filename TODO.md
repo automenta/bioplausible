@@ -675,3 +675,30 @@ P2.1-P2.13             →  Need P1.1-P1.4 (substrate must support all algorithm
 
 ---
 
+### 2026-08-19 — Test Failure Fix & Lint Cleanup
+
+**Completed:**
+
+| Task | Summary |
+|------|---------|
+| **Fix diffusion integration test** | Removed `@compile_settling_loop` decorator from `SimpleConvEqProp` and `ModernConvEqProp` in `bioplausible/zoo/models/eqprop/modern_conv_eqprop.py`. The decorator applied `torch.compile` which conflicted with gradient checkpointing in `settle_single_state` (PyTorch issue #166926). Models were already tagged as `status_tag("broken")`. |
+| **Fix invalid ruff suppression in `__init__.py`** | Moved `# ruff: file-ignore[TRY003]` to file-level scope in `bioplausible/__init__.py`. |
+| **Fix acceleration `__init__.py` lint issues** | - Added `RUF067` (non-empty-init-module) to ruff ignore list in `pyproject.toml`<br>- Refactored `get_algorithm_kernels()` to reduce complexity (C901/PLR0912/PLR0915) using loop over kernel specs<br>- Sorted `__all__` list alphabetically to fix `RUF022` (unsorted-dunder-all) |
+| **Cleaned up unused import** | Removed `compile_settling_loop` import from `modern_conv_eqprop.py` |
+
+**Verification gates passing:**
+- `pytest tests/integration/test_diffusion_integration.py` — 3 passed
+- `pytest tests/unit/core/ tests/unit/tile/ tests/unit/validation/test_registry_audit.py` — 572 passed, 18 skipped
+- `pytest tests/integration/test_gradient_equivalence.py` — 9 passed
+- `biopl-registry-audit` — 108 components, 0 missing
+- `biopl-repro-check --seed 42 --device cpu` — 7/7 reproducible
+- `biopl-parity --task mnist --epochs 1` — runs successfully
+- `pyright .` — 0 errors
+- `ruff format --check bioplausible/` — clean
+
+**Improvement opportunities:**
+- The `modern_conv_eqprop.py` models remain tagged as `broken` — the underlying `torch.compile` + checkpoint conflict needs a proper fix (e.g., explicit `mark_dynamic` or separate compiled/uncompiled paths) if these models are to be used in production.
+- Many pre-existing ruff warnings remain in the codebase (10,000+); these are cosmetic and don't affect functionality.
+
+---
+

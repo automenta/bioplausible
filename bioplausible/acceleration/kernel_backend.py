@@ -306,7 +306,10 @@ class KernelRegistry:
         if hasattr(backend, "initialize"):
             # Try to initialize with minimal config
             try:
-                from bioplausible.acceleration.kernel_backend import KernelConfig, HardwareTarget
+                from bioplausible.acceleration.kernel_backend import (
+                    HardwareTarget,
+                    KernelConfig,
+                )
                 config = KernelConfig(
                     algorithm=backend.name if hasattr(backend, "name") else AlgorithmFamily.BACKPROP,
                     hardware=HardwareTarget.CPU,

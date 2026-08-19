@@ -28,35 +28,29 @@ Usage:
     # Check available backends
     >>> from bioplausible.core.logging import get_logger
     >>> get_logger().info("CuPy: %s, Triton: %s", HAS_CUPY, HAS_TRITON)
-
-    # Use optimal backend
-    device = get_optimal_backend()
-
-    # Compile model for speed
-    model = compile_model(model, mode='reduce-overhead')
 """
 
 # Import to trigger EQPROP kernel backend registration
 from bioplausible.acceleration import (
-    eqprop_kernel_backend,  # ruff: ignore[unused-import]
+    eqprop_kernel_backend,
 )
 from bioplausible.acceleration.backends import (
     HAS_CUPY,
     HAS_TRITON,
+    AutoDispatcher,
+    BackendBenchmark,
     BackendDetector,
     BackendType,
-    BackendBenchmark,
-    AutoDispatcher,
-    KernelProfiler,
     CupyChecker,
+    KernelProfiler,
     TritonChecker,
     check_cupy_available,
     check_triton_available,
-    enable_tf32,
-    get_optimal_backend,
     dispatch_kernel,
-    profile_kernel,
+    enable_tf32,
     get_dispatcher,
+    get_optimal_backend,
+    profile_kernel,
 )
 from bioplausible.acceleration.compile import compile_model, compile_settling_loop
 from bioplausible.acceleration.contrastive_kernels import (
@@ -132,80 +126,45 @@ def get_triton_ops() -> type[object] | None:
 def get_algorithm_kernels() -> dict[str, type[object]]:
     """Get all algorithm-specific kernel backends (uniform interface)."""
     kernels = {}
-    try:
-        from bioplausible.acceleration.fa_kernels import FAKernelBackend
-
-        kernels["fa"] = FAKernelBackend
-    except ImportError:
-        pass
-    try:
-        from bioplausible.acceleration.hebbian_kernels import (
-            HebbianKernelBackend,
-            ThreeFactorKernelBackend,
-        )
-
-        kernels["hebbian"] = HebbianKernelBackend
-        kernels["three_factor"] = ThreeFactorKernelBackend
-    except ImportError:
-        pass
-    try:
-        from bioplausible.acceleration.ff_kernels import (
-            FFKernelBackend,
-            PEPITAKernelBackend,
-        )
-
-        kernels["ff"] = FFKernelBackend
-        kernels["pepita"] = PEPITAKernelBackend
-    except ImportError:
-        pass
-    try:
-        from bioplausible.acceleration.tp_kernels import TPKernelBackend
-
-        kernels["tp"] = TPKernelBackend
-    except ImportError:
-        pass
-    try:
-        from bioplausible.acceleration.pc_kernels import PCKernelBackend
-
-        kernels["pc"] = PCKernelBackend
-    except ImportError:
-        pass
-    try:
-        from bioplausible.acceleration.snn_kernels import SNNKernelBackend
-
-        kernels["snn"] = SNNKernelBackend
-    except ImportError:
-        pass
-    try:
-        from bioplausible.acceleration.tile_kernels import TileKernelBackend
-
-        kernels["tile"] = TileKernelBackend
-    except ImportError:
-        pass
-    try:
-        from bioplausible.acceleration.mep_kernels import (
-            MEPKernelBackend,
-            O1MemoryEPv2KernelBackend,
-        )
-
-        kernels["mep"] = MEPKernelBackend
-        kernels["o1memory"] = O1MemoryEPv2KernelBackend
-    except ImportError:
-        pass
-    try:
-        from bioplausible.acceleration.backprop_kernels import BackpropKernelBackend
-
-        kernels["backprop"] = BackpropKernelBackend
-    except ImportError:
-        pass
-    try:
-        from bioplausible.acceleration.eqprop_kernel_backend import (
-            EqPropKernelBackend,
-        )
-
-        kernels["eqprop"] = EqPropKernelBackend
-    except ImportError:
-        pass
+    kernel_specs = [
+        ("bioplausible.acceleration.fa_kernels", ["FAKernelBackend"], ["fa"]),
+        (
+            "bioplausible.acceleration.hebbian_kernels",
+            ["HebbianKernelBackend", "ThreeFactorKernelBackend"],
+            ["hebbian", "three_factor"],
+        ),
+        (
+            "bioplausible.acceleration.ff_kernels",
+            ["FFKernelBackend", "PEPITAKernelBackend"],
+            ["ff", "pepita"],
+        ),
+        ("bioplausible.acceleration.tp_kernels", ["TPKernelBackend"], ["tp"]),
+        ("bioplausible.acceleration.pc_kernels", ["PCKernelBackend"], ["pc"]),
+        ("bioplausible.acceleration.snn_kernels", ["SNNKernelBackend"], ["snn"]),
+        ("bioplausible.acceleration.tile_kernels", ["TileKernelBackend"], ["tile"]),
+        (
+            "bioplausible.acceleration.mep_kernels",
+            ["MEPKernelBackend", "O1MemoryEPv2KernelBackend"],
+            ["mep", "o1memory"],
+        ),
+        (
+            "bioplausible.acceleration.backprop_kernels",
+            ["BackpropKernelBackend"],
+            ["backprop"],
+        ),
+        (
+            "bioplausible.acceleration.eqprop_kernel_backend",
+            ["EqPropKernelBackend"],
+            ["eqprop"],
+        ),
+    ]
+    for module_name, class_names, keys in kernel_specs:
+        try:
+            module = __import__(module_name, fromlist=class_names)
+            for cls_name, key in zip(class_names, keys):
+                kernels[key] = getattr(module, cls_name)
+        except ImportError:
+            pass
     return kernels
 
 
@@ -233,14 +192,12 @@ def get_contrastive_kernels() -> dict[str, type[object]]:
 __all__ = [
     "HAS_CUPY",
     "HAS_TRITON",
-    # Kernel backend infrastructure
     "AlgorithmFamily",
     "AutoDispatcher",
     "BackendBenchmark",
     "BackendDetector",
     "BackendType",
     "BaseContrastiveKernel",
-    # Contrastive kernels (O(1) memory)
     "ContrastiveConfig",
     "ContrastiveKernel",
     "CupyChecker",
@@ -261,7 +218,6 @@ __all__ = [
     "TPContrastiveKernel",
     "TileContrastiveKernel",
     "TritonChecker",
-    # Contrastive primitives
     "batched_outer_product",
     "check_cupy_available",
     "check_triton_available",
@@ -273,6 +229,7 @@ __all__ = [
     "cross_entropy",
     "dispatch_kernel",
     "enable_tf32",
+    "eqprop_kernel_backend",
     "forward_forward_goodness",
     "get_algorithm_kernels",
     "get_backend",
@@ -295,5 +252,4 @@ __all__ = [
     "stdp_update",
     "target_propagation_target",
     "to_numpy",
-    "eqprop_kernel_backend",
 ]

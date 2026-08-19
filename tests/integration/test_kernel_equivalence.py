@@ -259,7 +259,6 @@ class TestKernelRegistryAutoTune:
         from bioplausible.acceleration.kernel_backend import (
             AlgorithmFamily,
             HardwareTarget,
-            KernelConfig,
             KernelRegistry,
         )
 
@@ -314,7 +313,6 @@ class TestBackendNumericalParity:
         """Verify backends are registered for key algorithms."""
         from bioplausible.acceleration.kernel_backend import (
             AlgorithmFamily,
-            HardwareTarget,
             KernelRegistry,
         )
 

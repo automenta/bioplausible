@@ -139,7 +139,7 @@ def compute_pareto_frontier(
     # Ensure we have all objectives
     for obj in objectives:
         if obj not in df.columns:
-            raise ValueError(f"Missing objective: {obj}")  # noqa: TRY003
+            raise ValueError(f"Missing objective: {obj}")  # ruff: ignore[raise-vanilla-args]
 
     # Create list of (index, objectives_dict, model)
     points = []
