@@ -4,7 +4,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
@@ -36,7 +35,7 @@ class TernaryQuantize(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
-        (weight,) = ctx.saved_tensors
+        (_weight,) = ctx.saved_tensors
         grad_weight = grad_output.clone()
         return grad_weight, None
 
@@ -170,3 +169,19 @@ class TernaryEqProp(TransitionGraphMixin, nn.Module):
             ),
             "sparsity_used": sparsity,
         }
+
+    @classmethod
+    def build(
+        cls,
+        input_dim: int,
+        output_dim: int,
+        hidden_dim: int,
+        device: str,
+        **_kwargs,
+    ):
+        """Factory method for registry instantiation."""
+        return cls(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+        ).to(device)

@@ -127,6 +127,7 @@ TRAINABLE_MODELS: tuple[str, ...] = (
     "rl_tile",
     "timeseries_tile",
     "tile_lm",
+    "ternary_eqprop",
 )
 
 
@@ -170,6 +171,7 @@ _DEFAULT_HIDDEN_DIM: dict[str, int] = {
     "rl_tile": 32,
     "timeseries_tile": 32,
     "tile_lm": 192,
+    "ternary_eqprop": 64,
 }
 
 

@@ -17,6 +17,7 @@ from pathlib import Path
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from bioplausible.core.checkpoint import (
     load_checkpoint_into_model,
@@ -1351,6 +1352,187 @@ def benchmark_quantized_model(
     }
 
 
+# --- Ternary Quantization Utilities (P2.17) ---
+
+
+class TernaryQuantize(torch.autograd.Function):
+    """
+    Ternary quantization with Straight-Through Estimator.
+
+    Forward: Quantize weights to {-1, 0, +1}
+    Backward: Pass gradients through unchanged (STE)
+    """
+
+    @staticmethod
+    def forward(ctx, weight: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
+        ctx.save_for_backward(weight)
+
+        ternary = torch.zeros_like(weight)
+        ternary[weight > threshold] = 1.0
+        ternary[weight < -threshold] = -1.0
+
+        return ternary
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        (_weight,) = ctx.saved_tensors
+        grad_weight = grad_output.clone()
+        return grad_weight, None
+
+
+class TernaryLinear(nn.Module):
+    """Linear layer with ternary weights."""
+
+    def __init__(self, in_features: int, out_features: int, threshold: float = 0.5):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.threshold = threshold
+
+        self.weight = nn.Parameter(torch.empty(out_features, in_features))
+        self.bias = nn.Parameter(torch.zeros(out_features))
+
+        nn.init.xavier_uniform_(self.weight, gain=0.8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        ternary_weight = TernaryQuantize.apply(self.weight, self.threshold)
+        return F.linear(x, ternary_weight, self.bias)
+
+    def get_weight_stats(self) -> dict:
+        w = self.weight.detach()
+        threshold = self.threshold
+
+        n_pos = (w > threshold).sum().item()
+        n_neg = (w < -threshold).sum().item()
+        n_zero = w.numel() - n_pos - n_neg
+
+        total = w.numel()
+        return {
+            "positive": n_pos / total,
+            "zero": n_zero / total,
+            "negative": n_neg / total,
+            "sparsity": n_zero / total,
+        }
+
+
+def quantize_model_ternary(
+    model: nn.Module,
+    threshold: float = 0.5,
+) -> nn.Module:
+    """
+    Convert a model's Linear layers to TernaryLinear (weights {-1, 0, +1}).
+
+    This is a post-training quantization that replaces nn.Linear with TernaryLinear
+    and quantizes the weights using the Straight-Through Estimator.
+
+    Args:
+        model: Model to quantize.
+        threshold: Threshold for ternary quantization.
+
+    Returns:
+        Model with TernaryLinear layers.
+    """
+    import copy
+
+    model = copy.deepcopy(model)
+    model.eval()
+
+    def replace_linear(module: nn.Module, prefix: str = "") -> nn.Module:
+        for name, child in list(module.named_children()):
+            full_name = f"{prefix}.{name}" if prefix else name
+            if isinstance(child, nn.Linear):
+                ternary_layer = TernaryLinear(
+                    child.in_features,
+                    child.out_features,
+                    threshold,
+                )
+                with torch.no_grad():
+                    ternary_layer.weight.copy_(child.weight)
+                    if child.bias is not None:
+                        ternary_layer.bias.copy_(child.bias)
+                setattr(module, name, ternary_layer)
+            else:
+                replace_linear(child, full_name)
+        return module
+
+    return replace_linear(model)
+
+
+def quantize_model_ternary_inplace(
+    model: nn.Module,
+    threshold: float = 0.5,
+) -> nn.Module:
+    """
+    Convert a model's Linear layers to TernaryLinear in-place.
+
+    Args:
+        model: Model to quantize (modified in-place).
+        threshold: Threshold for ternary quantization.
+
+    Returns:
+        The same model with TernaryLinear layers.
+    """
+
+    def replace_linear(module: nn.Module) -> None:
+        for name, child in list(module.named_children()):
+            if isinstance(child, nn.Linear):
+                ternary_layer = TernaryLinear(
+                    child.in_features,
+                    child.out_features,
+                    threshold,
+                )
+                with torch.no_grad():
+                    ternary_layer.weight.copy_(child.weight)
+                    if child.bias is not None:
+                        ternary_layer.bias.copy_(child.bias)
+                setattr(module, name, ternary_layer)
+            else:
+                replace_linear(child)
+
+    replace_linear(model)
+    return model
+
+
+def count_ternary_operations(model: nn.Module, seq_len: int = 1) -> dict:
+    """
+    Count ternary operations in a model for efficiency analysis.
+
+    Args:
+        model: Model with TernaryLinear layers.
+        seq_len: Sequence length for recurrent operations.
+
+    Returns:
+        Dict with operation counts and sparsity metrics.
+    """
+    total_macs = 0
+    ternary_macs = 0
+    total_params = 0
+    ternary_params = 0
+
+    for module in model.modules():
+        if isinstance(module, TernaryLinear):
+            in_f = module.in_features
+            out_f = module.out_features
+            macs = in_f * out_f * seq_len
+            total_macs += macs
+            stats = module.get_weight_stats()
+            sparsity = stats["sparsity"]
+            ternary_params += module.weight.numel()
+            ternary_macs += int(macs * (1 - sparsity))
+        elif isinstance(module, nn.Linear):
+            total_macs += module.in_features * module.out_features * seq_len
+            total_params += module.weight.numel()
+
+    return {
+        "total_macs": total_macs,
+        "ternary_macs": ternary_macs,
+        "speedup_factor": total_macs / ternary_macs
+        if ternary_macs > 0
+        else float("inf"),
+        "sparsity": 1 - (ternary_macs / total_macs) if total_macs > 0 else 0,
+    }
+
+
 __all__ = [
     "BatchInferenceRequest",
     "InferenceEngine",
@@ -1360,8 +1542,11 @@ __all__ = [
     "ModelInfo",
     "ModelLoader",
     "TensorRTConfig",
+    "TernaryLinear",
+    "TernaryQuantize",
     "benchmark_quantized_model",
     "convert_qat_model",
+    "count_ternary_operations",
     "create_inference_server",
     "export_model",
     "export_to_onnx",
@@ -1372,6 +1557,8 @@ __all__ = [
     "quantize_model_dynamic_int8",
     "quantize_model_int8_ptq",
     "quantize_model_int8_qat",
+    "quantize_model_ternary",
+    "quantize_model_ternary_inplace",
     "save_quantized_model",
     "serve_model",
 ]
