@@ -3,6 +3,7 @@ import os
 import pathlib
 
 import pandas as pd
+
 from bioplausible.analysis.scaling import compute_compute_optimal, plot_scaling_curves
 
 

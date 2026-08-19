@@ -17,7 +17,6 @@ import logging
 import pytest
 import torch
 
-import bioplausible.zoo  # ruff: ignore[unused-import]  (model registration side effect)
 from bioplausible.config.unified import ModelConfig
 
 # Silence the probe-sweep logger for the *duration of this module's tests* only.

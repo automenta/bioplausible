@@ -2,6 +2,7 @@ import pathlib
 
 import numpy as np
 import pandas as pd
+
 from bioplausible.analysis.scaling import (
     compute_compute_optimal,
     fit_power_law,

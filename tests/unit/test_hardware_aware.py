@@ -11,7 +11,6 @@ import tempfile
 import pytest
 import torch
 
-import bioplausible.zoo  # ruff: ignore[unused-import]  (populates the model registry)
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.experiment.result_sink import configure as sink_configure

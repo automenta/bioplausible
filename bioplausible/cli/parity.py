@@ -19,12 +19,11 @@ import json
 import logging
 
 # Import zoo models to trigger registration
-import bioplausible.zoo.models  # ruff: ignore[unused-import]
-
 # Register the models the parity CLI trains against. With Sprint 0.5 lazy
 # imports, importing the top-level package is no longer a registration side
 # effect; the zoo must be imported explicitly (it now owns the substrate
 # deployment models that used to live in the separate equitile package).
+import bioplausible.zoo  # noqa: F401  # triggers model registration
 from bioplausible.core.logging import get_logger
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.domains.registry import SUPPORTED_TASKS, resolve_task

@@ -51,9 +51,6 @@ def track_20_transfer_learning(verifier) -> TrackResult:
 
     mask_B = y >= 5
     X_B, y_B = X[mask_B], y[mask_B] - 5  # Remap to 0-4 for simplicity
-    # We keep a shared readout for simplicity or swap heads.
-    # Standard transfer uses a new head.
-    # We will use the same model but re-initialize readout for Task B.
 
     # 1. Pre-train on Task A
     logger.info("\n[20a] Pre-training on Task A (Classes 0-4)...")
@@ -66,11 +63,20 @@ def track_20_transfer_learning(verifier) -> TrackResult:
 
     # Create new model for B, copy weights from A (except readout)
     model_B = LoopedMLP(input_dim, hidden_dim, 5, use_spectral_norm=True)
-    model_B.W_in.weight.data = model.W_in.weight.data.clone()
-    model_B.W_in.bias.data = model.W_in.bias.data.clone()
-    model_B.W_rec.weight.data = model.W_rec.weight.data.clone()
-    model_B.W_rec.bias.data = model.W_rec.bias.data.clone()
-    # Readout is random (scratch)
+
+    # Copy input layer (layers.0) - handle spectral norm parametrization
+    if hasattr(model.layers[0], "parametrizations"):
+        model_B.layers[0].parametrizations.weight.original.data = model.layers[
+            0
+        ].parametrizations.weight.original.data.clone()
+    else:
+        model_B.layers[0].weight.data = model.layers[0].weight.data.clone()
+    model_B.layers[0].bias.data = model.layers[0].bias.data.clone()
+
+    # Copy recurrent layer (W_rec is a ModuleList with Linear at index 0)
+    model_B.W_rec[0].weight.data = model.W_rec[0].weight.data.clone()
+    model_B.W_rec[0].bias.data = model.W_rec[0].bias.data.clone()
+    # Readout (layers.1) is random (scratch)
 
     # Baseline: Train from scratch on B (same amount of data)
     model_scratch = LoopedMLP(input_dim, hidden_dim, 5, use_spectral_norm=True)
@@ -91,10 +97,6 @@ def track_20_transfer_learning(verifier) -> TrackResult:
     # Expect transfer to be better or faster
     improvement = acc_transfer - acc_scratch
     # Transfer might not help with orthogonal synthetic tasks, but shouldn't hurt.
-    # Features might be random without structured generation.
-    # Ideally reuse cluster centers?
-    # For this verification, we accept >= -5% parity (it shouldn't break)
-    # and ideally > 0 if features are shared.
 
     score = 100 if improvement > -0.05 else 50
     status = "pass" if score == 100 else "partial"

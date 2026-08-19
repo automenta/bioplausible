@@ -8,7 +8,6 @@ accuracy?"
 
 from __future__ import annotations
 
-import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
 from bioplausible.autoscientist.proposer import (
     ExperimentProposer,
     ProposalObjective,

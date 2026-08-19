@@ -21,7 +21,6 @@ import torch
 # CoreTrainer instantiations by registered model name) need the zoo imported
 # explicitly and up-front for deterministic behavior (the zoo owns the substrate
 # deployment models that used to live in the separate equitile package).
-import bioplausible.zoo  # ruff: ignore[unused-import]  (registers zoo models/propagators)
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.domains.registry import resolve_task

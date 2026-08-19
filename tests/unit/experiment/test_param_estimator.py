@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-import bioplausible.zoo  # ruff: ignore[unused-import]  # triggers model registration
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.experiment.param_estimator import (
     ParamEstimateError,

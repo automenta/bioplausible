@@ -11,7 +11,6 @@ import json
 
 # Importing the zoo/equitile packages is what registers the components the
 # audit enumerates; the module does this lazily inside ``audit_rows``.
-from bioplausible import zoo  # ruff: ignore[unused-import]
 from bioplausible.core.audit import (
     CRITICAL_FIELDS,
     AuditRow,

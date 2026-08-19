@@ -281,4 +281,5 @@ __all__ = [
     "stdp_update",
     "target_propagation_target",
     "to_numpy",
+    "eqprop_kernel_backend",
 ]

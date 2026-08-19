@@ -13,7 +13,6 @@ from collections.abc import Mapping
 import pytest
 import torch
 
-import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 
 requires_gpu = pytest.mark.skipif(

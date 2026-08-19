@@ -9,7 +9,6 @@ import torch
 from hypothesis import given
 from hypothesis import strategies as st
 
-import bioplausible.zoo  # ruff: ignore[unused-import]  (populate the model registry)
 from bioplausible.core.exceptions import SpaceSignatureMismatchError
 from bioplausible.hyperopt.rule_frontier import RuleFrontierFinder
 from bioplausible.hyperopt.search_space import (

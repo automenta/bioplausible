@@ -7,7 +7,6 @@ results appropriately.
 
 import pytest
 
-import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
 from bioplausible.core.model_status import STATUS_TAG_PREFIX, ModelStatus, status_tag
 from bioplausible.core.registry import ComponentCategory, Registry
 

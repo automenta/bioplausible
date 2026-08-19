@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+import torch
 
 from bioplausible.core.logging import get_logger
 from bioplausible.zoo.models.eqprop import (
@@ -219,10 +220,56 @@ def track_3_adversarial_healing(verifier) -> TrackResult:
     noise_levels = [0.5, 1.0, 2.0]
     results = {}
 
+    model.eval()
+    with torch.no_grad():
+        # Get the initial activations (input projection)
+        x_test = X[:32]
+        activations = model._initial_activations(x_test)
+
     for noise in noise_levels:
-        damping = model.inject_noise_and_relax(X[:32], noise_level=noise)
-        results[noise] = damping
-        logger.info("  sigma=%s: damping=%.1f%%", noise, damping["damping_percent"])
+        # Inject noise into hidden state and measure damping through relaxation
+        model.eval()
+        with torch.no_grad():
+            # Start from clean activations
+            h_clean = activations[-1].clone()
+
+            # Add noise to hidden state
+            noise_tensor = torch.randn_like(h_clean) * noise
+            h_noisy = h_clean + noise_tensor
+            initial_noise_mag = noise_tensor.abs().mean().item()
+
+            # Run relaxation steps (without input, just recurrent dynamics)
+            # Replace the hidden activation with noisy version and settle
+            activations_noisy = list(activations)
+            activations_noisy[-1] = h_noisy
+
+            # Use the model's settle function
+            from bioplausible.core.local_learning.settling import (
+                settle_activations_list,
+            )
+
+            settled, _, _ = settle_activations_list(
+                activations_0=activations_noisy,
+                forward_dynamics=model.forward_dynamics,
+                steps=model.max_steps,
+                beta=0.0,
+                target=None,
+                return_trajectory=False,
+                return_dynamics=False,
+                convergence_threshold=model.convergence_threshold,
+                convergence_start=model.convergence_start,
+            )
+
+            h_final = settled[-1]
+            final_noise = (h_final - h_clean).abs().mean().item()
+            damping_percent = (1 - final_noise / (initial_noise_mag + 1e-8)) * 100
+
+        results[noise] = {
+            "initial_noise": initial_noise_mag,
+            "final_noise": final_noise,
+            "damping_percent": damping_percent,
+        }
+        logger.info("  sigma=%s: damping=%.1f%%", noise, damping_percent)
 
     avg_damping = np.mean([r["damping_percent"] for r in results.values()])
     score = min(100, avg_damping)

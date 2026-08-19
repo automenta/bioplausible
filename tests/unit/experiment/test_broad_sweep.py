@@ -127,7 +127,6 @@ def test_space_with_categorical_choice() -> None:
 
 
 def test_registry_families_detected() -> None:
-    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
 
     families = bs._registry_families()
     assert "eqprop" in families
@@ -140,7 +139,6 @@ def test_models_in_family_excludes_broken_by_default() -> None:
     Default sweeps must not waste compute on known-broken probes; the
     ``--include-broken`` flag opts back in.
     """
-    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
 
     # conv_eqprop is tagged status:broken (phantom num_layers).
     default = bs._models_in_family("eqprop")
@@ -157,7 +155,6 @@ def test_models_in_family_excludes_broken_by_default() -> None:
 
 def test_model_status_reads_registry_tag() -> None:
     """_model_status returns the status:<x> tag value from registry metadata."""
-    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
 
     assert bs._model_status("conv_eqprop") == "broken"
     assert bs._model_status("eqprop") == "stable"
@@ -432,7 +429,6 @@ def test_match_param_budget_stays_under_budget():
     Uses the static estimator (model construction, no training), so this is a
     fast pure-logic check of the fair-comparison rematch.
     """
-    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
     from bioplausible.experiment.param_estimator import estimate_param_count
 
     budget = 4000
@@ -493,7 +489,6 @@ def test_match_param_budget_binds_conv_model_width():
     #3/#4). The family space samples hidden_dim; the matcher must search the
     model's real width axis hidden_channels instead of returning the wide sample.
     """
-    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
     from bioplausible.experiment.param_estimator import estimate_param_count
 
     for model in ("modern_conv_eqprop", "conv_eqprop"):
@@ -564,7 +559,6 @@ def test_forward_probe_ok_skips_diffusion_and_chl_incompatible():
     #5) and a 2D->conv3d model whose CHL propagator can't stream it (#6). Healthy
     rules pass through.
     """
-    import bioplausible.zoo  # ruff: ignore[unused-import]  (registration side effect)
 
     # eqprop_diffusion: bare flat forward raises 't must be provided'.
     cfg = {"hidden_dim": 64, "learning_rate": 1e-3}

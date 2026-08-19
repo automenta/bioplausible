@@ -14,7 +14,6 @@ and checkpoints never see a ``Literal``-typed dataclass field).
 
 from __future__ import annotations
 
-import bioplausible.zoo  # ruff: ignore[unused-import]  # triggers model registration
 from bioplausible.core.construction import (
     KNOBS,
     build_model_config,
@@ -264,6 +263,7 @@ def test_all_models_honor_depth_or_are_knowingly_phantom() -> None:
         # cannot be audited on the vision dummy dims; opt them out of the guard.
         # conv_tile's depth map is offset (``num_fc_layers = num_layers - 2``),
         # so the 1-vs-3 audit never triggers its (real, verified) depth growth.
+        # Same applies to algorithm-specific conv_tile variants.
         if name in (
             "backprop_transformer_lm",
             "eqprop_diffusion",
@@ -271,6 +271,11 @@ def test_all_models_honor_depth_or_are_knowingly_phantom() -> None:
             "rl_tile",
             "timeseries_tile",
             "conv_tile",
+            "conv_tile_fa",
+            "conv_tile_tp",
+            "conv_tile_hebbian",
+            "conv_tile_snn",
+            "conv_tile_pc",
             "custom_stacked_model",
             "spiking_stdp",
         ):

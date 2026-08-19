@@ -139,17 +139,21 @@ def track_43_directed_ep(verifier) -> TrackResult:
         learning_rate=0.01,
     )
 
-    # Verify asymmetry
-    w_fwd = model.forward_layers[0].weight
-    w_bwd = model.feedback_layers[0].weight  # Corresponds to layer 0 connection?
-    # In my implementation:
-    # forward_layers[0] connects input -> h1 (dim 0 -> 1)
-    # feedback_layers[0] connects h1 -> input (dim 1 -> 0)
+    # Use contrastive gradient method to enable local train_step
+    model.gradient_method = "contrastive"
+
+    # Verify asymmetry: forward and feedback weights should be different
+    # Forward: layers[0] (input -> hidden) [hidden_dim, input_dim]
+    # Feedback: feedback_layers[0] (output -> hidden) [hidden_dim, output_dim]
+    w_fwd = model.layers[0].parametrizations.weight.original
+    w_bwd = model.feedback_layers[0].weight
+
     # Check shapes
     logger.info("  Forward W shape: %s", w_fwd.shape)
-    logger.info("  Feedback B shape: %s", w_bwd.shape)
+    logger.info("  Feedback W shape: %s", w_bwd.shape)
 
     # Check if tied (should NOT be tied/shared memory)
+    # They have different shapes so they can't be tied, but verify they're separate parameters
     is_tied = w_fwd.data_ptr() == w_bwd.data_ptr()
     logger.info("  Weights Tied: %s", is_tied)
 
@@ -174,6 +178,7 @@ def track_43_directed_ep(verifier) -> TrackResult:
 
     learned = final_loss < initial_loss * 0.95
 
+    # Asymmetric if not tied AND learning occurred
     score = 100 if learned and not is_tied else 0
     status = "pass" if score == 100 else "fail"
 
@@ -220,6 +225,8 @@ def track_44_finite_nudge_ep(verifier) -> TrackResult:
         eq_steps=10,
         learning_rate=0.01,
     )
+    # Use contrastive gradient method to enable local train_step
+    model.gradient_method = "contrastive"
     logger.info("  Using Beta: %s", model.beta)
 
     # Train
