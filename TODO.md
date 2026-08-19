@@ -110,10 +110,23 @@ Bioplausible is a mature research framework with excellent architectural foundat
 | # | Task | File | Status | Target |
 |---|------|------|--------|--------|
 | P1.34 | **Triton kernels for EqProp/MEP** — fused relaxation, Muon NS, Dion SVD, Fisher | `bioplausible/acceleration/triton_kernels.py` | 🔄 Partial | 2-5x speedup on GPU |
+| P1.34a | **Triton: FA kernels** — fused feedback projection + weight update | `bioplausible/acceleration/fa_kernels.py` | ❌ Missing | FA depth scaling (1000+ layers) |
+| P1.34b | **Triton: PC kernels** — fused prediction error + lateral update | `bioplausible/acceleration/pc_kernels.py` | ❌ Missing | Predictive Coding parity |
+| P1.34c | **Triton: Hebbian/SNN kernels** — STDP, surrogate gradients, contrastive Hebbian | `bioplausible/acceleration/hebbian_kernels.py`, `snn_kernels.py` | ❌ Missing | Spiking/Hebbian TileNet |
+| P1.34d | **Triton: Forward-Forward kernels** — goodness threshold + layer-local update | `bioplausible/acceleration/ff_kernels.py` | ❌ Missing | FF on TileNet |
 | P1.35 | **Backend auto-dispatch** — CUDA→Triton→CPU→NumPy fallback chain | `bioplausible/acceleration/backends.py` | 🔄 Partial | Profile-guided selection |
+| P1.35a | **KernelRegistry auto-tuning** — benchmark each backend per op shape, cache best | `bioplausible/acceleration/kernel_backend.py` | 🔄 Partial | `KernelRegistry` exists, needs autotune |
 | P1.36 | **torch.compile integration** — custom EqProp backward, dynamic shapes | `bioplausible/acceleration/compile.py` | 🔄 Partial | Graph break minimization |
+| P1.36a | **Custom EqProp autograd Function** — `torch.autograd.Function` with Triton backward | `bioplausible/acceleration/compile.py` | ❌ Missing | Enable `torch.compile` on settle |
+| P1.36b | **Dynamic shape support** — `torch._dynamo.mark_dynamic` for variable batch/seq | `bioplausible/acceleration/compile.py` | ❌ Missing | Variable batch sizes |
+| P1.36c | **Compile mode selection** — `reduce-overhead` vs `max-autotune` per model | `bioplausible/acceleration/compile.py` | ❌ Missing | Auto-select per model size |
 | P1.37 | **Reference NumPy/CuPy kernels** — correctness testing, CPU fallback for CI | `bioplausible/acceleration/kernels.py` | 🔄 Partial | Gradient equivalence on every commit |
+| P1.37a | **Gradient equivalence CI gate** — compare Triton vs CuPy vs PyTorch on every PR | `tests/integration/test_kernel_equivalence.py` | ❌ Missing | Bitwise/numerical parity |
 | P1.38 | **TileNet kernel backend** — tile-specific fused kernels (activity update, weight update) | `bioplausible/acceleration/tile_kernels.py` | ❌ Missing | Accelerate tile substrate families |
+| P1.38a | **Tile activity kernel** — fused `TileAlgorithm._ep_activity_update` per tile | `bioplausible/acceleration/tile_kernels.py` | ❌ Missing | 6 algorithms × tile-parallel |
+| P1.38b | **Tile weight kernel** — fused contrastive Hebbian per tile (free/nudged) | `bioplausible/acceleration/tile_kernels.py` | ❌ Missing | O(1) memory per tile |
+| P1.38c | **Tile routing kernel** — sparse/dense MoT routing (top-k, random, learned) | `bioplausible/acceleration/tile_kernels.py` | ❌ Missing | MoT ablation (P1.14) |
+| P1.38d | **Multi-GPU tile sharding** — NCCL all-reduce for tile gradients | `bioplausible/acceleration/tile_kernels.py` | ❌ Missing | Scale TileNet >1B params |
 
 ---
 
@@ -122,12 +135,24 @@ Bioplausible is a mature research framework with excellent architectural foundat
 | # | Task | File | Status |
 |---|------|------|--------|
 | P1.39 | **Chain-of-thought templates** — failure analysis, transfer reasoning, composition | `bioplausible/autoscientist/reasoner.py` | 🔄 Partial |
-| P1.40 | **Literature retrieval** — arXiv API + semantic search for prior art | `bioplausible/autoscientist/proposer.py` | ❌ Missing |
-| P1.41 | **Counterfactual generator** — "What if β schedule changed?" | `bioplausible/autoscientist/proposer.py` | ❌ Missing |
+| P1.39a | **Failure analysis template** — "Why did X fail? Root cause → hypothesis → fix" | `bioplausible/autoscientist/reasoner.py` | ❌ Missing |
+| P1.39b | **Transfer reasoning template** — "What transfers from domain A to B? Evidence?" | `bioplausible/autoscientist/reasoner.py` | ❌ Missing |
+| P1.39c | **Composition template** — "Combine X + Y → novel algorithm Z" | `bioplausible/autoscientist/reasoner.py` | ❌ Missing |
+| P1.40 | **Literature retrieval** — arXiv API + semantic search for prior art | `bioplausible/autoscientist/literature.py` | ✅ Complete |
+| P1.41 | **Counterfactual generator** — "What if β schedule changed?" | `bioplausible/autoscientist/counterfactual.py` | ✅ Complete |
 | P1.42 | **Knowledge Base meta-analysis** — scaling law fits, algorithm fingerprints, failure manifold | `bioplausible/knowledge/kb.py` | 🔄 Partial |
-| P1.43 | **Campaign persistence/resume** — YAML+SQLite, git-like branching | `bioplausible/autoscientist/campaign.py` | 🔄 Partial |
+| P1.42a | **Scaling law meta-fit** — aggregate Chinchilla fits across all runs | `bioplausible/knowledge/kb.py` | ❌ Missing |
+| P1.42b | **Algorithm fingerprinting** — hyperparam sensitivity → embedding → phylogeny | `bioplausible/knowledge/kb.py` | 🔄 Partial (analysis/genealogy.py) |
+| P1.42c | **Failure manifold mapping** — cluster failed runs by error mode | `bioplausible/knowledge/kb.py` | ❌ Missing |
+| P1.43 | **Campaign persistence/resume** — YAML+SQLite, git-like branching | `bioplausible/autoscientist/campaign.py` | ✅ Complete |
 | P1.44 | **Human-in-the-loop interface** — web dashboard for hypothesis review/approval | `bioplausible/autoscientist/` (NEW) | ❌ Missing |
-| P1.45 | **Local LLM support** — llama.cpp, ollama integration (no API key required) | `bioplausible/autoscientist/reasoner.py` | ❌ Missing |
+| P1.44a | **NiceGUI/Streamlit dashboard** — view proposals, approve/reject, see live metrics | `bioplausible/autoscientist/dashboard.py` | ❌ Missing |
+| P1.44b | **WebSocket live updates** — stream experiment progress to browser | `bioplausible/autoscientist/dashboard.py` | ❌ Missing |
+| P1.44c | **Hypothesis annotation UI** — tag, comment, link to literature/KB | `bioplausible/autoscientist/dashboard.py` | ❌ Missing |
+| P1.45 | **Local LLM support** — llama.cpp, ollama integration (no API key required) | `bioplausible/autoscientist/local_llm.py` | ✅ Complete |
+| P1.45a | **Ollama auto-model-pull** — detect missing model, `ollama pull` | `bioplausible/autoscientist/local_llm.py` | ❌ Missing |
+| P1.45b | **llama.cpp quantization auto-select** — Q4_K_M vs Q8_0 based on VRAM | `bioplausible/autoscientist/local_llm.py` | ❌ Missing |
+| P1.45c | **Speculative decoding** — draft model for faster hypothesis generation | `bioplausible/autoscientist/local_llm.py` | ❌ Missing |
 
 ---
 
@@ -148,6 +173,9 @@ Bioplausible is a mature research framework with excellent architectural foundat
 | P2.11 | **Hybrid Local-Global** — EqProp body + backprop head (last 1-2 layers) | Hybrid | Medium | ❌ Not started |
 | P2.12 | **Spectral/Normalization Variants** — Lipschitz-1 guarantee for 1000+ layers | Spectral | Medium | ❌ Not started |
 | P2.13 | **Structured Topology Variants** — small-world, hierarchical, modular TileNet | Tile | Medium | ❌ Not started |
+| P2.14 | **TileNet + Counterfactual** — AutoScientist generates β schedules, runs via campaign | Tile+AutoSci | Low | ❌ Not started |
+| P2.15 | **Literature-guided search** — AutoScientist retrieves papers, proposes replications | AutoSci | Low | ❌ Not started |
+| P2.16 | **Kernel-autotuned TileNet** — TileNet kernels auto-select Triton/CuPy/PyTorch per tile | Tile+Kernel | Medium | ❌ Not started |
 
 ---
 
@@ -185,6 +213,10 @@ Bioplausible is a mature research framework with excellent architectural foundat
 | QW.6 | **Sign-Symmetric FA implementation** — ~50 lines, hardware-friendly weight transport solution | Novel algorithm, low effort |
 | QW.7 | **Expand demo `TRAINABLE_MODELS`** — add all tile variants to NiceGUI demo | Showcase algorithm diversity |
 | QW.8 | **Fix LSP/type errors** — clean pyright strict mode | Code quality signal |
+| QW.9 | **`biopl-registry-audit --fix`** — auto-generate missing registry metadata from code | Eliminate manual metadata drift |
+| QW.10 | **`biopl-kernel-benchmark` CLI** — benchmark all Triton/CuPy/PyTorch kernels, output markdown | Hardware acceleration visibility |
+| QW.11 | **Literature auto-sync** — daily arXiv search for "equilibrium propagation", "feedback alignment", etc. | Keep KB current |
+| QW.12 | **Counterfactual auto-run** — campaign mode: generate → run top-3 → update KB | Closed-loop discovery |
 
 ---
 
