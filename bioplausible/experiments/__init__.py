@@ -1,0 +1,32 @@
+"""Bioplausible Experiments Package.
+
+Flagship experiments for publishable bio-plausible learning results.
+"""
+
+from .cross_domain_transfer import TransferConfig, run_transfer_experiment
+from .eqprop_vision_parity import EqPropParityConfig, run_eqprop_parity
+from .fa_depth_scaling import FADepthConfig, run_fa_depth_scaling
+from .mep_tournament import MEPExperimentConfig, run_mep_tournament
+from .mot_ablation import MoTAblationConfig, run_mot_ablation
+from .tile_algorithm_comparison import (
+    TileAlgorithmConfig,
+    run_tile_algorithm_comparison,
+)
+from .tile_scaling import ScalingConfig, run_scaling_sweep
+
+__all__ = [
+    "EqPropParityConfig",
+    "FADepthConfig",
+    "MEPExperimentConfig",
+    "MoTAblationConfig",
+    "ScalingConfig",
+    "TileAlgorithmConfig",
+    "TransferConfig",
+    "run_eqprop_parity",
+    "run_fa_depth_scaling",
+    "run_mep_tournament",
+    "run_mot_ablation",
+    "run_scaling_sweep",
+    "run_tile_algorithm_comparison",
+    "run_transfer_experiment",
+]

@@ -9,7 +9,25 @@ from .energy_landscape import (
     plot_energy_landscape,
 )
 from .failure_manifesto import FailureManifestoGenerator
+from .pareto import (
+    ParetoFrontier,
+    ParetoPoint,
+    compute_pareto_frontier,
+    knee_detection,
+    pareto_frontier_from_trials,
+    plot_pareto_3d,
+    plot_pareto_frontier,
+)
 from .results import compute_statistics, get_rankings, load_trials
+from .scaling import (
+    ChinchillaLaw,
+    PowerLawFit,
+    ScalingLawFitter,
+    compute_scaling_exponent,
+    extrapolate_performance,
+    fit_chinchilla_law,
+    fit_power_law,
+)
 from .tile_dynamics import (
     DynamicTileAlgorithm,
     DynamicTileConfig,
@@ -52,6 +70,7 @@ __all__ = [
     "BenchmarkConfig",
     "BenchmarkResult",
     "BenchmarkRunner",
+    "ChinchillaLaw",
     "DynamicTileAlgorithm",
     "DynamicTileConfig",
     "DynamicsAnalyzer",
@@ -63,7 +82,11 @@ __all__ = [
     "MemoryProfiler",
     "MetricCollector",
     "MetricEntry",
+    "ParetoFrontier",
+    "ParetoPoint",
+    "PowerLawFit",
     "ProfileResult",
+    "ScalingLawFitter",
     "TileAlgorithmProfiler",
     "TileGrowthConfig",
     "TileGrowthManager",
@@ -73,6 +96,8 @@ __all__ = [
     "TileStats",
     "VisualizationHelper",
     "compute_energy_landscape",
+    "compute_pareto_frontier",
+    "compute_scaling_exponent",
     "compute_statistics",
     "create_ablation_study",
     "create_dynamic_model",
@@ -80,8 +105,15 @@ __all__ = [
     "create_profiler",
     "create_tracker",
     "create_visualization_helper",
+    "extrapolate_performance",
+    "fit_chinchilla_law",
+    "fit_power_law",
     "get_rankings",
+    "knee_detection",
     "load_trials",
+    "pareto_frontier_from_trials",
     "plot_energy_landscape",
+    "plot_pareto_3d",
+    "plot_pareto_frontier",
     "run_benchmark",
 ]

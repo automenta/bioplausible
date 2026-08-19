@@ -60,13 +60,13 @@ Bioplausible is a mature research framework with excellent architectural foundat
 
 | # | Experiment | File | Status | Target |
 |---|------------|------|--------|--------|
-| P1.10 | **TileNet Scaling Sweep** — depth/width scaling on MNIST/CIFAR-10 across PC, EP, FA, TP, Hebbian, backprop | `bioplausible/experiments/tile_scaling.py` (NEW) | ❌ Missing | Scaling law plots + Pareto frontiers |
-| P1.11 | **EqProp Family Vision Parity** — all EqProp variants on MNIST/Fashion-MNIST/CIFAR-10/SVHN | `bioplausible/experiments/eqprop_vision_parity.py` (NEW) | ❌ Missing | Variant recommendation matrix per task/budget |
-| P1.12 | **MEP Preset Tournament** — factorized: gradient×update×constraint×feedback | `bioplausible/experiments/mep_tournament.py` (NEW) | ❌ Missing | Factor importance analysis + recommended presets |
-| P1.13 | **Feedback Alignment Depth Scaling** — 10→1000 layers, MNIST + synthetic parity | `bioplausible/experiments/fa_depth_scaling.py` (NEW) | ❌ Missing | Depth-scaling curves proving FA viability |
-| P1.14 | **Mixture-of-Tiles (MoT) Ablation** — dense vs sparse tile routing (OptimizedLMEquiTile exists) | `bioplausible/experiments/mot_ablation.py` (NEW) | ❌ Missing | Does sparse routing help or just add overhead? |
-| P1.15 | **Cross-Domain Transfer** — vision→LM/RL/graph transfer efficiency | `bioplausible/experiments/cross_domain_transfer.py` (NEW) | ❌ Missing | Local learning representations transfer better? |
-| P1.16 | **Tile Algorithm Family Comparison** — PC vs EP vs FA vs TP vs Hebbian vs SNN on same tile substrate | `bioplausible/experiments/tile_algorithm_comparison.py` (NEW) | ❌ Missing | Fair comparison isolating credit assignment |
+| P1.10 | **TileNet Scaling Sweep** — depth/width scaling on MNIST/CIFAR-10 across PC, EP, FA, TP, Hebbian, backprop | `bioplausible/experiments/tile_scaling.py` | ✅ Implemented | Scaling law plots + Pareto frontiers |
+| P1.11 | **EqProp Family Vision Parity** — all EqProp variants on MNIST/Fashion-MNIST/CIFAR-10/SVHN | `bioplausible/experiments/eqprop_vision_parity.py` | ✅ Implemented | Variant recommendation matrix per task/budget |
+| P1.12 | **MEP Preset Tournament** — factorized: gradient×update×constraint×feedback | `bioplausible/experiments/mep_tournament.py` | ✅ Implemented | Factor importance analysis + recommended presets |
+| P1.13 | **Feedback Alignment Depth Scaling** — 10→1000 layers, MNIST + synthetic parity | `bioplausible/experiments/fa_depth_scaling.py` | ✅ Implemented | Depth-scaling curves proving FA viability |
+| P1.14 | **Mixture-of-Tiles (MoT) Ablation** — dense vs sparse tile routing (OptimizedLMEquiTile exists) | `bioplausible/experiments/mot_ablation.py` | ✅ Implemented | Does sparse routing help or just add overhead? |
+| P1.15 | **Cross-Domain Transfer** — vision→LM/RL/graph transfer efficiency | `bioplausible/experiments/cross_domain_transfer.py` | ✅ Implemented | Local learning representations transfer better? |
+| P1.16 | **Tile Algorithm Family Comparison** — PC vs EP vs FA vs TP vs Hebbian vs SNN on same tile substrate | `bioplausible/experiments/tile_algorithm_comparison.py` | ✅ Implemented | Fair comparison isolating credit assignment |
 
 ---
 
@@ -402,3 +402,33 @@ P2.1-P2.13             →  Need P1.1-P1.4 (substrate must support all algorithm
 - `pytest tests/unit/validation/test_registry_audit.py` ✅ (379 passed, 18 skipped)
 
 **Next priority:** P1 Flagship Experiments (P1.10–P1.16) — produce publishable results demonstrating bio-plausible parity/excellence across all tile algorithms.
+
+---
+
+### 2026-08-18 — P1 Flagship Experiments Implemented
+
+**Completed (P1.10–P1.16):**
+
+| Task | Summary |
+|------|---------|
+| **P1.10 TileNet Scaling Sweep** | Created `bioplausible/experiments/tile_scaling.py` — depth/width scaling on MNIST/CIFAR-10 across PC, EP, FA, TP, Hebbian, SNN, backprop. Uses `ScalingLawFitter` for power-law fits and `ParetoFrontier` for multi-objective analysis. |
+| **P1.11 EqProp Vision Parity** | Created `bioplausible/experiments/eqprop_vision_parity.py` — all EqProp variants on MNIST/Fashion-MNIST/CIFAR-10/SVHN. Statistical comparison (Cohen's d, Cliff's δ, permutation tests) with variant recommendation matrix per task/budget. |
+| **P1.12 MEP Preset Tournament** | Created `bioplausible/experiments/mep_tournament.py` — factorized ablation of gradient×update×constraint×feedback factors. ANOVA-based factor importance analysis + Sobol indices, best preset identification. |
+| **P1.13 FA Depth Scaling** | Created `bioplausible/experiments/fa_depth_scaling.py` — 10→1000 layers on MNIST + synthetic. Depth-scaling curves, power-law fits, FA vs Backprop parity gap analysis per depth/width. |
+| **P1.14 MoT Ablation** | Created `bioplausible/experiments/mot_ablation.py` — dense vs sparse vs top-k vs random routing. Routing efficiency analysis (param/time/FLOPs ratios), statistical comparison, optimal config finder. |
+| **P1.15 Cross-Domain Transfer** | Created `bioplausible/experiments/cross_domain_transfer.py` — vision→LM/RL/graph/timeseries transfer. Finetune vs scratch baselines, local vs global learning comparison, transfer benefit quantification. |
+| **P1.16 Tile Algorithm Comparison** | Created `bioplausible/experiments/tile_algorithm_comparison.py` — fair comparison of PC/EP/FA/TP/Hebbian/SNN/Backprop on same tile substrate. Pairwise statistical tests, bio-plausibility weighted ranking. |
+
+**Analysis Infrastructure Added:**
+
+| Module | Purpose |
+|--------|---------|
+| `bioplausible/analysis/scaling.py` | Power-law fitting (`fit_power_law`), Chinchilla laws, `ScalingLawFitter` manager, bootstrap CIs, extrapolation. |
+| `bioplausible/analysis/pareto.py` | Pareto frontier computation (`compute_pareto_frontier`), knee detection, Plotly visualization (`plot_pareto_frontier`, `plot_pareto_3d`). |
+
+**Verification gates passing:**
+- All experiment modules import successfully ✅
+- All analysis modules import successfully ✅
+- `pyright` on new files: only warnings (missing plotly, pandas type hints) ✅
+
+**Next priority:** Run experiments to generate publishable results, complete Validation Tracks (P1.17–P1.26), and Hardware Acceleration (P1.34–P1.38).
