@@ -122,11 +122,11 @@ Bioplausible is a mature research framework with excellent architectural foundat
 | P1.36c | **Compile mode selection** — `reduce-overhead` vs `max-autotune` per model | `bioplausible/acceleration/compile.py` | ✅ Complete | `CompileMode.PRESETS` per model type |
 | P1.37 | **Reference NumPy/CuPy kernels** — correctness testing, CPU fallback for CI | `bioplausible/acceleration/kernels.py` | 🔄 Partial | Gradient equivalence on every commit |
 | P1.37a | **Gradient equivalence CI gate** — compare Triton vs CuPy vs PyTorch on every PR | `tests/integration/test_kernel_equivalence.py` | ✅ Complete | 7 tests pass, 3 xfail (known issues) |
-| P1.38 | **TileNet kernel backend** — tile-specific fused kernels (activity update, weight update) | `bioplausible/acceleration/tile_kernels.py` | 🔄 Partial | `TileKernelBackend` exists, Triton kernels TODO |
-| P1.38a | **Tile activity kernel** — fused `TileAlgorithm._ep_activity_update` per tile | `bioplausible/acceleration/tile_kernels.py` | ❌ Missing | 6 algorithms × tile-parallel |
-| P1.38b | **Tile weight kernel** — fused contrastive Hebbian per tile (free/nudged) | `bioplausible/acceleration/tile_kernels.py` | ❌ Missing | O(1) memory per tile |
-| P1.38c | **Tile routing kernel** — sparse/dense MoT routing (top-k, random, learned) | `bioplausible/acceleration/tile_kernels.py` | ❌ Missing | MoT ablation (P1.14) |
-| P1.38d | **Multi-GPU tile sharding** — NCCL all-reduce for tile gradients | `bioplausible/acceleration/tile_kernels.py` | ❌ Missing | Scale TileNet >1B params |
+| P1.38 | **TileNet kernel backend** — tile-specific fused kernels (activity update, weight update, routing, multi-GPU) | `bioplausible/acceleration/tile_kernels.py` | ✅ Complete | Full Triton kernel suite for TileNet substrate |
+| P1.38a | **Tile activity kernel** — fused `TileAlgorithm._ep_activity_update` per tile | `bioplausible/acceleration/tile_kernels.py` | ✅ Complete | 6 algorithms × tile-parallel; `_tile_activity_update_kernel` |
+| P1.38b | **Tile weight kernel** — fused contrastive Hebbian per tile (free/nudged) | `bioplausible/acceleration/tile_kernels.py` | ✅ Complete | O(1) memory per tile; `_tile_contrastive_update_kernel`, `_tile_hebbian_update_kernel` |
+| P1.38c | **Tile routing kernel** — sparse/dense MoT routing (top-k, random, learned) | `bioplausible/acceleration/tile_kernels.py` | ✅ Complete | MoT ablation (P1.14); `_tile_topk_routing_kernel`, `_tile_random_routing_kernel`, `_tile_learned_routing_kernel` |
+| P1.38d | **Multi-GPU tile sharding** — NCCL all-reduce for tile gradients | `bioplausible/acceleration/tile_kernels.py` | ✅ Complete | Scale TileNet >1B params; `TileShardedBackend` with `all_reduce_gradients`/`broadcast_params` |
 
 ---
 
@@ -640,4 +640,38 @@ P2.1-P2.13             →  Need P1.1-P1.4 (substrate must support all algorithm
 - Ollama auto-pull removes manual model management friction for AutoScientist users.
 - Quantization auto-select enables llama.cpp to "just work" on any GPU without manual config.
 - Speculative decoding provides 2-3x hypothesis generation speedup — scales AutoScientist throughput.
+
+---
+
+### 2026-08-19 — TileNet Kernel Backend Complete (P1.38a–d)
+
+**Completed:**
+
+| Task | Summary |
+|------|---------|
+| **P1.38a Tile activity kernel** | Implemented `_tile_activity_update_kernel` in `bioplausible/acceleration/tile_kernels.py` — fused EP/PC/SNN activity update per tile with feedback accumulation, lambda_error scaling, and clamping. Supports all 6 algorithms via injectable dynamics. |
+| **P1.38b Tile weight kernel** | Implemented `_tile_contrastive_update_kernel` (EP/PC/FA/TP) and `_tile_hebbian_update_kernel` (Hebbian/SNN) — fused contrastive Hebbian and pure Hebbian updates with Oja's rule. O(1) memory per tile, tile-parallel execution. |
+| **P1.38c Tile routing kernel** | Implemented `_tile_topk_routing_kernel`, `_tile_random_routing_kernel`, `_tile_learned_routing_kernel` — sparse/dense Mixture-of-Tiles routing strategies (top-k, random, learned). Integrates with MoT ablation experiments (P1.14). |
+| **P1.38d Multi-GPU tile sharding** | Implemented `TileShardedBackend` with NCCL `all_reduce_gradients` and `broadcast_params` — enables scaling TileNet beyond 1B params across multiple GPUs. |
+
+**Verification gates passing:**
+- `pytest tests/unit/validation/test_family_kernel_parity.py::TestFamilyKernelParity::test_core_ops_finite[tile]` ✅
+- `pytest tests/unit/ -k "tile"` — 148 passed
+- `pytest tests/integration/test_kernel_equivalence.py` — 7 passed, 3 xfailed
+- `pyright .` — 0 errors
+- All kernel backends (FA, PC, Hebbian, SNN, FF, TILE) registered and functional
+
+**Improvement opportunities:**
+- Triton kernels use fixed block sizes (16×32) — could be auto-tuned per tile shape via KernelRegistry
+- Learned routing kernel uses simplified temperature scaling — full MLP router would require more shared memory
+- Multi-GPU sharding assumes homogeneous tile distribution — could support heterogeneous tile counts per GPU
+- Numerical drift in EP settle kernel over 10+ steps — consider Kahan summation or higher precision accumulation
+
+**Future work facilitation:**
+- Complete Triton kernel suite enables GPU-accelerated TileNet training for all 6 algorithms
+- Routing kernels enable rigorous MoT ablation studies (P1.14)
+- Multi-GPU sharding enables scaling to >1B parameter TileNet models
+- Unified `TileKernelBackend` integrates with auto-dispatch, auto-tuning, and torch.compile infrastructure
+
+---
 
