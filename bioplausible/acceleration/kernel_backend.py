@@ -6,10 +6,12 @@ and configuration dataclasses for hardware-agnostic kernel acceleration.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
+import numpy as np
 import torch
 
 
@@ -126,10 +128,14 @@ class KernelBackend(Protocol):
 
 # Registry
 class KernelRegistry:
-    """Global registry for kernel backends with auto-selection logic."""
+    """Global registry for kernel backends with auto-selection and auto-tuning logic."""
 
     _backends: dict[AlgorithmFamily, dict[HardwareTarget, type]] = {}
     _instances: dict[tuple[AlgorithmFamily, HardwareTarget], object] = {}
+    # Auto-tuning cache: (algorithm, hardware, op_name, shape) -> best_hardware
+    _autotune_cache: dict[tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]], HardwareTarget] = {}
+    # Benchmark results: (algorithm, hardware, op_name, shape) -> list of (hardware, time_ms)
+    _benchmark_cache: dict[tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]], list[tuple[HardwareTarget, float]]] = {}
 
     @classmethod
     def register(
@@ -182,6 +188,180 @@ class KernelRegistry:
                 return backend
 
         return None
+
+    @classmethod
+    def get_best_for_shape(
+        cls,
+        algorithm: AlgorithmFamily,
+        op_name: str,
+        shape: tuple[int, ...],
+        benchmark_fn: Callable[[object, tuple[int, ...]], float] | None = None,
+        warmup_runs: int = 3,
+        benchmark_runs: int = 10,
+    ) -> object | None:
+        """Get best backend for a specific operation shape using auto-tuning.
+
+        Args:
+            algorithm: Algorithm family
+            op_name: Operation name (e.g., "forward", "backward", "update_weights")
+            shape: Input tensor shape
+            benchmark_fn: Optional custom benchmark function. If None, uses default timing.
+            warmup_runs: Number of warmup iterations
+            benchmark_runs: Number of benchmark iterations
+
+        Returns:
+            Best backend instance for this operation/shape combination
+        """
+        cache_key = (algorithm, op_name, shape)
+
+        # Check auto-tune cache first
+        if cache_key in cls._autotune_cache:
+            best_hw = cls._autotune_cache[cache_key]
+            return cls.get(algorithm, best_hw)
+
+        # Get available hardware targets for this algorithm
+        available_hw = cls.list_for(algorithm)
+        if not available_hw:
+            return None
+
+        # Priority order for fallback
+        priority_order = [
+            HardwareTarget.TRITON,
+            HardwareTarget.CUDA,
+            HardwareTarget.CPU,
+        ]
+        candidate_hw = [hw for hw in priority_order if hw in available_hw]
+
+        if len(candidate_hw) == 1:
+            # Only one option, no need to benchmark
+            cls._autotune_cache[cache_key] = candidate_hw[0]
+            return cls.get(algorithm, candidate_hw[0])
+
+        # Benchmark each backend for this shape
+        best_hw = cls._benchmark_backends(
+            algorithm, op_name, shape, candidate_hw, benchmark_fn, warmup_runs, benchmark_runs
+        )
+
+        cls._autotune_cache[cache_key] = best_hw
+        return cls.get(algorithm, best_hw)
+
+    @classmethod
+    def _benchmark_backends(
+        cls,
+        algorithm: AlgorithmFamily,
+        op_name: str,
+        shape: tuple[int, ...],
+        candidate_hw: list[HardwareTarget],
+        benchmark_fn: Callable[[object, tuple[int, ...]], float] | None,
+        warmup_runs: int,
+        benchmark_runs: int,
+    ) -> HardwareTarget:
+        """Benchmark multiple backends and return the fastest."""
+        bench_key = (algorithm, op_name, shape)
+        results = []
+
+        for hw in candidate_hw:
+            backend = cls.get(algorithm, hw)
+            if backend is None:
+                continue
+
+            try:
+                if benchmark_fn is not None:
+                    # Use custom benchmark function
+                    time_ms = benchmark_fn(backend, shape)
+                else:
+                    # Default: time the forward pass with dummy inputs
+                    time_ms = cls._default_benchmark(backend, op_name, shape, warmup_runs, benchmark_runs)
+
+                if time_ms > 0 and not np.isinf(time_ms):
+                    results.append((hw, time_ms))
+            except Exception:
+                # Backend failed, skip
+                continue
+
+        # Cache benchmark results
+        if results:
+            cls._benchmark_cache[bench_key] = results
+
+        if not results:
+            # All failed, return first candidate as fallback
+            return candidate_hw[0]
+
+        # Return fastest
+        return min(results, key=lambda x: x[1])[0]
+
+    @classmethod
+    def _default_benchmark(
+        cls,
+        backend: object,
+        op_name: str,
+        shape: tuple[int, ...],
+        warmup_runs: int,
+        benchmark_runs: int,
+    ) -> float:
+        """Default benchmark using forward pass with random inputs."""
+        import time
+
+        # Create dummy inputs based on shape
+        if hasattr(backend, "initialize"):
+            # Try to initialize with minimal config
+            try:
+                from bioplausible.acceleration.kernel_backend import KernelConfig, HardwareTarget
+                config = KernelConfig(
+                    algorithm=backend.name if hasattr(backend, "name") else AlgorithmFamily.BACKPROP,
+                    hardware=HardwareTarget.CPU,
+                    extra={"num_layers": 2, "hidden_dim": shape[-1] if shape else 256}
+                )
+                backend.initialize(config)
+            except Exception:
+                pass
+
+        # Get the operation method
+        method = getattr(backend, op_name, None)
+        if method is None:
+            return float("inf")
+
+        # Warmup
+        try:
+            for _ in range(warmup_runs):
+                if op_name == "forward":
+                    x = torch.randn(*shape, device="cpu")
+                    _ = method(x)
+                else:
+                    # For other ops, try with minimal args
+                    _ = method()
+        except Exception:
+            return float("inf")
+
+        # Benchmark
+        times = []
+        for _ in range(benchmark_runs):
+            start = time.perf_counter()
+            try:
+                if op_name == "forward":
+                    x = torch.randn(*shape, device="cpu")
+                    _ = method(x)
+                else:
+                    _ = method()
+            except Exception:
+                return float("inf")
+            elapsed = time.perf_counter() - start
+            times.append(elapsed * 1000)  # ms
+
+        return float(np.mean(times))
+
+    @classmethod
+    def clear_autotune_cache(cls) -> None:
+        """Clear the auto-tuning cache (e.g., when hardware changes)."""
+        cls._autotune_cache.clear()
+        cls._benchmark_cache.clear()
+
+    @classmethod
+    def get_benchmark_results(
+        cls, algorithm: AlgorithmFamily, op_name: str, shape: tuple[int, ...]
+    ) -> list[tuple[HardwareTarget, float]] | None:
+        """Get cached benchmark results for an operation/shape."""
+        return cls._benchmark_cache.get((algorithm, op_name, shape))
 
     @classmethod
     def has(cls, algorithm: AlgorithmFamily, hardware: HardwareTarget) -> bool:
