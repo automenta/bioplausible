@@ -40,7 +40,9 @@ class FADepthConfig:
     tasks: list[str] = field(default_factory=lambda: ["mnist", "synthetic"])
     depths: list[int] = field(default_factory=lambda: [10, 20, 50, 100, 200, 500, 1000])
     widths: list[int] = field(default_factory=lambda: [128, 256, 512])
-    algorithms: list[str] = field(default_factory=lambda: ["fa", "backprop", "ep", "pc"])
+    algorithms: list[str] = field(
+        default_factory=lambda: ["fa", "backprop", "ep", "pc"]
+    )
     seeds: int = 3
     epochs: int = 50
     batch_size: int = 128
@@ -212,7 +214,13 @@ def run_fa_depth_scaling(config: FADepthConfig) -> list[dict]:
     config = FADepthConfig(**{**config.__dict__, "device": device})
 
     results = []
-    total = len(config.tasks) * len(config.algorithms) * len(config.depths) * len(config.widths) * config.seeds
+    total = (
+        len(config.tasks)
+        * len(config.algorithms)
+        * len(config.depths)
+        * len(config.widths)
+        * config.seeds
+    )
     logger.info("FA Depth Scaling: %d total experiments", total)
     logger.info("Depths: %s", config.depths)
     logger.info("Widths: %s", config.widths)
@@ -227,10 +235,18 @@ def run_fa_depth_scaling(config: FADepthConfig) -> list[dict]:
                         exp_count += 1
                         logger.info(
                             "[%d/%d] %s depth=%d width=%d on %s (seed=%d)",
-                            exp_count, total, algorithm, depth, width, task, seed
+                            exp_count,
+                            total,
+                            algorithm,
+                            depth,
+                            width,
+                            task,
+                            seed,
                         )
 
-                        result = _run_single_experiment(algorithm, task, depth, width, seed, config)
+                        result = _run_single_experiment(
+                            algorithm, task, depth, width, seed, config
+                        )
                         results.append(result)
 
     return results
@@ -258,12 +274,17 @@ def _analyze_depth_scaling(results: list[dict]) -> dict:
             for width in algo_df["width"].unique():
                 width_df = algo_df[algo_df["width"] == width]
                 # Aggregate over seeds
-                depth_agg = width_df.groupby("depth").agg({
-                    "accuracy": ["mean", "std"],
-                    "loss": ["mean", "std"],
-                    "params": "mean",
-                    "time": "mean",
-                }).reset_index()
+                depth_agg = (
+                    width_df
+                    .groupby("depth")
+                    .agg({
+                        "accuracy": ["mean", "std"],
+                        "loss": ["mean", "std"],
+                        "params": "mean",
+                        "time": "mean",
+                    })
+                    .reset_index()
+                )
                 depth_agg.columns = [
                     "_".join(col).strip("_") if col[1] else col[0]
                     for col in depth_agg.columns.values
@@ -288,7 +309,13 @@ def _analyze_depth_scaling(results: list[dict]) -> dict:
                             "depth_curve": depth_agg.to_dict("records"),
                         }
                     except Exception as e:
-                        logger.warning("Scaling fit failed for %s/%s width=%d: %s", task, algorithm, width, e)
+                        logger.warning(
+                            "Scaling fit failed for %s/%s width=%d: %s",
+                            task,
+                            algorithm,
+                            width,
+                            e,
+                        )
 
             task_analysis[algorithm] = algo_analysis
 
@@ -320,7 +347,9 @@ def _compute_parity_gaps(results: list[dict]) -> dict:
                 depth_df = width_df[width_df["depth"] == depth]
 
                 fa_accs = depth_df[depth_df["algorithm"] == "fa"]["accuracy"].values
-                bp_accs = depth_df[depth_df["algorithm"] == "backprop"]["accuracy"].values
+                bp_accs = depth_df[depth_df["algorithm"] == "backprop"][
+                    "accuracy"
+                ].values
 
                 if len(fa_accs) > 0 and len(bp_accs) > 0:
                     fa_mean = np.mean(fa_accs)
@@ -329,6 +358,7 @@ def _compute_parity_gaps(results: list[dict]) -> dict:
 
                     # Statistical test
                     from bioplausible.validation.statistics import permutation_test_p
+
                     p_val = permutation_test_p(fa_accs, bp_accs, n_permutations=500)
 
                     width_gaps[depth] = {
@@ -356,6 +386,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
             f.write(json.dumps(r, default=str) + "\n")
 
     import pandas as pd
+
     df = pd.DataFrame(results)
     df.to_parquet(output_path / "results.parquet", index=False)
 
@@ -368,6 +399,7 @@ def _generate_plots(results: list[dict], output_dir: str) -> None:
 
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
@@ -396,7 +428,12 @@ def _generate_plots(results: list[dict], output_dir: str) -> None:
 
             for algorithm in sorted(width_df["algorithm"].unique()):
                 algo_df = width_df[width_df["algorithm"] == algorithm]
-                depth_agg = algo_df.groupby("depth")["accuracy"].agg(["mean", "std"]).reset_index()
+                depth_agg = (
+                    algo_df
+                    .groupby("depth")["accuracy"]
+                    .agg(["mean", "std"])
+                    .reset_index()
+                )
 
                 if len(depth_agg) > 0:
                     ax.errorbar(
@@ -417,7 +454,9 @@ def _generate_plots(results: list[dict], output_dir: str) -> None:
 
         fig.suptitle(f"Depth Scaling: {task.upper()}", fontsize=14)
         fig.tight_layout()
-        fig.savefig(output_path / f"depth_scaling_{task}.png", dpi=150, bbox_inches="tight")
+        fig.savefig(
+            output_path / f"depth_scaling_{task}.png", dpi=150, bbox_inches="tight"
+        )
         plt.close(fig)
 
     # Parity gap plot
@@ -436,11 +475,18 @@ def _generate_plots(results: list[dict], output_dir: str) -> None:
                 depth_df = width_df[width_df["depth"] == depth]
 
                 fa_accs = depth_df[depth_df["algorithm"] == "fa"]["accuracy"].values
-                bp_accs = depth_df[depth_df["algorithm"] == "backprop"]["accuracy"].values
+                bp_accs = depth_df[depth_df["algorithm"] == "backprop"][
+                    "accuracy"
+                ].values
 
                 if len(fa_accs) > 0 and len(bp_accs) > 0:
                     gap = (np.mean(bp_accs) - np.mean(fa_accs)) * 100
-                    ax.scatter([depth], [gap], s=100, label=f"Depth {depth}" if idx == 0 else "")
+                    ax.scatter(
+                        [depth],
+                        [gap],
+                        s=100,
+                        label=f"Depth {depth}" if idx == 0 else "",
+                    )
 
             ax.axhline(y=0, color="k", linestyle="--", alpha=0.3)
             ax.set_xscale("log")
@@ -451,7 +497,9 @@ def _generate_plots(results: list[dict], output_dir: str) -> None:
 
         fig.suptitle(f"FA vs Backprop Parity Gap: {task.upper()}", fontsize=14)
         fig.tight_layout()
-        fig.savefig(output_path / f"parity_gap_{task}.png", dpi=150, bbox_inches="tight")
+        fig.savefig(
+            output_path / f"parity_gap_{task}.png", dpi=150, bbox_inches="tight"
+        )
         plt.close(fig)
 
     logger.info("Saved plots to %s", output_path)
@@ -459,15 +507,25 @@ def _generate_plots(results: list[dict], output_dir: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Feedback Alignment Depth Scaling")
-    parser.add_argument("--tasks", default="mnist,synthetic", help="Comma-separated tasks")
-    parser.add_argument("--depths", default="10,20,50,100,200,500,1000", help="Comma-separated depths")
-    parser.add_argument("--widths", default="128,256,512", help="Comma-separated widths")
-    parser.add_argument("--algorithms", default="fa,backprop,ep,pc", help="Comma-separated algorithms")
+    parser.add_argument(
+        "--tasks", default="mnist,synthetic", help="Comma-separated tasks"
+    )
+    parser.add_argument(
+        "--depths", default="10,20,50,100,200,500,1000", help="Comma-separated depths"
+    )
+    parser.add_argument(
+        "--widths", default="128,256,512", help="Comma-separated widths"
+    )
+    parser.add_argument(
+        "--algorithms", default="fa,backprop,ep,pc", help="Comma-separated algorithms"
+    )
     parser.add_argument("--seeds", type=int, default=3, help="Seeds per config")
     parser.add_argument("--epochs", type=int, default=50, help="Epochs per run")
     parser.add_argument("--batch-size", type=int, default=128, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
-    parser.add_argument("--output-dir", default="results/fa_depth_scaling", help="Output directory")
+    parser.add_argument(
+        "--output-dir", default="results/fa_depth_scaling", help="Output directory"
+    )
     parser.add_argument("--device", default="auto", help="Device (auto, cuda, cpu)")
     parser.add_argument("--quick", action="store_true", help="Quick mode")
 

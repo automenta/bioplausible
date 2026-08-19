@@ -41,11 +41,15 @@ logger = logging.getLogger(__name__)
 class TileAlgorithmConfig:
     """Configuration for tile algorithm comparison."""
 
-    tasks: list[str] = field(default_factory=lambda: ["mnist", "cifar10", "tiny_shakespeare"])
-    algorithms: list[str] = field(default_factory=lambda: [
-        "ep", "fa", "tp", "pc", "hebbian", "snn", "backprop"
-    ])
-    substrates: list[str] = field(default_factory=lambda: ["tile"])  # Could extend to other substrates
+    tasks: list[str] = field(
+        default_factory=lambda: ["mnist", "cifar10", "tiny_shakespeare"]
+    )
+    algorithms: list[str] = field(
+        default_factory=lambda: ["ep", "fa", "tp", "pc", "hebbian", "snn", "backprop"]
+    )
+    substrates: list[str] = field(
+        default_factory=lambda: ["tile"]
+    )  # Could extend to other substrates
     seeds: int = 5
     epochs: int = 20
     batch_size: int = 128
@@ -59,7 +63,7 @@ class TileAlgorithmConfig:
 
 # Algorithm to model mapping (all using tile substrate)
 ALGORITHM_MODELS = {
-    "ep": "conv_tile",      # will use algorithm=ep
+    "ep": "conv_tile",  # will use algorithm=ep
     "fa": "conv_tile_fa",
     "tp": "conv_tile_tp",
     "pc": "conv_tile_pc",
@@ -70,12 +74,12 @@ ALGORITHM_MODELS = {
 
 # For LM tasks
 LM_ALGORITHM_MODELS = {
-    "ep": "tile_lm",        # will use algorithm=ep
-    "fa": "tile_lm",        # with algorithm=fa
-    "tp": "tile_lm",        # with algorithm=tp
-    "pc": "tile_lm",        # with algorithm=pc
-    "hebbian": "tile_lm",   # with algorithm=hebbian
-    "snn": "tile_lm",       # with algorithm=snn
+    "ep": "tile_lm",  # will use algorithm=ep
+    "fa": "tile_lm",  # with algorithm=fa
+    "tp": "tile_lm",  # with algorithm=tp
+    "pc": "tile_lm",  # with algorithm=pc
+    "hebbian": "tile_lm",  # with algorithm=hebbian
+    "snn": "tile_lm",  # with algorithm=snn
     "backprop": "backprop_lm",
 }
 
@@ -225,7 +229,9 @@ def run_tile_algorithm_comparison(config: TileAlgorithmConfig) -> list[dict]:
     logger.info("Tile Algorithm Comparison: %d total experiments", total)
     logger.info("Tasks: %s", config.tasks)
     logger.info("Algorithms: %s", config.algorithms)
-    logger.info("Fixed architecture: width=%d, depth=%d", config.fixed_width, config.fixed_depth)
+    logger.info(
+        "Fixed architecture: width=%d, depth=%d", config.fixed_width, config.fixed_depth
+    )
 
     exp_count = 0
     for task in config.tasks:
@@ -234,7 +240,11 @@ def run_tile_algorithm_comparison(config: TileAlgorithmConfig) -> list[dict]:
                 exp_count += 1
                 logger.info(
                     "[%d/%d] %s on %s (seed=%d)",
-                    exp_count, total, algorithm, task, seed
+                    exp_count,
+                    total,
+                    algorithm,
+                    task,
+                    seed,
                 )
 
                 result = _run_single_experiment(algorithm, task, seed, config)
@@ -271,8 +281,12 @@ def _analyze_algorithm_performance(results: list[dict]) -> dict:
                 "max_accuracy": float(np.max(accs)),
                 "mean_params": float(algo_df["params"].mean()),
                 "mean_time": float(algo_df["time"].mean()),
-                "mean_flops": float(algo_df["flops"].mean()) if "flops" in algo_df.columns else 0,
-                "mean_memory": float(algo_df["memory_mb"].mean()) if "memory_mb" in algo_df.columns else 0,
+                "mean_flops": float(algo_df["flops"].mean())
+                if "flops" in algo_df.columns
+                else 0,
+                "mean_memory": float(algo_df["memory_mb"].mean())
+                if "memory_mb" in algo_df.columns
+                else 0,
                 "n_seeds": len(accs),
                 "ci_95": list(bootstrap_ci(accs)) if len(accs) >= 2 else [0, 0],
             }
@@ -282,7 +296,7 @@ def _analyze_algorithm_performance(results: list[dict]) -> dict:
         comparisons = {}
 
         for i, algo1 in enumerate(algorithms):
-            for algo2 in algorithms[i + 1:]:
+            for algo2 in algorithms[i + 1 :]:
                 df1 = task_df[task_df["algorithm"] == algo1]["accuracy"].values
                 df2 = task_df[task_df["algorithm"] == algo2]["accuracy"].values
 
@@ -302,10 +316,7 @@ def _analyze_algorithm_performance(results: list[dict]) -> dict:
                     }
 
         # Ranking by accuracy
-        ranked = sorted(
-            task_analysis.items(),
-            key=lambda x: -x[1]["mean_accuracy"]
-        )
+        ranked = sorted(task_analysis.items(), key=lambda x: -x[1]["mean_accuracy"])
 
         task_analysis["_ranking"] = [
             {"rank": i + 1, "algorithm": algo, **stats}
@@ -378,6 +389,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
             f.write(json.dumps(r, default=str) + "\n")
 
     import pandas as pd
+
     df = pd.DataFrame(results)
     df.to_parquet(output_path / "results.parquet", index=False)
 
@@ -479,15 +491,34 @@ def _generate_report(
 
 def main():
     parser = argparse.ArgumentParser(description="Tile Algorithm Family Comparison")
-    parser.add_argument("--tasks", default="mnist,cifar10,tiny_shakespeare", help="Comma-separated tasks")
-    parser.add_argument("--algorithms", default="ep,fa,tp,pc,hebbian,snn,backprop", help="Comma-separated algorithms")
+    parser.add_argument(
+        "--tasks",
+        default="mnist,cifar10,tiny_shakespeare",
+        help="Comma-separated tasks",
+    )
+    parser.add_argument(
+        "--algorithms",
+        default="ep,fa,tp,pc,hebbian,snn,backprop",
+        help="Comma-separated algorithms",
+    )
     parser.add_argument("--seeds", type=int, default=5, help="Seeds per config")
     parser.add_argument("--epochs", type=int, default=20, help="Epochs per run")
     parser.add_argument("--batch-size", type=int, default=128, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
-    parser.add_argument("--width", type=int, default=128, help="Fixed width (neurons_per_tile * tiles_per_layer)")
-    parser.add_argument("--depth", type=int, default=3, help="Fixed depth (num_hidden_layers)")
-    parser.add_argument("--output-dir", default="results/tile_algorithm_comparison", help="Output directory")
+    parser.add_argument(
+        "--width",
+        type=int,
+        default=128,
+        help="Fixed width (neurons_per_tile * tiles_per_layer)",
+    )
+    parser.add_argument(
+        "--depth", type=int, default=3, help="Fixed depth (num_hidden_layers)"
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="results/tile_algorithm_comparison",
+        help="Output directory",
+    )
     parser.add_argument("--device", default="auto", help="Device (auto, cuda, cpu)")
     parser.add_argument("--quick", action="store_true", help="Quick mode")
 

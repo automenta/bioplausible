@@ -24,13 +24,13 @@ type TileModelFactory = Callable[..., nn.Module]
 __all__ = [
     "ConvFeatureExtractor",
     "GraphAttentionLayer",
-    "GraphEquiTileLayer",
     "GraphFeatureExtractor",
+    "GraphTileNetLayer",
     "TemporalAttentionLayer",
-    "TemporalEquiTileLayer",
     "TemporalFeatureExtractor",
     "TemporalPositionalEncoding",
     "TileModelFactory",
+    "TimeSeriesTileNetLayer",
     "aggregate_messages",
     "create_graph_from_edges",
     "scatter_max",
@@ -257,7 +257,7 @@ class TemporalFeatureExtractor(nn.Module):
             self.pos_encoding = None
 
         self.layers = nn.ModuleList([
-            TemporalEquiTileLayer(config, tile_model_factory)
+            TimeSeriesTileNetLayer(config, tile_model_factory)
             for _ in range(config.num_layers)
         ])
 
@@ -362,7 +362,7 @@ class TemporalAttentionLayer(nn.Module):
         return self.out_proj(attn_output)
 
 
-class TemporalEquiTileLayer(nn.Module):
+class TimeSeriesTileNetLayer(nn.Module):
     """Time series tile layer with optional attention."""
 
     def __init__(
@@ -416,7 +416,7 @@ class TemporalEquiTileLayer(nn.Module):
         return x
 
 
-class GraphEquiTileLayer(nn.Module):
+class GraphTileNetLayer(nn.Module):
     """Graph tile layer with tile-based message passing."""
 
     def __init__(
@@ -481,7 +481,7 @@ class GraphFeatureExtractor(nn.Module):
 
         self.input_proj = nn.Linear(config.node_features, config.hidden_dim)
         self.layers = nn.ModuleList([
-            GraphEquiTileLayer(config, tile_model_factory)
+            GraphTileNetLayer(config, tile_model_factory)
             for _ in range(config.num_layers)
         ])
 

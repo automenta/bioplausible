@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -43,7 +43,7 @@ class ParetoFrontier:
     points: list[ParetoPoint]
     objectives: list[str]
     directions: list[Literal["maximize", "minimize"]]
-    dominated_points: list[ParetoPoint] = ()
+    dominated_points: list[ParetoPoint] = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.points)
@@ -139,7 +139,7 @@ def compute_pareto_frontier(
     # Ensure we have all objectives
     for obj in objectives:
         if obj not in df.columns:
-            raise ValueError("Missing objective")  # ruff: ignore[raise-vanilla-args]
+            raise ValueError(f"Missing objective: {obj}")  # noqa: TRY003
 
     # Create list of (index, objectives_dict, model)
     points = []
@@ -351,12 +351,12 @@ def plot_pareto_frontier(
                 },
                 text=dominated_df["model"],
                 hovertemplate=(
-                "%{text}<br>"
-                + x_obj
-                + "=%{x:.4f}<br>"
-                + y_obj
-                + "=%{y:.4f}<extra></extra>"
-            ),
+                    "%{text}<br>"
+                    + x_obj
+                    + "=%{x:.4f}<br>"
+                    + y_obj
+                    + "=%{y:.4f}<extra></extra>"
+                ),
             )
         )
 

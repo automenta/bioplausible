@@ -47,16 +47,20 @@ logger = logging.getLogger(__name__)
 class EqPropParityConfig:
     """Configuration for EqProp vision parity experiment."""
 
-    tasks: list[str] = field(default_factory=lambda: ["mnist", "fashion_mnist", "cifar10", "svhn"])
-    eqprop_models: list[str] = field(default_factory=lambda: [
-        "eqprop",
-        "directed_ep",
-        "finite_nudge_ep",
-        "momentum_equilibrium",
-        "sparse_equilibrium",
-        "equilibrium_alignment",
-        "layerwise_equilibrium_fa",
-    ])
+    tasks: list[str] = field(
+        default_factory=lambda: ["mnist", "fashion_mnist", "cifar10", "svhn"]
+    )
+    eqprop_models: list[str] = field(
+        default_factory=lambda: [
+            "eqprop",
+            "directed_ep",
+            "finite_nudge_ep",
+            "momentum_equilibrium",
+            "sparse_equilibrium",
+            "equilibrium_alignment",
+            "layerwise_equilibrium_fa",
+        ]
+    )
     baseline_models: list[str] = field(default_factory=lambda: ["backprop_mlp"])
     seeds: int = 5
     epochs: int = 20
@@ -258,7 +262,9 @@ def run_eqprop_parity(config: EqPropParityConfig) -> list[dict]:
                     result = _run_single_experiment(model_name, task, seed, config)
                     results.append(result)
                 except Exception as e:
-                    logger.exception("Experiment failed: %s on %s seed=%d", model_name, task, seed)
+                    logger.exception(
+                        "Experiment failed: %s on %s seed=%d", model_name, task, seed
+                    )
                     results.append({
                         "model": model_name,
                         "task": task,
@@ -283,17 +289,21 @@ def _aggregate_results(results: list[dict]) -> pd.DataFrame:
         return pd.DataFrame()
 
     # Group by task and model
-    grouped = df.groupby(["task", "model"]).agg({
-        "accuracy": ["mean", "std", "count"],
-        "loss": ["mean", "std"],
-        "time": "mean",
-        "params": "mean",
-        "success": "sum",
-    }).reset_index()
+    grouped = (
+        df
+        .groupby(["task", "model"])
+        .agg({
+            "accuracy": ["mean", "std", "count"],
+            "loss": ["mean", "std"],
+            "time": "mean",
+            "params": "mean",
+            "success": "sum",
+        })
+        .reset_index()
+    )
 
     grouped.columns = [
-        "_".join(col).strip("_") if col[1] else col[0]
-        for col in grouped.columns.values
+        "_".join(col).strip("_") if col[1] else col[0] for col in grouped.columns.values
     ]
 
     # Add 95% CI for accuracy
@@ -313,7 +323,9 @@ def _aggregate_results(results: list[dict]) -> pd.DataFrame:
     return grouped
 
 
-def _statistical_comparison(results: list[dict], baseline: str = "backprop_mlp") -> dict:
+def _statistical_comparison(
+    results: list[dict], baseline: str = "backprop_mlp"
+) -> dict:
     """Perform statistical comparisons against baseline."""
     import pandas as pd
 
@@ -399,7 +411,9 @@ def _generate_recommendation_matrix(comparisons: dict, output_dir: str) -> None:
         f.write("# EqProp Variant Recommendation Matrix\n\n")
         for task in df["task"].unique():
             f.write(f"## {task}\n\n")
-            task_df = df[df["task"] == task].sort_values("gap_to_baseline_pp", ascending=False)
+            task_df = df[df["task"] == task].sort_values(
+                "gap_to_baseline_pp", ascending=False
+            )
             f.write(task_df.to_markdown(index=False))
             f.write("\n\n")
 
@@ -431,7 +445,9 @@ def _save_results(results: list[dict], output_dir: str) -> None:
             f.write(json.dumps(r, default=str) + "\n")
 
     aggregated = _aggregate_results(results)
-    aggregated.to_json(output_path / "aggregated_results.json", orient="records", indent=2)
+    aggregated.to_json(
+        output_path / "aggregated_results.json", orient="records", indent=2
+    )
 
     logger.info("Saved results to %s", output_path)
 
@@ -465,7 +481,9 @@ def _analyze_dynamics(results: list[dict], output_dir: str) -> None:
 def main():
     parser = argparse.ArgumentParser(description="EqProp Vision Parity Experiment")
     parser.add_argument(
-        "--tasks", default="mnist,fashion_mnist,cifar10,svhn", help="Comma-separated tasks"
+        "--tasks",
+        default="mnist,fashion_mnist,cifar10,svhn",
+        help="Comma-separated tasks",
     )
     parser.add_argument(
         "--models",
@@ -480,7 +498,9 @@ def main():
         "--output-dir", default="results/eqprop_vision_parity", help="Output directory"
     )
     parser.add_argument("--device", default="auto", help="Device (auto, cuda, cpu)")
-    parser.add_argument("--quick", action="store_true", help="Quick mode (fewer epochs)")
+    parser.add_argument(
+        "--quick", action="store_true", help="Quick mode (fewer epochs)"
+    )
 
     args = parser.parse_args()
 

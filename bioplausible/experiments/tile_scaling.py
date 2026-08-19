@@ -272,18 +272,22 @@ def _aggregate_results(results: list[dict]) -> list[dict]:
         return []
 
     # Group by task, model, depth, width
-    grouped = df.groupby(["task", "model", "depth", "width"]).agg({
-        "accuracy": ["mean", "std", "count"],
-        "loss": ["mean", "std"],
-        "time": "mean",
-        "params": "mean",
-        "success": "sum",
-    }).reset_index()
+    grouped = (
+        df
+        .groupby(["task", "model", "depth", "width"])
+        .agg({
+            "accuracy": ["mean", "std", "count"],
+            "loss": ["mean", "std"],
+            "time": "mean",
+            "params": "mean",
+            "success": "sum",
+        })
+        .reset_index()
+    )
 
     # Flatten column names
     grouped.columns = [
-        "_".join(col).strip("_") if col[1] else col[0]
-        for col in grouped.columns.values
+        "_".join(col).strip("_") if col[1] else col[0] for col in grouped.columns.values
     ]
 
     return grouped.to_dict("records")
@@ -337,7 +341,9 @@ def _analyze_scaling_laws(results: list[dict], output_dir: str) -> None:
                         law = fit_power_law(params[valid], acc[valid])
                         fitter.add_fit(f"{task}_{model}_width", law)
                 except Exception as e:
-                    logger.warning("Width scaling fit failed for %s/%s: %s", task, model, e)
+                    logger.warning(
+                        "Width scaling fit failed for %s/%s: %s", task, model, e
+                    )
 
             # Depth scaling (fix width at median)
             median_width = model_df["width"].median()
@@ -351,7 +357,9 @@ def _analyze_scaling_laws(results: list[dict], output_dir: str) -> None:
                         law = fit_power_law(params[valid], acc[valid])
                         fitter.add_fit(f"{task}_{model}_depth", law)
                 except Exception as e:
-                    logger.warning("Depth scaling fit failed for %s/%s: %s", task, model, e)
+                    logger.warning(
+                        "Depth scaling fit failed for %s/%s: %s", task, model, e
+                    )
 
     # Save scaling law fits
     fitter.save(output_path / "scaling_laws.json")
@@ -392,9 +400,7 @@ def _compute_pareto_frontiers(results: list[dict], output_dir: str) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="TileNet Scaling Sweep Experiment"
-    )
+    parser = argparse.ArgumentParser(description="TileNet Scaling Sweep Experiment")
     parser.add_argument(
         "--tasks", default="mnist,cifar10", help="Comma-separated tasks"
     )

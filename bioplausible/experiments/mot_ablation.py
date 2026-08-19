@@ -38,9 +38,15 @@ logger = logging.getLogger(__name__)
 class MoTAblationConfig:
     """Configuration for MoT ablation experiment."""
 
-    tasks: list[str] = field(default_factory=lambda: ["mnist", "cifar10", "tiny_shakespeare"])
-    routing_modes: list[str] = field(default_factory=lambda: ["dense", "sparse", "topk", "random"])
-    tile_algorithms: list[str] = field(default_factory=lambda: ["ep", "fa", "pc", "hebbian"])
+    tasks: list[str] = field(
+        default_factory=lambda: ["mnist", "cifar10", "tiny_shakespeare"]
+    )
+    routing_modes: list[str] = field(
+        default_factory=lambda: ["dense", "sparse", "topk", "random"]
+    )
+    tile_algorithms: list[str] = field(
+        default_factory=lambda: ["ep", "fa", "pc", "hebbian"]
+    )
     num_tiles: list[int] = field(default_factory=lambda: [4, 8, 16, 32])
     topk_values: list[int] = field(default_factory=lambda: [1, 2, 4, 8])
     seeds: int = 5
@@ -120,7 +126,9 @@ def _run_single_mot_experiment(
     """Run a single MoT experiment."""
     seed_everything(seed)
 
-    model_kwargs = _create_mot_config(routing_mode, tile_algorithm, num_tiles, top_k, task)
+    model_kwargs = _create_mot_config(
+        routing_mode, tile_algorithm, num_tiles, top_k, task
+    )
 
     # Try to find a suitable registered model
     model_name = "tile_lm" if task == "tiny_shakespeare" else "conv_tile"
@@ -207,17 +215,33 @@ def run_mot_ablation(config: MoTAblationConfig) -> list[dict]:
         for routing_mode in config.routing_modes:
             for tile_algorithm in config.tile_algorithms:
                 for num_tiles in config.num_tiles:
-                    top_k_values = config.topk_values if routing_mode in ("sparse", "topk", "random") else [None]
+                    top_k_values = (
+                        config.topk_values
+                        if routing_mode in ("sparse", "topk", "random")
+                        else [None]
+                    )
                     for top_k in top_k_values:
                         for seed in range(config.seeds):
                             exp_count += 1
                             logger.info(
                                 "[%d] %s/%s tiles=%d topk=%s on %s (seed=%d)",
-                                exp_count, routing_mode, tile_algorithm, num_tiles, top_k, task, seed
+                                exp_count,
+                                routing_mode,
+                                tile_algorithm,
+                                num_tiles,
+                                top_k,
+                                task,
+                                seed,
                             )
 
                             result = _run_single_mot_experiment(
-                                routing_mode, tile_algorithm, num_tiles, top_k, task, seed, config
+                                routing_mode,
+                                tile_algorithm,
+                                num_tiles,
+                                top_k,
+                                task,
+                                seed,
+                                config,
                             )
                             results.append(result)
 
@@ -258,8 +282,8 @@ def _analyze_routing_efficiency(results: list[dict]) -> dict:
             for algorithm in sparse_df["tile_algorithm"].unique():
                 for num_tiles in sparse_df["num_tiles"].unique():
                     subset = sparse_df[
-                        (sparse_df["tile_algorithm"] == algorithm) &
-                        (sparse_df["num_tiles"] == num_tiles)
+                        (sparse_df["tile_algorithm"] == algorithm)
+                        & (sparse_df["num_tiles"] == num_tiles)
                     ]
                     if subset.empty:
                         continue
@@ -267,11 +291,15 @@ def _analyze_routing_efficiency(results: list[dict]) -> dict:
                     sparse_acc = subset["accuracy"].mean()
                     sparse_params = subset["params"].mean()
                     sparse_time = subset["time"].mean()
-                    sparse_flops = subset["flops"].mean() if "flops" in subset.columns else 0
+                    sparse_flops = (
+                        subset["flops"].mean() if "flops" in subset.columns else 0
+                    )
 
                     # Efficiency metrics
                     acc_diff = (sparse_acc - dense_acc) * 100  # pp
-                    param_ratio = sparse_params / dense_params if dense_params > 0 else 1
+                    param_ratio = (
+                        sparse_params / dense_params if dense_params > 0 else 1
+                    )
                     time_ratio = sparse_time / dense_time if dense_time > 0 else 1
                     flops_ratio = sparse_flops / dense_flops if dense_flops > 0 else 1
 
@@ -279,7 +307,9 @@ def _analyze_routing_efficiency(results: list[dict]) -> dict:
                     dense_accs = dense_df["accuracy"].values
                     sparse_accs = subset["accuracy"].values
                     if len(dense_accs) >= 2 and len(sparse_accs) >= 2:
-                        p_val = permutation_test_p(sparse_accs, dense_accs, n_permutations=500)
+                        p_val = permutation_test_p(
+                            sparse_accs, dense_accs, n_permutations=500
+                        )
                         d = cohens_d(sparse_accs, dense_accs)
                     else:
                         p_val = 1.0
@@ -344,6 +374,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
             f.write(json.dumps(r, default=str) + "\n")
 
     import pandas as pd
+
     df = pd.DataFrame(results)
     df.to_parquet(output_path / "results.parquet", index=False)
 
@@ -402,16 +433,26 @@ def _generate_report(
 
 def main():
     parser = argparse.ArgumentParser(description="Mixture-of-Tiles Ablation")
-    parser.add_argument("--tasks", default="mnist,cifar10,tiny_shakespeare", help="Comma-separated tasks")
-    parser.add_argument("--routing", default="dense,sparse,topk,random", help="Routing modes")
-    parser.add_argument("--algorithms", default="ep,fa,pc,hebbian", help="Tile algorithms")
+    parser.add_argument(
+        "--tasks",
+        default="mnist,cifar10,tiny_shakespeare",
+        help="Comma-separated tasks",
+    )
+    parser.add_argument(
+        "--routing", default="dense,sparse,topk,random", help="Routing modes"
+    )
+    parser.add_argument(
+        "--algorithms", default="ep,fa,pc,hebbian", help="Tile algorithms"
+    )
     parser.add_argument("--num-tiles", default="4,8,16,32", help="Number of tiles")
     parser.add_argument("--topk", default="1,2,4,8", help="Top-k values")
     parser.add_argument("--seeds", type=int, default=5, help="Seeds per config")
     parser.add_argument("--epochs", type=int, default=20, help="Epochs per run")
     parser.add_argument("--batch-size", type=int, default=64, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
-    parser.add_argument("--output-dir", default="results/mot_ablation", help="Output directory")
+    parser.add_argument(
+        "--output-dir", default="results/mot_ablation", help="Output directory"
+    )
     parser.add_argument("--device", default="auto", help="Device (auto, cuda, cpu)")
     parser.add_argument("--quick", action="store_true", help="Quick mode")
 

@@ -39,15 +39,21 @@ class TransferConfig:
     """Configuration for cross-domain transfer experiment."""
 
     source_domains: list[str] = field(default_factory=lambda: ["vision"])
-    target_domains: list[str] = field(default_factory=lambda: ["lm", "rl", "graph", "timeseries"])
+    target_domains: list[str] = field(
+        default_factory=lambda: ["lm", "rl", "graph", "timeseries"]
+    )
     source_tasks: list[str] = field(default_factory=lambda: ["cifar10"])
-    target_tasks: dict[str, list[str]] = field(default_factory=lambda: {
-        "lm": ["tiny_shakespeare"],
-        "rl": ["cartpole"],
-        "graph": ["cora"],
-        "timeseries": ["forecasting"],
-    })
-    algorithms: list[str] = field(default_factory=lambda: ["ep", "fa", "pc", "hebbian", "backprop"])
+    target_tasks: dict[str, list[str]] = field(
+        default_factory=lambda: {
+            "lm": ["tiny_shakespeare"],
+            "rl": ["cartpole"],
+            "graph": ["cora"],
+            "timeseries": ["forecasting"],
+        }
+    )
+    algorithms: list[str] = field(
+        default_factory=lambda: ["ep", "fa", "pc", "hebbian", "backprop"]
+    )
     finetune_epochs: int = 10
     pretrain_epochs: int = 20
     batch_size: int = 64
@@ -190,8 +196,14 @@ def _run_pretraining(
 
     model_name = _get_model_for_domain("vision", algorithm)
     trainer_config = _create_trainer_config(
-        model_name, source_task, "vision", algorithm,
-        config.pretrain_epochs, config.learning_rate, False, config
+        model_name,
+        source_task,
+        "vision",
+        algorithm,
+        config.pretrain_epochs,
+        config.learning_rate,
+        False,
+        config,
     )
 
     trainer = CoreTrainer(trainer_config)
@@ -216,7 +228,9 @@ def _run_pretraining(
         "algorithm": algorithm,
         "source_task": source_task,
         "seed": seed,
-        "pretrain_accuracy": final.val_acc if hasattr(final, "val_acc") else final.accuracy,
+        "pretrain_accuracy": final.val_acc
+        if hasattr(final, "val_acc")
+        else final.accuracy,
         "pretrain_loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
         "pretrain_time": elapsed,
         "pretrain_params": final.param_count if hasattr(final, "param_count") else 0,
@@ -237,8 +251,14 @@ def _run_finetuning(
 
     model_name = _get_model_for_domain(target_domain, algorithm)
     trainer_config = _create_trainer_config(
-        model_name, target_task, target_domain, algorithm,
-        config.finetune_epochs, config.finetune_lr, True, config
+        model_name,
+        target_task,
+        target_domain,
+        algorithm,
+        config.finetune_epochs,
+        config.finetune_lr,
+        True,
+        config,
     )
 
     # For simplicity, create new trainer (in practice would load pretrained weights)
@@ -266,7 +286,9 @@ def _run_finetuning(
         "target_domain": target_domain,
         "target_task": target_task,
         "seed": seed,
-        "finetune_accuracy": final.val_acc if hasattr(final, "val_acc") else final.accuracy,
+        "finetune_accuracy": final.val_acc
+        if hasattr(final, "val_acc")
+        else final.accuracy,
         "finetune_loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
         "finetune_time": elapsed,
         "finetune_params": final.param_count if hasattr(final, "param_count") else 0,
@@ -286,8 +308,14 @@ def _run_scratch_baseline(
 
     model_name = _get_model_for_domain(target_domain, algorithm)
     trainer_config = _create_trainer_config(
-        model_name, target_task, target_domain, algorithm,
-        config.finetune_epochs, config.finetune_lr, False, config
+        model_name,
+        target_task,
+        target_domain,
+        algorithm,
+        config.finetune_epochs,
+        config.finetune_lr,
+        False,
+        config,
     )
 
     trainer = CoreTrainer(trainer_config)
@@ -314,7 +342,9 @@ def _run_scratch_baseline(
         "target_domain": target_domain,
         "target_task": target_task,
         "seed": seed,
-        "scratch_accuracy": final.val_acc if hasattr(final, "val_acc") else final.accuracy,
+        "scratch_accuracy": final.val_acc
+        if hasattr(final, "val_acc")
+        else final.accuracy,
         "scratch_loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
         "scratch_time": elapsed,
         "scratch_params": final.param_count if hasattr(final, "param_count") else 0,
@@ -333,7 +363,9 @@ def run_transfer_experiment(config: TransferConfig) -> list[dict]:
     pretrain_count = 0
 
     # Phase 1: Pretraining
-    logger.info("Phase 1: Pretraining on source domain (%d experiments)", total_pretrain)
+    logger.info(
+        "Phase 1: Pretraining on source domain (%d experiments)", total_pretrain
+    )
     pretrained_models = {}
 
     for source_task in config.source_tasks:
@@ -342,7 +374,11 @@ def run_transfer_experiment(config: TransferConfig) -> list[dict]:
                 pretrain_count += 1
                 logger.info(
                     "[Pretrain %d/%d] %s on %s (seed=%d)",
-                    pretrain_count, total_pretrain, algorithm, source_task, seed
+                    pretrain_count,
+                    total_pretrain,
+                    algorithm,
+                    source_task,
+                    seed,
                 )
 
                 result, trainer = _run_pretraining(algorithm, source_task, seed, config)
@@ -376,18 +412,31 @@ def run_transfer_experiment(config: TransferConfig) -> list[dict]:
                         finetune_count += 1
                         logger.info(
                             "[Finetune %d/%d] %s: %s→%s on %s (seed=%d)",
-                            finetune_count, total_finetune,
-                            algorithm, source_task, target_domain, target_task, seed
+                            finetune_count,
+                            total_finetune,
+                            algorithm,
+                            source_task,
+                            target_domain,
+                            target_task,
+                            seed,
                         )
 
                         # Finetune
                         key = (algorithm, source_task, seed)
                         pretrained = pretrained_models.get(key)
                         ft_result = _run_finetuning(
-                            algorithm, target_domain, target_task, seed,
-                            pretrained, config
+                            algorithm,
+                            target_domain,
+                            target_task,
+                            seed,
+                            pretrained,
+                            config,
                         )
-                        results.append({**ft_result, "phase": "finetune", "source_task": source_task})
+                        results.append({
+                            **ft_result,
+                            "phase": "finetune",
+                            "source_task": source_task,
+                        })
 
                         # Scratch baseline (only once per algorithm/target/seed)
                         if source_task == config.source_tasks[0]:
@@ -444,7 +493,9 @@ def _analyze_transfer_efficiency(results: list[dict]) -> dict:
                 ft_accs = finetune_df["finetune_accuracy"].values
                 scratch_accs = scratch_df["scratch_accuracy"].values
                 if len(ft_accs) >= 2 and len(scratch_accs) >= 2:
-                    p_val = permutation_test_p(ft_accs, scratch_accs, n_permutations=500)
+                    p_val = permutation_test_p(
+                        ft_accs, scratch_accs, n_permutations=500
+                    )
                     d = cohens_d(ft_accs, scratch_accs)
                 else:
                     p_val = 1.0
@@ -498,7 +549,10 @@ def _compare_local_vs_global(results: list[dict]) -> dict:
                     ft_df = algo_df[algo_df["phase"] == "finetune"]
                     scratch_df = algo_df[algo_df["phase"] == "scratch"]
                     if not ft_df.empty and not scratch_df.empty:
-                        benefit = (ft_df["finetune_accuracy"].mean() - scratch_df["scratch_accuracy"].mean()) * 100
+                        benefit = (
+                            ft_df["finetune_accuracy"].mean()
+                            - scratch_df["scratch_accuracy"].mean()
+                        ) * 100
                         local_benefits.append(benefit)
 
             global_benefit = 0
@@ -507,7 +561,10 @@ def _compare_local_vs_global(results: list[dict]) -> dict:
                 ft_df = algo_df[algo_df["phase"] == "finetune"]
                 scratch_df = algo_df[algo_df["phase"] == "scratch"]
                 if not ft_df.empty and not scratch_df.empty:
-                    global_benefit = (ft_df["finetune_accuracy"].mean() - scratch_df["scratch_accuracy"].mean()) * 100
+                    global_benefit = (
+                        ft_df["finetune_accuracy"].mean()
+                        - scratch_df["scratch_accuracy"].mean()
+                    ) * 100
 
             if local_benefits:
                 comparison[f"{target_domain}/{target_task}"] = {
@@ -529,6 +586,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
             f.write(json.dumps(r, default=str) + "\n")
 
     import pandas as pd
+
     df = pd.DataFrame(results)
     df.to_parquet(output_path / "results.parquet", index=False)
 
@@ -590,16 +648,28 @@ def _generate_report(
 def main():
     parser = argparse.ArgumentParser(description="Cross-Domain Transfer Experiment")
     parser.add_argument("--source", default="vision", help="Source domain")
-    parser.add_argument("--targets", default="lm,rl,graph,timeseries", help="Target domains")
+    parser.add_argument(
+        "--targets", default="lm,rl,graph,timeseries", help="Target domains"
+    )
     parser.add_argument("--source-tasks", default="cifar10", help="Source tasks")
-    parser.add_argument("--algorithms", default="ep,fa,pc,hebbian,backprop", help="Algorithms")
-    parser.add_argument("--pretrain-epochs", type=int, default=20, help="Pretrain epochs")
-    parser.add_argument("--finetune-epochs", type=int, default=10, help="Finetune epochs")
+    parser.add_argument(
+        "--algorithms", default="ep,fa,pc,hebbian,backprop", help="Algorithms"
+    )
+    parser.add_argument(
+        "--pretrain-epochs", type=int, default=20, help="Pretrain epochs"
+    )
+    parser.add_argument(
+        "--finetune-epochs", type=int, default=10, help="Finetune epochs"
+    )
     parser.add_argument("--batch-size", type=int, default=64, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-3, help="Pretrain learning rate")
-    parser.add_argument("--finetune-lr", type=float, default=1e-4, help="Finetune learning rate")
+    parser.add_argument(
+        "--finetune-lr", type=float, default=1e-4, help="Finetune learning rate"
+    )
     parser.add_argument("--seeds", type=int, default=3, help="Seeds per config")
-    parser.add_argument("--output-dir", default="results/cross_domain_transfer", help="Output directory")
+    parser.add_argument(
+        "--output-dir", default="results/cross_domain_transfer", help="Output directory"
+    )
     parser.add_argument("--device", default="auto", help="Device (auto, cuda, cpu)")
     parser.add_argument("--quick", action="store_true", help="Quick mode")
 

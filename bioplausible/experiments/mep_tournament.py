@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 # MEP factors and their levels
 MEP_FACTORS = {
-    "gradient": ["bp", "fa", "direct", "kfac"],           # Gradient estimator
-    "update": ["sgd", "adam", "muon", "shampoo"],          # Update rule
+    "gradient": ["bp", "fa", "direct", "kfac"],  # Gradient estimator
+    "update": ["sgd", "adam", "muon", "shampoo"],  # Update rule
     "constraint": ["none", "spectral", "frobenius", "lipschitz"],  # Constraint type
     "feedback": ["symmetric", "random", "alignment", "none"],  # Feedback pathway
 }
@@ -232,11 +232,17 @@ def _analyze_factor_importance(results: list[dict]) -> dict:
             groups = [g["accuracy"].values for _, g in task_df.groupby(factor)]
             if len(groups) >= 2 and all(len(g) > 0 for g in groups):
                 from scipy.stats import f_oneway
+
                 try:
                     f_stat, p_val = f_oneway(*groups)
                     # Eta-squared
-                    ss_between = sum(len(g) * (np.mean(g) - np.mean(task_df["accuracy"])) ** 2 for g in groups)
-                    ss_total = sum((task_df["accuracy"] - np.mean(task_df["accuracy"])) ** 2)
+                    ss_between = sum(
+                        len(g) * (np.mean(g) - np.mean(task_df["accuracy"])) ** 2
+                        for g in groups
+                    )
+                    ss_total = sum(
+                        (task_df["accuracy"] - np.mean(task_df["accuracy"])) ** 2
+                    )
                     eta_squared = ss_between / ss_total if ss_total > 0 else 0
                     task_importance[factor] = {
                         "eta_squared": float(eta_squared),
@@ -245,18 +251,29 @@ def _analyze_factor_importance(results: list[dict]) -> dict:
                         "significant": p_val < 0.05,
                     }
                 except Exception:
-                    task_importance[factor] = {"eta_squared": 0.0, "p_value": 1.0, "significant": False}
+                    task_importance[factor] = {
+                        "eta_squared": 0.0,
+                        "p_value": 1.0,
+                        "significant": False,
+                    }
 
         # Two-way interactions
         for f1, f2 in itertools.combinations(factor_cols, 2):
             try:
                 # Create interaction groups
                 task_df[f"{f1}_{f2}"] = task_df[f1] + "_" + task_df[f2]
-                groups = [g["accuracy"].values for _, g in task_df.groupby(f"{f1}_{f2}")]
+                groups = [
+                    g["accuracy"].values for _, g in task_df.groupby(f"{f1}_{f2}")
+                ]
                 if len(groups) >= 2 and all(len(g) > 0 for g in groups):
                     f_stat, p_val = f_oneway(*groups)
-                    ss_between = sum(len(g) * (np.mean(g) - np.mean(task_df["accuracy"])) ** 2 for g in groups)
-                    ss_total = sum((task_df["accuracy"] - np.mean(task_df["accuracy"])) ** 2)
+                    ss_between = sum(
+                        len(g) * (np.mean(g) - np.mean(task_df["accuracy"])) ** 2
+                        for g in groups
+                    )
+                    ss_total = sum(
+                        (task_df["accuracy"] - np.mean(task_df["accuracy"])) ** 2
+                    )
                     eta_squared = ss_between / ss_total if ss_total > 0 else 0
                     task_importance[f"{f1}×{f2}"] = {
                         "eta_squared": float(eta_squared),
@@ -287,11 +304,16 @@ def _find_best_presets(results: list[dict], top_k: int = 5) -> dict:
         task_df = df[df["task"] == task]
         # Aggregate by factor combination
         factor_cols = ["gradient", "update", "constraint", "feedback"]
-        grouped = task_df.groupby(factor_cols).agg({
-            "accuracy": ["mean", "std", "count"],
-            "time": "mean",
-            "params": "mean",
-        }).reset_index()
+        grouped = (
+            task_df
+            .groupby(factor_cols)
+            .agg({
+                "accuracy": ["mean", "std", "count"],
+                "time": "mean",
+                "params": "mean",
+            })
+            .reset_index()
+        )
         grouped.columns = [
             "_".join(col).strip("_") if col[1] else col[0]
             for col in grouped.columns.values
@@ -313,6 +335,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
             f.write(json.dumps(r, default=str) + "\n")
 
     import pandas as pd
+
     df = pd.DataFrame(results)
     df.to_parquet(output_path / "results.parquet", index=False)
 
@@ -321,11 +344,15 @@ def _save_results(results: list[dict], output_dir: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="MEP Preset Tournament")
-    parser.add_argument("--tasks", default="mnist,cifar10", help="Comma-separated tasks")
+    parser.add_argument(
+        "--tasks", default="mnist,cifar10", help="Comma-separated tasks"
+    )
     parser.add_argument("--seeds", type=int, default=5, help="Seeds per combination")
     parser.add_argument("--epochs", type=int, default=20, help="Epochs per run")
     parser.add_argument("--batch-size", type=int, default=128, help="Batch size")
-    parser.add_argument("--output-dir", default="results/mep_tournament", help="Output directory")
+    parser.add_argument(
+        "--output-dir", default="results/mep_tournament", help="Output directory"
+    )
     parser.add_argument("--device", default="auto", help="Device (auto, cuda, cpu)")
     parser.add_argument("--quick", action="store_true", help="Quick mode")
     parser.add_argument(
@@ -393,7 +420,9 @@ def _generate_report(importance: dict, presets: dict, output_dir: str) -> None:
             f.write(f"### {task}\n\n")
             f.write("| Factor | η² | F-stat | p-value | Significant |\n")
             f.write("|--------|-----|--------|---------|-------------|\n")
-            for factor, stats in sorted(task_imp.items(), key=lambda x: -x[1].get("eta_squared", 0)):
+            for factor, stats in sorted(
+                task_imp.items(), key=lambda x: -x[1].get("eta_squared", 0)
+            ):
                 f.write(
                     f"| {factor} | {stats.get('eta_squared', 0):.4f} | "
                     f"{stats.get('f_statistic', 0):.2f} | "
@@ -405,8 +434,12 @@ def _generate_report(importance: dict, presets: dict, output_dir: str) -> None:
         f.write("## Best Presets\n\n")
         for task, task_presets in presets.items():
             f.write(f"### {task}\n\n")
-            f.write("| Rank | Gradient | Update | Constraint | Feedback | Accuracy | Std | Time (s) |\n")
-            f.write("|------|----------|--------|------------|----------|----------|-----|----------|\n")
+            f.write(
+                "| Rank | Gradient | Update | Constraint | Feedback | Accuracy | Std | Time (s) |\n"
+            )
+            f.write(
+                "|------|----------|--------|------------|----------|----------|-----|----------|\n"
+            )
             for i, p in enumerate(task_presets, 1):
                 f.write(
                     f"| {i} | {p['gradient']} | {p['update']} | {p['constraint']} | "

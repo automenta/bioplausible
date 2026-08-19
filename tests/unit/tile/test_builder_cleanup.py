@@ -1,9 +1,9 @@
 import unittest
 
-from bioplausible.zoo.models.deployments.graph import GraphEquiTile, GraphEquiTileConfig
+from bioplausible.zoo.models.deployments.graph import GraphTileNet, GraphTileNetConfig
 from bioplausible.zoo.models.deployments.timeseries import (
     TimeSeriesConfig,
-    TimeSeriesEquiTile,
+    TimeSeriesTileNet,
 )
 
 
@@ -12,22 +12,22 @@ class TestDeploymentConfigCleanup(unittest.TestCase):
         self.device = "cpu"
 
     def test_graph_equitile_config_cleanup(self):
-        """Test GraphEquiTile works with the consolidated deployment config."""
-        config = GraphEquiTileConfig(node_features=5, hidden_dim=16, num_classes=2)
+        """Test GraphTileNet works with the consolidated deployment config."""
+        config = GraphTileNetConfig(node_features=5, hidden_dim=16, num_classes=2)
         # Consolidated onto the unified deployment config (backprop-capable).
         self.assertTrue(hasattr(config, "mode"))
 
-        model = GraphEquiTile(config)
-        self.assertIsInstance(model, GraphEquiTile)
+        model = GraphTileNet(config)
+        self.assertIsInstance(model, GraphTileNet)
 
     def test_timeseries_equitile_config_cleanup(self):
-        """Test TimeSeriesEquiTile works with the consolidated deployment config."""
+        """Test TimeSeriesTileNet works with the consolidated deployment config."""
         config = TimeSeriesConfig(input_dim=5, seq_len=10, output_dim=1)
         # Consolidated onto the unified deployment config (backprop-capable).
         self.assertTrue(hasattr(config, "mode"))
 
-        model = TimeSeriesEquiTile(config)
-        self.assertIsInstance(model, TimeSeriesEquiTile)
+        model = TimeSeriesTileNet(config)
+        self.assertIsInstance(model, TimeSeriesTileNet)
 
 
 if __name__ == "__main__":

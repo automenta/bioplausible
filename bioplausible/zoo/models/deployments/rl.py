@@ -3,7 +3,7 @@ TileNet RL: TileNet for Reinforcement Learning
 ===============================================
 
 Extends TileNet with reinforcement learning capabilities:
-- RLTIleNet: Policy and value networks for RL
+- RLTileNet: Policy and value networks for RL
 - Actor-Critic architecture with tile-based learning
 - Support for discrete and continuous action spaces
 - Integration with Gymnasium environments
@@ -61,7 +61,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class RLTIleNetConfig(RLDeploymentConfig):
+class RLTileNetConfig(RLDeploymentConfig):
     """Configuration for RL TileNet.
 
     Inherits the shared deployment fields from ``RLDeploymentConfig`` and
@@ -102,7 +102,7 @@ def _credit_assignment_type(algorithm: str) -> str:
     family="tile",
     tags=[status_tag("experimental")],
 )
-class RLTIleNet(BioModel):
+class RLTileNet(BioModel):
     """TileNet for Reinforcement Learning.
 
     Implements actor-critic architecture with tile-based local learning
@@ -110,7 +110,7 @@ class RLTIleNet(BioModel):
 
     Parameters
     ----------
-    config : RLTIleNetConfig, optional
+    config : RLTileNetConfig, optional
         Configuration
     **kwargs
         Additional configuration parameters
@@ -130,7 +130,7 @@ class RLTIleNet(BioModel):
         task_type,
         **kwargs,
     ):
-        """Build RLTIleNet from factory arguments."""
+        """Build RLTileNet from factory arguments."""
         config_kwargs = {
             "obs_dim": input_dim,
             "action_dim": output_dim,
@@ -142,7 +142,7 @@ class RLTIleNet(BioModel):
             "tiles_per_layer": kwargs.get("tiles_per_layer", 4),
         }
 
-        valid_keys = RLTIleNetConfig.__annotations__.keys()
+        valid_keys = RLTileNetConfig.__annotations__.keys()
         for k, v in kwargs.items():
             if k in valid_keys:
                 config_kwargs[k] = v
@@ -151,18 +151,18 @@ class RLTIleNet(BioModel):
             if k in valid_keys:
                 config_kwargs[k] = v
 
-        config = RLTIleNetConfig(**config_kwargs)
+        config = RLTileNetConfig(**config_kwargs)
 
         model = cls(config=config)
         return model.to(device)
 
     def __init__(
         self,
-        config: RLTIleNetConfig | None = None,
+        config: RLTileNetConfig | None = None,
         **kwargs,
     ) -> None:
         if config is None:
-            config = RLTIleNetConfig(**kwargs)
+            config = RLTileNetConfig(**kwargs)
 
         super().__init__(
             ModelConfig(
@@ -187,7 +187,7 @@ class RLTIleNet(BioModel):
         self._init_weights()
 
     def _build_actor_head(
-        self, config: RLTIleNetConfig, input_dim: int
+        self, config: RLTileNetConfig, input_dim: int
     ) -> TileAlgorithm:
         """Build actor (policy) head using TileAlgorithm substrate."""
         head_config = TileAlgorithmConfig(
@@ -213,7 +213,7 @@ class RLTIleNet(BioModel):
         )
 
     def _build_critic_head(
-        self, config: RLTIleNetConfig, input_dim: int
+        self, config: RLTileNetConfig, input_dim: int
     ) -> TileAlgorithm:
         """Build critic (value) head using TileAlgorithm substrate."""
         head_config = TileAlgorithmConfig(
@@ -428,14 +428,14 @@ class RLTIleNet(BioModel):
 # =============================================================================
 
 
-class RecurrentRLTileNet(RLTIleNet):
+class RecurrentRLTileNet(RLTileNet):
     """Recurrent TileNet for partially observable environments.
 
     Adds LSTM/GRU layers for temporal memory.
 
     Parameters
     ----------
-    config : RLTIleNetConfig
+    config : RLTileNetConfig
         Configuration
     rnn_type : str
         RNN type: 'lstm' or 'gru'
@@ -445,7 +445,7 @@ class RecurrentRLTileNet(RLTIleNet):
 
     def __init__(
         self,
-        config: RLTIleNetConfig,
+        config: RLTileNetConfig,
         rnn_type: Literal["lstm", "gru"] = "lstm",
         rnn_hidden_dim: int = 128,
     ) -> None:
@@ -648,16 +648,16 @@ def create_rl_model(
     action_type: Literal["discrete", "continuous"] = "discrete",
     hidden_dim: int = 128,
     **kwargs: object,
-) -> RLTIleNet:
-    """Create RLTIleNet model."""
-    config = RLTIleNetConfig(
+) -> RLTileNet:
+    """Create RLTileNet model."""
+    config = RLTileNetConfig(
         obs_dim=obs_dim,
         action_dim=action_dim,
         action_type=action_type,
         hidden_dim=hidden_dim,
         **kwargs,
     )
-    return RLTIleNet(config)
+    return RLTileNet(config)
 
 
 def create_recurrent_rl_model(
@@ -668,7 +668,7 @@ def create_recurrent_rl_model(
     **kwargs: object,
 ) -> RecurrentRLTileNet:
     """Create RecurrentRLTileNet model."""
-    config = RLTIleNetConfig(
+    config = RLTileNetConfig(
         obs_dim=obs_dim,
         action_dim=action_dim,
         action_type=action_type,
@@ -681,8 +681,8 @@ def create_atari_model(
     obs_shape: tuple[int, int, int] = (4, 84, 84),
     action_dim: int = 4,
     **kwargs: object,
-) -> RLTIleNet:
-    """Create RLTIleNet for Atari games.
+) -> RLTileNet:
+    """Create RLTileNet for Atari games.
 
     Note: Flattens the image observation to a 1D vector.
     """
@@ -700,8 +700,8 @@ def create_mujoco_model(
     obs_dim: int,
     action_dim: int,
     **kwargs: object,
-) -> RLTIleNet:
-    """Create RLTIleNet for MuJoCo environments (continuous action space)."""
+) -> RLTileNet:
+    """Create RLTileNet for MuJoCo environments (continuous action space)."""
     return create_rl_model(
         obs_dim=obs_dim,
         action_dim=action_dim,
@@ -717,7 +717,7 @@ def create_mujoco_model(
 
 
 def _register_variant(name: str, algorithm: str, credit_type: str, bio_score: float):
-    """Helper to register algorithm-specific RLTIleNet variants."""
+    """Helper to register algorithm-specific RLTileNet variants."""
 
     @register_model(
         name,
@@ -729,17 +729,17 @@ def _register_variant(name: str, algorithm: str, credit_type: str, bio_score: fl
         family="tile",
         tags=[status_tag("experimental")],
     )
-    class _RLTileNetVariant(RLTIleNet):
+    class _RLTileNetVariant(RLTileNet):
         algorithm_name = f"RLTileNet-{algorithm.upper()}"
 
         def __init__(
             self,
-            config: RLTIleNetConfig | None = None,
+            config: RLTileNetConfig | None = None,
             **kwargs: object,
         ) -> None:
             if config is None:
                 kwargs.setdefault("algorithm", algorithm)
-                config = RLTIleNetConfig(**kwargs)
+                config = RLTileNetConfig(**kwargs)
             elif config.algorithm != algorithm:
                 config = dataclasses.replace(config, algorithm=algorithm)
             super().__init__(config=config)

@@ -60,7 +60,7 @@ class ConvTileNetConfig(ConvDeploymentConfig):
     """Configuration for Convolutional TileNet.
 
     Inherits the shared deployment fields from ``ConvDeploymentConfig`` and
-    keeps the same defaults the historical ``ConvEquiTileConfig`` exposed.
+    keeps the same defaults the historical ``ConvTileNetConfig`` exposed.
     """
 
     # Historical vision default learning rate differs from the generic base.

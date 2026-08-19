@@ -36,14 +36,14 @@ from bioplausible.zoo.models.deployments.base import (
 # ``from bioplausible.zoo.models.deployments.timeseries import ...`` keeps working.
 TemporalPositionalEncoding = _fe.TemporalPositionalEncoding
 TemporalAttentionLayer = _fe.TemporalAttentionLayer
-TimeSeriesEquiTileLayer = _fe.TemporalEquiTileLayer
+TimeSeriesTileNetLayer = _fe.TimeSeriesTileNetLayer
 
 __all__ = [
     "TemporalAttentionLayer",
     "TemporalPositionalEncoding",
     "TimeSeriesConfig",
-    "TimeSeriesEquiTileLayer",
     "TimeSeriesTileNet",
+    "TimeSeriesTileNetLayer",
     "create_anomaly_detection_model",
     "create_classification_model",
     "create_forecasting_model",
@@ -92,7 +92,7 @@ class _TimeSeriesEncoder(nn.Module):
             self.pos_encoding = None
 
         self.layers = nn.ModuleList([
-            _fe.TemporalEquiTileLayer(config, _fe.tile_model_factory)
+            _fe.TimeSeriesTileNetLayer(config, _fe.tile_model_factory)
             for _ in range(config.num_layers)
         ])
 

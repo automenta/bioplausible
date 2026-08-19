@@ -232,7 +232,9 @@ class ChinchillaLaw:
 
     def predict(self, N: float, D: float) -> float:
         """Predict loss for given N, D."""
-        return self.A / np.power(N, self.alpha) + self.B / np.power(D, self.beta) + self.E
+        return (
+            self.A / np.power(N, self.alpha) + self.B / np.power(D, self.beta) + self.E
+        )
 
     def optimal_allocation(self, compute: float) -> tuple[float, float]:
         """Optimal N, D for given compute budget C = 6*N*D.
@@ -241,7 +243,9 @@ class ChinchillaLaw:
         """
         # From Chinchilla paper: N_opt ∝ C^α/(α+β), D_opt ∝ C^β/(α+β)
         # For 6*N*D = C
-        ratio = (self.A * self.alpha / (self.B * self.beta)) ** (1 / (self.alpha + self.beta))
+        ratio = (self.A * self.alpha / (self.B * self.beta)) ** (
+            1 / (self.alpha + self.beta)
+        )
         N_opt = np.sqrt(compute / 6 * ratio)
         D_opt = compute / (6 * N_opt)
         return float(N_opt), float(D_opt)
@@ -273,7 +277,9 @@ def fit_chinchilla_law(
 
     try:
         popt, _ = curve_fit(
-            lambda ND, A, B, E, alpha, beta: chinchilla_loss((A, B, E, alpha, beta), ND[0], ND[1]),
+            lambda ND, A, B, E, alpha, beta: chinchilla_loss(
+                (A, B, E, alpha, beta), ND[0], ND[1]
+            ),
             (N, D),
             L,
             p0=p0,
@@ -338,7 +344,12 @@ class ScalingLawFitter:
             x_plot = np.logspace(np.log10(x_min), np.log10(x_max), 100)
             y_plot = fit.predict(x_plot)
 
-            ax.loglog(x_plot, y_plot, "b-", label=f"Fit: a={fit.a:.2e}, b={fit.b:.3f}, c={fit.c:.3f}")
+            ax.loglog(
+                x_plot,
+                y_plot,
+                "b-",
+                label=f"Fit: a={fit.a:.2e}, b={fit.b:.3f}, c={fit.c:.3f}",
+            )
             ax.set_xlabel("Parameter Count / Compute")
             ax.set_ylabel("Loss / Metric")
             ax.set_title(f"Scaling Law: {name}")

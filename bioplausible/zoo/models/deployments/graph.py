@@ -34,7 +34,7 @@ from bioplausible.zoo.models.deployments.base import (
 
 # Re-export shared graph components under their historical names.
 GraphAttentionLayer = _fe.GraphAttentionLayer
-GraphEquiTileLayer = _fe.GraphEquiTileLayer
+GraphTileNetLayer = _fe.GraphTileNetLayer
 GraphFeatureExtractor = _fe.GraphFeatureExtractor
 aggregate_messages = _fe.aggregate_messages
 create_graph_from_edges = _fe.create_graph_from_edges
@@ -45,9 +45,9 @@ add_self_loops = _fe.add_self_loops
 
 __all__ = [
     "GraphAttentionLayer",
-    "GraphEquiTileLayer",
     "GraphTileNet",
     "GraphTileNetConfig",
+    "GraphTileNetLayer",
     "add_self_loops",
     "aggregate_messages",
     "create_graph_from_edges",
@@ -72,7 +72,7 @@ class GraphTileNetConfig(GraphDeploymentConfig):
     """Configuration for Graph TileNet.
 
     Inherits the shared deployment fields from ``GraphDeploymentConfig`` and
-    keeps the same defaults the historical ``GraphEquiTileConfig`` exposed.
+    keeps the same defaults the historical ``GraphTileNetConfig`` exposed.
     """
 
     # Historical graph defaults differ from the generic base.

@@ -123,7 +123,7 @@ def _instantiate(  # ruff: ignore[too-many-return-statements]  (one return per r
         ).to(device)
 
     # Every remaining registered family (tile substrate like ``tile_pc`` and the
-    # deployment ``BioModel`` family like ``conv_equitile``) constructs through
+    # deployment ``BioModel`` family like ``conv_tile``) constructs through
     # its canonical ``build`` classmethod, routed via the single construction
     # funnel so registry validation + device placement stay uniform.
     from bioplausible.core.construction import construct_model

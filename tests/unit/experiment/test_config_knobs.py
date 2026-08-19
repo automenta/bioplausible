@@ -262,15 +262,15 @@ def test_all_models_honor_depth_or_are_knowingly_phantom() -> None:
         cfg = {"hidden_dim": 32, "num_layers": 3, "learning_rate": 0.01}
         # Models that refuse vision-style dimension args (LM/RL/graph/diffusion)
         # cannot be audited on the vision dummy dims; opt them out of the guard.
-        # conv_equitile's depth map is offset (``num_fc_layers = num_layers - 2``),
+        # conv_tile's depth map is offset (``num_fc_layers = num_layers - 2``),
         # so the 1-vs-3 audit never triggers its (real, verified) depth growth.
         if name in (
             "backprop_transformer_lm",
             "eqprop_diffusion",
-            "graph_equitile",
-            "rl_equitile",
-            "timeseries_equitile",
-            "conv_equitile",
+            "graph_tile",
+            "rl_tile",
+            "timeseries_tile",
+            "conv_tile",
             "custom_stacked_model",
             "spiking_stdp",
         ):

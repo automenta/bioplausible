@@ -241,12 +241,19 @@ def _tile_lm():
 # These share the same input formats as their base models.
 
 for _name, _algo in [
-    ("graph_tile_fa", "fa"), ("graph_tile_tp", "tp"), ("graph_tile_hebbian", "hebbian"),
-    ("graph_tile_snn", "snn"), ("graph_tile_pc", "pc"),
+    ("graph_tile_fa", "fa"),
+    ("graph_tile_tp", "tp"),
+    ("graph_tile_hebbian", "hebbian"),
+    ("graph_tile_snn", "snn"),
+    ("graph_tile_pc", "pc"),
 ]:
+
     @_reg(_name)
     def _make_graph_tile_variant(algo=_algo):
-        from bioplausible.zoo.models.deployments.graph import GraphTileNet, GraphTileNetConfig
+        from bioplausible.zoo.models.deployments.graph import (
+            GraphTileNet,
+            GraphTileNetConfig,
+        )
 
         def build():
             return GraphTileNet(
@@ -271,12 +278,19 @@ for _name, _algo in [
 
 
 for _name, _algo in [
-    ("conv_tile_fa", "fa"), ("conv_tile_tp", "tp"), ("conv_tile_hebbian", "hebbian"),
-    ("conv_tile_snn", "snn"), ("conv_tile_pc", "pc"),
+    ("conv_tile_fa", "fa"),
+    ("conv_tile_tp", "tp"),
+    ("conv_tile_hebbian", "hebbian"),
+    ("conv_tile_snn", "snn"),
+    ("conv_tile_pc", "pc"),
 ]:
+
     @_reg(_name)
     def _make_conv_tile_variant(algo=_algo):
-        from bioplausible.zoo.models.deployments.vision import ConvTileNet, ConvTileNetConfig
+        from bioplausible.zoo.models.deployments.vision import (
+            ConvTileNet,
+            ConvTileNetConfig,
+        )
 
         def build():
             return ConvTileNet(
@@ -295,12 +309,19 @@ for _name, _algo in [
 
 
 for _name, _algo in [
-    ("timeseries_tile_fa", "fa"), ("timeseries_tile_tp", "tp"), ("timeseries_tile_hebbian", "hebbian"),
-    ("timeseries_tile_snn", "snn"), ("timeseries_tile_pc", "pc"),
+    ("timeseries_tile_fa", "fa"),
+    ("timeseries_tile_tp", "tp"),
+    ("timeseries_tile_hebbian", "hebbian"),
+    ("timeseries_tile_snn", "snn"),
+    ("timeseries_tile_pc", "pc"),
 ]:
+
     @_reg(_name)
     def _make_timeseries_tile_variant(algo=_algo):
-        from bioplausible.zoo.models.deployments.timeseries import TimeSeriesTileNet, TimeSeriesConfig
+        from bioplausible.zoo.models.deployments.timeseries import (
+            TimeSeriesConfig,
+            TimeSeriesTileNet,
+        )
 
         return (
             lambda: TimeSeriesTileNet(
@@ -319,16 +340,19 @@ for _name, _algo in [
 
 
 for _name, _algo in [
-    ("rl_tile_fa", "fa"), ("rl_tile_hebbian", "hebbian"), ("rl_tile_snn", "snn"),
+    ("rl_tile_fa", "fa"),
+    ("rl_tile_hebbian", "hebbian"),
+    ("rl_tile_snn", "snn"),
     ("rl_tile_pc", "pc"),
 ]:
+
     @_reg(_name)
     def _make_rl_tile_variant(algo=_algo):
-        from bioplausible.zoo.models.deployments.rl import RLTIleNet, RLTIleNetConfig
+        from bioplausible.zoo.models.deployments.rl import RLTileNet, RLTileNetConfig
 
         def build():
-            return RLTIleNet(
-                RLTIleNetConfig(
+            return RLTileNet(
+                RLTileNetConfig(
                     obs_dim=8,
                     action_dim=4,
                     neurons_per_tile=8,

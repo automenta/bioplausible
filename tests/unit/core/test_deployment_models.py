@@ -1,6 +1,6 @@
 """CoreTrainer + deployment-model integration (Pillar A).
 
-Verifies the single training path: a substrate deployment model (``conv_equitile``)
+Verifies the single training path: a substrate deployment model (``conv_tile``)
 is constructed via the canonical ``construct_model`` funnel, receives spatial input
 (``input_format="spatial"``), and trains through ``CoreTrainer``'s Phase-3
 model-side ``train_step`` dispatch.
@@ -8,7 +8,6 @@ model-side ``train_step`` dispatch.
 
 import pytest
 
-import bioplausible.zoo  # ruff: ignore[unused-import]  # registration side effect
 from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 
 _TILE_KWARGS = {
@@ -23,7 +22,7 @@ _TILE_KWARGS = {
 def _trainer_config(**overrides: object) -> TrainerConfig:
     """Build a minimal one-epoch CoreTrainer config for a deployment model."""
     kwargs = {
-        "model": "conv_equitile",
+        "model": "conv_tile",
         "task": "mnist",
         "model_kwargs": dict(_TILE_KWARGS),
         "epochs": 1,
@@ -40,12 +39,12 @@ def _trainer_config(**overrides: object) -> TrainerConfig:
 
 
 def test_deployment_model_constructs_via_coretrainer() -> None:
-    """ConvEquiTile is constructed through the single construction funnel."""
+    """ConvTileNet is constructed through the single construction funnel."""
     trainer = CoreTrainer(_trainer_config())
     trainer.setup()
 
     assert trainer.model is not None
-    assert trainer.model.__class__.__name__ == "ConvEquiTile"
+    assert trainer.model.__class__.__name__ == "ConvTileNet"
     assert trainer.model.config.mode == "pc"
     assert hasattr(trainer.model, "train_step")
 
@@ -74,17 +73,17 @@ def test_deployment_model_trains_through_coretrainer() -> None:
 
 
 def test_deployment_model_build_accepts_tuple_input_dim() -> None:
-    """ConvEquiTile.build flattens spatial tuples via math.prod (Pillar C contract)."""
+    """ConvTileNet.build flattens spatial tuples via math.prod (Pillar C contract)."""
     from bioplausible.core.construction import construct_model
     from bioplausible.core.registry import ComponentCategory, Registry
 
-    model_cls = Registry.get(ComponentCategory.MODEL, "conv_equitile")
+    model_cls = Registry.get(ComponentCategory.MODEL, "conv_tile")
     model = construct_model(
         model_cls,
         dict(_TILE_KWARGS),
         input_dim=(1, 28, 28),
         output_dim=10,
-        model_name="conv_equitile",
+        model_name="conv_tile",
     )
 
     assert model is not None

@@ -35,7 +35,7 @@ _META = ComponentMetadata(
     bio_plausibility_score=0.8,
     credit_assignment_type="hebbian",
     tags=["local", "online"],
-    family="equitile",
+    family="tile",
 )
 
 # ---- Predicate dispatch table (__post_init__) ----
@@ -69,7 +69,7 @@ def test_predicate_dispatch_all_fields() -> None:
         max_bio_score=0.9,
         credit_type="hebbian",
         tags=["local"],
-        family="equitile",
+        family="tile",
     )
     assert len(q._predicates) == 9
     expected_types = [
@@ -146,7 +146,7 @@ def test_tags_all_predicate() -> None:
 
 def test_family_predicate() -> None:
     """_FamilyIs: exact match on family string."""
-    assert _FamilyIs("equitile")(_META)
+    assert _FamilyIs("tile")(_META)
     assert not _FamilyIs("backprop")(_META)
 
 

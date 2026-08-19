@@ -16,10 +16,10 @@ import pytest
 import torch
 
 from bioplausible.zoo.models.deployments import (
-    ConvEquiTile,  # Vision; RL
-    ConvEquiTileConfig,
-    RLEquiTile,
-    RLEquiTileConfig,
+    ConvTileNet,  # Vision; RL
+    ConvTileNetConfig,
+    RLTileNet,
+    RLTileNetConfig,
     RolloutBuffer,
     VisionAugmentation,
     compute_gae,
@@ -135,13 +135,13 @@ class TestVisionRobustness:
 
     def test_vision_basic_functionality(self) -> None:
         """Test basic vision functionality."""
-        config = ConvEquiTileConfig(
+        config = ConvTileNetConfig(
             input_channels=3,
             input_size=32,
             num_classes=10,
             conv_channels=[8, 16],
         )
-        model = ConvEquiTile(config)
+        model = ConvTileNet(config)
 
         images = torch.randn(2, 3, 32, 32)
         logits = model(images)
@@ -155,25 +155,25 @@ class TestVisionRobustness:
     def test_vision_various_input_sizes(self) -> None:
         """Test various input sizes."""
         for input_size in [28, 32, 48]:
-            config = ConvEquiTileConfig(
+            config = ConvTileNetConfig(
                 input_channels=3,
                 input_size=input_size,
                 num_classes=10,
                 conv_channels=[8, 16],
             )
-            model = ConvEquiTile(config)
+            model = ConvTileNet(config)
             images = torch.randn(2, 3, input_size, input_size)
             logits = model(images)
             assert logits.shape == (2, 10)
 
     def test_vision_grayscale(self) -> None:
         """Test grayscale images."""
-        config = ConvEquiTileConfig(
+        config = ConvTileNetConfig(
             input_channels=1,
             input_size=28,
             num_classes=10,
         )
-        model = ConvEquiTile(config)
+        model = ConvTileNet(config)
 
         images = torch.randn(4, 1, 28, 28)
         labels = torch.randint(0, 10, (4,))
@@ -231,12 +231,12 @@ class TestRLRobustness:
 
     def test_rl_discrete_actions(self) -> None:
         """Test RL with discrete actions."""
-        config = RLEquiTileConfig(
+        config = RLTileNetConfig(
             obs_dim=8,
             action_dim=4,
             action_type="discrete",
         )
-        model = RLEquiTile(config)
+        model = RLTileNet(config)
         obs = torch.randn(4, 8)
 
         action, value, log_prob = model.act(obs)
@@ -248,12 +248,12 @@ class TestRLRobustness:
 
     def test_rl_continuous_actions(self) -> None:
         """Test RL with continuous actions."""
-        config = RLEquiTileConfig(
+        config = RLTileNetConfig(
             obs_dim=12,
             action_dim=6,
             action_type="continuous",
         )
-        model = RLEquiTile(config)
+        model = RLTileNet(config)
         obs = torch.randn(4, 12)
 
         action, value, log_prob = model.act(obs)

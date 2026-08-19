@@ -3,9 +3,9 @@
 Domain-Specific Tests for EquiTile
 
 Tests for:
-- Vision (ConvEquiTile)
+- Vision (ConvTileNet)
 - Language Modeling (TileLM)
-- Reinforcement Learning (RLEquiTile)
+- Reinforcement Learning (RLTileNet)
 
 Usage:
     python -m pytest tests/test_equitile_domains.py -v
@@ -16,11 +16,11 @@ import torch
 
 from bioplausible.data.lm import CharacterTokenizer
 from bioplausible.zoo.models.deployments import (
-    ConvEquiTile,  # Vision; RL
-    ConvEquiTileConfig,
-    RecurrentRLEquiTile,
-    RLEquiTile,
-    RLEquiTileConfig,
+    ConvTileNet,  # Vision; RL
+    ConvTileNetConfig,
+    RecurrentRLTileNet,
+    RLTileNet,
+    RLTileNetConfig,
     RolloutBuffer,
     VisionAugmentation,
     compute_gae,
@@ -37,11 +37,11 @@ from tests.conftest import lm_train_step
 
 
 class TestVision:
-    """Tests for ConvEquiTile vision module."""
+    """Tests for ConvTileNet vision module."""
 
     def test_conv_equitile_config(self) -> None:
-        """Test ConvEquiTileConfig."""
-        config = ConvEquiTileConfig(
+        """Test ConvTileNetConfig."""
+        config = ConvTileNetConfig(
             input_channels=3,
             input_size=32,
             num_classes=10,
@@ -53,21 +53,21 @@ class TestVision:
         assert len(config.conv_channels) == 3
 
     def test_conv_equitile_creation(self) -> None:
-        """Test ConvEquiTile creation."""
-        config = ConvEquiTileConfig(
+        """Test ConvTileNet creation."""
+        config = ConvTileNetConfig(
             input_channels=1,
             input_size=28,
             num_classes=10,
             conv_channels=[16, 32],
         )
-        model = ConvEquiTile(config)
+        model = ConvTileNet(config)
 
         assert model is not None
         assert model.config.num_classes == 10
 
     def test_conv_equitile_forward(self) -> None:
-        """Test ConvEquiTile forward pass."""
-        config = ConvEquiTileConfig(
+        """Test ConvTileNet forward pass."""
+        config = ConvTileNetConfig(
             input_channels=1,
             input_size=28,
             num_classes=10,
@@ -76,7 +76,7 @@ class TestVision:
             tiles_per_layer=1,
             num_fc_layers=1,
         )
-        model = ConvEquiTile(config)
+        model = ConvTileNet(config)
         model.eval()
 
         # Create batch of images
@@ -88,8 +88,8 @@ class TestVision:
         assert logits.shape == (4, 10)
 
     def test_conv_equitile_train_step(self) -> None:
-        """Test ConvEquiTile training step."""
-        config = ConvEquiTileConfig(
+        """Test ConvTileNet training step."""
+        config = ConvTileNetConfig(
             input_channels=1,
             input_size=28,
             num_classes=10,
@@ -98,7 +98,7 @@ class TestVision:
             tiles_per_layer=1,
             num_fc_layers=1,
         )
-        model = ConvEquiTile(config)
+        model = ConvTileNet(config)
 
         images = torch.randn(4, 1, 28, 28)
         labels = torch.randint(0, 10, (4,))
@@ -278,11 +278,11 @@ class TestLanguage:
 
 
 class TestRL:
-    """Tests for RLEquiTile RL module."""
+    """Tests for RLTileNet RL module."""
 
     def test_rl_equitile_config(self) -> None:
-        """Test RLEquiTileConfig."""
-        config = RLEquiTileConfig(
+        """Test RLTileNetConfig."""
+        config = RLTileNetConfig(
             obs_dim=8,
             action_dim=4,
             action_type="discrete",
@@ -293,37 +293,37 @@ class TestRL:
         assert config.action_type == "discrete"
 
     def test_rl_equitile_discrete_creation(self) -> None:
-        """Test RLEquiTile with discrete actions."""
-        config = RLEquiTileConfig(
+        """Test RLTileNet with discrete actions."""
+        config = RLTileNetConfig(
             obs_dim=8,
             action_dim=4,
             action_type="discrete",
         )
-        model = RLEquiTile(config)
+        model = RLTileNet(config)
 
         assert model is not None
         assert model.config.action_type == "discrete"
 
     def test_rl_equitile_continuous_creation(self) -> None:
-        """Test RLEquiTile with continuous actions."""
-        config = RLEquiTileConfig(
+        """Test RLTileNet with continuous actions."""
+        config = RLTileNetConfig(
             obs_dim=12,
             action_dim=6,
             action_type="continuous",
         )
-        model = RLEquiTile(config)
+        model = RLTileNet(config)
 
         assert model is not None
         assert model.config.action_type == "continuous"
 
     def test_rl_equitile_act_discrete(self) -> None:
-        """Test RLEquiTile action selection (discrete)."""
-        config = RLEquiTileConfig(
+        """Test RLTileNet action selection (discrete)."""
+        config = RLTileNetConfig(
             obs_dim=8,
             action_dim=4,
             action_type="discrete",
         )
-        model = RLEquiTile(config)
+        model = RLTileNet(config)
         model.eval()
 
         obs = torch.randn(1, 8)
@@ -338,13 +338,13 @@ class TestRL:
         assert action.item() in range(4)
 
     def test_rl_equitile_act_continuous(self) -> None:
-        """Test RLEquiTile action selection (continuous)."""
-        config = RLEquiTileConfig(
+        """Test RLTileNet action selection (continuous)."""
+        config = RLTileNetConfig(
             obs_dim=12,
             action_dim=6,
             action_type="continuous",
         )
-        model = RLEquiTile(config)
+        model = RLTileNet(config)
         model.eval()
 
         obs = torch.randn(1, 12)
@@ -360,13 +360,13 @@ class TestRL:
         )  # continuous: 2D action -> 2D log_prob (keepdim)
 
     def test_rl_equitile_evaluate_actions(self) -> None:
-        """Test RLEquiTile action evaluation."""
-        config = RLEquiTileConfig(
+        """Test RLTileNet action evaluation."""
+        config = RLTileNetConfig(
             obs_dim=8,
             action_dim=4,
             action_type="discrete",
         )
-        model = RLEquiTile(config)
+        model = RLTileNet(config)
 
         obs = torch.randn(4, 8)
         actions = torch.randint(0, 4, (4,))
@@ -379,13 +379,13 @@ class TestRL:
         assert value.shape == (4,)
 
     def test_rl_equitile_train_step(self) -> None:
-        """Test RLEquiTile training step."""
-        config = RLEquiTileConfig(
+        """Test RLTileNet training step."""
+        config = RLTileNetConfig(
             obs_dim=8,
             action_dim=4,
             action_type="discrete",
         )
-        model = RLEquiTile(config)
+        model = RLTileNet(config)
 
         obs = torch.randn(4, 8)
         actions = torch.randint(0, 4, (4,))
@@ -400,13 +400,13 @@ class TestRL:
         assert "value_loss" in stats
 
     def test_recurrent_rl_equitile(self) -> None:
-        """Test RecurrentRLEquiTile."""
-        config = RLEquiTileConfig(
+        """Test RecurrentRLTileNet."""
+        config = RLTileNetConfig(
             obs_dim=8,
             action_dim=4,
             action_type="discrete",
         )
-        model = RecurrentRLEquiTile(config, rnn_hidden_dim=64)
+        model = RecurrentRLTileNet(config, rnn_hidden_dim=64)
 
         assert model is not None
         assert model.rnn_hidden_dim == 64
@@ -499,7 +499,7 @@ class TestDomainIntegration:
     def test_vision_to_rl_pipeline(self) -> None:
         """Test vision features can feed into RL."""
         # Create vision model
-        vision_config = ConvEquiTileConfig(
+        vision_config = ConvTileNetConfig(
             input_channels=1,
             input_size=28,
             num_classes=10,
@@ -508,18 +508,18 @@ class TestDomainIntegration:
             tiles_per_layer=1,
             num_fc_layers=1,
         )
-        vision_model = ConvEquiTile(vision_config)
+        vision_model = ConvTileNet(vision_config)
 
         # Get feature dimension from vision model
         feature_dim = vision_model.feature_extractor.output_size
 
         # Create RL model with matching obs_dim
-        rl_config = RLEquiTileConfig(
+        rl_config = RLTileNetConfig(
             obs_dim=feature_dim,
             action_dim=4,
             action_type="discrete",
         )
-        rl_model = RLEquiTile(rl_config)
+        rl_model = RLTileNet(rl_config)
 
         # Process image through vision model
         images = torch.randn(4, 1, 28, 28)
@@ -544,12 +544,12 @@ class TestDomainIntegration:
         )
 
         # Create RL model
-        rl_config = RLEquiTileConfig(
+        rl_config = RLTileNetConfig(
             obs_dim=32,  # Use LM embed dim
             action_dim=4,
             action_type="discrete",
         )
-        rl_model = RLEquiTile(rl_config)
+        rl_model = RLTileNet(rl_config)
 
         # Process text through language model
         input_ids = torch.randint(0, 100, (4, 16))

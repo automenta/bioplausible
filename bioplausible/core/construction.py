@@ -185,8 +185,8 @@ def _is_tile_substrate(model_cls: object) -> bool:
 def _is_deployment_model(model_cls: object) -> bool:
     """Whether ``model_cls`` is a deployment ``BioModel`` with a custom ``build``.
 
-    The deployment family (``ConvEquiTile``/``RLEquiTile``/``GraphEquiTile``/
-    ``TimeSeriesEquiTile``) subclasses :class:`BioModel` and overrides ``build``
+    The deployment family (``ConvTileNet``/``RLTileNet``/``GraphTileNet``/
+    ``TimeSeriesTileNet``) subclasses :class:`BioModel` and overrides ``build``
     with a domain-specific geometry (conv channels, RL/vision/graph/timeseries).
     It is *not* a ``TileAlgorithm`` substrate, so ``_is_tile_substrate`` misses
     it, yet it constructs through the same ``build(spec, input_dim, ...)``
@@ -397,7 +397,7 @@ def construct_model(
     """
     consumption = resolve_consumption(model_cls)
     # Substrate models (``TileAlgorithm`` subclasses like ``tile_pc``/``tile_fa``
-    # and the deployment ``BioModel`` family like ``conv_equitile``) declare a
+    # and the deployment ``BioModel`` family like ``conv_tile``) declare a
     # ``config`` parameter typed as a domain-specific config — not the unified
     # ``ModelConfig`` — and construct through their canonical ``build``
     # classmethod (which folds the standard scalars into a domain-specific
