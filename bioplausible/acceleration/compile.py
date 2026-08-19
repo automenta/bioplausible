@@ -210,7 +210,9 @@ class CompileMode:
     @classmethod
     def get_preset(cls, model_type: str) -> dict:
         """Get compile preset for a model type."""
-        return cls.PRESETS.get(model_type, {"mode": "auto", "fullgraph": False, "dynamic": None})
+        return cls.PRESETS.get(
+            model_type, {"mode": "auto", "fullgraph": False, "dynamic": None}
+        )
 
 
 @contextmanager
@@ -233,11 +235,16 @@ def compile_context(
     def safe_compile(model, **kwargs):
         nonlocal error_occurred
         try:
-            return torch.compile(model, mode=mode, fullgraph=fullgraph, dynamic=dynamic, **kwargs)
+            return torch.compile(
+                model, mode=mode, fullgraph=fullgraph, dynamic=dynamic, **kwargs
+            )
         except Exception as e:
             error_occurred = True
             if suppress_errors:
-                warnings.warn(f"torch.compile failed: {e}. Using uncompiled model.", RuntimeWarning)
+                warnings.warn(
+                    f"torch.compile failed: {e}. Using uncompiled model.",
+                    RuntimeWarning,
+                )
                 return model
             raise
 
@@ -315,18 +322,22 @@ class EqPropFunction(Function):
         model.zero_grad(set_to_none=True)
         free_loss = nn.functional.cross_entropy(ctx.free_output, ctx.target)
         free_loss.backward()
-        free_grads = [p.grad.clone() if p.grad is not None else torch.zeros_like(p) for p in params]
+        free_grads = [
+            p.grad.clone() if p.grad is not None else torch.zeros_like(p)
+            for p in params
+        ]
 
         # Compute nudged phase gradients
         model.zero_grad(set_to_none=True)
         nudged_loss = nn.functional.cross_entropy(ctx.nudged_output, ctx.target)
         nudged_loss.backward()
-        nudged_grads = [p.grad.clone() if p.grad is not None else torch.zeros_like(p) for p in params]
+        nudged_grads = [
+            p.grad.clone() if p.grad is not None else torch.zeros_like(p)
+            for p in params
+        ]
 
         # Contrastive update: (nudged - free) / beta
-        contrastive_grads = [
-            (n - f) / beta for n, f in zip(nudged_grads, free_grads)
-        ]
+        contrastive_grads = [(n - f) / beta for n, f in zip(nudged_grads, free_grads)]
 
         # Apply gradients to model parameters
         for p, g in zip(params, contrastive_grads):
@@ -411,12 +422,16 @@ class EqPropTritonFunction(Function):
         model.eval()
         with torch.no_grad():
             free_output = model.settle(input, steps=steps)
-            ctx.free_acts = model.get_activations() if hasattr(model, "get_activations") else []
+            ctx.free_acts = (
+                model.get_activations() if hasattr(model, "get_activations") else []
+            )
 
         # Nudged phase
         with torch.no_grad():
             nudged_output = model.settle(input, target=target, beta=beta, steps=steps)
-            ctx.nudged_acts = model.get_activations() if hasattr(model, "get_activations") else []
+            ctx.nudged_acts = (
+                model.get_activations() if hasattr(model, "get_activations") else []
+            )
 
         return free_output
 
@@ -430,7 +445,9 @@ class EqPropTritonFunction(Function):
                 model = ctx.model
                 params = list(model.parameters())
 
-                for free_act, nudged_act, param in zip(ctx.free_acts, ctx.nudged_acts, params):
+                for free_act, nudged_act, param in zip(
+                    ctx.free_acts, ctx.nudged_acts, params
+                ):
                     if param.grad is not None:
                         continue  # Skip if already has grad
 

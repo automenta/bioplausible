@@ -563,8 +563,12 @@ try:
         for i in range(D):
             offs_i = i
             if offs_i < D:
-                pos = tl.load(pos_acts_ptr + offs_b * D + offs_i, mask=mask_b, other=0.0)
-                neg = tl.load(neg_acts_ptr + offs_b * D + offs_i, mask=mask_b, other=0.0)
+                pos = tl.load(
+                    pos_acts_ptr + offs_b * D + offs_i, mask=mask_b, other=0.0
+                )
+                neg = tl.load(
+                    neg_acts_ptr + offs_b * D + offs_i, mask=mask_b, other=0.0
+                )
                 pos_norm += pos * pos
                 neg_norm += neg * neg
 
@@ -600,12 +604,28 @@ try:
         acc_neg = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
 
         for b in range(B):
-            pre_p = tl.load(pre_pos_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
-            post_p = tl.load(post_pos_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            pre_p = tl.load(
+                pre_pos_ptr + b * D_in + offs_in[None, :],
+                mask=mask_in[None, :],
+                other=0.0,
+            )
+            post_p = tl.load(
+                post_pos_ptr + b * D_out + offs_out[:, None],
+                mask=mask_out[:, None],
+                other=0.0,
+            )
             acc_pos += tl.dot(tl.trans(post_p), pre_p)
 
-            pre_n = tl.load(pre_neg_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
-            post_n = tl.load(post_neg_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            pre_n = tl.load(
+                pre_neg_ptr + b * D_in + offs_in[None, :],
+                mask=mask_in[None, :],
+                other=0.0,
+            )
+            post_n = tl.load(
+                post_neg_ptr + b * D_out + offs_out[:, None],
+                mask=mask_out[:, None],
+                other=0.0,
+            )
             acc_neg += tl.dot(tl.trans(post_n), pre_n)
 
         acc_pos = acc_pos / B
@@ -613,7 +633,11 @@ try:
 
         delta = lr * (acc_pos - acc_neg)
 
-        tl.store(delta_ptr + offs_out[:, None] * D_in + offs_in[None, :], delta, mask=mask_out[:, None] & mask_in[None, :])
+        tl.store(
+            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
+            delta,
+            mask=mask_out[:, None] & mask_in[None, :],
+        )
 
     @triton.jit
     def _pepita_error_modulation_kernel(
@@ -640,14 +664,26 @@ try:
         acc = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
 
         for b in range(B):
-            err = tl.load(error_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
-            fb = tl.load(feedback_ptr + offs_in[:, None] * D_out + offs_out[None, :], mask=mask_in[:, None] & mask_out[None, :], other=0.0)
+            err = tl.load(
+                error_ptr + b * D_out + offs_out[:, None],
+                mask=mask_out[:, None],
+                other=0.0,
+            )
+            fb = tl.load(
+                feedback_ptr + offs_in[:, None] * D_out + offs_out[None, :],
+                mask=mask_in[:, None] & mask_out[None, :],
+                other=0.0,
+            )
             acc += tl.dot(err, fb)
 
         acc = acc / B
         delta = scale * acc
 
-        tl.store(delta_ptr + offs_out[:, None] * D_in + offs_in[None, :], delta, mask=mask_out[:, None] & mask_in[None, :])
+        tl.store(
+            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
+            delta,
+            mask=mask_out[:, None] & mask_in[None, :],
+        )
 
     @triton.jit
     def _pepita_contrastive_update_kernel(
@@ -677,12 +713,28 @@ try:
         acc_err = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
 
         for b in range(B):
-            pre_s = tl.load(pre_std_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
-            post_s = tl.load(post_std_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            pre_s = tl.load(
+                pre_std_ptr + b * D_in + offs_in[None, :],
+                mask=mask_in[None, :],
+                other=0.0,
+            )
+            post_s = tl.load(
+                post_std_ptr + b * D_out + offs_out[:, None],
+                mask=mask_out[:, None],
+                other=0.0,
+            )
             acc_std += tl.dot(tl.trans(post_s), pre_s)
 
-            pre_e = tl.load(pre_err_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
-            post_e = tl.load(post_err_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            pre_e = tl.load(
+                pre_err_ptr + b * D_in + offs_in[None, :],
+                mask=mask_in[None, :],
+                other=0.0,
+            )
+            post_e = tl.load(
+                post_err_ptr + b * D_out + offs_out[:, None],
+                mask=mask_out[:, None],
+                other=0.0,
+            )
             acc_err += tl.dot(tl.trans(post_e), pre_e)
 
         acc_std = acc_std / B
@@ -690,7 +742,11 @@ try:
 
         delta = lr * (acc_std - acc_err)
 
-        tl.store(delta_ptr + offs_out[:, None] * D_in + offs_in[None, :], delta, mask=mask_out[:, None] & mask_in[None, :])
+        tl.store(
+            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
+            delta,
+            mask=mask_out[:, None] & mask_in[None, :],
+        )
 
     HAS_TRITON_FF = True
 except ImportError:

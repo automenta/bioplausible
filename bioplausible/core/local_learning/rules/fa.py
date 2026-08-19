@@ -17,6 +17,7 @@ __all__ = [
     "ContrastiveFA",
     "DirectFA",
     "FeedbackAlignment",
+    "SignSymmetricFA",
     "StochasticFA",
 ]
 
@@ -318,3 +319,61 @@ class ContrastiveFA(LearningRuleOptimizer):
         loss = -sim.mean()
 
         return loss
+
+
+@register_propagator("sign_symmetric_fa", family="fa")
+class SignSymmetricFA(LearningRuleOptimizer):
+    """
+    Sign-Symmetric Feedback Alignment: Feedback weights preserve forward weight signs.
+
+    Uses B = sign(W) * |B_rand| where B_rand is random.
+    This preserves the sign structure of forward weights while keeping
+    feedback weights random in magnitude — hardware-friendly (sign only needs 1 bit).
+
+    Reference: Xiao et al., 2018 "Sign-Symmetric Feedforward Alignment"
+    """
+
+    def __init__(
+        self,
+        params,
+        model: nn.Module,
+        lr: float = 0.01,
+        momentum: float = 0.9,
+        weight_decay: float = 0.0005,
+        feedback_seed: int = 42,
+    ):
+        super().__init__(params, model, lr, momentum, weight_decay)
+        self.feedback_weights = self._create_sign_symmetric_feedback(feedback_seed)
+
+    def _create_sign_symmetric_feedback(self, seed: int) -> list[torch.Tensor]:
+        """Create feedback weights B = sign(W) * |randn|."""
+        device = self.params[0].device if self.params else torch.device("cpu")
+        gen = torch.Generator(device=device)
+        gen.manual_seed(seed)
+        feedback = []
+
+        for param in self.params:
+            if param.ndim >= 2:
+                sign_W = torch.sign(param.data)
+                rand_magnitude = torch.randn_like(param, generator=gen).abs() * 0.1
+                fb = sign_W * rand_magnitude
+                feedback.append(fb)
+            else:
+                feedback.append(None)
+
+        return feedback
+
+    def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None:
+        if target is None:
+            raise ValueError("SignSymmetricFA requires target")
+
+        self.model.train()
+        self.zero_grad()
+
+        output = self.model(x)
+        loss = F.cross_entropy(output, target)
+        loss.backward()
+
+        for param, buffer in zip(self.params, self.buffers):
+            if param.grad is not None:
+                self._apply_update(param.grad, param, buffer)

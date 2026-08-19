@@ -85,7 +85,9 @@ class EnergyLandscape:
             energy=data["energy"],
             d1_norm=float(data["d1_norm"]),
             param_count=int(data["param_count"]),
-            direction_method=DirectionMethod(data.get("direction_method", "gradient_random")),
+            direction_method=DirectionMethod(
+                data.get("direction_method", "gradient_random")
+            ),
             d1=data.get("d1"),
             d2=data.get("d2"),
         )
@@ -119,9 +121,13 @@ def _orthonormal_directions(
     if g_norm < 1e-8:
         # Zero gradient - use random directions
         rng = np.random.default_rng(seed)
-        d1 = torch.from_numpy(rng.standard_normal(g.shape)).to(dtype=g.dtype, device=g.device)
+        d1 = torch.from_numpy(rng.standard_normal(g.shape)).to(
+            dtype=g.dtype, device=g.device
+        )
         d1 = d1 / (d1.norm() + 1e-8)
-        d2 = torch.from_numpy(rng.standard_normal(g.shape)).to(dtype=g.dtype, device=g.device)
+        d2 = torch.from_numpy(rng.standard_normal(g.shape)).to(
+            dtype=g.dtype, device=g.device
+        )
         d2 = d2 - (d2 @ d1) * d1
         d2 = d2 / (d2.norm() + 1e-8)
         return d1, d2
@@ -265,8 +271,10 @@ def compute_hessian_spectrum(
         # Gradient of (grad · v)
         grad_v = (grad_flat * v).sum()
         hvp_grads = torch.autograd.grad(grad_v, params, retain_graph=False)
-        return torch.cat([g.reshape(-1) if g is not None else torch.zeros_like(p).reshape(-1)
-                          for g, p in zip(hvp_grads, params)])
+        return torch.cat([
+            g.reshape(-1) if g is not None else torch.zeros_like(p).reshape(-1)
+            for g, p in zip(hvp_grads, params)
+        ])
 
     if use_lanczos and n_params > 100:
         # Lanczos algorithm for large models
@@ -280,7 +288,10 @@ def compute_hessian_spectrum(
 
         operator = LinearOperator((n_params, n_params), matvec=matvec, dtype=np.float32)
         eigvals, eigvecs = eigsh(operator, k=min(top_k, n_params - 1), which="LA")
-        eigvecs_torch = [torch.from_numpy(eigvecs[:, i]).to(p_flat.device) for i in range(eigvecs.shape[1])]
+        eigvecs_torch = [
+            torch.from_numpy(eigvecs[:, i]).to(p_flat.device)
+            for i in range(eigvecs.shape[1])
+        ]
         return eigvals, eigvecs_torch
     else:
         # Full Hessian for small models (expensive!)
@@ -402,9 +413,16 @@ def compute_multiple_slices(
     for i, method in enumerate(methods):
         seed = 42 + i * 100  # Different seed per method
         landscape = compute_energy_landscape(
-            model, x, y, model_name, task_name,
-            radius=radius, grid=grid, seed=seed,
-            direction_method=method, hessian_evecs=hessian_evecs,
+            model,
+            x,
+            y,
+            model_name,
+            task_name,
+            radius=radius,
+            grid=grid,
+            seed=seed,
+            direction_method=method,
+            hessian_evecs=hessian_evecs,
         )
         landscapes.append(landscape)
 
@@ -438,11 +456,15 @@ def plot_energy_landscape(
     X, Y = np.meshgrid(landscape.alphas, landscape.betas)
 
     # Energy surface
-    contour_filled = ax.contourf(X, Y, landscape.energy.T, levels=30, cmap=cmap, alpha=0.8)
+    contour_filled = ax.contourf(
+        X, Y, landscape.energy.T, levels=30, cmap=cmap, alpha=0.8
+    )
     plt.colorbar(contour_filled, ax=ax, label="Energy", shrink=0.8)
 
     if show_contours:
-        cf = ax.contour(X, Y, landscape.energy.T, levels=12, colors="k", linewidths=0.5, alpha=0.6)
+        cf = ax.contour(
+            X, Y, landscape.energy.T, levels=12, colors="k", linewidths=0.5, alpha=0.6
+        )
         ax.clabel(cf, inline=True, fontsize=6)
 
     if show_gradient:
@@ -469,12 +491,30 @@ def plot_energy_landscape(
         if minima:
             min_alphas = [landscape.alphas[m[0]] for m in minima]
             min_betas = [landscape.betas[m[1]] for m in minima]
-            ax.scatter(min_alphas, min_betas, marker="*", s=200, c="red",
-                       edgecolors="white", linewidths=1, label="Local Minima", zorder=5)
+            ax.scatter(
+                min_alphas,
+                min_betas,
+                marker="*",
+                s=200,
+                c="red",
+                edgecolors="white",
+                linewidths=1,
+                label="Local Minima",
+                zorder=5,
+            )
 
     # Origin (trained weights)
-    ax.scatter([0], [0], marker="*", s=180, c="cyan", edgecolors="black",
-               linewidths=1, label="Trained weights w*", zorder=5)
+    ax.scatter(
+        [0],
+        [0],
+        marker="*",
+        s=180,
+        c="cyan",
+        edgecolors="black",
+        linewidths=1,
+        label="Trained weights w*",
+        zorder=5,
+    )
 
     ax.axhline(0, color="grey", lw=0.5, ls="--", alpha=0.5)
     ax.axvline(0, color="grey", lw=0.5, ls="--", alpha=0.5)
@@ -505,7 +545,9 @@ def plot_energy_landscape_3d(
     try:
         import plotly.graph_objects as go
     except ImportError:
-        raise ImportError("Plotly required for 3D plots. Install with: pip install plotly")
+        raise ImportError(
+            "Plotly required for 3D plots. Install with: pip install plotly"
+        )
 
     out = pathlib.Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -515,23 +557,31 @@ def plot_energy_landscape_3d(
     X, Y = np.meshgrid(landscape.alphas, landscape.betas)
     Z = landscape.energy.T
 
-    fig = go.Figure(data=[
-        go.Surface(
-            x=X, y=Y, z=Z,
-            colorscale=cmap,
-            showscale=True,
-            colorbar=dict(title="Energy", thickness=20),
-            lighting=dict(ambient=0.6, diffuse=0.8, roughness=0.4),
-        )
-    ])
+    fig = go.Figure(
+        data=[
+            go.Surface(
+                x=X,
+                y=Y,
+                z=Z,
+                colorscale=cmap,
+                showscale=True,
+                colorbar=dict(title="Energy", thickness=20),
+                lighting=dict(ambient=0.6, diffuse=0.8, roughness=0.4),
+            )
+        ]
+    )
 
     # Add trained weights point
-    fig.add_trace(go.Scatter3d(
-        x=[0], y=[0], z=[landscape.energy[len(landscape.alphas) // 2, len(landscape.betas) // 2]],
-        mode="markers",
-        marker=dict(size=8, color="cyan", symbol="diamond"),
-        name="Trained weights w*",
-    ))
+    fig.add_trace(
+        go.Scatter3d(
+            x=[0],
+            y=[0],
+            z=[landscape.energy[len(landscape.alphas) // 2, len(landscape.betas) // 2]],
+            mode="markers",
+            marker=dict(size=8, color="cyan", symbol="diamond"),
+            name="Trained weights w*",
+        )
+    )
 
     # Find and add minima
     minima = find_minima(landscape.energy)
@@ -539,12 +589,16 @@ def plot_energy_landscape_3d(
         min_alphas = [landscape.alphas[m[0]] for m in minima]
         min_betas = [landscape.betas[m[1]] for m in minima]
         min_energies = [landscape.energy[m[0], m[1]] for m in minima]
-        fig.add_trace(go.Scatter3d(
-            x=min_alphas, y=min_betas, z=min_energies,
-            mode="markers",
-            marker=dict(size=6, color="red", symbol="x"),
-            name="Local Minima",
-        ))
+        fig.add_trace(
+            go.Scatter3d(
+                x=min_alphas,
+                y=min_betas,
+                z=min_energies,
+                mode="markers",
+                marker=dict(size=6, color="red", symbol="x"),
+                name="Local Minima",
+            )
+        )
 
     fig.update_layout(
         title=f"Energy Landscape 3D — {landscape.model_name} ({landscape.task_name})",
@@ -576,9 +630,14 @@ def find_minima(energy: np.ndarray, threshold: float = 1e-4) -> list[tuple[int, 
             center = energy[i, j]
             # Check 8 neighbors
             neighbors = [
-                energy[i - 1, j - 1], energy[i - 1, j], energy[i - 1, j + 1],
-                energy[i, j - 1], energy[i, j + 1],
-                energy[i + 1, j - 1], energy[i + 1, j], energy[i + 1, j + 1],
+                energy[i - 1, j - 1],
+                energy[i - 1, j],
+                energy[i - 1, j + 1],
+                energy[i, j - 1],
+                energy[i, j + 1],
+                energy[i + 1, j - 1],
+                energy[i + 1, j],
+                energy[i + 1, j + 1],
             ]
             if all(center <= n + threshold for n in neighbors):
                 minima.append((i, j))
@@ -610,26 +669,40 @@ def analyze_landscape_curvature(
     # Second derivative along alpha (d1)
     if center_i > 0 and center_i < len(alphas) - 1:
         da = alphas[1] - alphas[0]
-        curv_alpha = (energy[center_i + 1, center_j] - 2 * energy[center_i, center_j]
-                      + energy[center_i - 1, center_j]) / (da**2)
+        curv_alpha = (
+            energy[center_i + 1, center_j]
+            - 2 * energy[center_i, center_j]
+            + energy[center_i - 1, center_j]
+        ) / (da**2)
     else:
         curv_alpha = 0.0
 
     # Second derivative along beta (d2)
     if center_j > 0 and center_j < len(betas) - 1:
         db = betas[1] - betas[0]
-        curv_beta = (energy[center_i, center_j + 1] - 2 * energy[center_i, center_j]
-                     + energy[center_i, center_j - 1]) / (db**2)
+        curv_beta = (
+            energy[center_i, center_j + 1]
+            - 2 * energy[center_i, center_j]
+            + energy[center_i, center_j - 1]
+        ) / (db**2)
     else:
         curv_beta = 0.0
 
     # Mixed derivative
-    if center_i > 0 and center_i < len(alphas) - 1 and center_j > 0 and center_j < len(betas) - 1:
+    if (
+        center_i > 0
+        and center_i < len(alphas) - 1
+        and center_j > 0
+        and center_j < len(betas) - 1
+    ):
         da = alphas[1] - alphas[0]
         db = betas[1] - betas[0]
-        curv_mixed = (energy[center_i + 1, center_j + 1] - energy[center_i + 1, center_j - 1]
-                      - energy[center_i - 1, center_j + 1] + energy[center_i - 1, center_j - 1]
-                      ) / (4 * da * db)
+        curv_mixed = (
+            energy[center_i + 1, center_j + 1]
+            - energy[center_i + 1, center_j - 1]
+            - energy[center_i - 1, center_j + 1]
+            + energy[center_i - 1, center_j - 1]
+        ) / (4 * da * db)
     else:
         curv_mixed = 0.0
 
@@ -646,8 +719,10 @@ def analyze_landscape_curvature(
 
     # Barrier height: max on boundary - min
     boundary_values = np.concatenate([
-        energy[0, :], energy[-1, :],
-        energy[:, 0], energy[:, -1]
+        energy[0, :],
+        energy[-1, :],
+        energy[:, 0],
+        energy[:, -1],
     ])
     barrier_height = float(boundary_values.max() - min_energy)
 

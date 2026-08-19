@@ -319,12 +319,18 @@ class HypothesisReasoner:
         ]
 
         # Categorize failure
-        if "cuda" in str(error).lower() or "oom" in str(error).lower() or "memory" in str(error).lower():
+        if (
+            "cuda" in str(error).lower()
+            or "oom" in str(error).lower()
+            or "memory" in str(error).lower()
+        ):
             failure_category = "Resource Exhaustion"
             steps.append("  → Category: Resource Exhaustion (OOM/CUDA)")
             steps.append("  → Root cause: Model too large for GPU memory")
             hypothesis = "Reduce model size, use gradient checkpointing, or enable mixed precision"
-            fix = "Try: smaller hidden_dim, gradient_accumulation_steps > 1, or fp16/bf16"
+            fix = (
+                "Try: smaller hidden_dim, gradient_accumulation_steps > 1, or fp16/bf16"
+            )
         elif "nan" in str(error).lower() or "inf" in str(error).lower():
             failure_category = "Numerical Instability"
             steps.append("  → Category: Numerical Instability (NaN/Inf)")
@@ -334,20 +340,28 @@ class HypothesisReasoner:
         elif accuracy < 0.1:
             failure_category = "Complete Training Failure"
             steps.append("  → Category: Complete Training Failure (near-random)")
-            steps.append("  → Root cause: Architecture/algorithm mismatch or hyperparameter issue")
-            hypothesis = "Algorithm incompatible with task or critical hyperparameter wrong"
+            steps.append(
+                "  → Root cause: Architecture/algorithm mismatch or hyperparameter issue"
+            )
+            hypothesis = (
+                "Algorithm incompatible with task or critical hyperparameter wrong"
+            )
             fix = "Try: different algorithm family, check beta/gamma, verify implementation"
         elif accuracy < 0.3:
             failure_category = "Underfitting"
             steps.append("  → Category: Underfitting (low accuracy)")
-            steps.append("  → Root cause: Insufficient capacity or wrong inductive bias")
+            steps.append(
+                "  → Root cause: Insufficient capacity or wrong inductive bias"
+            )
             hypothesis = "Model capacity too low or learning rule cannot solve task"
             fix = "Try: increase hidden_dim/num_layers, or switch to more expressive algorithm"
         else:
             failure_category = "Suboptimal Performance"
             steps.append("  → Category: Suboptimal Performance")
             steps.append("  → Root cause: Hyperparameter suboptimality")
-            hypothesis = "Hyperparameters not optimal for this task/algorithm combination"
+            hypothesis = (
+                "Hyperparameters not optimal for this task/algorithm combination"
+            )
             fix = "Try: learning rate sweep, beta sweep, or architecture search"
 
         steps.extend([
@@ -366,7 +380,10 @@ class HypothesisReasoner:
             conclusion=hypothesis,
             confidence=0.75,
             evidence=evidence,
-            assumptions=["Error message is accurate", "Failure mode categorization is correct"],
+            assumptions=[
+                "Error message is accurate",
+                "Failure mode categorization is correct",
+            ],
         )
 
         self._reasoning_chains.append(chain)
@@ -413,24 +430,36 @@ class HypothesisReasoner:
 
         steps.append(f"  → Found {len(successful)} successful algorithms")
         for s in successful[:3]:
-            steps.append(f"    - {s['model']}: {s['accuracy']:.3f} on {s['task']} (bio: {s['bio_score']:.2f})")
+            steps.append(
+                f"    - {s['model']}: {s['accuracy']:.3f} on {s['task']} (bio: {s['bio_score']:.2f})"
+            )
 
         steps.append("Step 2: Analyze algorithm properties for transferability")
         transferable = []
         for s in successful:
             model = s["model"]
             # Check algorithm family properties
-            if "eqprop" in model.lower() or "fa" in model.lower() or "hebbian" in model.lower():
+            if (
+                "eqprop" in model.lower()
+                or "fa" in model.lower()
+                or "hebbian" in model.lower()
+            ):
                 transferable.append(model)
                 steps.append(f"  → {model}: Local learning rule - likely transferable")
 
         steps.append("Step 3: Consider domain-specific adaptations")
         adaptations = []
         if "vision" in source_domain.lower() and "language" in target_domain.lower():
-            adaptations.append("Language needs sequential processing - check if algorithm supports RNN/Transformer")
-            adaptations.append("Vocabulary size vs pixel count - adjust input/output dimensions")
+            adaptations.append(
+                "Language needs sequential processing - check if algorithm supports RNN/Transformer"
+            )
+            adaptations.append(
+                "Vocabulary size vs pixel count - adjust input/output dimensions"
+            )
         elif "vision" in source_domain.lower() and "rl" in target_domain.lower():
-            adaptations.append("RL needs credit assignment over time - check temporal credit assignment capability")
+            adaptations.append(
+                "RL needs credit assignment over time - check temporal credit assignment capability"
+            )
             adaptations.append("Reward sparsity - may need different beta schedule")
 
         steps.append("  → Required adaptations:")
@@ -445,14 +474,21 @@ class HypothesisReasoner:
             conclusion = f"No directly transferable algorithms; design new algorithm for {target_domain}"
             confidence = 0.3
 
-        evidence = [f"Source: {source_domain}", f"Target: {target_domain}", f"Successful: {len(successful)}"]
+        evidence = [
+            f"Source: {source_domain}",
+            f"Target: {target_domain}",
+            f"Successful: {len(successful)}",
+        ]
         chain = ReasoningChain(
             template=ReasoningTemplate.TRANSFER_REASONING,
             steps=steps,
             conclusion=conclusion,
             confidence=confidence,
             evidence=evidence,
-            assumptions=["Algorithm properties are domain-agnostic", "Empirical results generalize across domains"],
+            assumptions=[
+                "Algorithm properties are domain-agnostic",
+                "Empirical results generalize across domains",
+            ],
         )
 
         self._reasoning_chains.append(chain)
@@ -479,16 +515,66 @@ class HypothesisReasoner:
 
         # Known algorithm properties
         algo_props = {
-            "eqprop": {"credit": "equilibrium", "memory": "O(1)", "local": True, "settling": True},
-            "fa": {"credit": "random_feedback", "memory": "O(1)", "local": True, "settling": False},
-            "tp": {"credit": "target_prop", "memory": "O(L)", "local": True, "settling": True},
-            "pc": {"credit": "prediction_error", "memory": "O(L)", "local": True, "settling": True},
-            "hebbian": {"credit": "correlation", "memory": "O(1)", "local": True, "settling": False},
-            "snn": {"credit": "spike_timing", "memory": "O(T)", "local": True, "settling": True},
-            "ff": {"credit": "goodness", "memory": "O(1)", "local": True, "settling": False},
-            "pepita": {"credit": "error_feedback", "memory": "O(1)", "local": True, "settling": False},
-            "mep": {"credit": "spectral", "memory": "O(L)", "local": True, "settling": True},
-            "backprop": {"credit": "gradient", "memory": "O(T)", "local": False, "settling": False},
+            "eqprop": {
+                "credit": "equilibrium",
+                "memory": "O(1)",
+                "local": True,
+                "settling": True,
+            },
+            "fa": {
+                "credit": "random_feedback",
+                "memory": "O(1)",
+                "local": True,
+                "settling": False,
+            },
+            "tp": {
+                "credit": "target_prop",
+                "memory": "O(L)",
+                "local": True,
+                "settling": True,
+            },
+            "pc": {
+                "credit": "prediction_error",
+                "memory": "O(L)",
+                "local": True,
+                "settling": True,
+            },
+            "hebbian": {
+                "credit": "correlation",
+                "memory": "O(1)",
+                "local": True,
+                "settling": False,
+            },
+            "snn": {
+                "credit": "spike_timing",
+                "memory": "O(T)",
+                "local": True,
+                "settling": True,
+            },
+            "ff": {
+                "credit": "goodness",
+                "memory": "O(1)",
+                "local": True,
+                "settling": False,
+            },
+            "pepita": {
+                "credit": "error_feedback",
+                "memory": "O(1)",
+                "local": True,
+                "settling": False,
+            },
+            "mep": {
+                "credit": "spectral",
+                "memory": "O(L)",
+                "local": True,
+                "settling": True,
+            },
+            "backprop": {
+                "credit": "gradient",
+                "memory": "O(T)",
+                "local": False,
+                "settling": False,
+            },
         }
 
         props_a = algo_props.get(algorithm_a.lower(), {})
@@ -517,14 +603,20 @@ class HypothesisReasoner:
         patterns = []
 
         # Pattern 1: Hybrid credit assignment
-        if "credit" in props_a and "credit" in props_b and props_a["credit"] != props_b["credit"]:
+        if (
+            "credit" in props_a
+            and "credit" in props_b
+            and props_a["credit"] != props_b["credit"]
+        ):
             patterns.append(
                 f"Hybrid credit: {props_a['credit']} (body) + {props_b['credit']} (head)"
             )
 
         # Pattern 2: Memory-accuracy tradeoff
         if props_a.get("memory") == "O(1)" and props_b.get("memory") != "O(1)":
-            patterns.append(f"Use {algorithm_a} for memory efficiency, {algorithm_b} for accuracy")
+            patterns.append(
+                f"Use {algorithm_a} for memory efficiency, {algorithm_b} for accuracy"
+            )
 
         # Pattern 3: Settling dynamics
         if props_a.get("settling") and not props_b.get("settling"):
@@ -556,7 +648,10 @@ class HypothesisReasoner:
             conclusion=conclusion,
             confidence=confidence,
             evidence=evidence,
-            assumptions=["Algorithm properties are composable", "No negative interference between components"],
+            assumptions=[
+                "Algorithm properties are composable",
+                "No negative interference between components",
+            ],
         )
 
         self._reasoning_chains.append(chain)
@@ -589,7 +684,11 @@ class HypothesisReasoner:
             steps.append("  (no counterevidence provided)")
 
         steps.append("Step 3: Identify assumptions to test")
-        assumptions = hypothesis.structured_reasoning.assumptions if hypothesis.structured_reasoning else []
+        assumptions = (
+            hypothesis.structured_reasoning.assumptions
+            if hypothesis.structured_reasoning
+            else []
+        )
         for a in assumptions:
             steps.append(f"  ? {a}")
 
@@ -598,7 +697,9 @@ class HypothesisReasoner:
         # Simple refinement logic
         new_confidence = hypothesis.confidence
         if counterevidence:
-            new_confidence = max(0.1, hypothesis.confidence - 0.1 * len(counterevidence))
+            new_confidence = max(
+                0.1, hypothesis.confidence - 0.1 * len(counterevidence)
+            )
 
         if new_confidence < 0.3:
             conclusion = f"Hypothesis weakened. Consider alternative: {hypothesis.proposed_model or 'different approach'}"
@@ -670,10 +771,14 @@ class HypothesisReasoner:
         n_algos = len(available_algorithms)
         n_tasks = len(available_tasks)
         n_conditions = n_algos * n_tasks
-        steps.append(f"  Full factorial: {n_algos} algorithms × {n_tasks} tasks = {n_conditions} conditions")
+        steps.append(
+            f"  Full factorial: {n_algos} algorithms × {n_tasks} tasks = {n_conditions} conditions"
+        )
 
         if n_conditions > 50:
-            steps.append("  → Too many conditions; use fractional factorial or Bayesian optimization")
+            steps.append(
+                "  → Too many conditions; use fractional factorial or Bayesian optimization"
+            )
 
         steps.append("Step 4: Define success criteria")
         criteria = [
@@ -694,7 +799,9 @@ class HypothesisReasoner:
         for a in analyses:
             steps.append(f"  → {a}")
 
-        conclusion = f"Designed {n_conditions}-condition experiment to test: {research_question}"
+        conclusion = (
+            f"Designed {n_conditions}-condition experiment to test: {research_question}"
+        )
         if n_conditions > 50:
             conclusion += " (will use fractional design)"
 
@@ -703,8 +810,14 @@ class HypothesisReasoner:
             steps=steps,
             conclusion=conclusion,
             confidence=0.8,
-            evidence=[f"Algorithms: {available_algorithms}", f"Tasks: {available_tasks}"],
-            assumptions=["Algorithms are correctly implemented", "Tasks are well-defined"],
+            evidence=[
+                f"Algorithms: {available_algorithms}",
+                f"Tasks: {available_tasks}",
+            ],
+            assumptions=[
+                "Algorithms are correctly implemented",
+                "Tasks are well-defined",
+            ],
         )
 
         self._reasoning_chains.append(chain)

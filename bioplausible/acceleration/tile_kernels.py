@@ -385,7 +385,11 @@ try:
             logits = logits * temp
 
             if router_bias_ptr != 0:
-                bias = tl.load(router_bias_ptr + tl.arange(0, N), mask=tl.arange(0, N) < N, other=0.0)
+                bias = tl.load(
+                    router_bias_ptr + tl.arange(0, N),
+                    mask=tl.arange(0, N) < N,
+                    other=0.0,
+                )
                 logits = logits + bias
 
             # Softmax
@@ -415,6 +419,7 @@ except ImportError:
 # ──────────────────────────────────────────────
 # Multi-GPU Tile Sharding (NCCL)
 # ──────────────────────────────────────────────
+
 
 class TileShardedBackend:
     """Multi-GPU tile sharding via NCCL.
@@ -467,6 +472,7 @@ class TileShardedBackend:
 # ──────────────────────────────────────────────
 # Tile Kernel Backend with Triton Acceleration
 # ──────────────────────────────────────────────
+
 
 class TileKernelBackend:
     """Tile substrate kernel backend.
@@ -606,14 +612,22 @@ class TileKernelBackend:
         """Launch fused prediction kernel."""
         if not inputs:
             if bias is not None:
-                return bias.unsqueeze(0).expand(inputs[0].shape[0], -1) if inputs else bias.unsqueeze(0)
-            return torch.zeros(1, self._neurons_per_tile, device=self._device, dtype=self._dtype)
+                return (
+                    bias.unsqueeze(0).expand(inputs[0].shape[0], -1)
+                    if inputs
+                    else bias.unsqueeze(0)
+                )
+            return torch.zeros(
+                1, self._neurons_per_tile, device=self._device, dtype=self._dtype
+            )
 
         B, N = inputs[0].shape
 
         if HAS_TRITON_TILE and self._device.type == "cuda":
             num_inputs = len(inputs)
-            input_ptrs = torch.tensor([inp.data_ptr() for inp in inputs], dtype=torch.int64, device="cuda")
+            input_ptrs = torch.tensor(
+                [inp.data_ptr() for inp in inputs], dtype=torch.int64, device="cuda"
+            )
             input_strides = torch.tensor(
                 [[inp.stride(0), inp.stride(1)] for inp in inputs],
                 dtype=torch.int64,
@@ -665,7 +679,10 @@ class TileKernelBackend:
             delta = torch.empty(D_out, D_in, device=self._device, dtype=self._dtype)
             BLOCK_IN = 32
             BLOCK_OUT = 32
-            grid = ((D_in + BLOCK_IN - 1) // BLOCK_IN, (D_out + BLOCK_OUT - 1) // BLOCK_OUT)
+            grid = (
+                (D_in + BLOCK_IN - 1) // BLOCK_IN,
+                (D_out + BLOCK_OUT - 1) // BLOCK_OUT,
+            )
 
             _tile_contrastive_update_kernel[grid](
                 src_free.data_ptr(),
@@ -714,7 +731,10 @@ class TileKernelBackend:
             delta = torch.empty(D_out, D_in, device=self._device, dtype=self._dtype)
             BLOCK_IN = 32
             BLOCK_OUT = 32
-            grid = ((D_in + BLOCK_IN - 1) // BLOCK_IN, (D_out + BLOCK_OUT - 1) // BLOCK_OUT)
+            grid = (
+                (D_in + BLOCK_IN - 1) // BLOCK_IN,
+                (D_out + BLOCK_OUT - 1) // BLOCK_OUT,
+            )
 
             _tile_hebbian_update_kernel[grid](
                 src.data_ptr(),
@@ -791,9 +811,13 @@ class TileKernelBackend:
                     BLOCK_B=BLOCK_B,
                 )
             elif strategy == "learned":
-                router_w_ptr = router_weights.data_ptr() if router_weights is not None else 0
+                router_w_ptr = (
+                    router_weights.data_ptr() if router_weights is not None else 0
+                )
                 router_b_ptr = router_bias.data_ptr() if router_bias is not None else 0
-                router_dim = router_weights.shape[0] if router_weights is not None else N
+                router_dim = (
+                    router_weights.shape[0] if router_weights is not None else N
+                )
                 _tile_learned_routing_kernel[grid](
                     logits.data_ptr(),
                     router_w_ptr,
@@ -811,7 +835,9 @@ class TileKernelBackend:
             values, indices = torch.topk(logits, num_routes, dim=1)
         elif strategy == "random":
             gen = torch.Generator(device=device).manual_seed(seed)
-            indices = torch.multinomial(torch.softmax(logits, dim=1), num_routes, generator=gen)
+            indices = torch.multinomial(
+                torch.softmax(logits, dim=1), num_routes, generator=gen
+            )
             values = torch.gather(logits, 1, indices)
         elif strategy == "learned":
             if router_weights is not None:
@@ -963,17 +989,27 @@ class TileKernelBackend:
                 idx = layer_idx * self._tiles_per_layer + tile_idx
 
                 src = activations[idx] if idx < len(activations) else activations[-1]
-                dst = activations[idx + 1] if idx + 1 < len(activations) else activations[-1]
+                dst = (
+                    activations[idx + 1]
+                    if idx + 1 < len(activations)
+                    else activations[-1]
+                )
 
                 weight = None
                 if hasattr(self, "_tile_algo") and self._tile_algo is not None:
                     # Get weight from tile algorithm
-                    src_id = layer_idx * self._tiles_per_layer + tile_idx - self._tiles_per_layer
+                    src_id = (
+                        layer_idx * self._tiles_per_layer
+                        + tile_idx
+                        - self._tiles_per_layer
+                    )
                     dst_id = idx
                     if src_id >= 0 and hasattr(self._tile_algo, "_weight_lookup"):
                         weight = self._tile_algo._weight_lookup(src_id, dst_id)
 
-                delta = self._launch_hebbian_update(src, dst, weight, importance, use_oja)
+                delta = self._launch_hebbian_update(
+                    src, dst, weight, importance, use_oja
+                )
                 weight_deltas[f"tiles.layer{layer_idx}.tile{tile_idx}.weight"] = delta
 
         if self._sharded is not None:

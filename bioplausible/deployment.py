@@ -135,7 +135,9 @@ class ModelExporter:
 
         if "torchscript" in formats:
             try:
-                path = self._export_torchscript(model, output_dir, input_shape, verbose)
+                path = self._export_torchscript(
+                    model, output_dir, input_shape, verbose, method="trace"
+                )
                 export_paths["torchscript"] = path
             except (RuntimeError, ValueError, OSError) as e:
                 if verbose:
@@ -186,7 +188,7 @@ class ModelExporter:
         input_shape: tuple[int, ...],
         verbose: bool,
     ) -> str:
-        """Export to ONNX format."""
+        """Export to ONNX format with dynamic axes and opset 17+."""
         path = str(Path(output_dir) / "model.onnx")
 
         model.eval()
@@ -203,7 +205,7 @@ class ModelExporter:
                 dummy_input,
                 path,
                 export_params=True,
-                opset_version=14,
+                opset_version=17,
                 do_constant_folding=True,
                 input_names=["input"],
                 output_names=["output"],
@@ -211,11 +213,11 @@ class ModelExporter:
                     "input": {0: "batch_size"},
                     "output": {0: "batch_size"},
                 },
-                dynamo=False,
+                dynamo=True,
             )
 
         if verbose:
-            logger.info("  ✓ ONNX: %s", path)
+            logger.info("  ✓ ONNX (opset 17): %s", path)
 
         return path
 
@@ -225,31 +227,38 @@ class ModelExporter:
         output_dir: str,
         input_shape: tuple[int, ...],
         verbose: bool,
+        method: str = "script",
     ) -> str:
-        """Export to torch.compile format.
+        """Export to TorchScript format (script or trace).
 
-        Saves model state dict alongside compilation metadata.
+        Args:
+            model: Model to export.
+            output_dir: Output directory.
+            input_shape: Example input shape for tracing.
+            verbose: Print progress.
+            method: 'script' (torch.jit.script) or 'trace' (torch.jit.trace).
+
+        Returns:
+            Path to exported model.
         """
-        path = str(Path(output_dir) / "model.pt")
+        path = str(Path(output_dir) / "model_ts.pt")
 
         model.eval()
+        model = model.to(self.device)
         dummy_input = torch.randn(input_shape, device=self.device)
 
-        compiled_model = torch.compile(model, mode="reduce-overhead")
-        # Run once to trigger compilation
-        _ = compiled_model(dummy_input)
-        # Save state dict for compiled model via canonical checkpoint
-        save_checkpoint(
-            path,
-            {
-                "model_state_dict": compiled_model.state_dict(),
-                "compiled": True,
-            },
-            mkdir=True,
-        )
+        if method == "script":
+            scripted = torch.jit.script(model)
+        elif method == "trace":
+            scripted = torch.jit.trace(model, dummy_input)
+        else:
+            raise ValueError(f"Unknown TorchScript method: {method}")
+
+        # Save TorchScript model
+        scripted.save(path)
 
         if verbose:
-            logger.info("  ✓ Compiled model: %s", path)
+            logger.info("  ✓ TorchScript (%s): %s", method, path)
 
         return path
 
@@ -676,7 +685,7 @@ def load_model(
 
 
 def export_to_onnx(model, input_sample, path):
-    """Export model to ONNX format."""
+    """Export model to ONNX format with opset 17+."""
     import warnings
 
     model.eval()
@@ -689,7 +698,7 @@ def export_to_onnx(model, input_sample, path):
             input_sample,
             path,
             export_params=True,
-            opset_version=11,
+            opset_version=17,
             do_constant_folding=True,
             input_names=["input"],
             output_names=["output"],
@@ -697,24 +706,33 @@ def export_to_onnx(model, input_sample, path):
                 "input": {0: "batch_size"},
                 "output": {0: "batch_size"},
             },
-            dynamo=False,
+            dynamo=True,
         )
 
 
-def export_to_torchscript(model, input_sample, path):
-    """Export model to torch.compile format.
+def export_to_torchscript(model, input_sample, path, method: str = "script"):
+    """Export model to TorchScript format.
 
-    Saves model state dict. Note: this function replaces the deprecated
-    torch.jit.trace export. The saved file contains state dict under
-    ``model_state_dict`` key and a ``compiled`` marker.
+    Args:
+        model: Model to export.
+        input_sample: Example input for tracing (required for trace method).
+        path: Output path.
+        method: 'script' (torch.jit.script) or 'trace' (torch.jit.trace).
+
+    Returns:
+        Path to exported model.
     """
     model.eval()
-    compiled_model = torch.compile(model, mode="reduce-overhead")
-    _ = compiled_model(input_sample)
-    save_checkpoint(
-        path,
-        {"model_state_dict": compiled_model.state_dict(), "compiled": True},
-    )
+
+    if method == "script":
+        scripted = torch.jit.script(model)
+    elif method == "trace":
+        scripted = torch.jit.trace(model, input_sample)
+    else:
+        raise ValueError(f"Unknown TorchScript method: {method}")
+
+    scripted.save(path)
+    return path
 
 
 # --- Serving Logic (FastAPI) ---
@@ -807,15 +825,225 @@ def serve_model(model: object, host: str = "0.0.0.0", port: int = 8000) -> None:
     _app_state.serve_model(model, host=host, port=port)
 
 
+# --- Quantization Utilities ---
+
+
+def quantize_model_int8_ptq(
+    model: nn.Module,
+    calibration_data: list[torch.Tensor] | None = None,
+    backend: str = "fbgemm",
+) -> nn.Module:
+    """
+    Post-Training Quantization (PTQ) to INT8.
+
+    Args:
+        model: Model to quantize (must be on CPU).
+        calibration_data: List of input tensors for calibration.
+        backend: Quantization backend ('fbgemm' for x86, 'qnnpack' for ARM).
+
+    Returns:
+        Quantized model.
+    """
+    import torch.quantization as quant
+
+    model.eval()
+    model.cpu()
+
+    # Set quantization config
+    model.qconfig = quant.get_default_qconfig(backend)
+
+    # Prepare for quantization
+    quant.prepare(model, inplace=True)
+
+    # Calibrate with sample data
+    if calibration_data is not None:
+        with torch.no_grad():
+            for x in calibration_data:
+                model(x)
+
+    # Convert to quantized model
+    quantized_model = quant.convert(model, inplace=False)
+
+    return quantized_model
+
+
+def quantize_model_int8_qat(
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer | None = None,
+    backend: str = "fbgemm",
+) -> nn.Module:
+    """
+    Quantization-Aware Training (QAT) preparation for INT8.
+
+    Args:
+        model: Model to prepare for QAT.
+        optimizer: Optional optimizer (will be recreated for quantized model).
+        backend: Quantization backend.
+
+    Returns:
+        QAT-prepared model (train this, then call convert).
+    """
+    import torch.quantization as quant
+
+    model.train()
+    model.cpu()
+
+    # Set QAT config
+    model.qconfig = quant.get_default_qat_qconfig(backend)
+
+    # Prepare for QAT (inserts fake quant observers)
+    quant.prepare_qat(model, inplace=True)
+
+    return model
+
+
+def convert_qat_model(model: nn.Module) -> nn.Module:
+    """
+    Convert QAT-prepared model to quantized INT8 model.
+
+    Call after QAT training is complete.
+
+    Args:
+        model: QAT-prepared model.
+
+    Returns:
+        Fully quantized INT8 model.
+    """
+    import torch.quantization as quant
+
+    model.eval()
+    model.cpu()
+    quantized_model = quant.convert(model, inplace=False)
+    return quantized_model
+
+
+def quantize_model_dynamic_int8(model: nn.Module) -> nn.Module:
+    """
+    Dynamic quantization to INT8 (weights only, activations float).
+
+    Simplest quantization - no calibration needed, weights quantized to INT8,
+    activations remain float. Good for LSTM/Transformer models.
+
+    Args:
+        model: Model to quantize.
+
+    Returns:
+        Dynamically quantized model.
+    """
+    import torch.quantization as quant
+
+    model.eval()
+    model.cpu()
+
+    # Quantize Linear and LSTM layers dynamically
+    quantized_model = quant.quantize_dynamic(
+        model,
+        {nn.Linear, nn.LSTM, nn.GRU},
+        dtype=torch.qint8,
+    )
+
+    return quantized_model
+
+
+def save_quantized_model(
+    model: nn.Module,
+    path: str,
+    model_name: str = "quantized_model",
+    input_shape: tuple[int, ...] | None = None,
+) -> None:
+    """Save quantized model with metadata."""
+    from bioplausible.core.checkpoint import save_checkpoint
+
+    save_checkpoint(
+        path,
+        {
+            "model_state_dict": model.state_dict(),
+            "quantized": True,
+            "model_name": model_name,
+            "input_shape": input_shape,
+        },
+        mkdir=True,
+    )
+
+
+def load_quantized_model(
+    path: str,
+    model_class: type,
+    model_params: dict[str, object],
+    input_shape: tuple[int, ...] | None = None,
+) -> nn.Module:
+    """Load quantized model and prepare for inference."""
+    from bioplausible.deployment import load_model
+
+    model, _ = load_model(path)
+    model.eval()
+    return model
+
+
+def benchmark_quantized_model(
+    model: nn.Module,
+    quantized_model: nn.Module,
+    test_data: list[torch.Tensor],
+    num_runs: int = 100,
+) -> dict[str, float]:
+    """
+    Benchmark original vs quantized model.
+
+    Returns:
+        Dict with latency comparison and accuracy metrics.
+    """
+    import time
+
+    model.eval()
+    quantized_model.eval()
+
+    # Warmup
+    with torch.no_grad():
+        for x in test_data[:5]:
+            model(x)
+            quantized_model(x)
+
+    # Benchmark original
+    times_orig = []
+    for x in test_data[:num_runs]:
+        start = time.perf_counter()
+        with torch.no_grad():
+            _ = model(x)
+        times_orig.append(time.perf_counter() - start)
+
+    # Benchmark quantized
+    times_quant = []
+    for x in test_data[:num_runs]:
+        start = time.perf_counter()
+        with torch.no_grad():
+            _ = quantized_model(x)
+        times_quant.append(time.perf_counter() - start)
+
+    return {
+        "orig_mean_ms": sum(times_orig) / len(times_orig) * 1000,
+        "quant_mean_ms": sum(times_quant) / len(times_quant) * 1000,
+        "speedup": sum(times_orig) / sum(times_quant),
+        "orig_p99_ms": sorted(times_orig)[int(len(times_orig) * 0.99)] * 1000,
+        "quant_p99_ms": sorted(times_quant)[int(len(times_quant) * 0.99)] * 1000,
+    }
+
+
 __all__ = [
     "InferenceEngine",
     "ModelExporter",
     "ModelInfo",
     "ModelLoader",
+    "benchmark_quantized_model",
+    "convert_qat_model",
     "export_model",
     "export_to_onnx",
     "export_to_torchscript",
     "get_app",
     "load_model",
+    "load_quantized_model",
+    "quantize_model_dynamic_int8",
+    "quantize_model_int8_ptq",
+    "quantize_model_int8_qat",
+    "save_quantized_model",
     "serve_model",
 ]

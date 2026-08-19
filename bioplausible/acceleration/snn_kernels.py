@@ -355,8 +355,16 @@ try:
         mask_b = offs_b < B
         mask_n = offs_n < N
 
-        v = tl.load(v_ptr + offs_b[:, None] * N + offs_n[None, :], mask=mask_b[:, None] & mask_n[None, :], other=0.0)
-        i_syn = tl.load(i_syn_ptr + offs_b[:, None] * N + offs_n[None, :], mask=mask_b[:, None] & mask_n[None, :], other=0.0)
+        v = tl.load(
+            v_ptr + offs_b[:, None] * N + offs_n[None, :],
+            mask=mask_b[:, None] & mask_n[None, :],
+            other=0.0,
+        )
+        i_syn = tl.load(
+            i_syn_ptr + offs_b[:, None] * N + offs_n[None, :],
+            mask=mask_b[:, None] & mask_n[None, :],
+            other=0.0,
+        )
 
         # dv/dt = -v/tau_mem + I_syn
         v_new = v + dt * (-v / tau_mem + i_syn)
@@ -373,9 +381,21 @@ try:
         # Add spikes to synaptic current
         i_syn_new = i_syn_new + spikes
 
-        tl.store(v_ptr + offs_b[:, None] * N + offs_n[None, :], v_new, mask=mask_b[:, None] & mask_n[None, :])
-        tl.store(i_syn_ptr + offs_b[:, None] * N + offs_n[None, :], i_syn_new, mask=mask_b[:, None] & mask_n[None, :])
-        tl.store(spikes_ptr + offs_b[:, None] * N + offs_n[None, :], spikes, mask=mask_b[:, None] & mask_n[None, :])
+        tl.store(
+            v_ptr + offs_b[:, None] * N + offs_n[None, :],
+            v_new,
+            mask=mask_b[:, None] & mask_n[None, :],
+        )
+        tl.store(
+            i_syn_ptr + offs_b[:, None] * N + offs_n[None, :],
+            i_syn_new,
+            mask=mask_b[:, None] & mask_n[None, :],
+        )
+        tl.store(
+            spikes_ptr + offs_b[:, None] * N + offs_n[None, :],
+            spikes,
+            mask=mask_b[:, None] & mask_n[None, :],
+        )
 
     @triton.jit
     def _stdp_update_kernel(
@@ -408,18 +428,38 @@ try:
         # Correlation over time
         for t in range(T - 1):
             # LTP: post at t+1 with pre at t
-            pre_t = tl.load(pre_spikes_ptr + offs_pre[None, :] * T + (t + 1), mask=mask_pre[None, :], other=0.0)
-            post_t = tl.load(post_spikes_ptr + offs_post[:, None] * T + t, mask=mask_post[:, None], other=0.0)
+            pre_t = tl.load(
+                pre_spikes_ptr + offs_pre[None, :] * T + (t + 1),
+                mask=mask_pre[None, :],
+                other=0.0,
+            )
+            post_t = tl.load(
+                post_spikes_ptr + offs_post[:, None] * T + t,
+                mask=mask_post[:, None],
+                other=0.0,
+            )
             ltp += tl.dot(post_t, pre_t)
 
             # LTD: post at t with pre at t+1
-            pre_t1 = tl.load(pre_spikes_ptr + offs_pre[None, :] * T + t, mask=mask_pre[None, :], other=0.0)
-            post_t1 = tl.load(post_spikes_ptr + offs_post[:, None] * T + (t + 1), mask=mask_post[:, None], other=0.0)
+            pre_t1 = tl.load(
+                pre_spikes_ptr + offs_pre[None, :] * T + t,
+                mask=mask_pre[None, :],
+                other=0.0,
+            )
+            post_t1 = tl.load(
+                post_spikes_ptr + offs_post[:, None] * T + (t + 1),
+                mask=mask_post[:, None],
+                other=0.0,
+            )
             ltd += tl.dot(post_t1, pre_t1)
 
         delta = A_plus * ltp - A_minus * ltd
 
-        tl.store(delta_ptr + offs_post[:, None] * N_pre + offs_pre[None, :], delta, mask=mask_post[:, None] & mask_pre[None, :])
+        tl.store(
+            delta_ptr + offs_post[:, None] * N_pre + offs_pre[None, :],
+            delta,
+            mask=mask_post[:, None] & mask_pre[None, :],
+        )
 
     @triton.jit
     def _contrastive_stdp_kernel(
@@ -450,26 +490,62 @@ try:
 
         for t in range(T - 1):
             # Free phase
-            pre_f = tl.load(pre_free_ptr + offs_pre[None, :] * T + (t + 1), mask=mask_pre[None, :], other=0.0)
-            post_f = tl.load(post_free_ptr + offs_post[:, None] * T + t, mask=mask_post[:, None], other=0.0)
+            pre_f = tl.load(
+                pre_free_ptr + offs_pre[None, :] * T + (t + 1),
+                mask=mask_pre[None, :],
+                other=0.0,
+            )
+            post_f = tl.load(
+                post_free_ptr + offs_post[:, None] * T + t,
+                mask=mask_post[:, None],
+                other=0.0,
+            )
             free_delta += tl.dot(post_f, pre_f)
 
-            pre_f_t = tl.load(pre_free_ptr + offs_pre[None, :] * T + t, mask=mask_pre[None, :], other=0.0)
-            post_f_t = tl.load(post_free_ptr + offs_post[:, None] * T + (t + 1), mask=mask_post[:, None], other=0.0)
+            pre_f_t = tl.load(
+                pre_free_ptr + offs_pre[None, :] * T + t,
+                mask=mask_pre[None, :],
+                other=0.0,
+            )
+            post_f_t = tl.load(
+                post_free_ptr + offs_post[:, None] * T + (t + 1),
+                mask=mask_post[:, None],
+                other=0.0,
+            )
             free_delta += tl.dot(post_f_t, pre_f_t)
 
             # Nudged phase
-            pre_n = tl.load(pre_nudged_ptr + offs_pre[None, :] * T + (t + 1), mask=mask_pre[None, :], other=0.0)
-            post_n = tl.load(post_nudged_ptr + offs_post[:, None] * T + t, mask=mask_post[:, None], other=0.0)
+            pre_n = tl.load(
+                pre_nudged_ptr + offs_pre[None, :] * T + (t + 1),
+                mask=mask_pre[None, :],
+                other=0.0,
+            )
+            post_n = tl.load(
+                post_nudged_ptr + offs_post[:, None] * T + t,
+                mask=mask_post[:, None],
+                other=0.0,
+            )
             nudged_delta += tl.dot(post_n, pre_n)
 
-            pre_n_t = tl.load(pre_nudged_ptr + offs_pre[None, :] * T + t, mask=mask_pre[None, :], other=0.0)
-            post_n_t = tl.load(post_nudged_ptr + offs_post[:, None] * T + (t + 1), mask=mask_post[:, None], other=0.0)
+            pre_n_t = tl.load(
+                pre_nudged_ptr + offs_pre[None, :] * T + t,
+                mask=mask_pre[None, :],
+                other=0.0,
+            )
+            post_n_t = tl.load(
+                post_nudged_ptr + offs_post[:, None] * T + (t + 1),
+                mask=mask_post[:, None],
+                other=0.0,
+            )
             nudged_delta += tl.dot(post_n_t, pre_n_t)
 
         delta = (nudged_delta - free_delta) / beta
 
-        tl.store(delta_ptr + offs_post[:, None] * N_pre + offs_pre[None, :], delta, mask=mask_post[:, None] & mask_pre[None, :])
+        tl.store(
+            delta_ptr + offs_post[:, None] * N_pre + offs_pre[None, :],
+            delta,
+            mask=mask_post[:, None] & mask_pre[None, :],
+        )
 
     HAS_TRITON_SNN = True
 except ImportError:

@@ -53,7 +53,7 @@ def _set_nested(cfg: RunConfig, path: tuple[str, ...], value: object) -> None:
     final = path[-1]
     try:
         setattr(obj, final, value)
-    except (AttributeError, TypeError):
+    except AttributeError, TypeError:
         obj[final] = value
 
 
@@ -144,7 +144,9 @@ class AblationStudy:
                 params=params,
                 success=True,
                 val_accuracy=score,
-                metrics={k: float(v) for k, v in res.items() if isinstance(v, (int, float))},
+                metrics={
+                    k: float(v) for k, v in res.items() if isinstance(v, (int, float))
+                },
             )
         except Exception as e:  # broad: best-effort
             return AblationResult(
@@ -542,17 +544,23 @@ class AblationStudy:
             # Sobol plot
             if sobol:
                 fig = self.plot_sobol_indices(sobol)
-                fig.savefig(output_dir / "sobol_indices.png", dpi=150, bbox_inches="tight")
+                fig.savefig(
+                    output_dir / "sobol_indices.png", dpi=150, bbox_inches="tight"
+                )
                 plt.close(fig)
                 report_paths["sobol_plot"] = output_dir / "sobol_indices.png"
 
         # Generate formatted report
         if format in ("html", "all"):
-            html_path = self._generate_html_report(output_dir, summary, df, loo_results, sobol)
+            html_path = self._generate_html_report(
+                output_dir, summary, df, loo_results, sobol
+            )
             report_paths["html"] = html_path
 
         if format in ("markdown", "all"):
-            md_path = self._generate_markdown_report(output_dir, summary, loo_results, sobol)
+            md_path = self._generate_markdown_report(
+                output_dir, summary, loo_results, sobol
+            )
             report_paths["markdown"] = md_path
 
         return report_paths
@@ -593,15 +601,15 @@ class AblationStudy:
 
     <h2>Summary</h2>
     <div class="metric">
-        <div class="metric-value">{summary['n_experiments']}</div>
+        <div class="metric-value">{summary["n_experiments"]}</div>
         <div class="metric-label">Total Experiments</div>
     </div>
     <div class="metric">
-        <div class="metric-value">{summary['n_successful']}</div>
+        <div class="metric-value">{summary["n_successful"]}</div>
         <div class="metric-label">Successful Runs</div>
     </div>
     <div class="metric">
-        <div class="metric-value">{summary['baseline_accuracy']:.4f if summary['baseline_accuracy'] else 'N/A'}</div>
+        <div class="metric-value">{summary["baseline_accuracy"]:.4f if summary['baseline_accuracy'] else 'N/A'}</div>
         <div class="metric-label">Baseline Accuracy</div>
     </div>
 
@@ -611,7 +619,9 @@ class AblationStudy:
 """
 
         for i, param in enumerate(summary["critical_params"], 1):
-            html_content += f"        <li><span class='critical'>{i}. {param}</span></li>\n"
+            html_content += (
+                f"        <li><span class='critical'>{i}. {param}</span></li>\n"
+            )
 
         html_content += """
     </ol>
@@ -684,7 +694,7 @@ class AblationStudy:
         for plot_file in output_dir.glob("*.png"):
             html_content += f"""
     <div class="plot">
-        <h3>{plot_file.stem.replace('_', ' ').title()}</h3>
+        <h3>{plot_file.stem.replace("_", " ").title()}</h3>
         <img src="{plot_file.name}" alt="{plot_file.stem}">
     </div>
 """
@@ -796,7 +806,9 @@ def create_ablation_report(
 
     if run_sobol:
         try:
-            study.compute_sobol_indices(n_samples=500, parallel_workers=parallel_workers)
+            study.compute_sobol_indices(
+                n_samples=500, parallel_workers=parallel_workers
+            )
         except ImportError:
             pass
 

@@ -133,9 +133,14 @@ class KernelRegistry:
     _backends: dict[AlgorithmFamily, dict[HardwareTarget, type]] = {}
     _instances: dict[tuple[AlgorithmFamily, HardwareTarget], object] = {}
     # Auto-tuning cache: (algorithm, hardware, op_name, shape) -> best_hardware
-    _autotune_cache: dict[tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]], HardwareTarget] = {}
+    _autotune_cache: dict[
+        tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]], HardwareTarget
+    ] = {}
     # Benchmark results: (algorithm, hardware, op_name, shape) -> list of (hardware, time_ms)
-    _benchmark_cache: dict[tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]], list[tuple[HardwareTarget, float]]] = {}
+    _benchmark_cache: dict[
+        tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]],
+        list[tuple[HardwareTarget, float]],
+    ] = {}
 
     @classmethod
     def register(
@@ -239,7 +244,13 @@ class KernelRegistry:
 
         # Benchmark each backend for this shape
         best_hw = cls._benchmark_backends(
-            algorithm, op_name, shape, candidate_hw, benchmark_fn, warmup_runs, benchmark_runs
+            algorithm,
+            op_name,
+            shape,
+            candidate_hw,
+            benchmark_fn,
+            warmup_runs,
+            benchmark_runs,
         )
 
         cls._autotune_cache[cache_key] = best_hw
@@ -271,7 +282,9 @@ class KernelRegistry:
                     time_ms = benchmark_fn(backend, shape)
                 else:
                     # Default: time the forward pass with dummy inputs
-                    time_ms = cls._default_benchmark(backend, op_name, shape, warmup_runs, benchmark_runs)
+                    time_ms = cls._default_benchmark(
+                        backend, op_name, shape, warmup_runs, benchmark_runs
+                    )
 
                 if time_ms > 0 and not np.isinf(time_ms):
                     results.append((hw, time_ms))
@@ -310,10 +323,13 @@ class KernelRegistry:
                     HardwareTarget,
                     KernelConfig,
                 )
+
                 config = KernelConfig(
-                    algorithm=backend.name if hasattr(backend, "name") else AlgorithmFamily.BACKPROP,
+                    algorithm=backend.name
+                    if hasattr(backend, "name")
+                    else AlgorithmFamily.BACKPROP,
                     hardware=HardwareTarget.CPU,
-                    extra={"num_layers": 2, "hidden_dim": shape[-1] if shape else 256}
+                    extra={"num_layers": 2, "hidden_dim": shape[-1] if shape else 256},
                 )
                 backend.initialize(config)
             except Exception:

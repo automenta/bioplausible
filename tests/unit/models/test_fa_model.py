@@ -13,6 +13,7 @@ from bioplausible.zoo.models.fa import (
     FeedbackAlignmentEqProp,
     FeedbackAlignmentLayer,
     LayerwiseEquilibriumFA,
+    SignSymmetricFA,
     StandardFA,
     StochasticFA,
 )
@@ -516,3 +517,40 @@ class TestEquilibriumAlignment:
         y = torch.randint(0, 3, (8,))
         optimizer.step(x, y)
         assert any(p.grad is not None for p in model.parameters() if p.requires_grad)
+
+
+# ─── SignSymmetricFA ──────────────────────────────────────────────────────────────
+
+
+class TestSignSymmetricFA:
+    def test_construction(self):
+        model = SignSymmetricFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
+        assert isinstance(model, SignSymmetricFA)
+
+    def test_forward_shape(self):
+        model = SignSymmetricFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
+        x = torch.randn(4, 10)
+        out = model(x)
+        assert out.shape == (4, 3)
+
+    def test_train_step_returns_dict(self):
+        model = SignSymmetricFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
+        x = torch.randn(8, 10)
+        y = torch.randint(0, 3, (8,))
+        result = model.train_step(x, y)
+        assert "loss" in result
+        assert "accuracy" in result
+
+    def test_sign_alignment_preserved(self):
+        """Feedback weights preserve sign of forward weights."""
+        model = SignSymmetricFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
+        for layer, B in zip(model.layers, model.feedback_weights):
+            W = layer.weight
+            sign_match = (torch.sign(W) * torch.sign(B) > 0).float().mean()
+            assert sign_match == 1.0
+
+    def test_feedback_alignment_angles(self):
+        model = SignSymmetricFA(input_dim=10, hidden_dim=20, output_dim=3, num_layers=2)
+        angles = model.get_feedback_alignment_angles()
+        assert isinstance(angles, dict)
+        assert len(angles) == 2

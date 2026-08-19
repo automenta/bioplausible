@@ -355,8 +355,16 @@ try:
         mask_b = offs_b < B
         mask_d = offs_d < D
 
-        mu = tl.load(mu_ptr + offs_b[:, None] * D + offs_d[None, :], mask=mask_b[:, None] & mask_d[None, :], other=0.0)
-        pred = tl.load(pred_ptr + offs_b[:, None] * D + offs_d[None, :], mask=mask_b[:, None] & mask_d[None, :], other=0.0)
+        mu = tl.load(
+            mu_ptr + offs_b[:, None] * D + offs_d[None, :],
+            mask=mask_b[:, None] & mask_d[None, :],
+            other=0.0,
+        )
+        pred = tl.load(
+            pred_ptr + offs_b[:, None] * D + offs_d[None, :],
+            mask=mask_b[:, None] & mask_d[None, :],
+            other=0.0,
+        )
 
         error = mu - pred
 
@@ -377,7 +385,11 @@ try:
 
         mu_new = mu - eta_infer * error * deriv
 
-        tl.store(mu_new_ptr + offs_b[:, None] * D + offs_d[None, :], mu_new, mask=mask_b[:, None] & mask_d[None, :])
+        tl.store(
+            mu_new_ptr + offs_b[:, None] * D + offs_d[None, :],
+            mu_new,
+            mask=mask_b[:, None] & mask_d[None, :],
+        )
 
     @triton.jit
     def _pc_contrastive_update_kernel(
@@ -408,12 +420,28 @@ try:
         acc_nudged = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
 
         for b in range(B):
-            pre_f = tl.load(pre_free_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
-            post_f = tl.load(post_free_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            pre_f = tl.load(
+                pre_free_ptr + b * D_in + offs_in[None, :],
+                mask=mask_in[None, :],
+                other=0.0,
+            )
+            post_f = tl.load(
+                post_free_ptr + b * D_out + offs_out[:, None],
+                mask=mask_out[:, None],
+                other=0.0,
+            )
             acc_free += tl.dot(tl.trans(post_f), pre_f)
 
-            pre_n = tl.load(pre_nudged_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
-            post_n = tl.load(post_nudged_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            pre_n = tl.load(
+                pre_nudged_ptr + b * D_in + offs_in[None, :],
+                mask=mask_in[None, :],
+                other=0.0,
+            )
+            post_n = tl.load(
+                post_nudged_ptr + b * D_out + offs_out[:, None],
+                mask=mask_out[:, None],
+                other=0.0,
+            )
             acc_nudged += tl.dot(tl.trans(post_n), pre_n)
 
         acc_free = acc_free / B
@@ -421,7 +449,11 @@ try:
 
         delta = lr * (acc_nudged - acc_free) / beta
 
-        tl.store(delta_ptr + offs_out[:, None] * D_in + offs_in[None, :], delta, mask=mask_out[:, None] & mask_in[None, :])
+        tl.store(
+            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
+            delta,
+            mask=mask_out[:, None] & mask_in[None, :],
+        )
 
     HAS_TRITON_PC = True
 except ImportError:

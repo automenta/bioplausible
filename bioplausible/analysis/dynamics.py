@@ -194,7 +194,9 @@ class DynamicsAnalyzer:
 
         # Check if model has energy method
         if not hasattr(self.model, "energy"):
-            warnings.warn("Model does not have energy() method. Cannot compute energy trajectory.")
+            warnings.warn(
+                "Model does not have energy() method. Cannot compute energy trajectory."
+            )
             return EnergyTrajectory(
                 free_energy=np.array([]),
                 nudged_energy=None,
@@ -236,9 +238,7 @@ class DynamicsAnalyzer:
 
         free_energy = np.array(free_energies)
         nudged_energy = np.array(nudged_energies) if nudged_energies else None
-        energy_gap = (
-            free_energy - nudged_energy if nudged_energy is not None else None
-        )
+        energy_gap = free_energy - nudged_energy if nudged_energy is not None else None
         steps_arr = np.arange(len(free_energy))
 
         return EnergyTrajectory(
@@ -327,8 +327,12 @@ class DynamicsAnalyzer:
 
         overall_alignment = alignment_sum / count if count > 0 else 0.0
         angle_degrees = np.degrees(np.arccos(np.clip(overall_alignment, -1, 1)))
-        bio_grad_norm = float(np.mean(list(bio_grad_norms.values()))) if bio_grad_norms else 0.0
-        bp_grad_norm = float(np.mean(list(bp_grad_norms.values()))) if bp_grad_norms else 0.0
+        bio_grad_norm = (
+            float(np.mean(list(bio_grad_norms.values()))) if bio_grad_norms else 0.0
+        )
+        bp_grad_norm = (
+            float(np.mean(list(bp_grad_norms.values()))) if bp_grad_norms else 0.0
+        )
 
         return GradientAlignment(
             cosine_similarity=overall_alignment,
@@ -346,7 +350,9 @@ class DynamicsAnalyzer:
             TileHeatmapData or None if model is not a TileAlgorithm.
         """
         # Check if model has tile structure
-        if not hasattr(self.model, "graph") or not hasattr(self.model, "tile_importance"):
+        if not hasattr(self.model, "graph") or not hasattr(
+            self.model, "tile_importance"
+        ):
             return None
 
         tile_activities = []
@@ -535,7 +541,9 @@ class DynamicsAnalyzer:
                 (heatmap_data.layer_ids[:i] == lid) & (heatmap_data.tile_ids[:i] == tid)
             )
             if data.ndim == 2:
-                heatmap_grid[layer_idx, tile_idx] = data[i, 0] if data.shape[1] == 1 else data[i].mean()
+                heatmap_grid[layer_idx, tile_idx] = (
+                    data[i, 0] if data.shape[1] == 1 else data[i].mean()
+                )
             else:
                 heatmap_grid[layer_idx, tile_idx] = data[i]
 
@@ -559,7 +567,9 @@ class DynamicsAnalyzer:
     ) -> go.Figure:
         """Create interactive Plotly convergence plot."""
         if not HAS_PLOTLY:
-            raise ImportError("Plotly is required for interactive plotting. Please install it.")
+            raise ImportError(
+                "Plotly is required for interactive plotting. Please install it."
+            )
 
         data = self.get_convergence_data(x, steps)
         if not data:
@@ -570,7 +580,8 @@ class DynamicsAnalyzer:
         steps_arr = np.arange(len(deltas))
 
         fig = make_subplots(
-            rows=1, cols=2,
+            rows=1,
+            cols=2,
             subplot_titles=("Equilibrium Error (State Change)", "Neural Activity"),
             horizontal_spacing=0.1,
         )
@@ -585,7 +596,8 @@ class DynamicsAnalyzer:
                 line=dict(color="blue"),
                 marker=dict(size=6),
             ),
-            row=1, col=1,
+            row=1,
+            col=1,
         )
 
         # Activities
@@ -598,7 +610,8 @@ class DynamicsAnalyzer:
                 line=dict(color="orange"),
                 marker=dict(size=6),
             ),
-            row=1, col=2,
+            row=1,
+            col=2,
         )
 
         fig.update_xaxes(title_text="Time Step", row=1, col=1)
@@ -622,7 +635,9 @@ class DynamicsAnalyzer:
     ) -> go.Figure:
         """Create interactive Plotly energy trajectory plot."""
         if not HAS_PLOTLY:
-            raise ImportError("Plotly is required for interactive plotting. Please install it.")
+            raise ImportError(
+                "Plotly is required for interactive plotting. Please install it."
+            )
 
         fig = go.Figure()
 
@@ -681,7 +696,9 @@ class DynamicsAnalyzer:
     ) -> go.Figure:
         """Create interactive Plotly tile heatmap."""
         if not HAS_PLOTLY:
-            raise ImportError("Plotly is required for interactive plotting. Please install it.")
+            raise ImportError(
+                "Plotly is required for interactive plotting. Please install it."
+            )
 
         if metric == "activity":
             data = heatmap_data.tile_activities.mean(axis=1)  # [tiles, neurons]
@@ -717,7 +734,9 @@ class DynamicsAnalyzer:
             if data.ndim == 2 and data.shape[1] > 1:
                 heatmap_grid[layer_idx, tile_idx] = data[i].mean()
             else:
-                heatmap_grid[layer_idx, tile_idx] = data[i, 0] if data.ndim == 2 else data[i]
+                heatmap_grid[layer_idx, tile_idx] = (
+                    data[i, 0] if data.ndim == 2 else data[i]
+                )
 
         fig = go.Figure(
             data=go.Heatmap(
@@ -748,14 +767,17 @@ class DynamicsAnalyzer:
     ) -> go.Figure:
         """Create interactive Plotly gradient alignment plot."""
         if not HAS_PLOTLY:
-            raise ImportError("Plotly is required for interactive plotting. Please install it.")
+            raise ImportError(
+                "Plotly is required for interactive plotting. Please install it."
+            )
 
         # Per-layer alignment bar chart
         layers = list(alignment.per_layer_alignment.keys())
         values = list(alignment.per_layer_alignment.values())
 
         fig = make_subplots(
-            rows=2, cols=1,
+            rows=2,
+            cols=1,
             subplot_titles=(
                 f"Per-Layer Cosine Similarity (Overall: {alignment.cosine_similarity:.4f}, Angle: {alignment.angle_degrees:.1f}°)",
                 "Gradient Norm Comparison",
@@ -774,7 +796,8 @@ class DynamicsAnalyzer:
                 text=[f"{v:.3f}" for v in values],
                 textposition="outside",
             ),
-            row=1, col=1,
+            row=1,
+            col=1,
         )
 
         # Gradient norms
@@ -795,7 +818,8 @@ class DynamicsAnalyzer:
                 marker_color="blue",
                 opacity=0.7,
             ),
-            row=2, col=1,
+            row=2,
+            col=1,
         )
         fig.add_trace(
             go.Bar(
@@ -805,7 +829,8 @@ class DynamicsAnalyzer:
                 marker_color="red",
                 opacity=0.7,
             ),
-            row=2, col=1,
+            row=2,
+            col=1,
         )
 
         fig.update_xaxes(tickangle=45, row=1, col=1)
@@ -872,7 +897,9 @@ class DynamicsAnalyzer:
             fig, ax = plt.subplots(figsize=(10, 5))
             layers = list(alignment.per_layer_alignment.keys())
             values = list(alignment.per_layer_alignment.values())
-            colors = ["green" if v > 0.5 else "orange" if v > 0 else "red" for v in values]
+            colors = [
+                "green" if v > 0.5 else "orange" if v > 0 else "red" for v in values
+            ]
             ax.bar(range(len(layers)), values, color=colors)
             ax.set_xticks(range(len(layers)))
             ax.set_xticklabels(layers, rotation=45, ha="right")
@@ -892,7 +919,9 @@ class DynamicsAnalyzer:
         heatmap_data = self.get_tile_heatmap_data()
         if heatmap_data is not None and HAS_MATPLOTLIB:
             for metric in ["activity", "error", "importance"]:
-                fig = self.plot_tile_heatmap(heatmap_data, metric, f"Tile {metric.capitalize()} Heatmap")
+                fig = self.plot_tile_heatmap(
+                    heatmap_data, metric, f"Tile {metric.capitalize()} Heatmap"
+                )
                 path = output_dir / f"tile_{metric}_heatmap.png"
                 fig.savefig(path, dpi=150, bbox_inches="tight")
                 plt.close(fig)
@@ -908,19 +937,31 @@ class DynamicsAnalyzer:
             report_paths["convergence_plotly"] = plotly_dir / "convergence.html"
 
             if len(energy_traj.free_energy) > 0:
-                fig = self.plot_energy_trajectory_plotly(energy_traj, "Energy Trajectory")
+                fig = self.plot_energy_trajectory_plotly(
+                    energy_traj, "Energy Trajectory"
+                )
                 fig.write_html(plotly_dir / "energy_trajectory.html")
-                report_paths["energy_trajectory_plotly"] = plotly_dir / "energy_trajectory.html"
+                report_paths["energy_trajectory_plotly"] = (
+                    plotly_dir / "energy_trajectory.html"
+                )
 
             if alignment.per_layer_alignment:
-                fig = self.plot_gradient_alignment_plotly(alignment, "Gradient Alignment Analysis")
+                fig = self.plot_gradient_alignment_plotly(
+                    alignment, "Gradient Alignment Analysis"
+                )
                 fig.write_html(plotly_dir / "gradient_alignment.html")
-                report_paths["gradient_alignment_plotly"] = plotly_dir / "gradient_alignment.html"
+                report_paths["gradient_alignment_plotly"] = (
+                    plotly_dir / "gradient_alignment.html"
+                )
 
             if heatmap_data is not None:
                 for metric in ["activity", "error", "importance"]:
-                    fig = self.plot_tile_heatmap_plotly(heatmap_data, metric, f"Tile {metric.capitalize()} Heatmap")
+                    fig = self.plot_tile_heatmap_plotly(
+                        heatmap_data, metric, f"Tile {metric.capitalize()} Heatmap"
+                    )
                     fig.write_html(plotly_dir / f"tile_{metric}_heatmap.html")
-                    report_paths[f"tile_{metric}_heatmap_plotly"] = plotly_dir / f"tile_{metric}_heatmap.html"
+                    report_paths[f"tile_{metric}_heatmap_plotly"] = (
+                        plotly_dir / f"tile_{metric}_heatmap.html"
+                    )
 
         return report_paths

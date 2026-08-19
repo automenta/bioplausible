@@ -73,6 +73,9 @@ dev = [
     "kademlia",
     "onnxruntime",
     "datasets",
+    "nicegui>=3.16.0",
+    "plotly>=6.9.0",
+    "cryptography==50.0.0",
 ]
 
 # --- Domain / data ---
@@ -190,7 +193,7 @@ select = [
     "RSE",  # flake8-raise
     "SIM",  # flake8-simplify
 ]
-ignore = ["non-empty-init-module"]
+ignore = ["RUF067"]
 
 [tool.ruff.lint.flake8-type-checking]
 

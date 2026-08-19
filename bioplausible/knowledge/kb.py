@@ -1234,7 +1234,7 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
             results = {}
 
             def scaling_law(N, D, E, A, B, alpha, beta):
-                return E + A / (N ** alpha) + B / (D ** beta)
+                return E + A / (N**alpha) + B / (D**beta)
 
             for model in df["model_family"].unique():
                 model_df = df[df["model_family"] == model]
@@ -1242,7 +1242,10 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
                     continue
 
                 try:
-                    X = np.column_stack([model_df["n_params"].values, model_df["n_data"].values])
+                    X = np.column_stack([
+                        model_df["n_params"].values,
+                        model_df["n_data"].values,
+                    ])
                     y = model_df["loss"].values
 
                     # Initial guess: E=0.1, A=1, B=1, alpha=0.5, beta=0.5
@@ -1250,8 +1253,14 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
                     bounds = ([0, 0, 0, 0.1, 0.1], [10, 100, 100, 2.0, 2.0])
 
                     popt, pcov = curve_fit(
-                        lambda X, E, A, B, alpha, beta: scaling_law(X[:, 0], X[:, 1], E, A, B, alpha, beta),
-                        X, y, p0=p0, bounds=bounds, maxfev=5000,
+                        lambda X, E, A, B, alpha, beta: scaling_law(
+                            X[:, 0], X[:, 1], E, A, B, alpha, beta
+                        ),
+                        X,
+                        y,
+                        p0=p0,
+                        bounds=bounds,
+                        maxfev=5000,
                     )
 
                     E, A, B, alpha, beta = popt
@@ -1448,14 +1457,20 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
                     continue
 
                 # Characterize cluster
-                error_mode = cluster_df["error"].mode().iloc[0] if not cluster_df["error"].mode().empty else "unknown"
+                error_mode = (
+                    cluster_df["error"].mode().iloc[0]
+                    if not cluster_df["error"].mode().empty
+                    else "unknown"
+                )
                 algorithms = cluster_df["model_family"].value_counts().to_dict()
                 tasks = cluster_df["task"].value_counts().to_dict()
                 mean_acc = float(cluster_df["accuracy"].mean())
 
                 # Common config patterns
                 common_config = {}
-                for col in cluster_df["config"].iloc[0].keys() if len(cluster_df) > 0 else []:
+                for col in (
+                    cluster_df["config"].iloc[0].keys() if len(cluster_df) > 0 else []
+                ):
                     vals = [c.get(col) for c in cluster_df["config"] if col in c]
                     if vals:
                         common_config[col] = max(set(vals), key=vals.count)
@@ -1469,7 +1484,9 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
                     "common_config": common_config,
                 }
 
-            logger.info("Mapped failure manifold with %d clusters", len(failure_manifold))
+            logger.info(
+                "Mapped failure manifold with %d clusters", len(failure_manifold)
+            )
             return failure_manifold
 
         except Exception as e:
@@ -1541,7 +1558,9 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
                 "leaves": dend["leaves"],
             }
 
-            logger.info("Generated algorithm phylogeny with %d clusters", tree["n_clusters"])
+            logger.info(
+                "Generated algorithm phylogeny with %d clusters", tree["n_clusters"]
+            )
             return tree
 
         except Exception as e:

@@ -169,9 +169,15 @@ class KernelProfiler:
         """Prepare inputs for benchmarking based on backend."""
         if backend in (BackendType.CUPY,):
             import cupy as cp
+
             return [cp.random.randn(*shape).astype(cp.float32) for _ in range(2)]
         else:
-            return [torch.randn(*shape, device="cuda" if backend != BackendType.CPU else "cpu") for _ in range(2)]
+            return [
+                torch.randn(
+                    *shape, device="cuda" if backend != BackendType.CPU else "cpu"
+                )
+                for _ in range(2)
+            ]
 
     def select_best_backend(
         self,
@@ -185,7 +191,9 @@ class KernelProfiler:
         if shape_key in self._cache:
             benchmarks = self._cache[shape_key]
         else:
-            benchmarks = self._benchmark_single(operation, shape, self._get_available_backends()[0])
+            benchmarks = self._benchmark_single(
+                operation, shape, self._get_available_backends()[0]
+            )
             benchmarks = [benchmarks]  # Simplified
 
         # Filter successful
@@ -250,7 +258,9 @@ class AutoDispatcher:
         else:
             return HardwareTarget.CPU
 
-    def _fallback_dispatch(self, algorithm: AlgorithmFamily, operation: str, *args, **kwargs):
+    def _fallback_dispatch(
+        self, algorithm: AlgorithmFamily, operation: str, *args, **kwargs
+    ):
         """Fallback to next available backend."""
         for hw in [HardwareTarget.CUDA, HardwareTarget.CPU]:
             backend = KernelRegistry.get(algorithm, hw)
@@ -276,7 +286,9 @@ class AutoDispatcher:
             if backend is not None:
                 info["available_backends"][hw.value] = {
                     "class": backend.__class__.__name__,
-                    "memory_complexity": getattr(backend, "memory_complexity", "unknown"),
+                    "memory_complexity": getattr(
+                        backend, "memory_complexity", "unknown"
+                    ),
                     "locality_level": getattr(backend, "locality_level", "unknown"),
                     "supports_autograd": getattr(backend, "supports_autograd", False),
                     "requires_settle": getattr(backend, "requires_settle", False),
@@ -341,6 +353,7 @@ def check_cupy_available() -> tuple[bool, str]:
     """Check if CuPy is available with proper CUDA configuration."""
     try:
         import cupy as cp
+
         _ = cp.zeros(10)
         return True, "CuPy available with CUDA"
     except ImportError:
@@ -362,6 +375,7 @@ try:
     import triton
     import triton.language as tl
     from triton.language.extra import libdevice
+
     if hasattr(libdevice, "tanh"):
         HAS_TRITON = True
 except ImportError:
@@ -371,6 +385,7 @@ except ImportError:
 HAS_CUPY = False
 try:
     import cupy as cp
+
     if hasattr(cp, "cuda") and cp.cuda.is_available():
         with cp.cuda.Device(0):
             _ = cp.array([1.0])
@@ -378,7 +393,7 @@ try:
         HAS_CUPY = True
     else:
         cp = None
-except (ImportError, Exception):
+except ImportError, Exception:
     cp = None
     HAS_CUPY = False
 

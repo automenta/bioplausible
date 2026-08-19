@@ -143,7 +143,9 @@ class DashboardState:
                 return True
         return False
 
-    def reject_proposal(self, proposal_id: str, annotator: str = "human", reason: str = "") -> bool:
+    def reject_proposal(
+        self, proposal_id: str, annotator: str = "human", reason: str = ""
+    ) -> bool:
         """Reject a pending proposal."""
         for i, p in enumerate(self.pending_proposals):
             if p["id"] == proposal_id:
@@ -174,21 +176,29 @@ class DashboardState:
                 return True
         return False
 
-    def link_to_literature(self, proposal_id: str, paper_id: str, notes: str = "") -> bool:
+    def link_to_literature(
+        self, proposal_id: str, paper_id: str, notes: str = ""
+    ) -> bool:
         """Link proposal to literature/KB entry."""
-        return self.add_annotation(proposal_id, {
-            "type": "literature_link",
-            "paper_id": paper_id,
-            "notes": notes,
-        })
+        return self.add_annotation(
+            proposal_id,
+            {
+                "type": "literature_link",
+                "paper_id": paper_id,
+                "notes": notes,
+            },
+        )
 
     def link_to_kb(self, proposal_id: str, kb_entry_id: str, notes: str = "") -> bool:
         """Link proposal to KnowledgeBase entry."""
-        return self.add_annotation(proposal_id, {
-            "type": "kb_link",
-            "kb_entry_id": kb_entry_id,
-            "notes": notes,
-        })
+        return self.add_annotation(
+            proposal_id,
+            {
+                "type": "kb_link",
+                "kb_entry_id": kb_entry_id,
+                "notes": notes,
+            },
+        )
 
     def get_summary(self) -> dict:
         """Get dashboard summary."""
@@ -242,8 +252,12 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
             ui.label(config.title).classes("text-xl font-bold")
             with ui.row().classes("w-full justify-end items-center gap-4"):
                 ui.label(f"Iteration: {state.current_iteration}").classes("text-sm")
-                ui.label(f"Pending: {len(state.pending_proposals)}").classes("text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded")
-                ui.label(f"Approved: {len(state.approved_proposals)}").classes("text-sm bg-green-100 text-green-800 px-2 py-1 rounded")
+                ui.label(f"Pending: {len(state.pending_proposals)}").classes(
+                    "text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded"
+                )
+                ui.label(f"Approved: {len(state.approved_proposals)}").classes(
+                    "text-sm bg-green-100 text-green-800 px-2 py-1 rounded"
+                )
 
         with ui.tabs().classes("w-full") as tabs:
             overview_tab = ui.tab("Overview")
@@ -254,7 +268,6 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
             settings_tab = ui.tab("Settings")
 
         with ui.tab_panels(tabs, value=overview_tab).classes("w-full p-4"):
-
             with ui.tab_panel(overview_tab):
                 await _render_overview(state)
 
@@ -275,6 +288,7 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
 
         # WebSocket endpoint for real-time updates
         if config.enable_websockets:
+
             @app.websocket("/ws")
             async def websocket_endpoint(websocket):
                 await websocket.accept()
@@ -308,7 +322,9 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
             with ui.card().classes("flex-1"):
                 ui.label("Quick Stats").classes("text-lg font-semibold mb-2")
                 with ui.row().classes("w-full gap-4"):
-                    _stat_card("Pending Proposals", len(state.pending_proposals), "warning")
+                    _stat_card(
+                        "Pending Proposals", len(state.pending_proposals), "warning"
+                    )
                     _stat_card("Approved", len(state.approved_proposals), "positive")
                     _stat_card("Rejected", len(state.rejected_proposals), "negative")
                     _stat_card("Iteration", state.current_iteration, "info")
@@ -316,7 +332,9 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
             # Recent metrics chart placeholder
             with ui.card().classes("w-full"):
                 ui.label("Recent Performance").classes("text-lg font-semibold mb-2")
-                ui.label("(Metrics chart - connect to campaign data)").classes("text-gray-500")
+                ui.label("(Metrics chart - connect to campaign data)").classes(
+                    "text-gray-500"
+                )
 
     async def _render_proposals(state: DashboardState):
         """Render proposals tab with approval controls."""
@@ -341,7 +359,9 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
             table = ui.table(columns=columns, rows=rows, row_key="id").classes("w-full")
 
             # Add action buttons via slots
-            table.add_slot("body-cell-actions", """
+            table.add_slot(
+                "body-cell-actions",
+                """
                 <q-td :props="props">
                     <q-btn size="sm" color="positive" label="Approve"
                         @click="$parent.$emit('approve', props.row.id)" />
@@ -350,7 +370,8 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
                     <q-btn size="sm" color="primary" label="Annotate"
                         @click="$parent.$emit('annotate', props.row.id)" />
                 </q-td>
-            """)
+            """,
+            )
 
             table.on("approve", lambda e: _handle_approve(state, e.args))
             table.on("reject", lambda e: _handle_reject(state, e.args))
@@ -364,7 +385,9 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
             for p in state.approved_proposals[-10:]:
                 with ui.card().classes("w-full mb-2"):
                     ui.label(f"{p['model']} on {p['task']} - {p['hypothesis'][:80]}...")
-                    ui.label(f"Approved by {p.get('approved_by', 'unknown')} at {p.get('approved_at', 'N/A')}").classes("text-sm text-gray-500")
+                    ui.label(
+                        f"Approved by {p.get('approved_by', 'unknown')} at {p.get('approved_at', 'N/A')}"
+                    ).classes("text-sm text-gray-500")
         else:
             ui.label("No approved proposals yet").classes("text-gray-500")
 
@@ -380,18 +403,31 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
                         with ui.column().classes("flex-1"):
                             ui.label(h.statement).classes("font-medium")
                             if h.proposed_model:
-                                ui.label(f"Model: {h.proposed_model}").classes("text-sm text-gray-600")
+                                ui.label(f"Model: {h.proposed_model}").classes(
+                                    "text-sm text-gray-600"
+                                )
                             if h.proposed_task:
-                                ui.label(f"Task: {h.proposed_task}").classes("text-sm text-gray-600")
+                                ui.label(f"Task: {h.proposed_task}").classes(
+                                    "text-sm text-gray-600"
+                                )
                             if h.reasoning_chain:
                                 with ui.expansion("Reasoning").classes("w-full"):
                                     for step in h.reasoning_chain:
                                         ui.label(f"• {step}").classes("text-sm")
                         with ui.column().classes("items-end"):
                             ui.label(f"Confidence: {h.confidence:.0%}").classes(
-                                "text-lg font-bold " + ("text-green-600" if h.confidence > 0.7 else "text-yellow-600" if h.confidence > 0.4 else "text-red-600")
+                                "text-lg font-bold "
+                                + (
+                                    "text-green-600"
+                                    if h.confidence > 0.7
+                                    else "text-yellow-600"
+                                    if h.confidence > 0.4
+                                    else "text-red-600"
+                                )
                             )
-                            ui.label(f"Source: {h.source}").classes("text-xs text-gray-500")
+                            ui.label(f"Source: {h.source}").classes(
+                                "text-xs text-gray-500"
+                            )
         else:
             ui.label("No reasoner available").classes("text-gray-500")
 
@@ -399,7 +435,9 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
         if state.reasoner and state.reasoner.get_reasoning_history():
             ui.label("Reasoning Chains").classes("text-lg font-semibold mt-6 mb-2")
             for chain in state.reasoner.get_reasoning_history()[-5:]:
-                with ui.expansion(f"{chain.template.value}: {chain.conclusion[:60]}...").classes("w-full"):
+                with ui.expansion(
+                    f"{chain.template.value}: {chain.conclusion[:60]}..."
+                ).classes("w-full"):
                     for step in chain.steps:
                         ui.label(step).classes("text-sm font-mono")
                     ui.label(f"Confidence: {chain.confidence:.0%}").classes("text-sm")
@@ -416,15 +454,22 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
                     _info_card("Campaign ID", summary.get("campaign_id", "N/A"))
                     _info_card("Branch", summary.get("branch_name", "N/A"))
                     _info_card("Iterations", str(summary.get("iterations", 0)))
-                    _info_card("Total Experiments", str(summary.get("total_experiments", 0)))
+                    _info_card(
+                        "Total Experiments", str(summary.get("total_experiments", 0))
+                    )
                     _info_card("Completed", str(summary.get("completed", 0)))
-                    _info_card("Best Accuracy", f"{summary.get('best_accuracy', 0):.4f}")
+                    _info_card(
+                        "Best Accuracy", f"{summary.get('best_accuracy', 0):.4f}"
+                    )
 
             # Branch management
             ui.label("Branch Operations").classes("text-lg font-semibold mt-6 mb-2")
             with ui.row().classes("gap-4"):
                 new_branch = ui.input("New branch name").classes("w-64")
-                ui.button("Create Branch", on_click=lambda: _create_branch(state, new_branch.value))
+                ui.button(
+                    "Create Branch",
+                    on_click=lambda: _create_branch(state, new_branch.value),
+                )
                 ui.button("List Branches", on_click=lambda: _list_branches(state))
 
         # Iteration history
@@ -434,7 +479,9 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
             for it in history[-10:]:
                 with ui.card().classes("w-full mb-2"):
                     ui.label(f"Iteration {it.iteration} - {it.timestamp}")
-                    ui.label(f"Proposals: {it.n_proposals} | Completed: {it.n_completed} | Failed: {it.n_failed}").classes("text-sm")
+                    ui.label(
+                        f"Proposals: {it.n_proposals} | Completed: {it.n_completed} | Failed: {it.n_failed}"
+                    ).classes("text-sm")
                     if it.insights:
                         with ui.expansion("Insights").classes("w-full"):
                             for ins in it.insights[:3]:
@@ -454,7 +501,9 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
 
             # Search
             ui.label("Semantic Search").classes("text-lg font-semibold mt-6 mb-2")
-            search_input = ui.input("Search query", placeholder="e.g., equilibrium propagation scaling").classes("w-96")
+            search_input = ui.input(
+                "Search query", placeholder="e.g., equilibrium propagation scaling"
+            ).classes("w-96")
             ui.button("Search", on_click=lambda: _search_kb(state, search_input.value))
 
     async def _render_settings(state: DashboardState):
@@ -463,8 +512,16 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
 
         with ui.card().classes("w-full max-w-2xl"):
             ui.label("Campaign Settings").classes("text-lg font-semibold mb-4")
-            ui.checkbox("Human approval gate", value=state.campaign.human_approval_gate if state.campaign else False)
-            ui.number("Max concurrent experiments", value=state.campaign.max_concurrent if state.campaign else 1, min=1, max=10)
+            ui.checkbox(
+                "Human approval gate",
+                value=state.campaign.human_approval_gate if state.campaign else False,
+            )
+            ui.number(
+                "Max concurrent experiments",
+                value=state.campaign.max_concurrent if state.campaign else 1,
+                min=1,
+                max=10,
+            )
             ui.number("Checkpoint interval", value=5, min=1, max=100)
 
             ui.separator().classes("my-4")
@@ -474,7 +531,11 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
             ui.number("Port", value=config.port, min=1024, max=65535)
             ui.checkbox("Enable WebSockets", value=config.enable_websockets)
 
-            ui.button("Save Settings", color="primary", on_click=lambda: ui.notify("Settings saved"))
+            ui.button(
+                "Save Settings",
+                color="primary",
+                on_click=lambda: ui.notify("Settings saved"),
+            )
 
     ui.run(
         host=config.host,
@@ -516,14 +577,24 @@ async def _handle_reject(state: DashboardState, proposal_id: str):
         reason = ui.textarea("Reason (optional)").classes("w-full")
         with ui.row().classes("w-full justify-end gap-2"):
             ui.button("Cancel", on_click=dialog.close)
-            ui.button("Reject", color="negative", on_click=lambda: _confirm_reject(state, proposal_id, reason.value, dialog))
+            ui.button(
+                "Reject",
+                color="negative",
+                on_click=lambda: _confirm_reject(
+                    state, proposal_id, reason.value, dialog
+                ),
+            )
     dialog.open()
 
 
 async def _confirm_reject(state: DashboardState, proposal_id: str, reason: str, dialog):
     """Confirm rejection."""
     if state.reject_proposal(proposal_id, reason=reason):
-        await state.broadcast({"type": "proposal_rejected", "proposal_id": proposal_id, "reason": reason})
+        await state.broadcast({
+            "type": "proposal_rejected",
+            "proposal_id": proposal_id,
+            "reason": reason,
+        })
         ui.notify(f"Proposal {proposal_id} rejected", type="warning")
     dialog.close()
 
@@ -532,15 +603,26 @@ async def _handle_annotate(state: DashboardState, proposal_id: str):
     """Handle proposal annotation."""
     with ui.dialog() as dialog, ui.card():
         ui.label("Add Annotation").classes("text-lg font-semibold")
-        annotation_type = ui.select("Type", ["note", "literature_link", "kb_link", "concern", "suggestion"], value="note")
+        annotation_type = ui.select(
+            "Type",
+            ["note", "literature_link", "kb_link", "concern", "suggestion"],
+            value="note",
+        )
         content = ui.textarea("Content").classes("w-full")
         with ui.row().classes("w-full justify-end gap-2"):
             ui.button("Cancel", on_click=dialog.close)
-            ui.button("Save", on_click=lambda: _save_annotation(state, proposal_id, annotation_type.value, content.value, dialog))
+            ui.button(
+                "Save",
+                on_click=lambda: _save_annotation(
+                    state, proposal_id, annotation_type.value, content.value, dialog
+                ),
+            )
     dialog.open()
 
 
-async def _save_annotation(state: DashboardState, proposal_id: str, ann_type: str, content: str, dialog):
+async def _save_annotation(
+    state: DashboardState, proposal_id: str, ann_type: str, content: str, dialog
+):
     """Save annotation."""
     if state.add_annotation(proposal_id, {"type": ann_type, "content": content}):
         ui.notify("Annotation added", type="positive")
@@ -577,7 +659,9 @@ def _search_kb(state: DashboardState, query: str):
         if results:
             ui.notify(f"Found {len(results)} results", type="info")
             for entry, score in results[:5]:
-                ui.notify(f"[{entry.model_family}] {entry.finding} ({score:.2f})", type="info")
+                ui.notify(
+                    f"[{entry.model_family}] {entry.finding} ({score:.2f})", type="info"
+                )
         else:
             ui.notify("No results found", type="warning")
 
@@ -611,14 +695,21 @@ def _run_fastapi_dashboard(state: DashboardState, config: DashboardConfig):
         @app.post("/api/proposals/{proposal_id}/approve")
         async def api_approve(proposal_id: str):
             if state.approve_proposal(proposal_id):
-                await state.broadcast({"type": "proposal_approved", "proposal_id": proposal_id})
+                await state.broadcast({
+                    "type": "proposal_approved",
+                    "proposal_id": proposal_id,
+                })
                 return {"success": True}
             return {"success": False, "error": "Not found"}
 
         @app.post("/api/proposals/{proposal_id}/reject")
         async def api_reject(proposal_id: str, reason: str = ""):
             if state.reject_proposal(proposal_id, reason=reason):
-                await state.broadcast({"type": "proposal_rejected", "proposal_id": proposal_id, "reason": reason})
+                await state.broadcast({
+                    "type": "proposal_rejected",
+                    "proposal_id": proposal_id,
+                    "reason": reason,
+                })
                 return {"success": True}
             return {"success": False, "error": "Not found"}
 
@@ -636,7 +727,9 @@ def _run_fastapi_dashboard(state: DashboardState, config: DashboardConfig):
         uvicorn.run(app, host=config.host, port=config.port)
 
     except ImportError:
-        logger.error("Neither NiceGUI nor FastAPI available. Install with: pip install nicegui or pip install fastapi uvicorn")
+        logger.error(
+            "Neither NiceGUI nor FastAPI available. Install with: pip install nicegui or pip install fastapi uvicorn"
+        )
         raise
 
 
@@ -677,7 +770,7 @@ def _get_dashboard_html(state: DashboardState, config: DashboardConfig) -> str:
     <div class="container">
         <div class="header">
             <h1>{config.title}</h1>
-            <p>Campaign: {camp.get('campaign_id', 'N/A')} | Branch: {camp.get('branch_name', 'N/A')} | Iteration: {state.current_iteration}</p>
+            <p>Campaign: {camp.get("campaign_id", "N/A")} | Branch: {camp.get("branch_name", "N/A")} | Iteration: {state.current_iteration}</p>
         </div>
 
         <div class="stats">
@@ -713,16 +806,16 @@ def _get_dashboard_html(state: DashboardState, config: DashboardConfig) -> str:
     for p in state.pending_proposals:
         html += f"""
                     <tr>
-                        <td>{p['id']}</td>
-                        <td>{p['model']}</td>
-                        <td>{p['task']}</td>
-                        <td>{p['hypothesis'][:80]}...</td>
-                        <td>{p.get('propagator', 'N/A')}</td>
-                        <td>{p.get('priority', 0)}</td>
+                        <td>{p["id"]}</td>
+                        <td>{p["model"]}</td>
+                        <td>{p["task"]}</td>
+                        <td>{p["hypothesis"][:80]}...</td>
+                        <td>{p.get("propagator", "N/A")}</td>
+                        <td>{p.get("priority", 0)}</td>
                         <td>
-                            <button class="btn btn-approve" onclick="approve('{p['id']}')">Approve</button>
-                            <button class="btn btn-reject" onclick="reject('{p['id']}')">Reject</button>
-                            <button class="btn btn-annotate" onclick="annotate('{p['id']}')">Annotate</button>
+                            <button class="btn btn-approve" onclick="approve('{p["id"]}')">Approve</button>
+                            <button class="btn btn-reject" onclick="reject('{p["id"]}')">Reject</button>
+                            <button class="btn btn-annotate" onclick="annotate('{p["id"]}')">Annotate</button>
                         </td>
                     </tr>
 """
@@ -740,10 +833,10 @@ def _get_dashboard_html(state: DashboardState, config: DashboardConfig) -> str:
         html += f"""
             <div class="proposal">
                 <div class="proposal-header">
-                    <strong>{p['model']} on {p['task']}</strong>
-                    <span style="color: #10b981;">✓ Approved by {p.get('approved_by', 'unknown')}</span>
+                    <strong>{p["model"]} on {p["task"]}</strong>
+                    <span style="color: #10b981;">✓ Approved by {p.get("approved_by", "unknown")}</span>
                 </div>
-                <p>{p['hypothesis']}</p>
+                <p>{p["hypothesis"]}</p>
             </div>
 """
 
@@ -822,8 +915,12 @@ def main():
     parser = argparse.ArgumentParser(description="AutoScientist Dashboard")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
     parser.add_argument("--port", type=int, default=8080, help="Port to bind")
-    parser.add_argument("--campaign-dir", default="autoscientist_campaigns", help="Campaign directory")
-    parser.add_argument("--theme", choices=["light", "dark"], default="light", help="UI theme")
+    parser.add_argument(
+        "--campaign-dir", default="autoscientist_campaigns", help="Campaign directory"
+    )
+    parser.add_argument(
+        "--theme", choices=["light", "dark"], default="light", help="UI theme"
+    )
 
     args = parser.parse_args()
 

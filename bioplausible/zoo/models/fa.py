@@ -41,6 +41,7 @@ __all__ = [
     "FeedbackAlignmentEqProp",
     "FeedbackAlignmentLayer",
     "LayerwiseEquilibriumFA",
+    "SignSymmetricFA",
     "StandardFA",
     "StochasticFA",
 ]
@@ -797,6 +798,92 @@ class DeepDFAEqProp(DirectFeedbackAlignmentEqProp):
             max_steps=kwargs.get("max_steps", 30),
             alpha=kwargs.get("alpha", 0.5),
         ).to(device)
+
+
+@register_model(
+    "sign_symmetric_fa",
+    family="fa",
+    tags=["fa", "sign-symmetric", status_tag("experimental")],
+)
+class SignSymmetricFA(BioModel):
+    """
+    Sign-Symmetric Feedback Alignment: Feedback weights preserve forward weight signs.
+
+    Uses B = sign(W) * |B_rand| where B_rand is random.
+    Hardware-friendly: sign only needs 1 bit, magnitude can be low-precision.
+
+    Reference: Xiao et al., 2018 "Sign-Symmetric Feedforward Alignment"
+    """
+
+    def __init__(self, config: ModelConfig | None = None, **kwargs):
+        super().__init__(config, **kwargs)
+
+        self.feedback_weights = nn.ParameterList()
+        hidden_dims = resolve_hidden_dims(self.config, self.hidden_dim)
+        dims = [self.input_dim] + hidden_dims + [self.output_dim]
+
+        self.layers = nn.ModuleList()
+        for i in range(len(dims) - 1):
+            self.layers.append(nn.Linear(dims[i], dims[i + 1]))
+
+            # Create sign-symmetric feedback: B = sign(W) * |randn|
+            with torch.no_grad():
+                W = self.layers[-1].weight
+                sign_W = torch.sign(W)
+                rand_mag = torch.randn_like(W).abs() * 0.1
+                B = sign_W * rand_mag
+            p = nn.Parameter(B, requires_grad=False)
+            self.feedback_weights.append(p)
+
+        self.criterion = nn.CrossEntropyLoss()
+        self.hebbian_lr = kwargs.get("hebbian_lr", 0.01)
+        self.optimizer = create_optimizer(
+            [p for p in self.parameters() if p.requires_grad],
+            OptimizerConfig(name="adam", lr=self.config.learning_rate),
+        )
+
+    def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
+        h = x
+        for i, layer in enumerate(self.layers):
+            h = layer(h)
+            if i < len(self.layers) - 1:
+                h = self.activation(h)
+        return h
+
+    def train_step(
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+    ) -> dict[str, float]:
+        self.optimizer.zero_grad()
+
+        _, output, loss, wgrads, bgrads = _fa_train_step_body(self, x, y)
+
+        with torch.no_grad():
+            _apply_fa_grads_to_optim(self.layers, wgrads, bgrads)
+
+        self.optimizer.step()
+
+        return {
+            "loss": loss.item(),
+            "accuracy": compute_accuracy(output, y),
+        }
+
+    def get_feedback_alignment_angles(self) -> dict[str, float]:
+        """Get cosine similarity between forward and feedback weights."""
+        angles = {}
+        for i, (layer, B) in enumerate(zip(self.layers, self.feedback_weights)):
+            W = layer.weight
+            W_flat = W.flatten()
+            B_flat = B.flatten()
+            min_len = min(len(W_flat), len(B_flat))
+            cos_sim = F.cosine_similarity(
+                W_flat[:min_len].unsqueeze(0), B_flat[:min_len].unsqueeze(0)
+            )
+            angles[f"layer_{i}"] = cos_sim.item()
+        return angles
 
 
 # ============================================================================
