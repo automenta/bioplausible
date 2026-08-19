@@ -326,4 +326,154 @@ for hw in HardwareTarget:
     KernelRegistry.register(AlgorithmFamily.SNN, hw, SNNKernelBackend)
 
 
-__all__ = ["SNNKernelBackend"]
+# Triton kernels for fused SNN operations
+try:
+    import triton
+    import triton.language as tl
+
+    @triton.jit
+    def _lif_step_kernel(
+        v_ptr,
+        i_syn_ptr,
+        spikes_ptr,
+        tau_mem,
+        tau_syn,
+        threshold,
+        dt,
+        B,
+        N,
+        BLOCK_B: tl.constexpr,
+        BLOCK_N: tl.constexpr,
+    ):
+        """Fused LIF neuron step."""
+        pid_b = tl.program_id(0)
+        pid_n = tl.program_id(1)
+
+        offs_b = pid_b * BLOCK_B + tl.arange(0, BLOCK_B)
+        offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
+
+        mask_b = offs_b < B
+        mask_n = offs_n < N
+
+        v = tl.load(v_ptr + offs_b[:, None] * N + offs_n[None, :], mask=mask_b[:, None] & mask_n[None, :], other=0.0)
+        i_syn = tl.load(i_syn_ptr + offs_b[:, None] * N + offs_n[None, :], mask=mask_b[:, None] & mask_n[None, :], other=0.0)
+
+        # dv/dt = -v/tau_mem + I_syn
+        v_new = v + dt * (-v / tau_mem + i_syn)
+
+        # dI/dt = -I/tau_syn
+        i_syn_new = i_syn * (1.0 - dt / tau_syn)
+
+        # Spike generation
+        spikes = (v_new > threshold).to(tl.float32)
+
+        # Reset membrane potential after spike
+        v_new = tl.where(spikes > 0, 0.0, v_new)
+
+        # Add spikes to synaptic current
+        i_syn_new = i_syn_new + spikes
+
+        tl.store(v_ptr + offs_b[:, None] * N + offs_n[None, :], v_new, mask=mask_b[:, None] & mask_n[None, :])
+        tl.store(i_syn_ptr + offs_b[:, None] * N + offs_n[None, :], i_syn_new, mask=mask_b[:, None] & mask_n[None, :])
+        tl.store(spikes_ptr + offs_b[:, None] * N + offs_n[None, :], spikes, mask=mask_b[:, None] & mask_n[None, :])
+
+    @triton.jit
+    def _stdp_update_kernel(
+        pre_spikes_ptr,
+        post_spikes_ptr,
+        delta_ptr,
+        tau_plus,
+        tau_minus,
+        A_plus,
+        A_minus,
+        N_pre,
+        N_post,
+        T,
+        BLOCK_PRE: tl.constexpr,
+        BLOCK_POST: tl.constexpr,
+    ):
+        """STDP weight update from spike timing correlation."""
+        pid_pre = tl.program_id(0)
+        pid_post = tl.program_id(1)
+
+        offs_pre = pid_pre * BLOCK_PRE + tl.arange(0, BLOCK_PRE)
+        offs_post = pid_post * BLOCK_POST + tl.arange(0, BLOCK_POST)
+
+        mask_pre = offs_pre < N_pre
+        mask_post = offs_post < N_post
+
+        ltp = tl.zeros((BLOCK_POST, BLOCK_PRE), dtype=tl.float32)
+        ltd = tl.zeros((BLOCK_POST, BLOCK_PRE), dtype=tl.float32)
+
+        # Correlation over time
+        for t in range(T - 1):
+            # LTP: post at t+1 with pre at t
+            pre_t = tl.load(pre_spikes_ptr + offs_pre[None, :] * T + (t + 1), mask=mask_pre[None, :], other=0.0)
+            post_t = tl.load(post_spikes_ptr + offs_post[:, None] * T + t, mask=mask_post[:, None], other=0.0)
+            ltp += tl.dot(post_t, pre_t)
+
+            # LTD: post at t with pre at t+1
+            pre_t1 = tl.load(pre_spikes_ptr + offs_pre[None, :] * T + t, mask=mask_pre[None, :], other=0.0)
+            post_t1 = tl.load(post_spikes_ptr + offs_post[:, None] * T + (t + 1), mask=mask_post[:, None], other=0.0)
+            ltd += tl.dot(post_t1, pre_t1)
+
+        delta = A_plus * ltp - A_minus * ltd
+
+        tl.store(delta_ptr + offs_post[:, None] * N_pre + offs_pre[None, :], delta, mask=mask_post[:, None] & mask_pre[None, :])
+
+    @triton.jit
+    def _contrastive_stdp_kernel(
+        pre_free_ptr,
+        post_free_ptr,
+        pre_nudged_ptr,
+        post_nudged_ptr,
+        delta_ptr,
+        N_pre,
+        N_post,
+        T,
+        beta,
+        BLOCK_PRE: tl.constexpr,
+        BLOCK_POST: tl.constexpr,
+    ):
+        """Contrastive STDP: free vs nudged phase."""
+        pid_pre = tl.program_id(0)
+        pid_post = tl.program_id(1)
+
+        offs_pre = pid_pre * BLOCK_PRE + tl.arange(0, BLOCK_PRE)
+        offs_post = pid_post * BLOCK_POST + tl.arange(0, BLOCK_POST)
+
+        mask_pre = offs_pre < N_pre
+        mask_post = offs_post < N_post
+
+        free_delta = tl.zeros((BLOCK_POST, BLOCK_PRE), dtype=tl.float32)
+        nudged_delta = tl.zeros((BLOCK_POST, BLOCK_PRE), dtype=tl.float32)
+
+        for t in range(T - 1):
+            # Free phase
+            pre_f = tl.load(pre_free_ptr + offs_pre[None, :] * T + (t + 1), mask=mask_pre[None, :], other=0.0)
+            post_f = tl.load(post_free_ptr + offs_post[:, None] * T + t, mask=mask_post[:, None], other=0.0)
+            free_delta += tl.dot(post_f, pre_f)
+
+            pre_f_t = tl.load(pre_free_ptr + offs_pre[None, :] * T + t, mask=mask_pre[None, :], other=0.0)
+            post_f_t = tl.load(post_free_ptr + offs_post[:, None] * T + (t + 1), mask=mask_post[:, None], other=0.0)
+            free_delta += tl.dot(post_f_t, pre_f_t)
+
+            # Nudged phase
+            pre_n = tl.load(pre_nudged_ptr + offs_pre[None, :] * T + (t + 1), mask=mask_pre[None, :], other=0.0)
+            post_n = tl.load(post_nudged_ptr + offs_post[:, None] * T + t, mask=mask_post[:, None], other=0.0)
+            nudged_delta += tl.dot(post_n, pre_n)
+
+            pre_n_t = tl.load(pre_nudged_ptr + offs_pre[None, :] * T + t, mask=mask_pre[None, :], other=0.0)
+            post_n_t = tl.load(post_nudged_ptr + offs_post[:, None] * T + (t + 1), mask=mask_post[:, None], other=0.0)
+            nudged_delta += tl.dot(post_n_t, pre_n_t)
+
+        delta = (nudged_delta - free_delta) / beta
+
+        tl.store(delta_ptr + offs_post[:, None] * N_pre + offs_pre[None, :], delta, mask=mask_post[:, None] & mask_pre[None, :])
+
+    HAS_TRITON_SNN = True
+except ImportError:
+    HAS_TRITON_SNN = False
+
+
+__all__ = ["HAS_TRITON_SNN", "SNNKernelBackend"]

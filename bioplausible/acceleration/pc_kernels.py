@@ -262,7 +262,170 @@ def _apply_activation(x: Tensor, activation: str) -> Tensor:
     return torch.tanh(x)
 
 
-# Register backend for all HardwareTargets
+# Triton kernels for fused PC operations
+try:
+    import triton
+    import triton.language as tl
+    from triton.language.extra import libdevice
+
+    @triton.jit
+    def _pc_prediction_kernel(
+        mu_ptr,
+        W_ptr,
+        b_ptr,
+        pred_ptr,
+        B,
+        D_in,
+        D_out,
+        activation_type,
+        BLOCK_B: tl.constexpr,
+        BLOCK_D: tl.constexpr,
+    ):
+        """Compute prediction: act(mu @ W.T + b)"""
+        pid_b = tl.program_id(0)
+        pid_d = tl.program_id(1)
+
+        offs_b = pid_b * BLOCK_B + tl.arange(0, BLOCK_B)
+        offs_d = pid_d * BLOCK_D + tl.arange(0, BLOCK_D)
+
+        mask_b = offs_b < B
+        mask_d = offs_d < D_out
+
+        acc = tl.zeros((BLOCK_B, BLOCK_D), dtype=tl.float32)
+        for k in range(0, D_in, BLOCK_D):
+            offs_k = k + tl.arange(0, BLOCK_D)
+            mask_k = offs_k < D_in
+
+            mu_tile = tl.load(
+                mu_ptr + offs_b[:, None] * D_in + offs_k[None, :],
+                mask=mask_b[:, None] & mask_k[None, :],
+                other=0.0,
+            )
+            W_tile = tl.load(
+                W_ptr + offs_d[:, None] * D_in + offs_k[None, :],
+                mask=mask_d[:, None] & mask_k[None, :],
+                other=0.0,
+            )
+            acc += tl.dot(mu_tile, tl.trans(W_tile))
+
+        # Add bias
+        if b_ptr is not None:
+            bias = tl.load(b_ptr + offs_d, mask=mask_d, other=0.0)
+            acc += bias[None, :]
+
+        # Apply activation
+        if activation_type == 0:  # ReLU
+            pred = tl.maximum(acc, 0.0)
+        elif activation_type == 1:  # SiLU
+            sig = libdevice.sigmoid(acc)
+            pred = acc * sig
+        elif activation_type == 2:  # Tanh
+            pred = libdevice.tanh(acc)
+        elif activation_type == 3:  # GELU
+            cdf = 0.5 * (1.0 + libdevice.erf(acc * 0.7071067811865475))
+            pred = acc * cdf
+        else:
+            pred = tl.maximum(acc, 0.0)
+
+        tl.store(
+            pred_ptr + offs_b[:, None] * D_out + offs_d[None, :],
+            pred,
+            mask=mask_b[:, None] & mask_d[None, :],
+        )
+
+    @triton.jit
+    def _pc_error_update_kernel(
+        mu_ptr,
+        pred_ptr,
+        mu_new_ptr,
+        eta_infer,
+        activation_type,
+        B,
+        D,
+        BLOCK_B: tl.constexpr,
+        BLOCK_D: tl.constexpr,
+    ):
+        """PCN inference step: mu = mu - eta * (mu - pred) * act_deriv(mu)"""
+        pid_b = tl.program_id(0)
+        pid_d = tl.program_id(1)
+
+        offs_b = pid_b * BLOCK_B + tl.arange(0, BLOCK_B)
+        offs_d = pid_d * BLOCK_D + tl.arange(0, BLOCK_D)
+
+        mask_b = offs_b < B
+        mask_d = offs_d < D
+
+        mu = tl.load(mu_ptr + offs_b[:, None] * D + offs_d[None, :], mask=mask_b[:, None] & mask_d[None, :], other=0.0)
+        pred = tl.load(pred_ptr + offs_b[:, None] * D + offs_d[None, :], mask=mask_b[:, None] & mask_d[None, :], other=0.0)
+
+        error = mu - pred
+
+        # Activation derivative
+        if activation_type == 0:  # ReLU
+            deriv = (mu > 0).to(tl.float32)
+        elif activation_type == 1:  # SiLU
+            sig = libdevice.sigmoid(mu)
+            deriv = sig * (1.0 + mu * (1.0 - sig))
+        elif activation_type == 2:  # Tanh
+            deriv = 1.0 - mu * mu
+        elif activation_type == 3:  # GELU
+            cdf = 0.5 * (1.0 + libdevice.erf(mu * 0.7071067811865475))
+            pdf = libdevice.exp(-mu * mu * 0.5) * 0.3989422804014327
+            deriv = cdf + mu * pdf
+        else:
+            deriv = (mu > 0).to(tl.float32)
+
+        mu_new = mu - eta_infer * error * deriv
+
+        tl.store(mu_new_ptr + offs_b[:, None] * D + offs_d[None, :], mu_new, mask=mask_b[:, None] & mask_d[None, :])
+
+    @triton.jit
+    def _pc_contrastive_update_kernel(
+        pre_free_ptr,
+        post_free_ptr,
+        pre_nudged_ptr,
+        post_nudged_ptr,
+        delta_ptr,
+        B,
+        D_in,
+        D_out,
+        beta,
+        lr,
+        BLOCK_IN: tl.constexpr,
+        BLOCK_OUT: tl.constexpr,
+    ):
+        """Contrastive weight update for PC."""
+        pid_in = tl.program_id(0)
+        pid_out = tl.program_id(1)
+
+        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
+        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
+
+        mask_in = offs_in < D_in
+        mask_out = offs_out < D_out
+
+        acc_free = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
+        acc_nudged = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
+
+        for b in range(B):
+            pre_f = tl.load(pre_free_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
+            post_f = tl.load(post_free_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            acc_free += tl.dot(tl.trans(post_f), pre_f)
+
+            pre_n = tl.load(pre_nudged_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
+            post_n = tl.load(post_nudged_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            acc_nudged += tl.dot(tl.trans(post_n), pre_n)
+
+        acc_free = acc_free / B
+        acc_nudged = acc_nudged / B
+
+        delta = lr * (acc_nudged - acc_free) / beta
+
+        tl.store(delta_ptr + offs_out[:, None] * D_in + offs_in[None, :], delta, mask=mask_out[:, None] & mask_in[None, :])
+
+    HAS_TRITON_PC = True
+except ImportError:
+    HAS_TRITON_PC = False
 for hw in HardwareTarget:
     KernelRegistry.register(AlgorithmFamily.PC, hw, PCKernelBackend)
 

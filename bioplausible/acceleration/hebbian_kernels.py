@@ -290,4 +290,143 @@ for hw in HardwareTarget:
 #     KernelRegistry.register(AlgorithmFamily.HEBBIAN, hw, ThreeFactorKernelBackend)
 
 
-__all__ = ["HebbianKernelBackend", "ThreeFactorKernelBackend"]
+# Triton kernels for fused Hebbian operations
+try:
+    import triton
+    import triton.language as tl
+
+    @triton.jit
+    def _hebbian_update_kernel(
+        pre_ptr,
+        post_ptr,
+        weight_ptr,
+        delta_ptr,
+        B,
+        D_in,
+        D_out,
+        lr,
+        use_oja,
+        BLOCK_IN: tl.constexpr,
+        BLOCK_OUT: tl.constexpr,
+    ):
+        """Hebbian weight update with Oja's rule: Delta W = lr * (post.T @ pre / B - post^2 @ W)"""
+        pid_in = tl.program_id(0)
+        pid_out = tl.program_id(1)
+
+        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
+        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
+
+        mask_in = offs_in < D_in
+        mask_out = offs_out < D_out
+
+        acc = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
+
+        for b in range(B):
+            pre = tl.load(pre_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
+            post = tl.load(post_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            acc += tl.dot(tl.trans(post), pre)
+
+        acc = acc / B
+
+        if use_oja:
+            # Oja's subtraction term: post^2 @ W
+            post_sq = tl.zeros((BLOCK_OUT, 1), dtype=tl.float32)
+            for b in range(B):
+                post = tl.load(post_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+                post_sq += post * post
+            post_sq = post_sq / B
+
+            weight = tl.load(weight_ptr + offs_out[:, None] * D_in + offs_in[None, :], mask=mask_out[:, None] & mask_in[None, :], other=0.0)
+            acc = acc - post_sq * weight
+
+        delta = lr * acc
+
+        tl.store(delta_ptr + offs_out[:, None] * D_in + offs_in[None, :], delta, mask=mask_out[:, None] & mask_in[None, :])
+
+    @triton.jit
+    def _three_factor_hebbian_kernel(
+        pre_ptr,
+        post_ptr,
+        modulator_ptr,
+        delta_ptr,
+        B,
+        D_in,
+        D_out,
+        lr,
+        BLOCK_IN: tl.constexpr,
+        BLOCK_OUT: tl.constexpr,
+    ):
+        """Three-factor Hebbian: Delta W = lr * modulator * (post.T @ pre / B)"""
+        pid_in = tl.program_id(0)
+        pid_out = tl.program_id(1)
+
+        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
+        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
+
+        mask_in = offs_in < D_in
+        mask_out = offs_out < D_out
+
+        acc = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
+
+        for b in range(B):
+            pre = tl.load(pre_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
+            post = tl.load(post_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            mod = tl.load(modulator_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            post_mod = post * mod
+            acc += tl.dot(tl.trans(post_mod), pre)
+
+        acc = acc / B
+        delta = lr * acc
+
+        tl.store(delta_ptr + offs_out[:, None] * D_in + offs_in[None, :], delta, mask=mask_out[:, None] & mask_in[None, :])
+
+    @triton.jit
+    def _contrastive_hebbian_kernel(
+        pre_free_ptr,
+        post_free_ptr,
+        pre_nudged_ptr,
+        post_nudged_ptr,
+        delta_ptr,
+        B,
+        D_in,
+        D_out,
+        lr,
+        beta,
+        BLOCK_IN: tl.constexpr,
+        BLOCK_OUT: tl.constexpr,
+    ):
+        """Contrastive Hebbian update."""
+        pid_in = tl.program_id(0)
+        pid_out = tl.program_id(1)
+
+        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
+        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
+
+        mask_in = offs_in < D_in
+        mask_out = offs_out < D_out
+
+        acc_free = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
+        acc_nudged = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
+
+        for b in range(B):
+            pre_f = tl.load(pre_free_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
+            post_f = tl.load(post_free_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            acc_free += tl.dot(tl.trans(post_f), pre_f)
+
+            pre_n = tl.load(pre_nudged_ptr + b * D_in + offs_in[None, :], mask=mask_in[None, :], other=0.0)
+            post_n = tl.load(post_nudged_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None], other=0.0)
+            acc_nudged += tl.dot(tl.trans(post_n), pre_n)
+
+        acc_free = acc_free / B
+        acc_nudged = acc_nudged / B
+
+        delta = lr * (acc_nudged - acc_free) / beta
+
+        tl.store(delta_ptr + offs_out[:, None] * D_in + offs_in[None, :], delta, mask=mask_out[:, None] & mask_in[None, :])
+
+    HAS_TRITON_HEBBIAN = True
+except ImportError:
+    HAS_TRITON_HEBBIAN = False
+
+
+__all__ = ["HAS_TRITON_HEBBIAN", "HebbianKernelBackend", "ThreeFactorKernelBackend"]

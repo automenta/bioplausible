@@ -298,29 +298,137 @@ def _apply_activation_derivative(
     return grad_h * (h_curr > 0).to(grad_h.dtype)
 
 
-# Triton kernel for fused backward loop (when TRITON backend)
+# Triton kernels for fused FA operations
 try:
     import triton
     import triton.language as tl
+    from triton.language.extra import libdevice
 
     @triton.jit
-    def _fa_backward_kernel(
-        activations_ptr,  # [num_layers, B, D]
-        error_ptr,  # [B, D_out]
-        feedback_ptr,  # [num_layers-1, D_out, D_in]
-        weight_grads_ptr,  # [num_layers, D_out, D_in]
-        bias_grads_ptr,  # [num_layers, D_out]
-        activation_type,  # 0=relu, 1=silu, 2=tanh
-        dropout_prob,
-        num_layers,
+    def _fa_feedback_projection_kernel(
+        error_ptr,
+        feedback_ptr,
+        out_ptr,
         B,
-        D_out,
         D_in,
+        D_out,
         BLOCK_B: tl.constexpr,
         BLOCK_D: tl.constexpr,
     ):
-        """Fused FA backward kernel."""
-        # Implementation would go here for production
+        """Fused feedback weight projection: error @ B.T"""
+        pid_b = tl.program_id(0)
+        pid_d = tl.program_id(1)
+
+        offs_b = pid_b * BLOCK_B + tl.arange(0, BLOCK_B)
+        offs_d = pid_d * BLOCK_D + tl.arange(0, BLOCK_D)
+
+        mask_b = offs_b < B
+        mask_d = offs_d < D_in
+
+        # Accumulate error @ B.T
+        acc = tl.zeros((BLOCK_B, BLOCK_D), dtype=tl.float32)
+        for k in range(0, D_out, BLOCK_D):
+            offs_k = k + tl.arange(0, BLOCK_D)
+            mask_k = offs_k < D_out
+
+            # Load error tile [BLOCK_B, BLOCK_D]
+            error_tile = tl.load(
+                error_ptr + offs_b[:, None] * D_out + offs_k[None, :],
+                mask=mask_b[:, None] & mask_k[None, :],
+                other=0.0,
+            )
+
+            # Load feedback tile [BLOCK_D, BLOCK_D]
+            fb_tile = tl.load(
+                feedback_ptr + offs_d[:, None] * D_out + offs_k[None, :],
+                mask=mask_d[:, None] & mask_k[None, :],
+                other=0.0,
+            )
+
+            acc += tl.dot(error_tile, tl.trans(fb_tile), input_precision="ieee")
+
+        tl.store(
+            out_ptr + offs_b[:, None] * D_in + offs_d[None, :],
+            acc,
+            mask=mask_b[:, None] & mask_d[None, :],
+        )
+
+    @triton.jit
+    def _fa_activation_derivative_kernel(
+        grad_ptr,
+        h_ptr,
+        out_ptr,
+        n_elements,
+        activation_type,
+        BLOCK_SIZE: tl.constexpr,
+    ):
+        """Apply activation derivative in-place."""
+        pid = tl.program_id(0)
+        offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+        mask = offs < n_elements
+
+        grad = tl.load(grad_ptr + offs, mask=mask)
+        h = tl.load(h_ptr + offs, mask=mask)
+
+        if activation_type == 0:  # ReLU
+            deriv = (h > 0).to(tl.float32)
+        elif activation_type == 1:  # SiLU
+            sig = libdevice.sigmoid(h)
+            deriv = sig * (1.0 + h * (1.0 - sig))
+        elif activation_type == 2:  # Tanh
+            deriv = 1.0 - h * h
+        elif activation_type == 3:  # GELU (approximate)
+            cdf = 0.5 * (1.0 + libdevice.erf(h * 0.7071067811865475))
+            pdf = libdevice.exp(-h * h * 0.5) * 0.3989422804014327
+            deriv = cdf + h * pdf
+        else:
+            deriv = (h > 0).to(tl.float32)
+
+        out = grad * deriv
+        tl.store(out_ptr + offs, out, mask=mask)
+
+    @triton.jit
+    def _fa_batched_outer_kernel(
+        pre_ptr,
+        post_ptr,
+        grad_ptr,
+        B,
+        D_in,
+        D_out,
+        BLOCK_IN: tl.constexpr,
+        BLOCK_OUT: tl.constexpr,
+    ):
+        """Fused batched outer product for weight gradients."""
+        pid_in = tl.program_id(0)
+        pid_out = tl.program_id(1)
+
+        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
+        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
+
+        mask_in = offs_in < D_in
+        mask_out = offs_out < D_out
+
+        acc = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
+
+        for b in range(B):
+            pre = tl.load(
+                pre_ptr + b * D_in + offs_in[None, :],
+                mask=mask_in[None, :],
+                other=0.0,
+            )
+            post = tl.load(
+                post_ptr + b * D_out + offs_out[:, None],
+                mask=mask_out[:, None],
+                other=0.0,
+            )
+            acc += tl.dot(tl.trans(post), pre)
+
+        acc = acc / B
+        tl.store(
+            grad_ptr + offs_out[:, None] * D_in + offs_in[None, :],
+            acc,
+            mask=mask_out[:, None] & mask_in[None, :],
+        )
 
     HAS_TRITON_FA = True
 except ImportError:
