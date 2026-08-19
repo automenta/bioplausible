@@ -58,7 +58,9 @@ class TestTritonEqPropEquivalence:
 
     @pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    @pytest.mark.xfail(reason="Layered step requires CuPy for Triton path; skipping until fixed")
+    @pytest.mark.xfail(
+        reason="Layered step requires CuPy for Triton path; skipping until fixed"
+    )
     def test_layered_step_equivalence(self):
         """Test Triton fused layered MLP step matches PyTorch."""
         torch.manual_seed(42)
@@ -152,7 +154,9 @@ class TestMEPKernelsEquivalence:
 
     @pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    @pytest.mark.xfail(reason="EP settle tolerance needs tuning for accumulated operations")
+    @pytest.mark.xfail(
+        reason="EP settle tolerance needs tuning for accumulated operations"
+    )
     def test_ep_settle_equivalence(self):
         """Test Triton fused EP settle matches PyTorch loop."""
         torch.manual_seed(42)
@@ -192,7 +196,9 @@ class TestCuPyEquivalence:
 
     @pytest.mark.skipif(not HAS_CUPY, reason="CuPy not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    @pytest.mark.xfail(reason="CuPy-Torch zero-copy path returns empty tensors; needs investigation")
+    @pytest.mark.xfail(
+        reason="CuPy-Torch zero-copy path returns empty tensors; needs investigation"
+    )
     def test_step_layered_cupy_torch_equivalence(self):
         """Test CuPy-Torch zero-copy layered step matches pure PyTorch."""
         torch.manual_seed(42)
@@ -239,7 +245,9 @@ class TestCuPyEquivalence:
         out_ref = (1.0 - gamma) * h + gamma * (ffn_out_ref + x_emb)
 
         # Check shapes match
-        assert out_t.shape == out_ref.shape, f"Shape mismatch: {out_t.shape} vs {out_ref.shape}"
+        assert out_t.shape == out_ref.shape, (
+            f"Shape mismatch: {out_t.shape} vs {out_ref.shape}"
+        )
 
         max_diff = (out_t - out_ref).abs().max().item()
         assert max_diff < 1e-4, f"CuPy-Torch max diff: {max_diff}"
@@ -281,7 +289,9 @@ class TestKernelRegistryAutoTune:
                 return x * 2
 
         # Register dummy backend
-        KernelRegistry.register(AlgorithmFamily.BACKPROP, HardwareTarget.CPU, DummyBackend)
+        KernelRegistry.register(
+            AlgorithmFamily.BACKPROP, HardwareTarget.CPU, DummyBackend
+        )
 
         # First call should populate cache
         backend1 = KernelRegistry.get_best_for_shape(
@@ -304,10 +314,13 @@ class TestKernelRegistryAutoTune:
 class TestBackendNumericalParity:
     """Test numerical parity across all registered backends."""
 
-    @pytest.mark.parametrize("algorithm", [
-        "eqprop",
-        "mep",
-    ])
+    @pytest.mark.parametrize(
+        "algorithm",
+        [
+            "eqprop",
+            "mep",
+        ],
+    )
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_registered_backends_exist(self, algorithm):
         """Verify backends are registered for key algorithms."""

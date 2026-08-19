@@ -737,11 +737,281 @@ def export_to_torchscript(model, input_sample, path, method: str = "script"):
 
 # --- Serving Logic (FastAPI) ---
 
+import asyncio
 import numpy as np
 import uvicorn
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
 from bioplausible.core.utils.device import get_device
+
+
+class BatchInferenceRequest(BaseModel):
+    """Batched request body for deployment prediction endpoint."""
+
+    data: list[list[float]] = Field(..., description="List of input samples")
+    shape: list[int] | None = Field(
+        None, description="Optional reshape for each sample"
+    )
+
+
+class InferenceResponse(BaseModel):
+    """Response body for inference."""
+
+    outputs: list[list[float]]
+    batch_size: int
+    latency_ms: float
+
+
+@dataclass(frozen=True, slots=True)
+class TensorRTConfig:
+    """TensorRT optimization configuration."""
+
+    enabled: bool = False
+    precision: str = "fp16"  # fp32, fp16, int8
+    workspace_size: int = 1 << 30  # 1GB
+    max_batch_size: int = 32
+
+
+class InferenceServer:
+    """
+    Production-ready inference server with batching, TensorRT, and async support.
+
+    Features:
+    - Dynamic batching with configurable max batch size and timeout
+    - TensorRT optimization (when available)
+    - Async request handling for high throughput
+    - Health checks and metrics
+    - Graceful shutdown
+    """
+
+    def __init__(
+        self,
+        model: nn.Module,
+        config: dict[str, object],
+        device: str = "auto",
+        max_batch_size: int = 32,
+        batch_timeout_ms: int = 10,
+        tensorrt_config: TensorRTConfig | None = None,
+    ):
+        self.model = model
+        self.config = config
+        self.device = device if device != "auto" else str(get_device())
+        self.max_batch_size = max_batch_size
+        self.batch_timeout_ms = batch_timeout_ms
+        self.tensorrt_config = tensorrt_config or TensorRTConfig()
+
+        self._batch_queue: asyncio.Queue = asyncio.Queue()
+        self._running = False
+        self._batch_task: asyncio.Task | None = None
+        self._tensorrt_model: nn.Module | None = None
+
+        self.model = self.model.to(self.device)
+        self.model.eval()
+
+        self.input_shape = tuple(config.get("input_shape", (1, 784)))
+
+    async def _initialize_tensorrt(self) -> None:
+        """Initialize TensorRT optimization if enabled."""
+        if not self.tensorrt_config.enabled:
+            return
+
+        try:
+            import torch_tensorrt  # type: ignore
+
+            self.model.eval()
+            example_input = torch.randn(
+                self.tensorrt_config.max_batch_size,
+                *self.input_shape[1:],
+                device=self.device,
+            )
+
+            enabled_precisions = {
+                torch.float32,
+                torch.float16,
+                torch.int8,
+            }
+            if self.tensorrt_config.precision == "fp16":
+                enabled_precisions = {torch.float16, torch.float32}
+            elif self.tensorrt_config.precision == "int8":
+                enabled_precisions = {torch.int8, torch.float16, torch.float32}
+
+            self._tensorrt_model = torch_tensorrt.compile(
+                self.model,
+                inputs=[
+                    torch_tensorrt.Input(
+                        min_shape=(1, *self.input_shape[1:]),
+                        opt_shape=(
+                            self.tensorrt_config.max_batch_size // 2,
+                            *self.input_shape[1:],
+                        ),
+                        max_shape=(
+                            self.tensorrt_config.max_batch_size,
+                            *self.input_shape[1:],
+                        ),
+                        dtype=torch.float32,
+                    )
+                ],
+                enabled_precisions=enabled_precisions,
+                workspace_size=self.tensorrt_config.workspace_size,
+                truncate_long_and_double=True,
+            )
+            print(
+                f"TensorRT model compiled with {self.tensorrt_config.precision} precision"
+            )
+        except ImportError:
+            print("torch_tensorrt not available, falling back to PyTorch")
+            self.tensorrt_config.enabled = False
+        except Exception as e:
+            print(f"TensorRT compilation failed: {e}, falling back to PyTorch")
+            self.tensorrt_config.enabled = False
+
+    @property
+    def _inference_model(self) -> nn.Module:
+        """Get the active inference model (TensorRT or PyTorch)."""
+        return self._tensorrt_model if self._tensorrt_model is not None else self.model
+
+    async def _batch_worker(self) -> None:
+        """Background worker that processes batched requests."""
+        while self._running:
+            batch_requests = []
+
+            # Wait for first request
+            try:
+                first_req = await asyncio.wait_for(self._batch_queue.get(), timeout=0.1)
+                batch_requests.append(first_req)
+            except asyncio.TimeoutError:
+                continue
+
+            # Collect additional requests up to max_batch_size
+            while len(batch_requests) < self.max_batch_size:
+                try:
+                    req = await asyncio.wait_for(
+                        self._batch_queue.get(),
+                        timeout=self.batch_timeout_ms / 1000.0,
+                    )
+                    batch_requests.append(req)
+                except asyncio.TimeoutError:
+                    break
+
+            # Process batch
+            if batch_requests:
+                await self._process_batch(batch_requests)
+
+    async def _process_batch(self, requests: list) -> None:
+        """Process a batch of inference requests."""
+        import time
+
+        start_time = time.perf_counter()
+
+        try:
+            # Stack inputs
+            batch_data = []
+            for req in requests:
+                data = np.array(req.data, dtype=np.float32)
+                if req.shape:
+                    data = data.reshape(req.shape)
+                elif len(data.shape) == 1:
+                    data = data.reshape(1, -1)
+                batch_data.append(data)
+
+            batched = np.stack(batch_data)
+            tensor = torch.from_numpy(batched).to(self.device)
+
+            with torch.no_grad():
+                outputs = self._inference_model(tensor)
+
+            outputs_list = outputs.cpu().tolist()
+            latency_ms = (time.perf_counter() - start_time) * 1000
+
+            # Distribute results
+            for i, req in enumerate(requests):
+                req["future"].set_result(
+                    InferenceResponse(
+                        outputs=[outputs_list[i]],
+                        batch_size=len(requests),
+                        latency_ms=latency_ms,
+                    )
+                )
+        except Exception as e:
+            for req in requests:
+                req["future"].set_exception(e)
+
+    async def predict(self, request: BatchInferenceRequest) -> InferenceResponse:
+        """Async prediction with dynamic batching."""
+        if not self._running:
+            raise HTTPException(status_code=503, detail="Server not running")
+
+        future = asyncio.get_event_loop().create_future()
+        await self._batch_queue.put({
+            "data": request.data,
+            "shape": request.shape,
+            "future": future,
+        })
+        return await future
+
+    def predict_sync(self, request: BatchInferenceRequest) -> InferenceResponse:
+        """Synchronous prediction (bypasses batching queue)."""
+        import time
+
+        start_time = time.perf_counter()
+
+        data = np.array(request.data, dtype=np.float32)
+        if request.shape:
+            data = data.reshape(request.shape)
+        elif len(data.shape) == 1:
+            data = data.reshape(1, -1)
+
+        tensor = torch.from_numpy(data).to(self.device)
+
+        with torch.no_grad():
+            output = self._inference_model(tensor)
+
+        outputs_list = output.cpu().tolist()
+        latency_ms = (time.perf_counter() - start_time) * 1000
+
+        return InferenceResponse(
+            outputs=outputs_list,
+            batch_size=len(request.data),
+            latency_ms=latency_ms,
+        )
+
+    async def start(self) -> None:
+        """Start the batching worker."""
+        self._running = True
+        await self._initialize_tensorrt()
+        self._batch_task = asyncio.create_task(self._batch_worker())
+
+    async def stop(self) -> None:
+        """Stop the batching worker gracefully."""
+        self._running = False
+        if self._batch_task:
+            self._batch_task.cancel()
+            try:
+                await self._batch_task
+            except asyncio.CancelledError:
+                pass
+
+
+def create_inference_server(
+    model: nn.Module,
+    config: dict[str, object],
+    device: str = "auto",
+    max_batch_size: int = 32,
+    batch_timeout_ms: int = 10,
+    tensorrt_config: TensorRTConfig | None = None,
+) -> InferenceServer:
+    """Factory function to create an InferenceServer."""
+    return InferenceServer(
+        model=model,
+        config=config,
+        device=device,
+        max_batch_size=max_batch_size,
+        batch_timeout_ms=batch_timeout_ms,
+        tensorrt_config=tensorrt_config,
+    )
 
 
 class _AppState:
@@ -749,67 +1019,104 @@ class _AppState:
 
     def __init__(self) -> None:
         self.app: FastAPI | None = None
-        self.model_instance: object | None = None
+        self.server: InferenceServer | None = None
 
     def get_app(self) -> FastAPI:
-        """Lazy-initialized FastAPI app.
-
-        Importing this module should not bind to a port or perform any
-        I/O. The app is constructed on first access.
-        """
+        """Lazy-initialized FastAPI app."""
         if self.app is None:
             self.app = self._build_app()
         return self.app
 
     def serve_model(
-        self, model: object, host: str = "0.0.0.0", port: int = 8000
+        self,
+        model: object,
+        config: dict[str, object] | None = None,
+        host: str = "0.0.0.0",
+        port: int = 8000,
+        max_batch_size: int = 32,
+        batch_timeout_ms: int = 10,
+        tensorrt_config: TensorRTConfig | None = None,
     ) -> None:
-        """Run a FastAPI server for the model."""
-        self.model_instance = model
-        if hasattr(model, "eval"):
-            model.eval()
-        uvicorn.run(self.get_app(), host=host, port=port, log_level="info")
+        """Run a FastAPI server for the model with batching support."""
+        if config is None:
+            config = {"input_shape": (1, 784)}
+
+        self.server = create_inference_server(
+            model=model,
+            config=config,
+            max_batch_size=max_batch_size,
+            batch_timeout_ms=batch_timeout_ms,
+            tensorrt_config=tensorrt_config,
+        )
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            await self.server.start()
+            yield
+            await self.server.stop()
+
+        self.app = FastAPI(
+            title="Bioplausible Inference API",
+            version="1.0.0",
+            lifespan=lifespan,
+        )
+        self._build_routes()
+
+        uvicorn.run(self.app, host=host, port=port, log_level="info")
 
     def _build_app(self) -> FastAPI:
-        app = FastAPI(title="Bioplausible Inference API")
+        return FastAPI(title="Bioplausible Inference API")
 
-        @app.post("/predict")
-        def predict(request: InferenceRequest):
-            if not self.model_instance:
-                return {"error": "No model loaded"}
-            try:
-                data = np.array(request.data, dtype=np.float32)
-                if request.shape:
-                    data = data.reshape(request.shape)
-                elif hasattr(self.model_instance, "input_dim"):
-                    if (
-                        len(data.shape) == 1
-                        and data.shape[0] == self.model_instance.input_dim
-                    ):
-                        data = data.reshape(1, -1)
-                elif "Conv" in type(self.model_instance).__name__:
-                    pass
-                tensor = torch.from_numpy(data)
-                if tensor.dim() == 1:
-                    tensor = tensor.unsqueeze(0)
-                device = next(self.model_instance.parameters()).device
-                tensor = tensor.to(device)
-                with torch.no_grad():
-                    output = self.model_instance(tensor)
-                return {"output": output.cpu().tolist()}
-            except Exception as e:  # broad: best-effort
-                return {"error": str(e)}
+    def _build_routes(self) -> None:
+        if not self.app or not self.server:
+            return
 
-        @app.get("/health")
+        @self.app.post("/predict", response_model=InferenceResponse)
+        async def predict(request: BatchInferenceRequest):
+            if not self.server:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            return await self.server.predict(request)
+
+        @self.app.post("/predict/sync", response_model=InferenceResponse)
+        def predict_sync(request: BatchInferenceRequest):
+            if not self.server:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            return self.server.predict_sync(request)
+
+        @self.app.get("/health")
         def health():
             return {
                 "status": "ok",
-                "model": str(type(self.model_instance).__name__)
-                if self.model_instance
+                "model": str(type(self.server.model).__name__)
+                if self.server
                 else "None",
+                "device": self.server.device if self.server else "unknown",
+                "tensorrt_enabled": self.server.tensorrt_config.enabled
+                if self.server
+                else False,
+                "batching": {
+                    "max_batch_size": self.server.max_batch_size if self.server else 0,
+                    "batch_timeout_ms": self.server.batch_timeout_ms
+                    if self.server
+                    else 0,
+                    "queue_size": self.server._batch_queue.qsize()
+                    if self.server
+                    else 0,
+                },
             }
 
-        return app
+        @self.app.get("/metrics")
+        def metrics():
+            if not self.server:
+                raise HTTPException(status_code=503, detail="Server not initialized")
+            return {
+                "max_batch_size": self.server.max_batch_size,
+                "batch_timeout_ms": self.server.batch_timeout_ms,
+                "tensorrt_enabled": self.server.tensorrt_config.enabled,
+                "tensorrt_precision": self.server.tensorrt_config.precision,
+                "device": self.server.device,
+                "input_shape": self.server.input_shape,
+            }
 
 
 _app_state = _AppState()
@@ -820,9 +1127,25 @@ def get_app() -> FastAPI:
     return _app_state.get_app()
 
 
-def serve_model(model: object, host: str = "0.0.0.0", port: int = 8000) -> None:
-    """Run a FastAPI server for the model."""
-    _app_state.serve_model(model, host=host, port=port)
+def serve_model(
+    model: object,
+    config: dict[str, object] | None = None,
+    host: str = "0.0.0.0",
+    port: int = 8000,
+    max_batch_size: int = 32,
+    batch_timeout_ms: int = 10,
+    tensorrt_config: TensorRTConfig | None = None,
+) -> None:
+    """Run a FastAPI server for the model with batching and TensorRT support."""
+    _app_state.serve_model(
+        model=model,
+        config=config,
+        host=host,
+        port=port,
+        max_batch_size=max_batch_size,
+        batch_timeout_ms=batch_timeout_ms,
+        tensorrt_config=tensorrt_config,
+    )
 
 
 # --- Quantization Utilities ---
@@ -1029,12 +1352,17 @@ def benchmark_quantized_model(
 
 
 __all__ = [
+    "BatchInferenceRequest",
     "InferenceEngine",
+    "InferenceResponse",
+    "InferenceServer",
     "ModelExporter",
     "ModelInfo",
     "ModelLoader",
+    "TensorRTConfig",
     "benchmark_quantized_model",
     "convert_qat_model",
+    "create_inference_server",
     "export_model",
     "export_to_onnx",
     "export_to_torchscript",

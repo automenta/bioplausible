@@ -4,6 +4,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.config.unified import ModelConfig
+from bioplausible.core.model_status import status_tag
+from bioplausible.core.registry import Domain, LocalityLevel, register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 __all__ = [
@@ -73,6 +76,19 @@ class TernaryLinear(nn.Module):
         }
 
 
+@register_model(
+    "ternary_eqprop",
+    domains=[Domain.VISION, Domain.LM, Domain.TABULAR],
+    locality_level=LocalityLevel.EQUILIBRIUM,
+    bio_plausibility_score=0.85,
+    credit_assignment_type="equilibrium",
+    requires_backward=False,
+    memory_complexity="O(1)",
+    family="eqprop",
+    typical_lr_range=(0.001, 0.01),
+    tags=["eqprop", "ternary", "quantized", status_tag("experimental")],
+    extra={"quantization": "ternary", "parity_threshold": 0.1},
+)
 class TernaryEqProp(TransitionGraphMixin, nn.Module):
     """
     Equilibrium Propagation with Ternary Weights.

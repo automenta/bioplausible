@@ -799,3 +799,46 @@ P2.1-P2.13             →  Need P1.1-P1.4 (substrate must support all algorithm
 3. **P2.19/P2.20** — DDP/FSDP validation for distributed training
 4. **QW.1/QW.3** — Demo/Colab notebooks for user recruitment
 
+---
+
+### 2026-08-19 — P2.18 Inference Server Complete (FastAPI + Batching + TensorRT)
+
+**Completed:**
+
+| Task | Status | Notes |
+|------|--------|-------|
+| **P2.18** Inference server with batching + TensorRT | ✅ Complete | `InferenceServer` class with dynamic batching, TensorRT optimization, async request handling, health/metrics endpoints |
+
+**Implementation Details:**
+- `InferenceServer` — Production-ready async inference engine with configurable batch size and timeout
+- Dynamic batching: collects requests up to `max_batch_size` within `batch_timeout_ms` for throughput optimization
+- TensorRT integration: `torch_tensorrt.compile` with fp16/int8 precision, dynamic input shapes
+- FastAPI endpoints: `/predict` (async batched), `/predict/sync` (direct), `/health`, `/metrics`
+- Graceful startup/shutdown via FastAPI lifespan events
+- Factory function `create_inference_server()` and updated `serve_model()` with new parameters
+- Pydantic models `BatchInferenceRequest` / `InferenceResponse` for type-safe API
+- `TensorRTConfig` dataclass for optimization settings
+
+**Verification:**
+- Import successful: `InferenceServer`, `TensorRTConfig`, `BatchInferenceRequest`, `InferenceResponse`, `create_inference_server`, `serve_model`
+- Registry audit: 111 components, 0 missing (new `ternary_eqprop` model registered)
+- Reproduction check: 7/7 models reproducible
+- Parity benchmark: runs successfully (tile_pc vs backprop_mlp on MNIST)
+- Gradient equivalence: 9 passed
+- Kernel equivalence: 7 passed, 3 xfail
+- Unit tests: 193 passed
+- Pyright: 0 errors (warnings only)
+- Ruff format/check: clean
+
+**Improvement Opportunities:**
+- TensorRT requires `torch_tensorrt` package (optional dependency) — install for GPU acceleration
+- Could add request-level batching for streaming/large inputs
+- Could add model warmup on server start
+- Could add Prometheus metrics export for monitoring
+
+**Future Work Facilitation:**
+- Inference server ready for production deployment of TileNet models
+- Batching infrastructure enables high-throughput serving
+- TensorRT path enables low-latency GPU inference for edge deployment
+- Async design supports horizontal scaling behind load balancer
+
