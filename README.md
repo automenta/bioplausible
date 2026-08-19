@@ -66,7 +66,7 @@ uv run python demo/main.py
 ```
 
 Launches a NiceGUI web dashboard at `http://localhost:8080` with:
-- Model training (12+ models including all TileNet variants)
+- Model training (12 models: 5 TileNet deployments + 7 classical)
 - Live loss/accuracy curves
 - Hyperparameter controls
 - AutoScientist hypothesis proposals
@@ -81,7 +81,7 @@ Every component is registered in the Registry (`bioplausible/core/registry.py`) 
 
 | Component | Purpose |
 |-----------|---------|
-| `CoreTrainer`, `TrainerConfig`, `run_from_config` | Unified training entry point |
+| `CoreTrainer`, `TrainerConfig`, `run_from_runconfig` | Unified training entry point |
 | `Registry`, `Domain`, `LocalityLevel`, `register_*` decorators | Component registration and query |
 | `EnergyTracker` | Energy-based training diagnostics |
 | `ExecutionEngine`, `ExperimentTask`, `ExecutionStrategy` | State-machine experiment orchestration |
@@ -313,19 +313,51 @@ Tile-based architecture sub-framework at `bioplausible/core/local_learning/` wit
 
 ### PyTorch Lightning Integration
 
-Structured training workflows at `bioplausible/lightning_/`: Lightning module wrapping Bioplausible models, Optuna pruning callbacks, Ray Tune integration, mixed precision support, energy convergence monitoring, and neural architecture search integration.
+Structured training workflows at `bioplausible/lightning_/`:
+
+- **LightningModule wrapper**: `module.py` wraps any Bioplausible model for Lightning Trainer
+- **Callbacks**: `callbacks.py` — Optuna pruning, energy convergence monitoring, early stopping on plateau, gradient norm clipping, memory profiling
+- **HPO integration**: `hpo.py` — Optuna study with Lightning, trial checkpointing, multi-objective optimization
+- **NAS integration**: `nas.py` — Neural architecture search with registry-discovered components
+- **Strategy plugins**: `strategies.py` — DDP, FSDP, DeepSpeed, custom TileNet sharding strategies
+- **Experiment orchestration**: `experiment.py` — reproducible run management, config versioning, artifact logging
 
 ### Domains
 
 Domain-specific model wrappers and data interfaces at `bioplausible/domains/` for vision, language modeling, reinforcement learning, graph-structured data, time-series, tabular, and scientific computing domains. Factory pattern with heuristic-based task creation.
 
+**Supported tasks** (registered in `domains/registry.py`):
+- **Vision**: MNIST, Fashion-MNIST, CIFAR-10, CIFAR-100, SVHN
+- **Language**: Tiny Shakespeare, WikiText-2, Penn Treebank, char n-gram
+- **RL**: CartPole, MountainCar, LunarLander, Pong (Atari via Gymnasium)
+- **Graph**: Cora, Citeseer, PubMed (node classification)
+- **Time-Series**: ETTh1, ETTh2, Electricity, Traffic (forecasting)
+- **Tabular**: Diabetes, California Housing, Wine, Breast Cancer (sklearn)
+- **Scientific**: Custom PDE/ODE datasets
+
 ### Knowledge Base
 
-Structured experiment knowledge at `bioplausible/knowledge/` — a metamodel-backed knowledge base that records experimental findings and enables cross-experiment reasoning. Meta-analysis capabilities: scaling law fits, algorithm fingerprinting, failure manifold clustering, algorithm phylogeny generation.
+Structured experiment knowledge at `bioplausible/knowledge/` — a metamodel-backed knowledge base (`kb.py`, `metamodel.py`, `seed.py`) that records experimental findings and enables cross-experiment reasoning.
+
+**Capabilities:**
+- **Entry storage**: Experiments, models, hypotheses, failures with full metadata
+- **Semantic search**: Keyword + embedding-based query with filters (model family, task, confidence, tags)
+- **Surrogate modeling**: Train predictive surrogates for accuracy/FLOPs/memory given config
+- **Causal analysis**: Identify which hyperparameters causally affect outcomes
+- **Meta-analysis**: Scaling law fits across runs, algorithm fingerprinting (hyperparameter sensitivity embeddings), failure manifold clustering (DBSCAN on error modes), algorithm phylogeny generation (hierarchical clustering on fingerprints)
+- **Symbolic rule extraction**: Distill human-readable patterns from experiment history
+- **Seed data**: Pre-populated with known results for cold-start guidance
 
 ### Leaderboard
 
-Automatic leaderboard generation at `bioplausible/leaderboard/` ranking model-optimizer combinations across benchmarks.
+Automatic leaderboard generation at `bioplausible/leaderboard/` (`generator.py`) ranking model-optimizer combinations across benchmarks.
+
+**Features:**
+- Multi-metric ranking: accuracy, FLOPs/sample, peak memory, wall-time, energy estimate
+- Tier classification: Strong/acceptable/negative parity vs backprop baseline
+- Pareto frontier overlay: visualize tradeoffs per task
+- Auto-refresh: CI-nightly regeneration, GitHub Pages deployable
+- Embeddable: standalone HTML/JSON for project READMEs
 
 ---
 
@@ -346,7 +378,7 @@ Modular validation tracks registered via `@register_track`, each a self-containe
 | Negative Results | Documentation of unsuccessful approaches |
 | NEBC | Nobody Ever Bothered to Check |
 
-All core tracks pass. The framework enforces: gradient equivalence testing (finite-difference verification for every propagator), backprop parity benchmarks (compute-matched comparisons with CIs/effect sizes), registry metadata audit (CI gate for all components), deterministic reproducibility (global seed, config hash, env capture), and statistical rigor (bootstrap CIs, Cohen's d, Cliff's delta, BH correction).
+All core tracks pass (Core, Scaling, Signal, Tradeoffs, Hardware, Research, Application, Architecture Comparison, Negative Results). NEBC tracks 51-54 require verifier interface adapter (Track 50 passes). The framework enforces: gradient equivalence testing (finite-difference verification for every propagator), backprop parity benchmarks (compute-matched comparisons with CIs/effect sizes), registry metadata audit (CI gate for all components), deterministic reproducibility (global seed, config hash, env capture), and statistical rigor (bootstrap CIs, Cohen's d, Cliff's delta, BH correction).
 
 ---
 
@@ -354,7 +386,22 @@ All core tracks pass. The framework enforces: gradient equivalence testing (fini
 
 ### Hyperparameter Optimization
 
-Optuna-powered search at `bioplausible/hyperopt/` with TPE sampler, NSGA-II multi-objective sampler, Hyperband pruner, and Median pruner. Uses `Registry.query()` for automatic component discovery — no hardcoded model lists.
+Optuna-powered search at `bioplausible/hyperopt/` (17 modules) with:
+
+- **Samplers**: TPE, NSGA-II (multi-objective), CMA-ES, Random, Grid
+- **Pruners**: Hyperband, Median, Percentile, Nop, Patient
+- **Registry-driven discovery**: `Registry.query()` for automatic component discovery — no hardcoded model lists
+- **Rule-space search**: `search_space.py` defines continuous/discrete spaces per algorithm family (EqProp, FA, MEP, Forward-Only, Hebbian, Predictive Coding, TileNet, Backprop, Hybrid)
+- **Portfolio management**: `portfolio.py` tracks Pareto frontiers per regime (locality level), decides Scale/Hold/Eliminate
+- **Frontier analysis**: `frontier.py`, `rule_frontier.py` compute cost-of-plausibility, compare frontiers across algorithms
+- **Ideal backprop finder**: `ideal_backprop.py` searches/caches best backprop baseline for fair comparison
+- **Scaling law integration**: `scaling_law.py` fits power laws, predicts FLOPs for target accuracy
+- **Parallel execution**: `parallel_runner.py` with OptunaBridge for distributed trials
+- **Storage & persistence**: `storage.py` with SQLite backend, trial metadata, artifact tracking
+- **Dashboard**: `_dashboard.py` for real-time trial visualization
+- **Comparison engine**: `comparator.py`, `comparison.py` for side-by-side algorithm evaluation
+- **Metrics & statistics**: `metrics.py`, `_stats.py` for effect sizes, confidence intervals, tradeoff analysis
+- **Hyperparameter metamodel**: `hyperparameter_metamodel.py` validates configs, defines scopes per family
 
 ### Experiment Runner
 
@@ -382,7 +429,14 @@ PyTorch Lightning multi-GPU and multi-node training with DDP, FSDP, and DeepSpee
 
 ### P2P Coordinator System
 
-Decentralized training coordination at `bioplausible/p2p/` using Kademlia DHT for peer discovery. A coordinator dispatches tasks to distributed workers with asynchronous result aggregation. (Implementation pending — infrastructure ready)
+Decentralized training coordination at `bioplausible/p2p/` with working implementation:
+
+- **Kademlia DHT** (`dht.py`): Peer discovery, key-value storage, bootstrap nodes, async operation in background thread
+- **P2P Worker** (`p2p_worker.py`): Registers as DHT node, pulls tasks from coordinator, executes locally, pushes results
+- **State management** (`state.py`): Distributed state synchronization, conflict resolution, checkpoint sharing
+- **Evolutionary coordination** (`evolution.py`): Population-based search across peers, island model migration
+
+CLI: `eqprop-p2p-worker` starts a worker node. Coordinator orchestrates task dispatch and result aggregation asynchronously.
 
 ---
 
