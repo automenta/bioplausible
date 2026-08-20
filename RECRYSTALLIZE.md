@@ -131,9 +131,9 @@ Chain-of-thought templates now operate on *ontology axes*, enabling hypotheses l
 | **3** | P2P RPC layer (gRPC + Kademlia) | ✅ Sprint 2 Complete | Proto: `bioplausible/p2p/proto/tile_mesh.proto`, Service: `bioplausible/p2p/grpc_service.py` |
 | **3** | Control-Lyapunov proofs for directed topologies | ✅ Sprint 3 Complete | 5 new tests in `test_energy_invariants.py`, free energy tracking |
 | **3** | FA structured init (orthogonal + feedback_scale) | ✅ Sprint 3 Complete | `CreditAssignmentConfig.orthogonal_init`, `feedback_scale`; QR-based init |
-| **4** | ModelAdapter.validate(), legacy migration on contact | 📋 Sprint 4 | — |
+| **4** | ModelAdapter.validate(), legacy migration on contact | ✅ Sprint 4 Complete | Tests: `tests/unit/core/test_ontology.py::TestModelAdapter::test_validate_*` |
 
-**Last verified:** 2026-08-20 — all 97+ core/integration/property tests pass, Pyright strict clean, Ruff format clean; gRPC P2P layer implemented; Sprint 3 (Control-Lyapunov, FA orthogonal init) complete
+**Last verified:** 2026-08-20 — all 97+ core/integration/property tests pass, Pyright strict clean, Ruff format clean; gRPC P2P layer implemented; Sprint 3 (Control-Lyapunov, FA orthogonal init) complete; Sprint 4 (ModelAdapter.validate()) complete
 
 ---
 
@@ -197,7 +197,7 @@ Verified via `tests/integration/test_gradient_equivalence.py::TestOntologyLayerE
 | **2** | **P1** | **P2P RPC Layer (gRPC + Kademlia)** | 3-5 days | Real distributed training | ✅ DONE: Proto defined, gRPC service implemented, integrated with DistributedSystemTrainer |
 | **3** | **P2** | **RandomProjectionsCredit structured init** | 1 day | FA production use | ✅ DONE: Added `orthogonal_init: bool`, `feedback_scale: float` to `CreditAssignmentConfig`; uses `torch.linalg.qr` for orthogonal init |
 | **3** | **P2** | **Control-Lyapunov formal proof** | 2-3 days | Theoretical completeness | ✅ DONE: Added `track_free_energy_per_iter` to `StateDynamicsConfig`; free energy history tracked in `PredictiveSettlingDynamics`; 5 tests verify `dV/dt ≤ 0` |
-| **4** | **P3** | **ModelAdapter.validate()** | 1-2 days | AutoScientist accuracy | Run forward/backward pass comparing metrics with legacy; improve inference priority: metadata → `model.config` → `model.family` → heuristics → defaults |
+| **4** | **P3** | **ModelAdapter.validate()** | 1-2 days | AutoScientist accuracy | ✅ DONE: Implemented `validate()` method comparing legacy vs System metrics; added tests in `tests/unit/core/test_ontology.py::TestModelAdapter` |
 | **1** | **P3** | **Test file lint cleanup** | 0.5 day | CI hygiene | ✅ DONE: `ruff check --fix tests/property/test_ontology_locks.py`; fixed assertions, line lengths, no-self-use |
 
 ### Sprint Execution Order
@@ -215,8 +215,8 @@ Sprint 3 (P2 theoretical):  ✅ COMPLETED
   ├─ P2: FA orthogonal init + feedback_scale (1 day) ✅
   └─ P2: Control-Lyapunov proof + tracking   (2-3 days) ✅
 
-Sprint 4 (P3 polish):
-  └─ P3: ModelAdapter.validate()             (1-2 days)
+Sprint 4 (P3 polish):  ✅ COMPLETED
+  └─ P3: ModelAdapter.validate()             (1-2 days) ✅
 ```
 
 ---

@@ -2,37 +2,29 @@
 
 import pytest
 import torch
-from torch import Tensor
 
 from bioplausible.core.ontology import (
-    Substrate,
-    Geometry,
-    StateDynamics,
-    CreditAssignment,
-    ParameterUpdate,
+    CreditAssignmentConfig,
+    DigitalSubstrate,
+    EuclideanUpdate,
+    FeedforwardGeometry,
+    GeometryConfig,
+    InstantaneousDynamics,
+    ModelAdapter,
+    ParameterUpdateConfig,
+    RecurrentGeometry,
+    StateDynamicsConfig,
+    SubstrateConfig,
     System,
     SystemState,
-    SubstrateConfig,
-    GeometryConfig,
-    StateDynamicsConfig,
-    CreditAssignmentConfig,
-    ParameterUpdateConfig,
-    DigitalSubstrate,
-    FeedforwardGeometry,
-    RecurrentGeometry,
-    TileGeometry,
-    InstantaneousDynamics,
     ThermodynamicContrast,
-    EuclideanUpdate,
-    EnergyMinimizationDynamics,
-    ModelAdapter,
+    TileGeometry,
 )
 from bioplausible.core.system_trainer import (
-    SystemTrainerConfig,
     SystemTrainer,
-    compose_system,
-    create_eqprop_system,
+    SystemTrainerConfig,
     create_backprop_system,
+    create_eqprop_system,
     create_fa_system,
 )
 
@@ -401,6 +393,56 @@ class TestModelAdapter:
         y = torch.randint(0, 3, (4,))
         metrics = system.train_step(x, y)
         assert "loss" in metrics
+
+    def test_validate_with_legacy_model(self):
+        """Test ModelAdapter.validate compares legacy and system metrics."""
+        from bioplausible.zoo.models.forward_only import ForwardForwardNet
+
+        model = ForwardForwardNet(input_dim=10, hidden_dim=20, output_dim=3)
+        adapter = ModelAdapter(model)
+
+        # Run validation
+        result = adapter.validate(rtol=0.2, atol=0.01)
+
+        # Basic structure checks
+        assert "passed" in result
+        assert "legacy_metrics" in result
+        assert "system_metrics" in result
+        assert "differences" in result
+        assert "details" in result
+
+        # Legacy model should produce metrics
+        assert "loss" in result["legacy_metrics"]
+        assert "accuracy" in result["legacy_metrics"]
+
+        # System should produce metrics
+        assert "loss" in result["system_metrics"]
+        assert "accuracy" in result["system_metrics"]
+
+        # Differences should be computed for common keys
+        assert "loss" in result["differences"]
+        assert "accuracy" in result["differences"]
+
+        # Loss should be reasonably close (within rtol)
+        loss_diff = result["differences"]["loss"]["rel_diff"]
+        assert loss_diff < 0.2, f"Loss difference too large: {loss_diff}"
+
+    def test_validate_with_custom_data(self):
+        """Test ModelAdapter.validate with user-provided test data."""
+        from bioplausible.zoo.models.forward_only import ForwardForwardNet
+
+        model = ForwardForwardNet(input_dim=10, hidden_dim=20, output_dim=3)
+        adapter = ModelAdapter(model)
+
+        x = torch.randn(8, 10)
+        y = torch.randint(0, 3, (8,))
+
+        result = adapter.validate(x=x, y=y)
+
+        assert result["details"]["input_shape"] == (8, 10)
+        assert result["details"]["target_shape"] == (8,)
+        assert "loss" in result["legacy_metrics"]
+        assert "loss" in result["system_metrics"]
 
 
 class TestOntologyConfigs:

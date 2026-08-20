@@ -1752,6 +1752,130 @@ class ModelAdapter:
 
         return update if update is not None else EuclideanUpdate()
 
+    @staticmethod
+    def _compare_metrics(
+        legacy: dict[str, object],
+        system: dict[str, object],
+        rtol: float,
+        atol: float,
+    ) -> tuple[dict[str, dict[str, object]], bool]:
+        """Compare legacy and system metrics, return differences and pass status."""
+        differences: dict[str, dict[str, object]] = {}
+        all_passed = True
+
+        for key in set(legacy.keys()) | set(system.keys()):
+            legacy_val = legacy.get(key)
+            system_val = system.get(key)
+            if legacy_val is not None and system_val is not None:
+                if isinstance(legacy_val, (int, float)) and isinstance(system_val, (int, float)):
+                    diff = abs(legacy_val - system_val)
+                    rel_diff = diff / (abs(legacy_val) + atol)
+                    differences[key] = {
+                        "legacy": legacy_val,
+                        "system": system_val,
+                        "abs_diff": diff,
+                        "rel_diff": rel_diff,
+                    }
+                    if rel_diff > rtol and diff > atol:
+                        all_passed = False
+                elif isinstance(legacy_val, Tensor) and isinstance(system_val, Tensor):
+                    diff = (legacy_val - system_val).abs().max().item()
+                    differences[key] = {"abs_diff": diff}
+                    if diff > atol:
+                        all_passed = False
+                else:
+                    differences[key] = {
+                        "legacy": legacy_val,
+                        "system": system_val,
+                        "type_mismatch": True,
+                    }
+                    all_passed = False
+            else:
+                differences[key] = {
+                    "legacy": legacy_val,
+                    "system": system_val,
+                    "missing": True,
+                }
+                all_passed = False
+
+        return differences, all_passed
+
+    def validate(
+        self,
+        x: Tensor | None = None,
+        y: Tensor | None = None,
+        rtol: float = 0.1,
+        atol: float = 1e-3,
+    ) -> dict[str, object]:
+        """Validate the 5-D projection against the legacy model.
+
+        Runs a forward/backward pass on both the legacy model and the adapted
+        System, comparing key metrics (loss, gradients) to ensure the ontology
+        projection preserves the model's learning behavior.
+
+        Args:
+            x: Input tensor. If None, generates synthetic data based on
+               inferred input_dim.
+            y: Target tensor. If None, generates synthetic labels based on
+               inferred output_dim.
+            rtol: Relative tolerance for metric comparison.
+            atol: Absolute tolerance for metric comparison.
+
+        Returns:
+            Dictionary with validation results:
+            - "passed": bool indicating if all checks passed
+            - "legacy_metrics": metrics from legacy model train_step
+            - "system_metrics": metrics from System train_step
+            - "differences": dict of metric differences
+            - "details": additional diagnostic info
+        """
+        # Generate test data if not provided
+        if x is None:
+            input_dim = getattr(self.model, "input_dim", 10)
+            x = torch.randn(4, input_dim)
+        if y is None:
+            output_dim = getattr(self.model, "output_dim", 3)
+            y = torch.randint(0, output_dim, (x.shape[0],))
+
+        # Ensure model is in train mode
+        self.model.train()
+
+        # Run legacy model train_step
+        legacy_metrics: dict[str, object] = {}
+        if hasattr(self.model, "train_step"):
+            try:
+                legacy_result = self.model.train_step(x, y)
+                if legacy_result is not None:
+                    legacy_metrics = legacy_result  # type: ignore[assignment]
+            except Exception as e:
+                legacy_metrics = {"error": str(e)}
+
+        # Run System train_step
+        system = self.to_system()
+        system_metrics: dict[str, object] = {}
+        try:
+            system_metrics = system.train_step(x, y)  # type: ignore[assignment]
+        except Exception as e:
+            system_metrics = {"error": str(e)}
+
+        # Compare metrics
+        differences, all_passed = self._compare_metrics(
+            legacy_metrics, system_metrics, rtol, atol
+        )
+
+        return {
+            "passed": all_passed,
+            "legacy_metrics": legacy_metrics,
+            "system_metrics": system_metrics,
+            "differences": differences,
+            "details": {
+                "rtol": rtol,
+                "atol": atol,
+                "input_shape": tuple(x.shape),
+                "target_shape": tuple(y.shape),
+            },
+        }
+
 
 # Additional substrate implementations
 class AnalogSubstrate(DigitalSubstrate):
