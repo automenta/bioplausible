@@ -4,6 +4,7 @@ Decorator-based registry for all components (models, propagators,
 optimizers, sparsity) enabling AutoScientist to query and compose
 intelligently."""
 
+import itertools
 import pathlib
 from collections.abc import Callable
 from dataclasses import MISSING, dataclass, field, fields
@@ -640,6 +641,179 @@ class Registry:
         # This is a placeholder - in practice, propagators map to CreditAssignment,
         # optimizers map to ParameterUpdate, etc.
         return compose_system(substrate, geometry, dynamics, credit, update)
+
+    @classmethod
+    def query_ontology(
+        cls,
+        fixed: dict[str, str | list[str]] | None = None,
+        sweep: str | None = None,
+        sweep_values: list[str] | None = None,
+        category: ComponentCategory | str | None = None,
+        domain: Domain | None = None,
+        min_bio_score: float | None = None,
+    ) -> list[dict[str, object]]:
+        """Query the registry along the 5-D ontology axes.
+
+        Enables structured ablation studies by holding some layers constant
+        and sweeping others. This is the primary interface for the AutoScientist
+        to explore the hypercube of bioplausible systems.
+
+        Args:
+            fixed: Dictionary of layer -> value(s) to hold constant.
+                Keys: "substrate", "geometry", "dynamics", "credit", "update"
+                Values: single value or list of values
+            sweep: Layer to sweep over ("substrate", "geometry", "dynamics", "credit", "update")
+            sweep_values: Values to sweep for the sweep layer
+            category: Optional category filter
+            domain: Optional domain filter
+            min_bio_score: Minimum bio-plausibility score
+
+        Returns:
+            List of matching components with their 5-D layer assignments.
+        """
+        from bioplausible.core.ontology import ModelAdapter
+
+        # Layer to metadata field mapping
+        layer_fields = {
+            "substrate": "compute_profile",
+            "geometry": "family",  # topology_type inferred from family
+            "dynamics": "locality_level",
+            "credit": "credit_assignment_type",
+            "update": "tags",  # optimizer tags like "muon", "spectral"
+        }
+
+        # Map ontology layer values to registry metadata values (list of possible matches)
+        layer_value_map = {
+            "substrate": {
+                "Digital": [ComputeProfile.GPU, ComputeProfile.CPU],
+                "Memristive": [ComputeProfile.MEMRISTOR],
+                "Neuromorphic": [ComputeProfile.NEUROMORPHIC],
+                "Optical": [ComputeProfile.OPTICAL],
+                "Quantum": [ComputeProfile.ANALOG],
+            },
+            "geometry": {
+                "Feedforward": ["backprop", "fa", "forward_only", "hebbian", "target_prop", "mep"],
+                "Recurrent": ["eqprop", "recurrent", "equilibrium", "ep", "chl"],
+                "TileMesh": ["tile"],
+                "Neuromorphic": ["neuromorphic", "fabric"],
+                "SpatialLattice": ["spatial_lattice", "neural_cube", "3d"],
+            },
+            "dynamics": {
+                "Instantaneous": [LocalityLevel.FORWARD_ONLY, LocalityLevel.GLOBAL],
+                "EnergyMinimization": [LocalityLevel.EQUILIBRIUM],
+                "PredictiveSettling": [LocalityLevel.EQUILIBRIUM],
+                "SpikeIntegration": [LocalityLevel.LOCAL],
+            },
+            "credit": {
+                "ThermodynamicContrast": ["equilibrium", "hebbian", "gradient"],
+                "RandomProjections": ["feedback_alignment", "random_projections", "target", "gradient"],
+                "LocalGoodness": ["forward_only", "hebbian", "gradient"],
+                "TemporalTrace": ["spiking", "temporal_trace", "gradient"],
+                "TargetInversion": ["target", "target_inversion", "gradient"],
+            },
+            "update": {
+                "Euclidean": ["sgd", "adam", "adamw", "plain", "gradient"],
+                "RiemannianOrthogonal": ["muon", "riemannian"],
+                "SpectralConstrained": ["spectral"],
+                "NaturalGradient": ["fisher", "natural"],
+                "ElasticConsolidation": ["ewc", "elastic"],
+            },
+        }
+
+        # Map field name to query parameter name
+        field_to_param = {
+            "compute_profile": "compute",
+            "locality_level": "locality",
+            "credit_assignment_type": "credit_type",
+            "family": "family",
+            "tags": "tags",
+        }
+
+        # Build list of query_kwargs for each combination of fixed values
+        if fixed:
+            # For each layer, get the list of possible values
+            fixed_params: dict[str, list] = {}
+            for layer, values in fixed.items():
+                if layer not in layer_fields:
+                    continue
+                field = layer_fields[layer]
+                val_list = values if isinstance(values, list) else [values]
+                mapped = []
+                for v in val_list:
+                    mapped.extend(layer_value_map[layer].get(v, [v]))
+                param_name = field_to_param.get(field, field)
+                fixed_params[param_name] = mapped
+
+            # Generate all combinations of fixed parameters
+            param_names = list(fixed_params.keys())
+            param_values = list(fixed_params.values())
+            all_combinations = list(itertools.product(*param_values))
+
+            # Run query for each combination and merge results
+            all_results: list[dict[str, object]] = []
+            for combo in all_combinations:
+                query_kwargs = dict(zip(param_names, combo))
+                query_kwargs.update({
+                    "category": category,
+                    "domain": domain,
+                    "min_bio_score": min_bio_score,
+                })
+                # Remove None values
+                query_kwargs = {k: v for k, v in query_kwargs.items() if v is not None}
+                results = cls.query(**query_kwargs)
+                all_results.extend(results)
+
+            # Deduplicate results by name+category
+            seen = set()
+            results = []
+            for r in all_results:
+                key = (r["name"], r["category"])
+                if key not in seen:
+                    seen.add(key)
+                    results.append(r)
+        else:
+            # No fixed constraints, just run single query
+            query_kwargs = {
+                "category": category,
+                "domain": domain,
+                "min_bio_score": min_bio_score,
+            }
+            results = cls.query(**query_kwargs)
+
+        # If sweep is specified, filter and augment with sweep values
+        if sweep and sweep_values:
+            sweep_field = layer_fields.get(sweep)
+            if sweep_field:
+                sweep_mapped = []
+                for v in sweep_values:
+                    sweep_mapped.extend(layer_value_map[sweep].get(v, [v]))
+                filtered = []
+                for r in results:
+                    meta = r["metadata"]
+                    meta_val = getattr(meta, sweep_field, None)
+                    if isinstance(meta_val, list):
+                        if any(v in meta_val for v in sweep_mapped):
+                            filtered.append(r)
+                    elif meta_val in sweep_mapped:
+                        filtered.append(r)
+                results = filtered
+
+        # Augment results with 5-D layer assignments
+        for r in results:
+            r["ontology_layers"] = cls._infer_ontology_layers(r["metadata"])
+
+        return results
+
+    @classmethod
+    def _infer_ontology_layers(cls, meta: ComponentMetadata) -> dict[str, str]:
+        """Infer the 5-D ontology layer assignments for a component."""
+        return {
+            "substrate": meta.compute_profile.value,
+            "geometry": meta.family or "feedforward",
+            "dynamics": meta.locality_level.value,
+            "credit": meta.credit_assignment_type,
+            "update": ",".join(meta.tags) if meta.tags else "euclidean",
+        }
 
     @classmethod
     def clear(cls) -> None:

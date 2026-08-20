@@ -19,6 +19,8 @@ from bioplausible.core.ontology import (
     ParameterUpdateConfig,
     DigitalSubstrate,
     FeedforwardGeometry,
+    RecurrentGeometry,
+    TileGeometry,
     InstantaneousDynamics,
     ThermodynamicContrast,
     EuclideanUpdate,
@@ -134,6 +136,82 @@ class TestGeometry:
         )
         modules = geometry.transition_modules()
         assert len(modules) == 2  # Two Linear layers
+
+    def test_recurrent_geometry_forward(self):
+        geometry = RecurrentGeometry(
+            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,)),
+            hidden_dim=20,
+        )
+        substrate = DigitalSubstrate()
+        x = torch.randn(4, 10)
+        out = geometry.forward(x, substrate)
+        assert out.shape == (4, 3)
+
+    def test_recurrent_geometry_route(self):
+        geometry = RecurrentGeometry(
+            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,)),
+            hidden_dim=20,
+        )
+        h = torch.randn(4, 20)  # Hidden state dimension
+        out = geometry.route(h)
+        assert out.shape == (4, 20)
+
+    def test_recurrent_geometry_params(self):
+        geometry = RecurrentGeometry(
+            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,)),
+            hidden_dim=20,
+        )
+        params = geometry.params
+        assert "recurrent_weight" in params
+
+    def test_tile_geometry_forward(self):
+        geometry = TileGeometry(
+            GeometryConfig(input_dim=10, output_dim=3, num_layers=3),
+            neurons_per_tile=8,
+            tiles_per_layer=2,
+        )
+        substrate = DigitalSubstrate()
+        x = torch.randn(4, 10)
+        out = geometry.forward(x, substrate)
+        assert out.shape == (4, 3)
+
+    def test_tile_geometry_route(self):
+        geometry = TileGeometry(
+            GeometryConfig(input_dim=10, output_dim=3, num_layers=3),
+            neurons_per_tile=8,
+            tiles_per_layer=2,
+        )
+        # Get flat activities from initial forward pass
+        substrate = DigitalSubstrate()
+        x = torch.randn(4, 10)
+        _ = geometry.forward(x, substrate)  # Initialize tile activities
+        flat_acts = geometry._get_flat_activities()
+        out = geometry.route(flat_acts)
+        assert out.shape == flat_acts.shape
+
+    def test_tile_geometry_params(self):
+        geometry = TileGeometry(
+            GeometryConfig(input_dim=10, output_dim=3, num_layers=3),
+            neurons_per_tile=8,
+            tiles_per_layer=2,
+        )
+        params = geometry.params
+        assert len(params) > 0
+        # Should have input/output projections and tile weights/biases
+        assert any("input_proj" in k for k in params.keys())
+        assert any("output_proj" in k for k in params.keys())
+        assert any("tile_weight" in k for k in params.keys())
+        assert any("tile_bias" in k for k in params.keys())
+
+    def test_tile_geometry_transition_modules(self):
+        geometry = TileGeometry(
+            GeometryConfig(input_dim=10, output_dim=3, num_layers=3),
+            neurons_per_tile=8,
+            tiles_per_layer=2,
+        )
+        modules = geometry.transition_modules()
+        # Should have input and output projection modules
+        assert len(modules) == 2
 
 
 class TestStateDynamics:

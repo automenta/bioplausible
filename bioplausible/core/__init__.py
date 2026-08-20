@@ -54,10 +54,19 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "DigitalSubstrate": ("bioplausible.core.ontology", "DigitalSubstrate"),
     "FeedforwardGeometry": ("bioplausible.core.ontology", "FeedforwardGeometry"),
     "RecurrentGeometry": ("bioplausible.core.ontology", "RecurrentGeometry"),
+    "TileGeometry": ("bioplausible.core.ontology", "TileGeometry"),
     "InstantaneousDynamics": ("bioplausible.core.ontology", "InstantaneousDynamics"),
     "ThermodynamicContrast": ("bioplausible.core.ontology", "ThermodynamicContrast"),
     "EuclideanUpdate": ("bioplausible.core.ontology", "EuclideanUpdate"),
     "ModelAdapter": ("bioplausible.core.ontology", "ModelAdapter"),
+    # Hardware substrates
+    "AnalogSubstrate": ("bioplausible.core.ontology", "AnalogSubstrate"),
+    "MemristiveSubstrate": ("bioplausible.core.ontology", "MemristiveSubstrate"),
+    "NeuromorphicSubstrate": ("bioplausible.core.ontology", "NeuromorphicSubstrate"),
+    "OpticalSubstrate": ("bioplausible.core.ontology", "OpticalSubstrate"),
+    "QuantumSubstrate": ("bioplausible.core.ontology", "QuantumSubstrate"),
+    "QuantizedSubstrate": ("bioplausible.core.ontology", "QuantizedSubstrate"),
+    "NoisySubstrate": ("bioplausible.core.ontology", "NoisySubstrate"),
     # SystemTrainer
     "SystemTrainerConfig": ("bioplausible.core.system_trainer", "SystemTrainerConfig"),
     "SystemTrainer": ("bioplausible.core.system_trainer", "SystemTrainer"),
@@ -65,6 +74,12 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "create_eqprop_system": ("bioplausible.core.system_trainer", "create_eqprop_system"),
     "create_backprop_system": ("bioplausible.core.system_trainer", "create_backprop_system"),
     "create_fa_system": ("bioplausible.core.system_trainer", "create_fa_system"),
+    # Distributed Trainer
+    "DistributedConfig": ("bioplausible.core.distributed_trainer", "DistributedConfig"),
+    "DistributedSystemTrainer": ("bioplausible.core.distributed_trainer", "DistributedSystemTrainer"),
+    "NodeRegistry": ("bioplausible.core.distributed_trainer", "NodeRegistry"),
+    "DHTRouter": ("bioplausible.core.distributed_trainer", "DHTRouter"),
+    "FederatedAggregator": ("bioplausible.core.distributed_trainer", "FederatedAggregator"),
 }
 
 __all__ = sorted(_LAZY)

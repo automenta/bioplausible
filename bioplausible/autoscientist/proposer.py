@@ -15,6 +15,7 @@ from bioplausible.core.registry import (
     ComponentCategory,
     ComponentMetadata,
     ComputeProfile,
+    Domain,
     LocalityLevel,
     Registry,
 )
@@ -363,3 +364,82 @@ class ExperimentProposer:
                 "proposer skipped %d already-characterized probe(s)", len(skipped)
             )
         return kept, skipped
+
+    def propose_hypercube_ablation(
+        self,
+        fixed: dict[str, str | list[str]],
+        sweep: str,
+        sweep_values: list[str],
+        domain: str | None = None,
+        n_proposals: int = 10,
+        min_bio_score: float = 0.0,
+        objective: ProposalObjective | str = ProposalObjective.ACCURACY,
+    ) -> list[ExperimentProposal]:
+        """Propose experiments via hypercube ablation along the 5-D ontology axes.
+
+        This enables the AutoScientist to perform rigorous ablation studies by
+        holding some ontology layers constant and sweeping others.
+
+        Args:
+            fixed: Dictionary of layer -> value(s) to hold constant.
+                Keys: "substrate", "geometry", "dynamics", "credit", "update"
+                Values: single value or list of values
+            sweep: Layer to sweep over ("substrate", "geometry", "dynamics", "credit", "update")
+            sweep_values: Values to sweep for the sweep layer
+            domain: Optional domain filter
+            n_proposals: Number of proposals to generate
+            min_bio_score: Minimum bio-plausibility score
+            objective: The axis to optimize when ranking candidates
+
+        Returns:
+            List of experiment proposals for the hypercube ablation.
+        """
+        # Query the registry along the 5-D ontology axes
+        results = Registry.query_ontology(
+            fixed=fixed,
+            sweep=sweep,
+            sweep_values=sweep_values,
+            domain=Domain(domain) if domain else None,
+            min_bio_score=min_bio_score,
+        )
+
+        # Convert results to proposals
+        proposals = []
+        for i, r in enumerate(results[:n_proposals]):
+            meta = r["metadata"]
+            layers = r.get("ontology_layers", {})
+
+            # Build hypothesis from the ablation
+            fixed_str = ", ".join(f"{k}={v}" for k, v in fixed.items())
+            sweep_str = f"{sweep}={sweep_values}" if isinstance(sweep_values, list) else f"{sweep}={sweep_values}"
+            hypothesis = f"Hypercube ablation: fixed [{fixed_str}], sweep [{sweep_str}]"
+
+            proposals.append(
+                ExperimentProposal(
+                    hypothesis=hypothesis,
+                    model=meta.name,
+                    task="mnist",
+                    propagator=None,  # Will use model's default
+                    justification=(
+                        f"5-D ontology ablation: {hypothesis}. "
+                        f"Layers: {layers}. Bio-score: {meta.bio_plausibility_score}"
+                    ),
+                    priority=0.5,
+                    tags=[
+                        "hypercube_ablation",
+                        f"sweep:{sweep}",
+                        f"fixed:{list(fixed.keys())}",
+                        f"objective:{objective.value if isinstance(objective, ProposalObjective) else objective}",
+                    ],
+                )
+            )
+
+        logger.info(
+            "Proposed %d hypercube ablation experiments "
+            "(fixed=%s, sweep=%s=%s)",
+            len(proposals),
+            list(fixed.keys()),
+            sweep,
+            sweep_values,
+        )
+        return proposals

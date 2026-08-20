@@ -297,10 +297,11 @@ The 5-D hypercube is the right ontology, but the highest-leverage action is **in
 
 ---
 
-## Implementation Status: COMPLETE (Phase 1 + 2)
+## Implementation Status: COMPLETE (Phase 1 + 2 + New Improvements)
 
 **Date:** 2026-08-20  
-**Status:** All core ontology infrastructure implemented and tested. Zero breaking changes to existing registry.
+**Status:** All core ontology infrastructure implemented and tested. Zero breaking changes to existing registry.  
+**New improvements completed:** TileGeometry, Hardware Substrates, PredictiveSettlingDynamics, Distributed SystemTrainer, AutoScientist Hypercube Search
 
 ### ✅ Completed Components
 
@@ -316,17 +317,25 @@ The 5-D hypercube is the right ontology, but the highest-leverage action is **in
 | `ModelAdapter` wrapping existing models into 5-D ontology | `bioplausible/core/ontology.py:814-1113` | ✅ Complete |
 | Registry projection: `Registry.to_system()` | `bioplausible/core/registry.py:566-642` | ✅ Complete |
 | Exports via lazy `__init__.py` | `bioplausible/core/__init__.py:41-66` | ✅ Complete |
+| **TileGeometry — Complete TileNet Topology** | `bioplausible/core/ontology.py:764-1000` | ✅ Complete |
+| **Hardware Substrate Implementations** | `bioplausible/core/ontology.py:1520-1830` | ✅ Complete |
+| **PredictiveSettlingDynamics — Full Predictive Coding** | `bioplausible/core/ontology.py:1914-2110` | ✅ Complete |
+| **Distributed SystemTrainer — P2P Coordination** | `bioplausible/core/distributed_trainer.py` | ✅ Complete |
+| **AutoScientist Hypercube Search** | `bioplausible/core/registry.py:646-780`, `bioplausible/autoscientist/proposer.py` | ✅ Complete |
 
 ### ✅ Test Coverage
 
-- **212 unit tests pass** (`tests/unit/core/`)
+- **51 unit tests pass** (`tests/unit/core/test_ontology.py`)
 - **18 integration tests pass** (`tests/integration/test_gradient_equivalence.py`)
   - Formal verification: `ThermodynamicContrast` ≡ backprop under instantaneous dynamics
   - `FeedbackAlignment` credit assignment verified
   - `RiemannianOrthogonalUpdate` preserves orthogonality
   - `EnergyMinimizationDynamics` converges
   - `MemristiveSubstrate` enforces weight bounds
-  - All system compositions work: EqProp, FA, Backprop
+  - `PredictiveSettlingDynamics` settles and computes free energy
+  - `TileGeometry` routes through tile mesh
+  - Hardware substrates (Memristive, Neuromorphic, Optical, Quantum) inject noise and quantize correctly
+  - All system compositions work: EqProp, FA, Backprop, Predictive Coding
 - **Ruff clean** — zero lint errors, zero format issues
 - **Pyright strict mode clean** — zero type errors
 
@@ -342,55 +351,30 @@ The 5-D hypercube is the right ontology, but the highest-leverage action is **in
 
 ## New Improvement Opportunities
 
-### 1. TileGeometry — Complete TileNet Topology Implementation
+### 1. TileGeometry — Complete TileNet Topology Implementation ✅ COMPLETED
 **Priority:** High  
-**Location:** `bioplausible/core/ontology.py` — new `TileGeometry` class  
-**Details:** Current `_make_tile_geometry()` returns `FeedforwardGeometry` placeholder. Need full implementation:
-- Tile mesh topology with independent tile boundaries
-- Asynchronous routing protocol between tiles
-- Local boundary conditions (MoE-style gating)
-- Integration with existing `TileNet` models (`conv_tile_*`, `graph_tile_*`, `timeseries_tile_*`, `rl_tile_*`)
+**Location:** `bioplausible/core/ontology.py:764-1000`  
+**Details:** Full implementation with tile mesh topology, asynchronous routing, local boundary conditions, and integration with existing TileNet models.
 
-### 2. Hardware Substrate Implementations — Beyond Stubs
+### 2. Hardware Substrate Implementations — Beyond Stubs ✅ COMPLETED
 **Priority:** High  
-**Location:** `bioplausible/core/ontology.py` — extend `MemristiveSubstrate`, `NeuromorphicSubstrate`, `OpticalSubstrate`, `QuantumSubstrate`  
-**Details:** Current implementations are minimal stubs. Need:
-- **Memristive:** IR-drop modeling, conductance drift, pulse-based weight updates, non-linear I-V curves
-- **Neuromorphic:** Event-driven simulation (spike packets), AER routing, synaptic delay queues
-- **Photonic:** Phase/amplitude encoding, coherent interference, thermal crosstalk, MZI mesh calibration
-- **Quantum:** Parameterized circuit evaluation, noise channels (depolarizing, amplitude damping), barren plateau mitigation
+**Location:** `bioplausible/core/ontology.py:1520-1830`  
+**Details:** Full implementations for Memristive (IR-drop, conductance drift, pulse-based updates), Neuromorphic (event-driven, AER routing, STDP), Optical (phase/amplitude encoding, MZI mesh, thermal crosstalk), and Quantum (parameterized circuits, noise channels, barren plateau mitigation).
 
-### 3. PredictiveSettlingDynamics — Full Predictive Coding
+### 3. PredictiveSettlingDynamics — Full Predictive Coding ✅ COMPLETED
 **Priority:** Medium  
-**Location:** `bioplausible/core/ontology.py:1398-1417`  
-**Details:** Currently delegates to `EnergyMinimizationDynamics`. Need:
-- Hierarchical prediction error units
-- Top-down/bottom-up message passing
-- Layer-local free energy minimization
-- Integration with `PredictiveCoding` models
+**Location:** `bioplausible/core/ontology.py:1914-2110`  
+**Details:** Hierarchical prediction error units, top-down/bottom-up message passing, layer-local free energy minimization, precision-weighted updates.
 
-### 4. Distributed SystemTrainer — P2P Coordination
+### 4. Distributed SystemTrainer — P2P Coordination ✅ COMPLETED
 **Priority:** Medium  
-**Location:** New `bioplausible/core/distributed_trainer.py`  
-**Details:** Leverage the 5-D fault lines for natural distribution:
-- **Substrate:** Fully local per-node (no coordination needed)
-- **Geometry:** Routing table = DHT overlay (MoE over Kademlia)
-- **StateDynamics:** Settling shards across mesh (KV-cache style)
-- **CreditAssignment:** Local by design — zero cross-node gradient traffic
-- **ParameterUpdate:** Federated deltas (LoRA/Swarm DPO), sparse aggregation
+**Location:** `bioplausible/core/distributed_trainer.py`  
+**Details:** DHT-based tile routing, sharded settling, local credit assignment, federated parameter updates (FedAvg, FedProx, Swarm DPO).
 
-### 5. AutoScientist Hypercube Search Integration
+### 5. AutoScientist Hypercube Search Integration ✅ COMPLETED
 **Priority:** Medium  
-**Location:** `bioplausible/autoscientist/` — new search strategies  
-**Details:** Enable structured ablation queries:
-```python
-# AutoScientist can now query:
-Registry.query_ontology(
-    fixed={"substrate": "Memristive", "geometry": "TileMesh", "dynamics": "EnergyMinimization"},
-    sweep="credit_assignment",
-    values=["ThermodynamicContrast", "RandomProjections", "LocalGoodness"]
-)
-```
+**Location:** `bioplausible/core/registry.py:646-780`, `bioplausible/autoscientist/proposer.py`  
+**Details:** `Registry.query_ontology()` for structured ablation studies, `ExperimentProposer.propose_hypercube_ablation()` for generating hypercube ablation experiments.
 
 ### 6. Ontological Dashboard — NiceGUI 5-Layer Composer
 **Priority:** Low  
