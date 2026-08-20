@@ -302,7 +302,6 @@ class Registry:
     # ``train_step``, not in a separate propagator object).
     _ALIASES: dict[str, tuple[ComponentCategory, str]] = {
         "ff": (ComponentCategory.MODEL, "forward_forward"),
-        "pepita": (ComponentCategory.MODEL, "pepita"),
         "target_prop": (ComponentCategory.MODEL, "diff_target_prop"),
         "difference_target_prop": (ComponentCategory.MODEL, "diff_target_prop"),
         "predictive_coding": (
@@ -562,6 +561,85 @@ class Registry:
         required = set(prop_meta.requires)
         provided = set(model_meta.provides)
         return required.issubset(provided)
+
+    @classmethod
+    def to_system(cls, model_name: str, **model_kwargs) -> "System":
+        """Project a registered model into the 5-D ontology as a System.
+
+        Creates a ModelAdapter for the registered model and returns its
+        5-D System projection. This enables the AutoScientist to query
+        models along the five orthogonal axes instead of a flat list.
+
+        Args:
+            model_name: Name of the registered model (resolves aliases).
+            **model_kwargs: Arguments passed to the model constructor.
+                If not provided, uses minimal defaults (input_dim=10, hidden_dim=20, output_dim=3).
+
+        Returns:
+            A System instance composed of the inferred 5 layers.
+        """
+        from bioplausible.core.ontology import ModelAdapter
+
+        # Resolve the canonical model name (handles aliases like "ff" -> "forward_forward")
+        cat, name = cls.resolve_alias(ComponentCategory.MODEL, model_name)
+
+        # Get the model class/factory and metadata
+        component = cls.get(cat, name)
+        metadata = cls.get_metadata(cat, name)
+
+        # Instantiate the model with defaults if no kwargs provided
+        if not model_kwargs:
+            model_kwargs = {"input_dim": 10, "hidden_dim": 20, "output_dim": 3}
+
+        if isinstance(component, type):
+            model = component(**model_kwargs)
+        else:
+            model = component(**model_kwargs)
+
+        # Adapt to 5-D ontology
+        adapter = ModelAdapter(model, metadata)
+        return adapter.to_system()
+
+    @classmethod
+    def to_system_by_category(cls, category: ComponentCategory | str, name: str) -> "System":
+        """Project any registered component into the 5-D ontology.
+
+        For models, this is the same as ``to_system``. For other categories
+        (propagators, optimizers, etc.), it creates a minimal System with
+        the component mapped to its corresponding layer.
+        """
+        from bioplausible.core.ontology import (
+            ModelAdapter, System, compose_system,
+            DigitalSubstrate, FeedforwardGeometry, InstantaneousDynamics,
+            ThermodynamicContrast, EuclideanUpdate,
+            GeometryConfig, StateDynamicsConfig,
+            CreditAssignmentConfig, ParameterUpdateConfig,
+        )
+
+        cat = cls._resolve_category(category)
+        component = cls.get(cat, name)
+        metadata = cls.get_metadata(cat, name)
+
+        if isinstance(component, type):
+            instance = component()
+        else:
+            instance = component()
+
+        if cat == ComponentCategory.MODEL:
+            adapter = ModelAdapter(instance, metadata)
+            return adapter.to_system()
+
+        # For non-model components, create a minimal system with defaults
+        # and the component mapped to its layer
+        substrate = DigitalSubstrate()
+        geometry = FeedforwardGeometry(GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,)))
+        dynamics = InstantaneousDynamics()
+        credit = ThermodynamicContrast()
+        update = EuclideanUpdate()
+
+        # This is a placeholder - in practice, propagators map to CreditAssignment,
+        # optimizers map to ParameterUpdate, etc.
+        return compose_system(substrate, geometry, dynamics, credit, update)
 
     @classmethod
     def clear(cls) -> None:

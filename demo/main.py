@@ -1,8 +1,9 @@
-"""Bioplausible NiceGUI demo entry point (Sprint 3).
+"""Bioplausible NiceGUI demo entry point (Sprint 3 + Sprint 6 Ontology).
 
-Two-panel side-by-side config comparison with live streaming charts. The
-training runs in worker threads via :mod:`runner`, emitting telemetry through
-the Sprint 3.4 ``ExecutionCallback`` protocol — the UI is a pure consumer.
+Two modes:
+- Classic: Two-panel side-by-side config comparison with flat model registry
+- Ontology: 5-D composition with dropdowns for each layer (Substrate, Geometry,
+  StateDynamics, CreditAssignment, ParameterUpdate)
 
 Run::
 
@@ -48,6 +49,47 @@ logger = logging.getLogger(__name__)
 
 DEMO_MODELS = list(TRAINABLE_MODELS)
 
+# 5-D Ontology layer options (RECRYSTALLIZE.md)
+ONTOLOGY_LAYERS = {
+    "Substrate": [
+        "DigitalSubstrate",
+        "NoisySubstrate",
+        "QuantizedSubstrate",
+        "OpticalSubstrate",
+        "MemristiveSubstrate",
+        "NeuromorphicSubstrate",
+        "QuantumSubstrate",
+    ],
+    "Geometry": [
+        "FeedforwardGeometry",
+        "RecurrentGeometry",
+        "TileGeometry",
+        "NeuromorphicGeometry",
+        "SpatialGeometry",
+    ],
+    "StateDynamics": [
+        "InstantaneousDynamics",
+        "EnergyMinimizationDynamics",
+        "PredictiveSettlingDynamics",
+        "SpikeIntegrationDynamics",
+    ],
+    "CreditAssignment": [
+        "ThermodynamicContrast",
+        "RandomProjectionsCredit",
+        "LocalGoodnessCredit",
+        "TemporalTraceCredit",
+        "TargetInversionCredit",
+        "BackpropCredit",
+    ],
+    "ParameterUpdate": [
+        "EuclideanUpdate",
+        "RiemannianOrthogonalUpdate",
+        "SpectralConstrainedUpdate",
+        "NaturalGradientUpdate",
+        "ElasticConsolidationUpdate",
+    ],
+}
+
 
 def _fresh_panel(model: str, task: str, epochs: int, lr: float) -> DemoPanel:
     cfg = default_trainer_config(model=model, task=task, epochs=epochs, lr=lr)
@@ -81,6 +123,10 @@ class DemoUi:
         self.meta_a: ui.label | None = None
         self.meta_b: ui.label | None = None
         self.weight_box: ui.column | None = None
+        # Ontology mode state
+        self.ontology_mode: bool = False
+        self.layer_selectors_a: dict[str, ui.select] = {}
+        self.layer_selectors_b: dict[str, ui.select] = {}
 
     def _make_chart(self) -> ui.elements.plotly_element.Plotly:
         import plotly.graph_objects as go
@@ -106,19 +152,156 @@ def _meta_text(name: str) -> str:
     )
 
 
+def _build_ontology_system(layer_choices: dict[str, str]) -> "System":
+    """Build a System from 5 layer choices."""
+    from bioplausible.core.ontology import (
+        DigitalSubstrate, NoisySubstrate, QuantizedSubstrate, OpticalSubstrate,
+        MemristiveSubstrate, NeuromorphicSubstrate, QuantumSubstrate,
+        FeedforwardGeometry, RecurrentGeometry,
+        InstantaneousDynamics, EnergyMinimizationDynamics,
+        PredictiveSettlingDynamics, SpikeIntegrationDynamics,
+        ThermodynamicContrast, RandomProjectionsCredit, LocalGoodnessCredit,
+        TemporalTraceCredit, TargetInversionCredit, BackpropCredit,
+        EuclideanUpdate, RiemannianOrthogonalUpdate, SpectralConstrainedUpdate,
+        NaturalGradientUpdate, ElasticConsolidationUpdate,
+        GeometryConfig, StateDynamicsConfig, CreditAssignmentConfig,
+        ParameterUpdateConfig,
+    )
+    from bioplausible.core.system_trainer import compose_system
+
+    # Map layer names to instances
+    substrate_map = {
+        "DigitalSubstrate": DigitalSubstrate(),
+        "NoisySubstrate": NoisySubstrate(),
+        "QuantizedSubstrate": QuantizedSubstrate(),
+        "OpticalSubstrate": OpticalSubstrate(),
+        "MemristiveSubstrate": MemristiveSubstrate(),
+        "NeuromorphicSubstrate": NeuromorphicSubstrate(),
+        "QuantumSubstrate": QuantumSubstrate(),
+    }
+
+    geometry_map = {
+        "FeedforwardGeometry": FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,))),
+        "RecurrentGeometry": RecurrentGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,)), hidden_dim=256),
+        "TileGeometry": FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,), topology_type="tile_mesh")),
+        "NeuromorphicGeometry": FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,), topology_type="neuromorphic")),
+        "SpatialGeometry": FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,), topology_type="spatial_lattice")),
+    }
+
+    dynamics_map = {
+        "InstantaneousDynamics": InstantaneousDynamics(),
+        "EnergyMinimizationDynamics": EnergyMinimizationDynamics(StateDynamicsConfig(dynamics_type="energy_minimization", max_steps=30, beta=0.5)),
+        "PredictiveSettlingDynamics": PredictiveSettlingDynamics(StateDynamicsConfig(dynamics_type="predictive_settling")),
+        "SpikeIntegrationDynamics": SpikeIntegrationDynamics(StateDynamicsConfig(dynamics_type="spike_integration")),
+    }
+
+    credit_map = {
+        "ThermodynamicContrast": ThermodynamicContrast(CreditAssignmentConfig(credit_type="thermodynamic_contrast", beta=0.5)),
+        "RandomProjectionsCredit": RandomProjectionsCredit(),
+        "LocalGoodnessCredit": LocalGoodnessCredit(),
+        "TemporalTraceCredit": TemporalTraceCredit(),
+        "TargetInversionCredit": TargetInversionCredit(),
+        "BackpropCredit": BackpropCredit(),
+    }
+
+    update_map = {
+        "EuclideanUpdate": EuclideanUpdate(ParameterUpdateConfig(update_type="euclidean", step_size=0.01)),
+        "RiemannianOrthogonalUpdate": RiemannianOrthogonalUpdate(ParameterUpdateConfig(update_type="riemannian_orthogonal", step_size=0.01)),
+        "SpectralConstrainedUpdate": SpectralConstrainedUpdate(ParameterUpdateConfig(update_type="spectral_constrained", step_size=0.01)),
+        "NaturalGradientUpdate": NaturalGradientUpdate(ParameterUpdateConfig(update_type="natural_gradient", step_size=0.01)),
+        "ElasticConsolidationUpdate": ElasticConsolidationUpdate(ParameterUpdateConfig(update_type="elastic_consolidation", step_size=0.01)),
+    }
+
+    substrate = substrate_map[layer_choices["Substrate"]]
+    geometry = geometry_map[layer_choices["Geometry"]]
+    dynamics = dynamics_map[layer_choices["StateDynamics"]]
+    credit = credit_map[layer_choices["CreditAssignment"]]
+    update = update_map[layer_choices["ParameterUpdate"]]
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def _create_ontology_panel(layer_choices: dict[str, str], task: str, epochs: int, lr: float) -> DemoPanel:
+    """Create a DemoPanel from an ontology-composed System."""
+    from bioplausible.core.registry import Registry, ComponentCategory
+    from bioplausible.core.trainer import TrainerConfig
+
+    # Build the system
+    system = _build_ontology_system(layer_choices)
+
+    # Create a synthetic model name for the trainer config
+    model_name = f"ontology_{layer_choices['Substrate']}_{layer_choices['Geometry']}_{layer_choices['StateDynamics']}_{layer_choices['CreditAssignment']}_{layer_choices['ParameterUpdate']}"
+
+    # Use a base trainer config
+    cfg = default_trainer_config(model="backprop_mlp", task=task, epochs=epochs, lr=lr)
+    cfg.model = model_name
+    cfg.model_kwargs = {}  # System handles its own architecture
+
+    panel = DemoPanel(trainer_config=cfg, epochs=epochs)
+    # Store the system for training
+    panel._ontology_system = system
+    return panel
+
+
 def create_page(demo: DemoUi) -> None:
     """Compose the demo page (called once at startup)."""
     ui.dark_mode().enable()
 
-    # --- Controls row ---
+    # --- Mode Selector ---
     with ui.row():
-        task_sel = ui.select(
-            [t.name for t in build_tasks()], value="mnist", label="Task"
-        )
-        model_a = ui.select(DEMO_MODELS, value="tile_pc", label="Config A")
-        model_b = ui.select(DEMO_MODELS, value="backprop_mlp", label="Config B")
-        epochs = ui.number(value=5, min=1, max=50, label="Epochs")
-        lr = ui.number(value=0.001, format="%.4f", label="Learning Rate")
+        mode_select = ui.select(
+            ["Classic", "Ontology (5-D)"],
+            value="Classic",
+            label="Mode",
+        ).classes("w-64")
+
+    # --- Classic Mode Controls ---
+    classic_controls = ui.column()
+    ontology_controls = ui.column().classes("hidden")
+
+    with classic_controls:
+        with ui.row():
+            task_sel = ui.select(
+                [t.name for t in build_tasks()], value="mnist", label="Task"
+            )
+            model_a = ui.select(DEMO_MODELS, value="tile_pc", label="Config A")
+            model_b = ui.select(DEMO_MODELS, value="backprop_mlp", label="Config B")
+            epochs = ui.number(value=5, min=1, max=50, label="Epochs")
+            lr = ui.number(value=0.001, format="%.4f", label="Learning Rate")
+
+    # --- Ontology Mode Controls ---
+    with ontology_controls:
+        with ui.row():
+            task_sel_ont = ui.select(
+                [t.name for t in build_tasks()], value="mnist", label="Task"
+            )
+            epochs_ont = ui.number(value=5, min=1, max=50, label="Epochs")
+            lr_ont = ui.number(value=0.001, format="%.4f", label="Learning Rate")
+
+        with ui.row():
+            with ui.column():
+                ui.label("Config A (5-D Composition)").classes("text-bold")
+                for layer_name, options in ONTOLOGY_LAYERS.items():
+                    sel = ui.select(options, value=options[0], label=layer_name).classes("w-full")
+                    demo.layer_selectors_a[layer_name] = sel
+
+            with ui.column():
+                ui.label("Config B (5-D Composition)").classes("text-bold")
+                for layer_name, options in ONTOLOGY_LAYERS.items():
+                    sel = ui.select(options, value=options[0], label=layer_name).classes("w-full")
+                    demo.layer_selectors_b[layer_name] = sel
+
+    def _toggle_mode() -> None:
+        if mode_select.value == "Ontology (5-D)":
+            classic_controls.classes("hidden")
+            ontology_controls.classes(remove="hidden")
+            demo.ontology_mode = True
+        else:
+            classic_controls.classes(remove="hidden")
+            ontology_controls.classes("hidden")
+            demo.ontology_mode = False
+
+    mode_select.on("change", _toggle_mode)
 
     # --- Live editable config panels (Sprint 3.2 widget tree) ---
     demo.panel_a = _fresh_panel(model_a.value, task_sel.value, 5, 0.001)
@@ -139,6 +322,15 @@ def create_page(demo: DemoUi) -> None:
     def sync_b() -> None:
         demo.panel_b.trainer_config.epochs = int(epochs.value)
         demo.panel_b.trainer_config.optimizer_kwargs["lr"] = float(lr.value)
+
+    def sync_a_ont() -> None:
+        if demo.panel_a and hasattr(demo.panel_a, "_ontology_system"):
+            # Ontology systems don't use trainer_config for epochs/lr
+            pass
+
+    def sync_b_ont() -> None:
+        if demo.panel_b and hasattr(demo.panel_b, "_ontology_system"):
+            pass
 
     with ui.row():
         with ui.column():
@@ -171,30 +363,41 @@ def create_page(demo: DemoUi) -> None:
 
     # --- Train button ---
     async def train() -> None:
-        # Use the current selectors, but reuse each panel's live (widget-mutated)
-        # config when the model/task are unchanged so Sprint 3.2 knob edits feed
-        # the run; only a model/task change rebuilds from defaults.
-        demo.panel_a = _cooked_panel(
-            demo.panel_a,
-            model_a.value,
-            task_sel.value,
-            int(epochs.value),
-            float(lr.value),
-        )
-        demo.panel_b = _cooked_panel(
-            demo.panel_b,
-            model_b.value,
-            task_sel.value,
-            int(epochs.value),
-            float(lr.value),
-        )
-        sync_a()
-        sync_b()
         demo.run_btn.disable()
+
+        if demo.ontology_mode:
+            # Build ontology systems from layer choices
+            choices_a = {name: sel.value for name, sel in demo.layer_selectors_a.items()}
+            choices_b = {name: sel.value for name, sel in demo.layer_selectors_b.items()}
+
+            demo.panel_a = _create_ontology_panel(choices_a, task_sel_ont.value, int(epochs_ont.value), float(lr_ont.value))
+            demo.panel_b = _create_ontology_panel(choices_b, task_sel_ont.value, int(epochs_ont.value), float(lr_ont.value))
+        else:
+            # Classic mode
+            demo.panel_a = _cooked_panel(
+                demo.panel_a,
+                model_a.value,
+                task_sel.value,
+                int(epochs.value),
+                float(lr.value),
+            )
+            demo.panel_b = _cooked_panel(
+                demo.panel_b,
+                model_b.value,
+                task_sel.value,
+                int(epochs.value),
+                float(lr.value),
+            )
+            sync_a()
+            sync_b()
 
         async def train_one(panel: DemoPanel) -> None:
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, run_headless, panel)
+            if hasattr(panel, "_ontology_system") and panel._ontology_system is not None:
+                # Train using the ontology system
+                await loop.run_in_executor(None, _run_ontology_system, panel)
+            else:
+                await loop.run_in_executor(None, run_headless, panel)
 
         await asyncio.gather(train_one(demo.panel_a), train_one(demo.panel_b))
 
@@ -232,6 +435,74 @@ def create_page(demo: DemoUi) -> None:
         )
     with ui.row():
         ui.button("Export Run (CSV+PNG)", on_click=_export_run(demo, export_info))
+
+
+def _run_ontology_system(panel: DemoPanel) -> None:
+    """Run training for an ontology-composed system."""
+    import torch
+    from bioplausible.domains.registry import resolve_task
+
+    try:
+        panel.running = True
+        panel.finished = False
+        system = panel._ontology_system
+        task_spec = resolve_task(panel.trainer_config.task)
+
+        # Get data
+        from bioplausible.data import get_dataloaders
+        train_loader, val_loader = get_dataloaders(
+            panel.trainer_config.task,
+            batch_size=panel.trainer_config.batch_size,
+        )
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if hasattr(system.geometry, "to"):
+            system.geometry.to(device)
+
+        for epoch in range(panel.epochs):
+            system.geometry.train()
+            epoch_loss = 0.0
+            epoch_acc = 0.0
+            num_batches = 0
+
+            for x, y in train_loader:
+                x = x.to(device)
+                y = y.to(device)
+
+                metrics = system.train_step(x, y)
+
+                epoch_loss += metrics.get("loss", 0.0)
+                epoch_acc += metrics.get("accuracy", 0.0)
+                num_batches += 1
+
+            avg_loss = epoch_loss / max(num_batches, 1)
+            avg_acc = epoch_acc / max(num_batches, 1)
+
+            panel.losses.append(avg_loss)
+            panel.accuracies.append(avg_acc)
+
+            # Validation
+            if val_loader is not None:
+                system.geometry.eval()
+                val_loss = 0.0
+                val_acc = 0.0
+                val_batches = 0
+                with torch.no_grad():
+                    for x, y in val_loader:
+                        x = x.to(device)
+                        y = y.to(device)
+                        logits = system.forward(x)
+                        loss = torch.nn.functional.cross_entropy(logits, y)
+                        acc = (logits.argmax(-1) == y).float().mean().item()
+                        val_loss += loss.item()
+                        val_acc += acc
+                        val_batches += 1
+
+        panel.finished = True
+    except Exception as e:
+        panel.error = str(e)
+    finally:
+        panel.running = False
 
 
 def _save_cfg(side: str, demo: DemoUi, status) -> Callable[[], None]:

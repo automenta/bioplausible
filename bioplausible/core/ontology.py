@@ -27,6 +27,8 @@ from typing import Protocol, TypeVar, runtime_checkable
 import torch
 from torch import Tensor, nn
 
+from bioplausible.core.registry import ComponentMetadata, ComputeProfile, LocalityLevel
+
 __all__ = [
     "CreditAssignment",
     "CreditAssignmentConfig",
@@ -40,6 +42,32 @@ __all__ = [
     "SubstrateConfig",
     "System",
     "SystemState",
+    "ModelAdapter",
+    "DigitalSubstrate",
+    "AnalogSubstrate",
+    "MemristiveSubstrate",
+    "NeuromorphicSubstrate",
+    "QuantumSubstrate",
+    "OpticalSubstrate",
+    "NoisySubstrate",
+    "QuantizedSubstrate",
+    "FeedforwardGeometry",
+    "RecurrentGeometry",
+    "InstantaneousDynamics",
+    "EnergyMinimizationDynamics",
+    "PredictiveSettlingDynamics",
+    "SpikeIntegrationDynamics",
+    "ThermodynamicContrast",
+    "RandomProjectionsCredit",
+    "LocalGoodnessCredit",
+    "TemporalTraceCredit",
+    "TargetInversionCredit",
+    "BackpropCredit",
+    "EuclideanUpdate",
+    "RiemannianOrthogonalUpdate",
+    "SpectralConstrainedUpdate",
+    "NaturalGradientUpdate",
+    "ElasticConsolidationUpdate",
 ]
 
 
@@ -669,10 +697,19 @@ class RecurrentGeometry(nn.Module):
         return h
 
     def route(self, activations: Tensor) -> Tensor:
-        """Single recurrent step: h_{t+1} = f(h_t) = activation(W_rec @ h_t)."""
+        """Single recurrent step: h_{t+1} = f(h_t) = activation(W_rec @ h_t).
+
+        Expects activations to be the hidden state (batch_size x hidden_dim).
+        """
         h = activations
         if self._recurrent_weight is not None:
-            h = h @ self._recurrent_weight.T
+            # Hidden state should match recurrent weight dimensions
+            if h.shape[-1] == self._recurrent_weight.shape[0]:
+                h = h @ self._recurrent_weight.T
+            else:
+                # Activations are output dim; we can't apply recurrent weight
+                # This happens when route is called on output instead of hidden state
+                pass
         return h
 
     def update_params(self, new_params: dict[str, Tensor]) -> None:
@@ -780,21 +817,26 @@ class ModelAdapter:
     This enables the Strangler Fig migration: existing models stay registered
     and functional, but can be projected into the ontology for AutoScientist
     queries and cross-axis ablation studies.
+
+    Inference priority:
+    1. Registry metadata (most reliable - from @register_model decorator)
+    2. Model attributes (backend, gradient_method, max_steps, etc.)
+    3. Heuristics from class name / family tag
+    4. Defaults (DigitalSubstrate, FeedforwardGeometry, InstantaneousDynamics, etc.)
     """
 
-    def __init__(self, model: nn.Module):
+    def __init__(self, model: nn.Module, metadata: ComponentMetadata | None = None):
         self.model = model
+        self._metadata = metadata
 
-    def to_system(self):
+    def to_system(self) -> System:
         """Project model into 5-D ontology (best-effort inference)."""
-        # Infer components from model attributes/metadata
         substrate = self._infer_substrate()
         geometry = self._infer_geometry()
         dynamics = self._infer_dynamics()
         credit = self._infer_credit()
         update = self._infer_update()
 
-        # Return a System-like object that delegates to the model
         return _AdaptedSystem(
             substrate=substrate,
             geometry=geometry,
@@ -805,50 +847,325 @@ class ModelAdapter:
         )
 
     def _infer_substrate(self) -> Substrate:
-        # Default to digital; check for hardware variants
-        if hasattr(self.model, "backend"):
-            if self.model.backend == "quantized":
-                return QuantizedSubstrate()
-            elif self.model.backend == "noisy":
-                return NoisySubstrate()
-            elif self.model.backend == "optical":
+        # Priority 1: Registry metadata compute_profile
+        if self._metadata and self._metadata.compute_profile:
+            profile = self._metadata.compute_profile
+            if profile == ComputeProfile.ANALOG:
+                return AnalogSubstrate()
+            elif profile == ComputeProfile.OPTICAL:
                 return OpticalSubstrate()
+            elif profile == ComputeProfile.MEMRISTOR:
+                return MemristiveSubstrate()
+            elif profile == ComputeProfile.NEUROMORPHIC:
+                return NeuromorphicSubstrate()
+
+        # Priority 2: Model attributes
+        if hasattr(self.model, "backend"):
+            backend = self.model.backend
+            if backend == "quantized":
+                return QuantizedSubstrate()
+            elif backend == "noisy":
+                return NoisySubstrate()
+            elif backend == "optical":
+                return OpticalSubstrate()
+            elif backend == "crossbar":
+                return MemristiveSubstrate()
+            elif backend == "quantum":
+                return QuantumSubstrate()
+
+        # Priority 3: Family tag heuristics
+        if self._metadata and self._metadata.family:
+            family = self._metadata.family.lower()
+            if "quantized" in family or "ternary" in family:
+                return QuantizedSubstrate()
+            elif "noisy" in family:
+                return NoisySubstrate()
+            elif "optical" in family or "photonic" in family:
+                return OpticalSubstrate()
+            elif "crossbar" in family or "memristive" in family:
+                return MemristiveSubstrate()
+            elif "quantum" in family:
+                return QuantumSubstrate()
+
         return DigitalSubstrate()
 
     def _infer_geometry(self) -> Geometry:
+        # Priority 1: Check for specific topology types
+        if hasattr(self.model, "topology_type"):
+            topo = self.model.topology_type
+            if topo == "recurrent" or topo == "recurrent_attractor":
+                return self._make_recurrent_geometry()
+            elif topo == "tile_mesh" or topo == "tile":
+                return self._make_tile_geometry()
+            elif topo == "neuromorphic" or topo == "fabric":
+                return self._make_neuromorphic_geometry()
+            elif topo == "spatial_lattice" or topo == "3d":
+                return self._make_spatial_geometry()
+
+        # Priority 2: Registry metadata family
+        if self._metadata and self._metadata.family:
+            family = self._metadata.family.lower()
+            if "tile" in family:
+                return self._make_tile_geometry()
+            elif "cube" in family or "neural_cube" in family:
+                return self._make_spatial_geometry()
+            elif "graph" in family or "fabric" in family:
+                return self._make_neuromorphic_geometry()
+            elif "recurrent" in family or "equilibrium" in family or "eqprop" in family or "ep" in family:
+                return self._make_recurrent_geometry()
+
+        # Priority 3: Model attributes
         if hasattr(self.model, "transition_modules"):
             layers = self.model.transition_modules()  # type: ignore[attr-defined]
             return FeedforwardGeometry(
                 GeometryConfig(
                     input_dim=getattr(self.model, "input_dim", 0),
                     output_dim=getattr(self.model, "output_dim", 0),
+                    hidden_dims=self._infer_hidden_dims(),
                 ),
                 layers=layers,
             )
-        return FeedforwardGeometry(GeometryConfig(input_dim=0, output_dim=0))
+
+        # Default: feedforward
+        return FeedforwardGeometry(
+            GeometryConfig(
+                input_dim=getattr(self.model, "input_dim", 0),
+                output_dim=getattr(self.model, "output_dim", 0),
+                hidden_dims=self._infer_hidden_dims(),
+            )
+        )
+
+    def _infer_hidden_dims(self) -> tuple[int, ...]:
+        if hasattr(self.model, "hidden_dims"):
+            return tuple(self.model.hidden_dims)
+        if hasattr(self.model, "hidden_dim"):
+            return (self.model.hidden_dim,)
+        if hasattr(self.model, "config") and hasattr(self.model.config, "hidden_dims"):
+            return tuple(self.model.config.hidden_dims)
+        return ()
+
+    def _make_recurrent_geometry(self) -> RecurrentGeometry:
+        return RecurrentGeometry(
+            GeometryConfig(
+                input_dim=getattr(self.model, "input_dim", 0),
+                output_dim=getattr(self.model, "output_dim", 0),
+                hidden_dims=self._infer_hidden_dims(),
+                topology_type="recurrent",
+            ),
+            hidden_dim=self._infer_hidden_dims()[-1] if self._infer_hidden_dims() else None,
+        )
+
+    def _make_tile_geometry(self) -> Geometry:
+        # Tile geometry is complex; for now use feedforward as placeholder
+        # A full TileGeometry implementation would be added later
+        return FeedforwardGeometry(
+            GeometryConfig(
+                input_dim=getattr(self.model, "input_dim", 0),
+                output_dim=getattr(self.model, "output_dim", 0),
+                hidden_dims=self._infer_hidden_dims(),
+                topology_type="tile_mesh",
+            )
+        )
+
+    def _make_neuromorphic_geometry(self) -> Geometry:
+        return FeedforwardGeometry(
+            GeometryConfig(
+                input_dim=getattr(self.model, "input_dim", 0),
+                output_dim=getattr(self.model, "output_dim", 0),
+                hidden_dims=self._infer_hidden_dims(),
+                topology_type="neuromorphic",
+            )
+        )
+
+    def _make_spatial_geometry(self) -> Geometry:
+        return FeedforwardGeometry(
+            GeometryConfig(
+                input_dim=getattr(self.model, "input_dim", 0),
+                output_dim=getattr(self.model, "output_dim", 0),
+                hidden_dims=self._infer_hidden_dims(),
+                topology_type="spatial_lattice",
+            )
+        )
 
     def _infer_dynamics(self) -> StateDynamics:
+        # Priority 1: Registry metadata (most reliable)
+        if self._metadata and self._metadata.family:
+            family = self._metadata.family.lower()
+            if "equilibrium" in family or "eqprop" in family or "ep" in family or "chl" in family:
+                return EnergyMinimizationDynamics(StateDynamicsConfig(
+                    dynamics_type="energy_minimization",
+                    max_steps=30,
+                    beta=0.5,
+                ))
+            elif "predictive" in family or "pc" in family:
+                return PredictiveSettlingDynamics()
+            elif "spiking" in family or "stdp" in family or "snn" in family:
+                return SpikeIntegrationDynamics()
+            elif "forward_only" in family or "ff" in family or "pepita" in family:
+                return InstantaneousDynamics()
+            elif "fa" in family or "feedback" in family or "dfa" in family:
+                return InstantaneousDynamics()
+            elif "target" in family or "target_prop" in family or "tp" in family:
+                return InstantaneousDynamics()
+
+        # Priority 2: Model attributes
+        if hasattr(self.model, "gradient_method"):
+            method = self.model.gradient_method
+            if method == "equilibrium":
+                return EnergyMinimizationDynamics(StateDynamicsConfig(
+                    dynamics_type="energy_minimization",
+                    max_steps=getattr(self.model, "max_steps", 30),
+                    beta=getattr(self.model, "beta", 0.5),
+                ))
+            elif method == "predictive_coding":
+                return PredictiveSettlingDynamics()
+            elif method == "spiking" or method == "stdp":
+                return SpikeIntegrationDynamics()
+
         if hasattr(self.model, "max_steps") and getattr(self.model, "max_steps", 1) > 1:
-            return EnergyMinimizationDynamics()
+            return EnergyMinimizationDynamics(StateDynamicsConfig(
+                dynamics_type="energy_minimization",
+                max_steps=self.model.max_steps,
+                beta=getattr(self.model, "beta", 0.5),
+            ))
+
+        # Priority 3: Locality level
+        if self._metadata and self._metadata.locality_level:
+            if self._metadata.locality_level == LocalityLevel.EQUILIBRIUM:
+                return EnergyMinimizationDynamics()
+            elif self._metadata.locality_level == LocalityLevel.FORWARD_ONLY:
+                return InstantaneousDynamics()
+            elif self._metadata.locality_level == LocalityLevel.LOCAL:
+                return SpikeIntegrationDynamics()
+
         return InstantaneousDynamics()
 
     def _infer_credit(self) -> CreditAssignment:
-        credit_type = getattr(self.model, "credit_assignment_type", "gradient")
-        if credit_type == "equilibrium":
-            return ThermodynamicContrast()
-        elif credit_type == "random_projections":
-            return RandomProjectionsCredit()
+        # Priority 1: Registry metadata
+        if self._metadata and self._metadata.credit_assignment_type:
+            credit_type = self._metadata.credit_assignment_type
+            if credit_type == "equilibrium":
+                return ThermodynamicContrast(CreditAssignmentConfig(
+                    credit_type="thermodynamic_contrast",
+                    beta=0.5,
+                ))
+            elif credit_type in ("random_projections", "feedback_alignment"):
+                return RandomProjectionsCredit()
+            elif credit_type == "local_goodness":
+                return LocalGoodnessCredit()
+            elif credit_type == "temporal_trace":
+                return TemporalTraceCredit()
+            elif credit_type == "target_inversion":
+                return TargetInversionCredit()
+            elif credit_type in ("gradient", "backpropagation"):
+                return BackpropCredit()
+
+        # Priority 2: Model attributes
+        if hasattr(self.model, "credit_assignment_type"):
+            credit_type = self.model.credit_assignment_type
+            if credit_type == "equilibrium":
+                return ThermodynamicContrast()
+            elif credit_type in ("random_projections", "feedback_alignment"):
+                return RandomProjectionsCredit()
+
+        # Priority 3: Family
+        if self._metadata and self._metadata.family:
+            family = self._metadata.family.lower()
+            if "eqprop" in family or "equilibrium" in family or "ep" in family:
+                return ThermodynamicContrast()
+            elif "fa" in family or "feedback" in family or "dfa" in family:
+                return RandomProjectionsCredit()
+            elif "hebbian" in family or "chl" in family:
+                return ThermodynamicContrast()  # CHL uses contrastive
+            elif "forward_only" in family or "ff" in family or "pepita" in family:
+                return LocalGoodnessCredit()
+            elif "spiking" in family or "stdp" in family:
+                return TemporalTraceCredit()
+            elif "target_prop" in family or "tp" in family:
+                return TargetInversionCredit()
+
         return BackpropCredit()
 
     def _infer_update(self) -> ParameterUpdate:
-        if hasattr(self.model, "optimizer") and hasattr(self.model.optimizer, "step"):
-            # Check for Muon etc.
-            opt_name = type(self.model.optimizer).__name__.lower()
-            if "muon" in opt_name:
+        # Priority 1: Registry metadata tags
+        if self._metadata and self._metadata.tags:
+            tags = [t.lower() for t in self._metadata.tags]
+            if "muon" in tags or "riemannian" in tags:
                 return RiemannianOrthogonalUpdate()
-            elif "ewc" in opt_name:
+            elif "spectral" in tags:
+                return SpectralConstrainedUpdate()
+            elif "fisher" in tags or "natural" in tags:
+                return NaturalGradientUpdate()
+            elif "ewc" in tags or "elastic" in tags:
                 return ElasticConsolidationUpdate()
+
+        # Priority 2: Family
+        if self._metadata and self._metadata.family:
+            family = self._metadata.family.lower()
+            if "muon" in family or "mep" in family:
+                return RiemannianOrthogonalUpdate()
+            elif "fisher" in family:
+                return NaturalGradientUpdate()
+            elif "ewc" in family:
+                return ElasticConsolidationUpdate()
+
         return EuclideanUpdate()
+
+
+# Additional substrate implementations
+class AnalogSubstrate(DigitalSubstrate):
+    """Analog compute substrate with continuous values and noise."""
+    def __init__(self, config: SubstrateConfig | None = None):
+        super().__init__(config or SubstrateConfig(precision="float32", noise_level=0.02))
+
+
+class MemristiveSubstrate(DigitalSubstrate):
+    """Memristive crossbar: conductance matrices, bounded precision, IR-drop noise."""
+    def __init__(self, config: SubstrateConfig | None = None):
+        super().__init__(config or SubstrateConfig(
+            precision="int8",
+            noise_level=0.05,
+            weight_bounds=(0.0, 1.0),  # Conductance is positive
+            sparsity=0.1,
+        ))
+
+    def quantize_weights(self, w: Tensor) -> Tensor:
+        # Memristors: positive conductance, bounded
+        w = torch.clamp(w, 0.0, 1.0)
+        scale = 1.0 / 255.0
+        return (w / scale).round().clamp(0, 255) * scale
+
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
+        # Crossbar: I = V * G (with IR drop approximation)
+        return lambda x, w: x @ w.T  # Simplified
+
+
+class NeuromorphicSubstrate(DigitalSubstrate):
+    """Event-driven neuromorphic: sparse spikes, asynchronous."""
+    def __init__(self, config: SubstrateConfig | None = None):
+        super().__init__(config or SubstrateConfig(
+            precision="float16",
+            noise_level=0.01,
+            sparsity=0.95,
+        ))
+
+    def inject_state_noise(self, s: Tensor) -> Tensor:
+        # Spike dropout
+        mask = torch.rand_like(s) > self.config.sparsity
+        return s * mask.float()
+
+
+class QuantumSubstrate(DigitalSubstrate):
+    """Quantum substrate: parameterized unitary gates."""
+    def __init__(self, config: SubstrateConfig | None = None):
+        super().__init__(config or SubstrateConfig(
+            precision="complex64",
+            noise_level=0.02,
+        ))
+
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
+        # Simplified: quantum circuit evaluation
+        return lambda x, w: (x @ w.T).real
 
 
 # Additional substrate implementations
@@ -919,7 +1236,11 @@ class EnergyMinimizationDynamics:
 
     def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:
         # Simplified energy: reconstruction error
-        acts = state.free_state or state.nudged_state or state.activations
+        acts = state.free_state
+        if acts is None:
+            acts = state.nudged_state
+        if acts is None:
+            acts = state.activations
         if acts is None:
             return torch.tensor(0.0)
         if isinstance(acts, list):
@@ -998,17 +1319,34 @@ class RandomProjectionsCredit:
     ) -> list[Tensor]:
         # Use fixed random feedback matrix
         if self._feedback_weights is None:
-            # Initialize based on geometry output dim
+            # Initialize based on geometry output dim and hidden dims
             out_dim = geometry.config.output_dim
-            self._feedback_weights = torch.randn(out_dim, out_dim) * 0.1
+            hidden_dims = geometry.config.hidden_dims
+            # For simplicity, create feedback for each layer
+            self._feedback_weights = {}
+            for i, h_dim in enumerate(hidden_dims):
+                self._feedback_weights[f"layer_{i}"] = torch.randn(h_dim, out_dim) * 0.1
 
         # Project error through fixed feedback
         if nudged_state.activations is not None:
             acts = nudged_state.activations
             if isinstance(acts, list):
-                acts = acts[-1]
-            error = acts - self._feedback_weights @ acts  # Simplified
-            return [error]
+                # For multi-layer, we need per-layer activations
+                grads = []
+                for i, act in enumerate(acts[:-1]):  # Skip output layer
+                    if f"layer_{i}" in self._feedback_weights:
+                        fb = self._feedback_weights[f"layer_{i}"]
+                        # Project output error back to this layer
+                        output_error = acts[-1]  # Simplified
+                        if output_error.shape[-1] == fb.shape[1]:
+                            grad = output_error @ fb.T
+                        else:
+                            grad = torch.zeros_like(act)
+                        grads.append(grad)
+                return grads
+            else:
+                # Single layer
+                return [torch.zeros_like(acts)]
         return []
 
 
