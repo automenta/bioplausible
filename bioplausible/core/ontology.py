@@ -1084,6 +1084,38 @@ class TileGeometry(nn.Module):
             elif name in self._tile_biases:
                 self._tile_biases[name].data.copy_(param)
 
+    def _validate_shapes(self) -> None:
+        """Validate that projection dimensions match tile graph structure.
+
+        Checks that input/output projection dimensions match the sum of
+        input/output tile neurons. Raises ValueError if mismatch detected.
+        """
+        # Validate input projection
+        input_neurons = sum(
+            self._graph.tiles[tid].neurons for tid in self._graph.input_tile_ids
+        )
+        in_feats = self._input_projection.in_features
+        out_feats = self._input_projection.out_features
+        if in_feats != self.config.input_dim:
+            msg = f"Input projection in_features ({in_feats}) != config.input_dim ({self.config.input_dim})"
+            raise ValueError(msg)
+        if out_feats != input_neurons:
+            msg = f"Input projection out_features ({out_feats}) != sum of input tile neurons ({input_neurons})"
+            raise ValueError(msg)
+
+        # Validate output projection
+        output_neurons = sum(
+            self._graph.tiles[tid].neurons for tid in self._graph.output_tile_ids
+        )
+        out_in_feats = self._output_projection.in_features
+        out_out_feats = self._output_projection.out_features
+        if out_in_feats != output_neurons:
+            msg = f"Output projection in_features ({out_in_feats}) != sum of output tile neurons ({output_neurons})"
+            raise ValueError(msg)
+        if out_out_feats != self.config.output_dim:
+            msg = f"Output projection out_features ({out_out_feats}) != config.output_dim ({self.config.output_dim})"
+            raise ValueError(msg)
+
     def transition_modules(self) -> list[nn.Module]:
         """Return modules in forward order for TransitionGraph protocol."""
         modules = []
@@ -2776,15 +2808,43 @@ class _AdaptedSystem:
         self._model = model
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        # Try legacy model's train_step first
         if hasattr(self._model, "train_step"):
-            return self._model.train_step(x, y)  # type: ignore[attr-defined]
-        # Fallback to BPTT
-        self._model.train()
-        logits = self._model(x)  # type: ignore[operator]
-        loss = torch.nn.functional.cross_entropy(logits, y)
+            result = self._model.train_step(x, y)  # type: ignore[attr-defined]
+            if result is not None:
+                return result
+            # Legacy model returned None (e.g., EqProp single-hidden implicit path)
+            # Fall back to ontology 5-layer pipeline
+        # Ontology 5-layer pipeline fallback
+        state = SystemState(x=x, y=y)
+        # 1. Substrate + Geometry: Forward pass
+        state.activations = self.geometry.forward(x, self.substrate)
+        if state.activations is not None:
+            state.activations = self.substrate.inject_state_noise(state.activations)
+        # 2. StateDynamics: Free phase settling
+        free_state = self.dynamics.settle(
+            state, self.geometry, self.substrate, target=None
+        )
+        free_state.energy = self.dynamics.compute_energy(free_state, self.geometry)
+        # 3. StateDynamics: Nudged phase settling
+        nudged_state = self.dynamics.settle(
+            state, self.geometry, self.substrate, target=y
+        )
+        nudged_state.energy = self.dynamics.compute_energy(nudged_state, self.geometry)
+        nudged_state.loss = self._compute_loss(nudged_state, y)
+        # 4. CreditAssignment: Compute pseudo-gradients
+        pseudo_grads = self.credit.compute_pseudo_gradient(
+            free_state, nudged_state, nudged_state.loss, self.geometry
+        )
+        # 5. ParameterUpdate: Apply updates
+        new_params = self.update.step(self.geometry.params, pseudo_grads, self.geometry)
+        self.geometry.update_params(new_params)
         return {
-            "loss": loss.item(),
-            "accuracy": (logits.argmax(-1) == y).float().mean().item(),
+            "loss": float(nudged_state.loss) if nudged_state.loss is not None else 0.0,
+            "energy": float(free_state.energy)
+            if free_state.energy is not None
+            else 0.0,
+            "accuracy": free_state.metrics.get("accuracy", 0.0),
         }
 
     def forward(self, x: Tensor) -> Tensor:

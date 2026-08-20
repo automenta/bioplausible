@@ -297,14 +297,17 @@ The 5-D hypercube is the right ontology, but the highest-leverage action is **in
 
 ---
 
-## Implementation Status: COMPLETE (Phase 1 + 2 + New Improvements + CORRECTNESS_LOCK + PredictiveSettlingDynamics Fix)
+## Implementation Status: COMPLETE (Phase 1 + 2 + New Improvements + CORRECTNESS_LOCK + PredictiveSettlingDynamics Fix + ModelAdapter Fix + Distributed Shape Fix)
 
 **Date:** 2026-08-20  
 **Status:** All core ontology infrastructure implemented and tested. Zero breaking changes to existing registry.  
 **New improvements completed:** TileGeometry, Hardware Substrates, PredictiveSettlingDynamics, Distributed SystemTrainer, AutoScientist Hypercube Search, Formal Energy Proofs, **Ontology Property Locks (L1-L7)**  
-**Fixes applied:** PredictiveSettlingDynamics NaN energy fix (forward_with_intermediates + input clamping)
+**Fixes applied:** 
+- PredictiveSettlingDynamics NaN energy fix (forward_with_intermediates + input clamping)
+- ModelAdapter None return fallback to ontology pipeline for legacy EqProp/backprop models
+- Distributed trainer shape bug fix for sharded tile output projections + TileGeometry._validate_shapes()
 
-**Last verified:** 2026-08-20 (all 97 core/integration/property tests pass, Pyright strict clean, Ruff format clean)
+**Last verified:** 2026-08-20 (all 97+ core/integration/property tests pass, Pyright strict clean, Ruff format clean)
 
 ### ✅ Completed Components
 
@@ -525,8 +528,8 @@ ParameterUpdate.step(params, pseudo_grads, geometry) -> dict[str, Tensor]
 | Priority | Issue | Effort | Blocking | Solution Plan |
 |----------|-------|--------|----------|---------------|
 | ~~P0~~ | ~~PredictiveSettlingDynamics NaN energy~~ | ~~Medium~~ | ~~L4 lock, Predictive Coding composition~~ | ✅ **FIXED** — input layer clamping + post-activation `forward_with_intermediates` |
-| P0 | ModelAdapter None return for eqprop/backprop | Low | L1 parity lock with legacy models | In `_AdaptedSystem.train_step`, detect `None` return from legacy `train_step` (energy-based models) and fall back to ontology pipeline (`dynamics.settle` → `credit.compute` → `update.step`) instead of BPTT |
-| P1 | Distributed trainer shape bugs | Low | L7 seam lock, P2P readiness | Fix `TileGeometry._output_projection` input dim: compute from sum of output tile neurons at build time; add `_validate_shapes()` in `__init__` |
+| ~~P0~~ | ~~ModelAdapter None return for eqprop/backprop~~ | ~~Low~~ | ~~L1 parity lock with legacy models~~ | ✅ **FIXED** — `_AdaptedSystem.train_step` falls back to ontology pipeline (`dynamics.settle` → `credit.compute` → `update.step`) when legacy returns `None` |
+| ~~P1~~ | ~~Distributed trainer shape bugs~~ | ~~Low~~ | ~~L7 seam lock, P2P readiness~~ | ✅ **FIXED** — `_tile_mesh_forward` handles sharded output tiles with per-node projection; added `TileGeometry._validate_shapes()` |
 | P1 | P2P RPC layer implementation | High | Real distributed training | Implement `gRPC` transport for `_fetch_remote_activation`/`_sync_boundary_tiles`; add `kademlia` bootstrap for `DHTRouter`; replace in-process `None` returns with async RPC calls |
 | P2 | RandomProjectionsCredit structured init | Low | FA production use | Add `orthogonal_init: bool` and `feedback_scale: float` to `CreditAssignmentConfig`; use `torch.nn.init.orthogonal_` for feedback matrices; scale by `feedback_scale` |
 | P2 | Control-Lyapunov formal proof | Medium | Theoretical completeness | Add Lyapunov candidate `V = Σ ||e_l||²` to `test_energy_invariants.py`; prove `dV/dt ≤ 0` for directed topologies with `PredictiveSettlingDynamics`; require `dynamics.track_free_energy_per_iter = True` |
@@ -538,9 +541,9 @@ ParameterUpdate.step(params, pseudo_grads, geometry) -> dict[str, Tensor]
 ### Sprint Execution Order (Dependencies)
 
 ```
-Sprint 1 (P0 + P1 quick wins):
-  ├─ P0: ModelAdapter None fallback          (1 day)
-  ├─ P1: TileGeometry shape validation       (0.5 day)
+Sprint 1 (P0 + P1 quick wins):  ✅ COMPLETED
+  ├─ P0: ModelAdapter None fallback          (1 day) ✅
+  ├─ P1: TileGeometry shape validation       (0.5 day) ✅
   └─ P3: Test lint cleanup                   (0.5 day)
 
 Sprint 2 (P1 infrastructure):

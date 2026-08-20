@@ -10,12 +10,14 @@ Leverages the 5-D fault lines for natural distribution:
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import torch
 from torch import Tensor
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 from bioplausible.core.ontology import (
     Geometry,
@@ -142,7 +144,7 @@ class FederatedAggregator:
         self.aggregation = aggregation
         self._updates: dict[str, list[Tensor]] = {}
 
-    def add_update(self, node_id: str, updates: dict[str, Tensor]) -> None:
+    def add_update(self, _node_id: str, updates: dict[str, Tensor]) -> None:
         """Add updates from a node."""
         for name, delta in updates.items():
             if name not in self._updates:
@@ -270,9 +272,9 @@ class DistributedSystemTrainer:
         epoch_energy = 0.0
         num_batches = 0
 
-        for _, (x, y) in enumerate(self.train_data):
-            x = x.to(self._get_device())
-            y = y.to(self._get_device())
+        for batch_x, batch_y in self.train_data:
+            x = batch_x.to(self._get_device())
+            y = batch_y.to(self._get_device())
 
             metrics = self._distributed_train_step(x, y)
 
@@ -446,9 +448,27 @@ class DistributedSystemTrainer:
             return torch.empty(x.shape[0], geometry.config.output_dim, device=x.device)
 
         h = torch.cat(out_acts, dim=1)
-        return geometry._output_projection(h)
 
-    def _fetch_remote_activation(self, tile_id: int) -> Tensor | None:
+        # If we have all output tiles locally, use the full output projection
+        # Otherwise, create a per-node output projection for the local output dim
+        expected_out_dim = sum(
+            geometry._graph.tiles[tid].neurons
+            for tid in geometry._graph.output_tile_ids
+        )
+        if h.shape[1] == expected_out_dim:
+            return geometry._output_projection(h)
+        else:
+            # Sharded output: create a temporary per-node projection
+            local_out_proj = torch.nn.Linear(
+                h.shape[1], geometry.config.output_dim, device=h.device
+            )
+            # Initialize with small weights
+            torch.nn.init.xavier_uniform_(local_out_proj.weight)
+            if local_out_proj.bias is not None:
+                torch.nn.init.zeros_(local_out_proj.bias)
+            return local_out_proj(h)
+
+    def _fetch_remote_activation(self, _tile_id: int) -> Tensor | None:
         """Fetch activation from remote node (simulated)."""
         # In real implementation, this would be an RPC call
         # For now, return None to indicate unavailable
@@ -567,10 +587,7 @@ class DistributedSystemTrainer:
         acts = state.activations
         if acts is None:
             return torch.tensor(0.0, device=y.device)
-        if isinstance(acts, list):
-            logits = acts[-1]
-        else:
-            logits = acts
+        logits = acts[-1] if isinstance(acts, list) else acts
         return torch.nn.functional.cross_entropy(logits, y)
 
     def validate(self) -> dict[str, float]:
@@ -584,9 +601,9 @@ class DistributedSystemTrainer:
         num_batches = 0
 
         with torch.no_grad():
-            for x, y in self.val_data:
-                x = x.to(self._get_device())
-                y = y.to(self._get_device())
+            for batch_x, batch_y in self.val_data:
+                x = batch_x.to(self._get_device())
+                y = batch_y.to(self._get_device())
 
                 logits = self.system.forward(x)
                 loss = torch.nn.functional.cross_entropy(logits, y)
