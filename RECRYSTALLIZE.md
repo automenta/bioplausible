@@ -297,7 +297,7 @@ The 5-D hypercube is the right ontology, but the highest-leverage action is **in
 
 ---
 
-## Implementation Status: COMPLETE (Phase 1 + 2 + New Improvements + CORRECTNESS_LOCK + PredictiveSettlingDynamics Fix + ModelAdapter Fix + Distributed Shape Fix)
+## Implementation Status: COMPLETE (Phase 1 + 2 + New Improvements + CORRECTNESS_LOCK + PredictiveSettlingDynamics Fix + ModelAdapter Fix + Distributed Shape Fix + ModelAdapter FeedforwardGeometry Fix)
 
 **Date:** 2026-08-20  
 **Status:** All core ontology infrastructure implemented and tested. Zero breaking changes to existing registry.  
@@ -306,6 +306,7 @@ The 5-D hypercube is the right ontology, but the highest-leverage action is **in
 - PredictiveSettlingDynamics NaN energy fix (forward_with_intermediates + input clamping)
 - ModelAdapter None return fallback to ontology pipeline for legacy EqProp/backprop models
 - Distributed trainer shape bug fix for sharded tile output projections + TileGeometry._validate_shapes()
+- **ModelAdapter FeedforwardGeometry params fix**: Ensure `layers` parameter accepts `list[nn.Module]` and wraps in `nn.ModuleList` for proper parameter registration
 
 **Last verified:** 2026-08-20 (all 97+ core/integration/property tests pass, Pyright strict clean, Ruff format clean)
 
@@ -520,6 +521,10 @@ ParameterUpdate.step(params, pseudo_grads, geometry) -> dict[str, Tensor]
 
 8. **Test file lint noise** — 117 ruff issues (asserts, naming, unused imports) in `test_ontology_locks.py`.
     - **Sprint fix**: Run `ruff check --fix` + manual cleanup; adopt pytest-style assertions or `pytest-check` for multi-assert tests.
+
+9. **ModelAdapter FeedforwardGeometry params registration** — When `transition_modules()` returns a plain `list[nn.Module]`, the `FeedforwardGeometry` didn't wrap it in `nn.ModuleList`, causing `params` property to fail.
+    - **Sprint fix**: Update `FeedforwardGeometry.__init__` to accept `list[nn.Module]` and wrap in `nn.ModuleList`.
+    - **STATUS: FIXED** (2026-08-20) — Changed `layers: nn.ModuleList | list[nn.Module] | None = None` and `self._layers = nn.ModuleList(layers) if layers else nn.ModuleList()`.
 
 ---
 

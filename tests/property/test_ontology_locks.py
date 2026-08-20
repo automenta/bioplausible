@@ -509,9 +509,7 @@ class TestL4LyapunovLock:
                 state.activations = sys.substrate.inject_state_noise(state.activations)
 
             # Single settle call (runs max_steps iterations internally)
-            state = sys.dynamics.settle(
-                state, sys.geometry, sys.substrate, target=None
-            )
+            state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=None)
             energy = sys.dynamics.compute_energy(state, sys.geometry)
 
             # Energy should be finite (not NaN or inf)
@@ -525,9 +523,7 @@ class TestL4LyapunovLock:
             if state.activations is not None:
                 state.activations = sys.substrate.inject_state_noise(state.activations)
 
-            state = sys.dynamics.settle(
-                state, sys.geometry, sys.substrate, target=y
-            )
+            state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=y)
             energy = sys.dynamics.compute_energy(state, sys.geometry)
 
             assert not torch.isnan(energy), "Nudged energy is NaN"

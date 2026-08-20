@@ -624,10 +624,14 @@ class FeedforwardGeometry(nn.Module):
 
     _layers: nn.ModuleList
 
-    def __init__(self, config: GeometryConfig, layers: nn.ModuleList | None = None):
+    def __init__(
+        self,
+        config: GeometryConfig,
+        layers: nn.ModuleList | list[nn.Module] | None = None,
+    ):
         super().__init__()
         self.config = config
-        self._layers = layers or nn.ModuleList()
+        self._layers = nn.ModuleList(layers) if layers else nn.ModuleList()
         if not self._layers and config.hidden_dims:
             self._build_layers()
 
