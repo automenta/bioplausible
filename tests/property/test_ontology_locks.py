@@ -489,8 +489,8 @@ class TestL4LyapunovLock:
     def test_L4_predictive_coding_produces_finite_energies(self):
         """Predictive coding settling produces finite free energies (no NaN).
 
-        Note: Infinite/NaN energy can occur due to numerical issues in the current
-        implementation; this test verifies the common case of finite energies.
+        A single settle call runs max_steps iterations internally and should
+        converge to a finite energy.
         """
         device = select_device()
         if device.type == "cuda":
@@ -508,21 +508,31 @@ class TestL4LyapunovLock:
             if state.activations is not None:
                 state.activations = sys.substrate.inject_state_noise(state.activations)
 
-            energies = []
-            for step in range(sys.dynamics.config.max_steps):
-                state = sys.dynamics.settle(
-                    state, sys.geometry, sys.substrate, target=None
-                )
-                energy = sys.dynamics.compute_energy(state, sys.geometry)
+            # Single settle call (runs max_steps iterations internally)
+            state = sys.dynamics.settle(
+                state, sys.geometry, sys.substrate, target=None
+            )
+            energy = sys.dynamics.compute_energy(state, sys.geometry)
 
-                # Check for NaN (inf/nan is a known issue in current impl)
-                if torch.isnan(energy):
-                    pytest.skip(f"NaN energy at step {step} (known numerical issue)")
-                energies.append(energy.item())
+            # Energy should be finite (not NaN or inf)
+            assert not torch.isnan(energy), "Energy is NaN"
+            assert not torch.isinf(energy), "Energy is infinite"
+            assert energy.item() >= 0, "Energy should be non-negative"
 
-            # At least some energies should be finite
-            finite_count = sum(1 for e in energies if not torch.isinf(torch.tensor(e)))
-            assert finite_count > 0, "All energies were infinite"
+            # Also test nudged phase
+            state = SystemState(x=x, y=y)
+            state.activations = sys.geometry.forward(x, sys.substrate)
+            if state.activations is not None:
+                state.activations = sys.substrate.inject_state_noise(state.activations)
+
+            state = sys.dynamics.settle(
+                state, sys.geometry, sys.substrate, target=y
+            )
+            energy = sys.dynamics.compute_energy(state, sys.geometry)
+
+            assert not torch.isnan(energy), "Nudged energy is NaN"
+            assert not torch.isinf(energy), "Nudged energy is infinite"
+            assert energy.item() >= 0, "Nudged energy should be non-negative"
 
 
 # ======================================================================

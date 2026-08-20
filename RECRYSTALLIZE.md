@@ -297,13 +297,14 @@ The 5-D hypercube is the right ontology, but the highest-leverage action is **in
 
 ---
 
-## Implementation Status: COMPLETE (Phase 1 + 2 + New Improvements + CORRECTNESS_LOCK)
+## Implementation Status: COMPLETE (Phase 1 + 2 + New Improvements + CORRECTNESS_LOCK + PredictiveSettlingDynamics Fix)
 
 **Date:** 2026-08-20  
 **Status:** All core ontology infrastructure implemented and tested. Zero breaking changes to existing registry.  
-**New improvements completed:** TileGeometry, Hardware Substrates, PredictiveSettlingDynamics, Distributed SystemTrainer, AutoScientist Hypercube Search, Formal Energy Proofs, **Ontology Property Locks (L1-L7)**
+**New improvements completed:** TileGeometry, Hardware Substrates, PredictiveSettlingDynamics, Distributed SystemTrainer, AutoScientist Hypercube Search, Formal Energy Proofs, **Ontology Property Locks (L1-L7)**  
+**Fixes applied:** PredictiveSettlingDynamics NaN energy fix (forward_with_intermediates + input clamping)
 
-**Last verified:** 2026-08-20 (all 95 core/integration/property tests pass, Pyright strict clean, Ruff format clean)
+**Last verified:** 2026-08-20 (all 97 core/integration/property tests pass, Pyright strict clean, Ruff format clean)
 
 ### ✅ Completed Components
 
@@ -493,28 +494,29 @@ ParameterUpdate.step(params, pseudo_grads, geometry) -> dict[str, Tensor]
 ### Known Limitations / Future Work
 
 1. **PredictiveSettlingDynamics** requires `forward_with_intermediates` on Geometry (only `FeedforwardGeometry` and `RecurrentGeometry` have it; `TileGeometry` added). For other geometries, falls back to single-tensor mode.
-   - **Sprint fix**: Add `forward_with_intermediates` to all Geometry implementations; fix free energy divergence (likely step_size too large or precision-weighting bug in `compute_energy`).
+    - **Sprint fix**: Add `forward_with_intermediates` to all Geometry implementations; fix free energy divergence (likely step_size too large or precision-weighting bug in `compute_energy`).
+    - **STATUS: FIXED** (2026-08-20) — Added `forward_with_intermediates` to `FeedforwardGeometry` and `RecurrentGeometry` returning post-activation outputs; fixed input layer clamping in settling loop; verified finite energies in L4 lock.
 
 2. **RandomProjectionsCredit** feedback matrix initialization is simplified; production use may need structured initialization. Now properly implements FA/DFA with layer-wise error propagation.
-   - **Sprint fix**: Add orthogonal initialization option; support `feedback_scale` config param.
+    - **Sprint fix**: Add orthogonal initialization option; support `feedback_scale` config param.
 
 3. **Control-Lyapunov stability** for directed topologies with PredictiveSettling is empirically tested (finite energies) but not formally proven.
-   - **Sprint fix**: Add Lyapunov candidate proof to `test_energy_invariants.py`; require `PredictiveSettlingDynamics` to track free energy per iteration.
+    - **Sprint fix**: Add Lyapunov candidate proof to `test_energy_invariants.py`; require `PredictiveSettlingDynamics` to track free energy per iteration.
 
 4. **P2P communication** in `DistributedSystemTrainer` is simulated (`_fetch_remote_activation` returns None); needs real RPC layer.
-   - **Sprint fix**: Implement gRPC/HTTP transport for `_fetch_remote_activation` and `_sync_boundary_tiles`; add `kademlia` bootstrap for DHTRouter.
+    - **Sprint fix**: Implement gRPC/HTTP transport for `_fetch_remote_activation` and `_sync_boundary_tiles`; add `kademlia` bootstrap for DHTRouter.
 
 5. **ModelAdapter inference** is best-effort; complex models may need explicit 5-D composition via `compose_system()`.
-   - **Sprint fix**: Improve inference priority chain (metadata → attributes → heuristics → defaults); add `ModelAdapter.validate()` to verify projection correctness.
+    - **Sprint fix**: Improve inference priority chain (metadata → attributes → heuristics → defaults); add `ModelAdapter.validate()` to verify projection correctness.
 
 6. **ModelAdapter.train_step returns None** for legacy models using `gradient_method="equilibrium"` (delegates to EnergyModel path).
-   - **Sprint fix**: In `_AdaptedSystem.train_step`, detect `None` return and fall back to ontology pipeline instead of BPTT.
+    - **Sprint fix**: In `_AdaptedSystem.train_step`, detect `None` return and fall back to ontology pipeline instead of BPTT.
 
 7. **Distributed trainer shape bugs** — `_tile_mesh_forward` dimension mismatch (64×8 vs 10×10) in output projection.
-   - **Sprint fix**: Fix `TileGeometry._output_projection` input dimension to match concatenated output tile activities.
+    - **Sprint fix**: Fix `TileGeometry._output_projection` input dimension to match concatenated output tile activities.
 
 8. **Test file lint noise** — 117 ruff issues (asserts, naming, unused imports) in `test_ontology_locks.py`.
-   - **Sprint fix**: Run `ruff check --fix` + manual cleanup; adopt pytest-style assertions or `pytest-check` for multi-assert tests.
+    - **Sprint fix**: Run `ruff check --fix` + manual cleanup; adopt pytest-style assertions or `pytest-check` for multi-assert tests.
 
 ---
 
@@ -522,7 +524,7 @@ ParameterUpdate.step(params, pseudo_grads, geometry) -> dict[str, Tensor]
 
 | Priority | Issue | Effort | Blocking |
 |----------|-------|--------|----------|
-| P0 | PredictiveSettlingDynamics NaN energy | Medium | L4 lock, Predictive Coding composition |
+| ~~P0~~ | ~~PredictiveSettlingDynamics NaN energy~~ | ~~Medium~~ | ~~L4 lock, Predictive Coding composition~~ |
 | P0 | ModelAdapter None return for eqprop/backprop | Low | L1 parity lock with legacy models |
 | P1 | Distributed trainer shape bugs | Low | L7 seam lock, P2P readiness |
 | P1 | P2P RPC layer implementation | High | Real distributed training |

@@ -663,11 +663,11 @@ class FeedforwardGeometry(nn.Module):
     def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate
     ) -> list[Tensor]:
-        """Forward pass returning intermediate activations for each linear layer.
+        """Forward pass returning intermediate activations for each layer.
 
         Returns:
-            List of activations [input, linear1_out, linear2_out, ..., output]
-            Skipping activation function outputs to match weight matrix dimensions.
+            List of activations [input, layer1_out, layer2_out, ..., output]
+            where layer outputs are after activation functions (ReLU).
         """
         op = substrate.get_forward_operator()
         h = x
@@ -677,9 +677,13 @@ class FeedforwardGeometry(nn.Module):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
                     h += layer.bias
-                acts.append(h)  # Only add after linear layers
             else:
                 h = layer(h)
+                # Add after activation functions (ReLU, etc.)
+                acts.append(h)
+        # Add final output if last layer was Linear (no trailing activation)
+        if isinstance(self._layers[-1], nn.Linear):
+            acts.append(h)
         return acts
 
     def route(self, activations: Tensor) -> Tensor:
@@ -813,12 +817,16 @@ class RecurrentGeometry(nn.Module):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
                     h += layer.bias
-                acts.append(h)
             else:
                 h = layer(h)
+                # Add after activation functions
+                acts.append(h)
             # Apply recurrent connection after each hidden layer (except output)
             if self._recurrent_weight is not None and i < len(self._layers) - 2:
                 h += op(h, self._recurrent_weight)
+        # Add final output if last layer was Linear (no trailing activation)
+        if isinstance(self._layers[-1], nn.Linear):
+            acts.append(h)
         return acts
 
 
@@ -2239,10 +2247,11 @@ class PredictiveSettlingDynamics:
                 errors.append(-layer_acts[-1])  # Free phase: minimize output activity
 
             # Update representation units
-            # r_l ← r_l + η * (W_l^T * e_{l+1} - e_l) for l=0..n-2
-            # r_{n-1} ← r_{n-1} + η * (-e_{n-1})
-            new_acts = []
-            for l in range(n_layers):
+            # r_l ← r_l + η * (W_l^T * e_{l+1} - e_l) for l=1..n-2 (hidden layers only)
+            # r_{n-1} ← r_{n-1} + η * (-e_{n-1}) (output layer)
+            # Input layer (l=0) is clamped to data and NOT updated
+            new_acts = [layer_acts[0]]  # Keep input layer unchanged
+            for l in range(1, n_layers):
                 if l == n_layers - 1:
                     # Output layer: only local error
                     update = -errors[-1]
