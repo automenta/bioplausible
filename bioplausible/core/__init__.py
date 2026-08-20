@@ -37,6 +37,34 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "CheckpointMixin": ("bioplausible.core.checkpoint_mixin", "CheckpointMixin"),
     "BaseMetrics": ("bioplausible.core.metrics", "BaseMetrics"),
     "EpochMetrics": ("bioplausible.core.metrics", "EpochMetrics"),
+    # Ontology (5-D tensor product)
+    "Substrate": ("bioplausible.core.ontology", "Substrate"),
+    "Geometry": ("bioplausible.core.ontology", "Geometry"),
+    "StateDynamics": ("bioplausible.core.ontology", "StateDynamics"),
+    "CreditAssignment": ("bioplausible.core.ontology", "CreditAssignment"),
+    "ParameterUpdate": ("bioplausible.core.ontology", "ParameterUpdate"),
+    "System": ("bioplausible.core.ontology", "System"),
+    "SystemState": ("bioplausible.core.ontology", "SystemState"),
+    "SubstrateConfig": ("bioplausible.core.ontology", "SubstrateConfig"),
+    "GeometryConfig": ("bioplausible.core.ontology", "GeometryConfig"),
+    "StateDynamicsConfig": ("bioplausible.core.ontology", "StateDynamicsConfig"),
+    "CreditAssignmentConfig": ("bioplausible.core.ontology", "CreditAssignmentConfig"),
+    "ParameterUpdateConfig": ("bioplausible.core.ontology", "ParameterUpdateConfig"),
+    # Reference implementations
+    "DigitalSubstrate": ("bioplausible.core.ontology", "DigitalSubstrate"),
+    "FeedforwardGeometry": ("bioplausible.core.ontology", "FeedforwardGeometry"),
+    "RecurrentGeometry": ("bioplausible.core.ontology", "RecurrentGeometry"),
+    "InstantaneousDynamics": ("bioplausible.core.ontology", "InstantaneousDynamics"),
+    "ThermodynamicContrast": ("bioplausible.core.ontology", "ThermodynamicContrast"),
+    "EuclideanUpdate": ("bioplausible.core.ontology", "EuclideanUpdate"),
+    "ModelAdapter": ("bioplausible.core.ontology", "ModelAdapter"),
+    # SystemTrainer
+    "SystemTrainerConfig": ("bioplausible.core.system_trainer", "SystemTrainerConfig"),
+    "SystemTrainer": ("bioplausible.core.system_trainer", "SystemTrainer"),
+    "compose_system": ("bioplausible.core.system_trainer", "compose_system"),
+    "create_eqprop_system": ("bioplausible.core.system_trainer", "create_eqprop_system"),
+    "create_backprop_system": ("bioplausible.core.system_trainer", "create_backprop_system"),
+    "create_fa_system": ("bioplausible.core.system_trainer", "create_fa_system"),
 }
 
 __all__ = sorted(_LAZY)
