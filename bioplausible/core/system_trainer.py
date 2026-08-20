@@ -51,6 +51,7 @@ class SystemTrainerConfig:
         seed: Random seed
         deterministic: Use deterministic algorithms
     """
+
     max_epochs: int = 10
     batch_size: int = 64
     val_batch_size: int | None = None
@@ -164,7 +165,10 @@ class SystemTrainer:
 
         logger.info(
             "Epoch %d: train_loss=%.4f, train_acc=%.4f, train_energy=%.4f",
-            self.current_epoch, avg_loss, avg_acc, avg_energy
+            self.current_epoch,
+            avg_loss,
+            avg_acc,
+            avg_energy,
         )
 
         return epoch_metrics
@@ -229,6 +233,7 @@ def compose_system(
             update=EuclideanUpdate(),
         )
     """
+
     @dataclass(frozen=True, slots=True)
     class _ComposedSystem:
         substrate: Substrate
@@ -246,12 +251,18 @@ def compose_system(
                 state.activations = self.substrate.inject_state_noise(state.activations)
 
             # 2. StateDynamics: Free phase
-            free_state = self.dynamics.settle(state, self.geometry, self.substrate, target=None)
+            free_state = self.dynamics.settle(
+                state, self.geometry, self.substrate, target=None
+            )
             free_state.energy = self.dynamics.compute_energy(free_state, self.geometry)
 
             # 3. StateDynamics: Nudged phase
-            nudged_state = self.dynamics.settle(state, self.geometry, self.substrate, target=y)
-            nudged_state.energy = self.dynamics.compute_energy(nudged_state, self.geometry)
+            nudged_state = self.dynamics.settle(
+                state, self.geometry, self.substrate, target=y
+            )
+            nudged_state.energy = self.dynamics.compute_energy(
+                nudged_state, self.geometry
+            )
             nudged_state.loss = self._compute_loss(nudged_state, y)
 
             # 4. CreditAssignment
@@ -260,12 +271,18 @@ def compose_system(
             )
 
             # 5. ParameterUpdate
-            new_params = self.update.step(self.geometry.params, pseudo_grads, self.geometry)
+            new_params = self.update.step(
+                self.geometry.params, pseudo_grads, self.geometry
+            )
             self.geometry.update_params(new_params)
 
             return {
-                "loss": float(nudged_state.loss) if nudged_state.loss is not None else 0.0,
-                "energy": float(free_state.energy) if free_state.energy is not None else 0.0,
+                "loss": float(nudged_state.loss)
+                if nudged_state.loss is not None
+                else 0.0,
+                "energy": float(free_state.energy)
+                if free_state.energy is not None
+                else 0.0,
                 "accuracy": free_state.metrics.get("accuracy", 0.0),
             }
 
@@ -284,7 +301,9 @@ def compose_system(
             state.activations = self.geometry.forward(x, self.substrate)
             if state.activations is not None:
                 state.activations = self.substrate.inject_state_noise(state.activations)
-            state = self.dynamics.settle(state, self.geometry, self.substrate, target=None)
+            state = self.dynamics.settle(
+                state, self.geometry, self.substrate, target=None
+            )
             acts = state.activations
             if acts is None:
                 return torch.empty(0)
@@ -327,27 +346,36 @@ def create_eqprop_system(
     substrate = DigitalSubstrate()
 
     dims = [hidden_dim] * max(num_layers, 1)
-    geometry = RecurrentGeometry(GeometryConfig(
-        input_dim=input_dim,
-        output_dim=output_dim,
-        hidden_dims=tuple(dims),
-    ), hidden_dim=hidden_dim)
+    geometry = RecurrentGeometry(
+        GeometryConfig(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=tuple(dims),
+        ),
+        hidden_dim=hidden_dim,
+    )
 
-    dynamics = EnergyMinimizationDynamics(StateDynamicsConfig(
-        dynamics_type="energy_minimization",
-        max_steps=settle_steps,
-        beta=beta,
-    ))
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig(
+            dynamics_type="energy_minimization",
+            max_steps=settle_steps,
+            beta=beta,
+        )
+    )
 
-    credit = ThermodynamicContrast(CreditAssignmentConfig(
-        credit_type="thermodynamic_contrast",
-        beta=beta,
-    ))
+    credit = ThermodynamicContrast(
+        CreditAssignmentConfig(
+            credit_type="thermodynamic_contrast",
+            beta=beta,
+        )
+    )
 
-    update = EuclideanUpdate(ParameterUpdateConfig(
-        update_type="euclidean",
-        step_size=lr,
-    ))
+    update = EuclideanUpdate(
+        ParameterUpdateConfig(
+            update_type="euclidean",
+            step_size=lr,
+        )
+    )
 
     return compose_system(substrate, geometry, dynamics, credit, update)
 
@@ -375,24 +403,32 @@ def create_backprop_system(
     substrate = DigitalSubstrate()
 
     dims = [hidden_dim] * max(num_layers - 1, 1)
-    geometry = FeedforwardGeometry(GeometryConfig(
-        input_dim=input_dim,
-        output_dim=output_dim,
-        hidden_dims=tuple(dims),
-    ))
+    geometry = FeedforwardGeometry(
+        GeometryConfig(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=tuple(dims),
+        )
+    )
 
-    dynamics = InstantaneousDynamics(StateDynamicsConfig(
-        dynamics_type="instantaneous",
-    ))
+    dynamics = InstantaneousDynamics(
+        StateDynamicsConfig(
+            dynamics_type="instantaneous",
+        )
+    )
 
-    credit = BackpropCredit(CreditAssignmentConfig(
-        credit_type="gradient",
-    ))
+    credit = BackpropCredit(
+        CreditAssignmentConfig(
+            credit_type="gradient",
+        )
+    )
 
-    update = EuclideanUpdate(ParameterUpdateConfig(
-        update_type="euclidean",
-        step_size=lr,
-    ))
+    update = EuclideanUpdate(
+        ParameterUpdateConfig(
+            update_type="euclidean",
+            step_size=lr,
+        )
+    )
 
     return compose_system(substrate, geometry, dynamics, credit, update)
 
@@ -420,24 +456,32 @@ def create_fa_system(
     substrate = DigitalSubstrate()
 
     dims = [hidden_dim] * max(num_layers - 1, 1)
-    geometry = FeedforwardGeometry(GeometryConfig(
-        input_dim=input_dim,
-        output_dim=output_dim,
-        hidden_dims=tuple(dims),
-    ))
+    geometry = FeedforwardGeometry(
+        GeometryConfig(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=tuple(dims),
+        )
+    )
 
-    dynamics = InstantaneousDynamics(StateDynamicsConfig(
-        dynamics_type="instantaneous",
-    ))
+    dynamics = InstantaneousDynamics(
+        StateDynamicsConfig(
+            dynamics_type="instantaneous",
+        )
+    )
 
-    credit = RandomProjectionsCredit(CreditAssignmentConfig(
-        credit_type="random_projections",
-    ))
+    credit = RandomProjectionsCredit(
+        CreditAssignmentConfig(
+            credit_type="random_projections",
+        )
+    )
 
-    update = EuclideanUpdate(ParameterUpdateConfig(
-        update_type="euclidean",
-        step_size=lr,
-    ))
+    update = EuclideanUpdate(
+        ParameterUpdateConfig(
+            update_type="euclidean",
+            step_size=lr,
+        )
+    )
 
     return compose_system(substrate, geometry, dynamics, credit, update)
 

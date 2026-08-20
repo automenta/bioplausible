@@ -174,17 +174,22 @@ def test_equilibrium_gradient_direction_equivalence(name, build, threshold):
 def _create_test_geometry(input_dim=10, hidden_dim=20, output_dim=5, recurrent=False):
     """Create a test geometry with known weights for gradient verification."""
     if recurrent:
-        return RecurrentGeometry(GeometryConfig(
+        return RecurrentGeometry(
+            GeometryConfig(
+                input_dim=input_dim,
+                output_dim=output_dim,
+                hidden_dims=(hidden_dim,),
+                topology_type="recurrent",
+            ),
+            hidden_dim=hidden_dim,
+        )
+    return FeedforwardGeometry(
+        GeometryConfig(
             input_dim=input_dim,
             output_dim=output_dim,
             hidden_dims=(hidden_dim,),
-            topology_type="recurrent",
-        ), hidden_dim=hidden_dim)
-    return FeedforwardGeometry(GeometryConfig(
-        input_dim=input_dim,
-        output_dim=output_dim,
-        hidden_dims=(hidden_dim,),
-    ))
+        )
+    )
 
 
 def _create_digital_system(geometry, dynamics, credit, update):
@@ -309,12 +314,14 @@ class TestOntologyLayerEquivalence:
         substrate = DigitalSubstrate()
 
         # Use simpler dynamics for this test
-        dynamics = EnergyMinimizationDynamics(StateDynamicsConfig(
-            dynamics_type="energy_minimization",
-            max_steps=10,
-            convergence_threshold=1e-3,
-            beta=0.5,
-        ))
+        dynamics = EnergyMinimizationDynamics(
+            StateDynamicsConfig(
+                dynamics_type="energy_minimization",
+                max_steps=10,
+                convergence_threshold=1e-3,
+                beta=0.5,
+            )
+        )
         credit = ThermodynamicContrast()
         update = EuclideanUpdate(ParameterUpdateConfig(step_size=0.01))
 
@@ -352,11 +359,13 @@ class TestOntologyLayerEquivalence:
         """Compose a full EqProp system from 5 layers."""
         system = _create_digital_system(
             geometry=_create_test_geometry(recurrent=True),
-            dynamics=EnergyMinimizationDynamics(StateDynamicsConfig(
-                dynamics_type="energy_minimization",
-                max_steps=10,
-                beta=0.5,
-            )),
+            dynamics=EnergyMinimizationDynamics(
+                StateDynamicsConfig(
+                    dynamics_type="energy_minimization",
+                    max_steps=10,
+                    beta=0.5,
+                )
+            ),
             credit=ThermodynamicContrast(CreditAssignmentConfig(beta=0.5)),
             update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.01)),
         )

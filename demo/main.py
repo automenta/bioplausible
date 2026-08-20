@@ -155,16 +155,33 @@ def _meta_text(name: str) -> str:
 def _build_ontology_system(layer_choices: dict[str, str]) -> "System":
     """Build a System from 5 layer choices."""
     from bioplausible.core.ontology import (
-        DigitalSubstrate, NoisySubstrate, QuantizedSubstrate, OpticalSubstrate,
-        MemristiveSubstrate, NeuromorphicSubstrate, QuantumSubstrate,
-        FeedforwardGeometry, RecurrentGeometry,
-        InstantaneousDynamics, EnergyMinimizationDynamics,
-        PredictiveSettlingDynamics, SpikeIntegrationDynamics,
-        ThermodynamicContrast, RandomProjectionsCredit, LocalGoodnessCredit,
-        TemporalTraceCredit, TargetInversionCredit, BackpropCredit,
-        EuclideanUpdate, RiemannianOrthogonalUpdate, SpectralConstrainedUpdate,
-        NaturalGradientUpdate, ElasticConsolidationUpdate,
-        GeometryConfig, StateDynamicsConfig, CreditAssignmentConfig,
+        DigitalSubstrate,
+        NoisySubstrate,
+        QuantizedSubstrate,
+        OpticalSubstrate,
+        MemristiveSubstrate,
+        NeuromorphicSubstrate,
+        QuantumSubstrate,
+        FeedforwardGeometry,
+        RecurrentGeometry,
+        InstantaneousDynamics,
+        EnergyMinimizationDynamics,
+        PredictiveSettlingDynamics,
+        SpikeIntegrationDynamics,
+        ThermodynamicContrast,
+        RandomProjectionsCredit,
+        LocalGoodnessCredit,
+        TemporalTraceCredit,
+        TargetInversionCredit,
+        BackpropCredit,
+        EuclideanUpdate,
+        RiemannianOrthogonalUpdate,
+        SpectralConstrainedUpdate,
+        NaturalGradientUpdate,
+        ElasticConsolidationUpdate,
+        GeometryConfig,
+        StateDynamicsConfig,
+        CreditAssignmentConfig,
         ParameterUpdateConfig,
     )
     from bioplausible.core.system_trainer import compose_system
@@ -181,22 +198,58 @@ def _build_ontology_system(layer_choices: dict[str, str]) -> "System":
     }
 
     geometry_map = {
-        "FeedforwardGeometry": FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,))),
-        "RecurrentGeometry": RecurrentGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,)), hidden_dim=256),
-        "TileGeometry": FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,), topology_type="tile_mesh")),
-        "NeuromorphicGeometry": FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,), topology_type="neuromorphic")),
-        "SpatialGeometry": FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,), topology_type="spatial_lattice")),
+        "FeedforwardGeometry": FeedforwardGeometry(
+            GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,))
+        ),
+        "RecurrentGeometry": RecurrentGeometry(
+            GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256,)),
+            hidden_dim=256,
+        ),
+        "TileGeometry": FeedforwardGeometry(
+            GeometryConfig(
+                input_dim=784,
+                output_dim=10,
+                hidden_dims=(256,),
+                topology_type="tile_mesh",
+            )
+        ),
+        "NeuromorphicGeometry": FeedforwardGeometry(
+            GeometryConfig(
+                input_dim=784,
+                output_dim=10,
+                hidden_dims=(256,),
+                topology_type="neuromorphic",
+            )
+        ),
+        "SpatialGeometry": FeedforwardGeometry(
+            GeometryConfig(
+                input_dim=784,
+                output_dim=10,
+                hidden_dims=(256,),
+                topology_type="spatial_lattice",
+            )
+        ),
     }
 
     dynamics_map = {
         "InstantaneousDynamics": InstantaneousDynamics(),
-        "EnergyMinimizationDynamics": EnergyMinimizationDynamics(StateDynamicsConfig(dynamics_type="energy_minimization", max_steps=30, beta=0.5)),
-        "PredictiveSettlingDynamics": PredictiveSettlingDynamics(StateDynamicsConfig(dynamics_type="predictive_settling")),
-        "SpikeIntegrationDynamics": SpikeIntegrationDynamics(StateDynamicsConfig(dynamics_type="spike_integration")),
+        "EnergyMinimizationDynamics": EnergyMinimizationDynamics(
+            StateDynamicsConfig(
+                dynamics_type="energy_minimization", max_steps=30, beta=0.5
+            )
+        ),
+        "PredictiveSettlingDynamics": PredictiveSettlingDynamics(
+            StateDynamicsConfig(dynamics_type="predictive_settling")
+        ),
+        "SpikeIntegrationDynamics": SpikeIntegrationDynamics(
+            StateDynamicsConfig(dynamics_type="spike_integration")
+        ),
     }
 
     credit_map = {
-        "ThermodynamicContrast": ThermodynamicContrast(CreditAssignmentConfig(credit_type="thermodynamic_contrast", beta=0.5)),
+        "ThermodynamicContrast": ThermodynamicContrast(
+            CreditAssignmentConfig(credit_type="thermodynamic_contrast", beta=0.5)
+        ),
         "RandomProjectionsCredit": RandomProjectionsCredit(),
         "LocalGoodnessCredit": LocalGoodnessCredit(),
         "TemporalTraceCredit": TemporalTraceCredit(),
@@ -205,11 +258,21 @@ def _build_ontology_system(layer_choices: dict[str, str]) -> "System":
     }
 
     update_map = {
-        "EuclideanUpdate": EuclideanUpdate(ParameterUpdateConfig(update_type="euclidean", step_size=0.01)),
-        "RiemannianOrthogonalUpdate": RiemannianOrthogonalUpdate(ParameterUpdateConfig(update_type="riemannian_orthogonal", step_size=0.01)),
-        "SpectralConstrainedUpdate": SpectralConstrainedUpdate(ParameterUpdateConfig(update_type="spectral_constrained", step_size=0.01)),
-        "NaturalGradientUpdate": NaturalGradientUpdate(ParameterUpdateConfig(update_type="natural_gradient", step_size=0.01)),
-        "ElasticConsolidationUpdate": ElasticConsolidationUpdate(ParameterUpdateConfig(update_type="elastic_consolidation", step_size=0.01)),
+        "EuclideanUpdate": EuclideanUpdate(
+            ParameterUpdateConfig(update_type="euclidean", step_size=0.01)
+        ),
+        "RiemannianOrthogonalUpdate": RiemannianOrthogonalUpdate(
+            ParameterUpdateConfig(update_type="riemannian_orthogonal", step_size=0.01)
+        ),
+        "SpectralConstrainedUpdate": SpectralConstrainedUpdate(
+            ParameterUpdateConfig(update_type="spectral_constrained", step_size=0.01)
+        ),
+        "NaturalGradientUpdate": NaturalGradientUpdate(
+            ParameterUpdateConfig(update_type="natural_gradient", step_size=0.01)
+        ),
+        "ElasticConsolidationUpdate": ElasticConsolidationUpdate(
+            ParameterUpdateConfig(update_type="elastic_consolidation", step_size=0.01)
+        ),
     }
 
     substrate = substrate_map[layer_choices["Substrate"]]
@@ -221,7 +284,9 @@ def _build_ontology_system(layer_choices: dict[str, str]) -> "System":
     return compose_system(substrate, geometry, dynamics, credit, update)
 
 
-def _create_ontology_panel(layer_choices: dict[str, str], task: str, epochs: int, lr: float) -> DemoPanel:
+def _create_ontology_panel(
+    layer_choices: dict[str, str], task: str, epochs: int, lr: float
+) -> DemoPanel:
     """Create a DemoPanel from an ontology-composed System."""
     from bioplausible.core.registry import Registry, ComponentCategory
     from bioplausible.core.trainer import TrainerConfig
@@ -282,13 +347,17 @@ def create_page(demo: DemoUi) -> None:
             with ui.column():
                 ui.label("Config A (5-D Composition)").classes("text-bold")
                 for layer_name, options in ONTOLOGY_LAYERS.items():
-                    sel = ui.select(options, value=options[0], label=layer_name).classes("w-full")
+                    sel = ui.select(
+                        options, value=options[0], label=layer_name
+                    ).classes("w-full")
                     demo.layer_selectors_a[layer_name] = sel
 
             with ui.column():
                 ui.label("Config B (5-D Composition)").classes("text-bold")
                 for layer_name, options in ONTOLOGY_LAYERS.items():
-                    sel = ui.select(options, value=options[0], label=layer_name).classes("w-full")
+                    sel = ui.select(
+                        options, value=options[0], label=layer_name
+                    ).classes("w-full")
                     demo.layer_selectors_b[layer_name] = sel
 
     def _toggle_mode() -> None:
@@ -367,11 +436,25 @@ def create_page(demo: DemoUi) -> None:
 
         if demo.ontology_mode:
             # Build ontology systems from layer choices
-            choices_a = {name: sel.value for name, sel in demo.layer_selectors_a.items()}
-            choices_b = {name: sel.value for name, sel in demo.layer_selectors_b.items()}
+            choices_a = {
+                name: sel.value for name, sel in demo.layer_selectors_a.items()
+            }
+            choices_b = {
+                name: sel.value for name, sel in demo.layer_selectors_b.items()
+            }
 
-            demo.panel_a = _create_ontology_panel(choices_a, task_sel_ont.value, int(epochs_ont.value), float(lr_ont.value))
-            demo.panel_b = _create_ontology_panel(choices_b, task_sel_ont.value, int(epochs_ont.value), float(lr_ont.value))
+            demo.panel_a = _create_ontology_panel(
+                choices_a,
+                task_sel_ont.value,
+                int(epochs_ont.value),
+                float(lr_ont.value),
+            )
+            demo.panel_b = _create_ontology_panel(
+                choices_b,
+                task_sel_ont.value,
+                int(epochs_ont.value),
+                float(lr_ont.value),
+            )
         else:
             # Classic mode
             demo.panel_a = _cooked_panel(
@@ -393,7 +476,10 @@ def create_page(demo: DemoUi) -> None:
 
         async def train_one(panel: DemoPanel) -> None:
             loop = asyncio.get_running_loop()
-            if hasattr(panel, "_ontology_system") and panel._ontology_system is not None:
+            if (
+                hasattr(panel, "_ontology_system")
+                and panel._ontology_system is not None
+            ):
                 # Train using the ontology system
                 await loop.run_in_executor(None, _run_ontology_system, panel)
             else:
@@ -450,6 +536,7 @@ def _run_ontology_system(panel: DemoPanel) -> None:
 
         # Get data
         from bioplausible.data import get_dataloaders
+
         train_loader, val_loader = get_dataloaders(
             panel.trainer_config.task,
             batch_size=panel.trainer_config.batch_size,

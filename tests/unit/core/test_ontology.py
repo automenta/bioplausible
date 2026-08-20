@@ -40,7 +40,13 @@ from bioplausible.core.system_trainer import (
 class DummyDataProvider:
     """Simple data provider for testing."""
 
-    def __init__(self, batch_size: int = 4, num_batches: int = 5, input_dim: int = 10, output_dim: int = 3):
+    def __init__(
+        self,
+        batch_size: int = 4,
+        num_batches: int = 5,
+        input_dim: int = 10,
+        output_dim: int = 3,
+    ):
         self.batch_size = batch_size
         self.num_batches = num_batches
         self.input_dim = input_dim
@@ -93,6 +99,7 @@ class TestSubstrate:
 
     def test_noisy_substrate_injects_noise(self):
         from bioplausible.core.ontology import NoisySubstrate
+
         substrate = NoisySubstrate(SubstrateConfig(noise_level=0.1))
         s = torch.zeros(4, 10)
         noisy = substrate.inject_state_noise(s)
@@ -332,10 +339,16 @@ class TestSystemTrainer:
     def test_trainer_single_epoch(self):
         system = create_backprop_system(input_dim=10, hidden_dim=20, output_dim=3)
         config = SystemTrainerConfig(max_epochs=1, batch_size=4)
-        train_data = DummyDataProvider(batch_size=4, num_batches=3, input_dim=10, output_dim=3)
-        val_data = DummyDataProvider(batch_size=4, num_batches=2, input_dim=10, output_dim=3)
+        train_data = DummyDataProvider(
+            batch_size=4, num_batches=3, input_dim=10, output_dim=3
+        )
+        val_data = DummyDataProvider(
+            batch_size=4, num_batches=2, input_dim=10, output_dim=3
+        )
 
-        trainer = SystemTrainer(system=system, config=config, train_data=train_data, val_data=val_data)
+        trainer = SystemTrainer(
+            system=system, config=config, train_data=train_data, val_data=val_data
+        )
         metrics = trainer.train_epoch()
 
         assert "train_loss" in metrics
@@ -348,10 +361,16 @@ class TestSystemTrainer:
     def test_trainer_full_fit(self):
         system = create_backprop_system(input_dim=10, hidden_dim=20, output_dim=3)
         config = SystemTrainerConfig(max_epochs=2, batch_size=4)
-        train_data = DummyDataProvider(batch_size=4, num_batches=3, input_dim=10, output_dim=3)
-        val_data = DummyDataProvider(batch_size=4, num_batches=2, input_dim=10, output_dim=3)
+        train_data = DummyDataProvider(
+            batch_size=4, num_batches=3, input_dim=10, output_dim=3
+        )
+        val_data = DummyDataProvider(
+            batch_size=4, num_batches=2, input_dim=10, output_dim=3
+        )
 
-        trainer = SystemTrainer(system=system, config=config, train_data=train_data, val_data=val_data)
+        trainer = SystemTrainer(
+            system=system, config=config, train_data=train_data, val_data=val_data
+        )
         history = trainer.fit()
 
         assert len(history) == 2
@@ -411,7 +430,9 @@ class TestOntologyConfigs:
         assert config.beta == 0.5
 
     def test_parameter_update_config(self):
-        config = ParameterUpdateConfig(update_type="riemannian_orthogonal", step_size=0.01)
+        config = ParameterUpdateConfig(
+            update_type="riemannian_orthogonal", step_size=0.01
+        )
         assert config.update_type == "riemannian_orthogonal"
         assert config.step_size == 0.01
 

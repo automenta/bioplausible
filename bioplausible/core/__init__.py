@@ -71,15 +71,27 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "SystemTrainerConfig": ("bioplausible.core.system_trainer", "SystemTrainerConfig"),
     "SystemTrainer": ("bioplausible.core.system_trainer", "SystemTrainer"),
     "compose_system": ("bioplausible.core.system_trainer", "compose_system"),
-    "create_eqprop_system": ("bioplausible.core.system_trainer", "create_eqprop_system"),
-    "create_backprop_system": ("bioplausible.core.system_trainer", "create_backprop_system"),
+    "create_eqprop_system": (
+        "bioplausible.core.system_trainer",
+        "create_eqprop_system",
+    ),
+    "create_backprop_system": (
+        "bioplausible.core.system_trainer",
+        "create_backprop_system",
+    ),
     "create_fa_system": ("bioplausible.core.system_trainer", "create_fa_system"),
     # Distributed Trainer
     "DistributedConfig": ("bioplausible.core.distributed_trainer", "DistributedConfig"),
-    "DistributedSystemTrainer": ("bioplausible.core.distributed_trainer", "DistributedSystemTrainer"),
+    "DistributedSystemTrainer": (
+        "bioplausible.core.distributed_trainer",
+        "DistributedSystemTrainer",
+    ),
     "NodeRegistry": ("bioplausible.core.distributed_trainer", "NodeRegistry"),
     "DHTRouter": ("bioplausible.core.distributed_trainer", "DHTRouter"),
-    "FederatedAggregator": ("bioplausible.core.distributed_trainer", "FederatedAggregator"),
+    "FederatedAggregator": (
+        "bioplausible.core.distributed_trainer",
+        "FederatedAggregator",
+    ),
 }
 
 __all__ = sorted(_LAZY)

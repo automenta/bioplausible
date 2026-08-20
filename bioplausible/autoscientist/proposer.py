@@ -411,7 +411,11 @@ class ExperimentProposer:
 
             # Build hypothesis from the ablation
             fixed_str = ", ".join(f"{k}={v}" for k, v in fixed.items())
-            sweep_str = f"{sweep}={sweep_values}" if isinstance(sweep_values, list) else f"{sweep}={sweep_values}"
+            sweep_str = (
+                f"{sweep}={sweep_values}"
+                if isinstance(sweep_values, list)
+                else f"{sweep}={sweep_values}"
+            )
             hypothesis = f"Hypercube ablation: fixed [{fixed_str}], sweep [{sweep_str}]"
 
             proposals.append(
@@ -435,8 +439,7 @@ class ExperimentProposer:
             )
 
         logger.info(
-            "Proposed %d hypercube ablation experiments "
-            "(fixed=%s, sweep=%s=%s)",
+            "Proposed %d hypercube ablation experiments (fixed=%s, sweep=%s=%s)",
             len(proposals),
             list(fixed.keys()),
             sweep,

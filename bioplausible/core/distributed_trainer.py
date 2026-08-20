@@ -47,17 +47,17 @@ class DistributedConfig:
     dht_port: int = 8468
 
     # Distribution strategy
-    shard_geometry: bool = True          # Shard tile mesh across nodes
-    federated_updates: bool = True       # Use federated parameter updates
-    sync_interval: int = 10              # Steps between federated sync
+    shard_geometry: bool = True  # Shard tile mesh across nodes
+    federated_updates: bool = True  # Use federated parameter updates
+    sync_interval: int = 10  # Steps between federated sync
 
     # Communication
-    compression: str = "topk"            # Gradient compression: "none", "topk", "quantize"
-    topk_ratio: float = 0.01             # Top-k sparsification ratio
+    compression: str = "topk"  # Gradient compression: "none", "topk", "quantize"
+    topk_ratio: float = 0.01  # Top-k sparsification ratio
 
     # Fault tolerance
-    heartbeat_interval: float = 5.0      # Seconds between heartbeats
-    max_missed_heartbeats: int = 3       # Max missed before node considered dead
+    heartbeat_interval: float = 5.0  # Seconds between heartbeats
+    max_missed_heartbeats: int = 3  # Max missed before node considered dead
 
     # Training
     max_epochs: int = 10
@@ -79,8 +79,7 @@ class NodeRegistry:
 
     def get_active_nodes(self, current_time: float, timeout: float) -> list[str]:
         return [
-            nid for nid, ts in self._heartbeats.items()
-            if current_time - ts < timeout
+            nid for nid, ts in self._heartbeats.items() if current_time - ts < timeout
         ]
 
     def remove(self, node_id: str) -> None:
@@ -123,7 +122,7 @@ class DHTRouter:
         for prefix_len in range(target_prefix, -1, -1):
             bucket = self._buckets.get(prefix_len, [])
             if bucket:
-                return bucket[:self.k]
+                return bucket[: self.k]
         return []
 
     @staticmethod
@@ -189,7 +188,9 @@ class DistributedSystemTrainer:
     # Distributed state
     _node_registry: NodeRegistry = field(default_factory=NodeRegistry, init=False)
     _dht_router: DHTRouter = field(init=False)
-    _federated_aggregator: FederatedAggregator = field(default_factory=FederatedAggregator, init=False)
+    _federated_aggregator: FederatedAggregator = field(
+        default_factory=FederatedAggregator, init=False
+    )
 
     # Training state
     current_epoch: int = field(default=0, init=False)
@@ -203,17 +204,22 @@ class DistributedSystemTrainer:
     def _setup_distributed(self) -> None:
         """Initialize distributed components."""
         # Register self
-        self._node_registry.register(self.config.node_id, {
-            "geometry_shards": self._get_geometry_shards(),
-            "capabilities": self._get_node_capabilities(),
-        })
+        self._node_registry.register(
+            self.config.node_id,
+            {
+                "geometry_shards": self._get_geometry_shards(),
+                "capabilities": self._get_node_capabilities(),
+            },
+        )
 
         # Connect to bootstrap nodes
         for bootstrap in self.config.bootstrap_nodes:
             self._dht_router.add_node(bootstrap)
 
         # If using TileGeometry, set up tile sharding
-        if self.config.shard_geometry and isinstance(self.system.geometry, TileGeometry):
+        if self.config.shard_geometry and isinstance(
+            self.system.geometry, TileGeometry
+        ):
             self._setup_tile_sharding()
 
     def _get_geometry_shards(self) -> dict:
@@ -238,7 +244,8 @@ class DistributedSystemTrainer:
         """Get this node's compute capabilities."""
         return {
             "device": str(next(self.system.geometry.parameters()).device)
-            if hasattr(self.system.geometry, "parameters") else "cpu",
+            if hasattr(self.system.geometry, "parameters")
+            else "cpu",
             "memory_gb": 16,  # Placeholder
         }
 
@@ -276,7 +283,10 @@ class DistributedSystemTrainer:
             self.global_step += 1
 
             # Federated sync
-            if self.config.federated_updates and self.global_step % self.config.sync_interval == 0:
+            if (
+                self.config.federated_updates
+                and self.global_step % self.config.sync_interval == 0
+            ):
                 self._federated_sync()
 
             # Heartbeat
@@ -319,19 +329,25 @@ class DistributedSystemTrainer:
         # 1. Substrate + Geometry: Forward pass
         state.activations = self._distributed_forward(x, self.system.substrate)
         if state.activations is not None:
-            state.activations = self.system.substrate.inject_state_noise(state.activations)
+            state.activations = self.system.substrate.inject_state_noise(
+                state.activations
+            )
 
         # 2. StateDynamics: Free phase settling (sharded for tile geometry)
         free_state = self._distributed_settle(
             state, self.system.geometry, self.system.substrate, target=None
         )
-        free_state.energy = self.system.dynamics.compute_energy(free_state, self.system.geometry)
+        free_state.energy = self.system.dynamics.compute_energy(
+            free_state, self.system.geometry
+        )
 
         # 3. StateDynamics: Nudged phase settling
         nudged_state = self._distributed_settle(
             state, self.system.geometry, self.system.substrate, target=y
         )
-        nudged_state.energy = self.system.dynamics.compute_energy(nudged_state, self.system.geometry)
+        nudged_state.energy = self.system.dynamics.compute_energy(
+            nudged_state, self.system.geometry
+        )
         nudged_state.loss = self._compute_loss(nudged_state, y)
 
         # 4. CreditAssignment: Compute pseudo-gradients (local)
@@ -360,7 +376,9 @@ class DistributedSystemTrainer:
 
         return {
             "loss": float(nudged_state.loss) if nudged_state.loss is not None else 0.0,
-            "energy": float(free_state.energy) if free_state.energy is not None else 0.0,
+            "energy": float(free_state.energy)
+            if free_state.energy is not None
+            else 0.0,
             "accuracy": free_state.metrics.get("accuracy", 0.0),
         }
 
@@ -407,7 +425,12 @@ class DistributedSystemTrainer:
                     contrib = op(src_act, w)
                     acc = contrib if acc is None else acc + contrib
                 if acc is not None:
-                    acc += geometry._tile_biases[str(tid)].unsqueeze(0).expand(acc.shape[0], -1)
+                    acc += (
+                        geometry
+                        ._tile_biases[str(tid)]
+                        .unsqueeze(0)
+                        .expand(acc.shape[0], -1)
+                    )
                     tile.activity = acc
                     tile.prediction = acc
 
@@ -470,7 +493,12 @@ class DistributedSystemTrainer:
                         contrib = src_act @ w.T
                         acc = contrib if acc is None else acc + contrib
                     if acc is not None:
-                        acc += geometry._tile_biases[str(tid)].unsqueeze(0).expand(acc.shape[0], -1)
+                        acc += (
+                            geometry
+                            ._tile_biases[str(tid)]
+                            .unsqueeze(0)
+                            .expand(acc.shape[0], -1)
+                        )
                         tile.activity = substrate.inject_state_noise(acc)  # type: ignore[arg-type]
 
             # Synchronize boundary tiles with neighbors
@@ -513,7 +541,8 @@ class DistributedSystemTrainer:
         if aggregated:
             current_params = self.system.geometry.params
             new_params = {
-                name: current_params[name] + aggregated.get(name, torch.zeros_like(current_params[name]))
+                name: current_params[name]
+                + aggregated.get(name, torch.zeros_like(current_params[name]))
                 for name in current_params
             }
             self.system.geometry.update_params(new_params)
@@ -521,6 +550,7 @@ class DistributedSystemTrainer:
     def _send_heartbeat(self) -> None:
         """Send heartbeat to maintain P2P membership."""
         import time
+
         self._node_registry.heartbeat(self.config.node_id, time.time())
 
     def _get_device(self) -> torch.device:
@@ -573,7 +603,9 @@ class DistributedSystemTrainer:
 
     def fit(self) -> list[dict[str, float]]:
         """Run full distributed training loop."""
-        for _ in range(self.config.max_epochs if hasattr(self.config, "max_epochs") else 10):
+        for _ in range(
+            self.config.max_epochs if hasattr(self.config, "max_epochs") else 10
+        ):
             self.train_epoch()
         return self.history
 

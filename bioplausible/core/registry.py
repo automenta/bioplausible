@@ -488,7 +488,11 @@ class Registry:
             if cat not in cls._components:
                 return {cat.value: []}
             return {cat.value: list(cls._components[cat].keys())}
-        return {cat.value: list(comps.keys()) for cat, comps in cls._components.items()}
+        return {
+            cat.value: list(comps.keys())
+            for cat, comps in cls._components.items()
+            if isinstance(cat, ComponentCategory)
+        }
 
     @classmethod
     def query(
@@ -608,7 +612,9 @@ class Registry:
         return adapter.to_system()
 
     @classmethod
-    def to_system_by_category(cls, category: ComponentCategory | str, name: str) -> System:
+    def to_system_by_category(
+        cls, category: ComponentCategory | str, name: str
+    ) -> System:
         """Project any registered component into the 5-D ontology.
 
         For models, this is the same as ``to_system``. For other categories
@@ -642,7 +648,9 @@ class Registry:
         # For non-model components, create a minimal system with defaults
         # and the component mapped to its layer
         substrate = DigitalSubstrate()
-        geometry = FeedforwardGeometry(GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,)))
+        geometry = FeedforwardGeometry(
+            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,))
+        )
         dynamics = InstantaneousDynamics()
         credit = ThermodynamicContrast()
         update = EuclideanUpdate()
@@ -699,7 +707,14 @@ class Registry:
                 "Quantum": [ComputeProfile.ANALOG],
             },
             "geometry": {
-                "Feedforward": ["backprop", "fa", "forward_only", "hebbian", "target_prop", "mep"],
+                "Feedforward": [
+                    "backprop",
+                    "fa",
+                    "forward_only",
+                    "hebbian",
+                    "target_prop",
+                    "mep",
+                ],
                 "Recurrent": ["eqprop", "recurrent", "equilibrium", "ep", "chl"],
                 "TileMesh": ["tile"],
                 "Neuromorphic": ["neuromorphic", "fabric"],
@@ -713,7 +728,12 @@ class Registry:
             },
             "credit": {
                 "ThermodynamicContrast": ["equilibrium", "hebbian", "gradient"],
-                "RandomProjections": ["feedback_alignment", "random_projections", "target", "gradient"],
+                "RandomProjections": [
+                    "feedback_alignment",
+                    "random_projections",
+                    "target",
+                    "gradient",
+                ],
                 "LocalGoodness": ["forward_only", "hebbian", "gradient"],
                 "TemporalTrace": ["spiking", "temporal_trace", "gradient"],
                 "TargetInversion": ["target", "target_inversion", "gradient"],
