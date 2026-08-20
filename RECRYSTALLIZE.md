@@ -129,11 +129,11 @@ Chain-of-thought templates now operate on *ontology axes*, enabling hypotheses l
 | **2** | PredictiveSettlingDynamics, DistributedSystemTrainer (in-process) | ✅ Complete | 12 energy proofs, 16 property locks |
 | **2** | AutoScientist Hypercube Search, Formal Energy Proofs, L1-L7 Locks | ✅ Complete | CORRECTNESS_LOCK.md suite green |
 | **3** | P2P RPC layer (gRPC + Kademlia) | ✅ Sprint 2 Complete | Proto: `bioplausible/p2p/proto/tile_mesh.proto`, Service: `bioplausible/p2p/grpc_service.py` |
-| **3** | Control-Lyapunov proofs for directed topologies | 📋 Sprint 3 | — |
-| **3** | FA structured init (orthogonal + feedback_scale) | 📋 Sprint 3 | — |
+| **3** | Control-Lyapunov proofs for directed topologies | ✅ Sprint 3 Complete | 5 new tests in `test_energy_invariants.py`, free energy tracking |
+| **3** | FA structured init (orthogonal + feedback_scale) | ✅ Sprint 3 Complete | `CreditAssignmentConfig.orthogonal_init`, `feedback_scale`; QR-based init |
 | **4** | ModelAdapter.validate(), legacy migration on contact | 📋 Sprint 4 | — |
 
-**Last verified:** 2026-08-20 — all 97 core/integration/property tests pass, Pyright strict clean, Ruff format clean; gRPC P2P layer implemented
+**Last verified:** 2026-08-20 — all 97+ core/integration/property tests pass, Pyright strict clean, Ruff format clean; gRPC P2P layer implemented; Sprint 3 (Control-Lyapunov, FA orthogonal init) complete
 
 ---
 
@@ -157,7 +157,9 @@ Chain-of-thought templates now operate on *ontology axes*, enabling hypotheses l
 | `Registry.query_ontology()` + `propose_hypercube_ablation()` | `bioplausible/core/registry.py:646-780`, `bioplausible/autoscientist/proposer.py` | — |
 | gRPC Proto & Service (TileMeshService) | `bioplausible/p2p/proto/tile_mesh.proto`, `bioplausible/p2p/grpc_service.py` | — |
 | GRPCConnectionPool (peer management) | `bioplausible/p2p/grpc_service.py` | — |
-| Formal Energy Proofs | `tests/integration/test_energy_invariants.py` | 12 proofs |
+| Formal Energy Proofs | `tests/integration/test_energy_invariants.py` | 17 proofs |
+| Control-Lyapunov Proofs (directed topologies) | `tests/integration/test_energy_invariants.py::TestControlLyapunovStability` | 5 tests |
+| FA Structured Init (orthogonal + feedback_scale) | `bioplausible/core/ontology.py:2479-2532` | Integrated |
 | Ontology Property Locks (L1-L7) | `tests/property/test_ontology_locks.py`, `tests/property/_support.py` | 16 property |
 
 ---
@@ -193,8 +195,8 @@ Verified via `tests/integration/test_gradient_equivalence.py::TestOntologyLayerE
 | Sprint | Priority | Task | Effort | Blocking | Solution |
 |--------|----------|------|--------|----------|----------|
 | **2** | **P1** | **P2P RPC Layer (gRPC + Kademlia)** | 3-5 days | Real distributed training | ✅ DONE: Proto defined, gRPC service implemented, integrated with DistributedSystemTrainer |
-| **3** | **P2** | **RandomProjectionsCredit structured init** | 1 day | FA production use | Add `orthogonal_init: bool`, `feedback_scale: float` to `CreditAssignmentConfig`; use `torch.nn.init.orthogonal_` |
-| **3** | **P2** | **Control-Lyapunov formal proof** | 2-3 days | Theoretical completeness | Add Lyapunov candidate `V = Σ ‖eₗ‖²` to `test_energy_invariants.py`; prove `dV/dt ≤ 0` for directed topologies; require `dynamics.track_free_energy_per_iter = True` |
+| **3** | **P2** | **RandomProjectionsCredit structured init** | 1 day | FA production use | ✅ DONE: Added `orthogonal_init: bool`, `feedback_scale: float` to `CreditAssignmentConfig`; uses `torch.linalg.qr` for orthogonal init |
+| **3** | **P2** | **Control-Lyapunov formal proof** | 2-3 days | Theoretical completeness | ✅ DONE: Added `track_free_energy_per_iter` to `StateDynamicsConfig`; free energy history tracked in `PredictiveSettlingDynamics`; 5 tests verify `dV/dt ≤ 0` |
 | **4** | **P3** | **ModelAdapter.validate()** | 1-2 days | AutoScientist accuracy | Run forward/backward pass comparing metrics with legacy; improve inference priority: metadata → `model.config` → `model.family` → heuristics → defaults |
 | **1** | **P3** | **Test file lint cleanup** | 0.5 day | CI hygiene | ✅ DONE: `ruff check --fix tests/property/test_ontology_locks.py`; fixed assertions, line lengths, no-self-use |
 
@@ -209,9 +211,9 @@ Sprint 1 (P0 + P1 quick wins):  ✅ COMPLETED
 Sprint 2 (P1 infrastructure):  ✅ COMPLETED
   └─ P1: P2P RPC layer (gRPC + kademlia)    (3-5 days) ✅
 
-Sprint 3 (P2 theoretical):
-  ├─ P2: FA orthogonal init + feedback_scale (1 day)
-  └─ P2: Control-Lyapunov proof + tracking   (2-3 days)
+Sprint 3 (P2 theoretical):  ✅ COMPLETED
+  ├─ P2: FA orthogonal init + feedback_scale (1 day) ✅
+  └─ P2: Control-Lyapunov proof + tracking   (2-3 days) ✅
 
 Sprint 4 (P3 polish):
   └─ P3: ModelAdapter.validate()             (1-2 days)

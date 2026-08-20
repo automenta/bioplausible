@@ -134,6 +134,8 @@ class StateDynamicsConfig:
         convergence_start: Step to start checking convergence
         step_size: Learning rate for state updates
         beta: Nudge strength for energy-based methods
+        track_free_energy_per_iter: Record free energy at each iteration
+            for Control-Lyapunov analysis
     """
 
     dynamics_type: str = "instantaneous"
@@ -142,6 +144,7 @@ class StateDynamicsConfig:
     convergence_start: int = 5
     step_size: float = 0.1
     beta: float = 0.1
+    track_free_energy_per_iter: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,12 +158,16 @@ class CreditAssignmentConfig:
         feedback_matrix: Optional fixed feedback matrix
             (for random projections)
         local_objective: Layer-local loss type (for local goodness)
+        orthogonal_init: Initialize feedback matrices with orthogonal weights
+        feedback_scale: Scaling factor for feedback matrices
     """
 
     credit_type: str = "thermodynamic_contrast"
     beta: float = 0.5
     feedback_matrix: Tensor | None = None
     local_objective: str = "mse"
+    orthogonal_init: bool = False
+    feedback_scale: float = 0.01
 
 
 @dataclass(frozen=True, slots=True)
@@ -2170,6 +2177,7 @@ class PredictiveSettlingDynamics:
         self._precision: list[Tensor] | None = (
             None  # Layer-wise precision (inverse variance)
         )
+        self._free_energy_history: list[float] | None = None
 
     def _init_precision(self, n_layers: int, device: torch.device) -> None:
         """Initialize precision parameters for each layer."""
@@ -2250,6 +2258,12 @@ class PredictiveSettlingDynamics:
                 in_dim = layer_acts[i].shape[-1]
                 weights.append(torch.eye(out_dim, in_dim, device=device))
 
+        # Initialize free energy tracking if enabled
+        if self.config.track_free_energy_per_iter:
+            self._free_energy_history = []
+        else:
+            self._free_energy_history = None
+
         # Predictive coding settling iterations
         for step in range(self.config.max_steps):
             # Store previous activations for convergence check
@@ -2307,6 +2321,28 @@ class PredictiveSettlingDynamics:
 
             layer_acts = new_acts
             layer_acts = [substrate.inject_state_noise(a) for a in layer_acts]
+
+            # Track free energy if enabled
+            if (
+                self.config.track_free_energy_per_iter
+                and self._free_energy_history is not None
+            ):
+                # Compute free energy at this step
+                total_energy = torch.tensor(0.0, device=device)
+                for l in range(n_layers - 1):
+                    pred = torch.nn.functional.linear(layer_acts[l + 1], weights[l].T)
+                    pred = torch.nn.functional.relu(pred)
+                    error = layer_acts[l] - pred
+                    precision = (
+                        self._precision[l]
+                        if self._precision is not None and l < len(self._precision)
+                        else torch.ones(1, device=device)
+                    )
+                    precision_scalar = precision.squeeze()
+                    total_energy = total_energy + (error**2).sum() / (
+                        2 * precision_scalar
+                    )
+                self._free_energy_history.append(total_energy.item())
 
             # Check convergence
             if step >= self.config.convergence_start:
@@ -2376,6 +2412,13 @@ class PredictiveSettlingDynamics:
 
         return total_energy
 
+    def get_free_energy_history(self) -> list[float] | None:
+        """Return the free energy history tracked during settling.
+
+        Returns None if tracking was not enabled (track_free_energy_per_iter=False).
+        """
+        return self._free_energy_history
+
 
 class SpikeIntegrationDynamics:
     """Spiking dynamics: membrane potential integration and thresholding."""
@@ -2442,20 +2485,49 @@ class RandomProjectionsCredit:
         hidden_dims = geometry.config.hidden_dims
         out_dim = geometry.config.output_dim
 
+        # Use config parameters for initialization
+        scale = self.config.feedback_scale
+        use_orthogonal = self.config.orthogonal_init
+
         if self._is_dfa:
             # DFA: Single feedback matrix from output to all hidden layers
             for i, h_dim in enumerate(hidden_dims):
-                self._feedback_weights[f"layer_{i}"] = (
-                    torch.randn(h_dim, out_dim, device=device) * 0.01
-                )
+                if use_orthogonal:
+                    # Orthogonal initialization: random matrix then QR decomposition
+                    if h_dim >= out_dim:
+                        mat = torch.randn(h_dim, out_dim, device=device)
+                        q, _ = torch.linalg.qr(mat)
+                        self._feedback_weights[f"layer_{i}"] = q[:, :out_dim] * scale
+                    else:
+                        mat = torch.randn(out_dim, h_dim, device=device)
+                        q, _ = torch.linalg.qr(mat)
+                        self._feedback_weights[f"layer_{i}"] = q[:h_dim, :].T * scale
+                else:
+                    self._feedback_weights[f"layer_{i}"] = (
+                        torch.randn(h_dim, out_dim, device=device) * scale
+                    )
         else:
             # FA: Chain of feedback matrices between adjacent layers
             prev_dim = out_dim
             for i, h_dim in enumerate(reversed(hidden_dims)):
                 # Feedback from layer i+1 to layer i
-                self._feedback_weights[f"layer_{len(hidden_dims) - 1 - i}"] = (
-                    torch.randn(h_dim, prev_dim, device=device) * 0.01
-                )
+                if use_orthogonal:
+                    if h_dim >= prev_dim:
+                        mat = torch.randn(h_dim, prev_dim, device=device)
+                        q, _ = torch.linalg.qr(mat)
+                        self._feedback_weights[f"layer_{len(hidden_dims) - 1 - i}"] = (
+                            q[:, :prev_dim] * scale
+                        )
+                    else:
+                        mat = torch.randn(prev_dim, h_dim, device=device)
+                        q, _ = torch.linalg.qr(mat)
+                        self._feedback_weights[f"layer_{len(hidden_dims) - 1 - i}"] = (
+                            q[:h_dim, :].T * scale
+                        )
+                else:
+                    self._feedback_weights[f"layer_{len(hidden_dims) - 1 - i}"] = (
+                        torch.randn(h_dim, prev_dim, device=device) * scale
+                    )
                 prev_dim = h_dim
 
     def compute_pseudo_gradient(

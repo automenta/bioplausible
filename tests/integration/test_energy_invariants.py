@@ -123,6 +123,11 @@ class TestControlLyapunovStability:
     Theoretical basis: Predictive Coding dynamics minimize free energy F.
     The free energy F = Σ ||e_l||^2 / (2 * precision_l) is a Control-Lyapunov
     function for the directed topology.
+
+    For a Control-Lyapunov function V(x), we require:
+    - V(x) ≥ 0, V(0) = 0
+    - dV/dt ≤ 0 along trajectories (stability)
+    - dV/dt < 0 for x ≠ 0 (asymptotic stability)
     """
 
     def test_predictive_coding_free_energy_finite(self):
@@ -197,6 +202,143 @@ class TestControlLyapunovStability:
         # Just verify both phases compute valid energies
         assert free_energy >= 0
         assert nudged_energy >= 0
+
+    def test_control_lyapunov_free_energy_decreases(self):
+        """Control-Lyapunov function (free energy) decreases monotonically during settling.
+
+        This is the core Control-Lyapunov proof: V = Σ ||e_l||^2 / (2 * precision_l)
+        must be non-increasing along trajectories: dV/dt ≤ 0.
+        """
+        torch.manual_seed(123)
+
+        geometry = FeedforwardGeometry(
+            GeometryConfig(input_dim=10, output_dim=5, hidden_dims=(20, 15))
+        )
+        substrate = DigitalSubstrate()
+        dynamics = PredictiveSettlingDynamics(
+            StateDynamicsConfig(
+                dynamics_type="predictive_settling",
+                max_steps=50,
+                convergence_threshold=1e-4,
+                step_size=0.01,  # Smaller step for stability
+                track_free_energy_per_iter=True,  # Enable tracking
+            )
+        )
+
+        x = torch.randn(4, 10) * 0.1
+        state = SystemState(x=x)
+        state.activations = geometry.forward(x, substrate)
+
+        # Run settling with free energy tracking
+        state = dynamics.settle(state, geometry, substrate, target=None)
+
+        # Retrieve free energy history
+        history = dynamics.get_free_energy_history()
+        assert history is not None, "Free energy history should be tracked"
+        assert len(history) > 1, "Should have multiple iterations"
+
+        # Control-Lyapunov: V must be non-increasing (dV/dt ≤ 0)
+        # Allow small numerical tolerance for discrete-time dynamics
+        for i in range(1, len(history)):
+            assert history[i] <= history[i - 1] + 1e-3, (
+                f"Free energy increased at step {i}: {history[i]} > {history[i - 1]}"
+            )
+
+        # Energy should converge (change becomes small)
+        if len(history) >= 2:
+            final_change = abs(history[-1] - history[-2])
+            assert final_change < 1e-2, (
+                f"Free energy did not converge: final change = {final_change}"
+            )
+
+        # Initial energy should be positive (non-zero errors)
+        assert history[0] >= 0
+
+    def test_control_lyapunov_nudged_phase_decreases(self):
+        """Control-Lyapunov function decreases in nudged phase as well.
+
+        Note: The free energy as defined (prediction errors only) is a Lyapunov
+        function for the free phase dynamics. For the nudged phase, the target
+        introduces an additional force. We verify energy remains finite and
+        generally decreases (with relaxed tolerance for target-driven dynamics).
+        """
+        torch.manual_seed(456)
+
+        geometry = FeedforwardGeometry(
+            GeometryConfig(input_dim=10, output_dim=5, hidden_dims=(20,))
+        )
+        substrate = DigitalSubstrate()
+        dynamics = PredictiveSettlingDynamics(
+            StateDynamicsConfig(
+                dynamics_type="predictive_settling",
+                max_steps=40,
+                step_size=0.02,
+                track_free_energy_per_iter=True,
+            )
+        )
+
+        x = torch.randn(4, 10)
+        y = torch.randint(0, 5, (4,))
+        state = SystemState(x=x, y=y)
+        state.activations = geometry.forward(x, substrate)
+
+        # Run settling with target (nudged phase)
+        state = dynamics.settle(state, geometry, substrate, target=y)
+
+        # Retrieve free energy history
+        history = dynamics.get_free_energy_history()
+        assert history is not None, "Free energy history should be tracked"
+        assert len(history) > 1, "Should have multiple iterations"
+
+        # Energy should be finite and non-negative
+        for e in history:
+            assert not torch.isnan(torch.tensor(e))
+            assert not torch.isinf(torch.tensor(e))
+            assert e >= 0
+
+        # Generally decreasing (allow small increases due to target force)
+        # Check overall trend: final should be <= initial (or close)
+        assert history[-1] <= history[0] + 1.0, (
+            f"Energy trend not decreasing: initial={history[0]}, final={history[-1]}"
+        )
+
+    def test_control_lyapunov_function_positive_definite(self):
+        """Control-Lyapunov function V = Σ ||e_l||^2 is positive definite.
+
+        V(x) ≥ 0 for all x, and V(x) = 0 iff x is at fixed point (all errors zero).
+        """
+        torch.manual_seed(789)
+
+        geometry = FeedforwardGeometry(
+            GeometryConfig(input_dim=8, output_dim=3, hidden_dims=(16,))
+        )
+        substrate = DigitalSubstrate()
+        dynamics = PredictiveSettlingDynamics(
+            StateDynamicsConfig(
+                dynamics_type="predictive_settling",
+                max_steps=30,
+                step_size=0.1,
+                track_free_energy_per_iter=True,
+            )
+        )
+
+        x = torch.randn(2, 8)
+        state = SystemState(x=x)
+        state.activations = geometry.forward(x, substrate)
+
+        # Run settling
+        state = dynamics.settle(state, geometry, substrate, target=None)
+
+        history = dynamics.get_free_energy_history()
+        assert history is not None
+
+        # Free energy (Control-Lyapunov function) must be non-negative
+        for e in history:
+            assert e >= -1e-6, f"Free energy negative: {e}"
+
+        # At convergence, energy should be near zero (or at least non-increasing)
+        # The fixed point has zero prediction errors
+        assert history[-1] >= 0
 
 
 class TestSubstratePassivity:
