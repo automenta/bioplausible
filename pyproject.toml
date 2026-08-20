@@ -98,7 +98,7 @@ deploy = ["fastapi", "uvicorn", "onnxruntime"]
 export = ["onnx", "onnxscript"]
 
 # --- Networking ---
-p2p = ["kademlia"]
+p2p = ["kademlia", "grpcio>=1.62", "grpcio-tools>=1.62"]
 
 # --- Desktop UI ---
 ui = ["PyQt6", "pyqtgraph"]
@@ -140,6 +140,7 @@ biopl-export-trained-kernel = "bioplausible.cli.export_trained_kernel:main"
 
 [dependency-groups]
 dev = [
+    "grpcio-tools>=1.83.0",
     "hypothesis>=6.161.2",
     "pytest-cov>=7.1.0",
 ]
@@ -194,6 +195,9 @@ select = [
     "SIM",  # flake8-simplify
 ]
 ignore = ["RUF067"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "PLR6301"]  # S101: assert in tests; PLR6301: no-self-use in test methods
 
 [tool.ruff.lint.flake8-type-checking]
 

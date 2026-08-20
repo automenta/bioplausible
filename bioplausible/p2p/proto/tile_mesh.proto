@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package bioplausible.p2p;
+
+// Tile Mesh RPC Service for distributed training
+// Allows nodes to fetch remote tile activations and synchronize boundary tiles
+
+message TensorProto {
+  // Serialized tensor data (using pickle or custom serialization)
+  bytes data = 1;
+  repeated int64 shape = 2;
+  string dtype = 3;  // e.g., "float32", "float16", "int64"
+}
+
+message TileActivationRequest {
+  int32 tile_id = 1;
+  int32 request_id = 2;  // For matching responses
+}
+
+message TileActivationResponse {
+  int32 tile_id = 1;
+  int32 request_id = 2;
+  TensorProto activation = 3;
+  bool success = 4;
+  string error = 5;
+}
+
+message BoundarySyncRequest {
+  int32 source_node_id = 1;
+  repeated TensorProto boundary_activations = 2;
+  repeated int32 boundary_tile_ids = 3;
+  int64 step = 4;
+}
+
+message BoundarySyncResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message HeartbeatRequest {
+  string node_id = 1;
+  int64 timestamp = 2;
+  map<string, string> metadata = 3;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
+  repeated string active_nodes = 2;
+}
+
+message ParameterUpdateRequest {
+  string node_id = 1;
+  int64 step = 2;
+  map<string, TensorProto> updates = 3;
+}
+
+message ParameterUpdateResponse {
+  bool success = 1;
+  map<string, TensorProto> aggregated_updates = 2;
+  string error = 3;
+}
+
+// RPC Service for Tile Mesh Communication
+service TileMeshService {
+  // Fetch activation for a remote tile
+  rpc FetchTileActivation(TileActivationRequest) returns (TileActivationResponse);
+
+  // Synchronize boundary tile activations with neighbor
+  rpc SyncBoundaryTiles(BoundarySyncRequest) returns (BoundarySyncResponse);
+
+  // Send heartbeat to maintain P2P membership
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Federated parameter update aggregation
+  rpc PushParameterUpdate(ParameterUpdateRequest) returns (ParameterUpdateResponse);
+}

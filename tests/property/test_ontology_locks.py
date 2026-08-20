@@ -1,7 +1,7 @@
-"""Ontology Property Locks (L1–L7) — CORRECTNESS_LOCK.md
+"""Ontology Property Locks (L1-L7) - CORRECTNESS_LOCK.md
 
 Fast-CI property suite enforcing seven invariants of the 5-D ontology.
-Wall-clock budget: ≤ 5 min on GPU, ≤ 10 min on CPU.
+Wall-clock budget: <= 5 min on GPU, <= 10 min on CPU.
 """
 
 from __future__ import annotations
@@ -51,6 +51,15 @@ from tests.property._support import (
     select_device,
     tiny_batch,
 )
+
+# ----------------------------------------------------------------------
+# Constants for magic values
+# ----------------------------------------------------------------------
+LOCALITY_TOL = 1e-6
+ENERGY_CONVERGENCE_TOL = 1e-6
+ENERGY_STEP_TOL = 1e-7
+PERTURB_SCALE = 1e-3
+MIN_LAYERS_FOR_LOCALITY = 2
 
 
 # ----------------------------------------------------------------------
@@ -182,10 +191,40 @@ def _metrics_equal(
     return True
 
 
+def _assert_metrics_valid(metrics: dict[str, float]) -> None:
+    """Assert metrics have expected keys and valid ranges."""
+    assert metrics is not None
+    assert "loss" in metrics
+    assert metrics["loss"] >= 0
+    assert "accuracy" in metrics
+    assert 0 <= metrics["accuracy"] <= 1
+
+
+def _setup_system_device(sys: System, device: torch.device) -> System:
+    """Move system to device if supported."""
+    if hasattr(sys.geometry, "to"):
+        sys.geometry.to(device)
+    return sys
+
+
+def _run_settle_and_compute_loss(
+    sys: System, x: Tensor, y: Tensor | None, target: Tensor | None
+) -> SystemState:
+    """Run settle and compute loss."""
+    state = SystemState(x=x, y=y)
+    state.activations = sys.geometry.forward(x, sys.substrate)
+    if state.activations is not None:
+        state.activations = sys.substrate.inject_state_noise(state.activations)
+    state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=target)
+    if target is not None:
+        state.loss = sys._compute_loss(state, target)
+    return state
+
+
 # ======================================================================
-# L1 — Parity Lock (strangler-fig guarantee)
+# L1 - Parity Lock (strangler-fig guarantee)
 # ======================================================================
-def test_L1_composed_systems_train():
+def test_l1_composed_systems_train() -> None:
     """Composed 5-D systems can train and produce valid metrics."""
     device = select_device()
     if device.type == "cuda":
@@ -201,39 +240,33 @@ def test_L1_composed_systems_train():
     ]:
         with seeded(42):
             system = system_factory()
-            if hasattr(system.geometry, "to"):
-                system.geometry.to(device)
+            _setup_system_device(system, device)
 
             metrics = system.train_step(x, y)
-            assert metrics is not None
-            assert "loss" in metrics
-            assert metrics["loss"] >= 0
-            assert "accuracy" in metrics
-            assert 0 <= metrics["accuracy"] <= 1
+            _assert_metrics_valid(metrics)
 
 
 # ======================================================================
-# L2 — Orthogonality Lock (ontology honesty)
+# L2 - Orthogonality Lock (ontology honesty)
 # ======================================================================
 class TestL2OrthogonalityLock:
     """Each pipeline stage is a pure function of the axes that precede it."""
 
-    def test_O1_geometry_forward_deterministic(self):
+    def test_o1_geometry_forward_deterministic(self) -> None:
         """geometry.forward is deterministic for same inputs."""
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
 
         sys = _make_backprop_system()
-        if hasattr(sys.geometry, "to"):
-            sys.geometry.to(device)
+        _setup_system_device(sys, device)
 
         x, _ = tiny_batch(42)
         out1 = sys.geometry.forward(x, sys.substrate)
         out2 = sys.geometry.forward(x, sys.substrate)
         assert torch.equal(out1, out2)
 
-    def test_O2_geometry_forward_independent_of_dynamics(self):
+    def test_o2_geometry_forward_independent_of_dynamics(self) -> None:
         """geometry.forward output doesn't depend on which Dynamics is used."""
         device = select_device()
         if device.type == "cuda":
@@ -244,9 +277,8 @@ class TestL2OrthogonalityLock:
         with seeded(42):
             sys2 = _make_predictive_coding_system()
 
-        if hasattr(sys1.geometry, "to"):
-            sys1.geometry.to(device)
-            sys2.geometry.to(device)
+        _setup_system_device(sys1, device)
+        _setup_system_device(sys2, device)
 
         _copy_system_params(sys1, sys2)
         x, _ = tiny_batch(42)
@@ -255,7 +287,7 @@ class TestL2OrthogonalityLock:
         out2 = sys2.geometry.forward(x, sys2.substrate)
         assert torch.equal(out1, out2)
 
-    def test_O3_credit_independent_of_update(self):
+    def test_o3_credit_independent_of_update(self) -> None:
         """Pseudo-gradients are independent of ParameterUpdate choice."""
         device = select_device()
         if device.type == "cuda":
@@ -280,28 +312,17 @@ class TestL2OrthogonalityLock:
                 ),
             )
 
-        if hasattr(sys1.geometry, "to"):
-            sys1.geometry.to(device)
-            sys2.geometry.to(device)
+        _setup_system_device(sys1, device)
+        _setup_system_device(sys2, device)
 
         _copy_system_params(sys1, sys2)
         x, y = tiny_batch(42)
 
-        state1 = SystemState(x=x, y=y)
-        state1.activations = sys1.geometry.forward(x, sys1.substrate)
-        if state1.activations is not None:
-            state1.activations = sys1.substrate.inject_state_noise(state1.activations)
-        free1 = sys1.dynamics.settle(state1, sys1.geometry, sys1.substrate, target=None)
-        nudged1 = sys1.dynamics.settle(state1, sys1.geometry, sys1.substrate, target=y)
-        nudged1.loss = sys1._compute_loss(nudged1, y)
+        free1 = _run_settle_and_compute_loss(sys1, x, y, target=None)
+        nudged1 = _run_settle_and_compute_loss(sys1, x, y, target=y)
 
-        state2 = SystemState(x=x, y=y)
-        state2.activations = sys2.geometry.forward(x, sys2.substrate)
-        if state2.activations is not None:
-            state2.activations = sys2.substrate.inject_state_noise(state2.activations)
-        free2 = sys2.dynamics.settle(state2, sys2.geometry, sys2.substrate, target=None)
-        nudged2 = sys2.dynamics.settle(state2, sys2.geometry, sys2.substrate, target=y)
-        nudged2.loss = sys2._compute_loss(nudged2, y)
+        free2 = _run_settle_and_compute_loss(sys2, x, y, target=None)
+        nudged2 = _run_settle_and_compute_loss(sys2, x, y, target=y)
 
         grads1 = sys1.credit.compute_pseudo_gradient(
             free1, nudged1, nudged1.loss, sys1.geometry
@@ -311,18 +332,17 @@ class TestL2OrthogonalityLock:
         )
 
         assert len(grads1) == len(grads2)
-        for g1, g2 in zip(grads1, grads2):
+        for g1, g2 in zip(grads1, grads2, strict=True):
             assert torch.equal(g1, g2)
 
-    def test_O4_substrate_noise_is_only_effect(self):
+    def test_o4_substrate_noise_is_only_effect(self) -> None:
         """With noiseless DigitalSubstrate, forward is deterministic."""
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
 
         sys = _make_tile_system()
-        if hasattr(sys.geometry, "to"):
-            sys.geometry.to(device)
+        _setup_system_device(sys, device)
 
         x, _ = tiny_batch(42)
         out1 = sys.geometry.forward(x, sys.substrate)
@@ -331,51 +351,48 @@ class TestL2OrthogonalityLock:
 
 
 # ======================================================================
-# L3 — Locality Lock (bioplausibility axiom)
+# L3 - Locality Lock (bioplausibility axiom)
 # ======================================================================
 class TestL3LocalityLock:
-    """L3a: Strictly-local rules have invariant pseudo-gradients under non-local perturbation.
-    L3b: FA family feedback matrices fixed at init and independent of forward weights.
+    """L3a: Strictly-local rules have invariant pseudo-gradients under
+    non-local perturbation. L3b: FA family feedback matrices fixed at init
+    and independent of forward weights.
     """
 
-    def test_L3a_thermodynamic_contrast_local(self):
-        """ThermodynamicContrast pseudo-gradient invariant to non-local perturbations."""
+    def test_l3a_thermodynamic_contrast_local(self) -> None:
+        """ThermodynamicContrast pseudo-gradient invariant to
+        non-local perturbations.
+        """
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
 
         with seeded(42):
             sys = _make_eqprop_system()
-            if hasattr(sys.geometry, "to"):
-                sys.geometry.to(device)
+            _setup_system_device(sys, device)
 
             x, y = tiny_batch(42)
 
-            state = SystemState(x=x, y=y)
-            state.activations = sys.geometry.forward(x, sys.substrate)
-            if state.activations is not None:
-                state.activations = sys.substrate.inject_state_noise(state.activations)
-            free = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=None)
-            nudged = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=y)
-            nudged.loss = sys._compute_loss(nudged, y)
+            free = _run_settle_and_compute_loss(sys, x, y, target=None)
+            nudged = _run_settle_and_compute_loss(sys, x, y, target=y)
 
             grads_orig = sys.credit.compute_pseudo_gradient(
                 free, nudged, nudged.loss, sys.geometry
             )
 
-            if len(grads_orig) >= 2:
-                free_pert = perturb_nonlocal(free, 0, 1e-3)
-                nudged_pert = perturb_nonlocal(nudged, 0, 1e-3)
+            if len(grads_orig) >= MIN_LAYERS_FOR_LOCALITY:
+                free_pert = perturb_nonlocal(free, 0, PERTURB_SCALE)
+                nudged_pert = perturb_nonlocal(nudged, 0, PERTURB_SCALE)
 
                 grads_pert = sys.credit.compute_pseudo_gradient(
                     free_pert, nudged_pert, nudged_pert.loss, sys.geometry
                 )
 
                 assert torch.allclose(
-                    grads_orig[0], grads_pert[0], atol=1e-6, rtol=0
+                    grads_orig[0], grads_pert[0], atol=LOCALITY_TOL, rtol=0
                 ), "ThermodynamicContrast violated locality at layer 0"
 
-    def test_L3b_fa_feedback_matrices_fixed_at_init(self):
+    def test_l3b_fa_feedback_matrices_fixed_at_init(self) -> None:
         """Feedback matrices are fixed at init and independent of forward weights."""
         device = select_device()
         if device.type == "cuda":
@@ -383,8 +400,7 @@ class TestL3LocalityLock:
 
         with seeded(42):
             sys = _make_fa_system()
-            if hasattr(sys.geometry, "to"):
-                sys.geometry.to(device)
+            _setup_system_device(sys, device)
 
             # Initialize feedback weights
             sys.credit._init_feedback_weights(sys.geometry, device)
@@ -408,8 +424,7 @@ class TestL3LocalityLock:
                     update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.001)),
                 )
 
-            if hasattr(sys2.geometry, "to"):
-                sys2.geometry.to(device)
+            _setup_system_device(sys2, device)
 
             # Feedback weights should be identical
             assert sys2.credit._feedback_weights is not None
@@ -418,15 +433,14 @@ class TestL3LocalityLock:
                     fb_weights_orig[k], sys2.credit._feedback_weights[k]
                 ), f"Feedback matrix {k} changed after forward weight re-init"
 
-    def test_L3b_fa_different_seeds_produce_different_feedback(self):
+    def test_l3b_fa_different_seeds_produce_different_feedback(self) -> None:
         """Different feedback seed produces different feedback matrices."""
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
 
         sys = _make_fa_system()
-        if hasattr(sys.geometry, "to"):
-            sys.geometry.to(device)
+        _setup_system_device(sys, device)
 
         credit1 = RandomProjectionsCredit(
             CreditAssignmentConfig(credit_type="random_projections")
@@ -448,20 +462,21 @@ class TestL3LocalityLock:
 
 
 # ======================================================================
-# L4 — Lyapunov / Energy Lock (physics guarantee)
+# L4 - Lyapunov / Energy Lock (physics guarantee)
 # ======================================================================
 class TestL4LyapunovLock:
-    """Energy sampled per settling iteration is non-increasing; terminal update norm < 1e-6."""
+    """Energy sampled per settling iteration is non-increasing;
+    terminal update norm < 1e-6.
+    """
 
-    def test_L4_energy_non_increasing_eqprop(self):
+    def test_l4_energy_non_increasing_eqprop(self) -> None:
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
 
         with seeded(42):
             sys = _make_eqprop_system()
-            if hasattr(sys.geometry, "to"):
-                sys.geometry.to(device)
+            _setup_system_device(sys, device)
 
             x, y = tiny_batch(42)
             state = SystemState(x=x, y=y)
@@ -477,16 +492,16 @@ class TestL4LyapunovLock:
                 energies.append(energy.item())
 
                 if len(energies) > 1:
-                    assert energies[-1] <= energies[-2] + 1e-7, (
+                    assert energies[-1] <= energies[-2] + ENERGY_STEP_TOL, (
                         f"Energy increased at step {step}"
                     )
 
-            if len(energies) >= 2:
-                assert abs(energies[-1] - energies[-2]) < 1e-6, (
+            if len(energies) >= MIN_LAYERS_FOR_LOCALITY:
+                assert abs(energies[-1] - energies[-2]) < ENERGY_CONVERGENCE_TOL, (
                     "Did not converge to fixed point"
                 )
 
-    def test_L4_predictive_coding_produces_finite_energies(self):
+    def test_l4_predictive_coding_produces_finite_energies(self) -> None:
         """Predictive coding settling produces finite free energies (no NaN).
 
         A single settle call runs max_steps iterations internally and should
@@ -498,8 +513,7 @@ class TestL4LyapunovLock:
 
         with seeded(42):
             sys = _make_predictive_coding_system()
-            if hasattr(sys.geometry, "to"):
-                sys.geometry.to(device)
+            _setup_system_device(sys, device)
 
             x, y = tiny_batch(42)
             state = SystemState(x=x, y=y)
@@ -532,7 +546,7 @@ class TestL4LyapunovLock:
 
 
 # ======================================================================
-# L5 — Determinism Lock (same seed, same device = bitwise equal)
+# L5 - Determinism Lock (same seed, same device = bitwise equal)
 # ======================================================================
 @pytest.mark.parametrize(
     "system_factory",
@@ -543,23 +557,23 @@ class TestL4LyapunovLock:
         _make_tile_system,
     ],
 )
-def test_L5_determinism_lock(system_factory):
-    """Same seed, same device, two runs of train_step: metrics and params bitwise equal."""
+def test_l5_determinism_lock(system_factory) -> None:
+    """Same seed, same device, two runs of train_step:
+    metrics and params bitwise equal.
+    """
     device = select_device()
 
     # CPU always
     with seeded(42):
         sys1 = system_factory()
-        if hasattr(sys1.geometry, "to"):
-            sys1.geometry.to(device)
+        _setup_system_device(sys1, device)
         x, y = tiny_batch(42)
         metrics1 = sys1.train_step(x, y)
         params1 = {k: v.clone() for k, v in sys1.geometry.params.items()}
 
     with seeded(42):
         sys2 = system_factory()
-        if hasattr(sys2.geometry, "to"):
-            sys2.geometry.to(device)
+        _setup_system_device(sys2, device)
         x, y = tiny_batch(42)
         metrics2 = sys2.train_step(x, y)
         params2 = {k: v.clone() for k, v in sys2.geometry.params.items()}
@@ -569,16 +583,19 @@ def test_L5_determinism_lock(system_factory):
 
     # GPU with deterministic settings (may skip if op lacks deterministic impl)
     if torch.cuda.is_available():
-        try:
+
+        def _run_gpu() -> tuple[dict[str, float], dict[str, Tensor]]:
             enable_deterministic_cuda()
             with seeded(42):
                 sys3 = system_factory()
-                if hasattr(sys3.geometry, "to"):
-                    sys3.geometry.to(device)
+                _setup_system_device(sys3, device)
                 x, y = tiny_batch(42)
                 metrics3 = sys3.train_step(x, y)
                 params3 = {k: v.clone() for k, v in sys3.geometry.params.items()}
+            return metrics3, params3
 
+        try:
+            metrics3, params3 = _run_gpu()
             assert _metrics_equal(metrics1, metrics3, BITWISE)
             assert _params_equal(params1, params3, BITWISE)
         except RuntimeError as e:
@@ -588,9 +605,9 @@ def test_L5_determinism_lock(system_factory):
 
 
 # ======================================================================
-# L6 — Round-trip & Totality Lock (interchange guarantee)
+# L6 - Round-trip & Totality Lock (interchange guarantee)
 # ======================================================================
-def test_L6_totality_registered_models_project():
+def test_l6_totality_registered_models_project() -> None:
     """Registered model names project via Registry.to_system() (smoke test)."""
     # Import models to populate registry
 
@@ -607,38 +624,43 @@ def test_L6_totality_registered_models_project():
         working_models = model_names[:3]
 
     for name in working_models:
-        try:
-            system = Registry.to_system(
+
+        def _try_project() -> System | None:
+            return Registry.to_system(
                 name, input_dim=WIDTH, hidden_dim=WIDTH, output_dim=10
             )
-            assert system is not None
-            assert hasattr(system, "substrate")
-            assert hasattr(system, "geometry")
-            assert hasattr(system, "dynamics")
-            assert hasattr(system, "credit")
-            assert hasattr(system, "update")
 
-            # Basic protocol conformance (adapted systems may not fully implement all methods)
-            assert conforms(
-                system.substrate,
-                {
-                    "quantize_weights": True,
-                    "inject_state_noise": True,
-                    "get_forward_operator": True,
-                    "get_weight_update_operator": True,
-                    "initial_state": True,
-                },
-            )
-            # Credit and update should always conform
-            assert conforms(system.credit, {"compute_pseudo_gradient": True})
-            assert conforms(system.update, {"step": True})
+        try:
+            system = _try_project()
         except TypeError:
-            # Some models have different constructor signatures - skip
             pytest.skip(f"Model {name} has incompatible constructor")
 
+        assert system is not None
+        assert hasattr(system, "substrate")
+        assert hasattr(system, "geometry")
+        assert hasattr(system, "dynamics")
+        assert hasattr(system, "credit")
+        assert hasattr(system, "update")
 
-def test_L6_round_trip_configs():
-    """Configs → round-trip → configs is identity."""
+        # Basic protocol conformance (adapted systems may not fully
+        # implement all methods)
+        assert conforms(
+            system.substrate,
+            {
+                "quantize_weights": True,
+                "inject_state_noise": True,
+                "get_forward_operator": True,
+                "get_weight_update_operator": True,
+                "initial_state": True,
+            },
+        )
+        # Credit and update should always conform
+        assert conforms(system.credit, {"compute_pseudo_gradient": True})
+        assert conforms(system.update, {"step": True})
+
+
+def test_l6_round_trip_configs() -> None:
+    """Configs - round-trip - configs is identity."""
     systems = [
         _make_backprop_system(),
         _make_fa_system(),
@@ -657,9 +679,9 @@ def test_L6_round_trip_configs():
 
 
 # ======================================================================
-# L7 — Seam Lock (P2P anticipation)
+# L7 - Seam Lock (P2P anticipation)
 # ======================================================================
-def test_L7_system_trainer_runs():
+def test_l7_system_trainer_runs() -> None:
     """SystemTrainer runs without error (distributed seam tested in integration)."""
     device = select_device()
     if device.type == "cuda":
@@ -667,8 +689,7 @@ def test_L7_system_trainer_runs():
 
     with seeded(42):
         sys = _make_tile_system()
-        if hasattr(sys.geometry, "to"):
-            sys.geometry.to(device)
+        _setup_system_device(sys, device)
 
         x, y = tiny_batch(42)
 

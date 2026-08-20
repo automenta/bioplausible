@@ -10,6 +10,7 @@ Leverages the 5-D fault lines for natural distribution:
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
@@ -26,6 +27,7 @@ from bioplausible.core.ontology import (
     SystemState,
     TileGeometry,
 )
+from bioplausible.p2p.grpc_service import GRPCConnectionPool
 
 
 class _DataProvider(Protocol):
@@ -47,6 +49,7 @@ class DistributedConfig:
     # P2P network
     bootstrap_nodes: list[str] = field(default_factory=list)
     dht_port: int = 8468
+    grpc_port: int = 50051
 
     # Distribution strategy
     shard_geometry: bool = True  # Shard tile mesh across nodes
@@ -193,6 +196,7 @@ class DistributedSystemTrainer:
     _federated_aggregator: FederatedAggregator = field(
         default_factory=FederatedAggregator, init=False
     )
+    _grpc_pool: GRPCConnectionPool = field(init=False)
 
     # Training state
     current_epoch: int = field(default=0, init=False)
@@ -201,6 +205,12 @@ class DistributedSystemTrainer:
 
     def __post_init__(self):
         self._dht_router = DHTRouter(self.config.node_id)
+        self._grpc_pool = GRPCConnectionPool(
+            geometry=self.system.geometry,
+            node_id=self.config.node_id,
+            port=self.config.grpc_port,
+            device=self._get_device(),
+        )
         self._setup_distributed()
 
     def _setup_distributed(self) -> None:
@@ -214,7 +224,7 @@ class DistributedSystemTrainer:
             },
         )
 
-        # Connect to bootstrap nodes
+        # Connect to bootstrap nodes (DHT for discovery)
         for bootstrap in self.config.bootstrap_nodes:
             self._dht_router.add_node(bootstrap)
 
@@ -223,6 +233,14 @@ class DistributedSystemTrainer:
             self.system.geometry, TileGeometry
         ):
             self._setup_tile_sharding()
+
+    async def _start_grpc_server(self) -> None:
+        """Start the gRPC server for incoming connections."""
+        await self._grpc_pool.start_server()
+
+    async def _stop_grpc_server(self) -> None:
+        """Stop the gRPC server."""
+        await self._grpc_pool.close_all()
 
     def _get_geometry_shards(self) -> dict:
         """Get the geometry shards this node is responsible for."""
@@ -263,7 +281,32 @@ class DistributedSystemTrainer:
         # Store boundary info for cross-node communication
         self._boundary_tiles = boundary_tiles.get(self.config.node_id, [])
 
-    def train_epoch(self) -> dict[str, float]:
+    async def _discover_peers(self) -> None:
+        """Discover peers from bootstrap nodes and establish gRPC connections."""
+        # Get active nodes from DHT router
+        known_nodes = set()
+        for prefix_len in range(64, -1, -1):
+            bucket = self._dht_router._buckets.get(prefix_len, [])
+            known_nodes.update(bucket)
+
+        # Add bootstrap nodes
+        for bootstrap in self.config.bootstrap_nodes:
+            if bootstrap != self.config.node_id:
+                known_nodes.add(bootstrap)
+
+        # Add peers to gRPC connection pool
+        # In production, resolve addresses from DHT
+        for node_id in known_nodes:
+            if node_id != self.config.node_id:
+                # Use a simple address resolution (in production: from DHT)
+                port = (
+                    self.config.grpc_port + int(node_id.split("_")[-1])
+                    if "_" in node_id
+                    else self.config.grpc_port
+                )
+                self._grpc_pool.add_peer(node_id, f"localhost:{port}")
+
+    async def train_epoch(self) -> dict[str, float]:
         """Run one distributed training epoch."""
         self.system.geometry.train()
 
@@ -276,7 +319,7 @@ class DistributedSystemTrainer:
             x = batch_x.to(self._get_device())
             y = batch_y.to(self._get_device())
 
-            metrics = self._distributed_train_step(x, y)
+            metrics = await self._distributed_train_step(x, y)
 
             epoch_loss += metrics.get("loss", 0.0)
             epoch_acc += metrics.get("accuracy", 0.0)
@@ -289,11 +332,11 @@ class DistributedSystemTrainer:
                 self.config.federated_updates
                 and self.global_step % self.config.sync_interval == 0
             ):
-                self._federated_sync()
+                await self._federated_sync()
 
             # Heartbeat
             if self.global_step % 10 == 0:
-                self._send_heartbeat()
+                await self._send_heartbeat()
 
         avg_loss = epoch_loss / max(num_batches, 1)
         avg_acc = epoch_acc / max(num_batches, 1)
@@ -317,7 +360,7 @@ class DistributedSystemTrainer:
 
         return epoch_metrics
 
-    def _distributed_train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+    async def _distributed_train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Execute one distributed training step.
 
         Pipeline:
@@ -329,14 +372,14 @@ class DistributedSystemTrainer:
         state = SystemState(x=x, y=y)
 
         # 1. Substrate + Geometry: Forward pass
-        state.activations = self._distributed_forward(x, self.system.substrate)
+        state.activations = await self._distributed_forward(x, self.system.substrate)
         if state.activations is not None:
             state.activations = self.system.substrate.inject_state_noise(
                 state.activations
             )
 
         # 2. StateDynamics: Free phase settling (sharded for tile geometry)
-        free_state = self._distributed_settle(
+        free_state = await self._distributed_settle(
             state, self.system.geometry, self.system.substrate, target=None
         )
         free_state.energy = self.system.dynamics.compute_energy(
@@ -344,7 +387,7 @@ class DistributedSystemTrainer:
         )
 
         # 3. StateDynamics: Nudged phase settling
-        nudged_state = self._distributed_settle(
+        nudged_state = await self._distributed_settle(
             state, self.system.geometry, self.system.substrate, target=y
         )
         nudged_state.energy = self.system.dynamics.compute_energy(
@@ -384,13 +427,13 @@ class DistributedSystemTrainer:
             "accuracy": free_state.metrics.get("accuracy", 0.0),
         }
 
-    def _distributed_forward(self, x: Tensor, substrate: Substrate) -> Tensor:
+    async def _distributed_forward(self, x: Tensor, substrate: Substrate) -> Tensor:
         """Forward pass with DHT routing for tile mesh."""
         if isinstance(self.system.geometry, TileGeometry):
-            return self._tile_mesh_forward(x, substrate)
+            return await self._tile_mesh_forward(x, substrate)
         return self.system.geometry.forward(x, substrate)
 
-    def _tile_mesh_forward(self, x: Tensor, substrate: Substrate) -> Tensor:
+    async def _tile_mesh_forward(self, x: Tensor, substrate: Substrate) -> Tensor:  # ruff: ignore[complex-structure, too-many-branches]
         """Forward pass through tile mesh with cross-node routing."""
         geometry = self.system.geometry
         op = substrate.get_forward_operator()
@@ -420,7 +463,7 @@ class DistributedSystemTrainer:
                     src_act = geometry._graph.tiles[src_id].activity
                     if src_act is None:
                         # Need to fetch from remote node
-                        src_act = self._fetch_remote_activation(src_id)
+                        src_act = await self._fetch_remote_activation(src_id)
                         if src_act is None:
                             continue
                     w = geometry._tile_weights[geometry._weight_key(src_id, tid)]
@@ -468,13 +511,19 @@ class DistributedSystemTrainer:
                 torch.nn.init.zeros_(local_out_proj.bias)
             return local_out_proj(h)
 
-    def _fetch_remote_activation(self, _tile_id: int) -> Tensor | None:
-        """Fetch activation from remote node (simulated)."""
-        # In real implementation, this would be an RPC call
-        # For now, return None to indicate unavailable
-        return None
+    async def _fetch_remote_activation(self, tile_id: int) -> Tensor | None:
+        """Fetch activation from remote node via gRPC."""
+        # Find which node owns this tile
+        owner_node = self._assign_tile_to_node(tile_id)
+        if owner_node == self.config.node_id:
+            # Local tile, shouldn't happen but handle gracefully
+            tile = self.system.geometry._graph.tiles.get(tile_id)
+            return tile.activity if tile else None
 
-    def _distributed_settle(
+        # Fetch from remote node via gRPC
+        return await self._grpc_pool.fetch_remote_activation(owner_node, tile_id)
+
+    async def _distributed_settle(
         self,
         state: SystemState,
         geometry: Geometry,
@@ -483,10 +532,10 @@ class DistributedSystemTrainer:
     ) -> SystemState:
         """Settle with sharded computation for tile mesh."""
         if isinstance(geometry, TileGeometry):
-            return self._tile_mesh_settle(state, geometry, substrate, target)
+            return await self._tile_mesh_settle(state, geometry, substrate, target)
         return self.system.dynamics.settle(state, geometry, substrate, target)
 
-    def _tile_mesh_settle(
+    async def _tile_mesh_settle(  # ruff: ignore[complex-structure, too-many-branches]
         self,
         state: SystemState,
         geometry: TileGeometry,
@@ -495,7 +544,7 @@ class DistributedSystemTrainer:
     ) -> SystemState:
         """Tile mesh settling with cross-node synchronization."""
         # Run settling iterations
-        for step in range(self.system.dynamics.config.max_steps):
+        for step in range(self.system.dynamics.config.max_steps):  # ruff: ignore[too-many-nested-blocks]
             # Local settle step
             for layer_tiles in geometry._graph.layer_ids[1:]:
                 for tid in layer_tiles:
@@ -506,7 +555,7 @@ class DistributedSystemTrainer:
                     for src_id in tile.bwd_neighbors:
                         src_act = geometry._graph.tiles[src_id].activity
                         if src_act is None:
-                            src_act = self._fetch_remote_activation(src_id)
+                            src_act = await self._fetch_remote_activation(src_id)
                             if src_act is None:
                                 continue
                         w = geometry._tile_weights[geometry._weight_key(src_id, tid)]
@@ -522,7 +571,7 @@ class DistributedSystemTrainer:
                         tile.activity = substrate.inject_state_noise(acc)  # type: ignore[arg-type]
 
             # Synchronize boundary tiles with neighbors
-            self._sync_boundary_tiles(geometry)
+            await self._sync_boundary_tiles(geometry, step)
 
             # Check convergence (simplified)
             if step >= self.system.dynamics.config.convergence_start:
@@ -544,20 +593,46 @@ class DistributedSystemTrainer:
         state.activations = acts
         return state
 
-    def _sync_boundary_tiles(self, geometry: TileGeometry) -> None:
-        """Synchronize boundary tile activations with neighbor nodes."""
-        # In real implementation: send boundary activations to neighbor nodes
-        # For now, no-op
+    async def _sync_boundary_tiles(self, geometry: TileGeometry, step: int) -> None:
+        """Synchronize boundary tile activations with neighbor nodes via gRPC."""
+        if not self._boundary_tiles:
+            return
 
-    def _federated_sync(self) -> None:
-        """Synchronize parameter updates across nodes."""
+        # Group boundary tiles by their owner node
+        boundary_by_node: dict[str, list[int]] = {}
+        boundary_activations: dict[int, Tensor] = {}
+
+        for tid in self._boundary_tiles:
+            tile = geometry._graph.tiles.get(tid)
+            if tile is not None and tile.activity is not None:
+                boundary_activations[tid] = tile.activity
+                # Find neighbor nodes that need this activation
+                for neighbor_id in tile.fwd_neighbors + tile.bwd_neighbors:
+                    neighbor_owner = self._assign_tile_to_node(neighbor_id)
+                    if neighbor_owner != self.config.node_id:
+                        boundary_by_node.setdefault(neighbor_owner, []).append(tid)
+
+        # Send boundary activations to each neighbor
+        for node_id, tile_ids in boundary_by_node.items():
+            acts = [
+                boundary_activations[tid]
+                for tid in tile_ids
+                if tid in boundary_activations
+            ]
+            if acts:
+                await self._grpc_pool.sync_boundary_with_peer(
+                    node_id, tile_ids, acts, step
+                )
+
+    async def _federated_sync(self) -> None:
+        """Synchronize parameter updates across nodes via gRPC."""
         if not self.config.federated_updates:
             return
 
-        # Aggregate updates
+        # Aggregate local updates
         aggregated = self._federated_aggregator.aggregate()
 
-        # Apply aggregated updates
+        # Apply aggregated updates locally
         if aggregated:
             current_params = self.system.geometry.params
             new_params = {
@@ -567,11 +642,19 @@ class DistributedSystemTrainer:
             }
             self.system.geometry.update_params(new_params)
 
-    def _send_heartbeat(self) -> None:
-        """Send heartbeat to maintain P2P membership."""
-        import time
+        # Also push to peers for federated aggregation (in a full implementation)
+        # This would be a more complex protocol with a coordinator or all-reduce
 
+    async def _send_heartbeat(self) -> None:
+        """Send heartbeat to maintain P2P membership."""
         self._node_registry.heartbeat(self.config.node_id, time.time())
+
+        # Send heartbeats to gRPC peers
+        for node_id in self._grpc_pool._peer_addresses:
+            if node_id != self.config.node_id:
+                client = await self._grpc_pool.get_client(node_id)
+                if client:
+                    await client.heartbeat({"step": str(self.global_step)})
 
     def _get_device(self) -> torch.device:
         """Get the device for this node."""
@@ -582,7 +665,8 @@ class DistributedSystemTrainer:
                 pass
         return torch.device("cpu")
 
-    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:
+    @staticmethod
+    def _compute_loss(state: SystemState, y: Tensor) -> Tensor:
         """Compute task loss from final state."""
         acts = state.activations
         if acts is None:
@@ -618,12 +702,23 @@ class DistributedSystemTrainer:
             "val_acc": val_acc / max(num_batches, 1),
         }
 
-    def fit(self) -> list[dict[str, float]]:
+    async def fit(self) -> list[dict[str, float]]:
         """Run full distributed training loop."""
-        for _ in range(
-            self.config.max_epochs if hasattr(self.config, "max_epochs") else 10
-        ):
-            self.train_epoch()
+        # Start gRPC server
+        await self._start_grpc_server()
+
+        # Discover peers
+        await self._discover_peers()
+
+        try:
+            for _ in range(
+                self.config.max_epochs if hasattr(self.config, "max_epochs") else 10
+            ):
+                await self.train_epoch()
+        finally:
+            # Stop gRPC server
+            await self._stop_grpc_server()
+
         return self.history
 
 
