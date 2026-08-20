@@ -522,16 +522,39 @@ ParameterUpdate.step(params, pseudo_grads, geometry) -> dict[str, Tensor]
 
 ### Next Sprint Priorities (Ranked by Impact)
 
-| Priority | Issue | Effort | Blocking |
-|----------|-------|--------|----------|
-| ~~P0~~ | ~~PredictiveSettlingDynamics NaN energy~~ | ~~Medium~~ | ~~L4 lock, Predictive Coding composition~~ |
-| P0 | ModelAdapter None return for eqprop/backprop | Low | L1 parity lock with legacy models |
-| P1 | Distributed trainer shape bugs | Low | L7 seam lock, P2P readiness |
-| P1 | P2P RPC layer implementation | High | Real distributed training |
-| P2 | RandomProjectionsCredit structured init | Low | FA production use |
-| P2 | Control-Lyapunov formal proof | Medium | Theoretical completeness |
-| P3 | ModelAdapter inference improvements | Low | AutoScientist projection accuracy |
-| P3 | Test file lint cleanup | Low | CI hygiene |
+| Priority | Issue | Effort | Blocking | Solution Plan |
+|----------|-------|--------|----------|---------------|
+| ~~P0~~ | ~~PredictiveSettlingDynamics NaN energy~~ | ~~Medium~~ | ~~L4 lock, Predictive Coding composition~~ | ✅ **FIXED** — input layer clamping + post-activation `forward_with_intermediates` |
+| P0 | ModelAdapter None return for eqprop/backprop | Low | L1 parity lock with legacy models | In `_AdaptedSystem.train_step`, detect `None` return from legacy `train_step` (energy-based models) and fall back to ontology pipeline (`dynamics.settle` → `credit.compute` → `update.step`) instead of BPTT |
+| P1 | Distributed trainer shape bugs | Low | L7 seam lock, P2P readiness | Fix `TileGeometry._output_projection` input dim: compute from sum of output tile neurons at build time; add `_validate_shapes()` in `__init__` |
+| P1 | P2P RPC layer implementation | High | Real distributed training | Implement `gRPC` transport for `_fetch_remote_activation`/`_sync_boundary_tiles`; add `kademlia` bootstrap for `DHTRouter`; replace in-process `None` returns with async RPC calls |
+| P2 | RandomProjectionsCredit structured init | Low | FA production use | Add `orthogonal_init: bool` and `feedback_scale: float` to `CreditAssignmentConfig`; use `torch.nn.init.orthogonal_` for feedback matrices; scale by `feedback_scale` |
+| P2 | Control-Lyapunov formal proof | Medium | Theoretical completeness | Add Lyapunov candidate `V = Σ ||e_l||²` to `test_energy_invariants.py`; prove `dV/dt ≤ 0` for directed topologies with `PredictiveSettlingDynamics`; require `dynamics.track_free_energy_per_iter = True` |
+| P3 | ModelAdapter inference improvements | Low | AutoScientist projection accuracy | Add `ModelAdapter.validate()` that runs a forward/backward pass and compares metrics with legacy; improve inference priority: metadata → `model.config` → `model.family` → heuristics → defaults |
+| P3 | Test file lint cleanup | Low | CI hygiene | Run `ruff check --fix tests/property/test_ontology_locks.py`; replace raw `assert` with `pytest` assertions; add `# noqa: S101` where intentional |
+
+---
+
+### Sprint Execution Order (Dependencies)
+
+```
+Sprint 1 (P0 + P1 quick wins):
+  ├─ P0: ModelAdapter None fallback          (1 day)
+  ├─ P1: TileGeometry shape validation       (0.5 day)
+  └─ P3: Test lint cleanup                   (0.5 day)
+
+Sprint 2 (P1 infrastructure):
+  └─ P1: P2P RPC layer (gRPC + kademlia)    (3-5 days)
+
+Sprint 3 (P2 theoretical):
+  ├─ P2: FA orthogonal init + feedback_scale (1 day)
+  └─ P2: Control-Lyapunov proof + tracking   (2-3 days)
+
+Sprint 4 (P3 polish):
+  └─ P3: ModelAdapter.validate()             (1-2 days)
+```
+
+---
 
 ### Verified Compositions (Working End-to-End)
 
