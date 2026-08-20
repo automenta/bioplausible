@@ -1,6 +1,6 @@
 """5-Dimensional Physico-Computational Ontology for Bioplausible Systems.
 
-This module defines the five orthogonal axes (S × G × D × C × U) that compose
+This module defines the five orthogonal axes (S x G x D x C x U) that compose
 any bioplausible neural network. The tensor product of these primitives
 replaces the flat registry of 111+ hardcoded model permutations with a
 generative, mathematically rigorous composition engine.
@@ -20,9 +20,11 @@ type safety: invalid compositions are caught at type-check time.
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import torch
 from torch import Tensor, nn
@@ -30,44 +32,44 @@ from torch import Tensor, nn
 from bioplausible.core.registry import ComponentMetadata, ComputeProfile, LocalityLevel
 
 __all__ = [
+    "AnalogSubstrate",
+    "BackpropCredit",
     "CreditAssignment",
     "CreditAssignmentConfig",
+    "DigitalSubstrate",
+    "ElasticConsolidationUpdate",
+    "EnergyMinimizationDynamics",
+    "EuclideanUpdate",
+    "FeedforwardGeometry",
     "Geometry",
     "GeometryConfig",
+    "InstantaneousDynamics",
+    "LocalGoodnessCredit",
+    "MemristiveSubstrate",
+    "ModelAdapter",
+    "NaturalGradientUpdate",
+    "NeuromorphicSubstrate",
+    "NoisySubstrate",
+    "OpticalSubstrate",
     "ParameterUpdate",
     "ParameterUpdateConfig",
+    "PredictiveSettlingDynamics",
+    "QuantizedSubstrate",
+    "QuantumSubstrate",
+    "RandomProjectionsCredit",
+    "RecurrentGeometry",
+    "RiemannianOrthogonalUpdate",
+    "SpectralConstrainedUpdate",
+    "SpikeIntegrationDynamics",
     "StateDynamics",
     "StateDynamicsConfig",
     "Substrate",
     "SubstrateConfig",
     "System",
     "SystemState",
-    "ModelAdapter",
-    "DigitalSubstrate",
-    "AnalogSubstrate",
-    "MemristiveSubstrate",
-    "NeuromorphicSubstrate",
-    "QuantumSubstrate",
-    "OpticalSubstrate",
-    "NoisySubstrate",
-    "QuantizedSubstrate",
-    "FeedforwardGeometry",
-    "RecurrentGeometry",
-    "InstantaneousDynamics",
-    "EnergyMinimizationDynamics",
-    "PredictiveSettlingDynamics",
-    "SpikeIntegrationDynamics",
-    "ThermodynamicContrast",
-    "RandomProjectionsCredit",
-    "LocalGoodnessCredit",
-    "TemporalTraceCredit",
     "TargetInversionCredit",
-    "BackpropCredit",
-    "EuclideanUpdate",
-    "RiemannianOrthogonalUpdate",
-    "SpectralConstrainedUpdate",
-    "NaturalGradientUpdate",
-    "ElasticConsolidationUpdate",
+    "TemporalTraceCredit",
+    "ThermodynamicContrast",
 ]
 
 
@@ -75,17 +77,21 @@ __all__ = [
 # Configuration Dataclasses (immutable, slotted)
 # ============================================================
 
+
 @dataclass(frozen=True, slots=True)
 class SubstrateConfig:
     """Configuration for a physical substrate.
 
     Attributes:
-        precision: Numeric precision ("float32", "float16", "bfloat16", "int8", "int4", "binary")
+        precision: Numeric precision ("float32", "float16", "bfloat16",
+            "int8", "int4", "binary")
         noise_level: Standard deviation of additive state noise
         weight_bounds: Optional (min, max) tuple for weight clamping
         sparsity: Target sparsity ratio [0, 1]
-        device: Target device ("cpu", "cuda", "mps", "fpga", "analog", "optical")
+        device: Target device ("cpu", "cuda", "mps", "fpga", "analog",
+            "optical")
     """
+
     precision: str = "float32"
     noise_level: float = 0.0
     weight_bounds: tuple[float, float] | None = None
@@ -102,9 +108,11 @@ class GeometryConfig:
         output_dim: Output dimension
         hidden_dims: List of hidden layer dimensions
         num_layers: Number of layers (alternative to hidden_dims)
-        topology_type: "feedforward", "recurrent", "tile_mesh", "neuromorphic", "spatial_lattice"
+        topology_type: "feedforward", "recurrent", "tile_mesh",
+            "neuromorphic", "spatial_lattice"
         connectivity: Optional adjacency specification
     """
+
     input_dim: int
     output_dim: int
     hidden_dims: tuple[int, ...] = ()
@@ -118,13 +126,15 @@ class StateDynamicsConfig:
     """Configuration for state dynamics/settling.
 
     Attributes:
-        dynamics_type: "energy_minimization", "predictive_settling", "spike_integration", "instantaneous"
+        dynamics_type: "energy_minimization", "predictive_settling",
+            "spike_integration", "instantaneous"
         max_steps: Maximum settling iterations
         convergence_threshold: Early stopping threshold
         convergence_start: Step to start checking convergence
         step_size: Learning rate for state updates
         beta: Nudge strength for energy-based methods
     """
+
     dynamics_type: str = "instantaneous"
     max_steps: int = 30
     convergence_threshold: float = 1e-4
@@ -138,11 +148,14 @@ class CreditAssignmentConfig:
     """Configuration for credit assignment.
 
     Attributes:
-        credit_type: "thermodynamic_contrast", "random_projections", "local_goodness", "temporal_trace", "target_inversion"
+        credit_type: "thermodynamic_contrast", "random_projections",
+            "local_goodness", "temporal_trace", "target_inversion"
         beta: Nudge strength (for thermodynamic contrast)
-        feedback_matrix: Optional fixed feedback matrix (for random projections)
+        feedback_matrix: Optional fixed feedback matrix
+            (for random projections)
         local_objective: Layer-local loss type (for local goodness)
     """
+
     credit_type: str = "thermodynamic_contrast"
     beta: float = 0.5
     feedback_matrix: Tensor | None = None
@@ -154,7 +167,8 @@ class ParameterUpdateConfig:
     """Configuration for parameter update rule.
 
     Attributes:
-        update_type: "riemannian_orthogonal", "spectral_constrained", "natural_gradient", "elastic_consolidation", "euclidean"
+        update_type: "riemannian_orthogonal", "spectral_constrained",
+            "natural_gradient", "elastic_consolidation", "euclidean"
         step_size: Learning rate
         momentum: Momentum coefficient (for euclidean)
         ortho_steps: Newton-Schulz iterations (for riemannian)
@@ -162,6 +176,7 @@ class ParameterUpdateConfig:
         fisher_damping: Damping for natural gradient
         ewc_lambda: EWC regularization strength
     """
+
     update_type: str = "euclidean"
     step_size: float = 0.01
     momentum: float = 0.9
@@ -174,6 +189,7 @@ class ParameterUpdateConfig:
 # ============================================================
 # State Container
 # ============================================================
+
 
 @dataclass(frozen=False, slots=True)
 class SystemState:
@@ -194,6 +210,7 @@ class SystemState:
         loss: Current loss value
         metrics: Accumulated metrics dict
     """
+
     x: Tensor | None = None
     y: Tensor | None = None
     activations: list[Tensor] | Tensor | None = None
@@ -212,6 +229,7 @@ class SystemState:
 # ============================================================
 # Layer 1: Substrate (The Physical State Space)
 # ============================================================
+
 
 @runtime_checkable
 class Substrate(Protocol):
@@ -250,10 +268,11 @@ class Substrate(Protocol):
 
     @abstractmethod
     def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
-        """Return the substrate's weight update operator: (pseudo_grad, current_w) -> ΔW.
+        """Return the substrate's weight update operator.
 
-        Encodes how the substrate physically modifies weights (e.g. pulse-based
-        conductance change for memristors, phase shift for photonic).
+        (pseudo_grad, current_w) -> ΔW. Encodes how the substrate physically
+        modifies weights (e.g. pulse-based conductance change for memristors,
+        phase shift for photonic).
         """
         ...
 
@@ -266,6 +285,7 @@ class Substrate(Protocol):
 # ============================================================
 # Layer 2: Geometry (The Topology & Routing)
 # ============================================================
+
 
 @runtime_checkable
 class Geometry(Protocol):
@@ -323,6 +343,7 @@ class Geometry(Protocol):
 # Layer 3: StateDynamics (Forward Evolution & Settling)
 # ============================================================
 
+
 @runtime_checkable
 class StateDynamics(Protocol):
     """How the network's activations evolve over time (the forward pass).
@@ -372,6 +393,7 @@ class StateDynamics(Protocol):
 # Layer 4: CreditAssignment (Error Routing & Pseudo-Gradients)
 # ============================================================
 
+
 @runtime_checkable
 class CreditAssignment(Protocol):
     """How the network computes the direction of learning (pseudo-gradient).
@@ -415,6 +437,7 @@ class CreditAssignment(Protocol):
 # ============================================================
 # Layer 5: ParameterUpdate (The Optimization Rule)
 # ============================================================
+
 
 @runtime_checkable
 class ParameterUpdate(Protocol):
@@ -497,11 +520,15 @@ class System(Protocol[TS, TG, TD, TC, TU]):
             state.activations = self.substrate.inject_state_noise(state.activations)
 
         # 2. StateDynamics: Free phase settling
-        free_state = self.dynamics.settle(state, self.geometry, self.substrate, target=None)
+        free_state = self.dynamics.settle(
+            state, self.geometry, self.substrate, target=None
+        )
         free_state.energy = self.dynamics.compute_energy(free_state, self.geometry)
 
         # 3. StateDynamics: Nudged phase settling
-        nudged_state = self.dynamics.settle(state, self.geometry, self.substrate, target=y)
+        nudged_state = self.dynamics.settle(
+            state, self.geometry, self.substrate, target=y
+        )
         nudged_state.energy = self.dynamics.compute_energy(nudged_state, self.geometry)
         nudged_state.loss = self._compute_loss(nudged_state, y)
 
@@ -516,19 +543,18 @@ class System(Protocol[TS, TG, TD, TC, TU]):
 
         return {
             "loss": float(nudged_state.loss) if nudged_state.loss is not None else 0.0,
-            "energy": float(free_state.energy) if free_state.energy is not None else 0.0,
+            "energy": float(free_state.energy)
+            if free_state.energy is not None
+            else 0.0,
             "accuracy": free_state.metrics.get("accuracy", 0.0),
         }
 
-    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:
+    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:  # noqa: PLR6301
         """Compute task loss from final state."""
         acts = state.activations
         if acts is None:
             return torch.tensor(0.0)
-        if isinstance(acts, list):
-            logits = acts[-1]
-        else:
-            logits = acts
+        logits = acts[-1] if isinstance(acts, list) else acts
         return torch.nn.functional.cross_entropy(logits, y)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -550,25 +576,26 @@ class System(Protocol[TS, TG, TD, TC, TU]):
 # Default/Reference Implementations
 # ============================================================
 
+
 class DigitalSubstrate:
     """Reference substrate: infinite precision, continuous time, no noise."""
 
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig()
 
-    def quantize_weights(self, w: Tensor) -> Tensor:
+    def quantize_weights(self, w: Tensor) -> Tensor:  # noqa: PLR6301
         return w
 
-    def inject_state_noise(self, s: Tensor) -> Tensor:
+    def inject_state_noise(self, s: Tensor) -> Tensor:  # noqa: PLR6301
         return s
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
-        return lambda x, w: x @ w.T
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+        return lambda x, _: x @ _.T
 
-    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
-        return lambda grad, w: grad
+    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+        return lambda grad, _: grad
 
-    def initial_state(self, x: Tensor) -> Tensor:
+    def initial_state(self, x: Tensor) -> Tensor:  # noqa: PLR6301
         return x
 
 
@@ -585,7 +612,11 @@ class FeedforwardGeometry(nn.Module):
             self._build_layers()
 
     def _build_layers(self) -> None:
-        dims = [self.config.input_dim] + list(self.config.hidden_dims) + [self.config.output_dim]
+        dims = (
+            self.config.input_dim,
+            *self.config.hidden_dims,
+            self.config.output_dim,
+        )
         layers = []
         for i in range(len(dims) - 1):
             layers.append(nn.Linear(dims[i], dims[i + 1]))
@@ -595,7 +626,7 @@ class FeedforwardGeometry(nn.Module):
 
     @property
     def params(self) -> dict[str, Tensor]:
-        return dict(self._layers.named_parameters())
+        return dict(self._layers.named_parameters())  # type: ignore[return-value]
 
     def forward(self, x: Tensor, substrate: Substrate) -> Tensor:
         op = substrate.get_forward_operator()
@@ -604,7 +635,7 @@ class FeedforwardGeometry(nn.Module):
             if isinstance(layer, nn.Linear):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
-                    h = h + layer.bias
+                    h += layer.bias
             else:
                 h = layer(h)
         return h
@@ -614,9 +645,9 @@ class FeedforwardGeometry(nn.Module):
         h = activations
         for layer in self._layers:
             if isinstance(layer, nn.Linear):
-                h = h @ layer.weight.T
+                h = h @ layer.weight.T  # noqa: PLR6104
                 if layer.bias is not None:
-                    h = h + layer.bias
+                    h += layer.bias
             else:
                 h = layer(h)
         return h
@@ -659,7 +690,11 @@ class RecurrentGeometry(nn.Module):
 
     def _build_layers(self) -> None:
         # For recurrent: input -> hidden (with recurrent), hidden -> output
-        dims = [self.config.input_dim] + list(self.config.hidden_dims) + [self.config.output_dim]
+        dims = (
+            self.config.input_dim,
+            *self.config.hidden_dims,
+            self.config.output_dim,
+        )
         layers = []
         for i in range(len(dims) - 1):
             layers.append(nn.Linear(dims[i], dims[i + 1]))
@@ -678,7 +713,7 @@ class RecurrentGeometry(nn.Module):
         params = dict(self._layers.named_parameters())
         if self._recurrent_weight is not None:
             params["recurrent_weight"] = self._recurrent_weight
-        return params
+        return params  # type: ignore[return-value]
 
     def forward(self, x: Tensor, substrate: Substrate) -> Tensor:
         """Full forward pass with recurrence (single step)."""
@@ -688,12 +723,12 @@ class RecurrentGeometry(nn.Module):
             if isinstance(layer, nn.Linear):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
-                    h = h + layer.bias
+                    h += layer.bias
             else:
                 h = layer(h)
             # Apply recurrent connection after each hidden layer (except output)
             if self._recurrent_weight is not None and i < len(self._layers) - 2:
-                h = h + op(h, self._recurrent_weight)
+                h += op(h, self._recurrent_weight)
         return h
 
     def route(self, activations: Tensor) -> Tensor:
@@ -705,7 +740,7 @@ class RecurrentGeometry(nn.Module):
         if self._recurrent_weight is not None:
             # Hidden state should match recurrent weight dimensions
             if h.shape[-1] == self._recurrent_weight.shape[0]:
-                h = h @ self._recurrent_weight.T
+                h @= self._recurrent_weight.T
             else:
                 # Activations are output dim; we can't apply recurrent weight
                 # This happens when route is called on output instead of hidden state
@@ -731,21 +766,21 @@ class InstantaneousDynamics:
     def __init__(self, config: StateDynamicsConfig | None = None):
         self.config = config or StateDynamicsConfig(dynamics_type="instantaneous")
 
-    def settle(
+    def settle(  # noqa: PLR6301
         self,
         state: SystemState,
-        geometry: Geometry,
-        substrate: Substrate,
-        target: Tensor | None = None,
+        geometry: Geometry,  # noqa: ARG002
+        substrate: Substrate,  # noqa: ARG002
+        target: Tensor | None = None,  # noqa: ARG002
     ) -> SystemState:
         # Single forward pass - no settling
         state.free_state = state.activations
         return state
 
-    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, _state: SystemState, _geometry: Geometry) -> Tensor:  # noqa: PLR6301
         # Proxy: negative log-likelihood for instantaneous pass
-        if state.loss is not None:
-            return torch.as_tensor(state.loss)
+        if _state.loss is not None:
+            return torch.as_tensor(_state.loss)
         return torch.tensor(0.0)
 
 
@@ -757,16 +792,24 @@ class ThermodynamicContrast:
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
-        geometry: Geometry,
+        _free_state: SystemState,
+        _nudged_state: SystemState,
+        _loss: Tensor,
+        _geometry: Geometry,
     ) -> list[Tensor]:
-        if free_state.activations is None or nudged_state.activations is None:
+        if _free_state.activations is None or _nudged_state.activations is None:
             return []
 
-        free_acts = free_state.activations if isinstance(free_state.activations, list) else [free_state.activations]
-        nudged_acts = nudged_state.activations if isinstance(nudged_state.activations, list) else [nudged_state.activations]
+        free_acts = (
+            _free_state.activations
+            if isinstance(_free_state.activations, list)
+            else [_free_state.activations]
+        )
+        nudged_acts = (
+            _nudged_state.activations
+            if isinstance(_nudged_state.activations, list)
+            else [_nudged_state.activations]
+        )
 
         grads = []
         for f, n in zip(free_acts[:-1], nudged_acts[:-1]):
@@ -787,7 +830,7 @@ class EuclideanUpdate:
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
-        geometry: Geometry,
+        geometry: Geometry,  # noqa: ARG002
     ) -> dict[str, Tensor]:
         updated = {}
 
@@ -810,6 +853,7 @@ class EuclideanUpdate:
 # ============================================================
 # Adapter: Wrap existing models as System compositions
 # ============================================================
+
 
 class ModelAdapter:
     """Adapt an existing registered model to the 5-D System interface.
@@ -848,76 +892,99 @@ class ModelAdapter:
 
     def _infer_substrate(self) -> Substrate:
         # Priority 1: Registry metadata compute_profile
-        if self._metadata and self._metadata.compute_profile:
-            profile = self._metadata.compute_profile
-            if profile == ComputeProfile.ANALOG:
-                return AnalogSubstrate()
-            elif profile == ComputeProfile.OPTICAL:
-                return OpticalSubstrate()
-            elif profile == ComputeProfile.MEMRISTOR:
-                return MemristiveSubstrate()
-            elif profile == ComputeProfile.NEUROMORPHIC:
-                return NeuromorphicSubstrate()
+        substrate = self._infer_substrate_from_compute_profile()
+        if substrate is not None:
+            return substrate
 
         # Priority 2: Model attributes
-        if hasattr(self.model, "backend"):
-            backend = self.model.backend
-            if backend == "quantized":
-                return QuantizedSubstrate()
-            elif backend == "noisy":
-                return NoisySubstrate()
-            elif backend == "optical":
-                return OpticalSubstrate()
-            elif backend == "crossbar":
-                return MemristiveSubstrate()
-            elif backend == "quantum":
-                return QuantumSubstrate()
+        substrate = self._infer_substrate_from_backend()
+        if substrate is not None:
+            return substrate
 
         # Priority 3: Family tag heuristics
-        if self._metadata and self._metadata.family:
-            family = self._metadata.family.lower()
-            if "quantized" in family or "ternary" in family:
-                return QuantizedSubstrate()
-            elif "noisy" in family:
-                return NoisySubstrate()
-            elif "optical" in family or "photonic" in family:
-                return OpticalSubstrate()
-            elif "crossbar" in family or "memristive" in family:
-                return MemristiveSubstrate()
-            elif "quantum" in family:
-                return QuantumSubstrate()
+        substrate = self._infer_substrate_from_family()
+        if substrate is not None:
+            return substrate
 
         return DigitalSubstrate()
 
+    def _infer_substrate_from_compute_profile(self) -> Substrate | None:
+        if not (self._metadata and self._metadata.compute_profile):
+            return None
+        profile = self._metadata.compute_profile
+        if profile == ComputeProfile.ANALOG:
+            return AnalogSubstrate()
+        if profile == ComputeProfile.OPTICAL:
+            return OpticalSubstrate()
+        if profile == ComputeProfile.MEMRISTOR:
+            return MemristiveSubstrate()
+        if profile == ComputeProfile.NEUROMORPHIC:
+            return NeuromorphicSubstrate()
+        return None
+
+    def _infer_substrate_from_backend(self) -> Substrate | None:
+        if not hasattr(self.model, "backend"):
+            return None
+        backend_map = {
+            "quantized": QuantizedSubstrate,
+            "noisy": NoisySubstrate,
+            "optical": OpticalSubstrate,
+            "crossbar": MemristiveSubstrate,
+            "quantum": QuantumSubstrate,
+        }
+        cls = backend_map.get(self.model.backend)
+        return cls() if cls else None
+
+    def _infer_substrate_from_family(self) -> Substrate | None:
+        if not (self._metadata and self._metadata.family):
+            return None
+        family = self._metadata.family.lower()
+        family_map = [
+            (("quantized", "ternary"), QuantizedSubstrate),
+            (("noisy",), NoisySubstrate),
+            (("optical", "photonic"), OpticalSubstrate),
+            (("crossbar", "memristive"), MemristiveSubstrate),
+            (("quantum",), QuantumSubstrate),
+        ]
+        for keys, cls in family_map:
+            if any(k in family for k in keys):
+                return cls()
+        return None
+
     def _infer_geometry(self) -> Geometry:
         # Priority 1: Check for specific topology types
+        geometry: Geometry | None = None
         if hasattr(self.model, "topology_type"):
-            topo = self.model.topology_type
-            if topo == "recurrent" or topo == "recurrent_attractor":
-                return self._make_recurrent_geometry()
-            elif topo == "tile_mesh" or topo == "tile":
-                return self._make_tile_geometry()
-            elif topo == "neuromorphic" or topo == "fabric":
-                return self._make_neuromorphic_geometry()
-            elif topo == "spatial_lattice" or topo == "3d":
-                return self._make_spatial_geometry()
+            topo_map = {
+                "recurrent": self._make_recurrent_geometry,
+                "recurrent_attractor": self._make_recurrent_geometry,
+                "tile_mesh": self._make_tile_geometry,
+                "tile": self._make_tile_geometry,
+                "neuromorphic": self._make_neuromorphic_geometry,
+                "fabric": self._make_neuromorphic_geometry,
+                "spatial_lattice": self._make_spatial_geometry,
+                "3d": self._make_spatial_geometry,
+            }
+            maker = topo_map.get(self.model.topology_type)
+            if maker:
+                geometry = maker()
 
         # Priority 2: Registry metadata family
-        if self._metadata and self._metadata.family:
+        if geometry is None and self._metadata and self._metadata.family:
             family = self._metadata.family.lower()
             if "tile" in family:
-                return self._make_tile_geometry()
-            elif "cube" in family or "neural_cube" in family:
-                return self._make_spatial_geometry()
-            elif "graph" in family or "fabric" in family:
-                return self._make_neuromorphic_geometry()
-            elif "recurrent" in family or "equilibrium" in family or "eqprop" in family or "ep" in family:
-                return self._make_recurrent_geometry()
+                geometry = self._make_tile_geometry()
+            elif any(k in family for k in ("cube", "neural_cube")):
+                geometry = self._make_spatial_geometry()
+            elif any(k in family for k in ("graph", "fabric")):
+                geometry = self._make_neuromorphic_geometry()
+            elif any(k in family for k in ("recurrent", "equilibrium", "eqprop", "ep")):
+                geometry = self._make_recurrent_geometry()
 
         # Priority 3: Model attributes
-        if hasattr(self.model, "transition_modules"):
+        if geometry is None and hasattr(self.model, "transition_modules"):
             layers = self.model.transition_modules()  # type: ignore[attr-defined]
-            return FeedforwardGeometry(
+            geometry = FeedforwardGeometry(
                 GeometryConfig(
                     input_dim=getattr(self.model, "input_dim", 0),
                     output_dim=getattr(self.model, "output_dim", 0),
@@ -926,22 +993,36 @@ class ModelAdapter:
                 layers=layers,
             )
 
-        # Default: feedforward
-        return FeedforwardGeometry(
-            GeometryConfig(
-                input_dim=getattr(self.model, "input_dim", 0),
-                output_dim=getattr(self.model, "output_dim", 0),
-                hidden_dims=self._infer_hidden_dims(),
+        if geometry is None:
+            geometry = FeedforwardGeometry(
+                GeometryConfig(
+                    input_dim=getattr(self.model, "input_dim", 0),
+                    output_dim=getattr(self.model, "output_dim", 0),
+                    hidden_dims=self._infer_hidden_dims(),
+                )
             )
-        )
+
+        return geometry
 
     def _infer_hidden_dims(self) -> tuple[int, ...]:
         if hasattr(self.model, "hidden_dims"):
-            return tuple(self.model.hidden_dims)
+            hidden_dims = self.model.hidden_dims
+            if isinstance(hidden_dims, (list, tuple)):
+                return tuple(int(d) for d in hidden_dims)
         if hasattr(self.model, "hidden_dim"):
-            return (self.model.hidden_dim,)
-        if hasattr(self.model, "config") and hasattr(self.model.config, "hidden_dims"):
-            return tuple(self.model.config.hidden_dims)
+            hidden_dim = self.model.hidden_dim
+            if isinstance(hidden_dim, int):
+                return (hidden_dim,)
+        if hasattr(self.model, "config"):
+            config = getattr(self.model, "config", None)
+            if (
+                config is not None
+                and not isinstance(config, Tensor)
+                and hasattr(config, "hidden_dims")
+            ):
+                hidden_dims = config.hidden_dims
+                if isinstance(hidden_dims, (list, tuple)):
+                    return tuple(int(d) for d in hidden_dims)
         return ()
 
     def _make_recurrent_geometry(self) -> RecurrentGeometry:
@@ -952,7 +1033,9 @@ class ModelAdapter:
                 hidden_dims=self._infer_hidden_dims(),
                 topology_type="recurrent",
             ),
-            hidden_dim=self._infer_hidden_dims()[-1] if self._infer_hidden_dims() else None,
+            hidden_dim=self._infer_hidden_dims()[-1]
+            if self._infer_hidden_dims()
+            else None,
         )
 
     def _make_tile_geometry(self) -> Geometry:
@@ -991,163 +1074,221 @@ class ModelAdapter:
         # Priority 1: Registry metadata (most reliable)
         if self._metadata and self._metadata.family:
             family = self._metadata.family.lower()
-            if "equilibrium" in family or "eqprop" in family or "ep" in family or "chl" in family:
-                return EnergyMinimizationDynamics(StateDynamicsConfig(
-                    dynamics_type="energy_minimization",
-                    max_steps=30,
-                    beta=0.5,
-                ))
-            elif "predictive" in family or "pc" in family:
-                return PredictiveSettlingDynamics()
-            elif "spiking" in family or "stdp" in family or "snn" in family:
-                return SpikeIntegrationDynamics()
-            elif "forward_only" in family or "ff" in family or "pepita" in family:
-                return InstantaneousDynamics()
-            elif "fa" in family or "feedback" in family or "dfa" in family:
-                return InstantaneousDynamics()
-            elif "target" in family or "target_prop" in family or "tp" in family:
-                return InstantaneousDynamics()
+            dynamics = self._dynamics_from_family(family)
+            if dynamics is not None:
+                return dynamics
 
         # Priority 2: Model attributes
         if hasattr(self.model, "gradient_method"):
             method = self.model.gradient_method
-            if method == "equilibrium":
-                return EnergyMinimizationDynamics(StateDynamicsConfig(
-                    dynamics_type="energy_minimization",
-                    max_steps=getattr(self.model, "max_steps", 30),
-                    beta=getattr(self.model, "beta", 0.5),
-                ))
-            elif method == "predictive_coding":
-                return PredictiveSettlingDynamics()
-            elif method == "spiking" or method == "stdp":
-                return SpikeIntegrationDynamics()
+            dynamics = self._dynamics_from_gradient_method(method)
+            if dynamics is not None:
+                return dynamics
 
         if hasattr(self.model, "max_steps") and getattr(self.model, "max_steps", 1) > 1:
-            return EnergyMinimizationDynamics(StateDynamicsConfig(
-                dynamics_type="energy_minimization",
-                max_steps=self.model.max_steps,
-                beta=getattr(self.model, "beta", 0.5),
-            ))
+            max_steps = getattr(self.model, "max_steps", 30)
+            if not isinstance(max_steps, int):
+                max_steps = 30
+            return EnergyMinimizationDynamics(
+                StateDynamicsConfig(
+                    dynamics_type="energy_minimization",
+                    max_steps=max_steps,
+                    beta=getattr(self.model, "beta", 0.5),
+                )
+            )
 
         # Priority 3: Locality level
         if self._metadata and self._metadata.locality_level:
-            if self._metadata.locality_level == LocalityLevel.EQUILIBRIUM:
-                return EnergyMinimizationDynamics()
-            elif self._metadata.locality_level == LocalityLevel.FORWARD_ONLY:
-                return InstantaneousDynamics()
-            elif self._metadata.locality_level == LocalityLevel.LOCAL:
-                return SpikeIntegrationDynamics()
+            return self._dynamics_from_locality(self._metadata.locality_level)
 
         return InstantaneousDynamics()
+
+    def _dynamics_from_family(self, family: str) -> StateDynamics | None:  # noqa: PLR6301
+        equilibrium_keys = ("equilibrium", "eqprop", "ep", "chl")
+        if any(k in family for k in equilibrium_keys):
+            return EnergyMinimizationDynamics(
+                StateDynamicsConfig(
+                    dynamics_type="energy_minimization", max_steps=30, beta=0.5
+                )
+            )
+        if any(k in family for k in ("predictive", "pc")):
+            return PredictiveSettlingDynamics()
+        if any(k in family for k in ("spiking", "stdp", "snn")):
+            return SpikeIntegrationDynamics()
+        forward_keys = (
+            "forward_only",
+            "ff",
+            "pepita",
+            "fa",
+            "feedback",
+            "dfa",
+            "target",
+            "target_prop",
+            "tp",
+        )
+        if any(k in family for k in forward_keys):
+            return InstantaneousDynamics()
+        return None
+
+    def _dynamics_from_gradient_method(self, method: str) -> StateDynamics | None:
+        if method == "equilibrium":
+            return EnergyMinimizationDynamics(
+                StateDynamicsConfig(
+                    dynamics_type="energy_minimization",
+                    max_steps=getattr(self.model, "max_steps", 30),
+                    beta=getattr(self.model, "beta", 0.5),
+                )
+            )
+        if method == "predictive_coding":
+            return PredictiveSettlingDynamics()
+        if method in {"spiking", "stdp"}:
+            return SpikeIntegrationDynamics()
+        return None
+
+    def _dynamics_from_locality(self, locality: LocalityLevel) -> StateDynamics | None:  # noqa: PLR6301
+        if locality == LocalityLevel.EQUILIBRIUM:
+            return EnergyMinimizationDynamics()
+        if locality == LocalityLevel.FORWARD_ONLY:
+            return InstantaneousDynamics()
+        if locality == LocalityLevel.LOCAL:
+            return SpikeIntegrationDynamics()
+        return None
 
     def _infer_credit(self) -> CreditAssignment:
         # Priority 1: Registry metadata
         if self._metadata and self._metadata.credit_assignment_type:
             credit_type = self._metadata.credit_assignment_type
-            if credit_type == "equilibrium":
-                return ThermodynamicContrast(CreditAssignmentConfig(
-                    credit_type="thermodynamic_contrast",
-                    beta=0.5,
-                ))
-            elif credit_type in ("random_projections", "feedback_alignment"):
-                return RandomProjectionsCredit()
-            elif credit_type == "local_goodness":
-                return LocalGoodnessCredit()
-            elif credit_type == "temporal_trace":
-                return TemporalTraceCredit()
-            elif credit_type == "target_inversion":
-                return TargetInversionCredit()
-            elif credit_type in ("gradient", "backpropagation"):
-                return BackpropCredit()
+            credit = self._credit_from_type(credit_type, with_config=True)
+            if credit is not None:
+                return credit
 
         # Priority 2: Model attributes
         if hasattr(self.model, "credit_assignment_type"):
             credit_type = self.model.credit_assignment_type
-            if credit_type == "equilibrium":
-                return ThermodynamicContrast()
-            elif credit_type in ("random_projections", "feedback_alignment"):
-                return RandomProjectionsCredit()
+            credit = self._credit_from_type(credit_type, with_config=False)
+            if credit is not None:
+                return credit
 
         # Priority 3: Family
         if self._metadata and self._metadata.family:
             family = self._metadata.family.lower()
-            if "eqprop" in family or "equilibrium" in family or "ep" in family:
-                return ThermodynamicContrast()
-            elif "fa" in family or "feedback" in family or "dfa" in family:
-                return RandomProjectionsCredit()
-            elif "hebbian" in family or "chl" in family:
-                return ThermodynamicContrast()  # CHL uses contrastive
-            elif "forward_only" in family or "ff" in family or "pepita" in family:
-                return LocalGoodnessCredit()
-            elif "spiking" in family or "stdp" in family:
-                return TemporalTraceCredit()
-            elif "target_prop" in family or "tp" in family:
-                return TargetInversionCredit()
+            credit = self._credit_from_family(family)
+            if credit is not None:
+                return credit
 
         return BackpropCredit()
 
+    def _credit_from_type(  # noqa: PLR6301
+        self, credit_type: str, with_config: bool
+    ) -> CreditAssignment | None:
+        if credit_type == "equilibrium":
+            if with_config:
+                return ThermodynamicContrast(
+                    CreditAssignmentConfig(
+                        credit_type="thermodynamic_contrast", beta=0.5
+                    )
+                )
+            return ThermodynamicContrast()
+        credit_map: dict[str, type[CreditAssignment]] = {
+            "random_projections": RandomProjectionsCredit,
+            "feedback_alignment": RandomProjectionsCredit,
+            "local_goodness": LocalGoodnessCredit,
+            "temporal_trace": TemporalTraceCredit,
+            "target_inversion": TargetInversionCredit,
+            "gradient": BackpropCredit,
+            "backpropagation": BackpropCredit,
+        }
+        cls = credit_map.get(credit_type)
+        return cls() if cls else None
+
+    def _credit_from_family(self, family: str) -> CreditAssignment | None:  # noqa: PLR6301
+        family_map: list[tuple[tuple[str, ...], type[CreditAssignment]]] = [
+            (("eqprop", "equilibrium", "ep"), ThermodynamicContrast),
+            (("fa", "feedback", "dfa"), RandomProjectionsCredit),
+            (("hebbian", "chl"), ThermodynamicContrast),
+            (("forward_only", "ff", "pepita"), LocalGoodnessCredit),
+            (("spiking", "stdp"), TemporalTraceCredit),
+            (("target_prop", "tp"), TargetInversionCredit),
+        ]
+        for keys, cls in family_map:
+            if any(k in family for k in keys):
+                return cls()
+        return None
+
     def _infer_update(self) -> ParameterUpdate:
         # Priority 1: Registry metadata tags
+        update: ParameterUpdate | None = None
         if self._metadata and self._metadata.tags:
-            tags = [t.lower() for t in self._metadata.tags]
-            if "muon" in tags or "riemannian" in tags:
-                return RiemannianOrthogonalUpdate()
+            tags = {t.lower() for t in self._metadata.tags}
+            if tags & {"muon", "riemannian"}:
+                update = RiemannianOrthogonalUpdate()
             elif "spectral" in tags:
-                return SpectralConstrainedUpdate()
-            elif "fisher" in tags or "natural" in tags:
-                return NaturalGradientUpdate()
-            elif "ewc" in tags or "elastic" in tags:
-                return ElasticConsolidationUpdate()
+                update = SpectralConstrainedUpdate()
+            elif tags & {"fisher", "natural"}:
+                update = NaturalGradientUpdate()
+            elif tags & {"ewc", "elastic"}:
+                update = ElasticConsolidationUpdate()
 
         # Priority 2: Family
-        if self._metadata and self._metadata.family:
+        if update is None and self._metadata and self._metadata.family:
             family = self._metadata.family.lower()
-            if "muon" in family or "mep" in family:
-                return RiemannianOrthogonalUpdate()
+            if any(k in family for k in ("muon", "mep")):
+                update = RiemannianOrthogonalUpdate()
             elif "fisher" in family:
-                return NaturalGradientUpdate()
+                update = NaturalGradientUpdate()
             elif "ewc" in family:
-                return ElasticConsolidationUpdate()
+                update = ElasticConsolidationUpdate()
 
-        return EuclideanUpdate()
+        return update if update is not None else EuclideanUpdate()
 
 
 # Additional substrate implementations
 class AnalogSubstrate(DigitalSubstrate):
     """Analog compute substrate with continuous values and noise."""
+
     def __init__(self, config: SubstrateConfig | None = None):
-        super().__init__(config or SubstrateConfig(precision="float32", noise_level=0.02))
+        super().__init__(
+            config or SubstrateConfig(precision="float32", noise_level=0.02)
+        )
 
 
 class MemristiveSubstrate(DigitalSubstrate):
     """Memristive crossbar: conductance matrices, bounded precision, IR-drop noise."""
-    def __init__(self, config: SubstrateConfig | None = None):
-        super().__init__(config or SubstrateConfig(
-            precision="int8",
-            noise_level=0.05,
-            weight_bounds=(0.0, 1.0),  # Conductance is positive
-            sparsity=0.1,
-        ))
 
-    def quantize_weights(self, w: Tensor) -> Tensor:
+    def __init__(self, config: SubstrateConfig | None = None):
+        super().__init__(
+            config
+            or SubstrateConfig(
+                precision="int8",
+                noise_level=0.05,
+                weight_bounds=(0.0, 1.0),  # Conductance is positive
+                sparsity=0.1,
+            )
+        )
+
+    def quantize_weights(self, w: Tensor) -> Tensor:  # noqa: PLR6301
         # Memristors: positive conductance, bounded
         w = torch.clamp(w, 0.0, 1.0)
         scale = 1.0 / 255.0
         return (w / scale).round().clamp(0, 255) * scale
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
         # Crossbar: I = V * G (with IR drop approximation)
         return lambda x, w: x @ w.T  # Simplified
 
 
 class NeuromorphicSubstrate(DigitalSubstrate):
     """Event-driven neuromorphic: sparse spikes, asynchronous."""
+
     def __init__(self, config: SubstrateConfig | None = None):
-        super().__init__(config or SubstrateConfig(
-            precision="float16",
-            noise_level=0.01,
-            sparsity=0.95,
-        ))
+        super().__init__(
+            config
+            or SubstrateConfig(
+                precision="float16",
+                noise_level=0.01,
+                sparsity=0.95,
+            )
+        )
 
     def inject_state_noise(self, s: Tensor) -> Tensor:
         # Spike dropout
@@ -1157,13 +1298,17 @@ class NeuromorphicSubstrate(DigitalSubstrate):
 
 class QuantumSubstrate(DigitalSubstrate):
     """Quantum substrate: parameterized unitary gates."""
-    def __init__(self, config: SubstrateConfig | None = None):
-        super().__init__(config or SubstrateConfig(
-            precision="complex64",
-            noise_level=0.02,
-        ))
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
+    def __init__(self, config: SubstrateConfig | None = None):
+        super().__init__(
+            config
+            or SubstrateConfig(
+                precision="complex64",
+                noise_level=0.02,
+            )
+        )
+
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
         # Simplified: quantum circuit evaluation
         return lambda x, w: (x @ w.T).real
 
@@ -1173,7 +1318,7 @@ class QuantizedSubstrate(DigitalSubstrate):
     def __init__(self, config: SubstrateConfig | None = None):
         super().__init__(config or SubstrateConfig(precision="int8"))
 
-    def quantize_weights(self, w: Tensor) -> Tensor:
+    def quantize_weights(self, w: Tensor) -> Tensor:  # noqa: PLR6301
         scale = w.abs().max() / 127
         return (w / scale).round().clamp(-128, 127) * scale
 
@@ -1189,9 +1334,11 @@ class NoisySubstrate(DigitalSubstrate):
 
 class OpticalSubstrate(DigitalSubstrate):
     def __init__(self, config: SubstrateConfig | None = None):
-        super().__init__(config or SubstrateConfig(precision="float32", noise_level=0.01))
+        super().__init__(
+            config or SubstrateConfig(precision="float32", noise_level=0.01)
+        )
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
         # Phase/amplitude encoding - simplified
         return lambda x, w: (x @ w.T).cos()  # Interference pattern
 
@@ -1234,7 +1381,7 @@ class EnergyMinimizationDynamics:
         state.activations = h
         return state
 
-    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # noqa: PLR6301, ARG002
         # Simplified energy: reconstruction error
         acts = state.free_state
         if acts is None:
@@ -1245,7 +1392,7 @@ class EnergyMinimizationDynamics:
             return torch.tensor(0.0)
         if isinstance(acts, list):
             acts = acts[-1]
-        return (acts ** 2).mean()
+        return (acts**2).mean()
 
 
 class PredictiveSettlingDynamics:
@@ -1262,7 +1409,9 @@ class PredictiveSettlingDynamics:
         target: Tensor | None = None,
     ) -> SystemState:
         # Predictive coding settling - simplified
-        return EnergyMinimizationDynamics(self.config).settle(state, geometry, substrate, target)
+        return EnergyMinimizationDynamics(self.config).settle(
+            state, geometry, substrate, target
+        )
 
     def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:
         return EnergyMinimizationDynamics(self.config).compute_energy(state, geometry)
@@ -1278,8 +1427,8 @@ class SpikeIntegrationDynamics:
         self,
         state: SystemState,
         geometry: Geometry,
-        substrate: Substrate,
-        target: Tensor | None = None,
+        substrate: Substrate,  # noqa: ARG002
+        target: Tensor | None = None,  # noqa: ARG002
     ) -> SystemState:
         # Simplified LIF dynamics
         h = state.activations
@@ -1291,14 +1440,17 @@ class SpikeIntegrationDynamics:
             h_new = geometry.route(h)
             # Spike thresholding
             h_new = torch.where(h_new > 1.0, torch.zeros_like(h_new), h_new)
-            if torch.dist(h_new, h, p=float("inf")).item() < self.config.convergence_threshold:
+            if (
+                torch.dist(h_new, h, p=float("inf")).item()
+                < self.config.convergence_threshold
+            ):
                 h = h_new
                 break
             h = h_new
         state.activations = h
         return state
 
-    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, _state: SystemState, _geometry: Geometry) -> Tensor:  # noqa: PLR6301
         return torch.tensor(0.0)
 
 
@@ -1308,28 +1460,28 @@ class RandomProjectionsCredit:
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(credit_type="random_projections")
-        self._feedback_weights: Tensor | None = None
+        self._feedback_weights: dict[str, Tensor] | None = None
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
-        geometry: Geometry,
+        _free_state: SystemState,
+        _nudged_state: SystemState,
+        _loss: Tensor,
+        _geometry: Geometry,
     ) -> list[Tensor]:
         # Use fixed random feedback matrix
         if self._feedback_weights is None:
             # Initialize based on geometry output dim and hidden dims
-            out_dim = geometry.config.output_dim
-            hidden_dims = geometry.config.hidden_dims
+            out_dim = _geometry.config.output_dim
+            hidden_dims = _geometry.config.hidden_dims
             # For simplicity, create feedback for each layer
             self._feedback_weights = {}
             for i, h_dim in enumerate(hidden_dims):
                 self._feedback_weights[f"layer_{i}"] = torch.randn(h_dim, out_dim) * 0.1
 
         # Project error through fixed feedback
-        if nudged_state.activations is not None:
-            acts = nudged_state.activations
+        if _nudged_state.activations is not None:
+            acts = _nudged_state.activations
             if isinstance(acts, list):
                 # For multi-layer, we need per-layer activations
                 grads = []
@@ -1356,17 +1508,17 @@ class LocalGoodnessCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(credit_type="local_goodness")
 
-    def compute_pseudo_gradient(
+    def compute_pseudo_gradient(  # noqa: PLR6301
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
-        geometry: Geometry,
+        _free_state: SystemState,
+        _nudged_state: SystemState,
+        _loss: Tensor,
+        _geometry: Geometry,
     ) -> list[Tensor]:
         # Layer-local goodness gradients
         grads = []
-        if free_state.activations and isinstance(free_state.activations, list):
-            for act in free_state.activations[1:]:  # Skip input
+        if _free_state.activations and isinstance(_free_state.activations, list):
+            for act in _free_state.activations[1:]:  # Skip input
                 # Positive pass: maximize goodness
                 # Negative pass: minimize goodness
                 pos_grad = act * (1 - torch.sigmoid(act))
@@ -1380,18 +1532,20 @@ class BackpropCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(credit_type="gradient")
 
-    def compute_pseudo_gradient(
+    def compute_pseudo_gradient(  # noqa: PLR6301
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
-        geometry: Geometry,
+        _free_state: SystemState,
+        _nudged_state: SystemState,
+        _loss: Tensor,
+        _geometry: Geometry,
     ) -> list[Tensor]:
         # Backprop computes true gradients via autograd
         # This is a placeholder - actual implementation uses autograd
-        params = list(geometry.params.values())
-        if params and loss is not None:
-            grads = torch.autograd.grad(loss, params, create_graph=False, allow_unused=True)
+        params = list(_geometry.params.values())
+        if params and _loss is not None:
+            grads = torch.autograd.grad(
+                _loss, params, create_graph=False, allow_unused=True
+            )
             return [g for g in grads if g is not None]
         return []
 
@@ -1402,12 +1556,12 @@ class TemporalTraceCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(credit_type="temporal_trace")
 
-    def compute_pseudo_gradient(
+    def compute_pseudo_gradient(  # noqa: PLR6301
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
-        geometry: Geometry,
+        _free_state: SystemState,
+        _nudged_state: SystemState,
+        _loss: Tensor,
+        _geometry: Geometry,
     ) -> list[Tensor]:
         # STDP-style correlation
         return []
@@ -1419,12 +1573,12 @@ class TargetInversionCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(credit_type="target_inversion")
 
-    def compute_pseudo_gradient(
+    def compute_pseudo_gradient(  # noqa: PLR6301
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
-        geometry: Geometry,
+        _free_state: SystemState,
+        _nudged_state: SystemState,
+        _loss: Tensor,
+        _geometry: Geometry,
     ) -> list[Tensor]:
         # Target propagation uses learned inverse maps
         return []
@@ -1435,12 +1589,14 @@ class RiemannianOrthogonalUpdate:
     """Muon: Riemannian optimization on Stiefel manifold."""
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
-        self.config = config or ParameterUpdateConfig(update_type="riemannian_orthogonal")
+        self.config = config or ParameterUpdateConfig(
+            update_type="riemannian_orthogonal"
+        )
 
-    def _newton_schulz(self, G: Tensor, steps: int = 5) -> Tensor:
+    def _newton_schulz(self, g: Tensor, steps: int = 5) -> Tensor:  # noqa: PLR6301
         """Compute orthogonal projection via Newton-Schulz iteration."""
         a, b, c = 3.4445, -4.7750, 2.0315
-        x = G
+        x = g
         for _ in range(steps):
             x = a * x + b * x @ x.T @ x + c * x @ x.T @ x @ x.T @ x
         return x
@@ -1449,13 +1605,13 @@ class RiemannianOrthogonalUpdate:
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
-        geometry: Geometry,
+        geometry: Geometry,  # noqa: ARG002
     ) -> dict[str, Tensor]:
         updated = {}
         for i, (name, param) in enumerate(params.items()):
             if i < len(pseudo_grads) and pseudo_grads[i] is not None:
                 grad = pseudo_grads[i]
-                if grad.ndim >= 2:
+                if grad.ndim >= 2:  # noqa: PLR2004
                     # Orthogonalize the gradient
                     grad = self._newton_schulz(grad, self.config.ortho_steps)
                 updated[name] = param - self.config.step_size * grad
@@ -1468,20 +1624,23 @@ class SpectralConstrainedUpdate:
     """Spectral norm constrained updates for stability."""
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
-        self.config = config or ParameterUpdateConfig(update_type="spectral_constrained")
+        self.config = config or ParameterUpdateConfig(
+            update_type="spectral_constrained"
+        )
 
     def step(
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
-        geometry: Geometry,
+        geometry: Geometry,  # noqa: ARG002
     ) -> dict[str, Tensor]:
         updated = {}
+        min_ndim_for_svd = 2
         for i, (name, param) in enumerate(params.items()):
             if i < len(pseudo_grads) and pseudo_grads[i] is not None:
                 grad = pseudo_grads[i]
                 # Project gradient to satisfy spectral constraint
-                if grad.ndim >= 2:
+                if grad.ndim >= min_ndim_for_svd:
                     u, s, v = torch.linalg.svd(grad, full_matrices=False)
                     s = torch.clamp(s, max=self.config.spectral_norm)
                     grad = u @ torch.diag(s) @ v
@@ -1502,7 +1661,7 @@ class NaturalGradientUpdate:
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
-        geometry: Geometry,
+        geometry: Geometry,  # noqa: ARG002
     ) -> dict[str, Tensor]:
         updated = {}
         for i, (name, param) in enumerate(params.items()):
@@ -1513,7 +1672,9 @@ class NaturalGradientUpdate:
                     self._fisher[name] = torch.zeros_like(param)
                 self._fisher[name].mul_(0.99).addcmul_(grad, grad, value=0.01)
                 # Natural gradient: F^-1 * g
-                nat_grad = grad / (self._fisher[name].sqrt() + self.config.fisher_damping)
+                nat_grad = grad / (
+                    self._fisher[name].sqrt() + self.config.fisher_damping
+                )
                 updated[name] = param - self.config.step_size * nat_grad
             else:
                 updated[name] = param
@@ -1524,7 +1685,9 @@ class ElasticConsolidationUpdate:
     """Elastic Weight Consolidation for continual learning."""
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
-        self.config = config or ParameterUpdateConfig(update_type="elastic_consolidation")
+        self.config = config or ParameterUpdateConfig(
+            update_type="elastic_consolidation"
+        )
         self._importance: dict[str, Tensor] = {}
         self._old_params: dict[str, Tensor] = {}
 
@@ -1532,7 +1695,7 @@ class ElasticConsolidationUpdate:
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
-        geometry: Geometry,
+        geometry: Geometry,  # noqa: ARG002
     ) -> dict[str, Tensor]:
         updated = {}
         for i, (name, param) in enumerate(params.items()):
@@ -1541,7 +1704,11 @@ class ElasticConsolidationUpdate:
                 # EWC penalty: lambda * importance * (param - old_param)
                 ewc_penalty = torch.zeros_like(param)
                 if name in self._importance and name in self._old_params:
-                    ewc_penalty = self.config.ewc_lambda * self._importance[name] * (param - self._old_params[name])
+                    ewc_penalty = (
+                        self.config.ewc_lambda
+                        * self._importance[name]
+                        * (param - self._old_params[name])
+                    )
                 updated[name] = param - self.config.step_size * (grad + ewc_penalty)
             else:
                 updated[name] = param
@@ -1557,6 +1724,7 @@ class ElasticConsolidationUpdate:
 # Internal: Adapted System for wrapping existing models
 # ============================================================
 
+
 class _AdaptedSystem:
     """Internal adapter that wraps an existing model as a System.
 
@@ -1564,7 +1732,14 @@ class _AdaptedSystem:
     the 5-D ontology interface for AutoScientist queries.
     """
 
-    def __init__(
+    substrate: Substrate
+    geometry: Geometry
+    dynamics: StateDynamics
+    credit: CreditAssignment
+    update: ParameterUpdate
+    _model: nn.Module
+
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         substrate: Substrate,
         geometry: Geometry,
@@ -1587,10 +1762,21 @@ class _AdaptedSystem:
         self._model.train()
         logits = self._model(x)  # type: ignore[operator]
         loss = torch.nn.functional.cross_entropy(logits, y)
-        return {"loss": loss.item(), "accuracy": (logits.argmax(-1) == y).float().mean().item()}
+        return {
+            "loss": loss.item(),
+            "accuracy": (logits.argmax(-1) == y).float().mean().item(),
+        }
 
     def forward(self, x: Tensor) -> Tensor:
         return self._model(x)  # type: ignore[operator]
+
+    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:  # noqa: PLR6301
+        """Compute task loss from final state (required by System protocol)."""
+        acts = state.activations
+        if acts is None:
+            return torch.tensor(0.0)
+        logits = acts[-1] if isinstance(acts, list) else acts
+        return torch.nn.functional.cross_entropy(logits, y)
 
     @property
     def model(self) -> nn.Module:
