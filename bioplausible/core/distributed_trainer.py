@@ -10,26 +10,20 @@ Leverages the 5-D fault lines for natural distribution:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
 from collections.abc import Iterator
+from dataclasses import dataclass, field
+from typing import Protocol
 
 import torch
 from torch import Tensor
 
 from bioplausible.core.ontology import (
-    System,
-    SystemState,
     Geometry,
     Substrate,
-    StateDynamics,
-    CreditAssignment,
-    ParameterUpdate,
+    System,
+    SystemState,
     TileGeometry,
 )
-
-if TYPE_CHECKING:
-    from bioplausible.core.tile.topology import TileGraph
 
 
 class _DataProvider(Protocol):
@@ -64,6 +58,9 @@ class DistributedConfig:
     # Fault tolerance
     heartbeat_interval: float = 5.0      # Seconds between heartbeats
     max_missed_heartbeats: int = 3       # Max missed before node considered dead
+
+    # Training
+    max_epochs: int = 10
 
 
 class NodeRegistry:
@@ -241,7 +238,7 @@ class DistributedSystemTrainer:
         """Get this node's compute capabilities."""
         return {
             "device": str(next(self.system.geometry.parameters()).device)
-            if hasattr(self.system.geometry, 'parameters') else "cpu",
+            if hasattr(self.system.geometry, "parameters") else "cpu",
             "memory_gb": 16,  # Placeholder
         }
 
@@ -474,7 +471,7 @@ class DistributedSystemTrainer:
                         acc = contrib if acc is None else acc + contrib
                     if acc is not None:
                         acc += geometry._tile_biases[str(tid)].unsqueeze(0).expand(acc.shape[0], -1)
-                        tile.activity = substrate.inject_state_noise(acc)
+                        tile.activity = substrate.inject_state_noise(acc)  # type: ignore[arg-type]
 
             # Synchronize boundary tiles with neighbors
             self._sync_boundary_tiles(geometry)
@@ -503,7 +500,6 @@ class DistributedSystemTrainer:
         """Synchronize boundary tile activations with neighbor nodes."""
         # In real implementation: send boundary activations to neighbor nodes
         # For now, no-op
-        pass
 
     def _federated_sync(self) -> None:
         """Synchronize parameter updates across nodes."""
@@ -529,7 +525,7 @@ class DistributedSystemTrainer:
 
     def _get_device(self) -> torch.device:
         """Get the device for this node."""
-        if hasattr(self.system.geometry, 'parameters'):
+        if hasattr(self.system.geometry, "parameters"):
             try:
                 return next(self.system.geometry.parameters()).device
             except StopIteration:
@@ -577,15 +573,15 @@ class DistributedSystemTrainer:
 
     def fit(self) -> list[dict[str, float]]:
         """Run full distributed training loop."""
-        for _ in range(self.config.max_epochs if hasattr(self.config, 'max_epochs') else 10):
+        for _ in range(self.config.max_epochs if hasattr(self.config, "max_epochs") else 10):
             self.train_epoch()
         return self.history
 
 
 __all__ = [
+    "DHTRouter",
     "DistributedConfig",
     "DistributedSystemTrainer",
-    "NodeRegistry",
-    "DHTRouter",
     "FederatedAggregator",
+    "NodeRegistry",
 ]

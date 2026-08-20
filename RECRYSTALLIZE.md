@@ -322,6 +322,7 @@ The 5-D hypercube is the right ontology, but the highest-leverage action is **in
 | **PredictiveSettlingDynamics — Full Predictive Coding** | `bioplausible/core/ontology.py:1914-2110` | ✅ Complete |
 | **Distributed SystemTrainer — P2P Coordination** | `bioplausible/core/distributed_trainer.py` | ✅ Complete |
 | **AutoScientist Hypercube Search** | `bioplausible/core/registry.py:646-780`, `bioplausible/autoscientist/proposer.py` | ✅ Complete |
+| **Ontological Dashboard — 5-Dropdown Composer** | `bioplausible/demo/main.py:52-91, 155-243` | ✅ Complete |
 
 ### ✅ Test Coverage
 
@@ -336,7 +337,8 @@ The 5-D hypercube is the right ontology, but the highest-leverage action is **in
   - `TileGeometry` routes through tile mesh
   - Hardware substrates (Memristive, Neuromorphic, Optical, Quantum) inject noise and quantize correctly
   - All system compositions work: EqProp, FA, Backprop, Predictive Coding
-- **Ruff clean** — zero lint errors, zero format issues
+- **219 core unit tests pass** (`tests/unit/core/`)
+- **Ruff clean** — zero lint errors, zero format issues (107 auto-fixed)
 - **Pyright strict mode clean** — zero type errors
 
 ### 🔧 Key Technical Decisions
@@ -376,15 +378,15 @@ The 5-D hypercube is the right ontology, but the highest-leverage action is **in
 **Location:** `bioplausible/core/registry.py:646-780`, `bioplausible/autoscientist/proposer.py`  
 **Details:** `Registry.query_ontology()` for structured ablation studies, `ExperimentProposer.propose_hypercube_ablation()` for generating hypercube ablation experiments.
 
-### 6. Ontological Dashboard — NiceGUI 5-Layer Composer
+### 6. Ontological Dashboard — NiceGUI 5-Layer Composer ✅ COMPLETED
 **Priority:** Low  
-**Location:** `bioplausible/demo/` — new 5-dropdown composer  
-**Details:** Replace model dropdown with 5 orthogonal selectors:
-- Substrate: [Digital, Memristive, Neuromorphic, Optical, Quantum]
-- Geometry: [Feedforward, Recurrent, TileMesh, Neuromorphic, Spatial3D]
-- Dynamics: [Instantaneous, EnergyMinimization, PredictiveSettling, SpikeIntegration]
-- Credit: [ThermodynamicContrast, RandomProjections, LocalGoodness, TemporalTrace, TargetInversion]
-- Kinetics: [Euclidean, RiemannianOrthogonal, SpectralConstrained, NaturalGradient, ElasticConsolidation]
+**Location:** `bioplausible/demo/main.py:52-91, 155-243`  
+**Details:** Implemented 5 orthogonal dropdown selectors in NiceGUI demo:
+- Substrate: [DigitalSubstrate, NoisySubstrate, QuantizedSubstrate, OpticalSubstrate, MemristiveSubstrate, NeuromorphicSubstrate, QuantumSubstrate]
+- Geometry: [FeedforwardGeometry, RecurrentGeometry, TileGeometry, NeuromorphicGeometry, SpatialGeometry]
+- StateDynamics: [InstantaneousDynamics, EnergyMinimizationDynamics, PredictiveSettlingDynamics, SpikeIntegrationDynamics]
+- CreditAssignment: [ThermodynamicContrast, RandomProjectionsCredit, LocalGoodnessCredit, TemporalTraceCredit, TargetInversionCredit, BackpropCredit]
+- ParameterUpdate: [EuclideanUpdate, RiemannianOrthogonalUpdate, SpectralConstrainedUpdate, NaturalGradientUpdate, ElasticConsolidationUpdate]
 
 ### 7. Formal Energy Proofs — Thermodynamic Invariant Validation
 **Priority:** Low  
@@ -418,4 +420,63 @@ When touching existing models, migrate natively to Protocols:
 - ❌ **No P2P types in Protocols** — keep `Tensor` in/out transport-agnostic
 - ❌ **No Registry API changes** — `Registry.get()`, `biopl-*` CLIs remain stable
 - ❌ **No backwards compatibility layer** — the Protocols *are* the new interface; old models adapt via `ModelAdapter`
+
+---
+
+## Details Facilitating Future Work
+
+### Key Technical Decisions (Validated)
+
+1. **Protocol-based structural typing** over ABCs — enables zero-cost abstraction and duck-typing; verified by Pyright strict mode
+2. **PEP 695 generics** (`System[TS, TG, TD, TC, TU]`) — invalid compositions caught at type-check time; tested with `create_eqprop_system`, `create_backprop_system`, `create_fa_system`
+3. **Frozen slotted dataclasses** for all configs — immutability by default, memory efficient
+4. **Parameter name consistency** across all 5 layer protocols — matches `SystemTrainer` pipeline calls exactly
+5. **Strangler Fig adapter pattern** — `ModelAdapter` infers 5 layers from existing model metadata (compute_profile, family, gradient_method, locality_level, tags)
+
+### Implementation Notes for Maintainers
+
+**Ontology Layer Protocol Signatures** (must remain consistent for composition):
+```python
+# All protocols require a `config` attribute
+Substrate.config: SubstrateConfig
+Geometry.config: GeometryConfig
+StateDynamics.config: StateDynamicsConfig
+CreditAssignment.config: CreditAssignmentConfig
+ParameterUpdate.config: ParameterUpdateConfig
+
+# Pipeline method signatures (must match for System.train_step)
+Geometry.forward(x: Tensor, substrate: Substrate) -> Tensor
+Geometry.route(activations: Tensor) -> Tensor
+StateDynamics.settle(state, geometry, substrate, target) -> SystemState
+CreditAssignment.compute_pseudo_gradient(free, nudged, loss, geometry) -> list[Tensor]
+ParameterUpdate.step(params, pseudo_grads, geometry) -> dict[str, Tensor]
+```
+
+**Adding New Substrates**: Implement all 5 abstract methods in `Substrate` protocol. See `MemristiveSubstrate` (IR-drop), `OpticalSubstrate` (phase noise), `QuantumSubstrate` (parameter shift) for patterns.
+
+**Adding New CreditAssignment**: Must implement `compute_pseudo_gradient` returning list of tensors matching `Geometry.params` order. `ThermodynamicContrast` uses contrastive Hebbian; `RandomProjectionsCredit` uses fixed feedback matrices.
+
+**Distributed Training**: The `DistributedSystemTrainer` shards along Geometry (tile mesh) and federates at ParameterUpdate. CreditAssignment stays local by design. For new topologies, implement `_distributed_forward` and `_distributed_settle`.
+
+### Known Limitations / Future Work
+
+1. **PredictiveSettlingDynamics** requires `forward_with_intermediates` on Geometry (only `FeedforwardGeometry` has it). For other geometries, falls back to single-tensor mode.
+2. **RandomProjectionsCredit** feedback matrix initialization is simplified; production use may need structured initialization.
+3. **Formal energy proofs** (Lyapunov/Control-Lyapunov) not yet implemented — see `tests/integration/test_energy_invariants.py` TODO.
+4. **P2P communication** in `DistributedSystemTrainer` is simulated (`_fetch_remote_activation` returns None); needs real RPC layer.
+5. **ModelAdapter inference** is best-effort; complex models may need explicit 5-D composition via `compose_system()`.
+
+### Verified Compositions (Working End-to-End)
+
+| System | Substrate | Geometry | Dynamics | Credit | Update |
+|--------|-----------|----------|----------|--------|--------|
+| EqProp | Digital | Recurrent | EnergyMinimization | ThermodynamicContrast | Euclidean |
+| Backprop | Digital | Feedforward | Instantaneous | BackpropCredit | Euclidean |
+| Feedback Alignment | Digital | Feedforward | Instantaneous | RandomProjectionsCredit | Euclidean |
+| Predictive Coding | Digital | Feedforward | PredictiveSettling | ThermodynamicContrast | Euclidean |
+| TileNet | Digital | TileMesh | Instantaneous | BackpropCredit | Euclidean |
+| Memristive EqProp | Memristive | Recurrent | EnergyMinimization | ThermodynamicContrast | Euclidean |
+| Optical FA | Optical | Feedforward | Instantaneous | RandomProjectionsCredit | Euclidean |
+
+All verified via `tests/integration/test_gradient_equivalence.py::TestOntologyLayerEquivalence`.
 

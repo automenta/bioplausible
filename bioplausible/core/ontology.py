@@ -30,7 +30,7 @@ import torch
 from torch import Tensor, nn
 
 from bioplausible.core.registry import ComponentMetadata, ComputeProfile, LocalityLevel
-from bioplausible.core.tile.topology import TileGraph, TileState
+from bioplausible.core.tile.topology import TileGraph
 
 __all__ = [
     "AnalogSubstrate",
@@ -550,7 +550,7 @@ class System(Protocol[TS, TG, TD, TC, TU]):
             "accuracy": free_state.metrics.get("accuracy", 0.0),
         }
 
-    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:  # noqa: PLR6301
+    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
         """Compute task loss from final state."""
         acts = state.activations
         if acts is None:
@@ -584,19 +584,19 @@ class DigitalSubstrate:
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig()
 
-    def quantize_weights(self, w: Tensor) -> Tensor:  # noqa: PLR6301
+    def quantize_weights(self, w: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
         return w
 
-    def inject_state_noise(self, s: Tensor) -> Tensor:  # noqa: PLR6301
+    def inject_state_noise(self, s: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
         return s
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
         return lambda x, _: x @ _.T
 
-    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
         return lambda grad, _: grad
 
-    def initial_state(self, x: Tensor) -> Tensor:  # noqa: PLR6301
+    def initial_state(self, x: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
         return x
 
 
@@ -665,7 +665,7 @@ class FeedforwardGeometry(nn.Module):
         h = activations
         for layer in self._layers:
             if isinstance(layer, nn.Linear):
-                h = h @ layer.weight.T  # noqa: PLR6104
+                h = h @ layer.weight.T  # ruff: ignore[non-augmented-assignment]
                 if layer.bias is not None:
                     h += layer.bias
             else:
@@ -799,8 +799,8 @@ class TileGeometry(nn.Module):
     _tile_weights: nn.ParameterDict
     _tile_biases: nn.ParameterDict
     _graph: TileGraph
-    _input_projection: nn.Linear | None
-    _output_projection: nn.Linear | None
+    _input_projection: nn.Linear
+    _output_projection: nn.Linear
 
     def __init__(
         self,
@@ -997,12 +997,11 @@ class TileGeometry(nn.Module):
                 key = name.replace("tile_weight.", "")
                 if key in self._tile_weights:
                     self._tile_weights[key].data.copy_(param)
-            else:
-                # Try direct match for backward compatibility
-                if name in self._tile_weights:
-                    self._tile_weights[name].data.copy_(param)
-                elif name in self._tile_biases:
-                    self._tile_biases[name].data.copy_(param)
+            # Try direct match for backward compatibility
+            elif name in self._tile_weights:
+                self._tile_weights[name].data.copy_(param)
+            elif name in self._tile_biases:
+                self._tile_biases[name].data.copy_(param)
 
     def transition_modules(self) -> list[nn.Module]:
         """Return modules in forward order for TransitionGraph protocol."""
@@ -1029,21 +1028,21 @@ class InstantaneousDynamics:
     def __init__(self, config: StateDynamicsConfig | None = None):
         self.config = config or StateDynamicsConfig(dynamics_type="instantaneous")
 
-    def settle(  # noqa: PLR6301
+    def settle(  # ruff: ignore[no-self-use]
         self,
         state: SystemState,
-        geometry: Geometry,  # noqa: ARG002
-        substrate: Substrate,  # noqa: ARG002
-        target: Tensor | None = None,  # noqa: ARG002
+        geometry: Geometry,  # ruff: ignore[unused-method-argument]
+        substrate: Substrate,  # ruff: ignore[unused-method-argument]
+        target: Tensor | None = None,  # ruff: ignore[unused-method-argument]
     ) -> SystemState:
         # Single forward pass - no settling
         state.free_state = state.activations
         return state
 
-    def compute_energy(self, _state: SystemState, _geometry: Geometry) -> Tensor:  # noqa: PLR6301
+    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use]
         # Proxy: negative log-likelihood for instantaneous pass
-        if _state.loss is not None:
-            return torch.as_tensor(_state.loss)
+        if state.loss is not None:
+            return torch.as_tensor(state.loss)
         return torch.tensor(0.0)
 
 
@@ -1080,7 +1079,7 @@ class ThermodynamicContrast:
 
         # Get parameter names to match gradients
         param_names = list(geometry.params.keys())
-        weight_names = [n for n in param_names if 'weight' in n and geometry.params[n].ndim == 2]
+        weight_names = [n for n in param_names if "weight" in n and geometry.params[n].ndim == 2]
 
         grads = []
         # Compute contrastive Hebbian gradients for each weight matrix
@@ -1117,7 +1116,7 @@ class EuclideanUpdate:
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
-        geometry: Geometry,  # noqa: ARG002
+        geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
         updated = {}
 
@@ -1219,6 +1218,9 @@ class ModelAdapter:
     def _infer_substrate_from_backend(self) -> Substrate | None:
         if not hasattr(self.model, "backend"):
             return None
+        backend = getattr(self.model, "backend", None)
+        if not isinstance(backend, str):
+            return None
         backend_map = {
             "quantized": QuantizedSubstrate,
             "noisy": NoisySubstrate,
@@ -1226,7 +1228,7 @@ class ModelAdapter:
             "crossbar": MemristiveSubstrate,
             "quantum": QuantumSubstrate,
         }
-        cls = backend_map.get(self.model.backend)
+        cls = backend_map.get(backend)
         return cls() if cls else None
 
     def _infer_substrate_from_family(self) -> Substrate | None:
@@ -1259,9 +1261,11 @@ class ModelAdapter:
                 "spatial_lattice": self._make_spatial_geometry,
                 "3d": self._make_spatial_geometry,
             }
-            maker = topo_map.get(self.model.topology_type)
-            if maker:
-                geometry = maker()
+            topology_type = getattr(self.model, "topology_type", None)
+            if isinstance(topology_type, str):
+                maker = topo_map.get(topology_type)
+                if maker:
+                    geometry = maker()
 
         # Priority 2: Registry metadata family
         if geometry is None and self._metadata and self._metadata.family:
@@ -1398,10 +1402,11 @@ class ModelAdapter:
 
         # Priority 2: Model attributes
         if hasattr(self.model, "gradient_method"):
-            method = self.model.gradient_method
-            dynamics = self._dynamics_from_gradient_method(method)
-            if dynamics is not None:
-                return dynamics
+            method = getattr(self.model, "gradient_method", None)
+            if isinstance(method, str):
+                dynamics = self._dynamics_from_gradient_method(method)
+                if dynamics is not None:
+                    return dynamics
 
         if hasattr(self.model, "max_steps") and getattr(self.model, "max_steps", 1) > 1:
             max_steps = getattr(self.model, "max_steps", 30)
@@ -1417,11 +1422,13 @@ class ModelAdapter:
 
         # Priority 3: Locality level
         if self._metadata and self._metadata.locality_level:
-            return self._dynamics_from_locality(self._metadata.locality_level)
+            dynamics = self._dynamics_from_locality(self._metadata.locality_level)
+            if dynamics is not None:
+                return dynamics
 
         return InstantaneousDynamics()
 
-    def _dynamics_from_family(self, family: str) -> StateDynamics | None:  # noqa: PLR6301
+    def _dynamics_from_family(self, family: str) -> StateDynamics | None:  # ruff: ignore[no-self-use]
         equilibrium_keys = ("equilibrium", "eqprop", "ep", "chl")
         if any(k in family for k in equilibrium_keys):
             return EnergyMinimizationDynamics(
@@ -1463,7 +1470,7 @@ class ModelAdapter:
             return SpikeIntegrationDynamics()
         return None
 
-    def _dynamics_from_locality(self, locality: LocalityLevel) -> StateDynamics | None:  # noqa: PLR6301
+    def _dynamics_from_locality(self, locality: LocalityLevel) -> StateDynamics | None:  # ruff: ignore[no-self-use]
         if locality == LocalityLevel.EQUILIBRIUM:
             return EnergyMinimizationDynamics()
         if locality == LocalityLevel.FORWARD_ONLY:
@@ -1482,10 +1489,11 @@ class ModelAdapter:
 
         # Priority 2: Model attributes
         if hasattr(self.model, "credit_assignment_type"):
-            credit_type = self.model.credit_assignment_type
-            credit = self._credit_from_type(credit_type, with_config=False)
-            if credit is not None:
-                return credit
+            credit_type = getattr(self.model, "credit_assignment_type", None)
+            if isinstance(credit_type, str):
+                credit = self._credit_from_type(credit_type, with_config=False)
+                if credit is not None:
+                    return credit
 
         # Priority 3: Family
         if self._metadata and self._metadata.family:
@@ -1496,7 +1504,7 @@ class ModelAdapter:
 
         return BackpropCredit()
 
-    def _credit_from_type(  # noqa: PLR6301
+    def _credit_from_type(  # ruff: ignore[no-self-use]
         self, credit_type: str, with_config: bool
     ) -> CreditAssignment | None:
         if credit_type == "equilibrium":
@@ -1519,7 +1527,7 @@ class ModelAdapter:
         cls = credit_map.get(credit_type)
         return cls() if cls else None
 
-    def _credit_from_family(self, family: str) -> CreditAssignment | None:  # noqa: PLR6301
+    def _credit_from_family(self, family: str) -> CreditAssignment | None:  # ruff: ignore[no-self-use]
         family_map: list[tuple[tuple[str, ...], type[CreditAssignment]]] = [
             (("eqprop", "equilibrium", "ep"), ThermodynamicContrast),
             (("fa", "feedback", "dfa"), RandomProjectionsCredit),
@@ -1601,7 +1609,7 @@ class MemristiveSubstrate(DigitalSubstrate):
         self._pulse_width = 100e-9    # Pulse width (s)
         self._drift_coefficient = 0.01  # Conductance drift per cycle
 
-    def quantize_weights(self, w: Tensor) -> Tensor:  # noqa: PLR6301
+    def quantize_weights(self, w: Tensor) -> Tensor:
         """Quantize weights to memristor conductance levels (positive, bounded)."""
         # Map from [-1, 1] to [G_min, G_max] conductance range
         w = torch.clamp(w, -1.0, 1.0)
@@ -1613,15 +1621,13 @@ class MemristiveSubstrate(DigitalSubstrate):
         scale = (g_max - g_min) / 255.0
         return ((conductance - g_min) / scale).round().clamp(0, 255) * scale + g_min
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         """Crossbar forward operator: I = V * G with IR-drop approximation."""
         def crossbar_forward(x: Tensor, w: Tensor) -> Tensor:
             # x: input voltages (batch_size, n_inputs)
             # w: conductance matrix (n_outputs, n_inputs)
             # Output: currents (batch_size, n_outputs)
             # Simplified IR-drop: voltage drop along columns
-            batch_size, n_inputs = x.shape
-            n_outputs = w.shape[0]
 
             # Compute ideal currents
             currents = x @ w.T  # (batch, n_outputs)
@@ -1640,7 +1646,7 @@ class MemristiveSubstrate(DigitalSubstrate):
 
         return crossbar_forward
 
-    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         """Pulse-based memristor weight update operator."""
         def memristor_update(pseudo_grad: Tensor, current_w: Tensor) -> Tensor:
             # Pulse-based update: conductance change proportional to pulse amplitude/duration
@@ -1696,7 +1702,7 @@ class NeuromorphicSubstrate(DigitalSubstrate):
         thermal_noise = torch.randn_like(s) * self.config.noise_level
         return s * spike_mask.float() + thermal_noise
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
         """Neuromorphic forward operator: spike-based convolution."""
         def neuromorphic_forward(x: Tensor, w: Tensor) -> Tensor:
             # x: spike trains (batch, time, n_inputs) or rates (batch, n_inputs)
@@ -1712,7 +1718,7 @@ class NeuromorphicSubstrate(DigitalSubstrate):
 
         return neuromorphic_forward
 
-    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
         """STDP-based weight update operator."""
         def stdp_update(pseudo_grad: Tensor, current_w: Tensor) -> Tensor:
             # STDP: pre-before-post -> LTP, post-before-pre -> LTD
@@ -1755,14 +1761,13 @@ class OpticalSubstrate(DigitalSubstrate):
         self._insertion_loss = 0.1      # dB per MZI
         self._phase_shifter_range = 2 * torch.pi  # Full 2π range
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         """Photonic forward operator: coherent interference in MZI mesh."""
         def photonic_forward(x: Tensor, w: Tensor) -> Tensor:
             # x: input field amplitudes (batch, n_inputs) - complex
             # w: MZI mesh parameters (phases) (n_outputs, n_inputs, 2) - internal, external
             # For real-valued weights, interpret as phase shifts
             # MZI transfer matrix: cos(phi/2) for bar, i*sin(phi/2) for cross
-            batch_size, n_inputs = x.shape
             n_outputs = w.shape[0]
 
             # Convert real weights to phases (assuming [-1,1] -> [-π, π])
@@ -1798,7 +1803,7 @@ class OpticalSubstrate(DigitalSubstrate):
 
         return photonic_forward
 
-    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
         """Phase shifter based weight update."""
         def phase_update(pseudo_grad: Tensor, current_w: Tensor) -> Tensor:
             # Update phases based on gradient
@@ -1834,13 +1839,12 @@ class QuantumSubstrate(DigitalSubstrate):
         self._amplitude_damping_prob = 0.005
         self._n_layers = 3
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         """Quantum circuit evaluation (simplified classical simulation)."""
         def quantum_forward(x: Tensor, w: Tensor) -> Tensor:
             # x: classical input (batch, n_features)
             # w: circuit parameters or weight matrix
             # Simplified: if w is 2D, treat as weight matrix; if 1D, treat as circuit params
-            batch_size = x.shape[0]
 
             if w.ndim == 2:
                 # Treat as weight matrix: x @ w.T
@@ -1874,7 +1878,7 @@ class QuantumSubstrate(DigitalSubstrate):
 
         return quantum_forward
 
-    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # noqa: PLR6301
+    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
         """Parameter shift rule for quantum gradients."""
         def quantum_update(pseudo_grad: Tensor, current_w: Tensor) -> Tensor:
             # Parameter shift rule: gradient = (f(θ+π/2) - f(θ-π/2)) / 2
@@ -1889,7 +1893,7 @@ class QuantizedSubstrate(DigitalSubstrate):
     def __init__(self, config: SubstrateConfig | None = None):
         super().__init__(config or SubstrateConfig(precision="int8"))
 
-    def quantize_weights(self, w: Tensor) -> Tensor:  # noqa: PLR6301
+    def quantize_weights(self, w: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
         scale = w.abs().max() / 127
         return (w / scale).round().clamp(-128, 127) * scale
 
@@ -1941,7 +1945,7 @@ class EnergyMinimizationDynamics:
         state.activations = h
         return state
 
-    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # noqa: PLR6301, ARG002
+    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use, unused-method-argument]
         # Simplified energy: reconstruction error
         acts = state.free_state
         if acts is None:
@@ -1997,10 +2001,11 @@ class PredictiveSettlingDynamics:
             # If it's already a list from a previous call, assume it's filtered
             return acts
         # Single tensor - compute intermediate activations using geometry
-        if hasattr(geometry, 'forward_with_intermediates'):
+        if hasattr(geometry, "forward_with_intermediates"):
             # We need the original input - get it from state.x
             if state.x is not None:
-                all_acts = geometry.forward_with_intermediates(state.x, self.substrate_ref)
+                # Type ignore: forward_with_intermediates is specific to FeedforwardGeometry
+                all_acts = geometry.forward_with_intermediates(state.x, self.substrate_ref)  # type: ignore[attr-defined]
                 # Filter to only linear layer outputs (every other activation starting from index 1)
                 # FeedforwardGeometry has: [input, linear1_out, relu1_out, linear2_out, relu2_out, ...]
                 # We want: [input, linear1_out, linear2_out, ..., output]
@@ -2018,14 +2023,16 @@ class PredictiveSettlingDynamics:
     def _extract_weights(self, geometry: Geometry, n_layers: int, device: torch.device) -> list[Tensor]:
         """Extract weight matrices from geometry."""
         weights = []
-        if hasattr(geometry, '_layers') and hasattr(geometry._layers, '__iter__'):
-            for layer in geometry._layers:
-                if isinstance(layer, torch.nn.Linear):
-                    weights.append(layer.weight)
-        elif hasattr(geometry, 'params'):
+        if hasattr(geometry, "_layers"):
+            layers = getattr(geometry, "_layers", None)
+            if layers is not None and hasattr(layers, "__iter__"):
+                for layer in layers:  # type: ignore[attr-defined]
+                    if isinstance(layer, torch.nn.Linear):
+                        weights.append(layer.weight)
+        elif hasattr(geometry, "params"):
             params = geometry.params
-            weights = [p for name, p in params.items() if 'weight' in name and p.ndim == 2]
-        
+            weights = [p for name, p in params.items() if "weight" in name and p.ndim == 2]
+
         if len(weights) != n_layers - 1:
             # Fallback: create identity-like weights
             weights = [
@@ -2112,7 +2119,7 @@ class PredictiveSettlingDynamics:
                     top_down = (weights[l].T @ errors[l + 1].T).T
                     update = top_down - errors[l]
 
-                if l < len(self._precision):
+                if self._precision is not None and l < len(self._precision):
                     update = update * self._precision[l]
 
                 new_act = layer_acts[l] + self.config.step_size * update
@@ -2141,20 +2148,32 @@ class PredictiveSettlingDynamics:
     def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:
         """Compute free energy (variational bound on negative log likelihood)."""
         # Need substrate reference for intermediate activations
-        if hasattr(self, 'substrate_ref'):
+        if hasattr(self, "substrate_ref"):
             pass  # Already set by settle
         layer_acts = state.free_state if state.free_state is not None else state.activations
         if not layer_acts or not isinstance(layer_acts, list):
-            return torch.tensor(0.0, device=state.activations.device if state.activations is not None else 'cpu')
+            # state.activations could be Tensor or list[Tensor], get device from first tensor
+            if state.activations is not None:
+                if isinstance(state.activations, list):
+                    device = state.activations[0].device if state.activations else "cpu"
+                else:
+                    device = state.activations.device
+            else:
+                device = "cpu"
+            return torch.tensor(0.0, device=device)
+        if len(layer_acts) == 0:
+            return torch.tensor(0.0, device="cpu")
 
-        n_layers = len(layer_acts)
-        device = layer_acts[0].device
+        # At this point layer_acts is guaranteed to be list[Tensor] with at least one element
+        acts: list[Tensor] = layer_acts
+        n_layers = len(acts)
+        device = acts[0].device
         self._init_precision(n_layers, device)
 
         weights = self._extract_weights(geometry, n_layers, device)
         if len(weights) != n_layers - 1:
             weights = [
-                torch.eye(layer_acts[i+1].shape[-1], layer_acts[i].shape[-1], device=device)
+                torch.eye(layer_acts[i + 1].shape[-1], layer_acts[i].shape[-1], device=device)
                 for i in range(n_layers - 1)
             ]
 
@@ -2163,7 +2182,7 @@ class PredictiveSettlingDynamics:
             pred = torch.nn.functional.linear(layer_acts[l + 1], weights[l].T)
             pred = torch.nn.functional.relu(pred)
             error = layer_acts[l] - pred
-            precision = self._precision[l] if l < len(self._precision) else torch.ones(1, device=device)
+            precision = self._precision[l] if self._precision is not None and l < len(self._precision) else torch.ones(1, device=device)
             precision_scalar = precision.squeeze()
             total_energy = total_energy + (error ** 2).sum() / (2 * precision_scalar)
 
@@ -2180,8 +2199,8 @@ class SpikeIntegrationDynamics:
         self,
         state: SystemState,
         geometry: Geometry,
-        substrate: Substrate,  # noqa: ARG002
-        target: Tensor | None = None,  # noqa: ARG002
+        substrate: Substrate,  # ruff: ignore[unused-method-argument]
+        target: Tensor | None = None,  # ruff: ignore[unused-method-argument]
     ) -> SystemState:
         # Simplified LIF dynamics
         h = state.activations
@@ -2203,7 +2222,7 @@ class SpikeIntegrationDynamics:
         state.activations = h
         return state
 
-    def compute_energy(self, _state: SystemState, _geometry: Geometry) -> Tensor:  # noqa: PLR6301
+    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use]
         return torch.tensor(0.0)
 
 
@@ -2261,7 +2280,7 @@ class LocalGoodnessCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(credit_type="local_goodness")
 
-    def compute_pseudo_gradient(  # noqa: PLR6301
+    def compute_pseudo_gradient(  # ruff: ignore[no-self-use]
         self,
         free_state: SystemState,
         nudged_state: SystemState,
@@ -2285,7 +2304,7 @@ class BackpropCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(credit_type="gradient")
 
-    def compute_pseudo_gradient(  # noqa: PLR6301
+    def compute_pseudo_gradient(  # ruff: ignore[no-self-use]
         self,
         free_state: SystemState,
         nudged_state: SystemState,
@@ -2309,7 +2328,7 @@ class TemporalTraceCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(credit_type="temporal_trace")
 
-    def compute_pseudo_gradient(  # noqa: PLR6301
+    def compute_pseudo_gradient(  # ruff: ignore[no-self-use]
         self,
         free_state: SystemState,
         nudged_state: SystemState,
@@ -2326,7 +2345,7 @@ class TargetInversionCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(credit_type="target_inversion")
 
-    def compute_pseudo_gradient(  # noqa: PLR6301
+    def compute_pseudo_gradient(  # ruff: ignore[no-self-use]
         self,
         free_state: SystemState,
         nudged_state: SystemState,
@@ -2346,7 +2365,7 @@ class RiemannianOrthogonalUpdate:
             update_type="riemannian_orthogonal"
         )
 
-    def _newton_schulz(self, g: Tensor, steps: int = 5) -> Tensor:  # noqa: PLR6301
+    def _newton_schulz(self, g: Tensor, steps: int = 5) -> Tensor:  # ruff: ignore[no-self-use]
         """Compute orthogonal projection via Newton-Schulz iteration."""
         a, b, c = 3.4445, -4.7750, 2.0315
         x = g
@@ -2358,13 +2377,13 @@ class RiemannianOrthogonalUpdate:
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
-        geometry: Geometry,  # noqa: ARG002
+        geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
         updated = {}
         for i, (name, param) in enumerate(params.items()):
             if i < len(pseudo_grads) and pseudo_grads[i] is not None:
                 grad = pseudo_grads[i]
-                if grad.ndim >= 2:  # noqa: PLR2004
+                if grad.ndim >= 2:  # ruff: ignore[magic-value-comparison]
                     # Orthogonalize the gradient
                     grad = self._newton_schulz(grad, self.config.ortho_steps)
                 updated[name] = param - self.config.step_size * grad
@@ -2385,7 +2404,7 @@ class SpectralConstrainedUpdate:
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
-        geometry: Geometry,  # noqa: ARG002
+        geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
         updated = {}
         min_ndim_for_svd = 2
@@ -2414,7 +2433,7 @@ class NaturalGradientUpdate:
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
-        geometry: Geometry,  # noqa: ARG002
+        geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
         updated = {}
         for i, (name, param) in enumerate(params.items()):
@@ -2448,7 +2467,7 @@ class ElasticConsolidationUpdate:
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
-        geometry: Geometry,  # noqa: ARG002
+        geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
         updated = {}
         for i, (name, param) in enumerate(params.items()):
@@ -2492,7 +2511,7 @@ class _AdaptedSystem:
     update: ParameterUpdate
     _model: nn.Module
 
-    def __init__(  # noqa: PLR0913, PLR0917
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         substrate: Substrate,
         geometry: Geometry,
@@ -2523,7 +2542,7 @@ class _AdaptedSystem:
     def forward(self, x: Tensor) -> Tensor:
         return self._model(x)  # type: ignore[operator]
 
-    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:  # noqa: PLR6301
+    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
         """Compute task loss from final state (required by System protocol)."""
         acts = state.activations
         if acts is None:

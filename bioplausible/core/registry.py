@@ -9,7 +9,10 @@ import pathlib
 from collections.abc import Callable
 from dataclasses import MISSING, dataclass, field, fields
 from enum import Enum, StrEnum
-from typing import Literal, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, Literal, Protocol, TypeVar, cast
+
+if TYPE_CHECKING:
+    from bioplausible.core.ontology import System
 
 from bioplausible.core.exceptions import IncompatibilityError as _IncompatibilityError
 from bioplausible.core.logging import get_logger
@@ -331,9 +334,11 @@ class Registry:
         if category not in cls._components:
             cls._components[category] = {}
 
-        def decorator(component: Component, _name: str = name) -> Component:
+        def decorator(component: Component, _name: str | None = name) -> Component:
             if _name is None:
                 _name = getattr(component, "__name__", repr(component))
+            # _name is guaranteed to be str at this point
+            assert _name is not None
             if _name in cls._components[category]:
                 logger.warning("Overwriting component %s/%s", category.value, _name)
             metadata = ComponentMetadata(
@@ -479,7 +484,7 @@ class Registry:
     ) -> dict[str, list[str]]:
         """List all registered components, optionally filtered by category."""
         if category is not None:
-            cat = cls._resolve_category(category)
+            cat: ComponentCategory = cls._resolve_category(category)
             if cat not in cls._components:
                 return {cat.value: []}
             return {cat.value: list(cls._components[cat].keys())}
@@ -564,7 +569,7 @@ class Registry:
         return required.issubset(provided)
 
     @classmethod
-    def to_system(cls, model_name: str, **model_kwargs) -> "System":
+    def to_system(cls, model_name: str, **model_kwargs) -> System:
         """Project a registered model into the 5-D ontology as a System.
 
         Creates a ModelAdapter for the registered model and returns its
@@ -595,14 +600,15 @@ class Registry:
         if isinstance(component, type):
             model = component(**model_kwargs)
         else:
-            model = component(**model_kwargs)
+            # component is a callable factory function
+            model = component(**model_kwargs)  # type: ignore[operator]
 
         # Adapt to 5-D ontology
         adapter = ModelAdapter(model, metadata)
         return adapter.to_system()
 
     @classmethod
-    def to_system_by_category(cls, category: ComponentCategory | str, name: str) -> "System":
+    def to_system_by_category(cls, category: ComponentCategory | str, name: str) -> System:
         """Project any registered component into the 5-D ontology.
 
         For models, this is the same as ``to_system``. For other categories
@@ -610,12 +616,15 @@ class Registry:
         the component mapped to its corresponding layer.
         """
         from bioplausible.core.ontology import (
-            ModelAdapter, System, compose_system,
-            DigitalSubstrate, FeedforwardGeometry, InstantaneousDynamics,
-            ThermodynamicContrast, EuclideanUpdate,
-            GeometryConfig, StateDynamicsConfig,
-            CreditAssignmentConfig, ParameterUpdateConfig,
+            DigitalSubstrate,
+            EuclideanUpdate,
+            FeedforwardGeometry,
+            GeometryConfig,
+            InstantaneousDynamics,
+            ModelAdapter,
+            ThermodynamicContrast,
         )
+        from bioplausible.core.system_trainer import compose_system
 
         cat = cls._resolve_category(category)
         component = cls.get(cat, name)
@@ -624,7 +633,7 @@ class Registry:
         if isinstance(component, type):
             instance = component()
         else:
-            instance = component()
+            instance = component()  # type: ignore[operator]
 
         if cat == ComponentCategory.MODEL:
             adapter = ModelAdapter(instance, metadata)
@@ -671,8 +680,6 @@ class Registry:
         Returns:
             List of matching components with their 5-D layer assignments.
         """
-        from bioplausible.core.ontology import ModelAdapter
-
         # Layer to metadata field mapping
         layer_fields = {
             "substrate": "compute_profile",
@@ -800,7 +807,7 @@ class Registry:
 
         # Augment results with 5-D layer assignments
         for r in results:
-            r["ontology_layers"] = cls._infer_ontology_layers(r["metadata"])
+            r["ontology_layers"] = cls._infer_ontology_layers(r["metadata"])  # type: ignore[arg-type]
 
         return results
 
@@ -826,8 +833,7 @@ class Registry:
         import yaml  # local import: keep module import cheap (AGENTS.md)
 
         export_data: dict[str, dict[str, dict[str, object]]] = {}
-        for category, comps in cls._components.items():
-            cat_name = category.value
+        for cat_name, comps in cls._components.items():
             export_data[cat_name] = {}
             for name, info in comps.items():
                 meta = cast("ComponentMetadata", info["metadata"])
