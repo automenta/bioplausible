@@ -362,20 +362,6 @@ The framework supports **7 evaluation domains** with 60+ tasks/datasets, unified
 **Tasks**: `mnist`, `fashion_mnist`, `kmnist`, `usps`, `cifar10`, `cifar100`, `svhn`, `digits`, `xor`, `spiral`, `circles`  
 (image classification + synthetic boolean tasks)
 
-**Models Registered (Vision-Compatible)**
-
-| Model Family | Variants | Locality | Requires Backward |
-|--------------|----------|----------|-------------------|
-| `backprop` | mlp, cnn, resnet | global | ✅ |
-| `eqprop` | mlp, conv, transformer | equilibrium | ❌ |
-| `fa` | standard, dfa, adaptive, stochastic | layerwise | ✅ (random) |
-| `predictive_coding` | standard, hierarchical | local | ❌ |
-| `hebbian` | 3d, oja, 3-factor | forward-only | ❌ |
-| `pepita` | forward-forward, goodness | forward-only | ❌ |
-| `target_prop` | standard, difference | layerwise | ❌ |
-| `spiking` | lif, izhikevich, stdp | temporal | ❌ |
-| `tile` | ep, fa, pc, tp, hebbian | equilibrium/local | varies |
-
 **Quick Commands**
 
 ```bash
@@ -394,16 +380,6 @@ python experiments/cross_domain_transfer.py --source vision --target lm
 ### 📝 Language Modeling Domain
 
 **Tasks**: `tiny_shakespeare` (char), `char_ngram`, `wikitext2`, `penn_treebank` (word-level)
-
-**Models Registered (LM-Compatible)**
-
-| Model Family | Variants | Key Feature |
-|--------------|----------|-------------|
-| `backprop` | lstm, transformer, gpt | Standard autoregressive |
-| `eqprop` | causal_transformer, attention_only, recurrent_core | Equilibrium attention |
-| `fa` | transformer_fa, lstm_fa | Random feedback in LM |
-| `pepita` | ff_lm, goodness_lm | Forward-forward LM |
-| `tile` | ep_tile_lm, fa_tile_lm | Tiled language models |
 
 **Key Experiments**
 
@@ -424,17 +400,6 @@ biopl scientist --campaign campaigns/lm_hypercube.yaml
 
 **Tasks**: `cartpole`, `pendulum`, `acrobot`, `mountain_car`, `lunar_lander` (Gymnasium classic control + Box2D)
 
-**Models Registered (RL-Compatible)**
-
-| Model Family | Algorithm | Policy Type | Notes |
-|--------------|-----------|-------------|-------|
-| `backprop` | PPO, A2C, DQN, SAC | MLP/Gaussian | Standard baselines |
-| `eqprop` | EqProp-PPO, EqProp-A2C | Energy-based | Equilibrium actor-critic |
-| `fa` | FA-PPO, FA-A2C | Random feedback | Weight-transport free RL |
-| `hebbian` | Hebbian-RL | Local plasticity | Pure Hebbian policy gradient |
-| `spiking` | SNN-PPO, STDP-RL | Spiking | Neuromorphic RL |
-| `tile` | Tile-PPO | Tiled actor-critic | Distributed RL |
-
 **Key Experiments**
 
 ```bash
@@ -453,16 +418,6 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 ### 🕸️ Graph Domain
 
 **Tasks**: `cora`, `citeseer`, `pubmed` (Planetoid citation networks, node classification)
-
-**Models Registered (Graph-Compatible)**
-
-| Model Family | Variants | Aggregation |
-|--------------|----------|-------------|
-| `backprop` | GCN, GAT, GraphSAGE | Message passing |
-| `eqprop` | EqProp-GCN, EqProp-GAT | Equilibrium message passing |
-| `fa` | FA-GCN, FA-GAT | Random feedback GNN |
-| `predictive_coding` | PC-GNN | Predictive coding on graphs |
-| `tile` | Tile-GCN | Tiled graph learning |
 
 ---
 
