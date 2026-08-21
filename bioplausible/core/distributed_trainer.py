@@ -10,7 +10,6 @@ Leverages the 5-D fault lines for natural distribution:
 
 from __future__ import annotations
 
-import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
@@ -662,7 +661,7 @@ class DistributedSystemTrainer:
                     await self._grpc_pool.sync_boundary_with_peer(
                         node_id, tile_ids, acts, step
                     )
-                except (grpc.RpcError, asyncio.TimeoutError) as e:
+                except (TimeoutError, grpc.RpcError) as e:
                     lost = self._identify_lost_workers()
                     raise DistributedTrainingError(
                         f"Worker communication failed at step {step}: {e}",

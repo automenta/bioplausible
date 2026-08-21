@@ -5,39 +5,28 @@ Tests the L7 Seam Lock: real gRPC transport across processes.
 
 from __future__ import annotations
 
-import multiprocessing
-import os
-import signal
 import asyncio
-import grpc
+
 import pytest
 import torch
 
-from bioplausible.core.ontology import (
-    BackpropCredit,
-    DigitalSubstrate,
-    EuclideanUpdate,
-    FeedforwardGeometry,
-    GeometryConfig,
-    InstantaneousDynamics,
-    ParameterUpdateConfig,
-    SystemState,
-    TileGeometry,
-)
-from bioplausible.core.system_trainer import SystemTrainer, SystemTrainerConfig, compose_system
-from bioplausible.p2p.grpc_service import GRPCServer, GRPCConnectionPool
+from bioplausible.p2p.grpc_service import GRPCServer
 
 
 def run_server(port_queue, geometry_shard, node_id, ready_event, barrier):
     """Run gRPC server in a separate process."""
-    asyncio.run(_run_server_async(port_queue, geometry_shard, node_id, ready_event, barrier))
+    asyncio.run(
+        _run_server_async(port_queue, geometry_shard, node_id, ready_event, barrier)
+    )
 
 
 async def _run_server_async(port_queue, geometry_shard, node_id, ready_event, barrier):
     """Async server runner."""
     server = GRPCServer(geometry_shard, node_id, port=0, device=torch.device("cpu"))
     await server.start()
-    actual_port = server._server._port if hasattr(server._server, '_port') else port_queue.get()
+    actual_port = (
+        server._server._port if hasattr(server._server, "_port") else port_queue.get()
+    )
     port_queue.put(actual_port)
     ready_event.set()
     barrier.wait()  # Wait for all servers + client ready
@@ -72,10 +61,7 @@ def test_grpc_seam_fault_injection():
     # Verify the error class exists and has the right structure
     try:
         raise DistributedTrainingError(
-            "test error",
-            lost_workers=["node_1"],
-            step=5,
-            partial_metrics={"loss": 0.5}
+            "test error", lost_workers=["node_1"], step=5, partial_metrics={"loss": 0.5}
         )
     except DistributedTrainingError as e:
         assert e.lost_workers == ["node_1"]

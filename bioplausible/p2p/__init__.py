@@ -12,12 +12,12 @@ from bioplausible.p2p.state import load_state, save_state
 
 __all__ = [
     "DHTNode",
+    "GRPCClient",
+    "GRPCConnectionPool",
+    "GRPCServer",
     "P2PEvolution",
+    "TileMeshServicer",
     "get_config_hash",
     "load_state",
     "save_state",
-    "GRPCConnectionPool",
-    "GRPCServer",
-    "GRPCClient",
-    "TileMeshServicer",
 ]

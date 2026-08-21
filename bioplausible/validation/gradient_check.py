@@ -249,11 +249,12 @@ def check_surrogate_equivalence(
         (mean_surrogate_cosine, mean_true_gradient_cosine) for KB fingerprint
     """
     import torch
-    from torch import Tensor
 
     # Get pseudo-gradients from the credit rule
     loss = nudged_state.loss if nudged_state.loss is not None else torch.tensor(0.0)
-    pseudo_grads = credit.compute_pseudo_gradient(free_state, nudged_state, loss, geometry)
+    pseudo_grads = credit.compute_pseudo_gradient(
+        free_state, nudged_state, loss, geometry
+    )
 
     # Get surrogate objective from the credit rule
     try:
@@ -310,11 +311,14 @@ def check_surrogate_equivalence(
                 ).item()
                 surrogate_cosines.append(cos)
 
-    mean_surrogate_cos = sum(surrogate_cosines) / len(surrogate_cosines) if surrogate_cosines else 0.0
+    mean_surrogate_cos = (
+        sum(surrogate_cosines) / len(surrogate_cosines) if surrogate_cosines else 0.0
+    )
 
     # KB integration - record gradient fingerprint
     try:
         from bioplausible.knowledge.kb import KB
+
         kb = KB()
         kb.record_gradient_fingerprint(
             family=name,

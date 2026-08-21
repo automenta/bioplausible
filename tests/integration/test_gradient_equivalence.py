@@ -26,6 +26,24 @@ from bioplausible.core.local_learning.rules.fa import (
 from bioplausible.core.local_learning.rules.hebbian import (  # ruff: ignore[module-import-not-at-top-of-file]
     ContrastiveHebbianLearning as _CHL,
 )
+
+# 5-D Ontology imports for layer verification
+from bioplausible.core.ontology import (
+    BackpropCredit,
+    CreditAssignmentConfig,
+    DigitalSubstrate,
+    EnergyMinimizationDynamics,
+    EuclideanUpdate,
+    FeedforwardGeometry,
+    GeometryConfig,
+    InstantaneousDynamics,
+    ParameterUpdateConfig,
+    RecurrentGeometry,
+    RiemannianOrthogonalUpdate,
+    StateDynamicsConfig,
+    ThermodynamicContrast,
+)
+from bioplausible.core.system_trainer import compose_system
 from bioplausible.validation.gradient_check import (
     check_gradient_equivalence,
     loss_ce,
@@ -37,25 +55,6 @@ from bioplausible.zoo.mep.presets import (
 from bioplausible.zoo.models.eqprop import (
     LoopedMLP,
 )
-
-# 5-D Ontology imports for layer verification
-from bioplausible.core.ontology import (
-    DigitalSubstrate,
-    FeedforwardGeometry,
-    RecurrentGeometry,
-    InstantaneousDynamics,
-    EnergyMinimizationDynamics,
-    ThermodynamicContrast,
-    BackpropCredit,
-    RandomProjectionsCredit,
-    EuclideanUpdate,
-    RiemannianOrthogonalUpdate,
-    GeometryConfig,
-    StateDynamicsConfig,
-    CreditAssignmentConfig,
-    ParameterUpdateConfig,
-)
-from bioplausible.core.system_trainer import compose_system
 
 
 def test_contrastive_gradients():

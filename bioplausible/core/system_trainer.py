@@ -562,7 +562,9 @@ def compose_system_from_configs(
         "quantized": "QuantizedSubstrate",
         "noisy": "NoisySubstrate",
     }
-    substrate_cls_name = substrate_map.get(substrate.precision.lower(), "DigitalSubstrate")
+    substrate_cls_name = substrate_map.get(
+        substrate.precision.lower(), "DigitalSubstrate"
+    )
     substrate_cls = globals().get(substrate_cls_name, DigitalSubstrate)
     substrate_instance = substrate_cls(substrate)
 
@@ -575,6 +577,7 @@ def compose_system_from_configs(
         )
     elif topology_type in ("tile_mesh", "tile"):
         from bioplausible.core.ontology import TileGeometry
+
         geometry_instance = TileGeometry(
             geometry,
             neurons_per_tile=8,
@@ -603,7 +606,9 @@ def compose_system_from_configs(
     elif credit_type in ("local_goodness", "forward_only"):
         credit_instance = LocalGoodnessCredit(credit)
     elif credit_type in ("temporal_trace", "spiking"):
-        credit_instance = TargetInversionCredit(credit)  # Will use TemporalTraceCredit if available
+        credit_instance = TargetInversionCredit(
+            credit
+        )  # Will use TemporalTraceCredit if available
     elif credit_type in ("target_inversion", "target_prop"):
         credit_instance = TargetInversionCredit(credit)
     else:
@@ -622,7 +627,13 @@ def compose_system_from_configs(
     else:
         update_instance = EuclideanUpdate(update)
 
-    return compose_system(substrate_instance, geometry_instance, dynamics_instance, credit_instance, update_instance)
+    return compose_system(
+        substrate_instance,
+        geometry_instance,
+        dynamics_instance,
+        credit_instance,
+        update_instance,
+    )
 
 
 __all__ = [
@@ -630,8 +641,8 @@ __all__ = [
     "SystemTrainerConfig",
     "compose_system",
     "compose_system_from_configs",
-    "extract_config",
     "create_backprop_system",
     "create_eqprop_system",
     "create_fa_system",
+    "extract_config",
 ]

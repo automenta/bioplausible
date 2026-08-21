@@ -24,6 +24,7 @@ from bioplausible.core.system_trainer import (
 
 __all__ = [
     "LegacyEqPropAdapter",
+    "create_eqprop_system",
     "get_native_eqprop_system",
     "migrate_to_native",
 ]

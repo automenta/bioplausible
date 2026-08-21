@@ -152,37 +152,37 @@ def _meta_text(name: str) -> str:
     )
 
 
-def _build_ontology_system(layer_choices: dict[str, str]) -> "System":
+def _build_ontology_system(layer_choices: dict[str, str]) -> System:
     """Build a System from 5 layer choices."""
     from bioplausible.core.ontology import (
-        DigitalSubstrate,
-        NoisySubstrate,
-        QuantizedSubstrate,
-        OpticalSubstrate,
-        MemristiveSubstrate,
-        NeuromorphicSubstrate,
-        QuantumSubstrate,
-        FeedforwardGeometry,
-        RecurrentGeometry,
-        InstantaneousDynamics,
-        EnergyMinimizationDynamics,
-        PredictiveSettlingDynamics,
-        SpikeIntegrationDynamics,
-        ThermodynamicContrast,
-        RandomProjectionsCredit,
-        LocalGoodnessCredit,
-        TemporalTraceCredit,
-        TargetInversionCredit,
         BackpropCredit,
+        CreditAssignmentConfig,
+        DigitalSubstrate,
+        ElasticConsolidationUpdate,
+        EnergyMinimizationDynamics,
         EuclideanUpdate,
+        FeedforwardGeometry,
+        GeometryConfig,
+        InstantaneousDynamics,
+        LocalGoodnessCredit,
+        MemristiveSubstrate,
+        NaturalGradientUpdate,
+        NeuromorphicSubstrate,
+        NoisySubstrate,
+        OpticalSubstrate,
+        ParameterUpdateConfig,
+        PredictiveSettlingDynamics,
+        QuantizedSubstrate,
+        QuantumSubstrate,
+        RandomProjectionsCredit,
+        RecurrentGeometry,
         RiemannianOrthogonalUpdate,
         SpectralConstrainedUpdate,
-        NaturalGradientUpdate,
-        ElasticConsolidationUpdate,
-        GeometryConfig,
+        SpikeIntegrationDynamics,
         StateDynamicsConfig,
-        CreditAssignmentConfig,
-        ParameterUpdateConfig,
+        TargetInversionCredit,
+        TemporalTraceCredit,
+        ThermodynamicContrast,
     )
     from bioplausible.core.system_trainer import compose_system
 
@@ -288,8 +288,6 @@ def _create_ontology_panel(
     layer_choices: dict[str, str], task: str, epochs: int, lr: float
 ) -> DemoPanel:
     """Create a DemoPanel from an ontology-composed System."""
-    from bioplausible.core.registry import Registry, ComponentCategory
-    from bioplausible.core.trainer import TrainerConfig
 
     # Build the system
     system = _build_ontology_system(layer_choices)
@@ -324,15 +322,14 @@ def create_page(demo: DemoUi) -> None:
     classic_controls = ui.column()
     ontology_controls = ui.column().classes("hidden")
 
-    with classic_controls:
-        with ui.row():
-            task_sel = ui.select(
-                [t.name for t in build_tasks()], value="mnist", label="Task"
-            )
-            model_a = ui.select(DEMO_MODELS, value="tile_pc", label="Config A")
-            model_b = ui.select(DEMO_MODELS, value="backprop_mlp", label="Config B")
-            epochs = ui.number(value=5, min=1, max=50, label="Epochs")
-            lr = ui.number(value=0.001, format="%.4f", label="Learning Rate")
+    with classic_controls, ui.row():
+        task_sel = ui.select(
+            [t.name for t in build_tasks()], value="mnist", label="Task"
+        )
+        model_a = ui.select(DEMO_MODELS, value="tile_pc", label="Config A")
+        model_b = ui.select(DEMO_MODELS, value="backprop_mlp", label="Config B")
+        epochs = ui.number(value=5, min=1, max=50, label="Epochs")
+        lr = ui.number(value=0.001, format="%.4f", label="Learning Rate")
 
     # --- Ontology Mode Controls ---
     with ontology_controls:
@@ -398,8 +395,7 @@ def create_page(demo: DemoUi) -> None:
             pass
 
     def sync_b_ont() -> None:
-        if demo.panel_b and hasattr(demo.panel_b, "_ontology_system"):
-            pass
+        demo.panel_b and hasattr(demo.panel_b, "_ontology_system")
 
     with ui.row():
         with ui.column():
@@ -526,6 +522,7 @@ def create_page(demo: DemoUi) -> None:
 def _run_ontology_system(panel: DemoPanel) -> None:
     """Run training for an ontology-composed system."""
     import torch
+
     from bioplausible.domains.registry import resolve_task
 
     try:

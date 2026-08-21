@@ -714,6 +714,7 @@ def test_l7_system_trainer_runs() -> None:
 # Phase 1 — Test Logic Corrections
 # ======================================================================
 
+
 # C7 — Add EuclideanUpdate / BackpropCredit Property Tests
 class TestU_EuclideanProperties:
     """Property tests for EuclideanUpdate (SGD with momentum)."""
@@ -725,7 +726,9 @@ class TestU_EuclideanProperties:
             enable_deterministic_cuda()
 
         with seeded(42):
-            update = EuclideanUpdate(ParameterUpdateConfig(step_size=0.01, momentum=0.9))
+            update = EuclideanUpdate(
+                ParameterUpdateConfig(step_size=0.01, momentum=0.9)
+            )
             params = {"w": torch.randn(10, 10, device=device)}
             grads = [torch.randn(10, 10, device=device)]
 
@@ -764,7 +767,9 @@ class TestC_BackpropCreditProperties:
                 state.activations = sys.substrate.inject_state_noise(state.activations)
 
             # Free phase
-            free_state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=None)
+            free_state = sys.dynamics.settle(
+                state, sys.geometry, sys.substrate, target=None
+            )
             free_state.energy = sys.dynamics.compute_energy(free_state, sys.geometry)
 
             # Nudged phase - recompute forward for fresh graph
@@ -772,8 +777,12 @@ class TestC_BackpropCreditProperties:
             state.activations = sys.geometry.forward(x, sys.substrate)
             if state.activations is not None:
                 state.activations = sys.substrate.inject_state_noise(state.activations)
-            nudged_state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=y)
-            nudged_state.energy = sys.dynamics.compute_energy(nudged_state, sys.geometry)
+            nudged_state = sys.dynamics.settle(
+                state, sys.geometry, sys.substrate, target=y
+            )
+            nudged_state.energy = sys.dynamics.compute_energy(
+                nudged_state, sys.geometry
+            )
             nudged_state.loss = sys._compute_loss(nudged_state, y)
 
             # Get pseudo-gradients from BackpropCredit (uses autograd internally)
@@ -786,7 +795,9 @@ class TestC_BackpropCreditProperties:
             state.activations = sys.geometry.forward(x, sys.substrate)
             if state.activations is not None:
                 state.activations = sys.substrate.inject_state_noise(state.activations)
-            nudged_state2 = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=y)
+            nudged_state2 = sys.dynamics.settle(
+                state, sys.geometry, sys.substrate, target=y
+            )
             nudged_state2.loss = sys._compute_loss(nudged_state2, y)
 
             sys_geometry = sys.geometry
@@ -805,7 +816,9 @@ class TestC_BackpropCreditProperties:
                     cos = torch.nn.functional.cosine_similarity(
                         pg_flat.unsqueeze(0), ag_flat.unsqueeze(0)
                     ).item()
-                    assert cos > 0.99, f"BackpropCredit direction mismatch: cos={cos:.4f}"
+                    assert cos > 0.99, (
+                        f"BackpropCredit direction mismatch: cos={cos:.4f}"
+                    )
 
 
 # C9 — Neuromorphic Passivity Test: Deterministic Noise Comparison
@@ -830,7 +843,7 @@ def test_s_neuromorphic_passivity() -> None:
 
     # Now ‖na - nb‖ ≤ ‖a - b‖ (deterministic noise cancels)
     assert torch.norm(na - nb) <= torch.norm(a - b) + 1e-6, (
-        f"Passivity violated: ‖na-nb‖={torch.norm(na-nb):.6f} > ‖a-b‖={torch.norm(a-b):.6f}"
+        f"Passivity violated: ‖na-nb‖={torch.norm(na - nb):.6f} > ‖a-b‖={torch.norm(a - b):.6f}"
     )
 
 
@@ -886,6 +899,7 @@ def test_u_elastic_moves_toward_old_params() -> None:
 # Workstream A — Certify Remaining C & U Members
 # ======================================================================
 
+
 # A1 — LocalGoodnessCredit & TargetInversionCredit: Surrogate Objective Locks
 class TestC_SurrogateLocks:
     """Surrogate objective property tests using check_surrogate_equivalence."""
@@ -897,12 +911,11 @@ class TestC_SurrogateLocks:
             enable_deterministic_cuda()
 
         from bioplausible.core.ontology import (
-            LocalGoodnessCredit,
+            DigitalSubstrate,
             FeedforwardGeometry,
             GeometryConfig,
             InstantaneousDynamics,
-            DigitalSubstrate,
-            SystemState,
+            LocalGoodnessCredit,
         )
         from bioplausible.validation.gradient_check import check_surrogate_equivalence
 
@@ -911,7 +924,9 @@ class TestC_SurrogateLocks:
                 substrate=DigitalSubstrate(),
                 geometry=FeedforwardGeometry(
                     GeometryConfig(
-                        input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
+                        input_dim=WIDTH,
+                        output_dim=10,
+                        hidden_dims=(WIDTH,) * (DEPTH - 1),
                     )
                 ),
                 dynamics=InstantaneousDynamics(),
@@ -929,7 +944,9 @@ class TestC_SurrogateLocks:
             )
             # Only check if surrogate is implemented (cos > 0)
             if mean_cos > 0:
-                assert mean_cos >= 0.95, f"LocalGoodnessCredit surrogate cos={mean_cos:.3f} < 0.95"
+                assert mean_cos >= 0.95, (
+                    f"LocalGoodnessCredit surrogate cos={mean_cos:.3f} < 0.95"
+                )
 
     def test_target_inversion_surrogate(self) -> None:
         """TargetInversionCredit surrogate objective FD check."""
@@ -938,11 +955,11 @@ class TestC_SurrogateLocks:
             enable_deterministic_cuda()
 
         from bioplausible.core.ontology import (
-            TargetInversionCredit,
+            DigitalSubstrate,
             FeedforwardGeometry,
             GeometryConfig,
             InstantaneousDynamics,
-            DigitalSubstrate,
+            TargetInversionCredit,
         )
         from bioplausible.validation.gradient_check import check_surrogate_equivalence
 
@@ -951,7 +968,9 @@ class TestC_SurrogateLocks:
                 substrate=DigitalSubstrate(),
                 geometry=FeedforwardGeometry(
                     GeometryConfig(
-                        input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
+                        input_dim=WIDTH,
+                        output_dim=10,
+                        hidden_dims=(WIDTH,) * (DEPTH - 1),
                     )
                 ),
                 dynamics=InstantaneousDynamics(),
@@ -968,18 +987,23 @@ class TestC_SurrogateLocks:
                 "target_inversion", sys.credit, free_state, nudged_state, sys.geometry
             )
             if mean_cos > 0:
-                assert mean_cos >= 0.95, f"TargetInversionCredit surrogate cos={mean_cos:.3f} < 0.95"
+                assert mean_cos >= 0.95, (
+                    f"TargetInversionCredit surrogate cos={mean_cos:.3f} < 0.95"
+                )
 
 
 # A2 — TemporalTraceCredit: STDP Window Property Tests
 class TestC_TemporalTraceSTDP:
     """STDP window property tests for TemporalTraceCredit."""
 
-    @pytest.mark.parametrize("pre_time,post_time,expected_sign", [
-        (0.0, 5.0, +1),   # Causal pre->post => potentiation
-        (5.0, 0.0, -1),   # Anti-causal post->pre => depression
-        (0.0, 0.0, 0),    # Simultaneous => zero (antisymmetry)
-    ])
+    @pytest.mark.parametrize(
+        "pre_time,post_time,expected_sign",
+        [
+            (0.0, 5.0, +1),  # Causal pre->post => potentiation
+            (5.0, 0.0, -1),  # Anti-causal post->pre => depression
+            (0.0, 0.0, 0),  # Simultaneous => zero (antisymmetry)
+        ],
+    )
     def test_stdp_causal_potentiation(self, pre_time, post_time, expected_sign) -> None:
         """STDP window sign matches causal/anti-causal timing."""
         from bioplausible.core.ontology import TemporalTraceCredit
@@ -993,7 +1017,9 @@ class TestC_TemporalTraceSTDP:
         window_val = window[0, 0].item()  # Single pair
 
         if expected_sign == 0:
-            assert abs(window_val) < 1e-6, f"Simultaneous spikes should give zero: {window_val}"
+            assert abs(window_val) < 1e-6, (
+                f"Simultaneous spikes should give zero: {window_val}"
+            )
         else:
             assert (window_val > 0) == (expected_sign > 0), (
                 f"Expected sign {expected_sign}, got {window_val}"
@@ -1009,7 +1035,9 @@ class TestC_TemporalTraceSTDP:
         dt = torch.linspace(-50, 50, 101)
 
         window_pos = credit.compute_stdp_window(pre_spikes, post_spikes, dt)
-        window_neg = credit.compute_stdp_window(post_spikes, pre_spikes, dt)  # Swap for -Δt
+        window_neg = credit.compute_stdp_window(
+            post_spikes, pre_spikes, dt
+        )  # Swap for -Δt
 
         assert torch.allclose(window_pos, -window_neg, atol=1e-6), (
             "STDP window not antisymmetric"
@@ -1033,7 +1061,9 @@ class TestC_TemporalTraceSTDP:
 
         # Magnitude should decrease with Δt
         for i in range(1, len(windows)):
-            assert windows[i] < windows[i-1], f"STDP magnitude should decay: {windows}"
+            assert windows[i] < windows[i - 1], (
+                f"STDP magnitude should decay: {windows}"
+            )
 
 
 # A3 — U-Axis Step Property Tests (Corrected)
@@ -1059,8 +1089,6 @@ class TestU_StepProperties:
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        from bioplausible.core.ontology import SpectralConstrainedUpdate
-
         with seeded(42):
             update = SpectralConstrainedUpdate(ParameterUpdateConfig(spectral_norm=1.0))
             grad = torch.randn(10, 10, device=device)
@@ -1069,7 +1097,9 @@ class TestU_StepProperties:
             s_clamped = torch.clamp(s, max=1.0)
             projected = u @ torch.diag(s_clamped) @ v
             s_proj = torch.linalg.svdvals(projected)
-            assert s_proj.max().item() <= 1.0 + 1e-5  # Slightly larger tolerance for numerical precision
+            assert (
+                s_proj.max().item() <= 1.0 + 1e-5
+            )  # Slightly larger tolerance for numerical precision
 
     def test_natural_gradient_fisher_whitening(self) -> None:
         """NaturalGradientUpdate: natural gradient = g / sqrt(g^2 + damping)."""
@@ -1097,7 +1127,9 @@ class TestU_StepProperties:
             enable_deterministic_cuda()
 
         with seeded(42):
-            update = ElasticConsolidationUpdate(ParameterUpdateConfig(ewc_lambda=1000.0))
+            update = ElasticConsolidationUpdate(
+                ParameterUpdateConfig(ewc_lambda=1000.0)
+            )
             params = {"w": torch.randn(10, 10, device=device)}
             grads = [torch.randn(10, 10, device=device)]
             old_params = {"w": torch.ones(10, 10, device=device)}
@@ -1113,6 +1145,7 @@ class TestU_StepProperties:
 # Workstream B — Certify Remaining D & S Members
 # ======================================================================
 
+
 # B1 — SpikeIntegrationDynamics: Lyapunov Lock
 def test_d_spike_integration_lyapunov() -> None:
     """SpikeIntegrationDynamics: membrane potentials bounded, spike count variance non-increasing."""
@@ -1121,10 +1154,10 @@ def test_d_spike_integration_lyapunov() -> None:
         enable_deterministic_cuda()
 
     from bioplausible.core.ontology import (
-        SpikeIntegrationDynamics,
+        DigitalSubstrate,
         FeedforwardGeometry,
         GeometryConfig,
-        DigitalSubstrate,
+        SpikeIntegrationDynamics,
         StateDynamicsConfig,
     )
     from bioplausible.core.system_trainer import compose_system
@@ -1134,9 +1167,7 @@ def test_d_spike_integration_lyapunov() -> None:
         sys = compose_system(
             substrate=DigitalSubstrate(),
             geometry=FeedforwardGeometry(
-                GeometryConfig(
-                    input_dim=WIDTH, output_dim=WIDTH, hidden_dims=()
-                )
+                GeometryConfig(input_dim=WIDTH, output_dim=WIDTH, hidden_dims=())
             ),
             dynamics=SpikeIntegrationDynamics(
                 StateDynamicsConfig(
@@ -1170,7 +1201,7 @@ def test_d_spike_integration_lyapunov() -> None:
         totals = [sc.sum().item() for sc in spike_counts]
         for i in range(1, len(totals)):
             # Variance of remaining steps should not increase
-            var_before = np.var(totals[i-1:])
+            var_before = np.var(totals[i - 1 :])
             var_after = np.var(totals[i:])
             assert var_after <= var_before + 1e-6, (
                 f"Spike count variance increased at step {i}: {var_before:.4f} -> {var_after:.4f}"
@@ -1188,7 +1219,6 @@ def test_s_quantum_parameter_shift() -> None:
     if device.type == "cuda":
         enable_deterministic_cuda()
 
-    from bioplausible.core.ontology import QuantumSubstrate
     import torch.nn.functional as F
 
     substrate = QuantumSubstrate()
@@ -1203,10 +1233,12 @@ def test_s_quantum_parameter_shift() -> None:
 
     # Finite difference on <Z> = cos(θ)
     eps = 1e-4
-    fd_grad = (torch.cos(current_w + eps) - torch.cos(current_w - eps)) / (2*eps)
+    fd_grad = (torch.cos(current_w + eps) - torch.cos(current_w - eps)) / (2 * eps)
 
     # Direction alignment
-    cos = F.cosine_similarity(param_shift_step.unsqueeze(0), fd_grad.unsqueeze(0)).item()
+    cos = F.cosine_similarity(
+        param_shift_step.unsqueeze(0), fd_grad.unsqueeze(0)
+    ).item()
     assert cos >= 0.999, f"Parameter-shift cosine={cos:.6f} < 0.999"
 
 

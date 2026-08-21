@@ -739,10 +739,11 @@ def export_to_torchscript(model, input_sample, path, method: str = "script"):
 # --- Serving Logic (FastAPI) ---
 
 import asyncio
-import numpy as np
-import uvicorn
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+
+import numpy as np
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -883,7 +884,7 @@ class InferenceServer:
             try:
                 first_req = await asyncio.wait_for(self._batch_queue.get(), timeout=0.1)
                 batch_requests.append(first_req)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
             # Collect additional requests up to max_batch_size
@@ -894,7 +895,7 @@ class InferenceServer:
                         timeout=self.batch_timeout_ms / 1000.0,
                     )
                     batch_requests.append(req)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
 
             # Process batch

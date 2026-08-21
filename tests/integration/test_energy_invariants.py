@@ -10,7 +10,6 @@ Each test uses PyTorch autograd to verify mathematical properties numerically.
 
 import pytest
 import torch
-from torch import Tensor
 
 from bioplausible.core.ontology import (
     DigitalSubstrate,
@@ -464,11 +463,11 @@ class TestGradientEquivalence:
         """ThermodynamicContrast approaches backprop as β→∞."""
         from bioplausible.core.ontology import (
             BackpropCredit,
+            CreditAssignmentConfig,
             EuclideanUpdate,
             InstantaneousDynamics,
             ParameterUpdateConfig,
             ThermodynamicContrast,
-            CreditAssignmentConfig,
         )
 
         geometry = FeedforwardGeometry(
@@ -571,8 +570,8 @@ class TestEnergyInvariantComposition:
 # Import needed classes
 from bioplausible.core.ontology import (
     EuclideanUpdate,
-    ThermodynamicContrast,
     ParameterUpdateConfig,
+    ThermodynamicContrast,
 )
 
 if __name__ == "__main__":

@@ -19,9 +19,9 @@ type safety: invalid compositions are caught at type-check time.
 
 from __future__ import annotations
 
+import math
 from abc import abstractmethod
 from dataclasses import dataclass
-import math
 from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
@@ -34,6 +34,7 @@ from bioplausible.core.registry import ComponentMetadata, ComputeProfile, Locali
 from bioplausible.core.tile.topology import TileGraph
 
 __all__ = [
+    "FAMILY_TOLERANCES",
     "AnalogSubstrate",
     "BackpropCredit",
     "CreditAssignment",
@@ -42,7 +43,6 @@ __all__ = [
     "ElasticConsolidationUpdate",
     "EnergyMinimizationDynamics",
     "EuclideanUpdate",
-    "FAMILY_TOLERANCES",
     "FeedforwardGeometry",
     "Geometry",
     "GeometryConfig",
@@ -478,7 +478,9 @@ class CreditAssignment(Protocol):
         Only LocalGoodnessCredit and TargetInversionCredit override this.
         Others raise NotImplementedError.
         """
-        raise NotImplementedError("Surrogate objective not defined for this credit rule")
+        raise NotImplementedError(
+            "Surrogate objective not defined for this credit rule"
+        )
 
 
 # ============================================================
@@ -1840,7 +1842,9 @@ class ModelAdapter:
             legacy_val = legacy.get(key)
             system_val = system.get(key)
             if legacy_val is not None and system_val is not None:
-                if isinstance(legacy_val, (int, float)) and isinstance(system_val, (int, float)):
+                if isinstance(legacy_val, (int, float)) and isinstance(
+                    system_val, (int, float)
+                ):
                     diff = abs(legacy_val - system_val)
                     rel_diff = diff / (abs(legacy_val) + atol)
                     differences[key] = {
@@ -2297,7 +2301,7 @@ class QuantumSubstrate(DigitalSubstrate):
             shifted_minus = self._evaluate_circuit(current_w - math.pi / 2)
             param_shift_grad = (shifted_plus - shifted_minus) / 2
             # Use a default step size since SubstrateConfig doesn't have one
-            step_size = getattr(self.config, 'step_size', 0.01)
+            step_size = getattr(self.config, "step_size", 0.01)
             return current_w - step_size * param_shift_grad
 
         return parameter_shift_update
@@ -2307,7 +2311,7 @@ class QuantumSubstrate(DigitalSubstrate):
 
         Minimal: 1 qubit, RY(θ), measure <Z>
         """
-        import math
+
         # <Z> = cos(θ) for RY(θ)|0>
         return torch.cos(params)
 
@@ -2683,7 +2687,7 @@ class SpikeIntegrationDynamics:
         state.activations = h
         state.spike_counts = spike_counts
         if state.metrics is not None:
-            state.metrics['spike_counts'] = spike_counts
+            state.metrics["spike_counts"] = spike_counts
         return state
 
     def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use]
@@ -2978,7 +2982,7 @@ class LocalGoodnessCredit:
         """Layer-local goodness: sum of σ(h)^2 for positive pass, minimize for negative."""
         acts = free_state.activations
         if isinstance(acts, list):
-            total_goodness = sum((torch.sigmoid(act)**2).sum() for act in acts[1:])
+            total_goodness = sum((torch.sigmoid(act) ** 2).sum() for act in acts[1:])
             return total_goodness
         return torch.tensor(0.0)
 
@@ -3038,12 +3042,16 @@ class TemporalTraceCredit:
         self._tau_plus = 20.0  # LTP time constant (ms)
         self._tau_minus = 20.0  # LTD time constant (ms)
 
-    def record_spikes(self, layer_idx: int, pre_spikes: Tensor, post_spikes: Tensor) -> None:
+    def record_spikes(
+        self, layer_idx: int, pre_spikes: Tensor, post_spikes: Tensor
+    ) -> None:
         """Call from SpikeIntegrationDynamics during settling."""
         self._pre_spike_times[layer_idx] = pre_spikes
         self._post_spike_times[layer_idx] = post_spikes
 
-    def compute_stdp_window(self, pre_spikes: Tensor, post_spikes: Tensor, dt: Tensor) -> Tensor:
+    def compute_stdp_window(
+        self, pre_spikes: Tensor, post_spikes: Tensor, dt: Tensor
+    ) -> Tensor:
         """Return weight change per Δt bin. Exponential STDP window.
 
         Δt = post - pre; causal (Δt>0) => LTP; anti-causal (Δt<0) => LTD
@@ -3057,7 +3065,9 @@ class TemporalTraceCredit:
         ltd_mask = delta_t < 0
         window = torch.zeros_like(delta_t)
         window[ltp_mask] = self._a_plus * torch.exp(-delta_t[ltp_mask] / self._tau_plus)
-        window[ltd_mask] = -self._a_minus * torch.exp(delta_t[ltd_mask] / self._tau_minus)
+        window[ltd_mask] = -self._a_minus * torch.exp(
+            delta_t[ltd_mask] / self._tau_minus
+        )
         return window
 
     def compute_pseudo_gradient(
@@ -3073,7 +3083,10 @@ class TemporalTraceCredit:
         weight_names = [n for n in params if "weight" in n and params[n].ndim == 2]
 
         for layer_idx, weight_name in enumerate(weight_names):
-            if layer_idx not in self._pre_spike_times or layer_idx not in self._post_spike_times:
+            if (
+                layer_idx not in self._pre_spike_times
+                or layer_idx not in self._post_spike_times
+            ):
                 # No spike data for this layer, return zero gradient
                 weight = params[weight_name]
                 grads.append(torch.zeros_like(weight))
@@ -3114,8 +3127,10 @@ class TemporalTraceCredit:
                 post = self._post_spike_times[layer_idx]
                 if pre.numel() > 0 and post.numel() > 0:
                     # Simple correlation proxy
-                    total_correlation += (pre.float().mean() * post.float().mean())
-        return -total_correlation  # Minimize negative correlation = maximize correlation
+                    total_correlation += pre.float().mean() * post.float().mean()
+        return (
+            -total_correlation
+        )  # Minimize negative correlation = maximize correlation
 
 
 class TargetInversionCredit:
@@ -3145,9 +3160,17 @@ class TargetInversionCredit:
         if isinstance(acts, list):
             # For target prop, surrogate is MSE between free and nudged activations per layer
             free_acts = acts
-            nudged_acts = nudged_state.activations if isinstance(nudged_state.activations, list) else []
-            total_mse = torch.tensor(0.0, device=free_acts[0].device if free_acts else 'cpu')
-            for fa, na in zip(free_acts[1:], nudged_acts[1:] if len(nudged_acts) > 1 else []):
+            nudged_acts = (
+                nudged_state.activations
+                if isinstance(nudged_state.activations, list)
+                else []
+            )
+            total_mse = torch.tensor(
+                0.0, device=free_acts[0].device if free_acts else "cpu"
+            )
+            for fa, na in zip(
+                free_acts[1:], nudged_acts[1:] if len(nudged_acts) > 1 else []
+            ):
                 if fa.shape == na.shape:
                     total_mse += torch.nn.functional.mse_loss(fa, na)
             return total_mse
@@ -3286,7 +3309,9 @@ class HomeostaticCredit:
                 factor = 1.0 - (self._adaptation_rate * (1.0 + 10.0 * error))
                 factor = max(0.5, factor)
 
-                self._layer_scales[layer_idx] = self._layer_scales.get(layer_idx, 1.0) * factor
+                self._layer_scales[layer_idx] = (
+                    self._layer_scales.get(layer_idx, 1.0) * factor
+                )
                 brake_total += 1.0 - factor
                 layers_braked += 1
 
@@ -3297,7 +3322,9 @@ class HomeostaticCredit:
                     factor = 1.0 + (self._adaptation_rate * (1.0 + 5.0 * error))
                     factor = min(1.5, factor)
 
-                    self._layer_scales[layer_idx] = self._layer_scales.get(layer_idx, 1.0) * factor
+                    self._layer_scales[layer_idx] = (
+                        self._layer_scales.get(layer_idx, 1.0) * factor
+                    )
                     boost_total += factor - 1.0
                     layers_boosted += 1
 
@@ -3311,7 +3338,10 @@ class HomeostaticCredit:
             else 0.0
         )
         avg_lipschitz = (
-            sum(self._estimate_layer_lipschitz(i, geometry) for i in range(len(self._layer_scales)))
+            sum(
+                self._estimate_layer_lipschitz(i, geometry)
+                for i in range(len(self._layer_scales))
+            )
             / len(self._layer_scales)
             if self._layer_scales
             else 0.0
