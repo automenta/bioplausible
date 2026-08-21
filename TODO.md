@@ -1,3 +1,148 @@
+# Sprint 5: Hypercube Certification, Real Transport, and Native Migration
+
+**Status**: Planned — not started
+
+## 0. Context
+
+The 5-D Ontology refactor is complete. Phase 1 and 2 are locked: the `System` tensor product is defined, the `SystemTrainer` pipeline is verified, the `ModelAdapter` strangler-fig is in place, and the base correctness locks (L1–L7) are green in fast CI.
+
+However, the AutoScientist's search space (the hypercube) currently contains uncertified primitives on the C (CreditAssignment), U (ParameterUpdate), and D (StateDynamics) axes. Furthermore, the P2P gRPC seam is currently tested only in-process, and the system lacks a formal interchange format for learning rules.
+
+Sprint 5 expands the certified hypercube using **strictly cheap, fast property tests** (no training campaigns, no heavy compute), upgrades the P2P seam to real transport, and executes the first native strangler-fig migration.
+
+## 1. Goal & Definition of Done
+
+Done when:
+1. All uncertified C, U, and D axis primitives have dedicated property locks in the fast-CI gate.
+2. A real-transport (multi-process) P2P seam test is green and stable.
+3. A versioned `.system` interchange format is implemented and round-trips perfectly.
+4. `eqprop_mlp` is natively migrated to the 5 Protocols, bypassing `ModelAdapter`, with L1 parity maintained.
+5. `pyright` strict: 0 errors. `ruff`: clean.
+6. Wall-clock budget: The new lock suite adds $\le$ 2 minutes to the fast CI gate on GPU.
+
+## 2. Non-Goals (Strictly Enforced)
+
+- ❌ **No AutoScientist campaigns.** The agent must not write or execute experiment YAMLs.
+- ❌ **No real datasets.** All tests must use synthetic tiny batches (`tiny_batch()` from `_support.py`).
+- ❌ **No multi-node/cluster P2P.** Real transport is strictly multi-process on `localhost`.
+- ❌ **No heavy training.** Max 1 training step, max 10 settling iterations, max batch size 64.
+
+## 3. Deliverable 1: Axis Certification Locks
+
+Create `tests/property/test_axis_certifications.py`. Use `hypothesis` for randomized inputs and `@pytest.mark.parametrize` for iterating over primitives. Use `select_device()` (GPU where faster, CPU for serialization).
+
+### 3.1 C-Axis Locks (CreditAssignment)
+
+| Primitive | Property to Lock | Assertion |
+|-----------|------------------|-----------|
+| `LocalGoodnessCredit` (FF/PEPITA) | Layer-local surrogate alignment | For each layer $l$, finite-difference the layer-local contrastive loss. Cosine similarity between FD gradient and `compute_pseudo_gradient` $\ge 0.90$. |
+| `TargetInversionCredit` | Global surrogate alignment | Finite-difference the declared global surrogate objective. Cosine similarity with pseudo-gradient $\ge 0.95$. |
+| `TemporalTraceCredit` (STDP) | Causal/Anti-causal asymmetry | Generate pre/post spike trains with $\Delta t \in \{-20, -5, 5, 20\}$ ms. Assert $\Delta w > 0$ for $\Delta t > 0$ (causal), $\Delta w < 0$ for $\Delta t < 0$ (anti-causal). |
+| `TemporalTraceCredit` (STDP) | Antisymmetry & Decay | Assert $W(\Delta t) \approx -W(-\Delta t)$ within 5%. Assert $|W(20)| < |W(5)|$ (exponential decay). |
+
+### 3.2 U-Axis Locks (ParameterUpdate)
+
+| Primitive | Property to Lock | Assertion |
+|-----------|------------------|-----------|
+| `RiemannianOrthogonalUpdate` (Muon) | Orthogonality preservation | Generate random gradient block $G$. Apply Newton-Schulz orthogonalization. Assert $\|G^T G - I\|_F < 1e-4$. |
+| `SpectralConstrainedUpdate` | Lipschitz bound enforcement | Apply update to a weight matrix $W$. Compute max singular value $\sigma_{max}$ via SVD. Assert $\sigma_{max} \le 1.0 + 1e-5$. |
+| `NaturalGradientUpdate` (Fisher) | Whitening idempotence | Compute Fisher diagonal $F$. Apply whitening $g \odot F^{-1/2}$. Assert re-whitening yields identical output (bitwise within $1e-6$). |
+| `ElasticConsolidationUpdate` | Protected parameter immobility | Set a binary mask protecting 50% of parameters. Apply update with high penalty $\lambda$. Assert protected parameters are strictly unchanged (diff == 0.0). |
+
+### 3.3 D-Axis Locks (StateDynamics)
+
+| Primitive | Property to Lock | Assertion |
+|-----------|------------------|-----------|
+| `SpikeIntegration` (LIF) | Membrane boundedness | Run settling for 50 steps with constant input. Assert membrane potential $V < V_{thresh}$ strictly (no runaway integration). |
+| `SpikeIntegration` (LIF) | Variance non-increase | Compute spike counts over 5 windows of 10 steps. Assert variance of spike counts is bounded (does not diverge to infinity). |
+
+## 4. Deliverable 2: Real Transport P2P Seam
+
+Create `tests/integration/test_grpc_seam_subprocess.py`. This replaces/supplements the in-process mock test by spinning up actual gRPC servers.
+
+**Execution Strategy:**
+1. Use `subprocess.Popen` to launch 2 worker processes running `bioplausible/p2p/grpc_service.py`.
+2. **Crucial CI Stability:** Bind servers to `port=0` (OS-assigned dynamic port). Parse the stdout/stderr of the subprocess to extract the actual bound port.
+3. Implement a client connection loop with exponential backoff (max 5 retries) to wait for the servers to be ready.
+4. Execute 1 training step on a tiny `TileGeometry` via the gRPC `ExecuteStep` RPC.
+5. **Parity Assertion:** Compare the resulting parameters against a single-process `SystemTrainer` run with the same seed. Tolerance: `LOOSE` (`rtol=1e-4, atol=1e-5`) to account for floating-point non-associativity in network reduction.
+6. **Fault Injection Variant:** Launch 3 workers. Mid-step, send `SIGTERM` to worker 2. Assert the `DistributedSystemTrainer` catches the `DistributedTrainingError`, logs a structured failure, and successfully completes the step using the remaining 2 workers (partial metrics).
+
+## 5. Deliverable 3: The `.system` Interchange Format
+
+The framework needs an ONNX-equivalent for *learning rules*, not just inference graphs.
+
+**Implementation in `bioplausible/core/ontology.py`:**
+1. Add `System.to_spec() -> dict` and `System.from_spec(spec: dict) -> System`.
+2. The spec must include a `schema_version: Literal["1.0"]` field.
+3. It must serialize the exact configs of all 5 axes (which are already frozen, slotted dataclasses, making this trivial via `dataclasses.asdict`).
+4. Create `tests/unit/core/test_system_spec.py`:
+   - Generate 10 random valid `System` compositions using the factories.
+   - Round-trip them through `to_spec() -> json.dumps() -> json.loads() -> from_spec()`.
+   - Assert identity: the reconstructed system produces bitwise-identical outputs on a dummy forward pass.
+
+## 6. Deliverable 4: Native `eqprop_mlp` Migration
+
+Execute the first "Strangler Fig" cutover.
+
+1. Create `bioplausible/models/native/eqprop_native.py`.
+2. Implement it purely as a composition of native Protocols:
+   ```python
+   def create_native_eqprop_mlp(config: GeometryConfig) -> System:
+       return System(
+           substrate=DigitalSubstrate(),
+           geometry=RecurrentGeometry(config, symmetric=True),
+           dynamics=EnergyMinimizationDynamics(StateDynamicsConfig(n_iters=20, beta=0.5)),
+           credit=ThermodynamicContrastCredit(),
+           update=EuclideanUpdate(step_size=config.lr)
+       )
+   ```
+3. Update `Registry` to map the string `"eqprop_mlp"` to this native factory *instead* of the `ModelAdapter`.
+4. **The Gate:** The existing `L1 Parity Lock` (which compares legacy path vs `SystemTrainer` path) must remain green. If the native implementation is correct, L1 passes automatically.
+5. Add a deprecation tag to the old monolithic class, but do not delete it yet.
+
+## 7. Process Wiring & Acceptance Checklist
+
+### CI Gate Update
+The fast CI gate order must be strictly enforced in `.github/workflows` (or `pyproject.toml` pre-commit/pytest config):
+1. `ruff format --check` & `ruff check`
+2. `pyright`
+3. `pytest tests/property/ -q` (Includes `test_ontology_locks.py` AND new `test_axis_certifications.py`)
+4. `pytest tests/integration/test_grpc_seam_subprocess.py -q`
+5. `pytest tests/unit/core/ -q`
+6. Remaining integration/slow suites.
+
+### Acceptance Checklist (Run in Order)
+
+```bash
+# 1. New Axis Certifications
+uv run pytest tests/property/test_axis_certifications.py -q
+
+# 2. Real Transport P2P (Subprocess)
+uv run pytest tests/integration/test_grpc_seam_subprocess.py -q
+
+# 3. Spec Interchange Format
+uv run pytest tests/unit/core/test_system_spec.py -q
+
+# 4. Native Migration Parity (L1 Lock must hold)
+uv run pytest tests/property/test_ontology_locks.py::test_parity_lock -q
+
+# 5. Full Fast Gate
+uv run pyright . && uv run ruff check . && uv run pytest tests/property/ tests/unit/core/ -q
+
+# 6. Wall-clock budget check (record in PR description)
+# New additions must not exceed +2 minutes on GPU.
+```
+
+## 8. Implementation Order for the Agent
+
+1. **Phase A (The Math Locks):** Implement `test_axis_certifications.py` (C, U, D axes). This is pure math and requires no infrastructure changes.
+2. **Phase B (The Spec Format):** Implement `System.to_spec()` and `test_system_spec.py`.
+3. **Phase C (The P2P Subprocess):** Implement `test_grpc_seam_subprocess.py`. Handle the dynamic port binding carefully to avoid CI flakiness.
+4. **Phase D (The Migration):** Swap `eqprop_mlp` to native Protocols. Rely on the L1 lock to verify correctness.
+
+---
+
 # Codebase Cleanup Opportunities
 
 Collected during domain registration removal. **Do not start** — just a plan.
@@ -178,16 +323,17 @@ The `Verifier` class runs tracks at 3 evidence levels (smoke/intermediate/full) 
 
 ## Priority Order (if we were to execute)
 
-1. **Config unification** — highest impact, touches everything
-2. **Registry category reduction** — simplifies AutoScientist composition
-3. **Validation tracks deletion** — removes ~2000 lines of dead code
-4. **Model alias collapse** — reduces confusion in zoo
-5. **CLI subcommand completion** — consistent UX
-6. **Test infrastructure** — enables reliable CI
-7. **Dead code removal** — reduces cognitive load
-8. **Documentation sync** — prevents misinformation
-9. **Type cleanup** — improves IDE support
-10. **Import hygiene** — prevents circular deps
+1. **Sprint 5 (above)** — highest priority active sprint
+2. **Config unification** — highest impact, touches everything
+3. **Registry category reduction** — simplifies AutoScientist composition
+4. **Validation tracks deletion** — removes ~2000 lines of dead code
+5. **Model alias collapse** — reduces confusion in zoo
+6. **CLI subcommand completion** — consistent UX
+7. **Test infrastructure** — enables reliable CI
+8. **Dead code removal** — reduces cognitive load
+9. **Documentation sync** — prevents misinformation
+10. **Type cleanup** — improves IDE support
+11. **Import hygiene** — prevents circular deps
 
 ---
 
