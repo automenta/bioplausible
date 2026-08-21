@@ -345,40 +345,27 @@ The framework supports **7 evaluation domains** with 60+ tasks/datasets, unified
 
 ### 📊 Domain Overview
 
-| Domain | Tasks | Datasets | Models Tested | Key Metrics |
-|--------|-------|----------|---------------|-------------|
-| **Vision** | 12 | MNIST, Fashion-MNIST, KMNIST, USPS, CIFAR-10, CIFAR-100, SVHN, Digits, XOR, Spiral, Circles | 25+ | Accuracy, Loss, Energy, FLOPs, Memory |
-| **Language (LM)** | 4 | Tiny Shakespeare, Char N-gram, WikiText-2, Penn Treebank | 12+ | Perplexity, BPC, Accuracy, Compression |
-| **Reinforcement Learning (RL)** | 6 | CartPole, Pendulum, Acrobot, MountainCar, LunarLander | 8+ | Episode Return, Success Rate, Sample Efficiency |
-| **Graph** | 3 | Cora, CiteSeer, PubMed | 6+ | Node Classification Accuracy, F1 |
+| Domain | Tasks | Example Datasets | Models | Key Metrics |
+|--------|-------|------------------|--------|-------------|
+| **Vision** | 11 | MNIST, CIFAR-10/100, SVHN, Digits, synthetic (XOR, spirals) | 25+ | Accuracy, Loss, Energy, FLOPs |
+| **Language (LM)** | 4 | Tiny Shakespeare, WikiText-2, Penn Treebank, char n-gram | 12+ | Perplexity, BPC, Accuracy |
+| **Reinforcement Learning (RL)** | 5 | CartPole, Pendulum, Acrobot, MountainCar, LunarLander | 8+ | Episode Return, Success Rate |
+| **Graph** | 3 | Cora, CiteSeer, PubMed | 6+ | Node Classification Acc, F1 |
 | **Tabular** | 5 | Breast Cancer, Iris, Wine, Diabetes, California Housing | 10+ | Accuracy, R², AUC |
-| **Time Series** | 2 | Synthetic Forecast, (ETT variants planned) | 6+ | MSE, MAE, CRPS |
-| **Scientific** | 2 | Synthetic Physics, (PDE variants planned) | 5+ | Relative L2, Conservation Error |
+| **Time Series** | 2 | Synthetic Forecast, ETT (planned) | 6+ | MSE, MAE |
+| **Scientific** | 2 | Heat/Wave/Burgers PDE, Navier-Stokes (planned) | 5+ | Relative L2, Conservation |
 
 ---
 
 ### 🖼️ Vision Domain
 
-**Tasks & Datasets**
-
-| Task | Type | Input Dim | Output Dim | Classes | Train/Val/Test Split | Notes |
-|------|------|-----------|------------|---------|---------------------|-------|
-| `mnist` | Classification | 784 | 10 | 10 | 50k/10k/10k | Standard benchmark |
-| `fashion_mnist` | Classification | 784 | 10 | 10 | 50k/10k/10k | Harder than MNIST |
-| `kmnist` | Classification | 784 | 10 | 10 | 50k/10k/10k | Kuzushiji-MNIST |
-| `usps` | Classification | 784 | 10 | 10 | 7.3k/1.8k/2k | USPS handwritten digits |
-| `cifar10` | Classification | 3072 | 10 | 10 | 40k/10k/10k | 32×32 RGB |
-| `cifar100` | Classification | 3072 | 100 | 100 | 40k/10k/10k | Fine/coarse labels |
-| `svhn` | Classification | 3072 | 10 | 10 | 60k/10k/26k | Street View House Numbers |
-| `digits` | Classification | 64 | 10 | 10 | ~1.5k | sklearn digits (8×8) |
-| `xor` | Boolean | 2 | 2 | 2 | Synthetic | Non-linear separability |
-| `spiral` | Classification | 2 | 3 | 3 | Synthetic | Interlocking spirals |
-| `circles` | Classification | 2 | 2 | 2 | Synthetic | Concentric circles |
+**Tasks**: `mnist`, `fashion_mnist`, `kmnist`, `usps`, `cifar10`, `cifar100`, `svhn`, `digits`, `xor`, `spiral`, `circles`  
+(image classification + synthetic boolean tasks)
 
 **Models Registered (Vision-Compatible)**
 
-| Model Family | Variants | Locality Level | Requires Backward |
-|--------------|----------|----------------|-------------------|
+| Model Family | Variants | Locality | Requires Backward |
+|--------------|----------|----------|-------------------|
 | `backprop` | mlp, cnn, resnet | global | ✅ |
 | `eqprop` | mlp, conv, transformer | equilibrium | ❌ |
 | `fa` | standard, dfa, adaptive, stochastic | layerwise | ✅ (random) |
@@ -406,14 +393,7 @@ python experiments/cross_domain_transfer.py --source vision --target lm
 
 ### 📝 Language Modeling Domain
 
-**Tasks & Datasets**
-
-| Task | Type | Input Dim | Output Dim | Vocab Size | Sequence Length | Train Tokens |
-|------|------|-----------|------------|------------|-----------------|--------------|
-| `tiny_shakespeare` | Next-char LM | 65 | 65 | 65 | 100 | ~1M |
-| `char_ngram` | N-gram LM | configurable | vocab | 256 | 16–64 | Synthetic |
-| `wikitext2` | Word-level LM | 33278 | 33278 | ~33k | 128 | ~36M |
-| `penn_treebank` | Word-level LM | 10000 | 10000 | ~10k | 128 | ~1.3M |
+**Tasks**: `tiny_shakespeare` (char), `char_ngram`, `wikitext2`, `penn_treebank` (word-level)
 
 **Models Registered (LM-Compatible)**
 
@@ -428,7 +408,7 @@ python experiments/cross_domain_transfer.py --source vision --target lm
 **Key Experiments**
 
 ```bash
-# EqProp vs Backprop on language modeling (Track 37)
+# EqProp vs Backprop on language modeling
 python experiments/language_modeling_comparison.py --epochs 50
 
 # Run LM benchmark
@@ -442,25 +422,17 @@ biopl scientist --campaign campaigns/lm_hypercube.yaml
 
 ### 🎮 Reinforcement Learning Domain
 
-**Tasks & Environments**
-
-| Task | Type | Observation Space | Action Space | Horizon | Reward Structure |
-|------|------|-------------------|--------------|---------|------------------|
-| `cartpole` | Classic Control | Box(4) | Discrete(2) | 500 | +1/step |
-| `pendulum` | Classic Control | Box(3) | Box(1) | 200 | -θ² - 0.1θ̇² - 0.001u² |
-| `acrobot` | Classic Control | Box(6) | Discrete(3) | 500 | -1/step |
-| `mountain_car` | Classic Control | Box(2) | Discrete(3) | 200 | -1/step |
-| `lunar_lander` | Box2D | Box(8) | Discrete(4) | 1000 | Shaped + sparse |
+**Tasks**: `cartpole`, `pendulum`, `acrobot`, `mountain_car`, `lunar_lander` (Gymnasium classic control + Box2D)
 
 **Models Registered (RL-Compatible)**
 
 | Model Family | Algorithm | Policy Type | Notes |
 |--------------|-----------|-------------|-------|
 | `backprop` | PPO, A2C, DQN, SAC | MLP/Gaussian | Standard baselines |
-| `eqprop` | EqProp-PPO, EqProp-A2C | Energy-based policy | Equilibrium actor-critic |
-| `fa` | FA-PPO, FA-A2C | Random feedback policy | Weight-transport free RL |
+| `eqprop` | EqProp-PPO, EqProp-A2C | Energy-based | Equilibrium actor-critic |
+| `fa` | FA-PPO, FA-A2C | Random feedback | Weight-transport free RL |
 | `hebbian` | Hebbian-RL | Local plasticity | Pure Hebbian policy gradient |
-| `spiking` | SNN-PPO, STDP-RL | Spiking policy | Neuromorphic RL |
+| `spiking` | SNN-PPO, STDP-RL | Spiking | Neuromorphic RL |
 | `tile` | Tile-PPO | Tiled actor-critic | Distributed RL |
 
 **Key Experiments**
@@ -480,13 +452,7 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 
 ### 🕸️ Graph Domain
 
-**Tasks & Datasets**
-
-| Task | Type | Nodes | Edges | Features | Classes | Split |
-|------|------|-------|-------|----------|---------|-------|
-| `cora` | Node Classification | 2,708 | 5,429 | 1,433 | 7 | Planetoid |
-| `citeseer` | Node Classification | 3,327 | 4,732 | 3,703 | 6 | Planetoid |
-| `pubmed` | Node Classification | 19,717 | 44,338 | 500 | 3 | Planetoid |
+**Tasks**: `cora`, `citeseer`, `pubmed` (Planetoid citation networks, node classification)
 
 **Models Registered (Graph-Compatible)**
 
@@ -502,15 +468,7 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 
 ### 📋 Tabular Domain
 
-**Tasks & Datasets**
-
-| Task | Type | Samples | Features | Classes/Target | Source |
-|------|------|---------|----------|----------------|--------|
-| `breast_cancer` | Classification | 569 | 30 | 2 (malignant/benign) | sklearn |
-| `iris` | Classification | 150 | 4 | 3 | UCI |
-| `wine` | Classification | 178 | 13 | 3 | UCI |
-| `diabetes` | Regression | 442 | 10 | Continuous | sklearn |
-| `california_housing` | Regression | 20,640 | 8 | Continuous | sklearn |
+**Tasks**: `breast_cancer`, `iris`, `wine` (classification), `diabetes`, `california_housing` (regression) — sklearn/UCI
 
 **Models**: All MLP-based families (backprop, eqprop, fa, pepita, hebbian, tile) support tabular tasks.
 
@@ -518,12 +476,7 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 
 ### 📈 Time Series Domain
 
-**Tasks**
-
-| Task | Type | Sequence Length | Features | Horizon | Source |
-|------|------|-----------------|----------|---------|--------|
-| `synthetic_forecast` | Forecasting | 100 | 1–5 | 10–50 | Synthetic (sin, AR, chaos) |
-| `ett_h1` | Forecasting | 168 | 7 | 24 | ETT (planned) |
+**Tasks**: `synthetic_forecast` (sin, AR, chaos), `ett_h1` (planned)
 
 **Models**: RNN/LSTM/Transformer families across all credit assignments.
 
@@ -531,12 +484,7 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 
 ### 🔬 Scientific Domain
 
-**Tasks**
-
-| Task | Type | Equation | Dimensions | Resolution | Source |
-|------|------|----------|------------|------------|--------|
-| `synthetic_physics` | PDE Solving | Heat, Wave, Burgers | 1D/2D | 64×64 | Synthetic |
-| `navier_stokes` | PDE Solving | Navier-Stokes | 2D | 64×64 | Synthetic (planned) |
+**Tasks**: `synthetic_physics` (Heat, Wave, Burgers PDEs), `navier_stokes` (planned)
 
 **Models**: Physics-informed variants (PINO, DeepONet, FNO) adapted to bioplausible credit assignments.
 
