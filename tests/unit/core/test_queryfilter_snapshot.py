@@ -10,11 +10,9 @@ Verifies that:
 from bioplausible.core.registry import (
     ComponentMetadata,
     ComputeProfile,
-    Domain,
     LocalityLevel,
     _ComputeIs,
     _CreditTypeIs,
-    _DomainIn,
     _FamilyIs,
     _LocalityIs,
     _MaxBioScore,
@@ -28,7 +26,6 @@ from bioplausible.core.registry import (
 _META = ComponentMetadata(
     name="test_comp",
     category="model",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.LOCAL,
     compute_profile=ComputeProfile.CPU,
     requires_backward=False,
@@ -38,7 +35,7 @@ _META = ComponentMetadata(
     family="tile",
 )
 
-# ---- Predicate dispatch table (__post_init__) ----
+# ---- Predicate dispatch table (__post_init__) ->
 
 
 def test_predicate_dispatch_empty() -> None:
@@ -49,19 +46,18 @@ def test_predicate_dispatch_empty() -> None:
 
 def test_predicate_dispatch_single() -> None:
     """Each non-None field adds exactly one predicate."""
-    q = _QueryFilter(domain=Domain.VISION)
-    assert len(q._predicates) == 1
-    assert isinstance(q._predicates[0], _DomainIn)
-
     q = _QueryFilter(locality=LocalityLevel.LOCAL)
     assert len(q._predicates) == 1
     assert isinstance(q._predicates[0], _LocalityIs)
 
+    q = _QueryFilter(compute=ComputeProfile.CPU)
+    assert len(q._predicates) == 1
+    assert isinstance(q._predicates[0], _ComputeIs)
+
 
 def test_predicate_dispatch_all_fields() -> None:
-    """All fields specified -> 9 predicates in deterministic order."""
+    """All fields specified -> 8 predicates in deterministic order."""
     q = _QueryFilter(
-        domain=Domain.VISION,
         locality=LocalityLevel.LOCAL,
         compute=ComputeProfile.CPU,
         requires_backward=False,
@@ -71,9 +67,8 @@ def test_predicate_dispatch_all_fields() -> None:
         tags=["local"],
         family="tile",
     )
-    assert len(q._predicates) == 9
+    assert len(q._predicates) == 8
     expected_types = [
-        _DomainIn,
         _LocalityIs,
         _ComputeIs,
         _RequiresBackwardIs,
@@ -88,13 +83,6 @@ def test_predicate_dispatch_all_fields() -> None:
 
 
 # ---- Individual predicate correctness ----
-
-
-def test_domain_predicate() -> None:
-    """_DomainIn: True iff meta's domains include the required domain."""
-    p = _DomainIn(Domain.VISION)
-    assert p(_META)
-    assert not _DomainIn(Domain.RL)(_META)
 
 
 def test_locality_predicate() -> None:
@@ -156,7 +144,6 @@ def test_family_predicate() -> None:
 def test_matches_passes_all_constraints() -> None:
     """matches() returns True when all predicates pass."""
     q = _QueryFilter(
-        domain=Domain.VISION,
         locality=LocalityLevel.LOCAL,
         min_bio_score=0.5,
         tags=["local"],
@@ -166,7 +153,7 @@ def test_matches_passes_all_constraints() -> None:
 
 def test_matches_fails_on_mismatch() -> None:
     """matches() returns False when any predicate fails."""
-    q = _QueryFilter(domain=Domain.RL)
+    q = _QueryFilter(locality=LocalityLevel.GLOBAL)
     assert not q.matches(_META)
 
 

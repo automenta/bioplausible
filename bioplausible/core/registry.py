@@ -38,27 +38,39 @@ IncompatibilityError = _IncompatibilityError
 
 
 class ComponentCategory(str, Enum):
-    """Categories of components in the registry."""
+    """Categories of components in the registry.
 
+    Core categories (for AutoScientist composition):
+    1. MODEL - Model architectures (including model-side learners: FF, TP, PCN, Hebbian)
+    2. CREDIT_ASSIGNMENT - Learning rules/propagators (Backprop, FA, EP, TP, etc.)
+    3. PARAM_UPDATE - Parameter updates (optimizers + update strategies + constraints)
+    4. HARDWARE - Hardware substrates, kernel backends, sparsity
+
+    Auxiliary categories (for infrastructure):
+    - METRIC - Evaluation metrics
+    - TASK - Benchmark tasks
+    - TRACK - Validation tracks
+    """
+
+    # Core categories
     MODEL = "model"
-    PROPAGATOR = "propagator"
-    OPTIMIZER = "optimizer"
-    # Update/constraint strategies that transform gradients or project weights
-    # AFTER an optimizer steps (e.g. Muon Newton-Schulz, spectral norm clipping).
-    # Distinct from OPTIMIZER because they are not torch.optim estimators: they
-    # expose ``transform_gradient`` (strategies) or ``step`` (constraints) with
-    # no parameter/costate ownership.
-    UPDATE_STRATEGY = "update_strategy"
-    CONSTRAINT = "constraint"
-    # Training-side controllers (e.g. DynamicEquiTile topology controller) that
-    # are not nn.Modules and never run a forward pass.
-    CONTROLLER = "controller"
-    SPARSITY = "sparsity"
+    CREDIT_ASSIGNMENT = "credit_assignment"
+    PARAM_UPDATE = "param_update"
+    HARDWARE = "hardware"
+
+    # Auxiliary categories
     METRIC = "metric"
     TASK = "task"
     TRACK = "track"
-    # Kernel acceleration backends for bio-plausible algorithms
+
+    # Deprecated aliases (for backward compatibility during migration)
+    PROPAGATOR = "propagator"
+    OPTIMIZER = "optimizer"
+    UPDATE_STRATEGY = "update_strategy"
+    CONSTRAINT = "constraint"
+    SPARSITY = "sparsity"
     KERNEL_BACKEND = "kernel_backend"
+    CONTROLLER = "controller"
 
 
 class LocalityLevel(str, Enum):
@@ -853,42 +865,28 @@ class Registry:
         logger.info("Registry exported to %s: %d components", path, n_components)
 
 
-# Convenience decorators
+# Convenience decorators (core categories)
 def register_model(name: str | None = None, **kwargs) -> Callable:
     """Register a model component."""
     return Registry.register(ComponentCategory.MODEL, name, **kwargs)
 
 
-def register_propagator(name: str | None = None, **kwargs) -> Callable:
-    """Register a propagator/learning-rule component."""
-    return Registry.register(ComponentCategory.PROPAGATOR, name, **kwargs)
+def register_credit_assignment(name: str | None = None, **kwargs) -> Callable:
+    """Register a credit assignment / learning rule component."""
+    return Registry.register(ComponentCategory.CREDIT_ASSIGNMENT, name, **kwargs)
 
 
-def register_optimizer(name: str | None = None, **kwargs) -> Callable:
-    """Register an optimizer component."""
-    return Registry.register(ComponentCategory.OPTIMIZER, name, **kwargs)
+def register_param_update(name: str | None = None, **kwargs) -> Callable:
+    """Register a parameter update component (optimizer, update strategy, or constraint)."""
+    return Registry.register(ComponentCategory.PARAM_UPDATE, name, **kwargs)
 
 
-def register_update_strategy(name: str | None = None, **kwargs) -> Callable:
-    """Register an update-strategy component (gradient transformation)."""
-    return Registry.register(ComponentCategory.UPDATE_STRATEGY, name, **kwargs)
+def register_hardware(name: str | None = None, **kwargs) -> Callable:
+    """Register a hardware component (substrate, kernel backend, sparsity)."""
+    return Registry.register(ComponentCategory.HARDWARE, name, **kwargs)
 
 
-def register_constraint(name: str | None = None, **kwargs) -> Callable:
-    """Register a constraint component (post-step weight projection)."""
-    return Registry.register(ComponentCategory.CONSTRAINT, name, **kwargs)
-
-
-def register_controller(name: str | None = None, **kwargs) -> Callable:
-    """Register a training-side controller component (not an ``nn.Module``)."""
-    return Registry.register(ComponentCategory.CONTROLLER, name, **kwargs)
-
-
-def register_sparsity(name: str | None = None, **kwargs) -> Callable:
-    """Register a sparsity component."""
-    return Registry.register(ComponentCategory.SPARSITY, name, **kwargs)
-
-
+# Convenience decorators (auxiliary categories)
 def register_metric(name: str | None = None, **kwargs) -> Callable:
     """Register a metric component."""
     return Registry.register(ComponentCategory.METRIC, name, **kwargs)
@@ -897,6 +895,79 @@ def register_metric(name: str | None = None, **kwargs) -> Callable:
 def register_task(name: str | None = None, **kwargs) -> Callable:
     """Register a task component."""
     return Registry.register(ComponentCategory.TASK, name, **kwargs)
+
+
+def register_track(name: str | None = None, **kwargs) -> Callable:
+    """Register a validation track component."""
+    return Registry.register(ComponentCategory.TRACK, name, **kwargs)
+
+
+# Deprecated aliases (for backward compatibility)
+def register_propagator(name: str | None = None, **kwargs) -> Callable:
+    """Register a propagator/learning-rule component (deprecated: use register_credit_assignment).
+
+    Registers under both PROPAGATOR (deprecated) and CREDIT_ASSIGNMENT (new).
+    """
+    import warnings
+    warnings.warn("register_propagator is deprecated, use register_credit_assignment", DeprecationWarning, stacklevel=2)
+    # Register under both old and new categories for backward compatibility
+    Registry.register(ComponentCategory.PROPAGATOR, name, **kwargs)
+    return Registry.register(ComponentCategory.CREDIT_ASSIGNMENT, name, **kwargs)
+
+
+def register_optimizer(name: str | None = None, **kwargs) -> Callable:
+    """Register an optimizer component (deprecated: use register_param_update).
+
+    Registers under both OPTIMIZER (deprecated) and PARAM_UPDATE (new).
+    """
+    import warnings
+    warnings.warn("register_optimizer is deprecated, use register_param_update", DeprecationWarning, stacklevel=2)
+    Registry.register(ComponentCategory.OPTIMIZER, name, **kwargs)
+    return Registry.register(ComponentCategory.PARAM_UPDATE, name, **kwargs)
+
+
+def register_update_strategy(name: str | None = None, **kwargs) -> Callable:
+    """Register an update-strategy component (deprecated: use register_param_update).
+
+    Registers under both UPDATE_STRATEGY (deprecated) and PARAM_UPDATE (new).
+    """
+    import warnings
+    warnings.warn("register_update_strategy is deprecated, use register_param_update", DeprecationWarning, stacklevel=2)
+    Registry.register(ComponentCategory.UPDATE_STRATEGY, name, **kwargs)
+    return Registry.register(ComponentCategory.PARAM_UPDATE, name, **kwargs)
+
+
+def register_constraint(name: str | None = None, **kwargs) -> Callable:
+    """Register a constraint component (deprecated: use register_param_update).
+
+    Registers under both CONSTRAINT (deprecated) and PARAM_UPDATE (new).
+    """
+    import warnings
+    warnings.warn("register_constraint is deprecated, use register_param_update", DeprecationWarning, stacklevel=2)
+    Registry.register(ComponentCategory.CONSTRAINT, name, **kwargs)
+    return Registry.register(ComponentCategory.PARAM_UPDATE, name, **kwargs)
+
+
+def register_sparsity(name: str | None = None, **kwargs) -> Callable:
+    """Register a sparsity component (deprecated: use register_hardware).
+
+    Registers under both SPARSITY (deprecated) and HARDWARE (new).
+    """
+    import warnings
+    warnings.warn("register_sparsity is deprecated, use register_hardware", DeprecationWarning, stacklevel=2)
+    Registry.register(ComponentCategory.SPARSITY, name, **kwargs)
+    return Registry.register(ComponentCategory.HARDWARE, name, **kwargs)
+
+
+def register_controller(name: str | None = None, **kwargs) -> Callable:
+    """Register a training-side controller component (deprecated: use register_hardware).
+
+    Registers under both CONTROLLER (deprecated) and HARDWARE (new).
+    """
+    import warnings
+    warnings.warn("register_controller is deprecated, use register_hardware", DeprecationWarning, stacklevel=2)
+    Registry.register(ComponentCategory.CONTROLLER, name, **kwargs)
+    return Registry.register(ComponentCategory.HARDWARE, name, **kwargs)
 
 
 def list_models() -> list[str]:
@@ -916,11 +987,15 @@ __all__ = [
     "list_models",
     "register_constraint",
     "register_controller",
+    "register_credit_assignment",
+    "register_hardware",
     "register_metric",
     "register_model",
     "register_optimizer",
+    "register_param_update",
     "register_propagator",
     "register_sparsity",
     "register_task",
+    "register_track",
     "register_update_strategy",
 ]

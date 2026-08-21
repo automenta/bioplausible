@@ -234,7 +234,7 @@ class ExperimentProposer:
             min_bio_score=min_bio_score,
         )
         propagators = Registry.query(
-            category=ComponentCategory.PROPAGATOR,
+            category=ComponentCategory.CREDIT_ASSIGNMENT,
             min_bio_score=min_bio_score,
         )
 

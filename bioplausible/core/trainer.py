@@ -1338,7 +1338,7 @@ class CoreTrainer:
         model_name = self.config.model
 
         try:
-            prop_meta = Registry.get_metadata(ComponentCategory.PROPAGATOR, prop_name)
+            prop_meta = Registry.get_metadata(ComponentCategory.CREDIT_ASSIGNMENT, prop_name)
             model_meta = Registry.get_metadata(ComponentCategory.MODEL, model_name)
             required = set(prop_meta.requires)
             provided = set(model_meta.provides)
@@ -1355,7 +1355,7 @@ class CoreTrainer:
             pass
 
         try:
-            prop_cls = Registry.get(ComponentCategory.PROPAGATOR, prop_name)
+            prop_cls = Registry.get(ComponentCategory.CREDIT_ASSIGNMENT, prop_name)
         except ValueError:
             logger.warning("Propagator %s not in registry, skipping", prop_name)
             return
@@ -1382,7 +1382,7 @@ class CoreTrainer:
             return False
         try:
             meta = Registry.get_metadata(
-                ComponentCategory.OPTIMIZER, self.config.optimizer
+                ComponentCategory.PARAM_UPDATE, self.config.optimizer
             )
         except ValueError:
             return False
@@ -1403,11 +1403,11 @@ class CoreTrainer:
         """Create optimizer."""
         # Check if optimizer is in new registry
         try:
-            opt_cls = Registry.get(ComponentCategory.OPTIMIZER, self.config.optimizer)
+            opt_cls = Registry.get(ComponentCategory.PARAM_UPDATE, self.config.optimizer)
 
             # Check if it's a learning rule optimizer (needs model)
             meta = Registry.get_metadata(
-                ComponentCategory.OPTIMIZER, self.config.optimizer
+                ComponentCategory.PARAM_UPDATE, self.config.optimizer
             )
             if meta.credit_assignment_type in [
                 "equilibrium",
@@ -2370,7 +2370,7 @@ def _build_runconfig_optimizer(cfg: object, model: nn.Module) -> object:
         if hasattr(cfg.optimizer, "mode"):
             opt_kwargs["mode"] = cfg.optimizer.mode
 
-    opt_cls = Registry.get(ComponentCategory.OPTIMIZER, cfg.optimizer.name)
+    opt_cls = Registry.get(ComponentCategory.PARAM_UPDATE, cfg.optimizer.name)
 
     # Some optimizers (learning-rule propagators) require the model, while
     # plain torch.optim optimizers do not. Attempt both call signatures.

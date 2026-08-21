@@ -14,12 +14,6 @@ from torch import nn
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import register_model
 from bioplausible.utils import count_parameters
-
-# ``BackpropMLP`` lives in ``zoo.models.eqprop.looped_mlp`` (it is built against
-# the equilibrating MLP machinery). Re-export it here for hygiene so callers that
-# import it from ``zoo.models.backprop`` (mirroring its name) resolve correctly
-# instead of silently raising ImportError. See the registry-audit session log.
-from bioplausible.zoo.models.eqprop.looped_mlp import BackpropMLP
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 # ============================================================================
@@ -415,3 +409,74 @@ class CustomStackedModel(TransitionGraphMixin, nn.Module):
                 layers_config.append({"type": "linear", "size": hidden_dim})
 
         return cls(input_dim, output_dim, layers_config).to(device)
+
+
+@register_model(
+    "backprop_mlp",
+    family="backprop",
+    tags=["backprop", "mlp", status_tag("stable")],
+)
+class BackpropMLP(TransitionGraphMixin, nn.Module):
+    """Standard feedforward MLP for comparison (no equilibrium dynamics)."""
+
+    def __init__(
+        self, input_dim: int, hidden_dim: int, output_dim: int, num_layers: int = 2
+    ) -> None:
+        super().__init__()
+        layers = []
+        if input_dim is None:
+            input_dim = 64
+
+        if isinstance(input_dim, tuple):
+            input_dim = math.prod(input_dim)
+
+        layers.append(nn.Linear(input_dim, hidden_dim))
+        layers.append(nn.Tanh())
+
+        if num_layers <= 1:
+            layers = [nn.Linear(input_dim, output_dim)]
+        else:
+            for _ in range(num_layers - 2):
+                layers.append(nn.Linear(hidden_dim, hidden_dim))
+                layers.append(nn.Tanh())
+            layers.append(nn.Linear(hidden_dim, output_dim))
+
+        self.net = nn.Sequential(*layers)
+        self.num_layers = num_layers
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dtype not in [torch.float32, torch.float64, torch.float16, torch.bfloat16]:
+            x = x.float()
+        if x.dim() > 2:
+            x = x.reshape(x.size(0), -1)
+
+        if x.size(1) != self.net[0].in_features:
+            raise ValueError(
+                f"Input feature dimension mismatch. "
+                f"Expected {self.net[0].in_features} but got {x.size(1)}."
+            )
+
+        return self.net(x)
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Return Linear layers from self.net in order."""
+        return [m for m in self.net if isinstance(m, nn.Linear)]
+
+    @classmethod
+    def build(
+        cls,
+        spec,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        num_layers,
+        device,
+        task_type,
+        **kwargs,
+    ):
+        return cls(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            num_layers=num_layers,
+        ).to(device)

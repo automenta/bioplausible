@@ -5,15 +5,16 @@ from bioplausible.core.registry import (
     ComputeProfile,
     LocalityLevel,
     Registry,
-    register_optimizer,
+    register_param_update,
+    register_credit_assignment,
 )
 
 from .optimizers import DionUpdate, FisherUpdate, MuonUpdate, PlainUpdate
 from .presets import local_ep, muon_backprop, natural_ep, sdmep, smep, smep_fast
 
-# Register MEP presets as propagators (credit assignment + update combined)
+# Register MEP presets as credit assignments (credit assignment + update combined)
 Registry.register(
-    ComponentCategory.PROPAGATOR,
+    ComponentCategory.CREDIT_ASSIGNMENT,
     name="smep",
     locality_level=LocalityLevel.EQUILIBRIUM,
     compute_profile=ComputeProfile.GPU,
@@ -25,7 +26,7 @@ Registry.register(
 )(smep)
 
 Registry.register(
-    ComponentCategory.PROPAGATOR,
+    ComponentCategory.CREDIT_ASSIGNMENT,
     name="smep_fast",
     locality_level=LocalityLevel.EQUILIBRIUM,
     compute_profile=ComputeProfile.GPU,
@@ -37,7 +38,7 @@ Registry.register(
 )(smep_fast)
 
 Registry.register(
-    ComponentCategory.PROPAGATOR,
+    ComponentCategory.CREDIT_ASSIGNMENT,
     name="sdmep",
     locality_level=LocalityLevel.EQUILIBRIUM,
     compute_profile=ComputeProfile.GPU,
@@ -49,7 +50,7 @@ Registry.register(
 )(sdmep)
 
 Registry.register(
-    ComponentCategory.PROPAGATOR,
+    ComponentCategory.CREDIT_ASSIGNMENT,
     name="local_ep",
     locality_level=LocalityLevel.LOCAL,
     compute_profile=ComputeProfile.GPU,
@@ -61,7 +62,7 @@ Registry.register(
 )(local_ep)
 
 Registry.register(
-    ComponentCategory.PROPAGATOR,
+    ComponentCategory.CREDIT_ASSIGNMENT,
     name="natural_ep",
     locality_level=LocalityLevel.EQUILIBRIUM,
     compute_profile=ComputeProfile.GPU,
@@ -73,7 +74,7 @@ Registry.register(
 )(natural_ep)
 
 Registry.register(
-    ComponentCategory.PROPAGATOR,
+    ComponentCategory.CREDIT_ASSIGNMENT,
     name="muon_backprop",
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
@@ -84,14 +85,13 @@ Registry.register(
     family="mep",
 )(muon_backprop)
 
-# Pure update strategies as optimizers (complement the propagator presets).
+# Pure update strategies as param_update (complement the credit assignment presets).
 #
-# As of the category-correctness sprint these are registered under
-# ComponentCategory.UPDATE_STRATEGY, NOT OPTIMIZER: they are gradient
+# These are registered under ComponentCategory.PARAM_UPDATE: they are gradient
 # transformation strategies (no torch.optim parameter/state ownership) rather
 # than optimizers. Consumers resolve them via the presets (smep/muon_backprop).
 Registry.register(
-    ComponentCategory.UPDATE_STRATEGY,
+    ComponentCategory.PARAM_UPDATE,
     name="muon",
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
@@ -103,7 +103,7 @@ Registry.register(
 )(MuonUpdate)
 
 Registry.register(
-    ComponentCategory.UPDATE_STRATEGY,
+    ComponentCategory.PARAM_UPDATE,
     name="dion",
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
@@ -115,7 +115,7 @@ Registry.register(
 )(DionUpdate)
 
 Registry.register(
-    ComponentCategory.UPDATE_STRATEGY,
+    ComponentCategory.PARAM_UPDATE,
     name="plain",
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
@@ -127,7 +127,7 @@ Registry.register(
 )(PlainUpdate)
 
 Registry.register(
-    ComponentCategory.UPDATE_STRATEGY,
+    ComponentCategory.PARAM_UPDATE,
     name="fisher",
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
@@ -139,7 +139,7 @@ Registry.register(
 )(FisherUpdate)
 
 
-# OPTIMIZER-category registrations: expose the EP presets to ``CoreTrainer`` so
+# PARAM_UPDATE-category registrations: expose the EP presets to ``CoreTrainer`` so
 # ``optimizer="smep"`` (etc.) drives the learning-rule path. The wrapper forces
 # ``mode="ep"`` by default so ``dispatch_train_step``'s ``step(x, target)`` call
 # computes gradients — the raw preset defaults to backprop mode, which would be a
@@ -160,7 +160,7 @@ for _name, _preset in (
     ("local_ep", local_ep),
     ("natural_ep", natural_ep),
 ):
-    register_optimizer(
+    register_param_update(
         _name,
         locality_level=LocalityLevel.EQUILIBRIUM,
         compute_profile=ComputeProfile.GPU,

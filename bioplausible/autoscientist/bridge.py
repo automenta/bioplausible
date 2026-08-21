@@ -77,12 +77,12 @@ class AutoScientistBridge:
             min_bio_score=min_bio_score,
         )
         propagators = Registry.query(
-            category=ComponentCategory.PROPAGATOR,
+            category=ComponentCategory.CREDIT_ASSIGNMENT,
             domain=domain,
             min_bio_score=min_bio_score,
         )
         optimizers = Registry.query(
-            category=ComponentCategory.OPTIMIZER,
+            category=ComponentCategory.PARAM_UPDATE,
             domain=domain,
         )
 

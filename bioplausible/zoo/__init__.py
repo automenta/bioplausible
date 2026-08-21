@@ -16,6 +16,7 @@ from bioplausible.core.registry import (
     register_metric,
     register_model,
     register_optimizer,
+    register_param_update,
     register_propagator,
     register_sparsity,
 )
@@ -124,7 +125,7 @@ def get_propagators_for_model(
     """Return propagators compatible with a model's locality + backward flag."""
     model_meta = Registry.get_metadata(ComponentCategory.MODEL, model_name)
     return Registry.query(
-        category=ComponentCategory.PROPAGATOR,
+        category=ComponentCategory.CREDIT_ASSIGNMENT,
         locality=model_meta.locality_level,
         requires_backward=model_meta.requires_backward,
     )
@@ -134,9 +135,9 @@ def get_optimizers_for_propagator(
     propagator_name: str,
 ) -> list[dict[str, object]]:
     """Return optimizers compatible with a propagator's backward flag."""
-    prop_meta = Registry.get_metadata(ComponentCategory.PROPAGATOR, propagator_name)
+    prop_meta = Registry.get_metadata(ComponentCategory.CREDIT_ASSIGNMENT, propagator_name)
     return Registry.query(
-        category=ComponentCategory.OPTIMIZER,
+        category=ComponentCategory.PARAM_UPDATE,
         requires_backward=prop_meta.requires_backward,
     )
 
@@ -164,6 +165,7 @@ __all__ = [
     "register_metric",
     "register_model",
     "register_optimizer",
+    "register_param_update",
     "register_propagator",
     "register_sparsity",
     "sparsity",

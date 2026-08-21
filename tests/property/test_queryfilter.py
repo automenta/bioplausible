@@ -17,13 +17,11 @@ from bioplausible.core.registry import (
     ComponentCategory,
     ComponentMetadata,
     ComputeProfile,
-    Domain,
     LocalityLevel,
     Registry,
     _QueryFilter,
 )
 
-domain_strat = st.sampled_from(list(Domain))
 locality_strat = st.sampled_from(list(LocalityLevel))
 compute_strat = st.sampled_from(list(ComputeProfile))
 credit_strat = st.sampled_from([
@@ -47,7 +45,6 @@ def meta_strat(draw):
     return ComponentMetadata(
         name=f"m{draw(st.integers(min_value=0, max_value=10**6))}",
         category=ComponentCategory.MODEL,
-        domains=draw(st.lists(domain_strat, min_size=1, max_size=3)),
         locality_level=draw(locality_strat),
         compute_profile=draw(compute_strat),
         bio_plausibility_score=draw(bio_strat),
@@ -62,7 +59,6 @@ def meta_strat(draw):
 def filter_strat(draw):
     """Generate a random _QueryFilter with a mix of constrained axes."""
     return _QueryFilter(
-        domain=draw(st.one_of(st.none(), domain_strat)),
         locality=draw(st.one_of(st.none(), locality_strat)),
         compute=draw(st.one_of(st.none(), compute_strat)),
         requires_backward=draw(st.one_of(st.none(), st.booleans())),
@@ -77,8 +73,6 @@ def filter_strat(draw):
 def _reference_matches(meta: ComponentMetadata, flt: _QueryFilter) -> bool:
     """Independent re-implementation of the filter predicate conjunction."""
     checks: list[bool] = []
-    if flt.domain is not None:
-        checks.append(flt.domain in meta.domains)
     if flt.locality is not None:
         checks.append(flt.locality == meta.locality_level)
     if flt.compute is not None:
@@ -133,17 +127,8 @@ def test_axis_predicates_are_independent(meta):
     Any single axis that forces a mismatch makes the full conjunction False,
     regardless of which axis it is and what the other axes say.
     """
-    domain_off = _QueryFilter(domain=_other_domain(meta))
     locality_off = _QueryFilter(locality=_other_locality(meta))
-    assert domain_off.matches(meta) is False
     assert locality_off.matches(meta) is False
-
-
-def _other_domain(meta: ComponentMetadata) -> Domain:
-    for d in Domain:
-        if d not in meta.domains:
-            return d
-    return Domain.VISION
 
 
 def _other_locality(meta: ComponentMetadata) -> LocalityLevel:
@@ -175,22 +160,20 @@ def test_query_set_commutative(ma, mb):
     assume(ma.name != mb.name)
     saved = _seed(ma, mb)
     try:
-        if ma.domains and mb.domains:
-            axis = ma.domains[0]
+        if ma.family and mb.family:
+            axis = ma.family
             set_ab = {
                 r["name"]
                 for r in Registry.query(
                     category=ComponentCategory.MODEL,
-                    domain=axis,
-                    family=mb.family,
+                    family=axis,
                 )
             }
             set_ba = {
                 r["name"]
                 for r in Registry.query(
                     category=ComponentCategory.MODEL,
-                    family=mb.family,
-                    domain=axis,
+                    family=axis,
                 )
             }
             assert set_ab == set_ba

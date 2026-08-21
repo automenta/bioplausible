@@ -187,7 +187,7 @@ class HypothesisReasoner:
         from bioplausible.core.registry import ComponentCategory, Registry
 
         mep_propagators = Registry.query(
-            category=ComponentCategory.PROPAGATOR,
+            category=ComponentCategory.CREDIT_ASSIGNMENT,
             tags=["mep"],
         )
 

@@ -499,8 +499,43 @@ uv run pyright . && uv run ruff check . && uv run pytest tests/property/ tests/u
 ```
 
 **Pre-existing Issues (Not Sprint 5 Scope)**:
-- 5 test files fail to collect due to `Domain` enum removal from registry (cleanup item §6)
 - 6 geometry tests in `test_grpc_seam_subprocess.py` fail with CUDA device-side assert (known TileGeometry limitation)
 - 1 fault injection test has CUDA error during setup
-- `AGENTS.md` line 377 references removed `Domain` enum (doc debt §9)
 - Coverage floor (55%) not met — property tests only cover ontology core (§8)
+
+---
+
+## Post-Sprint 5 Cleanup (2026-08-21)
+
+### Completed Cleanup Tasks
+
+| Task | Status | Details |
+|------|--------|---------|
+| Fix failing tests (Domain enum removal) | ✅ Complete | Updated 5 test files to remove `Domain` enum references |
+| Remove legacy modules | ✅ Complete | Deleted `bioplausible/zoo/models/eqprop/_legacy/`, `docs/archive/`, `run_experiment.py` |
+| Consolidate BackpropMLP / LoopedMLP | ✅ Complete | Moved `BackpropMLP` to `bioplausible/zoo/models/backprop.py`, removed duplicate from `looped_mlp.py` |
+| Registry category consolidation | ✅ Complete | Reduced to 4 core categories (MODEL, CREDIT_ASSIGNMENT, PARAM_UPDATE, HARDWARE) + 3 auxiliary (METRIC, TASK, TRACK). Deprecated aliases maintained for backward compatibility |
+
+### Registry Category Migration
+
+**Before (11 categories):**
+- MODEL, PROPAGATOR, OPTIMIZER, UPDATE_STRATEGY, CONSTRAINT, CONTROLLER, SPARSITY, METRIC, TASK, TRACK, KERNEL_BACKEND
+
+**After (7 categories):**
+- **Core (4):** MODEL, CREDIT_ASSIGNMENT, PARAM_UPDATE, HARDWARE
+- **Auxiliary (3):** METRIC, TASK, TRACK
+- **Deprecated aliases kept:** PROPAGATOR, OPTIMIZER, UPDATE_STRATEGY, CONSTRAINT, SPARSITY, KERNEL_BACKEND, CONTROLLER
+
+All existing registrations now work under both old and new category names via the deprecated decorators.
+
+### Test Results After Cleanup
+
+```bash
+# All property and unit/core tests pass
+uv run pytest tests/property/ tests/unit/core/ -q --ignore=tests/property/test_kernels.py
+# ✅ 368 passed, 3 xfailed in ~48s
+
+# Lint and type check
+uv run ruff check . && uv run pyright .
+# ✅ Clean
+```

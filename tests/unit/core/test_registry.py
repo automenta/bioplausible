@@ -8,7 +8,6 @@ from torch import nn
 from bioplausible.core.registry import (
     ComponentCategory,
     ComponentMetadata,
-    Domain,
     LocalityLevel,
     Registry,
     register_model,
@@ -36,7 +35,7 @@ def test_register_and_get():
     Registry.clear()
 
     @register_model(
-        name="TestModel", domains=[Domain.VISION], description="A test model"
+        name="TestModel", family="test", description="A test model"
     )
     class TestModel:
         pass
@@ -48,7 +47,7 @@ def test_register_and_get():
     # Get metadata
     meta = Registry.get_metadata(ComponentCategory.MODEL, "TestModel")
     assert meta.name == "TestModel"
-    assert Domain.VISION in meta.domains
+    assert meta.family == "test"
     assert meta.description == "A test model"
     assert meta.category == ComponentCategory.MODEL
 
@@ -101,9 +100,9 @@ def test_list_with_entries():
 
     result = Registry.list()
     assert "model" in result
-    assert "optimizer" in result
+    assert "param_update" in result
     assert result["model"] == ["ModelA"]
-    assert result["optimizer"] == ["OptA"]
+    assert result["param_update"] == ["OptA"]
 
 
 def test_list_by_category():
@@ -117,7 +116,7 @@ def test_list_by_category():
     result = Registry.list(ComponentCategory.MODEL)
     assert "model" in result
     assert result["model"] == ["ModelA"]
-    assert "optimizer" not in result
+    assert "param_update" not in result
 
 
 def test_query_no_filters():
@@ -137,25 +136,25 @@ def test_query_no_filters():
     assert {r["name"] for r in results} == {"ModelA", "ModelB"}
 
 
-def test_query_by_domain():
-    """Test query by domain."""
+def test_query_by_family():
+    """Test query by family."""
     Registry.clear()
 
-    @register_model(name="VisionModel", domains=[Domain.VISION])
-    class VisionModel:
+    @register_model(name="EqpropModel", family="eqprop")
+    class EqpropModel:
         pass
 
-    @register_model(name="LMModel", domains=[Domain.LM])
-    class LMModel:
+    @register_model(name="BackpropModel", family="backprop")
+    class BackpropModel:
         pass
 
-    vision_results = Registry.query(domain=Domain.VISION)
-    assert len(vision_results) == 1
-    assert vision_results[0]["name"] == "VisionModel"
+    eqprop_results = Registry.query(family="eqprop")
+    assert len(eqprop_results) == 1
+    assert eqprop_results[0]["name"] == "EqpropModel"
 
-    lm_results = Registry.query(domain=Domain.LM)
-    assert len(lm_results) == 1
-    assert lm_results[0]["name"] == "LMModel"
+    backprop_results = Registry.query(family="backprop")
+    assert len(backprop_results) == 1
+    assert backprop_results[0]["name"] == "BackpropModel"
 
 
 def test_query_by_locality():
@@ -252,9 +251,9 @@ def test_query_category():
     assert len(results) == 1
     assert results[0]["category"] == ComponentCategory.MODEL
 
-    results = Registry.query(category=ComponentCategory.OPTIMIZER)
+    results = Registry.query(category=ComponentCategory.PARAM_UPDATE)
     assert len(results) == 1
-    assert results[0]["category"] == ComponentCategory.OPTIMIZER
+    assert results[0]["category"] == ComponentCategory.PARAM_UPDATE
 
 
 def test_component_metadata_defaults():
@@ -263,7 +262,6 @@ def test_component_metadata_defaults():
     assert meta.bio_plausibility_score == pytest.approx(0.5)
     assert meta.requires_backward is True
     assert meta.locality_level == LocalityLevel.GLOBAL
-    assert Domain.VISION in meta.domains
     assert meta.memory_complexity == "O(N)"
 
 
@@ -365,10 +363,13 @@ def test_all_models_have_transition_modules_or_override():
     for name in models:
         if name in skip:
             continue
-        cls = Registry.get(ComponentCategory.MODEL, name)
-        if not issubclass(cls, BioModel):
+        component = Registry.get(ComponentCategory.MODEL, name)
+        # Skip factory functions (not classes)
+        if not isinstance(component, type):
+            continue
+        if not issubclass(component, BioModel):
             continue  # plain nn.Module, no requirement
-        assert hasattr(cls, "transition_modules"), (
-            f"Model {name!r} ({cls.__name__}) inherits BioModel "
+        assert hasattr(component, "transition_modules"), (
+            f"Model {name!r} ({component.__name__}) inherits BioModel "
             f"but has no transition_modules()"
         )

@@ -32,7 +32,7 @@ def get_plausible_model_names() -> list[str]:
 def get_bio_optimizer_names() -> list[str]:
     """Return bio-plausible optimizer names."""
     keywords = ("eqprop", "smep", "hebbian", "fa", "chl")
-    optimizers = Registry.list(ComponentCategory.OPTIMIZER).get("optimizer", [])
+    optimizers = Registry.list(ComponentCategory.PARAM_UPDATE).get("param_update", [])
     return [name for name in optimizers if any(kw in name.lower() for kw in keywords)]
 
 

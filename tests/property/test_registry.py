@@ -9,13 +9,11 @@ from bioplausible.core.registry import (
     ComponentCategory,
     ComponentMetadata,
     ComputeProfile,
-    Domain,
     LocalityLevel,
     Registry,
 )
 
 # ---------- strategies for metadata fields ----------
-domain_strat = st.sampled_from(list(Domain))
 locality_strat = st.sampled_from(list(LocalityLevel))
 compute_strat = st.sampled_from(list(ComputeProfile))
 bio_score_strat = st.floats(min_value=0.0, max_value=1.0, allow_nan=False)
@@ -37,7 +35,6 @@ def metadata_strat(draw):
     return ComponentMetadata(
         name=f"test_{draw(st.integers(min_value=0, max_value=10000))}",
         category=ComponentCategory.MODEL,
-        domains=draw(st.lists(domain_strat, min_size=1, max_size=3)),
         locality_level=draw(locality_strat),
         compute_profile=draw(compute_strat),
         bio_plausibility_score=draw(bio_score_strat),
@@ -72,7 +69,6 @@ def test_query_matches_itself(meta):
         }
         results = Registry.query(
             category=ComponentCategory.MODEL,
-            domain=meta.domains[0] if meta.domains else None,
             locality=meta.locality_level,
             compute=meta.compute_profile,
             requires_backward=meta.requires_backward,
@@ -88,8 +84,8 @@ def test_query_matches_itself(meta):
     meta1=metadata_strat(),
     meta2=metadata_strat(),
 )
-def test_query_monotonic_constraining_domain(meta1, meta2):
-    """Adding a domain constraint never adds results."""
+def test_query_monotonic_constraining_family(meta1, meta2):
+    """Adding a family constraint never adds results."""
     assume(meta1.name != meta2.name)
     saved = _setup()
     try:
@@ -98,10 +94,10 @@ def test_query_monotonic_constraining_domain(meta1, meta2):
             meta2.name: {"class": object, "metadata": meta2},
         }
         all_results = Registry.query(category=ComponentCategory.MODEL)
-        # Constrain by a single domain
-        if meta1.domains:
-            d = meta1.domains[0]
-            constrained = Registry.query(category=ComponentCategory.MODEL, domain=d)
+        # Constrain by a single family
+        if meta1.family:
+            f = meta1.family
+            constrained = Registry.query(category=ComponentCategory.MODEL, family=f)
             assert len(constrained) <= len(all_results)
     finally:
         _restore(saved)
@@ -131,19 +127,19 @@ def test_query_monotonic_constraining_bio_score(meta):
     meta=metadata_strat(),
 )
 def test_query_empty_for_exclusive_constraint(meta):
-    """A filter with no matching domain returns empty."""
+    """A filter with no matching family returns empty."""
     saved = _setup()
     try:
         Registry._components[ComponentCategory.MODEL] = {
             meta.name: {"class": object, "metadata": meta}
         }
-        # Use a domain guaranteed not to match
-        all_domains = list(Domain)
-        if meta.domains:
-            other = [d for d in all_domains if d not in meta.domains]
+        # Use a family guaranteed not to match
+        if meta.family:
+            other_families = ["eqprop", "fa", "hebbian", "backprop", "predictive_coding", "mep", "tile"]
+            other = [f for f in other_families if f != meta.family]
             if other:
                 results = Registry.query(
-                    category=ComponentCategory.MODEL, domain=other[0]
+                    category=ComponentCategory.MODEL, family=other[0]
                 )
                 assert len(results) == 0
     finally:

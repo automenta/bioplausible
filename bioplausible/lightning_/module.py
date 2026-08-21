@@ -109,7 +109,7 @@ class BioLightningModule(pl.LightningModule):
 
     def configure_optimizers(self):
         """Create and store the bioplausible optimizer."""
-        opt_cls = Registry.get(ComponentCategory.OPTIMIZER, self.optimizer_name)
+        opt_cls = Registry.get(ComponentCategory.PARAM_UPDATE, self.optimizer_name)
         # Standard torch optimizers don't accept model=; bioplausible ones do
         try:
             self._optimizer = opt_cls(

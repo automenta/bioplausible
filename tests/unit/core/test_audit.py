@@ -30,7 +30,7 @@ def test_audit_enumerates_all_components():
     # spanning every category the registry supports.
     assert len(rows) >= MIN_EXPECTED_COMPONENTS
     categories = {row.category for row in rows}
-    assert {"model", "propagator", "optimizer"} <= categories
+    assert {"model", "credit_assignment", "param_update"} <= categories
 
 
 def test_no_component_missing_critical_fields():
@@ -44,12 +44,9 @@ def test_every_algorithm_component_has_a_family():
     # ``family`` only has meaning for rule-bearing categories.
     algorithm_categories = {
         "model",
-        "propagator",
-        "optimizer",
-        "update_strategy",
-        "constraint",
-        "controller",
-        "sparsity",
+        "credit_assignment",
+        "param_update",
+        "hardware",
     }
     rows = audit_rows()
     no_family = [

@@ -5,7 +5,7 @@ Laws:
   - get(register(x)) == x: registering a component and fetching it returns
     the identical object.
   - get_metadata returns the metadata that was provided at registration
-    (name, category, family, domain, locality, bio score preserved).
+    (name, category, family, locality, bio score preserved).
   - registering a name twice overwrites; get returns the latest component.
 """
 
@@ -17,14 +17,12 @@ from hypothesis import strategies as st
 from bioplausible.core.registry import (
     ComponentCategory,
     ComponentMetadata,
-    Domain,
     LocalityLevel,
     Registry,
 )
 
 name_strat = st.integers(min_value=0, max_value=10**6).map(lambda i: f"pcomp_{i}")
 family_strat = st.sampled_from(["eqprop", "fa", "hebbian", "backprop"])
-domain_strat = st.sampled_from(list(Domain))
 
 
 class _Dummy:
@@ -45,10 +43,9 @@ def _restore(saved):
 @given(
     name=name_strat,
     family=family_strat,
-    domain=domain_strat,
     bio=st.floats(min_value=0.1, max_value=1.0, allow_nan=False),
 )
-def test_get_returns_registered_component(name, family, domain, bio):
+def test_get_returns_registered_component(name, family, bio):
     """get(register(x)) == x and metadata is preserved."""
     saved = _snapshot()
     try:
@@ -56,7 +53,6 @@ def test_get_returns_registered_component(name, family, domain, bio):
             ComponentCategory.MODEL,
             name,
             family=family,
-            domains=[domain],
             bio_plausibility_score=bio,
             locality_level=LocalityLevel.LOCAL,
         )(_Dummy)
@@ -67,7 +63,6 @@ def test_get_returns_registered_component(name, family, domain, bio):
         assert meta.name == name and meta.category == ComponentCategory.MODEL
         assert meta.family == family
         assert meta.bio_plausibility_score == bio
-        assert domain in meta.domains
     finally:
         _restore(saved)
 
