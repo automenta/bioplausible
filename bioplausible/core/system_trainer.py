@@ -17,10 +17,15 @@ from torch import Tensor
 from bioplausible.core.logging import get_logger
 from bioplausible.core.ontology import (
     CreditAssignment,
+    CreditAssignmentConfig,
     Geometry,
+    GeometryConfig,
     ParameterUpdate,
+    ParameterUpdateConfig,
     StateDynamics,
+    StateDynamicsConfig,
     Substrate,
+    SubstrateConfig,
     System,
     SystemState,
 )
@@ -486,10 +491,146 @@ def create_fa_system(
     return compose_system(substrate, geometry, dynamics, credit, update)
 
 
+def extract_config(system: System) -> dict[str, object]:
+    """Extract configuration from a composed System.
+
+    Returns a dictionary mapping layer names to their configuration objects.
+    This enables round-trip: System -> configs -> System.
+    """
+    return {
+        "substrate": system.substrate.config,
+        "geometry": system.geometry.config,
+        "dynamics": system.dynamics.config,
+        "credit": system.credit.config,
+        "update": system.update.config,
+    }
+
+
+def compose_system_from_configs(
+    substrate: SubstrateConfig,
+    geometry: GeometryConfig,
+    dynamics: StateDynamicsConfig,
+    credit: CreditAssignmentConfig,
+    update: ParameterUpdateConfig,
+) -> System:
+    """Compose a System from five configuration objects.
+
+    This is the inverse of extract_config(), enabling the round-trip:
+    System --extract_config--> configs --compose_system_from_configs--> System
+
+    Args:
+        substrate: Substrate configuration
+        geometry: Geometry configuration
+        dynamics: StateDynamics configuration
+        credit: CreditAssignment configuration
+        update: ParameterUpdate configuration
+
+    Returns:
+        A composed System with default implementations for each layer.
+    """
+    from bioplausible.core.ontology import (
+        BackpropCredit,
+        DigitalSubstrate,
+        ElasticConsolidationUpdate,
+        EnergyMinimizationDynamics,
+        EuclideanUpdate,
+        FeedforwardGeometry,
+        InstantaneousDynamics,
+        LocalGoodnessCredit,
+        NaturalGradientUpdate,
+        NeuromorphicSubstrate,
+        OpticalSubstrate,
+        PredictiveSettlingDynamics,
+        QuantumSubstrate,
+        RandomProjectionsCredit,
+        RecurrentGeometry,
+        RiemannianOrthogonalUpdate,
+        SpectralConstrainedUpdate,
+        SpikeIntegrationDynamics,
+        TargetInversionCredit,
+        ThermodynamicContrast,
+    )
+
+    # Instantiate substrate from config
+    substrate_map = {
+        "digital": DigitalSubstrate,
+        "analog": "AnalogSubstrate",
+        "memristive": "MemristiveSubstrate",
+        "neuromorphic": NeuromorphicSubstrate,
+        "optical": OpticalSubstrate,
+        "quantum": QuantumSubstrate,
+        "quantized": "QuantizedSubstrate",
+        "noisy": "NoisySubstrate",
+    }
+    substrate_cls_name = substrate_map.get(substrate.precision.lower(), "DigitalSubstrate")
+    substrate_cls = globals().get(substrate_cls_name, DigitalSubstrate)
+    substrate_instance = substrate_cls(substrate)
+
+    # Instantiate geometry from config
+    topology_type = geometry.topology_type.lower()
+    if topology_type in ("recurrent", "recurrent_attractor"):
+        geometry_instance = RecurrentGeometry(
+            geometry,
+            hidden_dim=geometry.hidden_dims[-1] if geometry.hidden_dims else None,
+        )
+    elif topology_type in ("tile_mesh", "tile"):
+        from bioplausible.core.ontology import TileGeometry
+        geometry_instance = TileGeometry(
+            geometry,
+            neurons_per_tile=8,
+            tiles_per_layer=2,
+        )
+    else:
+        geometry_instance = FeedforwardGeometry(geometry)
+
+    # Instantiate dynamics from config
+    dynamics_type = dynamics.dynamics_type.lower()
+    if dynamics_type == "energy_minimization":
+        dynamics_instance = EnergyMinimizationDynamics(dynamics)
+    elif dynamics_type == "predictive_settling":
+        dynamics_instance = PredictiveSettlingDynamics(dynamics)
+    elif dynamics_type == "spike_integration":
+        dynamics_instance = SpikeIntegrationDynamics(dynamics)
+    else:
+        dynamics_instance = InstantaneousDynamics(dynamics)
+
+    # Instantiate credit from config
+    credit_type = credit.credit_type.lower()
+    if credit_type in ("thermodynamic_contrast", "equilibrium"):
+        credit_instance = ThermodynamicContrast(credit)
+    elif credit_type in ("random_projections", "feedback_alignment"):
+        credit_instance = RandomProjectionsCredit(credit)
+    elif credit_type in ("local_goodness", "forward_only"):
+        credit_instance = LocalGoodnessCredit(credit)
+    elif credit_type in ("temporal_trace", "spiking"):
+        credit_instance = TargetInversionCredit(credit)  # Will use TemporalTraceCredit if available
+    elif credit_type in ("target_inversion", "target_prop"):
+        credit_instance = TargetInversionCredit(credit)
+    else:
+        credit_instance = BackpropCredit(credit)
+
+    # Instantiate update from config
+    update_type = update.update_type.lower()
+    if update_type in ("riemannian_orthogonal", "muon"):
+        update_instance = RiemannianOrthogonalUpdate(update)
+    elif update_type in ("spectral_constrained", "spectral"):
+        update_instance = SpectralConstrainedUpdate(update)
+    elif update_type in ("natural_gradient", "fisher"):
+        update_instance = NaturalGradientUpdate(update)
+    elif update_type in ("elastic_consolidation", "ewc"):
+        update_instance = ElasticConsolidationUpdate(update)
+    else:
+        update_instance = EuclideanUpdate(update)
+
+    return compose_system(substrate_instance, geometry_instance, dynamics_instance, credit_instance, update_instance)
+
+
 __all__ = [
     "SystemTrainer",
     "SystemTrainerConfig",
     "compose_system",
+    "compose_system_from_configs",
+    "extract_config",
     "create_backprop_system",
     "create_eqprop_system",
     "create_fa_system",

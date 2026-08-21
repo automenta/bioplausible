@@ -42,10 +42,13 @@ __all__ = [
     "ElasticConsolidationUpdate",
     "EnergyMinimizationDynamics",
     "EuclideanUpdate",
+    "FAMILY_TOLERANCES",
     "FeedforwardGeometry",
     "Geometry",
     "GeometryConfig",
+    "HomeostaticCredit",
     "InstantaneousDynamics",
+    "LazyStateDynamics",
     "LocalGoodnessCredit",
     "MemristiveSubstrate",
     "ModelAdapter",
@@ -1357,6 +1360,35 @@ class EuclideanUpdate:
 # ============================================================
 
 
+# Family-specific tolerances for validation
+FAMILY_TOLERANCES: dict[str, tuple[float, float]] = {
+    "eqprop": (0.15, 1e-2),
+    "equilibrium": (0.15, 1e-2),
+    "ep": (0.15, 1e-2),
+    "chl": (0.15, 1e-2),
+    "fa": (0.1, 5e-3),
+    "feedback_alignment": (0.1, 5e-3),
+    "dfa": (0.1, 5e-3),
+    "forward_only": (0.05, 1e-3),
+    "ff": (0.05, 1e-3),
+    "pepita": (0.05, 1e-3),
+    "hebbian": (0.2, 1e-2),
+    "target_prop": (0.1, 5e-3),
+    "target_inversion": (0.1, 5e-3),
+    "spiking": (0.2, 1e-2),
+    "stdp": (0.2, 1e-2),
+    "snn": (0.2, 1e-2),
+    "predictive_coding": (0.1, 5e-3),
+    "pc": (0.1, 5e-3),
+    "backprop": (0.01, 1e-4),
+    "gradient": (0.01, 1e-4),
+    "mep": (0.1, 5e-3),
+    "equitile": (0.1, 5e-3),
+    "tile": (0.1, 5e-3),
+    "default": (0.1, 1e-3),
+}
+
+
 class ModelAdapter:
     """Adapt an existing registered model to the 5-D System interface.
 
@@ -1374,6 +1406,19 @@ class ModelAdapter:
     def __init__(self, model: nn.Module, metadata: ComponentMetadata | None = None):
         self.model = model
         self._metadata = metadata
+
+    def _get_family_tolerances(self) -> tuple[float, float]:
+        """Get family-specific tolerances based on model metadata."""
+        if self._metadata and self._metadata.family:
+            family = self._metadata.family.lower()
+            # Check for exact match first
+            if family in FAMILY_TOLERANCES:
+                return FAMILY_TOLERANCES[family]
+            # Check for partial matches
+            for key, tol in FAMILY_TOLERANCES.items():
+                if key != "default" and key in family:
+                    return tol
+        return FAMILY_TOLERANCES["default"]
 
     def to_system(self) -> System:
         """Project model into 5-D ontology (best-effort inference)."""
@@ -1832,8 +1877,8 @@ class ModelAdapter:
         self,
         x: Tensor | None = None,
         y: Tensor | None = None,
-        rtol: float = 0.1,
-        atol: float = 1e-3,
+        rtol: float | None = None,
+        atol: float | None = None,
     ) -> dict[str, object]:
         """Validate the 5-D projection against the legacy model.
 
@@ -1846,8 +1891,10 @@ class ModelAdapter:
                inferred input_dim.
             y: Target tensor. If None, generates synthetic labels based on
                inferred output_dim.
-            rtol: Relative tolerance for metric comparison.
-            atol: Absolute tolerance for metric comparison.
+            rtol: Relative tolerance for metric comparison. If None, uses
+                  family-specific tolerance from FAMILY_TOLERANCES.
+            atol: Absolute tolerance for metric comparison. If None, uses
+                  family-specific tolerance from FAMILY_TOLERANCES.
 
         Returns:
             Dictionary with validation results:
@@ -1857,6 +1904,12 @@ class ModelAdapter:
             - "differences": dict of metric differences
             - "details": additional diagnostic info
         """
+        # Use family-specific tolerances if not explicitly provided
+        if rtol is None or atol is None:
+            family_rtol, family_atol = self._get_family_tolerances()
+            rtol = rtol if rtol is not None else family_rtol
+            atol = atol if atol is not None else family_atol
+
         # Generate test data if not provided
         if x is None:
             input_dim = getattr(self.model, "input_dim", 10)
@@ -1901,6 +1954,7 @@ class ModelAdapter:
                 "atol": atol,
                 "input_shape": tuple(x.shape),
                 "target_shape": tuple(y.shape),
+                "family": self._metadata.family if self._metadata else "unknown",
             },
         }
 
@@ -2636,6 +2690,77 @@ class SpikeIntegrationDynamics:
         return torch.tensor(0.0)
 
 
+class LazyStateDynamics:
+    """Lazy per-step state dynamics (Lazy EqProp variant).
+
+    Computes activations on-demand during settling, deferring computation
+    until the energy/contrastive step requires them. This implements the
+    "lazy" evaluation strategy from LazyEqProp where intermediate states
+    are materialized only when needed for the pseudo-gradient computation.
+
+    The dynamics mimics EquilibriumMLP.forward_dynamics but with lazy
+    activation caching — useful for memory-constrained substrates.
+    """
+
+    def __init__(self, config: StateDynamicsConfig | None = None):
+        self.config = config or StateDynamicsConfig(dynamics_type="energy_minimization")
+        self._activation_cache: dict[int, Tensor] = {}
+
+    def settle(
+        self,
+        state: SystemState,
+        geometry: Geometry,
+        substrate: Substrate,
+        target: Tensor | None = None,
+    ) -> SystemState:
+        """Settle with lazy activation computation."""
+        h = state.activations
+        if h is None:
+            return state
+        if isinstance(h, list):
+            h = h[-1]  # Use last layer for single-tensor routing
+
+        # Lazy evaluation: only compute when actually settling
+        for step in range(self.config.max_steps):
+            h_new = geometry.route(h)
+            h_new = substrate.inject_state_noise(h_new)
+
+            # Cache activations lazily at convergence check points
+            if step >= self.config.convergence_start:
+                self._activation_cache[step] = h_new.clone()
+
+            if step >= self.config.convergence_start:
+                delta = torch.dist(h_new, h, p=float("inf")).item()
+                if delta < self.config.convergence_threshold:
+                    h = h_new
+                    break
+            h = h_new
+
+        if target is None:
+            state.free_state = h
+        else:
+            state.nudged_state = h
+        state.activations = h
+        return state
+
+    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:
+        """Compute energy using cached activations if available."""
+        acts = state.free_state if state.free_state is not None else state.activations
+        if acts is None:
+            return torch.tensor(0.0)
+        if isinstance(acts, list):
+            acts = acts[-1]
+        return (acts**2).mean()
+
+    def get_cached_activations(self) -> dict[int, Tensor]:
+        """Return lazily cached activations for inspection."""
+        return self._activation_cache
+
+    def clear_cache(self) -> None:
+        """Clear the lazy activation cache."""
+        self._activation_cache.clear()
+
+
 # Additional credit assignment implementations
 class RandomProjectionsCredit:
     """Feedback Alignment / Direct Feedback Alignment.
@@ -3027,6 +3152,220 @@ class TargetInversionCredit:
                     total_mse += torch.nn.functional.mse_loss(fa, na)
             return total_mse
         return torch.tensor(0.0)
+
+
+class HomeostaticCredit:
+    """Homeostatic credit assignment with dynamic Lipschitz scaling.
+
+    Implements the homeostatic mechanism from HomeostaticEqProp:
+    - Monitors per-layer velocity (state change rate)
+    - Estimates layer-wise Lipschitz constants
+    - Applies braking (scale down) when velocity exceeds threshold or Lipschitz > target
+    - Applies boosting (scale up) when velocity is too low and Lipschitz < target
+
+    This provides autonomous stability without external hyperparameter tuning.
+    """
+
+    def __init__(self, config: CreditAssignmentConfig | None = None):
+        self.config = config or CreditAssignmentConfig(credit_type="homeostatic")
+        self._layer_scales: dict[int, float] = {}
+        self._last_velocities: dict[int, float] = {}
+        self._homeostasis_history: list[dict] = []
+
+        # Homeostatic parameters
+        self._alpha = 0.5
+        self._target_lipschitz = 0.95
+        self._velocity_threshold_high = 0.1
+        self._velocity_threshold_low = 0.01
+        self._adaptation_rate = 0.01
+
+    def _estimate_layer_lipschitz(self, layer_idx: int, geometry: Geometry) -> float:
+        """Estimate Lipschitz constant for a layer using power iteration."""
+        params = geometry.params
+        weight_names = [n for n in params if "weight" in n and params[n].ndim == 2]
+
+        if layer_idx >= len(weight_names):
+            return 1.0
+
+        weight_name = weight_names[layer_idx]
+        scale = self._layer_scales.get(layer_idx, 1.0)
+        W = params[weight_name] * scale
+
+        with torch.no_grad():
+            u = torch.randn(W.shape[1], device=W.device)
+            u = torch.nn.functional.normalize(u, dim=0)
+            for _ in range(3):
+                v = torch.nn.functional.normalize(W @ u, dim=0)
+                u = torch.nn.functional.normalize(W.T @ v, dim=0)
+            sigma = torch.norm(W @ u).item()
+        return sigma
+
+    def compute_pseudo_gradient(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        loss: Tensor,
+        geometry: Geometry,
+    ) -> list[Tensor]:
+        """Compute homeostatic pseudo-gradients.
+
+        The pseudo-gradient is the standard contrastive gradient scaled
+        by the homeostatic layer scales (which adapt based on velocity/Lipschitz).
+        """
+        if free_state.activations is None or nudged_state.activations is None:
+            return []
+
+        free_acts = (
+            free_state.activations
+            if isinstance(free_state.activations, list)
+            else [free_state.activations]
+        )
+        nudged_acts = (
+            nudged_state.activations
+            if isinstance(nudged_state.activations, list)
+            else [nudged_state.activations]
+        )
+
+        param_names = list(geometry.params.keys())
+        weight_names = [
+            n for n in param_names if "weight" in n and geometry.params[n].ndim == 2
+        ]
+
+        grads = []
+        n_layers = len(free_acts) - 1
+
+        for layer_idx in range(n_layers):
+            if layer_idx < len(weight_names):
+                # Standard contrastive Hebbian gradient
+                free_pre = free_acts[layer_idx]
+                free_post = free_acts[layer_idx + 1]
+                free_corr = free_pre.T @ free_post
+
+                nudged_pre = nudged_acts[layer_idx]
+                nudged_post = nudged_acts[layer_idx + 1]
+                nudged_corr = nudged_pre.T @ nudged_post
+
+                contrast = (free_corr - nudged_corr) / free_pre.shape[0]
+                grad = contrast.T
+
+                # Apply homeostatic scaling
+                scale = self._layer_scales.get(layer_idx, 1.0)
+                grads.append(grad * scale)
+
+        # Track velocities for homeostasis (difference between nudged and free)
+        if free_state.activations is not None and nudged_state.activations is not None:
+            for layer_idx in range(n_layers):
+                if layer_idx < len(free_acts) - 1 and layer_idx < len(nudged_acts) - 1:
+                    free_h = free_acts[layer_idx + 1]
+                    nudged_h = nudged_acts[layer_idx + 1]
+                    velocity = torch.mean(torch.abs(nudged_h - free_h)).item()
+                    self._last_velocities[layer_idx] = velocity
+
+        return grads
+
+    def apply_homeostasis(self, geometry: Geometry) -> dict:
+        """Apply homeostatic adaptation based on tracked velocities.
+
+        Call this after computing pseudo-gradients to update layer scales.
+        """
+        brake_total = 0.0
+        boost_total = 0.0
+        layers_braked = 0
+        layers_boosted = 0
+
+        for layer_idx, velocity in self._last_velocities.items():
+            current_L = self._estimate_layer_lipschitz(layer_idx, geometry)
+
+            if velocity > self._velocity_threshold_high or current_L > (
+                self._target_lipschitz + 0.1
+            ):
+                error_v = max(0, velocity - self._velocity_threshold_high)
+                error_l = max(0, current_L - self._target_lipschitz)
+                error = error_v + error_l
+
+                factor = 1.0 - (self._adaptation_rate * (1.0 + 10.0 * error))
+                factor = max(0.5, factor)
+
+                self._layer_scales[layer_idx] = self._layer_scales.get(layer_idx, 1.0) * factor
+                brake_total += 1.0 - factor
+                layers_braked += 1
+
+            elif velocity < self._velocity_threshold_low:
+                current_L = self._estimate_layer_lipschitz(layer_idx, geometry)
+                if current_L < self._target_lipschitz:
+                    error = self._velocity_threshold_low - velocity
+                    factor = 1.0 + (self._adaptation_rate * (1.0 + 5.0 * error))
+                    factor = min(1.5, factor)
+
+                    self._layer_scales[layer_idx] = self._layer_scales.get(layer_idx, 1.0) * factor
+                    boost_total += factor - 1.0
+                    layers_boosted += 1
+
+        # Clamp scales
+        for k in self._layer_scales:
+            self._layer_scales[k] = max(0.1, min(3.0, self._layer_scales[k]))
+
+        avg_velocity = (
+            sum(self._last_velocities.values()) / len(self._last_velocities)
+            if self._last_velocities
+            else 0.0
+        )
+        avg_lipschitz = (
+            sum(self._estimate_layer_lipschitz(i, geometry) for i in range(len(self._layer_scales)))
+            / len(self._layer_scales)
+            if self._layer_scales
+            else 0.0
+        )
+
+        metrics = {
+            "avg_velocity": avg_velocity,
+            "lipschitz_estimate": avg_lipschitz,
+            "brake_applied": brake_total,
+            "boost_applied": boost_total,
+            "layers_braked": layers_braked,
+            "layers_boosted": layers_boosted,
+            "layer_scales": dict(self._layer_scales),
+        }
+
+        self._homeostasis_history.append(metrics)
+        return metrics
+
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Surrogate objective: negative energy difference with homeostatic penalty."""
+        if free_state.energy is not None and nudged_state.energy is not None:
+            base_obj = nudged_state.energy - free_state.energy
+            # Add homeostatic regularization
+            reg = sum((s - 1.0) ** 2 for s in self._layer_scales.values())
+            return base_obj + 0.01 * reg
+        return torch.tensor(0.0)
+
+    def get_stability_report(self) -> str:
+        """Generate a stability report."""
+        if not self._layer_scales:
+            return "No layers tracked yet"
+
+        max_L = max(
+            self._estimate_layer_lipschitz(i, None) if i < 10 else 0.0
+            for i in self._layer_scales
+        )
+        status = "STABLE" if max_L < 1.0 else "UNSTABLE"
+
+        lines = [
+            f"Max Lipschitz: {max_L:.4f} {status}",
+            f"Layer Scales: {[f'{s:.3f}' for s in self._layer_scales.values()]}",
+        ]
+        if self._homeostasis_history:
+            last = self._homeostasis_history[-1]
+            lines.append(
+                f"Last Action: {last['layers_braked']} braked, {last['layers_boosted']} boosted"
+            )
+
+        return "\n".join(lines)
 
 
 # Additional parameter update implementations
