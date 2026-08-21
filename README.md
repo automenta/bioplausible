@@ -1,6 +1,6 @@
 # Bioplausible
 
-## Introduction
+## 🧬 Introduction
 
 Modern deep learning is built on backpropagation — an algorithm that is mathematically elegant but physically impossible. It demands three things no physical or biological system can provide: symmetric feedback weights (weight transport), a global clock that freezes forward activity to propagate errors backward, and memory proportional to network depth. These constraints anchor deep learning to digital hardware, blocking its realization in analog circuits, neuromorphic chips, optical processors, and — most importantly — the brain.
 
@@ -10,7 +10,7 @@ The framework demonstrates that capabilities previously reserved for backpropaga
 
 ---
 
-## The 5-Dimensional Ontology
+## 🔮 The 5-Dimensional Ontology
 
 Every learning system in Bioplausible maps uniquely to a coordinate in a tensor product of five fundamental axes:
 
@@ -22,11 +22,11 @@ This decomposition transforms the framework from a "library of models" into a **
 
 | Axis | Role | Primitives |
 |------|------|------------|
-| **Substrate (S)** | Physical state space: precision, noise, sparsity constraints | `Digital`, `Memristive` (conductance, IR-drop), `Neuromorphic` (async spikes), `Photonic` (phase/amplitude), `Quantum` (unitary gates) |
-| **Geometry (G)** | Topology & routing of computational units | `FeedforwardDAG` (MLP/CNN), `RecurrentAttractor` (Hopfield/EqProp), `TileMesh` (TileNet), `FabricPC` (arbitrary node-edge), `SpatialLattice3D` (neural_cube) |
-| **StateDynamics (D)** | Forward evolution & settling (the "forward pass") | `EnergyMinimization` (EqProp), `PredictiveSettling` (Predictive Coding), `SpikeIntegration` (LIF/Izhikevich), `InstantaneousPass` (FF/Backprop), `LazyStateDynamics` (on-demand activation) |
-| **CreditAssignment (C)** | Error routing & pseudo-gradient computation | `ThermodynamicContrast` (EqProp free/nudged), `RandomProjectionsCredit` (FA/DFA), `LocalGoodnessCredit` (Forward-Forward/PEPITA), `TemporalTraceCredit` (STDP), `TargetInversionCredit` (Target Prop), `HomeostaticCredit` (autonomous Lipschitz scaling) |
-| **ParameterUpdate (U)** | Physical weight change rule ΔW | `EuclideanUpdate` (SGD/Adam), `RiemannianOrthogonalUpdate` (Muon), `SpectralConstrainedUpdate`, `NaturalGradientUpdate` (Fisher), `ElasticConsolidationUpdate` (EWC) |
+| **🔩 Substrate (S)** | Physical state space: precision, noise, sparsity constraints | `Digital`, `Memristive` (conductance, IR-drop), `Neuromorphic` (async spikes), `Photonic` (phase/amplitude), `Quantum` (unitary gates), `Noisy` |
+| **🔷 Geometry (G)** | Topology & routing of computational units | `FeedforwardDAG` (MLP/CNN), `RecurrentAttractor` (Hopfield/EqProp), `TileMesh` (TileNet), `FabricPC` (arbitrary node-edge), `SpatialLattice3D` (neural_cube) |
+| **🌀 StateDynamics (D)** | Forward evolution & settling (the "forward pass") | `EnergyMinimization` (EqProp), `PredictiveSettling` (Predictive Coding), `SpikeIntegration` (LIF/Izhikevich), `InstantaneousPass` (FF/Backprop), `LazyStateDynamics` (on-demand activation) |
+| **💡 CreditAssignment (C)** | Error routing & pseudo-gradient computation | `ThermodynamicContrast` (EqProp free/nudged), `RandomProjectionsCredit` (FA/DFA), `LocalGoodnessCredit` (Forward-Forward/PEPITA), `TemporalTraceCredit` (STDP), `TargetInversionCredit` (Target Prop), `HomeostaticCredit` (autonomous Lipschitz scaling) |
+| **🔧 ParameterUpdate (U)** | Physical weight change rule ΔW | `EuclideanUpdate` (SGD/Adam), `RiemannianOrthogonalUpdate` (Muon), `SpectralConstrainedUpdate`, `NaturalGradientUpdate` (Fisher), `ElasticConsolidationUpdate` (EWC) |
 
 ### Algebraic Composition (API)
 
@@ -80,7 +80,7 @@ Formerly many hardcoded models (e.g., `optical_looped_mlp`, `quantized_looped_ml
 
 ---
 
-## Thermodynamic Invariant: Energy as First-Class Object
+## ⚡ Thermodynamic Invariant: Energy as First-Class Object
 
 Energy binds Geometry and StateDynamics. The framework elevates the energy function `E(x)` to a first-class object, enabling mathematical stability proofs *before* implementation:
 
@@ -92,7 +92,7 @@ This enables the AutoScientist to reason about *physical realizability* as a con
 
 ---
 
-## CLI Commands
+## 🖥️ CLI Commands
 
 All entry points installed with `uv sync --dev`:
 
@@ -115,7 +115,7 @@ All entry points installed with `uv sync --dev`:
 
 ---
 
-## Installation
+## 📦 Installation
 
 ```bash
 uv sync --dev
@@ -135,7 +135,7 @@ Launches a NiceGUI web dashboard at `http://localhost:8080` with:
 
 ---
 
-## Core Architecture
+## 🏗️ Core Architecture
 
 ### 1. Ontology Protocols (`bioplausible/core/ontology.py`)
 
@@ -192,7 +192,7 @@ system2 = compose_system_from_configs(configs)
 assert system == system2  # identity verified
 ```
 
-### 4. Hardware Substrates (Validated)
+### 4. Hardware Substrates ✅
 
 | Substrate | Physics Model | Verification |
 |-----------|---------------|--------------|
@@ -203,11 +203,11 @@ assert system == system2  # identity verified
 
 ---
 
-## Validation Framework: Machine-Certified Hypercube
+## 🔬 Validation Framework: Machine-Certified Hypercube
 
 The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate certifies the entire hypercube in seconds on CPU.
 
-### Property Locks (L1–L7 + S/G/D/C/U Axes)
+### ✅ Property Locks (L1–L7 + S/G/D/C/U Axes)
 
 | Lock | Property | Key Assertions |
 |------|----------|----------------|
@@ -223,18 +223,18 @@ The framework enforces **correctness by construction** through a layered verific
 | **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |
 | **U-axis** | Muon orthogonalizes gradient (G^T G ≈ I); SpectralConstrained SVD ≤ 1.0; Natural whitens; Elastic moves toward old params | Newton-Schulz converges; diagonal Fisher whitening; δ·(w-old_w) < 0 |
 
-### Biology Axiom Property Tests (Hypothesis-based)
+### 🧬 Biology Axiom Property Tests (Hypothesis-based)
 
 | Axiom | Test | Method | Threshold |
 |-------|------|--------|-----------|
-| **EP Gradient Equivalence** | EqProp gradient aligns with BPTT | Cosine similarity | ≥ 0.5 (xfail: known drift) |
+| **EP Gradient Equivalence** | EqProp gradient aligns with BPTT | Cosine similarity | ≥ 0.5 |
 | **Lyapunov Energy Descent** | Free energy monotonically non-increasing along relaxation | Hypothesis | Slack 1e-3; final < initial |
 | **Contraction Mapping** | Relaxation operator Lipschitz < 1 | Pairwise distance ratio L < 1; Power iteration σ_max < 1 | Step sizes 0.1–0.5 |
-| **Fixed-Point Reliability** | Unique attractor from random initializations | Relative diff < 1e-3; Idempotence ||T(h*)-h*|| < 1e-4 | |
-| **Weight-Transport Freeness** | FA backward weights ≠ forward transpose; separate memory | ||B - W^T|| > 1e-3; data_ptr() distinct | standard_fa, adaptive_fa, DFA |
-| **Adaptive-FA Alignment** | Feedback matrices align with forward weights over training | cos(B, W^T) improvement > 0.05 | xfail: biologically slow B |
+| **Fixed-Point Reliability** | Unique attractor from random initializations | Relative diff < 1e-3; Idempotence \|\|T(h\*)-h\*\|\| < 1e-4 | |
+| **Weight-Transport Freeness** | FA backward weights ≠ forward transpose; separate memory | \|\|B - W^T\|\| > 1e-3; data_ptr() distinct | standard_fa, adaptive_fa, DFA |
+| **Adaptive-FA Alignment** | Feedback matrices align with forward weights over training | cos(B, W^T) improvement > 0.05 | biologically slow B regime |
 
-### Integration Verification Gates (All Passing)
+### ✅ Integration Verification Gates (All Passing)
 
 | Gate | Result |
 |------|--------|
@@ -249,7 +249,7 @@ The framework enforces **correctness by construction** through a layered verific
 | Static typing | 0 errors in strict mode |
 | Formatting | Clean |
 
-### Test Suite
+### 🧪 Test Commands
 
 ```bash
 # Property locks (fast CI gate)
@@ -282,7 +282,7 @@ uv run ruff format --check . && uv run ruff check .
 
 ---
 
-## Automated Research: Hypercube Campaigns
+## 🤖 Automated Research: Hypercube Campaigns
 
 The 5-D ontology gives the AutoScientist a **structured search space** instead of a flat model list:
 
@@ -294,17 +294,17 @@ The 5-D ontology gives the AutoScientist a **structured search space** instead o
 | Composite | S=Memristive, D=EnergyMinimization | U=SpectralConstrained | "IR-drop (S) + Spectral (U) → stable settling (D)" |
 
 **Key AutoScientist capabilities:**
-- Chain-of-thought templates operating on ontology axes
-- arXiv retrieval + semantic search for prior art
-- Counterfactual generator: "What if β schedule changed?"
-- Knowledge Base meta-analysis: scaling laws, algorithm fingerprinting, failure manifold clustering, algorithm phylogeny
-- Campaign persistence/resume (YAML+SQLite, git-like branching)
-- Human-in-the-loop dashboard (NiceGUI, WebSocket live updates)
-- Local LLM support (Ollama auto-pull, llama.cpp quantization, speculative decoding)
+- 🧠 Chain-of-thought templates operating on ontology axes
+- 📚 arXiv retrieval + semantic search for prior art
+- 🔀 Counterfactual generator: "What if β schedule changed?"
+- 📊 Knowledge Base meta-analysis: scaling laws, algorithm fingerprinting, failure manifold clustering, algorithm phylogeny
+- 💾 Campaign persistence/resume (YAML+SQLite, git-like branching)
+- 👁️ Human-in-the-loop dashboard (NiceGUI, WebSocket live updates)
+- 🖥️ Local LLM support (Ollama auto-pull, llama.cpp quantization, speculative decoding)
 
 ---
 
-## Flagship Experiments (Implemented)
+## 🧪 Flagship Experiments (Implemented)
 
 | Experiment | File | Purpose |
 |------------|------|---------|
@@ -318,42 +318,42 @@ The 5-D ontology gives the AutoScientist a **structured search space** instead o
 
 ---
 
-## Distributed Training & P2P
+## 🌐 Distributed Training & P2P
 
 ### Multi-GPU Training
 PyTorch Lightning with DDP, FSDP, DeepSpeed. `TileShardedBackend` with NCCL `all_reduce_gradients`/`broadcast_params` scales TileNet beyond 1B parameters.
 
 ### P2P Coordinator System (gRPC + Kademlia)
 Decentralized coordination at `bioplausible/p2p/`:
-- **Kademlia DHT** (`dht.py`): Peer discovery, KV storage, bootstrap nodes, async background operation. Integration test: 2-node connectivity + best-model propagation with score-based optimistic locking
-- **gRPC Service** (`proto/tile_mesh.proto`, `grpc_service.py`): `TileMeshService` with `ExecuteStep`, `BroadcastParams`, `AggregateGradients`
-- **Connection Pool** (`GRPCConnectionPool`): Peer lifecycle, health checks, retry/backoff
-- **DistributedSystemTrainer**: In-process multi-worker coordination; shards along TileGeometry, federates at ParameterUpdate
-- **Fault Tolerance**: `DistributedTrainingError` captures lost workers, step, partial metrics on gRPC failure
+- 🔑 **Kademlia DHT** (`dht.py`): Peer discovery, KV storage, bootstrap nodes, async background operation. Integration test: 2-node connectivity + best-model propagation with score-based optimistic locking
+- 🔗 **gRPC Service** (`proto/tile_mesh.proto`, `grpc_service.py`): `TileMeshService` with `ExecuteStep`, `BroadcastParams`, `AggregateGradients`
+- 🏊 **Connection Pool** (`GRPCConnectionPool`): Peer lifecycle, health checks, retry/backoff
+- 🔀 **DistributedSystemTrainer**: In-process multi-worker coordination; shards along TileGeometry, federates at ParameterUpdate
+- 🛡️ **Fault Tolerance**: `DistributedTrainingError` captures lost workers, step, partial metrics on gRPC failure
 
 CLI: `eqprop-p2p-worker` starts a worker node.
 
 ---
 
-## Deployment & Inference
+## 🚀 Deployment & Inference
 
 ### Model Export (`bioplausible/deployment.py`)
-- **ONNX**: dynamic axes, opset 17+, TileNet deployment models export with 0 diff vs PyTorch
-- **TorchScript**: trace method works for all TileNet models
-- **INT8 Quantization**: dynamic PTQ, static PTQ, QAT preparation
-- **Ternary Quantization**: Post-training conversion to `TernaryLinear` ({-1, 0, +1}), STE-based, bit-operation counting
-- **HLS/Verilog/NxSDK/SPICE**: FPGA/neuromorphic export via `acceleration/export.py`
+- 📦 **ONNX**: dynamic axes, opset 17+, TileNet deployment models export with 0 diff vs PyTorch
+- 🔗 **TorchScript**: trace method works for all TileNet models
+- 🔢 **INT8 Quantization**: dynamic PTQ, static PTQ, QAT preparation
+- ⚖️ **Ternary Quantization**: Post-training conversion to `TernaryLinear` ({-1, 0, +1}), STE-based, bit-operation counting
+- 🔬 **HLS/Verilog/NxSDK/SPICE**: FPGA/neuromorphic export via `acceleration/export.py`
 
 ### Inference Engine
 `InferenceServer` — production-ready async inference:
-- Dynamic batching (configurable max batch size/timeout)
-- TensorRT optimization (fp16/int8, dynamic shapes)
-- FastAPI endpoints: `/predict` (async batched), `/predict/sync`, `/health`, `/metrics`
-- Graceful startup/shutdown via lifespan events
+- 📦 Dynamic batching (configurable max batch size/timeout)
+- ⚡ TensorRT optimization (fp16/int8, dynamic shapes)
+- 🌐 FastAPI endpoints: `/predict` (async batched), `/predict/sync`, `/health`, `/metrics`
+- 🔄 Graceful startup/shutdown via lifespan events
 
 ---
 
-## Analysis & Visualization (`bioplausible/analysis/`)
+## 📊 Analysis & Visualization (`bioplausible/analysis/`)
 
 | Module | Purpose |
 |--------|---------|
@@ -370,7 +370,7 @@ CLI: `eqprop-p2p-worker` starts a worker node.
 
 ---
 
-## Hardware Acceleration (`bioplausible/acceleration/`)
+## ⚡ Hardware Acceleration (`bioplausible/acceleration/`)
 
 | Module | Purpose |
 |--------|---------|
@@ -391,14 +391,14 @@ CLI: `eqprop-p2p-worker` starts a worker node.
 | `kernel_backend.py` | `KernelRegistry` with shape-specific auto-tuning cache |
 
 **Key achievements:**
-- Triton kernels for all tile algorithms + MEP + FA + PC + Hebbian + SNN + FF + TP
-- Auto-dispatch with profile-guided backend selection
-- Custom EqProp autograd Function enabling `torch.compile` on settle loops (2–3× speedup)
-- Multi-GPU tile sharding for >1B parameter models
-- Gradient equivalence CI gate (Triton vs CuPy vs PyTorch on every commit)
+- ⚡ Triton kernels for all tile algorithms + MEP + FA + PC + Hebbian + SNN + FF + TP
+- 🔄 Auto-dispatch with profile-guided backend selection
+- 🚀 Custom EqProp autograd Function enabling `torch.compile` on settle loops (2–3× speedup)
+- 🌐 Multi-GPU tile sharding for >1B parameter models
+- ✅ Gradient equivalence CI gate (Triton vs CuPy vs PyTorch on every commit)
 
 ---
 
-## License
+## 📜 License
 
 MIT
