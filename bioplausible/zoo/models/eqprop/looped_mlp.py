@@ -18,6 +18,7 @@ from torch import nn
 
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model_status import status_tag
+from bioplausible.core.ontology import System
 from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.models.native.eqprop_native import native_eqprop_mlp
 

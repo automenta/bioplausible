@@ -83,13 +83,11 @@ def _make_random_system(device: torch.device) -> tuple:
     dynamics = InstantaneousDynamics()
 
     # Use deterministic credit types only (no random projections, temporal trace)
-    credit_type = random.choice(
-        [
-            "thermodynamic_contrast",
-            "local_goodness",
-            "target_inversion",
-        ]
-    )
+    credit_type = random.choice([
+        "thermodynamic_contrast",
+        "local_goodness",
+        "target_inversion",
+    ])
     credit_map = {
         "thermodynamic_contrast": ThermodynamicContrast,
         "local_goodness": LocalGoodnessCredit,
@@ -98,15 +96,13 @@ def _make_random_system(device: torch.device) -> tuple:
     credit = credit_map[credit_type](CreditAssignmentConfig(credit_type=credit_type))
 
     # Use deterministic update types only
-    update_type = random.choice(
-        [
-            "euclidean",
-            "riemannian_orthogonal",
-            "spectral_constrained",
-            "natural_gradient",
-            "elastic_consolidation",
-        ]
-    )
+    update_type = random.choice([
+        "euclidean",
+        "riemannian_orthogonal",
+        "spectral_constrained",
+        "natural_gradient",
+        "elastic_consolidation",
+    ])
     update_map = {
         "euclidean": lambda: EuclideanUpdate(ParameterUpdateConfig(step_size=0.01)),
         "riemannian_orthogonal": lambda: RiemannianOrthogonalUpdate(
@@ -119,7 +115,9 @@ def _make_random_system(device: torch.device) -> tuple:
             ParameterUpdateConfig(update_type="natural_gradient", fisher_damping=1e-3)
         ),
         "elastic_consolidation": lambda: ElasticConsolidationUpdate(
-            ParameterUpdateConfig(update_type="elastic_consolidation", ewc_lambda=1000.0)
+            ParameterUpdateConfig(
+                update_type="elastic_consolidation", ewc_lambda=1000.0
+            )
         ),
     }
     update = update_map[update_type]()
@@ -185,16 +183,29 @@ class TestSystemSpecRoundTrip:
             enable_deterministic_cuda()
 
         sys = compose_system(
-            substrate=DigitalSubstrate(SubstrateConfig(precision="float32", noise_level=0.01)),
+            substrate=DigitalSubstrate(
+                SubstrateConfig(precision="float32", noise_level=0.01)
+            ),
             geometry=FeedforwardGeometry(
-                GeometryConfig(input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,), topology_type="feedforward")
+                GeometryConfig(
+                    input_dim=WIDTH,
+                    output_dim=10,
+                    hidden_dims=(WIDTH,),
+                    topology_type="feedforward",
+                )
             ),
             dynamics=EnergyMinimizationDynamics(
-                StateDynamicsConfig(dynamics_type="energy_minimization", max_steps=30, beta=0.5)
+                StateDynamicsConfig(
+                    dynamics_type="energy_minimization", max_steps=30, beta=0.5
+                )
             ),
-            credit=ThermodynamicContrast(CreditAssignmentConfig(credit_type="thermodynamic_contrast", beta=0.5)),
+            credit=ThermodynamicContrast(
+                CreditAssignmentConfig(credit_type="thermodynamic_contrast", beta=0.5)
+            ),
             update=RiemannianOrthogonalUpdate(
-                ParameterUpdateConfig(update_type="riemannian_orthogonal", step_size=0.01, ortho_steps=5)
+                ParameterUpdateConfig(
+                    update_type="riemannian_orthogonal", step_size=0.01, ortho_steps=5
+                )
             ),
         )
         _setup_system_device(sys, device)
@@ -232,7 +243,9 @@ class TestSystemSpecRoundTrip:
 
         sys = compose_system(
             substrate=DigitalSubstrate(),
-            geometry=FeedforwardGeometry(GeometryConfig(input_dim=WIDTH, output_dim=10)),
+            geometry=FeedforwardGeometry(
+                GeometryConfig(input_dim=WIDTH, output_dim=10)
+            ),
             dynamics=InstantaneousDynamics(),
             credit=ThermodynamicContrast(),
             update=EuclideanUpdate(),
@@ -252,9 +265,13 @@ class TestSystemSpecRoundTrip:
             enable_deterministic_cuda()
 
         sys = compose_system(
-            substrate=DigitalSubstrate(SubstrateConfig(precision="float32", noise_level=0.01)),
+            substrate=DigitalSubstrate(
+                SubstrateConfig(precision="float32", noise_level=0.01)
+            ),
             geometry=FeedforwardGeometry(
-                GeometryConfig(input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1))
+                GeometryConfig(
+                    input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
+                )
             ),
             dynamics=InstantaneousDynamics(),
             credit=ThermodynamicContrast(),

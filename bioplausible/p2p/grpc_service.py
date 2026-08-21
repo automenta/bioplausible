@@ -289,7 +289,9 @@ class GRPCServer:
             self.port = bound_port
 
         self._running = True
-        logger.info("gRPC server started on [::]:%d for node %s", self.port, self.node_id)
+        logger.info(
+            "gRPC server started on [::]:%d for node %s", self.port, self.node_id
+        )
 
     async def stop(self) -> None:
         """Stop the gRPC server."""

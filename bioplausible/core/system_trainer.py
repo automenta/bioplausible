@@ -256,8 +256,13 @@ def compose_system(
             """
             geometry_dict = dataclasses.asdict(self.geometry.config)
             # Include recurrent_weight from geometry if present (runtime state)
-            if hasattr(self.geometry, "_recurrent_weight") and self.geometry._recurrent_weight is not None:
-                geometry_dict["recurrent_weight"] = self.geometry._recurrent_weight.tolist()
+            if (
+                hasattr(self.geometry, "_recurrent_weight")
+                and self.geometry._recurrent_weight is not None
+            ):
+                geometry_dict["recurrent_weight"] = (
+                    self.geometry._recurrent_weight.tolist()
+                )
 
             # Include all geometry parameters for exact round-trip
             geometry_params = {}
@@ -285,7 +290,9 @@ def compose_system(
                 A composed System instance.
             """
             if spec.get("schema_version") != "1.0":
-                raise ValueError(f"Unsupported schema version: {spec.get('schema_version')}")
+                raise ValueError(
+                    f"Unsupported schema version: {spec.get('schema_version')}"
+                )
 
             from bioplausible.core.ontology import (
                 AnalogSubstrate,
@@ -338,7 +345,11 @@ def compose_system(
                 "noisy": DigitalSubstrate,
             }
             # Use device field to determine substrate type, fallback to precision
-            substrate_key = substrate_cfg.device.lower() if substrate_cfg.device != "cpu" else substrate_cfg.precision.lower()
+            substrate_key = (
+                substrate_cfg.device.lower()
+                if substrate_cfg.device != "cpu"
+                else substrate_cfg.precision.lower()
+            )
             substrate_cls = substrate_map.get(substrate_key, DigitalSubstrate)
             substrate = substrate_cls(substrate_cfg)
 
@@ -346,17 +357,23 @@ def compose_system(
             geometry_dict = spec["geometry"]
             serialized_params = geometry_dict.pop("params", None)
             # JSON serialization converts tuples to lists; restore tuple types
-            if "hidden_dims" in geometry_dict and isinstance(geometry_dict["hidden_dims"], list):
+            if "hidden_dims" in geometry_dict and isinstance(
+                geometry_dict["hidden_dims"], list
+            ):
                 geometry_dict["hidden_dims"] = tuple(geometry_dict["hidden_dims"])
             geometry_cfg = GeometryConfig(**geometry_dict)
             topology_type = geometry_cfg.topology_type.lower()
             if topology_type in ("recurrent", "recurrent_attractor"):
-                hidden_dim = geometry_cfg.hidden_dims[-1] if geometry_cfg.hidden_dims else None
+                hidden_dim = (
+                    geometry_cfg.hidden_dims[-1] if geometry_cfg.hidden_dims else None
+                )
                 recurrent_weight = None
                 if geometry_cfg.recurrent_weight is not None:
                     recurrent_weight = torch.tensor(geometry_cfg.recurrent_weight)
                 geometry = RecurrentGeometry(
-                    geometry_cfg, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
+                    geometry_cfg,
+                    hidden_dim=hidden_dim,
+                    recurrent_weight=recurrent_weight,
                 )
             elif topology_type in ("tile_mesh", "tile"):
                 from bioplausible.core.ontology import TileGeometry

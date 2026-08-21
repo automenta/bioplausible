@@ -141,16 +141,12 @@ def _make_system_for_credit(
     return sys, geometry, substrate, dynamics, update
 
 
-def _make_system_for_dynamics(
-    dynamics, device: torch.device | None = None
-) -> tuple:
+def _make_system_for_dynamics(dynamics, device: torch.device | None = None) -> tuple:
     """Create a minimal system for dynamics testing."""
     if device is None:
         device = select_device()
 
-    config = GeometryConfig(
-        input_dim=WIDTH, output_dim=WIDTH, hidden_dims=()
-    )
+    config = GeometryConfig(input_dim=WIDTH, output_dim=WIDTH, hidden_dims=())
     geometry = FeedforwardGeometry(config)
     substrate = DigitalSubstrate()
     credit = ThermodynamicContrast(CreditAssignmentConfig())
@@ -161,9 +157,7 @@ def _make_system_for_dynamics(
     return sys, geometry, substrate, dynamics, update
 
 
-def _make_system_for_update(
-    update, device: torch.device | None = None
-) -> tuple:
+def _make_system_for_update(update, device: torch.device | None = None) -> tuple:
     """Create a minimal system for update testing."""
     if device is None:
         device = select_device()
@@ -208,6 +202,7 @@ def _run_nudged_phase(sys, x: Tensor, y: Tensor) -> SystemState:
 # C-AXIS CERTIFICATION LOCKS (CreditAssignment)
 # ======================================================================
 
+
 class TestCAxisLocalGoodnessCredit:
     """C-Axis: LocalGoodnessCredit (FF/PEPITA) surrogate alignment."""
 
@@ -222,7 +217,9 @@ class TestCAxisLocalGoodnessCredit:
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        credit = LocalGoodnessCredit(CreditAssignmentConfig(credit_type="local_goodness"))
+        credit = LocalGoodnessCredit(
+            CreditAssignmentConfig(credit_type="local_goodness")
+        )
         sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
             credit, dynamics_type="instantaneous", device=device
         )
@@ -262,9 +259,7 @@ class TestCAxisLocalGoodnessCredit:
                 return credit.surrogate_objective(free_state, nudged_state, geometry)
 
             # FD the surrogate w.r.t this layer's weights
-            fd_grad = _finite_diff_gradient(
-                surrogate_obj, geometry.params, weight_name
-            )
+            fd_grad = _finite_diff_gradient(surrogate_obj, geometry.params, weight_name)
 
             # Compare pseudo-gradient with FD gradient
             cos_sim = _cosine_similarity(pseudo_grad, fd_grad)
@@ -288,7 +283,9 @@ class TestCAxisTargetInversionCredit:
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        credit = TargetInversionCredit(CreditAssignmentConfig(credit_type="target_inversion"))
+        credit = TargetInversionCredit(
+            CreditAssignmentConfig(credit_type="target_inversion")
+        )
         sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
             credit, dynamics_type="instantaneous", device=device
         )
@@ -325,9 +322,7 @@ class TestCAxisTargetInversionCredit:
             if pseudo_grad.shape != weight.shape:
                 continue
 
-            fd_grad = _finite_diff_gradient(
-                surrogate_obj, geometry.params, weight_name
-            )
+            fd_grad = _finite_diff_gradient(surrogate_obj, geometry.params, weight_name)
 
             cos_sim = _cosine_similarity(pseudo_grad, fd_grad)
             assert cos_sim >= COSINE_TOL_EXCELLENT, (
@@ -342,18 +337,22 @@ class TestCAxisTemporalTraceCredit:
     @pytest.mark.parametrize(
         "pre_time,post_time,expected_sign",
         [
-            (0.0, 5.0, +1),   # Causal pre->post => potentiation
-            (5.0, 0.0, -1),   # Anti-causal post->pre => depression
-            (0.0, 0.0, 0),    # Simultaneous => zero (antisymmetry)
+            (0.0, 5.0, +1),  # Causal pre->post => potentiation
+            (5.0, 0.0, -1),  # Anti-causal post->pre => depression
+            (0.0, 0.0, 0),  # Simultaneous => zero (antisymmetry)
         ],
     )
-    def test_stdp_causal_asymmetry(self, pre_time: float, post_time: float, expected_sign: int) -> None:
+    def test_stdp_causal_asymmetry(
+        self, pre_time: float, post_time: float, expected_sign: int
+    ) -> None:
         """STDP window sign matches causal/anti-causal timing.
-        
+
         Generate pre/post spike trains with Δt ∈ {-20, -5, 5, 20} ms.
         Assert Δw > 0 for Δt > 0 (causal), Δw < 0 for Δt < 0 (anti-causal).
         """
-        credit = TemporalTraceCredit(CreditAssignmentConfig(credit_type="temporal_trace"))
+        credit = TemporalTraceCredit(
+            CreditAssignmentConfig(credit_type="temporal_trace")
+        )
         pre_spikes = torch.tensor([[pre_time]])
         post_spikes = torch.tensor([[post_time]])
         dt = torch.linspace(-50, 50, 101)
@@ -373,7 +372,9 @@ class TestCAxisTemporalTraceCredit:
     @pytest.mark.parametrize("dt_val", [5.0, 20.0])
     def test_stdp_antisymmetry(self, dt_val: float) -> None:
         """STDP antisymmetry: W(Δt) ≈ -W(-Δt) within 5%."""
-        credit = TemporalTraceCredit(CreditAssignmentConfig(credit_type="temporal_trace"))
+        credit = TemporalTraceCredit(
+            CreditAssignmentConfig(credit_type="temporal_trace")
+        )
         pre_spikes = torch.tensor([[0.0]])
         post_spikes = torch.tensor([[dt_val]])  # Δt = dt_val
         dt = torch.linspace(-50, 50, 101)
@@ -390,7 +391,9 @@ class TestCAxisTemporalTraceCredit:
 
     def test_stdp_exponential_decay(self) -> None:
         """STDP decay: |W(20)| < |W(5)| (exponential decay)."""
-        credit = TemporalTraceCredit(CreditAssignmentConfig(credit_type="temporal_trace"))
+        credit = TemporalTraceCredit(
+            CreditAssignmentConfig(credit_type="temporal_trace")
+        )
 
         dt_values = [5.0, 10.0, 20.0, 40.0]
         windows = []
@@ -412,6 +415,7 @@ class TestCAxisTemporalTraceCredit:
 # U-AXIS CERTIFICATION LOCKS (ParameterUpdate)
 # ======================================================================
 
+
 class TestUAxisRiemannianOrthogonalUpdate:
     """U-Axis: RiemannianOrthogonalUpdate (Muon) orthogonality preservation."""
 
@@ -424,7 +428,9 @@ class TestUAxisRiemannianOrthogonalUpdate:
 
         with seeded(seed):
             update = RiemannianOrthogonalUpdate(
-                ParameterUpdateConfig(update_type="riemannian_orthogonal", ortho_steps=20)
+                ParameterUpdateConfig(
+                    update_type="riemannian_orthogonal", ortho_steps=20
+                )
             )
             grad = torch.randn(10, 10, device=device)
 
@@ -449,7 +455,9 @@ class TestUAxisSpectralConstrainedUpdate:
 
         with seeded(seed):
             update = SpectralConstrainedUpdate(
-                ParameterUpdateConfig(update_type="spectral_constrained", spectral_norm=1.0)
+                ParameterUpdateConfig(
+                    update_type="spectral_constrained", spectral_norm=1.0
+                )
             )
             # Create a random gradient
             grad = torch.randn(10, 10, device=device)
@@ -478,7 +486,9 @@ class TestUAxisNaturalGradientUpdate:
 
         with seeded(seed):
             update = NaturalGradientUpdate(
-                ParameterUpdateConfig(update_type="natural_gradient", fisher_damping=1e-3)
+                ParameterUpdateConfig(
+                    update_type="natural_gradient", fisher_damping=1e-3
+                )
             )
             grad = torch.randn(10, 10, device=device)
 
@@ -506,14 +516,20 @@ class TestUAxisElasticConsolidationUpdate:
 
         with seeded(seed):
             update = ElasticConsolidationUpdate(
-                ParameterUpdateConfig(update_type="elastic_consolidation", ewc_lambda=1000.0, step_size=0.001)
+                ParameterUpdateConfig(
+                    update_type="elastic_consolidation",
+                    ewc_lambda=1000.0,
+                    step_size=0.001,
+                )
             )
             params = {"w": torch.randn(10, 10, device=device)}
             grads = [torch.randn(10, 10, device=device)]
 
         # Protect 50% of parameters by setting high Fisher importance in a dict
         fisher = {"w": torch.ones_like(params["w"])}
-        fisher["w"].view(-1)[: fisher["w"].numel() // 2] = 1e4  # High importance for protected params
+        fisher["w"].view(-1)[: fisher["w"].numel() // 2] = (
+            1e4  # High importance for protected params
+        )
 
         # Set old_params DIFFERENT from current params so EWC penalty applies
         old_params = {"w": params["w"] + torch.randn_like(params["w"]) * 0.5}
@@ -552,6 +568,7 @@ class TestUAxisElasticConsolidationUpdate:
 # ======================================================================
 # D-AXIS CERTIFICATION LOCKS (StateDynamics)
 # ======================================================================
+
 
 class TestDAxisSpikeIntegration:
     """D-Axis: SpikeIntegrationDynamics (LIF) membrane boundedness & variance."""
@@ -642,7 +659,7 @@ class TestDAxisSpikeIntegration:
             window_size = 2
             variances = []
             for w in range(0, len(totals) - window_size + 1, window_size):
-                window_totals = totals[w:w + window_size]
+                window_totals = totals[w : w + window_size]
                 if len(window_totals) == window_size:
                     variances.append(np.var(window_totals))
 

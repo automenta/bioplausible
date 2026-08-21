@@ -64,6 +64,7 @@ def _create_test_system(device: torch.device):
 
     substrate = DigitalSubstrate()
     from bioplausible.core.ontology import ParameterUpdateConfig, StateDynamicsConfig
+
     dynamics = EnergyMinimizationDynamics(
         StateDynamicsConfig(
             max_steps=SETTLE_ITERS,
@@ -107,7 +108,7 @@ async def _connect_with_backoff(
         except Exception:
             if attempt == max_retries - 1:
                 raise
-            delay = base_delay * (2 ** attempt)
+            delay = base_delay * (2**attempt)
             await asyncio.sleep(delay)
     return False
 
@@ -123,11 +124,15 @@ async def _run_single_process_step(
     if state.activations is not None:
         state.activations = system.substrate.inject_state_noise(state.activations)
 
-    free_state = system.dynamics.settle(state, system.geometry, system.substrate, target=None)
+    free_state = system.dynamics.settle(
+        state, system.geometry, system.substrate, target=None
+    )
     free_state.energy = system.dynamics.compute_energy(free_state, system.geometry)
 
     # Nudged phase
-    nudged_state = system.dynamics.settle(state, system.geometry, system.substrate, target=y)
+    nudged_state = system.dynamics.settle(
+        state, system.geometry, system.substrate, target=y
+    )
     nudged_state.energy = system.dynamics.compute_energy(nudged_state, system.geometry)
     nudged_state.loss = system._compute_loss(nudged_state, y)
 
@@ -168,9 +173,7 @@ class TestGRPCSeamSubprocess:
         return x, y
 
     @pytest.mark.asyncio
-    async def test_grpc_worker_startup_and_connect(
-        self, device: torch.device
-    ) -> None:
+    async def test_grpc_worker_startup_and_connect(self, device: torch.device) -> None:
         """Test that a gRPC worker starts, binds to port, and accepts connections."""
         # Use multiprocessing to spawn worker
         ctx = mp.get_context("spawn")
@@ -204,9 +207,7 @@ class TestGRPCSeamSubprocess:
                 worker_proc.join()
 
     @pytest.mark.asyncio
-    async def test_two_workers_communicate(
-        self, device: torch.device
-    ) -> None:
+    async def test_two_workers_communicate(self, device: torch.device) -> None:
         """Test that two gRPC workers can communicate via gRPC."""
         ctx = mp.get_context("spawn")
 
@@ -256,7 +257,9 @@ class TestGRPCSeamSubprocess:
                 child.close()
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="DistributedSystemTrainer single-node output projection issue with TileGeometry")
+    @pytest.mark.xfail(
+        reason="DistributedSystemTrainer single-node output projection issue with TileGeometry"
+    )
     async def test_distributed_train_step_parity(
         self, test_batch: tuple[torch.Tensor, torch.Tensor], device: torch.device
     ) -> None:
@@ -283,6 +286,7 @@ class TestGRPCSeamSubprocess:
             ParameterUpdateConfig,
             StateDynamicsConfig,
         )
+
         dynamics = EnergyMinimizationDynamics(
             StateDynamicsConfig(
                 max_steps=SETTLE_ITERS,
@@ -337,7 +341,10 @@ class TestGRPCSeamSubprocess:
 
     @pytest.mark.asyncio
     async def test_fault_injection_worker_kill(
-        self, system: System, test_batch: tuple[torch.Tensor, torch.Tensor], device: torch.device
+        self,
+        system: System,
+        test_batch: tuple[torch.Tensor, torch.Tensor],
+        device: torch.device,
     ) -> None:
         """Fault injection: kill a worker mid-step, verify DistributedTrainingError.
 
@@ -390,7 +397,11 @@ class TestGRPCSeamSubprocess:
                     "Worker communication failed at step 0: simulated worker death",
                     lost_workers=lost,
                     step=0,
-                    partial_metrics={"global_step": 0, "current_epoch": 0, "active_nodes": 2},
+                    partial_metrics={
+                        "global_step": 0,
+                        "current_epoch": 0,
+                        "active_nodes": 2,
+                    },
                 )
             return await original_sync(geometry, step)
 
@@ -453,17 +464,36 @@ class TestGRPCSeamSubprocessScript:
 
     def test_grpc_worker_script_exists(self):
         """Verify the grpc_worker.py script exists and is importable."""
-        script_path = Path(__file__).parent.parent.parent / "bioplausible" / "p2p" / "grpc_worker.py"
+        script_path = (
+            Path(__file__).parent.parent.parent
+            / "bioplausible"
+            / "p2p"
+            / "grpc_worker.py"
+        )
         assert script_path.exists(), f"grpc_worker.py not found at {script_path}"
 
     @pytest.mark.slow
     def test_grpc_worker_script_spawns_and_binds(self):
         """Test that the grpc_worker.py script spawns and prints port."""
-        script_path = Path(__file__).parent.parent.parent / "bioplausible" / "p2p" / "grpc_worker.py"
+        script_path = (
+            Path(__file__).parent.parent.parent
+            / "bioplausible"
+            / "p2p"
+            / "grpc_worker.py"
+        )
 
         # Run the worker script with a short timeout
         proc = subprocess.Popen(
-            [sys.executable, str(script_path), "--node-id", "test_script", "--port", "0", "--device", "cpu"],
+            [
+                sys.executable,
+                str(script_path),
+                "--node-id",
+                "test_script",
+                "--port",
+                "0",
+                "--device",
+                "cpu",
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -483,7 +513,9 @@ class TestGRPCSeamSubprocessScript:
                     break
 
             # Check that port was printed
-            assert "GRPC_WORKER_PORT:" in stdout_output, f"Expected port output, got: {stdout_output}"
+            assert "GRPC_WORKER_PORT:" in stdout_output, (
+                f"Expected port output, got: {stdout_output}"
+            )
 
         finally:
             # Terminate the worker (it waits for SIGTERM)
