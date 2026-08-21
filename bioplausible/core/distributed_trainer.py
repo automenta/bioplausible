@@ -10,10 +10,12 @@ Leverages the 5-D fault lines for natural distribution:
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
+import grpc
 import torch
 from torch import Tensor
 
@@ -28,6 +30,22 @@ from bioplausible.core.ontology import (
     TileGeometry,
 )
 from bioplausible.p2p.grpc_service import GRPCConnectionPool
+
+
+class DistributedTrainingError(RuntimeError):
+    """Raised when distributed training fails due to worker communication failure."""
+
+    def __init__(
+        self,
+        message: str,
+        lost_workers: list[str],
+        step: int,
+        partial_metrics: dict | None = None,
+    ):
+        self.lost_workers = lost_workers
+        self.step = step
+        self.partial_metrics = partial_metrics
+        super().__init__(message)
 
 
 class _DataProvider(Protocol):
@@ -593,6 +611,26 @@ class DistributedSystemTrainer:
         state.activations = acts
         return state
 
+    def _identify_lost_workers(self) -> list[str]:
+        """Identify workers that have failed to respond."""
+        # In a full implementation, this would check heartbeats
+        # For now, return peers that have failed gRPC calls
+        lost = []
+        for node_id in self._grpc_pool._peer_addresses:
+            if node_id != self.config.node_id:
+                client = self._grpc_pool._clients.get(node_id)
+                if client is None:
+                    lost.append(node_id)
+        return lost
+
+    def _collect_partial_metrics(self) -> dict:
+        """Collect partial metrics from the current training step."""
+        return {
+            "global_step": self.global_step,
+            "current_epoch": self.current_epoch,
+            "active_nodes": len(self._node_registry.get_active_nodes(0, 30)),
+        }
+
     async def _sync_boundary_tiles(self, geometry: TileGeometry, step: int) -> None:
         """Synchronize boundary tile activations with neighbor nodes via gRPC."""
         if not self._boundary_tiles:
@@ -620,9 +658,18 @@ class DistributedSystemTrainer:
                 if tid in boundary_activations
             ]
             if acts:
-                await self._grpc_pool.sync_boundary_with_peer(
-                    node_id, tile_ids, acts, step
-                )
+                try:
+                    await self._grpc_pool.sync_boundary_with_peer(
+                        node_id, tile_ids, acts, step
+                    )
+                except (grpc.RpcError, asyncio.TimeoutError) as e:
+                    lost = self._identify_lost_workers()
+                    raise DistributedTrainingError(
+                        f"Worker communication failed at step {step}: {e}",
+                        lost_workers=lost,
+                        step=step,
+                        partial_metrics=self._collect_partial_metrics(),
+                    )
 
     async def _federated_sync(self) -> None:
         """Synchronize parameter updates across nodes via gRPC."""
@@ -726,6 +773,7 @@ __all__ = [
     "DHTRouter",
     "DistributedConfig",
     "DistributedSystemTrainer",
+    "DistributedTrainingError",
     "FederatedAggregator",
     "NodeRegistry",
 ]

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from dataclasses import dataclass
+import math
 from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
@@ -217,6 +218,7 @@ class SystemState:
         energy: Current energy value
         loss: Current loss value
         metrics: Accumulated metrics dict
+        spike_counts: Per-step per-neuron spike counts (for spiking dynamics)
     """
 
     x: Tensor | None = None
@@ -228,6 +230,7 @@ class SystemState:
     energy: Tensor | float | None = None
     loss: Tensor | float | None = None
     metrics: dict[str, float] = None  # type: ignore[assignment]
+    spike_counts: list[Tensor] | None = None
 
     def __post_init__(self):
         if self.metrics is None:
@@ -459,6 +462,20 @@ class CreditAssignment(Protocol):
             List of pseudo-gradient tensors, one per learnable layer
         """
         ...
+
+    # DEFAULT METHOD — non-breaking, only overridden by LocalGoodness/TargetInversion
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Compute layer-local surrogate loss for gradient checking.
+
+        Only LocalGoodnessCredit and TargetInversionCredit override this.
+        Others raise NotImplementedError.
+        """
+        raise NotImplementedError("Surrogate objective not defined for this credit rule")
 
 
 # ============================================================
@@ -1284,6 +1301,17 @@ class ThermodynamicContrast:
                 grads.append(contrast.T)
 
         return grads
+
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Surrogate objective for EqProp: negative free energy difference."""
+        if free_state.energy is not None and nudged_state.energy is not None:
+            return nudged_state.energy - free_state.energy
+        return torch.tensor(0.0)
 
 
 class EuclideanUpdate:
@@ -2198,15 +2226,36 @@ class QuantumSubstrate(DigitalSubstrate):
 
         return quantum_forward
 
-    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
-        """Parameter shift rule for quantum gradients."""
+    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
+        """Parameter shift rule for quantum gradients.
 
-        def quantum_update(pseudo_grad: Tensor, current_w: Tensor) -> Tensor:
-            # Parameter shift rule: gradient = (f(θ+π/2) - f(θ-π/2)) / 2
-            # Here we use the pseudo-gradient directly as parameter update
-            return current_w - 0.01 * pseudo_grad
+        Classical simulation of parameter-shift rule for 1-qubit rotation.
+        For each parameter θ: ∇f(θ) ≈ [f(θ+π/2) - f(θ-π/2)] / 2
+        pseudo_grad is the "target direction"; we return the parameter-shift estimate.
+        """
 
-        return quantum_update
+        def parameter_shift_update(pseudo_grad: Tensor, current_w: Tensor) -> Tensor:
+            # Classical simulation of parameter-shift rule for 1-qubit rotation
+            # For each parameter θ: ∇f(θ) ≈ [f(θ+π/2) - f(θ-π/2)] / 2
+            # pseudo_grad is the "target direction"; we return the parameter-shift estimate
+            # Simplified: assume current_w encodes rotation angles; shift each by ±π/2
+            shifted_plus = self._evaluate_circuit(current_w + math.pi / 2)
+            shifted_minus = self._evaluate_circuit(current_w - math.pi / 2)
+            param_shift_grad = (shifted_plus - shifted_minus) / 2
+            # Use a default step size since SubstrateConfig doesn't have one
+            step_size = getattr(self.config, 'step_size', 0.01)
+            return current_w - step_size * param_shift_grad
+
+        return parameter_shift_update
+
+    def _evaluate_circuit(self, params: Tensor) -> Tensor:
+        """Classical simulation of parameterized quantum circuit.
+
+        Minimal: 1 qubit, RY(θ), measure <Z>
+        """
+        import math
+        # <Z> = cos(θ) for RY(θ)|0>
+        return torch.cos(params)
 
 
 # Additional substrate implementations (kept for backward compatibility)
@@ -2563,9 +2612,12 @@ class SpikeIntegrationDynamics:
             return state
         if isinstance(h, list):
             h = h[-1]
-        for _ in range(self.config.max_steps):
+        spike_counts = []
+        for _step in range(self.config.max_steps):
             h_new = geometry.route(h)
             # Spike thresholding
+            spikes = (h_new > 1.0).float()  # Threshold crossing
+            spike_counts.append(spikes.sum(dim=0))  # (n_neurons,) per step
             h_new = torch.where(h_new > 1.0, torch.zeros_like(h_new), h_new)
             if (
                 torch.dist(h_new, h, p=float("inf")).item()
@@ -2575,6 +2627,9 @@ class SpikeIntegrationDynamics:
                 break
             h = h_new
         state.activations = h
+        state.spike_counts = spike_counts
+        if state.metrics is not None:
+            state.metrics['spike_counts'] = spike_counts
         return state
 
     def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use]
@@ -2753,6 +2808,17 @@ class RandomProjectionsCredit:
 
         return grads
 
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Surrogate objective for FA: output error norm."""
+        if nudged_state.loss is not None:
+            return nudged_state.loss
+        return torch.tensor(0.0)
+
 
 class LocalGoodnessCredit:
     """Forward-Forward / PEPITA: layer-local contrastive objectives."""
@@ -2769,13 +2835,27 @@ class LocalGoodnessCredit:
     ) -> list[Tensor]:
         # Layer-local goodness gradients
         grads = []
-        if free_state.activations and isinstance(free_state.activations, list):
-            for act in free_state.activations[1:]:  # Skip input
+        acts = free_state.activations
+        if isinstance(acts, list):
+            for act in acts[1:]:  # Skip input
                 # Positive pass: maximize goodness
                 # Negative pass: minimize goodness
                 pos_grad = act * (1 - torch.sigmoid(act))
                 grads.append(pos_grad)
         return grads
+
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Layer-local goodness: sum of σ(h)^2 for positive pass, minimize for negative."""
+        acts = free_state.activations
+        if isinstance(acts, list):
+            total_goodness = sum((torch.sigmoid(act)**2).sum() for act in acts[1:])
+            return total_goodness
+        return torch.tensor(0.0)
 
 
 class BackpropCredit:
@@ -2801,22 +2881,116 @@ class BackpropCredit:
             return [g for g in grads if g is not None]
         return []
 
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Surrogate objective for Backprop: task loss."""
+        if nudged_state.loss is not None:
+            return nudged_state.loss
+        return torch.tensor(0.0)
+
 
 class TemporalTraceCredit:
-    """STDP: spike-timing-dependent correlation."""
+    """STDP: spike-timing-dependent correlation.
+
+    Implements spike-timing-dependent plasticity (STDP) for credit assignment:
+    - Records pre- and post-synaptic spike times per layer
+    - Computes STDP window function for weight updates
+    - Causal (pre before post) -> LTP (potentiation)
+    - Anti-causal (post before pre) -> LTD (depression)
+    """
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(credit_type="temporal_trace")
+        self._pre_spike_times: dict[int, Tensor] = {}  # layer -> spike times
+        self._post_spike_times: dict[int, Tensor] = {}
+        # STDP parameters
+        self._a_plus = 0.01  # LTP amplitude
+        self._a_minus = 0.01  # LTD amplitude
+        self._tau_plus = 20.0  # LTP time constant (ms)
+        self._tau_minus = 20.0  # LTD time constant (ms)
 
-    def compute_pseudo_gradient(  # ruff: ignore[no-self-use]
+    def record_spikes(self, layer_idx: int, pre_spikes: Tensor, post_spikes: Tensor) -> None:
+        """Call from SpikeIntegrationDynamics during settling."""
+        self._pre_spike_times[layer_idx] = pre_spikes
+        self._post_spike_times[layer_idx] = post_spikes
+
+    def compute_stdp_window(self, pre_spikes: Tensor, post_spikes: Tensor, dt: Tensor) -> Tensor:
+        """Return weight change per Δt bin. Exponential STDP window.
+
+        Δt = post - pre; causal (Δt>0) => LTP; anti-causal (Δt<0) => LTD
+        W(Δt) = A_plus * exp(-Δt/τ_plus) for Δt>0; -A_minus * exp(Δt/τ_minus) for Δt<0
+        """
+        # pre_spikes: (n_pre, n_spikes_pre), post_spikes: (n_post, n_spikes_post)
+        # Compute all pairwise Δt
+        delta_t = post_spikes.unsqueeze(1) - pre_spikes.unsqueeze(0)  # (n_post, n_pre)
+        # Apply exponential STDP window
+        ltp_mask = delta_t > 0
+        ltd_mask = delta_t < 0
+        window = torch.zeros_like(delta_t)
+        window[ltp_mask] = self._a_plus * torch.exp(-delta_t[ltp_mask] / self._tau_plus)
+        window[ltd_mask] = -self._a_minus * torch.exp(delta_t[ltd_mask] / self._tau_minus)
+        return window
+
+    def compute_pseudo_gradient(
         self,
         free_state: SystemState,
         nudged_state: SystemState,
         loss: Tensor,
         geometry: Geometry,
     ) -> list[Tensor]:
-        # STDP-style correlation
-        return []
+        """Compute STDP-based pseudo-gradients from recorded spikes."""
+        grads = []
+        params = geometry.params
+        weight_names = [n for n in params if "weight" in n and params[n].ndim == 2]
+
+        for layer_idx, weight_name in enumerate(weight_names):
+            if layer_idx not in self._pre_spike_times or layer_idx not in self._post_spike_times:
+                # No spike data for this layer, return zero gradient
+                weight = params[weight_name]
+                grads.append(torch.zeros_like(weight))
+                continue
+
+            pre_spikes = self._pre_spike_times[layer_idx]
+            post_spikes = self._post_spike_times[layer_idx]
+
+            # Compute STDP window
+            # For efficiency, use a representative dt range
+            dt_range = torch.linspace(-50, 50, 101)  # -50 to 50 ms
+            window = self.compute_stdp_window(pre_spikes, post_spikes, dt_range)
+
+            # Average window across spike pairs to get weight change per connection
+            # Shape: (n_post, n_pre) -> average over pre/post populations
+            if window.numel() > 0:
+                avg_window = window.mean()  # Scalar average
+                weight = params[weight_name]
+                # Scale by average STDP window
+                grad = torch.full_like(weight, avg_window.item())
+                grads.append(grad)
+            else:
+                grads.append(torch.zeros_like(params[weight_name]))
+
+        return grads
+
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Surrogate objective for STDP: negative correlation (maximize causal)."""
+        total_correlation = torch.tensor(0.0)
+        for layer_idx in self._pre_spike_times:
+            if layer_idx in self._post_spike_times:
+                pre = self._pre_spike_times[layer_idx]
+                post = self._post_spike_times[layer_idx]
+                if pre.numel() > 0 and post.numel() > 0:
+                    # Simple correlation proxy
+                    total_correlation += (pre.float().mean() * post.float().mean())
+        return -total_correlation  # Minimize negative correlation = maximize correlation
 
 
 class TargetInversionCredit:
@@ -2835,6 +3009,25 @@ class TargetInversionCredit:
         # Target propagation uses learned inverse maps
         return []
 
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Local target MSE: ‖h_l - target_l‖^2 per layer."""
+        acts = free_state.activations
+        if isinstance(acts, list):
+            # For target prop, surrogate is MSE between free and nudged activations per layer
+            free_acts = acts
+            nudged_acts = nudged_state.activations if isinstance(nudged_state.activations, list) else []
+            total_mse = torch.tensor(0.0, device=free_acts[0].device if free_acts else 'cpu')
+            for fa, na in zip(free_acts[1:], nudged_acts[1:] if len(nudged_acts) > 1 else []):
+                if fa.shape == na.shape:
+                    total_mse += torch.nn.functional.mse_loss(fa, na)
+            return total_mse
+        return torch.tensor(0.0)
+
 
 # Additional parameter update implementations
 class RiemannianOrthogonalUpdate:
@@ -2845,12 +3038,26 @@ class RiemannianOrthogonalUpdate:
             update_type="riemannian_orthogonal"
         )
 
-    def _newton_schulz(self, g: Tensor, steps: int = 5) -> Tensor:  # ruff: ignore[no-self-use]
-        """Compute orthogonal projection via Newton-Schulz iteration."""
-        a, b, c = 3.4445, -4.7750, 2.0315
-        x = g
+    def _newton_schulz(self, g: Tensor, steps: int = 20) -> Tensor:  # ruff: ignore[no-self-use]
+        """Compute orthogonal projection via Newton-Schulz iteration.
+
+        Newton-Schulz computes the polar factor (orthogonal part) of a matrix.
+        Uses standard iteration: x_{k+1} = 0.5 * x_k * (3I - x_k^T x_k)
+        Requires ~15-20 steps for 1e-5 accuracy.
+        """
+        # Normalize by spectral norm (max singular value) for convergence
+        _, s, _ = torch.linalg.svd(g, full_matrices=False)
+        spectral_norm = s[0]
+        if spectral_norm > 0:
+            x = g / spectral_norm
+        else:
+            x = g
+
+        n = x.shape[0]
+        eye = torch.eye(n, device=x.device, dtype=x.dtype)
         for _ in range(steps):
-            x = a * x + b * x @ x.T @ x + c * x @ x.T @ x @ x.T @ x
+            xtx = x.T @ x
+            x = 0.5 * x @ (3 * eye - xtx)
         return x
 
     def step(
