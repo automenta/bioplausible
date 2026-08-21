@@ -15,6 +15,7 @@ Usage:
 import time
 
 import torch
+
 from bioplausible.models import EquiTile, EquiTileEP
 
 

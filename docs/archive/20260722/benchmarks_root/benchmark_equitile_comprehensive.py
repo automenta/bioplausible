@@ -18,6 +18,7 @@ import pathlib
 import time
 
 import torch
+
 from bioplausible.models import (
     DynamicEquiTile,
     EnhancedEPConfig,
