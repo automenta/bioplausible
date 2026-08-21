@@ -94,24 +94,45 @@ This enables the AutoScientist to reason about *physical realizability* as a con
 
 ## 🖥️ CLI Commands
 
-All entry points installed with `uv sync --dev`:
+All entry points installed with `uv sync --dev`. The CLI has been consolidated under the `biopl` dispatcher:
+
+### Main Dispatcher: `biopl`
+
+```bash
+biopl <command> [args]
+```
+
+| Subcommand | Purpose | Legacy Alias |
+|------------|---------|--------------|
+| `biopl run` | Campaign runner (validate/plan/run) | `biopl-run` |
+| `biopl report` | Render experiment reports | `biopl-report` |
+| `biopl parity` | Backprop parity benchmark | `biopl-parity` |
+| `biopl repro` | Reproducibility verification | `biopl-repro-check` |
+| `biopl hpo` | Hyperparameter optimization | `biopl-hpo` |
+| `biopl audit` | Registry metadata audit | `biopl-registry-audit` |
+| `biopl frontier` | Pareto frontier analysis | `biopl-frontier` |
+| `biopl rank` | Family ranking from HPO studies | `biopl-compare` |
+| `biopl lab` | Interactive experiments & model inspection | — |
+
+### Standalone Commands (for scripting/CI)
 
 | Command | Purpose |
 |---------|---------|
-| `biopl` | Main CLI entry point |
 | `biopl-scientist` | Autonomous experiment loop (AutoScientist hypercube campaigns) |
-| `biopl-report` | Generate experiment reports |
-| `biopl-registry-audit` | Registry metadata completeness check |
-| `biopl-repro-check` | Deterministic reproducibility verification |
-| `biopl-parity` | Backprop parity benchmark (compute-matched) |
-| `biopl-frontier` | Pareto frontier analysis |
 | `biopl-failure-manifesto` | Structured negative result documentation |
 | `biopl-export-kernel` | Export kernel backend (untrained) |
 | `biopl-export-trained-kernel` | Train + export kernel backend with weights |
-| `biopl-hpo` | Hyperparameter optimization (Optuna) |
-| `biopl-run` | Standardized experiment runner |
-| `eqprop-verify` | EqProp gradient verification |
-| `eqprop-p2p-worker` | P2P worker for distributed training |
+| `biopl-p2p-worker` | P2P worker for distributed training (renamed from `eqprop-p2p-worker`) |
+
+### Deprecated / Removed
+
+| Old Command | Replacement |
+|-------------|-------------|
+| `eqprop-verify` | `biopl parity` / `biopl run` with campaign YAML |
+| `eqprop-p2p-worker` | `biopl-p2p-worker` (renamed — framework is no longer EqProp-specific) |
+| `biopl-run` / `biopl-report` / etc. | Use `biopl <subcommand>` (dispatcher) |
+
+> **Migration**: `biopl run --config campaign.yaml` replaces `biopl-run campaign.yaml`. The dispatcher ensures a single versioned entry point.
 
 ---
 
@@ -318,6 +339,209 @@ The 5-D ontology gives the AutoScientist a **structured search space** instead o
 
 ---
 
+## 🌐 Evaluation Domains
+
+The framework supports **7 evaluation domains** with 60+ tasks/datasets, unified through a common task interface (`DomainTask` protocol). Each domain has dedicated data loaders, metrics, and task-specific configurations.
+
+### 📊 Domain Overview
+
+| Domain | Tasks | Datasets | Models Tested | Key Metrics |
+|--------|-------|----------|---------------|-------------|
+| **Vision** | 12 | MNIST, Fashion-MNIST, KMNIST, USPS, CIFAR-10, CIFAR-100, SVHN, Digits, XOR, Spiral, Circles | 25+ | Accuracy, Loss, Energy, FLOPs, Memory |
+| **Language (LM)** | 4 | Tiny Shakespeare, Char N-gram, WikiText-2, Penn Treebank | 12+ | Perplexity, BPC, Accuracy, Compression |
+| **Reinforcement Learning (RL)** | 6 | CartPole, Pendulum, Acrobot, MountainCar, LunarLander | 8+ | Episode Return, Success Rate, Sample Efficiency |
+| **Graph** | 3 | Cora, CiteSeer, PubMed | 6+ | Node Classification Accuracy, F1 |
+| **Tabular** | 5 | Breast Cancer, Iris, Wine, Diabetes, California Housing | 10+ | Accuracy, R², AUC |
+| **Time Series** | 2 | Synthetic Forecast, (ETT variants planned) | 6+ | MSE, MAE, CRPS |
+| **Scientific** | 2 | Synthetic Physics, (PDE variants planned) | 5+ | Relative L2, Conservation Error |
+
+---
+
+### 🖼️ Vision Domain
+
+**Tasks & Datasets**
+
+| Task | Type | Input Dim | Output Dim | Classes | Train/Val/Test Split | Notes |
+|------|------|-----------|------------|---------|---------------------|-------|
+| `mnist` | Classification | 784 | 10 | 10 | 50k/10k/10k | Standard benchmark |
+| `fashion_mnist` | Classification | 784 | 10 | 10 | 50k/10k/10k | Harder than MNIST |
+| `kmnist` | Classification | 784 | 10 | 10 | 50k/10k/10k | Kuzushiji-MNIST |
+| `usps` | Classification | 784 | 10 | 10 | 7.3k/1.8k/2k | USPS handwritten digits |
+| `cifar10` | Classification | 3072 | 10 | 10 | 40k/10k/10k | 32×32 RGB |
+| `cifar100` | Classification | 3072 | 100 | 100 | 40k/10k/10k | Fine/coarse labels |
+| `svhn` | Classification | 3072 | 10 | 10 | 60k/10k/26k | Street View House Numbers |
+| `digits` | Classification | 64 | 10 | 10 | ~1.5k | sklearn digits (8×8) |
+| `xor` | Boolean | 2 | 2 | 2 | Synthetic | Non-linear separability |
+| `spiral` | Classification | 2 | 3 | 3 | Synthetic | Interlocking spirals |
+| `circles` | Classification | 2 | 2 | 2 | Synthetic | Concentric circles |
+
+**Models Registered (Vision-Compatible)**
+
+| Model Family | Variants | Locality Level | Requires Backward |
+|--------------|----------|----------------|-------------------|
+| `backprop` | mlp, cnn, resnet | global | ✅ |
+| `eqprop` | mlp, conv, transformer | equilibrium | ❌ |
+| `fa` | standard, dfa, adaptive, stochastic | layerwise | ✅ (random) |
+| `predictive_coding` | standard, hierarchical | local | ❌ |
+| `hebbian` | 3d, oja, 3-factor | forward-only | ❌ |
+| `pepita` | forward-forward, goodness | forward-only | ❌ |
+| `target_prop` | standard, difference | layerwise | ❌ |
+| `spiking` | lif, izhikevich, stdp | temporal | ❌ |
+| `tile` | ep, fa, pc, tp, hebbian | equilibrium/local | varies |
+
+**Quick Commands**
+
+```bash
+# Run vision benchmark (all models, all vision tasks)
+biopl lab benchmark --domain vision --quick
+
+# Run specific model on MNIST
+biopl lab core-train --model eqprop_mlp --task mnist --epochs 10
+
+# Cross-domain transfer: vision → LM
+python experiments/cross_domain_transfer.py --source vision --target lm
+```
+
+---
+
+### 📝 Language Modeling Domain
+
+**Tasks & Datasets**
+
+| Task | Type | Input Dim | Output Dim | Vocab Size | Sequence Length | Train Tokens |
+|------|------|-----------|------------|------------|-----------------|--------------|
+| `tiny_shakespeare` | Next-char LM | 65 | 65 | 65 | 100 | ~1M |
+| `char_ngram` | N-gram LM | configurable | vocab | 256 | 16–64 | Synthetic |
+| `wikitext2` | Word-level LM | 33278 | 33278 | ~33k | 128 | ~36M |
+| `penn_treebank` | Word-level LM | 10000 | 10000 | ~10k | 128 | ~1.3M |
+
+**Models Registered (LM-Compatible)**
+
+| Model Family | Variants | Key Feature |
+|--------------|----------|-------------|
+| `backprop` | lstm, transformer, gpt | Standard autoregressive |
+| `eqprop` | causal_transformer, attention_only, recurrent_core | Equilibrium attention |
+| `fa` | transformer_fa, lstm_fa | Random feedback in LM |
+| `pepita` | ff_lm, goodness_lm | Forward-forward LM |
+| `tile` | ep_tile_lm, fa_tile_lm | Tiled language models |
+
+**Key Experiments**
+
+```bash
+# EqProp vs Backprop on language modeling (Track 37)
+python experiments/language_modeling_comparison.py --epochs 50
+
+# Run LM benchmark
+biopl lab benchmark --domain lm --models backprop_transformer,eqprop_causal_transformer
+
+# AutoScientist campaign on LM
+biopl scientist --campaign campaigns/lm_hypercube.yaml
+```
+
+---
+
+### 🎮 Reinforcement Learning Domain
+
+**Tasks & Environments**
+
+| Task | Type | Observation Space | Action Space | Horizon | Reward Structure |
+|------|------|-------------------|--------------|---------|------------------|
+| `cartpole` | Classic Control | Box(4) | Discrete(2) | 500 | +1/step |
+| `pendulum` | Classic Control | Box(3) | Box(1) | 200 | -θ² - 0.1θ̇² - 0.001u² |
+| `acrobot` | Classic Control | Box(6) | Discrete(3) | 500 | -1/step |
+| `mountain_car` | Classic Control | Box(2) | Discrete(3) | 200 | -1/step |
+| `lunar_lander` | Box2D | Box(8) | Discrete(4) | 1000 | Shaped + sparse |
+
+**Models Registered (RL-Compatible)**
+
+| Model Family | Algorithm | Policy Type | Notes |
+|--------------|-----------|-------------|-------|
+| `backprop` | PPO, A2C, DQN, SAC | MLP/Gaussian | Standard baselines |
+| `eqprop` | EqProp-PPO, EqProp-A2C | Energy-based policy | Equilibrium actor-critic |
+| `fa` | FA-PPO, FA-A2C | Random feedback policy | Weight-transport free RL |
+| `hebbian` | Hebbian-RL | Local plasticity | Pure Hebbian policy gradient |
+| `spiking` | SNN-PPO, STDP-RL | Spiking policy | Neuromorphic RL |
+| `tile` | Tile-PPO | Tiled actor-critic | Distributed RL |
+
+**Key Experiments**
+
+```bash
+# RL benchmark across algorithms
+biopl lab benchmark --domain rl --quick
+
+# EqProp on CartPole (energy-based policy)
+biopl lab core-train --model eqprop_ppo --task cartpole --epochs 100
+
+# FA vs Backprop on continuous control
+python experiments/fa_rl_comparison.py --env pendulum --seeds 10
+```
+
+---
+
+### 🕸️ Graph Domain
+
+**Tasks & Datasets**
+
+| Task | Type | Nodes | Edges | Features | Classes | Split |
+|------|------|-------|-------|----------|---------|-------|
+| `cora` | Node Classification | 2,708 | 5,429 | 1,433 | 7 | Planetoid |
+| `citeseer` | Node Classification | 3,327 | 4,732 | 3,703 | 6 | Planetoid |
+| `pubmed` | Node Classification | 19,717 | 44,338 | 500 | 3 | Planetoid |
+
+**Models Registered (Graph-Compatible)**
+
+| Model Family | Variants | Aggregation |
+|--------------|----------|-------------|
+| `backprop` | GCN, GAT, GraphSAGE | Message passing |
+| `eqprop` | EqProp-GCN, EqProp-GAT | Equilibrium message passing |
+| `fa` | FA-GCN, FA-GAT | Random feedback GNN |
+| `predictive_coding` | PC-GNN | Predictive coding on graphs |
+| `tile` | Tile-GCN | Tiled graph learning |
+
+---
+
+### 📋 Tabular Domain
+
+**Tasks & Datasets**
+
+| Task | Type | Samples | Features | Classes/Target | Source |
+|------|------|---------|----------|----------------|--------|
+| `breast_cancer` | Classification | 569 | 30 | 2 (malignant/benign) | sklearn |
+| `iris` | Classification | 150 | 4 | 3 | UCI |
+| `wine` | Classification | 178 | 13 | 3 | UCI |
+| `diabetes` | Regression | 442 | 10 | Continuous | sklearn |
+| `california_housing` | Regression | 20,640 | 8 | Continuous | sklearn |
+
+**Models**: All MLP-based families (backprop, eqprop, fa, pepita, hebbian, tile) support tabular tasks.
+
+---
+
+### 📈 Time Series Domain
+
+**Tasks**
+
+| Task | Type | Sequence Length | Features | Horizon | Source |
+|------|------|-----------------|----------|---------|--------|
+| `synthetic_forecast` | Forecasting | 100 | 1–5 | 10–50 | Synthetic (sin, AR, chaos) |
+| `ett_h1` | Forecasting | 168 | 7 | 24 | ETT (planned) |
+
+**Models**: RNN/LSTM/Transformer families across all credit assignments.
+
+---
+
+### 🔬 Scientific Domain
+
+**Tasks**
+
+| Task | Type | Equation | Dimensions | Resolution | Source |
+|------|------|----------|------------|------------|--------|
+| `synthetic_physics` | PDE Solving | Heat, Wave, Burgers | 1D/2D | 64×64 | Synthetic |
+| `navier_stokes` | PDE Solving | Navier-Stokes | 2D | 64×64 | Synthetic (planned) |
+
+**Models**: Physics-informed variants (PINO, DeepONet, FNO) adapted to bioplausible credit assignments.
+
+---
+
 ## 🌐 Distributed Training & P2P
 
 ### Multi-GPU Training
@@ -331,7 +555,15 @@ Decentralized coordination at `bioplausible/p2p/`:
 - 🔀 **DistributedSystemTrainer**: In-process multi-worker coordination; shards along TileGeometry, federates at ParameterUpdate
 - 🛡️ **Fault Tolerance**: `DistributedTrainingError` captures lost workers, step, partial metrics on gRPC failure
 
-CLI: `eqprop-p2p-worker` starts a worker node.
+CLI: `biopl-p2p-worker` starts a worker node (renamed from `eqprop-p2p-worker` — the P2P layer is algorithm-agnostic).
+
+```bash
+# Start a P2P worker
+biopl-p2p-worker --bootstrap-ip 192.168.1.100 --task mnist --mode deep
+
+# Run distributed TileNet training
+biopl run --config campaigns/distributed_tile.yaml
+```
 
 ---
 

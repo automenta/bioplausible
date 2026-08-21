@@ -1,7 +1,9 @@
 """
 P2P Worker CLI
 
-Entry point for running a headless P2P NAS worker.
+Entry point for running a headless P2P distributed training worker.
+Algorithm-agnostic: supports EqProp, FA, Backprop, TileNet, and all
+credit assignments via the 5-D ontology.
 """
 
 import argparse
@@ -32,7 +34,9 @@ def signal_handler(sig, frame):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="BioPlausible P2P Worker")
+    parser = argparse.ArgumentParser(
+        description="Bioplausible P2P Worker", prog="biopl-p2p-worker"
+    )
     parser.add_argument(
         "--bootstrap-ip", type=str, default=None, help="IP of a known bootstrap node"
     )
