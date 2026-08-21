@@ -32,7 +32,7 @@ from bioplausible.core.local_learning import (
 )
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
-from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.deployments import _feature_extractors as _fe
 from bioplausible.zoo.models.deployments.base import RLDeploymentConfig
@@ -94,7 +94,6 @@ def _credit_assignment_type(algorithm: str) -> str:
 
 @register_model(
     "rl_tile",
-    domains=[Domain.RL],
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.75,
     requires_backward=False,
@@ -721,7 +720,6 @@ def _register_variant(name: str, algorithm: str, credit_type: str, bio_score: fl
 
     @register_model(
         name,
-        domains=[Domain.RL],
         locality_level=LocalityLevel.LOCAL,
         bio_plausibility_score=bio_score,
         requires_backward=False,

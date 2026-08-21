@@ -29,7 +29,7 @@ engine of their parent (:class:`EquilibriumMLP`), so they drop into
 import torch
 
 from bioplausible.core.model_status import status_tag
-from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.registry import LocalityLevel, register_model
 
 from .looped_mlp import LoopedMLP
 
@@ -45,7 +45,6 @@ __all__ = [
 
 @register_model(
     "quantized_looped_mlp",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.EQUILIBRIUM,
     bio_plausibility_score=0.9,
     credit_assignment_type="equilibrium",
@@ -103,7 +102,6 @@ class QuantizedLoopedMLP(LoopedMLP):
 
 @register_model(
     "noisy_looped_mlp",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.EQUILIBRIUM,
     bio_plausibility_score=0.9,
     credit_assignment_type="equilibrium",
@@ -164,7 +162,6 @@ class NoisyLoopedMLP(LoopedMLP):
 
 @register_model(
     "spiking_looped_mlp",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.EQUILIBRIUM,
     bio_plausibility_score=0.9,
     credit_assignment_type="equilibrium",
@@ -263,7 +260,6 @@ class SpikingLoopedMLP(LoopedMLP):
 
 @register_model(
     "optical_looped_mlp",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.EQUILIBRIUM,
     bio_plausibility_score=0.9,
     credit_assignment_type="equilibrium",
@@ -320,7 +316,6 @@ class OpticalLoopedMLP(LoopedMLP):
 
 @register_model(
     "crossbar_looped_mlp",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.EQUILIBRIUM,
     bio_plausibility_score=0.9,
     credit_assignment_type="equilibrium",
@@ -385,7 +380,6 @@ class CrossbarLoopedMLP(LoopedMLP):
 
 @register_model(
     "quantum_looped_mlp",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.EQUILIBRIUM,
     bio_plausibility_score=0.9,
     credit_assignment_type="equilibrium",

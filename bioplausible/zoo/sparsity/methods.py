@@ -10,7 +10,6 @@ import torch
 
 from bioplausible.core.registry import (
     ComputeProfile,
-    Domain,
     LocalityLevel,
     register_sparsity,
 )
@@ -19,7 +18,6 @@ from bioplausible.core.registry import (
 @register_sparsity(
     name="TopKPruning",
     family="sparsity",
-    domains=[Domain.VISION, Domain.LM, Domain.TIMESERIES],
     locality_level=LocalityLevel.LOCAL,
     compute_profile=ComputeProfile.NEUROMORPHIC,
     bio_plausibility_score=0.7,
@@ -71,7 +69,6 @@ class TopKPruning:
 @register_sparsity(
     name="ActivityDrivenPruning",
     family="sparsity",
-    domains=[Domain.VISION, Domain.LM, Domain.TIMESERIES],
     locality_level=LocalityLevel.LOCAL,
     compute_profile=ComputeProfile.NEUROMORPHIC,
     bio_plausibility_score=0.85,
@@ -119,7 +116,6 @@ class ActivityDrivenPruning:
 @register_sparsity(
     name="RandomPruning",
     family="sparsity",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.2,

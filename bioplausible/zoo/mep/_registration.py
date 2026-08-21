@@ -3,7 +3,6 @@
 from bioplausible.core.registry import (
     ComponentCategory,
     ComputeProfile,
-    Domain,
     LocalityLevel,
     Registry,
     register_optimizer,
@@ -16,7 +15,6 @@ from .presets import local_ep, muon_backprop, natural_ep, sdmep, smep, smep_fast
 Registry.register(
     ComponentCategory.PROPAGATOR,
     name="smep",
-    domains=[Domain.VISION, Domain.TABULAR, Domain.LM],
     locality_level=LocalityLevel.EQUILIBRIUM,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.95,
@@ -29,7 +27,6 @@ Registry.register(
 Registry.register(
     ComponentCategory.PROPAGATOR,
     name="smep_fast",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.EQUILIBRIUM,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.95,
@@ -42,7 +39,6 @@ Registry.register(
 Registry.register(
     ComponentCategory.PROPAGATOR,
     name="sdmep",
-    domains=[Domain.VISION, Domain.TABULAR, Domain.LM],
     locality_level=LocalityLevel.EQUILIBRIUM,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.93,
@@ -55,7 +51,6 @@ Registry.register(
 Registry.register(
     ComponentCategory.PROPAGATOR,
     name="local_ep",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.LOCAL,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.97,
@@ -68,7 +63,6 @@ Registry.register(
 Registry.register(
     ComponentCategory.PROPAGATOR,
     name="natural_ep",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.EQUILIBRIUM,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.90,
@@ -81,7 +75,6 @@ Registry.register(
 Registry.register(
     ComponentCategory.PROPAGATOR,
     name="muon_backprop",
-    domains=[Domain.VISION, Domain.TABULAR, Domain.LM, Domain.RL],
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.3,
@@ -100,7 +93,6 @@ Registry.register(
 Registry.register(
     ComponentCategory.UPDATE_STRATEGY,
     name="muon",
-    domains=[Domain.VISION, Domain.TABULAR, Domain.LM, Domain.RL],
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.0,
@@ -113,7 +105,6 @@ Registry.register(
 Registry.register(
     ComponentCategory.UPDATE_STRATEGY,
     name="dion",
-    domains=[Domain.VISION, Domain.TABULAR, Domain.LM],
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.0,
@@ -126,14 +117,6 @@ Registry.register(
 Registry.register(
     ComponentCategory.UPDATE_STRATEGY,
     name="plain",
-    domains=[
-        Domain.VISION,
-        Domain.TABULAR,
-        Domain.LM,
-        Domain.RL,
-        Domain.GRAPH,
-        Domain.TIMESERIES,
-    ],
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.0,
@@ -146,7 +129,6 @@ Registry.register(
 Registry.register(
     ComponentCategory.UPDATE_STRATEGY,
     name="fisher",
-    domains=[Domain.VISION, Domain.TABULAR],
     locality_level=LocalityLevel.GLOBAL,
     compute_profile=ComputeProfile.GPU,
     bio_plausibility_score=0.0,
@@ -180,7 +162,6 @@ for _name, _preset in (
 ):
     register_optimizer(
         _name,
-        domains=[Domain.VISION, Domain.TABULAR],
         locality_level=LocalityLevel.EQUILIBRIUM,
         compute_profile=ComputeProfile.GPU,
         bio_plausibility_score=0.9,

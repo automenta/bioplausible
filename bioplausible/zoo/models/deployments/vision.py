@@ -26,7 +26,7 @@ from torch import nn
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model import BioModel
 from bioplausible.core.model_status import status_tag
-from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.zoo.models.deployments import _feature_extractors as _fe
 from bioplausible.zoo.models.deployments.base import (
     ConvDeploymentConfig,
@@ -87,7 +87,6 @@ def _credit_assignment_type(algorithm: str) -> str:
 
 @register_model(
     "conv_tile",
-    domains=[Domain.VISION],
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.8,
     requires_backward=False,
@@ -418,7 +417,6 @@ def _register_variant(name: str, algorithm: str, credit_type: str, bio_score: fl
 
     @register_model(
         name,
-        domains=[Domain.VISION],
         locality_level=LocalityLevel.LOCAL,
         bio_plausibility_score=bio_score,
         requires_backward=False,

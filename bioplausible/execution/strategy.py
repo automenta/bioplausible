@@ -28,11 +28,10 @@ logger = get_logger("AutoScientist")
 class _ModelSpec:
     """Lightweight model spec consumed by ExecutionStrategy.generate_candidates."""
 
-    __slots__ = ("name", "task_compat")
+    __slots__ = ("name",)
 
-    def __init__(self, name: str, task_compat: list[str] | None = None) -> None:
+    def __init__(self, name: str) -> None:
         self.name = name
-        self.task_compat = task_compat
 
 
 def _model_specs() -> list[_ModelSpec]:
@@ -48,15 +47,7 @@ def _model_specs() -> list[_ModelSpec]:
         from bioplausible.core.registry import ComponentCategory
 
         for entry in Registry.query(category=ComponentCategory.MODEL):
-            meta = entry.get("metadata")
-            task_compat = None
-            if meta is not None:
-                domains = getattr(meta, "domains", None) or []
-                if domains:
-                    task_compat = [
-                        d.value if hasattr(d, "value") else str(d) for d in domains
-                    ]
-            specs.append(_ModelSpec(entry["name"], task_compat))
+            specs.append(_ModelSpec(entry["name"]))
     except KeyError, AttributeError, ValueError:  # pragma: no cover - registry empty
         logger.exception("Failed to enumerate models from Registry")
     _model_specs.cache = specs
@@ -262,7 +253,7 @@ class ExecutionStrategy:
         self._apply_saturation_logging(saturated_tasks)
 
         for spec in _model_specs():
-            tasks = self._resolve_tasks(spec.task_compat, spec.name)
+            tasks = self._resolve_tasks(spec.name)
 
             for task in tasks:
                 if not self._should_consider_task(
@@ -985,22 +976,12 @@ class ExecutionStrategy:
 
         return batch
 
-    def _resolve_tasks(self, task_compat: list[str], model_name: str = "") -> list[str]:
+    def _resolve_tasks(self, model_name: str = "") -> list[str]:
         """
-        Convert compatibility list to specific runnable tasks.
-        Uses CurriculumManager to refine choices.
+        Return default runnable tasks for a model.
         """
-        if not task_compat:
-            initial = self.curriculum.get_initial_task(model_name)
-            return [initial] if initial else ["mnist"]
-
-        resolved = []
-        for t in task_compat:
-            if t in self.curriculum.TRACKS:
-                resolved.extend(self.curriculum.TRACKS[t])
-            else:
-                resolved.append(t)
-        return list(set(resolved))
+        initial = self.curriculum.get_initial_task(model_name)
+        return [initial] if initial else ["mnist"]
 
     def _check_curriculum(self, progress: dict, model_name: str, task: str) -> bool:
         """

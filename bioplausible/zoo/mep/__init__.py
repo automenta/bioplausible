@@ -19,7 +19,6 @@ See NICHES.md for optimizer selection guide.
 """
 
 from bioplausible.core.registry import (
-    Domain,
     LocalityLevel,
     register_optimizer,
     register_propagator,
@@ -51,7 +50,6 @@ __all__ = [
     "BackpropGradient",
     "CompositeOptimizer",
     "DionUpdate",
-    "Domain",
     "EPGradient",
     "EnergyFunction",
     "ErrorFeedback",

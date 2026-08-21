@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 from bioplausible.core.local_learning.algorithm import TileAlgorithm
 from bioplausible.core.logging import get_logger
-from bioplausible.core.registry import Domain, LocalityLevel, register_controller
+from bioplausible.core.registry import LocalityLevel, register_controller
 
 __all__ = [
     "DynamicTileAlgorithm",
@@ -442,7 +442,6 @@ class TileSplitter:
 
 @register_controller(
     "dynamic_tile_algorithm",
-    domains=[Domain.VISION, Domain.RL],
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.85,
     requires_backward=False,

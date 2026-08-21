@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from bioplausible.core.model_status import status_tag
-from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.zoo.models.transitions import TransitionGraphMixin
 
 __all__ = [
@@ -77,7 +77,6 @@ class TernaryLinear(nn.Module):
 
 @register_model(
     "ternary_eqprop",
-    domains=[Domain.VISION, Domain.LM, Domain.TABULAR],
     locality_level=LocalityLevel.EQUILIBRIUM,
     bio_plausibility_score=0.85,
     credit_assignment_type="equilibrium",

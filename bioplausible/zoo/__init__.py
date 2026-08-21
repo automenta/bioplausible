@@ -11,7 +11,6 @@ from bioplausible.core.registry import (
     ComponentCategory,
     ComponentMetadata,
     ComputeProfile,
-    Domain,
     LocalityLevel,
     Registry,
     register_metric,
@@ -47,7 +46,6 @@ class ModelSpec:
         "name",
         "requires_backward",
         "tags",
-        "task_compat",
         "variant",
         "version",
     )
@@ -55,7 +53,6 @@ class ModelSpec:
     def __init__(self, meta: ComponentMetadata) -> None:
         self.name = meta.name
         self.family = meta.family if meta.family else "experimental"
-        self.task_compat = [d.value for d in meta.domains]
         self.model_type = meta.credit_assignment_type
         self.credit_assignment_type = meta.credit_assignment_type
         self.variant = meta.extra.get("variant")
@@ -121,20 +118,6 @@ def load_weights(
         logger.exception("Failed to load weights from %s", path)
 
 
-def get_models_for_task(
-    domain: Domain,
-    locality: LocalityLevel | None = None,
-    requires_backward: bool | None = None,
-) -> list[dict[str, object]]:
-    """Return all models compatible with a task (domain + locality + backward)."""
-    return Registry.query(
-        category=ComponentCategory.MODEL,
-        domain=domain,
-        locality=locality,
-        requires_backward=requires_backward,
-    )
-
-
 def get_propagators_for_model(
     model_name: str,
 ) -> list[dict[str, object]]:
@@ -169,11 +152,9 @@ __all__ = [
     "ComponentCategory",
     "ComponentMetadata",
     "ComputeProfile",
-    "Domain",
     "LocalityLevel",
     "Registry",
     "get_model_spec",
-    "get_models_for_task",
     "get_optimizers_for_propagator",
     "get_propagators_for_model",
     "load_weights",

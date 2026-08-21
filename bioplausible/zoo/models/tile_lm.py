@@ -22,7 +22,7 @@ from torch import Tensor, nn
 
 from bioplausible.core.local_learning import TileAlgorithm, TileAlgorithmConfig
 from bioplausible.core.model_status import status_tag
-from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.utils import count_parameters
 
 __all__ = [
@@ -80,7 +80,6 @@ class TileLMExtras:
 
 @register_model(
     "tile_lm",
-    domains=[Domain.LM],
     family="tile",
     locality_level=LocalityLevel.LOCAL,
     bio_plausibility_score=0.5,

@@ -18,7 +18,7 @@ from torch import nn
 
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model_status import status_tag
-from bioplausible.core.registry import Domain, LocalityLevel, register_model
+from bioplausible.core.registry import LocalityLevel, register_model
 
 from ..transitions import TransitionGraphMixin
 from ._energy import EquilibriumMLP
@@ -53,7 +53,6 @@ def _kernel_backend_step(
 
 @register_model(
     "eqprop_mlp",
-    domains=[Domain.VISION, Domain.LM, Domain.RL, Domain.TABULAR],
     locality_level=LocalityLevel.EQUILIBRIUM,
     bio_plausibility_score=0.9,
     credit_assignment_type="equilibrium",

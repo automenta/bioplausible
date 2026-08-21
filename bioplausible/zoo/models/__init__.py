@@ -4,7 +4,7 @@ Zoo Models Package
 All models registered with the unified registry system.
 """
 
-from bioplausible.core.registry import Domain, LocalityLevel, Registry, register_model
+from bioplausible.core.registry import LocalityLevel, Registry, register_model
 
 from . import (
     backprop,

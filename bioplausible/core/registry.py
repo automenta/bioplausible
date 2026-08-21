@@ -61,20 +61,6 @@ class ComponentCategory(str, Enum):
     KERNEL_BACKEND = "kernel_backend"
 
 
-class Domain(str, Enum):
-    """Supported domains."""
-
-    VISION = "vision"
-    LM = "lm"
-    RL = "rl"
-    GRAPH = "graph"
-    TIMESERIES = "timeseries"
-    TABULAR = "tabular"
-    SCIENTIFIC = "scientific"
-    CONTINUAL = "continual"
-    MULTITASK = "multitask"
-
-
 class LocalityLevel(str, Enum):
     """Credit assignment locality level."""
 
@@ -111,7 +97,6 @@ class ComponentMetadata:
 
     name: str
     category: ComponentCategory
-    domains: list[Domain] = field(default_factory=lambda: [Domain.VISION])
     locality_level: LocalityLevel = LocalityLevel.GLOBAL
     compute_profile: ComputeProfile = ComputeProfile.GPU
     bio_plausibility_score: float = 0.5  # 0.0 = backprop, 1.0 = fully bio-plausible
@@ -149,7 +134,6 @@ class _QueryFilter:
     ``no constraint on this axis``.
     """
 
-    domain: Domain | None = None
     locality: LocalityLevel | None = None
     compute: ComputeProfile | None = None
     requires_backward: bool | None = None
@@ -163,8 +147,6 @@ class _QueryFilter:
     def __post_init__(self) -> None:
         """Build the predicate dispatch table once at construction."""
         predicates: list[_Predicate] = []
-        if self.domain is not None:
-            predicates.append(_DomainIn(self.domain))
         if self.locality is not None:
             predicates.append(_LocalityIs(self.locality))
         if self.compute is not None:
@@ -192,16 +174,6 @@ class _Predicate(Protocol):
     """Single-axis capability predicate."""
 
     def __call__(self, meta: ComponentMetadata) -> bool: ...
-
-
-@dataclass(frozen=True, slots=True)
-class _DomainIn:
-    """True iff ``meta`` declares the target domain."""
-
-    domain: Domain
-
-    def __call__(self, meta: ComponentMetadata) -> bool:
-        return self.domain in meta.domains
 
 
 @dataclass(frozen=True, slots=True)
@@ -498,7 +470,6 @@ class Registry:
     def query(
         cls,
         category: ComponentCategory | str | None = None,
-        domain: Domain | None = None,
         locality: LocalityLevel | None = None,
         compute: ComputeProfile | None = None,
         requires_backward: bool | None = None,
@@ -515,7 +486,6 @@ class Registry:
         composition.
         """
         flt = _QueryFilter(
-            domain=domain,
             locality=locality,
             compute=compute,
             requires_backward=requires_backward,
@@ -551,13 +521,12 @@ class Registry:
     ) -> dict[str, list[dict[str, object]]]:
         """Get components compatible with a given model."""
         model_meta = cls.get_metadata(model_category, model_name)
-        primary_domain = model_meta.domains[0] if model_meta.domains else None
 
         compat: dict[str, list[dict[str, object]]] = {}
         for cat in ComponentCategory:
             if cat == model_category:
                 continue
-            compat[cat.value] = cls.query(category=cat, domain=primary_domain)
+            compat[cat.value] = cls.query(category=cat)
         return compat
 
     @classmethod
@@ -666,7 +635,6 @@ class Registry:
         sweep: str | None = None,
         sweep_values: list[str] | None = None,
         category: ComponentCategory | str | None = None,
-        domain: Domain | None = None,
         min_bio_score: float | None = None,
     ) -> list[dict[str, object]]:
         """Query the registry along the 5-D ontology axes.
@@ -782,7 +750,6 @@ class Registry:
                 query_kwargs = dict(zip(param_names, combo))
                 query_kwargs.update({
                     "category": category,
-                    "domain": domain,
                     "min_bio_score": min_bio_score,
                 })
                 # Remove None values
@@ -802,7 +769,6 @@ class Registry:
             # No fixed constraints, just run single query
             query_kwargs = {
                 "category": category,
-                "domain": domain,
                 "min_bio_score": min_bio_score,
             }
             results = cls.query(**query_kwargs)
@@ -860,7 +826,6 @@ class Registry:
                 export_data[cat_name][name] = {
                     "name": meta.name,
                     "category": meta.category.value,
-                    "domains": [d.value for d in meta.domains],
                     "locality_level": meta.locality_level.value,
                     "compute_profile": meta.compute_profile.value,
                     "bio_plausibility_score": meta.bio_plausibility_score,
@@ -938,7 +903,6 @@ __all__ = [
     "ComponentMetadata",
     "ComputeProfile",
     "CreditAssignmentType",
-    "Domain",
     "IncompatibilityError",
     "LocalityLevel",
     "Registry",

@@ -279,8 +279,7 @@ class HyperparameterMetamodel:
 
         # Map model families to hyperparameter scopes
         family = model_spec.family.lower()
-        is_vision = "vision" in model_spec.task_compat
-        is_rl = "rl" in model_spec.task_compat or "cartpole" in model_spec.task_compat
+        model_type = model_spec.model_type.lower()
 
         if family == "baseline":
             # Backprop uses gradient-based hyperparams
@@ -293,11 +292,11 @@ class HyperparameterMetamodel:
         elif family == "hybrid":
             # Hybrid models (e.g., Adaptive FA) might use both
             # Need to check model_type for specifics
-            if "fa" in model_spec.model_type or "alignment" in model_spec.model_type:
+            if "fa" in model_type or "alignment" in model_type:
                 applicable_scopes.add(HyperparamScope.FEEDBACK_ALIGNMENT)
-            if "equilibrium" in model_spec.model_type or "eq" in model_spec.model_type:
+            if "equilibrium" in model_type or "eq" in model_type:
                 applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
-            if "hebbian" in model_spec.model_type:
+            if "hebbian" in model_type:
                 applicable_scopes.add(HyperparamScope.HEBBIAN)
 
             # Hybrids might also use gradient methods (often do)
@@ -428,9 +427,13 @@ class HyperparameterMetamodel:
                 )
                 search_space["num_layers"] = constrained_nl
 
-        # Heuristics: Vision (Wider Layers)
-        # Only apply if NOT small task (which forces small), or carefully merge
-        if is_vision and "hidden_dim" in search_space and not is_small_task:
+        # Heuristics: Vision models (Wider Layers)
+        # Apply based on model family/type for vision-oriented models
+        is_vision_model = (
+            "vision" in model_spec.model_type.lower()
+            or model_spec.family in ("backprop", "eqprop", "fa", "tile")
+        )
+        if is_vision_model and "hidden_dim" in search_space and not is_small_task:
             hd_spec = search_space["hidden_dim"]
             constrained_hd = HyperparamSpec(
                 name=hd_spec.name,
@@ -442,7 +445,8 @@ class HyperparameterMetamodel:
             search_space["hidden_dim"] = constrained_hd
 
         # Heuristics: RL (Specific LR Range)
-        if is_rl and "lr" in search_space:
+        is_rl_model = "rl" in model_spec.model_type.lower() or model_spec.family == "rl"
+        if is_rl_model and "lr" in search_space:
             lr_spec = search_space["lr"]
             constrained_lr = HyperparamSpec(
                 name=lr_spec.name,

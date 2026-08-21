@@ -167,50 +167,6 @@ def _resolve_family_models(cli_family: str) -> tuple[str, list[str]]:
     return reg_family, models
 
 
-_TASK_DOMAIN = {
-    "digits": "vision",
-    "mnist": "vision",
-    "fashion_mnist": "vision",
-    "kmnist": "vision",
-    "cifar10": "vision",
-    "cifar100": "vision",
-    "svhn": "vision",
-    "usps": "vision",
-    "tiny_shakespeare": "lm",
-    "shakespeare": "lm",
-    "char_ngram": "lm",
-    "lm": "lm",
-    "cartpole": "rl",
-    "pendulum": "rl",
-    "acrobot": "rl",
-    "rl": "rl",
-}
-
-
-def _task_domain(task: str) -> str:
-    """Map a concrete task name to its registry Domain value."""
-    return _TASK_DOMAIN.get(task.lower(), task.lower())
-
-
-def _model_compatible(model_name: str, task: str) -> bool:
-    """Check whether a registered model supports a given task domain.
-
-    A model that declares *no* domains (``domains=[]`` -> empty task_compat) is
-    treated as incompatible with every task: such models carry bespoke
-    constructor args (e.g. ``layers_config``) that no search space can satisfy,
-    so they must not be pulled into family HPO runs.
-    """
-    try:
-        meta = get_model_spec(model_name)
-    except ValueError:
-        return True  # Unregistered names are allowed to "try naturally".
-    domain_names = meta.task_compat
-    if not domain_names:
-        return False  # Explicitly scoped to zero domains -> incompatible everywhere
-    task_domain = _task_domain(task)
-    return task in domain_names or task_domain in domain_names
-
-
 def _resolve_targets(args) -> list[tuple[str, str, str | None, list[str]]]:
     """Return ``[(study_name, reg_family, cli_family, [model_names]), ...]``.
 
@@ -230,9 +186,6 @@ def _resolve_targets(args) -> list[tuple[str, str, str | None, list[str]]]:
     if args.models:
         models = [m.strip() for m in args.models.split(",") if m.strip()]
         for m in models:
-            if not _model_compatible(m, args.task):
-                logger.warning("Skipping %s: incompatible with task '%s'", m, args.task)
-                continue
             targets.append((f"{m}_{args.task}", m, None, [m]))
         return targets
 
@@ -247,13 +200,9 @@ def _family_target(
     if not models:
         logger.warning("No models registered for family '%s'; skipping", cli_family)
         return None
-    compatible = [m for m in models if _model_compatible(m, task)]
     for m in models:
-        if m not in compatible:
-            logger.warning("Skipping %s: incompatible with task '%s'", m, task)
-    if not compatible:
-        return None
-    return (f"{reg_family}_{task}", reg_family, cli_family, compatible)
+        logger.warning("Skipping %s: incompatible with task '%s'", m, task)
+    return (f"{reg_family}_{task}", reg_family, cli_family, models)
 
 
 def _resolve_survivors(args) -> list[tuple[str, str, str | None, list[str]]]:
@@ -297,9 +246,8 @@ def _resolve_survivors(args) -> list[tuple[str, str, str | None, list[str]]]:
             logger.warning("Unknown survivor family '%s'; skipping", family)
             continue
         reg_family, models = _resolve_family_models(cli)
-        compatible = [m for m in models if _model_compatible(m, args.task)]
-        if compatible:
-            resolved.append((f"{reg_family}_{args.task}", reg_family, cli, compatible))
+        if models:
+            resolved.append((f"{reg_family}_{args.task}", reg_family, cli, models))
     return resolved
 
 
@@ -730,8 +678,7 @@ def list_models(_args):
     for name in sorted(model_names):
         meta = Registry.get_metadata(ComponentCategory.MODEL, name)
         score = meta.bio_plausibility_score
-        domains = ", ".join(d.value for d in meta.domains)
-        logger.info("  %-25s bio=%.1f  domains=[%s]", name, score, domains)
+        logger.info("  %-25s bio=%.1f", name, score)
 
 
 # ---------------------------------------------------------------------------
