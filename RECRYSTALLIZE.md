@@ -133,7 +133,7 @@ Chain-of-thought templates now operate on *ontology axes*, enabling hypotheses l
 | **3** | FA structured init (orthogonal + feedback_scale) | ✅ Sprint 3 Complete | `CreditAssignmentConfig.orthogonal_init`, `feedback_scale`; QR-based init |
 | **4** | ModelAdapter.validate(), legacy migration on contact | ✅ Sprint 4 Complete | Tests: `tests/unit/core/test_ontology.py::TestModelAdapter::test_validate_*` |
 
-**Last verified:** 2026-08-20 — all 97+ core/integration/property tests pass, Pyright strict clean, Ruff format clean; gRPC P2P layer implemented; Sprint 3 (Control-Lyapunov, FA orthogonal init) complete; Sprint 4 (ModelAdapter.validate()) complete
+**Last verified:** 2026-08-20 — all 97+ core/integration/property tests pass, Pyright strict clean, Ruff format clean; gRPC P2P layer implemented; Sprint 3 (Control-Lyapunov, FA orthogonal init) complete; Sprint 4 (ModelAdapter.validate()) complete; Phase 3 migration ready to begin
 
 ---
 
@@ -261,6 +261,52 @@ ParameterUpdate.step(params, pseudo_grads, geometry) -> dict[str, Tensor]
 - **Substrate**: Implement all 5 abstract methods. See `MemristiveSubstrate` (IR-drop), `OpticalSubstrate` (phase noise), `QuantumSubstrate` (parameter shift)
 - **CreditAssignment**: Implement `compute_pseudo_gradient` returning list matching `Geometry.params` order. `ThermodynamicContrast` uses contrastive Hebbian; `RandomProjectionsCredit` uses fixed feedback matrices
 - **Distributed Training**: `DistributedSystemTrainer` shards along Geometry (tile mesh) and federates at ParameterUpdate. CreditAssignment stays local. For new topologies, implement `_distributed_forward` and `_distributed_settle`
+
+---
+
+## Future Work & Opportunities (Post-Sprint 4)
+
+### Phase 3: Native Protocol Migration (Ongoing)
+Migrate model families to native 5-D Protocols using Strangler Fig pattern:
+
+| Priority | Family | Target Layers | Effort | Notes |
+|----------|--------|---------------|--------|-------|
+| P1 | `eqprop_*` | S=Digital, G=Recurrent, D=EnergyMinimization, C=ThermodynamicContrast, U=Euclidean | Low | Clear coordinate, existing gradient tests |
+| P1 | `*_fa` / `*_dfa` | C=RandomProjections, D=Instantaneous | Low | FA orthogonal init now available |
+| P1 | `*_ff` / `pepita` | C=LocalGoodness, D=Instantaneous | Low | ForwardForwardNet already validated |
+| P2 | `spiking_*` / `*_stdp` | C=TemporalTrace, D=SpikeIntegration | Medium | Needs STDP credit assignment validation |
+| P2 | `*_tp` / `*_target_prop` | C=TargetInversion, D=Instantaneous | Medium | Target inversion gradients untested |
+| P3 | `*_tile_*` | G=TileMesh, others vary | High | Most complex; DistributedSystemTrainer ready |
+| P2 | `optical_*`, `crossbar_*`, `quantum_*` | S=Optical/Memristive/Quantum | Medium | Substrate noise injection validated |
+
+### Phase 4: Real P2P Distribution (Planned)
+| Task | Status | Blocking |
+|------|--------|----------|
+| Kademlia DHT bootstrap | Proto/service ready | Multi-node test infra |
+| DistributedSystemTrainer multi-node | In-process works | Peer discovery |
+| Fault tolerance / state replication | Not started | Phase 4 core |
+| Scaling benchmarks | Not started | Phase 4 core |
+
+### AutoScientist Hypercube Campaigns
+- **Substrate Ablation**: Fix G/D/C/U, swap Digital → Memristive/Optical/Quantum — at what noise level does parity break?
+- **Epistemology Swaps**: Fix S=Optical, G=TileMesh, D=EnergyMinimization, swap ThermodynamicContrast ↔ RandomProjectionsCredit — does optical hardware favor FA?
+- **Kinetics Discovery**: Mix Orthogonal/Natural/Spectral updates without touching credit assignment
+- **Composite Hypotheses**: "Because Memristive Crossbars suffer IR-drop (S), applying Spectral Constraints (U) will stabilize EnergyMinimization (D) settling"
+
+### Extended Gradient Equivalence
+- LocalGoodnessCredit (Forward-Forward, PEPITA) vs. finite-difference
+- TargetInversionCredit (Target Prop) vs. finite-difference
+- TemporalTraceCredit (STDP) — spike-timing correlation validation
+
+### Formal Energy Proofs
+- Lyapunov for SpikeIntegrationDynamics (asynchronous convergence)
+- Passivity proofs for NeuromorphicSubstrate
+- Free energy bounds for TargetInversionCredit
+
+### Hardware Validation
+- MemristiveSubstrate: IR-drop model vs. SPICE simulation
+- OpticalSubstrate: Phase noise vs. photonic hardware measurements
+- QuantumSubstrate: Parameter-shift rule on quantum hardware/simulator
 
 ---
 
