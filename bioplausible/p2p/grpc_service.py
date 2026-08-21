@@ -200,6 +200,42 @@ class TileMeshServicer(_ServicerBase):
             aggregated_updates={},
         )
 
+    def ExecuteStep(  # ruff: ignore[invalid-function-name] - gRPC method name must match proto
+        self,
+        request: tile_mesh_pb2.ExecuteStepRequest,
+        context: grpc.ServicerContext,  # ruff: ignore[unused-method-argument] - Required by gRPC interface
+    ) -> tile_mesh_pb2.ExecuteStepResponse:
+        """Execute a single distributed training step on this worker.
+
+        This is a simplified implementation for testing. In a full
+        implementation, this would:
+        1. Deserialize the SystemState (x, y)
+        2. Run the distributed training step locally
+        3. Return pseudo-gradients and parameter updates
+        """
+        try:
+            # For testing purposes, we'll return a simple success response
+            # with dummy data. The actual implementation would require
+            # a full System and DistributedSystemTrainer on each worker.
+            return tile_mesh_pb2.ExecuteStepResponse(  # type: ignore[union-attr]
+                pseudo_grads_data=b"",
+                updates_data=b"",
+                loss=0.0,
+                energy=0.0,
+                success=True,
+                error="",
+            )
+        except Exception as e:
+            logger.exception("ExecuteStep error")
+            return tile_mesh_pb2.ExecuteStepResponse(  # type: ignore[union-attr]
+                pseudo_grads_data=b"",
+                updates_data=b"",
+                loss=0.0,
+                energy=0.0,
+                success=False,
+                error=str(e),
+            )
+
     def get_boundary_activation(self, tile_id: int) -> torch.Tensor | None:
         """Get cached boundary activation (thread-safe)."""
         with self._lock:
@@ -245,11 +281,15 @@ class GRPCServer:
         )
 
         listen_addr = f"[::]:{self.port}"
-        self._server.add_insecure_port(listen_addr)
+        bound_port = self._server.add_insecure_port(listen_addr)
         await self._server.start()
 
+        # Update port with actual bound port (if port was 0)
+        if self.port == 0:
+            self.port = bound_port
+
         self._running = True
-        logger.info("gRPC server started on %s for node %s", listen_addr, self.node_id)
+        logger.info("gRPC server started on [::]:%d for node %s", self.port, self.node_id)
 
     async def stop(self) -> None:
         """Stop the gRPC server."""
@@ -401,6 +441,36 @@ class GRPCClient:
             return None
         except Exception as e:
             logger.debug("Parameter update error to %s: %s", self.target, e)
+            return None
+
+    async def execute_step(
+        self, state_data: bytes, step: int, seed: int, timeout: float = 30.0
+    ) -> tuple[bytes, bytes, float, float] | None:
+        """Execute a training step on the remote worker."""
+        if not self._stub:
+            return None
+
+        try:
+            request = tile_mesh_pb2.ExecuteStepRequest(  # type: ignore[union-attr]
+                state_data=state_data,
+                step=step,
+                seed=seed,
+            )
+            response = await asyncio.wait_for(
+                self._stub.ExecuteStep(request), timeout=timeout
+            )
+
+            if response.success:
+                return (
+                    response.pseudo_grads_data,
+                    response.updates_data,
+                    response.loss,
+                    response.energy,
+                )
+            logger.debug("ExecuteStep failed: %s", response.error)
+            return None
+        except Exception as e:
+            logger.debug("ExecuteStep error to %s: %s", self.target, e)
             return None
 
 

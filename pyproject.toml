@@ -141,6 +141,7 @@ biopl-export-trained-kernel = "bioplausible.cli.export_trained_kernel:main"
 dev = [
     "grpcio-tools>=1.83.0",
     "hypothesis>=6.161.2",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
 ]
 

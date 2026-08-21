@@ -60,6 +60,29 @@ message ParameterUpdateResponse {
   string error = 3;
 }
 
+message ExecuteStepRequest {
+  // Serialized SystemState with input x and target y
+  bytes state_data = 1;
+  // Current training step
+  int64 step = 2;
+  // Seed for determinism
+  int64 seed = 3;
+}
+
+message ExecuteStepResponse {
+  // Serialized pseudo-gradients
+  bytes pseudo_grads_data = 1;
+  // Serialized parameter updates
+  bytes updates_data = 2;
+  // Loss value
+  float loss = 3;
+  // Energy value
+  float energy = 4;
+  // Success flag
+  bool success = 5;
+  string error = 6;
+}
+
 // RPC Service for Tile Mesh Communication
 service TileMeshService {
   // Fetch activation for a remote tile
@@ -73,4 +96,7 @@ service TileMeshService {
 
   // Federated parameter update aggregation
   rpc PushParameterUpdate(ParameterUpdateRequest) returns (ParameterUpdateResponse);
+
+  // Execute a single distributed training step
+  rpc ExecuteStep(ExecuteStepRequest) returns (ExecuteStepResponse);
 }

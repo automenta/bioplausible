@@ -228,6 +228,7 @@ class DistributedSystemTrainer:
             port=self.config.grpc_port,
             device=self._get_device(),
         )
+        self._boundary_tiles: list[int] = []  # Initialize for non-sharded case
         self._setup_distributed()
 
     def _setup_distributed(self) -> None:
