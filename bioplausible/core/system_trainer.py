@@ -7,6 +7,7 @@ CreditAssignment ⊗ ParameterUpdate).
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Protocol, TypeVar
@@ -246,6 +247,178 @@ def compose_system(
         dynamics: StateDynamics
         credit: CreditAssignment
         update: ParameterUpdate
+
+        def to_spec(self) -> dict:
+            """Serialize the System to a specification dictionary.
+
+            Returns:
+                Dictionary containing schema_version and all 5 axis configs.
+            """
+            geometry_dict = dataclasses.asdict(self.geometry.config)
+            # Include recurrent_weight from geometry if present (runtime state)
+            if hasattr(self.geometry, "_recurrent_weight") and self.geometry._recurrent_weight is not None:
+                geometry_dict["recurrent_weight"] = self.geometry._recurrent_weight.tolist()
+
+            # Include all geometry parameters for exact round-trip
+            geometry_params = {}
+            for name, param in self.geometry.params.items():
+                geometry_params[name] = param.tolist()
+            geometry_dict["params"] = geometry_params
+
+            return {
+                "schema_version": "1.0",
+                "substrate": dataclasses.asdict(self.substrate.config),
+                "geometry": geometry_dict,
+                "dynamics": dataclasses.asdict(self.dynamics.config),
+                "credit": dataclasses.asdict(self.credit.config),
+                "update": dataclasses.asdict(self.update.config),
+            }
+
+        @classmethod
+        def from_spec(cls, spec: dict) -> System:
+            """Reconstruct a System from a specification dictionary.
+
+            Args:
+                spec: Dictionary with schema_version and 5 axis configs.
+
+            Returns:
+                A composed System instance.
+            """
+            if spec.get("schema_version") != "1.0":
+                raise ValueError(f"Unsupported schema version: {spec.get('schema_version')}")
+
+            from bioplausible.core.ontology import (
+                AnalogSubstrate,
+                BackpropCredit,
+                CreditAssignmentConfig,
+                DigitalSubstrate,
+                ElasticConsolidationUpdate,
+                EnergyMinimizationDynamics,
+                EuclideanUpdate,
+                FeedforwardGeometry,
+                GeometryConfig,
+                InstantaneousDynamics,
+                LocalGoodnessCredit,
+                MemristiveSubstrate,
+                NaturalGradientUpdate,
+                NeuromorphicSubstrate,
+                OpticalSubstrate,
+                ParameterUpdateConfig,
+                PredictiveSettlingDynamics,
+                QuantumSubstrate,
+                RandomProjectionsCredit,
+                RecurrentGeometry,
+                RiemannianOrthogonalUpdate,
+                SpectralConstrainedUpdate,
+                SpikeIntegrationDynamics,
+                StateDynamicsConfig,
+                SubstrateConfig,
+                TargetInversionCredit,
+                TemporalTraceCredit,
+                ThermodynamicContrast,
+            )
+
+            # Reconstruct substrate
+            substrate_cfg = SubstrateConfig(**spec["substrate"])
+            substrate_map = {
+                "digital": DigitalSubstrate,
+                "float32": DigitalSubstrate,
+                "float16": DigitalSubstrate,
+                "bfloat16": DigitalSubstrate,
+                "int8": DigitalSubstrate,
+                "int4": DigitalSubstrate,
+                "binary": DigitalSubstrate,
+                "analog": AnalogSubstrate,
+                "memristive": MemristiveSubstrate,
+                "memristor": MemristiveSubstrate,
+                "neuromorphic": NeuromorphicSubstrate,
+                "optical": OpticalSubstrate,
+                "quantum": QuantumSubstrate,
+                "quantized": DigitalSubstrate,
+                "noisy": DigitalSubstrate,
+            }
+            # Use device field to determine substrate type, fallback to precision
+            substrate_key = substrate_cfg.device.lower() if substrate_cfg.device != "cpu" else substrate_cfg.precision.lower()
+            substrate_cls = substrate_map.get(substrate_key, DigitalSubstrate)
+            substrate = substrate_cls(substrate_cfg)
+
+            # Reconstructed geometry
+            geometry_dict = spec["geometry"]
+            serialized_params = geometry_dict.pop("params", None)
+            # JSON serialization converts tuples to lists; restore tuple types
+            if "hidden_dims" in geometry_dict and isinstance(geometry_dict["hidden_dims"], list):
+                geometry_dict["hidden_dims"] = tuple(geometry_dict["hidden_dims"])
+            geometry_cfg = GeometryConfig(**geometry_dict)
+            topology_type = geometry_cfg.topology_type.lower()
+            if topology_type in ("recurrent", "recurrent_attractor"):
+                hidden_dim = geometry_cfg.hidden_dims[-1] if geometry_cfg.hidden_dims else None
+                recurrent_weight = None
+                if geometry_cfg.recurrent_weight is not None:
+                    recurrent_weight = torch.tensor(geometry_cfg.recurrent_weight)
+                geometry = RecurrentGeometry(
+                    geometry_cfg, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
+                )
+            elif topology_type in ("tile_mesh", "tile"):
+                from bioplausible.core.ontology import TileGeometry
+
+                geometry = TileGeometry(
+                    geometry_cfg,
+                    neurons_per_tile=8,
+                    tiles_per_layer=2,
+                )
+            else:
+                geometry = FeedforwardGeometry(geometry_cfg)
+
+            # Restore serialized parameters for exact round-trip
+            if serialized_params is not None:
+                geometry_params = {
+                    k: torch.tensor(v) for k, v in serialized_params.items()
+                }
+                geometry.update_params(geometry_params)
+
+            # Reconstruct dynamics
+            dynamics_cfg = StateDynamicsConfig(**spec["dynamics"])
+            dynamics_type = dynamics_cfg.dynamics_type.lower()
+            if dynamics_type == "energy_minimization":
+                dynamics = EnergyMinimizationDynamics(dynamics_cfg)
+            elif dynamics_type == "predictive_settling":
+                dynamics = PredictiveSettlingDynamics(dynamics_cfg)
+            elif dynamics_type == "spike_integration":
+                dynamics = SpikeIntegrationDynamics(dynamics_cfg)
+            else:
+                dynamics = InstantaneousDynamics(dynamics_cfg)
+
+            # Reconstruct credit
+            credit_cfg = CreditAssignmentConfig(**spec["credit"])
+            credit_type = credit_cfg.credit_type.lower()
+            if credit_type in ("thermodynamic_contrast", "equilibrium"):
+                credit = ThermodynamicContrast(credit_cfg)
+            elif credit_type in ("random_projections", "feedback_alignment"):
+                credit = RandomProjectionsCredit(credit_cfg)
+            elif credit_type in ("local_goodness", "forward_only"):
+                credit = LocalGoodnessCredit(credit_cfg)
+            elif credit_type in ("temporal_trace", "spiking"):
+                credit = TemporalTraceCredit(credit_cfg)
+            elif credit_type in ("target_inversion", "target_prop"):
+                credit = TargetInversionCredit(credit_cfg)
+            else:
+                credit = BackpropCredit(credit_cfg)
+
+            # Reconstruct update
+            update_cfg = ParameterUpdateConfig(**spec["update"])
+            update_type = update_cfg.update_type.lower()
+            if update_type in ("riemannian_orthogonal", "muon"):
+                update = RiemannianOrthogonalUpdate(update_cfg)
+            elif update_type in ("spectral_constrained", "spectral"):
+                update = SpectralConstrainedUpdate(update_cfg)
+            elif update_type in ("natural_gradient", "fisher"):
+                update = NaturalGradientUpdate(update_cfg)
+            elif update_type in ("elastic_consolidation", "ewc"):
+                update = ElasticConsolidationUpdate(update_cfg)
+            else:
+                update = EuclideanUpdate(update_cfg)
+
+            return compose_system(substrate, geometry, dynamics, credit, update)
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
             state = SystemState(x=x, y=y)
@@ -571,9 +744,12 @@ def compose_system_from_configs(
     # Instantiate geometry from config
     topology_type = geometry.topology_type.lower()
     if topology_type in ("recurrent", "recurrent_attractor"):
+        hidden_dim = geometry.hidden_dims[-1] if geometry.hidden_dims else None
+        recurrent_weight = None
+        if geometry.recurrent_weight is not None:
+            recurrent_weight = torch.tensor(geometry.recurrent_weight)
         geometry_instance = RecurrentGeometry(
-            geometry,
-            hidden_dim=geometry.hidden_dims[-1] if geometry.hidden_dims else None,
+            geometry, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
         )
     elif topology_type in ("tile_mesh", "tile"):
         from bioplausible.core.ontology import TileGeometry

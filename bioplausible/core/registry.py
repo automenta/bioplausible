@@ -576,7 +576,14 @@ class Registry:
             # component is a callable factory function
             model = component(**model_kwargs)  # type: ignore[operator]
 
-        # Adapt to 5-D ontology
+        # Check if the factory returned a native System directly
+        # (bypasses ModelAdapter for native 5-D compositions)
+        from bioplausible.core.ontology import System
+
+        if isinstance(model, System):
+            return model
+
+        # Adapt to 5-D ontology via ModelAdapter (legacy path)
         adapter = ModelAdapter(model, metadata)
         return adapter.to_system()
 

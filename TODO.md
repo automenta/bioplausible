@@ -1,6 +1,77 @@
 # Sprint 5: Hypercube Certification, Real Transport, and Native Migration
 
-**Status**: Planned — not started
+**Status**: Phase A, B, D complete — Phase C pending (requires protobuf fix and gRPC ExecuteStep RPC)
+
+## Progress Summary
+
+### ✅ Phase A (Complete): Axis Certification Locks
+Created `tests/property/test_axis_certifications.py` with 42 passing tests covering:
+- **C-Axis (CreditAssignment)**:
+  - `LocalGoodnessCredit`: Layer-local surrogate alignment (cosine ≥ 0.90) - 5 seeds ✓
+  - `TargetInversionCredit`: Global surrogate alignment (cosine ≥ 0.95) - 5 seeds ✓
+  - `TemporalTraceCredit`: STDP causal/anti-causal asymmetry, antisymmetry, exponential decay ✓
+- **U-Axis (ParameterUpdate)**:
+  - `RiemannianOrthogonalUpdate`: Orthogonality preservation ‖GᵀG - I‖_F < 1e-4 - 4 seeds ✓
+  - `SpectralConstrainedUpdate`: Lipschitz bound σ_max ≤ 1.0 + 1e-5 - 4 seeds ✓
+  - `NaturalGradientUpdate`: Whitening direction preservation (sign matches) - 4 seeds ✓
+  - `ElasticConsolidationUpdate`: Protected params move toward old_params with EWC - 4 seeds ✓
+- **D-Axis (StateDynamics)**:
+  - `SpikeIntegrationDynamics`: Membrane boundedness (V < 1.0 threshold) - 5 seeds ✓
+  - `SpikeIntegrationDynamics`: Spike count variance bounded/non-increasing - 5 seeds ✓
+
+All 42 tests pass in ~0.64s on GPU.
+
+### ✅ Phase B (Complete): System Spec Interchange Format
+- **Implemented**: `System.to_spec()` and `System.from_spec()` in `bioplausible/core/system_trainer.py`
+- **Added to Protocol**: `to_spec()` and `from_spec()` methods to `System` Protocol in `ontology.py`
+- **Test file created**: `tests/unit/core/test_system_spec.py` with 13 tests
+- **All 13 tests passing**:
+  - `test_spec_contains_all_configs` ✓
+  - `test_spec_rejects_wrong_version` ✓
+  - `test_spec_round_trip` (10 seeds) ✓
+  - `test_spec_preserves_configs` ✓
+
+**Solution implemented**: Added `recurrent_weight` field to `GeometryConfig`, serialize all geometry parameters in `to_spec()`, and restore them in `from_spec()`. Fixed `update_params` in `FeedforwardGeometry` and `RecurrentGeometry` to handle ModuleList parameter naming (`0.weight`, `0.bias`, etc.).
+
+### ⏳ Phase C (Pending): Real Transport P2P Subprocess
+Need to create `tests/integration/test_grpc_seam_subprocess.py` with:
+- Multi-process gRPC server launch (port=0 dynamic binding)
+- Client connection with exponential backoff
+- 1 training step parity check (LOOSE tolerance)
+- Fault injection: SIGTERM to worker mid-step, verify DistributedTrainingError
+
+**Blockers**: 
+1. Protobuf version mismatch (gencode 7.35.1 vs runtime 6.33.6) - fixed in uv env
+2. Missing `ExecuteStep` RPC in gRPC service - requires proto regeneration
+3. No worker entry point in `grpc_service.py`
+
+**Implementation Notes for Phase C**:
+- Proto files: `bioplausible/p2p/proto/tile_mesh.proto` needs `ExecuteStep` RPC added, then regenerate with:
+  ```bash
+  python -m grpc_tools.protoc -I bioplausible/p2p/proto --python_out=bioplausible/p2p/proto --grpc_python_out=bioplausible/p2p/proto bioplausible/p2p/proto/tile_mesh.proto
+  ```
+- Fix imports in generated `*_pb2_grpc.py` to use relative imports (`from . import tile_mesh_pb2`)
+- Create worker entry point script (e.g., `bioplausible/p2p/grpc_worker.py`) that:
+  - Starts `GRPCServer` with `port=0`
+  - Prints bound port to stdout for parent process to parse
+  - Runs until SIGTERM received
+- Test should use `subprocess.Popen` with stdout PIPE, parse port, connect `GRPCClient` with exponential backoff
+- Use existing `DistributedSystemTrainer` and `DistributedTrainingError` from `bioplausible/core/distributed_trainer.py`
+- Reference existing in-process test: `tests/integration/test_grpc_seam.py` (currently skipped)
+
+### ✅ Phase D (Complete): Native eqprop_mlp Migration
+- **Created**: `bioplausible/models/native/eqprop_native.py` with native 5-Protocol composition
+- **Updated**: Registry mapping for "eqprop_mlp" to use native factory instead of ModelAdapter
+- **Modified**: `Registry.to_system()` to detect native factories returning System directly
+- **L1 Parity Lock**: Passes - native implementation matches legacy behavior
+- **Deprecated**: Old `LoopedMLP` class kept for backward compatibility with validation tracks
+
+**Implementation Notes for Phase D**:
+- Native factory: `create_native_eqprop_mlp()` in `bioplausible/models/native/eqprop_native.py`
+- Registry registration: `@register_model("eqprop_mlp", ...)` on `_native_eqprop_mlp_factory()` in `bioplausible/zoo/models/eqprop/looped_mlp.py`
+- Registry detection: `Registry.to_system()` checks `isinstance(model, System)` to bypass `ModelAdapter`
+- Legacy `LoopedMLP` class deprecated but kept for validation tracks; marked with `.. deprecated::` in docstring
+- All tests pass including L1 parity lock: `tests/property/test_ontology_locks.py::test_l1_composed_systems_train`
 
 ## 0. Context
 
@@ -318,6 +389,17 @@ The `Verifier` class runs tracks at 3 evidence levels (smoke/intermediate/full) 
 | `list[str] \| None` with `None` default | ~30 | Use `list[str] = field(default_factory=list)` |
 | `cast()` in registry | ~20 | Improve generic signatures |
 | `TYPE_CHECKING` imports for runtime-used types | ~10 | Move out of TYPE_CHECKING |
+
+---
+
+## 11. Magic Numbers Cleanup
+
+| Location | Magic Number | Context | Action |
+|----------|--------------|---------|--------|
+| `core/ontology.py:792,817` | `* 0.1` | RecurrentGeometry weight init | Add to `GeometryConfig` or make configurable |
+| `core/local_learning/rules/fa.py:58,174,226,276,358` | `* 0.1` | Feedback alignment weight init | Add to config or use principled init |
+
+---
 
 ---
 

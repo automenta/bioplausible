@@ -116,6 +116,7 @@ class GeometryConfig:
         topology_type: "feedforward", "recurrent", "tile_mesh",
             "neuromorphic", "spatial_lattice"
         connectivity: Optional adjacency specification
+        recurrent_weight: Optional recurrent weight matrix (for recurrent topology)
     """
 
     input_dim: int
@@ -124,6 +125,7 @@ class GeometryConfig:
     num_layers: int = 1
     topology_type: str = "feedforward"
     connectivity: dict | None = None
+    recurrent_weight: list[list[float]] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -620,6 +622,26 @@ class System(Protocol[TS, TG, TD, TC, TU]):
             return acts[-1]
         return acts
 
+    def to_spec(self) -> dict:
+        """Serialize the System to a specification dictionary.
+
+        Returns:
+            Dictionary containing schema_version and all 5 axis configs.
+        """
+        ...
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> System:
+        """Reconstruct a System from a specification dictionary.
+
+        Args:
+            spec: Dictionary with schema_version and 5 axis configs.
+
+        Returns:
+            A composed System instance.
+        """
+        ...
+
 
 # ============================================================
 # Default/Reference Implementations
@@ -733,9 +755,18 @@ class FeedforwardGeometry(nn.Module):
 
     def update_params(self, new_params: dict[str, Tensor]) -> None:
         for name, param in new_params.items():
-            for layer in self._layers:
-                if hasattr(layer, name):
-                    getattr(layer, name).data.copy_(param)
+            parts = name.split(".")
+            if len(parts) >= 2 and parts[0].isdigit():
+                layer_idx = int(parts[0])
+                param_name = ".".join(parts[1:])
+                if layer_idx < len(self._layers) and hasattr(
+                    self._layers[layer_idx], param_name
+                ):
+                    getattr(self._layers[layer_idx], param_name).data.copy_(param)
+            else:
+                for layer in self._layers:
+                    if hasattr(layer, name):
+                        getattr(layer, name).data.copy_(param)
 
     def transition_modules(self) -> list[nn.Module]:
         return [m for m in self._layers if isinstance(m, nn.Linear)]
@@ -755,6 +786,7 @@ class RecurrentGeometry(nn.Module):
         config: GeometryConfig,
         layers: nn.ModuleList | None = None,
         hidden_dim: int | None = None,
+        recurrent_weight: Tensor | None = None,
     ):
         super().__init__()
         self.config = config
@@ -762,7 +794,9 @@ class RecurrentGeometry(nn.Module):
         self._recurrent_weight = None
         if not self._layers and config.hidden_dims:
             self._build_layers()
-        if hidden_dim is not None and self._recurrent_weight is None:
+        if recurrent_weight is not None:
+            self._recurrent_weight = nn.Parameter(recurrent_weight)
+        elif hidden_dim is not None and self._recurrent_weight is None:
             self._recurrent_weight = nn.Parameter(
                 torch.randn(hidden_dim, hidden_dim) * 0.1
             )
@@ -781,11 +815,16 @@ class RecurrentGeometry(nn.Module):
                 layers.append(nn.ReLU())
         self._layers = nn.ModuleList(layers)
         # Add recurrent weight for the last hidden layer
-        if len(self.config.hidden_dims) > 0:
+        if len(self.config.hidden_dims) > 0 and self._recurrent_weight is None:
             hidden_dim = self.config.hidden_dims[-1]
-            self._recurrent_weight = nn.Parameter(
-                torch.randn(hidden_dim, hidden_dim) * 0.1
-            )
+            if self.config.recurrent_weight is not None:
+                self._recurrent_weight = nn.Parameter(
+                    torch.tensor(self.config.recurrent_weight)
+                )
+            else:
+                self._recurrent_weight = nn.Parameter(
+                    torch.randn(hidden_dim, hidden_dim) * 0.1
+                )
 
     @property
     def params(self) -> dict[str, Tensor]:
@@ -831,9 +870,18 @@ class RecurrentGeometry(nn.Module):
             if name == "recurrent_weight" and self._recurrent_weight is not None:
                 self._recurrent_weight.data.copy_(param)
             else:
-                for layer in self._layers:
-                    if hasattr(layer, name):
-                        getattr(layer, name).data.copy_(param)
+                parts = name.split(".")
+                if len(parts) >= 2 and parts[0].isdigit():
+                    layer_idx = int(parts[0])
+                    param_name = ".".join(parts[1:])
+                    if layer_idx < len(self._layers) and hasattr(
+                        self._layers[layer_idx], param_name
+                    ):
+                        getattr(self._layers[layer_idx], param_name).data.copy_(param)
+                else:
+                    for layer in self._layers:
+                        if hasattr(layer, name):
+                            getattr(layer, name).data.copy_(param)
 
     def transition_modules(self) -> list[nn.Module]:
         return [m for m in self._layers if isinstance(m, nn.Linear)]

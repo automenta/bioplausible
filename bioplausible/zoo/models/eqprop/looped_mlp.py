@@ -19,6 +19,7 @@ from torch import nn
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
+from bioplausible.models.native.eqprop_native import native_eqprop_mlp
 
 from ..transitions import TransitionGraphMixin
 from ._energy import EquilibriumMLP
@@ -51,6 +52,7 @@ def _kernel_backend_step(
     return engine.train_step(x_np, y_np)
 
 
+# Register native eqprop_mlp factory (bypasses ModelAdapter for 5-D composition)
 @register_model(
     "eqprop_mlp",
     locality_level=LocalityLevel.EQUILIBRIUM,
@@ -63,11 +65,15 @@ def _kernel_backend_step(
     tags=["eqprop", "looped_mlp", "equilibrium", status_tag("stable")],
     extra={"parity_threshold": 0.05},
 )
+def _native_eqprop_mlp_factory(**kwargs) -> System:
+    return native_eqprop_mlp(**kwargs)
+
+
 class LoopedMLP(EquilibriumMLP):
     """Canonical eqprop MLP — alias of :class:`EquilibriumMLP`.
 
     The registration metadata lives here (rather than on ``EquilibriumMLP``
-    itself) so the historic search-space key ``"eqprop_mlp"`` keeps resolving
+    itself) so the historic search-space key ``"eqprop_mlp`` keeps resolving
     to the consolidated layered engine. Architecture, depth handling
     (``num_layers``→real hidden layers), and energy-contrastive update are
     inherited unmodified: there is no separate "looped" implementation, this
@@ -77,6 +83,10 @@ class LoopedMLP(EquilibriumMLP):
     output_dim, ...)`` historically used by the validation/hardware tracks is
     preserved by translating it into a ``ModelConfig``; ``config=`` remains
     the preferred entrypoint for the construction layer.
+
+    .. deprecated:: 0.1
+       Use native 5-D composition via ``Registry.to_system("eqprop_mlp")`` instead.
+       This class is kept for backward compatibility with validation tracks.
     """
 
     variant = "plain"  # type: ignore[assignment]

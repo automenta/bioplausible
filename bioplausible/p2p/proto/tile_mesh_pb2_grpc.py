@@ -2,7 +2,8 @@
 """Client and server classes corresponding to protobuf-defined services."""
 
 import grpc
-import tile_mesh_pb2 as tile__mesh__pb2
+
+from . import tile_mesh_pb2 as tile__mesh__pb2
 
 GRPC_GENERATED_VERSION = "1.83.0"
 GRPC_VERSION = grpc.__version__
