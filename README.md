@@ -76,7 +76,7 @@ memristive_eqprop = System(
 )
 ```
 
-**Formerly 122+ hardcoded models** (e.g., `optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, 30 TileNet variants) are now **emergent coordinates** in this space. The old flat registry is preserved via `ModelAdapter` for zero-breakage migration.
+Formerly many hardcoded models (e.g., `optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **emergent coordinates** in this space.
 
 ---
 
@@ -84,9 +84,9 @@ memristive_eqprop = System(
 
 Energy binds Geometry and StateDynamics. The framework elevates the energy function `E(x)` to a first-class object, enabling mathematical stability proofs *before* implementation:
 
-- **Symmetric topology + EnergyMinimization** → guaranteed fixed-point convergence (Hopfield/EqProp)
-- **Directed topology** → requires Control-Lyapunov formulation for stability (formally verified)
-- **Free energy tracking** → per-iteration Lyapunov certificates for predictive coding and directed FA
+- **Symmetric topology + EnergyMinimization** → guaranteed fixed-point convergence (Hopfield/EqProp) via LaSalle's invariance principle
+- **Directed topology** → requires Control-Lyapunov formulation for stability (formally verified for PredictiveSettlingDynamics)
+- **Free energy tracking** → per-iteration Lyapunov certificates (`track_free_energy_per_iter`) for predictive coding and directed FA
 
 This enables the AutoScientist to reason about *physical realizability* as a constraint, not an afterthought.
 
@@ -139,7 +139,7 @@ Launches a NiceGUI web dashboard at `http://localhost:8080` with:
 
 ### 1. Ontology Protocols (`bioplausible/core/ontology.py`)
 
-Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive. Total: ~1800 lines of pure, composable infrastructure.
+Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure.
 
 ```python
 # Protocol signatures (structural typing — zero-cost abstraction)
@@ -174,7 +174,7 @@ class ParameterUpdate(Protocol):
 | `System[TS, TG, TD, TC, TU]` | Generic 5-layer composition; invalid combos caught at type-check |
 | `SystemTrainer` | 5-stage pipeline: Geometry.forward → StateDynamics.settle → CreditAssignment.compute_pseudo_gradient → ParameterUpdate.step → Substrate.weight_update_operator |
 | `DistributedSystemTrainer` | In-process P2P coordination; shards along Geometry (TileMesh), federates at ParameterUpdate; CreditAssignment stays local |
-| `ModelAdapter` | Strangler Fig adapter: projects legacy Registry models → 5-D System via metadata inference (family, gradient_method, locality_level, compute_profile, tags) with per-family tolerance calibration |
+| `ModelAdapter` | Strangler Fig adapter: projects legacy Registry models → 5-D System via metadata inference with per-family tolerance calibration |
 | `Registry.to_system()` | One-call projection of any registered component |
 
 ### 3. Factories (`bioplausible/core/system_trainer.py`)
@@ -189,64 +189,95 @@ from bioplausible.core.system_trainer import (
 # Config round-trip (L0 schema lock)
 configs = extract_config(system)
 system2 = compose_system_from_configs(configs)
-assert system == system2  # identity verified in test_l6_round_trip_configs
+assert system == system2  # identity verified
 ```
 
 ### 4. Hardware Substrates (Validated)
 
 | Substrate | Physics Model | Verification |
 |-----------|---------------|--------------|
-| `MemristiveSubstrate` | Conductance matrices, bounded precision, IR-drop noise | Gradient equivalence vs. digital (18 integration tests) |
-| `NeuromorphicSubstrate` | Async spike routing, strict sparsity, passivity | Property test: passivity under deterministic noise |
-| `OpticalSubstrate` | Phase/amplitude encoding, coherent interference | Parameter-shift equivalence test |
-| `QuantumSubstrate` | Parameterized unitary gates, parameter-shift rule | Classical 1-qubit simulation (`<Z> = cos(θ)`) |
+| `MemristiveSubstrate` | Conductance matrices, bounded precision, IR-drop noise | Gradient equivalence vs. digital; positive bounded conductance |
+| `NeuromorphicSubstrate` | Async spike routing, strict sparsity, passivity | Property test: deterministic noise cancels in diff (‖na-nb‖ ≤ ‖a-b‖) |
+| `OpticalSubstrate` | Phase/amplitude encoding, coherent interference | Phase wrapping to [-π, π]; no NaN/inf outputs |
+| `QuantumSubstrate` | Parameterized unitary gates, parameter-shift rule | Parameter-shift matches finite-difference (cosine ≥ 0.999) |
 
 ---
 
 ## Validation Framework: Machine-Certified Hypercube
 
-The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate (`pytest tests/property/test_ontology_locks.py -q`) certifies the entire hypercube in **<2 seconds on CPU**.
+The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate certifies the entire hypercube in seconds on CPU.
 
-### Property Locks (L1–L7 + S/G/D/C/U Axes) — 37 Tests Passing
+### Property Locks (L1–L7 + S/G/D/C/U Axes)
 
-| Lock | Property | Tests |
-|------|----------|-------|
-| **L1** | Substrate noise injection consistency | 3 |
-| **L2** | Geometry forward/route composition | 2 |
-| **L3** | StateDynamics settle contract | 4 |
-| **L4** | StateDynamics Lyapunov stability | 6 (incl. Control-Lyapunov for directed topologies) |
-| **L5** | CreditAssignment surrogate equivalence | 8 (all 6 credit classes) |
-| **L6** | ParameterUpdate step invariants | 7 |
-| **L7** | Distributed seam (gRPC) fault tolerance | 2 (worker kill mid-step) |
-| **S-axis** | Substrate passivity / parameter-shift | 2 |
-| **D-axis** | SpikeIntegration Lyapunov / LazyStateDynamics | 2 |
-| **C-axis** | TemporalTrace STDP window / surrogate | 2 |
-| **U-axis** | Muon orthogonalization / EWC direction | 2 |
+| Lock | Property | Key Assertions |
+|------|----------|----------------|
+| **L1** | Composed systems train & produce valid metrics | Backprop/FA/Tile systems train; loss≥0, accuracy∈[0,1] |
+| **L2** | Pipeline stages pure functions of preceding axes | Geometry.forward deterministic; credit independent of update; substrate noise only effect |
+| **L3** | Locality axioms: ThermodynamicContrast invariant to non-local perturb; FA feedback fixed at init & seed-independent | Layer-0 pseudo-gradient invariant; B matrices fixed; different seeds → different B |
+| **L4** | Lyapunov/energy: energy non-increasing; Control-Lyapunov for PredictiveSettling | Energy monotonic (EqProp); free energy non-increasing (PredictiveCoding); convergence threshold |
+| **L5** | Determinism: same seed + same device = bitwise equal params & metrics (CPU & GPU deterministic) | Parametrized over system factories |
+| **L6** | Round-trip & totality: configs round-trip identity; Registry.to_system() projects all registered models | Identity on configs; protocol conformance on projected systems |
+| **L7** | Distributed seam: SystemTrainer runs; fault tolerance | gRPC fault injection test captures lost workers, step, partial metrics |
+| **S-axis** | Neuromorphic passivity; Quantum parameter-shift equivalence | Deterministic noise cancellation; cosine ≥ 0.999 vs FD |
+| **D-axis** | SpikeIntegration Lyapunov (membrane bounded, spike variance non-increasing); LazyStateDynamics | Spike counts tracked; bounded activations |
+| **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |
+| **U-axis** | Muon orthogonalizes gradient (G^T G ≈ I); SpectralConstrained SVD ≤ 1.0; Natural whitens; Elastic moves toward old params | Newton-Schulz converges; diagonal Fisher whitening; δ·(w-old_w) < 0 |
 
-**All 37 property tests pass in ~1.6s.**
+### Biology Axiom Property Tests (Hypothesis-based)
+
+| Axiom | Test | Method | Threshold |
+|-------|------|--------|-----------|
+| **EP Gradient Equivalence** | EqProp gradient aligns with BPTT | Cosine similarity | ≥ 0.5 (xfail: known drift) |
+| **Lyapunov Energy Descent** | Free energy monotonically non-increasing along relaxation | Hypothesis | Slack 1e-3; final < initial |
+| **Contraction Mapping** | Relaxation operator Lipschitz < 1 | Pairwise distance ratio L < 1; Power iteration σ_max < 1 | Step sizes 0.1–0.5 |
+| **Fixed-Point Reliability** | Unique attractor from random initializations | Relative diff < 1e-3; Idempotence ||T(h*)-h*|| < 1e-4 | |
+| **Weight-Transport Freeness** | FA backward weights ≠ forward transpose; separate memory | ||B - W^T|| > 1e-3; data_ptr() distinct | standard_fa, adaptive_fa, DFA |
+| **Adaptive-FA Alignment** | Feedback matrices align with forward weights over training | cos(B, W^T) improvement > 0.05 | xfail: biologically slow B |
 
 ### Integration Verification Gates (All Passing)
 
-| Gate | Command | Result |
-|------|---------|--------|
-| Gradient equivalence | `pytest tests/integration/test_gradient_equivalence.py` | 9/9 pass (finite-difference vs. analytic for all propagators) |
-| Energy invariants | `pytest tests/integration/test_energy_invariants.py` | 17 formal proofs (Lyapunov, Control-Lyapunov, free energy) |
-| Kernel equivalence | `pytest tests/integration/test_kernel_equivalence.py` | 7 pass, 3 xfail (known Triton/CuPy diffs) |
-| Registry audit | `biopl-registry-audit` | 111 components, 0 missing critical fields |
-| Reproducibility | `biopl-repro-check --seed 42 --device cpu` | 7/7 models bitwise reproducible |
-| Backprop parity | `biopl-parity --task mnist --epochs 1` | Runs successfully |
-| Static typing | `pyright .` | 0 errors in strict mode |
-| Formatting | `ruff format --check .` | Clean |
+| Gate | Result |
+|------|--------|
+| Gradient equivalence (finite-difference) | CE families cos≥0.9: backprop, FA, DirectFA, StochasticFA, MEP-backprop; MSE families cos≥0.6: EqProp, MEP-EP, CHL |
+| Ontology layer equivalence | ThermodynamicContrast=Backprop under InstantaneousDynamics; RiemannianOrthogonal preserves orthogonality; EnergyMinimization converges |
+| Energy invariants (formal proofs) | Lyapunov, Control-Lyapunov, Substrate passivity, EqProp energy, Composition |
+| Kernel equivalence (Triton vs PyTorch) | max_diff < 1e-5, rel_diff < 1e-4 |
+| Kernel accuracy parity | FA, Backprop, PEPITA, DTP: kernel accuracy within 1% of reference on digits/synthetic |
+| Registry audit | 0 missing critical fields |
+| Reproducibility | Models bitwise reproducible |
+| Backprop parity | Runs successfully |
+| Static typing | 0 errors in strict mode |
+| Formatting | Clean |
 
-### Test Suite Composition
+### Test Suite
 
 ```bash
-# Total: 2403 tests across 5 categories
-pytest tests/unit/         # 1854 component correctness tests
-pytest tests/integration/  # 425 end-to-end, gradient equivalence, kernel parity
-pytest tests/property/     # 69 property-based (biology axioms, settle protocol, ontology locks)
-pytest tests/graph/        # 55 FabricPC topology/inference/training
-pytest tests/slow/         # 2 MNIST smoke tests
+# Property locks (fast CI gate)
+uv run pytest tests/property/test_ontology_locks.py -q
+
+# Core ontology unit tests
+uv run pytest tests/unit/core/test_ontology.py -q
+
+# Integration: gradient equivalence + energy proofs
+uv run pytest tests/integration/test_gradient_equivalence.py tests/integration/test_energy_invariants.py -q
+
+# Kernel equivalence (Triton vs PyTorch)
+uv run pytest tests/integration/test_kernel_equivalence.py -q
+
+# Kernel accuracy parity (end-to-end learning)
+uv run pytest tests/integration/test_kernel_accuracy_parity.py -q
+
+# gRPC seam test
+uv run pytest tests/integration/test_grpc_seam.py -q
+
+# Full suite
+uv run pytest tests/ -q
+
+# Type checking (strict)
+uv run pyright .
+
+# Formatting & linting
+uv run ruff format --check . && uv run ruff check .
 ```
 
 ---
@@ -277,10 +308,10 @@ The 5-D ontology gives the AutoScientist a **structured search space** instead o
 
 | Experiment | File | Purpose |
 |------------|------|---------|
-| TileNet Scaling Sweep | `experiments/tile_scaling.py` | Depth/width scaling on MNIST/CIFAR-10 across 6 tile algorithms + backprop |
-| EqProp Vision Parity | `experiments/eqprop_vision_parity.py` | All EqProp variants on MNIST/Fashion-MNIST/CIFAR-10/SVHN |
+| TileNet Scaling Sweep | `experiments/tile_scaling.py` | Depth/width scaling on MNIST/CIFAR-10 across tile algorithms + backprop |
+| EqProp Vision Parity | `experiments/eqprop_vision_parity.py` | EqProp variants on MNIST/Fashion-MNIST/CIFAR-10/SVHN |
 | MEP Preset Tournament | `experiments/mep_tournament.py` | Factorized ablation: gradient×update×constraint×feedback with ANOVA + Sobol |
-| FA Depth Scaling | `experiments/fa_depth_scaling.py` | 10→1000 layers, MNIST + synthetic parity |
+| FA Depth Scaling | `experiments/fa_depth_scaling.py` | Extreme depth, MNIST + synthetic parity |
 | MoT Ablation | `experiments/mot_ablation.py` | Dense vs sparse tile routing (top-k, random, learned) |
 | Cross-Domain Transfer | `experiments/cross_domain_transfer.py` | Vision→LM/RL/graph transfer, local vs global learning |
 | Tile Algorithm Comparison | `experiments/tile_algorithm_comparison.py` | Fair comparison of PC/EP/FA/TP/Hebbian/SNN/Backprop on same substrate |
@@ -294,7 +325,7 @@ PyTorch Lightning with DDP, FSDP, DeepSpeed. `TileShardedBackend` with NCCL `all
 
 ### P2P Coordinator System (gRPC + Kademlia)
 Decentralized coordination at `bioplausible/p2p/`:
-- **Kademlia DHT** (`dht.py`): Peer discovery, KV storage, bootstrap nodes, async background operation
+- **Kademlia DHT** (`dht.py`): Peer discovery, KV storage, bootstrap nodes, async background operation. Integration test: 2-node connectivity + best-model propagation with score-based optimistic locking
 - **gRPC Service** (`proto/tile_mesh.proto`, `grpc_service.py`): `TileMeshService` with `ExecuteStep`, `BroadcastParams`, `AggregateGradients`
 - **Connection Pool** (`GRPCConnectionPool`): Peer lifecycle, health checks, retry/backoff
 - **DistributedSystemTrainer**: In-process multi-worker coordination; shards along TileGeometry, federates at ParameterUpdate
@@ -307,7 +338,7 @@ CLI: `eqprop-p2p-worker` starts a worker node.
 ## Deployment & Inference
 
 ### Model Export (`bioplausible/deployment.py`)
-- **ONNX**: dynamic axes, opset 17+, all 5 TileNet deployment models export with 0 diff vs PyTorch
+- **ONNX**: dynamic axes, opset 17+, TileNet deployment models export with 0 diff vs PyTorch
 - **TorchScript**: trace method works for all TileNet models
 - **INT8 Quantization**: dynamic PTQ, static PTQ, QAT preparation
 - **Ternary Quantization**: Post-training conversion to `TernaryLinear` ({-1, 0, +1}), STE-based, bit-operation counting
@@ -351,7 +382,7 @@ CLI: `eqprop-p2p-worker` starts a worker node.
 | `snn_kernels.py` | LIF step, STDP, contrastive STDP |
 | `ff_kernels.py` | Goodness threshold, contrastive FF/PEPITA updates |
 | `tp_kernels.py` | Target propagation inverse + target computation |
-| `tile_kernels.py` | **Complete TileNet suite**: 6 algorithms activity/weight update, routing (top-k/random/learned), multi-GPU NCCL sharding |
+| `tile_kernels.py` | Complete TileNet suite: 6 algorithms activity/weight update, routing (top-k/random/learned), multi-GPU NCCL sharding |
 | `mep_kernels.py` | Muon orthogonalization, Dion SVD, Fisher whitening, EP settle |
 | `backprop_kernels.py` | Fused BPTT baseline |
 | `contrastive_kernels.py` | O(1) memory contrastive primitives (10 algorithm families) |
@@ -360,79 +391,11 @@ CLI: `eqprop-p2p-worker` starts a worker node.
 | `kernel_backend.py` | `KernelRegistry` with shape-specific auto-tuning cache |
 
 **Key achievements:**
-- Triton kernels for all 6 tile algorithms + MEP + FA + PC + Hebbian + SNN + FF + TP
+- Triton kernels for all tile algorithms + MEP + FA + PC + Hebbian + SNN + FF + TP
 - Auto-dispatch with profile-guided backend selection
 - Custom EqProp autograd Function enabling `torch.compile` on settle loops (2–3× speedup)
 - Multi-GPU tile sharding for >1B parameter models
 - Gradient equivalence CI gate (Triton vs CuPy vs PyTorch on every commit)
-
----
-
-## Legacy Migration (Strangler Fig Pattern)
-
-Existing Registry models are **not rewritten** — they are projected to the 5-D ontology on contact via `ModelAdapter`:
-
-```python
-from bioplausible.core.ontology import ModelAdapter
-from bioplausible.core.registry import Registry
-
-# Legacy model → 5-D System (with validated parity)
-legacy_model = Registry.get("eqprop_mlp")
-system = ModelAdapter.adapt(legacy_model)
-
-# Per-family tolerances for validation
-# eqprop:  (rtol=0.15, atol=1e-2)
-# backprop: (rtol=0.01, atol=1e-4)
-# fa:      (rtol=0.10, atol=1e-3)
-# ...
-```
-
-**Phase 3 migration status:**
-| Family | Target Coordinate | Effort | Status |
-|--------|-------------------|--------|--------|
-| `eqprop_*` | S=Digital, G=Recurrent, D=EnergyMinimization, C=ThermodynamicContrast, U=Euclidean | Low | ✅ Native (`LazyStateDynamics`, `HomeostaticCredit`) + `_legacy/` adapter |
-| `*_fa` / `*_dfa` | C=RandomProjectionsCredit, D=Instantaneous | Low | Ready (orthogonal init + feedback_scale validated) |
-| `*_ff` / `pepita` | C=LocalGoodnessCredit, D=Instantaneous | Low | Ready |
-| `spiking_*` / `*_stdp` | C=TemporalTraceCredit, D=SpikeIntegrationDynamics | Medium | Primitives implemented, validation pending |
-| `*_tp` / `*_target_prop` | C=TargetInversionCredit, D=Instantaneous | Medium | Primitives implemented, validation pending |
-| `*_tile_*` | G=TileMesh, others vary | High | DistributedSystemTrainer ready |
-| `optical_*`, `crossbar_*`, `quantum_*` | S=Optical/Memristive/Quantum | Medium | Substrate noise injection validated |
-
----
-
-## Testing
-
-```bash
-# Fast CI gate (property locks — runs in <2s CPU)
-uv run pytest tests/property/test_ontology_locks.py -q
-
-# Core ontology unit tests
-uv run pytest tests/unit/core/test_ontology.py -q
-
-# Integration: gradient equivalence + energy proofs
-uv run pytest tests/integration/test_gradient_equivalence.py tests/integration/test_energy_invariants.py -q
-
-# gRPC seam test
-uv run pytest tests/integration/test_grpc_seam.py -q
-
-# Full suite
-uv run pytest tests/ -q
-
-# Type checking (strict)
-uv run pyright .
-
-# Formatting & linting
-uv run ruff format --check . && uv run ruff check .
-```
-
-**All gates pass:**
-- 37 property tests (L1–L7 + S/G/D/C/U axes) — **<2s CPU**
-- 17 formal energy proofs (Lyapunov, Control-Lyapunov, free energy)
-- 9 gradient equivalence tests (finite-difference verification for every propagator)
-- 111 registry components, 0 missing critical fields
-- 7/7 models bitwise reproducible
-- 0 pyright errors in strict mode
-- ruff format/check clean
 
 ---
 
