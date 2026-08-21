@@ -74,32 +74,59 @@ class ExperimentConfig:
 
 ---
 
-## 5. Validation Tracks → Property Tests Migration
+## 5. Validation Tracks — Consolidate, Don't Delete
 
-| Legacy Track | Modern Replacement | Status |
-|--------------|-------------------|--------|
-| `validation/tracks/core_tracks.py` | `tests/property/test_ontology_locks.py` (L1-L7) | Partial |
-| `validation/tracks/advanced_tracks.py` | Property tests + integration | Partial |
-| `validation/tracks/hardware_tracks.py` | Substrate property tests (S-axis) | Partial |
-| `validation/tracks/scaling_tracks.py` | Scaling law tests | Missing |
-| `validation/tracks/engine_validation_tracks.py` | Kernel equivalence tests | Done |
-| `validation/tracks/enhanced_validation_tracks.py` | Cross-domain benchmarks | Partial |
+**Correction**: Validation tracks are **not** replaced by property tests. They serve different purposes:
 
-**Goal**: Delete `validation/tracks/` entirely; all verification via pytest property/integration tests.
+| System | Purpose | Output |
+|--------|---------|--------|
+| **Property/Integration Tests** | CI gates, formal correctness | Pass/fail, coverage |
+| **Validation Tracks** | Research evidence documentation | Human-readable markdown reports with evidence tables |
+
+The `Verifier` class runs tracks at 3 evidence levels (smoke/intermediate/full) and produces `VerificationNotebook` markdown — this is **research documentation infrastructure**.
+
+### Actual Cleanup Opportunities in Validation:
+
+| Track Module | Status | Action |
+|--------------|--------|--------|
+| `core_tracks.py` (tracks 1-3) | **Keep** — Core claims (SN stability, EP-BP parity, self-healing) | Consolidate with biology axioms tests |
+| `scaling_tracks.py` (tracks 12, 23-26, 35) | **Keep** — Scaling laws, deep scaling, O(1) memory | Move scaling law tests to `tests/property/` |
+| `hardware_tracks.py` (tracks 16-18) | **Keep** — FPGA/INT8, analog noise, thermodynamic | Substrate property tests already cover S-axis |
+| `application_tracks.py` (tracks 19-22) | **Evaluate** — Transfer, continual, golden ref | Cross-domain benchmarks cover some |
+| `nebc_tracks.py` (tracks 50-54) | **Keep** — NEBC extension experiments | Could be property tests |
+| `signal_tracks.py` + `tradeoff_tracks.py` | **Evaluate** — Signal propagation, tradeoff analysis | Research-specific; may not need automation |
+| `research_tracks.py` | **Evaluate** — Ad-hoc research experiments | Likely one-off; document or remove |
+| `negative_results.py` | **Keep** — Structured negative results | Valuable for AutoScientist |
+| `architecture_comparison.py` | **Evaluate** — Architecture diffs | Could be `biopl lab` command |
+
+**Goal**: 
+- Keep tracks that produce **reusable evidence** for research claims
+- Move **automatable invariants** (Lipschitz, energy descent, gradient equivalence) to property tests
+- Remove **one-off research scripts** masquerading as tracks
+- Unify `Verifier` output with `biopl report` / `biopl failure-manifesto`
 
 ---
 
 ## 6. Deprecated / Dead Code
 
-| Path | Reason |
-|------|--------|
-| `bioplausible/validation/` | Superseded by property tests + integration gates |
-| `docs/archive/` | Historical, not maintained |
-| `examples/` | Tutorial notebooks; migrate to `demo/` or delete |
-| `tools/benchmark_*.py` | One-off scripts; integrate into `biopl lab benchmark` |
-| `tools/check_*.py` | CI checks; move to pre-commit hooks |
-| `run_experiment.py` | Legacy scientist runner; replaced by `biopl-scientist` |
-| `run_scientist.sh` / `generate_report.sh` | Shell wrappers; replace with `uv run` commands |
+| Path | Reason | Status |
+|------|--------|--------|
+| `bioplausible/validation/tracks/` (one-off tracks) | Not reusable evidence; research scripts | **Evaluate per track** (see §5) |
+| `bioplausible/validation/tracks/advanced_tracks.py` | Deleted in Phase 4 (comment in track_registry) | **Already gone** |
+| `bioplausible/validation/tracks/analysis_tracks.py` | Deleted in Phase 4 | **Already gone** |
+| `bioplausible/validation/tracks/engine_validation_tracks.py` | Deleted in Phase 4 | **Already gone** |
+| `bioplausible/validation/tracks/enhanced_validation_tracks.py` | Deleted in Phase 4 | **Already gone** |
+| `bioplausible/validation/tracks/honest_tradeoff.py` | Deleted in Phase 4 | **Already gone** |
+| `bioplausible/validation/tracks/new_tracks.py` | Deleted in Phase 4 | **Already gone** |
+| `bioplausible/validation/tracks/rapid_validation.py` | Deleted in Phase 4 | **Already gone** |
+| `bioplausible/validation/tracks/special_tracks.py` | Deleted in Phase 4 | **Already gone** |
+| `bioplausible/validation/tracks/framework_validation.py` | Deleted in Phase 4 | **Already gone** |
+| `docs/archive/` | Historical, not maintained | **Delete** |
+| `examples/` | Tutorial notebooks; migrate to `demo/` or delete | **Evaluate** |
+| `tools/benchmark_*.py` | One-off scripts; integrate into `biopl lab benchmark` | **Consolidate** |
+| `tools/check_*.py` | CI checks; move to pre-commit hooks | **Move** |
+| `run_experiment.py` | Legacy scientist runner; replaced by `biopl-scientist` | **Delete** |
+| `run_scientist.sh` / `generate_report.sh` | Shell wrappers; replace with `uv run` commands | **Delete** |
 
 ---
 
