@@ -16,8 +16,9 @@ import asyncio
 import logging
 from collections.abc import Callable
 
-from bioplausible.core.ontology import System
 from compat import apply_compat_shims
+
+from bioplausible.core.ontology import System
 
 apply_compat_shims()  # must run before `import nicegui`
 

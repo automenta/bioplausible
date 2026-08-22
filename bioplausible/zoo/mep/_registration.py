@@ -6,7 +6,6 @@ from bioplausible.core.registry import (
     LocalityLevel,
     Registry,
     register_param_update,
-    register_credit_assignment,
 )
 
 from .optimizers import DionUpdate, FisherUpdate, MuonUpdate, PlainUpdate

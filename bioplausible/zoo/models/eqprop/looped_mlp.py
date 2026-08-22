@@ -14,7 +14,6 @@ against all the bio-plausible families.
 import math
 
 import torch
-from torch import nn
 
 from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model_status import status_tag
@@ -22,9 +21,7 @@ from bioplausible.core.ontology import System
 from bioplausible.core.registry import LocalityLevel, register_model
 from bioplausible.models.native.eqprop_native import native_eqprop_mlp
 
-from ..transitions import TransitionGraphMixin
 from ._energy import EquilibriumMLP
-from ..backprop import BackpropMLP
 
 __all__ = [
     "LoopedMLP",
