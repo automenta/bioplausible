@@ -6,29 +6,34 @@ Modern deep learning is built on backpropagation — an algorithm that is mathem
 
 Bioplausible is a research framework for the alternative: **learning algorithms whose synaptic updates depend only on signals locally available at each connection**. Instead of a global gradient, training emerges from local, energy-based dynamics — networks relax toward equilibrium and contrasts between free and nudged states drive weight changes. The implications are substantial: memory complexity becomes independent of depth, allowing arbitrarily deep networks on fixed hardware. Learning becomes asynchronous and event-driven, naturally matching the physics of analog substrates. Contractive dynamics confer fault tolerance: networks self-heal from perturbation, making them candidates for noisy, low-power, imprecise physical computation. The same locality that makes these algorithms biologically plausible also makes them physically realizable.
 
-The framework demonstrates that capabilities previously reserved for backpropagation can be matched — and in regimes backpropagation cannot reach, exceeded — by algorithms compatible with the actual physics of computation. It provides a **generative physico-computational engine** built on a 5-dimensional ontology that decomposes every learning system into orthogonal, composable primitives, plus the infrastructure to evaluate them rigorously and discover better ones autonomously.
+The framework demonstrates that capabilities previously reserved for backpropagation can be matched — and in regimes backpropagation cannot reach, exceeded — by algorithms compatible with the actual physics of computation. It provides a **generative physico-computational engine** built on a **6-dimensional ontology** that decomposes every learning system into orthogonal, composable primitives, plus the infrastructure to evaluate them rigorously and discover better ones autonomously.
+
+The joint architecture extends the 5-D engine with a **Plasticity (MetaDynamics) axis**, elevating the computational rule itself to a dynamical variable. The mathematical center becomes the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$, enabling the AutoScientist to search over **composable coupled dynamical systems** — not just fixed learning algorithms.
 
 ---
 
-## 🔮 The 5-Dimensional Ontology
+## 🔮 The 6-Dimensional Ontology
 
-Every learning system in Bioplausible maps uniquely to a coordinate in a tensor product of five fundamental axes:
+Every learning system in Bioplausible maps uniquely to a coordinate in a tensor product of six fundamental axes:
 
 ```
-System = Substrate ⊗ Geometry ⊗ StateDynamics ⊗ CreditAssignment ⊗ ParameterUpdate
+System = Substrate ⊗ Geometry ⊗ StateDynamics ⊗ Plasticity ⊗ CreditAssignment ⊗ ParameterUpdate
 ```
 
 This decomposition transforms the framework from a "library of models" into a **generative engine** — any valid combination of primitives yields a coherent learning system, and the space of all combinations is the search space for the AutoScientist.
 
-| Axis | Role | Primitives |
-|------|------|------------|
-| **🔩 Substrate (S)** | Physical state space: precision, noise, sparsity constraints | `Digital`, `Memristive` (conductance, IR-drop), `Neuromorphic` (async spikes), `Photonic` (phase/amplitude), `Quantum` (unitary gates), `Noisy` |
-| **🔷 Geometry (G)** | Topology & routing of computational units | `FeedforwardDAG` (MLP/CNN), `RecurrentAttractor` (Hopfield/EqProp), `TileMesh` (TileNet), `FabricPC` (arbitrary node-edge), `SpatialLattice3D` (neural_cube) |
-| **🌀 StateDynamics (D)** | Forward evolution & settling (the "forward pass") | `EnergyMinimization` (EqProp), `PredictiveSettling` (Predictive Coding), `SpikeIntegration` (LIF/Izhikevich), `InstantaneousPass` (FF/Backprop), `LazyStateDynamics` (on-demand activation) |
-| **💡 CreditAssignment (C)** | Error routing & pseudo-gradient computation | `ThermodynamicContrast` (EqProp free/nudged), `RandomProjectionsCredit` (FA/DFA), `LocalGoodnessCredit` (Forward-Forward/PEPITA), `TemporalTraceCredit` (STDP), `TargetInversionCredit` (Target Prop), `HomeostaticCredit` (autonomous Lipschitz scaling) |
-| **🔧 ParameterUpdate (U)** | Physical weight change rule ΔW | `EuclideanUpdate` (SGD/Adam), `RiemannianOrthogonalUpdate` (Muon), `SpectralConstrainedUpdate`, `NaturalGradientUpdate` (Fisher), `ElasticConsolidationUpdate` (EWC) |
+| Axis | Symbol | Role | Primitives |
+|------|:------:|------|------------|
+| **🔩 Substrate** | $S$ | Physical state space: precision, noise, sparsity constraints | `Digital`, `Memristive` (conductance, IR-drop), `Neuromorphic` (async spikes), `Photonic` (phase/amplitude), `Quantum` (unitary gates), `Noisy`, `Complex`, `Sparse`, `Ternary` |
+| **🔷 Geometry** | $G$ | Topology & routing of computational units | `FeedforwardDAG` (MLP/CNN), `RecurrentAttractor` (Hopfield/EqProp), `TileMesh` (TileNet), `FabricPC` (arbitrary node-edge), `SpatialLattice3D` (neural_cube) |
+| **🌀 StateDynamics** | $D$ | Forward evolution & settling (the "forward pass") | `EnergyMinimization` (EqProp), `PredictiveSettling` (Predictive Coding), `SpikeIntegration` (LIF/Izhikevich), `InstantaneousPass` (FF/Backprop), `LazyStateDynamics` (on-demand activation), `Diffusion` |
+| **🧬 Plasticity (MetaDynamics)** | $M$ | The mechanism by which the computational rule becomes a dynamical variable | `NullPlasticity` (Zero-Extension), `RoutingPlasticity` (gating/rerouting), `FastWeightPlasticity` (episode-local memory), `SubstrateCoupledPlasticity` (physical plasticity), `RuleStatePlasticity` (Z3: rule selection) |
+| **💡 CreditAssignment** | $C$ | Error routing & pseudo-gradient computation | `ThermodynamicContrast` (EqProp free/nudged), `RandomProjectionsCredit` (FA/DFA), `LocalGoodnessCredit` (Forward-Forward/PEPITA), `TemporalTraceCredit` (STDP), `TargetInversionCredit` (Target Prop), `HomeostaticCredit` (autonomous Lipschitz scaling) |
+| **🔧 ParameterUpdate** | $U$ | Slow, persistent parameter consolidation Δθ | `EuclideanUpdate` (SGD/Adam), `RiemannianOrthogonalUpdate` (Muon), `SpectralConstrainedUpdate`, `NaturalGradientUpdate` (Fisher), `ElasticConsolidationUpdate` (EWC) |
 
 ### Algebraic Composition (API)
+
+Construct systems by composing primitives across the six axes. The `System` generic enforces valid combinations at type-check time.
 
 ```python
 from bioplausible.core.ontology import (
@@ -38,45 +43,34 @@ from bioplausible.core.ontology import (
     ThermodynamicContrastCredit, MemristiveSubstrate, TileGeometry,
     TileAlgorithmConfig, LazyStateDynamics, HomeostaticCredit
 )
+from bioplausible.core.joint import PlasticityConfig
+```
 
-# A standard backprop MLP — no equilibrium dynamics
+**5-D compatible (M = NullPlasticity)** — standard backprop MLP, Equilibrium Propagation, TileNet:
+```python
 system = System(
     substrate=DigitalSubstrate(),
     geometry=FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256, 128))),
     dynamics=InstantaneousDynamics(),
     credit=BackpropCredit(),
-    update=EuclideanUpdate(step_size=0.01)
-)
-
-# Equilibrium Propagation on recurrent geometry
-eqprop = System(
-    substrate=DigitalSubstrate(),
-    geometry=RecurrentGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256, 128)), symmetric=True),
-    dynamics=EnergyMinimizationDynamics(StateDynamicsConfig(n_iters=20, beta=0.5)),
-    credit=ThermodynamicContrastCredit(),
-    update=EuclideanUpdate(step_size=0.01)
-)
-
-# TileNet: async tile mesh with configurable credit assignment
-tile = System(
-    substrate=DigitalSubstrate(),
-    geometry=TileGeometry(TileAlgorithmConfig(algorithm="ep", n_tiles=4, tile_size=64)),
-    dynamics=InstantaneousDynamics(),
-    credit=BackpropCredit(),  # or ThermodynamicContrastCredit, RandomProjectionsCredit, ...
-    update=EuclideanUpdate(step_size=0.01)
-)
-
-# Memristive EqProp: same algorithm, physical substrate
-memristive_eqprop = System(
-    substrate=MemristiveSubstrate(MemristiveConfig(conductance_range=(1e-6, 1e-3), ir_drop=0.02)),
-    geometry=RecurrentGeometry(...),
-    dynamics=EnergyMinimizationDynamics(...),
-    credit=ThermodynamicContrastCredit(),
-    update=EuclideanUpdate(step_size=0.01)
+    update=EuclideanUpdate(step_size=0.01),
+    plasticity=PlasticityConfig.null()
 )
 ```
 
-Formerly many hardcoded models (e.g., `optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **emergent coordinates** in this space.
+**6-D joint systems** — with non-null plasticity:
+```python
+# RoutingPlasticity: state-dependent gating, sparse pathways
+joint_routing = System(..., plasticity=PlasticityConfig.routing(gate_init_scale=0.1))
+
+# FastWeightPlasticity: episode-local associative memory
+joint_fast_weight = System(..., plasticity=PlasticityConfig.fast_weights(decay=0.95, lr=0.1))
+
+# SubstrateCoupledPlasticity: physical memristive drift
+memristive_plastic = System(..., plasticity=PlasticityConfig.substrate_coupled())
+```
+
+Formerly many hardcoded models (`optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **emergent coordinates** in this 6-D space. The 5-D coordinates (Sprints 9.0–9.7) are recovered as the `M = NullPlasticity` slice.
 
 ### Research Direction Models (Native Ontology Implementations)
 
@@ -87,29 +81,21 @@ The framework includes native implementations of novel research directions as fi
 | `holomorphic_ep` | `QuantumSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Complex-valued Equilibrium Propagation using holomorphic (analytic) activation functions and conjugate-transpose feedback pathways. Enables complex-domain credit assignment with potential for phase-based computation. |
 | `directed_ep` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ RandomProjections ⊗ EuclideanUpdate` | Directed/Asymmetric Equilibrium Propagation implementing Feedback Alignment within energy-based framework. Fixed random feedback matrices (no weight transport) with thermodynamic settling dynamics. |
 | `finite_nudge_ep` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast(beta≥1) ⊗ EuclideanUpdate` | Finite-Nudge Equilibrium Propagation using large β (finite nudge) instead of infinitesimal limit. Stronger supervision signals while maintaining equilibrium dynamics. |
+| `ternary_eqprop` | `TernarySubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Ternary-weight Equilibrium Propagation with STE-based quantization. Weights constrained to {-α, 0, +α}. |
+| `momentum_eqprop` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization(momentum) ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Heavy-ball settling dynamics for faster equilibrium convergence. |
+| `sparse_eqprop` | `SparseSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Dynamic sparsity masks with efficient sparse matmul. |
+| `diffusion_eqprop` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ DiffusionDynamics ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Continuous-time diffusion settling dynamics. |
 
-These models are available via the native API:
-
+These models are available via the native API in `bioplausible.models.native`:
 ```python
 from bioplausible.models.native import (
     create_native_holomorphic_ep,
     create_native_directed_ep,
     create_native_finite_nudge_ep,
-)
-
-# Holomorphic EP (complex-valued)
-holomorphic = create_native_holomorphic_ep(
-    input_dim=784, hidden_dim=256, output_dim=10, beta=0.5
-)
-
-# Directed EP (asymmetric feedback)
-directed = create_native_directed_ep(
-    input_dim=784, hidden_dim=256, output_dim=10, feedback_scale=0.01
-)
-
-# Finite-Nudge EP (large beta)
-finite_nudge = create_native_finite_nudge_ep(
-    input_dim=784, hidden_dim=256, output_dim=10, beta=1.0
+    create_native_ternary_eqprop,
+    create_native_momentum_eqprop,
+    create_native_sparse_eqprop,
+    create_native_diffusion_eqprop,
 )
 ```
 
@@ -123,7 +109,9 @@ Energy binds Geometry and StateDynamics. The framework elevates the energy funct
 - **Directed topology** → requires Control-Lyapunov formulation for stability (formally verified for PredictiveSettlingDynamics)
 - **Free energy tracking** → per-iteration Lyapunov certificates (`track_free_energy_per_iter`) for predictive coding and directed FA
 
-This enables the AutoScientist to reason about *physical realizability* as a constraint, not an afterthought.
+**Joint Architecture Extension**: The mathematical center is now the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$. The `StateRegistry` assigns lifecycle metadata to every variable (persistent θ, fast plastic ψ, substrate-owned σ, consolidatable), resolving ontological overlaps where a single physical variable (e.g., memristive conductance) serves multiple roles. Slow learning operates on persistent θ at episode boundaries: $\theta_{e+1} = U(\theta_e, C(\tau_e))$.
+
+This enables the AutoScientist to reason about *physical realizability* and the **stability-plasticity frontier** as constraints, not afterthoughts.
 
 ---
 
@@ -148,6 +136,10 @@ biopl <command> [args]
 | `biopl frontier` | Pareto frontier analysis | `biopl-frontier` |
 | `biopl rank` | Family ranking from HPO studies | `biopl-compare` |
 | `biopl lab` | Interactive experiments & model inspection | — |
+| `biopl joint-validate` | Validate arbitrary 6-D joint coordinates | — |
+| `biopl campaign` | Run/compare/resume joint campaigns | — |
+| `biopl stability` | Stability-plasticity frontier reports | — |
+| `biopl benchmark` | Run joint benchmark suites (adaptation, Z3, etc.) | — |
 
 ### Standalone Commands (for scripting/CI)
 
@@ -185,49 +177,47 @@ Launches a NiceGUI web dashboard at `http://localhost:8080` with:
 
 ### 1. Ontology Protocols (`bioplausible/core/ontology.py`)
 
-Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure.
+Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure. See `bioplausible/core/ontology.py` for full Protocol definitions:
 
-```python
-# Protocol signatures (structural typing — zero-cost abstraction)
-class Substrate(Protocol):
-    config: SubstrateConfig
-    def forward_operator(self, x: Tensor) -> Tensor: ...
-    def weight_update_operator(self, delta: Tensor) -> Tensor: ...
+- `Substrate` — `forward_operator`, `weight_update_operator`
+- `Geometry` — `forward`, `route`
+- `StateDynamics` — `settle`
+- `CreditAssignment` — `compute_pseudo_gradient`, `surrogate_objective`
+- `ParameterUpdate` — `step`
 
-class Geometry(Protocol):
-    config: GeometryConfig
-    def forward(self, x: Tensor, substrate: Substrate) -> Tensor: ...
-    def route(self, activations: Tensor) -> Tensor: ...
+### 2. Joint Architecture Protocols (`bioplausible/core/joint/`)
 
-class StateDynamics(Protocol):
-    config: StateDynamicsConfig
-    def settle(self, state, geometry, substrate, target) -> SystemState: ...
+The joint dynamical system elevates the computational rule to a dynamical variable via the **CoupledTransition** protocol operating on `CompositeState`. Key types defined in `bioplausible/core/joint/state.py`, `bioplausible/core/joint/context.py`, `bioplausible/core/joint/transition.py`:
 
-class CreditAssignment(Protocol):
-    config: CreditAssignmentConfig
-    def compute_pseudo_gradient(self, free, nudged, loss, geometry) -> list[Tensor]: ...
-    def surrogate_objective(self, free, nudged, geometry) -> Tensor: ...  # default provided
+- **CompositeState** — joint intra-episode state `z_t = (x_t, ψ_t, σ_t)` with `activity`, `plastic`, `substrate` mappings
+- **SystemContext** — immutable context: `theta`, `geometry`, `substrate_physics`, `registry`, `config` (6-axis)
+- **StateVariable** — lifecycle metadata: `persistent`, `fast_plastic`, `substrate_owned`, `consolidatable`
+- **StateRegistry** — registers variables, validates lifecycle, provides lifecycle groups
+- **CoupledTransition** — linchpin protocol: `step(z, context) -> CompositeState` executing `z_{t+1} = F_θ(z_t; G, S)`
+- **PlasticityPrimitive** — M-axis protocol: `step(psi, z, context) -> updated psi`
+- **StabilityMonitor** — `spectral_radius`, `lyapunov_exponent` estimation
 
-class ParameterUpdate(Protocol):
-    config: ParameterUpdateConfig
-    def step(self, params, pseudo_grads, geometry) -> dict[str, Tensor]: ...
-```
+**Key Architectural Rule**: *Plasticity must not become a weight preprocessor.* Plasticity receives the full joint state `z = (x, ψ, σ)`, returns updated plastic state (not modified weights), and the joint transition remains `z_{t+1} = F_θ(z_t; G, S)`. Credit assignment receives the full trajectory `τ = [z_0, ..., z_T]`. Parameter update touches only `persistent`/`consolidatable` variables.
 
-### 2. System & Trainers
+### 3. System & Trainers
 
 | Component | Purpose |
 |-----------|---------|
-| `System[TS, TG, TD, TC, TU]` | Generic 5-layer composition; invalid combos caught at type-check |
+| `System[TS, TG, TD, TM, TC, TU]` | Generic 6-layer composition; invalid combos caught at type-check |
 | `SystemTrainer` | 5-stage pipeline: Geometry.forward → StateDynamics.settle → CreditAssignment.compute_pseudo_gradient → ParameterUpdate.step → Substrate.weight_update_operator |
+| `JointSystemTrainer` | Joint pipeline: CoupledTransition.step → trajectory recording → CreditAssignment → ParameterUpdate.consolidate |
 | `DistributedSystemTrainer` | In-process P2P coordination; shards along Geometry (TileMesh), federates at ParameterUpdate; CreditAssignment stays local |
 | `ModelAdapter` | Strangler Fig adapter: projects legacy Registry models → 5-D System via metadata inference with per-family tolerance calibration |
 | `Registry.to_system()` | One-call projection of any registered component |
 
-### 3. Factories (`bioplausible/core/system_trainer.py`)
+### 4. Factories (`bioplausible/core/system_trainer.py`)
+
+Factory functions for composing systems from primitives or configs:
 
 ```python
 from bioplausible.core.system_trainer import (
     compose_system, compose_system_from_configs, extract_config,
+    compose_joint_system, compose_joint_system_from_configs,
     create_eqprop_system, create_backprop_system, create_fa_system,
     create_tile_system, create_predictive_coding_system
 )
@@ -236,13 +226,23 @@ from bioplausible.core.system_trainer import (
 configs = extract_config(system)
 system2 = compose_system_from_configs(configs)
 assert system == system2  # identity verified
+
+# Joint system composition
+joint = compose_joint_system(
+    substrate=DigitalSubstrate(),
+    geometry=RecurrentGeometry(...),
+    dynamics=EnergyMinimizationDynamics(...),
+    plasticity=RoutingPlasticity(...),
+    credit=ThermodynamicContrastCredit(),
+    update=EuclideanUpdate(step_size=0.01)
+)
 ```
 
-### 4. Hardware Substrates ✅
+### 5. Hardware Substrates ✅
 
 | Substrate | Physics Model | Verification |
 |-----------|---------------|--------------|
-| `DigitalSubstrate` | CPU/GPU |
+| `DigitalSubstrate` | CPU/GPU | — |
 | `MemristiveSubstrate` | Conductance matrices, bounded precision, IR-drop noise | Gradient equivalence vs. digital; positive bounded conductance |
 | `NeuromorphicSubstrate` | Async spike routing, strict sparsity, passivity | Property test: deterministic noise cancels in diff (‖na-nb‖ ≤ ‖a-b‖) |
 | `OpticalSubstrate` | Phase/amplitude encoding, coherent interference | Phase wrapping to [-π, π]; no NaN/inf outputs |
@@ -254,7 +254,7 @@ assert system == system2  # identity verified
 
 The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate certifies the entire hypercube in seconds on CPU.
 
-### ✅ Property Locks (L1–L7 + S/G/D/C/U Axes)
+### ✅ Property Locks (L1–L7 + S/G/D/C/U/M Axes + J1–J7)
 
 | Lock | Property | Key Assertions |
 |------|----------|----------------|
@@ -269,6 +269,14 @@ The framework enforces **correctness by construction** through a layered verific
 | **D-axis** | SpikeIntegration Lyapunov (membrane bounded, spike variance non-increasing); LazyStateDynamics | Spike counts tracked; bounded activations |
 | **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |
 | **U-axis** | Muon orthogonalizes gradient (G^T G ≈ I); SpectralConstrained SVD ≤ 1.0; Natural whitens; Elastic moves toward old params | Newton-Schulz converges; diagonal Fisher whitening; δ·(w-old_w) < 0 |
+| **M-axis** | NullPlasticity Zero-Extension; RoutingPlasticity gate entropy; FastWeightPlasticity decay bounds | Null ≡ 5-D; gate entropy ≥ 0; decay ∈ [0,1] |
+| **J1** | NullPlasticity preserves 5-D dynamics (Zero-Extension) | Joint(Null) ≡ 5-D within numerical tolerance |
+| **J2** | Persistent θ not mutated during intra-episode steps | θ data_ptr() unchanged during CoupledTransition.step |
+| **J3** | fast_plastic variables mutate only through plasticity projection | ψ updates only via PlasticityPrimitive.step |
+| **J4** | substrate_owned variables respect substrate physics constraints | σ updates only via Substrate.forward_operator |
+| **J5** | consolidatable variables promoted only at episode boundaries | consolidate() only called at episode end |
+| **J6** | Cross-adapters preserve joint transition shape & registry semantics | Adapter output is valid CompositeState projection |
+| **J7** | Trajectory records contain full z = (x, ψ, σ) | JointTrajectory has activity, plastic, substrate at each step |
 
 ### 🧬 Biology Axiom Property Tests (Hypothesis-based)
 
@@ -299,8 +307,11 @@ The framework enforces **correctness by construction** through a layered verific
 ### 🧪 Test Commands
 
 ```bash
-# Property locks (fast CI gate)
+# Property locks (fast CI gate) — 5-D
 uv run pytest tests/property/test_ontology_locks.py -q
+
+# Property locks (fast CI gate) — 6-D Joint Architecture
+uv run pytest tests/property/joint/ -q
 
 # Core ontology unit tests
 uv run pytest tests/unit/core/test_ontology.py -q
@@ -317,6 +328,9 @@ uv run pytest tests/integration/test_kernel_accuracy_parity.py -q
 # gRPC seam test
 uv run pytest tests/integration/test_grpc_seam.py -q
 
+# Joint integration tests
+uv run pytest tests/integration/joint/ -q
+
 # Full suite
 uv run pytest tests/ -q
 
@@ -329,29 +343,112 @@ uv run ruff format --check . && uv run ruff check .
 
 ---
 
+## 📐 Stability-Plasticity Frontier
+
+v1 relied on strict Lyapunov descent and global contraction. In the joint architecture, we recognize that global contraction is a *sufficient* condition for a unique fixed point, but not a *necessary* condition for useful computation. Systems can exhibit local contraction, multiple attractors, limit cycles, or metastable states.
+
+### The Frontier Hypothesis
+
+We formulate the research object as:
+
+```
+adaptive computation ↔ controlled departure from contraction
+```
+
+The hypothesis: **useful rule reconfiguration may require temporarily sacrificing some of the contraction/stability margin that a fixed computational attractor would maximize.**
+
+### Monitoring the Frontier
+
+The framework measures:
+
+| Metric | Purpose |
+|--------|---------|
+| $\rho(J_F)$ | Spectral radius of joint Jacobian — stability margin |
+| Local Lyapunov exponent | Sensitivity/divergence |
+| Settling time | Dynamical latency |
+| Basin stability | Robustness to perturbation |
+
+**Cheap fast-mode proxies (for CI)**: step-norm ratio, finite-difference perturbation growth, settle iterations, activation variance, gate entropy.
+
+**Deeper estimates (nightly/campaign)**: spectral radius via power iteration, Lyapunov via QR, basin via sampling.
+
+### Resource Vector
+
+The scientific claim is strictly about **resource scaling, locality, energy efficiency, and learnability** under constrained physical resources:
+
+$$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \text{plastic-state capacity})$$
+
+The campaign asks whether adaptive-rule systems occupy a superior Pareto frontier in $\mathcal{C}$.
+
+### Frontier Record
+
+Defined in `bioplausible/core/campaign/frontier_record.py`:
+
+```python
+@dataclass(frozen=True, slots=True)
+class FrontierRecord:
+    coordinate: SystemCoordinate
+    task_loss: float
+    adaptation_time: int
+    rho_jacobian: float
+    lyapunov_local: float
+    settling_time: float
+    basin_stability: float
+    resources: ResourceUsage
+```
+
+### 5-Level Benchmark Hierarchy
+
+| Level | Question | Toy Task | Compare |
+|-------|----------|----------|---------|
+| **1: Adaptation Efficiency** | Does plasticity adapt faster than Null? | Switching distribution (Phase A: y=f_A(x), Phase B: y=f_B(x)) | Null vs FastWeight vs Routing |
+| **2: Compute Efficiency** | Does routing reduce effective ops? | Mixture-of-experts (one route needed per input) | Active units, gate entropy, effective matmul |
+| **3: Structural Robustness** | Can system recover after damage? | Zeroed weights, removed nodes, dead channels, noisy memristive | Null vs Routing vs SubstrateCoupled |
+| **3.5: Algorithm Migration** | Can ψ switch strategy without θ update? | Task A₀: cumulative sum → Task A₁: last symbol | time(A₀→A₁), energy, ‖θ_after - θ_before‖ == 0 |
+| **4: Z3 — Fixed Weights, Changing Algorithm** | Can frozen θ solve multiple tasks via ψ? | **Constraint**: θ frozen. Tasks: parity, last-symbol, threshold. **Operators**: Identity, Threshold, Accumulate, LastSymbol, Parity, SparseTopKRoute, SignFlip, Delay | Adaptation time, energy, operator diversity, parameter invariance |
+
+**Z3 Parameter invariance must be exact**: `||θ_after - θ_before|| == 0`
+
+Commands:
+```bash
+biopl benchmark run --suite adaptation_efficiency
+biopl benchmark run --suite compute_efficiency
+biopl benchmark run --suite structural_robustness
+biopl benchmark run --suite algorithm_migration
+biopl benchmark run --suite z3_fixed_weights
+```
+
+---
+
 ## 🤖 Automated Research: Hypercube Campaigns
 
-The 5-D ontology gives the AutoScientist a **structured search space** instead of a flat model list:
+The 6-D ontology gives the AutoScientist a **structured search space** instead of a flat model list:
 
 | Campaign Type | Fixed Axes | Varied Axis | Example Hypothesis |
 |---------------|------------|-------------|-------------------|
-| Substrate Ablation | G, D, C, U | S: Digital → Memristive/Optical/Quantum | At what IR-drop does EqProp parity break? |
+| Substrate Ablation | G, D, M, C, U | S: Digital → Memristive/Optical/Quantum | At what IR-drop does EqProp parity break? |
 | Epistemology Swap | S=Optical, G=TileMesh, D=EnergyMinimization | C: ThermodynamicContrast ↔ RandomProjectionsCredit | Does optical hardware favor FA (lower settling energy)? |
 | Kinetics Discovery | S, G, D, C | U: Euclidean ↔ Riemannian ↔ Spectral ↔ Natural | Can Spectral constraints stabilize Memristive settling? |
-| Composite | S=Memristive, D=EnergyMinimization | U=SpectralConstrained | "IR-drop (S) + Spectral (U) → stable settling (D)" |
+| Plasticity Search | S, G, D, C, U | M: Null ↔ Routing ↔ FastWeight | Does routing reduce compute at stability margin? |
+| Composite | S=Memristive, D=EnergyMinimization, M=Routing | U=SpectralConstrained | "IR-drop (S) + Routing (M) + Spectral (U) → stable settling (D)" |
+| Stability-Plasticity Frontier | S, G, D, C, U | M + ρ(J_F) constraint | Maximize adaptation s.t. ρ(J_F) ≈ 0.99 |
 
 **Key AutoScientist capabilities:**
 - 🧠 Chain-of-thought templates operating on ontology axes
 - 📚 arXiv retrieval + semantic search for prior art
 - 🔀 Counterfactual generator: "What if β schedule changed?"
 - 📊 Knowledge Base meta-analysis: scaling laws, algorithm fingerprinting, failure manifold clustering, algorithm phylogeny
-- 💾 Campaign persistence/resume (YAML+SQLite, git-like branching)
+- 💾 Campaign persistence/resume (YAML+SQLite, git-like branching) — **includes joint state z, θ, ψ, σ**
 - 👁️ Human-in-the-loop dashboard (NiceGUI, WebSocket live updates)
 - 🖥️ Local LLM support (Ollama auto-pull, llama.cpp quantization, speculative decoding)
+- ⚡ **Joint Kernel Cache**: Persisted compiled kernels for `CoupledTransition.step`, plasticity updates, stability estimators
+- 🛡️ **Fault Tolerance**: Checkpoint-based recovery for multi-hour campaigns on spot instances
 
 ---
 
 ## 🧪 Flagship Experiments (Implemented)
+
+### 5-D Experiments (Completed)
 
 | Experiment | File | Purpose |
 |------------|------|---------|
@@ -362,6 +459,16 @@ The 5-D ontology gives the AutoScientist a **structured search space** instead o
 | MoT Ablation | `experiments/mot_ablation.py` | Dense vs sparse tile routing (top-k, random, learned) |
 | Cross-Domain Transfer | `experiments/cross_domain_transfer.py` | Vision→LM/RL/graph transfer, local vs global learning |
 | Tile Algorithm Comparison | `experiments/tile_algorithm_comparison.py` | Fair comparison of PC/EP/FA/TP/Hebbian/SNN/Backprop on same substrate |
+
+### 6-D Joint Architecture Experiments (In Progress)
+
+| Experiment | File | Purpose |
+|------------|------|---------|
+| Adaptation Efficiency | `experiments/joint/adaptation_efficiency.py` | Does plasticity adapt faster to non-stationary shifts than Null under matched compute? |
+| Compute Efficiency | `experiments/joint/compute_efficiency.py` | Does routing reduce effective operations (dynamic sparsity)? |
+| Structural Robustness | `experiments/joint/structural_robustness.py` | Can joint system recover after topology/device damage via autonomous rerouting? |
+| Algorithm Migration | `experiments/joint/algorithm_migration.py` | Can ψ switch strategy A₀→A₁ without changing θ? (Experiment 3.5) |
+| Z3: Fixed Weights, Changing Algorithm | `experiments/joint/z3.py` | **Crown jewel**: Frozen θ, multiple tasks via ψ-mediated rule selection (Experiment 4) |
 
 ---
 
