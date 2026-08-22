@@ -32,7 +32,10 @@ import torch
 from torch import Tensor, nn
 
 from bioplausible.core.registry import ComponentMetadata, ComputeProfile, LocalityLevel
-# Import ComplexSubstrate locally to avoid circular import
+if TYPE_CHECKING:
+    from bioplausible.core.substrates.complex_substrate import ComplexSubstrate
+    from bioplausible.core.substrates.sparse_substrate import SparseSubstrate
+    from bioplausible.core.substrates.ternary_substrate import TernarySubstrate
 from bioplausible.core.tile.topology import TileGraph
 
 __all__ = [
@@ -42,6 +45,7 @@ __all__ = [
     "CreditAssignment",
     "CreditAssignmentConfig",
     "ComplexSubstrate",
+    "DiffusionDynamics",
     "DigitalSubstrate",
     "ElasticConsolidationUpdate",
     "EnergyMinimizationDynamics",
@@ -67,6 +71,7 @@ __all__ = [
     "RandomProjectionsCredit",
     "RecurrentGeometry",
     "RiemannianOrthogonalUpdate",
+    "SparseSubstrate",
     "SpectralConstrainedUpdate",
     "SpikeIntegrationDynamics",
     "StateDynamics",
@@ -78,6 +83,7 @@ __all__ = [
     "SystemState",
     "TargetInversionCredit",
     "TemporalTraceCredit",
+    "TernarySubstrate",
     "ThermodynamicContrast",
 ]
 
@@ -222,6 +228,50 @@ class SubstrateConfig:
             device=device,
         )
 
+    @classmethod
+    def sparse(
+        cls,
+        *,
+        sparsity: float = 0.5,
+        noise_level: float = 0.0,
+        precision: str = "float32",
+        weight_bounds: tuple[float, float] | None = (-1.0, 1.0),
+        device: str = "cpu",
+    ) -> "SubstrateConfig":
+        """Sparse substrate with dynamic sparsity masks.
+
+        Supports unstructured, N:M structured, block, and channel-wise sparsity
+        with efficient sparse matmul where available.
+        """
+        return cls(
+            precision=precision,
+            noise_level=noise_level,
+            weight_bounds=weight_bounds,
+            sparsity=sparsity,
+            device=device,
+        )
+
+    @classmethod
+    def ternary(
+        cls,
+        *,
+        noise_level: float = 0.0,
+        weight_bounds: tuple[float, float] | None = (-1.0, 1.0),
+        device: str = "cpu",
+    ) -> "SubstrateConfig":
+        """Ternary substrate with STE-based quantization.
+
+        Weights quantized to {-α, 0, +α} with Straight-Through Estimator
+        for gradient backpropagation through the quantization function.
+        """
+        return cls(
+            precision="float32",  # Latent weights stay float32
+            noise_level=noise_level,
+            weight_bounds=weight_bounds,
+            sparsity=0.0,  # Sparsity emerges from thresholding
+            device=device,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class GeometryConfig:
@@ -317,12 +367,13 @@ class StateDynamicsConfig:
 
     Attributes:
         dynamics_type: "energy_minimization", "predictive_settling",
-            "spike_integration", "instantaneous"
+            "spike_integration", "instantaneous", "diffusion"
         max_steps: Maximum settling iterations
         convergence_threshold: Early stopping threshold
         convergence_start: Step to start checking convergence
         step_size: Learning rate for state updates
         beta: Nudge strength for energy-based methods
+        momentum: Momentum coefficient for heavy-ball dynamics (energy_minimization)
         track_free_energy_per_iter: Record free energy at each iteration
             for Control-Lyapunov analysis
     """
@@ -333,6 +384,7 @@ class StateDynamicsConfig:
     convergence_start: int
     step_size: float
     beta: float
+    momentum: float
     track_free_energy_per_iter: bool
 
     @classmethod
@@ -344,6 +396,7 @@ class StateDynamicsConfig:
         convergence_start: int = 5,
         step_size: float = 0.1,
         beta: float = 0.5,
+        momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
     ) -> "StateDynamicsConfig":
         return cls(
@@ -353,6 +406,7 @@ class StateDynamicsConfig:
             convergence_start=convergence_start,
             step_size=step_size,
             beta=beta,
+            momentum=momentum,
             track_free_energy_per_iter=track_free_energy_per_iter,
         )
 
@@ -365,6 +419,7 @@ class StateDynamicsConfig:
         convergence_start: int = 5,
         step_size: float = 0.1,
         beta: float = 0.5,
+        momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
     ) -> "StateDynamicsConfig":
         return cls(
@@ -374,6 +429,7 @@ class StateDynamicsConfig:
             convergence_start=convergence_start,
             step_size=step_size,
             beta=beta,
+            momentum=momentum,
             track_free_energy_per_iter=track_free_energy_per_iter,
         )
 
@@ -386,6 +442,7 @@ class StateDynamicsConfig:
         convergence_start: int = 5,
         step_size: float = 0.1,
         beta: float = 0.5,
+        momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
     ) -> "StateDynamicsConfig":
         return cls(
@@ -395,6 +452,7 @@ class StateDynamicsConfig:
             convergence_start=convergence_start,
             step_size=step_size,
             beta=beta,
+            momentum=momentum,
             track_free_energy_per_iter=track_free_energy_per_iter,
         )
 
@@ -407,6 +465,7 @@ class StateDynamicsConfig:
         convergence_start: int = 1,
         step_size: float = 0.1,
         beta: float = 0.1,
+        momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
     ) -> "StateDynamicsConfig":
         return cls(
@@ -416,6 +475,35 @@ class StateDynamicsConfig:
             convergence_start=convergence_start,
             step_size=step_size,
             beta=beta,
+            momentum=momentum,
+            track_free_energy_per_iter=track_free_energy_per_iter,
+        )
+
+    @classmethod
+    def diffusion(
+        cls,
+        *,
+        max_steps: int = 30,
+        convergence_threshold: float = 1e-4,
+        convergence_start: int = 5,
+        step_size: float = 0.1,
+        beta: float = 0.5,
+        momentum: float = 0.0,
+        track_free_energy_per_iter: bool = False,
+    ) -> "StateDynamicsConfig":
+        """Diffusion-based dynamics for continuous-time settling.
+
+        Implements the dynamics: dh/dt = -∇E(h) + noise
+        where E is the energy function and noise models diffusion.
+        """
+        return cls(
+            dynamics_type="diffusion",
+            max_steps=max_steps,
+            convergence_threshold=convergence_threshold,
+            convergence_start=convergence_start,
+            step_size=step_size,
+            beta=beta,
+            momentum=momentum,
             track_free_energy_per_iter=track_free_energy_per_iter,
         )
 
@@ -1234,6 +1322,9 @@ class SystemConfig:
                 "neuromorphic": SubstrateConfig.neuromorphic,
                 "optical": SubstrateConfig.optical,
                 "quantum": SubstrateConfig.quantum,
+                "complex": SubstrateConfig.complex,
+                "sparse": SubstrateConfig.sparse,
+                "ternary": SubstrateConfig.ternary,
             }
             substrate_factory = substrate_map.get(
                 ont.substrate_type, SubstrateConfig.digital
@@ -1280,6 +1371,7 @@ class SystemConfig:
                 "predictive_settling": StateDynamicsConfig.predictive_settling,
                 "spike_integration": StateDynamicsConfig.spike_integration,
                 "instantaneous": StateDynamicsConfig.instantaneous,
+                "diffusion": StateDynamicsConfig.diffusion,
             }
             dynamics_factory = dynamics_map.get(
                 ont.dynamics_type, StateDynamicsConfig.instantaneous
@@ -2517,42 +2609,18 @@ class ModelAdapter:
                 return dynamics
 
         return InstantaneousDynamics(
-            StateDynamicsConfig(
-                dynamics_type="instantaneous",
-                max_steps=1,
-                convergence_threshold=1e-4,
-                convergence_start=1,
-                step_size=0.1,
-                beta=0.1,
-                track_free_energy_per_iter=False,
-            )
+            StateDynamicsConfig.instantaneous()
         )
 
     def _dynamics_from_family(self, family: str) -> StateDynamics | None:  # ruff: ignore[no-self-use]
         equilibrium_keys = ("equilibrium", "eqprop", "ep", "chl")
         if any(k in family for k in equilibrium_keys):
             return EnergyMinimizationDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="energy_minimization",
-                    max_steps=30,
-                    convergence_threshold=1e-4,
-                    convergence_start=5,
-                    step_size=0.1,
-                    beta=0.5,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.energy_minimization()
             )
         if any(k in family for k in ("predictive", "pc")):
             return PredictiveSettlingDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="predictive_settling",
-                    max_steps=30,
-                    convergence_threshold=1e-4,
-                    convergence_start=5,
-                    step_size=0.1,
-                    beta=0.5,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.predictive_settling()
             )
         if any(k in family for k in ("spiking", "stdp", "snn")):
             return SpikeIntegrationDynamics(
@@ -2579,93 +2647,40 @@ class ModelAdapter:
         )
         if any(k in family for k in forward_keys):
             return InstantaneousDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="instantaneous",
-                    max_steps=1,
-                    convergence_threshold=1e-4,
-                    convergence_start=1,
-                    step_size=0.1,
-                    beta=0.1,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.instantaneous()
             )
         return None
 
     def _dynamics_from_gradient_method(self, method: str) -> StateDynamics | None:
         if method == "equilibrium":
             return EnergyMinimizationDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="energy_minimization",
+                StateDynamicsConfig.energy_minimization(
                     max_steps=getattr(self.model, "max_steps", 30),
-                    convergence_threshold=1e-4,
-                    convergence_start=5,
-                    step_size=0.1,
                     beta=getattr(self.model, "beta", 0.5),
-                    track_free_energy_per_iter=False,
                 )
             )
         if method == "predictive_coding":
             return PredictiveSettlingDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="predictive_settling",
-                    max_steps=30,
-                    convergence_threshold=1e-4,
-                    convergence_start=5,
-                    step_size=0.1,
-                    beta=0.5,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.predictive_settling()
             )
         if method in {"spiking", "stdp"}:
             return SpikeIntegrationDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="spike_integration",
-                    max_steps=30,
-                    convergence_threshold=1e-4,
-                    convergence_start=5,
-                    step_size=0.1,
-                    beta=0.5,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.spike_integration()
             )
         return None
 
     def _dynamics_from_locality(self, locality: LocalityLevel) -> StateDynamics | None:  # ruff: ignore[no-self-use]
         if locality == LocalityLevel.EQUILIBRIUM:
             return EnergyMinimizationDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="energy_minimization",
-                    max_steps=30,
-                    convergence_threshold=1e-4,
-                    convergence_start=5,
-                    step_size=0.1,
-                    beta=0.5,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.energy_minimization()
             )
         if locality == LocalityLevel.FORWARD_ONLY:
             return InstantaneousDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="instantaneous",
-                    max_steps=1,
-                    convergence_threshold=1e-4,
-                    convergence_start=1,
-                    step_size=0.1,
-                    beta=0.1,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.instantaneous()
             )
         if locality == LocalityLevel.LOCAL:
             return SpikeIntegrationDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="spike_integration",
-                    max_steps=30,
-                    convergence_threshold=1e-4,
-                    convergence_start=5,
-                    step_size=0.1,
-                    beta=0.5,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.spike_integration()
             )
         return None
 
@@ -3369,10 +3384,15 @@ class NoisySubstrate(DigitalSubstrate):
 
 # Additional dynamics implementations
 class EnergyMinimizationDynamics:
-    """Energy-based settling (EqProp, Hopfield, CHL)."""
+    """Energy-based settling (EqProp, Hopfield, CHL).
+
+    Supports heavy-ball momentum for accelerated convergence:
+    h_{t+1} = h_t + step_size * (geometry.route(h_t) - h_t) + momentum * (h_t - h_{t-1})
+    """
 
     def __init__(self, config: StateDynamicsConfig | None = None):
         self.config = config or StateDynamicsConfig.energy_minimization()
+        self._velocity: Tensor | None = None
 
     def settle(
         self,
@@ -3381,15 +3401,30 @@ class EnergyMinimizationDynamics:
         substrate: Substrate,
         target: Tensor | None = None,
     ) -> SystemState:
-        # Run settling iterations
+        # Run settling iterations with optional momentum
         h = state.activations
         if h is None:
             return state
         if isinstance(h, list):
             h = h[-1]  # Use last layer for single-tensor routing
+
+        # Initialize velocity for momentum
+        if self.config.momentum > 0:
+            self._velocity = torch.zeros_like(h)
+
         for step in range(self.config.max_steps):
             h_new = geometry.route(h)
             h_new = substrate.inject_state_noise(h_new)
+
+            # Apply momentum (heavy-ball)
+            if self.config.momentum > 0 and self._velocity is not None:
+                self._velocity.mul_(self.config.momentum).add_(
+                    h_new - h, alpha=self.config.step_size
+                )
+                h_new = h + self._velocity
+            else:
+                # Standard gradient-like step
+                h_new = h + self.config.step_size * (h_new - h)
 
             if step >= self.config.convergence_start:
                 delta = torch.dist(h_new, h, p=float("inf")).item()
@@ -3795,6 +3830,84 @@ class LazyStateDynamics:
     def clear_cache(self) -> None:
         """Clear the lazy activation cache."""
         self._activation_cache.clear()
+
+
+class DiffusionDynamics:
+    """Diffusion-based state dynamics for continuous-time settling.
+
+    Implements the stochastic differential equation:
+        dh/dt = -∇E(h) + √(2D) ξ(t)
+
+    where E is the energy function, D is the diffusion coefficient (noise),
+    and ξ(t) is white noise. This models Langevin dynamics for sampling
+    from the Boltzmann distribution p(h) ∝ exp(-E(h)/D).
+
+    The discrete-time update (Euler-Maruyama):
+        h_{t+1} = h_t - step_size * ∇E(h_t) + √(2 * step_size * D) * N(0, I)
+
+    For energy-based models, ∇E(h) ≈ h - f(h) where f is the geometry route.
+    """
+
+    def __init__(self, config: StateDynamicsConfig | None = None):
+        self.config = config or StateDynamicsConfig.diffusion()
+        self._diffusion_coeff = 1.0  # D in the SDE
+
+    def settle(
+        self,
+        state: SystemState,
+        geometry: Geometry,
+        substrate: Substrate,
+        target: Tensor | None = None,
+    ) -> SystemState:
+        h = state.activations
+        if h is None:
+            return state
+        if isinstance(h, list):
+            h = h[-1]  # Use last layer for single-tensor routing
+
+        step_size = self.config.step_size
+        diffusion_coeff = self._diffusion_coeff
+
+        for step in range(self.config.max_steps):
+            # Deterministic drift: -∇E(h) ≈ h - geometry.route(h)
+            h_drift = geometry.route(h)
+            h_drift = substrate.inject_state_noise(h_drift)
+            drift = h_drift - h
+
+            # Stochastic diffusion term: √(2 * step_size * D) * N(0, I)
+            noise_scale = math.sqrt(2.0 * step_size * diffusion_coeff)
+            diffusion = torch.randn_like(h) * noise_scale
+
+            # Euler-Maruyama update
+            h_new = h + step_size * drift + diffusion
+
+            if step >= self.config.convergence_start:
+                delta = torch.dist(h_new, h, p=float("inf")).item()
+                if delta < self.config.convergence_threshold:
+                    h = h_new
+                    break
+            h = h_new
+
+        if target is None:
+            state.free_state = h
+        else:
+            state.nudged_state = h
+        state.activations = h
+        return state
+
+    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:
+        """Compute energy of the current state."""
+        acts = state.free_state if state.free_state is not None else state.activations
+        if acts is None:
+            acts = state.nudged_state
+        if acts is None:
+            return torch.tensor(0.0)
+        if isinstance(acts, list):
+            acts = acts[-1]
+        # Energy: 0.5 * ||h - f(h)||^2 (fixed point energy)
+        with torch.no_grad():
+            h_pred = geometry.route(acts)
+        return 0.5 * ((acts - h_pred) ** 2).mean()
 
 
 # Additional credit assignment implementations

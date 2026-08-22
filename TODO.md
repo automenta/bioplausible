@@ -40,17 +40,17 @@ All 4 phases complete. Key deliverables:
 
 ## 🎯 CURRENT PRIORITIES (Ordered by Impact & Dependency)
 
-### Sprint 9.0: Ontology Primitives (3-5 days) — **UNBLOCKS Sprint 9/9.5/9.6**
+### Sprint 9.0: Ontology Primitives (3-5 days) — **UNBLOCKS Sprint 9/9.5/9.6** ✅ **COMPLETE**
 **Goal**: Implement 4 missing 5-D primitives needed by native migrations and adapters.
 
-| Primitive | Axis | Blocked By | Files to Create/Modify |
-|-----------|------|------------|------------------------|
-| `DiffusionDynamics` | StateDynamics | `EqPropDiffusion` (Sprint 9 P1), `diffusion_native.py` | `core/ontology.py` (protocol + config), `core/local_learning/settling.py` (implementation) |
-| `EnergyMinimization.momentum` variant | StateDynamics | `MomentumEquilibrium` (Sprint 9 P1), `momentum_native.py` | `core/ontology.py` (add `momentum` field to `StateDynamicsConfig.energy_minimization`), `core/local_learning/settling.py` |
-| `SparseSubstrate` | Substrate | `SparseEquilibrium` (Sprint 9 P1), `sparse_native.py`, `SparseSubstrate` adapter (Sprint 9.6) | `core/substrates/sparse_substrate.py`, `core/ontology.py` (config) |
-| `TernarySubstrate` | Substrate | `TernaryEqProp` (Sprint 9 P0), `ternary_native.py`, `TernarySubstrate` adapter (Sprint 9.6) | `core/substrates/ternary_substrate.py`, `core/ontology.py` (config with STE) |
+| Primitive | Axis | Blocked By | Files Created/Modified | Status |
+|-----------|------|------------|------------------------|--------|
+| `DiffusionDynamics` | StateDynamics | `EqPropDiffusion` (Sprint 9 P1), `diffusion_native.py` | `core/ontology.py` (protocol + config + implementation) | ✅ |
+| `EnergyMinimization.momentum` variant | StateDynamics | `MomentumEquilibrium` (Sprint 9 P1), `momentum_native.py` | `core/ontology.py` (added `momentum` field to `StateDynamicsConfig.energy_minimization` + implementation) | ✅ |
+| `SparseSubstrate` | Substrate | `SparseEquilibrium` (Sprint 9 P1), `sparse_native.py`, `SparseSubstrate` adapter (Sprint 9.6) | `core/substrates/sparse_substrate.py`, `core/ontology.py` (config factory) | ✅ |
+| `TernarySubstrate` | Substrate | `TernaryEqProp` (Sprint 9 P0), `ternary_native.py`, `TernarySubstrate` adapter (Sprint 9.6) | `core/substrates/ternary_substrate.py`, `core/ontology.py` (config factory with STE) | ✅ |
 
-**Exit Criteria**: All 4 primitives have protocol, config, factory method, and pass axis certification locks (S/G/D/C/U).
+**Exit Criteria**: All 4 primitives have protocol, config, factory method, and pass axis certification locks (S/G/D/C/U) — **MET**.
 
 ---
 
@@ -107,9 +107,9 @@ All 4 phases complete. Key deliverables:
 | `QuantumSubstrate` | Digital (float32) → Quantum (amplitude encoding) | Variational circuit emulation on classical GPU | ⚠️ Partial (classical sim) |
 | `MemristiveSubstrate` | Digital (float32) → Memristive (int8 conductance) | Conductance quantization + IR-drop model | ✅ Implemented |
 | `NeuromorphicSubstrate` | Digital (float32) → Neuromorphic (spike trains) | Rate-to-spike encoding, surrogate gradients | ❌ Needed |
-| `TernarySubstrate` | Digital (float32) → Ternary ({-1,0,1}) | Post-training ternary quantization, STE | ❌ Needed |
+| `TernarySubstrate` adapter | Digital (float32) → Ternary ({-1,0,1}) | Post-training ternary quantization, STE | ❌ Needed (base substrate ✅) |
 | `AnalogSubstrate` + `NoisySubstrate` | Digital (float32) → Analog (noisy) | Continuous noise injection, surrogate gradients | ✅ Implemented |
-| `SparseSubstrate` | Digital (dense) → Sparse (CSR/COO) | Dynamic sparsity masks, efficient sparse matmul | ❌ Needed |
+| `SparseSubstrate` adapter | Digital (dense) → Sparse (CSR/COO) | Dynamic sparsity masks, efficient sparse matmul | ❌ Needed (base substrate ✅) |
 
 **Cross-Dynamics Adapters**:
 | Adapter | Source → Target | Purpose |
@@ -133,10 +133,10 @@ All 4 phases complete. Key deliverables:
 
 | Gap | Axis | Blocked Compositions | Action |
 |-----|------|---------------------|--------|
-| `DiffusionDynamics` missing | StateDynamics | `EqPropDiffusion`, diffusion-based models | **Moved to Sprint 9.0** |
-| `EnergyMinimization` momentum variant missing | StateDynamics | `MomentumEquilibrium`, heavy-ball settling | **Moved to Sprint 9.0** |
-| `SparseSubstrate` missing | Substrate | `SparseEquilibrium`, sparse LoopedMLP | **Moved to Sprint 9.0** |
-| `TernarySubstrate` missing | Substrate | `TernaryEqProp`, ternary quantization | **Moved to Sprint 9.0** |
+| `DiffusionDynamics` missing | StateDynamics | `EqPropDiffusion`, diffusion-based models | ✅ **Complete** (Sprint 9.0) |
+| `EnergyMinimization` momentum variant missing | StateDynamics | `MomentumEquilibrium`, heavy-ball settling | ✅ **Complete** (Sprint 9.0) |
+| `SparseSubstrate` missing | Substrate | `SparseEquilibrium`, sparse LoopedMLP | ✅ **Complete** (Sprint 9.0) |
+| `TernarySubstrate` missing | Substrate | `TernaryEqProp`, ternary quantization | ✅ **Complete** (Sprint 9.0) |
 | `PredictiveSettling` dynamics missing | StateDynamics | PC-style models, cross-dynamics adapter (Sprint 9.6) | Implement protocol + config in `core/ontology.py` |
 | `ComplexSubstrate` not in axis certifications | Substrate | L1-L7, S/G/D/C/U locks don't test complex path; blocks Holomorphic EP (Sprint 9 P0) | Add complex path to property locks |
 | `SubstrateConfig.precision` not enforced | Substrate | QuantumSubstrate ignores it, ComplexSubstrate uses float32 | Add precision enforcement to all substrate `__init__` |

@@ -98,15 +98,7 @@ def _make_random_system(device: torch.device) -> tuple:
 
     # Use deterministic dynamics only
     dynamics = InstantaneousDynamics(
-        StateDynamicsConfig(
-            dynamics_type="instantaneous",
-            max_steps=1,
-            convergence_threshold=1e-4,
-            convergence_start=1,
-            step_size=0.1,
-            beta=0.1,
-            track_free_energy_per_iter=False,
-        )
+        StateDynamicsConfig.instantaneous()
     )
 
     # Use deterministic credit types only (no random projections, temporal trace)
@@ -280,15 +272,7 @@ class TestSystemSpecRoundTrip:
                 )
             ),
             dynamics=EnergyMinimizationDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="energy_minimization",
-                    max_steps=30,
-                    convergence_threshold=1e-4,
-                    convergence_start=5,
-                    step_size=0.1,
-                    beta=0.5,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.energy_minimization()
             ),
             credit=ThermodynamicContrast(
                 CreditAssignmentConfig(
@@ -367,15 +351,7 @@ class TestSystemSpecRoundTrip:
                 )
             ),
             dynamics=InstantaneousDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="instantaneous",
-                    max_steps=1,
-                    convergence_threshold=1e-4,
-                    convergence_start=1,
-                    step_size=0.1,
-                    beta=0.1,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.instantaneous()
             ),
             credit=ThermodynamicContrast(
                 CreditAssignmentConfig(
@@ -435,15 +411,7 @@ class TestSystemSpecRoundTrip:
                 )
             ),
             dynamics=InstantaneousDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="instantaneous",
-                    max_steps=1,
-                    convergence_threshold=1e-4,
-                    convergence_start=1,
-                    step_size=0.1,
-                    beta=0.1,
-                    track_free_energy_per_iter=False,
-                )
+                StateDynamicsConfig.instantaneous()
             ),
             credit=ThermodynamicContrast(
                 CreditAssignmentConfig(

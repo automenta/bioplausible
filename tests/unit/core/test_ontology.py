@@ -362,15 +362,7 @@ class TestStateDynamics:
 
     def test_instantaneous_dynamics(self):
         dynamics = InstantaneousDynamics(
-            StateDynamicsConfig(
-                dynamics_type="instantaneous",
-                max_steps=1,
-                convergence_threshold=1e-4,
-                convergence_start=1,
-                step_size=0.1,
-                beta=0.1,
-                track_free_energy_per_iter=False,
-            )
+            StateDynamicsConfig.instantaneous()
         )
         geometry = FeedforwardGeometry(
             GeometryConfig(
@@ -699,15 +691,7 @@ class TestOntologyConfigs:
         assert config.topology_type == "feedforward"
 
     def test_state_dynamics_config(self):
-        config = StateDynamicsConfig(
-            dynamics_type="energy_minimization",
-            max_steps=30,
-            convergence_threshold=1e-4,
-            convergence_start=5,
-            step_size=0.1,
-            beta=0.1,
-            track_free_energy_per_iter=False,
-        )
+        config = StateDynamicsConfig.energy_minimization()
         assert config.dynamics_type == "energy_minimization"
         assert config.max_steps == 30
 

@@ -740,8 +740,7 @@ def create_eqprop_system(
     )
 
     dynamics = EnergyMinimizationDynamics(
-        StateDynamicsConfig(
-            dynamics_type="energy_minimization",
+        StateDynamicsConfig.energy_minimization(
             max_steps=settle_steps,
             convergence_threshold=1e-4,
             convergence_start=5,
@@ -822,15 +821,7 @@ def create_backprop_system(
     )
 
     dynamics = InstantaneousDynamics(
-        StateDynamicsConfig(
-            dynamics_type="instantaneous",
-            max_steps=1,
-            convergence_threshold=1e-4,
-            convergence_start=1,
-            step_size=0.1,
-            beta=0.1,
-            track_free_energy_per_iter=False,
-        )
+        StateDynamicsConfig.instantaneous()
     )
 
     credit = BackpropCredit(
@@ -904,15 +895,7 @@ def create_fa_system(
     )
 
     dynamics = InstantaneousDynamics(
-        StateDynamicsConfig(
-            dynamics_type="instantaneous",
-            max_steps=1,
-            convergence_threshold=1e-4,
-            convergence_start=1,
-            step_size=0.1,
-            beta=0.1,
-            track_free_energy_per_iter=False,
-        )
+        StateDynamicsConfig.instantaneous()
     )
 
     credit = RandomProjectionsCredit(
