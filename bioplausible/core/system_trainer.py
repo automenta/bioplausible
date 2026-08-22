@@ -10,7 +10,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Protocol, TypeVar
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
 import torch
 from torch import Tensor
@@ -30,6 +30,9 @@ from bioplausible.core.ontology import (
     System,
     SystemState,
 )
+
+if TYPE_CHECKING:
+    from bioplausible.config.experiment import ExperimentConfig
 
 logger = get_logger()
 
@@ -129,7 +132,6 @@ class SystemTrainer:
         Returns:
             A configured SystemTrainer ready to call fit().
         """
-        from bioplausible.config.experiment import ExperimentConfig
         from bioplausible.core.ontology import (
             SubstrateConfig,
             GeometryConfig,

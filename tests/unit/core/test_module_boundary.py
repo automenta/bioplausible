@@ -61,9 +61,9 @@ print("ok")
 def test_top_level_import_is_lazy_and_attr_access_loads():
     script = """
 import bioplausible
-assert "CoreTrainer" not in vars(bioplausible)  # not loaded on plain import
-_ = bioplausible.CoreTrainer  # triggers lazy load
-assert "CoreTrainer" in vars(bioplausible)
+assert "SystemTrainer" not in vars(bioplausible)  # not loaded on plain import
+_ = bioplausible.SystemTrainer  # triggers lazy load
+assert "SystemTrainer" in vars(bioplausible)
 print("ok")
 """
     out = subprocess.run(

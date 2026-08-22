@@ -72,10 +72,10 @@ def test_registration_then_query_finds_it(name):
     """A registered component is discoverable via query and list."""
     saved = _snapshot()
     try:
-        Registry.register(ComponentCategory.OPTIMIZER, name, family="fa")(_Dummy)
-        listed = Registry.list(ComponentCategory.OPTIMIZER)
-        assert name in listed[ComponentCategory.OPTIMIZER.value]
-        results = Registry.query(category=ComponentCategory.OPTIMIZER, family="fa")
+        Registry.register(ComponentCategory.PARAM_UPDATE, name, family="fa")(_Dummy)
+        listed = Registry.list(ComponentCategory.PARAM_UPDATE)
+        assert name in listed[ComponentCategory.PARAM_UPDATE.value]
+        results = Registry.query(category=ComponentCategory.PARAM_UPDATE, family="fa")
         assert any(r["name"] == name for r in results)
     finally:
         _restore(saved)
@@ -112,7 +112,7 @@ def test_round_trip_identity(name):
         def factory():
             return 42
 
-        Registry.register(ComponentCategory.PROPAGATOR, name)(factory)
-        assert Registry.get(ComponentCategory.PROPAGATOR, name) is factory
+        Registry.register(ComponentCategory.CREDIT_ASSIGNMENT, name)(factory)
+        assert Registry.get(ComponentCategory.CREDIT_ASSIGNMENT, name) is factory
     finally:
         _restore(saved)

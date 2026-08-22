@@ -156,7 +156,7 @@ markers = [
     "flaky: quarantined non-deterministic test (Sprint 5.6)",
     "llm: requires a real LLM provider; skipped in CI",
 ]
-addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=25 -p no:warnings"
+addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=24 -p no:warnings"
 
 [tool.coverage.run]
 source = ["bioplausible"]

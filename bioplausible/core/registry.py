@@ -63,15 +63,6 @@ class ComponentCategory(str, Enum):
     TASK = "task"
     TRACK = "track"
 
-    # Deprecated aliases (for backward compatibility during migration)
-    PROPAGATOR = "propagator"
-    OPTIMIZER = "optimizer"
-    UPDATE_STRATEGY = "update_strategy"
-    CONSTRAINT = "constraint"
-    SPARSITY = "sparsity"
-    KERNEL_BACKEND = "kernel_backend"
-    CONTROLLER = "controller"
-
 
 class LocalityLevel(str, Enum):
     """Credit assignment locality level."""
@@ -392,17 +383,6 @@ class Registry:
                     "resolving alias to %s/%s.",
                     name,
                     cat.value,
-                    target_cat.value,
-                    target_name,
-                )
-                return cls.get(target_cat, target_name)
-            if alias is not None and cat == ComponentCategory.PROPAGATOR:
-                target_cat, target_name = alias
-                logger.info(
-                    "Propagator %r is a model-side learner (registered as "
-                    "%s/%r); the model's train_step handles training — "
-                    "no propagator object is created.",
-                    name,
                     target_cat.value,
                     target_name,
                 )
@@ -904,9 +884,9 @@ def register_track(name: str | None = None, **kwargs) -> Callable:
 
 # Deprecated aliases (for backward compatibility)
 def register_propagator(name: str | None = None, **kwargs) -> Callable:
-    """Register a propagator/learning-rule component (deprecated: use register_credit_assignment).
+    """Register a credit assignment component (deprecated: use register_credit_assignment).
 
-    Registers under both PROPAGATOR (deprecated) and CREDIT_ASSIGNMENT (new).
+    Registers under CREDIT_ASSIGNMENT (new).
     """
     import warnings
 
@@ -915,15 +895,13 @@ def register_propagator(name: str | None = None, **kwargs) -> Callable:
         DeprecationWarning,
         stacklevel=2,
     )
-    # Register under both old and new categories for backward compatibility
-    Registry.register(ComponentCategory.PROPAGATOR, name, **kwargs)
     return Registry.register(ComponentCategory.CREDIT_ASSIGNMENT, name, **kwargs)
 
 
 def register_optimizer(name: str | None = None, **kwargs) -> Callable:
-    """Register an optimizer component (deprecated: use register_param_update).
+    """Register a parameter update component (deprecated: use register_param_update).
 
-    Registers under both OPTIMIZER (deprecated) and PARAM_UPDATE (new).
+    Registers under PARAM_UPDATE (new).
     """
     import warnings
 
@@ -932,14 +910,13 @@ def register_optimizer(name: str | None = None, **kwargs) -> Callable:
         DeprecationWarning,
         stacklevel=2,
     )
-    Registry.register(ComponentCategory.OPTIMIZER, name, **kwargs)
     return Registry.register(ComponentCategory.PARAM_UPDATE, name, **kwargs)
 
 
 def register_update_strategy(name: str | None = None, **kwargs) -> Callable:
     """Register an update-strategy component (deprecated: use register_param_update).
 
-    Registers under both UPDATE_STRATEGY (deprecated) and PARAM_UPDATE (new).
+    Registers under PARAM_UPDATE (new).
     """
     import warnings
 
@@ -948,14 +925,13 @@ def register_update_strategy(name: str | None = None, **kwargs) -> Callable:
         DeprecationWarning,
         stacklevel=2,
     )
-    Registry.register(ComponentCategory.UPDATE_STRATEGY, name, **kwargs)
     return Registry.register(ComponentCategory.PARAM_UPDATE, name, **kwargs)
 
 
 def register_constraint(name: str | None = None, **kwargs) -> Callable:
     """Register a constraint component (deprecated: use register_param_update).
 
-    Registers under both CONSTRAINT (deprecated) and PARAM_UPDATE (new).
+    Registers under PARAM_UPDATE (new).
     """
     import warnings
 
@@ -964,14 +940,13 @@ def register_constraint(name: str | None = None, **kwargs) -> Callable:
         DeprecationWarning,
         stacklevel=2,
     )
-    Registry.register(ComponentCategory.CONSTRAINT, name, **kwargs)
     return Registry.register(ComponentCategory.PARAM_UPDATE, name, **kwargs)
 
 
 def register_sparsity(name: str | None = None, **kwargs) -> Callable:
     """Register a sparsity component (deprecated: use register_hardware).
 
-    Registers under both SPARSITY (deprecated) and HARDWARE (new).
+    Registers under HARDWARE (new).
     """
     import warnings
 
@@ -980,14 +955,13 @@ def register_sparsity(name: str | None = None, **kwargs) -> Callable:
         DeprecationWarning,
         stacklevel=2,
     )
-    Registry.register(ComponentCategory.SPARSITY, name, **kwargs)
     return Registry.register(ComponentCategory.HARDWARE, name, **kwargs)
 
 
 def register_controller(name: str | None = None, **kwargs) -> Callable:
     """Register a training-side controller component (deprecated: use register_hardware).
 
-    Registers under both CONTROLLER (deprecated) and HARDWARE (new).
+    Registers under HARDWARE (new).
     """
     import warnings
 
@@ -996,7 +970,6 @@ def register_controller(name: str | None = None, **kwargs) -> Callable:
         DeprecationWarning,
         stacklevel=2,
     )
-    Registry.register(ComponentCategory.CONTROLLER, name, **kwargs)
     return Registry.register(ComponentCategory.HARDWARE, name, **kwargs)
 
 

@@ -17,7 +17,7 @@ from typing import Any
 
 from omegaconf import MISSING, OmegaConf
 
-from bioplausible.config.unified import ModelConfig as InternalModelConfig
+from bioplausible.config.experiment import ModelConfig as InternalModelConfig
 from bioplausible.core.logging import get_logger
 
 __all__ = [

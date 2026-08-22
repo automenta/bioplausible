@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "BaseConfig",
     "BaseStructuredConfig",
+    "BaseStructuredDefaults",
     "DataConfig",
     "DeviceStr",
     "ExperimentConfig",
@@ -52,6 +53,7 @@ __all__ = [
     "LayerRole",
     "ModelConfig",
     "ReproducibilityConfig",
+    "_build_model_config",
     "compute_hidden_dims",
     "config_to_dict",
     "load_config",
@@ -116,7 +118,7 @@ class BaseStructuredDefaults:
 
 
 # ──────────────────────────────────────────────
-# Model configuration (migrated from core/config.py)
+# Legacy ModelConfig (deprecated, for backward compatibility with legacy zoo models)
 # ──────────────────────────────────────────────
 
 
@@ -126,7 +128,11 @@ LayerRole = Literal["hidden", "output"]
 
 @dataclass(frozen=True, slots=True)
 class ModelConfig:
-    """Configuration for a bio-plausible model.
+    """Legacy configuration for a bio-plausible model (deprecated).
+
+    Kept for backward compatibility with legacy zoo models that have not yet
+    been migrated to the new 5-D ontology pipeline. New code should use
+    :class:`bioplausible.config.experiment.ModelConfig` instead.
 
     Migrated from :mod:`bioplausible.core.config` (REFACTOR.md §1.1). Kept as
     a standalone frozen dataclass (NOT extending :class:`BaseConfig`) because
@@ -180,34 +186,6 @@ class ModelConfig:
             object.__setattr__(self, "input_dim", val)
         if self.output_dim <= 0:
             raise ValueError(f"output_dim must be > 0, got {self.output_dim}")
-
-
-def resolve_hidden_dims(
-    config: ModelConfig | None, hidden_dim: int | None
-) -> list[int]:
-    """Resolve the ``hidden_dims`` list from a ``ModelConfig`` or fallback.
-
-    Returns ``config.hidden_dims`` if non-empty; otherwise falls back to
-    ``[hidden_dim]`` if set; otherwise ``[]``.
-    """
-    if config is not None and config.hidden_dims:
-        return config.hidden_dims
-    if hidden_dim is not None:
-        return [hidden_dim]
-    return []
-
-
-def compute_hidden_dims(
-    hidden_dim: int | None, num_layers: int, max_layers: int = 5
-) -> list[int]:
-    """Compute a ``hidden_dims`` list for a ``build`` classmethod.
-
-    Returns ``[hidden_dim] * min(num_layers, max_layers)`` when
-    ``hidden_dim`` is set, else ``[]``.
-    """
-    if hidden_dim is None:
-        return []
-    return [hidden_dim] * min(num_layers, max_layers)
 
 
 def _build_model_config(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # contract for zoo models' build classmethods
@@ -276,57 +254,13 @@ def _build_model_config(  # ruff: ignore[too-many-arguments, too-many-positional
     return config
 
 
-def load_config(cls: type, path: str | Path) -> Any:
-    """Load a frozen dataclass config from a YAML file.
-
-    Merges the YAML with ``cls`` (the frozen dataclass) so that defaults
-    from the dataclass definition fill in missing keys, then converts
-    to a runtime instance via :func:`OmegaConf.to_object`.
-
-    Args:
-        cls: The frozen dataclass config class (e.g. ``MyConfig``).
-        path: Path to the YAML file.
-
-    Returns:
-        Instance of *cls* with values from the YAML merged over dataclass
-        defaults.
-    """
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"Config file not found: {p}")
-    yaml_cfg = OmegaConf.load(p)
-    merged = OmegaConf.merge(cls, yaml_cfg)
-    obj = OmegaConf.to_object(merged)
-    if not isinstance(obj, cls):
-        return obj
-    return obj
-
-
-def save_config(obj: Any, path: str | Path) -> None:
-    """Save a dataclass config instance to a YAML file.
-
-    Args:
-        obj: A dataclass instance (frozen or mutable).
-        path: Destination YAML file path.
-    """
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    OmegaConf.save(OmegaConf.structured(obj), str(p))
-
-
-def config_to_dict(obj: Any) -> dict[str, Any]:
-    """Convert a dataclass config to a plain dict, omitting ``None`` values.
-
-    Like :meth:`~bioplausible.core.metrics.BaseMetrics.to_dict`, this
-    strips ``None`` entries so the result is JSON-serialisable and
-    losslessly reconstructable.
-    """
-    return {k: v for k, v in asdict(obj).items() if v is not None}
-
-
 # ──────────────────────────────────────────────
 # Data configuration (unified task/geometry resolution)
 # ──────────────────────────────────────────────
+
+
+#: Role of a layer within a model: "hidden" or "output".
+LayerRole = Literal["hidden", "output"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -412,3 +346,79 @@ class ExperimentRunnerConfig(BaseConfig):
     eval_batches: int = 20
     track_metrics: bool = True
     verbose: bool = True
+
+
+def resolve_hidden_dims(
+    config: Any | None, hidden_dim: int | None
+) -> list[int]:
+    """Resolve the ``hidden_dims`` list from a config or fallback.
+
+    Returns ``config.hidden_dims`` if non-empty; otherwise falls back to
+    ``[hidden_dim]`` if set; otherwise ``[]``.
+    """
+    if config is not None and getattr(config, "hidden_dims", None):
+        return config.hidden_dims
+    if hidden_dim is not None:
+        return [hidden_dim]
+    return []
+
+
+def compute_hidden_dims(
+    hidden_dim: int | None, num_layers: int, max_layers: int = 5
+) -> list[int]:
+    """Compute a ``hidden_dims`` list for a ``build`` classmethod.
+
+    Returns ``[hidden_dim] * min(num_layers, max_layers)`` when
+    ``hidden_dim`` is set, else ``[]``.
+    """
+    if hidden_dim is None:
+        return []
+    return [hidden_dim] * min(num_layers, max_layers)
+
+
+def load_config(cls: type, path: str | Path) -> Any:
+    """Load a frozen dataclass config from a YAML file.
+
+    Merges the YAML with ``cls`` (the frozen dataclass) so that defaults
+    from the dataclass definition fill in missing keys, then converts
+    to a runtime instance via :func:`OmegaConf.to_object`.
+
+    Args:
+        cls: The frozen dataclass config class (e.g. ``MyConfig``).
+        path: Path to the YAML file.
+
+    Returns:
+        Instance of *cls* with values from the YAML merged over dataclass
+        defaults.
+    """
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Config file not found: {p}")
+    yaml_cfg = OmegaConf.load(p)
+    merged = OmegaConf.merge(cls, yaml_cfg)
+    obj = OmegaConf.to_object(merged)
+    if not isinstance(obj, cls):
+        return obj
+    return obj
+
+
+def save_config(obj: Any, path: str | Path) -> None:
+    """Save a dataclass config instance to a YAML file.
+
+    Args:
+        obj: A dataclass instance (frozen or mutable).
+        path: Destination YAML file path.
+    """
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    OmegaConf.save(OmegaConf.structured(obj), str(p))
+
+
+def config_to_dict(obj: Any) -> dict[str, Any]:
+    """Convert a dataclass config to a plain dict, omitting ``None`` values.
+
+    Like :meth:`~bioplausible.core.metrics.BaseMetrics.to_dict`, this
+    strips ``None`` entries so the result is JSON-serialisable and
+    losslessly reconstructable.
+    """
+    return {k: v for k, v in asdict(obj).items() if v is not None}

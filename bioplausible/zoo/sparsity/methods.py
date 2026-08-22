@@ -3,7 +3,7 @@
 Each class implements a ``step()`` method that updates parameter masks
 based on a different sparsity heuristic.  Registration is done with the
 ``@register_sparsity`` decorator so the methods are discoverable through
-``Registry.list(ComponentCategory.SPARSITY)``.
+``Registry.list(ComponentCategory.HARDWARE)``.
 """
 
 import torch

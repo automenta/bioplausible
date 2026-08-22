@@ -8,7 +8,6 @@ from typing import cast
 import torch
 from torch import nn
 
-from bioplausible.core.construction import construct_model
 from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device
@@ -36,31 +35,27 @@ def inspect_model(args):
         "Task: %s, Input: %s, Output: %s", args.task, task.input_dim, task.output_dim
     )
 
-    # Create Model
-    model_cls = Registry.get(ComponentCategory.MODEL, args.model)
-    # Task geometry is passed straight through: vision tasks expose spatial
-    # ``input_dim`` tuples that the construction layer folds (same contract as
-    # ``_build_runconfig_model``). ``0`` guards the LM ``None`` case.
-    model = cast(
-        "nn.Module",
-        construct_model(
-            model_cls,
-            {"hidden_dim": 64, "num_layers": 2},
-            input_dim=cast("int", task.input_dim or 0),
-            output_dim=task.output_dim,
-            model_name=args.model,
-        ),
-    ).to(device)
-
-    logger.info("Model Created: %s", model.__class__.__name__)
-    logger.info(
-        "Parameters: %.2fM", count_parameters(model, trainable_only=False) / 1e6
+    # Create System via 5-D ontology projection
+    # This uses the native 5-D composition for models that support it,
+    # or falls back to ModelAdapter for legacy models.
+    system = Registry.to_system(
+        args.model,
+        input_dim=task.input_dim or 0,
+        hidden_dim=64,
+        output_dim=task.output_dim,
+        num_layers=2,
     )
+
+    logger.info("System Created: %s", type(system).__name__)
+
+    # Get parameter count from geometry
+    if hasattr(system, "geometry") and hasattr(system.geometry, "params"):
+        param_count = sum(p.numel() for p in system.geometry.params.values())
+        logger.info("Parameters: %.2fM", param_count / 1e6)
 
     # Run Dummy Forward
     logger.info("Running Verification Inference...")
     x, _ = task.get_batch("val")
-    model.eval()
     with torch.no_grad():
         # LM models that expose `embed` expect integer token ids — task.get_batch
         # already returns those ids, so forward handles the embedding internally.
@@ -70,7 +65,10 @@ def inspect_model(args):
 
         try:
             x = x.to(device)
-            out = model(x)
+            # Move system geometry to device if needed
+            if hasattr(system.geometry, "to"):
+                system.geometry.to(device)
+            out = system.forward(x)
         except RuntimeError, ValueError, TypeError:
             logger.exception("Forward pass failed for model %s", args.model)
             return

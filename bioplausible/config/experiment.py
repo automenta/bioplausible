@@ -17,8 +17,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from bioplausible.config.unified import ModelConfig as UnifiedModelConfig
-
 if TYPE_CHECKING:
     from bioplausible.core.ontology import (
         CreditAssignmentConfig,
@@ -145,26 +143,6 @@ class ModelConfig:
 
     # Additional kwargs
     extra: dict[str, Any]
-
-    def to_unified(self) -> UnifiedModelConfig:
-        """Convert to the existing UnifiedModelConfig for backward compatibility."""
-        return UnifiedModelConfig(
-            name=self.name,
-            input_dim=self.input_dim,
-            output_dim=self.output_dim,
-            hidden_dims=list(self.hidden_dims),
-            learning_rate=self.learning_rate,
-            beta=self.beta,
-            max_steps=self.max_steps,
-            convergence_threshold=self.convergence_threshold,
-            convergence_start=self.convergence_start,
-            use_spectral_norm=self.use_spectral_norm,
-            spectral_norm_power_iterations=self.spectral_norm_power_iterations,
-            activation=self.activation,  # type: ignore[arg-type]
-            lipschitz_mode=self.lipschitz_mode,  # type: ignore[arg-type]
-            output_scaling_mode=self.output_scaling_mode,
-            extra=self.extra,
-        )
 
 
 @dataclass(frozen=True, slots=True)

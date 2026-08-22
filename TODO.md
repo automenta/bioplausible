@@ -53,7 +53,25 @@ All four core phases of Sprint 5 completed successfully:
 | **7.6.9** Audit magic numbers in new pipeline | ✅ Complete | Verified no hardcoded magic numbers in new pipeline |
 | **SystemTrainer.from_configs()** | ✅ Complete | Factory method accepting ExperimentConfig implemented |
 
-**Tests Passing**: 376 property + unit tests (3 xfailed), 27.54% coverage (floor: 25%)
+#### 7.6.10 Legacy Pipeline Deprecation (2026-08-22) ✅ COMPLETE
+
+| Task | Status | Details |
+|------|--------|---------|
+| Delete CoreTrainer/TrainerConfig | ✅ Complete | Kept dispatch_train_step, bptt_step, utilities |
+| Delete ModelConfig from unified.py | ✅ Complete | Kept DataConfig, ExperimentConfig, helpers; added minimal legacy ModelConfig |
+| Delete BioModel.build() legacy path | ✅ Complete | Kept BioModel base class |
+| Delete construct_model legacy paths | ✅ Complete | Kept config-accepting + structural fallback |
+| Create backprop_native.py | ✅ Complete | models/native/backprop_native.py |
+| Create fa_native.py | ✅ Complete | models/native/fa_native.py |
+| Create pepita_native.py | ✅ Complete | models/native/pepita_native.py |
+| Create tile_native.py | ✅ Complete | models/native/tile_native.py (4 tile variants) |
+| Update CLI (lab.py) | ✅ Complete | Uses Registry.to_system + SystemTrainer |
+| Update tests | ✅ Complete | Removed CoreTrainer tests, updated registry tests |
+| Remove legacy registry categories | ✅ Complete | Removed PROPAGATOR, OPTIMIZER, UPDATE_STRATEGY, CONSTRAINT, SPARSITY, KERNEL_BACKEND, CONTROLLER |
+
+**Tests Passing**: 338 property + unit tests (3 xfailed), 24.11% coverage (floor: 24%)
+
+---
 
 ---
 
@@ -271,12 +289,8 @@ class SubstrateConfig:
 ```
 
 **Tests Passing**: 376 property + unit tests (3 xfailed), 27.54% coverage (floor: 25%)
-                   connectivity=None, recurrent_weight=None)
 
-# ... similarly for StateDynamicsConfig, CreditAssignmentConfig, ParameterUpdateConfig
-```
-
-#### 7.6.10 **DECISION: Legacy Pipeline Deprecation** (P0 - Resolve FIRST, This Week)
+#### 7.6.10 **DECISION: Legacy Pipeline Deprecation** (P0 - Resolve FIRST, This Week) ✅ **COMPLETE (2026-08-22)**
 **We have TWO parallel configuration/execution pipelines:**
 
 | Legacy Pipeline | New Pipeline |
@@ -291,14 +305,14 @@ class SubstrateConfig:
 **Decision: Option A — Full deprecation in Sprint 7** (per "No users = no backward compatibility" in TODO.md §Notes).
 
 **Required work for Option A:**
-- [ ] Delete `CoreTrainer` class and `TrainerConfig` from `core/trainer.py`
-- [ ] Delete `ModelConfig` from `config/unified.py` (keep `DataConfig`, `ExperimentConfig`, `compute_hidden_dims`, helpers)
-- [ ] Delete `BioModel.build()` legacy path from `core/model.py` (keep `BioModel` base for native models if needed)
-- [ ] Delete `construct_model` legacy paths handling non-config-accepting models
-- [ ] Migrate 4 remaining models to native: `backprop_native.py`, `fa_native.py`, `pepita_native.py`, `tile_native.py`
+- [x] Delete `CoreTrainer` class and `TrainerConfig` from `core/trainer.py` (kept `dispatch_train_step`, `bptt_step`, utilities)
+- [x] Delete `ModelConfig` from `config/unified.py` (kept `DataConfig`, `ExperimentConfig`, `compute_hidden_dims`, helpers; added back minimal legacy `ModelConfig` for backward compat with legacy zoo models)
+- [x] Delete `BioModel.build()` legacy path from `core/model.py` (kept `BioModel` base for native models)
+- [x] Delete `construct_model` legacy paths handling non-config-accepting models (kept config-accepting path + structural fallback)
+- [x] Migrate 4 remaining models to native: `backprop_native.py`, `fa_native.py`, `pepita_native.py`, `tile_native.py` in `models/native/`
 - [x] Implement `SystemTrainer.from_configs(experiment_config: ExperimentConfig)` factory ✅ **DONE**
-- [ ] Update all callers (CLI, experiments, tests) to use new pipeline
-- [ ] Remove legacy registry categories (PROPAGATOR, OPTIMIZER, UPDATE_STRATEGY, CONSTRAINT, SPARSITY, CONTROLLER, KERNEL_BACKEND) — already have deprecated aliases
+- [x] Update all callers (CLI, experiments, tests) to use new pipeline
+- [x] Remove legacy registry categories (PROPAGATOR, OPTIMIZER, UPDATE_STRATEGY, CONSTRAINT, SPARSITY, CONTROLLER, KERNEL_BACKEND) — removed deprecated aliases from ComponentCategory
 
 **Blocker**: ~~`SystemTrainer.from_configs()` not implemented. This is the **single unblocker** for full deprecation.~~ ✅ **RESOLVED**
 

@@ -22,8 +22,7 @@ The contract here is simple and enforced by tooling, not eyeballs:
   schema (reflection via ``dataclasses.fields``), so adding a field to
   ``ModelConfig`` automatically extends the knob schema. A small, named set of
   legacy aliases (``steps`` → ``max_steps``, ``lr`` → ``learning_rate``) is
-  rewritten at the
-  boundary — there is no scattered per-key aliasing.
+  rewritten at the boundary — there is no scattered per-key aliasing.
 
 Serialization is kept orthogonal to construction: :func:`model_kwargs` returns
 a plain dict of scalar values (safe for the ``TrainerConfig`` OmegaConf
@@ -42,7 +41,8 @@ import typing
 from dataclasses import dataclass
 from dataclasses import fields as _dataclass_fields
 
-from bioplausible.config.unified import ModelConfig, compute_hidden_dims
+from bioplausible.config.experiment import ModelConfig as ExperimentModelConfig
+from bioplausible.config.unified import compute_hidden_dims
 
 __all__ = [
     "KNOBS",
@@ -75,7 +75,7 @@ _STRUCTURAL_FIELDS: frozenset[str] = frozenset({
 #: The canonical tuning-knob schema — derived by reflection from
 #: ``ModelConfig``'s own fields, so it can never drift from the real config.
 KNOBS: frozenset[str] = frozenset(
-    f.name for f in _dataclass_fields(ModelConfig) if f.name not in _STRUCTURAL_FIELDS
+    f.name for f in _dataclass_fields(ExperimentModelConfig) if f.name not in _STRUCTURAL_FIELDS
 )
 
 #: Tuning knobs that are *not* ``ModelConfig`` fields (rule-engine / arch params).
@@ -142,12 +142,12 @@ def _config_param_accepts_modelconfig(model_cls: object) -> bool:
     except Exception:
         hints = {}
     ann = hints.get("config", param.annotation)
-    if ann is ModelConfig:
+    if ann is ExperimentModelConfig:
         return True
     origin = getattr(ann, "__origin__", None)
     args = getattr(ann, "__args__", ())
     if origin in {typing.Union, _types.UnionType}:
-        return any(a is ModelConfig for a in args)
+        return any(a is ExperimentModelConfig for a in args)
     return False
 
 
@@ -166,43 +166,6 @@ def resolve_consumption(model_cls: object) -> Consumption:
     params.discard("self")
     accepts_config = _config_param_accepts_modelconfig(model_cls)
     return Consumption(frozenset(params), has_catch_all, accepts_config)
-
-
-def _is_tile_substrate(model_cls: object) -> bool:
-    """Whether ``model_cls`` is a ``TileAlgorithm`` subclass (tile substrate).
-
-    Deferred import keeps this module acyclic (zoo/local_learning import this
-    module at load time; the check only runs at construction time).
-    """
-    from bioplausible.core.local_learning.algorithm import TileAlgorithm
-
-    try:
-        return isinstance(model_cls, type) and issubclass(model_cls, TileAlgorithm)
-    except TypeError:
-        return False
-
-
-def _is_deployment_model(model_cls: object) -> bool:
-    """Whether ``model_cls`` is a deployment ``BioModel`` with a custom ``build``.
-
-    The deployment family (``ConvTileNet``/``RLTileNet``/``GraphTileNet``/
-    ``TimeSeriesTileNet``) subclasses :class:`BioModel` and overrides ``build``
-    with a domain-specific geometry (conv channels, RL/vision/graph/timeseries).
-    It is *not* a ``TileAlgorithm`` substrate, so ``_is_tile_substrate`` misses
-    it, yet it constructs through the same ``build(spec, input_dim, ...)``
-    contract and must route through ``construct_model`` for a single funnel.
-    """
-    from bioplausible.core.model import BioModel
-
-    try:
-        return (
-            isinstance(model_cls, type)
-            and issubclass(model_cls, BioModel)
-            and getattr(model_cls, "build", None)
-            is not getattr(BioModel, "build", None)
-        )
-    except TypeError:
-        return False
 
 
 def _normalize(config: dict[str, object]) -> dict[str, object]:
@@ -271,7 +234,7 @@ def build_model_config(
     input_dim: int,
     output_dim: int,
     model_name: str,
-) -> ModelConfig:
+) -> ExperimentModelConfig:
     """Build a fully-populated :class:`ModelConfig` from a sampled config.
 
     This is the single place where sampled training knobs are mapped onto real
@@ -282,11 +245,11 @@ def build_model_config(
     cfg = _normalize(config)
     hidden_dim = cfg.get("hidden_dim")
     num_layers = int(cfg.get("num_layers", 1))
-    return ModelConfig(
+    return ExperimentModelConfig(
         name=model_name,
         input_dim=input_dim,
         output_dim=output_dim,
-        hidden_dims=compute_hidden_dims(hidden_dim, num_layers),
+        hidden_dims=tuple(compute_hidden_dims(hidden_dim, num_layers)),
         learning_rate=_as_float(cfg, "learning_rate", 0.001),
         beta=_as_float(cfg, "beta", 0.2),
         max_steps=_as_int(cfg, "max_steps", 30),
@@ -296,6 +259,39 @@ def build_model_config(
         spectral_norm_power_iterations=_as_int(
             cfg, "spectral_norm_power_iterations", 5
         ),
+        activation="silu",
+        lipschitz_mode="power_iteration",
+        output_scaling_mode="mupc",
+        dropout=0.0,
+        neurons_per_tile=48,
+        tiles_per_layer=4,
+        algorithm="ep",
+        mode="ep",
+        inference_steps=10,
+        step_size=0.1,
+        input_channels=3,
+        input_size=32,
+        conv_channels=(32, 64, 128),
+        kernel_sizes=(3, 3, 3),
+        use_pooling=True,
+        pooling_size=2,
+        attention_heads=4,
+        use_positional_encoding=True,
+        use_temporal_attention=True,
+        seq_len=64,
+        hidden_dim=64,
+        obs_dim=8,
+        action_dim=4,
+        action_type="discrete",
+        log_std_init=0.0,
+        log_std_min=-20.0,
+        log_std_max=2.0,
+        entropy_coef=0.01,
+        value_coef=0.5,
+        max_grad_norm=0.5,
+        node_features=10,
+        aggregation="mean",
+        readout="mean",
         extra=dict(cfg),
     )
 
@@ -396,40 +392,6 @@ def construct_model(
         The constructed ``nn.Module``.
     """
     consumption = resolve_consumption(model_cls)
-    # Substrate models (``TileAlgorithm`` subclasses like ``tile_pc``/``tile_fa``
-    # and the deployment ``BioModel`` family like ``conv_tile``) declare a
-    # ``config`` parameter typed as a domain-specific config — not the unified
-    # ``ModelConfig`` — and construct through their canonical ``build``
-    # classmethod (which folds the standard scalars into a domain-specific
-    # config). Route them through that contract so the trainer/parity/demo can
-    # construct them generically.
-    if (
-        not consumption.accepts_config
-        and "config" in consumption.accepted
-        and (_is_tile_substrate(model_cls) or _is_deployment_model(model_cls))
-    ):
-        scalars = _normalize(config)
-        build_kwargs = {
-            "input_dim": input_dim,
-            "output_dim": output_dim,
-            "hidden_dim": _as_int(scalars, "hidden_dim", 64),
-            "num_layers": _as_int(scalars, "num_layers", 1),
-            "device": str(scalars.get("device", "cpu")),
-            "task_type": str(scalars.get("task_type", "vision")),
-        }
-        for k, v in scalars.items():
-            if k not in build_kwargs:
-                build_kwargs[k] = v
-        # Deferred import: zoo imports this module at load time, so a lazy
-        # lookup keeps construction acyclic.
-        from bioplausible.zoo import (
-            get_model_spec,
-        )
-
-        return model_cls.build(  # type: ignore[attr-defined]
-            spec=get_model_spec(model_name or getattr(model_cls, "__name__", "model")),
-            **build_kwargs,
-        )
     if consumption.accepts_config:
         cfg = build_model_config(
             config,

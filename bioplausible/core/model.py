@@ -10,9 +10,8 @@ from abc import ABC
 import torch
 from torch import nn
 
-from bioplausible.config.unified import ModelConfig
+from bioplausible.config.experiment import ModelConfig
 from bioplausible.core.checkpoint_mixin import CheckpointMixin
-from bioplausible.core.construction import build_from_standard_args
 from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.spectral_mixin import SpectralMixin
 from bioplausible.core.training_mixin import TrainingMixin
@@ -42,35 +41,11 @@ class BioModel(nn.Module, ABC, TrainingMixin, SpectralMixin, CheckpointMixin):
 
     def __init__(
         self,
-        config: ModelConfig | None = None,
-        # Legacy/Direct init support
-        input_dim: int | None = None,
-        hidden_dim: int | None = None,
-        output_dim: int | None = None,
-        use_spectral_norm: bool = True,
-        max_steps: int = 30,
-        lipschitz_mode: str = "power_iteration",
-        spectral_norm_power_iterations: int = 5,
-        **kwargs,
+        config: ModelConfig,
     ):
         super().__init__()
 
-        # Handle config vs direct args
-        if config is None:
-            # Legacy/Direct init
-            self.config = ModelConfig(
-                name=self.algorithm_name,
-                input_dim=input_dim if input_dim is not None else 0,
-                output_dim=output_dim if output_dim is not None else 0,
-                hidden_dims=[hidden_dim] if hidden_dim else [],
-                use_spectral_norm=use_spectral_norm,
-                max_steps=max_steps,
-                lipschitz_mode=lipschitz_mode,
-                spectral_norm_power_iterations=spectral_norm_power_iterations,
-                extra=kwargs,
-            )
-        else:
-            self.config = config
+        self.config = config
 
         # Shortcuts for convenience
         self.input_dim = self.config.input_dim
@@ -84,7 +59,7 @@ class BioModel(nn.Module, ABC, TrainingMixin, SpectralMixin, CheckpointMixin):
         self.spectral_norm_power_iterations = getattr(
             self.config,
             "spectral_norm_power_iterations",
-            spectral_norm_power_iterations,
+            5,
         )
 
         # Helper for activation
@@ -157,35 +132,6 @@ class BioModel(nn.Module, ABC, TrainingMixin, SpectralMixin, CheckpointMixin):
             **kwargs,
         )
         return with_sn, without_sn
-
-    @classmethod
-    def build(
-        cls,
-        spec,
-        input_dim,
-        output_dim,
-        hidden_dim,
-        num_layers,
-        device,
-        task_type,
-        **kwargs,
-    ):
-        # BioModel-specific defaults (preserved from original BioModel.build)
-        kwargs.setdefault("learning_rate", getattr(spec, "default_lr", 0.001))
-        kwargs.setdefault("beta", 0.1)
-        kwargs.setdefault("max_steps", 20)
-        kwargs.setdefault("use_spectral_norm", True)
-        return build_from_standard_args(
-            cls,
-            spec,
-            input_dim,
-            output_dim,
-            hidden_dim,
-            num_layers,
-            device,
-            task_type,
-            **kwargs,
-        )
 
     # ------------------------------------------------------------------
     # TransitionGraph protocol (REFACTOR3 §1)

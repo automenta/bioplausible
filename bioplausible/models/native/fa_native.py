@@ -1,0 +1,86 @@
+"""Native Feedback Alignment model using 5-D Ontology composition.
+
+This replaces the legacy FA models with a direct
+composition of the 5 Protocols, bypassing ModelAdapter.
+"""
+
+from __future__ import annotations
+
+from bioplausible.core.ontology import (
+    CreditAssignmentConfig,
+    DigitalSubstrate,
+    EuclideanUpdate,
+    FeedforwardGeometry,
+    GeometryConfig,
+    InstantaneousDynamics,
+    ParameterUpdateConfig,
+    RandomProjectionsCredit,
+    StateDynamicsConfig,
+    System,
+)
+from bioplausible.core.system_trainer import compose_system
+
+
+def create_native_fa_mlp(
+    input_dim: int,
+    hidden_dim: int,
+    output_dim: int,
+    num_layers: int = 2,
+    lr: float = 0.001,
+    **kwargs,
+) -> System:
+    """Create a Feedback Alignment system using native 5-D composition.
+
+    Args:
+        input_dim: Input dimension
+        hidden_dim: Hidden layer dimension
+        output_dim: Output dimension
+        num_layers: Number of hidden layers
+        lr: Learning rate
+        **kwargs: Additional arguments (ignored, for compatibility)
+
+    Returns:
+        A composed System with FeedforwardGeometry + InstantaneousDynamics
+        + RandomProjectionsCredit + EuclideanUpdate
+    """
+    # Build hidden dims list
+    hidden_dims = tuple([hidden_dim] * max(num_layers - 1, 1))
+
+    geometry_cfg = GeometryConfig(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_dims=hidden_dims,
+        num_layers=num_layers,
+        topology_type="feedforward",
+        connectivity=None,
+        recurrent_weight=None,
+    )
+
+    substrate = DigitalSubstrate()
+    geometry = FeedforwardGeometry(geometry_cfg)
+    dynamics = InstantaneousDynamics(
+        StateDynamicsConfig(
+            dynamics_type="instantaneous",
+            max_steps=1,
+            beta=0.1,
+        )
+    )
+    credit = RandomProjectionsCredit(
+        CreditAssignmentConfig(
+            credit_type="random_projections",
+            beta=0.5,
+            feedback_scale=0.01,
+        )
+    )
+    update = EuclideanUpdate(
+        ParameterUpdateConfig(
+            update_type="euclidean",
+            step_size=lr,
+        )
+    )
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+# Alias for registry registration
+native_fa_mlp = create_native_fa_mlp
