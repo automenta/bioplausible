@@ -1488,6 +1488,15 @@ class FeedforwardGeometry(nn.Module):
             if i < len(dims) - 2:
                 layers.append(nn.ReLU())
         self._layers = nn.ModuleList(layers)
+        self._set_param_names()
+
+    def _set_param_names(self) -> None:
+        """Set _param_name attribute on weight tensors for substrate keying."""
+        for i, layer in enumerate(self._layers):
+            if isinstance(layer, nn.Linear):
+                layer.weight._param_name = f"layer_{i}_weight"
+                if layer.bias is not None:
+                    layer.bias._param_name = f"layer_{i}_bias"
 
     @property
     def params(self) -> dict[str, Tensor]:
@@ -1615,6 +1624,17 @@ class RecurrentGeometry(nn.Module):
                 self._recurrent_weight = nn.Parameter(
                     torch.randn(hidden_dim, hidden_dim) * self.config.init_scale
                 )
+        self._set_param_names()
+
+    def _set_param_names(self) -> None:
+        """Set _param_name attribute on weight tensors for substrate keying."""
+        for i, layer in enumerate(self._layers):
+            if isinstance(layer, nn.Linear):
+                layer.weight._param_name = f"layer_{i}_weight"
+                if layer.bias is not None:
+                    layer.bias._param_name = f"layer_{i}_bias"
+        if self._recurrent_weight is not None:
+            self._recurrent_weight._param_name = "recurrent_weight"
 
     @property
     def params(self) -> dict[str, Tensor]:
@@ -1751,6 +1771,7 @@ class TileGeometry(nn.Module):
 
         self._build_projections()
         self._build_tile_params()
+        self._set_projection_param_names()
 
     def _build_projections(self) -> None:
         """Build input/output projections between raw IO and tile-state space."""
@@ -1774,12 +1795,27 @@ class TileGeometry(nn.Module):
         for tid, tile in self._graph.tiles.items():
             if tile.is_input:
                 continue
-            self._tile_biases[str(tid)] = nn.Parameter(torch.zeros(tile.neurons))
+            bias = nn.Parameter(torch.zeros(tile.neurons))
+            bias._param_name = f"tile_bias_{tid}"
+            self._tile_biases[str(tid)] = bias
             for src_id in tile.bwd_neighbors:
                 src = self._graph.tiles[src_id]
                 bound = 1.0 / math.sqrt(src.neurons) if src.neurons > 0 else 0.0
                 w = torch.empty(tile.neurons, src.neurons).uniform_(-bound, bound)
-                self._tile_weights[f"{src_id}_{tid}"] = nn.Parameter(w)
+                param = nn.Parameter(w)
+                param._param_name = f"tile_weight_{src_id}_{tid}"
+                self._tile_weights[f"{src_id}_{tid}"] = param
+
+    def _set_projection_param_names(self) -> None:
+        """Set _param_name on input/output projection weights."""
+        if self._input_projection is not None:
+            self._input_projection.weight._param_name = "input_proj_weight"
+            if self._input_projection.bias is not None:
+                self._input_projection.bias._param_name = "input_proj_bias"
+        if self._output_projection is not None:
+            self._output_projection.weight._param_name = "output_proj_weight"
+            if self._output_projection.bias is not None:
+                self._output_projection.bias._param_name = "output_proj_bias"
 
     @staticmethod
     def _weight_key(src_id: int, dst_id: int) -> str:

@@ -7,6 +7,7 @@ from .causal_transformer_eqprop import (
     CausalTransformerEqProp,
 )
 from .conv_eqprop import ConvEqProp
+from .diffusion_native import native_diffusion_eqprop
 from .eqprop_diffusion import EqPropDiffusion
 from .eqprop_lm_variants import (
     CausalMask,
@@ -34,9 +35,12 @@ from .memory_efficient import (
     create_memory_efficient_model,
 )
 from .modern_conv_eqprop import ModernConvEqProp, SimpleConvEqProp
+from .momentum_native import native_momentum_eqprop
 from .neural_cube import NeuralCube
+from .sparse_native import native_sparse_eqprop
 from .temporal_resonance import TemporalResonanceEqProp
 from .ternary import TernaryEqProp, TernaryLinear, TernaryQuantize
+from .ternary_native import native_ternary_eqprop
 from .transformer_eqprop import EqPropAttention, TransformerEqProp
 
 __all__: list[str] = sorted(

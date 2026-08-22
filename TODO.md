@@ -1,6 +1,6 @@
 # Sprint Backlog — Consolidated (2026-08-22)
 
-**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0: ✅ Complete** | **Sprint 9: ✅ Complete** | Sprints 9.5-13: Planned
+**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0: ✅ Complete** | **Sprint 9: ✅ Complete** | **Sprint 9.5: ✅ Complete** | Sprints 9.6-13: Planned
 
 ---
 
@@ -80,15 +80,15 @@ All 4 phases complete. Key deliverables:
 
 ---
 
-### Sprint 9.5: Map Remaining Zoo Components to 5-D Ontology Coordinates
+### Sprint 9.5: Map Remaining Zoo Components to 5-D Ontology Coordinates ✅ **COMPLETE**
 **Goal**: Document all unique hardware/model variants as ontology coordinates.
 
 | Component | Current Location | Target Axes | Status |
 |-----------|------------------|-------------|--------|
-| `TernaryEqProp` | `eqprop/ternary.py` | Substrate (ternary) or ParamUpdate | ❌ Missing |
-| `MomentumEquilibrium` | `eqprop/_energy.py` | Dynamics (EnergyMin + Momentum) | ❌ Missing |
-| `SparseEquilibrium` | `eqprop/sparse_eq.py` | Geometry (Sparse) or Substrate | ❌ Missing |
-| `EqPropDiffusion` | `eqprop/eqprop_diffusion.py` | Dynamics (Diffusion-based) | ❌ Missing |
+| `TernaryEqProp` | `eqprop/ternary.py` | Substrate (TernarySubstrate) | ✅ `ternary_eqprop` native |
+| `MomentumEquilibrium` | `eqprop/_energy.py` | Dynamics (EnergyMin + Momentum) | ✅ `momentum_eqprop` native |
+| `SparseEquilibrium` | `eqprop/sparse_eq.py` | Substrate (SparseSubstrate) | ✅ `sparse_eqprop` native |
+| `EqPropDiffusion` | `eqprop/eqprop_diffusion.py` | Dynamics (DiffusionDynamics) | ✅ `diffusion_eqprop` native |
 | `QuantizedLoopedMLP` | `eqprop/hardware_variants.py` | Substrate (Memristive/Quantized) | ✅ MemristiveSubstrate exists |
 | `NoisyLoopedMLP` | `eqprop/hardware_variants.py` | Substrate (Analog/Noisy) | ✅ Analog/NoisySubstrate exist |
 | `SpikingLoopedMLP` | `eqprop/hardware_variants.py` | Substrate (Neuromorphic) + Dynamics (SpikeIntegration) | ✅ Both exist |
@@ -98,6 +98,16 @@ All 4 phases complete. Key deliverables:
 | `NeuralCube` | `eqprop/neural_cube.py` | Geometry (SpatialLattice3D) | ✅ SpatialLattice3D exists |
 | `LazyEqProp` | `eqprop/lazy_eqprop.py` | Dynamics (LazyStateDynamics) | ✅ LazyStateDynamics exists |
 | `Homeostatic` | `eqprop/homeostatic.py` | Credit (HomeostaticCredit) | ✅ HomeostaticCredit exists |
+
+**Deliverables**:
+- Created 4 native composition files in `models/native/`:
+  - `ternary_eqprop_native.py` — TernarySubstrate + RecurrentGeometry + EnergyMinimizationDynamics + ThermodynamicContrast + EuclideanUpdate
+  - `momentum_eqprop_native.py` — DigitalSubstrate + RecurrentGeometry + EnergyMinimizationDynamics(momentum) + ThermodynamicContrast + EuclideanUpdate
+  - `sparse_eqprop_native.py` — SparseSubstrate + RecurrentGeometry + EnergyMinimizationDynamics + ThermodynamicContrast + EuclideanUpdate
+  - `diffusion_eqprop_native.py` — DigitalSubstrate + RecurrentGeometry + DiffusionDynamics + ThermodynamicContrast + EuclideanUpdate
+- Registered all 4 as factory functions in zoo registry: `ternary_eqprop`, `momentum_eqprop`, `sparse_eqprop`, `diffusion_eqprop`
+- Added `_param_name` attribute to geometry weight tensors for proper substrate keying (fixes sparse/ternary mask reuse bug)
+- All 4 native models pass `train_step` and forward inference
 
 ---
 
