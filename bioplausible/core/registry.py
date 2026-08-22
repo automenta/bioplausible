@@ -909,7 +909,12 @@ def register_propagator(name: str | None = None, **kwargs) -> Callable:
     Registers under both PROPAGATOR (deprecated) and CREDIT_ASSIGNMENT (new).
     """
     import warnings
-    warnings.warn("register_propagator is deprecated, use register_credit_assignment", DeprecationWarning, stacklevel=2)
+
+    warnings.warn(
+        "register_propagator is deprecated, use register_credit_assignment",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     # Register under both old and new categories for backward compatibility
     Registry.register(ComponentCategory.PROPAGATOR, name, **kwargs)
     return Registry.register(ComponentCategory.CREDIT_ASSIGNMENT, name, **kwargs)
@@ -921,7 +926,12 @@ def register_optimizer(name: str | None = None, **kwargs) -> Callable:
     Registers under both OPTIMIZER (deprecated) and PARAM_UPDATE (new).
     """
     import warnings
-    warnings.warn("register_optimizer is deprecated, use register_param_update", DeprecationWarning, stacklevel=2)
+
+    warnings.warn(
+        "register_optimizer is deprecated, use register_param_update",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     Registry.register(ComponentCategory.OPTIMIZER, name, **kwargs)
     return Registry.register(ComponentCategory.PARAM_UPDATE, name, **kwargs)
 
@@ -932,7 +942,12 @@ def register_update_strategy(name: str | None = None, **kwargs) -> Callable:
     Registers under both UPDATE_STRATEGY (deprecated) and PARAM_UPDATE (new).
     """
     import warnings
-    warnings.warn("register_update_strategy is deprecated, use register_param_update", DeprecationWarning, stacklevel=2)
+
+    warnings.warn(
+        "register_update_strategy is deprecated, use register_param_update",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     Registry.register(ComponentCategory.UPDATE_STRATEGY, name, **kwargs)
     return Registry.register(ComponentCategory.PARAM_UPDATE, name, **kwargs)
 
@@ -943,7 +958,12 @@ def register_constraint(name: str | None = None, **kwargs) -> Callable:
     Registers under both CONSTRAINT (deprecated) and PARAM_UPDATE (new).
     """
     import warnings
-    warnings.warn("register_constraint is deprecated, use register_param_update", DeprecationWarning, stacklevel=2)
+
+    warnings.warn(
+        "register_constraint is deprecated, use register_param_update",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     Registry.register(ComponentCategory.CONSTRAINT, name, **kwargs)
     return Registry.register(ComponentCategory.PARAM_UPDATE, name, **kwargs)
 
@@ -954,7 +974,12 @@ def register_sparsity(name: str | None = None, **kwargs) -> Callable:
     Registers under both SPARSITY (deprecated) and HARDWARE (new).
     """
     import warnings
-    warnings.warn("register_sparsity is deprecated, use register_hardware", DeprecationWarning, stacklevel=2)
+
+    warnings.warn(
+        "register_sparsity is deprecated, use register_hardware",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     Registry.register(ComponentCategory.SPARSITY, name, **kwargs)
     return Registry.register(ComponentCategory.HARDWARE, name, **kwargs)
 
@@ -965,7 +990,12 @@ def register_controller(name: str | None = None, **kwargs) -> Callable:
     Registers under both CONTROLLER (deprecated) and HARDWARE (new).
     """
     import warnings
-    warnings.warn("register_controller is deprecated, use register_hardware", DeprecationWarning, stacklevel=2)
+
+    warnings.warn(
+        "register_controller is deprecated, use register_hardware",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     Registry.register(ComponentCategory.CONTROLLER, name, **kwargs)
     return Registry.register(ComponentCategory.HARDWARE, name, **kwargs)
 

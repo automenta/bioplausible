@@ -135,7 +135,15 @@ def test_query_empty_for_exclusive_constraint(meta):
         }
         # Use a family guaranteed not to match
         if meta.family:
-            other_families = ["eqprop", "fa", "hebbian", "backprop", "predictive_coding", "mep", "tile"]
+            other_families = [
+                "eqprop",
+                "fa",
+                "hebbian",
+                "backprop",
+                "predictive_coding",
+                "mep",
+                "tile",
+            ]
             other = [f for f in other_families if f != meta.family]
             if other:
                 results = Registry.query(

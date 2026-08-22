@@ -135,7 +135,9 @@ def get_optimizers_for_propagator(
     propagator_name: str,
 ) -> list[dict[str, object]]:
     """Return optimizers compatible with a propagator's backward flag."""
-    prop_meta = Registry.get_metadata(ComponentCategory.CREDIT_ASSIGNMENT, propagator_name)
+    prop_meta = Registry.get_metadata(
+        ComponentCategory.CREDIT_ASSIGNMENT, propagator_name
+    )
     return Registry.query(
         category=ComponentCategory.PARAM_UPDATE,
         requires_backward=prop_meta.requires_backward,

@@ -29,7 +29,8 @@ from .hardware_variants import NoisyLoopedMLP, QuantizedLoopedMLP
 from .holomorphic_ep import HolomorphicEP
 from .homeostatic import HomeostasisMetrics, HomeostaticEqProp
 from .lazy_eqprop import LazyEqProp, LazyStats
-from .looped_mlp import BackpropMLP, LoopedMLP
+from .looped_mlp import LoopedMLP
+from ..backprop import BackpropMLP
 from .memory_efficient import (
     MemoryEfficientEqPropModel,
     MemoryEfficientLoopedMLP,

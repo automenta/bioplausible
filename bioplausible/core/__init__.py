@@ -19,7 +19,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "Registry": ("bioplausible.core.registry", "Registry"),
     "register_constraint": ("bioplausible.core.registry", "register_constraint"),
     "register_controller": ("bioplausible.core.registry", "register_controller"),
-    "register_credit_assignment": ("bioplausible.core.registry", "register_credit_assignment"),
+    "register_credit_assignment": (
+        "bioplausible.core.registry",
+        "register_credit_assignment",
+    ),
     "register_hardware": ("bioplausible.core.registry", "register_hardware"),
     "register_metric": ("bioplausible.core.registry", "register_metric"),
     "register_model": ("bioplausible.core.registry", "register_model"),

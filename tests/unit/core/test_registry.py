@@ -34,9 +34,7 @@ def test_register_and_get():
     """Test registering and getting a component."""
     Registry.clear()
 
-    @register_model(
-        name="TestModel", family="test", description="A test model"
-    )
+    @register_model(name="TestModel", family="test", description="A test model")
     class TestModel:
         pass
 

@@ -1,6 +1,6 @@
 # Sprint 5: Hypercube Certification, Real Transport, and Native Migration
 
-**Status**: Core phases complete ✅ | **Remaining**: Fix test failures, lint, coverage, cleanup
+**Status**: Core phases complete ✅ | **Sprint 6 Stabilization**: Complete ✅
 
 ---
 
@@ -12,13 +12,13 @@ All four core phases of Sprint 5 completed successfully:
 |-------|-------------|--------|-------|
 | A | Axis Certification Locks (C, U, D axes) | ✅ Complete | 42 tests passing |
 | B | System Spec Interchange Format (.system) | ✅ Complete | 13 tests passing |
-| C | Real Transport P2P Subprocess | ⚠️ Partial | 5/13 passing, 7 failing, 1 xfail |
+| C | Real Transport P2P Subprocess | ✅ Complete | 13/13 passing (6 on CPU, 1 xfail) |
 | D | Native eqprop_mlp Migration | ✅ Complete | L1 Parity Lock passing |
 
 **Key Achievements**:
 - **Phase A**: 42 property-based tests certify all C/U/D axis primitives (LocalGoodnessCredit, TargetInversionCredit, TemporalTraceCredit, RiemannianOrthogonalUpdate, SpectralConstrainedUpdate, NaturalGradientUpdate, ElasticConsolidationUpdate, SpikeIntegrationDynamics)
 - **Phase B**: Versioned `.system` interchange format with round-trip serialization for all 5 axes
-- **Phase C**: Multi-process gRPC with dynamic port binding, exponential backoff, ExecuteStep RPC, fault injection — **core 5 tests pass**, geometry variants and fault injection have CUDA device-side assert failures
+- **Phase C**: Multi-process gRPC with dynamic port binding, exponential backoff, ExecuteStep RPC, fault injection — **all 13 tests pass** (geometry variants and fault injection run on CPU to avoid TileGeometry CUDA assert)
 - **Phase D**: First native strangler-fig migration (eqprop_mlp) bypassing ModelAdapter with L1 parity
 
 **New Files Created**:
@@ -42,19 +42,16 @@ All four core phases of Sprint 5 completed successfully:
 
 ## Remaining Sprint 5 Issues (Must Fix)
 
-### C1: gRPC Seam Geometry Tests — CUDA Device-Side Assert (6 tests failing)
+### C1: gRPC Seam Geometry Tests — CUDA Device-Side Assert (6 tests) ✅ FIXED
 **File**: `tests/integration/test_grpc_seam_subprocess.py::test_various_geometries`
 **Error**: `torch.AcceleratorError: CUDA error: device-side assert triggered` on `.to(device)`
-**Root Cause**: TileGeometry configurations (algorithm="ep", "fa", "hebbian") trigger CUDA kernel assertions when moved to GPU
-**Fix Options**:
-1. Run geometry tests on CPU only (mark `@pytest.mark.gpu_only` → `@pytest.mark.cpu_only`)
-2. Fix underlying TileGeometry kernel issue (deeper investigation needed)
-3. Skip problematic geometries in subprocess test; keep unit test coverage elsewhere
+**Root Cause**: TileGeometry configurations trigger CUDA kernel assertions when moved to GPU
+**Fix Applied**: Marked tests with `@pytest.mark.cpu_only` and force CPU device — tests now pass
 
-### C2: gRPC Seam Fault Injection — CUDA Error During Setup (1 test error)
+### C2: gRPC Seam Fault Injection — CUDA Error During Setup (1 test) ✅ FIXED
 **File**: `tests/integration/test_grpc_seam_subprocess.py::TestGRPCSeamSubprocess::test_fault_injection_worker_kill`
 **Error**: Same CUDA device-side assert during system creation
-**Fix**: Same as C1 — likely the test system creation uses TileGeometry
+**Fix Applied**: Marked test with `@pytest.mark.cpu_only`, create system and batch on CPU — test now passes
 
 ### C3: Distributed Parity Test — XFAIL (1 test expected fail)
 **File**: `tests/integration/test_grpc_seam_subprocess.py::TestGRPCSeamSubprocess::test_distributed_train_step_parity`
@@ -71,16 +68,14 @@ All four core phases of Sprint 5 completed successfully:
 **Categories**: Unused imports, magic values, complexity (C901), type-checking imports, enum patterns, etc.
 **Action**: Deferred indefinitely. Mostly style/unused-import noise in test/legacy code. Auto-fix on demand only.
 
-### Q2: Coverage Floor — 55% Required, ~16% Actual
-**Command**: `uv run pytest --cov=bioplausible --cov-fail-under=55`
-**Status**: FAILS — property tests only cover ontology core
-**Options**:
-1. **Lower floor** to 20% (realistic for research codebase with many kernel/analysis modules)
-2. **Raise coverage** by adding tests for acceleration, analysis, validation modules
-3. **Exclude** non-core modules from coverage (kernels, analysis, validation tracks)
-**Recommendation**: Option 1 + 3 — set floor to 25%, omit kernels/analysis/validation from coverage
+### Q2: Coverage Floor — 25% Required, ~27% Actual ✅ PASSES
+**Command**: `uv run pytest --cov=bioplausible --cov-fail-under=25`
+**Status**: ✅ PASSES — floor lowered to 25%, omit patterns added for non-core modules
+**Changes**: 
+- Lowered `--cov-fail-under` from 55 to 25 in `pyproject.toml`
+- Added `omit` patterns: `*/acceleration/*`, `*/analysis/*`, `*/validation/*`, `*/cli/*`, `*/experiments/*`, `*/tools/*`
 
-### Q3: Pyright — 0 Errors, 2,883 Warnings
+### Q3: Pyright — 0 Errors, 2,879 Warnings
 **Status**: ✅ Passes (no errors)
 **Warnings**: Mostly `reportUnknown*`, `reportUnused*`, `reportConstantRedefinition`
 **Action**: Non-blocking; address incrementally during cleanup
@@ -132,32 +127,32 @@ in 5+ dataclasses with divergent defaults) would require a lossy adapter
 and invite round-trip bugs that L6 is specifically designed to catch.
 Unify first, serialize second.
 
-### Sprint 6: Stabilize & Harden (1-2 weeks)
-**Goal**: Fix blocking CI issues, establish stable baseline
+### Sprint 6: Stabilize & Harden (1-2 weeks) ✅ COMPLETE
+**Goal**: Fix blocking CI issues, establish stable baseline — **ACHIEVED**
 
-#### 6.1 Fix gRPC Seam Test Failures (P0)
-- [ ] **C1**: Move geometry variant tests to CPU or skip on GPU
-- [ ] **C2**: Fix fault injection test setup (same root cause)
-- [ ] Verify core 5 subprocess tests remain green
-- [ ] Document TileGeometry GPU limitation in test comments
+#### 6.1 Fix gRPC Seam Test Failures (P0) ✅ DONE
+- [x] **C1**: Move geometry variant tests to CPU (`@pytest.mark.cpu_only`)
+- [x] **C2**: Fix fault injection test setup (same root cause — create system/batch on CPU)
+- [x] Verify core 5 subprocess tests remain green
+- [x] Document TileGeometry GPU limitation in test comments
 - **Guardrails**: This is the primary CI-flakiness risk. Mitigate with:
   - Explicit, strict timeouts on gRPC channel creation
   - A retry wrapper (e.g. `tenacity`) **only on this transport test**; keep all math locks (L1–L7, S/G/D/C/U) strictly retry-free
   - A narrow ephemeral port range (e.g. 50000–50100) instead of `port=0`, to avoid CI namespace/firewall collisions
   - Quarantine immediately if flake rate exceeds ~1-in-20 runs
 
-#### 6.2 Ruff Cleanup (P0 — Deferred)
+#### 6.2 Ruff Cleanup (P0 — Deferred) ✅ DEFERRED
 Linting is NOT blocking. Deferred indefinitely.
-- [ ] Auto-fix on demand only (`uv run ruff check . --fix`)
-- [ ] Per-file ignores for test files as needed
+- [x] Auto-fix on demand only (`uv run ruff check . --fix`)
+- [x] Per-file ignores for test files as needed
 - [ ] Target: <100 remaining errors (all in test/ or legacy code) — **no deadline**
 
-#### 6.3 Coverage Floor Adjustment (P0)
-- [ ] Lower `--cov-fail-under` from 55 to 25 in `pyproject.toml`
-- [ ] Add `omit` patterns for: `*/acceleration/*`, `*/analysis/*`, `*/validation/*`, `*/cli/*`, `*/experiments/*`, `*/tools/*`
-- [ ] Verify fast CI gate passes with new floor
+#### 6.3 Coverage Floor Adjustment (P0) ✅ DONE
+- [x] Lower `--cov-fail-under` from 55 to 25 in `pyproject.toml`
+- [x] Add `omit` patterns for: `*/acceleration/*`, `*/analysis/*`, `*/validation/*`, `*/cli/*`, `*/experiments/*`, `*/tools/*`
+- [x] Verify fast CI gate passes with new floor (27% coverage achieved)
 
-#### 6.4 Fast CI Gate Verification (P0)
+#### 6.4 Fast CI Gate Verification (P0) ✅ DONE
 Wall-clock budget: The test suite must stay ≤ 2 minutes on GPU. This budget is a hard constraint, not a target. If any phase threatens it, reduce per-test work via property-testing bounds (`hypothesis`) rather than expanding CI time. Transport tests (Phase C) may use scoped retries; math locks may not.
 
 ```bash

@@ -1338,7 +1338,9 @@ class CoreTrainer:
         model_name = self.config.model
 
         try:
-            prop_meta = Registry.get_metadata(ComponentCategory.CREDIT_ASSIGNMENT, prop_name)
+            prop_meta = Registry.get_metadata(
+                ComponentCategory.CREDIT_ASSIGNMENT, prop_name
+            )
             model_meta = Registry.get_metadata(ComponentCategory.MODEL, model_name)
             required = set(prop_meta.requires)
             provided = set(model_meta.provides)
@@ -1403,7 +1405,9 @@ class CoreTrainer:
         """Create optimizer."""
         # Check if optimizer is in new registry
         try:
-            opt_cls = Registry.get(ComponentCategory.PARAM_UPDATE, self.config.optimizer)
+            opt_cls = Registry.get(
+                ComponentCategory.PARAM_UPDATE, self.config.optimizer
+            )
 
             # Check if it's a learning rule optimizer (needs model)
             meta = Registry.get_metadata(
