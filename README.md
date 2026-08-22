@@ -124,16 +124,6 @@ biopl <command> [args]
 | `biopl-export-trained-kernel` | Train + export kernel backend with weights |
 | `biopl-p2p-worker` | P2P worker for distributed training (renamed from `eqprop-p2p-worker`) |
 
-### Deprecated / Removed
-
-| Old Command | Replacement |
-|-------------|-------------|
-| `eqprop-verify` | `biopl parity` / `biopl run` with campaign YAML |
-| `eqprop-p2p-worker` | `biopl-p2p-worker` (renamed — framework is no longer EqProp-specific) |
-| `biopl-run` / `biopl-report` / etc. | Use `biopl <subcommand>` (dispatcher) |
-
-> **Migration**: `biopl run --config campaign.yaml` replaces `biopl-run campaign.yaml`. The dispatcher ensures a single versioned entry point.
-
 ---
 
 ## 📦 Installation
@@ -217,6 +207,7 @@ assert system == system2  # identity verified
 
 | Substrate | Physics Model | Verification |
 |-----------|---------------|--------------|
+| `DigitalSubstrate` | CPU/GPU |
 | `MemristiveSubstrate` | Conductance matrices, bounded precision, IR-drop noise | Gradient equivalence vs. digital; positive bounded conductance |
 | `NeuromorphicSubstrate` | Async spike routing, strict sparsity, passivity | Property test: deterministic noise cancels in diff (‖na-nb‖ ≤ ‖a-b‖) |
 | `OpticalSubstrate` | Phase/amplitude encoding, coherent interference | Phase wrapping to [-π, π]; no NaN/inf outputs |
