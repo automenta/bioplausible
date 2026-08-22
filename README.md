@@ -8,7 +8,7 @@ Bioplausible is a research framework for the alternative: **learning algorithms 
 
 The framework demonstrates that capabilities previously reserved for backpropagation can be matched — and in regimes backpropagation cannot reach, exceeded — by algorithms compatible with the actual physics of computation. It provides a **generative physico-computational engine** built on a **6-dimensional ontology** that decomposes every learning system into orthogonal, composable primitives, plus the infrastructure to evaluate them rigorously and discover better ones autonomously.
 
-The joint architecture extends the 5-D engine with a **Plasticity (MetaDynamics) axis**, elevating the computational rule itself to a dynamical variable. The mathematical center becomes the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$, enabling the AutoScientist to search over **composable coupled dynamical systems** — not just fixed learning algorithms.
+The joint architecture extends the 5-D engine with a **Plasticity (MetaDynamics) axis**, elevating the computational rule itself to a dynamical variable. The mathematical center becomes the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$, enabling the AutoScientist to search over **composable coupled dynamical systems** — not just fixed learning algorithms. **The 5-D engine is recovered as the `M = NullPlasticity` slice** (`F_θ^Null = D_θ`), making the Zero-Extension Theorem a genuine mathematical statement, not just an integration test.
 
 ---
 
@@ -109,7 +109,7 @@ Energy binds Geometry and StateDynamics. The framework elevates the energy funct
 - **Directed topology** → requires Control-Lyapunov formulation for stability (formally verified for PredictiveSettlingDynamics)
 - **Free energy tracking** → per-iteration Lyapunov certificates (`track_free_energy_per_iter`) for predictive coding and directed FA
 
-**Joint Architecture Extension**: The mathematical center is now the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$. The `StateRegistry` assigns lifecycle metadata to every variable (persistent θ, fast plastic ψ, substrate-owned σ, consolidatable), resolving ontological overlaps where a single physical variable (e.g., memristive conductance) serves multiple roles. Slow learning operates on persistent θ at episode boundaries: $\theta_{e+1} = U(\theta_e, C(\tau_e))$.
+**Joint Architecture Extension**: The mathematical center is now the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$. The `StateRegistry` assigns lifecycle metadata to every variable (persistent θ, fast plastic ψ, substrate-owned σ, consolidatable), resolving ontological overlaps where a single physical variable (e.g., memristive conductance) serves multiple roles. Slow learning operates on persistent θ at episode boundaries: $\theta_{e+1} = U(\theta_e, C(\tau_e))$. **The 5-D energy-based dynamics are the restriction `F_θ^Null = D_θ` where `M=Null`, `ψ=∅`, `σ=σ₀`.**
 
 This enables the AutoScientist to reason about *physical realizability* and the **stability-plasticity frontier** as constraints, not afterthoughts.
 
@@ -204,11 +204,13 @@ The joint dynamical system elevates the computational rule to a dynamical variab
 | Component | Purpose |
 |-----------|---------|
 | `System[TS, TG, TD, TM, TC, TU]` | Generic 6-layer composition; invalid combos caught at type-check |
-| `SystemTrainer` | 5-stage pipeline: Geometry.forward → StateDynamics.settle → CreditAssignment.compute_pseudo_gradient → ParameterUpdate.step → Substrate.weight_update_operator |
-| `JointSystemTrainer` | Joint pipeline: CoupledTransition.step → trajectory recording → CreditAssignment → ParameterUpdate.consolidate |
+| `JointSystemTrainer` | **Single mathematical center**: executes `CoupledTransition.step` (joint transition `z_{t+1} = F_θ(z_t; G, S)`) → trajectory recording → CreditAssignment → ParameterUpdate.consolidate |
+| `SystemTrainer` | Compatibility wrapper: instantiates `JointSystemTrainer` with `plasticity=NullPlasticity`, `ψ=∅`, `σ=σ₀`. The 5-D pipeline `Geometry.forward → StateDynamics.settle → ...` is the **restriction** `F_θ^Null = D_θ` of the joint dynamics. |
 | `DistributedSystemTrainer` | In-process P2P coordination; shards along Geometry (TileMesh), federates at ParameterUpdate; CreditAssignment stays local |
 | `ModelAdapter` | Strangler Fig adapter: projects legacy Registry models → 5-D System via metadata inference with per-family tolerance calibration |
 | `Registry.to_system()` | One-call projection of any registered component |
+
+**Zero-Extension Theorem**: `M=Null, ψ=const, σ=σ₀ ⟹ F_θ(z)|_x = D_θ(x)`. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture. J1 test certifies this equivalence within numerical tolerance.
 
 ### 4. Factories (`bioplausible/core/system_trainer.py`)
 
@@ -269,8 +271,8 @@ The framework enforces **correctness by construction** through a layered verific
 | **D-axis** | SpikeIntegration Lyapunov (membrane bounded, spike variance non-increasing); LazyStateDynamics | Spike counts tracked; bounded activations |
 | **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |
 | **U-axis** | Muon orthogonalizes gradient (G^T G ≈ I); SpectralConstrained SVD ≤ 1.0; Natural whitens; Elastic moves toward old params | Newton-Schulz converges; diagonal Fisher whitening; δ·(w-old_w) < 0 |
-| **M-axis** | NullPlasticity Zero-Extension; RoutingPlasticity gate entropy; FastWeightPlasticity decay bounds | Null ≡ 5-D; gate entropy ≥ 0; decay ∈ [0,1] |
-| **J1** | NullPlasticity preserves 5-D dynamics (Zero-Extension) | Joint(Null) ≡ 5-D within numerical tolerance |
+| **M-axis** | NullPlasticity Zero-Extension (`F_θ^Null = D_θ`); RoutingPlasticity gate entropy; FastWeightPlasticity decay bounds | Null ≡ 5-D; gate entropy ≥ 0; decay ∈ [0,1] |
+| **J1** | NullPlasticity preserves 5-D dynamics (Zero-Extension Theorem) | `F_θ^Null = D_θ` within numerical tolerance |
 | **J2** | Persistent θ not mutated during intra-episode steps | θ data_ptr() unchanged during CoupledTransition.step |
 | **J3** | fast_plastic variables mutate only through plasticity projection | ψ updates only via PlasticityPrimitive.step |
 | **J4** | substrate_owned variables respect substrate physics constraints | σ updates only via Substrate.forward_operator |
