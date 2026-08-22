@@ -99,6 +99,23 @@ _LAZY: dict[str, tuple[str, str | None]] = {
         "bioplausible.core.distributed_trainer",
         "FederatedAggregator",
     ),
+    # Joint Architecture (6-D tensor product: S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U)
+    "StateVariable": ("bioplausible.core.joint", "StateVariable"),
+    "StateRegistry": ("bioplausible.core.joint", "StateRegistry"),
+    "CompositeState": ("bioplausible.core.joint", "CompositeState"),
+    "JointTrajectoryRecorder": ("bioplausible.core.joint", "JointTrajectoryRecorder"),
+    "SystemContext": ("bioplausible.core.joint", "SystemContext"),
+    "CoupledTransition": ("bioplausible.core.joint", "CoupledTransition"),
+    "PlasticityPrimitive": ("bioplausible.core.joint", "PlasticityPrimitive"),
+    "PlasticityConfig": ("bioplausible.core.joint", "PlasticityConfig"),
+    "NullPlasticity": ("bioplausible.core.joint", "NullPlasticity"),
+    "LegacyDynamicsAsCoupledTransition": (
+        "bioplausible.core.joint",
+        "LegacyDynamicsAsCoupledTransition",
+    ),
+    "JointTrajectory": ("bioplausible.core.joint", "JointTrajectory"),
+    "ConsolidationConfig": ("bioplausible.core.joint", "ConsolidationConfig"),
+    "consolidate": ("bioplausible.core.joint", "consolidate"),
 }
 
 __all__ = sorted(_LAZY)

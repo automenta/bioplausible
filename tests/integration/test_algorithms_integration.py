@@ -1,8 +1,10 @@
-import torch
+"""Legacy model tests - skipped as StandardEqProp/StandardFA removed in Sprint 7 (zoo facade collapse)."""
 
-from bioplausible.config.unified import ModelConfig
-from bioplausible.zoo.models.eqprop import StandardEqProp
-from bioplausible.zoo.models.fa import StandardFA
+import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="StandardEqProp/StandardFA removed in Sprint 7; use native 5-D compositions via SystemTrainer"
+)
 
 
 def test_eqprop_algorithm_integration():

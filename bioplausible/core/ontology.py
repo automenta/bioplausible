@@ -32,6 +32,7 @@ import torch
 from torch import Tensor, nn
 
 from bioplausible.core.registry import ComponentMetadata, ComputeProfile, LocalityLevel
+from bioplausible.core.joint.transition import PlasticityConfig
 if TYPE_CHECKING:
     from bioplausible.core.substrates.complex_substrate import ComplexSubstrate
     from bioplausible.core.substrates.sparse_substrate import SparseSubstrate
@@ -65,6 +66,7 @@ __all__ = [
     "OpticalSubstrate",
     "ParameterUpdate",
     "ParameterUpdateConfig",
+    "PlasticityConfig",
     "PredictiveSettlingDynamics",
     "QuantizedSubstrate",
     "QuantumSubstrate",
@@ -1224,17 +1226,37 @@ class System(Protocol[TS, TG, TD, TC, TU]):
 
 @dataclass(frozen=True, slots=True)
 class SystemConfig:
-    """Validated composition of 5-D ontology — single source of truth for a system.
+    """Validated composition of 6-D ontology — single source of truth for a system.
 
-    Composes the five orthogonal axes and provides validated, cross-validated access.
-    Replaces the redundant flattened fields in ExperimentConfig.OntologyConfig.
+    Composes the six orthogonal axes (S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U) and provides
+    validated, cross-validated access. The 6th axis (M = Plasticity) enables
+    meta-dynamics and fast plastic state evolution.
     """
 
     substrate: SubstrateConfig
     geometry: GeometryConfig
     dynamics: StateDynamicsConfig
+    plasticity: PlasticityConfig
     credit: CreditAssignmentConfig
     update: ParameterUpdateConfig
+
+    def __init__(
+        self,
+        substrate: SubstrateConfig,
+        geometry: GeometryConfig,
+        dynamics: StateDynamicsConfig,
+        credit: CreditAssignmentConfig,
+        update: ParameterUpdateConfig,
+        plasticity: PlasticityConfig | None = None,
+    ):
+        object.__setattr__(self, "substrate", substrate)
+        object.__setattr__(self, "geometry", geometry)
+        object.__setattr__(self, "dynamics", dynamics)
+        object.__setattr__(self, "credit", credit)
+        object.__setattr__(self, "update", update)
+        object.__setattr__(
+            self, "plasticity", plasticity if plasticity is not None else PlasticityConfig.null()
+        )
 
     def validate(self) -> None:
         """Cross-axis validation (hard constraints only).
@@ -1593,21 +1615,29 @@ class SystemConfig:
                 "spectral_constrained": ParameterUpdateConfig.spectral_constrained,
                 "spectral": ParameterUpdateConfig.spectral_constrained,
                 "natural_gradient": ParameterUpdateConfig.natural_gradient,
-                "fisher": ParameterUpdateConfig.natural_gradient,
-                "elastic_consolidation": ParameterUpdateConfig.elastic_consolidation,
-                "ewc": ParameterUpdateConfig.elastic_consolidation,
-                "euclidean": ParameterUpdateConfig.euclidean,
-            }
-            update_factory = update_map.get(
-                ont.update_type, ParameterUpdateConfig.euclidean
-            )
-            update = update_factory(step_size=ont.step_size)
+"fisher": ParameterUpdateConfig.natural_gradient,
+            "elastic_consolidation": ParameterUpdateConfig.elastic_consolidation,
+            "ewc": ParameterUpdateConfig.elastic_consolidation,
+            "euclidean": ParameterUpdateConfig.euclidean,
+        }
+        update_factory = update_map.get(
+            ont.update_type, ParameterUpdateConfig.euclidean
+        )
+        update = update_factory(step_size=ont.step_size)
+
+        # Build plasticity config (6th axis)
+        if hasattr(ont, "plasticity") and ont.plasticity is not None:
+            plasticity = ont.plasticity
+        else:
+            # Default to NullPlasticity for backward compatibility
+            plasticity = PlasticityConfig.null()
 
         # Create and validate
         sys_config = cls(
             substrate=substrate,
             geometry=geometry,
             dynamics=dynamics,
+            plasticity=plasticity,
             credit=credit,
             update=update,
         )

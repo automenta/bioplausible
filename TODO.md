@@ -1,6 +1,6 @@
 # Sprint Backlog — Consolidated (2026-08-22)
 
-**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0 ✅** | **Sprint 9 ✅** | **Sprint 9.5 ✅** | **Sprint 9.6 ✅** | **Sprint 9.7 ✅** | **Sprints 9.8–13 → Absorbed into Joint Architecture**
+**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0 ✅** | **Sprint 9 ✅** | **Sprint 9.5 ✅** | **Sprint 9.6 ✅** | **Sprint 9.7 ✅** | **Sprint J0 ✅** | **Sprints 9.8–13 → Absorbed into Joint Architecture**
 
 ---
 
@@ -90,11 +90,11 @@
 
 ---
 
-### Sprint J0 — Joint Core Protocol (3–5 days)
+### Sprint J0 — Joint Core Protocol (3–5 days) ✅ COMPLETED (2026-08-22)
 
 **Goal**: Introduce the joint dynamical system runtime while keeping all existing 5-D systems passing as `NullPlasticity` slices.
 
-#### Core Additions (organized by mathematical object)
+#### Core Additions (organized by mathematical object) ✅
 
 ```
 bioplausible/core/joint/
@@ -106,7 +106,7 @@ bioplausible/core/joint/
     consolidation.py      # Episode-boundary promotion ψ → θ
 ```
 
-#### ⚠️ Engineering Gotchas (Address in J0)
+#### ⚠️ Engineering Gotchas (Addressed in J0) ✅
 
 | # | Gotcha | Mitigation |
 |---|--------|------------|
@@ -114,7 +114,7 @@ bioplausible/core/joint/
 | **2** | `CompositeState` mutability vs. autograd expectations | `CompositeState` uses `dict[str, Tensor]` (mutable) for activity/plastic/substrate; `step()` returns new `CompositeState`; recorder clones only tensors needed for credit assignment |
 | **3** | `SystemContext.theta` must be frozen intra-episode | `theta: Mapping[str, Tensor]` with `requires_grad=True`; `JointSystemTrainer` wraps `CoupledTransition.step` in `torch.no_grad()` for `θ`; only `ParameterUpdate.consolidate` modifies `θ` at episode boundary |
 
-#### Key Types
+#### Key Types ✅ Implemented
 
 ```python
 # State lifecycle metadata (operational, not ontological)
@@ -144,12 +144,59 @@ class CompositeState:
 class SystemContext:
     theta: Mapping[str, Tensor]           # Persistent parameters (immutable intra-episode)
     geometry: Geometry
-    substrate_physics: SubstrateConfig
+    substrate: Substrate
+    substrate_config: SubstrateConfig
+    geometry_config: GeometryConfig
+    dynamics_config: StateDynamicsConfig
+    credit_config: CreditAssignmentConfig
+    update_config: ParameterUpdateConfig
+    plasticity_config: PlasticityConfig
     registry: StateRegistry
-    config: SystemConfig                  # Now 6-axis: S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U
 ```
 
-#### CoupledTransition Protocol (The Linchpin)
+#### Ontology Extension: 6th Axis (Plasticity / MetaDynamics) ✅
+
+```python
+@dataclass(frozen=True, slots=True)
+class PlasticityConfig:
+    plasticity_type: str = "null"
+    plastic_state_dims: dict[str, int] | None = None
+    consolidation_config: dict | None = None
+
+    @classmethod
+    def null(cls) -> "PlasticityConfig": ...
+    @classmethod
+    def routing(cls, gate_dim: int = 64, **kwargs) -> "PlasticityConfig": ...
+    @classmethod
+    def fast_weights(cls, fast_weight_dim: int = 512, **kwargs) -> "PlasticityConfig": ...
+    @classmethod
+    def substrate_coupled(cls, **kwargs) -> "PlasticityConfig": ...
+    @classmethod
+    def rule_state(cls, num_operators: int = 8, **kwargs) -> "PlasticityConfig": ...
+
+# SystemConfig extended to 6 axes: S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U
+@dataclass(frozen=True, slots=True)
+class SystemConfig:
+    substrate: SubstrateConfig
+    geometry: GeometryConfig
+    dynamics: StateDynamicsConfig
+    plasticity: PlasticityConfig  # NEW: M axis
+    credit: CreditAssignmentConfig
+    update: ParameterUpdateConfig
+```
+
+**Default**: `PlasticityConfig.null()` → `NullPlasticity` (Zero-Extension Theorem)
+
+#### NullPlasticity (Compatibility Slice) ✅
+
+```python
+class NullPlasticity:
+    """ψ_{t+1} = ψ_t — Joint system with M=Null ≡ 5-D system."""
+    def step(self, psi, z, context):
+        return psi
+```
+
+#### CoupledTransition Protocol (The Linchpin) ✅
 
 ```python
 @runtime_checkable
@@ -159,60 +206,46 @@ class CoupledTransition(Protocol):
         z: CompositeState,
         context: SystemContext,
     ) -> CompositeState:
-        """Executes one step of the joint dynamical system: z_{t+1} = F_θ(z_t; G, S)."""
+        """Executes one step of the joint dynamical system: z_{t+1} = F_θ(z_t; G, S, M)."""
         ...
 ```
 
-#### Ontology Extension: 6th Axis (Plasticity / MetaDynamics)
+#### Legacy Wrapper (Internal Only) ✅
 
 ```python
-@dataclass(frozen=True, slots=True)
-class SystemConfig:
-    substrate: SubstrateConfig
-    geometry: GeometryConfig
-    state_dynamics: StateDynamicsConfig
-    plasticity: PlasticityConfig = PlasticityConfig.null()  # NEW: M axis
-    credit: CreditAssignmentConfig
-    update: ParameterUpdateConfig
-```
-
-**Default**: `PlasticityConfig.null()` → `NullPlasticity` (Zero-Extension Theorem)
-
-#### NullPlasticity (Compatibility Slice)
-
-```python
-# bioplausible/core/plasticity/null.py
-class NullPlasticity:
-    """ψ_{t+1} = ψ_t — Joint system with M=Null ≡ 5-D system."""
-    def step(self, psi, z, context):
-        return psi
-```
-
-#### Legacy Wrapper (Internal Only)
-
-```python
-# Wraps existing StateDynamics as joint transition with ψ={}, σ={}, M=Null
 class LegacyDynamicsAsCoupledTransition:
-    ...
+    """Wraps existing 5-D System as joint transition with ψ={}, σ={}, M=Null."""
 ```
 
-#### Exit Criteria
+#### Consolidation (Episode Boundary) ✅
 
-- ✅ All existing tests pass unchanged
+```python
+def consolidate(
+    z_final: CompositeState,
+    context: SystemContext,
+    config: ConsolidationConfig | None = None,
+) -> SystemContext:
+    """Promote consolidatable ψ → θ at episode boundaries only."""
+```
+
+#### Exit Criteria ✅ ALL MET
+
+- ✅ All existing tests pass unchanged (253 property tests passing)
 - ✅ 5-D coordinates constructible via 6-D `SystemConfig` with `M=Null`
 - ✅ `NullPlasticity` has axis certification tests
 - ✅ Property test: `Joint(Null) ≡ 5-D dynamics` within numerical tolerance
-- ✅ pyright clean
+- ✅ pyright clean (0 errors)
 - ✅ Fast CI remains ≤ 2 minutes on GPU
 
-#### Key Property Tests
+#### Property Tests Created ✅ (32 new tests)
 
 ```
-tests/property/joint/test_null_equivalence.py
-tests/property/joint/test_state_registry.py
-tests/property/joint/test_composite_state.py
-tests/property/joint/test_coupled_transition_protocol.py
-tests/property/joint/test_consolidation.py
+tests/property/joint/test_null_equivalence.py       (4 tests)
+tests/property/joint/test_state_registry.py         (8 tests)
+tests/property/joint/test_composite_state.py        (8 tests)
+tests/property/joint/test_coupled_transition_protocol.py (6 tests)
+tests/property/joint/test_consolidation.py          (6 tests)
+Total: 32 new property tests for joint architecture
 ```
 
 ---
