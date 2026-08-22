@@ -14,7 +14,7 @@ Experiments must specify every parameter explicitly via YAML or programmatic con
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         ParameterUpdateConfig,
         StateDynamicsConfig,
         SubstrateConfig,
+        SystemConfig,
     )
 
 __all__ = [
@@ -32,7 +33,7 @@ __all__ = [
     "ModelConfig",
     "TrainingConfig",
     "DataConfig",
-    "OntologyConfig",
+    "SystemConfig",
     "to_omegaconf",
     "from_omegaconf",
     "to_trainer_config",
@@ -240,70 +241,8 @@ class DataConfig:
     data_kwargs: dict[str, Any]
 
 
-@dataclass(frozen=True, slots=True)
-class OntologyConfig:
-    """5-D Ontology configuration (Substrate ⊗ Geometry ⊗ StateDynamics ⊗ CreditAssignment ⊗ ParameterUpdate).
-
-    All fields required.
-    """
-
-    # Substrate axis
-    substrate: "SubstrateConfig | None"
-    substrate_type: Literal[
-        "digital", "analog", "memristive", "neuromorphic", "optical", "quantum"
-    ]
-    substrate_precision: Literal[
-        "float32", "float16", "bfloat16", "int8", "int4", "binary"
-    ]
-
-    # Geometry axis
-    geometry: "GeometryConfig | None"
-    topology_type: Literal[
-        "feedforward", "recurrent", "recurrent_attractor", "tile_mesh", "tile"
-    ]
-    hidden_dims: tuple[int, ...]
-
-    # StateDynamics axis
-    dynamics: "StateDynamicsConfig | None"
-    dynamics_type: Literal[
-        "instantaneous",
-        "energy_minimization",
-        "predictive_settling",
-        "spike_integration",
-    ]
-    max_steps: int
-    beta: float
-
-    # CreditAssignment axis
-    credit: "CreditAssignmentConfig | None"
-    credit_type: Literal[
-        "gradient",
-        "thermodynamic_contrast",
-        "equilibrium",
-        "random_projections",
-        "feedback_alignment",
-        "local_goodness",
-        "forward_only",
-        "temporal_trace",
-        "spiking",
-        "target_inversion",
-        "target_prop",
-    ]
-
-    # ParameterUpdate axis
-    update: "ParameterUpdateConfig | None"
-    update_type: Literal[
-        "euclidean",
-        "riemannian_orthogonal",
-        "muon",
-        "spectral_constrained",
-        "spectral",
-        "natural_gradient",
-        "fisher",
-        "elastic_consolidation",
-        "ewc",
-    ]
-    step_size: float
+# Re-export SystemConfig from ontology as the unified 5-D config
+from bioplausible.core.ontology import SystemConfig
 
 
 # ──────────────────────────────────────────────
@@ -324,7 +263,7 @@ class ExperimentConfig:
             training=TrainingConfig(...),
             data=DataConfig(...),
             hardware=HardwareConfig(...),
-            ontology=OntologyConfig(...),
+            system=SystemConfig(...),
             name="my_experiment",
             seed=42,
             description="",
@@ -342,7 +281,7 @@ class ExperimentConfig:
     training: TrainingConfig
     data: DataConfig
     hardware: HardwareConfig
-    ontology: OntologyConfig
+    system: SystemConfig
 
     # Metadata
     name: str
@@ -619,24 +558,28 @@ def _base_data(domain: str, task: str) -> DataConfig:
     )
 
 
-def _base_ontology() -> OntologyConfig:
-    return OntologyConfig(
-        substrate=None,
-        substrate_type="digital",
-        substrate_precision="float32",
-        geometry=None,
-        topology_type="feedforward",
-        hidden_dims=(),
-        dynamics=None,
-        dynamics_type="instantaneous",
-        max_steps=30,
-        beta=0.5,
-        credit=None,
-        credit_type="gradient",
-        update=None,
-        update_type="euclidean",
-        step_size=0.01,
+def _base_system() -> SystemConfig:
+    from bioplausible.core.ontology import (
+        SubstrateConfig,
+        GeometryConfig,
+        StateDynamicsConfig,
+        CreditAssignmentConfig,
+        ParameterUpdateConfig,
+        SystemConfig,
     )
+
+    return SystemConfig(
+        substrate=SubstrateConfig.digital(),
+        geometry=GeometryConfig.feedforward(input_dim=0, output_dim=0, hidden_dims=()),
+        dynamics=StateDynamicsConfig.instantaneous(),
+        credit=CreditAssignmentConfig.gradient(),
+        update=ParameterUpdateConfig.euclidean(),
+    )
+
+
+def _override_config(base, **overrides):
+    """Create a new frozen dataclass instance with overridden fields."""
+    return type(base)(**{**asdict(base), **overrides})
 
 
 def make_vision_preset(
@@ -700,15 +643,10 @@ def make_vision_preset(
             readout="mean",
             extra={},
         ),
-        training=TrainingConfig(
-            **_base_training().__dict__,
-            learning_rate=learning_rate,
-            epochs=epochs,
-            batch_size=batch_size,
-        ),
+        training=_override_config(_base_training(), learning_rate=learning_rate, epochs=epochs, batch_size=batch_size),
         data=_base_data("vision", task),
         hardware=_base_hardware(),
-        ontology=_base_ontology(),
+        system=_base_system(),
         name=name,
         seed=seed,
         description=f"Vision {task} with MLP",
@@ -785,7 +723,7 @@ def make_lm_preset(
             extra={"vocab_size": vocab_size},
         ),
         training=TrainingConfig(
-            **_base_training().__dict__,
+            **asdict(_base_training()),
             learning_rate=learning_rate,
             epochs=epochs,
             batch_size=batch_size,
@@ -809,7 +747,7 @@ def make_lm_preset(
             data_kwargs={"vocab_size": vocab_size},
         ),
         hardware=_base_hardware(),
-        ontology=_base_ontology(),
+        system=_base_system(),
         name=name,
         seed=seed,
         description=f"LM {task} with MLP",
@@ -885,15 +823,10 @@ def make_graph_preset(
             readout="mean",
             extra={},
         ),
-        training=TrainingConfig(
-            **_base_training().__dict__,
-            learning_rate=learning_rate,
-            epochs=epochs,
-            batch_size=batch_size,
-        ),
+        training=_override_config(_base_training(), learning_rate=learning_rate, epochs=epochs, batch_size=batch_size),
         data=_base_data("graph", task),
         hardware=_base_hardware(),
-        ontology=_base_ontology(),
+        system=_base_system(),
         name=name,
         seed=seed,
         description=f"Graph {task} with GNN",
@@ -970,7 +903,7 @@ def make_rl_preset(
             extra={},
         ),
         training=TrainingConfig(
-            **_base_training().__dict__,
+            **asdict(_base_training()),
             learning_rate=learning_rate,
             epochs=epochs,
             batch_size=64,
@@ -979,7 +912,7 @@ def make_rl_preset(
         ),
         data=_base_data("rl", task),
         hardware=_base_hardware(),
-        ontology=_base_ontology(),
+        system=_base_system(),
         name=name,
         seed=seed,
         description=f"RL {task} with PPO-style MLP",
@@ -1057,7 +990,7 @@ def make_timeseries_preset(
             extra={"pred_len": pred_len},
         ),
         training=TrainingConfig(
-            **_base_training().__dict__,
+            **asdict(_base_training()),
             learning_rate=learning_rate,
             epochs=epochs,
             batch_size=32,
@@ -1077,7 +1010,7 @@ def make_timeseries_preset(
             data_kwargs={"pred_len": pred_len},
         ),
         hardware=_base_hardware(),
-        ontology=_base_ontology(),
+        system=_base_system(),
         name=name,
         seed=seed,
         description=f"Timeseries {task} forecasting",

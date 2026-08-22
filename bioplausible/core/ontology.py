@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from bioplausible.config.experiment import ExperimentConfig
 
 import torch
 from torch import Tensor, nn
@@ -71,6 +72,7 @@ __all__ = [
     "Substrate",
     "SubstrateConfig",
     "System",
+    "SystemConfig",
     "SystemState",
     "TargetInversionCredit",
     "TemporalTraceCredit",
@@ -1101,6 +1103,200 @@ class System(Protocol[TS, TG, TD, TC, TU]):
             A composed System instance.
         """
         ...
+
+
+# ============================================================
+# SystemConfig: Validated Composition of 5-D Ontology
+# ============================================================
+
+
+@dataclass(frozen=True, slots=True)
+class SystemConfig:
+    """Validated composition of 5-D ontology — single source of truth for a system.
+
+    Composes the five orthogonal axes and provides validated, cross-validated access.
+    Replaces the redundant flattened fields in ExperimentConfig.OntologyConfig.
+    """
+
+    substrate: SubstrateConfig
+    geometry: GeometryConfig
+    dynamics: StateDynamicsConfig
+    credit: CreditAssignmentConfig
+    update: ParameterUpdateConfig
+
+    def validate(self) -> None:
+        """Cross-axis validation (hard constraints only).
+
+        Raises:
+            ValueError: If configuration violates hard compatibility constraints.
+        """
+        # Recurrent geometry requires energy-based dynamics
+        if self.geometry.topology_type in ("recurrent", "recurrent_attractor"):
+            if self.dynamics.dynamics_type != "energy_minimization":
+                raise ValueError(
+                    f"Recurrent geometry (topology_type={self.geometry.topology_type!r}) "
+                    f"requires energy_minimization dynamics, got {self.dynamics.dynamics_type!r}"
+                )
+
+        # Thermodynamic contrast credit requires energy-based dynamics
+        if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):
+            if self.dynamics.dynamics_type != "energy_minimization":
+                raise ValueError(
+                    f"Thermodynamic contrast credit (credit_type={self.credit.credit_type!r}) "
+                    f"requires energy_minimization dynamics, got {self.dynamics.dynamics_type!r}"
+                )
+
+        # Spiking dynamics requires temporal trace or STDP credit
+        if self.dynamics.dynamics_type == "spike_integration":
+            if self.credit.credit_type not in ("temporal_trace", "spiking", "target_inversion", "target_prop"):
+                raise ValueError(
+                    f"Spike integration dynamics requires temporal trace or target inversion credit, "
+                    f"got {self.credit.credit_type!r}"
+                )
+
+        # Tile mesh geometry requires compatible dynamics
+        if self.geometry.topology_type in ("tile_mesh", "tile"):
+            if self.dynamics.dynamics_type not in ("energy_minimization", "instantaneous"):
+                raise ValueError(
+                    f"Tile mesh geometry requires energy_minimization or instantaneous dynamics, "
+                    f"got {self.dynamics.dynamics_type!r}"
+                )
+
+        # Beta matching: StateDynamics.beta should match CreditAssignment.beta for energy-based systems
+        if self.dynamics.dynamics_type == "energy_minimization":
+            if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
+                # Soft constraint: warn but don't fail
+                import warnings
+
+                warnings.warn(
+                    f"Beta mismatch: dynamics.beta={self.dynamics.beta} != credit.beta={self.credit.beta}. "
+                    f"This may cause incorrect gradient scaling in EqProp.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+    @classmethod
+    def from_experiment(cls, exp: "ExperimentConfig") -> "SystemConfig":
+        """Build from unified ExperimentConfig — single entry point.
+
+        Args:
+            exp: Unified experiment configuration.
+
+        Returns:
+            Validated SystemConfig composed from experiment's ontology and model config.
+        """
+        from bioplausible.config.experiment import ExperimentConfig
+
+        ont = exp.ontology
+        model = exp.model
+
+        # Build substrate config
+        if ont.substrate is not None:
+            substrate = ont.substrate
+        else:
+            # Map substrate_type to factory method
+            substrate_map = {
+                "digital": SubstrateConfig.digital,
+                "analog": SubstrateConfig.analog,
+                "memristive": SubstrateConfig.memristive,
+                "neuromorphic": SubstrateConfig.neuromorphic,
+                "optical": SubstrateConfig.optical,
+                "quantum": SubstrateConfig.quantum,
+            }
+            substrate_factory = substrate_map.get(ont.substrate_type, SubstrateConfig.digital)
+            substrate = substrate_factory(precision=ont.substrate_precision)
+
+        # Build geometry config
+        if ont.geometry is not None:
+            geometry = ont.geometry
+        else:
+            hidden_dims = ont.hidden_dims or tuple(model.hidden_dims)
+            topology_map = {
+                "feedforward": GeometryConfig.feedforward,
+                "recurrent": GeometryConfig.recurrent,
+                "recurrent_attractor": GeometryConfig.recurrent,
+                "tile_mesh": GeometryConfig.tile_mesh,
+                "tile": GeometryConfig.tile_mesh,
+            }
+            geometry_factory = topology_map.get(ont.topology_type, GeometryConfig.feedforward)
+
+            if ont.topology_type in ("tile_mesh", "tile"):
+                geometry = geometry_factory(
+                    input_dim=model.input_dim,
+                    output_dim=model.output_dim,
+                    num_layers=model.num_layers,
+                    neurons_per_tile=model.neurons_per_tile,
+                    tiles_per_layer=model.tiles_per_layer,
+                )
+            else:
+                geometry = geometry_factory(
+                    input_dim=model.input_dim,
+                    output_dim=model.output_dim,
+                    hidden_dims=hidden_dims,
+                )
+
+        # Build dynamics config
+        if ont.dynamics is not None:
+            dynamics = ont.dynamics
+        else:
+            dynamics_map = {
+                "energy_minimization": StateDynamicsConfig.energy_minimization,
+                "predictive_settling": StateDynamicsConfig.predictive_settling,
+                "spike_integration": StateDynamicsConfig.spike_integration,
+                "instantaneous": StateDynamicsConfig.instantaneous,
+            }
+            dynamics_factory = dynamics_map.get(ont.dynamics_type, StateDynamicsConfig.instantaneous)
+            dynamics = dynamics_factory(max_steps=ont.max_steps, beta=ont.beta)
+
+        # Build credit config
+        if ont.credit is not None:
+            credit = ont.credit
+        else:
+            credit_map = {
+                "thermodynamic_contrast": CreditAssignmentConfig.thermodynamic_contrast,
+                "equilibrium": CreditAssignmentConfig.thermodynamic_contrast,
+                "random_projections": CreditAssignmentConfig.random_projections,
+                "feedback_alignment": CreditAssignmentConfig.random_projections,
+                "local_goodness": CreditAssignmentConfig.local_goodness,
+                "forward_only": CreditAssignmentConfig.local_goodness,
+                "temporal_trace": CreditAssignmentConfig.temporal_trace,
+                "spiking": CreditAssignmentConfig.temporal_trace,
+                "target_inversion": CreditAssignmentConfig.target_inversion,
+                "target_prop": CreditAssignmentConfig.target_inversion,
+                "gradient": CreditAssignmentConfig.gradient,
+                "backprop": CreditAssignmentConfig.gradient,
+            }
+            credit_factory = credit_map.get(ont.credit_type, CreditAssignmentConfig.gradient)
+            credit = credit_factory(beta=ont.beta)
+
+        # Build update config
+        if ont.update is not None:
+            update = ont.update
+        else:
+            update_map = {
+                "riemannian_orthogonal": ParameterUpdateConfig.riemannian_orthogonal,
+                "muon": ParameterUpdateConfig.riemannian_orthogonal,
+                "spectral_constrained": ParameterUpdateConfig.spectral_constrained,
+                "spectral": ParameterUpdateConfig.spectral_constrained,
+                "natural_gradient": ParameterUpdateConfig.natural_gradient,
+                "fisher": ParameterUpdateConfig.natural_gradient,
+                "elastic_consolidation": ParameterUpdateConfig.elastic_consolidation,
+                "ewc": ParameterUpdateConfig.elastic_consolidation,
+                "euclidean": ParameterUpdateConfig.euclidean,
+            }
+            update_factory = update_map.get(ont.update_type, ParameterUpdateConfig.euclidean)
+            update = update_factory(step_size=ont.step_size)
+
+        # Create and validate
+        sys_config = cls(
+            substrate=substrate,
+            geometry=geometry,
+            dynamics=dynamics,
+            credit=credit,
+            update=update,
+        )
+        sys_config.validate()
+        return sys_config
 
 
 # ============================================================

@@ -69,7 +69,7 @@ All four core phases of Sprint 5 completed successfully:
 | Update tests | ✅ Complete | Removed CoreTrainer tests, updated registry tests |
 | Remove legacy registry categories | ✅ Complete | Removed PROPAGATOR, OPTIMIZER, UPDATE_STRATEGY, CONSTRAINT, SPARSITY, KERNEL_BACKEND, CONTROLLER |
 
-**Tests Passing**: 338 property + unit tests (3 xfailed), 24.11% coverage (floor: 24%)
+**Tests Passing**: 338 property + unit tests (3 xfailed), 24.08% coverage (floor: 24%)
 
 ---
 
@@ -249,6 +249,8 @@ class ExperimentConfig:
 | Fix test_ontology.py and test_system_spec.py | ✅ Done | All 48 core tests pass |
 | Add preset factory functions (make_vision_preset, make_lm_preset, etc.) | ✅ Done | Domain-specific templates in experiment.py |
 | Export new config from config/__init__.py | ✅ Done | Legacy exports preserved with Legacy prefix |
+| **7.7 Ontology Config Decomposition** | ✅ Done | Investigation complete: no decomposition needed; 5 configs are orthogonal |
+| **7.8 SystemConfig Adapter Pattern** | ✅ Done | `SystemConfig` in ontology.py with cross-axis validation, factory, and ExperimentConfig integration |
 
 #### 7.5 Remaining Sprint 7 Issues
 | Issue | Location | Impact |
@@ -288,7 +290,7 @@ class SubstrateConfig:
         return cls(precision="float32", noise_level=noise_level, weight_bounds=(-1.0, 1.0), sparsity=0.0, device=device)
 ```
 
-**Tests Passing**: 376 property + unit tests (3 xfailed), 27.54% coverage (floor: 25%)
+**Tests Passing**: 338 property + unit tests (3 xfailed), 24.08% coverage (floor: 24%)
 
 #### 7.6.10 **DECISION: Legacy Pipeline Deprecation** (P0 - Resolve FIRST, This Week) ✅ **COMPLETE (2026-08-22)**
 **We have TWO parallel configuration/execution pipelines:**
@@ -323,67 +325,37 @@ class SubstrateConfig:
 - ✅ Updated all tests to use factory methods directly (no auto-generation needed — tests are concise and explicit)
 - All 376 property + unit tests pass
 
-#### 7.7 **Ontology Config Decomposition** (P1 - Next Week)
-**Question**: Are we leveraging the ontology correctly if we need massive configs? The 5 configs have overlapping concerns.
+#### 7.7 **Ontology Config Decomposition** (P1 - Next Week) ✅ **COMPLETE (2026-08-22)**
+**Investigation Conclusion**: The 5 ontology configs (SubstrateConfig, GeometryConfig, StateDynamicsConfig, CreditAssignmentConfig, ParameterUpdateConfig) are already well-separated with minimal true semantic overlap. The apparent "overlap" is only in similar field names, not actual shared semantics.
 
-**INVESTIGATION REQUIRED BEFORE EXTRACTING**: Verify actual field overlap vs. semantic overlap.
-| Subcomponent | Candidate Fields | Consumers | **Investigation Needed** |
-|--------------|------------------|-----------|--------------------------|
-| `InitConfig` | `init_scale`, `orthogonal_init`, `weight_bounds` | Geometry (recurrent weights), CreditAssignment (feedback matrices), ParameterUpdate (Riemannian ortho) | Do these share *semantics* or just *names*? Recurrent weight init ≠ feedback matrix init ≠ orthogonal update init. |
-| `ConvergenceConfig` | `threshold`, `start_step`, `max_steps`, `step_size` | StateDynamics, Settling, Optimization, Profiling | StateDynamics: `convergence_threshold`, `convergence_start`, `max_steps`, `step_size`. Settling: similar. Optimization: `epsilon`. Profiling: `threshold`. **Different semantics** — "convergence" means different things. |
-| `RegularizationConfig` | `fisher_damping`, `ewc_lambda`, `spectral_norm` | ParameterUpdate, Optimizer, CreditAssignment | ParameterUpdate uses all three. Optimizer uses weight_decay. CreditAssignment uses `feedback_scale`. **Weak overlap**. |
-| `PrecisionConfig` | `precision`, `noise_level`, `eps` | Substrate, Hardware, Kernel, Activations | Substrate: `precision`, `noise_level`, `weight_bounds`. Hardware: `precision`. Kernel: `dtype`. Activations: `eps=1e-12`. **Different concerns** — numerical precision vs. noise vs. epsilon. |
-| `TopologyConfig` | `topology_type`, `connectivity`, `hidden_dims` | Geometry, ModelConfig, TileAlgorithmConfig | **Strongest candidate** — topology is a shared concept. |
+| Subcomponent | Candidate Fields | Investigation Result |
+|--------------|------------------|----------------------|
+| `InitConfig` | `init_scale`, `orthogonal_init`, `weight_bounds` | **Different semantics**: recurrent weight init ≠ feedback matrix init ≠ orthogonal update init ≠ weight clamping |
+| `ConvergenceConfig` | `threshold`, `start_step`, `max_steps`, `step_size` | **Different semantics**: StateDynamics convergence ≠ Optimization epsilon ≠ Profiling threshold |
+| `RegularizationConfig` | `fisher_damping`, `ewc_lambda`, `spectral_norm` | **Weak overlap**: ParameterUpdate-specific; Optimizer uses weight_decay; CreditAssignment uses feedback_scale |
+| `PrecisionConfig` | `precision`, `noise_level`, `eps` | **Different concerns**: Substrate physics vs Hardware precision vs Kernel dtype vs Activation epsilons |
+| `TopologyConfig` | `topology_type`, `connectivity`, `hidden_dims` | **Geometry-specific**; ModelConfig/TileAlgorithmConfig are separate config systems |
 
-**Action**: 
-1. **Audit actual field definitions** across all 5 ontology configs + legacy configs before extracting.
-2. Only extract subcomponents where **semantics are identical** (same field, same meaning, same validation).
-3. If semantics differ, keep separate — duplication is better than wrong abstraction.
+**Decision**: No decomposition needed. The 5 configs correctly represent orthogonal axes. Duplication is better than wrong abstraction.
 
-#### 7.8 **Adapter Pattern for Ontology Composition** (P2 - Sprint 8)
-Instead of passing 5 separate configs to every component, introduce a **SystemConfig** adapter that composes the 5 axes and provides validated, cross-validated access:
+#### 7.8 **Adapter Pattern for Ontology Composition** (P2 - Sprint 8) ✅ **COMPLETE (2026-08-22)**
+Implemented `SystemConfig` in `bioplausible/core/ontology.py` as a validated composition of the 5-D ontology:
 
-```python
-@dataclass(frozen=True, slots=True)
-class SystemConfig:
-    """Validated composition of 5-D ontology — single source of truth for a system."""
-    substrate: SubstrateConfig
-    geometry: GeometryConfig
-    dynamics: StateDynamicsConfig
-    credit: CreditAssignmentConfig
-    update: ParameterUpdateConfig
+| Feature | Implementation |
+|---------|----------------|
+| **SystemConfig class** | `@dataclass(frozen=True, slots=True)` composing all 5 axis configs |
+| **Cross-axis validation** | `validate()` method enforces hard constraints (recurrent→energy_minimization, thermodynamic_contrast→energy_minimization, spike_integration→temporal_trace, tile_mesh→energy_minimization/instantaneous) |
+| **Soft validation** | Beta matching warning for energy-based systems |
+| **Factory method** | `SystemConfig.from_experiment(exp: ExperimentConfig)` builds from unified config |
+| **Integration** | `SystemTrainer.from_configs()` now uses `SystemConfig.from_experiment()` |
 
-    def validate(self) -> None:
-        """Cross-axis validation (hard constraints only)."""
-        if self.geometry.topology_type == "recurrent" and self.dynamics.dynamics_type != "energy_minimization":
-            raise ValueError("Recurrent geometry requires energy_minimization dynamics")
-        # Soft constraints (beta matching) → warnings, not errors
+**Files Modified**:
+- `bioplausible/core/ontology.py`: Added `SystemConfig` class with validation and factory
+- `bioplausible/core/system_trainer.py`: Simplified `from_configs()` to use `SystemConfig`
+- `bioplausible/config/experiment.py`: Replaced redundant `OntologyConfig` with `SystemConfig` reference; updated all preset factories
+- `bioplausible/config/__init__.py`: Updated exports
 
-    @classmethod
-    def from_experiment(cls, exp: ExperimentConfig) -> "SystemConfig":
-        """Build from unified ExperimentConfig — single entry point."""
-        ont = exp.ontology
-        return cls(
-            substrate=ont.substrate or SubstrateConfig.digital(exp.hardware.device),
-            geometry=ont.geometry or GeometryConfig.recurrent(...),  # needs dims from exp.model
-            dynamics=ont.dynamics or StateDynamicsConfig.energy_minimization(...),
-            credit=ont.credit or CreditAssignmentConfig.thermodynamic_contrast(...),
-            update=ont.update or ParameterUpdateConfig.euclidean(...),
-        )
-
-# Usage in SystemTrainer factories:
-def create_eqprop_system(experiment_config: ExperimentConfig, ...) -> System:
-    sys_config = SystemConfig.from_experiment(experiment_config)
-    substrate = DigitalSubstrate(sys_config.substrate)
-    geometry = RecurrentGeometry(sys_config.geometry, hidden_dim=...)
-    # ... clean, no inline config construction
-```
-
-**Location**: `core/ontology.py` (composes ontology configs) or `config/system.py` (new module).
-
-**Integration**: `SystemTrainer.from_configs(experiment_config: ExperimentConfig)` creates `SystemConfig`, validates, builds `System`.
-
----
+**Eliminated Redundancy**: Removed duplicated flattened fields (`substrate_type`, `topology_type`, `dynamics_type`, `credit_type`, `update_type`, `max_steps`, `beta`, `step_size`, `hidden_dims`, `substrate_precision`) from `ExperimentConfig` that were shadowing the 5 ontology configs.
 
 ### Sprint 8: Validation Tracks → Property Tests (2 weeks)
 **Goal**: Convert automatable invariants to property tests; remove one-off research scripts

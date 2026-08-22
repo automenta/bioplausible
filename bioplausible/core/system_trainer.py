@@ -162,172 +162,93 @@ class SystemTrainer:
             SpectralConstrainedUpdate,
             NaturalGradientUpdate,
             ElasticConsolidationUpdate,
+            SystemConfig,
         )
         from bioplausible.core.system_trainer import compose_system
 
         exp = experiment_config
-        ont = exp.ontology
         model = exp.model
         training = exp.training
         hardware = exp.hardware
 
-        # Build substrate from ontology config
-        substrate_type = ont.substrate_type
-        if substrate_type == "digital":
-            substrate = DigitalSubstrate(
-                SubstrateConfig.digital(
-                    precision=ont.substrate_precision,
-                    device=hardware.device,
-                )
-            )
-        elif substrate_type == "analog":
-            substrate = AnalogSubstrate(SubstrateConfig.analog(device=hardware.device))
-        elif substrate_type == "memristive":
-            substrate = MemristiveSubstrate(
-                SubstrateConfig.memristive(device=hardware.device)
-            )
-        elif substrate_type == "neuromorphic":
-            substrate = NeuromorphicSubstrate(
-                SubstrateConfig.neuromorphic(device=hardware.device)
-            )
-        elif substrate_type == "optical":
-            substrate = OpticalSubstrate(
-                SubstrateConfig.optical(device=hardware.device)
-            )
-        elif substrate_type == "quantum":
-            substrate = QuantumSubstrate(
-                SubstrateConfig.quantum(device=hardware.device)
-            )
-        else:
-            substrate = DigitalSubstrate(
-                SubstrateConfig.digital(device=hardware.device)
-            )
+        # Build validated SystemConfig from experiment
+        sys_config = SystemConfig.from_experiment(exp)
 
-        # Build geometry from ontology config
-        topology_type = ont.topology_type
-        hidden_dims = ont.hidden_dims or tuple(model.hidden_dims)
-        input_dim = model.input_dim
-        output_dim = model.output_dim
+        # Build substrate from validated config
+        substrate_cfg = sys_config.substrate
+        substrate_map = {
+            "digital": DigitalSubstrate,
+            "analog": AnalogSubstrate,
+            "memristive": MemristiveSubstrate,
+            "neuromorphic": NeuromorphicSubstrate,
+            "optical": OpticalSubstrate,
+            "quantum": QuantumSubstrate,
+        }
+        # Determine substrate type from precision field
+        substrate_key = substrate_cfg.precision.lower()
+        if substrate_key in ("float32", "float16", "bfloat16", "int8", "int4", "binary"):
+            substrate_key = "digital"
+        substrate_cls = substrate_map.get(substrate_key, DigitalSubstrate)
+        substrate = substrate_cls(substrate_cfg)
 
+        # Build geometry from validated config
+        geometry_cfg = sys_config.geometry
+        topology_type = geometry_cfg.topology_type.lower()
         if topology_type == "feedforward":
-            geometry_cfg = GeometryConfig.feedforward(
-                input_dim=input_dim,
-                output_dim=output_dim,
-                hidden_dims=hidden_dims,
-            )
             geometry = FeedforwardGeometry(geometry_cfg)
         elif topology_type in ("recurrent", "recurrent_attractor"):
-            geometry_cfg = GeometryConfig.recurrent(
-                input_dim=input_dim,
-                output_dim=output_dim,
-                hidden_dims=hidden_dims,
-            )
-            geometry = RecurrentGeometry(
-                geometry_cfg,
-                hidden_dim=hidden_dims[-1] if hidden_dims else output_dim,
-            )
+            hidden_dim = geometry_cfg.hidden_dims[-1] if geometry_cfg.hidden_dims else model.output_dim
+            geometry = RecurrentGeometry(geometry_cfg, hidden_dim=hidden_dim)
         elif topology_type in ("tile_mesh", "tile"):
-            geometry_cfg = GeometryConfig.tile_mesh(
-                input_dim=input_dim,
-                output_dim=output_dim,
-                num_layers=model.num_layers,
-                neurons_per_tile=model.neurons_per_tile,
-                tiles_per_layer=model.tiles_per_layer,
-            )
             geometry = TileGeometry(
                 geometry_cfg,
                 neurons_per_tile=model.neurons_per_tile,
                 tiles_per_layer=model.tiles_per_layer,
             )
         else:
-            geometry_cfg = GeometryConfig.feedforward(
-                input_dim=input_dim,
-                output_dim=output_dim,
-                hidden_dims=hidden_dims,
-            )
             geometry = FeedforwardGeometry(geometry_cfg)
 
-        # Build dynamics from ontology config
-        dynamics_type = ont.dynamics_type
+        # Build dynamics from validated config
+        dynamics_cfg = sys_config.dynamics
+        dynamics_type = dynamics_cfg.dynamics_type.lower()
         if dynamics_type == "energy_minimization":
-            dynamics = EnergyMinimizationDynamics(
-                StateDynamicsConfig.energy_minimization(
-                    max_steps=ont.max_steps,
-                    beta=ont.beta,
-                )
-            )
+            dynamics = EnergyMinimizationDynamics(dynamics_cfg)
         elif dynamics_type == "predictive_settling":
-            dynamics = PredictiveSettlingDynamics(
-                StateDynamicsConfig.predictive_settling(
-                    max_steps=ont.max_steps,
-                    beta=ont.beta,
-                )
-            )
+            dynamics = PredictiveSettlingDynamics(dynamics_cfg)
         elif dynamics_type == "spike_integration":
-            dynamics = SpikeIntegrationDynamics(
-                StateDynamicsConfig.spike_integration(
-                    max_steps=ont.max_steps,
-                    beta=ont.beta,
-                )
-            )
+            dynamics = SpikeIntegrationDynamics(dynamics_cfg)
         else:
-            dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+            dynamics = InstantaneousDynamics(dynamics_cfg)
 
-        # Build credit from ontology config
-        credit_type = ont.credit_type
+        # Build credit from validated config
+        credit_cfg = sys_config.credit
+        credit_type = credit_cfg.credit_type.lower()
         if credit_type in ("thermodynamic_contrast", "equilibrium"):
-            credit = ThermodynamicContrast(
-                CreditAssignmentConfig.thermodynamic_contrast(
-                    beta=ont.beta,
-                )
-            )
+            credit = ThermodynamicContrast(credit_cfg)
         elif credit_type in ("random_projections", "feedback_alignment"):
-            credit = RandomProjectionsCredit(
-                CreditAssignmentConfig.random_projections(
-                    feedback_scale=ont.update.step_size,  # Use step_size as feedback_scale
-                )
-            )
+            credit = RandomProjectionsCredit(credit_cfg)
         elif credit_type in ("local_goodness", "forward_only"):
-            credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
+            credit = LocalGoodnessCredit(credit_cfg)
         elif credit_type in ("temporal_trace", "spiking"):
-            credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace())
+            credit = TemporalTraceCredit(credit_cfg)
         elif credit_type in ("target_inversion", "target_prop"):
-            credit = TargetInversionCredit(CreditAssignmentConfig.target_inversion())
+            credit = TargetInversionCredit(credit_cfg)
         else:
-            credit = BackpropCredit(CreditAssignmentConfig.gradient())
+            credit = BackpropCredit(credit_cfg)
 
-        # Build update from ontology config
-        update_type = ont.update_type
+        # Build update from validated config
+        update_cfg = sys_config.update
+        update_type = update_cfg.update_type.lower()
         if update_type in ("riemannian_orthogonal", "muon"):
-            update = RiemannianOrthogonalUpdate(
-                ParameterUpdateConfig.riemannian_orthogonal(
-                    step_size=ont.step_size,
-                )
-            )
+            update = RiemannianOrthogonalUpdate(update_cfg)
         elif update_type in ("spectral_constrained", "spectral"):
-            update = SpectralConstrainedUpdate(
-                ParameterUpdateConfig.spectral_constrained(
-                    step_size=ont.step_size,
-                )
-            )
+            update = SpectralConstrainedUpdate(update_cfg)
         elif update_type in ("natural_gradient", "fisher"):
-            update = NaturalGradientUpdate(
-                ParameterUpdateConfig.natural_gradient(
-                    step_size=ont.step_size,
-                )
-            )
+            update = NaturalGradientUpdate(update_cfg)
         elif update_type in ("elastic_consolidation", "ewc"):
-            update = ElasticConsolidationUpdate(
-                ParameterUpdateConfig.elastic_consolidation(
-                    step_size=ont.step_size,
-                )
-            )
+            update = ElasticConsolidationUpdate(update_cfg)
         else:
-            update = EuclideanUpdate(
-                ParameterUpdateConfig.euclidean(
-                    step_size=ont.step_size,
-                )
-            )
+            update = EuclideanUpdate(update_cfg)
 
         # Compose the system
         system = compose_system(substrate, geometry, dynamics, credit, update)
