@@ -70,7 +70,13 @@ class TestSubstrate:
     """Tests for Substrate implementations."""
 
     def test_digital_substrate_no_op(self):
-        substrate = DigitalSubstrate()
+        substrate = DigitalSubstrate(SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ))
         w = torch.randn(10, 5)
         assert torch.equal(substrate.quantize_weights(w), w)
 
@@ -84,7 +90,13 @@ class TestSubstrate:
         assert out.shape == (4, 20)
 
     def test_digital_substrate_initial_state(self):
-        substrate = DigitalSubstrate()
+        substrate = DigitalSubstrate(SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ))
         x = torch.randn(4, 10)
         state = substrate.initial_state(x)
         assert torch.equal(state, x)
@@ -92,7 +104,13 @@ class TestSubstrate:
     def test_noisy_substrate_injects_noise(self):
         from bioplausible.core.ontology import NoisySubstrate
 
-        substrate = NoisySubstrate(SubstrateConfig(noise_level=0.1))
+        substrate = NoisySubstrate(SubstrateConfig(
+            precision="float32",
+            noise_level=0.1,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ))
         s = torch.zeros(4, 10)
         noisy = substrate.inject_state_noise(s)
         assert not torch.equal(noisy, s)
@@ -105,16 +123,38 @@ class TestGeometry:
 
     def test_feedforward_geometry_forward(self):
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20, 15))
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20, 15),
+                num_layers=2,
+                topology_type="feedforward",
+                connectivity=None,
+                recurrent_weight=None,
+            )
         )
-        substrate = DigitalSubstrate()
+        substrate = DigitalSubstrate(SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ))
         x = torch.randn(4, 10)
         out = geometry.forward(x, substrate)
         assert out.shape == (4, 3)
 
     def test_feedforward_geometry_route(self):
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,))
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20,),
+                num_layers=1,
+                topology_type="feedforward",
+                connectivity=None,
+                recurrent_weight=None,
+            )
         )
         h = torch.randn(4, 10)
         out = geometry.route(h)
@@ -122,7 +162,15 @@ class TestGeometry:
 
     def test_feedforward_geometry_params(self):
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,))
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20,),
+                num_layers=1,
+                topology_type="feedforward",
+                connectivity=None,
+                recurrent_weight=None,
+            )
         )
         params = geometry.params
         assert len(params) > 0
@@ -131,24 +179,54 @@ class TestGeometry:
 
     def test_feedforward_geometry_transition_modules(self):
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,))
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20,),
+                num_layers=1,
+                topology_type="feedforward",
+                connectivity=None,
+                recurrent_weight=None,
+            )
         )
         modules = geometry.transition_modules()
         assert len(modules) == 2  # Two Linear layers
 
     def test_recurrent_geometry_forward(self):
         geometry = RecurrentGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,)),
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20,),
+                num_layers=1,
+                topology_type="recurrent",
+                connectivity=None,
+                recurrent_weight=None,
+            ),
             hidden_dim=20,
         )
-        substrate = DigitalSubstrate()
+        substrate = DigitalSubstrate(SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ))
         x = torch.randn(4, 10)
         out = geometry.forward(x, substrate)
         assert out.shape == (4, 3)
 
     def test_recurrent_geometry_route(self):
         geometry = RecurrentGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,)),
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20,),
+                num_layers=1,
+                topology_type="recurrent",
+                connectivity=None,
+                recurrent_weight=None,
+            ),
             hidden_dim=20,
         )
         h = torch.randn(4, 20)  # Hidden state dimension
@@ -157,7 +235,15 @@ class TestGeometry:
 
     def test_recurrent_geometry_params(self):
         geometry = RecurrentGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,)),
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20,),
+                num_layers=1,
+                topology_type="recurrent",
+                connectivity=None,
+                recurrent_weight=None,
+            ),
             hidden_dim=20,
         )
         params = geometry.params
@@ -165,23 +251,51 @@ class TestGeometry:
 
     def test_tile_geometry_forward(self):
         geometry = TileGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, num_layers=3),
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(),
+                num_layers=3,
+                topology_type="tile_mesh",
+                connectivity=None,
+                recurrent_weight=None,
+            ),
             neurons_per_tile=8,
             tiles_per_layer=2,
         )
-        substrate = DigitalSubstrate()
+        substrate = DigitalSubstrate(SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ))
         x = torch.randn(4, 10)
         out = geometry.forward(x, substrate)
         assert out.shape == (4, 3)
 
     def test_tile_geometry_route(self):
         geometry = TileGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, num_layers=3),
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(),
+                num_layers=3,
+                topology_type="tile_mesh",
+                connectivity=None,
+                recurrent_weight=None,
+            ),
             neurons_per_tile=8,
             tiles_per_layer=2,
         )
         # Get flat activities from initial forward pass
-        substrate = DigitalSubstrate()
+        substrate = DigitalSubstrate(SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ))
         x = torch.randn(4, 10)
         _ = geometry.forward(x, substrate)  # Initialize tile activities
         flat_acts = geometry._get_flat_activities()
@@ -190,7 +304,15 @@ class TestGeometry:
 
     def test_tile_geometry_params(self):
         geometry = TileGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, num_layers=3),
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(),
+                num_layers=3,
+                topology_type="tile_mesh",
+                connectivity=None,
+                recurrent_weight=None,
+            ),
             neurons_per_tile=8,
             tiles_per_layer=2,
         )
@@ -204,7 +326,15 @@ class TestGeometry:
 
     def test_tile_geometry_transition_modules(self):
         geometry = TileGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, num_layers=3),
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(),
+                num_layers=3,
+                topology_type="tile_mesh",
+                connectivity=None,
+                recurrent_weight=None,
+            ),
             neurons_per_tile=8,
             tiles_per_layer=2,
         )
@@ -217,11 +347,33 @@ class TestStateDynamics:
     """Tests for StateDynamics implementations."""
 
     def test_instantaneous_dynamics(self):
-        dynamics = InstantaneousDynamics()
+        dynamics = InstantaneousDynamics(StateDynamicsConfig(
+            dynamics_type="instantaneous",
+            max_steps=1,
+            convergence_threshold=1e-4,
+            convergence_start=1,
+            step_size=0.1,
+            beta=0.1,
+            track_free_energy_per_iter=False,
+        ))
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,))
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20,),
+                num_layers=1,
+                topology_type="feedforward",
+                connectivity=None,
+                recurrent_weight=None,
+            )
         )
-        substrate = DigitalSubstrate()
+        substrate = DigitalSubstrate(SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ))
         state = SystemState(x=torch.randn(4, 10), activations=torch.randn(4, 3))
         result = dynamics.settle(state, geometry, substrate)
         assert result.free_state is not None
@@ -243,12 +395,27 @@ class TestCreditAssignment:
     """Tests for CreditAssignment implementations."""
 
     def test_thermodynamic_contrast(self):
-        credit = ThermodynamicContrast()
+        credit = ThermodynamicContrast(CreditAssignmentConfig(
+            credit_type="thermodynamic_contrast",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="mse",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+        ))
         free_state = SystemState(activations=[torch.randn(4, 20), torch.randn(4, 3)])
         nudged_state = SystemState(activations=[torch.randn(4, 20), torch.randn(4, 3)])
         loss = torch.tensor(1.0)
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,))
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20,),
+                num_layers=1,
+                topology_type="feedforward",
+                connectivity=None,
+                recurrent_weight=None,
+            )
         )
         grads = credit.compute_pseudo_gradient(free_state, nudged_state, loss, geometry)
         assert len(grads) == 1  # One hidden layer
@@ -258,11 +425,27 @@ class TestParameterUpdate:
     """Tests for ParameterUpdate implementations."""
 
     def test_euclidean_update(self):
-        update = EuclideanUpdate(ParameterUpdateConfig(step_size=0.01))
+        update = EuclideanUpdate(ParameterUpdateConfig(
+            update_type="euclidean",
+            step_size=0.01,
+            momentum=0.9,
+            ortho_steps=5,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+        ))
         params = {"w1": torch.randn(20, 10), "b1": torch.randn(20)}
         pseudo_grads = [torch.randn(20, 10), torch.randn(20)]
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,))
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20,),
+                num_layers=1,
+                topology_type="feedforward",
+                connectivity=None,
+                recurrent_weight=None,
+            )
         )
         new_params = update.step(params, pseudo_grads, geometry)
         assert "w1" in new_params
@@ -270,11 +453,27 @@ class TestParameterUpdate:
         assert not torch.equal(new_params["w1"], params["w1"])
 
     def test_euclidean_update_with_momentum(self):
-        update = EuclideanUpdate(ParameterUpdateConfig(step_size=0.01, momentum=0.9))
+        update = EuclideanUpdate(ParameterUpdateConfig(
+            update_type="euclidean",
+            step_size=0.01,
+            momentum=0.9,
+            ortho_steps=5,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+        ))
         params = {"w1": torch.randn(20, 10)}
         pseudo_grads = [torch.randn(20, 10)]
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,))
+            GeometryConfig(
+                input_dim=10,
+                output_dim=3,
+                hidden_dims=(20,),
+                num_layers=1,
+                topology_type="feedforward",
+                connectivity=None,
+                recurrent_weight=None,
+            )
         )
         new_params = update.step(params, pseudo_grads, geometry)
         # Second step should use momentum
@@ -446,34 +645,69 @@ class TestModelAdapter:
 
 
 class TestOntologyConfigs:
-    """Tests for configuration dataclasses."""
+    """Tests for configuration dataclasses (all fields required)."""
 
     def test_substrate_config_defaults(self):
-        config = SubstrateConfig()
+        config = SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        )
         assert config.precision == "float32"
         assert config.noise_level == 0.0
         assert config.device == "cpu"
 
     def test_geometry_config(self):
-        config = GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20, 15))
+        config = GeometryConfig(
+            input_dim=10,
+            output_dim=3,
+            hidden_dims=(20, 15),
+            num_layers=2,
+            topology_type="feedforward",
+            connectivity=None,
+            recurrent_weight=None,
+        )
         assert config.input_dim == 10
         assert config.output_dim == 3
         assert config.hidden_dims == (20, 15)
         assert config.topology_type == "feedforward"
 
     def test_state_dynamics_config(self):
-        config = StateDynamicsConfig(dynamics_type="energy_minimization", max_steps=30)
+        config = StateDynamicsConfig(
+            dynamics_type="energy_minimization",
+            max_steps=30,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            step_size=0.1,
+            beta=0.1,
+            track_free_energy_per_iter=False,
+        )
         assert config.dynamics_type == "energy_minimization"
         assert config.max_steps == 30
 
     def test_credit_assignment_config(self):
-        config = CreditAssignmentConfig(credit_type="thermodynamic_contrast", beta=0.5)
+        config = CreditAssignmentConfig(
+            credit_type="thermodynamic_contrast",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="mse",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+        )
         assert config.credit_type == "thermodynamic_contrast"
         assert config.beta == 0.5
 
     def test_parameter_update_config(self):
         config = ParameterUpdateConfig(
-            update_type="riemannian_orthogonal", step_size=0.01
+            update_type="riemannian_orthogonal",
+            step_size=0.01,
+            momentum=0.9,
+            ortho_steps=5,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
         )
         assert config.update_type == "riemannian_orthogonal"
         assert config.step_size == 0.01

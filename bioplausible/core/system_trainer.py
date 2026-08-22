@@ -535,10 +535,17 @@ def create_eqprop_system(
         ParameterUpdateConfig,
         RecurrentGeometry,
         StateDynamicsConfig,
+        SubstrateConfig,
         ThermodynamicContrast,
     )
 
-    substrate = DigitalSubstrate()
+    substrate = DigitalSubstrate(SubstrateConfig(
+        precision="float32",
+        noise_level=0.0,
+        weight_bounds=None,
+        sparsity=0.0,
+        device="cpu",
+    ))
 
     dims = [hidden_dim] * max(num_layers, 1)
     geometry = RecurrentGeometry(
@@ -546,6 +553,10 @@ def create_eqprop_system(
             input_dim=input_dim,
             output_dim=output_dim,
             hidden_dims=tuple(dims),
+            num_layers=num_layers,
+            topology_type="recurrent",
+            connectivity=None,
+            recurrent_weight=None,
         ),
         hidden_dim=hidden_dim,
     )
@@ -554,7 +565,11 @@ def create_eqprop_system(
         StateDynamicsConfig(
             dynamics_type="energy_minimization",
             max_steps=settle_steps,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            step_size=0.1,
             beta=beta,
+            track_free_energy_per_iter=False,
         )
     )
 
@@ -562,6 +577,10 @@ def create_eqprop_system(
         CreditAssignmentConfig(
             credit_type="thermodynamic_contrast",
             beta=beta,
+            feedback_matrix=None,
+            local_objective="mse",
+            orthogonal_init=False,
+            feedback_scale=0.01,
         )
     )
 
@@ -569,6 +588,11 @@ def create_eqprop_system(
         ParameterUpdateConfig(
             update_type="euclidean",
             step_size=lr,
+            momentum=0.9,
+            ortho_steps=5,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
         )
     )
 
@@ -593,9 +617,16 @@ def create_backprop_system(
         InstantaneousDynamics,
         ParameterUpdateConfig,
         StateDynamicsConfig,
+        SubstrateConfig,
     )
 
-    substrate = DigitalSubstrate()
+    substrate = DigitalSubstrate(SubstrateConfig(
+        precision="float32",
+        noise_level=0.0,
+        weight_bounds=None,
+        sparsity=0.0,
+        device="cpu",
+    ))
 
     dims = [hidden_dim] * max(num_layers - 1, 1)
     geometry = FeedforwardGeometry(
@@ -603,18 +634,33 @@ def create_backprop_system(
             input_dim=input_dim,
             output_dim=output_dim,
             hidden_dims=tuple(dims),
+            num_layers=num_layers,
+            topology_type="feedforward",
+            connectivity=None,
+            recurrent_weight=None,
         )
     )
 
     dynamics = InstantaneousDynamics(
         StateDynamicsConfig(
             dynamics_type="instantaneous",
+            max_steps=1,
+            convergence_threshold=1e-4,
+            convergence_start=1,
+            step_size=0.1,
+            beta=0.1,
+            track_free_energy_per_iter=False,
         )
     )
 
     credit = BackpropCredit(
         CreditAssignmentConfig(
             credit_type="gradient",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="mse",
+            orthogonal_init=False,
+            feedback_scale=0.01,
         )
     )
 
@@ -622,6 +668,11 @@ def create_backprop_system(
         ParameterUpdateConfig(
             update_type="euclidean",
             step_size=lr,
+            momentum=0.9,
+            ortho_steps=5,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
         )
     )
 
@@ -646,9 +697,16 @@ def create_fa_system(
         ParameterUpdateConfig,
         RandomProjectionsCredit,
         StateDynamicsConfig,
+        SubstrateConfig,
     )
 
-    substrate = DigitalSubstrate()
+    substrate = DigitalSubstrate(SubstrateConfig(
+        precision="float32",
+        noise_level=0.0,
+        weight_bounds=None,
+        sparsity=0.0,
+        device="cpu",
+    ))
 
     dims = [hidden_dim] * max(num_layers - 1, 1)
     geometry = FeedforwardGeometry(
@@ -656,18 +714,33 @@ def create_fa_system(
             input_dim=input_dim,
             output_dim=output_dim,
             hidden_dims=tuple(dims),
+            num_layers=num_layers,
+            topology_type="feedforward",
+            connectivity=None,
+            recurrent_weight=None,
         )
     )
 
     dynamics = InstantaneousDynamics(
         StateDynamicsConfig(
             dynamics_type="instantaneous",
+            max_steps=1,
+            convergence_threshold=1e-4,
+            convergence_start=1,
+            step_size=0.1,
+            beta=0.1,
+            track_free_energy_per_iter=False,
         )
     )
 
     credit = RandomProjectionsCredit(
         CreditAssignmentConfig(
             credit_type="random_projections",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="mse",
+            orthogonal_init=False,
+            feedback_scale=0.01,
         )
     )
 
@@ -675,6 +748,11 @@ def create_fa_system(
         ParameterUpdateConfig(
             update_type="euclidean",
             step_size=lr,
+            momentum=0.9,
+            ortho_steps=5,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
         )
     )
 

@@ -97,11 +97,11 @@ class SubstrateConfig:
             "optical")
     """
 
-    precision: str = "float32"
-    noise_level: float = 0.0
-    weight_bounds: tuple[float, float] | None = None
-    sparsity: float = 0.0
-    device: str = "cpu"
+    precision: str
+    noise_level: float
+    weight_bounds: tuple[float, float] | None
+    sparsity: float
+    device: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,11 +121,11 @@ class GeometryConfig:
 
     input_dim: int
     output_dim: int
-    hidden_dims: tuple[int, ...] = ()
-    num_layers: int = 1
-    topology_type: str = "feedforward"
-    connectivity: dict | None = None
-    recurrent_weight: list[list[float]] | None = None
+    hidden_dims: tuple[int, ...]
+    num_layers: int
+    topology_type: str
+    connectivity: dict | None
+    recurrent_weight: list[list[float]] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,13 +144,13 @@ class StateDynamicsConfig:
             for Control-Lyapunov analysis
     """
 
-    dynamics_type: str = "instantaneous"
-    max_steps: int = 30
-    convergence_threshold: float = 1e-4
-    convergence_start: int = 5
-    step_size: float = 0.1
-    beta: float = 0.1
-    track_free_energy_per_iter: bool = False
+    dynamics_type: str
+    max_steps: int
+    convergence_threshold: float
+    convergence_start: int
+    step_size: float
+    beta: float
+    track_free_energy_per_iter: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,12 +168,12 @@ class CreditAssignmentConfig:
         feedback_scale: Scaling factor for feedback matrices
     """
 
-    credit_type: str = "thermodynamic_contrast"
-    beta: float = 0.5
-    feedback_matrix: Tensor | None = None
-    local_objective: str = "mse"
-    orthogonal_init: bool = False
-    feedback_scale: float = 0.01
+    credit_type: str
+    beta: float
+    feedback_matrix: Tensor | None
+    local_objective: str
+    orthogonal_init: bool
+    feedback_scale: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,13 +191,13 @@ class ParameterUpdateConfig:
         ewc_lambda: EWC regularization strength
     """
 
-    update_type: str = "euclidean"
-    step_size: float = 0.01
-    momentum: float = 0.9
-    ortho_steps: int = 5
-    spectral_norm: float = 1.0
-    fisher_damping: float = 1e-3
-    ewc_lambda: float = 1000.0
+    update_type: str
+    step_size: float
+    momentum: float
+    ortho_steps: int
+    spectral_norm: float
+    fisher_damping: float
+    ewc_lambda: float
 
 
 # ============================================================
@@ -1503,20 +1503,50 @@ class ModelAdapter:
         if substrate is not None:
             return substrate
 
-        return DigitalSubstrate()
+        return DigitalSubstrate(SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ))
 
     def _infer_substrate_from_compute_profile(self) -> Substrate | None:
         if not (self._metadata and self._metadata.compute_profile):
             return None
         profile = self._metadata.compute_profile
         if profile == ComputeProfile.ANALOG:
-            return AnalogSubstrate()
+            return AnalogSubstrate(SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            ))
         if profile == ComputeProfile.OPTICAL:
-            return OpticalSubstrate()
+            return OpticalSubstrate(SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            ))
         if profile == ComputeProfile.MEMRISTOR:
-            return MemristiveSubstrate()
+            return MemristiveSubstrate(SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            ))
         if profile == ComputeProfile.NEUROMORPHIC:
-            return NeuromorphicSubstrate()
+            return NeuromorphicSubstrate(SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            ))
         return None
 
     def _infer_substrate_from_backend(self) -> Substrate | None:
@@ -1533,7 +1563,13 @@ class ModelAdapter:
             "quantum": QuantumSubstrate,
         }
         cls = backend_map.get(backend)
-        return cls() if cls else None
+        return cls(SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        )) if cls else None
 
     def _infer_substrate_from_family(self) -> Substrate | None:
         if not (self._metadata and self._metadata.family):
@@ -1548,7 +1584,13 @@ class ModelAdapter:
         ]
         for keys, cls in family_map:
             if any(k in family for k in keys):
-                return cls()
+                return cls(SubstrateConfig(
+                    precision="float32",
+                    noise_level=0.0,
+                    weight_bounds=None,
+                    sparsity=0.0,
+                    device="cpu",
+                ))
         return None
 
     def _infer_geometry(self) -> Geometry:
@@ -1602,6 +1644,10 @@ class ModelAdapter:
                     input_dim=getattr(self.model, "input_dim", 0),
                     output_dim=getattr(self.model, "output_dim", 0),
                     hidden_dims=self._infer_hidden_dims(),
+                    num_layers=len(self._infer_hidden_dims()),
+                    topology_type="feedforward",
+                    connectivity=None,
+                    recurrent_weight=None,
                 ),
                 layers=layers,
             )
@@ -1612,6 +1658,10 @@ class ModelAdapter:
                     input_dim=getattr(self.model, "input_dim", 0),
                     output_dim=getattr(self.model, "output_dim", 0),
                     hidden_dims=self._infer_hidden_dims(),
+                    num_layers=len(self._infer_hidden_dims()),
+                    topology_type="feedforward",
+                    connectivity=None,
+                    recurrent_weight=None,
                 )
             )
 
@@ -1644,7 +1694,10 @@ class ModelAdapter:
                 input_dim=getattr(self.model, "input_dim", 0),
                 output_dim=getattr(self.model, "output_dim", 0),
                 hidden_dims=self._infer_hidden_dims(),
+                num_layers=len(self._infer_hidden_dims()),
                 topology_type="recurrent",
+                connectivity=None,
+                recurrent_weight=None,
             ),
             hidden_dim=self._infer_hidden_dims()[-1]
             if self._infer_hidden_dims()
@@ -1672,7 +1725,10 @@ class ModelAdapter:
                 input_dim=getattr(self.model, "input_dim", 0),
                 output_dim=getattr(self.model, "output_dim", 0),
                 hidden_dims=self._infer_hidden_dims(),
+                num_layers=len(self._infer_hidden_dims()),
                 topology_type="tile_mesh",
+                connectivity=None,
+                recurrent_weight=None,
             ),
             tile_graph=tile_graph,
             neurons_per_tile=neurons_per_tile,
@@ -1686,7 +1742,10 @@ class ModelAdapter:
                 input_dim=getattr(self.model, "input_dim", 0),
                 output_dim=getattr(self.model, "output_dim", 0),
                 hidden_dims=self._infer_hidden_dims(),
+                num_layers=len(self._infer_hidden_dims()),
                 topology_type="neuromorphic",
+                connectivity=None,
+                recurrent_weight=None,
             )
         )
 
@@ -1696,7 +1755,10 @@ class ModelAdapter:
                 input_dim=getattr(self.model, "input_dim", 0),
                 output_dim=getattr(self.model, "output_dim", 0),
                 hidden_dims=self._infer_hidden_dims(),
+                num_layers=len(self._infer_hidden_dims()),
                 topology_type="spatial_lattice",
+                connectivity=None,
+                recurrent_weight=None,
             )
         )
 
@@ -1724,7 +1786,11 @@ class ModelAdapter:
                 StateDynamicsConfig(
                     dynamics_type="energy_minimization",
                     max_steps=max_steps,
+                    convergence_threshold=1e-4,
+                    convergence_start=5,
+                    step_size=0.1,
                     beta=getattr(self.model, "beta", 0.5),
+                    track_free_energy_per_iter=False,
                 )
             )
 
@@ -1734,20 +1800,50 @@ class ModelAdapter:
             if dynamics is not None:
                 return dynamics
 
-        return InstantaneousDynamics()
+        return InstantaneousDynamics(StateDynamicsConfig(
+            dynamics_type="instantaneous",
+            max_steps=1,
+            convergence_threshold=1e-4,
+            convergence_start=1,
+            step_size=0.1,
+            beta=0.1,
+            track_free_energy_per_iter=False,
+        ))
 
     def _dynamics_from_family(self, family: str) -> StateDynamics | None:  # ruff: ignore[no-self-use]
         equilibrium_keys = ("equilibrium", "eqprop", "ep", "chl")
         if any(k in family for k in equilibrium_keys):
             return EnergyMinimizationDynamics(
                 StateDynamicsConfig(
-                    dynamics_type="energy_minimization", max_steps=30, beta=0.5
+                    dynamics_type="energy_minimization",
+                    max_steps=30,
+                    convergence_threshold=1e-4,
+                    convergence_start=5,
+                    step_size=0.1,
+                    beta=0.5,
+                    track_free_energy_per_iter=False,
                 )
             )
         if any(k in family for k in ("predictive", "pc")):
-            return PredictiveSettlingDynamics()
+            return PredictiveSettlingDynamics(StateDynamicsConfig(
+                dynamics_type="predictive_settling",
+                max_steps=30,
+                convergence_threshold=1e-4,
+                convergence_start=5,
+                step_size=0.1,
+                beta=0.5,
+                track_free_energy_per_iter=False,
+            ))
         if any(k in family for k in ("spiking", "stdp", "snn")):
-            return SpikeIntegrationDynamics()
+            return SpikeIntegrationDynamics(StateDynamicsConfig(
+                dynamics_type="spike_integration",
+                max_steps=30,
+                convergence_threshold=1e-4,
+                convergence_start=5,
+                step_size=0.1,
+                beta=0.5,
+                track_free_energy_per_iter=False,
+            ))
         forward_keys = (
             "forward_only",
             "ff",
@@ -1760,7 +1856,15 @@ class ModelAdapter:
             "tp",
         )
         if any(k in family for k in forward_keys):
-            return InstantaneousDynamics()
+            return InstantaneousDynamics(StateDynamicsConfig(
+                dynamics_type="instantaneous",
+                max_steps=1,
+                convergence_threshold=1e-4,
+                convergence_start=1,
+                step_size=0.1,
+                beta=0.1,
+                track_free_energy_per_iter=False,
+            ))
         return None
 
     def _dynamics_from_gradient_method(self, method: str) -> StateDynamics | None:
@@ -1769,22 +1873,66 @@ class ModelAdapter:
                 StateDynamicsConfig(
                     dynamics_type="energy_minimization",
                     max_steps=getattr(self.model, "max_steps", 30),
+                    convergence_threshold=1e-4,
+                    convergence_start=5,
+                    step_size=0.1,
                     beta=getattr(self.model, "beta", 0.5),
+                    track_free_energy_per_iter=False,
                 )
             )
         if method == "predictive_coding":
-            return PredictiveSettlingDynamics()
+            return PredictiveSettlingDynamics(StateDynamicsConfig(
+                dynamics_type="predictive_settling",
+                max_steps=30,
+                convergence_threshold=1e-4,
+                convergence_start=5,
+                step_size=0.1,
+                beta=0.5,
+                track_free_energy_per_iter=False,
+            ))
         if method in {"spiking", "stdp"}:
-            return SpikeIntegrationDynamics()
+            return SpikeIntegrationDynamics(StateDynamicsConfig(
+                dynamics_type="spike_integration",
+                max_steps=30,
+                convergence_threshold=1e-4,
+                convergence_start=5,
+                step_size=0.1,
+                beta=0.5,
+                track_free_energy_per_iter=False,
+            ))
         return None
 
     def _dynamics_from_locality(self, locality: LocalityLevel) -> StateDynamics | None:  # ruff: ignore[no-self-use]
         if locality == LocalityLevel.EQUILIBRIUM:
-            return EnergyMinimizationDynamics()
+            return EnergyMinimizationDynamics(StateDynamicsConfig(
+                dynamics_type="energy_minimization",
+                max_steps=30,
+                convergence_threshold=1e-4,
+                convergence_start=5,
+                step_size=0.1,
+                beta=0.5,
+                track_free_energy_per_iter=False,
+            ))
         if locality == LocalityLevel.FORWARD_ONLY:
-            return InstantaneousDynamics()
+            return InstantaneousDynamics(StateDynamicsConfig(
+                dynamics_type="instantaneous",
+                max_steps=1,
+                convergence_threshold=1e-4,
+                convergence_start=1,
+                step_size=0.1,
+                beta=0.1,
+                track_free_energy_per_iter=False,
+            ))
         if locality == LocalityLevel.LOCAL:
-            return SpikeIntegrationDynamics()
+            return SpikeIntegrationDynamics(StateDynamicsConfig(
+                dynamics_type="spike_integration",
+                max_steps=30,
+                convergence_threshold=1e-4,
+                convergence_start=5,
+                step_size=0.1,
+                beta=0.5,
+                track_free_energy_per_iter=False,
+            ))
         return None
 
     def _infer_credit(self) -> CreditAssignment:
@@ -1810,7 +1958,14 @@ class ModelAdapter:
             if credit is not None:
                 return credit
 
-        return BackpropCredit()
+        return BackpropCredit(CreditAssignmentConfig(
+            credit_type="gradient",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="mse",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+        ))
 
     def _credit_from_type(  # ruff: ignore[no-self-use]
         self, credit_type: str, with_config: bool
@@ -1819,10 +1974,22 @@ class ModelAdapter:
             if with_config:
                 return ThermodynamicContrast(
                     CreditAssignmentConfig(
-                        credit_type="thermodynamic_contrast", beta=0.5
+                        credit_type="thermodynamic_contrast",
+                        beta=0.5,
+                        feedback_matrix=None,
+                        local_objective="mse",
+                        orthogonal_init=False,
+                        feedback_scale=0.01,
                     )
                 )
-            return ThermodynamicContrast()
+            return ThermodynamicContrast(CreditAssignmentConfig(
+                credit_type="thermodynamic_contrast",
+                beta=0.5,
+                feedback_matrix=None,
+                local_objective="mse",
+                orthogonal_init=False,
+                feedback_scale=0.01,
+            ))
         credit_map: dict[str, type[CreditAssignment]] = {
             "random_projections": RandomProjectionsCredit,
             "feedback_alignment": RandomProjectionsCredit,
@@ -1833,7 +2000,14 @@ class ModelAdapter:
             "backpropagation": BackpropCredit,
         }
         cls = credit_map.get(credit_type)
-        return cls() if cls else None
+        return cls(CreditAssignmentConfig(
+            credit_type=credit_type,
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="mse",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+        )) if cls else None
 
     def _credit_from_family(self, family: str) -> CreditAssignment | None:  # ruff: ignore[no-self-use]
         family_map: list[tuple[tuple[str, ...], type[CreditAssignment]]] = [
@@ -1846,7 +2020,14 @@ class ModelAdapter:
         ]
         for keys, cls in family_map:
             if any(k in family for k in keys):
-                return cls()
+                return cls(CreditAssignmentConfig(
+                    credit_type="thermodynamic_contrast" if cls is ThermodynamicContrast else "random_projections",
+                    beta=0.5,
+                    feedback_matrix=None,
+                    local_objective="mse",
+                    orthogonal_init=False,
+                    feedback_scale=0.01,
+                ))
         return None
 
     def _infer_update(self) -> ParameterUpdate:
@@ -1855,25 +2036,89 @@ class ModelAdapter:
         if self._metadata and self._metadata.tags:
             tags = {t.lower() for t in self._metadata.tags}
             if tags & {"muon", "riemannian"}:
-                update = RiemannianOrthogonalUpdate()
+                update = RiemannianOrthogonalUpdate(ParameterUpdateConfig(
+                    update_type="riemannian_orthogonal",
+                    step_size=0.01,
+                    momentum=0.9,
+                    ortho_steps=5,
+                    spectral_norm=1.0,
+                    fisher_damping=1e-3,
+                    ewc_lambda=1000.0,
+                ))
             elif "spectral" in tags:
-                update = SpectralConstrainedUpdate()
+                update = SpectralConstrainedUpdate(ParameterUpdateConfig(
+                    update_type="spectral_constrained",
+                    step_size=0.01,
+                    momentum=0.9,
+                    ortho_steps=5,
+                    spectral_norm=1.0,
+                    fisher_damping=1e-3,
+                    ewc_lambda=1000.0,
+                ))
             elif tags & {"fisher", "natural"}:
-                update = NaturalGradientUpdate()
+                update = NaturalGradientUpdate(ParameterUpdateConfig(
+                    update_type="natural_gradient",
+                    step_size=0.01,
+                    momentum=0.9,
+                    ortho_steps=5,
+                    spectral_norm=1.0,
+                    fisher_damping=1e-3,
+                    ewc_lambda=1000.0,
+                ))
             elif tags & {"ewc", "elastic"}:
-                update = ElasticConsolidationUpdate()
+                update = ElasticConsolidationUpdate(ParameterUpdateConfig(
+                    update_type="elastic_consolidation",
+                    step_size=0.01,
+                    momentum=0.9,
+                    ortho_steps=5,
+                    spectral_norm=1.0,
+                    fisher_damping=1e-3,
+                    ewc_lambda=1000.0,
+                ))
 
         # Priority 2: Family
         if update is None and self._metadata and self._metadata.family:
             family = self._metadata.family.lower()
             if any(k in family for k in ("muon", "mep")):
-                update = RiemannianOrthogonalUpdate()
+                update = RiemannianOrthogonalUpdate(ParameterUpdateConfig(
+                    update_type="riemannian_orthogonal",
+                    step_size=0.01,
+                    momentum=0.9,
+                    ortho_steps=5,
+                    spectral_norm=1.0,
+                    fisher_damping=1e-3,
+                    ewc_lambda=1000.0,
+                ))
             elif "fisher" in family:
-                update = NaturalGradientUpdate()
+                update = NaturalGradientUpdate(ParameterUpdateConfig(
+                    update_type="natural_gradient",
+                    step_size=0.01,
+                    momentum=0.9,
+                    ortho_steps=5,
+                    spectral_norm=1.0,
+                    fisher_damping=1e-3,
+                    ewc_lambda=1000.0,
+                ))
             elif "ewc" in family:
-                update = ElasticConsolidationUpdate()
+                update = ElasticConsolidationUpdate(ParameterUpdateConfig(
+                    update_type="elastic_consolidation",
+                    step_size=0.01,
+                    momentum=0.9,
+                    ortho_steps=5,
+                    spectral_norm=1.0,
+                    fisher_damping=1e-3,
+                    ewc_lambda=1000.0,
+                ))
 
-        return update if update is not None else EuclideanUpdate()
+        return update if update is not None else EuclideanUpdate(ParameterUpdateConfig(
+            update_type="euclidean",
+            step_size=0.01,
+            momentum=0.9,
+            ortho_steps=5,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+        ))
 
     @staticmethod
     def _compare_metrics(

@@ -198,11 +198,181 @@ class ExperimentConfig:
 **Issue**: Same fields (`learning_rate`, `batch_size`, `epochs`) redefined in 5+ places with different defaults.
 
 #### 7.3 Migration Plan
-1. Create `bioplausible/config/experiment.py` with `ExperimentConfig`
+1. Create `bioplausible/config/experiment.py` with `ExperimentConfig` ✅ **DONE**
 2. Add `from_configs()` factory to `SystemTrainer` accepting `ExperimentConfig`
 3. Migrate one domain at a time (start with Vision → `experiments/eqprop_vision_parity.py`)
 4. Deprecate old config classes with `__deprecated__` warnings
 5. Update CLI commands to accept unified config
+
+#### 7.4 Sprint 7 Progress (2026-08-21)
+| Task | Status | Details |
+|------|--------|---------|
+| Create ExperimentConfig (no defaults, all fields required) | ✅ Done | `bioplausible/config/experiment.py` - 5 config primitives + top-level ExperimentConfig |
+| Remove defaults from ontology configs (SubstrateConfig, GeometryConfig, StateDynamicsConfig, CreditAssignmentConfig, ParameterUpdateConfig) | ✅ Done | All fields now required |
+| Fix SystemTrainer factory functions (create_eqprop_system, create_backprop_system, create_fa_system) | ✅ Done | All pass explicit configs |
+| Fix ModelAdapter inference methods | ✅ Done | All substrate/geometry/dynamics/credit/update constructors use explicit configs |
+| Fix test_ontology.py and test_system_spec.py | ✅ Done | All 48 core tests pass |
+| Add preset factory functions (make_vision_preset, make_lm_preset, etc.) | ✅ Done | Domain-specific templates in experiment.py |
+| Export new config from config/__init__.py | ✅ Done | Legacy exports preserved with Legacy prefix |
+
+#### 7.5 Remaining Sprint 7 Issues
+| Issue | Location | Impact |
+|-------|----------|--------|
+| Property tests (test_ontology_locks.py) still use default constructors | `tests/property/test_ontology_locks.py` | 76 tests fail - need explicit configs |
+| Legacy configs still have defaults (TrainerConfig, DeploymentConfig, TileAlgorithmConfig) | `core/trainer.py`, `zoo/models/deployments/`, `core/local_learning/algorithm.py` | Not blocking - legacy path, but should be deprecated |
+| SystemTrainer.from_configs() factory | `core/system_trainer.py` | Not yet implemented |
+| CLI integration | `bioplausible/cli/` | Not yet done |
+
+#### 7.6 **IMMEDIATE: Magic Number Elimination & Ontology Config Factories** (P0 - This Week)
+**Problem**: Removing defaults from ontology configs created massive constructor bloat (60+ lines inline config per system). Magic numbers (`* 0.1`, `1e-3`, `1e-4`) remain hardcoded in core logic instead of being configurable.
+
+**⚠️ CRITICAL: Resolve 7.6.10 (Legacy Deprecation) FIRST — before any other 7.6 tasks.**
+We have TWO pipelines. Every minute spent "fixing" legacy (`ModelConfig`, `CoreTrainer`, `BioModel.build()`) is wasted if we deprecate it. 
+- **Do not add factory methods to legacy configs** (`ModelConfig`, `TrainerConfig`, `DeploymentConfig`, `TileAlgorithmConfig`)
+- **Do not patch magic numbers in legacy code** (`core/trainer.py`, `core/model.py`, `core/construction.py` legacy paths)
+- **Only work on NEW pipeline**: 5 ontology configs → `SystemTrainer` → native models
+
+| Task | Location | Details |
+|------|----------|---------|
+| **7.6.1** Add factory methods to all 5 **ontology** configs | `core/ontology.py:87-200` | `SubstrateConfig.digital/analog()`, `GeometryConfig.feedforward/recurrent/tile_mesh()`, `StateDynamicsConfig.energy_minimization/instantaneous()`, `CreditAssignmentConfig.thermodynamic_contrast/random_projections/gradient()`, `ParameterUpdateConfig.euclidean/riemannian_orthogonal/spectral/natural/elastic()` |
+| **7.6.2** Replace hardcoded `* 0.1` weight init in RecurrentGeometry | `core/ontology.py:801,826` | **INVESTIGATE FIRST**: This is a *weight initialization* concern, not geometry. Should use shared `InitConfig` component (see 7.7). For now, add `init_scale: float` to `GeometryConfig.recurrent()` factory and thread through to `RecurrentGeometry` constructor. |
+| **7.6.3** Replace hardcoded `* 0.1` feedback init in FA rules | `core/local_learning/rules/fa.py:58,124,174,226,276,358` | Use `CreditAssignmentConfig.feedback_scale` (already exists!) instead of magic `0.1` — **trivial fix, do immediately** |
+| **7.6.4** Replace hardcoded convergence thresholds in **new pipeline only** | `core/local_learning/settling.py:39,397,689,851,921` | Use `StateDynamicsConfig` factory methods. **Do not touch** `core/construction.py:293` (legacy path). |
+| **7.6.5** **DEPRECATE** `ModelConfig` (unified.py) — delete, don't fix | `config/unified.py:143-163` | Legacy pipeline config. Replace usages with `ExperimentConfig` + ontology configs. |
+| **7.6.6** **DEPRECATE** `BioModel.build()` — delete, don't fix | `core/model.py:174-177` | Legacy zoo build path. Migrate models to native (`models/native/`). |
+| **7.6.7** **DEPRECATE** `CoreTrainer` — delete, don't fix | `core/trainer.py:93` | Legacy trainer. `SystemTrainer` is the replacement. Add deprecation warning, migrate callers. |
+| **7.6.8** Update property tests to use factories | `tests/property/test_ontology_locks.py` | 76 tests — replace inline configs with factory calls. **Investigate**: Can we auto-generate test configs from factories to avoid manual updates? |
+| **7.6.9** Audit ALL magic numbers in **new pipeline only** | `core/ontology.py`, `core/local_learning/rules/`, `models/native/` | Search: `* 0\.1`, `* 0\.01`, `1e-[34]`, `1e-12` — each must be: (a) configurable via appropriate config, (b) justified numerical constant with comment, or (c) eliminated via deprecation. |
+
+**Factory Method Pattern** (add to each config class in `core/ontology.py`):
+```python
+@dataclass(frozen=True, slots=True)
+class SubstrateConfig:
+    # ... fields ...
+    @classmethod
+    def digital(cls, device: str = "cpu", precision: str = "float32") -> "SubstrateConfig":
+        return cls(precision=precision, noise_level=0.0, weight_bounds=None, sparsity=0.0, device=device)
+    @classmethod
+    def analog(cls, noise_level: float = 0.1, device: str = "cpu") -> "SubstrateConfig":
+        return cls(precision="float32", noise_level=noise_level, weight_bounds=(-1.0, 1.0), sparsity=0.0, device=device)
+
+@dataclass(frozen=True, slots=True)
+class GeometryConfig:
+    # ... fields ...
+    @classmethod
+    def feedforward(cls, input_dim: int, output_dim: int, hidden_dims: tuple[int, ...]) -> "GeometryConfig":
+        return cls(input_dim=input_dim, output_dim=output_dim, hidden_dims=hidden_dims,
+                   num_layers=len(hidden_dims), topology_type="feedforward",
+                   connectivity=None, recurrent_weight=None)
+    @classmethod
+    def recurrent(cls, input_dim: int, output_dim: int, hidden_dims: tuple[int, ...],
+                  init_scale: float = 0.1) -> "GeometryConfig":  # Temporary; replace with InitConfig component
+        return cls(input_dim=input_dim, output_dim=output_dim, hidden_dims=hidden_dims,
+                   num_layers=len(hidden_dims), topology_type="recurrent",
+                   connectivity=None, recurrent_weight=None)
+    @classmethod
+    def tile_mesh(cls, input_dim: int, output_dim: int, num_layers: int,
+                  neurons_per_tile: int, tiles_per_layer: int) -> "GeometryConfig":
+        return cls(input_dim=input_dim, output_dim=output_dim, hidden_dims=(),
+                   num_layers=num_layers, topology_type="tile_mesh",
+                   connectivity=None, recurrent_weight=None)
+
+# ... similarly for StateDynamicsConfig, CreditAssignmentConfig, ParameterUpdateConfig
+```
+
+#### 7.6.10 **DECISION: Legacy Pipeline Deprecation** (P0 - Resolve FIRST, This Week)
+**We have TWO parallel configuration/execution pipelines:**
+
+| Legacy Pipeline | New Pipeline |
+|-----------------|--------------|
+| `ModelConfig` (unified.py) | 5 ontology configs + `ExperimentConfig` |
+| `TrainerConfig` (trainer.py) | `SystemTrainerConfig` + `TrainingConfig` |
+| `CoreTrainer` | `SystemTrainer` |
+| `BioModel` + `construct_model` | Native models (`eqprop_native.py`, etc.) |
+| `DeploymentConfig` (zoo/deployments) | `ExperimentConfig` presets |
+| `TileAlgorithmConfig` | `ExperimentConfig` → `TileAlgorithmConfig` converter (exists) |
+
+**Decision: Option A — Full deprecation in Sprint 7** (per "No users = no backward compatibility" in TODO.md §Notes).
+
+**Required work for Option A:**
+- [ ] Delete `CoreTrainer` class and `TrainerConfig` from `core/trainer.py`
+- [ ] Delete `ModelConfig` from `config/unified.py` (keep `DataConfig`, `ExperimentConfig`, `compute_hidden_dims`, helpers)
+- [ ] Delete `BioModel.build()` legacy path from `core/model.py` (keep `BioModel` base for native models if needed)
+- [ ] Delete `construct_model` legacy paths handling non-config-accepting models
+- [ ] Migrate 4 remaining models to native: `backprop_native.py`, `fa_native.py`, `pepita_native.py`, `tile_native.py`
+- [ ] Implement `SystemTrainer.from_configs(experiment_config: ExperimentConfig)` factory
+- [ ] Update all callers (CLI, experiments, tests) to use new pipeline
+- [ ] Remove legacy registry categories (PROPAGATOR, OPTIMIZER, UPDATE_STRATEGY, CONSTRAINT, SPARSITY, CONTROLLER, KERNEL_BACKEND) — already have deprecated aliases
+
+**Blocker**: `SystemTrainer.from_configs()` not implemented. This is the **single unblocker** for full deprecation.
+
+**Do NOT do Option B (bridge)** — it perpetuates dual maintenance. **Do NOT do Option C (freeze)** — legacy code rots and confuses.
+
+#### 7.6.11 **Investigation: Property Test Migration Automation** (P0 - This Week)
+76 tests in `test_ontology_locks.py` use default constructors. Manual update is error-prone.
+- [ ] Can we generate test cases from factory methods programmatically?
+- [ ] Or add a `test_fixtures.py` with pre-built configs via factories that tests import?
+- [ ] Or parametrize tests over factory methods directly?
+
+#### 7.7 **Ontology Config Decomposition** (P1 - Next Week)
+**Question**: Are we leveraging the ontology correctly if we need massive configs? The 5 configs have overlapping concerns.
+
+**INVESTIGATION REQUIRED BEFORE EXTRACTING**: Verify actual field overlap vs. semantic overlap.
+| Subcomponent | Candidate Fields | Consumers | **Investigation Needed** |
+|--------------|------------------|-----------|--------------------------|
+| `InitConfig` | `init_scale`, `orthogonal_init`, `weight_bounds` | Geometry (recurrent weights), CreditAssignment (feedback matrices), ParameterUpdate (Riemannian ortho) | Do these share *semantics* or just *names*? Recurrent weight init ≠ feedback matrix init ≠ orthogonal update init. |
+| `ConvergenceConfig` | `threshold`, `start_step`, `max_steps`, `step_size` | StateDynamics, Settling, Optimization, Profiling | StateDynamics: `convergence_threshold`, `convergence_start`, `max_steps`, `step_size`. Settling: similar. Optimization: `epsilon`. Profiling: `threshold`. **Different semantics** — "convergence" means different things. |
+| `RegularizationConfig` | `fisher_damping`, `ewc_lambda`, `spectral_norm` | ParameterUpdate, Optimizer, CreditAssignment | ParameterUpdate uses all three. Optimizer uses weight_decay. CreditAssignment uses `feedback_scale`. **Weak overlap**. |
+| `PrecisionConfig` | `precision`, `noise_level`, `eps` | Substrate, Hardware, Kernel, Activations | Substrate: `precision`, `noise_level`, `weight_bounds`. Hardware: `precision`. Kernel: `dtype`. Activations: `eps=1e-12`. **Different concerns** — numerical precision vs. noise vs. epsilon. |
+| `TopologyConfig` | `topology_type`, `connectivity`, `hidden_dims` | Geometry, ModelConfig, TileAlgorithmConfig | **Strongest candidate** — topology is a shared concept. |
+
+**Action**: 
+1. **Audit actual field definitions** across all 5 ontology configs + legacy configs before extracting.
+2. Only extract subcomponents where **semantics are identical** (same field, same meaning, same validation).
+3. If semantics differ, keep separate — duplication is better than wrong abstraction.
+
+#### 7.8 **Adapter Pattern for Ontology Composition** (P2 - Sprint 8)
+Instead of passing 5 separate configs to every component, introduce a **SystemConfig** adapter that composes the 5 axes and provides validated, cross-validated access:
+
+```python
+@dataclass(frozen=True, slots=True)
+class SystemConfig:
+    """Validated composition of 5-D ontology — single source of truth for a system."""
+    substrate: SubstrateConfig
+    geometry: GeometryConfig
+    dynamics: StateDynamicsConfig
+    credit: CreditAssignmentConfig
+    update: ParameterUpdateConfig
+
+    def validate(self) -> None:
+        """Cross-axis validation (hard constraints only)."""
+        if self.geometry.topology_type == "recurrent" and self.dynamics.dynamics_type != "energy_minimization":
+            raise ValueError("Recurrent geometry requires energy_minimization dynamics")
+        # Soft constraints (beta matching) → warnings, not errors
+
+    @classmethod
+    def from_experiment(cls, exp: ExperimentConfig) -> "SystemConfig":
+        """Build from unified ExperimentConfig — single entry point."""
+        ont = exp.ontology
+        return cls(
+            substrate=ont.substrate or SubstrateConfig.digital(exp.hardware.device),
+            geometry=ont.geometry or GeometryConfig.recurrent(...),  # needs dims from exp.model
+            dynamics=ont.dynamics or StateDynamicsConfig.energy_minimization(...),
+            credit=ont.credit or CreditAssignmentConfig.thermodynamic_contrast(...),
+            update=ont.update or ParameterUpdateConfig.euclidean(...),
+        )
+
+# Usage in SystemTrainer factories:
+def create_eqprop_system(experiment_config: ExperimentConfig, ...) -> System:
+    sys_config = SystemConfig.from_experiment(experiment_config)
+    substrate = DigitalSubstrate(sys_config.substrate)
+    geometry = RecurrentGeometry(sys_config.geometry, hidden_dim=...)
+    # ... clean, no inline config construction
+```
+
+**Location**: `core/ontology.py` (composes ontology configs) or `config/system.py` (new module).
+
+**Integration**: `SystemTrainer.from_configs(experiment_config: ExperimentConfig)` creates `SystemConfig`, validates, builds `System`.
 
 ---
 
@@ -300,11 +470,29 @@ class ExperimentConfig:
 | `cast()` in registry | ~20 | Improve generic signatures |
 | `TYPE_CHECKING` imports for runtime-used types | ~10 | Move out of TYPE_CHECKING |
 
-**Magic Numbers to Replace**:
+**Magic Numbers to Replace** (addressed in **Sprint 7.6**):
 | Location | Magic Number | Context | Action |
 |----------|--------------|---------|--------|
-| `core/ontology.py:792,817` | `* 0.1` | RecurrentGeometry weight init | Add to `GeometryConfig` or make configurable |
-| `core/local_learning/rules/fa.py:58,174,226,276,358` | `* 0.1` | Feedback alignment weight init | Add to config or use principled init |
+| `core/ontology.py:792,817` | `* 0.1` | RecurrentGeometry weight init | **7.6.2** Add `recurrent_init_scale` to `GeometryConfig` |
+| `core/local_learning/rules/fa.py:58,174,226,276,358` | `* 0.1` | Feedback alignment weight init | **7.6.3** Use `CreditAssignmentConfig.feedback_scale` |
+| `core/construction.py:293` | `1e-3` | Default convergence_threshold | **7.6.4** Use `StateDynamicsConfig` factory |
+| `core/local_learning/settling.py:39,397,689,851,921` | `1e-4`, `1e-3` | Convergence thresholds | **7.6.4** Use `StateDynamicsConfig` factory |
+| `core/model.py:174-177` | `0.001`, `0.1`, `20`, `True` | BioModel.build() defaults | **7.6.6** Use `ExperimentConfig` / ontology factories |
+| `core/trainer.py:93` | `0.01` | Optimizer LR fallback | **7.6.7** Use `TrainingConfig.learning_rate` |
+| `config/unified.py:143-163` | Multiple | ModelConfig defaults | **7.6.5** Remove defaults; all fields required |
+| `core/spectral_mixin.py:63` | `1e-12` | Spectral norm epsilon | Add to `PrecisionConfig` component |
+| `core/energies.py:142` | `1e-12` | Energy division epsilon | Add to `PrecisionConfig` component |
+| `core/local_learning/task.py:76` | `1e-8` | Accuracy denominator epsilon | Add to `PrecisionConfig` component |
+| `core/utils/activations.py:99,100,195,197,200` | `1e-12` | Normalization epsilons | Add to `PrecisionConfig` component |
+| `core/optimization/strategies/update.py:66,80` | `1e-4` | Optimization epsilons | Add to `ConvergenceConfig` component |
+| `core/optimization/strategies/constraint.py:28` | `1e-6` | Constraint epsilon | Add to `ConvergenceConfig` component |
+| `core/profiling.py:71,125,197` | `1e-5` | Profiling thresholds | Add to `ConvergenceConfig` component |
+| `core/local_learning/mixins.py:122` | `0.1` | Warmup LR multiplier | Make configurable in `TrainingConfig` |
+| `core/local_learning/algorithm.py:486` | `0.1` | Warmup LR multiplier | Make configurable in `TrainingConfig` |
+| `core/registry.py:120` | `1e-5`, `1e-1` | LR range defaults | Make configurable in `TrainingConfig` |
+| `core/training_state.py:168` | `0.1` | Overfitting threshold | Make configurable in `TrainingConfig` |
+
+**Audit Complete**: Run `grep -rn "\* 0\.\|1e-[34]\|1e-12" bioplausible/core --include="*.py"` — all hits must be configurable or justified constants with comments.
 
 **Circular Dependency Risks**:
 | Module | Imports | Risk |
