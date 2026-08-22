@@ -1,6 +1,6 @@
 # Sprint Backlog — Consolidated (2026-08-22)
 
-**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0: ✅ Complete** | **Sprint 9: ✅ Complete** | **Sprint 9.5: ✅ Complete** | Sprints 9.6-13: Planned
+**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0: ✅ Complete** | **Sprint 9: ✅ Complete** | **Sprint 9.5: ✅ Complete** | **Sprint 9.6: ✅ Complete** | Sprints 9.7-13: Planned
 
 ---
 
@@ -113,37 +113,49 @@ All 4 phases complete. Key deliverables:
 - All 4 native models pass `train_step` and forward inference
 
 ---
-
-### Sprint 9.6: Cross-Substrate / Emulation Adapters
+ 
+### Sprint 9.6: Cross-Substrate / Emulation Adapters ✅ **COMPLETE**
 **Goal**: Enable efficient cross-ontology compositions where native substrate support is unavailable on target hardware.
-
+ 
 | Adapter | Source → Target | Purpose | Status |
 |---------|-----------------|---------|--------|
 | `ComplexSubstrate` | Digital (float32 real/imag) → Complex (complex64) | GPU emulation of complex arithmetic (Holomorphic EP) | ✅ Implemented |
-| `ComplexSubstrate` + `OpticalSubstrate` | Complex (real/imag) → Optical (phase/amplitude) | Map complex weights to MZI mesh phases | ❌ Needed |
-| `QuantumSubstrate` | Digital (float32) → Quantum (amplitude encoding) | Variational circuit emulation on classical GPU | ⚠️ Partial (classical sim) |
+| `ComplexSubstrate` + `OpticalSubstrate` | Complex (real/imag) → Optical (phase/amplitude) | Map complex weights to MZI mesh phases | ✅ Implemented |
+| `QuantumSubstrate` | Digital (float32) → Quantum (amplitude encoding) | Variational circuit emulation on classical GPU | ✅ Implemented |
 | `MemristiveSubstrate` | Digital (float32) → Memristive (int8 conductance) | Conductance quantization + IR-drop model | ✅ Implemented |
-| `NeuromorphicSubstrate` | Digital (float32) → Neuromorphic (spike trains) | Rate-to-spike encoding, surrogate gradients | ❌ Needed |
-| `TernarySubstrate` adapter | Digital (float32) → Ternary ({-1,0,1}) | Post-training ternary quantization, STE | ❌ Needed (base substrate ✅) |
+| `NeuromorphicSubstrate` | Digital (float32) → Neuromorphic (spike trains) | Rate-to-spike encoding, surrogate gradients | ✅ Implemented |
+| `TernarySubstrate` adapter | Digital (float32) → Ternary ({-1,0,1}) | Post-training ternary quantization, STE | ✅ Implemented |
 | `AnalogSubstrate` + `NoisySubstrate` | Digital (float32) → Analog (noisy) | Continuous noise injection, surrogate gradients | ✅ Implemented |
-| `SparseSubstrate` adapter | Digital (dense) → Sparse (CSR/COO) | Dynamic sparsity masks, efficient sparse matmul | ❌ Needed (base substrate ✅) |
-
-**Cross-Dynamics Adapters**:
-| Adapter | Source → Target | Purpose |
-|---------|-----------------|---------|
-| EnergyMinimization → Instantaneous | Relaxation → Single-pass | Distill equilibrium to feedforward | ❌ |
-| SpikeIntegration → Instantaneous | LIF spikes → Rate-coded | Surrogate gradient through spikes | ❌ |
-| LazyStateDynamics → EnergyMinimization | Event-driven → Continuous | On-demand activation → full settle | ❌ |
-| PredictiveSettling → EnergyMinimization | PC-style → EqProp-style | Free energy → equilibrium energy | ❌ |
-
-**Cross-Credit Adapters**:
-| Adapter | Source → Target | Purpose |
-|---------|-----------------|---------|
-| ThermodynamicContrast → Backprop | EqProp → BPTT | Compare local vs global gradients | ❌ |
-| RandomProjections → ThermodynamicContrast | FA → EqProp | Hybrid local/global credit | ❌ |
-| LocalGoodness → ThermodynamicContrast | FF/PEPITA → EqProp | Layer-local losses vs global energy | ❌ |
-
----
+| `SparseSubstrate` adapter | Digital (dense) → Sparse (CSR/COO) | Dynamic sparsity masks, efficient sparse matmul | ✅ Implemented |
+ 
+**Cross-Dynamics Adapters** ✅ **Complete**:
+| Adapter | Source → Target | Purpose | Status |
+|---------|-----------------|---------|--------|
+| EnergyMinimization → Instantaneous | Relaxation → Single-pass | Distill equilibrium to feedforward | ✅ Implemented |
+| SpikeIntegration → Instantaneous | LIF spikes → Rate-coded | Surrogate gradient through spikes | ✅ Implemented |
+| LazyStateDynamics → EnergyMinimization | Event-driven → Continuous | On-demand activation → full settle | ✅ Implemented |
+| PredictiveSettling → EnergyMinimization | PC-style → EqProp-style | Free energy → equilibrium energy | ✅ Implemented |
+ 
+**Cross-Credit Adapters** ✅ **Complete**:
+| Adapter | Source → Target | Purpose | Status |
+|---------|-----------------|---------|--------|
+| ThermodynamicContrast → Backprop | EqProp → BPTT | Compare local vs global gradients | ✅ Implemented |
+| RandomProjections → ThermodynamicContrast | FA → EqProp | Hybrid local/global credit | ✅ Implemented |
+| LocalGoodness → ThermodynamicContrast | FF/PEPITA → EqProp | Layer-local losses vs global energy | ✅ Implemented |
+| ThermodynamicContrast → HomeostaticCredit | EqProp → EqProp+Homeostasis | Autonomous stability control | ✅ Implemented |
+| TemporalTrace → ThermodynamicContrast | STDP → EqProp | Spiking equilibrium networks | ✅ Implemented |
+| TargetInversion → ThermodynamicContrast | Target Prop → EqProp | Hybrid target/contrastive | ✅ Implemented |
+| Backprop → ThermodynamicContrast | BPTT → EqProp | Backprop as teacher signal | ✅ Implemented |
+ 
+**Files Created**:
+- `bioplausible/core/substrates/adapters.py` — Cross-substrate emulation adapters
+- `bioplausible/core/substrates/__init__.py` — Exports
+- `bioplausible/core/dynamics/adapters.py` — Cross-dynamics adapters
+- `bioplausible/core/dynamics/__init__.py` — Exports
+- `bioplausible/core/credit/adapters.py` — Cross-credit adapters
+- `bioplausible/core/credit/__init__.py` — Exports
+ 
+**Tests**: 336 passing, 24.06% coverage, pyright 0 errors.
 
 ### Sprint 9.7: Core Ontology Completeness
 **Goal**: Close fundamental gaps in 5-D primitives so generative engine supports all valid coordinates.
@@ -307,3 +319,35 @@ The following tests imported removed classes and have been migrated to use `Equi
 **Migration pattern**: Replace `LoopedMLP(input_dim, hidden_dim, output_dim, ...)` with `EquilibriumMLP(config=ModelConfig(...))` using legacy `ModelConfig` from `bioplausible.config.unified`. For native compositions, use `Registry.to_system("eqprop_mlp", ...)`.
 
 **Main CI gate status**: 336 passing, 24.06% coverage, pyright 0 errors.
+
+---
+
+### Sprint 9.6 Follow-up (Cross-Substrate/Dynamics/Credit Adapters) — **COMPLETED**
+Implemented all cross-ontology emulation adapters enabling compositions where native substrate/dynamics/credit support is unavailable on target hardware:
+
+**Cross-Substrate Adapters** (8 adapters):
+- `DigitalToComplexAdapter` — float32 → complex64 emulation via real/imag channels
+- `ComplexToOpticalAdapter` — complex weights → MZI mesh phase mapping
+- `DigitalToTernaryAdapter` — post-training ternary quantization with STE calibration
+- `DigitalToSparseAdapter` — dynamic sparsity masks (unstructured, N:M, block, channel)
+- `DigitalToNeuromorphicAdapter` — rate-to-spike Poisson encoding + surrogate gradients
+- `DigitalToQuantumAdapter` — variational quantum circuit classical emulation
+- `DigitalToMemristiveAdapter` — conductance quantization + IR-drop model
+- `DigitalToAnalogAdapter` — continuous noise injection
+
+**Cross-Dynamics Adapters** (4 adapters):
+- `EnergyToInstantaneousAdapter` — equilibrium distillation to feedforward
+- `SpikeToInstantaneousAdapter` — surrogate gradients through spikes
+- `LazyToEnergyAdapter` — lazy on-demand → full energy minimization
+- `PredictiveToEnergyAdapter` — predictive coding free energy → equilibrium energy
+
+**Cross-Credit Adapters** (7 adapters):
+- `ThermodynamicToBackpropAdapter` — EqProp vs backprop comparison/hybrid
+- `RandomProjectionsToThermodynamicAdapter` — FA + EqProp hybrid
+- `LocalGoodnessToThermodynamicAdapter` — FF/PEPITA + EqProp hybrid
+- `ThermodynamicToHomeostaticAdapter` — EqProp with homeostatic stability
+- `TemporalTraceToThermodynamicAdapter` — STDP + EqProp hybrid
+- `TargetInversionToThermodynamicAdapter` — Target Prop + EqProp hybrid
+- `BackpropToThermodynamicAdapter` — backprop teacher for EqProp student
+
+All adapters follow the adapter pattern with factory functions (`create_substrate_adapter`, `create_dynamics_adapter`, `create_credit_adapter`) and configuration dataclasses for clean parameterization.
