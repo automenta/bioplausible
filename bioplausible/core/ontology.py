@@ -32,6 +32,7 @@ import torch
 from torch import Tensor, nn
 
 from bioplausible.core.registry import ComponentMetadata, ComputeProfile, LocalityLevel
+# Import ComplexSubstrate locally to avoid circular import
 from bioplausible.core.tile.topology import TileGraph
 
 __all__ = [
@@ -40,6 +41,7 @@ __all__ = [
     "BackpropCredit",
     "CreditAssignment",
     "CreditAssignmentConfig",
+    "ComplexSubstrate",
     "DigitalSubstrate",
     "ElasticConsolidationUpdate",
     "EnergyMinimizationDynamics",
@@ -195,6 +197,28 @@ class SubstrateConfig:
             noise_level=noise_level,
             weight_bounds=None,
             sparsity=0.0,
+            device=device,
+        )
+
+    @classmethod
+    def complex(
+        cls,
+        *,
+        noise_level: float = 0.0,
+        weight_bounds: tuple[float, float] | None = (-1.0, 1.0),
+        sparsity: float = 0.0,
+        device: str = "cpu",
+    ) -> "SubstrateConfig":
+        """Complex-valued substrate for holomorphic networks.
+
+        Uses float32 emulation (real/imag channels) for efficient GPU execution
+        with Triton-accelerated complex ops (matmul, tanh, conjugate transpose).
+        """
+        return cls(
+            precision="float32",  # Emulated complex via real/imag channels
+            noise_level=noise_level,
+            weight_bounds=weight_bounds,
+            sparsity=sparsity,
             device=device,
         )
 

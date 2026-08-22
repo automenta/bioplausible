@@ -30,11 +30,13 @@ class Verifier:
         n_epochs_override: int | None = None,
         export_data: bool = False,
         output_dir: str | None = None,
+        record_to_kb: bool = False,
     ):
         self.quick_mode = quick_mode
         self.intermediate_mode = intermediate_mode
         self.seed = seed
         self.export_data = export_data
+        self.record_to_kb = record_to_kb
         self.notebook = VerificationNotebook()
 
         # Set output directory (default to ./results if not specified)
@@ -221,6 +223,101 @@ class Verifier:
             "all_scores": scores,
         }
 
+    def _record_track_to_kb(self, track_id: int, result) -> None:
+        """Record a track result to the knowledge layer via direct KB/FailureTracker."""
+        from bioplausible.core._paths import db_path
+        from bioplausible.execution._state import FailureTracker
+        from bioplausible.knowledge.kb import KnowledgeBase
+
+        try:
+            # Map track status to experiment status
+            status_map = {
+                "pass": "completed",
+                "fail": "failed",
+                "partial": "completed",  # Partial is still a valid result
+                "stub": "failed",
+            }
+            exp_status = status_map.get(result.status, "failed")
+
+            # Extract metrics from track result
+            metrics = dict(result.metrics) if result.metrics else {}
+            metrics.update({
+                "track_score": result.score,
+                "track_time_seconds": result.time_seconds,
+                "evidence_level": result.evidence_level,
+            })
+
+            # Build config from track metadata
+            name, _ = self.tracks[track_id]
+            config = {
+                "track_id": track_id,
+                "track_name": name,
+                "verification_mode": "quick" if self.quick_mode else ("intermediate" if self.intermediate_mode else "full"),
+            }
+
+            # Determine model/task from track
+            model = f"validation_track_{track_id}"
+            task = "verification"
+
+            # Sanitize metrics
+            def _sanitize(v: object) -> float:
+                try:
+                    return float(v if v is not None else 0.0)
+                except (TypeError, ValueError):
+                    return 0.0
+
+            sanitized_metrics = {k: _sanitize(v) for k, v in metrics.items()}
+
+            if exp_status == "completed":
+                # Record to KnowledgeBase
+                kb = KnowledgeBase(db_path=db_path("bioplausible_kb.db"), auto_embed=False)
+                acc = sanitized_metrics.get("track_score", 0.0) / 100.0
+                flops = sanitized_metrics.get("forward_flops", 0.0) + sanitized_metrics.get("backward_flops", 0.0)
+                mem = sanitized_metrics.get("peak_memory_mb", sanitized_metrics.get("memory_mb", 0.0))
+                wall = sanitized_metrics.get("wall_time_s", sanitized_metrics.get("track_time_seconds", 0.0))
+                finding = (
+                    f"rule {model} on {task}: final_acc={acc:.4f} "
+                    f"flops={flops:.3e} mem={mem:.1f}MB time={wall:.2f}s"
+                )
+                tags = ["experiment", model, task, "validation_track"]
+                kb.add_experiment(
+                    name=f"{model}/{task}",
+                    model_family=model,
+                    task=task,
+                    config=dict(config),
+                    metrics=sanitized_metrics,
+                    artifacts={"epochs": str(self.epochs), "seed": str(self.seed), "device": "cpu"},
+                )
+            else:
+                # Record to FailureTracker
+                from datetime import datetime
+                tracker = FailureTracker(db_path=db_path("execution_state.db"))
+                failure_type = {
+                    "error": "exception",
+                    "failed": "did_not_converge",
+                    "expensive": "cost_limited",
+                }.get(exp_status, "unknown")
+                from bioplausible.execution._state import FailureRecord
+                record = FailureRecord(
+                    timestamp=datetime.now().isoformat(),
+                    model_name=model,
+                    task_name=task,
+                    tier="validation_track",
+                    trial_id=self.seed,
+                    failure_type=failure_type,
+                    failure_epoch=self.epochs,
+                    failure_batch=None,
+                    config=dict(config),
+                    last_metrics=sanitized_metrics,
+                    stack_trace="",
+                )
+                tracker.log_failure(record)
+
+            logger.debug("Recorded track %s to knowledge base", track_id)
+        except Exception as e:
+            # Best-effort: don't break verification if KB recording fails
+            logger.warning("Failed to record track %s to KB: %s", track_id, e)
+
     def run_tracks(
         self, track_ids: list[int] | None = None, parallel: bool = False
     ) -> dict:
@@ -280,6 +377,10 @@ class Verifier:
                     elif result:
                         results[tid] = result
                         self.notebook.add_track_result(result)
+                        
+                        # Record to knowledge base if enabled
+                        if self.record_to_kb:
+                            self._record_track_to_kb(tid, result)
 
                         icon = {
                             "pass": "[OK] ",
@@ -316,6 +417,11 @@ class Verifier:
                 elif result:
                     results[track_id] = result
                     self.notebook.add_track_result(result)
+                    
+                    # Record to knowledge base if enabled
+                    if self.record_to_kb:
+                        self._record_track_to_kb(track_id, result)
+
                     icon = {
                         "pass": "[OK] ",
                         "fail": "[FAIL] ",

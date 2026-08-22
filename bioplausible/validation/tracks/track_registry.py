@@ -13,6 +13,7 @@ from bioplausible.core.registry import ComponentCategory, Registry
 # Import all KEPT track modules (Phase 4 deleted: advanced_tracks, analysis_tracks,
 # engine_validation_tracks, enhanced_validation_tracks, framework_validation,
 # honest_tradeoff, new_tracks, rapid_validation, special_tracks)
+# research_tracks removed (one-off research scripts - Sprint 8)
 from . import (
     application_tracks,
     architecture_comparison,
@@ -20,7 +21,6 @@ from . import (
     hardware_tracks,
     nebc_tracks,
     negative_results,
-    research_tracks,
     scaling_tracks,
     signal_tracks,
     tradeoff_tracks,
@@ -82,12 +82,11 @@ register_tracks_from_module(hardware_tracks)
 # 4. Applications
 register_tracks_from_module(application_tracks)
 
-# 5. NEBC / Research / Negative Results
+# 5. NEBC / Negative Results
 register_tracks_from_module(nebc_tracks)
 register_tracks_from_module(negative_results)
 register_tracks_from_module(architecture_comparison)
 register_tracks_from_module(tradeoff_tracks)
-register_tracks_from_module(research_tracks)
 
 # 6. Signal Propagation
 register_tracks_from_module(signal_tracks)

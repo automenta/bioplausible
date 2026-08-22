@@ -1,4 +1,5 @@
-# Tracks package - Phase 2 consolidated to 11 kept files + TrackRegistry
+# Tracks package - Phase 2 consolidated to 10 kept files + TrackRegistry
+# research_tracks removed (one-off research scripts - Sprint 8)
 from . import (
     application_tracks as application_tracks,  # Track 56 - depth architecture comparison
 )
@@ -16,9 +17,6 @@ from . import (
 )
 from . import (
     negative_results as negative_results,  # Track 55 - scientific negative results
-)
-from . import (
-    research_tracks as research_tracks,
 )
 from . import (
     scaling_tracks as scaling_tracks,

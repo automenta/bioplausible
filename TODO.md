@@ -376,8 +376,8 @@ Implemented `SystemConfig` in `bioplausible/core/ontology.py` as a validated com
 #### 8.2 Migration Actions
 - [x] Move **automatable invariants** (Lipschitz, energy descent, gradient equivalence) → `tests/property/`
 - [x] Keep **evidence-producing tracks** (core, scaling, hardware, NEBC, negative results)
-- [ ] Remove **one-off research scripts** masquerading as tracks
-- [ ] Unify `Verifier` output with `biopl report` / `biopl failure-manifesto`
+- [x] Remove **one-off research scripts** masquerading as tracks
+- [x] Unify `Verifier` output with `biopl report` / `biopl failure-manifesto`
 
 #### 8.3 Sprint 8 Progress (2026-08-22)
 | Task | Status | Details |
@@ -390,9 +390,12 @@ Implemented `SystemConfig` in `bioplausible/core/ontology.py` as a validated com
 | EqProp vs Backprop accuracy parity (Track 2) | ✅ Done | Accuracy gap < 15% |
 | Noise damping / self-healing (Track 3) | ✅ Done | Contraction mapping noise damping |
 | Biology axioms tests already cover | ✅ Done | Lipschitz, energy descent, gradient equivalence, fixed-point, weight-transport freeness |
+| **Remove research_tracks.py** | ✅ Done | Deleted one-off research tracks (42-44) |
+| **Unify Verifier with KB/FailureTracker** | ✅ Done | Added `record_to_kb` flag, new `biopl validate` CLI |
 
 **New Files Created**:
 - `tests/property/test_scaling_invariants.py` (17 tests: 7 pass, 10 xfail)
+- `bioplausible/cli/validate.py` (new validation CLI)
 
 **Tests Passing**: 345 property + unit tests (13 xfailed), 24.10% coverage (floor: 24%)
 
@@ -407,6 +410,138 @@ Implemented `SystemConfig` in `bioplausible/core/ontology.py` as a validated com
 | `TileAlgorithm` + variants | `core/local_learning/`, `zoo/models/deployments/*.py` | Consolidate: variants are config presets, not classes |
 | `*_legacy` modules still imported | `zoo/models/eqprop/_legacy/` (deleted), `docs/archive/` (deleted) | Audit imports; remove if unused |
 | Native migration for other models | `bioplausible/models/native/` | Add `backprop_native.py`, `fa_native.py`, `pepita_native.py`, `tile_native.py` |
+| **Native migration for research directions** | `bioplausible/models/native/research_native.py` | ✅ **Done**: `holomorphic_ep`, `directed_ep`, `finite_nudge_ep` as native ontology compositions |
+| **README documentation for research directions** | `README.md` | ✅ **Done**: Added coordinate table and usage examples for all three |
+| **Complex Substrate for Holomorphic EP** | `core/substrates/complex_substrate.py`, `core/ontology.py` | ⏳ **Partial**: Created `ComplexSubstrate` with real/imag channel emulation + Triton kernels; needs `holomorphic_ep` native migration to use it instead of `QuantumSubstrate` |
+| **Cross-substrate emulation adapter** | `core/substrates/` | ❌ **Needed**: Adapter layer to run complex models on GPU efficiently (real/imag split already implemented in `ComplexSubstrate`) |
+
+---
+
+### Sprint 9.5: Remaining Zoo Components → Ontology Coordinates
+**Goal**: Map all unique hardware/model variants to 5-D ontology primitives
+
+| Component | Current Location | Target Axes | Status |
+|-----------|------------------|-------------|--------|
+| `TernaryEqProp` | `eqprop/ternary.py` | Substrate (ternary) or ParamUpdate | ❌ Missing |
+| `MomentumEquilibrium` | `eqprop/_energy.py` | Dynamics (EnergyMin + Momentum) | ❌ Missing |
+| `SparseEquilibrium` | `eqprop/sparse_eq.py` | Geometry (Sparse) or Substrate | ❌ Missing |
+| `EqPropDiffusion` | `eqprop/eqprop_diffusion.py` | Dynamics (Diffusion-based) | ❌ Missing |
+| `QuantizedLoopedMLP` | `eqprop/hardware_variants.py` | Substrate (Memristive/Quantized) | ✅ MemristiveSubstrate exists |
+| `NoisyLoopedMLP` | `eqprop/hardware_variants.py` | Substrate (Analog/Noisy) | ✅ AnalogSubstrate/NoisySubstrate exist |
+| `SpikingLoopedMLP` | `eqprop/hardware_variants.py` | Substrate (Neuromorphic) + Dynamics (SpikeIntegration) | ✅ NeuromorphicSubstrate + SpikeIntegrationDynamics exist |
+| `OpticalLoopedMLP` | `eqprop/hardware_variants.py` | Substrate (Optical) | ✅ OpticalSubstrate exists |
+| `CrossbarLoopedMLP` | `eqprop/hardware_variants.py` | Substrate (Memristive) | ✅ MemristiveSubstrate exists |
+| `QuantumLoopedMLP` | `eqprop/hardware_variants.py` | Substrate (Quantum) | ✅ QuantumSubstrate exists |
+| `NeuralCube` | `eqprop/neural_cube.py` | Geometry (SpatialLattice3D) | ✅ SpatialLattice3D exists |
+| `LazyEqProp` | `eqprop/lazy_eqprop.py` | Dynamics (LazyStateDynamics) | ✅ LazyStateDynamics exists |
+| `Homeostatic` | `eqprop/homeostatic.py` | Credit (HomeostaticCredit) | ✅ HomeostaticCredit exists |
+
+---
+
+### Sprint 9.6: Cross-Substrate / Emulation Adapters
+**Goal**: Enable efficient cross-ontology compositions by providing emulation adapters where native substrate support is unavailable or suboptimal on target hardware.
+
+| Adapter | Source Substrate | Target Substrate | Purpose | Status |
+|---------|------------------|------------------|---------|--------|
+| `ComplexSubstrate` | Digital (float32 real/imag) | Complex (complex64) | Efficient GPU emulation of complex arithmetic (Holomorphic EP) | ✅ Implemented |
+| `ComplexSubstrate` + `OpticalSubstrate` | Complex (real/imag) | Optical (phase/amplitude) | Map complex weights to MZI mesh phases | ❌ Needed |
+| `QuantumSubstrate` | Digital (float32) | Quantum (amplitude encoding) | Variational circuit emulation on classical GPU | ✅ Partial (classical sim) |
+| `MemristiveSubstrate` | Digital (float32) | Memristive (int8 conductance) | Conductance quantization + IR-drop model | ✅ Implemented |
+| `NeuromorphicSubstrate` | Digital (float32) | Neuromorphic (spike trains) | Rate-to-spike encoding, surrogate gradients | ❌ Needed |
+| `TernarySubstrate` | Digital (float32) | Ternary ({-1,0,1}) | Post-training ternary quantization, STE | ❌ Needed |
+| `AnalogSubstrate` + `NoisySubstrate` | Digital (float32) | Analog (noisy) | Continuous noise injection, surrogate gradients | ✅ Implemented |
+| `SparseSubstrate` | Digital (dense) | Sparse (CSR/COO) | Dynamic sparsity masks, efficient sparse matmul | ❌ Needed |
+
+**Cross-Dynamics Adapters** (StateDynamics axis):
+| Adapter | Source Dynamics | Target Dynamics | Purpose |
+|---------|-----------------|-----------------|---------|
+| `EnergyMinimization` → `Instantaneous` | Relaxation | Single-pass | Distill equilibrium to feedforward |
+| `SpikeIntegration` → `Instantaneous` | LIF spikes | Rate-coded | Surrogate gradient through spikes |
+| `LazyStateDynamics` → `EnergyMinimization` | Event-driven | Continuous | On-demand activation → full settle |
+| `PredictiveSettling` → `EnergyMinimization` | PC-style | EqProp-style | Free energy → equilibrium energy |
+
+**Cross-Credit Adapters** (CreditAssignment axis):
+| Adapter | Source Credit | Target Credit | Purpose |
+|---------|---------------|---------------|---------|
+| `ThermodynamicContrast` → `Backprop` | EqProp | BPTT | Compare local vs global gradients |
+| `RandomProjections` → `ThermodynamicContrast` | FA | EqProp | Hybrid local/global credit |
+| `LocalGoodness` → `ThermodynamicContrast` | FF/PEPITA | EqProp | Layer-local losses vs global energy |
+
+---
+
+### Sprint 9.6: Cross-Substrate / Emulation Adapters
+**Goal**: Enable efficient cross-ontology compositions by providing emulation adapters where native substrate support is unavailable or suboptimal on target hardware.
+
+| Adapter | Source Substrate | Target Substrate | Purpose | Status |
+|---------|------------------|------------------|---------|--------|
+| `ComplexSubstrate` | Digital (float32 real/imag) | Complex (complex64) | Efficient GPU emulation of complex arithmetic (Holomorphic EP) | ✅ Implemented |
+| `ComplexSubstrate` + `OpticalSubstrate` | Complex (real/imag) | Optical (phase/amplitude) | Map complex weights to MZI mesh phases | ❌ Needed |
+| `QuantumSubstrate` | Digital (float32) | Quantum (amplitude encoding) | Variational circuit emulation on classical GPU | ✅ Partial (classical sim) |
+| `MemristiveSubstrate` | Digital (float32) | Memristive (int8 conductance) | Conductance quantization + IR-drop model | ✅ Implemented |
+| `NeuromorphicSubstrate` | Digital (float32) | Neuromorphic (spike trains) | Rate-to-spike encoding, surrogate gradients | ❌ Needed |
+| `TernarySubstrate` | Digital (float32) | Ternary ({-1,0,1}) | Post-training ternary quantization, STE | ❌ Needed |
+| `AnalogSubstrate` + `NoisySubstrate` | Digital (float32) | Analog (noisy) | Continuous noise injection, surrogate gradients | ✅ Implemented |
+| `SparseSubstrate` | Digital (dense) | Sparse (CSR/COO) | Dynamic sparsity masks, efficient sparse matmul | ❌ Needed |
+
+**Cross-Dynamics Adapters** (StateDynamics axis):
+| Adapter | Source Dynamics | Target Dynamics | Purpose | Status |
+|---------|-----------------|-----------------|---------|--------|
+| `EnergyMinimization` → `Instantaneous` | Relaxation | Single-pass | Distill equilibrium to feedforward | ❌ Needed |
+| `SpikeIntegration` → `Instantaneous` | LIF spikes | Rate-coded | Surrogate gradient through spikes | ❌ Needed |
+| `LazyStateDynamics` → `EnergyMinimization` | Event-driven | Continuous | On-demand activation → full settle | ❌ Needed |
+| `PredictiveSettling` → `EnergyMinimization` | PC-style | EqProp-style | Free energy → equilibrium energy | ❌ Needed |
+
+**Cross-Credit Adapters** (CreditAssignment axis):
+| Adapter | Source Credit | Target Credit | Purpose | Status |
+|---------|---------------|---------------|---------|--------|
+| `ThermodynamicContrast` → `Backprop` | EqProp | BPTT | Compare local vs global gradients | ❌ Needed |
+| `RandomProjections` → `ThermodynamicContrast` | FA | EqProp | Hybrid local/global credit | ❌ Needed |
+| `LocalGoodness` → `ThermodynamicContrast` | FF/PEPITA | EqProp | Layer-local losses vs global energy | ❌ Needed |
+
+---
+
+### Sprint 9.7: Native Migration for Remaining Zoo Components
+**Goal**: Replace all legacy `BioModel` subclasses with native 5-D ontology compositions.
+
+| Component | Native File | Axes Composition | Priority |
+|-----------|-------------|------------------|----------|
+| `TernaryEqProp` | `ternary_native.py` | `DigitalSubstrate(ternary) ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | High |
+| `MomentumEquilibrium` | `momentum_native.py` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization(momentum) ⊗ ThermodynamicContrast ⊗ RiemannianOrthogonalUpdate(Muon)` | High |
+| `SparseEquilibrium` | `sparse_native.py` | `SparseSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Medium |
+| `EqPropDiffusion` | `diffusion_native.py` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ DiffusionDynamics ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Medium |
+| `NeuralCube` | `neural_cube_native.py` | `DigitalSubstrate ⊗ SpatialLattice3D ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Medium |
+| `Homeostatic` | `homeostatic_native.py` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ HomeostaticCredit ⊗ EuclideanUpdate` | Low |
+| `LazyEqProp` | `lazy_native.py` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ LazyStateDynamics ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Low |
+| `SpikingLoopedMLP` | `spiking_native.py` | `NeuromorphicSubstrate ⊗ RecurrentGeometry ⊗ SpikeIntegrationDynamics ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | High |
+| `OpticalLoopedMLP` | `optical_native.py` | `OpticalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | High |
+| `CrossbarLoopedMLP` | `crossbar_native.py` | `MemristiveSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | High |
+
+---
+
+### Sprint 9.8: Core Ontology Completeness
+**Goal**: Close fundamental gaps in the 5-D primitives so the generative engine supports all valid coordinates.
+
+| Gap | Axis | Blocked Compositions | Action |
+|-----|------|---------------------|--------|
+| `DiffusionDynamics` missing | StateDynamics | `EqPropDiffusion`, diffusion-based models | Implement `DiffusionDynamics` protocol + config |
+| `EnergyMinimization` momentum variant missing | StateDynamics | `MomentumEquilibrium`, heavy-ball settling | Add `momentum` field to `StateDynamicsConfig.energy_minimization` |
+| `SparseSubstrate` missing | Substrate | `SparseEquilibrium`, sparse LoopedMLP | Implement `SparseSubstrate` (CSR/COO) |
+| `TernarySubstrate` missing | Substrate | `TernaryEqProp`, ternary quantization | Implement `TernarySubstrate` with STE |
+| `ComplexSubstrate` not in axis certifications | Substrate | L1-L7, S/G/D/C/U locks don't test complex path | Add complex path to property locks |
+| `SubstrateConfig.precision` not enforced | Substrate | QuantumSubstrate ignores it, ComplexSubstrate uses float32 | Add precision enforcement to all substrate `__init__` |
+| `SystemConfig` cross-axis validation incomplete | All | Physical realizability not checked | Add realizability constraints (e.g., neuromorphic⊗instantaneous invalid) |
+
+---
+
+### Sprint 9.9: Validation for Arbitrary Compositions
+**Goal**: Make property locks (L1-L7, S/G/D/C/U) work for any valid 5-D coordinate, not just reference implementations.
+
+| Gap | Impact | Action |
+|-----|--------|--------|
+| L1-L7 only test reference systems | Arbitrary compositions untested | Parameterize property locks over `SystemFactory` |
+| S/G/D/C/U axis locks test hardcoded primitives | Cross-adapter paths untested | Add adapter-aware test variants |
+| No "composability" test suite | Can't verify engine works end-to-end | Add `tests/property/test_composability.py` with random valid coordinates |
+| No performance regression tests for adapters | Cross-substrate efficiency unknown | Benchmark each adapter vs native |
 
 ---
 

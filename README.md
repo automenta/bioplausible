@@ -78,6 +78,41 @@ memristive_eqprop = System(
 
 Formerly many hardcoded models (e.g., `optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **emergent coordinates** in this space.
 
+### Research Direction Models (Native Ontology Implementations)
+
+The framework includes native implementations of novel research directions as first-class ontology coordinates:
+
+| Model | Coordinate | Description |
+|-------|------------|-------------|
+| `holomorphic_ep` | `QuantumSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Complex-valued Equilibrium Propagation using holomorphic (analytic) activation functions and conjugate-transpose feedback pathways. Enables complex-domain credit assignment with potential for phase-based computation. |
+| `directed_ep` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ RandomProjections ⊗ EuclideanUpdate` | Directed/Asymmetric Equilibrium Propagation implementing Feedback Alignment within energy-based framework. Fixed random feedback matrices (no weight transport) with thermodynamic settling dynamics. |
+| `finite_nudge_ep` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast(beta≥1) ⊗ EuclideanUpdate` | Finite-Nudge Equilibrium Propagation using large β (finite nudge) instead of infinitesimal limit. Stronger supervision signals while maintaining equilibrium dynamics. |
+
+These models are available via the native API:
+
+```python
+from bioplausible.models.native import (
+    create_native_holomorphic_ep,
+    create_native_directed_ep,
+    create_native_finite_nudge_ep,
+)
+
+# Holomorphic EP (complex-valued)
+holomorphic = create_native_holomorphic_ep(
+    input_dim=784, hidden_dim=256, output_dim=10, beta=0.5
+)
+
+# Directed EP (asymmetric feedback)
+directed = create_native_directed_ep(
+    input_dim=784, hidden_dim=256, output_dim=10, feedback_scale=0.01
+)
+
+# Finite-Nudge EP (large beta)
+finite_nudge = create_native_finite_nudge_ep(
+    input_dim=784, hidden_dim=256, output_dim=10, beta=1.0
+)
+```
+
 ---
 
 ## ⚡ Thermodynamic Invariant: Energy as First-Class Object
