@@ -1,12 +1,15 @@
 """Equilibrium Propagation model variants."""
 
+import math
+
 import torch
 
 from bioplausible.acceleration.kernels import HAS_CUPY, EqPropKernel
+from bioplausible.config.unified import ModelConfig
 
 from ..base import EqPropModel
 from ..transitions import TransitionGraphMixin
-from .looped_mlp import LoopedMLP, _kernel_backend_step
+from ._energy import EquilibriumMLP
 
 __all__ = [
     "MemoryEfficientEqPropModel",
@@ -15,7 +18,90 @@ __all__ = [
 ]
 
 
-class MemoryEfficientLoopedMLP(LoopedMLP):
+def _kernel_backend_step(
+    engine: object,
+    x: torch.Tensor,
+    y: torch.Tensor,
+) -> dict[str, float] | None:
+    """Run a train step via the NumPy/CuPy kernel engine.
+
+    Returns ``None`` when the engine is unavailable (caller falls back to
+    the PyTorch implementation). The kernel engine is single-hidden-state
+    only; layered ``LoopedMLP`` (``num_layers > 1``) must keep ``backend``
+    on ``"pytorch"`` and never reach here — the consolidated engine's
+    ``train_step`` path is then used instead.
+    """
+    if engine is None:
+        return None
+    x_np = x.detach().cpu().numpy() if isinstance(x, torch.Tensor) else x
+    y_np = y.detach().cpu().numpy() if isinstance(y, torch.Tensor) else y
+    if x_np.ndim > 2:
+        x_np = x_np.reshape(x_np.shape[0], -1)
+    return engine.train_step(x_np, y_np)
+
+
+def _make_config(
+    name: str,
+    input_dim: int,
+    hidden_dim: int,
+    output_dim: int,
+    use_spectral_norm: bool = True,
+    max_steps: int = 30,
+    gradient_method: str = "bptt",
+    **extra,
+) -> ModelConfig:
+    """Create a ModelConfig for memory-efficient constructors."""
+    return ModelConfig(
+        name=name,
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_dims=(hidden_dim,),
+        num_layers=1,
+        learning_rate=extra.pop("learning_rate", 0.01),
+        beta=extra.pop("beta", 0.5),
+        max_steps=max_steps,
+        convergence_threshold=extra.pop("convergence_threshold", 1e-4),
+        convergence_start=extra.pop("convergence_start", 5),
+        use_spectral_norm=use_spectral_norm,
+        spectral_norm_power_iterations=extra.pop("spectral_norm_power_iterations", 5),
+        activation=extra.pop("activation", "tanh"),
+        lipschitz_mode=extra.pop("lipschitz_mode", "power_iteration"),
+        output_scaling_mode=extra.pop("output_scaling_mode", "uniform"),
+        dropout=extra.pop("dropout", 0.0),
+        neurons_per_tile=extra.pop("neurons_per_tile", 48),
+        tiles_per_layer=extra.pop("tiles_per_layer", 4),
+        algorithm=extra.pop("algorithm", "ep"),
+        mode=extra.pop("mode", "ep"),
+        inference_steps=extra.pop("inference_steps", 10),
+        step_size=extra.pop("step_size", 0.1),
+        input_channels=extra.pop("input_channels", 3),
+        input_size=extra.pop("input_size", 32),
+        conv_channels=extra.pop("conv_channels", (32, 64, 128)),
+        kernel_sizes=extra.pop("kernel_sizes", (3, 3, 3)),
+        use_pooling=extra.pop("use_pooling", True),
+        pooling_size=extra.pop("pooling_size", 2),
+        attention_heads=extra.pop("attention_heads", 4),
+        use_positional_encoding=extra.pop("use_positional_encoding", True),
+        use_temporal_attention=extra.pop("use_temporal_attention", True),
+        seq_len=extra.pop("seq_len", 64),
+        hidden_dim=extra.pop("hidden_dim", hidden_dim),
+        obs_dim=extra.pop("obs_dim", 8),
+        action_dim=extra.pop("action_dim", 4),
+        action_type=extra.pop("action_type", "discrete"),
+        log_std_init=extra.pop("log_std_init", 0.0),
+        log_std_min=extra.pop("log_std_min", -20.0),
+        log_std_max=extra.pop("log_std_max", 2.0),
+        entropy_coef=extra.pop("entropy_coef", 0.01),
+        value_coef=extra.pop("value_coef", 0.5),
+        max_grad_norm=extra.pop("max_grad_norm", 0.5),
+        node_features=extra.pop("node_features", 10),
+        aggregation=extra.pop("aggregation", "mean"),
+        readout=extra.pop("readout", "mean"),
+        extra={**extra, "gradient_method": gradient_method, "backend": "pytorch"},
+    )
+
+
+class MemoryEfficientLoopedMLP(EquilibriumMLP):
     """Memory-efficiency metadata facade over the consolidated layered eqprop MLP.
 
     The prior implementation routed to a NumPy/CuPy single-hidden kernel for
@@ -46,15 +132,16 @@ class MemoryEfficientLoopedMLP(LoopedMLP):
         gradient_method: str = "bptt",
         use_gpu_if_available: bool = True,  # ruff: ignore[unused-method-argument]  (compat kwarg, ignored)
     ) -> None:
-        super().__init__(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim,
+        config = _make_config(
+            "memory_efficient_looped_mlp",
+            input_dim,
+            hidden_dim,
+            output_dim,
             use_spectral_norm=use_spectral_norm,
             max_steps=max_steps,
             gradient_method=gradient_method,
-            backend="pytorch",
         )
+        super().__init__(config=config)
         self.is_memory_efficient = False
 
     def __repr__(self) -> str:
@@ -92,14 +179,16 @@ class MemoryEfficientEqPropModel(TransitionGraphMixin, EqPropModel):
         else:
             self.backend = "pytorch"
 
-        super().__init__(
+        config = _make_config(
+            "memory_efficient_eqprop_model",
+            input_dim,
+            hidden_dim,
+            output_dim,
             max_steps=max_steps,
             gradient_method=gradient_method,
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim,
             use_spectral_norm=use_spectral_norm,
         )
+        super().__init__(config=config)
 
         if self.backend == "kernel":
             self._engine = EqPropKernel(

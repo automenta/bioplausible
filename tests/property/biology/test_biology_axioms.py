@@ -14,6 +14,7 @@ from torch import nn, optim
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.zoo import get_model_spec
+from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 
 # =============================================================================
 # Shared Fixtures & Helpers
@@ -83,17 +84,29 @@ class TestEPGradientEquivalence:
 
         try:
             if model_name == "eqprop_mlp":
-                from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
+                from bioplausible.config.unified import ModelConfig
 
-                model = LoopedMLP(
+                config = ModelConfig(
+                    name="eqprop_mlp",
                     input_dim=input_dim,
-                    hidden_dim=hidden_dim,
                     output_dim=output_dim,
-                    use_spectral_norm=True,
+                    hidden_dims=[hidden_dim],
+                    learning_rate=0.01,
+                    beta=0.5,
                     max_steps=20,
-                    gradient_method="contrastive",
-                    backend="pytorch",
+                    convergence_threshold=1e-4,
+                    convergence_start=5,
+                    use_spectral_norm=True,
+                    spectral_norm_power_iterations=5,
+                    activation="tanh",
+                    lipschitz_mode="power_iteration",
+                    output_scaling_mode="uniform",
+                    extra={
+                        "gradient_method": "contrastive",
+                        "backend": "pytorch",
+                    },
                 )
+                model = EquilibriumMLP(config=config)
             else:
                 model = _instantiate_model(
                     model_name, input_dim, hidden_dim, output_dim
@@ -150,19 +163,31 @@ class TestEPGradientEquivalence:
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
-            from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
+            from bioplausible.config.unified import ModelConfig
 
-            model = LoopedMLP(
+            config = ModelConfig(
+                name="eqprop_mlp",
                 input_dim=input_dim,
-                hidden_dim=hidden_dim,
                 output_dim=output_dim,
-                use_spectral_norm=True,
+                hidden_dims=[hidden_dim],
+                learning_rate=0.01,
+                beta=0.5,
                 max_steps=20,
-                gradient_method="contrastive",
-                backend="pytorch",
+                convergence_threshold=1e-4,
+                convergence_start=5,
+                use_spectral_norm=True,
+                spectral_norm_power_iterations=5,
+                activation="tanh",
+                lipschitz_mode="power_iteration",
+                output_scaling_mode="uniform",
+                extra={
+                    "gradient_method": "contrastive",
+                    "backend": "pytorch",
+                },
             )
+            model = EquilibriumMLP(config=config)
         except ImportError:
-            pytest.skip("LoopedMLP not available")
+            pytest.skip("EquilibriumMLP not available")
 
         xb, yb = x[:16], y[:16]
         model.eval()

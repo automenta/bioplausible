@@ -1,21 +1,11 @@
 """Consolidated deep Equilibrium Propagation engine (Scellier & Bengio).
 
-All six fundamental eqprop models (``StandardEqProp``, ``DirectedEP``,
-``FiniteNudgeEP``, ``LazyEqProp``, ``MomentumEquilibrium``,
-``SparseEquilibrium``) share a single engine here: a deep MLP whose widths are
-``config.hidden_dims`` (threaded from the sampled ``num_layers`` via
-:func:`bioplausible.config.unified.compute_hidden_dims`), settled jointly to
-equilibrium via :func:`settle_activations_list`, and trained by energy-
-contrastive ("free" vs "nudged") updates — the same rule Scellier & Bengio
-described for layered networks.
+The ``EquilibriumMLP`` class implements the deep energy-contrastive EqProp MLP.
+All variants (plain, momentum, sparse, feedback) are controlled by the
+``variant`` field and ``config.extra`` knobs — no subclasses needed.
 
-Subclasses differ only by a class-level ``variant`` field ("plain",
-"momentum", "sparse", "feedback") that augments the per-step dynamics or adds
-a feedback pathway; none of them overrides ``build()`` — they inherit the
-canonical safe path from :class:`bioplausible.core.model.BioModel` so the
-phantom-knob supervisor sees every sampled knob reach ``config``. Adding a
-new eqprop model means picking a ``variant`` and registering — no new
-``build()`` to write, no held-together-by-hand ``ModelConfig`` builder.
+Native 5-D compositions should use ``Registry.to_system("eqprop_mlp")`` or
+``SystemConfig.from_experiment()`` instead of subclassing.
 """
 
 from __future__ import annotations
@@ -35,21 +25,13 @@ from bioplausible.core.local_learning.settling import (
     settle_universal,
 )
 from bioplausible.core.model import BioModel
-from bioplausible.core.model_status import status_tag
-from bioplausible.core.registry import register_model
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 from ._contrastive import _contrastive_step
 
 __all__ = [
-    "DirectedEP",
     "EquilibriumMLP",
-    "FiniteNudgeEP",
-    "LazyEqProp",
     "LazyStats",
-    "MomentumEquilibrium",
-    "SparseEquilibrium",
-    "StandardEqProp",
 ]
 
 #: Discriminator for the per-step dynamics variant.
@@ -764,92 +746,3 @@ class EquilibriumMLP(BioModel):
             recurrent_layer_list=list(self.W_rec),
             feedback_layer_list=feedback_layers,
         )
-
-
-# ============================================================
-# Six thin registered subclasses — same engine, different variant.
-# Inheriting ``build()`` means the canonical construction path threads
-# every sampled knob (``num_layers`` included) into ``ModelConfig``.
-# ============================================================
-
-
-@register_model(
-    "eqprop",
-    family="eqprop",
-    tags=["eqprop", "energy", status_tag("stable")],
-)
-class StandardEqProp(EquilibriumMLP):
-    """Plain energy-contrastive deep EqProp MLP.
-
-    Status: ``stable`` for the 1-hidden implicit equilibrium path; deep vanilla
-    contrastive EqProp is ``experimental`` pending Plan 8 §B2/G2 (vanishing
-    contrastive signal at depth ≥ 3). See ``docs/eqprop_deep_limitation.md``.
-    """
-
-    variant: Variant = "plain"
-
-
-@register_model(
-    "directed_ep",
-    family="eqprop",
-    tags=["eqprop", "energy", "feedback", status_tag("experimental")],
-)
-class DirectedEP(EquilibriumMLP):
-    """Energy-contrastive EqProp with output→hidden feedback (DirectedEP).
-
-    Status: ``experimental`` — feedback pathway restores deep-layer signal
-    (profiling shows non-zero early-layer state deltas at depth ≥ 3), but its
-    accuracy at canonical parity targets has not been established across
-    multiple seeds (Plan 8 §B3 / Gate G2). Promising but not yet validated.
-    """
-
-    variant: Variant = "feedback"
-
-
-@register_model(
-    "finite_nudge_ep",
-    family="eqprop",
-    tags=["eqprop", "energy", status_tag("experimental")],
-)
-class FiniteNudgeEP(EquilibriumMLP):
-    """Energy-contrastive EqProp with configurable nudge-step count.
-
-    The surrogate ``max(3, max_steps // 3)`` nudge step count is read from
-    ``config.extra["nudge_steps"]`` when sampled, or defaults from
-    ``max_steps`` (Scellier & Bengio use a weaker nudge than the free settle).
-    """
-
-    variant: Variant = "plain"
-
-
-@register_model(
-    "lazy_eqprop",
-    family="eqprop",
-    tags=["eqprop", "energy", status_tag("experimental")],
-)
-class LazyEqProp(EquilibriumMLP):
-    """Energy-contrastive EqProp (lazy per-step activations)."""
-
-    variant: Variant = "plain"
-
-
-@register_model(
-    "momentum_equilibrium",
-    family="eqprop",
-    tags=["eqprop", "energy", "momentum", status_tag("experimental")],
-)
-class MomentumEquilibrium(EquilibriumMLP):
-    """Energy-contrastive EqProp with per-layer velocity (MomentumEquilibrium)."""
-
-    variant: Variant = "momentum"
-
-
-@register_model(
-    "sparse_equilibrium",
-    family="eqprop",
-    tags=["eqprop", "energy", "sparse", status_tag("experimental")],
-)
-class SparseEquilibrium(EquilibriumMLP):
-    """Energy-contrastive EqProp with top-k hidden sparsity (SparseEquilibrium)."""
-
-    variant: Variant = "sparse"

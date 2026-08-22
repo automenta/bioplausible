@@ -50,31 +50,27 @@ def create_native_eqprop_mlp(
     # Build hidden dims list
     hidden_dims = tuple([hidden_dim] * max(num_layers, 1))
 
-    geometry_cfg = GeometryConfig(
+    geometry_cfg = GeometryConfig.recurrent(
         input_dim=input_dim,
         output_dim=output_dim,
         hidden_dims=hidden_dims,
-        topology_type="recurrent",
     )
 
     substrate = DigitalSubstrate()
     geometry = RecurrentGeometry(geometry_cfg, hidden_dim=hidden_dim)
     dynamics = EnergyMinimizationDynamics(
-        StateDynamicsConfig(
-            dynamics_type="energy_minimization",
+        StateDynamicsConfig.energy_minimization(
             max_steps=settle_steps,
             beta=beta,
         )
     )
     credit = ThermodynamicContrast(
-        CreditAssignmentConfig(
-            credit_type="thermodynamic_contrast",
+        CreditAssignmentConfig.thermodynamic_contrast(
             beta=beta,
         )
     )
     update = EuclideanUpdate(
-        ParameterUpdateConfig(
-            update_type="euclidean",
+        ParameterUpdateConfig.euclidean(
             step_size=lr,
         )
     )

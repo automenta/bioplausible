@@ -154,12 +154,12 @@ def mnist_quick_task():
 
 @pytest.fixture
 def eqprop_model():
-    """Minimal StandardEqProp for settling/contrastive tests."""
+    """Minimal EquilibriumMLP for settling/contrastive tests."""
     from bioplausible.config.unified import ModelConfig
-    from bioplausible.zoo.models.eqprop import StandardEqProp
+    from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 
     config = ModelConfig(name="test", input_dim=64, output_dim=10, max_steps=5)
-    return StandardEqProp(config=config)
+    return EquilibriumMLP(config=config)
 
 
 # --- Sprint 4.3.4 Synthetic Fixtures (zero I/O, zero download) ---

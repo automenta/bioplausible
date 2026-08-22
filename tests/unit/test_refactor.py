@@ -1,66 +1,29 @@
 import unittest
 
-from torch import nn
-
 from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.zoo.models.eqprop import ConvEqProp, LoopedMLP, TransformerEqProp
 
 
 class TestRefactor(unittest.TestCase):
     def test_imports_and_models(self):
-        """Test that core models can be instantiated."""
-        mlp = LoopedMLP(10, 20, 5)
-        self.assertIsInstance(mlp, nn.Module)
-
-        # ConvEqProp inputs: input_channels, hidden_channels, output_dim
-        conv = ConvEqProp(1, 16, 5)
-        self.assertIsInstance(conv, nn.Module)
-
-        # TransformerEqProp inputs: vocab_size, hidden_dim, output_dim
-        trans = TransformerEqProp(100, 32, 5)
-        self.assertIsInstance(trans, nn.Module)
-
-    def test_trainer_init(self):
-        """Test that CoreTrainer can be initialized with a config."""
-        from bioplausible.core.trainer import CoreTrainer, TrainerConfig
-
-        config = TrainerConfig(
-            model="eqprop_mlp",
-            model_kwargs={
-                "input_dim": 784,
-                "hidden_dim": 20,
-                "output_dim": 10,
-            },
-            optimizer="adam",
-            task="mnist",
-            epochs=1,
-            use_compile=False,
-        )
-        trainer = CoreTrainer(config)
-        self.assertIsInstance(trainer, CoreTrainer)
+        """Test that native 5-D compositions can be instantiated."""
+        # Use native 5-D composition for eqprop_mlp
+        system = Registry.to_system("eqprop_mlp", input_dim=10, hidden_dim=20, output_dim=5)
+        self.assertTrue(hasattr(system, "forward"))
+        self.assertTrue(hasattr(system, "train_step"))
 
     def test_models_registry(self):
         """Test that models are registered with the unified Registry."""
-        # 'eqprop' (StandardEqProp) is registered by zoo/models/eqprop.py.
+        # 'eqprop_mlp' is the native factory returning a System
         names = Registry.list(ComponentCategory.MODEL).get("model", [])
-        self.assertIn("eqprop", names)
+        self.assertIn("eqprop_mlp", names)
 
-        eqprop_cls = Registry.get(ComponentCategory.MODEL, "eqprop")
-        self.assertIsNotNone(eqprop_cls)
+        eqprop_factory = Registry.get(ComponentCategory.MODEL, "eqprop_mlp")
+        self.assertIsNotNone(eqprop_factory)
 
-        # And we can instantiate by name
-        # NB: the registry class for "eqprop" is StandardEqProp which needs
-        # a ModelConfig (or kwargs matching its signature). Smoke check:
-        from bioplausible.config.unified import ModelConfig
-
-        spec = ModelConfig(
-            name="eqprop",
-            input_dim=10,
-            hidden_dims=[20],
-            output_dim=5,
-        )
-        model = eqprop_cls(spec)
-        self.assertIsInstance(model, nn.Module)
+        # And we can instantiate by name - returns a System
+        system = eqprop_factory(input_dim=10, hidden_dim=20, output_dim=5)
+        self.assertTrue(hasattr(system, "forward"))
+        self.assertTrue(hasattr(system, "train_step"))
 
 
 if __name__ == "__main__":

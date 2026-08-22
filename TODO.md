@@ -1,6 +1,6 @@
 # Sprint Backlog — Consolidated (2026-08-22)
 
-**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0: ✅ Complete** | Sprint 9: Planned | Sprints 9.5-13: Planned
+**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0: ✅ Complete** | **Sprint 9: ✅ Complete** | Sprints 9.5-13: Planned
 
 ---
 
@@ -59,11 +59,20 @@ All 4 phases complete. Key deliverables:
 
 | Task | Action | Status |
 |------|--------|--------|
-| **Collapse `EquilibriumMLP` + `LoopedMLP`** | Remove duplicate registration in `zoo/models/eqprop/` (~200 lines) | ❌ |
-| **Delete legacy `BioModel` subclasses** | Replace with `SystemConfig.from_experiment()` compositions | ❌ |
+| **Collapse `EquilibriumMLP` + `LoopedMLP`** | Remove duplicate registration in `zoo/models/eqprop/` (~200 lines) | ✅ |
+| **Delete legacy `BioModel` subclasses** | Replace with `SystemConfig.from_experiment()` compositions | ✅ |
 | **Document coordinates** | See Sprint 9.5 below | — |
 
 **Key insight**: Native compositions don't need `*_native.py` files — any valid coordinate is constructible via `SystemConfig` + primitives. The 5-D space *is* the generative engine.
+
+**Deliverables**:
+- Removed `LoopedMLP` facade class (~150 lines) from `looped_mlp.py`; kept native factory `_native_eqprop_mlp_factory` registered as `eqprop_mlp`
+- Removed 6 thin registered subclasses from `_energy.py`: `StandardEqProp`, `DirectedEP`, `FiniteNudgeEP`, `LazyEqProp`, `MomentumEquilibrium`, `SparseEquilibrium`
+- Deleted 6 re-export files: `standard_eqprop.py`, `deep_ep.py`, `finite_nudge_ep.py`, `lazy_eqprop.py`, `mom_eq.py`, `sparse_eq.py`
+- Updated `hardware_variants.py` to inherit from `EquilibriumMLP` directly with `ModelConfig` constructor
+- Updated `memory_efficient.py` to inherit from `EquilibriumMLP` directly
+- Updated `__init__.py` exports to remove deleted classes
+- Updated core tests (`test_refactor.py`, biology axioms) to use `EquilibriumMLP` with `ModelConfig` or native `Registry.to_system("eqprop_mlp")`
 
 ---
 
@@ -264,3 +273,19 @@ uv run pyright . && uv run pytest tests/property/ tests/unit/core/ -q
 - **AutoScientist drives requirements** — if it doesn't need it, delete it
 - **GPU > CPU** where appropriate (kernels, training, AutoScientist campaigns)
 - **Wall-clock budget**: Fast CI gate must stay ≤ 2 minutes on GPU
+
+### Sprint 9 Follow-up (Test Migration)
+The following tests still import removed classes and need migration to use `EquilibriumMLP` or native compositions:
+- `tests/property/test_scaling_invariants.py` — uses `LoopedMLP`, `LazyEqProp` (multiple tests)
+- `tests/integration/test_triton_integration.py` — imports `LoopedMLP`
+- `tests/integration/test_validation_all.py` — imports `LoopedMLP`
+- `tests/integration/test_advanced_training.py` — imports `LoopedMLP`
+- `tests/integration/test_gradient_equivalence.py` — imports `LoopedMLP`
+- `tests/integration/test_equilibrium_implicit_learns.py` — imports `LoopedMLP`
+- `tests/unit/test_hardware_aware.py` — imports `LoopedMLP`, `QuantizedLoopedMLP`, `NoisyLoopedMLP`
+- `tests/unit/validation/test_backprop_parity.py` — uses `eqprop_mlp` expecting BioModel
+- `tests/unit/validation/test_reproducibility.py` — uses `eqprop_mlp` expecting BioModel
+- `tests/unit/validation/hyperparams/` — multiple files use `eqprop_mlp`
+- `tests/conftest.py` — `Domain` import removed from registry (separate refactor)
+
+**Migration pattern**: Replace `LoopedMLP(input_dim, hidden_dim, output_dim, ...)` with `EquilibriumMLP(config=ModelConfig(...))` using legacy `ModelConfig` from `bioplausible.config.unified`. For native compositions, use `Registry.to_system("eqprop_mlp", ...)`.

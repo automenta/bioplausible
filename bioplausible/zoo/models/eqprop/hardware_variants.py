@@ -1,4 +1,4 @@
-"""Hardware-faithful variants of :class:`LoopedMLP` (plan §17, §2, REFACTOR7 §4).
+"""Hardware-faithful variants of :class:`EquilibriumMLP` (plan §17, §2, REFACTOR7 §4).
 
 These facades approximate non-Von-Neumann substrates so that the frontier
 pipeline's ``cost_of_plausibility`` can be measured *hardware-aware* rather
@@ -26,12 +26,15 @@ engine of their parent (:class:`EquilibriumMLP`), so they drop into
 ``validation -> core`` dependency.
 """
 
+import math
+
 import torch
 
+from bioplausible.config.unified import ModelConfig
 from bioplausible.core.model_status import status_tag
 from bioplausible.core.registry import LocalityLevel, register_model
 
-from .looped_mlp import LoopedMLP
+from ._energy import EquilibriumMLP
 
 __all__ = [
     "CrossbarLoopedMLP",
@@ -41,6 +44,65 @@ __all__ = [
     "QuantumLoopedMLP",
     "SpikingLoopedMLP",
 ]
+
+
+def _make_config(
+    name: str,
+    input_dim: int,
+    hidden_dim: int,
+    output_dim: int,
+    num_layers: int = 1,
+    **extra,
+) -> ModelConfig:
+    """Create a ModelConfig for hardware variant constructors."""
+    return ModelConfig(
+        name=name,
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_dims=tuple([hidden_dim] * max(num_layers, 1)),
+        num_layers=max(num_layers, 1),
+        learning_rate=extra.pop("learning_rate", 0.01),
+        beta=extra.pop("beta", 0.5),
+        max_steps=extra.pop("max_steps", 30),
+        convergence_threshold=extra.pop("convergence_threshold", 1e-4),
+        convergence_start=extra.pop("convergence_start", 5),
+        use_spectral_norm=extra.pop("use_spectral_norm", True),
+        spectral_norm_power_iterations=extra.pop("spectral_norm_power_iterations", 5),
+        activation=extra.pop("activation", "tanh"),
+        lipschitz_mode=extra.pop("lipschitz_mode", "power_iteration"),
+        output_scaling_mode=extra.pop("output_scaling_mode", "uniform"),
+        dropout=extra.pop("dropout", 0.0),
+        neurons_per_tile=extra.pop("neurons_per_tile", 48),
+        tiles_per_layer=extra.pop("tiles_per_layer", 4),
+        algorithm=extra.pop("algorithm", "ep"),
+        mode=extra.pop("mode", "ep"),
+        inference_steps=extra.pop("inference_steps", 10),
+        step_size=extra.pop("step_size", 0.1),
+        input_channels=extra.pop("input_channels", 3),
+        input_size=extra.pop("input_size", 32),
+        conv_channels=extra.pop("conv_channels", (32, 64, 128)),
+        kernel_sizes=extra.pop("kernel_sizes", (3, 3, 3)),
+        use_pooling=extra.pop("use_pooling", True),
+        pooling_size=extra.pop("pooling_size", 2),
+        attention_heads=extra.pop("attention_heads", 4),
+        use_positional_encoding=extra.pop("use_positional_encoding", True),
+        use_temporal_attention=extra.pop("use_temporal_attention", True),
+        seq_len=extra.pop("seq_len", 64),
+        hidden_dim=extra.pop("hidden_dim", hidden_dim),
+        obs_dim=extra.pop("obs_dim", 8),
+        action_dim=extra.pop("action_dim", 4),
+        action_type=extra.pop("action_type", "discrete"),
+        log_std_init=extra.pop("log_std_init", 0.0),
+        log_std_min=extra.pop("log_std_min", -20.0),
+        log_std_max=extra.pop("log_std_max", 2.0),
+        entropy_coef=extra.pop("entropy_coef", 0.01),
+        value_coef=extra.pop("value_coef", 0.5),
+        max_grad_norm=extra.pop("max_grad_norm", 0.5),
+        node_features=extra.pop("node_features", 10),
+        aggregation=extra.pop("aggregation", "mean"),
+        readout=extra.pop("readout", "mean"),
+        extra=extra,
+    )
 
 
 @register_model(
@@ -62,7 +124,7 @@ __all__ = [
     ],
     extra={"parity_threshold": 0.05},
 )
-class QuantizedLoopedMLP(LoopedMLP):
+class QuantizedLoopedMLP(EquilibriumMLP):
     """Approximate an FPGA substrate with fixed bit-precision hidden states.
 
     Args:
@@ -72,7 +134,7 @@ class QuantizedLoopedMLP(LoopedMLP):
         bits: Signed fixed-point width (e.g. ``8`` for INT8). Each hidden
             activation is rounded to ``[-2**(bits-1)+1, 2**(bits-1)-1]`` every
             settle step.
-        **kwargs: Remaining :class:`LoopedMLP` constructor arguments
+        **kwargs: Remaining :class:`EquilibriumMLP` constructor arguments
             (``num_layers``, ``max_steps``, ``use_spectral_norm``, ...).
 
     Gradients stay float: this simulates high-precision accumulators with a
@@ -82,7 +144,14 @@ class QuantizedLoopedMLP(LoopedMLP):
     def __init__(
         self, input_dim: int, hidden_dim: int, output_dim: int, bits: int = 8, **kwargs
     ) -> None:
-        super().__init__(input_dim, hidden_dim, output_dim, **kwargs)
+        config = _make_config(
+            "quantized_looped_mlp",
+            input_dim,
+            hidden_dim,
+            output_dim,
+            **kwargs,
+        )
+        super().__init__(config=config)
         self.bits = int(bits)
         self.scale = 2 ** (self.bits - 1) - 1  # e.g. signed INT8 range [-127, 127]
 
@@ -120,7 +189,7 @@ class QuantizedLoopedMLP(LoopedMLP):
     ],
     extra={"parity_threshold": 0.05},
 )
-class NoisyLoopedMLP(LoopedMLP):
+class NoisyLoopedMLP(EquilibriumMLP):
     """Approximate an analog/photonic substrate with continuous noise.
 
     Args:
@@ -129,7 +198,7 @@ class NoisyLoopedMLP(LoopedMLP):
         output_dim: Output logits width.
         noise_level: Std-dev of the per-step Gaussian noise (as a fraction of
             the activation scale).
-        **kwargs: Remaining :class:`LoopedMLP` constructor arguments.
+        **kwargs: Remaining :class:`EquilibriumMLP` constructor arguments.
 
     Attractor dynamics correct for the injected noise continuously, so the
     equilibrium is reached despite a noisy interaction.
@@ -143,7 +212,14 @@ class NoisyLoopedMLP(LoopedMLP):
         noise_level: float = 0.05,
         **kwargs,
     ) -> None:
-        super().__init__(input_dim, hidden_dim, output_dim, **kwargs)
+        config = _make_config(
+            "noisy_looped_mlp",
+            input_dim,
+            hidden_dim,
+            output_dim,
+            **kwargs,
+        )
+        super().__init__(config=config)
         self.noise_level = float(noise_level)
 
     def forward_dynamics(self, activations, beta: float = 0.0, target=None):
@@ -179,7 +255,7 @@ class NoisyLoopedMLP(LoopedMLP):
     ],
     extra={"parity_threshold": 0.05},
 )
-class SpikingLoopedMLP(LoopedMLP):
+class SpikingLoopedMLP(EquilibriumMLP):
     """Approximate a neuromorphic substrate with LIF-style spike-and-reset.
 
     Args:
@@ -190,7 +266,7 @@ class SpikingLoopedMLP(LoopedMLP):
             is reset to zero.
         refractory_period: Number of settle steps a neuron stays clamped at
             zero after spiking.
-        **kwargs: Remaining :class:`LoopedMLP` constructor arguments.
+        **kwargs: Remaining :class:`EquilibriumMLP` constructor arguments.
 
     Each settle step, hidden activations above ``spike_threshold`` are reset
     to zero and held there for ``refractory_period`` steps (surrogate
@@ -207,7 +283,14 @@ class SpikingLoopedMLP(LoopedMLP):
         refractory_period: float = 2.0,
         **kwargs,
     ) -> None:
-        super().__init__(input_dim, hidden_dim, output_dim, **kwargs)
+        config = _make_config(
+            "spiking_looped_mlp",
+            input_dim,
+            hidden_dim,
+            output_dim,
+            **kwargs,
+        )
+        super().__init__(config=config)
         self.spike_threshold = float(spike_threshold)
         self.refractory_period = float(refractory_period)
         self._refractory_counts: list[torch.Tensor] | None = None
@@ -277,7 +360,7 @@ class SpikingLoopedMLP(LoopedMLP):
     ],
     extra={"parity_threshold": 0.05},
 )
-class OpticalLoopedMLP(LoopedMLP):
+class OpticalLoopedMLP(EquilibriumMLP):
     """Approximate an optical substrate with phase- and detector-noise.
 
     Args:
@@ -286,7 +369,7 @@ class OpticalLoopedMLP(LoopedMLP):
         output_dim: Output logits width.
         phase_noise: Std-dev of the phase-noise applied to hidden amplitudes.
         detector_noise: Std-dev of the additive detector/readout noise.
-        **kwargs: Remaining :class:`LoopedMLP` constructor arguments.
+        **kwargs: Remaining :class:`EquilibriumMLP` constructor arguments.
     """
 
     def __init__(
@@ -298,7 +381,14 @@ class OpticalLoopedMLP(LoopedMLP):
         detector_noise: float = 0.005,
         **kwargs,
     ) -> None:
-        super().__init__(input_dim, hidden_dim, output_dim, **kwargs)
+        config = _make_config(
+            "optical_looped_mlp",
+            input_dim,
+            hidden_dim,
+            output_dim,
+            **kwargs,
+        )
+        super().__init__(config=config)
         self.phase_noise = float(phase_noise)
         self.detector_noise = float(detector_noise)
 
@@ -334,7 +424,7 @@ class OpticalLoopedMLP(LoopedMLP):
     ],
     extra={"parity_threshold": 0.05},
 )
-class CrossbarLoopedMLP(LoopedMLP):
+class CrossbarLoopedMLP(EquilibriumMLP):
     """Approximate an analog crossbar with ADC-quantised conductance readout.
 
     Args:
@@ -343,7 +433,7 @@ class CrossbarLoopedMLP(LoopedMLP):
         output_dim: Output logits width.
         adc_bits: ADC resolution for the conductance readout.
         ir_drop_factor: Fraction of signal lost to IR drop along the array.
-        **kwargs: Remaining :class:`LoopedMLP` constructor arguments.
+        **kwargs: Remaining :class:`EquilibriumMLP` constructor arguments.
     """
 
     def __init__(
@@ -355,7 +445,14 @@ class CrossbarLoopedMLP(LoopedMLP):
         ir_drop_factor: float = 0.1,
         **kwargs,
     ) -> None:
-        super().__init__(input_dim, hidden_dim, output_dim, **kwargs)
+        config = _make_config(
+            "crossbar_looped_mlp",
+            input_dim,
+            hidden_dim,
+            output_dim,
+            **kwargs,
+        )
+        super().__init__(config=config)
         self.adc_bits = int(adc_bits)
         self.ir_drop_factor = float(ir_drop_factor)
         self._adc_levels = 2 ** (self.adc_bits - 1) - 1
@@ -396,7 +493,7 @@ class CrossbarLoopedMLP(LoopedMLP):
     ],
     extra={"parity_threshold": 0.05},
 )
-class QuantumLoopedMLP(LoopedMLP):
+class QuantumLoopedMLP(EquilibriumMLP):
     """Approximate a variational/quantum substrate with measurement shot-noise.
 
     Args:
@@ -405,7 +502,7 @@ class QuantumLoopedMLP(LoopedMLP):
         output_dim: Output logits width.
         shot_noise: Number of measurement shots; noise scales as
             ``1 / sqrt(shot_noise)``.
-        **kwargs: Remaining :class:`LoopedMLP` constructor arguments.
+        **kwargs: Remaining :class:`EquilibriumMLP` constructor arguments.
     """
 
     def __init__(
@@ -416,7 +513,14 @@ class QuantumLoopedMLP(LoopedMLP):
         shot_noise: int = 1000,
         **kwargs,
     ) -> None:
-        super().__init__(input_dim, hidden_dim, output_dim, **kwargs)
+        config = _make_config(
+            "quantum_looped_mlp",
+            input_dim,
+            hidden_dim,
+            output_dim,
+            **kwargs,
+        )
+        super().__init__(config=config)
         self.shot_noise = int(shot_noise)
 
     def forward_dynamics(self, activations, beta: float = 0.0, target=None):

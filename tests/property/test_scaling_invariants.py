@@ -10,6 +10,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from torch import nn, optim
 
+from bioplausible.config.unified import ModelConfig
+from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+
 
 def _make_synthetic_dataset(
     n_samples: int, input_dim: int, output_dim: int, seed: int = 42
@@ -45,16 +48,27 @@ class TestMemoryScalingO1:
     )
     def test_eqprop_activation_memory_constant(self, depth, data):
         """EqProp activation memory should not grow dramatically with depth."""
-        from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
-
-        model = LoopedMLP(
+        config = ModelConfig(
+            name="eqprop_mlp",
             input_dim=64,
-            hidden_dim=128,
             output_dim=10,
-            use_spectral_norm=True,
+            hidden_dims=[128],
+            learning_rate=0.01,
+            beta=0.5,
             max_steps=depth,
-            gradient_method="equilibrium",
-        ).cuda()
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            use_spectral_norm=True,
+            spectral_norm_power_iterations=5,
+            activation="tanh",
+            lipschitz_mode="power_iteration",
+            output_scaling_mode="uniform",
+            extra={
+                "gradient_method": "equilibrium",
+                "backend": "pytorch",
+            },
+        )
+        model = EquilibriumMLP(config=config).cuda()
 
         x = torch.randn(32, 64, device="cuda")
         y = torch.randint(0, 10, (32,), device="cuda")
@@ -85,16 +99,27 @@ class TestMemoryScalingO1:
     )
     def test_backprop_memory_grows_with_depth(self, depth, data):
         """Backprop activation memory should grow with depth."""
-        from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
-
-        model = LoopedMLP(
+        config = ModelConfig(
+            name="eqprop_mlp",
             input_dim=64,
-            hidden_dim=128,
             output_dim=10,
-            use_spectral_norm=True,
+            hidden_dims=[128],
+            learning_rate=0.01,
+            beta=0.5,
             max_steps=depth,
-            gradient_method="bptt",
-        ).cuda()
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            use_spectral_norm=True,
+            spectral_norm_power_iterations=5,
+            activation="tanh",
+            lipschitz_mode="power_iteration",
+            output_scaling_mode="uniform",
+            extra={
+                "gradient_method": "bptt",
+                "backend": "pytorch",
+            },
+        )
+        model = EquilibriumMLP(config=config).cuda()
 
         x = torch.randn(32, 64, device="cuda")
         y = torch.randint(0, 10, (32,), device="cuda")
