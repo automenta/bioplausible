@@ -1,6 +1,6 @@
 # Sprint Backlog — Consolidated (2026-08-22)
 
-**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0: Planned** | Sprints 9-13: Planned
+**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0: ✅ Complete** | Sprint 9: Planned | Sprints 9.5-13: Planned
 
 ---
 
@@ -54,25 +54,20 @@ All 4 phases complete. Key deliverables:
 
 ---
 
-### Sprint 9: Remaining Zoo Components → Native Ontology Compositions
-**Goal**: Replace all legacy `BioModel` subclasses with native 5-D compositions.
+### Sprint 9: Zoo Facade Collapse & Coordinate Documentation
+**Goal**: Remove duplicate legacy facades; document all zoo components as 5-D coordinates.
 
-| Priority | Component | Native File | Axes Composition | Status |
-|----------|-----------|-------------|------------------|--------|
-| **P0** | `SpikingLoopedMLP` | `spiking_native.py` | NeuromorphicSubstrate ⊗ RecurrentGeometry ⊗ SpikeIntegrationDynamics ⊗ ThermodynamicContrast ⊗ EuclideanUpdate | ❌ |
-| **P0** | `OpticalLoopedMLP` | `optical_native.py` | OpticalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate | ❌ |
-| **P0** | `CrossbarLoopedMLP` | `crossbar_native.py` | MemristiveSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate | ❌ |
-| **P0** | `TernaryEqProp` | `ternary_native.py` | DigitalSubstrate(ternary) ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate | ❌ |
-| **P1** | `MomentumEquilibrium` | `momentum_native.py` | DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization(momentum) ⊗ ThermodynamicContrast ⊗ RiemannianOrthogonalUpdate(Muon) | ❌ |
-| **P1** | `SparseEquilibrium` | `sparse_native.py` | SparseSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate | ❌ |
-| **P1** | `EqPropDiffusion` | `diffusion_native.py` | DigitalSubstrate ⊗ RecurrentGeometry ⊗ DiffusionDynamics ⊗ ThermodynamicContrast ⊗ EuclideanUpdate | ❌ |
-| **P1** | `NeuralCube` | `neural_cube_native.py` | DigitalSubstrate ⊗ SpatialLattice3D ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate | ❌ |
-| **P2** | `Homeostatic` | `homeostatic_native.py` | DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ HomeostaticCredit ⊗ EuclideanUpdate | ❌ |
-| **P2** | `LazyEqProp` | `lazy_native.py` | DigitalSubstrate ⊗ RecurrentGeometry ⊗ LazyStateDynamics ⊗ ThermodynamicContrast ⊗ EuclideanUpdate | ❌ |
+| Task | Action | Status |
+|------|--------|--------|
+| **Collapse `EquilibriumMLP` + `LoopedMLP`** | Remove duplicate registration in `zoo/models/eqprop/` (~200 lines) | ❌ |
+| **Delete legacy `BioModel` subclasses** | Replace with `SystemConfig.from_experiment()` compositions | ❌ |
+| **Document coordinates** | See Sprint 9.5 below | — |
 
-**Also needed**: Collapse `EquilibriumMLP` + `LoopedMLP` facade duplication in `zoo/models/eqprop/` — **P0** (removes duplicate registration, ~200 lines)
+**Key insight**: Native compositions don't need `*_native.py` files — any valid coordinate is constructible via `SystemConfig` + primitives. The 5-D space *is* the generative engine.
 
-**Dependency**: Sprint 9.0 **must complete first** — all P0/P1 native migrations require primitives from 9.0.
+---
+
+### Sprint 9.5: Map Zoo Components to 5-D Ontology Coordinates (was Sprint 9.5)
 
 ---
 
