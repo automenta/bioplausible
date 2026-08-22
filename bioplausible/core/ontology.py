@@ -1148,7 +1148,12 @@ class SystemConfig:
 
         # Spiking dynamics requires temporal trace or STDP credit
         if self.dynamics.dynamics_type == "spike_integration":
-            if self.credit.credit_type not in ("temporal_trace", "spiking", "target_inversion", "target_prop"):
+            if self.credit.credit_type not in (
+                "temporal_trace",
+                "spiking",
+                "target_inversion",
+                "target_prop",
+            ):
                 raise ValueError(
                     f"Spike integration dynamics requires temporal trace or target inversion credit, "
                     f"got {self.credit.credit_type!r}"
@@ -1156,7 +1161,10 @@ class SystemConfig:
 
         # Tile mesh geometry requires compatible dynamics
         if self.geometry.topology_type in ("tile_mesh", "tile"):
-            if self.dynamics.dynamics_type not in ("energy_minimization", "instantaneous"):
+            if self.dynamics.dynamics_type not in (
+                "energy_minimization",
+                "instantaneous",
+            ):
                 raise ValueError(
                     f"Tile mesh geometry requires energy_minimization or instantaneous dynamics, "
                     f"got {self.dynamics.dynamics_type!r}"
@@ -1203,7 +1211,9 @@ class SystemConfig:
                 "optical": SubstrateConfig.optical,
                 "quantum": SubstrateConfig.quantum,
             }
-            substrate_factory = substrate_map.get(ont.substrate_type, SubstrateConfig.digital)
+            substrate_factory = substrate_map.get(
+                ont.substrate_type, SubstrateConfig.digital
+            )
             substrate = substrate_factory(precision=ont.substrate_precision)
 
         # Build geometry config
@@ -1218,7 +1228,9 @@ class SystemConfig:
                 "tile_mesh": GeometryConfig.tile_mesh,
                 "tile": GeometryConfig.tile_mesh,
             }
-            geometry_factory = topology_map.get(ont.topology_type, GeometryConfig.feedforward)
+            geometry_factory = topology_map.get(
+                ont.topology_type, GeometryConfig.feedforward
+            )
 
             if ont.topology_type in ("tile_mesh", "tile"):
                 geometry = geometry_factory(
@@ -1245,7 +1257,9 @@ class SystemConfig:
                 "spike_integration": StateDynamicsConfig.spike_integration,
                 "instantaneous": StateDynamicsConfig.instantaneous,
             }
-            dynamics_factory = dynamics_map.get(ont.dynamics_type, StateDynamicsConfig.instantaneous)
+            dynamics_factory = dynamics_map.get(
+                ont.dynamics_type, StateDynamicsConfig.instantaneous
+            )
             dynamics = dynamics_factory(max_steps=ont.max_steps, beta=ont.beta)
 
         # Build credit config
@@ -1266,7 +1280,9 @@ class SystemConfig:
                 "gradient": CreditAssignmentConfig.gradient,
                 "backprop": CreditAssignmentConfig.gradient,
             }
-            credit_factory = credit_map.get(ont.credit_type, CreditAssignmentConfig.gradient)
+            credit_factory = credit_map.get(
+                ont.credit_type, CreditAssignmentConfig.gradient
+            )
             credit = credit_factory(beta=ont.beta)
 
         # Build update config
@@ -1284,7 +1300,9 @@ class SystemConfig:
                 "ewc": ParameterUpdateConfig.elastic_consolidation,
                 "euclidean": ParameterUpdateConfig.euclidean,
             }
-            update_factory = update_map.get(ont.update_type, ParameterUpdateConfig.euclidean)
+            update_factory = update_map.get(
+                ont.update_type, ParameterUpdateConfig.euclidean
+            )
             update = update_factory(step_size=ont.step_size)
 
         # Create and validate

@@ -12,7 +12,7 @@ Quick Start:
 
 Or using native models:
     from bioplausible import native_eqprop_mlp, native_backprop_mlp, native_fa_mlp
-    
+
     system = native_eqprop_mlp(input_dim=784, hidden_dim=256, output_dim=10)
     # Use with SystemTrainer
 

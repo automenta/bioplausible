@@ -348,9 +348,7 @@ class ExperimentRunnerConfig(BaseConfig):
     verbose: bool = True
 
 
-def resolve_hidden_dims(
-    config: Any | None, hidden_dim: int | None
-) -> list[int]:
+def resolve_hidden_dims(config: Any | None, hidden_dim: int | None) -> list[int]:
     """Resolve the ``hidden_dims`` list from a config or fallback.
 
     Returns ``config.hidden_dims`` if non-empty; otherwise falls back to

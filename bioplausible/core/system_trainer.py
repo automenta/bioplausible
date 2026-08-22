@@ -186,7 +186,14 @@ class SystemTrainer:
         }
         # Determine substrate type from precision field
         substrate_key = substrate_cfg.precision.lower()
-        if substrate_key in ("float32", "float16", "bfloat16", "int8", "int4", "binary"):
+        if substrate_key in (
+            "float32",
+            "float16",
+            "bfloat16",
+            "int8",
+            "int4",
+            "binary",
+        ):
             substrate_key = "digital"
         substrate_cls = substrate_map.get(substrate_key, DigitalSubstrate)
         substrate = substrate_cls(substrate_cfg)
@@ -197,7 +204,11 @@ class SystemTrainer:
         if topology_type == "feedforward":
             geometry = FeedforwardGeometry(geometry_cfg)
         elif topology_type in ("recurrent", "recurrent_attractor"):
-            hidden_dim = geometry_cfg.hidden_dims[-1] if geometry_cfg.hidden_dims else model.output_dim
+            hidden_dim = (
+                geometry_cfg.hidden_dims[-1]
+                if geometry_cfg.hidden_dims
+                else model.output_dim
+            )
             geometry = RecurrentGeometry(geometry_cfg, hidden_dim=hidden_dim)
         elif topology_type in ("tile_mesh", "tile"):
             geometry = TileGeometry(

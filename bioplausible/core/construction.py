@@ -75,7 +75,9 @@ _STRUCTURAL_FIELDS: frozenset[str] = frozenset({
 #: The canonical tuning-knob schema — derived by reflection from
 #: ``ModelConfig``'s own fields, so it can never drift from the real config.
 KNOBS: frozenset[str] = frozenset(
-    f.name for f in _dataclass_fields(ExperimentModelConfig) if f.name not in _STRUCTURAL_FIELDS
+    f.name
+    for f in _dataclass_fields(ExperimentModelConfig)
+    if f.name not in _STRUCTURAL_FIELDS
 )
 
 #: Tuning knobs that are *not* ``ModelConfig`` fields (rule-engine / arch params).
