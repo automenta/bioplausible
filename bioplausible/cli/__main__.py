@@ -31,6 +31,7 @@ _SUBCOMMANDS: dict[str, tuple[str, str]] = {
     "rank": ("bioplausible.cli.rank", "main"),
     "lab": ("bioplausible.cli.lab", "main"),
     "validate": ("bioplausible.cli.validate", "main"),
+    "joint-validate": ("bioplausible.cli.joint_validate", "main"),
 }
 
 _USAGE = "biopl <" + "|".join(_SUBCOMMANDS) + "> [args]"

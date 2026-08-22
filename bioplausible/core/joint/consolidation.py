@@ -69,18 +69,19 @@ def consolidate(
             continue
 
         # Promotion: ψ → θ with optional scaling
-        promoted = psi_tensor.detach() * config.promotion_scale
+        promoted = (psi_tensor.detach() * config.promotion_scale).requires_grad_(True)
 
         if name in new_theta:
             # Add to existing parameter (e.g., fast weights added to base weights)
-            new_theta[name] = new_theta[name] + promoted
+            new_theta[name] = (new_theta[name] + promoted).requires_grad_(True)
         else:
             # New parameter (should be registered as persistent)
             new_theta[name] = promoted
 
         # Optionally reset plastic state
         if config.reset_plastic:
-            z_final.plastic[name].zero_()
+            # Use .data.zero_() to avoid in-place grad issues
+            z_final.plastic[name].data.zero_()
 
     # Return new context with updated theta
     return context.with_updated_theta(new_theta)
