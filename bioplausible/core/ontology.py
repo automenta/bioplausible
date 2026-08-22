@@ -1295,6 +1295,188 @@ class SystemConfig:
                     stacklevel=2,
                 )
 
+        # ============================================================
+        # Substrate-Dynamics Compatibility Constraints
+        # ============================================================
+
+        # Neuromorphic substrate requires spike integration or energy minimization dynamics
+        # (instantaneous pass-through doesn't capture neuromorphic temporal dynamics)
+        if self.substrate.precision == "float16" and self.substrate.sparsity > 0.9:
+            # Likely neuromorphic substrate
+            if self.dynamics.dynamics_type not in (
+                "spike_integration",
+                "energy_minimization",
+                "diffusion",
+            ):
+                raise ValueError(
+                    f"Neuromorphic substrate (precision={self.substrate.precision}, "
+                    f"sparsity={self.substrate.sparsity}) requires temporal dynamics "
+                    f"(spike_integration, energy_minimization, or diffusion), "
+                    f"got {self.dynamics.dynamics_type!r}"
+                )
+
+        # Analog substrate with noise requires dynamics that support noise injection
+        if self.substrate.precision == "float32" and self.substrate.noise_level > 0.0:
+            if self.dynamics.dynamics_type == "instantaneous":
+                # Instantaneous dynamics doesn't use substrate noise during settling
+                # (only single forward pass). Warn but don't fail.
+                import warnings
+
+                warnings.warn(
+                    f"Analog substrate with noise_level={self.substrate.noise_level} "
+                    f"used with instantaneous dynamics. Noise only applied once at input. "
+                    f"Consider energy_minimization or diffusion dynamics for continuous noise injection.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # Complex substrate requires compatible credit assignment
+        # Complex/holomorphic networks work best with thermodynamic contrast
+        # (phase-sensitive gradients) or backprop (Wirtinger calculus)
+        if self.substrate.precision == "float32" and getattr(self.substrate, "_complex_emulated", False):
+            # This is a complex substrate (emulated via real/imag channels)
+            if self.credit.credit_type not in (
+                "thermodynamic_contrast",
+                "equilibrium",
+                "gradient",
+                "backprop",
+            ):
+                import warnings
+
+                warnings.warn(
+                    f"Complex substrate used with {self.credit.credit_type!r} credit. "
+                    f"Best results with thermodynamic_contrast (holomorphic EqProp) "
+                    f"or gradient (holomorphic backprop).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # Quantum substrate requires compatible dynamics
+        # Quantum circuits need energy-based or instantaneous dynamics
+        if self.substrate.precision == "complex64":
+            if self.dynamics.dynamics_type not in (
+                "energy_minimization",
+                "instantaneous",
+                "diffusion",
+            ):
+                raise ValueError(
+                    f"Quantum substrate requires energy_minimization, instantaneous, "
+                    f"or diffusion dynamics, got {self.dynamics.dynamics_type!r}"
+                )
+
+            # Quantum substrate with thermodynamic contrast needs matching beta
+            if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):
+                if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
+                    import warnings
+
+                    warnings.warn(
+                        f"Quantum substrate with thermodynamic contrast: "
+                        f"beta mismatch dynamics.beta={self.dynamics.beta} != credit.beta={self.credit.beta}. "
+                        f"Phase-sensitive gradients require matched beta.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+
+        # Sparse substrate requires compatible update rule
+        # Sparse weights need updates that preserve sparsity structure
+        if self.substrate.sparsity > 0.5:
+            if self.update.update_type == "riemannian_orthogonal":
+                import warnings
+
+                warnings.warn(
+                    f"Sparse substrate (sparsity={self.substrate.sparsity}) with "
+                    f"RiemannianOrthogonalUpdate may densify weights. "
+                    f"Consider SpectralConstrainedUpdate or ElasticConsolidationUpdate.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # Ternary substrate requires compatible credit assignment
+        # Ternary quantization works best with equilibrium/thermodynamic contrast
+        # (contrastive learning naturally handles weight quantization)
+        if self.substrate.precision == "float32" and self.substrate.sparsity == 0.0 and self.substrate.weight_bounds == (-1.0, 1.0):
+            # Heuristic: likely ternary substrate (sparsity emerges from thresholding)
+            if self.credit.credit_type not in (
+                "thermodynamic_contrast",
+                "equilibrium",
+                "gradient",
+                "backprop",
+            ):
+                import warnings
+
+                warnings.warn(
+                    f"Ternary-like substrate used with {self.credit.credit_type!r} credit. "
+                    f"Best results with thermodynamic_contrast (Ternary EqProp) "
+                    f"or gradient (Ternary backprop with STE).",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # Diffusion dynamics requires noise-aware substrate
+        if self.dynamics.dynamics_type == "diffusion":
+            if self.substrate.noise_level == 0.0:
+                import warnings
+
+                warnings.warn(
+                    f"Diffusion dynamics (Langevin) requires substrate noise_level > 0 "
+                    f"for proper sampling. Consider setting noise_level on substrate.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # Predictive settling dynamics requires compatible credit
+        # PC uses local errors, works with thermodynamic contrast or local goodness
+        if self.dynamics.dynamics_type == "predictive_settling":
+            if self.credit.credit_type not in (
+                "thermodynamic_contrast",
+                "equilibrium",
+                "local_goodness",
+                "forward_only",
+            ):
+                raise ValueError(
+                    f"Predictive settling dynamics requires thermodynamic_contrast, "
+                    f"local_goodness, or forward_only credit, got {self.credit.credit_type!r}"
+                )
+
+        # Energy minimization with momentum requires compatible update
+        if self.dynamics.dynamics_type == "energy_minimization" and self.dynamics.momentum > 0.0:
+            if self.update.update_type == "riemannian_orthogonal":
+                import warnings
+
+                warnings.warn(
+                    f"EnergyMinimizationDynamics with momentum={self.dynamics.momentum} "
+                    f"combined with RiemannianOrthogonalUpdate may cause instability. "
+                    f"Consider EuclideanUpdate with momentum.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # Geometry-Substrate constraints
+        # Spatial lattice / neuromorphic geometry requires neuromorphic substrate
+        if self.geometry.topology_type in ("spatial_lattice", "neuromorphic", "fabric"):
+            if not (self.substrate.precision == "float16" and self.substrate.sparsity > 0.9):
+                import warnings
+
+                warnings.warn(
+                    f"Spatial/neuromorphic geometry ({self.geometry.topology_type}) "
+                    f"works best with neuromorphic substrate (float16, high sparsity). "
+                    f"Current substrate: precision={self.substrate.precision}, "
+                    f"sparsity={self.substrate.sparsity}",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # Tile mesh geometry with sparse substrate
+        if self.geometry.topology_type in ("tile_mesh", "tile") and self.substrate.sparsity > 0.5:
+            import warnings
+
+            warnings.warn(
+                f"Tile mesh geometry with sparse substrate (sparsity={self.substrate.sparsity}) "
+                f"may benefit from structured sparsity (N:M or block) for efficient matmul.",
+                UserWarning,
+                stacklevel=2,
+            )
+
     @classmethod
     def from_experiment(cls, exp: "ExperimentConfig") -> "SystemConfig":
         """Build from unified ExperimentConfig — single entry point.
@@ -1444,20 +1626,45 @@ class DigitalSubstrate:
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig.digital()
 
+    def _to_precision(self, tensor: Tensor) -> Tensor:
+        """Convert tensor to the configured precision."""
+        precision = self.config.precision
+        if precision == "float32":
+            return tensor.to(torch.float32)
+        elif precision == "float16":
+            return tensor.to(torch.float16)
+        elif precision == "bfloat16":
+            return tensor.to(torch.bfloat16)
+        elif precision == "int8":
+            return tensor.to(torch.int8)
+        elif precision == "int4":
+            # int4 not natively supported, use int8
+            return tensor.to(torch.int8)
+        elif precision == "binary":
+            return tensor.to(torch.bool)
+        return tensor
+
     def quantize_weights(self, w: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
-        return w
+        return self._to_precision(w)
 
     def inject_state_noise(self, s: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
-        return s
+        return self._to_precision(s)
 
     def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
-        return lambda x, _: x @ _.T
+        def forward(x: Tensor, w: Tensor) -> Tensor:
+            x = self._to_precision(x)
+            w = self._to_precision(w)
+            return self._to_precision(x @ w.T)
+        return forward
 
     def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
-        return lambda grad, _: grad
+        def update(grad: Tensor, w: Tensor) -> Tensor:
+            grad = self._to_precision(grad)
+            return self._to_precision(grad)
+        return update
 
     def initial_state(self, x: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
-        return x
+        return self._to_precision(x)
 
 
 class FeedforwardGeometry(nn.Module):
@@ -2104,12 +2311,20 @@ class InstantaneousDynamics:
     def settle(  # ruff: ignore[no-self-use]
         self,
         state: SystemState,
-        geometry: Geometry,  # ruff: ignore[unused-method-argument]
-        substrate: Substrate,  # ruff: ignore[unused-method-argument]
-        target: Tensor | None = None,  # ruff: ignore[unused-method-argument]
+        geometry: Geometry,
+        substrate: Substrate,
+        target: Tensor | None = None,
     ) -> SystemState:
         # Single forward pass - no settling
-        state.free_state = state.activations
+        if state.x is not None:
+            acts = geometry.forward_with_intermediates(state.x, substrate)
+        else:
+            acts = [state.activations] if state.activations is not None else []
+        if target is None:
+            state.free_state = acts
+        else:
+            state.nudged_state = acts
+        state.activations = acts
         return state
 
     def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use]
@@ -3082,6 +3297,12 @@ class AnalogSubstrate(DigitalSubstrate):
     def __init__(self, config: SubstrateConfig | None = None):
         super().__init__(config or SubstrateConfig.analog())
 
+    def inject_state_noise(self, s: Tensor) -> Tensor:
+        """Add analog noise to state."""
+        s = super().inject_state_noise(s)
+        noise = torch.randn_like(s) * self.config.noise_level
+        return self._to_precision(s + noise)
+
 
 class MemristiveSubstrate(DigitalSubstrate):
     """Memristive crossbar: conductance matrices, bounded precision, IR-drop noise.
@@ -3127,6 +3348,9 @@ class MemristiveSubstrate(DigitalSubstrate):
             # Output: currents (batch_size, n_outputs)
             # Simplified IR-drop: voltage drop along columns
 
+            x = self._to_precision(x)
+            w = self._to_precision(w)
+
             # Compute ideal currents
             currents = x @ w.T  # (batch, n_outputs)
 
@@ -3140,7 +3364,7 @@ class MemristiveSubstrate(DigitalSubstrate):
             # Scale currents by effective voltage
             currents = currents * (effective_voltage / self._read_voltage)
 
-            return currents
+            return self._to_precision(currents)
 
         return crossbar_forward
 
@@ -3188,26 +3412,29 @@ class NeuromorphicSubstrate(DigitalSubstrate):
 
     def inject_state_noise(self, s: Tensor) -> Tensor:
         """Spike dropout and thermal noise."""
+        s = super().inject_state_noise(s)
         # Spike dropout (sparse activity)
         spike_mask = torch.rand_like(s) > self.config.sparsity
         # Thermal noise
         thermal_noise = torch.randn_like(s) * self.config.noise_level
-        return s * spike_mask.float() + thermal_noise
+        return self._to_precision(s * spike_mask.float() + thermal_noise)
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         """Neuromorphic forward operator: spike-based convolution."""
 
         def neuromorphic_forward(x: Tensor, w: Tensor) -> Tensor:
             # x: spike trains (batch, time, n_inputs) or rates (batch, n_inputs)
             # w: synaptic weights (n_outputs, n_inputs)
             # For rate-coded inputs, use weighted sum with synaptic filtering
+            x = self._to_precision(x)
+            w = self._to_precision(w)
             if x.ndim == 3:
                 # Spike train input: convolve with synaptic kernel
                 # Simplified: average firing rate over time window
                 rates = x.mean(dim=1)  # (batch, n_inputs)
             else:
                 rates = x
-            return rates @ w.T
+            return self._to_precision(rates @ w.T)
 
         return neuromorphic_forward
 
@@ -3259,6 +3486,9 @@ class OpticalSubstrate(DigitalSubstrate):
             # MZI transfer matrix: cos(phi/2) for bar, i*sin(phi/2) for cross
             n_outputs = w.shape[0]
 
+            x = self._to_precision(x)
+            w = self._to_precision(w)
+
             # Convert real weights to phases (assuming [-1,1] -> [-π, π])
             phases = w * torch.pi
 
@@ -3290,7 +3520,7 @@ class OpticalSubstrate(DigitalSubstrate):
             # For simplicity, use cos(φ) as effective real weight
             effective_w = cos_half
 
-            return x @ effective_w.T
+            return self._to_precision(x @ effective_w.T)
 
         return photonic_forward
 
@@ -3335,6 +3565,9 @@ class QuantumSubstrate(DigitalSubstrate):
             # w: circuit parameters or weight matrix
             # Simplified: if w is 2D, treat as weight matrix; if 1D, treat as circuit params
 
+            x = self._to_precision(x)
+            w = self._to_precision(w)
+
             if w.ndim == 2:
                 # Treat as weight matrix: x @ w.T
                 out = x @ w.T
@@ -3363,7 +3596,7 @@ class QuantumSubstrate(DigitalSubstrate):
 
             # Add quantum noise
             noise = torch.randn_like(out) * self.config.noise_level
-            return out + noise
+            return self._to_precision(out + noise)
 
         return quantum_forward
 
@@ -3448,6 +3681,12 @@ class EnergyMinimizationDynamics:
         if self.config.momentum > 0:
             self._velocity = torch.zeros_like(h)
 
+        # Get initial activations with intermediates for credit assignment
+        if state.x is not None:
+            all_acts = geometry.forward_with_intermediates(state.x, substrate)
+        else:
+            all_acts = [h]
+
         for step in range(self.config.max_steps):
             h_new = geometry.route(h)
             h_new = substrate.inject_state_noise(h_new)
@@ -3469,11 +3708,17 @@ class EnergyMinimizationDynamics:
                     break
             h = h_new
 
-        if target is None:
-            state.free_state = h
+        # Get final activations with intermediates
+        if state.x is not None:
+            final_acts = geometry.forward_with_intermediates(state.x, substrate)
         else:
-            state.nudged_state = h
-        state.activations = h
+            final_acts = [h]
+
+        if target is None:
+            state.free_state = final_acts
+        else:
+            state.nudged_state = final_acts
+        state.activations = final_acts
         return state
 
     def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use, unused-method-argument]
@@ -4599,7 +4844,16 @@ class RiemannianOrthogonalUpdate:
         Newton-Schulz computes the polar factor (orthogonal part) of a matrix.
         Uses standard iteration: x_{k+1} = 0.5 * x_k * (3I - x_k^T x_k)
         Requires ~15-20 steps for 1e-5 accuracy.
+        For non-square matrices, uses SVD-based orthogonalization.
         """
+        # Handle non-square matrices via SVD
+        m, n = g.shape
+        if m != n:
+            # For non-square, use SVD: U @ Vh gives orthogonal projection
+            # torch.linalg.svd returns (U, S, Vh) where Vh = V^T
+            u, _, vh = torch.linalg.svd(g, full_matrices=False)
+            return u @ vh
+
         # Normalize by spectral norm (max singular value) for convergence
         _, s, _ = torch.linalg.svd(g, full_matrices=False)
         spectral_norm = s[0]
@@ -4608,7 +4862,6 @@ class RiemannianOrthogonalUpdate:
         else:
             x = g
 
-        n = x.shape[0]
         eye = torch.eye(n, device=x.device, dtype=x.dtype)
         for _ in range(steps):
             xtx = x.T @ x
@@ -4625,8 +4878,8 @@ class RiemannianOrthogonalUpdate:
         for i, (name, param) in enumerate(params.items()):
             if i < len(pseudo_grads) and pseudo_grads[i] is not None:
                 grad = pseudo_grads[i]
-                if grad.ndim >= 2:  # ruff: ignore[magic-value-comparison]
-                    # Orthogonalize the gradient
+                if grad.ndim >= 2 and grad.shape[0] == grad.shape[1]:  # ruff: ignore[magic-value-comparison]
+                    # Only orthogonalize square gradients
                     grad = self._newton_schulz(grad, self.config.ortho_steps)
                 updated[name] = param - self.config.step_size * grad
             else:

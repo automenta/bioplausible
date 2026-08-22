@@ -161,7 +161,7 @@ class TernarySubstrate(DigitalSubstrate):
             with torch.no_grad():
                 self._latent_weights[name].mul_(1 - self.weight_decay)
 
-        return w_q
+        return self._to_precision(w_q)
 
     def inject_state_noise(self, s: Tensor) -> Tensor:
         """Add noise to activations."""
@@ -171,8 +171,10 @@ class TernarySubstrate(DigitalSubstrate):
         """Forward operator with ternary weights."""
 
         def ternary_forward(x: Tensor, w: Tensor) -> Tensor:
+            x = self._to_precision(x)
+            w = self._to_precision(w)
             w_q = self.quantize_weights(w)
-            return x @ w_q.T
+            return self._to_precision(x @ w_q.T)
 
         return ternary_forward
 
@@ -184,6 +186,8 @@ class TernarySubstrate(DigitalSubstrate):
         """
 
         def ternary_update(pseudo_grad: Tensor, current_w: Tensor) -> Tensor:
+            pseudo_grad = self._to_precision(pseudo_grad)
+            current_w = self._to_precision(current_w)
             name = getattr(current_w, "_param_name", "default")
 
             # Update latent weights (full precision)
@@ -201,7 +205,7 @@ class TernarySubstrate(DigitalSubstrate):
 
             # Fallback: direct update on current weights
             step_size = getattr(self.config, "step_size", 0.01)
-            return current_w - step_size * pseudo_grad
+            return self._to_precision(current_w - step_size * pseudo_grad)
 
         return ternary_update
 

@@ -7,16 +7,11 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Generator
-from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
 
-if TYPE_CHECKING:
-    from bioplausible.core.ontology import (
-        System,
-        SystemState,
-    )
+from bioplausible.core.ontology import System, SystemState
 
 
 # ----------------------------------------------------------------------

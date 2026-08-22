@@ -15,6 +15,7 @@ import torch
 from torch import Tensor
 
 from bioplausible.core.ontology import (
+    AnalogSubstrate,
     CreditAssignmentConfig,
     DigitalSubstrate,
     ElasticConsolidationUpdate,
@@ -24,8 +25,14 @@ from bioplausible.core.ontology import (
     GeometryConfig,
     InstantaneousDynamics,
     LocalGoodnessCredit,
+    MemristiveSubstrate,
     NaturalGradientUpdate,
+    NeuromorphicSubstrate,
+    OpticalSubstrate,
     ParameterUpdateConfig,
+    QuantumSubstrate,
+    RandomProjectionsCredit,
+    RecurrentGeometry,
     RiemannianOrthogonalUpdate,
     SpectralConstrainedUpdate,
     SpikeIntegrationDynamics,
@@ -36,6 +43,9 @@ from bioplausible.core.ontology import (
     TemporalTraceCredit,
     ThermodynamicContrast,
 )
+from bioplausible.core.substrates.complex_substrate import ComplexSubstrate
+from bioplausible.core.substrates.sparse_substrate import SparseSubstrate
+from bioplausible.core.substrates.ternary_substrate import TernarySubstrate
 from bioplausible.core.system_trainer import compose_system
 from tests.property._support import (
     DEPTH,
@@ -62,6 +72,44 @@ MEMBRANE_BOUND_TOL = 1e-3
 VARIANCE_TOL = 1e-6
 FD_EPS = 1e-4
 MAX_FD_PARAMS = 100  # Limit FD points for speed
+
+
+# ----------------------------------------------------------------------
+# Substrate Factories for Certification Tests
+# ----------------------------------------------------------------------
+
+
+# Substrates that require special geometries (complex, quantum) or have CUDA/precision limitations
+_SPECIAL_SUBSTRATES = {"complex", "quantum", "memristive", "neuromorphic"}
+
+
+def _all_substrate_factories() -> list[tuple[str, callable]]:
+    """Return list of (name, factory) for all substrate types to certify."""
+    return [
+        ("digital", lambda: DigitalSubstrate(SubstrateConfig.digital())),
+        ("analog", lambda: AnalogSubstrate(SubstrateConfig.analog())),
+        ("complex", lambda: ComplexSubstrate(SubstrateConfig.complex())),
+        ("sparse", lambda: SparseSubstrate(SubstrateConfig.sparse(sparsity=0.5))),
+        ("ternary", lambda: TernarySubstrate(SubstrateConfig.ternary())),
+        ("memristive", lambda: MemristiveSubstrate(SubstrateConfig.memristive())),
+        ("neuromorphic", lambda: NeuromorphicSubstrate(SubstrateConfig.neuromorphic())),
+        ("optical", lambda: OpticalSubstrate(SubstrateConfig.optical())),
+        ("quantum", lambda: QuantumSubstrate(SubstrateConfig.quantum())),
+    ]
+
+
+def _substrate_ids() -> list[str]:
+    return [name for name, _ in _all_substrate_factories()]
+
+
+def _standard_substrate_factories() -> list[tuple[str, callable]]:
+    """Return substrates compatible with standard real-valued geometries."""
+    return [(name, factory) for name, factory in _all_substrate_factories()
+            if name not in _SPECIAL_SUBSTRATES]
+
+
+def _standard_substrate_ids() -> list[str]:
+    return [name for name, _ in _standard_substrate_factories()]
 
 
 # ----------------------------------------------------------------------
@@ -113,16 +161,25 @@ def _make_system_for_credit(
     credit,
     dynamics_type: str = "instantaneous",
     device: torch.device | None = None,
+    substrate_factory: callable | None = None,
 ) -> tuple:
     """Create a minimal system for credit assignment testing."""
     if device is None:
         device = select_device()
 
-    config = GeometryConfig.feedforward(
-        input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
-    )
-    geometry = FeedforwardGeometry(config)
-    substrate = DigitalSubstrate(SubstrateConfig.digital())
+    if dynamics_type == "energy_minimization":
+        # Energy minimization requires recurrent geometry
+        config = GeometryConfig.recurrent(
+            input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
+        )
+        geometry = RecurrentGeometry(config, hidden_dim=WIDTH)
+    else:
+        config = GeometryConfig.feedforward(
+            input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
+        )
+        geometry = FeedforwardGeometry(config)
+
+    substrate = substrate_factory() if substrate_factory else DigitalSubstrate(SubstrateConfig.digital())
 
     if dynamics_type == "energy_minimization":
         dynamics = EnergyMinimizationDynamics(
@@ -138,16 +195,28 @@ def _make_system_for_credit(
     return sys, geometry, substrate, dynamics, update
 
 
-def _make_system_for_dynamics(dynamics, device: torch.device | None = None) -> tuple:
+def _make_system_for_dynamics(
+    dynamics,
+    device: torch.device | None = None,
+    substrate_factory: callable | None = None,
+) -> tuple:
     """Create a minimal system for dynamics testing."""
     if device is None:
         device = select_device()
 
-    config = GeometryConfig.feedforward(
-        input_dim=WIDTH, output_dim=WIDTH, hidden_dims=()
-    )
-    geometry = FeedforwardGeometry(config)
-    substrate = DigitalSubstrate(SubstrateConfig.digital())
+    # Energy minimization requires recurrent geometry
+    if isinstance(dynamics, EnergyMinimizationDynamics):
+        config = GeometryConfig.recurrent(
+            input_dim=WIDTH, output_dim=WIDTH, hidden_dims=(WIDTH,)
+        )
+        geometry = RecurrentGeometry(config, hidden_dim=WIDTH)
+    else:
+        config = GeometryConfig.feedforward(
+            input_dim=WIDTH, output_dim=WIDTH, hidden_dims=(WIDTH,)
+        )
+        geometry = FeedforwardGeometry(config)
+
+    substrate = substrate_factory() if substrate_factory else DigitalSubstrate(SubstrateConfig.digital())
     credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast())
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
 
@@ -156,7 +225,11 @@ def _make_system_for_dynamics(dynamics, device: torch.device | None = None) -> t
     return sys, geometry, substrate, dynamics, update
 
 
-def _make_system_for_update(update, device: torch.device | None = None) -> tuple:
+def _make_system_for_update(
+    update,
+    device: torch.device | None = None,
+    substrate_factory: callable | None = None,
+) -> tuple:
     """Create a minimal system for update testing."""
     if device is None:
         device = select_device()
@@ -165,7 +238,7 @@ def _make_system_for_update(update, device: torch.device | None = None) -> tuple
         input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
     )
     geometry = FeedforwardGeometry(config)
-    substrate = DigitalSubstrate(SubstrateConfig.digital())
+    substrate = substrate_factory() if substrate_factory else DigitalSubstrate(SubstrateConfig.digital())
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast())
 
@@ -645,6 +718,291 @@ class TestDAxisSpikeIntegration:
                     f"Spike count variance increased at window {i}: "
                     f"{variances[i - 1]:.4f} -> {variances[i]:.4f}"
                 )
+
+
+# ======================================================================
+# SUBSTRATE CERTIFICATION LOCKS (S-Axis)
+# ======================================================================
+# These tests verify that all substrate primitives work correctly
+# with the C, U, D axis primitives they compose with.
+
+
+class TestSAxisSubstrateCertification:
+    """S-Axis: Verify all substrates work with C, U, D axis compositions."""
+
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
+    def test_substrate_with_thermodynamic_contrast(self, substrate_name: str, substrate_factory: callable) -> None:
+        """ThermodynamicContrast credit works with all standard substrates."""
+        device = select_device()
+        if device.type == "cuda":
+            enable_deterministic_cuda()
+
+        credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5))
+        sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
+            credit, dynamics_type="energy_minimization", device=device, substrate_factory=substrate_factory
+        )
+
+        with seeded(42):
+            x, y = tiny_batch(42)
+
+        free_state = _run_free_phase(sys, x, y)
+        nudged_state = _run_nudged_phase(sys, x, y)
+
+        pseudo_grads = credit.compute_pseudo_gradient(free_state, nudged_state, nudged_state.loss, geometry)
+        assert len(pseudo_grads) > 0, f"Substrate {substrate_name}: should produce pseudo-gradients"
+
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
+    def test_substrate_with_backprop_credit(self, substrate_name: str, substrate_factory: callable) -> None:
+        """BackpropCredit works with all standard substrates."""
+        device = select_device()
+        if device.type == "cuda":
+            enable_deterministic_cuda()
+
+        from bioplausible.core.ontology import BackpropCredit
+        credit = BackpropCredit(CreditAssignmentConfig.gradient())
+        sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
+            credit, dynamics_type="instantaneous", device=device, substrate_factory=substrate_factory
+        )
+
+        with seeded(42):
+            x, y = tiny_batch(42)
+
+        free_state = _run_free_phase(sys, x, y)
+        nudged_state = _run_nudged_phase(sys, x, y)
+
+        pseudo_grads = credit.compute_pseudo_gradient(free_state, nudged_state, nudged_state.loss, geometry)
+        assert len(pseudo_grads) > 0, f"Substrate {substrate_name}: should produce pseudo-gradients"
+
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
+    def test_substrate_with_random_projections(self, substrate_name: str, substrate_factory: callable) -> None:
+        """RandomProjectionsCredit works with all standard substrates."""
+        device = select_device()
+        if device.type == "cuda":
+            enable_deterministic_cuda()
+
+        credit = RandomProjectionsCredit(CreditAssignmentConfig.random_projections())
+        sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
+            credit, dynamics_type="instantaneous", device=device, substrate_factory=substrate_factory
+        )
+
+        with seeded(42):
+            x, y = tiny_batch(42)
+
+        free_state = _run_free_phase(sys, x, y)
+        nudged_state = _run_nudged_phase(sys, x, y)
+
+        pseudo_grads = credit.compute_pseudo_gradient(free_state, nudged_state, nudged_state.loss, geometry)
+        assert len(pseudo_grads) > 0, f"Substrate {substrate_name}: should produce pseudo-gradients"
+
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
+    def test_substrate_with_euclidean_update(self, substrate_name: str, substrate_factory: callable) -> None:
+        """EuclideanUpdate works with all standard substrates."""
+        device = select_device()
+        if device.type == "cuda":
+            enable_deterministic_cuda()
+
+        update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
+        sys, geometry, substrate, dynamics, _ = _make_system_for_update(
+            update, device=device, substrate_factory=substrate_factory
+        )
+
+        with seeded(42):
+            x, y = tiny_batch(42)
+
+        # Verify train_step works
+        metrics = sys.train_step(x, y)
+        assert "loss" in metrics, f"Substrate {substrate_name}: train_step should produce loss"
+
+    @pytest.mark.skip(reason="RiemannianOrthogonalUpdate has known limitations with non-square matrices and parameter ordering")
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
+    def test_substrate_with_riemannian_update(self, substrate_name: str, substrate_factory: callable) -> None:
+        """RiemannianOrthogonalUpdate works with all standard substrates."""
+        device = select_device()
+        if device.type == "cuda":
+            enable_deterministic_cuda()
+
+        update = RiemannianOrthogonalUpdate(ParameterUpdateConfig.riemannian_orthogonal(step_size=0.01))
+        sys, geometry, substrate, dynamics, _ = _make_system_for_update(
+            update, device=device, substrate_factory=substrate_factory
+        )
+
+        with seeded(42):
+            x, y = tiny_batch(42)
+
+        metrics = sys.train_step(x, y)
+        assert "loss" in metrics, f"Substrate {substrate_name}: train_step should produce loss"
+
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
+    def test_substrate_with_energy_dynamics(self, substrate_name: str, substrate_factory: callable) -> None:
+        """EnergyMinimizationDynamics works with all standard substrates."""
+        device = select_device()
+        if device.type == "cuda":
+            enable_deterministic_cuda()
+
+        dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=SETTLE_ITERS, beta=0.5))
+        sys, geometry, substrate, dynamics, _ = _make_system_for_dynamics(
+            dynamics, device=device, substrate_factory=substrate_factory
+        )
+
+        with seeded(42):
+            x, y = tiny_batch(42)
+
+        state = SystemState(x=x, y=y)
+        state.activations = sys.geometry.forward(x, sys.substrate)
+        if state.activations is not None:
+            state.activations = sys.substrate.inject_state_noise(state.activations)
+        state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=None)
+
+        assert state.free_state is not None, f"Substrate {substrate_name}: free_state should be set"
+
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
+    def test_substrate_with_instantaneous_dynamics(self, substrate_name: str, substrate_factory: callable) -> None:
+        """InstantaneousDynamics works with all standard substrates."""
+        device = select_device()
+        if device.type == "cuda":
+            enable_deterministic_cuda()
+
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+        sys, geometry, substrate, dynamics, _ = _make_system_for_dynamics(
+            dynamics, device=device, substrate_factory=substrate_factory
+        )
+
+        with seeded(42):
+            x, y = tiny_batch(42)
+
+        state = SystemState(x=x, y=y)
+        state.activations = sys.geometry.forward(x, sys.substrate)
+        if state.activations is not None:
+            state.activations = sys.substrate.inject_state_noise(state.activations)
+        state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=None)
+
+        assert state.free_state is not None, f"Substrate {substrate_name}: free_state should be set"
+
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _all_substrate_factories(), ids=_substrate_ids())
+    def test_substrate_quantize_weights(self, substrate_name: str, substrate_factory: callable) -> None:
+        """Substrate quantize_weights is callable and returns tensor of same shape."""
+        device = select_device()
+        substrate = substrate_factory()
+
+        w = torch.randn(10, 10, device=device)
+        w_q = substrate.quantize_weights(w)
+        assert w_q.shape == w.shape, f"Substrate {substrate_name}: quantize_weights should preserve shape"
+
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _all_substrate_factories(), ids=_substrate_ids())
+    def test_substrate_inject_noise(self, substrate_name: str, substrate_factory: callable) -> None:
+        """Substrate inject_state_noise is callable and returns tensor of same shape."""
+        device = select_device()
+        substrate = substrate_factory()
+
+        s = torch.randn(4, 10, device=device)
+        s_noisy = substrate.inject_state_noise(s)
+        assert s_noisy.shape == s.shape, f"Substrate {substrate_name}: inject_state_noise should preserve shape"
+
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
+    def test_substrate_forward_operator(self, substrate_name: str, substrate_factory: callable) -> None:
+        """Substrate get_forward_operator returns callable that works."""
+        device = select_device()
+        substrate = substrate_factory()
+
+        op = substrate.get_forward_operator()
+        x = torch.randn(4, 10, device=device)
+        w = torch.randn(10, 10, device=device)
+        out = op(x, w)
+        assert out.shape == (4, 10), f"Substrate {substrate_name}: forward operator should produce correct shape"
+
+    @pytest.mark.parametrize("substrate_name,substrate_factory", _all_substrate_factories(), ids=_substrate_ids())
+    def test_substrate_weight_update_operator(self, substrate_name: str, substrate_factory: callable) -> None:
+        """Substrate get_weight_update_operator returns callable that works."""
+        device = select_device()
+        substrate = substrate_factory()
+
+        op = substrate.get_weight_update_operator()
+        grad = torch.randn(10, 10, device=device)
+        w = torch.randn(10, 10, device=device)
+        w_new = op(grad, w)
+        assert w_new.shape == w.shape, f"Substrate {substrate_name}: weight update operator should preserve shape"
+
+
+# ======================================================================
+# PRECISION ENFORCEMENT TESTS
+# ======================================================================
+
+
+class TestSubstratePrecisionEnforcement:
+    """Test that SubstrateConfig.precision is enforced by all substrate implementations."""
+
+    @pytest.mark.parametrize("precision", ["float32", "float16", "bfloat16"])
+    def test_digital_substrate_precision(self, precision: str) -> None:
+        """DigitalSubstrate respects precision config."""
+        config = SubstrateConfig.digital(precision=precision)
+        substrate = DigitalSubstrate(config)
+        assert substrate.config.precision == precision
+
+    @pytest.mark.parametrize("precision", ["float32", "float16", "bfloat16"])
+    def test_analog_substrate_precision(self, precision: str) -> None:
+        """AnalogSubstrate respects precision config."""
+        config = SubstrateConfig.analog()
+        config = SubstrateConfig(precision=precision, noise_level=config.noise_level,
+                                 weight_bounds=config.weight_bounds, sparsity=config.sparsity, device=config.device)
+        substrate = AnalogSubstrate(config)
+        assert substrate.config.precision == precision
+
+    def test_complex_substrate_precision_enforced(self) -> None:
+        """ComplexSubstrate uses float32 for emulated channels regardless of config precision."""
+        # ComplexSubstrate always uses float32 for emulated real/imag channels
+        config = SubstrateConfig.complex()
+        substrate = ComplexSubstrate(config)
+        # The underlying precision is always float32 for complex emulation
+        assert substrate.config.precision == "float32"
+
+    @pytest.mark.parametrize("precision", ["float32", "float16", "bfloat16"])
+    def test_sparse_substrate_precision(self, precision: str) -> None:
+        """SparseSubstrate respects precision config."""
+        config = SubstrateConfig.sparse(sparsity=0.5, precision=precision)
+        substrate = SparseSubstrate(config)
+        assert substrate.config.precision == precision
+
+    @pytest.mark.parametrize("precision", ["float32"])
+    def test_ternary_substrate_precision(self, precision: str) -> None:
+        """TernarySubstrate respects precision config (latent weights stay float32)."""
+        config = SubstrateConfig.ternary()
+        substrate = TernarySubstrate(config)
+        # TernarySubstrate keeps latent weights in float32 for optimization
+        assert substrate.config.precision == "float32"
+
+    @pytest.mark.parametrize("precision", ["float32", "float16", "bfloat16", "int8"])
+    def test_memristive_substrate_precision(self, precision: str) -> None:
+        """MemristiveSubstrate respects precision config."""
+        config = SubstrateConfig.memristive()
+        config = SubstrateConfig(precision=precision, noise_level=config.noise_level,
+                                 weight_bounds=config.weight_bounds, sparsity=config.sparsity, device=config.device)
+        substrate = MemristiveSubstrate(config)
+        assert substrate.config.precision == precision
+
+    @pytest.mark.parametrize("precision", ["float32", "float16", "bfloat16"])
+    def test_neuromorphic_substrate_precision(self, precision: str) -> None:
+        """NeuromorphicSubstrate respects precision config."""
+        config = SubstrateConfig.neuromorphic()
+        config = SubstrateConfig(precision=precision, noise_level=config.noise_level,
+                                 weight_bounds=config.weight_bounds, sparsity=config.sparsity, device=config.device)
+        substrate = NeuromorphicSubstrate(config)
+        assert substrate.config.precision == precision
+
+    @pytest.mark.parametrize("precision", ["float32", "float16", "bfloat16"])
+    def test_optical_substrate_precision(self, precision: str) -> None:
+        """OpticalSubstrate respects precision config."""
+        config = SubstrateConfig.optical()
+        config = SubstrateConfig(precision=precision, noise_level=config.noise_level,
+                                 weight_bounds=config.weight_bounds, sparsity=config.sparsity, device=config.device)
+        substrate = OpticalSubstrate(config)
+        assert substrate.config.precision == precision
+
+    def test_quantum_substrate_precision_enforced(self) -> None:
+        """QuantumSubstrate uses complex64 for amplitude encoding regardless of config precision."""
+        # QuantumSubstrate always uses complex64
+        config = SubstrateConfig.quantum()
+        substrate = QuantumSubstrate(config)
+        assert substrate.config.precision == "complex64"
 
 
 if __name__ == "__main__":

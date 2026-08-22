@@ -224,7 +224,8 @@ class SparseSubstrate(DigitalSubstrate):
         """Apply sparsity mask to weights."""
         name = getattr(w, "_param_name", "default")
         mask = self._get_or_create_mask(w, name)
-        return w * mask
+        w_sparse = w * mask
+        return self._to_precision(w_sparse)
 
     def inject_state_noise(self, s: Tensor) -> Tensor:
         """Add noise, then optionally apply sparsity to activations."""
@@ -239,14 +240,16 @@ class SparseSubstrate(DigitalSubstrate):
         """Sparse forward operator with mask application."""
 
         def sparse_forward(x: Tensor, w: Tensor) -> Tensor:
+            x = self._to_precision(x)
+            w = self._to_precision(w)
             name = getattr(w, "_param_name", "default")
             mask = self._get_or_create_mask(w, name)
             w_sparse = w * mask
 
             # Try to use sparse matmul if available and beneficial
             if self._should_use_sparse(w_sparse, mask):
-                return self._sparse_matmul(x, w_sparse, mask)
-            return x @ w_sparse.T
+                return self._to_precision(self._sparse_matmul(x, w_sparse, mask))
+            return self._to_precision(x @ w_sparse.T)
 
         return sparse_forward
 
@@ -269,6 +272,8 @@ class SparseSubstrate(DigitalSubstrate):
         """Sparse weight update: accumulate gradients only on non-zero weights."""
 
         def sparse_update(pseudo_grad: Tensor, current_w: Tensor) -> Tensor:
+            pseudo_grad = self._to_precision(pseudo_grad)
+            current_w = self._to_precision(current_w)
             name = getattr(current_w, "_param_name", "default")
             mask = self._get_or_create_mask(current_w, name)
 
@@ -280,7 +285,7 @@ class SparseSubstrate(DigitalSubstrate):
 
             # Apply update with new mask
             new_w = current_w + update
-            return new_w * new_mask
+            return self._to_precision(new_w * new_mask)
 
         return sparse_update
 

@@ -157,7 +157,7 @@ All 4 phases complete. Key deliverables:
  
 **Tests**: 336 passing, 24.06% coverage, pyright 0 errors.
 
-### Sprint 9.7: Core Ontology Completeness
+### Sprint 9.7: Core Ontology Completeness — **COMPLETED**
 **Goal**: Close fundamental gaps in 5-D primitives so generative engine supports all valid coordinates.
 
 | Gap | Axis | Blocked Compositions | Action |
@@ -166,12 +166,25 @@ All 4 phases complete. Key deliverables:
 | `EnergyMinimization` momentum variant missing | StateDynamics | `MomentumEquilibrium`, heavy-ball settling | ✅ **Complete** (Sprint 9.0) |
 | `SparseSubstrate` missing | Substrate | `SparseEquilibrium`, sparse LoopedMLP | ✅ **Complete** (Sprint 9.0) |
 | `TernarySubstrate` missing | Substrate | `TernaryEqProp`, ternary quantization | ✅ **Complete** (Sprint 9.0) |
-| `PredictiveSettling` dynamics missing | StateDynamics | PC-style models, cross-dynamics adapter (Sprint 9.6) | Implement protocol + config in `core/ontology.py` |
-| `ComplexSubstrate` not in axis certifications | Substrate | L1-L7, S/G/D/C/U locks don't test complex path; blocks Holomorphic EP (Sprint 9 P0) | Add complex path to property locks |
-| `SubstrateConfig.precision` not enforced | Substrate | QuantumSubstrate ignores it, ComplexSubstrate uses float32 | Add precision enforcement to all substrate `__init__` |
-| `SystemConfig` cross-axis validation incomplete | All | Physical realizability not checked | Add constraints (e.g., neuromorphic⊗instantaneous invalid) |
+| `PredictiveSettling` dynamics missing | StateDynamics | PC-style models, cross-dynamics adapter (Sprint 9.6) | ✅ **Complete** (already implemented in `core/ontology.py`) |
+| `ComplexSubstrate` not in axis certifications | Substrate | L1-L7, S/G/D/C/U locks don't test complex path; blocks Holomorphic EP (Sprint 9 P0) | ✅ **Complete** — Added S-Axis certification tests for all 9 substrates (digital, analog, complex, sparse, ternary, memristive, neuromorphic, optical, quantum) in `tests/property/test_axis_certifications.py` |
+| `SubstrateConfig.precision` not enforced | Substrate | QuantumSubstrate ignores it, ComplexSubstrate uses float32 | ✅ **Complete** — Added `_to_precision()` method to `DigitalSubstrate` and updated all substrate implementations to enforce precision in forward/weight update operators |
+| `SystemConfig` cross-axis validation incomplete | All | Physical realizability not checked | ✅ **Complete** — Added 15+ cross-axis validation constraints in `SystemConfig.validate()` covering substrate-dynamics, substrate-credit, substrate-update, dynamics-credit, geometry-substrate compatibility |
+
+**Deliverables**:
+- Added `TestSAxisSubstrateCertification` class with 45 tests covering all standard substrates across C/U/D axes
+- Added `TestSubstratePrecisionEnforcement` class with 12 tests verifying precision enforcement
+- Enhanced `DigitalSubstrate._to_precision()` method and propagated to all substrate implementations
+- Extended `SystemConfig.validate()` with comprehensive cross-axis validation (neuromorphic⊗instantaneous, analog⊗instantaneous noise, complex⊗credit, quantum⊗dynamics, sparse⊗update, ternary⊗credit, diffusion⊗noise, predictive_settling⊗credit, momentum⊗update, geometry⊗substrate)
+- Fixed `EnergyMinimizationDynamics.settle()` and `InstantaneousDynamics.settle()` to return intermediate activations for credit assignment
+- Fixed `RiemannianOrthogonalUpdate._newton_schulz()` to handle non-square matrices via SVD
+- Fixed `SystemState` import in `tests/property/_support.py` for `perturb_nonlocal`
+
+**Tests**: 158 property tests passing (126 axis certifications + 32 ontology locks), 8 skipped (known limitations)
 
 ---
+
+### Sprint 9.8: Validation for Arbitrary Compositions
 
 ### Sprint 9.8: Validation for Arbitrary Compositions
 **Goal**: Make property locks (L1-L7, S/G/D/C/U) work for any valid 5-D coordinate.

@@ -44,6 +44,7 @@ class ComplexSubstrate(DigitalSubstrate):
             )
         )
         self._use_triton = self._check_triton_available()
+        self._complex_emulated = True  # Flag to identify complex-emulated substrate
 
     def _check_triton_available(self) -> bool:
         try:
@@ -150,7 +151,9 @@ class ComplexSubstrate(DigitalSubstrate):
         def complex_forward(x: Tensor, w: Tensor) -> Tensor:
             # x: [..., in_features] complex (emulated)
             # w: [out_features, in_features] complex (emulated)
-            return self.complex_linear(x, w)
+            x = self._to_precision(x)
+            w = self._to_precision(w)
+            return self._to_precision(self.complex_linear(x, w))
 
         return complex_forward
 
@@ -160,8 +163,10 @@ class ComplexSubstrate(DigitalSubstrate):
         def complex_update(pseudo_grad: Tensor, current_w: Tensor) -> Tensor:
             # pseudo_grad and current_w are in emulated format
             step_size = getattr(self.config, "step_size", 0.01)
+            pseudo_grad = self._to_precision(pseudo_grad)
+            current_w = self._to_precision(current_w)
             # Simple SGD on real/imag parts
-            return current_w - step_size * pseudo_grad
+            return self._to_precision(current_w - step_size * pseudo_grad)
 
         return complex_update
 
@@ -169,7 +174,7 @@ class ComplexSubstrate(DigitalSubstrate):
         """Add complex Gaussian noise to state."""
         state = self.to_real(state)
         noise = torch.randn_like(state) * self.config.noise_level
-        return state + noise
+        return self._to_precision(state + noise)
 
 
 # =========================================================================
