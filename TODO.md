@@ -63,13 +63,13 @@ All four core phases of Sprint 5 completed successfully:
 
 ---
 
-## Code Quality Gates (Blocking CI)
+## Code Quality Gates
 
-### Q1: Ruff Linting — 7,094 Errors
+### Q1: Ruff Linting — 7,094 Errors (NON-BLOCKING, indefinitely deferred)
 **Command**: `uv run ruff check .`
 **Status**: 7,094 errors (12 auto-fixed, 7,082 remaining)
 **Categories**: Unused imports, magic values, complexity (C901), type-checking imports, enum patterns, etc.
-**Action**: Run `uv run ruff check . --fix` iteratively; fix remaining manually; consider per-file ignores for test files
+**Action**: Deferred indefinitely. Mostly style/unused-import noise in test/legacy code. Auto-fix on demand only.
 
 ### Q2: Coverage Floor — 55% Required, ~16% Actual
 **Command**: `uv run pytest --cov=bioplausible --cov-fail-under=55`
@@ -105,6 +105,33 @@ All four core phases of Sprint 5 completed successfully:
 
 ## Next Sprint Priorities (Ordered by Impact & Dependency)
 
+### Priority Order (Backlog)
+
+01. **Sprint 5 Phase A (Math Locks)** — pure math, no infra, unblocks certification ✅ Done
+02. **Config unification** — **prerequisite for .system spec serialization**.
+    Do not design `.system` serialization on top of fragmented configs.
+03. **Sprint 5 Phase B (.system spec)** — depends on (02) ✅ Done
+04. **Sprint 5 Phase C (P2P subprocess)** — isolate behind feature flag; flakiness risk ⚠️ Partial
+05. **Sprint 5 Phase D (eqprop_mlp native migration)** ✅ Done
+06. **Registry category reduction** — simplifies AutoScientist composition ✅ Done
+07. **Validation tracks deletion** — removes ~2000 lines of dead code
+08. **Model alias collapse** — reduces confusion in zoo
+09. **CLI subcommand completion** — consistent UX
+10. **Test infrastructure** — enables reliable CI
+11. **Dead code removal** — reduces cognitive load
+12. **Documentation sync** — prevents misinformation
+13. **Type cleanup** — improves IDE support
+14. **Import hygiene** — prevents circular deps
+
+### Sequencing Rationale
+
+Config unification is pulled ahead of Phase B because the `.system`
+interchange format must serialize a single canonical config schema.
+Building `.system` on the current fragmented configs (fields redefined
+in 5+ dataclasses with divergent defaults) would require a lossy adapter
+and invite round-trip bugs that L6 is specifically designed to catch.
+Unify first, serialize second.
+
 ### Sprint 6: Stabilize & Harden (1-2 weeks)
 **Goal**: Fix blocking CI issues, establish stable baseline
 
@@ -113,12 +140,17 @@ All four core phases of Sprint 5 completed successfully:
 - [ ] **C2**: Fix fault injection test setup (same root cause)
 - [ ] Verify core 5 subprocess tests remain green
 - [ ] Document TileGeometry GPU limitation in test comments
+- **Guardrails**: This is the primary CI-flakiness risk. Mitigate with:
+  - Explicit, strict timeouts on gRPC channel creation
+  - A retry wrapper (e.g. `tenacity`) **only on this transport test**; keep all math locks (L1–L7, S/G/D/C/U) strictly retry-free
+  - A narrow ephemeral port range (e.g. 50000–50100) instead of `port=0`, to avoid CI namespace/firewall collisions
+  - Quarantine immediately if flake rate exceeds ~1-in-20 runs
 
-#### 6.2 Ruff Cleanup (P0)
-- [ ] Run `uv run ruff check . --fix` until no auto-fixable remain
-- [ ] Fix remaining 7,082 errors manually (prioritize: E/F/W/S security, then complexity, then style)
-- [ ] Add per-file ignores for test files (`assert`, `no-self-use`, `magic-value-comparison`)
-- [ ] Target: <100 remaining errors (all in test/ or legacy code)
+#### 6.2 Ruff Cleanup (P0 — Deferred)
+Linting is NOT blocking. Deferred indefinitely.
+- [ ] Auto-fix on demand only (`uv run ruff check . --fix`)
+- [ ] Per-file ignores for test files as needed
+- [ ] Target: <100 remaining errors (all in test/ or legacy code) — **no deadline**
 
 #### 6.3 Coverage Floor Adjustment (P0)
 - [ ] Lower `--cov-fail-under` from 55 to 25 in `pyproject.toml`
@@ -126,6 +158,8 @@ All four core phases of Sprint 5 completed successfully:
 - [ ] Verify fast CI gate passes with new floor
 
 #### 6.4 Fast CI Gate Verification (P0)
+Wall-clock budget: The test suite must stay ≤ 2 minutes on GPU. This budget is a hard constraint, not a target. If any phase threatens it, reduce per-test work via property-testing bounds (`hypothesis`) rather than expanding CI time. Transport tests (Phase C) may use scoped retries; math locks may not.
+
 ```bash
 # Must pass in order:
 uv run ruff format --check .
@@ -149,10 +183,10 @@ uv run pytest tests/integration/test_grpc_seam_subprocess.py::TestGRPCSeamSubpro
 # Target structure (from TODO.md §3)
 @dataclass(frozen=True, slots=True)
 class ExperimentConfig:
-    model: ModelConfig          # architecture: type, dims, topology
-    training: TrainingConfig    # lr, epochs, batch, optimizer, scheduler
-    data: DataConfig            # dataset, splits, transforms
-    hardware: HardwareConfig    # device, precision, distributed, substrate
+    model: ModelConfig  # architecture: type, dims, topology
+    training: TrainingConfig  # lr, epochs, batch, optimizer, scheduler
+    data: DataConfig  # dataset, splits, transforms
+    hardware: HardwareConfig  # device, precision, distributed, substrate
     # Domain-specific via extra dict or inheritance
 ```
 
@@ -328,7 +362,6 @@ uv run pytest tests/integration/test_grpc_seam_subprocess.py::TestGRPCSeamSubpro
   tests/integration/test_grpc_seam_subprocess.py::TestGRPCSeamSubprocessScript::test_grpc_worker_script_exists \
   tests/integration/test_grpc_seam_subprocess.py::TestGRPCSeamSubprocessScript::test_grpc_worker_script_spawns_and_binds -q
 
-uv run ruff check . --fix
 uv run pytest tests/property/ tests/unit/core/ -q --cov=bioplausible --cov-fail-under=25
 
 # 2. Sprint 7: Config Unification (manual verification)
@@ -338,7 +371,7 @@ uv run pytest tests/property/ tests/unit/core/ -q --cov=bioplausible --cov-fail-
 uv run pytest tests/property/ -k "lipschitz or energy or gradient" -q
 
 # 4. Full Gate (post Sprint 6)
-uv run pyright . && uv run ruff check . && uv run pytest tests/property/ tests/unit/core/ -q
+uv run pyright . && uv run pytest tests/property/ tests/unit/core/ -q
 ```
 
 ---
@@ -350,4 +383,4 @@ uv run pyright . && uv run ruff check . && uv run pytest tests/property/ tests/u
 - **Ontology is the source of truth** — everything should compose via 5-D axes
 - **AutoScientist drives requirements** — if it doesn't need it, delete it
 - **GPU > CPU** where appropriate (kernels, training, AutoScientist campaigns)
-- **Wall-clock budget**: Fast CI gate must stay ≤ 5 minutes on GPU
+- **Wall-clock budget**: Fast CI gate must stay ≤ 2 minutes on GPU
