@@ -99,12 +99,20 @@
 ```
 bioplausible/core/joint/
     __init__.py
-    state.py              # CompositeState, StateVariable, StateRegistry
+    state.py              # CompositeState, StateVariable, StateRegistry, JointTrajectoryRecorder
     context.py            # SystemContext (immutable θ, geometry, physics, registry)
     transition.py         # CoupledTransition protocol + NullPlasticity
-    trajectory.py         # JointTrajectory recording
+    trajectory.py         # JointTrajectory recording (checkpointed)
     consolidation.py      # Episode-boundary promotion ψ → θ
 ```
+
+#### ⚠️ Engineering Gotchas (Address in J0)
+
+| # | Gotcha | Mitigation |
+|---|--------|------------|
+| **1** | Autograd graph fragmentation from `Mapping[str, Tensor]` trajectory unrolling during long settling (EqProp) | `JointTrajectoryRecorder` in `state.py` with `torch.utils.checkpoint` support; explicit `.detach()` for `ψ`/`σ` that don't backprop to `θ`; trainer manages checkpointing interval |
+| **2** | `CompositeState` mutability vs. autograd expectations | `CompositeState` uses `dict[str, Tensor]` (mutable) for activity/plastic/substrate; `step()` returns new `CompositeState`; recorder clones only tensors needed for credit assignment |
+| **3** | `SystemContext.theta` must be frozen intra-episode | `theta: Mapping[str, Tensor]` with `requires_grad=True`; `JointSystemTrainer` wraps `CoupledTransition.step` in `torch.no_grad()` for `θ`; only `ParameterUpdate.consolidate` modifies `θ` at episode boundary |
 
 #### Key Types
 
@@ -244,6 +252,12 @@ tests/property/joint/test_consolidation.py
 ### Sprint J2 — Plasticity Primitives & Lifecycle Semantics (5–7 days)
 
 **Goal**: Implement first non-null plasticity primitives.
+
+#### ⚠️ Engineering Gotcha (Address in J2)
+
+| # | Gotcha | Mitigation |
+|---|--------|------------|
+| **2** | Plasticity leaking into weight preprocessing (violates `F_θ(z)|_x = D_θ(x)`) | `Geometry.forward(x, ψ, substrate)` and `StateDynamics.settle(..., ψ)` signatures accept `ψ` explicitly; routing via activation masking/`torch.gather` on pre-activations; base weights `θ` remain untouched, strictly persistent inside episode; plasticity `step(ψ, z, ctx)` returns updated `ψ` only |
 
 #### Hierarchy to Implement (in order)
 
@@ -409,6 +423,12 @@ Cache key: coordinate hash + tensor shapes + dtype/precision + device + adapter 
 ### Sprint J5 — Benchmark Campaign & Z3 (7–10 days)
 
 **Goal**: Produce tangible evidence for the joint architecture. Absorbs H5 + experimental campaign.
+
+#### ⚠️ Engineering Gotcha (Address in J5)
+
+| # | Gotcha | Mitigation |
+|---|--------|------------|
+| **3** | Z3 frozen-θ eval requires prior meta-training of operator embeddings | Explicit two-phase protocol in `experiments/joint/z3.py`: `meta_train(θ, ψ_controller)` → `freeze(θ)` → `eval_frozen(ψ_adapt)`; `||θ_after - θ_before|| == 0` invariant enforced by `torch.no_grad()` on `θ` during eval phase; controller learns operator selection, `θ` learns operator embeddings |
 
 #### Benchmark Hierarchy
 
