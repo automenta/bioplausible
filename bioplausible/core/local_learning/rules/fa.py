@@ -41,8 +41,10 @@ class FeedbackAlignment(LearningRuleOptimizer):
         momentum: float = 0.9,
         weight_decay: float = 0.0005,
         feedback_seed: int = 42,
+        feedback_scale: float = 0.1,
     ):
         super().__init__(params, model, lr, momentum, weight_decay)
+        self.feedback_scale = feedback_scale
         self.feedback_weights = self._create_feedback_weights(feedback_seed)
 
     def _create_feedback_weights(self, seed: int) -> list[torch.Tensor]:
@@ -55,7 +57,7 @@ class FeedbackAlignment(LearningRuleOptimizer):
 
         for param in self.params:
             if param.ndim >= 2:
-                fb = torch.randn_like(param, generator=gen) * 0.1
+                fb = torch.randn_like(param, generator=gen) * self.feedback_scale
                 feedback.append(fb)
             else:
                 feedback.append(None)
@@ -98,8 +100,10 @@ class DirectFA(LearningRuleOptimizer):
         momentum: float = 0.9,
         weight_decay: float = 0.0005,
         feedback_seed: int = 42,
+        feedback_scale: float = 0.1,
     ):
         super().__init__(params, model, lr, momentum, weight_decay)
+        self.feedback_scale = feedback_scale
         self.feedback_weights = self._create_direct_feedback(feedback_seed)
 
     def _create_direct_feedback(self, seed: int) -> list[torch.Tensor]:
@@ -121,7 +125,7 @@ class DirectFA(LearningRuleOptimizer):
                     torch.randn(
                         output_dim, input_dim, device=param.device, generator=gen
                     )
-                    * 0.1
+                    * self.feedback_scale
                 )
                 feedback.append(fb)
             else:
@@ -165,13 +169,16 @@ class AdaptiveFA(LearningRuleOptimizer):
         weight_decay: float = 0.0005,
         feedback_lr: float = 0.0001,
         alignment_strength: float = 0.1,
+        feedback_scale: float = 0.1,
     ):
         super().__init__(params, model, lr, momentum, weight_decay)
         self.feedback_lr = feedback_lr
         self.alignment_strength = alignment_strength
+        self.feedback_scale = feedback_scale
 
         self.feedback_weights = [
-            torch.randn_like(p) * 0.1 if p.ndim >= 2 else None for p in self.params
+            torch.randn_like(p) * self.feedback_scale if p.ndim >= 2 else None
+            for p in self.params
         ]
 
     def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None:
@@ -218,12 +225,15 @@ class StochasticFA(LearningRuleOptimizer):
         momentum: float = 0.9,
         weight_decay: float = 0.0005,
         noise_std: float = 0.1,
+        feedback_scale: float = 0.1,
     ):
         super().__init__(params, model, lr, momentum, weight_decay)
         self.noise_std = noise_std
+        self.feedback_scale = feedback_scale
 
         self.feedback_weights = [
-            torch.randn_like(p) * 0.1 if p.ndim >= 2 else None for p in self.params
+            torch.randn_like(p) * self.feedback_scale if p.ndim >= 2 else None
+            for p in self.params
         ]
 
     def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None:
@@ -267,13 +277,16 @@ class ContrastiveFA(LearningRuleOptimizer):
         weight_decay: float = 0.0005,
         contrastive_weight: float = 0.5,
         temperature: float = 0.1,
+        feedback_scale: float = 0.1,
     ):
         super().__init__(params, model, lr, momentum, weight_decay)
         self.contrastive_weight = contrastive_weight
         self.temperature = temperature
+        self.feedback_scale = feedback_scale
 
         self.feedback_weights = [
-            torch.randn_like(p) * 0.1 if p.ndim >= 2 else None for p in self.params
+            torch.randn_like(p) * self.feedback_scale if p.ndim >= 2 else None
+            for p in self.params
         ]
 
     def step(
@@ -341,8 +354,10 @@ class SignSymmetricFA(LearningRuleOptimizer):
         momentum: float = 0.9,
         weight_decay: float = 0.0005,
         feedback_seed: int = 42,
+        feedback_scale: float = 0.1,
     ):
         super().__init__(params, model, lr, momentum, weight_decay)
+        self.feedback_scale = feedback_scale
         self.feedback_weights = self._create_sign_symmetric_feedback(feedback_seed)
 
     def _create_sign_symmetric_feedback(self, seed: int) -> list[torch.Tensor]:
@@ -355,7 +370,9 @@ class SignSymmetricFA(LearningRuleOptimizer):
         for param in self.params:
             if param.ndim >= 2:
                 sign_W = torch.sign(param.data)
-                rand_magnitude = torch.randn_like(param, generator=gen).abs() * 0.1
+                rand_magnitude = (
+                    torch.randn_like(param, generator=gen).abs() * self.feedback_scale
+                )
                 fb = sign_W * rand_magnitude
                 feedback.append(fb)
             else:

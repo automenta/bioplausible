@@ -30,6 +30,7 @@ from bioplausible.core.ontology import (
     RiemannianOrthogonalUpdate,
     SpectralConstrainedUpdate,
     StateDynamicsConfig,
+    SubstrateConfig,
     System,
     SystemState,
     ThermodynamicContrast,
@@ -72,86 +73,88 @@ MIN_LAYERS_FOR_LOCALITY = 2
 # ----------------------------------------------------------------------
 def _make_eqprop_system() -> System:
     return compose_system(
-        substrate=DigitalSubstrate(),
+        substrate=DigitalSubstrate(SubstrateConfig.digital()),
         geometry=RecurrentGeometry(
-            GeometryConfig(
+            GeometryConfig.recurrent(
                 input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
             ),
             hidden_dim=WIDTH,
         ),
         dynamics=EnergyMinimizationDynamics(
-            StateDynamicsConfig(
-                dynamics_type="energy_minimization",
-                max_steps=SETTLE_ITERS,
-                beta=0.5,
-            )
+            StateDynamicsConfig.energy_minimization(max_steps=SETTLE_ITERS, beta=0.5)
         ),
-        credit=ThermodynamicContrast(CreditAssignmentConfig(beta=0.5)),
-        update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.01)),
+        credit=ThermodynamicContrast(
+            CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+        ),
+        update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01)),
     )
 
 
 def _make_backprop_system() -> System:
     return compose_system(
-        substrate=DigitalSubstrate(),
+        substrate=DigitalSubstrate(SubstrateConfig.digital()),
         geometry=FeedforwardGeometry(
-            GeometryConfig(
+            GeometryConfig.feedforward(
                 input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
             )
         ),
-        dynamics=InstantaneousDynamics(),
-        credit=BackpropCredit(),
-        update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.001)),
+        dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
+        credit=BackpropCredit(CreditAssignmentConfig.gradient()),
+        update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.001)),
     )
 
 
 def _make_fa_system() -> System:
     return compose_system(
-        substrate=DigitalSubstrate(),
+        substrate=DigitalSubstrate(SubstrateConfig.digital()),
         geometry=FeedforwardGeometry(
-            GeometryConfig(
+            GeometryConfig.feedforward(
                 input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
             )
         ),
-        dynamics=InstantaneousDynamics(),
-        credit=RandomProjectionsCredit(
-            CreditAssignmentConfig(credit_type="random_projections")
-        ),
-        update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.001)),
+        dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
+        credit=RandomProjectionsCredit(CreditAssignmentConfig.random_projections()),
+        update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.001)),
     )
 
 
 def _make_predictive_coding_system() -> System:
     return compose_system(
-        substrate=DigitalSubstrate(),
+        substrate=DigitalSubstrate(SubstrateConfig.digital()),
         geometry=FeedforwardGeometry(
-            GeometryConfig(
+            GeometryConfig.feedforward(
                 input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
             )
         ),
         dynamics=PredictiveSettlingDynamics(
-            StateDynamicsConfig(
-                dynamics_type="predictive_settling",
-                max_steps=SETTLE_ITERS,
-                step_size=0.1,
+            StateDynamicsConfig.predictive_settling(
+                max_steps=SETTLE_ITERS, step_size=0.1
             )
         ),
-        credit=ThermodynamicContrast(CreditAssignmentConfig(beta=0.5)),
-        update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.01)),
+        credit=ThermodynamicContrast(
+            CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+        ),
+        update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01)),
     )
 
 
 def _make_tile_system() -> System:
     return compose_system(
-        substrate=DigitalSubstrate(),
+        substrate=DigitalSubstrate(SubstrateConfig.digital()),
         geometry=TileGeometry(
-            GeometryConfig(input_dim=WIDTH, output_dim=10, num_layers=DEPTH),
+            GeometryConfig.tile_mesh(
+                input_dim=WIDTH,
+                output_dim=10,
+                num_layers=DEPTH,
+                neurons_per_tile=8,
+                tiles_per_layer=2,
+            ),
             neurons_per_tile=8,
             tiles_per_layer=2,
         ),
-        dynamics=InstantaneousDynamics(),
-        credit=BackpropCredit(),
-        update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.001)),
+        dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
+        credit=BackpropCredit(CreditAssignmentConfig.gradient()),
+        update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.001)),
     )
 
 
@@ -302,18 +305,18 @@ class TestL2OrthogonalityLock:
             sys1 = _make_backprop_system()
         with seeded(42):
             sys2 = compose_system(
-                substrate=DigitalSubstrate(),
+                substrate=DigitalSubstrate(SubstrateConfig.digital()),
                 geometry=FeedforwardGeometry(
-                    GeometryConfig(
+                    GeometryConfig.feedforward(
                         input_dim=WIDTH,
                         output_dim=10,
                         hidden_dims=(WIDTH,) * (DEPTH - 1),
                     )
                 ),
-                dynamics=InstantaneousDynamics(),
-                credit=BackpropCredit(),
+                dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
+                credit=BackpropCredit(CreditAssignmentConfig.gradient()),
                 update=RiemannianOrthogonalUpdate(
-                    ParameterUpdateConfig(step_size=0.001)
+                    ParameterUpdateConfig.riemannian_orthogonal(step_size=0.001)
                 ),
             )
 
@@ -416,17 +419,19 @@ class TestL3LocalityLock:
             # Create new system with same credit but different forward weights
             with seeded(123):
                 sys2 = compose_system(
-                    substrate=DigitalSubstrate(),
+                    substrate=DigitalSubstrate(SubstrateConfig.digital()),
                     geometry=FeedforwardGeometry(
-                        GeometryConfig(
+                        GeometryConfig.feedforward(
                             input_dim=WIDTH,
                             output_dim=10,
                             hidden_dims=(WIDTH,) * (DEPTH - 1),
                         )
                     ),
-                    dynamics=InstantaneousDynamics(),
+                    dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
                     credit=sys.credit,  # Same credit instance
-                    update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.001)),
+                    update=EuclideanUpdate(
+                        ParameterUpdateConfig.euclidean(step_size=0.001)
+                    ),
                 )
 
             _setup_system_device(sys2, device)
@@ -447,12 +452,8 @@ class TestL3LocalityLock:
         sys = _make_fa_system()
         _setup_system_device(sys, device)
 
-        credit1 = RandomProjectionsCredit(
-            CreditAssignmentConfig(credit_type="random_projections")
-        )
-        credit2 = RandomProjectionsCredit(
-            CreditAssignmentConfig(credit_type="random_projections")
-        )
+        credit1 = RandomProjectionsCredit(CreditAssignmentConfig.random_projections())
+        credit2 = RandomProjectionsCredit(CreditAssignmentConfig.random_projections())
 
         with seeded(111):
             credit1._init_feedback_weights(sys.geometry, device)
@@ -727,7 +728,7 @@ class TestU_EuclideanProperties:
 
         with seeded(42):
             update = EuclideanUpdate(
-                ParameterUpdateConfig(step_size=0.01, momentum=0.9)
+                ParameterUpdateConfig.euclidean(step_size=0.01, momentum=0.9)
             )
             params = {"w": torch.randn(10, 10, device=device)}
             grads = [torch.randn(10, 10, device=device)]
@@ -855,7 +856,9 @@ def test_u_muon_gradient_orthogonal() -> None:
         enable_deterministic_cuda()
 
     with seeded(42):
-        update = RiemannianOrthogonalUpdate(ParameterUpdateConfig(ortho_steps=5))
+        update = RiemannianOrthogonalUpdate(
+            ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=5)
+        )
         params = {"w": torch.randn(10, 10, device=device)}
         grads = [torch.randn(10, 10, device=device)]
 
@@ -876,7 +879,9 @@ def test_u_elastic_moves_toward_old_params() -> None:
         enable_deterministic_cuda()
 
     with seeded(42):
-        update = ElasticConsolidationUpdate(ParameterUpdateConfig(ewc_lambda=1000.0))
+        update = ElasticConsolidationUpdate(
+            ParameterUpdateConfig.elastic_consolidation(ewc_lambda=1000.0)
+        )
         params = {"w": torch.randn(10, 10, device=device)}
         grads = [torch.randn(10, 10, device=device)]
 
@@ -921,17 +926,17 @@ class TestC_SurrogateLocks:
 
         with seeded(42):
             sys = compose_system(
-                substrate=DigitalSubstrate(),
+                substrate=DigitalSubstrate(SubstrateConfig.digital()),
                 geometry=FeedforwardGeometry(
-                    GeometryConfig(
+                    GeometryConfig.feedforward(
                         input_dim=WIDTH,
                         output_dim=10,
                         hidden_dims=(WIDTH,) * (DEPTH - 1),
                     )
                 ),
-                dynamics=InstantaneousDynamics(),
-                credit=LocalGoodnessCredit(),
-                update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.01)),
+                dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
+                credit=LocalGoodnessCredit(CreditAssignmentConfig.local_goodness()),
+                update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01)),
             )
             _setup_system_device(sys, device)
 
@@ -965,17 +970,17 @@ class TestC_SurrogateLocks:
 
         with seeded(42):
             sys = compose_system(
-                substrate=DigitalSubstrate(),
+                substrate=DigitalSubstrate(SubstrateConfig.digital()),
                 geometry=FeedforwardGeometry(
-                    GeometryConfig(
+                    GeometryConfig.feedforward(
                         input_dim=WIDTH,
                         output_dim=10,
                         hidden_dims=(WIDTH,) * (DEPTH - 1),
                     )
                 ),
-                dynamics=InstantaneousDynamics(),
-                credit=TargetInversionCredit(),
-                update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.01)),
+                dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
+                credit=TargetInversionCredit(CreditAssignmentConfig.target_inversion()),
+                update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01)),
             )
             _setup_system_device(sys, device)
 
@@ -1077,7 +1082,9 @@ class TestU_StepProperties:
             enable_deterministic_cuda()
 
         with seeded(42):
-            update = RiemannianOrthogonalUpdate(ParameterUpdateConfig(ortho_steps=20))
+            update = RiemannianOrthogonalUpdate(
+                ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=20)
+            )
             grad = torch.randn(10, 10, device=device)
             ortho_grad = update._newton_schulz(grad)
             eye = torch.eye(10, device=device)
@@ -1090,7 +1097,9 @@ class TestU_StepProperties:
             enable_deterministic_cuda()
 
         with seeded(42):
-            update = SpectralConstrainedUpdate(ParameterUpdateConfig(spectral_norm=1.0))
+            update = SpectralConstrainedUpdate(
+                ParameterUpdateConfig.spectral_constrained(spectral_norm=1.0)
+            )
             grad = torch.randn(10, 10, device=device)
             # Access internal projection method
             u, s, v = torch.linalg.svd(grad, full_matrices=False)
@@ -1110,7 +1119,9 @@ class TestU_StepProperties:
         from bioplausible.core.ontology import NaturalGradientUpdate
 
         with seeded(42):
-            update = NaturalGradientUpdate(ParameterUpdateConfig(fisher_damping=1e-3))
+            update = NaturalGradientUpdate(
+                ParameterUpdateConfig.natural_gradient(fisher_damping=1e-3)
+            )
             grad = torch.randn(10, 10, device=device)
             # Diagonal Fisher: F = diag(g^2) + damping
             fisher = grad**2 + 1e-3
@@ -1128,7 +1139,7 @@ class TestU_StepProperties:
 
         with seeded(42):
             update = ElasticConsolidationUpdate(
-                ParameterUpdateConfig(ewc_lambda=1000.0)
+                ParameterUpdateConfig.elastic_consolidation(ewc_lambda=1000.0)
             )
             params = {"w": torch.randn(10, 10, device=device)}
             grads = [torch.randn(10, 10, device=device)]
@@ -1165,18 +1176,17 @@ def test_d_spike_integration_lyapunov() -> None:
     with seeded(42):
         # Use a simple geometry without hidden layers for testing spike dynamics
         sys = compose_system(
-            substrate=DigitalSubstrate(),
+            substrate=DigitalSubstrate(SubstrateConfig.digital()),
             geometry=FeedforwardGeometry(
-                GeometryConfig(input_dim=WIDTH, output_dim=WIDTH, hidden_dims=())
-            ),
-            dynamics=SpikeIntegrationDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="spike_integration",
-                    max_steps=10,
+                GeometryConfig.feedforward(
+                    input_dim=WIDTH, output_dim=WIDTH, hidden_dims=()
                 )
             ),
-            credit=BackpropCredit(),
-            update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.01)),
+            dynamics=SpikeIntegrationDynamics(
+                StateDynamicsConfig.spike_integration(max_steps=10)
+            ),
+            credit=BackpropCredit(CreditAssignmentConfig.gradient()),
+            update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01)),
         )
         _setup_system_device(sys, device)
 

@@ -67,7 +67,9 @@ class HardwareConfig:
     rank: int
     master_addr: str
     master_port: int
-    substrate: Literal["digital", "analog", "memristive", "neuromorphic", "optical", "quantum"]
+    substrate: Literal[
+        "digital", "analog", "memristive", "neuromorphic", "optical", "quantum"
+    ]
     substrate_kwargs: dict[str, Any]
 
 
@@ -178,7 +180,9 @@ class TrainingConfig:
     eps: float
 
     # Scheduler
-    scheduler: Literal["none", "cosine", "linear", "constant", "cosine_warmup", "step", "exponential"]
+    scheduler: Literal[
+        "none", "cosine", "linear", "constant", "cosine_warmup", "step", "exponential"
+    ]
     warmup_steps: int
     min_lr_ratio: float
     scheduler_kwargs: dict[str, Any]
@@ -267,27 +271,60 @@ class OntologyConfig:
 
     # Substrate axis
     substrate: "SubstrateConfig | None"
-    substrate_type: Literal["digital", "analog", "memristive", "neuromorphic", "optical", "quantum"]
-    substrate_precision: Literal["float32", "float16", "bfloat16", "int8", "int4", "binary"]
+    substrate_type: Literal[
+        "digital", "analog", "memristive", "neuromorphic", "optical", "quantum"
+    ]
+    substrate_precision: Literal[
+        "float32", "float16", "bfloat16", "int8", "int4", "binary"
+    ]
 
     # Geometry axis
     geometry: "GeometryConfig | None"
-    topology_type: Literal["feedforward", "recurrent", "recurrent_attractor", "tile_mesh", "tile"]
+    topology_type: Literal[
+        "feedforward", "recurrent", "recurrent_attractor", "tile_mesh", "tile"
+    ]
     hidden_dims: tuple[int, ...]
 
     # StateDynamics axis
     dynamics: "StateDynamicsConfig | None"
-    dynamics_type: Literal["instantaneous", "energy_minimization", "predictive_settling", "spike_integration"]
+    dynamics_type: Literal[
+        "instantaneous",
+        "energy_minimization",
+        "predictive_settling",
+        "spike_integration",
+    ]
     max_steps: int
     beta: float
 
     # CreditAssignment axis
     credit: "CreditAssignmentConfig | None"
-    credit_type: Literal["gradient", "thermodynamic_contrast", "equilibrium", "random_projections", "feedback_alignment", "local_goodness", "forward_only", "temporal_trace", "spiking", "target_inversion", "target_prop"]
+    credit_type: Literal[
+        "gradient",
+        "thermodynamic_contrast",
+        "equilibrium",
+        "random_projections",
+        "feedback_alignment",
+        "local_goodness",
+        "forward_only",
+        "temporal_trace",
+        "spiking",
+        "target_inversion",
+        "target_prop",
+    ]
 
     # ParameterUpdate axis
     update: "ParameterUpdateConfig | None"
-    update_type: Literal["euclidean", "riemannian_orthogonal", "muon", "spectral_constrained", "spectral", "natural_gradient", "fisher", "elastic_consolidation", "ewc"]
+    update_type: Literal[
+        "euclidean",
+        "riemannian_orthogonal",
+        "muon",
+        "spectral_constrained",
+        "spectral",
+        "natural_gradient",
+        "fisher",
+        "elastic_consolidation",
+        "ewc",
+    ]
     step_size: float
 
 
@@ -410,7 +447,9 @@ def to_trainer_config(config: ExperimentConfig):
         allow_bptt_fallback=config.training.allow_bptt_fallback,
         run_validation=config.training.run_validation,
         profile_epochs=config.training.profile_epochs,
-        target_hardware=config.hardware.substrate if config.hardware.substrate != "digital" else None,
+        target_hardware=config.hardware.substrate
+        if config.hardware.substrate != "digital"
+        else None,
         use_kernel=config.training.use_kernel,
         kernel_backend=config.training.kernel_backend,
         kernel_dtype=config.training.kernel_dtype,

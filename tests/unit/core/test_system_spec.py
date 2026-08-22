@@ -58,13 +58,15 @@ def _make_random_system(device: torch.device) -> tuple:
     """Create a random valid System composition using deterministic components only."""
     import random
 
-    substrate = DigitalSubstrate(SubstrateConfig(
-        precision="float32",
-        noise_level=0.0,
-        weight_bounds=None,
-        sparsity=0.0,
-        device="cpu",
-    ))
+    substrate = DigitalSubstrate(
+        SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        )
+    )
 
     # Use deterministic geometry types only
     geo_type = random.choice(["feedforward", "recurrent"])
@@ -95,15 +97,17 @@ def _make_random_system(device: torch.device) -> tuple:
         )
 
     # Use deterministic dynamics only
-    dynamics = InstantaneousDynamics(StateDynamicsConfig(
-        dynamics_type="instantaneous",
-        max_steps=1,
-        convergence_threshold=1e-4,
-        convergence_start=1,
-        step_size=0.1,
-        beta=0.1,
-        track_free_energy_per_iter=False,
-    ))
+    dynamics = InstantaneousDynamics(
+        StateDynamicsConfig(
+            dynamics_type="instantaneous",
+            max_steps=1,
+            convergence_threshold=1e-4,
+            convergence_start=1,
+            step_size=0.1,
+            beta=0.1,
+            track_free_energy_per_iter=False,
+        )
+    )
 
     # Use deterministic credit types only (no random projections, temporal trace)
     credit_type = random.choice([
@@ -116,14 +120,16 @@ def _make_random_system(device: torch.device) -> tuple:
         "local_goodness": LocalGoodnessCredit,
         "target_inversion": TargetInversionCredit,
     }
-    credit = credit_map[credit_type](CreditAssignmentConfig(
-        credit_type=credit_type,
-        beta=0.5,
-        feedback_matrix=None,
-        local_objective="mse",
-        orthogonal_init=False,
-        feedback_scale=0.01,
-    ))
+    credit = credit_map[credit_type](
+        CreditAssignmentConfig(
+            credit_type=credit_type,
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="mse",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+        )
+    )
 
     # Use deterministic update types only
     update_type = random.choice([
@@ -134,15 +140,17 @@ def _make_random_system(device: torch.device) -> tuple:
         "elastic_consolidation",
     ])
     update_map = {
-        "euclidean": lambda: EuclideanUpdate(ParameterUpdateConfig(
-            update_type="euclidean",
-            step_size=0.01,
-            momentum=0.9,
-            ortho_steps=5,
-            spectral_norm=1.0,
-            fisher_damping=1e-3,
-            ewc_lambda=1000.0,
-        )),
+        "euclidean": lambda: EuclideanUpdate(
+            ParameterUpdateConfig(
+                update_type="euclidean",
+                step_size=0.01,
+                momentum=0.9,
+                ortho_steps=5,
+                spectral_norm=1.0,
+                fisher_damping=1e-3,
+                ewc_lambda=1000.0,
+            )
+        ),
         "riemannian_orthogonal": lambda: RiemannianOrthogonalUpdate(
             ParameterUpdateConfig(
                 update_type="riemannian_orthogonal",
@@ -338,13 +346,15 @@ class TestSystemSpecRoundTrip:
             enable_deterministic_cuda()
 
         sys = compose_system(
-            substrate=DigitalSubstrate(SubstrateConfig(
-                precision="float32",
-                noise_level=0.0,
-                weight_bounds=None,
-                sparsity=0.0,
-                device="cpu",
-            )),
+            substrate=DigitalSubstrate(
+                SubstrateConfig(
+                    precision="float32",
+                    noise_level=0.0,
+                    weight_bounds=None,
+                    sparsity=0.0,
+                    device="cpu",
+                )
+            ),
             geometry=FeedforwardGeometry(
                 GeometryConfig(
                     input_dim=WIDTH,
@@ -356,32 +366,38 @@ class TestSystemSpecRoundTrip:
                     recurrent_weight=None,
                 )
             ),
-            dynamics=InstantaneousDynamics(StateDynamicsConfig(
-                dynamics_type="instantaneous",
-                max_steps=1,
-                convergence_threshold=1e-4,
-                convergence_start=1,
-                step_size=0.1,
-                beta=0.1,
-                track_free_energy_per_iter=False,
-            )),
-            credit=ThermodynamicContrast(CreditAssignmentConfig(
-                credit_type="thermodynamic_contrast",
-                beta=0.5,
-                feedback_matrix=None,
-                local_objective="mse",
-                orthogonal_init=False,
-                feedback_scale=0.01,
-            )),
-            update=EuclideanUpdate(ParameterUpdateConfig(
-                update_type="euclidean",
-                step_size=0.01,
-                momentum=0.9,
-                ortho_steps=5,
-                spectral_norm=1.0,
-                fisher_damping=1e-3,
-                ewc_lambda=1000.0,
-            )),
+            dynamics=InstantaneousDynamics(
+                StateDynamicsConfig(
+                    dynamics_type="instantaneous",
+                    max_steps=1,
+                    convergence_threshold=1e-4,
+                    convergence_start=1,
+                    step_size=0.1,
+                    beta=0.1,
+                    track_free_energy_per_iter=False,
+                )
+            ),
+            credit=ThermodynamicContrast(
+                CreditAssignmentConfig(
+                    credit_type="thermodynamic_contrast",
+                    beta=0.5,
+                    feedback_matrix=None,
+                    local_objective="mse",
+                    orthogonal_init=False,
+                    feedback_scale=0.01,
+                )
+            ),
+            update=EuclideanUpdate(
+                ParameterUpdateConfig(
+                    update_type="euclidean",
+                    step_size=0.01,
+                    momentum=0.9,
+                    ortho_steps=5,
+                    spectral_norm=1.0,
+                    fisher_damping=1e-3,
+                    ewc_lambda=1000.0,
+                )
+            ),
         )
         _setup_system_device(sys, device)
 
@@ -418,32 +434,38 @@ class TestSystemSpecRoundTrip:
                     recurrent_weight=None,
                 )
             ),
-            dynamics=InstantaneousDynamics(StateDynamicsConfig(
-                dynamics_type="instantaneous",
-                max_steps=1,
-                convergence_threshold=1e-4,
-                convergence_start=1,
-                step_size=0.1,
-                beta=0.1,
-                track_free_energy_per_iter=False,
-            )),
-            credit=ThermodynamicContrast(CreditAssignmentConfig(
-                credit_type="thermodynamic_contrast",
-                beta=0.5,
-                feedback_matrix=None,
-                local_objective="mse",
-                orthogonal_init=False,
-                feedback_scale=0.01,
-            )),
-            update=EuclideanUpdate(ParameterUpdateConfig(
-                update_type="euclidean",
-                step_size=0.01,
-                momentum=0.9,
-                ortho_steps=5,
-                spectral_norm=1.0,
-                fisher_damping=1e-3,
-                ewc_lambda=1000.0,
-            )),
+            dynamics=InstantaneousDynamics(
+                StateDynamicsConfig(
+                    dynamics_type="instantaneous",
+                    max_steps=1,
+                    convergence_threshold=1e-4,
+                    convergence_start=1,
+                    step_size=0.1,
+                    beta=0.1,
+                    track_free_energy_per_iter=False,
+                )
+            ),
+            credit=ThermodynamicContrast(
+                CreditAssignmentConfig(
+                    credit_type="thermodynamic_contrast",
+                    beta=0.5,
+                    feedback_matrix=None,
+                    local_objective="mse",
+                    orthogonal_init=False,
+                    feedback_scale=0.01,
+                )
+            ),
+            update=EuclideanUpdate(
+                ParameterUpdateConfig(
+                    update_type="euclidean",
+                    step_size=0.01,
+                    momentum=0.9,
+                    ortho_steps=5,
+                    spectral_norm=1.0,
+                    fisher_damping=1e-3,
+                    ewc_lambda=1000.0,
+                )
+            ),
         )
         _setup_system_device(sys, device)
 

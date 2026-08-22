@@ -30,6 +30,7 @@ from bioplausible.core.ontology import (
     SpectralConstrainedUpdate,
     SpikeIntegrationDynamics,
     StateDynamicsConfig,
+    SubstrateConfig,
     SystemState,
     TargetInversionCredit,
     TemporalTraceCredit,
@@ -117,24 +118,20 @@ def _make_system_for_credit(
     if device is None:
         device = select_device()
 
-    config = GeometryConfig(
+    config = GeometryConfig.feedforward(
         input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
     )
     geometry = FeedforwardGeometry(config)
-    substrate = DigitalSubstrate()
+    substrate = DigitalSubstrate(SubstrateConfig.digital())
 
     if dynamics_type == "energy_minimization":
         dynamics = EnergyMinimizationDynamics(
-            StateDynamicsConfig(
-                dynamics_type="energy_minimization",
-                max_steps=SETTLE_ITERS,
-                beta=0.5,
-            )
+            StateDynamicsConfig.energy_minimization(max_steps=SETTLE_ITERS, beta=0.5)
         )
     else:
-        dynamics = InstantaneousDynamics()
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
-    update = EuclideanUpdate(ParameterUpdateConfig(step_size=0.01))
+    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
 
     sys = compose_system(substrate, geometry, dynamics, credit, update)
     _setup_system_device(sys, device)
@@ -146,11 +143,13 @@ def _make_system_for_dynamics(dynamics, device: torch.device | None = None) -> t
     if device is None:
         device = select_device()
 
-    config = GeometryConfig(input_dim=WIDTH, output_dim=WIDTH, hidden_dims=())
+    config = GeometryConfig.feedforward(
+        input_dim=WIDTH, output_dim=WIDTH, hidden_dims=()
+    )
     geometry = FeedforwardGeometry(config)
-    substrate = DigitalSubstrate()
-    credit = ThermodynamicContrast(CreditAssignmentConfig())
-    update = EuclideanUpdate(ParameterUpdateConfig(step_size=0.01))
+    substrate = DigitalSubstrate(SubstrateConfig.digital())
+    credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast())
+    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
 
     sys = compose_system(substrate, geometry, dynamics, credit, update)
     _setup_system_device(sys, device)
@@ -162,13 +161,13 @@ def _make_system_for_update(update, device: torch.device | None = None) -> tuple
     if device is None:
         device = select_device()
 
-    config = GeometryConfig(
+    config = GeometryConfig.feedforward(
         input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
     )
     geometry = FeedforwardGeometry(config)
-    substrate = DigitalSubstrate()
-    dynamics = InstantaneousDynamics()
-    credit = ThermodynamicContrast(CreditAssignmentConfig())
+    substrate = DigitalSubstrate(SubstrateConfig.digital())
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast())
 
     sys = compose_system(substrate, geometry, dynamics, credit, update)
     _setup_system_device(sys, device)
@@ -217,9 +216,7 @@ class TestCAxisLocalGoodnessCredit:
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        credit = LocalGoodnessCredit(
-            CreditAssignmentConfig(credit_type="local_goodness")
-        )
+        credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
         sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
             credit, dynamics_type="instantaneous", device=device
         )
@@ -283,9 +280,7 @@ class TestCAxisTargetInversionCredit:
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        credit = TargetInversionCredit(
-            CreditAssignmentConfig(credit_type="target_inversion")
-        )
+        credit = TargetInversionCredit(CreditAssignmentConfig.target_inversion())
         sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
             credit, dynamics_type="instantaneous", device=device
         )
@@ -350,9 +345,7 @@ class TestCAxisTemporalTraceCredit:
         Generate pre/post spike trains with Δt ∈ {-20, -5, 5, 20} ms.
         Assert Δw > 0 for Δt > 0 (causal), Δw < 0 for Δt < 0 (anti-causal).
         """
-        credit = TemporalTraceCredit(
-            CreditAssignmentConfig(credit_type="temporal_trace")
-        )
+        credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace())
         pre_spikes = torch.tensor([[pre_time]])
         post_spikes = torch.tensor([[post_time]])
         dt = torch.linspace(-50, 50, 101)
@@ -372,9 +365,7 @@ class TestCAxisTemporalTraceCredit:
     @pytest.mark.parametrize("dt_val", [5.0, 20.0])
     def test_stdp_antisymmetry(self, dt_val: float) -> None:
         """STDP antisymmetry: W(Δt) ≈ -W(-Δt) within 5%."""
-        credit = TemporalTraceCredit(
-            CreditAssignmentConfig(credit_type="temporal_trace")
-        )
+        credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace())
         pre_spikes = torch.tensor([[0.0]])
         post_spikes = torch.tensor([[dt_val]])  # Δt = dt_val
         dt = torch.linspace(-50, 50, 101)
@@ -391,9 +382,7 @@ class TestCAxisTemporalTraceCredit:
 
     def test_stdp_exponential_decay(self) -> None:
         """STDP decay: |W(20)| < |W(5)| (exponential decay)."""
-        credit = TemporalTraceCredit(
-            CreditAssignmentConfig(credit_type="temporal_trace")
-        )
+        credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace())
 
         dt_values = [5.0, 10.0, 20.0, 40.0]
         windows = []
@@ -428,9 +417,7 @@ class TestUAxisRiemannianOrthogonalUpdate:
 
         with seeded(seed):
             update = RiemannianOrthogonalUpdate(
-                ParameterUpdateConfig(
-                    update_type="riemannian_orthogonal", ortho_steps=20
-                )
+                ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=20)
             )
             grad = torch.randn(10, 10, device=device)
 
@@ -455,9 +442,7 @@ class TestUAxisSpectralConstrainedUpdate:
 
         with seeded(seed):
             update = SpectralConstrainedUpdate(
-                ParameterUpdateConfig(
-                    update_type="spectral_constrained", spectral_norm=1.0
-                )
+                ParameterUpdateConfig.spectral_constrained(spectral_norm=1.0)
             )
             # Create a random gradient
             grad = torch.randn(10, 10, device=device)
@@ -486,9 +471,7 @@ class TestUAxisNaturalGradientUpdate:
 
         with seeded(seed):
             update = NaturalGradientUpdate(
-                ParameterUpdateConfig(
-                    update_type="natural_gradient", fisher_damping=1e-3
-                )
+                ParameterUpdateConfig.natural_gradient(fisher_damping=1e-3)
             )
             grad = torch.randn(10, 10, device=device)
 
@@ -516,10 +499,8 @@ class TestUAxisElasticConsolidationUpdate:
 
         with seeded(seed):
             update = ElasticConsolidationUpdate(
-                ParameterUpdateConfig(
-                    update_type="elastic_consolidation",
-                    ewc_lambda=1000.0,
-                    step_size=0.001,
+                ParameterUpdateConfig.elastic_consolidation(
+                    ewc_lambda=1000.0, step_size=0.001
                 )
             )
             params = {"w": torch.randn(10, 10, device=device)}
@@ -581,10 +562,7 @@ class TestDAxisSpikeIntegration:
             enable_deterministic_cuda()
 
         dynamics = SpikeIntegrationDynamics(
-            StateDynamicsConfig(
-                dynamics_type="spike_integration",
-                max_steps=50,
-            )
+            StateDynamicsConfig.spike_integration(max_steps=50)
         )
         sys, geometry, substrate, dynamics, _ = _make_system_for_dynamics(
             dynamics, device=device
@@ -620,10 +598,8 @@ class TestDAxisSpikeIntegration:
             enable_deterministic_cuda()
 
         dynamics = SpikeIntegrationDynamics(
-            StateDynamicsConfig(
-                dynamics_type="spike_integration",
-                max_steps=50,
-                convergence_threshold=1e-6,  # Lower threshold to allow more steps
+            StateDynamicsConfig.spike_integration(
+                max_steps=50, convergence_threshold=1e-6
             )
         )
         sys, geometry, substrate, dynamics, _ = _make_system_for_dynamics(

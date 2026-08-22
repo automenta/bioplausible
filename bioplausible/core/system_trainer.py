@@ -108,6 +108,250 @@ class SystemTrainer:
         if hasattr(self.system.geometry, "to"):
             self.system.geometry.to(self.device)
 
+    @classmethod
+    def from_configs(
+        cls,
+        experiment_config: "ExperimentConfig",
+        train_data: _DataProvider,
+        val_data: _DataProvider | None = None,
+    ) -> "SystemTrainer":
+        """Create a SystemTrainer from an ExperimentConfig.
+
+        This is the primary factory for creating trainers from the unified
+        configuration. It composes the 5-D ontology system from the ontology
+        config and creates a SystemTrainer with the training config.
+
+        Args:
+            experiment_config: Unified ExperimentConfig with all hyperparameters.
+            train_data: Training data provider (DataLoader, Task, etc.).
+            val_data: Optional validation data provider.
+
+        Returns:
+            A configured SystemTrainer ready to call fit().
+        """
+        from bioplausible.config.experiment import ExperimentConfig
+        from bioplausible.core.ontology import (
+            SubstrateConfig,
+            GeometryConfig,
+            StateDynamicsConfig,
+            CreditAssignmentConfig,
+            ParameterUpdateConfig,
+            DigitalSubstrate,
+            AnalogSubstrate,
+            MemristiveSubstrate,
+            NeuromorphicSubstrate,
+            OpticalSubstrate,
+            QuantumSubstrate,
+            FeedforwardGeometry,
+            RecurrentGeometry,
+            TileGeometry,
+            EnergyMinimizationDynamics,
+            InstantaneousDynamics,
+            PredictiveSettlingDynamics,
+            SpikeIntegrationDynamics,
+            ThermodynamicContrast,
+            RandomProjectionsCredit,
+            LocalGoodnessCredit,
+            TemporalTraceCredit,
+            TargetInversionCredit,
+            BackpropCredit,
+            EuclideanUpdate,
+            RiemannianOrthogonalUpdate,
+            SpectralConstrainedUpdate,
+            NaturalGradientUpdate,
+            ElasticConsolidationUpdate,
+        )
+        from bioplausible.core.system_trainer import compose_system
+
+        exp = experiment_config
+        ont = exp.ontology
+        model = exp.model
+        training = exp.training
+        hardware = exp.hardware
+
+        # Build substrate from ontology config
+        substrate_type = ont.substrate_type
+        if substrate_type == "digital":
+            substrate = DigitalSubstrate(
+                SubstrateConfig.digital(
+                    precision=ont.substrate_precision,
+                    device=hardware.device,
+                )
+            )
+        elif substrate_type == "analog":
+            substrate = AnalogSubstrate(SubstrateConfig.analog(device=hardware.device))
+        elif substrate_type == "memristive":
+            substrate = MemristiveSubstrate(
+                SubstrateConfig.memristive(device=hardware.device)
+            )
+        elif substrate_type == "neuromorphic":
+            substrate = NeuromorphicSubstrate(
+                SubstrateConfig.neuromorphic(device=hardware.device)
+            )
+        elif substrate_type == "optical":
+            substrate = OpticalSubstrate(
+                SubstrateConfig.optical(device=hardware.device)
+            )
+        elif substrate_type == "quantum":
+            substrate = QuantumSubstrate(
+                SubstrateConfig.quantum(device=hardware.device)
+            )
+        else:
+            substrate = DigitalSubstrate(
+                SubstrateConfig.digital(device=hardware.device)
+            )
+
+        # Build geometry from ontology config
+        topology_type = ont.topology_type
+        hidden_dims = ont.hidden_dims or tuple(model.hidden_dims)
+        input_dim = model.input_dim
+        output_dim = model.output_dim
+
+        if topology_type == "feedforward":
+            geometry_cfg = GeometryConfig.feedforward(
+                input_dim=input_dim,
+                output_dim=output_dim,
+                hidden_dims=hidden_dims,
+            )
+            geometry = FeedforwardGeometry(geometry_cfg)
+        elif topology_type in ("recurrent", "recurrent_attractor"):
+            geometry_cfg = GeometryConfig.recurrent(
+                input_dim=input_dim,
+                output_dim=output_dim,
+                hidden_dims=hidden_dims,
+            )
+            geometry = RecurrentGeometry(
+                geometry_cfg,
+                hidden_dim=hidden_dims[-1] if hidden_dims else output_dim,
+            )
+        elif topology_type in ("tile_mesh", "tile"):
+            geometry_cfg = GeometryConfig.tile_mesh(
+                input_dim=input_dim,
+                output_dim=output_dim,
+                num_layers=model.num_layers,
+                neurons_per_tile=model.neurons_per_tile,
+                tiles_per_layer=model.tiles_per_layer,
+            )
+            geometry = TileGeometry(
+                geometry_cfg,
+                neurons_per_tile=model.neurons_per_tile,
+                tiles_per_layer=model.tiles_per_layer,
+            )
+        else:
+            geometry_cfg = GeometryConfig.feedforward(
+                input_dim=input_dim,
+                output_dim=output_dim,
+                hidden_dims=hidden_dims,
+            )
+            geometry = FeedforwardGeometry(geometry_cfg)
+
+        # Build dynamics from ontology config
+        dynamics_type = ont.dynamics_type
+        if dynamics_type == "energy_minimization":
+            dynamics = EnergyMinimizationDynamics(
+                StateDynamicsConfig.energy_minimization(
+                    max_steps=ont.max_steps,
+                    beta=ont.beta,
+                )
+            )
+        elif dynamics_type == "predictive_settling":
+            dynamics = PredictiveSettlingDynamics(
+                StateDynamicsConfig.predictive_settling(
+                    max_steps=ont.max_steps,
+                    beta=ont.beta,
+                )
+            )
+        elif dynamics_type == "spike_integration":
+            dynamics = SpikeIntegrationDynamics(
+                StateDynamicsConfig.spike_integration(
+                    max_steps=ont.max_steps,
+                    beta=ont.beta,
+                )
+            )
+        else:
+            dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+
+        # Build credit from ontology config
+        credit_type = ont.credit_type
+        if credit_type in ("thermodynamic_contrast", "equilibrium"):
+            credit = ThermodynamicContrast(
+                CreditAssignmentConfig.thermodynamic_contrast(
+                    beta=ont.beta,
+                )
+            )
+        elif credit_type in ("random_projections", "feedback_alignment"):
+            credit = RandomProjectionsCredit(
+                CreditAssignmentConfig.random_projections(
+                    feedback_scale=ont.update.step_size,  # Use step_size as feedback_scale
+                )
+            )
+        elif credit_type in ("local_goodness", "forward_only"):
+            credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
+        elif credit_type in ("temporal_trace", "spiking"):
+            credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace())
+        elif credit_type in ("target_inversion", "target_prop"):
+            credit = TargetInversionCredit(CreditAssignmentConfig.target_inversion())
+        else:
+            credit = BackpropCredit(CreditAssignmentConfig.gradient())
+
+        # Build update from ontology config
+        update_type = ont.update_type
+        if update_type in ("riemannian_orthogonal", "muon"):
+            update = RiemannianOrthogonalUpdate(
+                ParameterUpdateConfig.riemannian_orthogonal(
+                    step_size=ont.step_size,
+                )
+            )
+        elif update_type in ("spectral_constrained", "spectral"):
+            update = SpectralConstrainedUpdate(
+                ParameterUpdateConfig.spectral_constrained(
+                    step_size=ont.step_size,
+                )
+            )
+        elif update_type in ("natural_gradient", "fisher"):
+            update = NaturalGradientUpdate(
+                ParameterUpdateConfig.natural_gradient(
+                    step_size=ont.step_size,
+                )
+            )
+        elif update_type in ("elastic_consolidation", "ewc"):
+            update = ElasticConsolidationUpdate(
+                ParameterUpdateConfig.elastic_consolidation(
+                    step_size=ont.step_size,
+                )
+            )
+        else:
+            update = EuclideanUpdate(
+                ParameterUpdateConfig.euclidean(
+                    step_size=ont.step_size,
+                )
+            )
+
+        # Compose the system
+        system = compose_system(substrate, geometry, dynamics, credit, update)
+
+        # Create trainer config
+        trainer_config = SystemTrainerConfig(
+            max_epochs=training.epochs,
+            batch_size=training.batch_size,
+            val_batch_size=training.val_batch_size,
+            device=hardware.device,
+            grad_clip=training.grad_clip,
+            track_energy=training.track_energy,
+            track_flops=training.track_flops,
+            track_memory=training.track_memory,
+            log_every_n_steps=training.log_every_n_steps,
+            seed=exp.seed,
+            deterministic=exp.deterministic,
+        )
+
+        return cls(
+            system=system,
+            config=trainer_config,
+            train_data=train_data,
+            val_data=val_data,
+        )
+
     def _setup_device(self) -> None:
         if self.config.device == "auto":
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -539,25 +783,25 @@ def create_eqprop_system(
         ThermodynamicContrast,
     )
 
-    substrate = DigitalSubstrate(SubstrateConfig(
-        precision="float32",
-        noise_level=0.0,
-        weight_bounds=None,
-        sparsity=0.0,
-        device="cpu",
-    ))
+    substrate = DigitalSubstrate(
+        SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        )
+    )
 
     dims = [hidden_dim] * max(num_layers, 1)
+    geometry_cfg = GeometryConfig.recurrent(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_dims=tuple(dims),
+        init_scale=0.1,
+    )
     geometry = RecurrentGeometry(
-        GeometryConfig(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            hidden_dims=tuple(dims),
-            num_layers=num_layers,
-            topology_type="recurrent",
-            connectivity=None,
-            recurrent_weight=None,
-        ),
+        geometry_cfg,
         hidden_dim=hidden_dim,
     )
 
@@ -620,13 +864,15 @@ def create_backprop_system(
         SubstrateConfig,
     )
 
-    substrate = DigitalSubstrate(SubstrateConfig(
-        precision="float32",
-        noise_level=0.0,
-        weight_bounds=None,
-        sparsity=0.0,
-        device="cpu",
-    ))
+    substrate = DigitalSubstrate(
+        SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        )
+    )
 
     dims = [hidden_dim] * max(num_layers - 1, 1)
     geometry = FeedforwardGeometry(
@@ -700,13 +946,15 @@ def create_fa_system(
         SubstrateConfig,
     )
 
-    substrate = DigitalSubstrate(SubstrateConfig(
-        precision="float32",
-        noise_level=0.0,
-        weight_bounds=None,
-        sparsity=0.0,
-        device="cpu",
-    ))
+    substrate = DigitalSubstrate(
+        SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        )
+    )
 
     dims = [hidden_dim] * max(num_layers - 1, 1)
     geometry = FeedforwardGeometry(

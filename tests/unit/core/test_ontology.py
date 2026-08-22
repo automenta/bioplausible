@@ -70,13 +70,15 @@ class TestSubstrate:
     """Tests for Substrate implementations."""
 
     def test_digital_substrate_no_op(self):
-        substrate = DigitalSubstrate(SubstrateConfig(
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        substrate = DigitalSubstrate(
+            SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
         w = torch.randn(10, 5)
         assert torch.equal(substrate.quantize_weights(w), w)
 
@@ -90,13 +92,15 @@ class TestSubstrate:
         assert out.shape == (4, 20)
 
     def test_digital_substrate_initial_state(self):
-        substrate = DigitalSubstrate(SubstrateConfig(
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        substrate = DigitalSubstrate(
+            SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
         x = torch.randn(4, 10)
         state = substrate.initial_state(x)
         assert torch.equal(state, x)
@@ -104,13 +108,15 @@ class TestSubstrate:
     def test_noisy_substrate_injects_noise(self):
         from bioplausible.core.ontology import NoisySubstrate
 
-        substrate = NoisySubstrate(SubstrateConfig(
-            precision="float32",
-            noise_level=0.1,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        substrate = NoisySubstrate(
+            SubstrateConfig(
+                precision="float32",
+                noise_level=0.1,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
         s = torch.zeros(4, 10)
         noisy = substrate.inject_state_noise(s)
         assert not torch.equal(noisy, s)
@@ -133,13 +139,15 @@ class TestGeometry:
                 recurrent_weight=None,
             )
         )
-        substrate = DigitalSubstrate(SubstrateConfig(
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        substrate = DigitalSubstrate(
+            SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
         x = torch.randn(4, 10)
         out = geometry.forward(x, substrate)
         assert out.shape == (4, 3)
@@ -205,13 +213,15 @@ class TestGeometry:
             ),
             hidden_dim=20,
         )
-        substrate = DigitalSubstrate(SubstrateConfig(
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        substrate = DigitalSubstrate(
+            SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
         x = torch.randn(4, 10)
         out = geometry.forward(x, substrate)
         assert out.shape == (4, 3)
@@ -263,13 +273,15 @@ class TestGeometry:
             neurons_per_tile=8,
             tiles_per_layer=2,
         )
-        substrate = DigitalSubstrate(SubstrateConfig(
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        substrate = DigitalSubstrate(
+            SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
         x = torch.randn(4, 10)
         out = geometry.forward(x, substrate)
         assert out.shape == (4, 3)
@@ -289,13 +301,15 @@ class TestGeometry:
             tiles_per_layer=2,
         )
         # Get flat activities from initial forward pass
-        substrate = DigitalSubstrate(SubstrateConfig(
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        substrate = DigitalSubstrate(
+            SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
         x = torch.randn(4, 10)
         _ = geometry.forward(x, substrate)  # Initialize tile activities
         flat_acts = geometry._get_flat_activities()
@@ -347,15 +361,17 @@ class TestStateDynamics:
     """Tests for StateDynamics implementations."""
 
     def test_instantaneous_dynamics(self):
-        dynamics = InstantaneousDynamics(StateDynamicsConfig(
-            dynamics_type="instantaneous",
-            max_steps=1,
-            convergence_threshold=1e-4,
-            convergence_start=1,
-            step_size=0.1,
-            beta=0.1,
-            track_free_energy_per_iter=False,
-        ))
+        dynamics = InstantaneousDynamics(
+            StateDynamicsConfig(
+                dynamics_type="instantaneous",
+                max_steps=1,
+                convergence_threshold=1e-4,
+                convergence_start=1,
+                step_size=0.1,
+                beta=0.1,
+                track_free_energy_per_iter=False,
+            )
+        )
         geometry = FeedforwardGeometry(
             GeometryConfig(
                 input_dim=10,
@@ -367,13 +383,15 @@ class TestStateDynamics:
                 recurrent_weight=None,
             )
         )
-        substrate = DigitalSubstrate(SubstrateConfig(
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        substrate = DigitalSubstrate(
+            SubstrateConfig(
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
         state = SystemState(x=torch.randn(4, 10), activations=torch.randn(4, 3))
         result = dynamics.settle(state, geometry, substrate)
         assert result.free_state is not None
@@ -395,14 +413,16 @@ class TestCreditAssignment:
     """Tests for CreditAssignment implementations."""
 
     def test_thermodynamic_contrast(self):
-        credit = ThermodynamicContrast(CreditAssignmentConfig(
-            credit_type="thermodynamic_contrast",
-            beta=0.5,
-            feedback_matrix=None,
-            local_objective="mse",
-            orthogonal_init=False,
-            feedback_scale=0.01,
-        ))
+        credit = ThermodynamicContrast(
+            CreditAssignmentConfig(
+                credit_type="thermodynamic_contrast",
+                beta=0.5,
+                feedback_matrix=None,
+                local_objective="mse",
+                orthogonal_init=False,
+                feedback_scale=0.01,
+            )
+        )
         free_state = SystemState(activations=[torch.randn(4, 20), torch.randn(4, 3)])
         nudged_state = SystemState(activations=[torch.randn(4, 20), torch.randn(4, 3)])
         loss = torch.tensor(1.0)
@@ -425,15 +445,17 @@ class TestParameterUpdate:
     """Tests for ParameterUpdate implementations."""
 
     def test_euclidean_update(self):
-        update = EuclideanUpdate(ParameterUpdateConfig(
-            update_type="euclidean",
-            step_size=0.01,
-            momentum=0.9,
-            ortho_steps=5,
-            spectral_norm=1.0,
-            fisher_damping=1e-3,
-            ewc_lambda=1000.0,
-        ))
+        update = EuclideanUpdate(
+            ParameterUpdateConfig(
+                update_type="euclidean",
+                step_size=0.01,
+                momentum=0.9,
+                ortho_steps=5,
+                spectral_norm=1.0,
+                fisher_damping=1e-3,
+                ewc_lambda=1000.0,
+            )
+        )
         params = {"w1": torch.randn(20, 10), "b1": torch.randn(20)}
         pseudo_grads = [torch.randn(20, 10), torch.randn(20)]
         geometry = FeedforwardGeometry(
@@ -453,15 +475,17 @@ class TestParameterUpdate:
         assert not torch.equal(new_params["w1"], params["w1"])
 
     def test_euclidean_update_with_momentum(self):
-        update = EuclideanUpdate(ParameterUpdateConfig(
-            update_type="euclidean",
-            step_size=0.01,
-            momentum=0.9,
-            ortho_steps=5,
-            spectral_norm=1.0,
-            fisher_damping=1e-3,
-            ewc_lambda=1000.0,
-        ))
+        update = EuclideanUpdate(
+            ParameterUpdateConfig(
+                update_type="euclidean",
+                step_size=0.01,
+                momentum=0.9,
+                ortho_steps=5,
+                spectral_norm=1.0,
+                fisher_damping=1e-3,
+                ewc_lambda=1000.0,
+            )
+        )
         params = {"w1": torch.randn(20, 10)}
         pseudo_grads = [torch.randn(20, 10)]
         geometry = FeedforwardGeometry(
