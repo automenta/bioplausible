@@ -10,9 +10,8 @@ from torch import nn
 from bioplausible.core.logging import get_logger
 from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
-from bioplausible.zoo.models.eqprop import (
-    LoopedMLP,
-)
+from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+from bioplausible.config.unified import ModelConfig
 
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 from ._base import build_track_result, track_header
@@ -54,7 +53,27 @@ def track_20_transfer_learning(verifier) -> TrackResult:
 
     # 1. Pre-train on Task A
     logger.info("\n[20a] Pre-training on Task A (Classes 0-4)...")
-    model = LoopedMLP(input_dim, hidden_dim, 5, use_spectral_norm=True)
+    config = ModelConfig(
+        name="eqprop_mlp",
+        input_dim=input_dim,
+        output_dim=5,
+        hidden_dims=[hidden_dim],
+        learning_rate=0.01,
+        beta=0.5,
+        max_steps=30,
+        convergence_threshold=1e-4,
+        convergence_start=5,
+        use_spectral_norm=True,
+        spectral_norm_power_iterations=5,
+        activation="tanh",
+        lipschitz_mode="power_iteration",
+        output_scaling_mode="uniform",
+        extra={
+            "gradient_method": "contrastive",
+            "backend": "pytorch",
+        },
+    )
+    model = EquilibriumMLP(config=config)
     train_model(model, X_A, y_A, epochs=verifier.epochs, lr=0.01, name="Pretrain")
     acc_A = evaluate_accuracy(model, X_A, y_A)
     logger.info("  Task A Accuracy: %.1f%%", acc_A * 100)
@@ -62,7 +81,7 @@ def track_20_transfer_learning(verifier) -> TrackResult:
     logger.info("\n[20b] Transferring to Task B (Classes 5-9)...")
 
     # Create new model for B, copy weights from A (except readout)
-    model_B = LoopedMLP(input_dim, hidden_dim, 5, use_spectral_norm=True)
+    model_B = EquilibriumMLP(config=config)
 
     # Copy input layer (layers.0) - handle spectral norm parametrization
     if hasattr(model.layers[0], "parametrizations"):
@@ -79,7 +98,7 @@ def track_20_transfer_learning(verifier) -> TrackResult:
     # Readout (layers.1) is random (scratch)
 
     # Baseline: Train from scratch on B (same amount of data)
-    model_scratch = LoopedMLP(input_dim, hidden_dim, 5, use_spectral_norm=True)
+    model_scratch = EquilibriumMLP(config=config)
 
     # Train both for FEW epochs to see speedup
     transfer_epochs = max(1, verifier.epochs // 2)
@@ -141,7 +160,27 @@ def track_21_continual_learning(verifier) -> TrackResult:
     X_B, y_B = X[y >= 5], y[y >= 5]
 
     # Single mask readout (classes 0-9)
-    model = LoopedMLP(input_dim, hidden_dim, 10, use_spectral_norm=True)
+    config = ModelConfig(
+        name="eqprop_mlp",
+        input_dim=input_dim,
+        output_dim=10,
+        hidden_dims=[hidden_dim],
+        learning_rate=0.01,
+        beta=0.5,
+        max_steps=30,
+        convergence_threshold=1e-4,
+        convergence_start=5,
+        use_spectral_norm=True,
+        spectral_norm_power_iterations=5,
+        activation="tanh",
+        lipschitz_mode="power_iteration",
+        output_scaling_mode="uniform",
+        extra={
+            "gradient_method": "contrastive",
+            "backend": "pytorch",
+        },
+    )
+    model = EquilibriumMLP(config=config)
 
     # 1. Train Task A
     logger.info("\n[21a] Learning Task A...")

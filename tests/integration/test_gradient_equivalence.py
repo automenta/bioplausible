@@ -52,9 +52,8 @@ from bioplausible.validation.gradient_check import (
 from bioplausible.zoo.mep.presets import (
     smep as _smep,
 )
-from bioplausible.zoo.models.eqprop import (
-    LoopedMLP,
-)
+from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+from bioplausible.config.unified import ModelConfig
 
 
 def test_contrastive_gradients():
@@ -63,7 +62,27 @@ def test_contrastive_gradients():
     torch.manual_seed(42)
 
     # Create model
-    model = LoopedMLP(10, 20, 5, gradient_method="contrastive", max_steps=10)
+    config = ModelConfig(
+        name="eqprop_mlp",
+        input_dim=10,
+        output_dim=5,
+        hidden_dims=[20],
+        learning_rate=0.01,
+        beta=0.5,
+        max_steps=10,
+        convergence_threshold=1e-4,
+        convergence_start=5,
+        use_spectral_norm=True,
+        spectral_norm_power_iterations=5,
+        activation="tanh",
+        lipschitz_mode="power_iteration",
+        output_scaling_mode="uniform",
+        extra={
+            "gradient_method": "contrastive",
+            "backend": "pytorch",
+        },
+    )
+    model = EquilibriumMLP(config=config)
 
     # Create dummy data
     x = torch.randn(4, 10)

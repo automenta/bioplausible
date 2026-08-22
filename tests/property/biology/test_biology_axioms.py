@@ -713,12 +713,33 @@ class TestWiredUpDisabledTests:
 
     def test_oracle_convergence_time_vs_noise(self):
         """Wire up test_oracle.py::test_oracle_metric - verify dynamics are computed correctly."""
-        from bioplausible.zoo.models.eqprop import LoopedMLP
+        from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+        from bioplausible.config.unified import ModelConfig
 
         input_dim = 16
         hidden_dim = 32
         output_dim = 10
-        model = LoopedMLP(input_dim, hidden_dim, output_dim, max_steps=20)
+        config = ModelConfig(
+            name="eqprop_mlp",
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=[hidden_dim],
+            learning_rate=0.01,
+            beta=0.5,
+            max_steps=20,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            use_spectral_norm=True,
+            spectral_norm_power_iterations=5,
+            activation="tanh",
+            lipschitz_mode="power_iteration",
+            output_scaling_mode="uniform",
+            extra={
+                "gradient_method": "equilibrium",
+                "backend": "pytorch",
+            },
+        )
+        model = EquilibriumMLP(config=config)
         model.eval()
 
         # Base input

@@ -317,29 +317,38 @@ def test_infer_metadata_regular_field():
 
 def test_runtime_checkable_transition_graph():
     """All registered EqProp models pass isinstance(..., TransitionGraph)."""
-    from bioplausible.zoo.models.eqprop import (
-        LoopedMLP,
-        MomentumEquilibrium,
-        SparseEquilibrium,
-        StandardEqProp,
-    )
+    from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
     from bioplausible.zoo.models.transitions import TransitionGraph
+    from bioplausible.config.unified import ModelConfig
 
-    models = [StandardEqProp, MomentumEquilibrium, SparseEquilibrium, LoopedMLP]
-    for model_cls in models:
-        assert isinstance(model_cls, type)
-        # Instantiate small version to test runtime checkable protocol
-        try:
-            inst = model_cls(4, 8, 4, max_steps=2)  # small dims
-            assert isinstance(inst, TransitionGraph), (
-                f"{model_cls.__name__} instance is not TransitionGraph"
-            )
-            modules = inst.transition_modules()
-            assert len(modules) > 0
-            assert all(isinstance(m, nn.Module) for m in modules)
-        except Exception:
-            # Some models may need specific init args — skip gracefully
-            pass
+    # Test the consolidated EquilibriumMLP engine
+    config = ModelConfig(
+        name="eqprop_mlp",
+        input_dim=4,
+        output_dim=4,
+        hidden_dims=[8],
+        learning_rate=0.01,
+        beta=0.5,
+        max_steps=2,
+        convergence_threshold=1e-4,
+        convergence_start=1,
+        use_spectral_norm=True,
+        spectral_norm_power_iterations=5,
+        activation="tanh",
+        lipschitz_mode="power_iteration",
+        output_scaling_mode="uniform",
+        extra={
+            "gradient_method": "contrastive",
+            "backend": "pytorch",
+        },
+    )
+    model = EquilibriumMLP(config=config)
+    assert isinstance(model, TransitionGraph), (
+        f"{model.__class__.__name__} instance is not TransitionGraph"
+    )
+    modules = model.transition_modules()
+    assert len(modules) > 0
+    assert all(isinstance(m, nn.Module) for m in modules)
 
 
 def test_all_models_have_transition_modules_or_override():

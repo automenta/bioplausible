@@ -12,6 +12,7 @@ from torch import nn, optim
 
 from bioplausible.config.unified import ModelConfig
 from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+from bioplausible.core.registry import Registry
 
 
 def _make_synthetic_dataset(
@@ -161,16 +162,28 @@ class TestDeepNetworkCreditAssignment:
     )
     def test_deep_network_gradient_flow(self, depth, data):
         """Gradients should flow through 100+ effective layers."""
-        from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
-
-        model = LoopedMLP(
+        hidden_dims = tuple([64] * (depth // 10))  # Scale hidden layers with depth
+        config = ModelConfig(
+            name="eqprop_mlp",
             input_dim=64,
-            hidden_dim=64,
             output_dim=10,
-            use_spectral_norm=True,
+            hidden_dims=hidden_dims,
+            learning_rate=0.01,
+            beta=0.5,
             max_steps=depth,
-            gradient_method="equilibrium",
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            use_spectral_norm=True,
+            spectral_norm_power_iterations=5,
+            activation="tanh",
+            lipschitz_mode="power_iteration",
+            output_scaling_mode="uniform",
+            extra={
+                "gradient_method": "equilibrium",
+                "backend": "pytorch",
+            },
         )
+        model = EquilibriumMLP(config=config)
 
         x = torch.randn(4, 64)
         y = torch.randint(0, 10, (4,))
@@ -209,16 +222,28 @@ class TestDeepNetworkCreditAssignment:
     )
     def test_deep_network_accuracy(self, depth, data):
         """100-layer network should achieve reasonable accuracy."""
-        from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
-
-        model = LoopedMLP(
+        hidden_dims = tuple([64] * (depth // 10))
+        config = ModelConfig(
+            name="eqprop_mlp",
             input_dim=64,
-            hidden_dim=64,
             output_dim=10,
-            use_spectral_norm=True,
+            hidden_dims=hidden_dims,
+            learning_rate=0.01,
+            beta=0.5,
             max_steps=depth,
-            gradient_method="equilibrium",
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            use_spectral_norm=True,
+            spectral_norm_power_iterations=5,
+            activation="tanh",
+            lipschitz_mode="power_iteration",
+            output_scaling_mode="uniform",
+            extra={
+                "gradient_method": "equilibrium",
+                "backend": "pytorch",
+            },
         )
+        model = EquilibriumMLP(config=config)
 
         x_train, y_train = _make_synthetic_dataset(128, 64, 10, 42)
         x_test, y_test = _make_synthetic_dataset(32, 64, 10, 43)
@@ -240,94 +265,10 @@ class TestDeepNetworkCreditAssignment:
 # =============================================================================
 # Track 12: Lazy Event-Driven Updates
 # =============================================================================
-
-
-class TestLazyUpdates:
-    """Lazy/EqProp models should achieve FLOP savings by skipping inactive neurons.
-
-    Known issue: LazyEqProp uses legacy config path and doesn't accept
-    input_dim/hidden_dim/output_dim directly. Requires ModelConfig.
-    """
-
-    @pytest.mark.parametrize("epsilon", [0.001, 0.01, 0.1])
-    @settings(max_examples=2, deadline=None)
-    @given(st.data())
-    @pytest.mark.xfail(
-        reason="LazyEqProp uses legacy config path; requires ModelConfig instantiation. "
-        "Waiting for native migration (Sprint 9)."
-    )
-    def test_lazy_eqprop_flop_savings(self, epsilon, data):
-        """LazyEqProp should save FLOPs with minimal accuracy loss."""
-        from bioplausible.zoo.models.eqprop.lazy_eqprop import LazyEqProp
-
-        model = LazyEqProp(
-            input_dim=64,
-            hidden_dim=128,
-            output_dim=10,
-            epsilon=epsilon,
-            use_spectral_norm=True,
-        )
-
-        x_train, y_train = _make_synthetic_dataset(128, 64, 10, 42)
-        x_test, y_test = _make_synthetic_dataset(32, 64, 10, 43)
-
-        # Train
-        model.train()
-        for epoch in range(3):
-            model.train_step(x_train, y_train)
-
-        # Measure accuracy
-        model.eval()
-        with torch.no_grad():
-            logits = model(x_test)
-            acc = (logits.argmax(dim=1) == y_test).float().mean().item()
-
-        # Measure FLOP savings
-        model.stats = model.stats.reset()
-        with torch.no_grad():
-            _ = model(x_test, steps=30)
-        savings = model.get_flop_savings()
-
-        # Should have some savings (even if small)
-        assert savings >= 0, f"FLOP savings should be non-negative, got {savings}"
-
-        # Accuracy should not be terrible
-        assert acc > 0.1, f"Accuracy {acc:.1%} too low with epsilon={epsilon}"
-
-    @pytest.mark.xfail(
-        reason="LazyEqProp uses legacy config path; requires ModelConfig instantiation. "
-        "Waiting for native migration (Sprint 9)."
-    )
-    def test_lazy_eqprop_savings_increase_with_epsilon(self):
-        """Larger epsilon should yield more FLOP savings (potentially with more accuracy loss)."""
-        from bioplausible.zoo.models.eqprop.lazy_eqprop import LazyEqProp
-
-        x_train, y_train = _make_synthetic_dataset(128, 64, 10, 42)
-        x_test, y_test = _make_synthetic_dataset(32, 64, 10, 43)
-
-        savings_results = []
-        for epsilon in [0.001, 0.01, 0.1]:
-            model = LazyEqProp(
-                input_dim=64,
-                hidden_dim=128,
-                output_dim=10,
-                epsilon=epsilon,
-                use_spectral_norm=True,
-            )
-            model.train()
-            for epoch in range(3):
-                model.train_step(x_train, y_train)
-
-            model.stats = model.stats.reset()
-            with torch.no_grad():
-                _ = model(x_test, steps=30)
-            savings = model.get_flop_savings()
-            savings_results.append((epsilon, savings))
-
-        # At least the largest epsilon should have some savings
-        assert savings_results[-1][1] >= 0, (
-            "Highest epsilon should have non-negative savings"
-        )
+# REMOVED: LazyEqProp was a legacy facade deleted in Sprint 9.
+# The LazyEqProp learning rule optimizer exists at
+# bioplausible.core.local_learning.rules.eqprop.LazyEqProp but is not a model.
+# Native compositions use LazyStateDynamics via SystemConfig.
 
 
 # =============================================================================
@@ -399,10 +340,30 @@ class TestEqPropBackpropAccuracyParity:
     @given(st.data())
     def test_eqprop_vs_backprop_accuracy(self, data):
         """EqProp accuracy should be within 15% of Backprop on synthetic data."""
-        from bioplausible.zoo.models.eqprop import BackpropMLP, LoopedMLP
+        from bioplausible.zoo.models.eqprop import BackpropMLP
 
         bp_model = BackpropMLP(64, 128, 10)
-        eq_model = LoopedMLP(64, 128, 10, use_spectral_norm=True, max_steps=30)
+        eq_config = ModelConfig(
+            name="eqprop_mlp",
+            input_dim=64,
+            output_dim=10,
+            hidden_dims=[128],
+            learning_rate=0.01,
+            beta=0.5,
+            max_steps=30,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            use_spectral_norm=True,
+            spectral_norm_power_iterations=5,
+            activation="tanh",
+            lipschitz_mode="power_iteration",
+            output_scaling_mode="uniform",
+            extra={
+                "gradient_method": "contrastive",
+                "backend": "pytorch",
+            },
+        )
+        eq_model = EquilibriumMLP(config=eq_config)
 
         x_train, y_train = _make_synthetic_dataset(128, 64, 10, 42)
         x_test, y_test = _make_synthetic_dataset(32, 64, 10, 43)
@@ -455,16 +416,27 @@ class TestNoiseDampingSelfHealing:
         except ImportError:
             pytest.skip("Required modules not available")
 
-        from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
-
-        model = LoopedMLP(
+        config = ModelConfig(
+            name="eqprop_mlp",
             input_dim=64,
-            hidden_dim=128,
             output_dim=10,
-            use_spectral_norm=True,
+            hidden_dims=[128],
+            learning_rate=0.01,
+            beta=0.5,
             max_steps=50,
-            gradient_method="equilibrium",
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            use_spectral_norm=True,
+            spectral_norm_power_iterations=5,
+            activation="tanh",
+            lipschitz_mode="power_iteration",
+            output_scaling_mode="uniform",
+            extra={
+                "gradient_method": "equilibrium",
+                "backend": "pytorch",
+            },
         )
+        model = EquilibriumMLP(config=config)
 
         x, y = _make_synthetic_dataset(32, 64, 10, 42)
 

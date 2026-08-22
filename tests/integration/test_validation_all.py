@@ -11,16 +11,19 @@ parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
 from bioplausible.core.local_learning.rules.fa import AdaptiveFA
+from bioplausible.config.unified import ModelConfig
 from bioplausible.zoo.models.eqprop import (
+    BackpropMLP,
     ConvEqProp,
     FullEqPropLM,
     HomeostaticEqProp,
-    LoopedMLP,
     ModernConvEqProp,
+    NeuralCube,
     RecurrentEqPropLM,
     SimpleConvEqProp,
     TransformerEqProp,
 )
+from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 from bioplausible.zoo.models.fa import FeedbackAlignmentEqProp
 
 
@@ -146,9 +149,27 @@ class TestValidationAll(unittest.TestCase):
         return criterion(output, target)
 
     def test_looped_mlp_learns(self):
-        model = LoopedMLP(self.input_dim, 32, self.output_dim, max_steps=5).to(
-            self.device
+        config = ModelConfig(
+            name="eqprop_mlp",
+            input_dim=self.input_dim,
+            output_dim=self.output_dim,
+            hidden_dims=[32],
+            learning_rate=0.01,
+            beta=0.5,
+            max_steps=5,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            use_spectral_norm=True,
+            spectral_norm_power_iterations=5,
+            activation="tanh",
+            lipschitz_mode="power_iteration",
+            output_scaling_mode="uniform",
+            extra={
+                "gradient_method": "contrastive",
+                "backend": "pytorch",
+            },
         )
+        model = EquilibriumMLP(config=config).to(self.device)
         i_loss, f_loss = self._train_minimal(model, self.loader)
         print(f"LoopedMLP: {i_loss:.4f} -> {f_loss:.4f}")
         self.assertLess(f_loss, i_loss)
@@ -156,13 +177,27 @@ class TestValidationAll(unittest.TestCase):
     def test_looped_mlp_equilibrium_learns(self):
         # Equilibrium Mode requires sufficient steps to reach fixed point
         # for the gradient approximation to be valid.
-        model = LoopedMLP(
-            self.input_dim,
-            32,
-            self.output_dim,
+        config = ModelConfig(
+            name="eqprop_mlp",
+            input_dim=self.input_dim,
+            output_dim=self.output_dim,
+            hidden_dims=[32],
+            learning_rate=0.01,
+            beta=0.5,
             max_steps=12,
-            gradient_method="equilibrium",
-        ).to(self.device)
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            use_spectral_norm=True,
+            spectral_norm_power_iterations=5,
+            activation="tanh",
+            lipschitz_mode="power_iteration",
+            output_scaling_mode="uniform",
+            extra={
+                "gradient_method": "equilibrium",
+                "backend": "pytorch",
+            },
+        )
+        model = EquilibriumMLP(config=config).to(self.device)
         i_loss, f_loss = self._train_minimal(model, self.loader)
         print(f"LoopedMLP (Eq): {i_loss:.4f} -> {f_loss:.4f}")
         self.assertLess(f_loss, i_loss)

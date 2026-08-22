@@ -10,7 +10,8 @@ parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
 from bioplausible.acceleration.triton_kernels import HAS_TRITON, TritonEqPropOps
-from bioplausible.zoo.models.eqprop import LoopedMLP
+from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+from bioplausible.config.unified import ModelConfig
 
 pytestmark = pytest.mark.gpu
 
@@ -21,11 +22,27 @@ class TestTritonIntegration(unittest.TestCase):
         self.input_dim = 64
         self.hidden_dim = 128
         self.output_dim = 10
-        self.model = LoopedMLP(
-            self.input_dim,
-            self.hidden_dim,
-            self.output_dim,
-        ).to(self.device)
+        config = ModelConfig(
+            name="eqprop_mlp",
+            input_dim=self.input_dim,
+            output_dim=self.output_dim,
+            hidden_dims=[self.hidden_dim],
+            learning_rate=0.01,
+            beta=0.5,
+            max_steps=30,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            use_spectral_norm=True,
+            spectral_norm_power_iterations=5,
+            activation="tanh",
+            lipschitz_mode="power_iteration",
+            output_scaling_mode="uniform",
+            extra={
+                "gradient_method": "equilibrium",
+                "backend": "pytorch",
+            },
+        )
+        self.model = EquilibriumMLP(config=config).to(self.device)
 
         # Reset functioning flag to ensure test isolation
         if HAS_TRITON:
