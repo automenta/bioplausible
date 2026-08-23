@@ -1739,7 +1739,9 @@ class FeedforwardGeometry(nn.Module):
     def params(self) -> dict[str, Tensor]:
         return dict(self._layers.named_parameters())  # type: ignore[return-value]
 
-    def forward(self, x: Tensor, substrate: Substrate) -> Tensor:
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        if substrate is None:
+            substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
         h = x
         for layer in self._layers:
@@ -1752,7 +1754,7 @@ class FeedforwardGeometry(nn.Module):
         return h
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate
+        self, x: Tensor, substrate: Substrate | None = None
     ) -> list[Tensor]:
         """Forward pass returning intermediate activations for each layer.
 
@@ -1760,6 +1762,8 @@ class FeedforwardGeometry(nn.Module):
             List of activations [input, layer1_out, layer2_out, ..., output]
             where layer outputs are after activation functions (ReLU).
         """
+        if substrate is None:
+            substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
         h = x
         acts = [h]  # Include input
@@ -1880,8 +1884,10 @@ class RecurrentGeometry(nn.Module):
             params["recurrent_weight"] = self._recurrent_weight
         return params  # type: ignore[return-value]
 
-    def forward(self, x: Tensor, substrate: Substrate) -> Tensor:
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
         """Full forward pass with recurrence (single step)."""
+        if substrate is None:
+            substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
         h = x
         for i, layer in enumerate(self._layers):
@@ -1934,9 +1940,11 @@ class RecurrentGeometry(nn.Module):
         return [m for m in self._layers if isinstance(m, nn.Linear)]
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate
+        self, x: Tensor, substrate: Substrate | None = None
     ) -> list[Tensor]:
         """Forward pass returning intermediate activations for each layer."""
+        if substrate is None:
+            substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
         h = x
         acts = [h]
@@ -2075,8 +2083,10 @@ class TileGeometry(nn.Module):
         params.update({f"tile_weight.{k}": v for k, v in self._tile_weights.items()})
         return params
 
-    def forward(self, x: Tensor, substrate: Substrate) -> Tensor:
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
         """Route input through the tile mesh using substrate's forward operator."""
+        if substrate is None:
+            substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
 
         # Project input to tile space
@@ -2279,9 +2289,11 @@ class TileGeometry(nn.Module):
         return self._graph.get_boundary_tiles(device_map)
 
     def forward_with_intermediates(
-        self, x: Tensor, substrate: Substrate
+        self, x: Tensor, substrate: Substrate | None = None
     ) -> list[Tensor]:
         """Forward pass returning intermediate activations for each layer."""
+        if substrate is None:
+            substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
 
         # Project input to tile space
@@ -2436,6 +2448,10 @@ class ThermodynamicContrast:
         if free_state.energy is not None and nudged_state.energy is not None:
             return nudged_state.energy - free_state.energy
         return torch.tensor(0.0)
+
+
+# Alias for backwards compatibility with README/docs
+ThermodynamicContrastCredit = ThermodynamicContrast
 
 
 class EuclideanUpdate:

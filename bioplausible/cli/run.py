@@ -28,7 +28,6 @@ import optuna
 from bioplausible.core._paths import db_path
 from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.core.trainer import CoreTrainer, TrainerConfig
 from bioplausible.hyperopt import (
     create_optuna_space,
     create_study,
@@ -568,29 +567,57 @@ def run_training(args):
 
     logger.info("[START]  Starting Headless Training: %s on %s", args.model, args.task)
 
-    config = TrainerConfig(
-        model=args.model,
-        task=(
-            args.dataset
-            if args.dataset
-            else ("mnist" if args.task == "vision" else "tinyshakespeare")
-        ),
-        epochs=args.epochs,
+    from bioplausible.core.system_trainer import SystemTrainer, SystemTrainerConfig
+    from bioplausible.domains.factory import create_task
+
+    task = create_task(
+        args.task, device=args.device, quick_mode=False
+    )
+    task.batch_size = args.batch_size
+    task.setup()
+
+    trainer_config = SystemTrainerConfig(
+        max_epochs=args.epochs,
         batch_size=args.batch_size,
-        optimizer_kwargs={"lr": args.lr},
+        device=args.device,
+        grad_clip=1.0,
+        track_energy=True,
+        track_flops=True,
+        track_memory=True,
+        log_every_n_steps=100,
+        seed=42,
     )
 
-    trainer = CoreTrainer(config)
+    # Create system based on model name
+    from bioplausible.core.registry import Registry
+
+    system = Registry.to_system(
+        args.model,
+        input_dim=task.input_dim or 0,
+        hidden_dim=args.hidden_dim if args.hidden_dim else 256,
+        output_dim=task.output_dim,
+        num_layers=2,
+    )
+
+    trainer = SystemTrainer(
+        system=system,
+        config=trainer_config,
+        train_data=task.get_dataloader("train"),
+        val_data=task.get_dataloader("val"),
+    )
 
     try:
         from tqdm import tqdm
 
         pbar = tqdm(range(args.epochs), desc="Epochs")
 
-        metrics = trainer.fit()
-        for epoch_metric in metrics:
+        history = trainer.fit()
+        for epoch_metric in history:
             pbar.update(1)
-            pbar.set_postfix({"loss": epoch_metric.loss, "acc": epoch_metric.accuracy})
+            pbar.set_postfix({
+                "loss": epoch_metric.get("train_loss", 0.0),
+                "acc": epoch_metric.get("train_acc", 0.0)
+            })
 
         pbar.close()
         logger.info("[OK]  Training Complete")
@@ -625,47 +652,328 @@ def run_search(args):
 
 
 def run_core_train(args):
-    """Run a single training session using CoreTrainer (new unified interface)."""
-    from bioplausible.core.trainer import CoreTrainer, TrainerConfig
+    """Run a single training session using SystemTrainer (unified interface)."""
+    from bioplausible.core.system_trainer import SystemTrainer, SystemTrainerConfig
+    from bioplausible.core.registry import Registry
+    from bioplausible.domains.factory import create_task
 
-    config = TrainerConfig(
-        model=args.model,
-        model_kwargs={"hidden_dim": args.hidden_dim} if args.hidden_dim else {},
-        optimizer=args.optimizer,
-        optimizer_kwargs={"lr": args.lr} if args.lr else {},
-        task=args.task,
-        epochs=args.epochs,
+    task = create_task(args.task, device=args.device, quick_mode=False)
+    task.batch_size = args.batch_size
+    task.setup()
+
+    trainer_config = SystemTrainerConfig(
+        max_epochs=args.epochs,
         batch_size=args.batch_size,
-        track_energy=not args.no_track_energy,
         device=args.device,
+        grad_clip=1.0,
+        track_energy=not args.no_track_energy,
+        track_flops=True,
+        track_memory=True,
+        log_every_n_steps=100,
+        seed=42,
     )
 
-    trainer = CoreTrainer(config)
+    system = Registry.to_system(
+        args.model,
+        input_dim=task.input_dim or 0,
+        hidden_dim=args.hidden_dim if args.hidden_dim else 256,
+        output_dim=task.output_dim,
+        num_layers=2,
+    )
+
+    trainer = SystemTrainer(
+        system=system,
+        config=trainer_config,
+        train_data=task.get_dataloader("train"),
+        val_data=task.get_dataloader("val"),
+    )
+
     history = trainer.fit()
 
     if history:
         final = history[-1]
         logger.info(
             "Results: Train Acc=%.4f, Val Acc=%.4f",
-            final.train_acc,
-            final.val_acc,
+            final.get("train_acc", 0.0),
+            final.get("val_acc", 0.0),
         )
 
 
 def run_from_yaml(args):
-    """Run training from a YAML config file."""
-    from bioplausible.core.trainer import CoreTrainer
+    """Run training from a YAML config file (flat preset format)."""
+    import torch
+    from omegaconf import OmegaConf
+    from bioplausible.core.ontology import PredictiveSettlingDynamics
+    from bioplausible.core.system_trainer import SystemTrainer, SystemTrainerConfig
+    from bioplausible.domains.factory import create_task
 
-    trainer = CoreTrainer.from_yaml(args.config)
+    # Load YAML config
+    cfg = OmegaConf.load(args.config)
+    config = OmegaConf.to_container(cfg, resolve=True)
+
+    # Extract components from flat YAML
+    substrate_cfg = config.get("substrate", {})
+    geometry_cfg = config.get("geometry", {})
+    dynamics_cfg = config.get("dynamics", {})
+    plasticity_cfg = config.get("plasticity", {})
+    credit_cfg = config.get("credit", {})
+    update_cfg = config.get("update", {})
+    training_cfg = config.get("training", {})
+
+    # Get training params
+    device = training_cfg.get("device", "auto")
+    if device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    epochs = training_cfg.get("max_epochs", 10)
+    batch_size = training_cfg.get("batch_size", 64)
+    task_name = training_cfg.get("task", "mnist")
+
+    # Create task and data loaders
+    task = create_task(task_name, device=device, quick_mode=False)
+    task.batch_size = batch_size
+    task.setup()
+
+    # Wrap data loaders to flatten input
+    from torch.utils.data import DataLoader
+
+    class _FlattenLoader:
+        """Wrapper that flattens input tensors from a DataLoader."""
+
+        def __init__(self, loader: DataLoader):
+            self.loader = loader
+
+        def __iter__(self):
+            for x, y in self.loader:
+                if x.dim() > 2:
+                    x = x.view(x.size(0), -1)
+                yield x, y
+
+        def __len__(self) -> int:
+            return len(self.loader)
+
+    train_loader = _FlattenLoader(task.get_dataloader("train"))
+    val_loader = _FlattenLoader(task.get_dataloader("val"))
+
+    # Build system from flat config
+    system = _build_system_from_flat_config(
+        substrate_cfg, geometry_cfg, dynamics_cfg, plasticity_cfg, credit_cfg, update_cfg, device
+    )
+
+    # Create trainer
+    trainer_config = SystemTrainerConfig(
+        max_epochs=epochs,
+        batch_size=batch_size,
+        device=device,
+        grad_clip=training_cfg.get("grad_clip", 1.0),
+        track_energy=training_cfg.get("track_energy", True),
+        track_flops=training_cfg.get("track_flops", True),
+        track_memory=training_cfg.get("track_memory", True),
+        log_every_n_steps=training_cfg.get("log_every_n_steps", 100),
+        seed=training_cfg.get("seed", 42),
+        deterministic=training_cfg.get("deterministic", False),
+    )
+
+    trainer = SystemTrainer(
+        system=system,
+        config=trainer_config,
+        train_data=train_loader,
+        val_data=val_loader,
+    )
+
     history = trainer.fit()
 
     if history:
         final = history[-1]
         logger.info(
             "Results: Train Acc=%.4f, Val Acc=%.4f",
-            final.train_acc,
-            final.val_acc,
+            final.get("train_acc", final.get("val_acc", 0.0)),
+            final.get("val_acc", 0.0),
         )
+
+
+def _build_system_from_flat_config(substrate_cfg, geometry_cfg, dynamics_cfg, plasticity_cfg, credit_cfg, update_cfg, device):
+    """Build a System or JointSystem from flat YAML config."""
+    import dataclasses
+    import torch
+
+    from bioplausible.core.ontology import (
+        BackpropCredit,
+        CreditAssignmentConfig,
+        DigitalSubstrate,
+        EnergyMinimizationDynamics,
+        EuclideanUpdate,
+        FeedforwardGeometry,
+        GeometryConfig,
+        InstantaneousDynamics,
+        ParameterUpdateConfig,
+        RandomProjectionsCredit,
+        RecurrentGeometry,
+        StateDynamicsConfig,
+        SubstrateConfig,
+        ThermodynamicContrast,
+    )
+    from bioplausible.core.plasticity import (
+        FastWeightPlasticity,
+        FastWeightPlasticityConfig,
+        NullPlasticity,
+        RoutingPlasticity,
+        RoutingPlasticityConfig,
+    )
+    from bioplausible.core.system_trainer import compose_joint_system, compose_system
+
+    # Build substrate
+    substrate_precision = substrate_cfg.get("precision", "float32")
+    substrate = DigitalSubstrate(
+        SubstrateConfig(
+            precision=substrate_precision,
+            noise_level=substrate_cfg.get("noise_level", 0.0),
+            weight_bounds=substrate_cfg.get("weight_bounds"),
+            sparsity=substrate_cfg.get("sparsity", 0.0),
+            device=device,
+        )
+    )
+
+    # Build geometry
+    geo_type = geometry_cfg.get("type", "feedforward")
+    if geo_type == "recurrent":
+        geometry = RecurrentGeometry(
+            GeometryConfig.recurrent(
+                input_dim=geometry_cfg["input_dim"],
+                output_dim=geometry_cfg["output_dim"],
+                hidden_dims=tuple(geometry_cfg["hidden_dims"]),
+                init_scale=geometry_cfg.get("init_scale", 0.1),
+            ),
+            hidden_dim=geometry_cfg["hidden_dims"][-1] if geometry_cfg["hidden_dims"] else geometry_cfg["output_dim"],
+        )
+    else:
+        geometry = FeedforwardGeometry(
+            GeometryConfig.feedforward(
+                input_dim=geometry_cfg["input_dim"],
+                output_dim=geometry_cfg["output_dim"],
+                hidden_dims=tuple(geometry_cfg["hidden_dims"]),
+                init_scale=geometry_cfg.get("init_scale", 0.1),
+            )
+        )
+
+    # Build dynamics
+    dyn_type = dynamics_cfg.get("type", "instantaneous")
+    if dyn_type == "energy_minimization":
+        dynamics = EnergyMinimizationDynamics(
+            StateDynamicsConfig.energy_minimization(
+                max_steps=dynamics_cfg.get("max_steps", 20),
+                convergence_threshold=dynamics_cfg.get("convergence_threshold", 1e-4),
+                convergence_start=dynamics_cfg.get("convergence_start", 5),
+                step_size=dynamics_cfg.get("step_size", 0.1),
+                beta=dynamics_cfg.get("beta", 0.5),
+                momentum=dynamics_cfg.get("momentum", 0.0),
+                track_free_energy_per_iter=dynamics_cfg.get("track_free_energy_per_iter", False),
+            )
+        )
+    elif dyn_type == "predictive_settling":
+        dynamics = PredictiveSettlingDynamics(
+            StateDynamicsConfig.predictive_settling(
+                max_steps=dynamics_cfg.get("max_steps", 20),
+                convergence_threshold=dynamics_cfg.get("convergence_threshold", 1e-4),
+                convergence_start=dynamics_cfg.get("convergence_start", 5),
+                step_size=dynamics_cfg.get("step_size", 0.1),
+                beta=dynamics_cfg.get("beta", 0.5),
+                momentum=dynamics_cfg.get("momentum", 0.0),
+                track_free_energy_per_iter=dynamics_cfg.get("track_free_energy_per_iter", False),
+            )
+        )
+    else:
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+
+    # Build credit
+    credit_type = credit_cfg.get("type", "backprop")
+    if credit_type == "thermodynamic_contrast":
+        credit = ThermodynamicContrast(
+            CreditAssignmentConfig(
+                credit_type="thermodynamic_contrast",
+                beta=credit_cfg.get("beta", 0.5),
+                feedback_matrix=None,
+                local_objective=credit_cfg.get("local_objective", "mse"),
+                orthogonal_init=credit_cfg.get("orthogonal_init", False),
+                feedback_scale=credit_cfg.get("feedback_scale", 0.01),
+            )
+        )
+    elif credit_type == "random_projections":
+        credit = RandomProjectionsCredit(
+            CreditAssignmentConfig(
+                credit_type="random_projections",
+                beta=credit_cfg.get("beta", 0.5),
+                feedback_matrix=None,
+                local_objective=credit_cfg.get("local_objective", "mse"),
+                orthogonal_init=credit_cfg.get("orthogonal_init", False),
+                feedback_scale=credit_cfg.get("feedback_scale", 0.01),
+            )
+        )
+    else:
+        credit = BackpropCredit(
+            CreditAssignmentConfig(
+                credit_type="gradient",
+                beta=0.5,
+                feedback_matrix=None,
+                local_objective="mse",
+                orthogonal_init=False,
+                feedback_scale=0.01,
+            )
+        )
+
+    # Build update
+    update_type = update_cfg.get("type", "euclidean")
+    if update_type == "euclidean":
+        update = EuclideanUpdate(
+            ParameterUpdateConfig.euclidean(
+                step_size=update_cfg.get("step_size", 0.01),
+                momentum=update_cfg.get("momentum", 0.9),
+                ortho_steps=update_cfg.get("ortho_steps", 5),
+                spectral_norm=update_cfg.get("spectral_norm", 1.0),
+                fisher_damping=update_cfg.get("fisher_damping", 1e-3),
+                ewc_lambda=update_cfg.get("ewc_lambda", 1000.0),
+            )
+        )
+    else:
+        update = EuclideanUpdate(
+            ParameterUpdateConfig.euclidean(
+                step_size=update_cfg.get("step_size", 0.01),
+                momentum=update_cfg.get("momentum", 0.9),
+                ortho_steps=update_cfg.get("ortho_steps", 5),
+                spectral_norm=update_cfg.get("spectral_norm", 1.0),
+                fisher_damping=update_cfg.get("fisher_damping", 1e-3),
+                ewc_lambda=update_cfg.get("ewc_lambda", 1000.0),
+            )
+        )
+
+    # Build plasticity
+    plast_type = plasticity_cfg.get("type", "null")
+    if plast_type == "routing":
+        plasticity = RoutingPlasticity(
+            RoutingPlasticityConfig(
+                gate_dim=plasticity_cfg.get("gate_dim", 64),
+                temperature=plasticity_cfg.get("temperature", 1.0),
+                top_k=plasticity_cfg.get("top_k"),
+                decay=plasticity_cfg.get("decay", 0.99),
+                learning_rate=plasticity_cfg.get("learning_rate", 0.01),
+            )
+        )
+    elif plast_type == "fast_weights":
+        plasticity = FastWeightPlasticity(
+            FastWeightPlasticityConfig(
+                fast_weight_dim=plasticity_cfg.get("fast_weight_dim", 512),
+                decay=plasticity_cfg.get("decay", 0.9),
+                learning_rate=plasticity_cfg.get("learning_rate", 0.1),
+                outer_product_scale=plasticity_cfg.get("outer_product_scale", 1.0),
+            )
+        )
+    else:
+        plasticity = NullPlasticity()
+
+    # Check if plasticity is null - use 5-D system, else use 6-D joint system
+    if isinstance(plasticity, NullPlasticity):
+        return compose_system(substrate, geometry, dynamics, credit, update)
+    else:
+        return compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)
 
 
 def list_models(_args):

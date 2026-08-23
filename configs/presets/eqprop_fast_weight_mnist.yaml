@@ -1,0 +1,68 @@
+# EqProp with FastWeightPlasticity on MNIST - 6-D coordinate
+substrate:
+  type: digital
+  precision: float32
+  noise_level: 0.0
+  weight_bounds: null
+  sparsity: 0.0
+  device: auto
+
+geometry:
+  type: recurrent
+  input_dim: 784
+  output_dim: 10
+  hidden_dims: [256, 128]
+  num_layers: 2
+  topology_type: recurrent
+  connectivity: null
+  recurrent_weight: null
+  init_scale: 0.1
+
+dynamics:
+  type: energy_minimization
+  max_steps: 20
+  convergence_threshold: 1e-4
+  convergence_start: 5
+  step_size: 0.1
+  beta: 0.5
+  momentum: 0.0
+  track_free_energy_per_iter: false
+
+plasticity:
+  type: fast_weights
+  fast_weight_dim: 512
+  decay: 0.9
+  learning_rate: 0.1
+  outer_product_scale: 1.0
+
+credit:
+  type: thermodynamic_contrast
+  beta: 0.5
+  feedback_matrix: null
+  local_objective: mse
+  orthogonal_init: false
+  feedback_scale: 0.01
+
+update:
+  type: euclidean
+  step_size: 0.01
+  momentum: 0.9
+  ortho_steps: 5
+  spectral_norm: 1.0
+  fisher_damping: 1e-3
+  ewc_lambda: 1000.0
+
+training:
+  max_epochs: 10
+  batch_size: 64
+  val_batch_size: 64
+  lr: 0.01
+  device: auto
+  grad_clip: 1.0
+  track_energy: true
+  track_flops: true
+  track_memory: true
+  log_every_n_steps: 100
+
+seed: 42
+deterministic: false

@@ -41,8 +41,8 @@ class TestLyapunovStability:
         torch.manual_seed(42)
 
         # Create symmetric recurrent weights
-        config = GeometryConfig(
-            input_dim=10, output_dim=5, hidden_dims=(20,), topology_type="recurrent"
+        config = GeometryConfig.recurrent(
+            input_dim=10, output_dim=5, hidden_dims=(20,), init_scale=0.1
         )
         geometry = RecurrentGeometry(config, hidden_dim=20)
 
@@ -53,11 +53,13 @@ class TestLyapunovStability:
 
         substrate = DigitalSubstrate()
         dynamics = EnergyMinimizationDynamics(
-            StateDynamicsConfig(
-                dynamics_type="energy_minimization",
+            StateDynamicsConfig.energy_minimization(
                 max_steps=100,
                 convergence_threshold=1e-5,
+                convergence_start=5,
+                step_size=0.1,
                 beta=0.5,
+                track_free_energy_per_iter=False,
             )
         )
 
@@ -84,8 +86,8 @@ class TestLyapunovStability:
         """Energy strictly decreases during settling (unless at fixed point)."""
         torch.manual_seed(123)
 
-        config = GeometryConfig(
-            input_dim=8, output_dim=3, hidden_dims=(16,), topology_type="recurrent"
+        config = GeometryConfig.recurrent(
+            input_dim=8, output_dim=3, hidden_dims=(16,), init_scale=0.1
         )
         geometry = RecurrentGeometry(config, hidden_dim=16)
 
@@ -96,11 +98,13 @@ class TestLyapunovStability:
 
         substrate = DigitalSubstrate()
         dynamics = EnergyMinimizationDynamics(
-            StateDynamicsConfig(
-                dynamics_type="energy_minimization",
+            StateDynamicsConfig.energy_minimization(
                 max_steps=50,
                 convergence_threshold=1e-6,
+                convergence_start=5,
+                step_size=0.1,
                 beta=0.5,
+                track_free_energy_per_iter=False,
             )
         )
 
@@ -134,15 +138,17 @@ class TestControlLyapunovStability:
         torch.manual_seed(42)
 
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=5, hidden_dims=(20, 15))
+            GeometryConfig.feedforward(input_dim=10, output_dim=5, hidden_dims=(20, 15))
         )
         substrate = DigitalSubstrate()
         dynamics = PredictiveSettlingDynamics(
-            StateDynamicsConfig(
-                dynamics_type="predictive_settling",
+            StateDynamicsConfig.predictive_settling(
                 max_steps=30,
                 convergence_threshold=1e-3,
+                convergence_start=5,
                 step_size=0.01,
+                beta=0.5,
+                track_free_energy_per_iter=False,
             )
         )
 
@@ -170,14 +176,17 @@ class TestControlLyapunovStability:
         torch.manual_seed(42)
 
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=5, hidden_dims=(20,))
+            GeometryConfig.feedforward(input_dim=10, output_dim=5, hidden_dims=(20,))
         )
         substrate = DigitalSubstrate()
         dynamics = PredictiveSettlingDynamics(
-            StateDynamicsConfig(
-                dynamics_type="predictive_settling",
+            StateDynamicsConfig.predictive_settling(
                 max_steps=50,
+                convergence_threshold=1e-4,
+                convergence_start=5,
                 step_size=0.1,
+                beta=0.5,
+                track_free_energy_per_iter=False,
             )
         )
 
@@ -211,15 +220,16 @@ class TestControlLyapunovStability:
         torch.manual_seed(123)
 
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=5, hidden_dims=(20, 15))
+            GeometryConfig.feedforward(input_dim=10, output_dim=5, hidden_dims=(20, 15))
         )
         substrate = DigitalSubstrate()
         dynamics = PredictiveSettlingDynamics(
-            StateDynamicsConfig(
-                dynamics_type="predictive_settling",
+            StateDynamicsConfig.predictive_settling(
                 max_steps=50,
                 convergence_threshold=1e-4,
+                convergence_start=5,
                 step_size=0.01,  # Smaller step for stability
+                beta=0.5,
                 track_free_energy_per_iter=True,  # Enable tracking
             )
         )
@@ -264,14 +274,16 @@ class TestControlLyapunovStability:
         torch.manual_seed(456)
 
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=5, hidden_dims=(20,))
+            GeometryConfig.feedforward(input_dim=10, output_dim=5, hidden_dims=(20,))
         )
         substrate = DigitalSubstrate()
         dynamics = PredictiveSettlingDynamics(
-            StateDynamicsConfig(
-                dynamics_type="predictive_settling",
+            StateDynamicsConfig.predictive_settling(
                 max_steps=40,
+                convergence_threshold=1e-4,
+                convergence_start=5,
                 step_size=0.02,
+                beta=0.5,
                 track_free_energy_per_iter=True,
             )
         )
@@ -309,14 +321,16 @@ class TestControlLyapunovStability:
         torch.manual_seed(789)
 
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=8, output_dim=3, hidden_dims=(16,))
+            GeometryConfig.feedforward(input_dim=8, output_dim=3, hidden_dims=(16,))
         )
         substrate = DigitalSubstrate()
         dynamics = PredictiveSettlingDynamics(
-            StateDynamicsConfig(
-                dynamics_type="predictive_settling",
+            StateDynamicsConfig.predictive_settling(
                 max_steps=30,
+                convergence_threshold=1e-4,
+                convergence_start=5,
                 step_size=0.1,
+                beta=0.5,
                 track_free_energy_per_iter=True,
             )
         )
@@ -395,15 +409,18 @@ class TestSubstratePassivity:
 
     def test_neuromorphic_substrate_sparsity(self):
         """NeuromorphicSubstrate maintains sparsity."""
-        substrate = NeuromorphicSubstrate(SubstrateConfig(sparsity=0.9))
+        # Use zero noise to test pure spike dropout sparsity
+        substrate = NeuromorphicSubstrate(
+            SubstrateConfig.neuromorphic(noise_level=0.0, device="cpu")
+        )
 
         s = torch.ones(100, 100)
         noisy = substrate.inject_state_noise(s)
 
-        # Sparsity should be approximately maintained
+        # Sparsity should be approximately maintained by spike dropout
         sparsity = (noisy == 0).float().mean().item()
-        # With sparsity=0.9 and noise, expect ~90% zeros
-        assert sparsity > 0.5  # Relaxed due to noise addition
+        # With sparsity=0.95, expect ~95% zeros
+        assert sparsity > 0.5  # Relaxed due to randomness
 
 
 class TestEqPropEnergyEquivalence:
@@ -418,8 +435,8 @@ class TestEqPropEnergyEquivalence:
         torch.manual_seed(42)
 
         geometry = RecurrentGeometry(
-            GeometryConfig(
-                input_dim=10, output_dim=5, hidden_dims=(20,), topology_type="recurrent"
+            GeometryConfig.recurrent(
+                input_dim=10, output_dim=5, hidden_dims=(20,), init_scale=0.1
             ),
             hidden_dim=20,
         )
@@ -431,10 +448,13 @@ class TestEqPropEnergyEquivalence:
 
         substrate = DigitalSubstrate()
         dynamics = EnergyMinimizationDynamics(
-            StateDynamicsConfig(
-                dynamics_type="energy_minimization",
+            StateDynamicsConfig.energy_minimization(
                 max_steps=30,
+                convergence_threshold=1e-4,
+                convergence_start=5,
+                step_size=0.1,
                 beta=0.5,
+                track_free_energy_per_iter=False,
             )
         )
 
@@ -471,14 +491,18 @@ class TestGradientEquivalence:
         )
 
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=5, hidden_dims=(20,))
+            GeometryConfig.feedforward(input_dim=10, output_dim=5, hidden_dims=(20,))
         )
         substrate = DigitalSubstrate()
-        dynamics = InstantaneousDynamics()
-        update = EuclideanUpdate(ParameterUpdateConfig(step_size=0.01))
+        dynamics = InstantaneousDynamics(
+            StateDynamicsConfig.instantaneous()
+        )
+        update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
 
         # System 1: ThermodynamicContrast with large β
-        credit_tc = ThermodynamicContrast(CreditAssignmentConfig(beta=100.0))
+        credit_tc = ThermodynamicContrast(
+            CreditAssignmentConfig.thermodynamic_contrast(beta=100.0)
+        )
         system_tc = compose_system(substrate, geometry, dynamics, credit_tc, update)
 
         # System 2: BackpropCredit
@@ -507,23 +531,26 @@ class TestEnergyInvariantComposition:
         system = compose_system(
             substrate=DigitalSubstrate(),
             geometry=RecurrentGeometry(
-                GeometryConfig(
+                GeometryConfig.recurrent(
                     input_dim=10,
                     output_dim=5,
                     hidden_dims=(20,),
-                    topology_type="recurrent",
+                    init_scale=0.1,
                 ),
                 hidden_dim=20,
             ),
             dynamics=EnergyMinimizationDynamics(
-                StateDynamicsConfig(
-                    dynamics_type="energy_minimization",
+                StateDynamicsConfig.energy_minimization(
                     max_steps=30,
+                    convergence_threshold=1e-4,
+                    convergence_start=5,
+                    step_size=0.1,
                     beta=0.5,
+                    track_free_energy_per_iter=False,
                 )
             ),
             credit=ThermodynamicContrast(),
-            update=EuclideanUpdate(ParameterUpdateConfig(step_size=0.01)),
+            update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01)),
         )
 
         x = torch.randn(4, 10)

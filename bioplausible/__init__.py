@@ -16,6 +16,16 @@ Or using native models:
     system = native_eqprop_mlp(input_dim=784, hidden_dim=256, output_dim=10)
     # Use with SystemTrainer
 
+One-Line System Construction:
+    from bioplausible import create_backprop_mlp, create_eqprop_mlp, create_fa_mlp
+    from bioplausible import create_routing_mlp, create_fast_weight_mlp
+
+    system = create_backprop_mlp(input_dim=784, hidden_dims=(256, 128), output_dim=10)
+    system = create_eqprop_mlp(input_dim=784, hidden_dims=(256, 128), output_dim=10, beta=0.5, n_iters=20)
+    system = create_fa_mlp(input_dim=784, hidden_dims=(256, 128), output_dim=10)
+    system = create_routing_mlp(input_dim=784, hidden_dims=(256, 128), output_dim=10)
+    system = create_fast_weight_mlp(input_dim=784, hidden_dims=(256, 128), output_dim=10)
+
 Two-Tier Propagator / Model Architecture:
 ----------------------------------------
 The zoo provides two complementary interfaces for bio-plausible learning:
@@ -41,19 +51,91 @@ compatibility alias map to the model-side registration
 
 __version__ = "1.0.0"
 
-# Lazy top-level API (Sprint 0.5 module-boundary hardening). `import
-# bioplausible` no longer eagerly pulls the entire zoo (torchvision, lightning,
-# optuna, ...): names are imported on first attribute access via __getattr__,
-# so a lightweight consumer (e.g. ``import bioplausible.core.registry``) stays
-# fast and dependency-slim. Side-effect model registration is preserved because
-# importing any zoo symbol triggers ``bioplausible.zoo`` (which imports all
-# components); consumers that need a registered model must import it (or
-# ``bioplausible.zoo``) explicitly.
+# Eager imports for core API (always available)
+from bioplausible.core.ontology import (
+    # Core 5-D ontology
+    System,
+    DigitalSubstrate,
+    AnalogSubstrate,
+    MemristiveSubstrate,
+    NeuromorphicSubstrate,
+    OpticalSubstrate,
+    QuantumSubstrate,
+    FeedforwardGeometry,
+    RecurrentGeometry,
+    TileGeometry,
+    GeometryConfig,
+    InstantaneousDynamics,
+    EnergyMinimizationDynamics,
+    PredictiveSettlingDynamics,
+    SpikeIntegrationDynamics,
+    StateDynamicsConfig,
+    BackpropCredit,
+    ThermodynamicContrast,
+    ThermodynamicContrastCredit,  # alias
+    RandomProjectionsCredit,
+    LocalGoodnessCredit,
+    TemporalTraceCredit,
+    TargetInversionCredit,
+    CreditAssignmentConfig,
+    EuclideanUpdate,
+    RiemannianOrthogonalUpdate,
+    SpectralConstrainedUpdate,
+    NaturalGradientUpdate,
+    ElasticConsolidationUpdate,
+    ParameterUpdateConfig,
+    SubstrateConfig,
+    SystemState,
+    SystemConfig,
+)
 
+from bioplausible.core.plasticity import (
+    # Plasticity primitives
+    NullPlasticity,
+    PlasticityConfig,
+    RoutingPlasticity,
+    FastWeightPlasticity,
+    SubstrateCoupledPlasticity,
+    RuleStatePlasticity,
+)
+
+from bioplausible.core.joint import (
+    # Joint 6-D architecture
+    CompositeState,
+    StateRegistry,
+    SystemContext,
+    CoupledTransition,
+)
+
+from bioplausible.core.presets import (
+    # Preset factories (5-D)
+    create_backprop_mlp,
+    create_eqprop_mlp,
+    create_fa_mlp,
+    # Preset factories (6-D)
+    create_routing_mlp,
+    create_fast_weight_mlp,
+)
+
+from bioplausible.core.system_trainer import (
+    # System composition (5-D and 6-D)
+    compose_system,
+    compose_system_from_configs,
+    extract_config,
+    compose_joint_system,
+    compose_joint_system_from_configs,
+    # Core system factories
+    create_backprop_system,
+    create_eqprop_system,
+    create_fa_system,
+    # Trainers
+    SystemTrainer,
+    SystemTrainerConfig,
+)
+
+# Lazy imports for heavy dependencies (zoo, experiment, config)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
 _LAZY: dict[str, tuple[str, str | None]] = {
-    "SystemTrainer": ("bioplausible.core.system_trainer", "SystemTrainer"),
-    "SystemTrainerConfig": ("bioplausible.core.system_trainer", "SystemTrainerConfig"),
     "ExperimentConfig": ("bioplausible.config.experiment", "ExperimentConfig"),
     "ModelConfig": ("bioplausible.config.experiment", "ModelConfig"),
     "TrainingConfig": ("bioplausible.config.experiment", "TrainingConfig"),
@@ -108,7 +190,74 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "smep_fast": ("bioplausible.zoo.mep.presets", "smep_fast"),
 }
 
-__all__ = ["__version__"]
+__all__ = [
+    "__version__",
+    # Core 5-D ontology
+    "System",
+    "DigitalSubstrate",
+    "AnalogSubstrate",
+    "MemristiveSubstrate",
+    "NeuromorphicSubstrate",
+    "OpticalSubstrate",
+    "QuantumSubstrate",
+    "FeedforwardGeometry",
+    "RecurrentGeometry",
+    "TileGeometry",
+    "GeometryConfig",
+    "InstantaneousDynamics",
+    "EnergyMinimizationDynamics",
+    "PredictiveSettlingDynamics",
+    "SpikeIntegrationDynamics",
+    "StateDynamicsConfig",
+    "BackpropCredit",
+    "ThermodynamicContrast",
+    "ThermodynamicContrastCredit",
+    "RandomProjectionsCredit",
+    "LocalGoodnessCredit",
+    "TemporalTraceCredit",
+    "TargetInversionCredit",
+    "CreditAssignmentConfig",
+    "EuclideanUpdate",
+    "RiemannianOrthogonalUpdate",
+    "SpectralConstrainedUpdate",
+    "NaturalGradientUpdate",
+    "ElasticConsolidationUpdate",
+    "ParameterUpdateConfig",
+    "SubstrateConfig",
+    "SystemState",
+    "SystemConfig",
+    # 5-D factories
+    "compose_system",
+    "compose_system_from_configs",
+    "extract_config",
+    "create_backprop_system",
+    "create_eqprop_system",
+    "create_fa_system",
+    # Joint 6-D architecture
+    "CompositeState",
+    "StateRegistry",
+    "SystemContext",
+    "CoupledTransition",
+    "NullPlasticity",
+    "PlasticityConfig",
+    "RoutingPlasticity",
+    "FastWeightPlasticity",
+    "SubstrateCoupledPlasticity",
+    "RuleStatePlasticity",
+    # 6-D factories
+    "compose_joint_system",
+    "compose_joint_system_from_configs",
+    # Preset factories (5-D)
+    "create_backprop_mlp",
+    "create_eqprop_mlp",
+    "create_fa_mlp",
+    # Preset factories (6-D)
+    "create_routing_mlp",
+    "create_fast_weight_mlp",
+    # Trainers
+    "SystemTrainer",
+    "SystemTrainerConfig",
+]
 
 
 # ruff: file-ignore[raise-vanilla-args]

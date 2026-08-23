@@ -1,13 +1,13 @@
-"""
-CLI Lab for Verification and Inspection
-"""
+"""CLI Lab for Verification and Inspection"""
 
 import argparse
-from typing import cast
+import logging
 
 import torch
 from torch import nn
 
+# Import zoo models to trigger registration
+import bioplausible.zoo  # ruff: ignore[unused-import]  # triggers model registration
 from bioplausible.core.logging import get_logger
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.core.utils.device import get_device
@@ -60,7 +60,7 @@ def inspect_model(args):
         # LM models that expose `embed` expect integer token ids — task.get_batch
         # already returns those ids, so forward handles the embedding internally.
         # Non-LM models may receive raw features; flatten spatially for MLPs.
-        if x.dim() > 2 and "Conv" not in args.model:  # ruff: ignore[magic-value-comparison]  # flatten >2D feature tensors for MLPs
+        if x.dim() > 2 and "Conv" not in args.model:
             x = x.view(x.size(0), -1)
 
         try:
@@ -68,8 +68,18 @@ def inspect_model(args):
             # Move system geometry to device if needed
             if hasattr(system.geometry, "to"):
                 system.geometry.to(device)
-            out = system.forward(x)
-        except RuntimeError, ValueError, TypeError:
+            # System.forward signature depends on whether it's a native System (requires substrate)
+            # or an _AdaptedSystem (delegates to model.forward without substrate).
+            # Try with substrate first (native 5-D System), fall back to no substrate (adapted).
+            from bioplausible.core.ontology import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+            try:
+                out = system.forward(x, substrate)
+            except TypeError:
+                # _AdaptedSystem.forward only takes x
+                out = system.forward(x)
+        except (RuntimeError, ValueError, TypeError):
             logger.exception("Forward pass failed for model %s", args.model)
             return
         logger.info("[OK]  Forward pass successful. Output shape: %s", out.shape)
@@ -81,9 +91,11 @@ def main():
 
     inspect = subparsers.add_parser("inspect", help="Inspect a model architecture")
     inspect.add_argument("--model", required=True, help="Model name")
-    inspect.add_argument("--task", default="vision", help="Task type")
+    inspect.add_argument("--task", default="mnist", help="Task type (e.g., mnist, cifar10)")
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
 
     if args.command == "inspect":
         inspect_model(args)

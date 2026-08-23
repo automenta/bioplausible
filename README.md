@@ -61,10 +61,10 @@ system = System(
 **6-D joint systems** — with non-null plasticity:
 ```python
 # RoutingPlasticity: state-dependent gating, sparse pathways
-joint_routing = System(..., plasticity=PlasticityConfig.routing(gate_init_scale=0.1))
+joint_routing = System(..., plasticity=PlasticityConfig.routing(gate_dim=64))
 
 # FastWeightPlasticity: episode-local associative memory
-joint_fast_weight = System(..., plasticity=PlasticityConfig.fast_weights(decay=0.95, lr=0.1))
+joint_fast_weight = System(..., plasticity=PlasticityConfig.fast_weights(fast_weight_dim=512, decay=0.9, learning_rate=0.1))
 
 # SubstrateCoupledPlasticity: physical memristive drift
 memristive_plastic = System(..., plasticity=PlasticityConfig.substrate_coupled())
