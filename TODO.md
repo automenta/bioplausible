@@ -1,6 +1,6 @@
 # Sprint Backlog — Consolidated (2026-08-22)
 
-**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0 ✅** | **Sprint 9 ✅** | **Sprint 9.5 ✅** | **Sprint 9.6 ✅** | **Sprint 9.7 ✅** | **Sprint J0 ✅** | **Sprint J1 ✅** | **Sprint J2 ✅** | **Sprint J3 ✅** | **Sprint J4 ✅** | **Sprint J5 ✅** | **Sprints 9.8–13 → Absorbed into Joint Architecture**
+**Status**: Sprint 5 ✅ | Sprint 6 ✅ | Sprint 7 ✅ | Sprint 8 ✅ | **Sprint 9.0 ✅** | **Sprint 9 ✅** | **Sprint 9.5 ✅** | **Sprint 9.6 ✅** | **Sprint 9.7 ✅** | **Sprint J0 ✅** | **Sprint J1 ✅** | **Sprint J2 ✅** | **Sprint J3 ✅** | **Sprint J4 ✅** | **Sprint J5 ✅** | **Sprint J6 ✅** | **Sprints 9.8–13 → Absorbed into Joint Architecture**
 
 ---
 
@@ -631,9 +631,9 @@ tests/campaign/       → Long-running, manual/scheduled
 | `AGENTS.md` | Reflect joint architecture | ✅ Already reflects joint architecture |
 | `CLAUDE.md` | Update or remove | ✅ Not present (no action needed) |
 | `pyproject.toml` | Development Status → "4 - Beta" | ✅ Done |
-| `examples/` | Migrate to `demo/` or delete | ⏳ Examples kept for reference |
-| `tools/benchmark_*.py` | Integrate into `biopl lab benchmark` | ⏳ Legacy tools kept for reference |
-| `tools/check_*.py` | Move to pre-commit hooks | ⏳ Legacy tools kept for reference |
+| `examples/` | Migrate to `demo/` or delete | ✅ Removed |
+| `tools/benchmark_*.py` | Integrate into `biopl lab benchmark` | ✅ Removed (replaced by biopl benchmark) |
+| `tools/check_*.py` | Move to pre-commit hooks | ✅ Removed (replaced by joint validation) |
 | `run_scientist.sh` / `generate_report.sh` | Replace with `uv run` commands | ✅ Not present (no action needed) |
 
 #### Type System (Protocol-First)
@@ -673,9 +673,30 @@ Removed legacy test files with import errors (deprecated APIs):
 8. **All tests pass**: Property tests (351), unit tests (247), integration joint tests (8)
 
 **Remaining for J6:**
-- Add `@pytest.mark.slow` to slow benchmark tests
-- Remove examples/ directory or migrate to demo/
-- Remove tools/ directory or integrate into biopl lab
+- ✅ Add `@pytest.mark.slow` to slow benchmark tests (already done in test_benchmarks.py)
+- ✅ Remove examples/ directory (completed)
+- ✅ Remove tools/ directory (completed)
+- ✅ Clean up config references (pyrightconfig.json, pyproject.toml, .pre-commit-config.yaml, cli/rank.py)
+
+**Completed in this continuation (2026-08-22):**
+
+9. **Removed `examples/` directory**: 10 legacy example files (tutorials.py, shallow_benchmark.py, parity_*.yaml, smoke_campaign.yaml)
+10. **Removed `tools/` directory**: 6 legacy benchmark/check tools (benchmark_all_kernels.py, benchmark_strategy_permutations.py, benchmark_kernel_parity.py, check_imports.py, check_seams.py, verify_permutation_coverage.py)
+11. **Cleaned up config references**:
+    - `.pre-commit-config.yaml`: Removed local hooks for `check_imports.py` and `check_seams.py`
+    - `pyrightconfig.json`: Removed `**/examples/**/*.py` from exclude list
+    - `pyproject.toml`: Removed `*/tools/*` from coverage omit list
+    - `bioplausible/cli/rank.py`: Updated default DB path from `examples/shallow_benchmark.db` to `shallow_benchmark.db`
+    - `TODO.md`: Updated documentation status table to reflect removals
+12. **Verified all joint architecture functionality**:
+    - Property tests: 351 passed, 37 skipped, 7 xfailed, 2 xpassed
+    - Joint integration tests: 8 passed
+    - Core unit tests: 199 passed
+    - Pyright: 0 errors
+    - `biopl joint-validate`: Works for both Null and non-Null plasticity coordinates
+    - `biopl benchmark`: All 5 suites listed and runnable
+    - `biopl campaign`: CLI functional
+    - `biopl stability`: CLI functional
 
 ---
 

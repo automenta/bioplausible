@@ -73,7 +73,6 @@
     "**/env",
     "**/tests/**/test_*.py",
     "**/tests/conftest.py",
-    "**/examples/**/*.py",
     "**/scripts/**/*.py",
     "**/docs/**/*.py",
     "**/bioplausible/tests/**/*.py"

@@ -171,7 +171,6 @@ omit = [
     "*/validation/*",
     "*/cli/*",
     "*/experiments/*",
-    "*/tools/*",
 ]
 
 [tool.ruff]

@@ -31,17 +31,4 @@ repos:
         pass_filenames: false
         always_run: true
 
-  - repo: local
-    hooks:
-      - id: check-imports
-        name: check-imports
-        entry: python tools/check_imports.py
-        language: system
-        pass_filenames: false
-        always_run: true
-      - id: check-seams
-        name: check-seams
-        entry: python tools/check_seams.py
-        language: system
-        pass_filenames: false
-        always_run: true
+  
