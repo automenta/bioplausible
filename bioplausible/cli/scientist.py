@@ -21,10 +21,14 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="biopl scientist",
         description="AutoScientist: Autonomous 6-D architecture exploration",
     )
-    subparsers = parser.add_subparsers(dest="subcommand", help="AutoScientist subcommand")
+    subparsers = parser.add_subparsers(
+        dest="subcommand", help="AutoScientist subcommand"
+    )
 
     # explore - run autonomous campaign
-    explore_parser = subparsers.add_parser("explore", help="Run autonomous exploration campaign")
+    explore_parser = subparsers.add_parser(
+        "explore", help="Run autonomous exploration campaign"
+    )
     explore_parser.add_argument(
         "--space",
         required=True,
@@ -68,9 +72,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # list - list campaigns
     list_parser = subparsers.add_parser("list", help="List campaigns")
-    list_parser.add_argument(
-        "--format", choices=["table", "json"], default="table"
-    )
+    list_parser.add_argument("--format", choices=["table", "json"], default="table")
     list_parser.add_argument("--db", help="SQLite database path")
 
     # show - show campaign details
@@ -100,12 +102,8 @@ def _build_parser() -> argparse.ArgumentParser:
     hypothesis_parser.add_argument(
         "--list", action="store_true", help="List available templates"
     )
-    hypothesis_parser.add_argument(
-        "--show", help="Show template details"
-    )
-    hypothesis_parser.add_argument(
-        "--run", help="Run experiment from template"
-    )
+    hypothesis_parser.add_argument("--show", help="Show template details")
+    hypothesis_parser.add_argument("--run", help="Run experiment from template")
 
     return parser
 
@@ -127,10 +125,33 @@ SEARCH_SPACES = {
     "joint_full": {
         "substrate": ["digital", "memristive", "neuromorphic", "optical", "quantum"],
         "geometry": ["feedforward", "recurrent", "tile_mesh"],
-        "dynamics": ["instantaneous", "energy_minimization", "predictive_settling", "spike_integration"],
-        "plasticity": ["null", "routing", "fast_weights", "substrate_coupled", "rule_state"],
-        "credit": ["backprop", "thermodynamic_contrast", "random_projections", "local_goodness", "temporal_trace"],
-        "update": ["euclidean", "riemannian_orthogonal", "spectral_constrained", "natural_gradient", "elastic_consolidation"],
+        "dynamics": [
+            "instantaneous",
+            "energy_minimization",
+            "predictive_settling",
+            "spike_integration",
+        ],
+        "plasticity": [
+            "null",
+            "routing",
+            "fast_weights",
+            "substrate_coupled",
+            "rule_state",
+        ],
+        "credit": [
+            "backprop",
+            "thermodynamic_contrast",
+            "random_projections",
+            "local_goodness",
+            "temporal_trace",
+        ],
+        "update": [
+            "euclidean",
+            "riemannian_orthogonal",
+            "spectral_constrained",
+            "natural_gradient",
+            "elastic_consolidation",
+        ],
     },
     "joint_routing": {
         "substrate": ["digital", "memristive", "neuromorphic"],
@@ -156,10 +177,12 @@ def _get_search_space(space_name: str) -> dict[str, list[str]]:
     return SEARCH_SPACES.get(space_name, SEARCH_SPACES["joint_smoke"])
 
 
-def _generate_coordinates(space: dict[str, list[str]], n: int, method: str = "random") -> list[str]:
+def _generate_coordinates(
+    space: dict[str, list[str]], n: int, method: str = "random"
+) -> list[str]:
     """Generate coordinates to test."""
-    import random
     import itertools
+    import random
 
     # Generate all combinations
     all_combos = list(itertools.product(*space.values()))
@@ -207,6 +230,7 @@ def _run_experiment(coordinate: str, objective: str, device: str) -> dict:
 
         # Parse results from JSON
         import json
+
         result_file = Path("temp_experiment/adaptation_efficiency_results.json")
         if result_file.exists():
             with result_file.open() as f:
@@ -263,12 +287,14 @@ def _explore(args) -> int:
 
     results = []
     for i, coord in enumerate(coordinates):
-        print(f"\n[{i+1}/{len(coordinates)}] Testing: {coord}")
+        print(f"\n[{i + 1}/{len(coordinates)}] Testing: {coord}")
         result = _run_experiment(coord, args.objective, args.device)
         results.append(result)
 
         if result["success"]:
-            print(f"  ✓ Accuracy: {result.get('accuracy', 0):.4f}, Adapt time: {result.get('adaptation_time', 0):.1f}")
+            print(
+                f"  ✓ Accuracy: {result.get('accuracy', 0):.4f}, Adapt time: {result.get('adaptation_time', 0):.1f}"
+            )
         else:
             print(f"  ✗ Error: {result.get('error', 'Unknown')}")
 
@@ -317,11 +343,15 @@ def _list_campaigns(args) -> int:
     if args.format == "json":
         print(json.dumps(campaigns, indent=2))
     else:
-        print(f"{'Campaign ID':<12} {'Space':<15} {'Objective':<20} {'Budget':<8} {'Status'}")
+        print(
+            f"{'Campaign ID':<12} {'Space':<15} {'Objective':<20} {'Budget':<8} {'Status'}"
+        )
         print("-" * 80)
         for c in campaigns:
             n_success = sum(1 for r in c["results"] if r.get("success"))
-            print(f"{c['campaign_id']:<12} {c['space']:<15} {c['objective']:<20} {c['budget']:<8} {n_success}/{len(c['results'])}")
+            print(
+                f"{c['campaign_id']:<12} {c['space']:<15} {c['objective']:<20} {c['budget']:<8} {n_success}/{len(c['results'])}"
+            )
 
     return 0
 
@@ -352,7 +382,9 @@ def _show_campaign(args) -> int:
 
     if "frontier" in args.include and successful:
         print("\n--- Pareto Frontier (top 5) ---")
-        sorted_results = sorted(successful, key=lambda x: x.get("objective_value", 0), reverse=True)
+        sorted_results = sorted(
+            successful, key=lambda x: x.get("objective_value", 0), reverse=True
+        )
         for r in sorted_results[:5]:
             print(f"  {r['coordinate']}: {r.get('objective_value', 0):.4f}")
 
@@ -390,7 +422,9 @@ def _pareto_campaign(args) -> int:
     # Multi-objective Pareto (simplified)
     objectives = args.objectives
     if len(objectives) == 1:
-        sorted_results = sorted(successful, key=lambda x: x.get(objectives[0], 0), reverse=True)
+        sorted_results = sorted(
+            successful, key=lambda x: x.get(objectives[0], 0), reverse=True
+        )
         print(f"Top 10 by {objectives[0]}:")
         for r in sorted_results[:10]:
             print(f"  {r['coordinate']}: {r.get(objectives[0], 0):.4f}")
@@ -432,7 +466,20 @@ Does changing substrate from {base_substrate} to {test_substrate} improve {objec
 - {objective} improvement > {threshold}%
 - No stability degradation (ρ(J) < 1.0)
 """,
-        "parameters": ["base_substrate", "test_substrate", "geometry", "dynamics", "plasticity", "credit", "update", "objective", "budget", "seeds", "reason", "threshold"],
+        "parameters": [
+            "base_substrate",
+            "test_substrate",
+            "geometry",
+            "dynamics",
+            "plasticity",
+            "credit",
+            "update",
+            "objective",
+            "budget",
+            "seeds",
+            "reason",
+            "threshold",
+        ],
     },
     "credit_swap": {
         "name": "Credit Assignment Swap",
@@ -456,7 +503,19 @@ Does {test_credit} outperform {base_credit} on {substrate} substrate?
 - {objective} improvement > {threshold}%
 - Gradient alignment > {alignment_threshold}
 """,
-        "parameters": ["base_credit", "test_credit", "substrate", "geometry", "dynamics", "plasticity", "update", "objective", "budget", "threshold", "alignment_threshold"],
+        "parameters": [
+            "base_credit",
+            "test_credit",
+            "substrate",
+            "geometry",
+            "dynamics",
+            "plasticity",
+            "update",
+            "objective",
+            "budget",
+            "threshold",
+            "alignment_threshold",
+        ],
     },
     "plasticity_search": {
         "name": "Plasticity Search",
@@ -481,7 +540,18 @@ Does {test_plasticity} plasticity improve {objective} over null plasticity?
 - Adaptation time reduction > {time_threshold}%
 - No catastrophic forgetting
 """,
-        "parameters": ["test_plasticity", "substrate", "geometry", "dynamics", "credit", "update", "objective", "budget", "threshold", "time_threshold"],
+        "parameters": [
+            "test_plasticity",
+            "substrate",
+            "geometry",
+            "dynamics",
+            "credit",
+            "update",
+            "objective",
+            "budget",
+            "threshold",
+            "time_threshold",
+        ],
     },
     "stability_frontier": {
         "name": "Stability Frontier",

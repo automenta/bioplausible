@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import plotly.graph_objects as go
@@ -26,14 +25,15 @@ from plotly.subplots import make_subplots
 @dataclass(frozen=True, slots=True)
 class JointTrajectory:
     """Joint training trajectory data."""
+
     activity: list[dict[str, list]]  # Per-step activity tensors per layer
-    plastic: list[dict[str, list]]   # Per-step plastic state
-    substrate: list[dict[str, list]] # Per-step substrate state
-    energy: list[float]              # Energy per step
-    loss: list[float]                # Loss per step
-    spectral_radius: list[float]     # ρ(J_F) per step
+    plastic: list[dict[str, list]]  # Per-step plastic state
+    substrate: list[dict[str, list]]  # Per-step substrate state
+    energy: list[float]  # Energy per step
+    loss: list[float]  # Loss per step
+    spectral_radius: list[float]  # ρ(J_F) per step
     gate_entropy: list[float] | None = None  # Gate entropy for routing
-    accuracy: list[float] | None = None      # Accuracy per step
+    accuracy: list[float] | None = None  # Accuracy per step
 
 
 def compute_gate_entropy(gate_logits: np.ndarray) -> float:
@@ -55,7 +55,7 @@ def compute_spectral_radius_proxy(activations: dict[str, np.ndarray]) -> float:
 
 def load_trajectory(filepath: Path) -> JointTrajectory:
     """Load trajectory from JSON file."""
-    with open(filepath) as f:
+    with Path(filepath).open() as f:
         data = json.load(f)
     traj_data = data.get("trajectory", {})
     return JointTrajectory(
@@ -70,7 +70,9 @@ def load_trajectory(filepath: Path) -> JointTrajectory:
     )
 
 
-def save_trajectory(traj: JointTrajectory, filepath: Path, coordinate: dict | None = None):
+def save_trajectory(
+    traj: JointTrajectory, filepath: Path, coordinate: dict | None = None
+):
     """Save trajectory to JSON file."""
     data = {
         "coordinate": coordinate or {},
@@ -85,7 +87,7 @@ def save_trajectory(traj: JointTrajectory, filepath: Path, coordinate: dict | No
             "accuracy": traj.accuracy,
         },
     }
-    with open(filepath, "w") as f:
+    with Path(filepath).open("w") as f:
         json.dump(data, f, indent=2)
 
 
@@ -112,12 +114,17 @@ def plot_training_dynamics(
     coord_str = "/".join(coordinate.values()) if coordinate else "Unknown"
 
     fig = make_subplots(
-        rows=4, cols=2,
+        rows=4,
+        cols=2,
         subplot_titles=(
-            "Energy Evolution", "Loss Evolution",
-            "Activity Norms (per layer)", "Plastic State Evolution",
-            "Substrate State Evolution", "Spectral Radius ρ(J_F)",
-            "Gate Entropy (Routing)", "Accuracy / Metrics",
+            "Energy Evolution",
+            "Loss Evolution",
+            "Activity Norms (per layer)",
+            "Plastic State Evolution",
+            "Substrate State Evolution",
+            "Spectral Radius ρ(J_F)",
+            "Gate Entropy (Routing)",
+            "Accuracy / Metrics",
         ),
         vertical_spacing=0.08,
         specs=[
@@ -130,8 +137,16 @@ def plot_training_dynamics(
 
     # Color palette
     colors = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
     ]
 
     # 1. Energy Evolution
@@ -144,7 +159,8 @@ def plot_training_dynamics(
             line=dict(color=colors[0], width=2),
             marker=dict(size=6),
         ),
-        row=1, col=1,
+        row=1,
+        col=1,
     )
 
     # 2. Loss Evolution
@@ -157,7 +173,8 @@ def plot_training_dynamics(
             line=dict(color=colors[1], width=2),
             marker=dict(size=6),
         ),
-        row=1, col=2,
+        row=1,
+        col=2,
     )
 
     # 3. Activity Norms
@@ -181,7 +198,8 @@ def plot_training_dynamics(
                     line=dict(color=colors[i % len(colors)], width=1.5),
                     showlegend=True,
                 ),
-                row=2, col=1,
+                row=2,
+                col=1,
             )
 
     # 4. Plastic State Evolution
@@ -202,10 +220,13 @@ def plot_training_dynamics(
                     y=norms,
                     name=f"Plastic: {var_name}",
                     mode="lines",
-                    line=dict(color=colors[(i + 3) % len(colors)], width=1.5, dash="dot"),
+                    line=dict(
+                        color=colors[(i + 3) % len(colors)], width=1.5, dash="dot"
+                    ),
                     showlegend=True,
                 ),
-                row=2, col=2,
+                row=2,
+                col=2,
             )
 
     # 5. Substrate State Evolution
@@ -226,10 +247,13 @@ def plot_training_dynamics(
                     y=norms,
                     name=f"Substrate: {var_name}",
                     mode="lines",
-                    line=dict(color=colors[(i + 5) % len(colors)], width=1.5, dash="dash"),
+                    line=dict(
+                        color=colors[(i + 5) % len(colors)], width=1.5, dash="dash"
+                    ),
                     showlegend=True,
                 ),
-                row=3, col=1,
+                row=3,
+                col=1,
             )
 
     # 6. Spectral Radius
@@ -242,7 +266,8 @@ def plot_training_dynamics(
             line=dict(color=colors[2], width=2),
             marker=dict(size=6, symbol="diamond"),
         ),
-        row=3, col=2,
+        row=3,
+        col=2,
     )
 
     # 7. Gate Entropy (if available)
@@ -256,7 +281,8 @@ def plot_training_dynamics(
                 line=dict(color=colors[3], width=2),
                 marker=dict(size=6, symbol="square"),
             ),
-            row=4, col=1,
+            row=4,
+            col=1,
         )
 
     # 8. Accuracy / Additional Metrics
@@ -270,7 +296,8 @@ def plot_training_dynamics(
                 line=dict(color=colors[4], width=2),
                 marker=dict(size=6, symbol="triangle-up"),
             ),
-            row=4, col=2,
+            row=4,
+            col=2,
         )
 
     # Layout
@@ -334,14 +361,23 @@ def plot_plasticity_comparison(
     n_rows = (n_metrics + n_cols - 1) // n_cols
 
     fig = make_subplots(
-        rows=n_rows, cols=n_cols,
+        rows=n_rows,
+        cols=n_cols,
         subplot_titles=[m.replace("_", " ").title() for m in metrics],
         vertical_spacing=0.1,
     )
 
     colors = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
     ]
 
     for i, metric in enumerate(metrics):
@@ -364,7 +400,8 @@ def plot_plasticity_comparison(
                     marker=dict(size=5),
                     showlegend=(i == 0),  # Only show legend once
                 ),
-                row=row, col=col,
+                row=row,
+                col=col,
             )
 
     fig.update_layout(
@@ -424,10 +461,12 @@ def plot_fast_weight_heatmap(
     # Create frames for animation
     frames = []
     for i in range(steps):
-        frames.append(go.Frame(
-            data=[go.Heatmap(z=fw_grid[i], colorscale="RdBu", zmid=0)],
-            name=str(i),
-        ))
+        frames.append(
+            go.Frame(
+                data=[go.Heatmap(z=fw_grid[i], colorscale="RdBu", zmid=0)],
+                name=str(i),
+            )
+        )
 
     fig = go.Figure(
         data=[go.Heatmap(z=fw_grid[0], colorscale="RdBu", zmid=0)],
@@ -437,22 +476,56 @@ def plot_fast_weight_heatmap(
     fig.update_layout(
         title=title,
         template="plotly_white",
-        updatemenus=[{
-            "type": "buttons",
-            "showactive": False,
-            "buttons": [
-                {"label": "Play", "method": "animate", "args": [None, {"frame": {"duration": 200, "redraw": True}, "fromcurrent": True}]},
-                {"label": "Pause", "method": "animate", "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate"}]},
-            ],
-        }],
-        sliders=[{
-            "steps": [
-                {"args": [[str(i)], {"frame": {"duration": 0, "redraw": True}, "mode": "immediate"}],
-                 "label": str(i), "method": "animate"} for i in range(steps)
-            ],
-            "active": 0,
-            "transition": {"duration": 0},
-        }],
+        updatemenus=[
+            {
+                "type": "buttons",
+                "showactive": False,
+                "buttons": [
+                    {
+                        "label": "Play",
+                        "method": "animate",
+                        "args": [
+                            None,
+                            {
+                                "frame": {"duration": 200, "redraw": True},
+                                "fromcurrent": True,
+                            },
+                        ],
+                    },
+                    {
+                        "label": "Pause",
+                        "method": "animate",
+                        "args": [
+                            [None],
+                            {
+                                "frame": {"duration": 0, "redraw": False},
+                                "mode": "immediate",
+                            },
+                        ],
+                    },
+                ],
+            }
+        ],
+        sliders=[
+            {
+                "steps": [
+                    {
+                        "args": [
+                            [str(i)],
+                            {
+                                "frame": {"duration": 0, "redraw": True},
+                                "mode": "immediate",
+                            },
+                        ],
+                        "label": str(i),
+                        "method": "animate",
+                    }
+                    for i in range(steps)
+                ],
+                "active": 0,
+                "transition": {"duration": 0},
+            }
+        ],
     )
 
     if save_html:
@@ -480,7 +553,8 @@ def plot_resource_usage(
     n_rows = (n_metrics + n_cols - 1) // n_cols
 
     fig = make_subplots(
-        rows=n_rows, cols=n_cols,
+        rows=n_rows,
+        cols=n_cols,
         subplot_titles=list(resource_data.keys()),
         vertical_spacing=0.1,
     )
@@ -501,7 +575,8 @@ def plot_resource_usage(
                 line=dict(color=colors[i % len(colors)], width=2),
                 marker=dict(size=6),
             ),
-            row=row, col=col,
+            row=row,
+            col=col,
         )
 
     fig.update_layout(
@@ -542,28 +617,39 @@ if __name__ == "__main__":
     steps = 50
     trajectory = JointTrajectory(
         activity=[
-            {"layer_0": np.random.randn(32, 256).tolist(), "layer_1": np.random.randn(32, 128).tolist()}
+            {
+                "layer_0": np.random.randn(32, 256).tolist(),
+                "layer_1": np.random.randn(32, 128).tolist(),
+            }
             for _ in range(steps)
         ],
         plastic=[
-            {"gate_logits": np.random.randn(32, 64).tolist(), "active_routes": np.random.randn(32, 64).tolist()}
+            {
+                "gate_logits": np.random.randn(32, 64).tolist(),
+                "active_routes": np.random.randn(32, 64).tolist(),
+            }
             for _ in range(steps)
         ],
         substrate=[
-            {"conductance": np.random.randn(32, 256).tolist()}
-            for _ in range(steps)
+            {"conductance": np.random.randn(32, 256).tolist()} for _ in range(steps)
         ],
-        energy=[10.0 * np.exp(-i/10) + np.random.randn() * 0.1 for i in range(steps)],
-        loss=[2.0 * np.exp(-i/15) + np.random.randn() * 0.05 for i in range(steps)],
-        spectral_radius=[0.95 + 0.03 * np.sin(i/5) for i in range(steps)],
-        gate_entropy=[np.log(64) * (1 - np.exp(-i/10)) for i in range(steps)],
-        accuracy=[0.1 + 0.8 * (1 - np.exp(-i/10)) for i in range(steps)],
+        energy=[10.0 * np.exp(-i / 10) + np.random.randn() * 0.1 for i in range(steps)],
+        loss=[2.0 * np.exp(-i / 15) + np.random.randn() * 0.05 for i in range(steps)],
+        spectral_radius=[0.95 + 0.03 * np.sin(i / 5) for i in range(steps)],
+        gate_entropy=[np.log(64) * (1 - np.exp(-i / 10)) for i in range(steps)],
+        accuracy=[0.1 + 0.8 * (1 - np.exp(-i / 10)) for i in range(steps)],
     )
 
     fig = plot_training_dynamics(
         trajectory,
-        coordinate={"substrate": "digital", "geometry": "recurrent", "dynamics": "energy_minimization",
-                   "plasticity": "routing", "credit": "thermo", "update": "euclidean"},
+        coordinate={
+            "substrate": "digital",
+            "geometry": "recurrent",
+            "dynamics": "energy_minimization",
+            "plasticity": "routing",
+            "credit": "thermo",
+            "update": "euclidean",
+        },
         save_html="demo_training_dynamics.html",
     )
     print("Demo plot saved to demo_training_dynamics.html")

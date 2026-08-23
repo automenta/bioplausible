@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Protocol, TypeVar
 import torch
 from torch import Tensor
 
+from bioplausible.core.joint.context import SystemContext
+from bioplausible.core.joint.state import StateVariable
 from bioplausible.core.joint.transition import PlasticityConfig, PlasticityPrimitive
 from bioplausible.core.logging import get_logger
 from bioplausible.core.ontology import (
@@ -31,11 +33,10 @@ from bioplausible.core.ontology import (
     System,
     SystemState,
 )
-from bioplausible.core.joint.context import SystemContext
-from bioplausible.core.joint.state import StateVariable
 
 if TYPE_CHECKING:
     from bioplausible.config.experiment import ExperimentConfig
+
 
 class JointSystem(Protocol):
     """Protocol for 6-D joint systems."""

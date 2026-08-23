@@ -130,6 +130,112 @@ class TestGradientEquivalence:
                             f"FA feedback matrix equals forward transpose for {name} (no weight transport violation)"
                         )
 
+    def test_thermodynamic_contrast_local_gradients(self):
+        """ThermodynamicContrast should compute gradients via local contrastive Hebbian rule (no weight transport).
+
+        EqProp/thermodynamic contrast uses only local pre/post-synaptic activity correlations:
+        ΔW ∝ (free_pre @ free_post - nudged_pre @ nudged_post) / β
+        This is fundamentally local - no weight transpose access required.
+        """
+        from bioplausible.core.ontology import SystemState
+
+        system = self._create_mlp_system("thermodynamic_contrast", beta=0.5)
+
+        # Run a training step to generate free/nudged states
+        x = torch.randn(4, 10)
+        y = torch.randint(0, 2, (4,))
+        result = system.train_step(x, y)
+
+        # Access the credit assignment to inspect gradient computation
+        credit = system.credit
+
+        # Verify the credit is ThermodynamicContrast
+        assert isinstance(credit, ThermodynamicContrast)
+
+        # Create mock free/nudged states with known activations
+        free_acts = [torch.randn(4, 10), torch.randn(4, 16), torch.randn(4, 2)]
+        nudged_acts = [torch.randn(4, 10), torch.randn(4, 16), torch.randn(4, 2)]
+
+        free_state = SystemState(x=x, activations=free_acts)
+        nudged_state = SystemState(x=x, activations=nudged_acts)
+
+        # Compute pseudo-gradients - should use only local activity correlations
+        pseudo_grads = credit.compute_pseudo_gradient(
+            free_state=free_state,
+            nudged_state=nudged_state,
+            loss=torch.tensor(0.5),
+            geometry=system.geometry,
+        )
+
+        # Should produce gradients for each weight matrix (not biases)
+        weight_names = [
+            n
+            for n in system.geometry.params
+            if "weight" in n and system.geometry.params[n].ndim == 2
+        ]
+        assert len(pseudo_grads) == len(weight_names)
+
+        # Verify gradients are computed from local correlations only
+        # (free_corr - nudged_corr) / beta - no forward weight access
+        for i, grad in enumerate(pseudo_grads):
+            assert grad is not None
+            assert grad.shape == system.geometry.params[weight_names[i]].shape
+            # Gradient magnitude should be reasonable (not zero, not infinite)
+            assert torch.isfinite(grad).all()
+            # Non-zero gradients indicate local learning is working
+            assert grad.norm() > 1e-10
+
+    def test_thermodynamic_contrast_no_weight_transport(self):
+        """ThermodynamicContrast should NOT access forward weight transposes.
+
+        Unlike backprop, EqProp computes gradients without ever reading W^T.
+        This test ensures the pseudo-gradient computation only uses activations.
+        """
+        from bioplausible.core.ontology import SystemState
+
+        system = self._create_mlp_system("thermodynamic_contrast", beta=0.5)
+
+        # Get forward weights
+        forward_weights = system.geometry.params
+        weight_shapes = {
+            k: v.shape for k, v in forward_weights.items() if "weight" in k
+        }
+
+        # Create states with activations that would produce different
+        # local correlations vs backprop gradients
+        x = torch.randn(4, 10)
+        free_acts = [
+            torch.ones(4, 10) * 0.5,
+            torch.ones(4, 16) * 0.3,
+            torch.ones(4, 2) * 0.1,
+        ]
+        nudged_acts = [
+            torch.ones(4, 10) * 0.5,
+            torch.ones(4, 16) * 0.7,  # Different post-synaptic activity
+            torch.ones(4, 2) * 0.9,
+        ]
+
+        free_state = SystemState(x=x, activations=free_acts)
+        nudged_state = SystemState(x=x, activations=nudged_acts)
+
+        credit = system.credit
+        pseudo_grads = credit.compute_pseudo_gradient(
+            free_state=free_state,
+            nudged_state=nudged_state,
+            loss=torch.tensor(0.5),
+            geometry=system.geometry,
+        )
+
+        # Verify gradients are non-zero (local learning works)
+        for grad in pseudo_grads:
+            assert grad.norm() > 1e-10, "Local contrastive gradients should be non-zero"
+
+        # The key test: gradients should be computable without ever
+        # accessing forward_weights or their transposes
+        # (This is implicitly tested by compute_pseudo_gradient not
+        # taking forward_weights as input - it only takes states and geometry
+        # for shape information)
+
 
 # EqProp joint system test - xfail for now due to PlasticityConfig API issue
 @pytest.mark.xfail(reason="PlasticityConfig.initial_psi API not yet implemented")

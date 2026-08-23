@@ -7,6 +7,7 @@ for any valid 6-D coordinate combination.
 import pytest
 import torch
 
+from bioplausible.core.joint.transition import NullPlasticity, PlasticityConfig
 from bioplausible.core.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
@@ -17,7 +18,6 @@ from bioplausible.core.ontology import (
     GeometryConfig,
     InstantaneousDynamics,
     ParameterUpdateConfig,
-    PredictiveSettlingDynamics,
     RandomProjectionsCredit,
     RecurrentGeometry,
     StateDynamicsConfig,
@@ -26,16 +26,14 @@ from bioplausible.core.ontology import (
 )
 from bioplausible.core.plasticity.fast_weights import create_fast_weight_plasticity
 from bioplausible.core.plasticity.routing import create_routing_plasticity
-from bioplausible.core.joint.transition import NullPlasticity, PlasticityConfig
 from bioplausible.core.system_trainer import compose_joint_system
 from tests.property._support import (
-    BATCH,
     BITWISE,
     DEPTH,
     WIDTH,
     enable_deterministic_cuda,
-    select_device,
     seeded,
+    select_device,
     tiny_batch,
 )
 
@@ -88,12 +86,15 @@ def _make_6d_system(coordinate: dict, device: str = "cpu") -> object:
     # Dynamics
     if dynamics_type == "energy_minimization":
         dynamics = EnergyMinimizationDynamics(
-            StateDynamicsConfig.energy_minimization(max_steps=10, beta=0.5, step_size=0.1)
+            StateDynamicsConfig.energy_minimization(
+                max_steps=10, beta=0.5, step_size=0.1
+            )
         )
     elif dynamics_type == "instantaneous":
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     elif dynamics_type == "predictive_settling":
         from bioplausible.core.ontology import PredictiveSettlingDynamics
+
         dynamics = PredictiveSettlingDynamics(
             StateDynamicsConfig.predictive_settling(max_steps=10, step_size=0.1)
         )
@@ -106,7 +107,9 @@ def _make_6d_system(coordinate: dict, device: str = "cpu") -> object:
     elif plasticity_type == "routing":
         plasticity = create_routing_plasticity(PlasticityConfig.routing(gate_dim=64))
     elif plasticity_type == "fast_weights":
-        plasticity = create_fast_weight_plasticity(PlasticityConfig.fast_weights(fast_weight_dim=512))
+        plasticity = create_fast_weight_plasticity(
+            PlasticityConfig.fast_weights(fast_weight_dim=512)
+        )
     else:
         raise ValueError(f"Unknown plasticity: {plasticity_type}")
 
@@ -114,7 +117,9 @@ def _make_6d_system(coordinate: dict, device: str = "cpu") -> object:
     if credit_type == "backprop":
         credit = BackpropCredit(CreditAssignmentConfig.gradient())
     elif credit_type == "thermodynamic_contrast":
-        credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5))
+        credit = ThermodynamicContrast(
+            CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+        )
     elif credit_type == "random_projections":
         credit = RandomProjectionsCredit(CreditAssignmentConfig.random_projections())
     else:
@@ -126,7 +131,9 @@ def _make_6d_system(coordinate: dict, device: str = "cpu") -> object:
     else:
         raise ValueError(f"Unknown update: {update_type}")
 
-    return compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)
+    return compose_joint_system(
+        substrate, geometry, dynamics, plasticity, credit, update
+    )
 
 
 def _run_train_step(system, x, y):
@@ -143,19 +150,89 @@ def _run_train_step(system, x, y):
 
 VALID_6D_COORDINATES = [
     # Standard combinations (null plasticity = 5-D equivalence)
-    {"substrate": "digital", "geometry": "feedforward", "dynamics": "instantaneous", "plasticity": "null", "credit": "backprop", "update": "euclidean"},
-    {"substrate": "digital", "geometry": "feedforward", "dynamics": "instantaneous", "plasticity": "null", "credit": "thermodynamic_contrast", "update": "euclidean"},
-    {"substrate": "digital", "geometry": "feedforward", "dynamics": "instantaneous", "plasticity": "null", "credit": "random_projections", "update": "euclidean"},
-    {"substrate": "digital", "geometry": "recurrent", "dynamics": "energy_minimization", "plasticity": "null", "credit": "thermodynamic_contrast", "update": "euclidean"},
+    {
+        "substrate": "digital",
+        "geometry": "feedforward",
+        "dynamics": "instantaneous",
+        "plasticity": "null",
+        "credit": "backprop",
+        "update": "euclidean",
+    },
+    {
+        "substrate": "digital",
+        "geometry": "feedforward",
+        "dynamics": "instantaneous",
+        "plasticity": "null",
+        "credit": "thermodynamic_contrast",
+        "update": "euclidean",
+    },
+    {
+        "substrate": "digital",
+        "geometry": "feedforward",
+        "dynamics": "instantaneous",
+        "plasticity": "null",
+        "credit": "random_projections",
+        "update": "euclidean",
+    },
+    {
+        "substrate": "digital",
+        "geometry": "recurrent",
+        "dynamics": "energy_minimization",
+        "plasticity": "null",
+        "credit": "thermodynamic_contrast",
+        "update": "euclidean",
+    },
     # With routing plasticity
-    {"substrate": "digital", "geometry": "recurrent", "dynamics": "energy_minimization", "plasticity": "routing", "credit": "thermodynamic_contrast", "update": "euclidean"},
-    {"substrate": "digital", "geometry": "feedforward", "dynamics": "instantaneous", "plasticity": "routing", "credit": "backprop", "update": "euclidean"},
+    {
+        "substrate": "digital",
+        "geometry": "recurrent",
+        "dynamics": "energy_minimization",
+        "plasticity": "routing",
+        "credit": "thermodynamic_contrast",
+        "update": "euclidean",
+    },
+    {
+        "substrate": "digital",
+        "geometry": "feedforward",
+        "dynamics": "instantaneous",
+        "plasticity": "routing",
+        "credit": "backprop",
+        "update": "euclidean",
+    },
     # With fast weights plasticity
-    {"substrate": "digital", "geometry": "recurrent", "dynamics": "energy_minimization", "plasticity": "fast_weights", "credit": "thermodynamic_contrast", "update": "euclidean"},
-    {"substrate": "digital", "geometry": "feedforward", "dynamics": "instantaneous", "plasticity": "fast_weights", "credit": "backprop", "update": "euclidean"},
+    {
+        "substrate": "digital",
+        "geometry": "recurrent",
+        "dynamics": "energy_minimization",
+        "plasticity": "fast_weights",
+        "credit": "thermodynamic_contrast",
+        "update": "euclidean",
+    },
+    {
+        "substrate": "digital",
+        "geometry": "feedforward",
+        "dynamics": "instantaneous",
+        "plasticity": "fast_weights",
+        "credit": "backprop",
+        "update": "euclidean",
+    },
     # With predictive settling dynamics
-    {"substrate": "digital", "geometry": "feedforward", "dynamics": "predictive_settling", "plasticity": "null", "credit": "thermodynamic_contrast", "update": "euclidean"},
-    {"substrate": "digital", "geometry": "recurrent", "dynamics": "predictive_settling", "plasticity": "null", "credit": "thermodynamic_contrast", "update": "euclidean"},
+    {
+        "substrate": "digital",
+        "geometry": "feedforward",
+        "dynamics": "predictive_settling",
+        "plasticity": "null",
+        "credit": "thermodynamic_contrast",
+        "update": "euclidean",
+    },
+    {
+        "substrate": "digital",
+        "geometry": "recurrent",
+        "dynamics": "predictive_settling",
+        "plasticity": "null",
+        "credit": "thermodynamic_contrast",
+        "update": "euclidean",
+    },
 ]
 
 
@@ -200,11 +277,16 @@ def test_l5_determinism_lock_6d(coordinate):
         x, y = tiny_batch(42)
         metrics2, params2 = _run_train_step(sys2, x, y)
 
-    assert _metrics_equal(metrics1, metrics2, BITWISE), f"Metrics differ for {_coordinate_id(coordinate)}"
-    assert _params_equal(params1, params2, BITWISE), f"Params differ for {_coordinate_id(coordinate)}"
+    assert _metrics_equal(metrics1, metrics2, BITWISE), (
+        f"Metrics differ for {_coordinate_id(coordinate)}"
+    )
+    assert _params_equal(params1, params2, BITWISE), (
+        f"Params differ for {_coordinate_id(coordinate)}"
+    )
 
     # GPU with deterministic settings (may skip if op lacks deterministic impl)
     if torch.cuda.is_available():
+
         def _run_gpu():
             enable_deterministic_cuda()
             with seeded(42):
@@ -219,15 +301,21 @@ def test_l5_determinism_lock_6d(coordinate):
 
         try:
             metrics3, params3 = _run_gpu()
-            assert _metrics_equal(metrics1, metrics3, BITWISE), f"GPU metrics differ for {_coordinate_id(coordinate)}"
-            assert _params_equal(params1, params3, BITWISE), f"GPU params differ for {_coordinate_id(coordinate)}"
+            assert _metrics_equal(metrics1, metrics3, BITWISE), (
+                f"GPU metrics differ for {_coordinate_id(coordinate)}"
+            )
+            assert _params_equal(params1, params3, BITWISE), (
+                f"GPU params differ for {_coordinate_id(coordinate)}"
+            )
         except RuntimeError as e:
             if "deterministic" in str(e).lower():
                 pytest.skip(f"GPU deterministic op not available: {e}")
             raise
 
 
-def _params_equal(a: dict[str, torch.Tensor], b: dict[str, torch.Tensor], tol: dict | int = BITWISE) -> bool:
+def _params_equal(
+    a: dict[str, torch.Tensor], b: dict[str, torch.Tensor], tol: dict | int = BITWISE
+) -> bool:
     """Compare two parameter dicts."""
     if set(a.keys()) != set(b.keys()):
         return False
@@ -240,7 +328,9 @@ def _params_equal(a: dict[str, torch.Tensor], b: dict[str, torch.Tensor], tol: d
     return True
 
 
-def _metrics_equal(a: dict[str, float], b: dict[str, float], tol: dict | int = BITWISE) -> bool:
+def _metrics_equal(
+    a: dict[str, float], b: dict[str, float], tol: dict | int = BITWISE
+) -> bool:
     """Compare two metrics dicts."""
     if set(a.keys()) != set(b.keys()):
         return False
@@ -287,12 +377,17 @@ def test_l5_determinism_multi_step_6d(coordinate):
 
     # Check each step's metrics
     for i, (m1, m2) in enumerate(zip(metrics1, metrics2)):
-        assert _metrics_equal(m1, m2, BITWISE), f"Step {i} metrics differ for {_coordinate_id(coordinate)}"
+        assert _metrics_equal(m1, m2, BITWISE), (
+            f"Step {i} metrics differ for {_coordinate_id(coordinate)}"
+        )
 
-    assert _params_equal(params1, params2, BITWISE), f"Final params differ for {_coordinate_id(coordinate)}"
+    assert _params_equal(params1, params2, BITWISE), (
+        f"Final params differ for {_coordinate_id(coordinate)}"
+    )
 
     # GPU test
     if torch.cuda.is_available():
+
         def _run_gpu_multi():
             enable_deterministic_cuda()
             return _run_multi_step(42)
@@ -300,8 +395,12 @@ def test_l5_determinism_multi_step_6d(coordinate):
         try:
             metrics3, params3 = _run_gpu_multi()
             for i, (m1, m3) in enumerate(zip(metrics1, metrics3)):
-                assert _metrics_equal(m1, m3, BITWISE), f"GPU step {i} metrics differ for {_coordinate_id(coordinate)}"
-            assert _params_equal(params1, params3, BITWISE), f"GPU final params differ for {_coordinate_id(coordinate)}"
+                assert _metrics_equal(m1, m3, BITWISE), (
+                    f"GPU step {i} metrics differ for {_coordinate_id(coordinate)}"
+                )
+            assert _params_equal(params1, params3, BITWISE), (
+                f"GPU final params differ for {_coordinate_id(coordinate)}"
+            )
         except RuntimeError as e:
             if "deterministic" in str(e).lower():
                 pytest.skip(f"GPU deterministic op not available: {e}")

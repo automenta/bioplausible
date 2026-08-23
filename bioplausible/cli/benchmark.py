@@ -89,11 +89,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "--epochs", type=int, default=10, help="Epochs per evaluation"
     )
     compare_parser.add_argument("--batch-size", type=int, default=64, help="Batch size")
-    compare_parser.add_argument("--device", default="auto", help="Device (auto, cpu, cuda)")
+    compare_parser.add_argument(
+        "--device", default="auto", help="Device (auto, cpu, cuda)"
+    )
     compare_parser.add_argument("--seeds", type=int, default=3, help="Number of seeds")
 
     # profile - kernel profiling
-    profile_parser = subparsers.add_parser("profile", help="Profile joint system kernels")
+    profile_parser = subparsers.add_parser(
+        "profile", help="Profile joint system kernels"
+    )
     profile_parser.add_argument(
         "--coordinate",
         required=True,
@@ -453,7 +457,9 @@ def _compare_plasticity(args) -> int:
     from pathlib import Path
 
     # Build coordinates for each plasticity type
-    base_coord = "digital/recurrent/energy_minimization/{}/thermodynamic_contrast/euclidean"
+    base_coord = (
+        "digital/recurrent/energy_minimization/{}/thermodynamic_contrast/euclidean"
+    )
     coordinates = [base_coord.format(p) for p in args.plast]
 
     output_dir = Path("benchmark_results") / "plasticity_compare"
@@ -502,7 +508,9 @@ def _compare_plasticity(args) -> int:
     return 0
 
 
-def _generate_plasticity_comparison_html(results_dir: Path, plast_types: list[str], output_path: str):
+def _generate_plasticity_comparison_html(
+    results_dir: Path, plast_types: list[str], output_path: str
+):
     """Generate HTML comparison report for plasticity types."""
     import json
 
@@ -552,11 +560,21 @@ def _generate_plasticity_comparison_html(results_dir: Path, plast_types: list[st
         if plast not in comparison_data:
             continue
         results = comparison_data[plast]
-        mean_acc = sum(r.get("mean_accuracy", 0) for r in results) / len(results) if results else 0
-        mean_rho = sum(
-            sum(s.get("rho_jacobian", 0) for s in r.get("seeds", [])) / max(len(r.get("seeds", [])), 1)
-            for r in results
-        ) / len(results) if results else 0
+        mean_acc = (
+            sum(r.get("mean_accuracy", 0) for r in results) / len(results)
+            if results
+            else 0
+        )
+        mean_rho = (
+            sum(
+                sum(s.get("rho_jacobian", 0) for s in r.get("seeds", []))
+                / max(len(r.get("seeds", [])), 1)
+                for r in results
+            )
+            / len(results)
+            if results
+            else 0
+        )
 
         html += f"""
         <div class="metric-card">

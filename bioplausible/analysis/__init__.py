@@ -68,16 +68,6 @@ from .tile_dynamics import (
     TileSplitter,
     create_dynamic_model,
 )
-from .training_dynamics import (
-    JointTrajectory,
-    load_trajectory,
-    plot_fast_weight_heatmap,
-    plot_joint_training_dynamics,
-    plot_plasticity_comparison,
-    plot_resource_usage,
-    plot_training_dynamics,
-    save_trajectory,
-)
 from .tile_profiler import (
     BenchmarkConfig,
     BenchmarkResult,
@@ -102,6 +92,16 @@ from .tile_research import (
     create_metric_collector,
     create_tracker,
     create_visualization_helper,
+)
+from .training_dynamics import (
+    JointTrajectory,
+    load_trajectory,
+    plot_fast_weight_heatmap,
+    plot_joint_training_dynamics,
+    plot_plasticity_comparison,
+    plot_resource_usage,
+    plot_training_dynamics,
+    save_trajectory,
 )
 
 __all__ = [

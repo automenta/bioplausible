@@ -366,6 +366,12 @@ biopl scientist explore --space joint_smoke --budget 5
 # 9. Benchmark comparison produces publication-ready figures
 biopl benchmark run --suite adaptation_efficiency
 biopl benchmark report --suite adaptation_efficiency --output plasticity_comparison.html
+
+# 10. Locality axiom tests pass (CI gate)
+uv run pytest tests/property/test_gradient_equivalence.py -v
+
+# 11. Empirical resource analysis works
+python -c "from bioplausible.core.profiling import analyze_joint_system; r = analyze_joint_system('digital/feedforward/instantaneous/null/thermo/euclidean', device='cpu'); print(f'FLOPs: {r.total_flops:,}, Latency: {r.wall_time_ms:.1f}ms')"
 ```
 
 ---
@@ -455,9 +461,9 @@ A developer (or AI agent) can:
 ### P4 - AI-Friendly (COMPLETED)
 - ✅ **Machine-readable API schema** (`scripts/generate_api_schema.py` → `api_schema.json`)
 
-### Remaining P3/P4 Tasks (Not Yet Started)
-- 🔄 Locality axiom tests (full: thermodynamic contrast invariance)
-- 🔄 Empirical resource analysis (FLOPs, nvml integration for `analyze_joint_system`)
+### Remaining P3/P4 Tasks (✅ COMPLETED 2026-08-23)
+- ✅ Locality axiom tests (full: thermodynamic contrast invariance) — Added `test_thermodynamic_contrast_local_gradients` and `test_thermodynamic_contrast_no_weight_transport` in `tests/property/test_gradient_equivalence.py`
+- ✅ Empirical resource analysis (FLOPs, nvml integration for `analyze_joint_system`) — Implemented in `bioplausible/core/profiling.py` with `count_flops_detailed`, `get_gpu_memory_mb`, `get_gpu_peak_memory_mb`, and `analyze_joint_system`
 
 ---
 
@@ -505,5 +511,15 @@ A developer (or AI agent) can:
 8. **PEPITA native model config bug — ✅ FIXED**: `create_native_pepita_mlp` in `pepita_native.py` passed incorrect args to `StateDynamicsConfig` (missing required positional args). Fixed by using `StateDynamicsConfig.instantaneous()`.
 
 9. **Create_fa_system num_layers logic**: Verified working for num_layers=2,3. The `max(num_layers - 1, 1)` convention matches `create_backprop_system`.
+
+10. **Locality axiom tests (L3) — ✅ COMPLETED 2026-08-23**: Added thermodynamic contrast invariance tests in `tests/property/test_gradient_equivalence.py`:
+    - `test_thermodynamic_contrast_local_gradients`: Verifies EqProp uses local contrastive Hebbian rule (free_corr - nudged_corr) / β
+    - `test_thermodynamic_contrast_no_weight_transport`: Verifies no access to forward weight transposes
+
+11. **Empirical resource analysis — ✅ COMPLETED 2026-08-23**: Implemented in `bioplausible/core/profiling.py`:
+    - `count_flops_detailed`: Layer-wise FLOPs counting for Linear/Conv2d
+    - `get_gpu_memory_mb` / `get_gpu_peak_memory_mb`: NVML integration with torch fallback
+    - `analyze_joint_system`: Complete resource profiling for 6-D coordinates
+    - `ResourceUsage` dataclass: Structured output for FrontierRecord
 
 ---

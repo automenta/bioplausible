@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,32 +21,33 @@ if TYPE_CHECKING:
 
 import torch
 
+from bioplausible.core.joint.transition import PlasticityConfig
+
 # Import bioplausible components
 from bioplausible.core.ontology import (
-    SubstrateConfig,
-    GeometryConfig,
-    StateDynamicsConfig,
-    CreditAssignmentConfig,
-    ParameterUpdateConfig,
-    DigitalSubstrate,
-    FeedforwardGeometry,
-    RecurrentGeometry,
-    EnergyMinimizationDynamics,
-    InstantaneousDynamics,
     BackpropCredit,
-    ThermodynamicContrast,
+    CreditAssignmentConfig,
+    DigitalSubstrate,
+    EnergyMinimizationDynamics,
     EuclideanUpdate,
+    FeedforwardGeometry,
+    GeometryConfig,
+    InstantaneousDynamics,
+    ParameterUpdateConfig,
+    RecurrentGeometry,
+    StateDynamicsConfig,
+    SubstrateConfig,
+    ThermodynamicContrast,
 )
-from bioplausible.core.joint.transition import PlasticityConfig
-from bioplausible.core.plasticity.routing import create_routing_plasticity
 from bioplausible.core.plasticity.fast_weights import create_fast_weight_plasticity
+from bioplausible.core.plasticity.routing import create_routing_plasticity
 from bioplausible.core.system_trainer import compose_joint_system
-from bioplausible.core.joint.state import CompositeState
 
 
 @dataclass(frozen=True, slots=True)
 class KernelProfile:
     """Profile data for a single kernel."""
+
     name: str
     coordinate: str
     batch_size: int
@@ -61,21 +61,33 @@ class KernelProfile:
 @dataclass(frozen=True, slots=True)
 class ProfileResult:
     """Complete profile result for a coordinate."""
+
     coordinate: str
     device: str
     batch_sizes: list[int]
-    kernels: dict[str, list[KernelProfile]]  # kernel_name -> list of profiles per batch size
+    kernels: dict[
+        str, list[KernelProfile]
+    ]  # kernel_name -> list of profiles per batch size
     total_latency_ms: float
     peak_memory_mb: float
 
 
-def _create_joint_system(coordinate: str, input_dim: int, output_dim: int, hidden_dim: int, device: str):
+def _create_joint_system(
+    coordinate: str, input_dim: int, output_dim: int, hidden_dim: int, device: str
+):
     """Create a JointSystem from coordinate string."""
     parts = coordinate.split("/")
     if len(parts) != 6:
         raise ValueError(f"Expected 6 parts, got {len(parts)}")
 
-    substrate_type, geometry_type, dynamics_type, plasticity_type, credit_type, update_type = parts
+    (
+        substrate_type,
+        geometry_type,
+        dynamics_type,
+        plasticity_type,
+        credit_type,
+        update_type,
+    ) = parts
 
     # Substrate
     if substrate_type == "digital":
@@ -109,7 +121,9 @@ def _create_joint_system(coordinate: str, input_dim: int, output_dim: int, hidde
     # Dynamics
     if dynamics_type == "energy_minimization":
         dynamics = EnergyMinimizationDynamics(
-            StateDynamicsConfig.energy_minimization(max_steps=10, beta=0.5, step_size=0.1)
+            StateDynamicsConfig.energy_minimization(
+                max_steps=10, beta=0.5, step_size=0.1
+            )
         )
     elif dynamics_type == "instantaneous":
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
@@ -122,7 +136,9 @@ def _create_joint_system(coordinate: str, input_dim: int, output_dim: int, hidde
     elif plasticity_type == "routing":
         plasticity = create_routing_plasticity(PlasticityConfig.routing(gate_dim=64))
     elif plasticity_type == "fast_weights":
-        plasticity = create_fast_weight_plasticity(PlasticityConfig.fast_weights(fast_weight_dim=512))
+        plasticity = create_fast_weight_plasticity(
+            PlasticityConfig.fast_weights(fast_weight_dim=512)
+        )
     else:
         raise ValueError(f"Unknown plasticity: {plasticity_type}")
 
@@ -130,7 +146,9 @@ def _create_joint_system(coordinate: str, input_dim: int, output_dim: int, hidde
     if credit_type == "backprop":
         credit = BackpropCredit(CreditAssignmentConfig.gradient())
     elif credit_type == "thermo":
-        credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5))
+        credit = ThermodynamicContrast(
+            CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+        )
     else:
         raise ValueError(f"Unknown credit: {credit_type}")
 
@@ -140,170 +158,103 @@ def _create_joint_system(coordinate: str, input_dim: int, output_dim: int, hidde
     else:
         raise ValueError(f"Unknown update: {update_type}")
 
-    return compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)
+    return compose_joint_system(
+        substrate, geometry, dynamics, plasticity, credit, update
+    )
 
 
-def _profile_kernel(kernel_fn, *args, iterations: int = 10, warmup: int = 3) -> tuple[float, float]:
+def _profile_kernel(
+    kernel_fn, *args, iterations: int = 10, warmup: int = 3
+) -> tuple[float, float]:
     """Profile a kernel function.
-    
+
     Returns:
         (mean_latency_ms, peak_memory_mb)
     """
-    device = args[0].device if hasattr(args[0], 'device') else torch.device('cpu')
-    
+    device = args[0].device if hasattr(args[0], "device") else torch.device("cpu")
+
     # Warmup
     for _ in range(warmup):
         with torch.no_grad():
             _ = kernel_fn(*args)
-    
+
     # Synchronize
-    if device.type == 'cuda':
+    if device.type == "cuda":
         torch.cuda.synchronize()
-    
+
     # Measure memory before
-    if device.type == 'cuda':
+    if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats()
         mem_before = torch.cuda.max_memory_allocated()
     else:
         mem_before = 0
-    
+
     # Timed runs
     latencies = []
     for _ in range(iterations):
         start = time.perf_counter()
         with torch.no_grad():
             _ = kernel_fn(*args)
-        if device.type == 'cuda':
+        if device.type == "cuda":
             torch.cuda.synchronize()
         end = time.perf_counter()
         latencies.append((end - start) * 1000)  # ms
-    
+
     # Measure peak memory
-    if device.type == 'cuda':
-        peak_mem = (torch.cuda.max_memory_allocated() - mem_before) / (1024 * 1024)  # MB
+    if device.type == "cuda":
+        peak_mem = (torch.cuda.max_memory_allocated() - mem_before) / (
+            1024 * 1024
+        )  # MB
     else:
         peak_mem = 0.0
-    
+
     mean_latency = sum(latencies) / len(latencies)
     return mean_latency, peak_mem
 
 
-def _profile_coordinate(coordinate: str, batch_sizes: list[int], device: str, input_dim: int = 784, output_dim: int = 10, hidden_dim: int = 256) -> ProfileResult:
+def _profile_coordinate(
+    coordinate: str,
+    batch_sizes: list[int],
+    device: str,
+    input_dim: int = 784,
+    output_dim: int = 10,
+    hidden_dim: int = 256,
+) -> ProfileResult:
     """Profile all kernels for a coordinate."""
     print(f"  Profiling coordinate: {coordinate} on {device}")
-    
+
     kernels_data = {}
     all_latencies = []
     peak_memory = 0.0
-    
+
     for batch_size in batch_sizes:
         print(f"    Batch size: {batch_size}")
-        
+
         # Create system
-        system = _create_joint_system(coordinate, input_dim, output_dim, hidden_dim, device)
-        
+        system = _create_joint_system(
+            coordinate, input_dim, output_dim, hidden_dim, device
+        )
+
         # Move to device
         if hasattr(system.geometry, "to"):
             system.geometry.to(device)
         if hasattr(system.substrate, "to"):
             system.substrate.to(device)
-        
+
         # Create test input
         x = torch.randn(batch_size, input_dim, device=device)
         y = torch.randint(0, output_dim, (batch_size,), device=device)
-        
+
         # Profile train_step (full pipeline)
         def train_step_fn(x, y):
             return system.train_step(x, y)
-        
+
         latency, mem = _profile_kernel(train_step_fn, x, y)
         kernel_name = "CoupledTransition.train_step"
         if kernel_name not in kernels_data:
             kernels_data[kernel_name] = []
-        kernels_data[kernel_name].append(KernelProfile(
-            name=kernel_name,
-            coordinate=coordinate,
-            batch_size=batch_size,
-            device=device,
-            latency_ms=latency,
-            memory_mb=mem,
-            iterations=10,
-        ))
-        all_latencies.append(latency)
-        peak_memory = max(peak_memory, mem)
-        
-        # Profile plasticity step if applicable
-        if hasattr(system, 'plasticity') and system.plasticity is not None:
-            # Create dummy plastic state and joint state
-            from bioplausible.core.joint.state import CompositeState
-            from bioplausible.core.joint.context import SystemContext
-            
-            z = CompositeState.empty()
-            z.activity["x"] = x
-            z.activity["y"] = y
-            
-            if hasattr(system, '_make_context'):
-                context = system._make_context()
-                if hasattr(system.plasticity, 'initial_psi'):
-                    z.plastic = system.plasticity.initial_psi(context, batch_size=batch_size)
-                    # Move plastic state to device
-                    z.plastic = {k: v.to(device) for k, v in z.plastic.items()}
-                
-                def plasticity_step_fn(psi, z_state, ctx):
-                    return system.plasticity.step(psi, z_state, ctx)
-                
-                latency, mem = _profile_kernel(plasticity_step_fn, z.plastic, z, context)
-                kernel_name = "PlasticityPrimitive.step"
-                if kernel_name not in kernels_data:
-                    kernels_data[kernel_name] = []
-                kernels_data[kernel_name].append(KernelProfile(
-                    name=kernel_name,
-                    coordinate=coordinate,
-                    batch_size=batch_size,
-                    device=device,
-                    latency_ms=latency,
-                    memory_mb=mem,
-                    iterations=10,
-                ))
-                all_latencies.append(latency)
-                peak_memory = max(peak_memory, mem)
-        
-        # Profile geometry forward
-        def geometry_forward_fn(x_input, substrate):
-            return system.geometry.forward(x_input, substrate)
-        
-        latency, mem = _profile_kernel(geometry_forward_fn, x, system.substrate)
-        kernel_name = "Geometry.forward"
-        if kernel_name not in kernels_data:
-            kernels_data[kernel_name] = []
-        kernels_data[kernel_name].append(KernelProfile(
-            name=kernel_name,
-            coordinate=coordinate,
-            batch_size=batch_size,
-            device=device,
-            latency_ms=latency,
-            memory_mb=mem,
-            iterations=10,
-        ))
-        all_latencies.append(latency)
-        peak_memory = max(peak_memory, mem)
-        
-        # Profile dynamics settle
-        if hasattr(system.dynamics, 'settle'):
-            from bioplausible.core.ontology import SystemState
-            
-            def dynamics_settle_fn(x_input, substrate, geometry):
-                state = SystemState(x=x_input)
-                state.activations = geometry.forward(x_input, substrate)
-                if state.activations is not None:
-                    state.activations = substrate.inject_state_noise(state.activations)
-                return system.dynamics.settle(state, geometry, substrate, target=None)
-            
-            latency, mem = _profile_kernel(dynamics_settle_fn, x, system.substrate, system.geometry)
-            kernel_name = "StateDynamics.settle"
-            if kernel_name not in kernels_data:
-                kernels_data[kernel_name] = []
-            kernels_data[kernel_name].append(KernelProfile(
+        kernels_data[kernel_name].append(
+            KernelProfile(
                 name=kernel_name,
                 coordinate=coordinate,
                 batch_size=batch_size,
@@ -311,14 +262,109 @@ def _profile_coordinate(coordinate: str, batch_sizes: list[int], device: str, in
                 latency_ms=latency,
                 memory_mb=mem,
                 iterations=10,
-            ))
+            )
+        )
+        all_latencies.append(latency)
+        peak_memory = max(peak_memory, mem)
+
+        # Profile plasticity step if applicable
+        if hasattr(system, "plasticity") and system.plasticity is not None:
+            # Create dummy plastic state and joint state
+            from bioplausible.core.joint.state import CompositeState
+
+            z = CompositeState.empty()
+            z.activity["x"] = x
+            z.activity["y"] = y
+
+            if hasattr(system, "_make_context"):
+                context = system._make_context()
+                if hasattr(system.plasticity, "initial_psi"):
+                    z.plastic = system.plasticity.initial_psi(
+                        context, batch_size=batch_size
+                    )
+                    # Move plastic state to device
+                    z.plastic = {k: v.to(device) for k, v in z.plastic.items()}
+
+                def plasticity_step_fn(psi, z_state, ctx):
+                    return system.plasticity.step(psi, z_state, ctx)
+
+                latency, mem = _profile_kernel(
+                    plasticity_step_fn, z.plastic, z, context
+                )
+                kernel_name = "PlasticityPrimitive.step"
+                if kernel_name not in kernels_data:
+                    kernels_data[kernel_name] = []
+                kernels_data[kernel_name].append(
+                    KernelProfile(
+                        name=kernel_name,
+                        coordinate=coordinate,
+                        batch_size=batch_size,
+                        device=device,
+                        latency_ms=latency,
+                        memory_mb=mem,
+                        iterations=10,
+                    )
+                )
+                all_latencies.append(latency)
+                peak_memory = max(peak_memory, mem)
+
+        # Profile geometry forward
+        def geometry_forward_fn(x_input, substrate):
+            return system.geometry.forward(x_input, substrate)
+
+        latency, mem = _profile_kernel(geometry_forward_fn, x, system.substrate)
+        kernel_name = "Geometry.forward"
+        if kernel_name not in kernels_data:
+            kernels_data[kernel_name] = []
+        kernels_data[kernel_name].append(
+            KernelProfile(
+                name=kernel_name,
+                coordinate=coordinate,
+                batch_size=batch_size,
+                device=device,
+                latency_ms=latency,
+                memory_mb=mem,
+                iterations=10,
+            )
+        )
+        all_latencies.append(latency)
+        peak_memory = max(peak_memory, mem)
+
+        # Profile dynamics settle
+        if hasattr(system.dynamics, "settle"):
+            from bioplausible.core.ontology import SystemState
+
+            def dynamics_settle_fn(x_input, substrate, geometry):
+                state = SystemState(x=x_input)
+                state.activations = geometry.forward(x_input, substrate)
+                if state.activations is not None:
+                    state.activations = substrate.inject_state_noise(state.activations)
+                return system.dynamics.settle(state, geometry, substrate, target=None)
+
+            latency, mem = _profile_kernel(
+                dynamics_settle_fn, x, system.substrate, system.geometry
+            )
+            kernel_name = "StateDynamics.settle"
+            if kernel_name not in kernels_data:
+                kernels_data[kernel_name] = []
+            kernels_data[kernel_name].append(
+                KernelProfile(
+                    name=kernel_name,
+                    coordinate=coordinate,
+                    batch_size=batch_size,
+                    device=device,
+                    latency_ms=latency,
+                    memory_mb=mem,
+                    iterations=10,
+                )
+            )
             all_latencies.append(latency)
             peak_memory = max(peak_memory, mem)
-        
+
         # Clear CUDA cache between batch sizes
-        if device == 'cuda':
+        if device == "cuda":
             torch.cuda.empty_cache()
-    
+
     total_latency = sum(all_latencies)
     return ProfileResult(
         coordinate=coordinate,
@@ -396,10 +442,10 @@ def _generate_html_report(results: list[ProfileResult], output_path: Path):
             batch_sizes = [p.batch_size for p in profiles]
             latencies = [p.latency_ms for p in profiles]
             memories = [p.memory_mb for p in profiles]
-            
+
             html += f"""
-            var {coord_short}_{kernel_name.replace('.', '_').replace(' ', '_')}_latency = {{x: {batch_sizes}, y: {latencies}, name: '{r.coordinate} - {kernel_name}', mode: 'lines+markers'}};
-            var {coord_short}_{kernel_name.replace('.', '_').replace(' ', '_')}_memory = {{x: {batch_sizes}, y: {memories}, name: '{r.coordinate} - {kernel_name}', mode: 'lines+markers'}};
+            var {coord_short}_{kernel_name.replace(".", "_").replace(" ", "_")}_latency = {{x: {batch_sizes}, y: {latencies}, name: '{r.coordinate} - {kernel_name}', mode: 'lines+markers'}};
+            var {coord_short}_{kernel_name.replace(".", "_").replace(" ", "_")}_memory = {{x: {batch_sizes}, y: {memories}, name: '{r.coordinate} - {kernel_name}', mode: 'lines+markers'}};
 """
 
     html += """
@@ -413,7 +459,9 @@ def _generate_html_report(results: list[ProfileResult], output_path: Path):
     for r in results:
         coord_short = r.coordinate.replace("/", "_")
         for kernel_name, profiles in r.kernels.items():
-            var_name = f"{coord_short}_{kernel_name.replace('.', '_').replace(' ', '_')}"
+            var_name = (
+                f"{coord_short}_{kernel_name.replace('.', '_').replace(' ', '_')}"
+            )
             html += f"""
         latencyTraces.push({var_name}_latency);
         memoryTraces.push({var_name}_memory);
@@ -531,7 +579,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     print("\nPer-Kernel Latencies:")
     for kernel_name, profiles in result.kernels.items():
         for p in profiles:
-            print(f"  {kernel_name} (batch={p.batch_size}): {p.latency_ms:.2f} ms, {p.memory_mb:.2f} MB")
+            print(
+                f"  {kernel_name} (batch={p.batch_size}): {p.latency_ms:.2f} ms, {p.memory_mb:.2f} MB"
+            )
 
     return 0
 

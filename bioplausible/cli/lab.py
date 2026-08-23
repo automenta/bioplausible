@@ -103,26 +103,28 @@ def _parse_coordinate(coord_str: str) -> dict:
     }
 
 
-def _create_joint_system_from_coordinate(coord: dict, input_dim: int, output_dim: int, hidden_dim: int, device: str):
+def _create_joint_system_from_coordinate(
+    coord: dict, input_dim: int, output_dim: int, hidden_dim: int, device: str
+):
     """Create a JointSystem from a parsed 6-D coordinate."""
-    from bioplausible.core.ontology import (
-        SubstrateConfig,
-        GeometryConfig,
-        StateDynamicsConfig,
-        CreditAssignmentConfig,
-        ParameterUpdateConfig,
-        DigitalSubstrate,
-        FeedforwardGeometry,
-        RecurrentGeometry,
-        EnergyMinimizationDynamics,
-        InstantaneousDynamics,
-        BackpropCredit,
-        ThermodynamicContrast,
-        EuclideanUpdate,
-    )
     from bioplausible.core.joint.transition import PlasticityConfig
-    from bioplausible.core.plasticity.routing import create_routing_plasticity
+    from bioplausible.core.ontology import (
+        BackpropCredit,
+        CreditAssignmentConfig,
+        DigitalSubstrate,
+        EnergyMinimizationDynamics,
+        EuclideanUpdate,
+        FeedforwardGeometry,
+        GeometryConfig,
+        InstantaneousDynamics,
+        ParameterUpdateConfig,
+        RecurrentGeometry,
+        StateDynamicsConfig,
+        SubstrateConfig,
+        ThermodynamicContrast,
+    )
     from bioplausible.core.plasticity.fast_weights import create_fast_weight_plasticity
+    from bioplausible.core.plasticity.routing import create_routing_plasticity
     from bioplausible.core.system_trainer import compose_joint_system
 
     # Substrate
@@ -157,7 +159,9 @@ def _create_joint_system_from_coordinate(coord: dict, input_dim: int, output_dim
     # Dynamics
     if coord["dynamics"] == "energy_min":
         dynamics = EnergyMinimizationDynamics(
-            StateDynamicsConfig.energy_minimization(max_steps=20, beta=0.5, step_size=0.1)
+            StateDynamicsConfig.energy_minimization(
+                max_steps=20, beta=0.5, step_size=0.1
+            )
         )
     elif coord["dynamics"] == "instantaneous":
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
@@ -181,7 +185,9 @@ def _create_joint_system_from_coordinate(coord: dict, input_dim: int, output_dim
     if coord["credit"] == "backprop":
         credit = BackpropCredit(CreditAssignmentConfig.gradient())
     elif coord["credit"] == "thermo":
-        credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5))
+        credit = ThermodynamicContrast(
+            CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+        )
     else:
         raise ValueError(f"Unknown credit: {coord['credit']}")
 
@@ -191,7 +197,9 @@ def _create_joint_system_from_coordinate(coord: dict, input_dim: int, output_dim
     else:
         raise ValueError(f"Unknown update: {coord['update']}")
 
-    return compose_joint_system(substrate, geometry, dynamics, plasticity or plasticity_config, credit, update)
+    return compose_joint_system(
+        substrate, geometry, dynamics, plasticity or plasticity_config, credit, update
+    )
 
 
 def _run_state_inspection(system, task, steps: int, device: str) -> dict:
@@ -250,16 +258,21 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:
         if hasattr(system, "dynamics") and hasattr(system.dynamics, "settle"):
             # Use the 5-D settling for now
             from bioplausible.core.ontology import SystemState
+
             state = SystemState(x=x, y=y)
             state.activations = system.geometry.forward(x, system.substrate)
             if state.activations is not None:
-                state.activations = system.substrate.inject_state_noise(state.activations)
+                state.activations = system.substrate.inject_state_noise(
+                    state.activations
+                )
 
             # Free phase
             free_state = system.dynamics.settle(
                 state, system.geometry, system.substrate, target=None
             )
-            free_state.energy = system.dynamics.compute_energy(free_state, system.geometry)
+            free_state.energy = system.dynamics.compute_energy(
+                free_state, system.geometry
+            )
 
             # Nudged phase
             nudged_state = system.dynamics.settle(
@@ -271,11 +284,18 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:
             nudged_state.loss = system._compute_loss(nudged_state, y)
 
             # Record energy
-            trajectory["energy"].append(free_state.energy.item() if free_state.energy else 0.0)
-            trajectory["loss"].append(nudged_state.loss.item() if nudged_state.loss else 0.0)
+            trajectory["energy"].append(
+                free_state.energy.item() if free_state.energy else 0.0
+            )
+            trajectory["loss"].append(
+                nudged_state.loss.item() if nudged_state.loss else 0.0
+            )
 
             # Estimate spectral radius of Jacobian
-            if hasattr(system.geometry, "params") and free_state.activations is not None:
+            if (
+                hasattr(system.geometry, "params")
+                and free_state.activations is not None
+            ):
                 try:
                     # Simple spectral radius estimate via power iteration
                     acts = free_state.activations
@@ -287,7 +307,9 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:
                     with torch.no_grad():
                         # Compute Jacobian-vector product approximation
                         jvp = act_vec @ act_vec  # crude proxy
-                        trajectory["spectral_radius"].append(float(torch.norm(jvp).item()))
+                        trajectory["spectral_radius"].append(
+                            float(torch.norm(jvp).item())
+                        )
                 except Exception:
                     trajectory["spectral_radius"].append(0.0)
             else:
@@ -323,25 +345,35 @@ def _generate_html_report(trajectory: dict, coord: dict, output_path: Path):
     step_indices = list(range(steps))
 
     fig = make_subplots(
-        rows=3, cols=2,
+        rows=3,
+        cols=2,
         subplot_titles=(
-            "Energy Evolution", "Loss Evolution",
-            "Activity Norms (per layer)", "Plastic State Evolution",
-            "Substrate State", "Spectral Radius ρ(J_F)"
+            "Energy Evolution",
+            "Loss Evolution",
+            "Activity Norms (per layer)",
+            "Plastic State Evolution",
+            "Substrate State",
+            "Spectral Radius ρ(J_F)",
         ),
         vertical_spacing=0.1,
     )
 
     # Energy
     fig.add_trace(
-        go.Scatter(x=step_indices, y=trajectory["energy"], name="Energy", mode="lines+markers"),
-        row=1, col=1
+        go.Scatter(
+            x=step_indices, y=trajectory["energy"], name="Energy", mode="lines+markers"
+        ),
+        row=1,
+        col=1,
     )
 
     # Loss
     fig.add_trace(
-        go.Scatter(x=step_indices, y=trajectory["loss"], name="Loss", mode="lines+markers"),
-        row=1, col=2
+        go.Scatter(
+            x=step_indices, y=trajectory["loss"], name="Loss", mode="lines+markers"
+        ),
+        row=1,
+        col=2,
     )
 
     # Activity norms
@@ -355,8 +387,14 @@ def _generate_html_report(trajectory: dict, coord: dict, output_path: Path):
                 else:
                     norms.append(0.0)
             fig.add_trace(
-                go.Scatter(x=step_indices, y=norms, name=f"Activity: {layer_name}", mode="lines"),
-                row=2, col=1
+                go.Scatter(
+                    x=step_indices,
+                    y=norms,
+                    name=f"Activity: {layer_name}",
+                    mode="lines",
+                ),
+                row=2,
+                col=1,
             )
 
     # Plastic state
@@ -370,8 +408,11 @@ def _generate_html_report(trajectory: dict, coord: dict, output_path: Path):
                 else:
                     norms.append(0.0)
             fig.add_trace(
-                go.Scatter(x=step_indices, y=norms, name=f"Plastic: {var_name}", mode="lines"),
-                row=2, col=2
+                go.Scatter(
+                    x=step_indices, y=norms, name=f"Plastic: {var_name}", mode="lines"
+                ),
+                row=2,
+                col=2,
             )
 
     # Substrate state
@@ -385,14 +426,23 @@ def _generate_html_report(trajectory: dict, coord: dict, output_path: Path):
                 else:
                     norms.append(0.0)
             fig.add_trace(
-                go.Scatter(x=step_indices, y=norms, name=f"Substrate: {var_name}", mode="lines"),
-                row=3, col=1
+                go.Scatter(
+                    x=step_indices, y=norms, name=f"Substrate: {var_name}", mode="lines"
+                ),
+                row=3,
+                col=1,
             )
 
     # Spectral radius
     fig.add_trace(
-        go.Scatter(x=step_indices, y=trajectory["spectral_radius"], name="ρ(J_F)", mode="lines+markers"),
-        row=3, col=2
+        go.Scatter(
+            x=step_indices,
+            y=trajectory["spectral_radius"],
+            name="ρ(J_F)",
+            mode="lines+markers",
+        ),
+        row=3,
+        col=2,
     )
 
     fig.update_layout(
@@ -422,12 +472,15 @@ def inspect_state(args):
     input_dim = task.input_dim or 784
     if isinstance(input_dim, (tuple, list)):
         import torch
+
         input_dim = int(torch.prod(torch.tensor(input_dim)))
     output_dim = task.output_dim
     hidden_dim = args.hidden_dim
 
     # Create Joint System
-    system = _create_joint_system_from_coordinate(coord, input_dim, output_dim, hidden_dim, device)
+    system = _create_joint_system_from_coordinate(
+        coord, input_dim, output_dim, hidden_dim, device
+    )
     logger.info("Joint System Created: %s", type(system).__name__)
 
     # Run state inspection
@@ -442,26 +495,31 @@ def inspect_state(args):
     else:
         output_path = Path(args.output + ".json")
 
-    output_path.write_text(json.dumps({
-        "coordinate": coord,
-        "trajectory": {
-            "activity": [
-                {k: v.tolist() for k, v in step.items()}
-                for step in trajectory["activity"]
-            ],
-            "plastic": [
-                {k: v.tolist() for k, v in step.items()}
-                for step in trajectory["plastic"]
-            ],
-            "substrate": [
-                {k: v.tolist() for k, v in step.items()}
-                for step in trajectory["substrate"]
-            ],
-            "energy": trajectory["energy"],
-            "spectral_radius": trajectory["spectral_radius"],
-            "loss": trajectory["loss"],
-        },
-    }, indent=2))
+    output_path.write_text(
+        json.dumps(
+            {
+                "coordinate": coord,
+                "trajectory": {
+                    "activity": [
+                        {k: v.tolist() for k, v in step.items()}
+                        for step in trajectory["activity"]
+                    ],
+                    "plastic": [
+                        {k: v.tolist() for k, v in step.items()}
+                        for step in trajectory["plastic"]
+                    ],
+                    "substrate": [
+                        {k: v.tolist() for k, v in step.items()}
+                        for step in trajectory["substrate"]
+                    ],
+                    "energy": trajectory["energy"],
+                    "spectral_radius": trajectory["spectral_radius"],
+                    "loss": trajectory["loss"],
+                },
+            },
+            indent=2,
+        )
+    )
     logger.info("Trajectory data saved to %s", output_path)
 
     # Generate HTML report if requested
@@ -481,8 +539,14 @@ def main():
         "--task", default="mnist", help="Task type (e.g., mnist, cifar10)"
     )
 
-    inspect_state_parser = subparsers.add_parser("inspect-state", help="Inspect joint state evolution for a 6-D coordinate")
-    inspect_state_parser.add_argument("--coordinate", required=True, help="6-D coordinate (e.g., digital/recurrent/energy_min/routing/thermo/euclidean)")
+    inspect_state_parser = subparsers.add_parser(
+        "inspect-state", help="Inspect joint state evolution for a 6-D coordinate"
+    )
+    inspect_state_parser.add_argument(
+        "--coordinate",
+        required=True,
+        help="6-D coordinate (e.g., digital/recurrent/energy_min/routing/thermo/euclidean)",
+    )
     inspect_state_parser.add_argument(
         "--task", default="mnist", help="Task type (e.g., mnist, cifar10)"
     )
@@ -493,7 +557,9 @@ def main():
         "--hidden-dim", type=int, default=256, help="Hidden dimension"
     )
     inspect_state_parser.add_argument(
-        "--output", default="state_evolution.json", help="Output file path (.json or .html)"
+        "--output",
+        default="state_evolution.json",
+        help="Output file path (.json or .html)",
     )
 
     args = parser.parse_args()
