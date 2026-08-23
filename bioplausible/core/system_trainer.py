@@ -683,7 +683,13 @@ def compose_system(
                 logits = acts[-1]
             else:
                 logits = acts
-            return torch.nn.functional.cross_entropy(logits, y)
+            loss = torch.nn.functional.cross_entropy(logits, y)
+            # Compute accuracy and store in state.metrics
+            with torch.no_grad():
+                preds = logits.argmax(dim=-1)
+                acc = (preds == y).float().mean().item()
+            state.metrics = {"accuracy": acc}
+            return loss
 
         def forward(self, x: Tensor) -> Tensor:
             state = SystemState(x=x)
@@ -870,6 +876,7 @@ def create_fa_system(
     output_dim: int,
     num_layers: int = 2,
     lr: float = 0.001,
+    feedback_scale: float = 0.1,
 ) -> System:
     """Create a Feedback Alignment system."""
     from bioplausible.core.ontology import (
@@ -917,7 +924,7 @@ def create_fa_system(
             feedback_matrix=None,
             local_objective="mse",
             orthogonal_init=False,
-            feedback_scale=0.01,
+            feedback_scale=feedback_scale,
         )
     )
 

@@ -523,3 +523,61 @@ A developer (or AI agent) can:
     - `ResourceUsage` dataclass: Structured output for FrontierRecord
 
 ---
+## 🎯 IMMEDIATE FIX PLAN — Quickstart & Accuracy Issues (2026-08-23)
+
+### Issues Discovered
+1. **Quickstart accuracy always 0%** — `free_state.metrics.get("accuracy", 0.0)` returns empty dict
+2. **Quickstart uses slow algorithms** — FA/EqProp need 20-50 epochs; not demo-friendly
+3. **No validated working hyperparameters** for quickstart context
+
+### Root Cause Analysis
+- `SystemTrainer.train_step` uses `free_state.metrics` which is never populated
+- FA/EqProp converge slowly; backprop converges in 3 epochs
+- Quickstart compares dissimilar things (slow bio-plausible vs fast backprop)
+
+### Action Plan
+
+#### P0 - Fix Accuracy Metric (30 min) — REQUIRED FOR ALL
+- [ ] Update `bioplausible/core/system_trainer.py` to compute accuracy from logits in `_compute_loss` or `train_step`
+- [ ] Add accuracy to returned metrics dict
+
+#### P1 - Quickstart: Use Fast Algorithm for Demo (1-2 hrs)
+- [ ] **Switch to Forward-Forward / LocalGoodnessCredit** — converges in 3-5 epochs like backprop
+- [ ] OR use **Backprop only** for quickstart; move FA/EqProp to `scripts/demo_fa.py`, `scripts/demo_eqprop.py`
+- [ ] Quickstart goal: "See bioplausible working in <2 min" — not "compare algorithms"
+- [ ] Test Forward-Forward / PEPITA: 3 epochs, ~90% MNIST accuracy
+
+#### P2 - Quickstart Refactor (1 hr)
+- [ ] Switch to `create_*_mlp` from `presets.py` + `SystemTrainer` with `SystemTrainerConfig`
+- [ ] Use proper validation evaluation loop
+- [ ] Add `configs/presets/quickstart.yaml` for reproducible config
+
+#### P3 - Document Working Configs (30 min)
+- [ ] Add presets for demo algorithms
+- [ ] Update README: quickstart = fast demo; see experiments/ for full benchmarks
+- [ ] Move FA/EqProp demos to separate scripts with proper configs
+
+### Working Configs from Experiments
+```python
+# From fa_depth_scaling.py (achieves competitive FA accuracy)
+FA_CONFIG = {
+    "model": "fa_mlp",
+    "use_spectral_norm": True,
+    "feedback_type": "random",
+    "learning_rate": 1e-3,
+    "epochs": 50,
+    "batch_size": 128,
+}
+
+# From eqprop_vision_parity.py (competitive EqProp)
+EQPROP_CONFIG = {
+    "hidden_dim": 512,
+    "num_layers": 3,
+    "use_spectral_norm": True,
+    "beta": 0.1,
+    "step_size": 0.1,
+    "inference_steps": 20,
+    "learning_rate": 1e-3,
+    "epochs": 20,
+}
+```
