@@ -136,6 +136,9 @@ biopl-frontier = "bioplausible.cli.frontier:main"
 biopl-failure-manifesto = "bioplausible.analysis.failure_manifesto:main"
 biopl-export-kernel = "bioplausible.cli.export_kernel:main"
 biopl-export-trained-kernel = "bioplausible.cli.export_trained_kernel:main"
+biopl-campaign = "bioplausible.cli.campaign:main"
+biopl-stability = "bioplausible.cli.stability:main"
+biopl-benchmark = "bioplausible.cli.benchmark:main"
 
 [dependency-groups]
 dev = [

@@ -7,7 +7,7 @@ one place.
 
 Usage::
 
-    biopl <run|report|parity|repro|hpo|audit|frontier|rank|lab> [args]
+    biopl <run|report|parity|repro|hpo|audit|frontier|rank|lab|validate|joint-validate|campaign|stability|benchmark> [args]
 """
 
 from __future__ import annotations
@@ -32,7 +32,12 @@ _SUBCOMMANDS: dict[str, tuple[str, str]] = {
     "lab": ("bioplausible.cli.lab", "main"),
     "validate": ("bioplausible.cli.validate", "main"),
     "joint-validate": ("bioplausible.cli.joint_validate", "main"),
+    "campaign": ("bioplausible.cli.campaign", "main"),
+    "stability": ("bioplausible.cli.stability", "main"),
+    "benchmark": ("bioplausible.cli.benchmark", "main"),
 }
+
+_USAGE = "biopl <" + "|".join(_SUBCOMMANDS) + "> [args]"
 
 _USAGE = "biopl <" + "|".join(_SUBCOMMANDS) + "> [args]"
 

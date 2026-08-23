@@ -443,11 +443,11 @@ tests/property/joint/test_stability_metrics.py (33 tests)
 
 ---
 
-### Sprint J4 — CLI, Campaigns, AutoScientist Integration (5–7 days)
+### Sprint J4 — CLI, Campaigns, AutoScientist Integration (5–7 days) ✅ COMPLETED (2026-08-22)
 
 **Goal**: Absorb Sprint 10 + H1/H2/H3 into joint operations.
 
-#### CLI Commands (Unified under `biopl`)
+#### CLI Commands (Unified under `biopl`) ✅ ALL IMPLEMENTED
 
 | Existing → Target | New Joint Commands |
 |-------------------|-------------------|
@@ -456,49 +456,81 @@ tests/property/joint/test_stability_metrics.py (33 tests)
 | `biopl-rank` → `biopl rank` | `biopl stability` |
 | `biopl-audit` → `biopl audit` | `biopl benchmark` |
 
-#### Examples
+#### Files Created
 
-```bash
-biopl joint-validate --coordinate digital/recurrent/energy_min/null/thermo/euclidean
-biopl joint-validate --coordinate digital/recurrent/energy_min/routing/thermo/euclidean
+```
+bioplausible/core/campaign/
+    __init__.py
+    resource_vector.py      # ResourceUsage: compute, memory, energy, latency, plastic_state_capacity
+    frontier_record.py      # FrontierRecord: complete 6-D coordinate evaluation
+    campaign_store.py       # CampaignStore: SQLite + YAML persistence
+    pareto.py               # Pareto frontier computation
+    kernel_cache.py         # JointKernelCache: compiled kernel persistence
+    checkpoint.py           # CheckpointManager: fault tolerance checkpointing
 
-biopl campaign run --space joint_smoke --objective adaptation_efficiency
-
-biopl stability report --run-id RUN_ID
-
-biopl benchmark run --suite adaptation_efficiency
-biopl benchmark run --suite algorithm_migration
-biopl benchmark run --suite z3_fixed_weights
+bioplausible/cli/
+    campaign.py             # biopl campaign (run, status, list, compare, checkpoint, export)
+    stability.py            # biopl stability (report, compare, summary)
+    benchmark.py            # biopl benchmark (run, list, report)
 ```
 
-#### Campaign Persistence (extends existing YAML+SQLite)
+#### Campaign Persistence ✅ IMPLEMENTED
 
-- 6-D coordinate + StateRegistry metadata + CompositeState shape signature
-- FrontierRecord + ResourceUsage + plasticity primitive name
-- Episode consolidation events
+- **CampaignStore** (`bioplausible/core/campaign/campaign_store.py`):
+  - SQLite backend with campaigns, episodes, registry_snapshots tables
+  - YAML checkpoints for human-readable state
+  - Branch support (git-like: create_branch, checkout, merge)
+  - Stores: 6-D coordinate, StateRegistry signature, CompositeState shape, FrontierRecord, ResourceUsage, consolidation events, RNG state
 
-#### Joint Kernel Cache
+- **FrontierRecord** (`bioplausible/core/campaign/frontier_record.py`):
+  - Task performance (loss, accuracy, adaptation_time)
+  - Stability metrics (rho_jacobian, lyapunov_local, settling_time, basin_stability)
+  - ResourceUsage vector
+  - Plasticity primitive identification
+  - Registry signature & CompositeState shape
+  - Consolidation events log
+  - Campaign tracking (campaign_id, episode_index)
 
-Persist compiled/cached kernels for:
-- `CoupledTransition.step`
-- Plasticity update
-- Stability estimator
-- Adapter projection
+- **ResourceUsage** (`bioplausible/core/campaign/resource_vector.py`):
+  - Compute (FLOPs), memory (MB), energy (J), latency (s)
+  - Plastic state capacity (bytes)
+  - Forward/backward FLOPs breakdown
+  - Parameter count, activation/gradient memory
+  - `measure()` method for empirical profiling
 
-Cache key: coordinate hash + tensor shapes + dtype/precision + device + adapter stack
+#### Joint Kernel Cache ✅ IMPLEMENTED
 
-#### Fault Tolerance (Checkpointing)
+- **JointKernelCache** (`bioplausible/core/campaign/kernel_cache.py`):
+  - In-memory LRU + persistent disk cache
+  - Cache key: coordinate hash + tensor shapes + dtype + device + adapter stack + kernel_type
+  - Supports: `CoupledTransition.step`, `PlasticityPrimitive.step`, stability estimators, adapter projections
+  - `torch.compile` integration with `mode="reduce-overhead", fullgraph=True`
+  - Global instance via `get_kernel_cache()` / `set_kernel_cache()`
 
-- `z, θ, ψ, σ`, episode index, campaign state, RNG state
-- Enables multi-hour AutoScientist campaigns on spot instances
+#### Fault Tolerance Checkpointing ✅ IMPLEMENTED
 
-#### Exit Criteria
+- **CheckpointManager** (`bioplausible/core/campaign/checkpoint.py`):
+  - Complete state: `z=(x,ψ,σ)`, `θ`, episode index, campaign state, RNG states (torch, numpy, python, CUDA)
+  - Periodic automatic checkpointing (configurable interval)
+  - Resume script generation
+  - Checkpoint validation & integrity checks
+  - Pruning of old checkpoints
 
-- ✅ All major commands under `biopl`
-- ✅ Campaigns resume after interruption
-- ✅ AutoScientist proposes 6-D coordinates
-- ✅ AutoScientist records Pareto metrics
-- ✅ Repeated runs use persistent kernel cache
+#### Pareto Frontier Computation ✅ IMPLEMENTED
+
+- **pareto_frontier()** (`bioplausible/core/campaign/pareto.py`):
+  - Multi-objective Pareto dominance (accuracy, stability, efficiency, resources)
+  - Exact 2D/3D hypervolume computation, Monte Carlo for higher dimensions
+  - Non-dominated sorting for Pareto layer ranking
+  - Configurable objectives and maximize/minimize directions
+
+#### Exit Criteria ✅ ALL MET
+
+- ✅ All major commands under `biopl` (campaign, stability, benchmark, joint-validate)
+- ✅ Campaigns resume after interruption (SQLite + YAML checkpoints)
+- ✅ AutoScientist proposes 6-D coordinates (via search space in campaign CLI)
+- ✅ AutoScientist records Pareto metrics (FrontierRecord + pareto_frontier)
+- ✅ Repeated runs use persistent kernel cache (JointKernelCache with disk persistence)
 
 ---
 
