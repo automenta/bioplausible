@@ -38,11 +38,15 @@ class SubstrateCoupledPlasticity:
         """
         self.config = PlasticityConfig.substrate_coupled()
 
-    def initial_psi(self, context: "SystemContext | None") -> dict[str, Tensor]:
+    def initial_psi(self, context: "SystemContext | None", batch_size: int = 1) -> dict[str, Tensor]:
         """Create initial plastic state.
 
         Substrate-coupled plasticity has no separate plastic state —
         plasticity IS the substrate state evolution.
+
+        Args:
+            context: System context (unused).
+            batch_size: Batch size (unused, kept for protocol compliance).
 
         Returns:
             Empty dict (ψ is empty, substrate state in σ).

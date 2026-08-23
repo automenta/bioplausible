@@ -83,16 +83,16 @@ class RoutingPlasticity:
     def gate_dim(self) -> int:
         return self._config.gate_dim
 
-    def initial_psi(self, context: "SystemContext | None") -> dict[str, Tensor]:
+    def initial_psi(self, context: "SystemContext | None", batch_size: int = 1) -> dict[str, Tensor]:
         """Create initial plastic state.
 
         Args:
             context: System context (unused, kept for protocol compliance).
+            batch_size: Batch size for the plastic state tensors.
 
         Returns:
             Dict with gate_logits and active_routes initialized to zero.
         """
-        batch_size = 4  # Default, will be overridden by first step
         return {
             "gate_logits": torch.zeros(batch_size, self.gate_dim),
             "active_routes": torch.zeros(batch_size, self.gate_dim),
@@ -115,6 +115,7 @@ class RoutingPlasticity:
             Updated plastic state.
         """
         gate_logits = psi["gate_logits"]
+        batch_size = gate_logits.shape[0]
 
         # Decay gate logits
         new_gate_logits = self._config.decay * gate_logits
@@ -122,15 +123,25 @@ class RoutingPlasticity:
         # Update based on activity if available
         if "x" in z.activity:
             x = z.activity["x"]  # [batch, input_dim]
+            # Handle batch size mismatch
+            if x.shape[0] != batch_size:
+                # Expand or truncate gate logits to match x
+                if x.shape[0] > batch_size:
+                    new_gate_logits = new_gate_logits.expand(x.shape[0], -1)
+                else:
+                    new_gate_logits = new_gate_logits[:x.shape[0]]
+                batch_size = x.shape[0]
+
             # Compute gate update from input statistics
-            # Use mean activity as gate drive
             gate_drive = x.abs().mean(dim=1, keepdim=True)  # [batch, 1]
             gate_drive = gate_drive.expand(-1, self.gate_dim)
             new_gate_logits = new_gate_logits + self._config.learning_rate * gate_drive
 
         # Compute active routes
         # Use training mode if context has theta with requires_grad
-        is_training = any(p.requires_grad for p in context.theta.values())
+        is_training = False
+        if context is not None:
+            is_training = any(p.requires_grad for p in context.theta.values())
         if is_training:
             # Training: differentiable Gumbel-Softmax
             active_routes = self._gumbel_softmax(new_gate_logits)

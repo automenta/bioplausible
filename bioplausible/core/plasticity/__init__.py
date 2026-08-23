@@ -17,6 +17,11 @@ from bioplausible.core.plasticity.routing import (
     RoutingPlasticityConfig,
     create_routing_plasticity,
 )
+from bioplausible.core.plasticity.rule_state import (
+    RuleStatePlasticity,
+    RuleStatePlasticityConfig,
+    create_rule_state_plasticity,
+)
 from bioplausible.core.plasticity.substrate_coupled import (
     SubstrateCoupledPlasticity,
     create_substrate_coupled_plasticity,
@@ -38,4 +43,8 @@ __all__ = [
     # Substrate Coupled
     "SubstrateCoupledPlasticity",
     "create_substrate_coupled_plasticity",
+    # Rule State (Z3)
+    "RuleStatePlasticity",
+    "RuleStatePlasticityConfig",
+    "create_rule_state_plasticity",
 ]

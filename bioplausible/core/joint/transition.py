@@ -150,7 +150,7 @@ class NullPlasticity:
         """Null plasticity: plastic state unchanged."""
         return psi
 
-    def initial_psi(self, context: "SystemContext") -> dict[str, Tensor]:
+    def initial_psi(self, context: "SystemContext", batch_size: int = 1) -> dict[str, Tensor]:
         """Null plasticity has no plastic state."""
         return {}
 

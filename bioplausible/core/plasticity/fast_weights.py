@@ -75,16 +75,16 @@ class FastWeightPlasticity:
     def fast_weight_dim(self) -> int:
         return self._config.fast_weight_dim
 
-    def initial_psi(self, context: "SystemContext | None") -> dict[str, Tensor]:
+    def initial_psi(self, context: "SystemContext | None", batch_size: int = 1) -> dict[str, Tensor]:
         """Create initial plastic state.
 
         Args:
             context: System context (unused, kept for protocol compliance).
+            batch_size: Batch size for the plastic state tensors.
 
         Returns:
             Dict with fast_weights initialized to zero.
         """
-        batch_size = 4  # Default, will be overridden by first step
         return {"fast_weights": torch.zeros(batch_size, self.fast_weight_dim)}
 
     def step(
