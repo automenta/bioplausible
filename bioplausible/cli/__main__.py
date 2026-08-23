@@ -33,6 +33,7 @@ _SUBCOMMANDS: dict[str, tuple[str, str]] = {
     "validate": ("bioplausible.cli.validate", "main"),
     "joint-validate": ("bioplausible.cli.joint_validate", "main"),
     "campaign": ("bioplausible.cli.campaign", "main"),
+    "scientist": ("bioplausible.cli.scientist", "main"),
     "stability": ("bioplausible.cli.stability", "main"),
     "benchmark": ("bioplausible.cli.benchmark", "main"),
 }

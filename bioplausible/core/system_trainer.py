@@ -31,27 +31,27 @@ from bioplausible.core.ontology import (
     System,
     SystemState,
 )
+from bioplausible.core.joint.context import SystemContext
+from bioplausible.core.joint.state import StateVariable
 
 if TYPE_CHECKING:
     from bioplausible.config.experiment import ExperimentConfig
-    from bioplausible.core.joint.context import SystemContext
-    from bioplausible.core.joint.state import StateVariable
 
-    class JointSystem(Protocol):
-        """Protocol for 6-D joint systems."""
+class JointSystem(Protocol):
+    """Protocol for 6-D joint systems."""
 
-        substrate: Substrate
-        geometry: Geometry
-        dynamics: StateDynamics
-        plasticity: PlasticityPrimitive
-        credit: CreditAssignment
-        update: ParameterUpdate
+    substrate: Substrate
+    geometry: Geometry
+    dynamics: StateDynamics
+    plasticity: PlasticityPrimitive
+    credit: CreditAssignment
+    update: ParameterUpdate
 
-        def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]: ...
-        def forward(self, x: Tensor) -> Tensor: ...
-        def to_spec(self) -> dict: ...
-        @classmethod
-        def from_spec(cls, spec: dict) -> JointSystem: ...
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]: ...
+    def forward(self, x: Tensor) -> Tensor: ...
+    def to_spec(self) -> dict: ...
+    @classmethod
+    def from_spec(cls, spec: dict) -> JointSystem: ...
 
 
 logger = get_logger()
@@ -1220,7 +1220,7 @@ def compose_joint_system(
                         name=name,
                         persistent=True,
                         fast_plastic=False,
-                        consolidatable=True,
+                        consolidatable=False,
                     )
                 )
 

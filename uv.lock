@@ -170,6 +170,7 @@ version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "cupy-cuda13x" },
+    { name = "nicegui" },
     { name = "numpy" },
     { name = "omegaconf" },
     { name = "pydantic" },
@@ -339,6 +340,7 @@ requires-dist = [
     { name = "matplotlib", marker = "extra == 'dev'" },
     { name = "matplotlib", marker = "extra == 'plot'" },
     { name = "networkx", marker = "extra == 'graphs'" },
+    { name = "nicegui", specifier = ">=3.16.0" },
     { name = "nicegui", marker = "extra == 'dev'", specifier = ">=3.16.0" },
     { name = "numpy" },
     { name = "omegaconf", specifier = ">=2.3" },
