@@ -50,9 +50,7 @@ def view_rankings(args):
 
 def main():
     parser = argparse.ArgumentParser(description="Bioplausible Leaderboard Viewer")
-    parser.add_argument(
-        "--db", default="shallow_benchmark.db", help="Path to database"
-    )
+    parser.add_argument("--db", default="shallow_benchmark.db", help="Path to database")
     parser.add_argument("--family", help="Filter by algorithm family")
 
     args = parser.parse_args()

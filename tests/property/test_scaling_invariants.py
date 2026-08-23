@@ -12,7 +12,6 @@ from torch import nn, optim
 
 from bioplausible.config.unified import ModelConfig
 from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
-from bioplausible.core.registry import Registry
 
 
 def _make_synthetic_dataset(
@@ -195,14 +194,17 @@ class TestDeepNetworkCreditAssignment:
         # Find first layer weight
         first_layer_weight = None
         for name, param in model.named_parameters():
-            if "weight" in name.lower() and "bias" not in name.lower():
-                if (
+            if (
+                "weight" in name.lower()
+                and "bias" not in name.lower()
+                and (
                     "layers.0" in name
                     or "W_in" in name
                     or name == "layers.0.parametrizations.weight.original"
-                ):
-                    first_layer_weight = param
-                    break
+                )
+            ):
+                first_layer_weight = param
+                break
 
         if first_layer_weight is None:
             pytest.skip("Could not find first layer weight")

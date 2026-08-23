@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 class ParetoFrontier:
     """Pareto frontier result with metadata."""
 
-    frontier: list["FrontierRecord"]  # Records on the Pareto frontier
-    dominated: list["FrontierRecord"]  # Records not on frontier
+    frontier: list[FrontierRecord]  # Records on the Pareto frontier
+    dominated: list[FrontierRecord]  # Records not on frontier
     objectives: tuple[str, ...]  # Objective names used
     hypervolume: float  # Hypervolume indicator (if reference point provided)
 
@@ -37,8 +37,12 @@ class ParetoFrontier:
 
 
 def pareto_frontier(
-    records: list["FrontierRecord"],
-    objectives: tuple[str, ...] = ("task_accuracy", "stability_score", "efficiency_score"),
+    records: list[FrontierRecord],
+    objectives: tuple[str, ...] = (
+        "task_accuracy",
+        "stability_score",
+        "efficiency_score",
+    ),
     maximize: tuple[bool, ...] = (True, True, True),
     reference_point: tuple[float, ...] | None = None,
 ) -> ParetoFrontier:
@@ -63,7 +67,7 @@ def pareto_frontier(
         )
 
     # Extract objective values for each record
-    def get_objectives(record: "FrontierRecord") -> tuple[float, ...]:
+    def get_objectives(record: FrontierRecord) -> tuple[float, ...]:
         values = []
         for obj in objectives:
             if obj == "task_accuracy":
@@ -249,13 +253,15 @@ def _hypervolume_3d(
     for i, p in enumerate(normalized):
         # 2D slice for remaining objectives
         slice_points = [(p[1], p[2])]
-        for q in normalized[i + 1:]:
+        for q in normalized[i + 1 :]:
             if q[0] < p[0]:  # Only points with smaller first objective
                 slice_points.append((q[1], q[2]))
 
         slice_ref = (norm_ref[1], norm_ref[2])
         slice_hv = _hypervolume_2d(slice_points, slice_ref, (True, True))
-        width = p[0] - (normalized[i + 1][0] if i + 1 < len(normalized) else norm_ref[0])
+        width = p[0] - (
+            normalized[i + 1][0] if i + 1 < len(normalized) else norm_ref[0]
+        )
         hv += width * slice_hv
 
     return hv
@@ -294,7 +300,10 @@ def _hypervolume_monte_carlo(
     maxs = [max(p[i] for p in normalized) for i in range(dim)]
 
     # Expand bounds slightly
-    bounds = [(mins[i] - 0.1 * (maxs[i] - mins[i]), maxs[i] + 0.1 * (maxs[i] - mins[i])) for i in range(dim)]
+    bounds = [
+        (mins[i] - 0.1 * (maxs[i] - mins[i]), maxs[i] + 0.1 * (maxs[i] - mins[i]))
+        for i in range(dim)
+    ]
 
     # Volume of bounding box
     box_volume = 1.0
@@ -315,10 +324,14 @@ def _hypervolume_monte_carlo(
 
 
 def rank_by_pareto(
-    records: list["FrontierRecord"],
-    objectives: tuple[str, ...] = ("task_accuracy", "stability_score", "efficiency_score"),
+    records: list[FrontierRecord],
+    objectives: tuple[str, ...] = (
+        "task_accuracy",
+        "stability_score",
+        "efficiency_score",
+    ),
     maximize: tuple[bool, ...] = (True, True, True),
-) -> list[tuple["FrontierRecord", int]]:
+) -> list[tuple[FrontierRecord, int]]:
     """
     Rank records by Pareto layers (non-dominated sorting).
 
@@ -327,7 +340,7 @@ def rank_by_pareto(
     if not records:
         return []
 
-    layers: list[list["FrontierRecord"]] = []
+    layers: list[list[FrontierRecord]] = []
     remaining = records.copy()
 
     while remaining:

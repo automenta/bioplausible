@@ -24,21 +24,21 @@ import torch
 
 if TYPE_CHECKING:
     from bioplausible.core.joint.context import SystemContext
+    from bioplausible.core.joint.state import CompositeState
     from bioplausible.core.joint.transition import CoupledTransition
     from bioplausible.core.plasticity import PlasticityPrimitive
-    from bioplausible.core.joint.state import CompositeState
 
 
 @dataclass(frozen=True, slots=True)
 class KernelCacheKey:
     """Composite key for kernel cache entries."""
 
-    coordinate_hash: str           # Hash of 6-D coordinate (S/G/D/M/C/U)
+    coordinate_hash: str  # Hash of 6-D coordinate (S/G/D/M/C/U)
     tensor_shapes: tuple[tuple[int, ...], ...]  # Input tensor shapes
-    dtype: str                     # e.g., "float32", "bfloat16"
-    device: str                    # e.g., "cuda:0", "cpu"
-    adapter_stack_hash: str        # Hash of adapter composition
-    kernel_type: str               # "transition", "plasticity", "stability", "adapter"
+    dtype: str  # e.g., "float32", "bfloat16"
+    device: str  # e.g., "cuda:0", "cpu"
+    adapter_stack_hash: str  # Hash of adapter composition
+    kernel_type: str  # "transition", "plasticity", "stability", "adapter"
 
     def to_string(self) -> str:
         """Convert to string for storage."""
@@ -60,7 +60,9 @@ class KernelCacheKey:
             raise ValueError(f"Invalid cache key format: {s}")
         return cls(
             coordinate_hash=parts[0],
-            tensor_shapes=tuple(tuple(int(x) for x in s.split(",")) for s in parts[1].split("|") if s),
+            tensor_shapes=tuple(
+                tuple(int(x) for x in s.split(",")) for s in parts[1].split("|") if s
+            ),
             dtype=parts[2],
             device=parts[3],
             adapter_stack_hash=parts[4],
@@ -73,10 +75,10 @@ class KernelCacheEntry:
     """Cached kernel entry with metadata."""
 
     key: KernelCacheKey
-    compiled_artifact: bytes       # Pickled compiled kernel (torch.compile, Triton, etc.)
-    metadata: dict[str, Any]       # Compilation time, memory, etc.
+    compiled_artifact: bytes  # Pickled compiled kernel (torch.compile, Triton, etc.)
+    metadata: dict[str, Any]  # Compilation time, memory, etc.
     hit_count: int = 0
-    created_at: str = ""           # ISO timestamp
+    created_at: str = ""  # ISO timestamp
 
 
 class JointKernelCache:
@@ -128,6 +130,7 @@ class JointKernelCache:
         if self._disk_index_path.exists():
             try:
                 import json
+
                 with self._disk_index_path.open("r") as f:
                     self._disk_index = json.load(f)
             except Exception:
@@ -137,6 +140,7 @@ class JointKernelCache:
         """Save disk cache index."""
         try:
             import json
+
             with self._disk_index_path.open("w") as f:
                 json.dump(self._disk_index, f)
         except Exception:
@@ -156,7 +160,9 @@ class JointKernelCache:
         return hashlib.sha256("|".join(adapter_infos).encode()).hexdigest()[:16]
 
     @staticmethod
-    def _get_tensor_shapes(tensors: dict[str, torch.Tensor] | list[torch.Tensor]) -> tuple[tuple[int, ...], ...]:
+    def _get_tensor_shapes(
+        tensors: dict[str, torch.Tensor] | list[torch.Tensor],
+    ) -> tuple[tuple[int, ...], ...]:
         """Extract tensor shapes for cache key."""
         if isinstance(tensors, dict):
             shapes = tuple(tuple(t.shape) for t in tensors.values())
@@ -198,7 +204,9 @@ class JointKernelCache:
         Returns:
             The compiled kernel artifact, or None if not found.
         """
-        key = self._make_key(coordinate, tensor_shapes, dtype, device, adapter_stack, kernel_type)
+        key = self._make_key(
+            coordinate, tensor_shapes, dtype, device, adapter_stack, kernel_type
+        )
         key_str = key.to_string()
 
         # Check memory cache first
@@ -227,13 +235,24 @@ class JointKernelCache:
                             with entry_path.open("rb") as f:
                                 artifact = pickle.load(f)
                             # Promote to memory cache
-                            self.put(key_str, artifact, KernelCacheEntry(
-                                key=key,
-                                compiled_artifact=pickle.dumps(artifact),
-                                metadata=self._disk_index[key_str].get("metadata", {}),
-                                hit_count=self._disk_index[key_str].get("hit_count", 0) + 1,
-                                created_at=self._disk_index[key_str].get("created_at", ""),
-                            ))
+                            self.put(
+                                key_str,
+                                artifact,
+                                KernelCacheEntry(
+                                    key=key,
+                                    compiled_artifact=pickle.dumps(artifact),
+                                    metadata=self._disk_index[key_str].get(
+                                        "metadata", {}
+                                    ),
+                                    hit_count=self._disk_index[key_str].get(
+                                        "hit_count", 0
+                                    )
+                                    + 1,
+                                    created_at=self._disk_index[key_str].get(
+                                        "created_at", ""
+                                    ),
+                                ),
+                            )
                             return artifact
                         except Exception:
                             pass
@@ -286,7 +305,9 @@ class JointKernelCache:
                             self._disk_index.keys(),
                             key=lambda k: self._disk_index[k].get("created_at", ""),
                         )
-                        for old_key in sorted_keys[:len(self._disk_index) - self._max_disk]:
+                        for old_key in sorted_keys[
+                            : len(self._disk_index) - self._max_disk
+                        ]:
                             old_path = self._cache_dir / f"{old_key}.pkl"
                             old_path.unlink(missing_ok=True)
                             del self._disk_index[old_key]
@@ -297,9 +318,9 @@ class JointKernelCache:
     def cache_transition_step(
         self,
         coordinate: str,
-        transition: "CoupledTransition",
-        context: "SystemContext",
-        sample_state: "CompositeState",
+        transition: CoupledTransition,
+        context: SystemContext,
+        sample_state: CompositeState,
         adapter_stack: list[Any] | None = None,
     ) -> Any:
         """
@@ -325,19 +346,25 @@ class JointKernelCache:
         device = str(next(iter(all_tensors.values())).device) if all_tensors else "cpu"
 
         # Try to get from cache
-        cached = self.get(coordinate, tensor_shapes, dtype, device, adapter_stack, "transition")
+        cached = self.get(
+            coordinate, tensor_shapes, dtype, device, adapter_stack, "transition"
+        )
         if cached is not None:
             return cached
 
         # Compile the transition step
-        compiled_step = torch.compile(transition.step, mode="reduce-overhead", fullgraph=True)
+        compiled_step = torch.compile(
+            transition.step, mode="reduce-overhead", fullgraph=True
+        )
 
         # Warm up with sample input
         with torch.no_grad():
             _ = compiled_step(sample_state, context)
 
         # Cache it
-        key = self._make_key(coordinate, tensor_shapes, dtype, device, adapter_stack, "transition")
+        key = self._make_key(
+            coordinate, tensor_shapes, dtype, device, adapter_stack, "transition"
+        )
         key_str = key.to_string()
         self.put(key_str, compiled_step)
 
@@ -346,10 +373,10 @@ class JointKernelCache:
     def cache_plasticity_update(
         self,
         coordinate: str,
-        plasticity: "PlasticityPrimitive",
-        context: "SystemContext",
+        plasticity: PlasticityPrimitive,
+        context: SystemContext,
         sample_psi: dict[str, torch.Tensor],
-        sample_state: "CompositeState",
+        sample_state: CompositeState,
         adapter_stack: list[Any] | None = None,
     ) -> Any:
         """Cache or retrieve a compiled plasticity update step."""
@@ -363,16 +390,22 @@ class JointKernelCache:
         dtype = next(iter(all_tensors.values())).dtype if all_tensors else torch.float32
         device = str(next(iter(all_tensors.values())).device) if all_tensors else "cpu"
 
-        cached = self.get(coordinate, tensor_shapes, dtype, device, adapter_stack, "plasticity")
+        cached = self.get(
+            coordinate, tensor_shapes, dtype, device, adapter_stack, "plasticity"
+        )
         if cached is not None:
             return cached
 
-        compiled_update = torch.compile(plasticity.step, mode="reduce-overhead", fullgraph=True)
+        compiled_update = torch.compile(
+            plasticity.step, mode="reduce-overhead", fullgraph=True
+        )
 
         with torch.no_grad():
             _ = compiled_update(sample_psi, sample_state, context)
 
-        key = self._make_key(coordinate, tensor_shapes, dtype, device, adapter_stack, "plasticity")
+        key = self._make_key(
+            coordinate, tensor_shapes, dtype, device, adapter_stack, "plasticity"
+        )
         key_str = key.to_string()
         self.put(key_str, compiled_update)
 
@@ -386,21 +419,37 @@ class JointKernelCache:
         adapter_stack: list[Any] | None = None,
     ) -> Any:
         """Cache or retrieve a compiled stability estimator."""
-        tensor_shapes = self._get_tensor_shapes(sample_trajectory[0] if sample_trajectory else {})
-        dtype = next(iter(sample_trajectory[0].values())).dtype if sample_trajectory else torch.float32
-        device = str(next(iter(sample_trajectory[0].values())).device) if sample_trajectory else "cpu"
+        tensor_shapes = self._get_tensor_shapes(
+            sample_trajectory[0] if sample_trajectory else {}
+        )
+        dtype = (
+            next(iter(sample_trajectory[0].values())).dtype
+            if sample_trajectory
+            else torch.float32
+        )
+        device = (
+            str(next(iter(sample_trajectory[0].values())).device)
+            if sample_trajectory
+            else "cpu"
+        )
 
-        cached = self.get(coordinate, tensor_shapes, dtype, device, adapter_stack, "stability")
+        cached = self.get(
+            coordinate, tensor_shapes, dtype, device, adapter_stack, "stability"
+        )
         if cached is not None:
             return cached
 
-        compiled_estimator = torch.compile(estimator.estimate, mode="reduce-overhead", fullgraph=True)
+        compiled_estimator = torch.compile(
+            estimator.estimate, mode="reduce-overhead", fullgraph=True
+        )
 
         if sample_trajectory:
             with torch.no_grad():
                 _ = compiled_estimator(sample_trajectory)
 
-        key = self._make_key(coordinate, tensor_shapes, dtype, device, adapter_stack, "stability")
+        key = self._make_key(
+            coordinate, tensor_shapes, dtype, device, adapter_stack, "stability"
+        )
         key_str = key.to_string()
         self.put(key_str, compiled_estimator)
 
@@ -418,16 +467,22 @@ class JointKernelCache:
         dtype = next(iter(sample_input.values())).dtype
         device = str(next(iter(sample_input.values())).device)
 
-        cached = self.get(coordinate, tensor_shapes, dtype, device, adapter_stack, "adapter")
+        cached = self.get(
+            coordinate, tensor_shapes, dtype, device, adapter_stack, "adapter"
+        )
         if cached is not None:
             return cached
 
-        compiled_adapter = torch.compile(adapter.project, mode="reduce-overhead", fullgraph=True)
+        compiled_adapter = torch.compile(
+            adapter.project, mode="reduce-overhead", fullgraph=True
+        )
 
         with torch.no_grad():
             _ = compiled_adapter(sample_input)
 
-        key = self._make_key(coordinate, tensor_shapes, dtype, device, adapter_stack, "adapter")
+        key = self._make_key(
+            coordinate, tensor_shapes, dtype, device, adapter_stack, "adapter"
+        )
         key_str = key.to_string()
         self.put(key_str, compiled_adapter)
 

@@ -36,7 +36,7 @@ class JointTrajectory:
     def __len__(self) -> int:
         return len(self.activity)
 
-    def get_step(self, t: int) -> "CompositeState":
+    def get_step(self, t: int) -> CompositeState:
         """Reconstruct CompositeState at step t."""
         from bioplausible.core.joint.state import CompositeState
 

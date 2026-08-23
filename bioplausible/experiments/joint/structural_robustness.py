@@ -14,14 +14,8 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import torch
-from torch import Tensor
-
-if TYPE_CHECKING:
-    from bioplausible.core.campaign.frontier_record import FrontierRecord
-    from bioplausible.core.campaign.resource_vector import ResourceUsage
 
 
 def create_damage_scenarios(
@@ -152,7 +146,7 @@ def evaluate_structural_robustness(
     seed: int = 42,
 ) -> dict:
     """Evaluate structural robustness for a coordinate."""
-    import torch.nn as nn
+    from torch import nn
     from torch.utils.data import DataLoader, TensorDataset
 
     torch.manual_seed(seed)
@@ -166,14 +160,13 @@ def evaluate_structural_robustness(
     plasticity_type = parts[3]
 
     # Build plasticity primitive
-    from bioplausible.core.joint.transition import PlasticityConfig
+    from bioplausible.core.joint.transition import NullPlasticity, PlasticityConfig
     from bioplausible.core.plasticity import (
-        create_routing_plasticity,
         create_fast_weight_plasticity,
-        create_substrate_coupled_plasticity,
+        create_routing_plasticity,
         create_rule_state_plasticity,
+        create_substrate_coupled_plasticity,
     )
-    from bioplausible.core.joint.transition import NullPlasticity
 
     plasticity_config = PlasticityConfig(
         plasticity_type=plasticity_type,

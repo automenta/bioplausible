@@ -2,6 +2,7 @@
 
 import types
 
+from ..backprop import BackpropMLP
 from .causal_transformer_eqprop import (
     CausalEqPropAttention,
     CausalTransformerEqProp,
@@ -28,7 +29,6 @@ from .hardware_variants import NoisyLoopedMLP, QuantizedLoopedMLP
 from .holomorphic_ep import HolomorphicEP
 from .homeostatic import HomeostasisMetrics, HomeostaticEqProp
 from .looped_mlp import native_eqprop_mlp
-from ..backprop import BackpropMLP
 from .memory_efficient import (
     MemoryEfficientEqPropModel,
     MemoryEfficientLoopedMLP,

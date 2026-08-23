@@ -19,32 +19,27 @@ from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from bioplausible.core.ontology import (
-        CreditAssignmentConfig,
-        GeometryConfig,
-        ParameterUpdateConfig,
-        StateDynamicsConfig,
-        SubstrateConfig,
         SystemConfig,
     )
 
 __all__ = [
+    "DataConfig",
     "ExperimentConfig",
     "HardwareConfig",
     "ModelConfig",
-    "TrainingConfig",
-    "DataConfig",
     "SystemConfig",
-    "to_omegaconf",
+    "TrainingConfig",
     "from_omegaconf",
-    "to_trainer_config",
-    "to_system_trainer_config",
-    "to_deployment_config",
-    "to_tile_algorithm_config",
-    "make_vision_preset",
-    "make_lm_preset",
     "make_graph_preset",
+    "make_lm_preset",
     "make_rl_preset",
     "make_timeseries_preset",
+    "make_vision_preset",
+    "to_deployment_config",
+    "to_omegaconf",
+    "to_system_trainer_config",
+    "to_tile_algorithm_config",
+    "to_trainer_config",
 ]
 
 
@@ -244,7 +239,6 @@ class DataConfig:
 # Re-export SystemConfig from ontology as the unified 5-D config
 from bioplausible.core.ontology import SystemConfig
 
-
 # ──────────────────────────────────────────────
 # Top-Level Experiment Configuration (ALL FIELDS REQUIRED)
 # ──────────────────────────────────────────────
@@ -384,7 +378,7 @@ def to_trainer_config(config: ExperimentConfig):
         seed=config.seed,
         deterministic=config.deterministic,
         device=config.hardware.device,
-        tags={tag: True for tag in config.tags} if config.tags else {},
+        tags=dict.fromkeys(config.tags, True) if config.tags else {},
         extra={
             **config.training.extra,
             "gradient_accumulation_steps": config.training.gradient_accumulation_steps,
@@ -560,11 +554,11 @@ def _base_data(domain: str, task: str) -> DataConfig:
 
 def _base_system() -> SystemConfig:
     from bioplausible.core.ontology import (
-        SubstrateConfig,
-        GeometryConfig,
-        StateDynamicsConfig,
         CreditAssignmentConfig,
+        GeometryConfig,
         ParameterUpdateConfig,
+        StateDynamicsConfig,
+        SubstrateConfig,
         SystemConfig,
     )
 

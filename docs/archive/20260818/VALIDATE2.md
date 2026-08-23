@@ -125,12 +125,12 @@ async def run_scaling_sweep(algo: str):
 def check_scaling_gate(algo: str, results: ScalingResults) -> GateDecision:
     """Returns CONTINUE / PAUSE / PIVOT based on gap trajectory."""
     trend = results.gap_trend_pp_per_decade
-    
-    if trend > 2.0:      
-        return GateDecision.PIVOT   # Gap growing >2pp per 10x scale → ceiling
-    elif trend > -0.5:   
+
+    if trend > 2.0:
+        return GateDecision.PIVOT  # Gap growing >2pp per 10x scale → ceiling
+    elif trend > -0.5:
         return GateDecision.CONTINUE  # Gap stable or shrinking slowly
-    else:                 
+    else:
         return GateDecision.ACCELERATE  # Gap shrinking → invest more
 ```
 
@@ -272,6 +272,7 @@ Each regime gets a **single-file runnable demo** with three criteria:
 Regime Demo: Memory-Constrained Deep Learning
 Run: uv run python -m bioplausible.demos.regime_memory_constrained
 """
+
 import argparse
 from bioplausible.validation.regime_demos import run_memory_demo
 
@@ -282,23 +283,30 @@ if __name__ == "__main__":
     parser.add_argument("--compare-backprop", action="store_true")
     parser.add_argument("--output", type=str, help="JSON output path")
     args = parser.parse_args()
-    
+
     results = run_memory_demo(
         depth=args.depth,
         memory_limit_mb=args.memory_limit_mb,
         compare_backprop=args.compare_backprop,
     )
-    
-    print(f"Bio-algo: {results.bio.accuracy:.1%} acc, {results.bio.peak_mem_mb:.0f}MB peak")
+
+    print(
+        f"Bio-algo: {results.bio.accuracy:.1%} acc, {results.bio.peak_mem_mb:.0f}MB peak"
+    )
     if results.backprop:
-        print(f"Backprop: {results.backprop.accuracy:.1%} acc, {results.backprop.peak_mem_mb:.0f}MB peak")
-        print(f"Advantage: {results.backprop.peak_mem_mb / results.bio.peak_mem_mb:.1f}× less memory")
-    
+        print(
+            f"Backprop: {results.backprop.accuracy:.1%} acc, {results.backprop.peak_mem_mb:.0f}MB peak"
+        )
+        print(
+            f"Advantage: {results.backprop.peak_mem_mb / results.bio.peak_mem_mb:.1f}× less memory"
+        )
+
     if args.output:
         import json
+
         with open(args.output, "w") as f:
             json.dump(results.to_dict(), f, indent=2)
-    
+
     exit(0 if results.success else 1)
 ```
 
@@ -346,12 +354,12 @@ Finds best achievable backprop accuracy under the memory limit.
 
 ```python
 CONSTRAINT_MATRIX = {
-    "quantization": [8, 4, 2],           # bits
+    "quantization": [8, 4, 2],  # bits
     "weight_noise": [0.0, 0.01, 0.05, 0.1],  # Gaussian σ
     "activation_noise": [0.0, 0.01, 0.05],
-    "asynchrony": [False, True],         # random update order
-    "sparsity": [0.0, 0.5, 0.75, 0.9],   # weight pruning
-    "device_variation": [0.0, 0.05, 0.1], # per-device param variation
+    "asynchrony": [False, True],  # random update order
+    "sparsity": [0.0, 0.5, 0.75, 0.9],  # weight pruning
+    "device_variation": [0.0, 0.05, 0.1],  # per-device param variation
 }
 ```
 
@@ -403,6 +411,7 @@ def run_meta_analysis(self) -> MetaAnalysisReport:
         failure_manifold=self.map_failures_by_model_task(),
         transfer_matrix=self.compute_cross_domain_transfer(),
     )
+
 
 def suggest_next_experiment(self) -> ExperimentProposal:
     """Bayesian optimization over algorithm space."""

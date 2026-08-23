@@ -15,15 +15,9 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import torch
-import torch.nn as nn
-from torch import Tensor
-
-if TYPE_CHECKING:
-    from bioplausible.core.campaign.frontier_record import FrontierRecord
-    from bioplausible.core.campaign.resource_vector import ResourceUsage
+from torch import Tensor, nn
 
 
 def create_switching_task(
@@ -182,12 +176,12 @@ def evaluate_adaptation(
     seed: int = 42,
 ) -> dict:
     """Evaluate adaptation efficiency for a coordinate."""
-    from bioplausible.core.joint.transition import PlasticityConfig, NullPlasticity
+    from bioplausible.core.joint.transition import NullPlasticity, PlasticityConfig
     from bioplausible.core.plasticity import (
-        create_routing_plasticity,
         create_fast_weight_plasticity,
-        create_substrate_coupled_plasticity,
+        create_routing_plasticity,
         create_rule_state_plasticity,
+        create_substrate_coupled_plasticity,
     )
 
     torch.manual_seed(seed)

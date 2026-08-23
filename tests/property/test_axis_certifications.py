@@ -104,8 +104,11 @@ def _substrate_ids() -> list[str]:
 
 def _standard_substrate_factories() -> list[tuple[str, callable]]:
     """Return substrates compatible with standard real-valued geometries."""
-    return [(name, factory) for name, factory in _all_substrate_factories()
-            if name not in _SPECIAL_SUBSTRATES]
+    return [
+        (name, factory)
+        for name, factory in _all_substrate_factories()
+        if name not in _SPECIAL_SUBSTRATES
+    ]
 
 
 def _standard_substrate_ids() -> list[str]:
@@ -179,7 +182,11 @@ def _make_system_for_credit(
         )
         geometry = FeedforwardGeometry(config)
 
-    substrate = substrate_factory() if substrate_factory else DigitalSubstrate(SubstrateConfig.digital())
+    substrate = (
+        substrate_factory()
+        if substrate_factory
+        else DigitalSubstrate(SubstrateConfig.digital())
+    )
 
     if dynamics_type == "energy_minimization":
         dynamics = EnergyMinimizationDynamics(
@@ -216,7 +223,11 @@ def _make_system_for_dynamics(
         )
         geometry = FeedforwardGeometry(config)
 
-    substrate = substrate_factory() if substrate_factory else DigitalSubstrate(SubstrateConfig.digital())
+    substrate = (
+        substrate_factory()
+        if substrate_factory
+        else DigitalSubstrate(SubstrateConfig.digital())
+    )
     credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast())
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
 
@@ -238,7 +249,11 @@ def _make_system_for_update(
         input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,) * (DEPTH - 1)
     )
     geometry = FeedforwardGeometry(config)
-    substrate = substrate_factory() if substrate_factory else DigitalSubstrate(SubstrateConfig.digital())
+    substrate = (
+        substrate_factory()
+        if substrate_factory
+        else DigitalSubstrate(SubstrateConfig.digital())
+    )
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast())
 
@@ -730,16 +745,27 @@ class TestDAxisSpikeIntegration:
 class TestSAxisSubstrateCertification:
     """S-Axis: Verify all substrates work with C, U, D axis compositions."""
 
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
-    def test_substrate_with_thermodynamic_contrast(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _standard_substrate_factories(),
+        ids=_standard_substrate_ids(),
+    )
+    def test_substrate_with_thermodynamic_contrast(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """ThermodynamicContrast credit works with all standard substrates."""
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5))
+        credit = ThermodynamicContrast(
+            CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+        )
         sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
-            credit, dynamics_type="energy_minimization", device=device, substrate_factory=substrate_factory
+            credit,
+            dynamics_type="energy_minimization",
+            device=device,
+            substrate_factory=substrate_factory,
         )
 
         with seeded(42):
@@ -748,20 +774,34 @@ class TestSAxisSubstrateCertification:
         free_state = _run_free_phase(sys, x, y)
         nudged_state = _run_nudged_phase(sys, x, y)
 
-        pseudo_grads = credit.compute_pseudo_gradient(free_state, nudged_state, nudged_state.loss, geometry)
-        assert len(pseudo_grads) > 0, f"Substrate {substrate_name}: should produce pseudo-gradients"
+        pseudo_grads = credit.compute_pseudo_gradient(
+            free_state, nudged_state, nudged_state.loss, geometry
+        )
+        assert len(pseudo_grads) > 0, (
+            f"Substrate {substrate_name}: should produce pseudo-gradients"
+        )
 
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
-    def test_substrate_with_backprop_credit(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _standard_substrate_factories(),
+        ids=_standard_substrate_ids(),
+    )
+    def test_substrate_with_backprop_credit(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """BackpropCredit works with all standard substrates."""
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
 
         from bioplausible.core.ontology import BackpropCredit
+
         credit = BackpropCredit(CreditAssignmentConfig.gradient())
         sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
-            credit, dynamics_type="instantaneous", device=device, substrate_factory=substrate_factory
+            credit,
+            dynamics_type="instantaneous",
+            device=device,
+            substrate_factory=substrate_factory,
         )
 
         with seeded(42):
@@ -770,11 +810,21 @@ class TestSAxisSubstrateCertification:
         free_state = _run_free_phase(sys, x, y)
         nudged_state = _run_nudged_phase(sys, x, y)
 
-        pseudo_grads = credit.compute_pseudo_gradient(free_state, nudged_state, nudged_state.loss, geometry)
-        assert len(pseudo_grads) > 0, f"Substrate {substrate_name}: should produce pseudo-gradients"
+        pseudo_grads = credit.compute_pseudo_gradient(
+            free_state, nudged_state, nudged_state.loss, geometry
+        )
+        assert len(pseudo_grads) > 0, (
+            f"Substrate {substrate_name}: should produce pseudo-gradients"
+        )
 
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
-    def test_substrate_with_random_projections(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _standard_substrate_factories(),
+        ids=_standard_substrate_ids(),
+    )
+    def test_substrate_with_random_projections(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """RandomProjectionsCredit works with all standard substrates."""
         device = select_device()
         if device.type == "cuda":
@@ -782,7 +832,10 @@ class TestSAxisSubstrateCertification:
 
         credit = RandomProjectionsCredit(CreditAssignmentConfig.random_projections())
         sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
-            credit, dynamics_type="instantaneous", device=device, substrate_factory=substrate_factory
+            credit,
+            dynamics_type="instantaneous",
+            device=device,
+            substrate_factory=substrate_factory,
         )
 
         with seeded(42):
@@ -791,11 +844,21 @@ class TestSAxisSubstrateCertification:
         free_state = _run_free_phase(sys, x, y)
         nudged_state = _run_nudged_phase(sys, x, y)
 
-        pseudo_grads = credit.compute_pseudo_gradient(free_state, nudged_state, nudged_state.loss, geometry)
-        assert len(pseudo_grads) > 0, f"Substrate {substrate_name}: should produce pseudo-gradients"
+        pseudo_grads = credit.compute_pseudo_gradient(
+            free_state, nudged_state, nudged_state.loss, geometry
+        )
+        assert len(pseudo_grads) > 0, (
+            f"Substrate {substrate_name}: should produce pseudo-gradients"
+        )
 
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
-    def test_substrate_with_euclidean_update(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _standard_substrate_factories(),
+        ids=_standard_substrate_ids(),
+    )
+    def test_substrate_with_euclidean_update(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """EuclideanUpdate works with all standard substrates."""
         device = select_device()
         if device.type == "cuda":
@@ -811,17 +874,29 @@ class TestSAxisSubstrateCertification:
 
         # Verify train_step works
         metrics = sys.train_step(x, y)
-        assert "loss" in metrics, f"Substrate {substrate_name}: train_step should produce loss"
+        assert "loss" in metrics, (
+            f"Substrate {substrate_name}: train_step should produce loss"
+        )
 
-    @pytest.mark.skip(reason="RiemannianOrthogonalUpdate has known limitations with non-square matrices and parameter ordering")
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
-    def test_substrate_with_riemannian_update(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.skip(
+        reason="RiemannianOrthogonalUpdate has known limitations with non-square matrices and parameter ordering"
+    )
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _standard_substrate_factories(),
+        ids=_standard_substrate_ids(),
+    )
+    def test_substrate_with_riemannian_update(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """RiemannianOrthogonalUpdate works with all standard substrates."""
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        update = RiemannianOrthogonalUpdate(ParameterUpdateConfig.riemannian_orthogonal(step_size=0.01))
+        update = RiemannianOrthogonalUpdate(
+            ParameterUpdateConfig.riemannian_orthogonal(step_size=0.01)
+        )
         sys, geometry, substrate, dynamics, _ = _make_system_for_update(
             update, device=device, substrate_factory=substrate_factory
         )
@@ -830,16 +905,26 @@ class TestSAxisSubstrateCertification:
             x, y = tiny_batch(42)
 
         metrics = sys.train_step(x, y)
-        assert "loss" in metrics, f"Substrate {substrate_name}: train_step should produce loss"
+        assert "loss" in metrics, (
+            f"Substrate {substrate_name}: train_step should produce loss"
+        )
 
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
-    def test_substrate_with_energy_dynamics(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _standard_substrate_factories(),
+        ids=_standard_substrate_ids(),
+    )
+    def test_substrate_with_energy_dynamics(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """EnergyMinimizationDynamics works with all standard substrates."""
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=SETTLE_ITERS, beta=0.5))
+        dynamics = EnergyMinimizationDynamics(
+            StateDynamicsConfig.energy_minimization(max_steps=SETTLE_ITERS, beta=0.5)
+        )
         sys, geometry, substrate, dynamics, _ = _make_system_for_dynamics(
             dynamics, device=device, substrate_factory=substrate_factory
         )
@@ -853,10 +938,18 @@ class TestSAxisSubstrateCertification:
             state.activations = sys.substrate.inject_state_noise(state.activations)
         state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=None)
 
-        assert state.free_state is not None, f"Substrate {substrate_name}: free_state should be set"
+        assert state.free_state is not None, (
+            f"Substrate {substrate_name}: free_state should be set"
+        )
 
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
-    def test_substrate_with_instantaneous_dynamics(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _standard_substrate_factories(),
+        ids=_standard_substrate_ids(),
+    )
+    def test_substrate_with_instantaneous_dynamics(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """InstantaneousDynamics works with all standard substrates."""
         device = select_device()
         if device.type == "cuda":
@@ -876,30 +969,54 @@ class TestSAxisSubstrateCertification:
             state.activations = sys.substrate.inject_state_noise(state.activations)
         state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=None)
 
-        assert state.free_state is not None, f"Substrate {substrate_name}: free_state should be set"
+        assert state.free_state is not None, (
+            f"Substrate {substrate_name}: free_state should be set"
+        )
 
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _all_substrate_factories(), ids=_substrate_ids())
-    def test_substrate_quantize_weights(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _all_substrate_factories(),
+        ids=_substrate_ids(),
+    )
+    def test_substrate_quantize_weights(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """Substrate quantize_weights is callable and returns tensor of same shape."""
         device = select_device()
         substrate = substrate_factory()
 
         w = torch.randn(10, 10, device=device)
         w_q = substrate.quantize_weights(w)
-        assert w_q.shape == w.shape, f"Substrate {substrate_name}: quantize_weights should preserve shape"
+        assert w_q.shape == w.shape, (
+            f"Substrate {substrate_name}: quantize_weights should preserve shape"
+        )
 
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _all_substrate_factories(), ids=_substrate_ids())
-    def test_substrate_inject_noise(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _all_substrate_factories(),
+        ids=_substrate_ids(),
+    )
+    def test_substrate_inject_noise(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """Substrate inject_state_noise is callable and returns tensor of same shape."""
         device = select_device()
         substrate = substrate_factory()
 
         s = torch.randn(4, 10, device=device)
         s_noisy = substrate.inject_state_noise(s)
-        assert s_noisy.shape == s.shape, f"Substrate {substrate_name}: inject_state_noise should preserve shape"
+        assert s_noisy.shape == s.shape, (
+            f"Substrate {substrate_name}: inject_state_noise should preserve shape"
+        )
 
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _standard_substrate_factories(), ids=_standard_substrate_ids())
-    def test_substrate_forward_operator(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _standard_substrate_factories(),
+        ids=_standard_substrate_ids(),
+    )
+    def test_substrate_forward_operator(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """Substrate get_forward_operator returns callable that works."""
         device = select_device()
         substrate = substrate_factory()
@@ -908,10 +1025,18 @@ class TestSAxisSubstrateCertification:
         x = torch.randn(4, 10, device=device)
         w = torch.randn(10, 10, device=device)
         out = op(x, w)
-        assert out.shape == (4, 10), f"Substrate {substrate_name}: forward operator should produce correct shape"
+        assert out.shape == (4, 10), (
+            f"Substrate {substrate_name}: forward operator should produce correct shape"
+        )
 
-    @pytest.mark.parametrize("substrate_name,substrate_factory", _all_substrate_factories(), ids=_substrate_ids())
-    def test_substrate_weight_update_operator(self, substrate_name: str, substrate_factory: callable) -> None:
+    @pytest.mark.parametrize(
+        "substrate_name,substrate_factory",
+        _all_substrate_factories(),
+        ids=_substrate_ids(),
+    )
+    def test_substrate_weight_update_operator(
+        self, substrate_name: str, substrate_factory: callable
+    ) -> None:
         """Substrate get_weight_update_operator returns callable that works."""
         device = select_device()
         substrate = substrate_factory()
@@ -920,7 +1045,9 @@ class TestSAxisSubstrateCertification:
         grad = torch.randn(10, 10, device=device)
         w = torch.randn(10, 10, device=device)
         w_new = op(grad, w)
-        assert w_new.shape == w.shape, f"Substrate {substrate_name}: weight update operator should preserve shape"
+        assert w_new.shape == w.shape, (
+            f"Substrate {substrate_name}: weight update operator should preserve shape"
+        )
 
 
 # ======================================================================
@@ -942,8 +1069,13 @@ class TestSubstratePrecisionEnforcement:
     def test_analog_substrate_precision(self, precision: str) -> None:
         """AnalogSubstrate respects precision config."""
         config = SubstrateConfig.analog()
-        config = SubstrateConfig(precision=precision, noise_level=config.noise_level,
-                                 weight_bounds=config.weight_bounds, sparsity=config.sparsity, device=config.device)
+        config = SubstrateConfig(
+            precision=precision,
+            noise_level=config.noise_level,
+            weight_bounds=config.weight_bounds,
+            sparsity=config.sparsity,
+            device=config.device,
+        )
         substrate = AnalogSubstrate(config)
         assert substrate.config.precision == precision
 
@@ -974,8 +1106,13 @@ class TestSubstratePrecisionEnforcement:
     def test_memristive_substrate_precision(self, precision: str) -> None:
         """MemristiveSubstrate respects precision config."""
         config = SubstrateConfig.memristive()
-        config = SubstrateConfig(precision=precision, noise_level=config.noise_level,
-                                 weight_bounds=config.weight_bounds, sparsity=config.sparsity, device=config.device)
+        config = SubstrateConfig(
+            precision=precision,
+            noise_level=config.noise_level,
+            weight_bounds=config.weight_bounds,
+            sparsity=config.sparsity,
+            device=config.device,
+        )
         substrate = MemristiveSubstrate(config)
         assert substrate.config.precision == precision
 
@@ -983,8 +1120,13 @@ class TestSubstratePrecisionEnforcement:
     def test_neuromorphic_substrate_precision(self, precision: str) -> None:
         """NeuromorphicSubstrate respects precision config."""
         config = SubstrateConfig.neuromorphic()
-        config = SubstrateConfig(precision=precision, noise_level=config.noise_level,
-                                 weight_bounds=config.weight_bounds, sparsity=config.sparsity, device=config.device)
+        config = SubstrateConfig(
+            precision=precision,
+            noise_level=config.noise_level,
+            weight_bounds=config.weight_bounds,
+            sparsity=config.sparsity,
+            device=config.device,
+        )
         substrate = NeuromorphicSubstrate(config)
         assert substrate.config.precision == precision
 
@@ -992,8 +1134,13 @@ class TestSubstratePrecisionEnforcement:
     def test_optical_substrate_precision(self, precision: str) -> None:
         """OpticalSubstrate respects precision config."""
         config = SubstrateConfig.optical()
-        config = SubstrateConfig(precision=precision, noise_level=config.noise_level,
-                                 weight_bounds=config.weight_bounds, sparsity=config.sparsity, device=config.device)
+        config = SubstrateConfig(
+            precision=precision,
+            noise_level=config.noise_level,
+            weight_bounds=config.weight_bounds,
+            sparsity=config.sparsity,
+            device=config.device,
+        )
         substrate = OpticalSubstrate(config)
         assert substrate.config.precision == precision
 

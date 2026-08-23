@@ -10,8 +10,10 @@ exception: ``raise DomainError("msg") from original_exception``.
 __all__ = [
     "BioplausibleError",
     "CheckpointError",
+    "CompositionError",  # alias
     "ConditionalQueryError",
     "ConfigError",
+    "ConfigurationError",  # alias
     "IncompatibilityError",
     "KnowledgeBaseError",
     "LoadStateError",
@@ -20,6 +22,7 @@ __all__ = [
     "RegistryError",
     "SpaceSignatureMismatchError",
     "TileGraphError",
+    "TrainingError",
     "TrialExecutionError",
 ]
 
@@ -101,3 +104,12 @@ class NumericalInstabilityError(BioplausibleError):
 
 class TileGraphError(BioplausibleError):
     """Invalid or inconsistent tile-graph topology."""
+
+
+# Aliases for API consistency with documentation
+ConfigurationError = ConfigError
+CompositionError = IncompatibilityError
+
+
+class TrainingError(BioplausibleError):
+    """A training step or epoch failed to execute."""

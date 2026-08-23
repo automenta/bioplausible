@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import torch
 
 from bioplausible.core.joint.state import CompositeState
+
 if TYPE_CHECKING:
     from bioplausible.core.joint.context import SystemContext
 
 
 def estimate_basin_stability(
-    transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-    z_attractor: "CompositeState",
-    context: "SystemContext",
+    transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+    z_attractor: CompositeState,
+    context: SystemContext,
     num_samples: int = 100,
     perturbation_radius: float = 1.0,
     max_steps: int = 200,
@@ -60,7 +62,9 @@ def estimate_basin_stability(
         direction = direction / (direction.norm(dim=-1, keepdim=True) + 1e-8)
 
         # Scale by random radius in [0, perturbation_radius]
-        radius = torch.rand(batch_size, 1, device=x_attractor.device) * perturbation_radius
+        radius = (
+            torch.rand(batch_size, 1, device=x_attractor.device) * perturbation_radius
+        )
         perturbation = direction * radius
 
         # Perturbed initial state
@@ -84,7 +88,9 @@ def estimate_basin_stability(
                 dist = delta.norm(dim=-1).mean()
             else:
                 # Cosine distance
-                cos_sim = torch.nn.functional.cosine_similarity(x_current, x_attractor, dim=-1)
+                cos_sim = torch.nn.functional.cosine_similarity(
+                    x_current, x_attractor, dim=-1
+                )
                 dist = (1 - cos_sim).mean()
 
             if dist < tolerance:
@@ -110,9 +116,9 @@ class BasinStabilityEstimator:
 
     def __call__(
         self,
-        transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-        z_attractor: "CompositeState",
-        context: "SystemContext",
+        transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+        z_attractor: CompositeState,
+        context: SystemContext,
     ) -> float:
         """Estimate basin stability."""
         if self.fast_mode:
@@ -131,9 +137,9 @@ class BasinStabilityEstimator:
 
     def _fast_proxy(
         self,
-        transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-        z_attractor: "CompositeState",
-        context: "SystemContext",
+        transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+        z_attractor: CompositeState,
+        context: SystemContext,
     ) -> float:
         """Fast proxy: single perturbation test + local linearization.
 
@@ -160,7 +166,10 @@ class BasinStabilityEstimator:
                 z_next = transition_fn(z_attractor, context)
                 z_next_perturbed = transition_fn(z_perturbed, context)
 
-            delta = z_next_perturbed.activity[self.activity_key] - z_next.activity[self.activity_key]
+            delta = (
+                z_next_perturbed.activity[self.activity_key]
+                - z_next.activity[self.activity_key]
+            )
             Jv = delta / eps
             J_norms.append(Jv.norm(dim=-1).mean().item())
 
@@ -182,9 +191,9 @@ class BasinStabilityEstimator:
 
 
 def estimate_basin_stability_multistart(
-    transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-    z_attractor: "CompositeState",
-    context: "SystemContext",
+    transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+    z_attractor: CompositeState,
+    context: SystemContext,
     num_samples: int = 100,
     perturbation_radii: list[float] | None = None,
     max_steps: int = 200,

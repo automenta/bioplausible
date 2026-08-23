@@ -20,12 +20,16 @@ into a single cell:
 import subprocess, os
 
 # 1. Install uv (Astral's Python package/venv manager)
-subprocess.run("curl -LsSf https://astral.sh/uv/install.sh | sh", shell=True, check=True)
+subprocess.run(
+    "curl -LsSf https://astral.sh/uv/install.sh | sh", shell=True, check=True
+)
 os.environ["PATH"] = f"{os.path.expanduser('~/.local/bin')}:{os.environ['PATH']}"
 
 # 2. Clone the repo
 if not os.path.exists("bioplausible"):
-    subprocess.run("git clone https://github.com/autonull/bioplausible.git", shell=True, check=True)
+    subprocess.run(
+        "git clone https://github.com/autonull/bioplausible.git", shell=True, check=True
+    )
 os.chdir("bioplausible")
 
 # 3. Sync deps (uses pyproject.toml + uv.lock)
@@ -60,15 +64,29 @@ The `CONFIG` dict at the top of `run_phase1_colab.py` controls everything:
 ```python
 CONFIG = {
     "db": "compute.db",
-    "tier": "standard",      # smoke / shallow / standard / deep
-    "interval": 30,          # dashboard refresh seconds
-    "emit_every": 10,        # interim portfolio every N trials
-    "families": ["backprop", "fa", "forward_only", "eqprop",
-                 "hebbian", "target_prop", "spiking", "predictive_coding"],
+    "tier": "standard",  # smoke / shallow / standard / deep
+    "interval": 30,  # dashboard refresh seconds
+    "emit_every": 10,  # interim portfolio every N trials
+    "families": [
+        "backprop",
+        "fa",
+        "forward_only",
+        "eqprop",
+        "hebbian",
+        "target_prop",
+        "spiking",
+        "predictive_coding",
+    ],
     "tasks": ["digits", "cifar10"],
     "family_budgets": {
-        "backprop": 30, "fa": 20, "forward_only": 20, "eqprop": 15,
-        "hebbian": 15, "target_prop": 15, "spiking": 15, "predictive_coding": 15,
+        "backprop": 30,
+        "fa": 20,
+        "forward_only": 20,
+        "eqprop": 15,
+        "hebbian": 15,
+        "target_prop": 15,
+        "spiking": 15,
+        "predictive_coding": 15,
     },
     "seed": 42,
     "device": "auto",
@@ -115,6 +133,7 @@ above) takes roughly **1.5–2.5 hours**. Use `"tier": "shallow"` or lower
 To download files to your machine:
 ```python
 from google.colab import files
+
 files.download("results/portfolio.csv")
 files.download("compute.db")
 ```

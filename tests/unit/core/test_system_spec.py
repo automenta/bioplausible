@@ -97,9 +97,7 @@ def _make_random_system(device: torch.device) -> tuple:
         )
 
     # Use deterministic dynamics only
-    dynamics = InstantaneousDynamics(
-        StateDynamicsConfig.instantaneous()
-    )
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
     # Use deterministic credit types only (no random projections, temporal trace)
     credit_type = random.choice([
@@ -350,9 +348,7 @@ class TestSystemSpecRoundTrip:
                     recurrent_weight=None,
                 )
             ),
-            dynamics=InstantaneousDynamics(
-                StateDynamicsConfig.instantaneous()
-            ),
+            dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
             credit=ThermodynamicContrast(
                 CreditAssignmentConfig(
                     credit_type="thermodynamic_contrast",
@@ -410,9 +406,7 @@ class TestSystemSpecRoundTrip:
                     recurrent_weight=None,
                 )
             ),
-            dynamics=InstantaneousDynamics(
-                StateDynamicsConfig.instantaneous()
-            ),
+            dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
             credit=ThermodynamicContrast(
                 CreditAssignmentConfig(
                     credit_type="thermodynamic_contrast",

@@ -121,10 +121,11 @@ bioplausible/core/joint/
 @dataclass(frozen=True, slots=True)
 class StateVariable:
     name: str
-    persistent: bool       # Survives episode boundaries (traditionally θ)
-    fast_plastic: bool     # Evolves via intra-episode plastic law (traditionally ψ)
+    persistent: bool  # Survives episode boundaries (traditionally θ)
+    fast_plastic: bool  # Evolves via intra-episode plastic law (traditionally ψ)
     substrate_owned: bool  # Subject to physical device constraints (traditionally σ)
-    consolidatable: bool   # Can be promoted to persistent state at episode end
+    consolidatable: bool  # Can be promoted to persistent state at episode end
+
 
 # Registry managing all state variables with lifecycle validation
 class StateRegistry:
@@ -132,17 +133,19 @@ class StateRegistry:
     def validate(self, z: CompositeState) -> None: ...
     def lifecycle_groups(self) -> dict[str, list[str]]: ...
 
+
 # Joint intra-episode state: z_t = (x_t, ψ_t, σ_t)
 @dataclass(frozen=False, slots=True)
 class CompositeState:
-    activity: Mapping[str, Tensor]    # x_t
-    plastic: Mapping[str, Tensor]     # ψ_t
-    substrate: Mapping[str, Tensor]   # σ_t
+    activity: Mapping[str, Tensor]  # x_t
+    plastic: Mapping[str, Tensor]  # ψ_t
+    substrate: Mapping[str, Tensor]  # σ_t
+
 
 # Immutable context for the joint transition
 @dataclass(frozen=True, slots=True)
 class SystemContext:
-    theta: Mapping[str, Tensor]           # Persistent parameters (immutable intra-episode)
+    theta: Mapping[str, Tensor]  # Persistent parameters (immutable intra-episode)
     geometry: Geometry
     substrate: Substrate
     substrate_config: SubstrateConfig
@@ -168,11 +171,14 @@ class PlasticityConfig:
     @classmethod
     def routing(cls, gate_dim: int = 64, **kwargs) -> "PlasticityConfig": ...
     @classmethod
-    def fast_weights(cls, fast_weight_dim: int = 512, **kwargs) -> "PlasticityConfig": ...
+    def fast_weights(
+        cls, fast_weight_dim: int = 512, **kwargs
+    ) -> "PlasticityConfig": ...
     @classmethod
     def substrate_coupled(cls, **kwargs) -> "PlasticityConfig": ...
     @classmethod
     def rule_state(cls, num_operators: int = 8, **kwargs) -> "PlasticityConfig": ...
+
 
 # SystemConfig extended to 6 axes: S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U
 @dataclass(frozen=True, slots=True)
@@ -192,6 +198,7 @@ class SystemConfig:
 ```python
 class NullPlasticity:
     """ψ_{t+1} = ψ_t — Joint system with M=Null ≡ 5-D system."""
+
     def step(self, psi, z, context):
         return psi
 ```

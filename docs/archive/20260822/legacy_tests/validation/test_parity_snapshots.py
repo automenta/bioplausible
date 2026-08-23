@@ -90,8 +90,9 @@ def _eqprop_mlp_acc():
 def _directed_ep_acc():
     x, y, input_dim, n_classes = _synthetic_task()
     torch.manual_seed(456)
-    from bioplausible.config.unified import ModelConfig
     from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
+
+    from bioplausible.config.unified import ModelConfig
 
     m = DirectedEP(
         ModelConfig(

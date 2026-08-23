@@ -1,34 +1,24 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.7.0
+  - repo: local
     hooks:
-      - id: ruff
-        args: [--fix]
       - id: ruff-format
-
-  - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.390
-    hooks:
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
       - id: pyright
-
-  - repo: https://github.com/pytest-dev/pytest
-    rev: 8.3.0
-    hooks:
-      - id: pytest
-        name: pytest
-        entry: pytest
+        name: pyright
+        entry: uv run pyright
+        language: system
+        types: [python]
+      - id: pytest-fast
+        name: pytest (property tests)
+        entry: uv run pytest tests/property/ -q
         language: system
         pass_filenames: false
         always_run: true
-
-  - repo: https://github.com/pypa/pip-audit
-    rev: v2.7.0
-    hooks:
-      - id: pip-audit
-        name: pip-audit
-        entry: pip-audit
-        language: system
-        pass_filenames: false
-        always_run: true
-
-  

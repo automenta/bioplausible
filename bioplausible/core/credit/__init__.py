@@ -13,13 +13,13 @@ from bioplausible.core.credit.adapters import (
 )
 
 __all__ = [
-    "CreditAdapter",
-    "ThermodynamicToBackpropAdapter",
-    "RandomProjectionsToThermodynamicAdapter",
-    "LocalGoodnessToThermodynamicAdapter",
-    "ThermodynamicToHomeostaticAdapter",
-    "TemporalTraceToThermodynamicAdapter",
-    "TargetInversionToThermodynamicAdapter",
     "BackpropToThermodynamicAdapter",
+    "CreditAdapter",
+    "LocalGoodnessToThermodynamicAdapter",
+    "RandomProjectionsToThermodynamicAdapter",
+    "TargetInversionToThermodynamicAdapter",
+    "TemporalTraceToThermodynamicAdapter",
+    "ThermodynamicToBackpropAdapter",
+    "ThermodynamicToHomeostaticAdapter",
     "create_credit_adapter",
 ]

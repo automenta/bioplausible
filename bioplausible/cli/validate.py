@@ -29,7 +29,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Intermediate mode (directional, ~1 hour)",
     )
     parser.add_argument(
-        "--full", action="store_true", help="Full mode (statistically significant, ~4+ hr)"
+        "--full",
+        action="store_true",
+        help="Full mode (statistically significant, ~4+ hr)",
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument(

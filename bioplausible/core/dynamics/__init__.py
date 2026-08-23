@@ -13,9 +13,9 @@ from bioplausible.core.dynamics.adapters import (
 __all__ = [
     "DynamicsAdapter",
     "EnergyToInstantaneousAdapter",
-    "SpikeToInstantaneousAdapter",
+    "InstantaneousToEnergyAdapter",
     "LazyToEnergyAdapter",
     "PredictiveToEnergyAdapter",
-    "InstantaneousToEnergyAdapter",
+    "SpikeToInstantaneousAdapter",
     "create_dynamics_adapter",
 ]

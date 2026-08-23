@@ -83,7 +83,9 @@ class RoutingPlasticity:
     def gate_dim(self) -> int:
         return self._config.gate_dim
 
-    def initial_psi(self, context: "SystemContext | None", batch_size: int = 1) -> dict[str, Tensor]:
+    def initial_psi(
+        self, context: SystemContext | None, batch_size: int = 1
+    ) -> dict[str, Tensor]:
         """Create initial plastic state.
 
         Args:
@@ -101,8 +103,8 @@ class RoutingPlasticity:
     def step(
         self,
         psi: dict[str, Tensor],
-        z: "CompositeState",
-        context: "SystemContext",
+        z: CompositeState,
+        context: SystemContext,
     ) -> dict[str, Tensor]:
         """Compute next plastic state.
 
@@ -129,7 +131,7 @@ class RoutingPlasticity:
                 if x.shape[0] > batch_size:
                     new_gate_logits = new_gate_logits.expand(x.shape[0], -1)
                 else:
-                    new_gate_logits = new_gate_logits[:x.shape[0]]
+                    new_gate_logits = new_gate_logits[: x.shape[0]]
                 batch_size = x.shape[0]
 
             # Compute gate update from input statistics
@@ -188,7 +190,11 @@ def create_routing_plasticity(config: PlasticityConfig) -> RoutingPlasticity:
     if config.plasticity_type != "routing":
         raise ValueError(f"Expected routing config, got {config.plasticity_type}")
 
-    gate_dim = config.plastic_state_dims.get("gate_logits", 64) if config.plastic_state_dims else 64
+    gate_dim = (
+        config.plastic_state_dims.get("gate_logits", 64)
+        if config.plastic_state_dims
+        else 64
+    )
     consolidation = config.consolidation_config or {}
 
     return RoutingPlasticity(

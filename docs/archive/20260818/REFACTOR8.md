@@ -202,8 +202,14 @@ No automated way to benchmark strategy permutations (gradient × update × const
 # Sweep: (model, dataset) × (gradient, update, constraint, feedback) × precision
 # Emits: artifacts/strategy_benchmark_report.json (schema v1)
 
-MODELS = ["backprop_mlp", "standard_fa", "pepita", "diff_target_prop", 
-          "predictive_coding_hybrid", "standard_eqprop"]
+MODELS = [
+    "backprop_mlp",
+    "standard_fa",
+    "pepita",
+    "diff_target_prop",
+    "predictive_coding_hybrid",
+    "standard_eqprop",
+]
 
 DATASETS = ["digits", "mnist", "fashion_mnist"]
 
@@ -420,6 +426,7 @@ class KernelBackend(Protocol):
     supported_dtypes: tuple[type, ...]
     supports_autograd: bool
     requires_settle: bool
+
     def initialize(self, config: KernelConfig) -> None: ...
     def forward(self, *args, **kwargs) -> tuple[Tensor, ...]: ...
     def backward(self, *args, **kwargs) -> dict[str, Tensor]: ...
@@ -449,10 +456,12 @@ class KernelConfig:
 ### Dispatch Integration (REFACTOR7 §1.5)
 ```python
 def _maybe_wrap_with_kernel(model: nn.Module, config: TrainerConfig) -> nn.Module:
-    if not config.use_kernel: return model
+    if not config.use_kernel:
+        return model
     family = _infer_algorithm_family(config.model)
     backend = KernelRegistry.get_best(family, config.target_hardware)
-    if backend is None: return model
+    if backend is None:
+        return model
     return backend.wrap(model, config)
 ```
 
@@ -500,7 +509,8 @@ class ContrastiveHebbianKernel:
         self.apply_updates(deltas)
         return self.compute_metrics(free, nudged)
 
-# Algorithm-specific: FAContrastiveKernel, HebbianContrastiveKernel, 
+
+# Algorithm-specific: FAContrastiveKernel, HebbianContrastiveKernel,
 # FFContrastiveKernel, PEPITAContrastiveKernel, TPContrastiveKernel,
 # PCContrastiveKernel, SNNContrastiveKernel, TileContrastiveKernel,
 # MEPContrastiveKernel, O1MemoryContrastiveKernel
@@ -512,6 +522,7 @@ def export_kernel_to_hls(kernel, config) -> Path: ...
 def export_kernel_to_verilog(kernel, config) -> Path: ...
 def export_kernel_to_nxsdk(kernel) -> Path: ...
 def export_kernel_to_spice(kernel, config) -> Path: ...
+
 
 # CLI: biopl-export-kernel --algorithm eqprop --target fpga --output ./hls_proj --precision fp16
 ```

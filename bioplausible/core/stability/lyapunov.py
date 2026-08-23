@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import torch
 
 from bioplausible.core.joint.state import CompositeState
+
 if TYPE_CHECKING:
     from bioplausible.core.joint.context import SystemContext
 
 
 def estimate_lyapunov_exponent(
-    transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-    z: "CompositeState",
-    context: "SystemContext",
+    transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+    z: CompositeState,
+    context: SystemContext,
     num_steps: int = 50,
     perturbation_scale: float = 1e-6,
     activity_key: str = "x",
@@ -102,9 +104,9 @@ class LyapunovEstimator:
 
     def __call__(
         self,
-        transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-        z: "CompositeState",
-        context: "SystemContext",
+        transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+        z: CompositeState,
+        context: SystemContext,
     ) -> float:
         """Estimate local Lyapunov exponent."""
         if self.fast_mode:
@@ -121,9 +123,9 @@ class LyapunovEstimator:
 
     def _fast_proxy(
         self,
-        transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-        z: "CompositeState",
-        context: "SystemContext",
+        transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+        z: CompositeState,
+        context: SystemContext,
     ) -> float:
         """Fast proxy: single-step log separation growth.
 
@@ -147,7 +149,10 @@ class LyapunovEstimator:
             z_next_perturbed = transition_fn(z_perturbed, context)
 
         delta_t = v
-        delta_t1 = z_next_perturbed.activity[self.activity_key] - z_next.activity[self.activity_key]
+        delta_t1 = (
+            z_next_perturbed.activity[self.activity_key]
+            - z_next.activity[self.activity_key]
+        )
 
         sep_t = delta_t.norm(dim=-1).mean()
         sep_t1 = delta_t1.norm(dim=-1).mean()
@@ -158,9 +163,9 @@ class LyapunovEstimator:
 
 
 def estimate_lyapunov_spectrum(
-    transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-    z: "CompositeState",
-    context: "SystemContext",
+    transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+    z: CompositeState,
+    context: SystemContext,
     num_vectors: int = 5,
     num_steps: int = 100,
     perturbation_scale: float = 1e-6,
@@ -215,7 +220,9 @@ def estimate_lyapunov_spectrum(
                 z_next = transition_fn(z_current, context)
                 z_next_perturbed = transition_fn(z_perturbed, context)
 
-            delta = z_next_perturbed.activity[activity_key] - z_next.activity[activity_key]
+            delta = (
+                z_next_perturbed.activity[activity_key] - z_next.activity[activity_key]
+            )
             new_q.append(delta / perturbation_scale)
 
             # Accumulate log norm

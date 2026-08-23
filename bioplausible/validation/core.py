@@ -252,7 +252,9 @@ class Verifier:
             config = {
                 "track_id": track_id,
                 "track_name": name,
-                "verification_mode": "quick" if self.quick_mode else ("intermediate" if self.intermediate_mode else "full"),
+                "verification_mode": "quick"
+                if self.quick_mode
+                else ("intermediate" if self.intermediate_mode else "full"),
             }
 
             # Determine model/task from track
@@ -263,18 +265,26 @@ class Verifier:
             def _sanitize(v: object) -> float:
                 try:
                     return float(v if v is not None else 0.0)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     return 0.0
 
             sanitized_metrics = {k: _sanitize(v) for k, v in metrics.items()}
 
             if exp_status == "completed":
                 # Record to KnowledgeBase
-                kb = KnowledgeBase(db_path=db_path("bioplausible_kb.db"), auto_embed=False)
+                kb = KnowledgeBase(
+                    db_path=db_path("bioplausible_kb.db"), auto_embed=False
+                )
                 acc = sanitized_metrics.get("track_score", 0.0) / 100.0
-                flops = sanitized_metrics.get("forward_flops", 0.0) + sanitized_metrics.get("backward_flops", 0.0)
-                mem = sanitized_metrics.get("peak_memory_mb", sanitized_metrics.get("memory_mb", 0.0))
-                wall = sanitized_metrics.get("wall_time_s", sanitized_metrics.get("track_time_seconds", 0.0))
+                flops = sanitized_metrics.get(
+                    "forward_flops", 0.0
+                ) + sanitized_metrics.get("backward_flops", 0.0)
+                mem = sanitized_metrics.get(
+                    "peak_memory_mb", sanitized_metrics.get("memory_mb", 0.0)
+                )
+                wall = sanitized_metrics.get(
+                    "wall_time_s", sanitized_metrics.get("track_time_seconds", 0.0)
+                )
                 finding = (
                     f"rule {model} on {task}: final_acc={acc:.4f} "
                     f"flops={flops:.3e} mem={mem:.1f}MB time={wall:.2f}s"
@@ -286,11 +296,16 @@ class Verifier:
                     task=task,
                     config=dict(config),
                     metrics=sanitized_metrics,
-                    artifacts={"epochs": str(self.epochs), "seed": str(self.seed), "device": "cpu"},
+                    artifacts={
+                        "epochs": str(self.epochs),
+                        "seed": str(self.seed),
+                        "device": "cpu",
+                    },
                 )
             else:
                 # Record to FailureTracker
                 from datetime import datetime
+
                 tracker = FailureTracker(db_path=db_path("execution_state.db"))
                 failure_type = {
                     "error": "exception",
@@ -298,6 +313,7 @@ class Verifier:
                     "expensive": "cost_limited",
                 }.get(exp_status, "unknown")
                 from bioplausible.execution._state import FailureRecord
+
                 record = FailureRecord(
                     timestamp=datetime.now().isoformat(),
                     model_name=model,
@@ -377,7 +393,7 @@ class Verifier:
                     elif result:
                         results[tid] = result
                         self.notebook.add_track_result(result)
-                        
+
                         # Record to knowledge base if enabled
                         if self.record_to_kb:
                             self._record_track_to_kb(tid, result)
@@ -417,7 +433,7 @@ class Verifier:
                 elif result:
                     results[track_id] = result
                     self.notebook.add_track_result(result)
-                    
+
                     # Record to knowledge base if enabled
                     if self.record_to_kb:
                         self._record_track_to_kb(track_id, result)

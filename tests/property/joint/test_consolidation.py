@@ -8,7 +8,6 @@ from torch import Tensor
 from bioplausible.core.joint import (
     CompositeState,
     ConsolidationConfig,
-    NullPlasticity,
     PlasticityConfig,
     StateRegistry,
     StateVariable,
@@ -18,16 +17,12 @@ from bioplausible.core.joint import (
 from bioplausible.core.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
-    EnergyMinimizationDynamics,
-    EuclideanUpdate,
     GeometryConfig,
     ParameterUpdateConfig,
     RecurrentGeometry,
     StateDynamicsConfig,
     SubstrateConfig,
-    ThermodynamicContrast,
 )
-from bioplausible.core.system_trainer import compose_system
 
 
 def _create_context_with_consolidatable() -> tuple[SystemContext, dict[str, Tensor]]:
@@ -42,10 +37,14 @@ def _create_context_with_consolidatable() -> tuple[SystemContext, dict[str, Tens
     for name in geometry.params:
         registry.register(StateVariable(name=name, persistent=True))
     # Add a consolidatable plastic variable
-    registry.register(StateVariable(name="fast_weights", fast_plastic=True, consolidatable=True))
+    registry.register(
+        StateVariable(name="fast_weights", fast_plastic=True, consolidatable=True)
+    )
 
     theta = dict(geometry.params)
-    theta["fast_weights"] = torch.zeros(20, 20, requires_grad=True)  # Base value for consolidation
+    theta["fast_weights"] = torch.zeros(
+        20, 20, requires_grad=True
+    )  # Base value for consolidation
 
     return (
         SystemContext(
@@ -53,8 +52,12 @@ def _create_context_with_consolidatable() -> tuple[SystemContext, dict[str, Tens
             geometry=geometry,
             substrate=substrate,
             substrate_config=SubstrateConfig.digital(),
-            geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
-            dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5),
+            geometry_config=GeometryConfig.recurrent(
+                input_dim=10, output_dim=2, hidden_dims=(20,)
+            ),
+            dynamics_config=StateDynamicsConfig.energy_minimization(
+                max_steps=5, beta=0.5
+            ),
             credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
             update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
             plasticity_config=PlasticityConfig.null(),
@@ -74,7 +77,9 @@ def test_consolidation_promotes_consolidatable():
         substrate={},
     )
 
-    new_context = consolidate(z_final, context, ConsolidationConfig(promotion_scale=1.0))
+    new_context = consolidate(
+        z_final, context, ConsolidationConfig(promotion_scale=1.0)
+    )
 
     # fast_weights should be promoted: θ_new = θ_old + ψ
     assert "fast_weights" in new_context.theta
@@ -93,7 +98,9 @@ def test_consolidation_scale():
     )
 
     # Scale 0.5: θ_new = θ_old + 0.5 * ψ
-    new_context = consolidate(z_final, context, ConsolidationConfig(promotion_scale=0.5))
+    new_context = consolidate(
+        z_final, context, ConsolidationConfig(promotion_scale=0.5)
+    )
     expected = original_theta["fast_weights"] + torch.ones(20, 20) * 0.5
     assert torch.allclose(new_context.theta["fast_weights"], expected)
 
@@ -118,7 +125,9 @@ def test_consolidation_resets_plastic():
         plastic={"fast_weights": torch.ones(20, 20) * 2},
         substrate={},
     )
-    new_context2 = consolidate(z_final2, context, ConsolidationConfig(reset_plastic=False))
+    new_context2 = consolidate(
+        z_final2, context, ConsolidationConfig(reset_plastic=False)
+    )
     assert torch.allclose(z_final2.plastic["fast_weights"], torch.ones(20, 20) * 2)
 
 
@@ -143,7 +152,9 @@ def test_consolidation_only_promotes_consolidatable():
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),

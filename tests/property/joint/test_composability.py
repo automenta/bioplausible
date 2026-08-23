@@ -5,11 +5,10 @@ from __future__ import annotations
 import random
 from typing import Any
 
-import torch
-from torch import Tensor
-
 import pytest
+import torch
 
+from bioplausible.core.dynamics.adapters import create_dynamics_adapter
 from bioplausible.core.joint import (
     CompositeState,
     NullPlasticity,
@@ -33,13 +32,10 @@ from bioplausible.core.ontology import (
     StateDynamicsConfig,
     SubstrateConfig,
     SystemConfig,
-    SystemState,
     ThermodynamicContrast,
 )
 from bioplausible.core.substrates.adapters import create_substrate_adapter
-from bioplausible.core.dynamics.adapters import create_dynamics_adapter
 from bioplausible.core.system_trainer import compose_system
-
 
 # ============================================================
 # Valid coordinate factories for each axis (using actual API)
@@ -59,18 +55,25 @@ SUBSTRATE_FACTORIES = {
 
 GEOMETRY_FACTORIES = {
     "feedforward": lambda: (
-        RecurrentGeometry(GeometryConfig.feedforward(input_dim=10, output_dim=2, hidden_dims=(20,))),
+        RecurrentGeometry(
+            GeometryConfig.feedforward(input_dim=10, output_dim=2, hidden_dims=(20,))
+        ),
         GeometryConfig.feedforward(input_dim=10, output_dim=2, hidden_dims=(20,)),
     ),
     "recurrent": lambda: (
-        RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)), hidden_dim=20),
+        RecurrentGeometry(
+            GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+            hidden_dim=20,
+        ),
         GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
     ),
 }
 
 DYNAMICS_FACTORIES = {
     "energy_minimization": lambda: (
-        EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)),
+        EnergyMinimizationDynamics(
+            StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+        ),
         StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
     ),
     "instantaneous": lambda: (
@@ -86,7 +89,9 @@ DYNAMICS_FACTORIES = {
         StateDynamicsConfig.spike_integration(max_steps=3),
     ),
     "diffusion": lambda: (
-        EnergyMinimizationDynamics(StateDynamicsConfig.diffusion(max_steps=3, beta=0.5)),
+        EnergyMinimizationDynamics(
+            StateDynamicsConfig.diffusion(max_steps=3, beta=0.5)
+        ),
         StateDynamicsConfig.diffusion(max_steps=3, beta=0.5),
     ),
 }
@@ -163,8 +168,18 @@ def create_random_system_config() -> SystemConfig:
         ("digital", "energy_minimization", "gradient", "euclidean"),
         ("analog", "energy_minimization", "thermodynamic_contrast", "euclidean"),
         ("ternary", "energy_minimization", "thermodynamic_contrast", "euclidean"),
-        ("sparse", "energy_minimization", "thermodynamic_contrast", "spectral_constrained"),
-        ("complex", "energy_minimization", "thermodynamic_contrast", "riemannian_orthogonal"),
+        (
+            "sparse",
+            "energy_minimization",
+            "thermodynamic_contrast",
+            "spectral_constrained",
+        ),
+        (
+            "complex",
+            "energy_minimization",
+            "thermodynamic_contrast",
+            "riemannian_orthogonal",
+        ),
     ]
 
     combo = random.choice(compatible_combinations)
@@ -201,7 +216,9 @@ def create_system_from_config(config: SystemConfig) -> tuple[Any, Any, Any, Any,
     return substrate, geometry, dynamics, credit, update
 
 
-def create_registry_from_geometry(geometry: RecurrentGeometry, plasticity_config: PlasticityConfig) -> StateRegistry:
+def create_registry_from_geometry(
+    geometry: RecurrentGeometry, plasticity_config: PlasticityConfig
+) -> StateRegistry:
     """Create a StateRegistry matching the geometry and plasticity config."""
     registry = StateRegistry()
     for name in geometry.params:
@@ -236,18 +253,28 @@ def test_random_6d_coordinate_constructs_system():
     for _ in range(10):
         config = create_random_system_config()
 
-        substrate, geometry, dynamics, credit, update = create_system_from_config(config)
+        substrate, geometry, dynamics, credit, update = create_system_from_config(
+            config
+        )
         registry = create_registry_from_geometry(geometry, config.plasticity)
 
         # Validate registry with dummy state
-        dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+        dummy_activity = {
+            name: param.detach().clone() for name, param in geometry.params.items()
+        }
         dummy_substrate = {"conductance": torch.randn(4, 20)}
         dummy_plastic = {}
         if config.plasticity.plastic_state_dims:
             for name, dim in config.plasticity.plastic_state_dims.items():
                 dummy_activity[name] = torch.zeros(4, dim)
                 dummy_plastic[name] = torch.zeros(4, dim)
-        registry.validate(CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate))
+        registry.validate(
+            CompositeState(
+                activity=dummy_activity,
+                plastic=dummy_plastic,
+                substrate=dummy_substrate,
+            )
+        )
 
         # Create context
         context = SystemContext(
@@ -272,7 +299,9 @@ def test_null_plasticity_reproduces_5d_behavior():
     # Create config with Null plasticity
     config = SystemConfig(
         substrate=SubstrateConfig.digital(),
-        geometry=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         plasticity=PlasticityConfig.null(),
         credit=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
@@ -284,9 +313,13 @@ def test_null_plasticity_reproduces_5d_behavior():
     system_5d = compose_system(substrate, geometry, dynamics, credit, update)
 
     registry = create_registry_from_geometry(geometry, config.plasticity)
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
     dummy_substrate = {"conductance": torch.randn(4, 20)}
-    registry.validate(CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate))
+    registry.validate(
+        CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate)
+    )
 
     context = SystemContext(
         theta=geometry.params,
@@ -322,7 +355,9 @@ def test_all_plasticity_types_constructible():
     for plasticity_name in PLASTICITY_FACTORIES:
         config = SystemConfig(
             substrate=SubstrateConfig.digital(),
-            geometry=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+            geometry=GeometryConfig.recurrent(
+                input_dim=10, output_dim=2, hidden_dims=(20,)
+            ),
             dynamics=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
             plasticity=PLASTICITY_FACTORIES[plasticity_name](),
             credit=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
@@ -337,7 +372,9 @@ def test_registry_matches_plasticity_config():
     for plasticity_name in PLASTICITY_FACTORIES:
         plasticity_config = PLASTICITY_FACTORIES[plasticity_name]()
 
-        geometry = RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)))
+        geometry = RecurrentGeometry(
+            GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,))
+        )
         registry = StateRegistry()
         for name in geometry.params:
             registry.register(StateVariable(name=name, persistent=True))
@@ -350,7 +387,9 @@ def test_registry_matches_plasticity_config():
         assert len(groups["persistent"]) == len(geometry.params)
 
         if plasticity_config.plastic_state_dims:
-            assert len(groups["fast_plastic"]) == len(plasticity_config.plastic_state_dims)
+            assert len(groups["fast_plastic"]) == len(
+                plasticity_config.plastic_state_dims
+            )
         else:
             assert len(groups["fast_plastic"]) == 0
 
@@ -368,8 +407,12 @@ def test_substrate_adapters_preserve_interface():
 
 def test_dynamics_adapters_preserve_interface():
     """Dynamics adapters should preserve Dynamics interface."""
-    source_dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5))
-    adapter = create_dynamics_adapter("energy_minimization", "instantaneous", source_dynamics)
+    source_dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
+    adapter = create_dynamics_adapter(
+        "energy_minimization", "instantaneous", source_dynamics
+    )
     assert adapter is not None
     assert hasattr(adapter, "settle")
     assert hasattr(adapter, "compute_energy")
@@ -380,7 +423,9 @@ def test_cross_axis_validation():
     # Valid config
     config = SystemConfig(
         substrate=SubstrateConfig.digital(),
-        geometry=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         plasticity=PlasticityConfig.null(),
         credit=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
@@ -392,7 +437,9 @@ def test_cross_axis_validation():
 def test_geometry_compatibility_with_substrate():
     """Geometry should be compatible with substrate capabilities."""
     # Digital substrate with recurrent geometry - should work
-    geometry = RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)))
+    geometry = RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,))
+    )
     substrate = DigitalSubstrate(SubstrateConfig.digital())
 
     x = torch.randn(4, 10)
@@ -435,7 +482,9 @@ def test_all_update_types_constructible():
 
 def test_composite_state_full_joint_state():
     """CompositeState should hold full joint state (x, ψ, σ)."""
-    geometry = RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)))
+    geometry = RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,))
+    )
 
     registry = StateRegistry()
     for name in geometry.params:
@@ -443,10 +492,16 @@ def test_composite_state_full_joint_state():
     registry.register(StateVariable(name="eligibility", fast_plastic=True))
     registry.register(StateVariable(name="conductance", substrate_owned=True))
 
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
     dummy_plastic = {"eligibility": torch.zeros(4, 20)}
     dummy_substrate = {"conductance": torch.randn(4, 20)}
-    registry.validate(CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate))
+    registry.validate(
+        CompositeState(
+            activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate
+        )
+    )
 
     z = CompositeState(
         activity=dummy_activity,
@@ -461,12 +516,16 @@ def test_composite_state_full_joint_state():
 
 def test_state_registry_lifecycle_groups():
     """Registry lifecycle_groups should correctly categorize variables."""
-    geometry = RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)))
+    geometry = RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,))
+    )
 
     registry = StateRegistry()
     for name in geometry.params:
         registry.register(StateVariable(name=name, persistent=True))
-    registry.register(StateVariable(name="eligibility", fast_plastic=True, consolidatable=True))
+    registry.register(
+        StateVariable(name="eligibility", fast_plastic=True, consolidatable=True)
+    )
     registry.register(StateVariable(name="conductance", substrate_owned=True))
 
     groups = registry.lifecycle_groups()
@@ -479,27 +538,42 @@ def test_state_registry_lifecycle_groups():
 
 def test_consolidation_respects_registry():
     """Consolidation should only promote consolidatable variables."""
-    from bioplausible.core.joint import consolidate, ConsolidationConfig
+    from bioplausible.core.joint import ConsolidationConfig, consolidate
 
-    geometry = RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)))
+    geometry = RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,))
+    )
     substrate = DigitalSubstrate(SubstrateConfig.digital())
 
     registry = StateRegistry()
     for name in geometry.params:
         registry.register(StateVariable(name=name, persistent=True))
-    registry.register(StateVariable(name="consol", fast_plastic=True, consolidatable=True))
-    registry.register(StateVariable(name="not_consol", fast_plastic=True, consolidatable=False))
+    registry.register(
+        StateVariable(name="consol", fast_plastic=True, consolidatable=True)
+    )
+    registry.register(
+        StateVariable(name="not_consol", fast_plastic=True, consolidatable=False)
+    )
 
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
-    dummy_plastic = {"consol": torch.ones(4, 20) * 2.0, "not_consol": torch.ones(4, 20) * 3.0}
-    registry.validate(CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate={}))
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
+    dummy_plastic = {
+        "consol": torch.ones(4, 20) * 2.0,
+        "not_consol": torch.ones(4, 20) * 3.0,
+    }
+    registry.validate(
+        CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate={})
+    )
 
     context = SystemContext(
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -509,7 +583,10 @@ def test_consolidation_respects_registry():
 
     z = CompositeState(
         activity=dummy_activity,
-        plastic={"consol": torch.ones(4, 20) * 2.0, "not_consol": torch.ones(4, 20) * 3.0},
+        plastic={
+            "consol": torch.ones(4, 20) * 2.0,
+            "not_consol": torch.ones(4, 20) * 3.0,
+        },
         substrate={},
     )
 

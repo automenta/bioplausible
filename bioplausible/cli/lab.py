@@ -4,15 +4,13 @@ import argparse
 import logging
 
 import torch
-from torch import nn
 
 # Import zoo models to trigger registration
 import bioplausible.zoo  # ruff: ignore[unused-import]  # triggers model registration
 from bioplausible.core.logging import get_logger
-from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.core.registry import Registry
 from bioplausible.core.utils.device import get_device
 from bioplausible.domains import create_task
-from bioplausible.utils import count_parameters
 
 logger = get_logger()
 
@@ -79,7 +77,7 @@ def inspect_model(args):
             except TypeError:
                 # _AdaptedSystem.forward only takes x
                 out = system.forward(x)
-        except (RuntimeError, ValueError, TypeError):
+        except RuntimeError, ValueError, TypeError:
             logger.exception("Forward pass failed for model %s", args.model)
             return
         logger.info("[OK]  Forward pass successful. Output shape: %s", out.shape)
@@ -91,7 +89,9 @@ def main():
 
     inspect = subparsers.add_parser("inspect", help="Inspect a model architecture")
     inspect.add_argument("--model", required=True, help="Model name")
-    inspect.add_argument("--task", default="mnist", help="Task type (e.g., mnist, cifar10)")
+    inspect.add_argument(
+        "--task", default="mnist", help="Task type (e.g., mnist, cifar10)"
+    )
 
     args = parser.parse_args()
 

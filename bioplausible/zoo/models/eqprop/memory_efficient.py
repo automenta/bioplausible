@@ -1,7 +1,5 @@
 """Equilibrium Propagation model variants."""
 
-import math
-
 import torch
 
 from bioplausible.acceleration.kernels import HAS_CUPY, EqPropKernel

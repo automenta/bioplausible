@@ -57,9 +57,13 @@ How computed pseudo-gradients translate into physical weight changes ΔW.
 
 ```python
 from bioplausible.core.ontology import (
-    System, DigitalSubstrate, FeedforwardGeometry,
-    InstantaneousDynamics, BackpropCredit, EuclideanUpdate,
-    GeometryConfig
+    System,
+    DigitalSubstrate,
+    FeedforwardGeometry,
+    InstantaneousDynamics,
+    BackpropCredit,
+    EuclideanUpdate,
+    GeometryConfig,
 )
 
 # Old Way: Hardcoded, entangled, brittle
@@ -68,10 +72,12 @@ model = Registry.get("optical_looped_mlp")
 # New Way: Pure, composable, mathematically rigorous
 system = System(
     substrate=DigitalSubstrate(),
-    geometry=FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256, 128))),
+    geometry=FeedforwardGeometry(
+        GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256, 128))
+    ),
     dynamics=InstantaneousDynamics(),
     credit=BackpropCredit(),
-    update=EuclideanUpdate(step_size=0.01)
+    update=EuclideanUpdate(step_size=0.01),
 )
 ```
 

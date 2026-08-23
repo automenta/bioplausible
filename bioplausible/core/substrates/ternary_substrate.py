@@ -12,15 +12,13 @@ Key features:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Literal
+from collections.abc import Callable
+from typing import Literal
 
 import torch
 from torch import Tensor, nn
 
 from bioplausible.core.ontology import DigitalSubstrate, SubstrateConfig
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 class TernaryQuantize(torch.autograd.Function):
@@ -31,7 +29,12 @@ class TernaryQuantize(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx: torch.autograd.function.FunctionCtx, w: Tensor, threshold: float, alpha: Tensor) -> Tensor:
+    def forward(
+        ctx: torch.autograd.function.FunctionCtx,
+        w: Tensor,
+        threshold: float,
+        alpha: Tensor,
+    ) -> Tensor:
         ctx.save_for_backward(w, alpha)
         ctx.threshold = threshold
         # Ternary: sign(w) * alpha where |w| > threshold, else 0
@@ -39,7 +42,9 @@ class TernaryQuantize(torch.autograd.Function):
         return w_q
 
     @staticmethod
-    def backward(ctx: torch.autograd.function.FunctionCtx, grad_output: Tensor) -> tuple[Tensor, None, Tensor]:
+    def backward(
+        ctx: torch.autograd.function.FunctionCtx, grad_output: Tensor
+    ) -> tuple[Tensor, None, Tensor]:
         w, alpha = ctx.saved_tensors
         threshold = ctx.threshold
         # STE: gradient passes through for |w| < threshold, zero elsewhere
@@ -47,7 +52,9 @@ class TernaryQuantize(torch.autograd.Function):
         mask = (w.abs() <= threshold).to(w.dtype)
         grad_w = grad_output * mask
         # Gradient for alpha: sum of grad_output * sign(w) * (|w| > threshold)
-        grad_alpha = (grad_output * torch.sign(w) * (w.abs() > threshold).to(w.dtype)).sum()
+        grad_alpha = (
+            grad_output * torch.sign(w) * (w.abs() > threshold).to(w.dtype)
+        ).sum()
         return grad_w, None, grad_alpha
 
 
@@ -93,10 +100,12 @@ class TernarySubstrate(DigitalSubstrate):
         self._alpha: dict[str, nn.Parameter] = {}
         self._alpha_neg: dict[str, nn.Parameter] = {}
         self._threshold: dict[str, nn.Parameter] = {}
-        self._latent_weights: dict[str, Tensor] = {}  # Full-precision weights for optimizer
+        self._latent_weights: dict[
+            str, Tensor
+        ] = {}  # Full-precision weights for optimizer
 
     @classmethod
-    def from_config(cls, config: SubstrateConfig) -> "TernarySubstrate":
+    def from_config(cls, config: SubstrateConfig) -> TernarySubstrate:
         """Create TernarySubstrate from SubstrateConfig."""
         return cls(config=config)
 
@@ -104,26 +113,38 @@ class TernarySubstrate(DigitalSubstrate):
     # Parameter Management
     # =========================================================================
 
-    def _get_or_create_params(self, weight: Tensor, name: str) -> tuple[Tensor, Tensor, Tensor]:
+    def _get_or_create_params(
+        self, weight: Tensor, name: str
+    ) -> tuple[Tensor, Tensor, Tensor]:
         """Get or create quantization parameters for a weight matrix."""
         device = weight.device
 
         if name not in self._alpha:
             if self.ternary_type == "delta":
-                self._alpha[name] = nn.Parameter(torch.tensor(self.alpha_init, device=device))
-                self._alpha_neg[name] = nn.Parameter(torch.tensor(self.alpha_init, device=device))
+                self._alpha[name] = nn.Parameter(
+                    torch.tensor(self.alpha_init, device=device)
+                )
+                self._alpha_neg[name] = nn.Parameter(
+                    torch.tensor(self.alpha_init, device=device)
+                )
             else:
-                self._alpha[name] = nn.Parameter(torch.tensor(self.alpha_init, device=device))
+                self._alpha[name] = nn.Parameter(
+                    torch.tensor(self.alpha_init, device=device)
+                )
 
             if self.learn_threshold:
-                self._threshold[name] = nn.Parameter(torch.tensor(self.threshold_init, device=device))
+                self._threshold[name] = nn.Parameter(
+                    torch.tensor(self.threshold_init, device=device)
+                )
 
             # Store reference to full-precision latent weights
             self._latent_weights[name] = weight.detach().clone()
 
         alpha = self._alpha[name]
         alpha_neg = self._alpha_neg.get(name, alpha)
-        threshold = self._threshold.get(name, torch.tensor(self.threshold_init, device=device))
+        threshold = self._threshold.get(
+            name, torch.tensor(self.threshold_init, device=device)
+        )
 
         return alpha, alpha_neg, threshold
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import torch
-from torch import Tensor
 
 from bioplausible.core.joint import (
     CompositeState,
@@ -30,7 +29,9 @@ def test_state_variable_creation():
     assert not sigma_var.persistent
 
     # Consolidatable (ψ → θ)
-    consol_var = StateVariable(name="fast_weight", fast_plastic=True, consolidatable=True)
+    consol_var = StateVariable(
+        name="fast_weight", fast_plastic=True, consolidatable=True
+    )
     assert consol_var.consolidatable
     assert consol_var.fast_plastic
 
@@ -74,7 +75,9 @@ def test_state_registry_lifecycle_groups():
     """Test lifecycle group extraction."""
     registry = StateRegistry()
     registry.register(StateVariable(name="weight", persistent=True))
-    registry.register(StateVariable(name="eligibility", fast_plastic=True, consolidatable=True))
+    registry.register(
+        StateVariable(name="eligibility", fast_plastic=True, consolidatable=True)
+    )
     registry.register(StateVariable(name="conductance", substrate_owned=True))
 
     groups = registry.lifecycle_groups()

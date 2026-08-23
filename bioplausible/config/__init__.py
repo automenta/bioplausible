@@ -27,21 +27,37 @@ from bioplausible.config.experiment import (
 )
 from bioplausible.config.omegaconf import (
     DatasetConfig as LegacyDatasetConfig,
+)
+from bioplausible.config.omegaconf import (
     DomainConfig as LegacyDomainConfig,
-    LightningConfig as LegacyLightningConfig,
-    OptimizerConfig as LegacyOptimizerConfig,
-    PropagatorConfig as LegacyPropagatorConfig,
-    ScientistConfig as LegacyScientistConfig,
-    SparsityConfig as LegacySparsityConfig,
-    TrainingConfig as LegacyTrainingConfig,
-    get_default_config,
-    validate_config,
 )
 from bioplausible.config.omegaconf import (
     ExperimentModelConfig as LegacyModelConfig,
 )
 from bioplausible.config.omegaconf import (
     ExperimentSchemaConfig as LegacyExperimentConfig,
+)
+from bioplausible.config.omegaconf import (
+    LightningConfig as LegacyLightningConfig,
+)
+from bioplausible.config.omegaconf import (
+    OptimizerConfig as LegacyOptimizerConfig,
+)
+from bioplausible.config.omegaconf import (
+    PropagatorConfig as LegacyPropagatorConfig,
+)
+from bioplausible.config.omegaconf import (
+    ScientistConfig as LegacyScientistConfig,
+)
+from bioplausible.config.omegaconf import (
+    SparsityConfig as LegacySparsityConfig,
+)
+from bioplausible.config.omegaconf import (
+    TrainingConfig as LegacyTrainingConfig,
+)
+from bioplausible.config.omegaconf import (
+    get_default_config,
+    validate_config,
 )
 from bioplausible.config.unified import (
     BaseConfig,

@@ -18,10 +18,10 @@ if TYPE_CHECKING:
 class ResourceUsage:
     """Resource consumption vector for a coordinate evaluation."""
 
-    compute: float              # FLOPs (forward + backward)
-    memory: float               # Peak memory in MB
-    energy: float               # Energy proxy (Joules or relative units)
-    latency: float              # Wall time in seconds
+    compute: float  # FLOPs (forward + backward)
+    memory: float  # Peak memory in MB
+    energy: float  # Energy proxy (Joules or relative units)
+    latency: float  # Wall time in seconds
     plastic_state_capacity: float  # Bytes of plastic state (ψ)
 
     # Additional metrics for detailed accounting
@@ -41,11 +41,15 @@ class ResourceUsage:
             memory=max(self.memory, other.memory),  # Peak memory
             energy=self.energy + other.energy,
             latency=self.latency + other.latency,
-            plastic_state_capacity=max(self.plastic_state_capacity, other.plastic_state_capacity),
+            plastic_state_capacity=max(
+                self.plastic_state_capacity, other.plastic_state_capacity
+            ),
             forward_flops=self.forward_flops + other.forward_flops,
             backward_flops=self.backward_flops + other.backward_flops,
             parameter_count=max(self.parameter_count, other.parameter_count),
-            activation_memory_mb=max(self.activation_memory_mb, other.activation_memory_mb),
+            activation_memory_mb=max(
+                self.activation_memory_mb, other.activation_memory_mb
+            ),
             gradient_memory_mb=max(self.gradient_memory_mb, other.gradient_memory_mb),
             substrate_overhead=self.substrate_overhead + other.substrate_overhead,
         )
@@ -174,14 +178,18 @@ class ResourceUsage:
         # Plastic state capacity
         plastic_capacity = 0
         if plastic_state:
-            plastic_capacity = sum(p.numel() * p.element_size() for p in plastic_state.values())
+            plastic_capacity = sum(
+                p.numel() * p.element_size() for p in plastic_state.values()
+            )
 
         # Estimate FLOPs (rough approximation)
         # For a linear layer: 2 * in_features * out_features * batch_size
         forward_flops = 0
         for module in model.modules():
             if isinstance(module, torch.nn.Linear):
-                forward_flops += 2 * module.in_features * module.out_features * input_tensor.shape[0]
+                forward_flops += (
+                    2 * module.in_features * module.out_features * input_tensor.shape[0]
+                )
             elif isinstance(module, torch.nn.Conv2d):
                 forward_flops += (
                     2
@@ -199,7 +207,9 @@ class ResourceUsage:
         return cls(
             compute=forward_flops + backward_flops,
             memory=peak_memory,
-            energy=peak_memory * 1e-9 * (forward_time + backward_time),  # Very rough proxy
+            energy=peak_memory
+            * 1e-9
+            * (forward_time + backward_time),  # Very rough proxy
             latency=forward_time + backward_time,
             plastic_state_capacity=plastic_capacity,
             forward_flops=forward_flops,

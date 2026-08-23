@@ -75,7 +75,9 @@ class FastWeightPlasticity:
     def fast_weight_dim(self) -> int:
         return self._config.fast_weight_dim
 
-    def initial_psi(self, context: "SystemContext | None", batch_size: int = 1) -> dict[str, Tensor]:
+    def initial_psi(
+        self, context: SystemContext | None, batch_size: int = 1
+    ) -> dict[str, Tensor]:
         """Create initial plastic state.
 
         Args:
@@ -90,8 +92,8 @@ class FastWeightPlasticity:
     def step(
         self,
         psi: dict[str, Tensor],
-        z: "CompositeState",
-        context: "SystemContext",
+        z: CompositeState,
+        context: SystemContext,
     ) -> dict[str, Tensor]:
         """Compute next plastic state via Hebbian update.
 
@@ -132,10 +134,19 @@ class FastWeightPlasticity:
                 if outer.shape[0] > self.fast_weight_dim:
                     outer = outer[: self.fast_weight_dim]
                 elif outer.shape[0] < self.fast_weight_dim:
-                    padding = torch.zeros(self.fast_weight_dim - outer.shape[0], device=outer.device, dtype=outer.dtype)
+                    padding = torch.zeros(
+                        self.fast_weight_dim - outer.shape[0],
+                        device=outer.device,
+                        dtype=outer.dtype,
+                    )
                     outer = torch.cat([outer, padding])
 
-                new_fast_weights[b] = new_fast_weights[b] + self._config.learning_rate * self._config.outer_product_scale * outer
+                new_fast_weights[b] = (
+                    new_fast_weights[b]
+                    + self._config.learning_rate
+                    * self._config.outer_product_scale
+                    * outer
+                )
 
         return {"fast_weights": new_fast_weights}
 
@@ -155,7 +166,11 @@ def create_fast_weight_plasticity(config: PlasticityConfig) -> FastWeightPlastic
     if config.plasticity_type != "fast_weights":
         raise ValueError(f"Expected fast_weights config, got {config.plasticity_type}")
 
-    fast_weight_dim = config.plastic_state_dims.get("fast_weights", 512) if config.plastic_state_dims else 512
+    fast_weight_dim = (
+        config.plastic_state_dims.get("fast_weights", 512)
+        if config.plastic_state_dims
+        else 512
+    )
     consolidation = config.consolidation_config or {}
 
     return FastWeightPlasticity(

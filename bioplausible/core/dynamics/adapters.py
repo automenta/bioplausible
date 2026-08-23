@@ -335,9 +335,7 @@ class PredictiveToEnergyAdapter(DynamicsAdapter):
         # For compatibility, store both
         if hasattr(self._source, "_free_energy_history"):
             state.metrics = state.metrics or {}
-            state.metrics["free_energy_history"] = (
-                self._source._free_energy_history
-            )
+            state.metrics["free_energy_history"] = self._source._free_energy_history
 
         return state
 

@@ -24,7 +24,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # run
     run_parser = subparsers.add_parser("run", help="Run a benchmark suite")
-    run_parser.add_argument("--suite", required=True,
+    run_parser.add_argument(
+        "--suite",
+        required=True,
         choices=[
             "adaptation_efficiency",
             "compute_efficiency",
@@ -32,23 +34,39 @@ def _build_parser() -> argparse.ArgumentParser:
             "algorithm_migration",
             "z3_fixed_weights",
         ],
-        help="Benchmark suite to run"
+        help="Benchmark suite to run",
     )
-    run_parser.add_argument("--coordinates", nargs="+", help="Specific 6-D coordinates to test (default: all from suite)")
-    run_parser.add_argument("--output-dir", default="benchmark_results", help="Output directory")
-    run_parser.add_argument("--epochs", type=int, default=10, help="Epochs per evaluation")
+    run_parser.add_argument(
+        "--coordinates",
+        nargs="+",
+        help="Specific 6-D coordinates to test (default: all from suite)",
+    )
+    run_parser.add_argument(
+        "--output-dir", default="benchmark_results", help="Output directory"
+    )
+    run_parser.add_argument(
+        "--epochs", type=int, default=10, help="Epochs per evaluation"
+    )
     run_parser.add_argument("--batch-size", type=int, default=64, help="Batch size")
     run_parser.add_argument("--device", default="auto", help="Device (auto, cpu, cuda)")
-    run_parser.add_argument("--seeds", type=int, default=3, help="Number of seeds per coordinate")
-    run_parser.add_argument("--quick", action="store_true", help="Quick mode (3 epochs, 1 seed)")
+    run_parser.add_argument(
+        "--seeds", type=int, default=3, help="Number of seeds per coordinate"
+    )
+    run_parser.add_argument(
+        "--quick", action="store_true", help="Quick mode (3 epochs, 1 seed)"
+    )
 
     # list
     list_parser = subparsers.add_parser("list", help="List available benchmark suites")
 
     # report
     report_parser = subparsers.add_parser("report", help="Generate benchmark report")
-    report_parser.add_argument("--results-dir", required=True, help="Benchmark results directory")
-    report_parser.add_argument("--format", choices=["text", "json", "html"], default="text")
+    report_parser.add_argument(
+        "--results-dir", required=True, help="Benchmark results directory"
+    )
+    report_parser.add_argument(
+        "--format", choices=["text", "json", "html"], default="text"
+    )
     report_parser.add_argument("--output", help="Output file path")
 
     return parser
@@ -106,7 +124,6 @@ def _get_suite_coordinates(suite: str) -> list[str]:
 def _run_benchmark(args) -> int:
     """Run a benchmark suite by delegating to experiment modules."""
     import subprocess
-    import sys
     from pathlib import Path
 
     coordinates = args.coordinates or _get_suite_coordinates(args.suite)
@@ -154,14 +171,22 @@ def _run_benchmark(args) -> int:
 
     # Build command for the experiment module
     cmd = [
-        sys.executable, "-m", module,
-        "--coordinates", *coordinates,
-        "--output-dir", str(output_dir),
-        epoch_arg, str(args.epochs),
+        sys.executable,
+        "-m",
+        module,
+        "--coordinates",
+        *coordinates,
+        "--output-dir",
+        str(output_dir),
+        epoch_arg,
+        str(args.epochs),
         *extra_args,
-        "--batch-size", str(args.batch_size),
-        "--seeds", str(args.seeds),
-        "--device", args.device,
+        "--batch-size",
+        str(args.batch_size),
+        "--seeds",
+        str(args.seeds),
+        "--device",
+        args.device,
     ]
     if args.quick:
         cmd.append("--quick")
@@ -173,9 +198,11 @@ def _run_benchmark(args) -> int:
 
     # Run the experiment module
     result = subprocess.run(cmd, capture_output=False, text=True)
-    
+
     if result.returncode != 0:
-        print(f"Benchmark suite {args.suite} failed with return code {result.returncode}")
+        print(
+            f"Benchmark suite {args.suite} failed with return code {result.returncode}"
+        )
         return result.returncode
 
     print(f"\nResults saved to {output_dir}")
@@ -247,19 +274,35 @@ def _generate_text_report(all_results: dict) -> str:
             lines.append("  No results")
             continue
 
-        lines.append(f"{'Coordinate':<50} {'Mean Acc':<10} {'Std':<8} {'Plasticity':<15} {'ρ(J)':<8} {'Basin':<8}")
+        lines.append(
+            f"{'Coordinate':<50} {'Mean Acc':<10} {'Std':<8} {'Plasticity':<15} {'ρ(J)':<8} {'Basin':<8}"
+        )
         lines.append("-" * 100)
 
         for r in results:
-            coord_short = r["coordinate"][:48] + ".." if len(r["coordinate"]) > 50 else r["coordinate"]
+            coord_short = (
+                r["coordinate"][:48] + ".."
+                if len(r["coordinate"]) > 50
+                else r["coordinate"]
+            )
             prim = r["coordinate"].split("/")[3]
             mean_acc = r.get("mean_accuracy", 0)
             std_acc = r.get("std_accuracy", 0)
             # Get average stability metrics
             seeds = r.get("seeds", [])
-            avg_rho = sum(s.get("rho_jacobian", 0) for s in seeds) / len(seeds) if seeds else 0
-            avg_basin = sum(s.get("basin_stability", 0) for s in seeds) / len(seeds) if seeds else 0
-            lines.append(f"{coord_short:<50} {mean_acc:<10.4f} {std_acc:<8.4f} {prim:<15} {avg_rho:<8.3f} {avg_basin:<8.3f}")
+            avg_rho = (
+                sum(s.get("rho_jacobian", 0) for s in seeds) / len(seeds)
+                if seeds
+                else 0
+            )
+            avg_basin = (
+                sum(s.get("basin_stability", 0) for s in seeds) / len(seeds)
+                if seeds
+                else 0
+            )
+            lines.append(
+                f"{coord_short:<50} {mean_acc:<10.4f} {std_acc:<8.4f} {prim:<15} {avg_rho:<8.3f} {avg_basin:<8.3f}"
+            )
 
         lines.append("")
 
@@ -310,10 +353,18 @@ def _generate_html_report(all_results: dict) -> str:
             mean_acc = r.get("mean_accuracy", 0)
             std_acc = r.get("std_accuracy", 0)
             seeds = r.get("seeds", [])
-            avg_rho = sum(s.get("rho_jacobian", 0) for s in seeds) / len(seeds) if seeds else 0
-            avg_basin = sum(s.get("basin_stability", 0) for s in seeds) / len(seeds) if seeds else 0
+            avg_rho = (
+                sum(s.get("rho_jacobian", 0) for s in seeds) / len(seeds)
+                if seeds
+                else 0
+            )
+            avg_basin = (
+                sum(s.get("basin_stability", 0) for s in seeds) / len(seeds)
+                if seeds
+                else 0
+            )
             html += f"""        <tr>
-            <td>{r['coordinate']}</td>
+            <td>{r["coordinate"]}</td>
             <td>{mean_acc:.4f}</td>
             <td>{std_acc:.4f}</td>
             <td>{prim}</td>

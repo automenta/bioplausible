@@ -43,10 +43,12 @@ Every state variable $v$ in the system is registered with metadata:
 ```python
 class StateVariable:
     name: str
-    persistent: bool       # Survives episode boundaries (traditionally \theta)
-    fast_plastic: bool     # Evolves via intra-episode plastic law (traditionally \psi)
-    substrate_owned: bool  # Subject to physical device constraints (traditionally \sigma)
-    consolidatable: bool   # Can be promoted to persistent state at episode end
+    persistent: bool  # Survives episode boundaries (traditionally \theta)
+    fast_plastic: bool  # Evolves via intra-episode plastic law (traditionally \psi)
+    substrate_owned: (
+        bool  # Subject to physical device constraints (traditionally \sigma)
+    )
+    consolidatable: bool  # Can be promoted to persistent state at episode end
 ```
 
 **Crucial Distinction:** The designation of a variable as "persistent $\theta$" is an **operational lifecycle designation**, not an ontological requirement of the computation. A substrate variable can migrate from fast to persistent state seamlessly if the registry and consolidation policies permit it.
@@ -90,12 +92,13 @@ To prevent `Plasticity` from degrading into a mere "weight pre-processor," v2 in
 ```python
 from typing import Protocol, runtime_checkable
 
+
 @runtime_checkable
 class CoupledTransition(Protocol):
     def step(
         self,
-        z: CompositeState,      # Contains z.activity, z.plastic, z.substrate
-        context: SystemContext  # Contains immutable theta, geometry, substrate physics
+        z: CompositeState,  # Contains z.activity, z.plastic, z.substrate
+        context: SystemContext,  # Contains immutable theta, geometry, substrate physics
     ) -> CompositeState:
         """
         Executes one step of the joint dynamical system: z_{t+1} = F_\theta(z_t; G, S).

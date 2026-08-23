@@ -103,69 +103,68 @@ The exported network follows this architecture:
 import nxsdk.api.n2a as nx
 import numpy as np
 
+
 def create_snn_network(weights_path: str, loihi_gen: str = "loihi2"):
     """Create SNN network for Loihi deployment."""
-    
+
     net = nx.NxNet()
-    
+
     # Load quantized weights
     weights = np.load(weights_path)
-    W1 = weights['W1']  # (hidden, input)
-    W2 = weights['W2']  # (output, hidden)
-    
+    W1 = weights["W1"]  # (hidden, input)
+    W2 = weights["W2"]  # (output, hidden)
+
     # Input layer (virtual - spike generators)
     num_input = W1.shape[1]
     input_layer = net.createSpikeGenProcess(num_input)
-    
+
     # Hidden LIF layer
     hidden_layer = net.createCompartmentGroup(
         size=W1.shape[0],
         compartmentParams=nx.CompartmentPrototype(
-            vThMant=255,      # Threshold
+            vThMant=255,  # Threshold
             compartmentVoltageDecay=4096,  # Tau = 20ms @ 1kHz
-            logicalCoreId=0
-        )
+            logicalCoreId=0,
+        ),
     )
-    
+
     # Output LIF layer
     output_layer = net.createCompartmentGroup(
         size=W2.shape[0],
         compartmentParams=nx.CompartmentPrototype(
-            vThMant=255,
-            compartmentVoltageDecay=4096,
-            logicalCoreId=1
-        )
+            vThMant=255, compartmentVoltageDecay=4096, logicalCoreId=1
+        ),
     )
-    
+
     # Connections: Input -> Hidden (weights quantized to 8-bit)
     conn_ih = net.createConnection(
-        input_layer, hidden_layer,
+        input_layer,
+        hidden_layer,
         prototype=nx.ConnectionPrototype(
-            weight=W1.astype(np.int8),
-            signMode=nx.SYNAPSE_SIGN_MODE.EXCITATORY
-        )
+            weight=W1.astype(np.int8), signMode=nx.SYNAPSE_SIGN_MODE.EXCITATORY
+        ),
     )
-    
+
     # Connections: Hidden -> Output
     conn_ho = net.createConnection(
-        hidden_layer, output_layer,
+        hidden_layer,
+        output_layer,
         prototype=nx.ConnectionPrototype(
-            weight=W2.astype(np.int8),
-            signMode=nx.SYNAPSE_SIGN_MODE.EXCITATORY
-        )
+            weight=W2.astype(np.int8), signMode=nx.SYNAPSE_SIGN_MODE.EXCITATORY
+        ),
     )
-    
+
     # STDP learning rule (if enabled)
-    if 'stdp_params' in weights:
+    if "stdp_params" in weights:
         stdp = nx.STDPRule(
-            tauPlus=weights['stdp_tau_plus'],
-            tauMinus=weights['stdp_tau_minus'],
+            tauPlus=weights["stdp_tau_plus"],
+            tauMinus=weights["stdp_tau_minus"],
             wMax=127,
-            wMin=-128
+            wMin=-128,
         )
         conn_ih.setSTDPRule(stdp)
         conn_ho.setSTDPRule(stdp)
-    
+
     return net
 ```
 
@@ -181,6 +180,7 @@ import nxsdk.api.n2a as nx
 import numpy as np
 from network import create_snn_network
 
+
 def encode_image_to_spikes(image, duration=100, rate_scale=100):
     """Rate coding: pixel intensity -> spike rate."""
     spikes = []
@@ -190,9 +190,13 @@ def encode_image_to_spikes(image, duration=100, rate_scale=100):
         spikes.append(spike_mask.astype(np.int8))
     return np.array(spikes)  # (time, pixels)
 
+
 # Load MNIST test data
 from torchvision import datasets, transforms
-test_data = datasets.MNIST('./data', train=False, download=True, transform=transforms.ToTensor())
+
+test_data = datasets.MNIST(
+    "./data", train=False, download=True, transform=transforms.ToTensor()
+)
 image, label = test_data[0]
 spikes = encode_image_to_spikes(image.numpy().flatten())
 ```
@@ -203,31 +207,32 @@ spikes = encode_image_to_spikes(image.numpy().flatten())
 # run_on_loihi.py (continued)
 def run_on_loihi(network, input_spikes, num_steps=100):
     """Run network on Loihi hardware."""
-    
+
     # Compile for Loihi
     compiler = nx.N2Compiler()
     board = compiler.compile(network, target="loihi2")
-    
+
     # Configure input spikes
     input_proc = network.getProcesses()[0]  # Spike generator
     for t in range(num_steps):
         input_proc.setSpikes(input_spikes[t])
-    
+
     # Run
     board.run(num_steps)
-    
+
     # Read output
     output_layer = network.getCompartmentGroups()[-1]
     output_spikes = output_layer.getSpikes()
-    
+
     board.disconnect()
     return output_spikes
+
 
 # Main
 if __name__ == "__main__":
     net = create_snn_network("./weights.npz")
     output_spikes = run_on_loihi(net, spikes)
-    
+
     # Decode: count output spikes per neuron
     spike_counts = np.sum(output_spikes, axis=0)
     prediction = np.argmax(spike_counts)
@@ -244,18 +249,20 @@ import lava.lib.dl.slayer as slayer
 import torch
 from network import create_snn_network
 
+
 # Convert to Lava SNN
 def create_lava_network(weights_path):
     weights = np.load(weights_path)
     net = slayer.block.cuba.Dense(
-        weights['W1'].shape[1],  # input
-        weights['W1'].shape[0],  # hidden
-        weights['W2'].shape[0],  # output
+        weights["W1"].shape[1],  # input
+        weights["W1"].shape[0],  # hidden
+        weights["W2"].shape[0],  # output
     )
     # Load weights
-    net.synapse.weight.grad = torch.from_numpy(weights['W1']).float()
+    net.synapse.weight.grad = torch.from_numpy(weights["W1"]).float()
     # ... load W2 ...
     return net
+
 
 # Simulate
 net = create_lava_network("./weights.npz")
@@ -274,15 +281,11 @@ Loihi uses 8-bit signed weights (-128 to 127). The export handles quantization a
 ```python
 # export_summary.json shows quantization stats
 {
-  "quantization": {
-    "W1": {"min": -0.84, "max": 0.92, "scale": 0.007, "zero_point": 0},
-    "W2": {"min": -1.23, "max": 1.15, "scale": 0.009, "zero_point": 0}
-  },
-  "accuracy": {
-    "fp32": 0.942,
-    "quantized": 0.931,
-    "drop": 0.011
-  }
+    "quantization": {
+        "W1": {"min": -0.84, "max": 0.92, "scale": 0.007, "zero_point": 0},
+        "W2": {"min": -1.23, "max": 1.15, "scale": 0.009, "zero_point": 0},
+    },
+    "accuracy": {"fp32": 0.942, "quantized": 0.931, "drop": 0.011},
 }
 ```
 
@@ -317,17 +320,17 @@ uv run biopl-export-trained-kernel \
 ```python
 # In loihi_config.json (auto-generated)
 {
-  "stdp": {
-    "enabled": true,
-    "rule": "three_factor",
-    "tau_plus": 20.0,
-    "tau_minus": 20.0,
-    "a_plus": 0.01,
-    "a_minus": 0.012,
-    "w_min": -128,
-    "w_max": 127,
-    "modulator": "reward"  # or "error", "novelty"
-  }
+    "stdp": {
+        "enabled": true,
+        "rule": "three_factor",
+        "tau_plus": 20.0,
+        "tau_minus": 20.0,
+        "a_plus": 0.01,
+        "a_minus": 0.012,
+        "w_min": -128,
+        "w_max": 127,
+        "modulator": "reward",  # or "error", "novelty"
+    }
 }
 ```
 

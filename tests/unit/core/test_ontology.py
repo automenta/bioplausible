@@ -361,9 +361,7 @@ class TestStateDynamics:
     """Tests for StateDynamics implementations."""
 
     def test_instantaneous_dynamics(self):
-        dynamics = InstantaneousDynamics(
-            StateDynamicsConfig.instantaneous()
-        )
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
         geometry = FeedforwardGeometry(
             GeometryConfig(
                 input_dim=10,

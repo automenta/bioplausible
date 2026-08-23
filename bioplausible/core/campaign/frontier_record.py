@@ -16,33 +16,39 @@ class FrontierRecord:
     """Complete evaluation record for a 6-D coordinate on a task."""
 
     # Coordinate identification
-    coordinate: str                    # S/G/D/M/C/U string (e.g., "digital/recurrent/energy_min/routing/thermo/euclidean")
-    task_name: str                     # Task identifier (e.g., "mnist", "cifar10")
+    coordinate: str  # S/G/D/M/C/U string (e.g., "digital/recurrent/energy_min/routing/thermo/euclidean")
+    task_name: str  # Task identifier (e.g., "mnist", "cifar10")
 
     # Task performance
-    task_loss: float                   # Final loss
-    task_accuracy: float               # Final accuracy (or relevant metric)
-    adaptation_time: int               # Episodes/steps to adapt
+    task_loss: float  # Final loss
+    task_accuracy: float  # Final accuracy (or relevant metric)
+    adaptation_time: int  # Episodes/steps to adapt
 
     # Stability metrics (from bioplausible.core.stability)
-    rho_jacobian: float                # Spectral radius of Jacobian
-    lyapunov_local: float              # Local Lyapunov exponent
-    settling_time: float               # Settling time (steps)
-    basin_stability: float             # Basin stability measure
+    rho_jacobian: float  # Spectral radius of Jacobian
+    lyapunov_local: float  # Local Lyapunov exponent
+    settling_time: float  # Settling time (steps)
+    basin_stability: float  # Basin stability measure
 
     # Resource usage
-    resources: "ResourceUsage"         # Compute, memory, energy, latency
+    resources: ResourceUsage  # Compute, memory, energy, latency
 
     # Plasticity identification
-    plasticity_primitive: str = "null" # null, routing, fast_weights, substrate_coupled, rule_state
+    plasticity_primitive: str = (
+        "null"  # null, routing, fast_weights, substrate_coupled, rule_state
+    )
     plasticity_config: dict = field(default_factory=dict)  # Full plasticity config
 
     # State Registry metadata
-    registry_signature: str = ""       # Hash of StateVariable registrations
-    composite_state_shape: dict[str, tuple[int, ...]] = field(default_factory=dict)  # Shape of z=(x,ψ,σ)
+    registry_signature: str = ""  # Hash of StateVariable registrations
+    composite_state_shape: dict[str, tuple[int, ...]] = field(
+        default_factory=dict
+    )  # Shape of z=(x,ψ,σ)
 
     # Episode consolidation events
-    consolidation_events: list[dict] = field(default_factory=list)  # List of {episode, promoted_vars, scale}
+    consolidation_events: list[dict] = field(
+        default_factory=list
+    )  # List of {episode, promoted_vars, scale}
 
     # Metadata
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -69,7 +75,9 @@ class FrontierRecord:
             "plasticity_primitive": self.plasticity_primitive,
             "plasticity_config": self.plasticity_config,
             "registry_signature": self.registry_signature,
-            "composite_state_shape": {k: list(v) for k, v in self.composite_state_shape.items()},
+            "composite_state_shape": {
+                k: list(v) for k, v in self.composite_state_shape.items()
+            },
             "consolidation_events": self.consolidation_events,
             "timestamp": self.timestamp,
             "seed": self.seed,
@@ -97,7 +105,9 @@ class FrontierRecord:
             plasticity_primitive=data.get("plasticity_primitive", "null"),
             plasticity_config=data.get("plasticity_config", {}),
             registry_signature=data.get("registry_signature", ""),
-            composite_state_shape={k: tuple(v) for k, v in data.get("composite_state_shape", {}).items()},
+            composite_state_shape={
+                k: tuple(v) for k, v in data.get("composite_state_shape", {}).items()
+            },
             consolidation_events=data.get("consolidation_events", []),
             timestamp=data.get("timestamp", datetime.now().isoformat()),
             seed=data.get("seed", 42),
@@ -121,9 +131,13 @@ class FrontierRecord:
         # Lower compute, memory, latency = better
         # Normalize by typical values
         compute_norm = min(self.resources.compute / 1e12, 1.0)  # 1 TFLOP
-        memory_norm = min(self.resources.memory / 8192, 1.0)     # 8 GB
-        latency_norm = min(self.resources.latency / 3600, 1.0)   # 1 hour
-        return (1.0 - compute_norm) * 0.4 + (1.0 - memory_norm) * 0.3 + (1.0 - latency_norm) * 0.3
+        memory_norm = min(self.resources.memory / 8192, 1.0)  # 8 GB
+        latency_norm = min(self.resources.latency / 3600, 1.0)  # 1 hour
+        return (
+            (1.0 - compute_norm) * 0.4
+            + (1.0 - memory_norm) * 0.3
+            + (1.0 - latency_norm) * 0.3
+        )
 
     def pareto_key(self) -> tuple[float, float, float, float]:
         """Key for Pareto frontier: (accuracy, -loss, stability, -resources)."""
@@ -136,4 +150,6 @@ class FrontierRecord:
 
 
 # Re-export ResourceUsage for convenience
-from bioplausible.core.campaign.resource_vector import ResourceUsage  # noqa: E402
+from bioplausible.core.campaign.resource_vector import (
+    ResourceUsage,
+)

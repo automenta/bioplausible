@@ -292,14 +292,18 @@ biopl-hpo = "bioplausible.cli.hpo:main"
 **File**: `bioplausible/cli/hpo.py` — **new thin shim** (≈50 lines):
 ```python
 """CLI entry for HPO. Delegates to cli/run.py search logic."""
+
 from bioplausible.cli.run import main as run_main
+
 
 def main():
     import sys
+
     # Default to search subcommand if no args
     if len(sys.argv) == 1:
         sys.argv.append("search")
     run_main()
+
 
 if __name__ == "__main__":
     main()
@@ -308,11 +312,37 @@ if __name__ == "__main__":
 **Then extend `cli/run.py::search_parser`** to support Phase 0 flags:
 ```python
 # In run.py, inside main() where search_parser is defined:
-search_parser.add_argument("--family", choices=["eqprop", "forward_only", "feedback_alignment", "equitile", "hebbian", "predictive_coding", "target_prop", "spiking", "mep", "backprop", "all"], default="all")
-search_parser.add_argument("--task", choices=["digits", "cifar10", "tiny_shakespeare", "mnist"], default="digits")
-search_parser.add_argument("--budget", type=int, default=200, help="Optuna trials per model")
-search_parser.add_argument("--seeds", type=int, default=5, help="Seeds for top-3 configs")
-search_parser.add_argument("--method", choices=["bayesian", "random"], default="bayesian")
+search_parser.add_argument(
+    "--family",
+    choices=[
+        "eqprop",
+        "forward_only",
+        "feedback_alignment",
+        "equitile",
+        "hebbian",
+        "predictive_coding",
+        "target_prop",
+        "spiking",
+        "mep",
+        "backprop",
+        "all",
+    ],
+    default="all",
+)
+search_parser.add_argument(
+    "--task",
+    choices=["digits", "cifar10", "tiny_shakespeare", "mnist"],
+    default="digits",
+)
+search_parser.add_argument(
+    "--budget", type=int, default=200, help="Optuna trials per model"
+)
+search_parser.add_argument(
+    "--seeds", type=int, default=5, help="Seeds for top-3 configs"
+)
+search_parser.add_argument(
+    "--method", choices=["bayesian", "random"], default="bayesian"
+)
 search_parser.add_argument("--output", type=str, help="JSONL output path")
 ```
 
@@ -327,9 +357,15 @@ uv run biopl-hpo search --family eqprop --task digits --budget 10 --seeds 1
 **Extend `cli/run.py`**:
 ```python
 # New subparser
-compare_parser = subparsers.add_parser("compare", help="Compare families, output ranking CSV")
-compare_parser.add_argument("--studies", required=True, help="Comma-separated study names")
-compare_parser.add_argument("--metric", default="accuracy", choices=["accuracy", "loss", "param_efficiency"])
+compare_parser = subparsers.add_parser(
+    "compare", help="Compare families, output ranking CSV"
+)
+compare_parser.add_argument(
+    "--studies", required=True, help="Comma-separated study names"
+)
+compare_parser.add_argument(
+    "--metric", default="accuracy", choices=["accuracy", "loss", "param_efficiency"]
+)
 compare_parser.add_argument("--output", required=True, help="Output CSV path")
 ```
 
@@ -338,7 +374,9 @@ compare_parser.add_argument("--output", required=True, help="Output CSV path")
 def run_compare(args):
     from bioplausible.hyperopt.storage import HyperoptStorage
     from bioplausible.hyperopt.comparison import (
-        compute_algorithm_rankings, group_trials_by_family, generate_comparison_summary
+        compute_algorithm_rankings,
+        group_trials_by_family,
+        generate_comparison_summary,
     )
     from bioplausible.core.registry import ComponentCategory, Registry
 
@@ -353,11 +391,28 @@ def run_compare(args):
 
     # Write CSV
     import csv
+
     with open(args.output, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["rank", "family", "best_value", "avg_value", "std_value", "n_trials", "best_trial_id"])
+        writer.writerow([
+            "rank",
+            "family",
+            "best_value",
+            "avg_value",
+            "std_value",
+            "n_trials",
+            "best_trial_id",
+        ])
         for r in rankings:
-            writer.writerow([r.rank, r.family, r.best_value, r.avg_value, r.std_value, r.n_trials, r.best_trial_id])
+            writer.writerow([
+                r.rank,
+                r.family,
+                r.best_value,
+                r.avg_value,
+                r.std_value,
+                r.n_trials,
+                r.best_trial_id,
+            ])
 
     print(generate_comparison_summary(rankings, baseline="backprop"))
 ```
@@ -393,7 +448,7 @@ def measure_peak_memory(model, dataloader, device, epochs=1):
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
         torch.cuda.empty_cache()
-    
+
     model.train()
     for epoch in range(epochs):
         for x, y in dataloader:
@@ -401,13 +456,15 @@ def measure_peak_memory(model, dataloader, device, epochs=1):
             loss = model.train_step(x, y)["loss"]
             # For equilibrium models: model.settle(x, y) or equivalent
             loss.backward() if hasattr(model, "backward") else None
-    
+
     if torch.cuda.is_available():
         peak_mb = torch.cuda.max_memory_allocated() / 1e6
     else:
         import psutil
+
         peak_mb = psutil.Process().memory_info().rss / 1e6
     return peak_mb
+
 
 def track_10_memory_scaling(verifier) -> TrackResult:
     # ... existing setup ...
@@ -416,12 +473,16 @@ def track_10_memory_scaling(verifier) -> TrackResult:
         # Measure actual memory
         train_loader = DataLoader(...)  # small subset for speed
         eqprop_peak = measure_peak_memory(model, train_loader, device)
-        
+
         # Backprop baseline same depth
         bp_model = BackpropMLP(...).to(device)
         bp_peak = measure_peak_memory(bp_model, train_loader, device)
-        
-        results[depth] = {"eqprop": eqprop_peak, "backprop": bp_peak, "ratio": bp_peak / eqprop_peak}
+
+        results[depth] = {
+            "eqprop": eqprop_peak,
+            "backprop": bp_peak,
+            "ratio": bp_peak / eqprop_peak,
+        }
     # ... rest unchanged ...
 ```
 

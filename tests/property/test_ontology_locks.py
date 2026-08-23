@@ -914,15 +914,17 @@ class TestC_SurrogateLocks:
     part of the validation tracks infrastructure, not the core ontology locks.
     """
 
-    @pytest.mark.skip(reason="Depends on validation tracks with legacy LoopedMLP imports")
+    @pytest.mark.skip(
+        reason="Depends on validation tracks with legacy LoopedMLP imports"
+    )
     def test_local_goodness_surrogate(self) -> None:
         """LocalGoodnessCredit surrogate objective FD check."""
-        pass
 
-    @pytest.mark.skip(reason="Depends on validation tracks with legacy LoopedMLP imports")
+    @pytest.mark.skip(
+        reason="Depends on validation tracks with legacy LoopedMLP imports"
+    )
     def test_target_inversion_surrogate(self) -> None:
         """TargetInversionCredit surrogate objective FD check."""
-        pass
 
 
 # A2 — TemporalTraceCredit: STDP Window Property Tests

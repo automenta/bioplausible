@@ -15,9 +15,12 @@ registering it lazily at import end:
 
 ```python
 from bioplausible.acceleration.kernel_backend import (
-    AlgorithmFamily, HardwareTarget, KernelRegistry,
+    AlgorithmFamily,
+    HardwareTarget,
+    KernelRegistry,
 )
 from bioplausible.acceleration.triton_kernels import MEP_TritonOps
+
 
 class MyKernelBackend:
     name = AlgorithmFamily.MYFAMILY
@@ -32,6 +35,7 @@ class MyKernelBackend:
     def backward(self, *args, **kwargs) -> dict[str, Tensor]: ...
     def update_weights(self, *args, **kwargs) -> None: ...
     def get_memory_stats(self) -> dict[str, float]: ...
+
 
 KernelRegistry.register(AlgorithmFamily.MYFAMILY, HardwareTarget.CPU, MyKernelBackend)
 ```

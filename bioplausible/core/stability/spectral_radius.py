@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
 
 from bioplausible.core.joint.state import CompositeState
+
 if TYPE_CHECKING:
     from bioplausible.core.joint.context import SystemContext
 
 
 def estimate_spectral_radius(
-    transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-    z: "CompositeState",
-    context: "SystemContext",
+    transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+    z: CompositeState,
+    context: SystemContext,
     num_iterations: int = 20,
     perturbation_scale: float = 1e-4,
     activity_key: str = "x",
@@ -63,7 +65,9 @@ def estimate_spectral_radius(
             z_next_perturbed = transition_fn(z_perturbed, context)
 
         # Extract activity difference
-        delta = z_next_perturbed.activity[activity_key] - z_next_base.activity[activity_key]
+        delta = (
+            z_next_perturbed.activity[activity_key] - z_next_base.activity[activity_key]
+        )
         Jv = delta / perturbation_scale
 
         # Power iteration update
@@ -104,9 +108,9 @@ class SpectralRadiusEstimator:
 
     def __call__(
         self,
-        transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-        z: "CompositeState",
-        context: "SystemContext",
+        transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+        z: CompositeState,
+        context: SystemContext,
     ) -> float:
         """Estimate spectral radius."""
         if self.fast_mode:
@@ -122,9 +126,9 @@ class SpectralRadiusEstimator:
 
     def _fast_proxy(
         self,
-        transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-        z: "CompositeState",
-        context: "SystemContext",
+        transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+        z: CompositeState,
+        context: SystemContext,
     ) -> float:
         """Fast proxy: single-step norm ratio.
 
@@ -149,16 +153,19 @@ class SpectralRadiusEstimator:
             z_next = transition_fn(z, context)
             z_next_perturbed = transition_fn(z_perturbed, context)
 
-        delta = z_next_perturbed.activity[self.activity_key] - z_next.activity[self.activity_key]
+        delta = (
+            z_next_perturbed.activity[self.activity_key]
+            - z_next.activity[self.activity_key]
+        )
         Jv = delta / eps
 
         return Jv.norm(dim=-1).mean().item()
 
 
 def estimate_spectral_radius_full_jacobian(
-    transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-    z: "CompositeState",
-    context: "SystemContext",
+    transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+    z: CompositeState,
+    context: SystemContext,
     activity_key: str = "x",
 ) -> float:
     """Estimate spectral radius by computing full Jacobian (expensive, for validation).

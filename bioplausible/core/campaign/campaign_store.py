@@ -22,8 +22,8 @@ import yaml
 
 if TYPE_CHECKING:
     from bioplausible.core.campaign.frontier_record import FrontierRecord
-    from bioplausible.core.joint.state import StateRegistry
     from bioplausible.core.joint.context import SystemContext
+    from bioplausible.core.joint.state import StateRegistry
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,7 +277,7 @@ class CampaignStore:
         iteration: int,
         coordinate: str,
         task_name: str,
-        frontier_record: "FrontierRecord",
+        frontier_record: FrontierRecord,
         consolidation_event: dict | None = None,
         rng_state: bytes | None = None,
     ) -> int:
@@ -329,7 +329,10 @@ class CampaignStore:
                     campaign_id,
                     episode_id,
                     registry_signature,
-                    json.dumps({k: {sk: list(sv) for sk, sv in v.items()} for k, v in composite_state_shape.items()}),
+                    json.dumps({
+                        k: {sk: list(sv) for sk, sv in v.items()}
+                        for k, v in composite_state_shape.items()
+                    }),
                     plasticity_primitive,
                     json.dumps(plasticity_config),
                 ),
@@ -360,7 +363,9 @@ class CampaignStore:
                 coordinate=row["coordinate"],
                 task_name=row["task_name"],
                 frontier_record=json.loads(row["frontier_record"]),
-                consolidation_event=json.loads(row["consolidation_event"]) if row["consolidation_event"] else None,
+                consolidation_event=json.loads(row["consolidation_event"])
+                if row["consolidation_event"]
+                else None,
                 rng_state=row["rng_state"],
             )
             for row in rows
@@ -389,7 +394,9 @@ class CampaignStore:
                 coordinate=row["coordinate"],
                 task_name=row["task_name"],
                 frontier_record=json.loads(row["frontier_record"]),
-                consolidation_event=json.loads(row["consolidation_event"]) if row["consolidation_event"] else None,
+                consolidation_event=json.loads(row["consolidation_event"])
+                if row["consolidation_event"]
+                else None,
                 rng_state=row["rng_state"],
             )
             for row in rows
@@ -477,7 +484,9 @@ class CampaignStore:
     ) -> Path:
         """Save campaign state as human-readable YAML."""
         if filename is None:
-            filename = f"{campaign_state.branch_name}_iter{campaign_state.iteration:04d}.yaml"
+            filename = (
+                f"{campaign_state.branch_name}_iter{campaign_state.iteration:04d}.yaml"
+            )
 
         filepath = self.checkpoint_dir / filename
 
@@ -531,19 +540,23 @@ class CampaignStore:
         return records
 
 
-def compute_registry_signature(registry: "StateRegistry") -> str:
+def compute_registry_signature(registry: StateRegistry) -> str:
     """Compute a hash signature of the StateRegistry."""
     import hashlib
 
     vars_info = []
     for var in registry._variables.values():
-        vars_info.append(f"{var.name}:{var.persistent}:{var.fast_plastic}:{var.substrate_owned}:{var.consolidatable}")
+        vars_info.append(
+            f"{var.name}:{var.persistent}:{var.fast_plastic}:{var.substrate_owned}:{var.consolidatable}"
+        )
 
     content = "|".join(sorted(vars_info))
     return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
-def compute_composite_state_shape(context: "SystemContext") -> dict[str, dict[str, tuple[int, ...]]]:
+def compute_composite_state_shape(
+    context: SystemContext,
+) -> dict[str, dict[str, tuple[int, ...]]]:
     """Compute shape signature of CompositeState from SystemContext."""
     shape = {
         "activity": {},

@@ -6,24 +6,23 @@ import pytest
 import torch
 from torch import Tensor
 
-from bioplausible.core.joint.state import CompositeState
 from bioplausible.core.joint.context import SystemContext
+from bioplausible.core.joint.state import CompositeState
 from bioplausible.core.joint.transition import NullPlasticity, PlasticityConfig
 from bioplausible.core.stability import (
-    estimate_spectral_radius,
-    SpectralRadiusEstimator,
-    estimate_lyapunov_exponent,
-    LyapunovEstimator,
-    measure_settling_time,
-    SettlingMonitor,
-    estimate_basin_stability,
     BasinStabilityEstimator,
-    estimate_basin_stability_multistart,
-    ResourceUsage,
-    FrontierRecord,
     FrontierAggregator,
+    FrontierRecord,
+    LyapunovEstimator,
+    ResourceUsage,
+    SettlingMonitor,
+    SpectralRadiusEstimator,
+    estimate_basin_stability,
+    estimate_basin_stability_multistart,
+    estimate_lyapunov_exponent,
+    estimate_spectral_radius,
+    measure_settling_time,
 )
-
 
 # ============================================================
 # Test Fixtures
@@ -132,7 +131,13 @@ class TestResourceUsage:
         assert ru.plastic_state_capacity == 0.0
 
     def test_construction_with_values(self):
-        ru = ResourceUsage(compute=100.0, memory=50.0, energy=10.0, latency=5.0, plastic_state_capacity=1000)
+        ru = ResourceUsage(
+            compute=100.0,
+            memory=50.0,
+            energy=10.0,
+            latency=5.0,
+            plastic_state_capacity=1000,
+        )
         assert ru.compute == 100.0
         assert ru.memory == 50.0
         assert ru.energy == 10.0
@@ -147,7 +152,13 @@ class TestResourceUsage:
         assert ru3.memory == 50.0  # max
 
     def test_division(self):
-        ru = ResourceUsage(compute=100.0, memory=50.0, energy=10.0, latency=5.0, plastic_state_capacity=1000)
+        ru = ResourceUsage(
+            compute=100.0,
+            memory=50.0,
+            energy=10.0,
+            latency=5.0,
+            plastic_state_capacity=1000,
+        )
         ru2 = ru / 2.0
         assert ru2.compute == 50.0
         assert ru2.memory == 25.0
@@ -156,7 +167,13 @@ class TestResourceUsage:
         assert ru2.plastic_state_capacity == 500
 
     def test_to_dict_from_dict(self):
-        ru = ResourceUsage(compute=100.0, memory=50.0, energy=10.0, latency=5.0, plastic_state_capacity=1000)
+        ru = ResourceUsage(
+            compute=100.0,
+            memory=50.0,
+            energy=10.0,
+            latency=5.0,
+            plastic_state_capacity=1000,
+        )
         d = ru.to_dict()
         ru2 = ResourceUsage.from_dict(d)
         assert ru2.compute == ru.compute
@@ -197,14 +214,24 @@ class TestFrontierRecord:
     def test_is_stable(self):
         ru = ResourceUsage()
         fr_stable = FrontierRecord(
-            coordinate="test", task_loss=0.5, adaptation_time=10,
-            rho_jacobian=0.9, lyapunov_local=-0.1, settling_time=10,
-            basin_stability=0.9, resources=ru
+            coordinate="test",
+            task_loss=0.5,
+            adaptation_time=10,
+            rho_jacobian=0.9,
+            lyapunov_local=-0.1,
+            settling_time=10,
+            basin_stability=0.9,
+            resources=ru,
         )
         fr_unstable = FrontierRecord(
-            coordinate="test", task_loss=0.5, adaptation_time=10,
-            rho_jacobian=1.1, lyapunov_local=0.1, settling_time=10,
-            basin_stability=0.1, resources=ru
+            coordinate="test",
+            task_loss=0.5,
+            adaptation_time=10,
+            rho_jacobian=1.1,
+            lyapunov_local=0.1,
+            settling_time=10,
+            basin_stability=0.1,
+            resources=ru,
         )
         assert fr_stable.is_stable()
         assert not fr_unstable.is_stable()
@@ -212,9 +239,15 @@ class TestFrontierRecord:
     def test_to_dict_from_dict(self):
         ru = ResourceUsage(compute=100.0)
         fr = FrontierRecord(
-            coordinate="test", task_loss=0.5, adaptation_time=10,
-            rho_jacobian=0.8, lyapunov_local=-0.1, settling_time=10,
-            basin_stability=0.9, resources=ru, plasticity_primitive="routing"
+            coordinate="test",
+            task_loss=0.5,
+            adaptation_time=10,
+            rho_jacobian=0.8,
+            lyapunov_local=-0.1,
+            settling_time=10,
+            basin_stability=0.9,
+            resources=ru,
+            plasticity_primitive="routing",
         )
         d = fr.to_dict()
         fr2 = FrontierRecord.from_dict(d)
@@ -235,9 +268,14 @@ class TestFrontierAggregator:
         ru = ResourceUsage()
         for i in range(5):
             fr = FrontierRecord(
-                coordinate=f"coord_{i}", task_loss=0.5, adaptation_time=10,
-                rho_jacobian=0.8, lyapunov_local=-0.1, settling_time=10,
-                basin_stability=0.9, resources=ru
+                coordinate=f"coord_{i}",
+                task_loss=0.5,
+                adaptation_time=10,
+                rho_jacobian=0.8,
+                lyapunov_local=-0.1,
+                settling_time=10,
+                basin_stability=0.9,
+                resources=ru,
             )
             agg.add(fr)
         assert len(agg) == 5
@@ -247,9 +285,14 @@ class TestFrontierAggregator:
         ru = ResourceUsage()
         for i, loss in enumerate([0.5, 0.3, 0.7, 0.2, 0.6]):
             fr = FrontierRecord(
-                coordinate=f"coord_{i}", task_loss=loss, adaptation_time=10,
-                rho_jacobian=0.8, lyapunov_local=-0.1, settling_time=10,
-                basin_stability=0.9, resources=ru
+                coordinate=f"coord_{i}",
+                task_loss=loss,
+                adaptation_time=10,
+                rho_jacobian=0.8,
+                lyapunov_local=-0.1,
+                settling_time=10,
+                basin_stability=0.9,
+                resources=ru,
             )
             agg.add(fr)
 
@@ -261,9 +304,14 @@ class TestFrontierAggregator:
         agg = FrontierAggregator()
         ru = ResourceUsage()
         fr = FrontierRecord(
-            coordinate="test", task_loss=0.5, adaptation_time=10,
-            rho_jacobian=0.8, lyapunov_local=-0.1, settling_time=10,
-            basin_stability=0.9, resources=ru
+            coordinate="test",
+            task_loss=0.5,
+            adaptation_time=10,
+            rho_jacobian=0.8,
+            lyapunov_local=-0.1,
+            settling_time=10,
+            basin_stability=0.9,
+            resources=ru,
         )
         agg.add(fr)
         assert len(agg) == 1
@@ -279,13 +327,17 @@ class TestFrontierAggregator:
 class TestSpectralRadius:
     def test_estimate_spectral_radius_stable(self, mock_context, initial_state):
         transition = MockTransition(rho=0.5)
-        rho = estimate_spectral_radius(transition, initial_state, mock_context, num_iterations=10)
+        rho = estimate_spectral_radius(
+            transition, initial_state, mock_context, num_iterations=10
+        )
         # Should be close to 0.5
         assert 0.3 < rho < 0.7
 
     def test_estimate_spectral_radius_unstable(self, mock_context, initial_state):
         transition = MockTransition(rho=1.2)
-        rho = estimate_spectral_radius(transition, initial_state, mock_context, num_iterations=10)
+        rho = estimate_spectral_radius(
+            transition, initial_state, mock_context, num_iterations=10
+        )
         # Should be close to 1.2
         assert 0.9 < rho < 1.5
 
@@ -311,13 +363,17 @@ class TestSpectralRadius:
 class TestLyapunovExponent:
     def test_estimate_lyapunov_stable(self, mock_context, initial_state):
         transition = MockTransition(rho=0.5)
-        lyap = estimate_lyapunov_exponent(transition, initial_state, mock_context, num_steps=20)
+        lyap = estimate_lyapunov_exponent(
+            transition, initial_state, mock_context, num_steps=20
+        )
         # For linear system with rho < 1, Lyapunov exponent = log(rho) < 0
         assert lyap < 0
 
     def test_estimate_lyapunov_unstable(self, mock_context, initial_state):
         transition = MockTransition(rho=1.2)
-        lyap = estimate_lyapunov_exponent(transition, initial_state, mock_context, num_steps=20)
+        lyap = estimate_lyapunov_exponent(
+            transition, initial_state, mock_context, num_steps=20
+        )
         # For rho > 1, Lyapunov exponent = log(rho) > 0
         assert lyap > 0
 
@@ -342,9 +398,13 @@ class TestLyapunovExponent:
 class TestSettlingTime:
     def test_measure_settling_time_converges(self, mock_context):
         # Start far from fixed point
-        z = CompositeState(activity={"x": torch.ones(4, 32) * 10.0}, plastic={}, substrate={})
+        z = CompositeState(
+            activity={"x": torch.ones(4, 32) * 10.0}, plastic={}, substrate={}
+        )
         transition = MockContractingTransition(rate=0.5)
-        steps, norms = measure_settling_time(transition, z, mock_context, tolerance=1e-3, max_steps=100)
+        steps, norms = measure_settling_time(
+            transition, z, mock_context, tolerance=1e-3, max_steps=100
+        )
         assert steps < 100
         assert len(norms) == steps
         assert norms[-1] < 1e-3
@@ -355,7 +415,9 @@ class TestSettlingTime:
             def __init__(self):
                 self.step_count = 0
 
-            def __call__(self, z: CompositeState, context: SystemContext) -> CompositeState:
+            def __call__(
+                self, z: CompositeState, context: SystemContext
+            ) -> CompositeState:
                 x = z.activity["x"]
                 # Alternate between two states
                 if self.step_count % 2 == 0:
@@ -363,18 +425,24 @@ class TestSettlingTime:
                 else:
                     new_x = x * 0.9
                 self.step_count += 1
-                return CompositeState(activity={"x": new_x}, plastic=z.plastic, substrate=z.substrate)
+                return CompositeState(
+                    activity={"x": new_x}, plastic=z.plastic, substrate=z.substrate
+                )
 
         transition = OscillatingTransition()
         z = CompositeState(activity={"x": torch.randn(4, 32)}, plastic={}, substrate={})
-        steps, norms = measure_settling_time(transition, z, mock_context, tolerance=1e-6, max_steps=10)
+        steps, norms = measure_settling_time(
+            transition, z, mock_context, tolerance=1e-6, max_steps=10
+        )
         assert steps == 10
         assert len(norms) == 10
 
     def test_settling_monitor_class(self, mock_context):
         monitor = SettlingMonitor(tolerance=1e-3, max_steps=100, record_trajectory=True)
         transition = MockContractingTransition(rate=0.5)
-        z = CompositeState(activity={"x": torch.ones(4, 32) * 10.0}, plastic={}, substrate={})
+        z = CompositeState(
+            activity={"x": torch.ones(4, 32) * 10.0}, plastic={}, substrate={}
+        )
         steps, norms, traj = monitor(transition, z, mock_context)
         assert steps < 100
         assert len(norms) == steps
@@ -384,7 +452,9 @@ class TestSettlingTime:
     def test_settling_fast_proxy(self, mock_context):
         monitor = SettlingMonitor()
         transition = MockContractingTransition(rate=0.5)
-        z = CompositeState(activity={"x": torch.ones(4, 32) * 10.0}, plastic={}, substrate={})
+        z = CompositeState(
+            activity={"x": torch.ones(4, 32) * 10.0}, plastic={}, substrate={}
+        )
         est = monitor.fast_proxy(transition, z, mock_context)
         assert isinstance(est, int)
         assert est <= monitor.max_steps
@@ -398,35 +468,50 @@ class TestSettlingTime:
 class TestBasinStability:
     def test_estimate_basin_stability_stable(self, mock_context):
         # Attractor at origin, contracting dynamics
-        z_attractor = CompositeState(activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={})
+        z_attractor = CompositeState(
+            activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={}
+        )
         transition = MockContractingTransition(rate=0.5)
         stability = estimate_basin_stability(
-            transition, z_attractor, mock_context,
-            num_samples=20, perturbation_radius=2.0, max_steps=50
+            transition,
+            z_attractor,
+            mock_context,
+            num_samples=20,
+            perturbation_radius=2.0,
+            max_steps=50,
         )
         # Should have high basin stability for contracting system
         assert stability > 0.5
 
     def test_basin_stability_estimator_class(self, mock_context):
         estimator = BasinStabilityEstimator(num_samples=20, fast_mode=False)
-        z_attractor = CompositeState(activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={})
+        z_attractor = CompositeState(
+            activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={}
+        )
         transition = MockContractingTransition(rate=0.5)
         stability = estimator(transition, z_attractor, mock_context)
         assert 0.0 <= stability <= 1.0
 
     def test_basin_fast_mode(self, mock_context):
         estimator = BasinStabilityEstimator(fast_mode=True)
-        z_attractor = CompositeState(activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={})
+        z_attractor = CompositeState(
+            activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={}
+        )
         transition = MockContractingTransition(rate=0.5)
         stability = estimator(transition, z_attractor, mock_context)
         assert 0.0 <= stability <= 1.0
 
     def test_basin_multistart(self, mock_context):
-        z_attractor = CompositeState(activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={})
+        z_attractor = CompositeState(
+            activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={}
+        )
         transition = MockContractingTransition(rate=0.5)
         results = estimate_basin_stability_multistart(
-            transition, z_attractor, mock_context,
-            num_samples=10, perturbation_radii=[0.5, 1.0, 2.0]
+            transition,
+            z_attractor,
+            mock_context,
+            num_samples=10,
+            perturbation_radii=[0.5, 1.0, 2.0],
         )
         assert len(results) == 3
         # Stability should decrease with radius
@@ -443,7 +528,9 @@ class TestNullPlasticityStability:
         """Test that NullPlasticity system can be analyzed for stability."""
         null_plasticity = NullPlasticity()
 
-        def joint_transition(z: CompositeState, context: SystemContext) -> CompositeState:
+        def joint_transition(
+            z: CompositeState, context: SystemContext
+        ) -> CompositeState:
             # Null plasticity: psi unchanged, activity evolves
             psi_next = null_plasticity.step(z.plastic, z, context)
             # Simple activity dynamics with stronger contraction
@@ -455,18 +542,33 @@ class TestNullPlasticityStability:
             )
 
         # Test all stability metrics work
-        rho = estimate_spectral_radius(joint_transition, initial_state, mock_context, num_iterations=5)
+        rho = estimate_spectral_radius(
+            joint_transition, initial_state, mock_context, num_iterations=5
+        )
         assert 0.4 < rho < 0.6
 
-        lyap = estimate_lyapunov_exponent(joint_transition, initial_state, mock_context, num_steps=10)
+        lyap = estimate_lyapunov_exponent(
+            joint_transition, initial_state, mock_context, num_steps=10
+        )
         assert lyap < 0  # Stable
 
-        steps, _ = measure_settling_time(joint_transition, initial_state, mock_context, tolerance=1e-3, max_steps=100, norm_type="absolute")
+        steps, _ = measure_settling_time(
+            joint_transition,
+            initial_state,
+            mock_context,
+            tolerance=1e-3,
+            max_steps=100,
+            norm_type="absolute",
+        )
         assert steps < 100
 
         # Basin stability at origin
-        z_zero = CompositeState(activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={})
-        stability = estimate_basin_stability(joint_transition, z_zero, mock_context, num_samples=10)
+        z_zero = CompositeState(
+            activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={}
+        )
+        stability = estimate_basin_stability(
+            joint_transition, z_zero, mock_context, num_samples=10
+        )
         assert stability >= 0.0
 
 
@@ -497,7 +599,9 @@ class TestFastModeProxies:
         assert isinstance(est, int)
 
         # Basin fast proxy
-        z_zero = CompositeState(activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={})
+        z_zero = CompositeState(
+            activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={}
+        )
         basin_est = BasinStabilityEstimator(fast_mode=True)
         stability = basin_est(transition, z_zero, mock_context)
         assert isinstance(stability, float)
@@ -537,7 +641,9 @@ class TestCheapProxyProperties:
     def test_basin_fast_proxy_bounded(self, mock_context):
         """Fast proxy basin stability should be in [0, 1]."""
         estimator = BasinStabilityEstimator(fast_mode=True)
-        z_zero = CompositeState(activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={})
+        z_zero = CompositeState(
+            activity={"x": torch.zeros(4, 32)}, plastic={}, substrate={}
+        )
         transition = MockContractingTransition(rate=0.5)
         stability = estimator(transition, z_zero, mock_context)
         assert 0.0 <= stability <= 1.0

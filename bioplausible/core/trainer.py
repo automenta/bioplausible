@@ -9,17 +9,13 @@ of ``SystemTrainer`` and ``ExperimentConfig`` (Sprint 7.6.10).
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Protocol, TypeIs
+from typing import Protocol, TypeIs
 
 import torch
 from torch import nn
 
 from bioplausible.core.ebm import EBMTrainer
 from bioplausible.core.losses import compute_loss
-from bioplausible.core.registry import Registry
-
-if TYPE_CHECKING:
-    from bioplausible.config.experiment import ExperimentConfig as _TrainerConfig
 
 
 class _TrainerConfigProtocol(Protocol):
@@ -176,8 +172,8 @@ def dispatch_train_step(
 
 
 __all__ = [
-    "bptt_step",
-    "dispatch_train_step",
     "_LearningRuleOptimizer",
     "_is_learning_rule_optimizer",
+    "bptt_step",
+    "dispatch_train_step",
 ]

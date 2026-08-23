@@ -9,10 +9,10 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-import torch
 from torch import Tensor
 
 from bioplausible.core.joint.state import CompositeState
+
 if TYPE_CHECKING:
     from bioplausible.core.joint.context import SystemContext
 
@@ -44,12 +44,12 @@ class PlasticityConfig:
     consolidation_config: dict | None = None
 
     @classmethod
-    def null(cls) -> "PlasticityConfig":
+    def null(cls) -> PlasticityConfig:
         """Null plasticity configuration (Zero-Extension Theorem)."""
         return cls(plasticity_type="null")
 
     @classmethod
-    def routing(cls, gate_dim: int = 64, **kwargs) -> "PlasticityConfig":
+    def routing(cls, gate_dim: int = 64, **kwargs) -> PlasticityConfig:
         """Routing plasticity: state-dependent pathway gating."""
         return cls(
             plasticity_type="routing",
@@ -58,7 +58,7 @@ class PlasticityConfig:
         )
 
     @classmethod
-    def fast_weights(cls, fast_weight_dim: int = 512, **kwargs) -> "PlasticityConfig":
+    def fast_weights(cls, fast_weight_dim: int = 512, **kwargs) -> PlasticityConfig:
         """Fast weight plasticity: episode-local associative memory."""
         return cls(
             plasticity_type="fast_weights",
@@ -67,7 +67,7 @@ class PlasticityConfig:
         )
 
     @classmethod
-    def substrate_coupled(cls, **kwargs) -> "PlasticityConfig":
+    def substrate_coupled(cls, **kwargs) -> PlasticityConfig:
         """Substrate-coupled plasticity: reuse substrate adapters as physical plasticity."""
         return cls(
             plasticity_type="substrate_coupled",
@@ -76,7 +76,7 @@ class PlasticityConfig:
         )
 
     @classmethod
-    def rule_state(cls, num_operators: int = 8, **kwargs) -> "PlasticityConfig":
+    def rule_state(cls, num_operators: int = 8, **kwargs) -> PlasticityConfig:
         """Rule state plasticity (Z3): operator selection via ψ."""
         return cls(
             plasticity_type="rule_state",
@@ -105,8 +105,8 @@ class PlasticityPrimitive(Protocol):
     def step(
         self,
         psi: dict[str, Tensor],
-        z: "CompositeState",
-        context: "SystemContext",
+        z: CompositeState,
+        context: SystemContext,
     ) -> dict[str, Tensor]:
         """Compute next plastic state.
 
@@ -121,7 +121,7 @@ class PlasticityPrimitive(Protocol):
         ...
 
     @abstractmethod
-    def initial_psi(self, context: "SystemContext") -> dict[str, Tensor]:
+    def initial_psi(self, context: SystemContext) -> dict[str, Tensor]:
         """Create initial plastic state for a new episode."""
         ...
 
@@ -144,13 +144,15 @@ class NullPlasticity:
     def step(
         self,
         psi: dict[str, Tensor],
-        z: "CompositeState",
-        context: "SystemContext",
+        z: CompositeState,
+        context: SystemContext,
     ) -> dict[str, Tensor]:
         """Null plasticity: plastic state unchanged."""
         return psi
 
-    def initial_psi(self, context: "SystemContext", batch_size: int = 1) -> dict[str, Tensor]:
+    def initial_psi(
+        self, context: SystemContext, batch_size: int = 1
+    ) -> dict[str, Tensor]:
         """Null plasticity has no plastic state."""
         return {}
 
@@ -174,9 +176,9 @@ class CoupledTransition(Protocol):
     @abstractmethod
     def step(
         self,
-        z: "CompositeState",
-        context: "SystemContext",
-    ) -> "CompositeState":
+        z: CompositeState,
+        context: SystemContext,
+    ) -> CompositeState:
         """Execute one step of the joint dynamical system.
 
         Args:
@@ -201,17 +203,16 @@ class LegacyDynamicsAsCoupledTransition:
     valid as NullPlasticity slices of the joint system.
     """
 
-    def __init__(self, system: "System") -> None:
-        from bioplausible.core.ontology import System
+    def __init__(self, system: System) -> None:
 
         self.system = system
         self._null_plasticity = NullPlasticity()
 
     def step(
         self,
-        z: "CompositeState",
-        context: "SystemContext",
-    ) -> "CompositeState":
+        z: CompositeState,
+        context: SystemContext,
+    ) -> CompositeState:
         """Execute one step using the wrapped 5-D system."""
         # Extract input from activity
         x = z.activity.get("x")

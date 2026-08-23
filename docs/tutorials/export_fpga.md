@@ -239,7 +239,11 @@ Add custom pragmas via export config:
 ```python
 # In your training script before export
 from bioplausible.acceleration.export import export_kernel_to_hls
-from bioplausible.core.acceleration.kernel_backend import KernelConfig, AlgorithmFamily, HardwareTarget
+from bioplausible.core.acceleration.kernel_backend import (
+    KernelConfig,
+    AlgorithmFamily,
+    HardwareTarget,
+)
 import torch
 
 config = KernelConfig(
@@ -251,7 +255,7 @@ config = KernelConfig(
         "hls_array_partition": "cyclic",
         "hls_partition_factor": 4,
         "hls_unroll_factor": 4,
-    }
+    },
 )
 
 export_kernel_to_hls(kernel_backend, config, Path("./custom_hls"))

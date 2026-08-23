@@ -10,16 +10,14 @@ Tests verify that each plasticity primitive passes axis certification:
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch import Tensor
-
-import pytest
 
 from bioplausible.core.joint import (
     CompositeState,
     NullPlasticity,
     PlasticityConfig,
-    PlasticityPrimitive,
     StateRegistry,
     StateVariable,
     SystemContext,
@@ -42,8 +40,13 @@ from bioplausible.core.ontology import (
 def _create_test_context(plasticity_config: PlasticityConfig = None):
     """Create a test context with the given plasticity config."""
     substrate = DigitalSubstrate(SubstrateConfig.digital())
-    geometry = RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)), hidden_dim=20)
-    dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5))
+    geometry = RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        hidden_dim=20,
+    )
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
 
     registry = StateRegistry()
     for name in geometry.params:
@@ -57,16 +60,24 @@ def _create_test_context(plasticity_config: PlasticityConfig = None):
 
     registry.register(StateVariable(name="conductance", substrate_owned=True))
 
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
     dummy_substrate = {"conductance": torch.randn(4, 20)}
-    registry.validate(CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate))
+    registry.validate(
+        CompositeState(
+            activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate
+        )
+    )
 
     context = SystemContext(
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -118,7 +129,9 @@ def test_null_plasticity_preserves_joint_invariants():
     plasticity = NullPlasticity()
 
     z = CompositeState(
-        activity={name: param.detach().clone() for name, param in geometry.params.items()},
+        activity={
+            name: param.detach().clone() for name, param in geometry.params.items()
+        },
         plastic={},
         substrate={"conductance": torch.randn(4, 20)},
     )
@@ -150,8 +163,12 @@ class RoutingPlasticity:
 
     def initial_psi(self, context: SystemContext) -> dict[str, Tensor]:
         return {
-            "gate_logits": torch.zeros(4, self.config.plastic_state_dims["gate_logits"]),
-            "active_routes": torch.zeros(4, self.config.plastic_state_dims["active_routes"]),
+            "gate_logits": torch.zeros(
+                4, self.config.plastic_state_dims["gate_logits"]
+            ),
+            "active_routes": torch.zeros(
+                4, self.config.plastic_state_dims["active_routes"]
+            ),
         }
 
     def step(
@@ -165,9 +182,13 @@ class RoutingPlasticity:
         if "x" in z.activity:
             x = z.activity["x"]
             # Gate logits evolve based on input
-            new_psi["gate_logits"] = new_psi["gate_logits"] + 0.01 * x.mean(dim=1, keepdim=True).expand(-1, 32)
+            new_psi["gate_logits"] = new_psi["gate_logits"] + 0.01 * x.mean(
+                dim=1, keepdim=True
+            ).expand(-1, 32)
             # Active routes = sigmoid(gate_logits) > 0.5
-            new_psi["active_routes"] = (torch.sigmoid(new_psi["gate_logits"]) > 0.5).float()
+            new_psi["active_routes"] = (
+                torch.sigmoid(new_psi["gate_logits"]) > 0.5
+            ).float()
         return new_psi
 
 
@@ -177,7 +198,10 @@ def test_routing_plasticity_axis_certification():
 
     # Config properties
     assert plasticity.config.plasticity_type == "routing"
-    assert plasticity.config.plastic_state_dims == {"gate_logits": 32, "active_routes": 32}
+    assert plasticity.config.plastic_state_dims == {
+        "gate_logits": 32,
+        "active_routes": 32,
+    }
 
     # Initial psi
     psi = plasticity.initial_psi(None)
@@ -187,7 +211,9 @@ def test_routing_plasticity_axis_certification():
     assert psi["active_routes"].shape == (4, 32)
 
     # Step should update psi
-    context, geometry, registry = _create_test_context(PlasticityConfig.routing(gate_dim=32))
+    context, geometry, registry = _create_test_context(
+        PlasticityConfig.routing(gate_dim=32)
+    )
     z = CompositeState(
         activity={
             name: param.detach().clone() for name, param in geometry.params.items()
@@ -234,7 +260,11 @@ class FastWeightPlasticity:
         self.lr = lr
 
     def initial_psi(self, context: SystemContext) -> dict[str, Tensor]:
-        return {"fast_weights": torch.zeros(4, self.config.plastic_state_dims["fast_weights"])}
+        return {
+            "fast_weights": torch.zeros(
+                4, self.config.plastic_state_dims["fast_weights"]
+            )
+        }
 
     def step(
         self,
@@ -251,8 +281,9 @@ class FastWeightPlasticity:
                 # Reshape to match fast_weights dim
                 outer = torch.outer(pre, post).flatten()  # [20]
                 if outer.shape[0] <= 64:
-                    new_psi["fast_weights"][:, :outer.shape[0]] = (
-                        self.decay * new_psi["fast_weights"][:, :outer.shape[0]] + self.lr * outer
+                    new_psi["fast_weights"][:, : outer.shape[0]] = (
+                        self.decay * new_psi["fast_weights"][:, : outer.shape[0]]
+                        + self.lr * outer
                     )
         return new_psi
 
@@ -268,7 +299,9 @@ def test_fast_weight_plasticity_axis_certification():
     assert "fast_weights" in psi
     assert psi["fast_weights"].shape == (4, 64)
 
-    context, geometry, registry = _create_test_context(PlasticityConfig.fast_weights(fast_weight_dim=64))
+    context, geometry, registry = _create_test_context(
+        PlasticityConfig.fast_weights(fast_weight_dim=64)
+    )
     z = CompositeState(
         activity={
             name: param.detach().clone() for name, param in geometry.params.items()
@@ -335,9 +368,13 @@ def test_substrate_coupled_plasticity_axis_certification():
     psi = plasticity.initial_psi(None)
     assert psi == {}
 
-    context, geometry, registry = _create_test_context(PlasticityConfig.substrate_coupled())
+    context, geometry, registry = _create_test_context(
+        PlasticityConfig.substrate_coupled()
+    )
     z = CompositeState(
-        activity={name: param.detach().clone() for name, param in geometry.params.items()},
+        activity={
+            name: param.detach().clone() for name, param in geometry.params.items()
+        },
         plastic={},
         substrate={"conductance": torch.randn(4, 20)},
     )
@@ -370,7 +407,11 @@ class RuleStatePlasticity:
     config = PlasticityConfig.rule_state(num_operators=8)
 
     def initial_psi(self, context: SystemContext) -> dict[str, Tensor]:
-        return {"operator_logits": torch.zeros(4, self.config.plastic_state_dims["operator_logits"])}
+        return {
+            "operator_logits": torch.zeros(
+                4, self.config.plastic_state_dims["operator_logits"]
+            )
+        }
 
     def step(
         self,
@@ -382,7 +423,9 @@ class RuleStatePlasticity:
         # Operator logits evolve based on input
         if "x" in z.activity:
             x = z.activity["x"]
-            new_psi["operator_logits"] = new_psi["operator_logits"] + 0.01 * x.mean(dim=1, keepdim=True).expand(-1, 8)
+            new_psi["operator_logits"] = new_psi["operator_logits"] + 0.01 * x.mean(
+                dim=1, keepdim=True
+            ).expand(-1, 8)
         return new_psi
 
 
@@ -397,7 +440,9 @@ def test_rule_state_plasticity_axis_certification():
     assert "operator_logits" in psi
     assert psi["operator_logits"].shape == (4, 8)
 
-    context, geometry, registry = _create_test_context(PlasticityConfig.rule_state(num_operators=8))
+    context, geometry, registry = _create_test_context(
+        PlasticityConfig.rule_state(num_operators=8)
+    )
     z = CompositeState(
         activity={
             name: param.detach().clone() for name, param in geometry.params.items()
@@ -458,13 +503,29 @@ def test_plasticity_config_factories():
 
 def test_plasticity_config_in_system_config():
     """PlasticityConfig should integrate with SystemConfig."""
-    for factory_name in ["null", "routing", "fast_weights", "substrate_coupled", "rule_state"]:
+    for factory_name in [
+        "null",
+        "routing",
+        "fast_weights",
+        "substrate_coupled",
+        "rule_state",
+    ]:
         factory = getattr(PlasticityConfig, factory_name)
         config = SystemConfig(
             substrate=SubstrateConfig.digital(),
-            geometry=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+            geometry=GeometryConfig.recurrent(
+                input_dim=10, output_dim=2, hidden_dims=(20,)
+            ),
             dynamics=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
-            plasticity=factory() if factory_name == "null" else factory(gate_dim=32) if factory_name == "routing" else factory(fast_weight_dim=64) if factory_name == "fast_weights" else factory(num_operators=8) if factory_name == "rule_state" else factory(),
+            plasticity=factory()
+            if factory_name == "null"
+            else factory(gate_dim=32)
+            if factory_name == "routing"
+            else factory(fast_weight_dim=64)
+            if factory_name == "fast_weights"
+            else factory(num_operators=8)
+            if factory_name == "rule_state"
+            else factory(),
             credit=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
             update=ParameterUpdateConfig.euclidean(step_size=0.01),
         )
@@ -479,37 +540,56 @@ def test_plasticity_config_in_system_config():
 
 def test_consolidation_with_plasticity_config():
     """Consolidation should respect plasticity config consolidation_config."""
-    from bioplausible.core.joint import consolidate, ConsolidationConfig
+    from bioplausible.core.joint import ConsolidationConfig, consolidate
 
-    context, geometry, registry = _create_test_context(PlasticityConfig.fast_weights(fast_weight_dim=20, consolidation_config={"promotion_scale": 0.1}))
+    context, geometry, registry = _create_test_context(
+        PlasticityConfig.fast_weights(
+            fast_weight_dim=20, consolidation_config={"promotion_scale": 0.1}
+        )
+    )
 
     # Note: fast_weights is already registered by _create_test_context
     # Need to update it to be consolidatable
     # For this test, we'll use a fresh registry
     substrate = DigitalSubstrate(SubstrateConfig.digital())
-    geometry2 = RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)), hidden_dim=20)
+    geometry2 = RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        hidden_dim=20,
+    )
 
     registry2 = StateRegistry()
     for name in geometry2.params:
         registry2.register(StateVariable(name=name, persistent=True))
-    registry2.register(StateVariable(name="fast_weights", fast_plastic=True, consolidatable=True))
+    registry2.register(
+        StateVariable(name="fast_weights", fast_plastic=True, consolidatable=True)
+    )
     registry2.register(StateVariable(name="conductance", substrate_owned=True))
 
-    dummy_activity = {name: param.detach().clone() for name, param in geometry2.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry2.params.items()
+    }
     dummy_plastic = {"fast_weights": torch.ones(4, 20) * 5.0}
     dummy_substrate = {"conductance": torch.randn(4, 20)}
-    registry2.validate(CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate))
+    registry2.validate(
+        CompositeState(
+            activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate
+        )
+    )
 
     context2 = SystemContext(
         theta=geometry2.params,
         geometry=geometry2,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
-        plasticity_config=PlasticityConfig.fast_weights(fast_weight_dim=20, consolidation_config={"promotion_scale": 0.1}),
+        plasticity_config=PlasticityConfig.fast_weights(
+            fast_weight_dim=20, consolidation_config={"promotion_scale": 0.1}
+        ),
         registry=registry2,
     )
 
@@ -520,11 +600,15 @@ def test_consolidation_with_plasticity_config():
     )
 
     # Consolidate
-    new_context = consolidate(z, context2, ConsolidationConfig(promote_all=True, promotion_scale=0.1))
+    new_context = consolidate(
+        z, context2, ConsolidationConfig(promote_all=True, promotion_scale=0.1)
+    )
 
     # fast_weights should be promoted
     assert "fast_weights" in new_context.theta
-    assert torch.allclose(new_context.theta["fast_weights"], torch.ones(4, 20) * 5.0 * 0.1)
+    assert torch.allclose(
+        new_context.theta["fast_weights"], torch.ones(4, 20) * 5.0 * 0.1
+    )
 
 
 def test_plasticity_state_dims_match_registry():
@@ -537,7 +621,9 @@ def test_plasticity_state_dims_match_registry():
         else:
             plasticity_config = PlasticityConfig.rule_state(num_operators=8)
 
-        geometry = RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)))
+        geometry = RecurrentGeometry(
+            GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,))
+        )
         registry = StateRegistry()
         for name in geometry.params:
             registry.register(StateVariable(name=name, persistent=True))
@@ -559,9 +645,16 @@ def test_zero_extension_theorem_null_plasticity():
     from bioplausible.core.system_trainer import compose_system
 
     substrate = DigitalSubstrate(SubstrateConfig.digital())
-    geometry = RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)), hidden_dim=20)
-    dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5))
-    credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5))
+    geometry = RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        hidden_dim=20,
+    )
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
+    credit = ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+    )
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
 
     system_5d = compose_system(substrate, geometry, dynamics, credit, update)
@@ -611,7 +704,9 @@ def test_zero_extension_theorem_null_vs_non_null():
     # RoutingPlasticity: psi evolves
     psi_routing = routing_plasticity.initial_psi(context_routing)
     psi_routing_new = routing_plasticity.step(psi_routing, z, context_routing)
-    assert not torch.allclose(psi_routing_new["gate_logits"], psi_routing["gate_logits"])
+    assert not torch.allclose(
+        psi_routing_new["gate_logits"], psi_routing["gate_logits"]
+    )
 
 
 if __name__ == "__main__":

@@ -125,9 +125,13 @@ class KernelRegistry:
     @classmethod
     def register(cls, backend: type[KernelBackend]) -> None: ...
     @classmethod
-    def get(cls, family: AlgorithmFamily, hardware: HardwareTarget) -> KernelBackend | None: ...
+    def get(
+        cls, family: AlgorithmFamily, hardware: HardwareTarget
+    ) -> KernelBackend | None: ...
     @classmethod
-    def get_best(cls, family: AlgorithmFamily, hardware: HardwareTarget) -> KernelBackend | None: ...
+    def get_best(
+        cls, family: AlgorithmFamily, hardware: HardwareTarget
+    ) -> KernelBackend | None: ...
     @classmethod
     def list_families(cls) -> list[AlgorithmFamily]: ...
     @classmethod
@@ -139,7 +143,9 @@ class KernelRegistry:
 from bioplausible.acceleration import KernelRegistry, AlgorithmFamily, HardwareTarget
 
 # Get best backend for a family/hardware combination
-backend = KernelRegistry.get_best(AlgorithmFamily.FEEDBACK_ALIGNMENT, HardwareTarget.TRITON)
+backend = KernelRegistry.get_best(
+    AlgorithmFamily.FEEDBACK_ALIGNMENT, HardwareTarget.TRITON
+)
 
 # List all available backends for a family
 backends = KernelRegistry.list_backends(AlgorithmFamily.MEP)
@@ -285,6 +291,7 @@ backends = KernelRegistry.list_backends(AlgorithmFamily.MEP)
 ```python
 class EqPropKernelBackend:
     """Thin adapter wrapping EqPropKernel for KernelRegistry."""
+
     name = AlgorithmFamily.EQPROP
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     supports_autograd = False
@@ -293,7 +300,12 @@ class EqPropKernelBackend:
 
 **Usage:**
 ```python
-from bioplausible.acceleration import EqPropKernelBackend, KernelRegistry, AlgorithmFamily, HardwareTarget
+from bioplausible.acceleration import (
+    EqPropKernelBackend,
+    KernelRegistry,
+    AlgorithmFamily,
+    HardwareTarget,
+)
 
 # Register (done automatically on import)
 backend = KernelRegistry.get(AlgorithmFamily.EQPROP, HardwareTarget.CPU)
@@ -353,8 +365,14 @@ class MEP_TritonOps:
     def fisher_whiten(grad: Tensor, fisher: Tensor, damping: float) -> Tensor: ...
     @staticmethod
     def ep_settle(
-        x: Tensor, W1: Tensor, W2: Tensor, b1: Tensor, b2: Tensor,
-        steps: int, beta: float, target: Tensor | None
+        x: Tensor,
+        W1: Tensor,
+        W2: Tensor,
+        b1: Tensor,
+        b2: Tensor,
+        steps: int,
+        beta: float,
+        target: Tensor | None,
     ) -> Tensor: ...
 ```
 
@@ -429,6 +447,7 @@ from bioplausible.acceleration.kernel_backend import AlgorithmFamily, HardwareTa
 import torch
 from torch import Tensor
 
+
 class MyCustomKernel:
     name = "my_custom"
     supported_dtypes = (torch.float32, torch.float16)
@@ -441,7 +460,9 @@ class MyCustomKernel:
     def forward(self, x: Tensor, weight: Tensor) -> tuple[Tensor, ...]:
         return (x @ weight.T,)
 
-    def backward(self, grad_output: Tensor, x: Tensor, weight: Tensor) -> dict[str, Tensor]:
+    def backward(
+        self, grad_output: Tensor, x: Tensor, weight: Tensor
+    ) -> dict[str, Tensor]:
         return {"weight": grad_output.T @ x, "input": grad_output @ weight}
 
     def update_weights(self, **kwargs) -> None:
@@ -449,6 +470,7 @@ class MyCustomKernel:
 
     def get_memory_stats(self) -> dict[str, float]:
         return {}
+
 
 KernelRegistry.register(MyCustomKernel)
 ```

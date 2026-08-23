@@ -61,13 +61,7 @@ def create_native_pepita_mlp(
 
     substrate = DigitalSubstrate()
     geometry = FeedforwardGeometry(geometry_cfg)
-    dynamics = InstantaneousDynamics(
-        StateDynamicsConfig(
-            dynamics_type="instantaneous",
-            max_steps=1,
-            beta=0.1,
-        )
-    )
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = LocalGoodnessCredit(
         CreditAssignmentConfig(
             credit_type="local_goodness",

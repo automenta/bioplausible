@@ -26,13 +26,15 @@ from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
     from bioplausible.config.experiment import ExperimentConfig
 
 import torch
 from torch import Tensor, nn
 
-from bioplausible.core.registry import ComponentMetadata, ComputeProfile, LocalityLevel
 from bioplausible.core.joint.transition import PlasticityConfig
+from bioplausible.core.registry import ComponentMetadata, ComputeProfile, LocalityLevel
+
 if TYPE_CHECKING:
     from bioplausible.core.substrates.complex_substrate import ComplexSubstrate
     from bioplausible.core.substrates.sparse_substrate import SparseSubstrate
@@ -43,9 +45,9 @@ __all__ = [
     "FAMILY_TOLERANCES",
     "AnalogSubstrate",
     "BackpropCredit",
+    "ComplexSubstrate",
     "CreditAssignment",
     "CreditAssignmentConfig",
-    "ComplexSubstrate",
     "DiffusionDynamics",
     "DigitalSubstrate",
     "ElasticConsolidationUpdate",
@@ -124,7 +126,7 @@ class SubstrateConfig:
         weight_bounds: tuple[float, float] | None = None,
         sparsity: float = 0.0,
         device: str = "cpu",
-    ) -> "SubstrateConfig":
+    ) -> SubstrateConfig:
         return cls(
             precision=precision,
             noise_level=noise_level,
@@ -139,7 +141,7 @@ class SubstrateConfig:
         *,
         noise_level: float = 0.1,
         device: str = "cpu",
-    ) -> "SubstrateConfig":
+    ) -> SubstrateConfig:
         return cls(
             precision="float32",
             noise_level=noise_level,
@@ -154,7 +156,7 @@ class SubstrateConfig:
         *,
         noise_level: float = 0.05,
         device: str = "cpu",
-    ) -> "SubstrateConfig":
+    ) -> SubstrateConfig:
         return cls(
             precision="int8",
             noise_level=noise_level,
@@ -169,7 +171,7 @@ class SubstrateConfig:
         *,
         noise_level: float = 0.01,
         device: str = "cpu",
-    ) -> "SubstrateConfig":
+    ) -> SubstrateConfig:
         return cls(
             precision="float16",
             noise_level=noise_level,
@@ -184,7 +186,7 @@ class SubstrateConfig:
         *,
         noise_level: float = 0.01,
         device: str = "cpu",
-    ) -> "SubstrateConfig":
+    ) -> SubstrateConfig:
         return cls(
             precision="float32",
             noise_level=noise_level,
@@ -199,7 +201,7 @@ class SubstrateConfig:
         *,
         noise_level: float = 0.02,
         device: str = "cpu",
-    ) -> "SubstrateConfig":
+    ) -> SubstrateConfig:
         return cls(
             precision="complex64",
             noise_level=noise_level,
@@ -216,7 +218,7 @@ class SubstrateConfig:
         weight_bounds: tuple[float, float] | None = (-1.0, 1.0),
         sparsity: float = 0.0,
         device: str = "cpu",
-    ) -> "SubstrateConfig":
+    ) -> SubstrateConfig:
         """Complex-valued substrate for holomorphic networks.
 
         Uses float32 emulation (real/imag channels) for efficient GPU execution
@@ -239,7 +241,7 @@ class SubstrateConfig:
         precision: str = "float32",
         weight_bounds: tuple[float, float] | None = (-1.0, 1.0),
         device: str = "cpu",
-    ) -> "SubstrateConfig":
+    ) -> SubstrateConfig:
         """Sparse substrate with dynamic sparsity masks.
 
         Supports unstructured, N:M structured, block, and channel-wise sparsity
@@ -260,7 +262,7 @@ class SubstrateConfig:
         noise_level: float = 0.0,
         weight_bounds: tuple[float, float] | None = (-1.0, 1.0),
         device: str = "cpu",
-    ) -> "SubstrateConfig":
+    ) -> SubstrateConfig:
         """Ternary substrate with STE-based quantization.
 
         Weights quantized to {-α, 0, +α} with Straight-Through Estimator
@@ -308,7 +310,7 @@ class GeometryConfig:
         output_dim: int,
         hidden_dims: tuple[int, ...],
         init_scale: float = 0.1,
-    ) -> "GeometryConfig":
+    ) -> GeometryConfig:
         return cls(
             input_dim=input_dim,
             output_dim=output_dim,
@@ -328,7 +330,7 @@ class GeometryConfig:
         output_dim: int,
         hidden_dims: tuple[int, ...],
         init_scale: float = 0.1,
-    ) -> "GeometryConfig":
+    ) -> GeometryConfig:
         return cls(
             input_dim=input_dim,
             output_dim=output_dim,
@@ -350,7 +352,7 @@ class GeometryConfig:
         neurons_per_tile: int,
         tiles_per_layer: int,
         init_scale: float = 0.1,
-    ) -> "GeometryConfig":
+    ) -> GeometryConfig:
         return cls(
             input_dim=input_dim,
             output_dim=output_dim,
@@ -400,7 +402,7 @@ class StateDynamicsConfig:
         beta: float = 0.5,
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
-    ) -> "StateDynamicsConfig":
+    ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="energy_minimization",
             max_steps=max_steps,
@@ -423,7 +425,7 @@ class StateDynamicsConfig:
         beta: float = 0.5,
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
-    ) -> "StateDynamicsConfig":
+    ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="predictive_settling",
             max_steps=max_steps,
@@ -446,7 +448,7 @@ class StateDynamicsConfig:
         beta: float = 0.5,
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
-    ) -> "StateDynamicsConfig":
+    ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="spike_integration",
             max_steps=max_steps,
@@ -469,7 +471,7 @@ class StateDynamicsConfig:
         beta: float = 0.1,
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
-    ) -> "StateDynamicsConfig":
+    ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="instantaneous",
             max_steps=max_steps,
@@ -492,7 +494,7 @@ class StateDynamicsConfig:
         beta: float = 0.5,
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
-    ) -> "StateDynamicsConfig":
+    ) -> StateDynamicsConfig:
         """Diffusion-based dynamics for continuous-time settling.
 
         Implements the dynamics: dh/dt = -∇E(h) + noise
@@ -541,7 +543,7 @@ class CreditAssignmentConfig:
         local_objective: str = "mse",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
-    ) -> "CreditAssignmentConfig":
+    ) -> CreditAssignmentConfig:
         return cls(
             credit_type="thermodynamic_contrast",
             beta=beta,
@@ -560,7 +562,7 @@ class CreditAssignmentConfig:
         local_objective: str = "mse",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
-    ) -> "CreditAssignmentConfig":
+    ) -> CreditAssignmentConfig:
         return cls(
             credit_type="random_projections",
             beta=beta,
@@ -579,7 +581,7 @@ class CreditAssignmentConfig:
         local_objective: str = "mse",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
-    ) -> "CreditAssignmentConfig":
+    ) -> CreditAssignmentConfig:
         return cls(
             credit_type="local_goodness",
             beta=beta,
@@ -598,7 +600,7 @@ class CreditAssignmentConfig:
         local_objective: str = "mse",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
-    ) -> "CreditAssignmentConfig":
+    ) -> CreditAssignmentConfig:
         return cls(
             credit_type="temporal_trace",
             beta=beta,
@@ -617,7 +619,7 @@ class CreditAssignmentConfig:
         local_objective: str = "mse",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
-    ) -> "CreditAssignmentConfig":
+    ) -> CreditAssignmentConfig:
         return cls(
             credit_type="target_inversion",
             beta=beta,
@@ -636,7 +638,7 @@ class CreditAssignmentConfig:
         local_objective: str = "mse",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
-    ) -> "CreditAssignmentConfig":
+    ) -> CreditAssignmentConfig:
         return cls(
             credit_type="gradient",
             beta=beta,
@@ -680,7 +682,7 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
-    ) -> "ParameterUpdateConfig":
+    ) -> ParameterUpdateConfig:
         return cls(
             update_type="euclidean",
             step_size=step_size,
@@ -701,7 +703,7 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
-    ) -> "ParameterUpdateConfig":
+    ) -> ParameterUpdateConfig:
         return cls(
             update_type="riemannian_orthogonal",
             step_size=step_size,
@@ -722,7 +724,7 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
-    ) -> "ParameterUpdateConfig":
+    ) -> ParameterUpdateConfig:
         return cls(
             update_type="spectral_constrained",
             step_size=step_size,
@@ -743,7 +745,7 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
-    ) -> "ParameterUpdateConfig":
+    ) -> ParameterUpdateConfig:
         return cls(
             update_type="natural_gradient",
             step_size=step_size,
@@ -764,7 +766,7 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
-    ) -> "ParameterUpdateConfig":
+    ) -> ParameterUpdateConfig:
         return cls(
             update_type="elastic_consolidation",
             step_size=step_size,
@@ -1169,8 +1171,8 @@ class System(Protocol[TS, TG, TD, TC, TU]):
         self.geometry.update_params(new_params)
 
         return {
-            "loss": float(nudged_state.loss) if nudged_state.loss is not None else 0.0,
-            "energy": float(free_state.energy)
+            "loss": nudged_state.loss.item() if nudged_state.loss is not None else 0.0,
+            "energy": free_state.energy.item()
             if free_state.energy is not None
             else 0.0,
             "accuracy": free_state.metrics.get("accuracy", 0.0),
@@ -1255,7 +1257,9 @@ class SystemConfig:
         object.__setattr__(self, "credit", credit)
         object.__setattr__(self, "update", update)
         object.__setattr__(
-            self, "plasticity", plasticity if plasticity is not None else PlasticityConfig.null()
+            self,
+            "plasticity",
+            plasticity if plasticity is not None else PlasticityConfig.null(),
         )
 
     def validate(self) -> None:
@@ -1355,7 +1359,9 @@ class SystemConfig:
         # Complex substrate requires compatible credit assignment
         # Complex/holomorphic networks work best with thermodynamic contrast
         # (phase-sensitive gradients) or backprop (Wirtinger calculus)
-        if self.substrate.precision == "float32" and getattr(self.substrate, "_complex_emulated", False):
+        if self.substrate.precision == "float32" and getattr(
+            self.substrate, "_complex_emulated", False
+        ):
             # This is a complex substrate (emulated via real/imag channels)
             if self.credit.credit_type not in (
                 "thermodynamic_contrast",
@@ -1416,7 +1422,11 @@ class SystemConfig:
         # Ternary substrate requires compatible credit assignment
         # Ternary quantization works best with equilibrium/thermodynamic contrast
         # (contrastive learning naturally handles weight quantization)
-        if self.substrate.precision == "float32" and self.substrate.sparsity == 0.0 and self.substrate.weight_bounds == (-1.0, 1.0):
+        if (
+            self.substrate.precision == "float32"
+            and self.substrate.sparsity == 0.0
+            and self.substrate.weight_bounds == (-1.0, 1.0)
+        ):
             # Heuristic: likely ternary substrate (sparsity emerges from thresholding)
             if self.credit.credit_type not in (
                 "thermodynamic_contrast",
@@ -1440,8 +1450,8 @@ class SystemConfig:
                 import warnings
 
                 warnings.warn(
-                    f"Diffusion dynamics (Langevin) requires substrate noise_level > 0 "
-                    f"for proper sampling. Consider setting noise_level on substrate.",
+                    "Diffusion dynamics (Langevin) requires substrate noise_level > 0 "
+                    "for proper sampling. Consider setting noise_level on substrate.",
                     UserWarning,
                     stacklevel=2,
                 )
@@ -1461,22 +1471,26 @@ class SystemConfig:
                 )
 
         # Energy minimization with momentum requires compatible update
-        if self.dynamics.dynamics_type == "energy_minimization" and self.dynamics.momentum > 0.0:
-            if self.update.update_type == "riemannian_orthogonal":
-                import warnings
+        if (
+            self.dynamics.dynamics_type == "energy_minimization"
+            and self.dynamics.momentum > 0.0
+        ) and self.update.update_type == "riemannian_orthogonal":
+            import warnings
 
-                warnings.warn(
-                    f"EnergyMinimizationDynamics with momentum={self.dynamics.momentum} "
-                    f"combined with RiemannianOrthogonalUpdate may cause instability. "
-                    f"Consider EuclideanUpdate with momentum.",
-                    UserWarning,
-                    stacklevel=2,
-                )
+            warnings.warn(
+                f"EnergyMinimizationDynamics with momentum={self.dynamics.momentum} "
+                f"combined with RiemannianOrthogonalUpdate may cause instability. "
+                f"Consider EuclideanUpdate with momentum.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # Geometry-Substrate constraints
         # Spatial lattice / neuromorphic geometry requires neuromorphic substrate
         if self.geometry.topology_type in ("spatial_lattice", "neuromorphic", "fabric"):
-            if not (self.substrate.precision == "float16" and self.substrate.sparsity > 0.9):
+            if not (
+                self.substrate.precision == "float16" and self.substrate.sparsity > 0.9
+            ):
                 import warnings
 
                 warnings.warn(
@@ -1489,7 +1503,10 @@ class SystemConfig:
                 )
 
         # Tile mesh geometry with sparse substrate
-        if self.geometry.topology_type in ("tile_mesh", "tile") and self.substrate.sparsity > 0.5:
+        if (
+            self.geometry.topology_type in ("tile_mesh", "tile")
+            and self.substrate.sparsity > 0.5
+        ):
             import warnings
 
             warnings.warn(
@@ -1500,7 +1517,7 @@ class SystemConfig:
             )
 
     @classmethod
-    def from_experiment(cls, exp: "ExperimentConfig") -> "SystemConfig":
+    def from_experiment(cls, exp: ExperimentConfig) -> SystemConfig:
         """Build from unified ExperimentConfig — single entry point.
 
         Args:
@@ -1509,7 +1526,6 @@ class SystemConfig:
         Returns:
             Validated SystemConfig composed from experiment's ontology and model config.
         """
-        from bioplausible.config.experiment import ExperimentConfig
 
         ont = exp.ontology
         model = exp.model
@@ -1615,11 +1631,11 @@ class SystemConfig:
                 "spectral_constrained": ParameterUpdateConfig.spectral_constrained,
                 "spectral": ParameterUpdateConfig.spectral_constrained,
                 "natural_gradient": ParameterUpdateConfig.natural_gradient,
-"fisher": ParameterUpdateConfig.natural_gradient,
-            "elastic_consolidation": ParameterUpdateConfig.elastic_consolidation,
-            "ewc": ParameterUpdateConfig.elastic_consolidation,
-            "euclidean": ParameterUpdateConfig.euclidean,
-        }
+                "fisher": ParameterUpdateConfig.natural_gradient,
+                "elastic_consolidation": ParameterUpdateConfig.elastic_consolidation,
+                "ewc": ParameterUpdateConfig.elastic_consolidation,
+                "euclidean": ParameterUpdateConfig.euclidean,
+            }
         update_factory = update_map.get(
             ont.update_type, ParameterUpdateConfig.euclidean
         )
@@ -1643,6 +1659,196 @@ class SystemConfig:
         )
         sys_config.validate()
         return sys_config
+
+    @classmethod
+    def valid_combinations(cls) -> list[dict]:
+        """Return all valid 6-D coordinate combinations for AutoScientist.
+
+        Returns:
+            List of dicts, each representing a valid combination of
+            substrate, geometry, dynamics, plasticity, credit, update.
+            These are the coordinates that pass cross-axis validation.
+        """
+        # Core valid combinations derived from validation rules
+        combinations = []
+
+        # Substrate types
+        substrates = [
+            {
+                "type": "digital",
+                "precision": "float32",
+                "noise_level": 0.0,
+                "sparsity": 0.0,
+            },
+            {
+                "type": "memristive",
+                "precision": "float32",
+                "noise_level": 0.01,
+                "sparsity": 0.0,
+            },
+            {
+                "type": "neuromorphic",
+                "precision": "float16",
+                "noise_level": 0.0,
+                "sparsity": 0.95,
+            },
+            {
+                "type": "optical",
+                "precision": "float32",
+                "noise_level": 0.0,
+                "sparsity": 0.0,
+            },
+            {
+                "type": "quantum",
+                "precision": "complex64",
+                "noise_level": 0.0,
+                "sparsity": 0.0,
+            },
+            {
+                "type": "sparse",
+                "precision": "float32",
+                "noise_level": 0.0,
+                "sparsity": 0.8,
+            },
+            {
+                "type": "ternary",
+                "precision": "float32",
+                "noise_level": 0.0,
+                "sparsity": 0.0,
+            },
+        ]
+
+        # Geometry types
+        geometries = [
+            {
+                "topology_type": "feedforward",
+                "input_dim": 784,
+                "output_dim": 10,
+                "hidden_dims": [256, 128],
+            },
+            {
+                "topology_type": "recurrent",
+                "input_dim": 784,
+                "output_dim": 10,
+                "hidden_dims": [256],
+            },
+            {
+                "topology_type": "tile_mesh",
+                "input_dim": 784,
+                "output_dim": 10,
+                "num_layers": 4,
+                "neurons_per_tile": 64,
+                "tiles_per_layer": 4,
+            },
+        ]
+
+        # Dynamics types
+        dynamics_options = [
+            {"dynamics_type": "energy_minimization", "max_steps": 20, "beta": 0.5},
+            {"dynamics_type": "predictive_settling", "max_steps": 20, "beta": 0.5},
+            {"dynamics_type": "spike_integration", "max_steps": 50, "beta": 0.5},
+            {"dynamics_type": "instantaneous", "max_steps": 1, "beta": 0.5},
+            {"dynamics_type": "diffusion", "max_steps": 100, "beta": 0.5},
+        ]
+
+        # Plasticity types
+        plasticities = [
+            {"type": "null"},
+            {"type": "routing", "gate_dim": 64},
+            {
+                "type": "fast_weights",
+                "fast_weight_dim": 512,
+                "decay": 0.9,
+                "learning_rate": 0.1,
+            },
+            {"type": "substrate_coupled"},
+        ]
+
+        # Credit types
+        credits = [
+            {"credit_type": "thermodynamic_contrast", "beta": 0.5},
+            {"credit_type": "random_projections", "beta": 0.5},
+            {"credit_type": "local_goodness", "beta": 0.5},
+            {"credit_type": "temporal_trace", "beta": 0.5},
+            {"credit_type": "target_inversion", "beta": 0.5},
+            {"credit_type": "gradient", "beta": 0.5},
+        ]
+
+        # Update types
+        updates = [
+            {"update_type": "euclidean", "step_size": 0.01},
+            {"update_type": "riemannian_orthogonal", "step_size": 0.01},
+            {"update_type": "spectral_constrained", "step_size": 0.01},
+            {"update_type": "natural_gradient", "step_size": 0.01},
+            {"update_type": "elastic_consolidation", "step_size": 0.01},
+        ]
+
+        # Generate combinations and validate
+        for sub in substrates:
+            for geom in geometries:
+                for dyn in dynamics_options:
+                    for plas in plasticities:
+                        for cred in credits:
+                            for upd in updates:
+                                coord = {
+                                    "substrate": sub,
+                                    "geometry": geom,
+                                    "dynamics": dyn,
+                                    "plasticity": plas,
+                                    "credit": cred,
+                                    "update": upd,
+                                }
+                                # Quick validation: skip known invalid combos
+                                # Recurrent geometry requires energy_minimization
+                                if geom["topology_type"] in (
+                                    "recurrent",
+                                    "recurrent_attractor",
+                                ):
+                                    if dyn["dynamics_type"] != "energy_minimization":
+                                        continue
+                                # Thermodynamic contrast requires energy_minimization
+                                if cred["credit_type"] in (
+                                    "thermodynamic_contrast",
+                                    "equilibrium",
+                                ):
+                                    if dyn["dynamics_type"] != "energy_minimization":
+                                        continue
+                                # Spike integration requires temporal trace or target inversion credit
+                                if dyn["dynamics_type"] == "spike_integration":
+                                    if cred["credit_type"] not in (
+                                        "temporal_trace",
+                                        "target_inversion",
+                                        "target_prop",
+                                    ):
+                                        continue
+                                # Tile mesh requires compatible dynamics
+                                if geom["topology_type"] in ("tile_mesh", "tile"):
+                                    if dyn["dynamics_type"] not in (
+                                        "energy_minimization",
+                                        "instantaneous",
+                                    ):
+                                        continue
+                                # Quantum substrate requires compatible dynamics
+                                if sub["precision"] == "complex64":
+                                    if dyn["dynamics_type"] not in (
+                                        "energy_minimization",
+                                        "instantaneous",
+                                        "diffusion",
+                                    ):
+                                        continue
+                                # Predictive settling requires compatible credit
+                                if dyn["dynamics_type"] == "predictive_settling":
+                                    if cred["credit_type"] not in (
+                                        "thermodynamic_contrast",
+                                        "equilibrium",
+                                        "local_goodness",
+                                        "forward_only",
+                                    ):
+                                        continue
+
+                                combinations.append(coord)
+
+        return combinations
 
 
 # ============================================================
@@ -1674,26 +1880,28 @@ class DigitalSubstrate:
             return tensor.to(torch.bool)
         return tensor
 
-    def quantize_weights(self, w: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
+    def quantize_weights(self, w: Tensor) -> Tensor:
         return self._to_precision(w)
 
-    def inject_state_noise(self, s: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
+    def inject_state_noise(self, s: Tensor) -> Tensor:
         return self._to_precision(s)
 
-    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         def forward(x: Tensor, w: Tensor) -> Tensor:
             x = self._to_precision(x)
             w = self._to_precision(w)
             return self._to_precision(x @ w.T)
+
         return forward
 
-    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:  # ruff: ignore[no-self-use]
+    def get_weight_update_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         def update(grad: Tensor, w: Tensor) -> Tensor:
             grad = self._to_precision(grad)
             return self._to_precision(grad)
+
         return update
 
-    def initial_state(self, x: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
+    def initial_state(self, x: Tensor) -> Tensor:
         return self._to_precision(x)
 
 
@@ -2934,20 +3142,14 @@ class ModelAdapter:
             if dynamics is not None:
                 return dynamics
 
-        return InstantaneousDynamics(
-            StateDynamicsConfig.instantaneous()
-        )
+        return InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
     def _dynamics_from_family(self, family: str) -> StateDynamics | None:  # ruff: ignore[no-self-use]
         equilibrium_keys = ("equilibrium", "eqprop", "ep", "chl")
         if any(k in family for k in equilibrium_keys):
-            return EnergyMinimizationDynamics(
-                StateDynamicsConfig.energy_minimization()
-            )
+            return EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization())
         if any(k in family for k in ("predictive", "pc")):
-            return PredictiveSettlingDynamics(
-                StateDynamicsConfig.predictive_settling()
-            )
+            return PredictiveSettlingDynamics(StateDynamicsConfig.predictive_settling())
         if any(k in family for k in ("spiking", "stdp", "snn")):
             return SpikeIntegrationDynamics(
                 StateDynamicsConfig(
@@ -2972,9 +3174,7 @@ class ModelAdapter:
             "tp",
         )
         if any(k in family for k in forward_keys):
-            return InstantaneousDynamics(
-                StateDynamicsConfig.instantaneous()
-            )
+            return InstantaneousDynamics(StateDynamicsConfig.instantaneous())
         return None
 
     def _dynamics_from_gradient_method(self, method: str) -> StateDynamics | None:
@@ -2986,28 +3186,18 @@ class ModelAdapter:
                 )
             )
         if method == "predictive_coding":
-            return PredictiveSettlingDynamics(
-                StateDynamicsConfig.predictive_settling()
-            )
+            return PredictiveSettlingDynamics(StateDynamicsConfig.predictive_settling())
         if method in {"spiking", "stdp"}:
-            return SpikeIntegrationDynamics(
-                StateDynamicsConfig.spike_integration()
-            )
+            return SpikeIntegrationDynamics(StateDynamicsConfig.spike_integration())
         return None
 
     def _dynamics_from_locality(self, locality: LocalityLevel) -> StateDynamics | None:  # ruff: ignore[no-self-use]
         if locality == LocalityLevel.EQUILIBRIUM:
-            return EnergyMinimizationDynamics(
-                StateDynamicsConfig.energy_minimization()
-            )
+            return EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization())
         if locality == LocalityLevel.FORWARD_ONLY:
-            return InstantaneousDynamics(
-                StateDynamicsConfig.instantaneous()
-            )
+            return InstantaneousDynamics(StateDynamicsConfig.instantaneous())
         if locality == LocalityLevel.LOCAL:
-            return SpikeIntegrationDynamics(
-                StateDynamicsConfig.spike_integration()
-            )
+            return SpikeIntegrationDynamics(StateDynamicsConfig.spike_integration())
         return None
 
     def _infer_credit(self) -> CreditAssignment:
@@ -4402,15 +4592,15 @@ class RandomProjectionsCredit:
                 # e_l = B_l @ e_out
                 layer_error = output_error @ fb.T  # (batch, h_dim)
                 # Apply derivative of activation (assuming ReLU)
-                if i < len(acts_list) - 1:
-                    act = acts_list[i]
-                    layer_error = layer_error * (act > 0).float()  # type: ignore[attr-defined]  # ReLU derivative
+                # Hidden layer i corresponds to acts_list[i + 1] (input is acts_list[0])
+                act = acts_list[i + 1]
+                layer_error = layer_error * (act > 0).float()  # type: ignore[attr-defined]  # ReLU derivative
                 # Pseudo-gradient: layer_error.T @ act_{l-1}
                 if i == 0:
                     # First hidden layer: input is x
                     pre_act = free_state.x if free_state.x is not None else acts_list[0]
                 else:
-                    pre_act = acts_list[i - 1]
+                    pre_act = acts_list[i]
                 if pre_act is not None:
                     grad = layer_error.T @ pre_act  # (h_dim, in_dim)
                     grads.append(grad.T)  # (out_dim, in_dim) to match weight shape
@@ -4422,12 +4612,12 @@ class RandomProjectionsCredit:
                 # e_l = B_l @ e_{l+1}
                 layer_error = error @ fb.T  # (batch, h_dim)
                 # Apply derivative of activation
-                if i < len(acts_list) - 1:
-                    act = acts_list[i]
-                    layer_error = layer_error * (act > 0).float()  # type: ignore[attr-defined]
+                # Hidden layer i corresponds to acts_list[i + 1]
+                act = acts_list[i + 1]
+                layer_error = layer_error * (act > 0).float()  # type: ignore[attr-defined]
                 # Pseudo-gradient
                 pre_act = (
-                    acts_list[i - 1]
+                    acts_list[i]
                     if i > 0
                     else (free_state.x if free_state.x is not None else acts_list[0])
                 )
@@ -5126,8 +5316,8 @@ class _AdaptedSystem:
         new_params = self.update.step(self.geometry.params, pseudo_grads, self.geometry)
         self.geometry.update_params(new_params)
         return {
-            "loss": float(nudged_state.loss) if nudged_state.loss is not None else 0.0,
-            "energy": float(free_state.energy)
+            "loss": nudged_state.loss.item() if nudged_state.loss is not None else 0.0,
+            "energy": free_state.energy.item()
             if free_state.energy is not None
             else 0.0,
             "accuracy": free_state.metrics.get("accuracy", 0.0),

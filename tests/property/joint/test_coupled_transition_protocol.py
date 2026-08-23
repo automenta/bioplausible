@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import torch
-from torch import Tensor
 
 from bioplausible.core.joint import (
     CompositeState,
@@ -52,7 +51,9 @@ def _create_system_context() -> SystemContext:
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=dynamics_config,
         credit_config=credit_config,
         update_config=update_config,
@@ -91,7 +92,9 @@ def test_legacy_dynamics_as_coupled_transition():
             GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
             hidden_dim=20,
         ),
-        EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5)),
+        EnergyMinimizationDynamics(
+            StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5)
+        ),
         ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)),
         EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01)),
     )
@@ -117,7 +120,9 @@ def test_system_config_6d_construction():
     """Test SystemConfig can be constructed with 6 axes."""
     config = SystemConfig(
         substrate=SubstrateConfig.digital(),
-        geometry=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics=StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5),
         plasticity=PlasticityConfig.null(),
         credit=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
@@ -136,7 +141,9 @@ def test_system_config_5d_backward_compat():
     """Test SystemConfig can be constructed with 5 axes (plasticity defaults to Null)."""
     config = SystemConfig(
         substrate=SubstrateConfig.digital(),
-        geometry=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics=StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5),
         credit=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update=ParameterUpdateConfig.euclidean(step_size=0.01),

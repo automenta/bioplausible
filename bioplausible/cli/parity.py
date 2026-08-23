@@ -17,7 +17,6 @@ import json
 import logging
 from typing import Protocol
 
-import torch
 from torch.utils.data import DataLoader
 
 # Import zoo models to trigger registration
@@ -30,8 +29,8 @@ from bioplausible.core.system_trainer import (
     create_eqprop_system,
     create_fa_system,
 )
-from bioplausible.domains.registry import SUPPORTED_TASKS, resolve_task
 from bioplausible.domains.factory import create_task
+from bioplausible.domains.registry import SUPPORTED_TASKS, resolve_task
 from bioplausible.utils import seed_everything
 
 logger = get_logger()
@@ -94,7 +93,9 @@ class _FlattenLoader:
         return len(self.loader)
 
 
-def _make_dataloaders(task_name: str, batch_size: int, device: str) -> tuple[_FlattenLoader, _FlattenLoader]:
+def _make_dataloaders(
+    task_name: str, batch_size: int, device: str
+) -> tuple[_FlattenLoader, _FlattenLoader]:
     """Create train and validation DataLoaders for a task with flattening."""
     task = create_task(task_name, device=device, quick_mode=True)
     task.setup()
@@ -171,7 +172,9 @@ def run_parity(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--config-a", default="backprop", help="First config (baseline)")
+    parser.add_argument(
+        "--config-a", default="backprop", help="First config (baseline)"
+    )
     parser.add_argument("--config-b", default="eqprop", help="Second config (compare)")
     parser.add_argument("--task", default=_DEFAULT_TASK)
     parser.add_argument("--epochs", type=int, default=5)

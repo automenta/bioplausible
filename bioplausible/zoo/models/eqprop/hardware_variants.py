@@ -26,8 +26,6 @@ engine of their parent (:class:`EquilibriumMLP`), so they drop into
 ``validation -> core`` dependency.
 """
 
-import math
-
 import torch
 
 from bioplausible.config.unified import ModelConfig

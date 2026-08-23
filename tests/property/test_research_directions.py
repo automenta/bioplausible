@@ -13,11 +13,9 @@ import pytest
 import torch
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from torch import nn, optim
 
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.zoo import get_model_spec
-
 
 # =============================================================================
 # Shared Fixtures & Helpers
@@ -55,7 +53,9 @@ class TestHolomorphicEP:
     @pytest.mark.parametrize("model_name", ["holomorphic_ep"])
     @settings(max_examples=10, deadline=None)
     @given(st.data())
-    def test_holomorphic_weights_are_complex(self, model_name, synthetic_mlp_task, data):
+    def test_holomorphic_weights_are_complex(
+        self, model_name, synthetic_mlp_task, data
+    ):
         """HolomorphicEP should have complex-valued weights."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
@@ -140,7 +140,9 @@ class TestDirectedEP:
     @pytest.mark.parametrize("model_name", ["directed_ep"])
     @settings(max_examples=10, deadline=None)
     @given(st.data())
-    def test_directed_ep_weights_are_asymmetric(self, model_name, synthetic_mlp_task, data):
+    def test_directed_ep_weights_are_asymmetric(
+        self, model_name, synthetic_mlp_task, data
+    ):
         """DirectedEP should have separate forward and feedback weights (not tied)."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
@@ -180,7 +182,7 @@ class TestDirectedEP:
                 if B.shape == W.T.shape:
                     # They have compatible shapes, check they're not the same tensor
                     assert B.data_ptr() != W.data_ptr(), (
-                        f"Feedback weight shares memory with forward weight transpose!"
+                        "Feedback weight shares memory with forward weight transpose!"
                     )
                     # Also check values are different (not just different memory)
                     diff = torch.norm(B - W.T).item()
@@ -277,7 +279,9 @@ class TestFiniteNudgeEP:
     @pytest.mark.xfail(
         reason="FiniteNudgeEP with large beta may be unstable; verifying mechanics only"
     )
-    def test_finite_nudge_stable_with_large_beta(self, model_name, synthetic_mlp_task, data):
+    def test_finite_nudge_stable_with_large_beta(
+        self, model_name, synthetic_mlp_task, data
+    ):
         """FiniteNudgeEP should not diverge with beta=1.0."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
@@ -319,9 +323,7 @@ class TestFiniteNudgeEP:
 
         # Loss should not explode
         max_loss = max(losses)
-        assert max_loss < 100.0, (
-            f"{model_name}: loss exploded (max={max_loss:.4f})"
-        )
+        assert max_loss < 100.0, f"{model_name}: loss exploded (max={max_loss:.4f})"
 
         # Should at least not diverge completely
         assert final_loss < initial_loss * 10, (
@@ -338,7 +340,9 @@ class TestFiniteNudgeEP:
 class TestWiredUpResearchTracks:
     """Tests that were in research_tracks.py now as property tests."""
 
-    @pytest.mark.parametrize("model_name", ["holomorphic_ep", "directed_ep", "finite_nudge_ep"])
+    @pytest.mark.parametrize(
+        "model_name", ["holomorphic_ep", "directed_ep", "finite_nudge_ep"]
+    )
     def test_model_builds_and_runs_forward(self, model_name, synthetic_mlp_task):
         """All three models should build and run forward pass."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task

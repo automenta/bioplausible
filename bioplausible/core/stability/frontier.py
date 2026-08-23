@@ -23,17 +23,19 @@ class ResourceUsage:
     latency: float = 0.0
     plastic_state_capacity: float = 0.0
 
-    def __add__(self, other: "ResourceUsage") -> "ResourceUsage":
+    def __add__(self, other: ResourceUsage) -> ResourceUsage:
         """Add two resource usage vectors."""
         return ResourceUsage(
             compute=self.compute + other.compute,
             memory=max(self.memory, other.memory),
             energy=self.energy + other.energy,
             latency=self.latency + other.latency,
-            plastic_state_capacity=max(self.plastic_state_capacity, other.plastic_state_capacity),
+            plastic_state_capacity=max(
+                self.plastic_state_capacity, other.plastic_state_capacity
+            ),
         )
 
-    def __truediv__(self, scalar: float) -> "ResourceUsage":
+    def __truediv__(self, scalar: float) -> ResourceUsage:
         """Divide by scalar for averaging."""
         if scalar == 0:
             return ResourceUsage()
@@ -56,7 +58,7 @@ class ResourceUsage:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, float]) -> "ResourceUsage":
+    def from_dict(cls, data: dict[str, float]) -> ResourceUsage:
         """Create from dictionary."""
         return cls(
             compute=data.get("compute", 0.0),
@@ -118,7 +120,7 @@ class FrontierRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "FrontierRecord":
+    def from_dict(cls, data: dict) -> FrontierRecord:
         """Create from dictionary."""
         return cls(
             coordinate=data["coordinate"],
@@ -162,7 +164,13 @@ class FrontierAggregator:
             return []
 
         if objectives is None:
-            objectives = ["task_loss", "adaptation_time", "rho_jacobian", "settling_time", "resources.compute"]
+            objectives = [
+                "task_loss",
+                "adaptation_time",
+                "rho_jacobian",
+                "settling_time",
+                "resources.compute",
+            ]
         if maximize is None:
             maximize = [False, False, False, False, False]  # All minimize by default
 
@@ -207,7 +215,9 @@ class FrontierAggregator:
 
         return pareto
 
-    def get_best_by_objective(self, objective: str, maximize: bool = False) -> FrontierRecord | None:
+    def get_best_by_objective(
+        self, objective: str, maximize: bool = False
+    ) -> FrontierRecord | None:
         """Get the best record by a single objective."""
         if not self._records:
             return None

@@ -438,8 +438,8 @@ class DistributedSystemTrainer:
         self.system.geometry.update_params(local_updates)
 
         return {
-            "loss": float(nudged_state.loss) if nudged_state.loss is not None else 0.0,
-            "energy": float(free_state.energy)
+            "loss": nudged_state.loss.item() if nudged_state.loss is not None else 0.0,
+            "energy": free_state.energy.item()
             if free_state.energy is not None
             else 0.0,
             "accuracy": free_state.metrics.get("accuracy", 0.0),

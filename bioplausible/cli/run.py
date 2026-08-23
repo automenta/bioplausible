@@ -27,6 +27,7 @@ import optuna
 
 from bioplausible.core._paths import db_path
 from bioplausible.core.logging import get_logger
+from bioplausible.core.ontology import PredictiveSettlingDynamics
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.hyperopt import (
     create_optuna_space,
@@ -570,9 +571,7 @@ def run_training(args):
     from bioplausible.core.system_trainer import SystemTrainer, SystemTrainerConfig
     from bioplausible.domains.factory import create_task
 
-    task = create_task(
-        args.task, device=args.device, quick_mode=False
-    )
+    task = create_task(args.task, device=args.device, quick_mode=False)
     task.batch_size = args.batch_size
     task.setup()
 
@@ -616,7 +615,7 @@ def run_training(args):
             pbar.update(1)
             pbar.set_postfix({
                 "loss": epoch_metric.get("train_loss", 0.0),
-                "acc": epoch_metric.get("train_acc", 0.0)
+                "acc": epoch_metric.get("train_acc", 0.0),
             })
 
         pbar.close()
@@ -653,8 +652,8 @@ def run_search(args):
 
 def run_core_train(args):
     """Run a single training session using SystemTrainer (unified interface)."""
-    from bioplausible.core.system_trainer import SystemTrainer, SystemTrainerConfig
     from bioplausible.core.registry import Registry
+    from bioplausible.core.system_trainer import SystemTrainer, SystemTrainerConfig
     from bioplausible.domains.factory import create_task
 
     task = create_task(args.task, device=args.device, quick_mode=False)
@@ -703,7 +702,7 @@ def run_from_yaml(args):
     """Run training from a YAML config file (flat preset format)."""
     import torch
     from omegaconf import OmegaConf
-    from bioplausible.core.ontology import PredictiveSettlingDynamics
+
     from bioplausible.core.system_trainer import SystemTrainer, SystemTrainerConfig
     from bioplausible.domains.factory import create_task
 
@@ -756,7 +755,13 @@ def run_from_yaml(args):
 
     # Build system from flat config
     system = _build_system_from_flat_config(
-        substrate_cfg, geometry_cfg, dynamics_cfg, plasticity_cfg, credit_cfg, update_cfg, device
+        substrate_cfg,
+        geometry_cfg,
+        dynamics_cfg,
+        plasticity_cfg,
+        credit_cfg,
+        update_cfg,
+        device,
     )
 
     # Create trainer
@@ -791,10 +796,16 @@ def run_from_yaml(args):
         )
 
 
-def _build_system_from_flat_config(substrate_cfg, geometry_cfg, dynamics_cfg, plasticity_cfg, credit_cfg, update_cfg, device):
+def _build_system_from_flat_config(
+    substrate_cfg,
+    geometry_cfg,
+    dynamics_cfg,
+    plasticity_cfg,
+    credit_cfg,
+    update_cfg,
+    device,
+):
     """Build a System or JointSystem from flat YAML config."""
-    import dataclasses
-    import torch
 
     from bioplausible.core.ontology import (
         BackpropCredit,
@@ -843,7 +854,9 @@ def _build_system_from_flat_config(substrate_cfg, geometry_cfg, dynamics_cfg, pl
                 hidden_dims=tuple(geometry_cfg["hidden_dims"]),
                 init_scale=geometry_cfg.get("init_scale", 0.1),
             ),
-            hidden_dim=geometry_cfg["hidden_dims"][-1] if geometry_cfg["hidden_dims"] else geometry_cfg["output_dim"],
+            hidden_dim=geometry_cfg["hidden_dims"][-1]
+            if geometry_cfg["hidden_dims"]
+            else geometry_cfg["output_dim"],
         )
     else:
         geometry = FeedforwardGeometry(
@@ -866,7 +879,9 @@ def _build_system_from_flat_config(substrate_cfg, geometry_cfg, dynamics_cfg, pl
                 step_size=dynamics_cfg.get("step_size", 0.1),
                 beta=dynamics_cfg.get("beta", 0.5),
                 momentum=dynamics_cfg.get("momentum", 0.0),
-                track_free_energy_per_iter=dynamics_cfg.get("track_free_energy_per_iter", False),
+                track_free_energy_per_iter=dynamics_cfg.get(
+                    "track_free_energy_per_iter", False
+                ),
             )
         )
     elif dyn_type == "predictive_settling":
@@ -878,7 +893,9 @@ def _build_system_from_flat_config(substrate_cfg, geometry_cfg, dynamics_cfg, pl
                 step_size=dynamics_cfg.get("step_size", 0.1),
                 beta=dynamics_cfg.get("beta", 0.5),
                 momentum=dynamics_cfg.get("momentum", 0.0),
-                track_free_energy_per_iter=dynamics_cfg.get("track_free_energy_per_iter", False),
+                track_free_energy_per_iter=dynamics_cfg.get(
+                    "track_free_energy_per_iter", False
+                ),
             )
         )
     else:
@@ -973,7 +990,9 @@ def _build_system_from_flat_config(substrate_cfg, geometry_cfg, dynamics_cfg, pl
     if isinstance(plasticity, NullPlasticity):
         return compose_system(substrate, geometry, dynamics, credit, update)
     else:
-        return compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)
+        return compose_joint_system(
+            substrate, geometry, dynamics, plasticity, credit, update
+        )
 
 
 def list_models(_args):

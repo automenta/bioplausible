@@ -144,7 +144,7 @@ class RuleStatePlasticity:
         return self._controller
 
     def initial_psi(
-        self, context: "SystemContext | None", batch_size: int = 1
+        self, context: SystemContext | None, batch_size: int = 1
     ) -> dict[str, Tensor]:
         """Create initial plastic state.
 
@@ -167,8 +167,8 @@ class RuleStatePlasticity:
     def step(
         self,
         psi: dict[str, Tensor],
-        z: "CompositeState",
-        context: "SystemContext",
+        z: CompositeState,
+        context: SystemContext,
     ) -> dict[str, Tensor]:
         """Compute next plastic state.
 

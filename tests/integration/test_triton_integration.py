@@ -10,8 +10,8 @@ parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
 from bioplausible.acceleration.triton_kernels import HAS_TRITON, TritonEqPropOps
-from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 from bioplausible.config.unified import ModelConfig
+from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 
 pytestmark = pytest.mark.gpu
 

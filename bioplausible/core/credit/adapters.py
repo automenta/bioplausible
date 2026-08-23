@@ -165,9 +165,7 @@ class ThermodynamicToBackpropAdapter(CreditAdapter):
         combined = []
         for eq, bp in zip(eqprop, backprop, strict=False):
             if eq.shape == bp.shape:
-                combined.append(
-                    (1 - 0.5) * eq + 0.5 * bp
-                )
+                combined.append((1 - 0.5) * eq + 0.5 * bp)
             else:
                 combined.append(eq)
         return combined
@@ -431,9 +429,7 @@ class TemporalTraceToThermodynamicAdapter(CreditAdapter):
         combined = []
         for stdp, eq in zip(stdp_grads, eqprop_grads, strict=False):
             if stdp.shape == eq.shape:
-                combined.append(
-                    self._stdp_weight * stdp + (1 - self._stdp_weight) * eq
-                )
+                combined.append(self._stdp_weight * stdp + (1 - self._stdp_weight) * eq)
             elif stdp.numel() > 0:
                 combined.append(stdp)
             else:
@@ -589,18 +585,24 @@ def create_credit_adapter(
     """
     adapter_map: dict[tuple[str, str], type[CreditAdapter]] = {
         ("thermodynamic_contrast", "gradient"): ThermodynamicToBackpropAdapter,
-        ("random_projections", "thermodynamic_contrast"):
-            RandomProjectionsToThermodynamicAdapter,
-        ("local_goodness", "thermodynamic_contrast"):
-            LocalGoodnessToThermodynamicAdapter,
-        ("thermodynamic_contrast", "homeostatic"):
-            ThermodynamicToHomeostaticAdapter,
-        ("temporal_trace", "thermodynamic_contrast"):
-            TemporalTraceToThermodynamicAdapter,
-        ("target_inversion", "thermodynamic_contrast"):
-            TargetInversionToThermodynamicAdapter,
-        ("gradient", "thermodynamic_contrast"):
-            BackpropToThermodynamicAdapter,
+        (
+            "random_projections",
+            "thermodynamic_contrast",
+        ): RandomProjectionsToThermodynamicAdapter,
+        (
+            "local_goodness",
+            "thermodynamic_contrast",
+        ): LocalGoodnessToThermodynamicAdapter,
+        ("thermodynamic_contrast", "homeostatic"): ThermodynamicToHomeostaticAdapter,
+        (
+            "temporal_trace",
+            "thermodynamic_contrast",
+        ): TemporalTraceToThermodynamicAdapter,
+        (
+            "target_inversion",
+            "thermodynamic_contrast",
+        ): TargetInversionToThermodynamicAdapter,
+        ("gradient", "thermodynamic_contrast"): BackpropToThermodynamicAdapter,
     }
 
     key = (source_type, target_type)

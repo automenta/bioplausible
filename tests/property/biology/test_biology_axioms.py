@@ -713,8 +713,8 @@ class TestWiredUpDisabledTests:
 
     def test_oracle_convergence_time_vs_noise(self):
         """Wire up test_oracle.py::test_oracle_metric - verify dynamics are computed correctly."""
-        from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
         from bioplausible.config.unified import ModelConfig
+        from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 
         input_dim = 16
         hidden_dim = 32

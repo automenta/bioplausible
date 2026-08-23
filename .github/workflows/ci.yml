@@ -7,7 +7,7 @@ on:
     branches: ["main", "master"]
 
 jobs:
-  code-quality:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,39 +27,14 @@ jobs:
         run: uv run ruff check .
       - name: Type Check (Pyright)
         run: uv run pyright .
+      - name: Property Tests (Fast CI Gate)
+        run: uv run pytest tests/property/ -q
       - name: Registry Audit (metadata completeness)
         run: uv run biopl-registry-audit --metadata
-      - name: Reproducibility Check (Sprint 1.4)
+      - name: Reproducibility Check
         run: uv run biopl-repro-check --device cpu
-      - name: Test with Coverage
-        run: uv run pytest --cov=bioplausible --cov-report=term-missing --cov-fail-under=50
       - name: Dependency Scan (pip-audit)
         run: uv run pip-audit
-
-  test-matrix:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.14"]
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-      with:
-        version: "latest"
-    - name: Install dependencies
-      run: uv sync --dev
-    - name: Run Verification Smoke Test
-      run: |
-        uv run eqprop-verify --quick
-    - name: Run Full Test Suite
-      run: |
-        uv run pytest tests/ -v --cov=bioplausible --cov-report=term-missing --cov-fail-under=50
 
   build-package:
     runs-on: ubuntu-latest

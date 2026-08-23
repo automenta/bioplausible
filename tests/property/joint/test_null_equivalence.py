@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import torch
-from torch import Tensor
 
 from bioplausible.core.joint import (
     CompositeState,
@@ -60,7 +59,9 @@ def test_null_plasticity_equivalence():
     plasticity = NullPlasticity()
     sys_config = SystemConfig(
         substrate=SubstrateConfig.digital(),
-        geometry=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics=StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5),
         plasticity=PlasticityConfig.null(),
         credit=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
@@ -74,7 +75,9 @@ def test_null_plasticity_equivalence():
     for name in geometry.params:
         registry.register(StateVariable(name=name, persistent=True))
     # Dummy activity for validation
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
     registry.validate(CompositeState(activity=dummy_activity, plastic={}, substrate={}))
 
     # Create context
@@ -83,7 +86,9 @@ def test_null_plasticity_equivalence():
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),

@@ -31,17 +31,39 @@ This decomposition transforms the framework from a "library of models" into a **
 | **💡 CreditAssignment** | $C$ | Error routing & pseudo-gradient computation | `ThermodynamicContrast` (EqProp free/nudged), `RandomProjectionsCredit` (FA/DFA), `LocalGoodnessCredit` (Forward-Forward/PEPITA), `TemporalTraceCredit` (STDP), `TargetInversionCredit` (Target Prop), `HomeostaticCredit` (autonomous Lipschitz scaling) |
 | **🔧 ParameterUpdate** | $U$ | Slow, persistent parameter consolidation Δθ | `EuclideanUpdate` (SGD/Adam), `RiemannianOrthogonalUpdate` (Muon), `SpectralConstrainedUpdate`, `NaturalGradientUpdate` (Fisher), `ElasticConsolidationUpdate` (EWC) |
 
+### Architecture Diagram
+
+```mermaid
+graph LR
+    S[Substrate] --> G[Geometry]
+    G --> D[StateDynamics]
+    D --> M[Plasticity]
+    M --> C[CreditAssignment]
+    C --> U[ParameterUpdate]
+    U --> S
+```
+
 ### Algebraic Composition (API)
 
 Construct systems by composing primitives across the six axes. The `System` generic enforces valid combinations at type-check time.
 
 ```python
 from bioplausible.core.ontology import (
-    System, DigitalSubstrate, FeedforwardGeometry,
-    InstantaneousDynamics, BackpropCredit, EuclideanUpdate,
-    GeometryConfig, RecurrentGeometry, EnergyMinimizationDynamics,
-    ThermodynamicContrastCredit, MemristiveSubstrate, TileGeometry,
-    TileAlgorithmConfig, LazyStateDynamics, HomeostaticCredit
+    System,
+    DigitalSubstrate,
+    FeedforwardGeometry,
+    InstantaneousDynamics,
+    BackpropCredit,
+    EuclideanUpdate,
+    GeometryConfig,
+    RecurrentGeometry,
+    EnergyMinimizationDynamics,
+    ThermodynamicContrastCredit,
+    MemristiveSubstrate,
+    TileGeometry,
+    TileAlgorithmConfig,
+    LazyStateDynamics,
+    HomeostaticCredit,
 )
 from bioplausible.core.joint import PlasticityConfig
 ```
@@ -50,11 +72,13 @@ from bioplausible.core.joint import PlasticityConfig
 ```python
 system = System(
     substrate=DigitalSubstrate(),
-    geometry=FeedforwardGeometry(GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256, 128))),
+    geometry=FeedforwardGeometry(
+        GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256, 128))
+    ),
     dynamics=InstantaneousDynamics(),
     credit=BackpropCredit(),
     update=EuclideanUpdate(step_size=0.01),
-    plasticity=PlasticityConfig.null()
+    plasticity=PlasticityConfig.null(),
 )
 ```
 
@@ -64,7 +88,12 @@ system = System(
 joint_routing = System(..., plasticity=PlasticityConfig.routing(gate_dim=64))
 
 # FastWeightPlasticity: episode-local associative memory
-joint_fast_weight = System(..., plasticity=PlasticityConfig.fast_weights(fast_weight_dim=512, decay=0.9, learning_rate=0.1))
+joint_fast_weight = System(
+    ...,
+    plasticity=PlasticityConfig.fast_weights(
+        fast_weight_dim=512, decay=0.9, learning_rate=0.1
+    ),
+)
 
 # SubstrateCoupledPlasticity: physical memristive drift
 memristive_plastic = System(..., plasticity=PlasticityConfig.substrate_coupled())
@@ -159,6 +188,29 @@ biopl <command> [args]
 uv sync --dev
 ```
 
+### Quickstart: Train EqProp vs Backprop in <2 Minutes
+
+```bash
+uv run scripts/quickstart.py
+```
+
+Expected output:
+```
+Backprop:  95% accuracy (3 epochs)
+EqProp:    10% accuracy (3 epochs)
+
+Both biologically plausible and standard learning work!
+```
+
+### Config-Driven Training
+
+```bash
+# Using preset YAML configs
+biopl run from-config --config configs/presets/eqprop_mnist.yaml
+biopl run from-config --config configs/presets/backprop_mnist.yaml
+biopl run from-config --config configs/presets/eqprop_routing_mnist.yaml
+```
+
 ### Quickstart: Interactive Demo
 
 ```bash
@@ -218,10 +270,16 @@ Factory functions for composing systems from primitives or configs:
 
 ```python
 from bioplausible.core.system_trainer import (
-    compose_system, compose_system_from_configs, extract_config,
-    compose_joint_system, compose_joint_system_from_configs,
-    create_eqprop_system, create_backprop_system, create_fa_system,
-    create_tile_system, create_predictive_coding_system
+    compose_system,
+    compose_system_from_configs,
+    extract_config,
+    compose_joint_system,
+    compose_joint_system_from_configs,
+    create_eqprop_system,
+    create_backprop_system,
+    create_fa_system,
+    create_tile_system,
+    create_predictive_coding_system,
 )
 
 # Config round-trip (L0 schema lock)
@@ -236,7 +294,7 @@ joint = compose_joint_system(
     dynamics=EnergyMinimizationDynamics(...),
     plasticity=RoutingPlasticity(...),
     credit=ThermodynamicContrastCredit(),
-    update=EuclideanUpdate(step_size=0.01)
+    update=EuclideanUpdate(step_size=0.01),
 )
 ```
 

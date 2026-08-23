@@ -8,11 +8,23 @@ Tests verify that each adapter correctly projects the joint state:
 
 from __future__ import annotations
 
-import torch
-from torch import Tensor
-
 import pytest
+import torch
 
+from bioplausible.core.credit.adapters import (
+    BackpropToThermodynamicAdapter,
+    LocalGoodnessToThermodynamicAdapter,
+    RandomProjectionsToThermodynamicAdapter,
+    TargetInversionToThermodynamicAdapter,
+    TemporalTraceToThermodynamicAdapter,
+    ThermodynamicToBackpropAdapter,
+    ThermodynamicToHomeostaticAdapter,
+)
+from bioplausible.core.dynamics.adapters import (
+    EnergyToInstantaneousAdapter,
+    InstantaneousToEnergyAdapter,
+    create_dynamics_adapter,
+)
 from bioplausible.core.joint import (
     CompositeState,
     JointTrajectoryRecorder,
@@ -32,47 +44,29 @@ from bioplausible.core.ontology import (
     RecurrentGeometry,
     StateDynamicsConfig,
     SubstrateConfig,
-    SystemConfig,
     ThermodynamicContrast,
 )
 from bioplausible.core.substrates.adapters import (
     DigitalToAnalogAdapter,
-    DigitalToComplexAdapter,
-    DigitalToMemristiveAdapter,
-    DigitalToNeuromorphicAdapter,
     DigitalToQuantumAdapter,
     DigitalToSparseAdapter,
     DigitalToTernaryAdapter,
     SubstrateAdapter,
     create_substrate_adapter,
 )
-from bioplausible.core.dynamics.adapters import (
-    EnergyToInstantaneousAdapter,
-    InstantaneousToEnergyAdapter,
-    LazyToEnergyAdapter,
-    PredictiveToEnergyAdapter,
-    SpikeToInstantaneousAdapter,
-    create_dynamics_adapter,
-)
-from bioplausible.core.credit.adapters import (
-    ThermodynamicToBackpropAdapter,
-    RandomProjectionsToThermodynamicAdapter,
-    LocalGoodnessToThermodynamicAdapter,
-    ThermodynamicToHomeostaticAdapter,
-    TemporalTraceToThermodynamicAdapter,
-    TargetInversionToThermodynamicAdapter,
-    BackpropToThermodynamicAdapter,
-)
 from bioplausible.core.system_trainer import compose_system
-
 
 # ============================================================
 # Test Fixtures
 # ============================================================
 
+
 def _create_base_geometry():
     """Create base recurrent geometry for testing."""
-    return RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)), hidden_dim=20)
+    return RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        hidden_dim=20,
+    )
 
 
 def _create_registry(geometry: RecurrentGeometry) -> StateRegistry:
@@ -84,7 +78,9 @@ def _create_registry(geometry: RecurrentGeometry) -> StateRegistry:
     return registry
 
 
-def _create_context(geometry: RecurrentGeometry, substrate, plasticity_config: PlasticityConfig = None) -> SystemContext:
+def _create_context(
+    geometry: RecurrentGeometry, substrate, plasticity_config: PlasticityConfig = None
+) -> SystemContext:
     """Create a SystemContext for testing."""
     registry = _create_registry(geometry)
     return SystemContext(
@@ -92,7 +88,9 @@ def _create_context(geometry: RecurrentGeometry, substrate, plasticity_config: P
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -101,7 +99,9 @@ def _create_context(geometry: RecurrentGeometry, substrate, plasticity_config: P
     )
 
 
-def _create_joint_state(geometry: RecurrentGeometry, include_x: bool = True) -> CompositeState:
+def _create_joint_state(
+    geometry: RecurrentGeometry, include_x: bool = True
+) -> CompositeState:
     """Create a valid joint state."""
     activity = {name: param.detach().clone() for name, param in geometry.params.items()}
     if include_x:
@@ -130,7 +130,9 @@ SUBSTRATE_ADAPTERS = [
 
 
 @pytest.mark.parametrize("source,target,adapter_class", SUBSTRATE_ADAPTERS)
-def test_substrate_adapter_preserves_composite_state_structure(source, target, adapter_class):
+def test_substrate_adapter_preserves_composite_state_structure(
+    source, target, adapter_class
+):
     """Substrate adapter should preserve CompositeState structure."""
     geometry = _create_base_geometry()
     substrate = create_substrate_adapter(source, target)
@@ -208,7 +210,9 @@ DYNAMICS_ADAPTERS = [
 
 
 @pytest.mark.parametrize("source_type,target_type,adapter_class", DYNAMICS_ADAPTERS)
-def test_dynamics_adapter_preserves_composite_state_activity(source_type, target_type, adapter_class):
+def test_dynamics_adapter_preserves_composite_state_activity(
+    source_type, target_type, adapter_class
+):
     """Dynamics adapter should preserve activity component of CompositeState."""
     from bioplausible.core.ontology import SystemState
 
@@ -217,9 +221,12 @@ def test_dynamics_adapter_preserves_composite_state_activity(source_type, target
 
     # Create source dynamics
     if source_type == "energy_minimization":
-        source_dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5))
+        source_dynamics = EnergyMinimizationDynamics(
+            StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+        )
     elif source_type == "instantaneous":
         from bioplausible.core.ontology import InstantaneousDynamics
+
         source_dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     else:
         pytest.skip(f"Source dynamics {source_type} not available")
@@ -241,16 +248,23 @@ def test_dynamics_adapter_preserves_composite_state_activity(source_type, target
 
 def test_dynamics_adapter_factory_creates_correct_types():
     """Dynamics adapter factory should create correct adapter types."""
-    source_dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5))
+    source_dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
 
     # Energy -> Instantaneous
-    adapter = create_dynamics_adapter("energy_minimization", "instantaneous", source_dynamics)
+    adapter = create_dynamics_adapter(
+        "energy_minimization", "instantaneous", source_dynamics
+    )
     assert isinstance(adapter, EnergyToInstantaneousAdapter)
 
     # Instantaneous -> Energy
     from bioplausible.core.ontology import InstantaneousDynamics
+
     instant_dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
-    adapter = create_dynamics_adapter("instantaneous", "energy_minimization", instant_dynamics)
+    adapter = create_dynamics_adapter(
+        "instantaneous", "energy_minimization", instant_dynamics
+    )
     assert isinstance(adapter, InstantaneousToEnergyAdapter)
 
 
@@ -260,24 +274,36 @@ def test_dynamics_adapter_factory_creates_correct_types():
 
 CREDIT_ADAPTERS = [
     ("thermodynamic_contrast", "backprop", ThermodynamicToBackpropAdapter),
-    ("random_projections", "thermodynamic_contrast", RandomProjectionsToThermodynamicAdapter),
+    (
+        "random_projections",
+        "thermodynamic_contrast",
+        RandomProjectionsToThermodynamicAdapter,
+    ),
     ("local_goodness", "thermodynamic_contrast", LocalGoodnessToThermodynamicAdapter),
     ("thermodynamic_contrast", "homeostatic", ThermodynamicToHomeostaticAdapter),
     ("temporal_trace", "thermodynamic_contrast", TemporalTraceToThermodynamicAdapter),
-    ("target_inversion", "thermodynamic_contrast", TargetInversionToThermodynamicAdapter),
+    (
+        "target_inversion",
+        "thermodynamic_contrast",
+        TargetInversionToThermodynamicAdapter,
+    ),
     ("backprop", "thermodynamic_contrast", BackpropToThermodynamicAdapter),
 ]
 
 
 @pytest.mark.parametrize("source_type,target_type,adapter_class", CREDIT_ADAPTERS)
-def test_credit_adapter_consumes_joint_trajectory(source_type, target_type, adapter_class):
+def test_credit_adapter_consumes_joint_trajectory(
+    source_type, target_type, adapter_class
+):
     """Credit adapter should consume JointTrajectory and produce update signal."""
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())
 
     # Create source credit
     if source_type == "thermodynamic_contrast":
-        source_credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5))
+        source_credit = ThermodynamicContrast(
+            CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+        )
     else:
         pytest.skip(f"Source credit {source_type} not tested")
 
@@ -288,7 +314,9 @@ def test_credit_adapter_consumes_joint_trajectory(source_type, target_type, adap
         pytest.skip(f"Adapter {source_type} -> {target_type} not fully tested")
 
     # Create joint trajectory
-    recorder = JointTrajectoryRecorder(max_steps=5, record_plastic=True, record_substrate=True)
+    recorder = JointTrajectoryRecorder(
+        max_steps=5, record_plastic=True, record_substrate=True
+    )
     for i in range(3):
         z = _create_joint_state(geometry)
         z.activity["x"] = torch.full((4, 10), float(i))
@@ -308,11 +336,15 @@ def test_credit_adapter_preserves_joint_trajectory_shape():
     """Credit adapter should preserve JointTrajectory structure."""
     geometry = _create_base_geometry()
 
-    source_credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5))
+    source_credit = ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+    )
     adapter = ThermodynamicToBackpropAdapter(source_credit)
 
     # Create trajectory with all components
-    recorder = JointTrajectoryRecorder(max_steps=5, record_plastic=True, record_substrate=True)
+    recorder = JointTrajectoryRecorder(
+        max_steps=5, record_plastic=True, record_substrate=True
+    )
     for i in range(3):
         z = _create_joint_state(geometry)
         recorder.record(z)
@@ -332,9 +364,11 @@ def test_credit_adapter_preserves_joint_trajectory_shape():
 # Joint Adapter Composition Tests
 # ============================================================
 
+
 def test_substrate_then_dynamics_adapter_composition():
     """Composing substrate and dynamics adapters should preserve joint structure."""
     import pytest
+
     pytest.skip("EnergyToInstantaneousAdapter has bug: modifies frozen config")
 
     geometry = _create_base_geometry()
@@ -343,8 +377,12 @@ def test_substrate_then_dynamics_adapter_composition():
     substrate = create_substrate_adapter("digital", "ternary")
 
     # Dynamics adapter
-    source_dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5))
-    dynamics = create_dynamics_adapter("energy_minimization", "instantaneous", source_dynamics)
+    source_dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
+    dynamics = create_dynamics_adapter(
+        "energy_minimization", "instantaneous", source_dynamics
+    )
 
     registry = _create_registry(geometry)
     z = _create_joint_state(geometry)
@@ -355,6 +393,7 @@ def test_substrate_then_dynamics_adapter_composition():
 
     # Apply dynamics adapter (via settle)
     from bioplausible.core.ontology import SystemState
+
     state = SystemState(x=z.activity["x"])
     state.activations = geometry.forward(state.x, substrate)
     state = dynamics.settle(state, geometry, substrate, target=None)
@@ -366,14 +405,19 @@ def test_substrate_then_dynamics_adapter_composition():
 def test_adapter_stack_preserves_registry():
     """Stack of adapters should preserve StateRegistry validation."""
     import pytest
+
     pytest.skip("EnergyToInstantaneousAdapter has bug: modifies frozen config")
 
     geometry = _create_base_geometry()
 
     # Stack: substrate -> dynamics -> credit
     substrate = create_substrate_adapter("digital", "sparse")
-    source_dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5))
-    dynamics = create_dynamics_adapter("energy_minimization", "instantaneous", source_dynamics)
+    source_dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
+    dynamics = create_dynamics_adapter(
+        "energy_minimization", "instantaneous", source_dynamics
+    )
 
     registry = _create_registry(geometry)
     z = _create_joint_state(geometry)
@@ -385,6 +429,7 @@ def test_adapter_stack_preserves_registry():
     _ = geometry.forward(z.activity["x"], substrate)
 
     from bioplausible.core.ontology import SystemState
+
     state = SystemState(x=z.activity["x"])
     state.activations = geometry.forward(state.x, substrate)
     state = dynamics.settle(state, geometry, substrate, target=None)
@@ -396,6 +441,7 @@ def test_adapter_stack_preserves_registry():
 # ============================================================
 # Adapter Axis Certification Tests
 # ============================================================
+
 
 def test_substrate_adapter_axis_certification():
     """Each substrate adapter should pass axis certification."""
@@ -413,8 +459,12 @@ def test_substrate_adapter_axis_certification():
 
 def test_dynamics_adapter_axis_certification():
     """Each dynamics adapter should pass axis certification."""
-    source_dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5))
-    adapter = create_dynamics_adapter("energy_minimization", "instantaneous", source_dynamics)
+    source_dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
+    adapter = create_dynamics_adapter(
+        "energy_minimization", "instantaneous", source_dynamics
+    )
 
     # Adapter should implement StateDynamics protocol
     assert hasattr(adapter, "config")
@@ -424,7 +474,9 @@ def test_dynamics_adapter_axis_certification():
 
 def test_credit_adapter_axis_certification():
     """Each credit adapter should pass axis certification."""
-    source_credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5))
+    source_credit = ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+    )
     adapter = ThermodynamicToBackpropAdapter(source_credit)
 
     # Adapter should implement CreditAssignment protocol
@@ -434,6 +486,7 @@ def test_credit_adapter_axis_certification():
 # ============================================================
 # Adapter Projection Property Tests
 # ============================================================
+
 
 def test_substrate_adapter_projection_is_idempotent_for_digital():
     """Digital -> Digital adapter should be identity projection."""
@@ -464,13 +517,18 @@ def test_substrate_adapter_projection_respects_substrate_physics():
 def test_dynamics_adapter_projection_preserves_energy_descent():
     """Dynamics adapter should preserve energy descent property."""
     import pytest
+
     pytest.skip("EnergyToInstantaneousAdapter has bug: modifies frozen config")
 
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())
 
-    source_dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5))
-    adapter = create_dynamics_adapter("energy_minimization", "instantaneous", source_dynamics)
+    source_dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
+    adapter = create_dynamics_adapter(
+        "energy_minimization", "instantaneous", source_dynamics
+    )
 
     from bioplausible.core.ontology import SystemState
 
@@ -488,6 +546,7 @@ def test_dynamics_adapter_projection_preserves_energy_descent():
 # ============================================================
 # Null Adapter Tests (Zero-Extension)
 # ============================================================
+
 
 def test_null_plasticity_as_adapter():
     """NullPlasticity should act as identity adapter on ψ."""
@@ -512,8 +571,12 @@ def test_joint_transition_with_null_plasticity():
 
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())
-    dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5))
-    credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5))
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
+    credit = ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+    )
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
 
     system_5d = compose_system(substrate, geometry, dynamics, credit, update)

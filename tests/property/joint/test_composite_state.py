@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import torch
-from torch import Tensor
 
 from bioplausible.core.joint import (
     CompositeState,
@@ -120,7 +119,10 @@ def test_joint_trajectory_get_variable():
 
     for i in range(4):
         z = CompositeState(
-            activity={"x": torch.full((4, 10), float(i)), "y": torch.full((4, 2), float(i * 10))},
+            activity={
+                "x": torch.full((4, 10), float(i)),
+                "y": torch.full((4, 2), float(i * 10)),
+            },
             plastic={},
             substrate={},
         )

@@ -38,7 +38,9 @@ class SubstrateCoupledPlasticity:
         """
         self.config = PlasticityConfig.substrate_coupled()
 
-    def initial_psi(self, context: "SystemContext | None", batch_size: int = 1) -> dict[str, Tensor]:
+    def initial_psi(
+        self, context: SystemContext | None, batch_size: int = 1
+    ) -> dict[str, Tensor]:
         """Create initial plastic state.
 
         Substrate-coupled plasticity has no separate plastic state —
@@ -56,8 +58,8 @@ class SubstrateCoupledPlasticity:
     def step(
         self,
         psi: dict[str, Tensor],
-        z: "CompositeState",
-        context: "SystemContext",
+        z: CompositeState,
+        context: SystemContext,
     ) -> dict[str, Tensor]:
         """No-op at plasticity level.
 
@@ -75,7 +77,9 @@ class SubstrateCoupledPlasticity:
         return psi
 
 
-def create_substrate_coupled_plasticity(config: PlasticityConfig) -> SubstrateCoupledPlasticity:
+def create_substrate_coupled_plasticity(
+    config: PlasticityConfig,
+) -> SubstrateCoupledPlasticity:
     """Factory to create SubstrateCoupledPlasticity from PlasticityConfig.
 
     Args:
@@ -88,6 +92,8 @@ def create_substrate_coupled_plasticity(config: PlasticityConfig) -> SubstrateCo
         ValueError: If config is not substrate_coupled type.
     """
     if config.plasticity_type != "substrate_coupled":
-        raise ValueError(f"Expected substrate_coupled config, got {config.plasticity_type}")
+        raise ValueError(
+            f"Expected substrate_coupled config, got {config.plasticity_type}"
+        )
 
     return SubstrateCoupledPlasticity(**(config.consolidation_config or {}))

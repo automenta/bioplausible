@@ -11,10 +11,7 @@ Instead of 20 lines of config, users can call:
 
 from __future__ import annotations
 
-import dataclasses
 from typing import TYPE_CHECKING
-
-import torch
 
 from bioplausible.core.ontology import (
     BackpropCredit,
@@ -128,9 +125,7 @@ def _eqprop_credit(beta: float = 0.5) -> ThermodynamicContrast:
 
 def _default_update(lr: float = 0.001) -> EuclideanUpdate:
     """Create default Euclidean update."""
-    return EuclideanUpdate(
-        ParameterUpdateConfig.euclidean(step_size=lr)
-    )
+    return EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=lr))
 
 
 # ============================================================
@@ -145,7 +140,7 @@ def create_backprop_mlp(
     lr: float = 0.001,
     init_scale: float = 0.1,
     device: str = "cpu",
-) -> "System":
+) -> System:
     """Create a standard Backprop MLP system (5-D coordinate).
 
     Args:
@@ -177,7 +172,7 @@ def create_eqprop_mlp(
     lr: float = 0.01,
     init_scale: float = 0.1,
     device: str = "cpu",
-) -> "System":
+) -> System:
     """Create an Equilibrium Propagation MLP system (5-D coordinate).
 
     Args:
@@ -220,7 +215,7 @@ def create_fa_mlp(
     init_scale: float = 0.1,
     feedback_scale: float = 0.01,
     device: str = "cpu",
-) -> "System":
+) -> System:
     """Create a Feedback Alignment MLP system (5-D coordinate).
 
     Args:
@@ -267,7 +262,7 @@ def create_routing_mlp(
     gate_dim: int = 64,
     gate_init_scale: float = 0.1,
     device: str = "cpu",
-) -> "JointSystem":
+) -> JointSystem:
     """Create an MLP with RoutingPlasticity (6-D coordinate).
 
     Args:
@@ -298,7 +293,9 @@ def create_routing_mlp(
         )
     )
 
-    return compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)
+    return compose_joint_system(
+        substrate, geometry, dynamics, plasticity, credit, update
+    )
 
 
 def create_fast_weight_mlp(
@@ -311,7 +308,7 @@ def create_fast_weight_mlp(
     decay: float = 0.9,
     learning_rate: float = 0.1,
     device: str = "cpu",
-) -> "JointSystem":
+) -> JointSystem:
     """Create an MLP with FastWeightPlasticity (6-D coordinate).
 
     Args:
@@ -343,7 +340,9 @@ def create_fast_weight_mlp(
         )
     )
 
-    return compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)
+    return compose_joint_system(
+        substrate, geometry, dynamics, plasticity, credit, update
+    )
 
 
 __all__ = [

@@ -7,7 +7,6 @@ joint property locks and lifecycle invariants.
 from __future__ import annotations
 
 import argparse
-import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -87,13 +86,17 @@ def _list_axis_options():
     print("Available 6-D axis options:")
     print()
     print("  Substrate (S):")
-    print("    digital, analog, memristive, neuromorphic, optical, quantum, complex, sparse, ternary")
+    print(
+        "    digital, analog, memristive, neuromorphic, optical, quantum, complex, sparse, ternary"
+    )
     print()
     print("  Geometry (G):")
     print("    feedforward, recurrent, tile_mesh")
     print()
     print("  StateDynamics (D):")
-    print("    energy_minimization, instantaneous, predictive_settling, spike_integration, diffusion")
+    print(
+        "    energy_minimization, instantaneous, predictive_settling, spike_integration, diffusion"
+    )
     print()
     print("  Plasticity/MetaDynamics (M):")
     print("    null, routing, fast_weights, substrate_coupled, rule_state")
@@ -106,7 +109,9 @@ def _list_axis_options():
     print("    euclidean, riemannian_orthogonal, spectral_constrained,")
     print("    natural_gradient, elastic_consolidation")
     print()
-    print("Example coordinate: digital/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean")
+    print(
+        "Example coordinate: digital/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean"
+    )
 
 
 def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
@@ -115,13 +120,13 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
 
     from bioplausible.core.joint import (
         CompositeState,
+        ConsolidationConfig,
         NullPlasticity,
         PlasticityConfig,
         StateRegistry,
         StateVariable,
         SystemContext,
         consolidate,
-        ConsolidationConfig,
     )
     from bioplausible.core.ontology import (
         CreditAssignmentConfig,
@@ -140,10 +145,10 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
         SystemConfig,
         ThermodynamicContrast,
     )
-    from bioplausible.core.substrates.adapters import create_substrate_adapter
-    from bioplausible.core.dynamics.adapters import create_dynamics_adapter
 
-    print(f"Validating coordinate: {coord['substrate']}/{coord['geometry']}/{coord['dynamics']}/{coord['plasticity']}/{coord['credit']}/{coord['update']}")
+    print(
+        f"Validating coordinate: {coord['substrate']}/{coord['geometry']}/{coord['dynamics']}/{coord['plasticity']}/{coord['credit']}/{coord['update']}"
+    )
 
     try:
         # Build substrate
@@ -151,7 +156,10 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
             "digital": lambda: (DigitalSubstrate(), SubstrateConfig.digital()),
             "analog": lambda: (DigitalSubstrate(), SubstrateConfig.analog()),
             "memristive": lambda: (DigitalSubstrate(), SubstrateConfig.memristive()),
-            "neuromorphic": lambda: (DigitalSubstrate(), SubstrateConfig.neuromorphic()),
+            "neuromorphic": lambda: (
+                DigitalSubstrate(),
+                SubstrateConfig.neuromorphic(),
+            ),
             "optical": lambda: (DigitalSubstrate(), SubstrateConfig.optical()),
             "quantum": lambda: (DigitalSubstrate(), SubstrateConfig.quantum()),
             "complex": lambda: (DigitalSubstrate(), SubstrateConfig.complex()),
@@ -165,16 +173,41 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
         # Build geometry
         geometry_map = {
             "feedforward": lambda: (
-                RecurrentGeometry(GeometryConfig.feedforward(input_dim=10, output_dim=2, hidden_dims=(20,))),
-                GeometryConfig.feedforward(input_dim=10, output_dim=2, hidden_dims=(20,)),
+                RecurrentGeometry(
+                    GeometryConfig.feedforward(
+                        input_dim=10, output_dim=2, hidden_dims=(20,)
+                    )
+                ),
+                GeometryConfig.feedforward(
+                    input_dim=10, output_dim=2, hidden_dims=(20,)
+                ),
             ),
             "recurrent": lambda: (
-                RecurrentGeometry(GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)), hidden_dim=20),
+                RecurrentGeometry(
+                    GeometryConfig.recurrent(
+                        input_dim=10, output_dim=2, hidden_dims=(20,)
+                    ),
+                    hidden_dim=20,
+                ),
                 GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
             ),
             "tile_mesh": lambda: (
-                RecurrentGeometry(GeometryConfig.tile_mesh(input_dim=10, output_dim=2, num_layers=2, neurons_per_tile=16, tiles_per_layer=4)),
-                GeometryConfig.tile_mesh(input_dim=10, output_dim=2, num_layers=2, neurons_per_tile=16, tiles_per_layer=4),
+                RecurrentGeometry(
+                    GeometryConfig.tile_mesh(
+                        input_dim=10,
+                        output_dim=2,
+                        num_layers=2,
+                        neurons_per_tile=16,
+                        tiles_per_layer=4,
+                    )
+                ),
+                GeometryConfig.tile_mesh(
+                    input_dim=10,
+                    output_dim=2,
+                    num_layers=2,
+                    neurons_per_tile=16,
+                    tiles_per_layer=4,
+                ),
             ),
         }
         if coord["geometry"] not in geometry_map:
@@ -184,7 +217,9 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
         # Build dynamics
         dynamics_map = {
             "energy_minimization": lambda: (
-                EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)),
+                EnergyMinimizationDynamics(
+                    StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+                ),
                 StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
             ),
             "instantaneous": lambda: (
@@ -196,11 +231,15 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
                 StateDynamicsConfig.predictive_settling(),
             ),
             "spike_integration": lambda: (
-                SpikeIntegrationDynamics(StateDynamicsConfig.spike_integration(max_steps=3)),
+                SpikeIntegrationDynamics(
+                    StateDynamicsConfig.spike_integration(max_steps=3)
+                ),
                 StateDynamicsConfig.spike_integration(max_steps=3),
             ),
             "diffusion": lambda: (
-                EnergyMinimizationDynamics(StateDynamicsConfig.diffusion(max_steps=3, beta=0.5)),
+                EnergyMinimizationDynamics(
+                    StateDynamicsConfig.diffusion(max_steps=3, beta=0.5)
+                ),
                 StateDynamicsConfig.diffusion(max_steps=3, beta=0.5),
             ),
         }
@@ -211,7 +250,9 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
         # Build credit
         credit_map = {
             "thermodynamic_contrast": lambda: (
-                ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)),
+                ThermodynamicContrast(
+                    CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+                ),
                 CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
             ),
             "random_projections": lambda: (
@@ -246,7 +287,9 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
                 ParameterUpdateConfig.euclidean(step_size=0.01),
             ),
             "riemannian_orthogonal": lambda: (
-                RiemannianOrthogonalUpdate(ParameterUpdateConfig.riemannian_orthogonal()),
+                RiemannianOrthogonalUpdate(
+                    ParameterUpdateConfig.riemannian_orthogonal()
+                ),
                 ParameterUpdateConfig.riemannian_orthogonal(),
             ),
             "spectral_constrained": lambda: (
@@ -303,13 +346,21 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
         registry.register(StateVariable(name="conductance", substrate_owned=True))
 
         # Validate registry
-        dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+        dummy_activity = {
+            name: param.detach().clone() for name, param in geometry.params.items()
+        }
         dummy_plastic = {}
         if plasticity_config.plastic_state_dims:
             for name, dim in plasticity_config.plastic_state_dims.items():
                 dummy_plastic[name] = torch.zeros(4, dim)
         dummy_substrate = {"conductance": torch.randn(4, 20)}
-        registry.validate(CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate))
+        registry.validate(
+            CompositeState(
+                activity=dummy_activity,
+                plastic=dummy_plastic,
+                substrate=dummy_substrate,
+            )
+        )
         print("  ✓ StateRegistry validation passed")
 
         # Test lifecycle locks
@@ -329,16 +380,24 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
         # J1: NullPlasticity zero-extension
         if coord["plasticity"] == "null":
             plasticity = NullPlasticity()
-            z = CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate)
+            z = CompositeState(
+                activity=dummy_activity, plastic={}, substrate=dummy_substrate
+            )
             psi = plasticity.step({}, z, context)
             assert psi == {}
             print("  ✓ J1: NullPlasticity zero-extension passed")
 
         # J2: Theta immutability
-        theta_initial = {name: param.detach().clone() for name, param in context.theta.items()}
-        z = CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate)
+        theta_initial = {
+            name: param.detach().clone() for name, param in context.theta.items()
+        }
+        z = CompositeState(
+            activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate
+        )
         # Simulate step
-        z2 = CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate)
+        z2 = CompositeState(
+            activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate
+        )
         for name, param in context.theta.items():
             assert torch.allclose(param, theta_initial[name])
         print("  ✓ J2: Theta immutability passed")
@@ -353,8 +412,16 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
 
         # J5: Consolidation at episode boundary
         if plasticity_config.plastic_state_dims:
-            z_final = CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate)
-            new_context = consolidate(z_final, context, ConsolidationConfig(promote_all=True, promotion_scale=0.1))
+            z_final = CompositeState(
+                activity=dummy_activity,
+                plastic=dummy_plastic,
+                substrate=dummy_substrate,
+            )
+            new_context = consolidate(
+                z_final,
+                context,
+                ConsolidationConfig(promote_all=True, promotion_scale=0.1),
+            )
             assert len(new_context.theta) >= len(context.theta)
             print("  ✓ J5: Episode boundary consolidation passed")
 
@@ -363,7 +430,10 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
 
         # J7: Trajectory recording
         from bioplausible.core.joint import JointTrajectoryRecorder
-        recorder = JointTrajectoryRecorder(max_steps=5, record_plastic=True, record_substrate=True)
+
+        recorder = JointTrajectoryRecorder(
+            max_steps=5, record_plastic=True, record_substrate=True
+        )
         for i in range(3):
             recorder.record(z)
         traj = recorder.get_trajectory()
@@ -382,22 +452,8 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
 def _run_composability_tests(num_samples: int, seed: int) -> bool:
     """Run random composability tests."""
     import random
-    import torch
 
-    from bioplausible.core.joint import PlasticityConfig, StateRegistry, StateVariable, SystemContext, CompositeState
-    from bioplausible.core.ontology import (
-        CreditAssignmentConfig,
-        DigitalSubstrate,
-        EnergyMinimizationDynamics,
-        EuclideanUpdate,
-        GeometryConfig,
-        ParameterUpdateConfig,
-        RecurrentGeometry,
-        StateDynamicsConfig,
-        SubstrateConfig,
-        SystemConfig,
-        ThermodynamicContrast,
-    )
+    import torch
 
     random.seed(seed)
     torch.manual_seed(seed)
@@ -422,18 +478,21 @@ def _run_composability_tests(num_samples: int, seed: int) -> bool:
         }
 
         # Only test compatible combinations
-        if coord["geometry"] == "recurrent" and coord["dynamics"] != "energy_minimization":
+        if (
+            coord["geometry"] == "recurrent"
+            and coord["dynamics"] != "energy_minimization"
+        ):
             continue
 
         try:
             success = _validate_coordinate(coord, quick=True)
             if not success:
-                print(f"  Sample {i+1}/{num_samples} FAILED")
+                print(f"  Sample {i + 1}/{num_samples} FAILED")
                 return False
             else:
-                print(f"  Sample {i+1}/{num_samples} passed")
+                print(f"  Sample {i + 1}/{num_samples} passed")
         except Exception as e:
-            print(f"  Sample {i+1}/{num_samples} FAILED: {e}")
+            print(f"  Sample {i + 1}/{num_samples} FAILED: {e}")
             return False
 
     print(f"All {num_samples} random compositions passed!")
@@ -458,7 +517,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if success else 1
 
     if args.adapters or args.plasticity:
-        print("Adapter and plasticity validation not yet implemented as standalone modes")
+        print(
+            "Adapter and plasticity validation not yet implemented as standalone modes"
+        )
         print("Use --coordinate or --composability for full validation")
         return 0
 

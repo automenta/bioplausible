@@ -5,22 +5,22 @@ Provides the 6-D joint state representation and lifecycle management.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Mapping, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import torch
 from torch import Tensor
 
 if TYPE_CHECKING:
-    from bioplausible.core.ontology import Geometry, SubstrateConfig, SystemConfig
     from bioplausible.core.joint.trajectory import JointTrajectory
 
 
 __all__ = [
-    "StateVariable",
-    "StateRegistry",
     "CompositeState",
     "JointTrajectoryRecorder",
+    "StateRegistry",
+    "StateVariable",
 ]
 
 
@@ -49,9 +49,12 @@ class StateVariable:
 
     def __post_init__(self) -> None:
         # A variable must have at least one lifecycle role
-        if not any(
-            (self.persistent, self.fast_plastic, self.substrate_owned, self.consolidatable)
-        ):
+        if not any((
+            self.persistent,
+            self.fast_plastic,
+            self.substrate_owned,
+            self.consolidatable,
+        )):
             raise ValueError(
                 f"StateVariable {self.name!r} must have at least one lifecycle role "
                 "(persistent, fast_plastic, substrate_owned, or consolidatable)"
@@ -73,7 +76,7 @@ class StateRegistryProtocol(Protocol):
     """Protocol for StateRegistry to enable dependency inversion."""
 
     def register(self, var: StateVariable) -> None: ...
-    def validate(self, z: "CompositeState") -> None: ...
+    def validate(self, z: CompositeState) -> None: ...
     def lifecycle_groups(self) -> dict[str, list[str]]: ...
 
 
@@ -110,7 +113,7 @@ class StateRegistry:
         """Get a state variable by name."""
         return self._variables.get(name)
 
-    def validate(self, z: "CompositeState") -> None:
+    def validate(self, z: CompositeState) -> None:
         """Validate that CompositeState contains all registered variables.
 
         Args:
@@ -123,7 +126,9 @@ class StateRegistry:
         for name, var in self._variables.items():
             if var.persistent:
                 if name not in z.activity:
-                    raise ValueError(f"Persistent variable {name!r} missing from activity")
+                    raise ValueError(
+                        f"Persistent variable {name!r} missing from activity"
+                    )
                 if not isinstance(z.activity[name], Tensor):
                     raise ValueError(f"Persistent variable {name!r} must be Tensor")
 
@@ -131,7 +136,9 @@ class StateRegistry:
         for name, var in self._variables.items():
             if var.fast_plastic:
                 if name not in z.plastic:
-                    raise ValueError(f"Fast plastic variable {name!r} missing from plastic")
+                    raise ValueError(
+                        f"Fast plastic variable {name!r} missing from plastic"
+                    )
                 if not isinstance(z.plastic[name], Tensor):
                     raise ValueError(f"Fast plastic variable {name!r} must be Tensor")
 
@@ -139,9 +146,13 @@ class StateRegistry:
         for name, var in self._variables.items():
             if var.substrate_owned:
                 if name not in z.substrate:
-                    raise ValueError(f"Substrate-owned variable {name!r} missing from substrate")
+                    raise ValueError(
+                        f"Substrate-owned variable {name!r} missing from substrate"
+                    )
                 if not isinstance(z.substrate[name], Tensor):
-                    raise ValueError(f"Substrate-owned variable {name!r} must be Tensor")
+                    raise ValueError(
+                        f"Substrate-owned variable {name!r} must be Tensor"
+                    )
 
     def lifecycle_groups(self) -> dict[str, list[str]]:
         """Group variable names by lifecycle role.
@@ -205,11 +216,11 @@ class CompositeState:
             object.__setattr__(self, "substrate", dict(self.substrate))
 
     @classmethod
-    def empty(cls) -> "CompositeState":
+    def empty(cls) -> CompositeState:
         """Create an empty joint state."""
         return cls(activity={}, plastic={}, substrate={})
 
-    def clone(self) -> "CompositeState":
+    def clone(self) -> CompositeState:
         """Create a deep copy with cloned tensors (detached from graph)."""
         return CompositeState(
             activity={k: v.detach().clone() for k, v in self.activity.items()},
@@ -217,7 +228,7 @@ class CompositeState:
             substrate={k: v.detach().clone() for k, v in self.substrate.items()},
         )
 
-    def detach_(self) -> "CompositeState":
+    def detach_(self) -> CompositeState:
         """Detach all tensors in-place (for stopping gradient flow)."""
         for v in self.activity.values():
             v.detach_()
@@ -227,7 +238,7 @@ class CompositeState:
             v.detach_()
         return self
 
-    def to(self, device: torch.device | str) -> "CompositeState":
+    def to(self, device: torch.device | str) -> CompositeState:
         """Move all tensors to device."""
         return CompositeState(
             activity={k: v.to(device) for k, v in self.activity.items()},
@@ -277,27 +288,30 @@ class JointTrajectoryRecorder:
             return
 
         # Clone activity (always needed for credit assignment)
-        self._activity_traj.append(
-            {k: v.detach().clone() for k, v in z.activity.items()}
-        )
+        self._activity_traj.append({
+            k: v.detach().clone() for k, v in z.activity.items()
+        })
 
         # Optionally record plastic state
         if self.record_plastic:
-            self._plastic_traj.append(
-                {k: v.detach().clone() for k, v in z.plastic.items()}
-            )
+            self._plastic_traj.append({
+                k: v.detach().clone() for k, v in z.plastic.items()
+            })
 
         # Optionally record substrate state
         if self.record_substrate:
-            self._substrate_traj.append(
-                {k: v.detach().clone() for k, v in z.substrate.items()}
-            )
+            self._substrate_traj.append({
+                k: v.detach().clone() for k, v in z.substrate.items()
+            })
 
         # Mark checkpoint if interval set
-        if self.checkpoint_interval > 0 and len(self._activity_traj) % self.checkpoint_interval == 0:
+        if (
+            self.checkpoint_interval > 0
+            and len(self._activity_traj) % self.checkpoint_interval == 0
+        ):
             self._checkpoint_indices.append(len(self._activity_traj) - 1)
 
-    def get_trajectory(self) -> "JointTrajectory":
+    def get_trajectory(self) -> JointTrajectory:
         """Return recorded trajectory as an immutable JointTrajectory."""
         # Import locally to avoid circular dependency
         import bioplausible.core.joint.trajectory as trajectory_module

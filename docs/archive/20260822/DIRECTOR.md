@@ -41,22 +41,22 @@ class VerifiedResult:
     seed: int
     git_commit: str
     environment_hash: str
-    
+
     # ALL must be True
     gradient_equivalence: bool
     reproducibility: bool
     parity_benchmark: bool
     registry_audit: bool
-    
-    metrics: dict[str, float]          # accuracy, flops, memory, wall_time, energy
-    artifacts: list[str]               # plots, data, models
+
+    metrics: dict[str, float]  # accuracy, flops, memory, wall_time, energy
+    artifacts: list[str]  # plots, data, models
     failure_manifesto_id: str | None
-    
-    novelty_score: float               # 0-1: fills KB gaps
-    rigor_score: float                 # 0-1: gate pass quality
-    reproducibility_score: float       # 1.0=bitwise, 0.5=statistical, 0=failed
-    
-    credit_earned: float               # = novelty × rigor × reproducibility × base_value
+
+    novelty_score: float  # 0-1: fills KB gaps
+    rigor_score: float  # 0-1: gate pass quality
+    reproducibility_score: float  # 1.0=bitwise, 0.5=statistical, 0=failed
+
+    credit_earned: float  # = novelty × rigor × reproducibility × base_value
     timestamp: datetime
 ```
 
@@ -66,21 +66,22 @@ class VerifiedResult:
 @dataclass(frozen=True, slots=True)
 class CreditLedger:
     entries: tuple[VerifiedResult, ...] = ()
-    initial_endowment: float = 10.0    # Infrastructure completion credit
-    
+    initial_endowment: float = 10.0  # Infrastructure completion credit
+
     @property
     def total_earned(self) -> float:
         return sum(r.credit_earned for r in self.entries)
-    
+
     @property
     def available_credit(self) -> float:
         days_idle = (now() - self.entries[-1].timestamp).days if self.entries else 0
         decay = 0.5 ** (days_idle / 30)  # Half-life: 30 days
         return (self.initial_endowment + self.total_earned) * decay
-    
+
     def append(self, result: VerifiedResult) -> "CreditLedger":
-        return CreditLedger(entries=self.entries + (result,), 
-                           initial_endowment=self.initial_endowment)
+        return CreditLedger(
+            entries=self.entries + (result,), initial_endowment=self.initial_endowment
+        )
 ```
 
 ### 3.3 Proposal (Investment Request)
@@ -89,12 +90,12 @@ class CreditLedger:
 @dataclass(frozen=True, slots=True)
 class Proposal:
     hypothesis: str
-    experiment_file: str               # e.g., "experiments/tile_scaling.py"
+    experiment_file: str  # e.g., "experiments/tile_scaling.py"
     config: dict
     estimated_credit_cost: float
     estimated_duration_hours: float
     required_gpus: int
-    kb_lineage: list[str]              # KB entry IDs this extends/contradicts
+    kb_lineage: list[str]  # KB entry IDs this extends/contradicts
     gates_required: list[str]
     expected_deliverables: list[str]
     risk_assessment: dict[str, float]  # failure_mode → probability
@@ -106,13 +107,14 @@ class Proposal:
 @dataclass(frozen=True, slots=True)
 class DirectorState:
     ledger: CreditLedger
-    knowledge_base_snapshot: str       # KB content hash
-    failure_manifesto_snapshot: str    # Manifesto content hash
+    knowledge_base_snapshot: str  # KB content hash
+    failure_manifesto_snapshot: str  # Manifesto content hash
     current_proposal: Proposal | None = None
     cycle_count: int = 0
     last_cycle_timestamp: datetime | None = None
-    status: Literal["idle", "proposing", "executing", "verifying", 
-                    "learning", "reporting", "halted"] = "idle"
+    status: Literal[
+        "idle", "proposing", "executing", "verifying", "learning", "reporting", "halted"
+    ] = "idle"
     halt_reason: str | None = None
 ```
 
@@ -125,66 +127,87 @@ class DirectorState:
 class Action:
     type: Literal["propose", "execute", "verify", "learn", "report", "request", "halt"]
     payload: dict
-    reasoning: str                     # Human-readable
-    constitutional_basis: list[str]    # Which articles apply
+    reasoning: str  # Human-readable
+    constitutional_basis: list[str]  # Which articles apply
+
 
 def decide(state: DirectorState) -> Action:
     """Pure, deterministic, auditable. No side effects. No randomness."""
-    
+
     # HALT: Constitution violations
     if state.status == "halted":
         return halt("already_halted")
-    
+
     if state.ledger.available_credit < MIN_CREDIT_FOR_ANY_EXPERIMENT:
         return halt("insufficient_credit", "Credit exhausted", ["I"])
-    
+
     # STATE MACHINE
     match state.status:
-        case "idle":       return _propose(state)
-        case "proposing":  return _execute(state)
-        case "executing":  return _verify(state)
-        case "verifying":  return _learn(state)
-        case "learning":   return _report(state)
-        case "reporting":  return _request(state)
-        case _:            return halt("invalid_state", "Unknown state", ["all"])
+        case "idle":
+            return _propose(state)
+        case "proposing":
+            return _execute(state)
+        case "executing":
+            return _verify(state)
+        case "verifying":
+            return _learn(state)
+        case "learning":
+            return _report(state)
+        case "reporting":
+            return _request(state)
+        case _:
+            return halt("invalid_state", "Unknown state", ["all"])
+
 
 def _propose(state) -> Action:
     candidates = kb_query(
-        max_cost=state.ledger.available_credit,
-        exclude_tried=True,
-        require_lineage=True
+        max_cost=state.ledger.available_credit, exclude_tried=True, require_lineage=True
     )
     if not candidates:
         return halt("no_candidates", "No viable experiments within credit", ["I", "VI"])
-    
+
     # Maximize: (expected_info_gain × success_prob) / cost
     best = max(candidates, key=lambda c: c.expected_value / c.estimated_credit_cost)
     return propose(best, "Highest value/cost ratio", ["III", "VI"])
 
+
 def _execute(state) -> Action:
     return execute(state.current_proposal, "Launching experiment", ["II"])
 
+
 def _verify(state) -> Action:
-    return verify(state.current_proposal.experiment_id, 
-                 "Running all verification gates", ["II"])
+    return verify(
+        state.current_proposal.experiment_id, "Running all verification gates", ["II"]
+    )
+
 
 def _learn(state) -> Action:
     result = load_verified_result(state.current_proposal.experiment_id)
-    if not all([result.gradient_equivalence, result.reproducibility,
-                result.parity_benchmark, result.registry_audit]):
+    if not all([
+        result.gradient_equivalence,
+        result.reproducibility,
+        result.parity_benchmark,
+        result.registry_audit,
+    ]):
         return halt("gates_failed", "Verification failed", ["II"])
     if result.failure_manifesto_id:
         generate_failure_manifesto(result)  # Article IV
     return learn(result, f"Credit earned: {result.credit_earned:.2f}", ["IV", "VI"])
 
+
 def _report(state) -> Action:
     return report(state.cycle_count, "Emitting cycle report", ["VII"])
+
 
 def _request(state) -> Action:
     credit = state.ledger.available_credit
     if credit > RESOURCE_REQUEST_THRESHOLD:
-        return request(credit, credit_to_gpus(credit), 
-                      f"Credit {credit:.1f} → requesting GPUs", ["I"])
+        return request(
+            credit,
+            credit_to_gpus(credit),
+            f"Credit {credit:.1f} → requesting GPUs",
+            ["I"],
+        )
     return idle("Insufficient credit for request", ["I"])
 ```
 
@@ -199,8 +222,13 @@ def calculate_credit(result: VerifiedResult, base_value: float) -> float:
     """Credit = base × novelty × rigor × reproducibility"""
     if not result.all_gates_passed:
         return 0.0  # Article II: no partial credit
-    
-    return base_value * result.novelty_score * result.rigor_score * result.reproducibility_score
+
+    return (
+        base_value
+        * result.novelty_score
+        * result.rigor_score
+        * result.reproducibility_score
+    )
 ```
 
 ### 5.2 Base Values (Per Experiment Type)
@@ -256,11 +284,11 @@ Every failed experiment **must** produce:
 class FailureManifestoEntry:
     experiment_id: str
     hypothesis: str
-    root_cause_hypothesis: str          # Why it failed (testable)
-    search_space_explored: dict         # Hyperparameters, seeds, architectures tried
-    partial_successes: list[str]        # What DID work (e.g., "converges at depth 10")
-    next_experiment_implication: str    # What to try next (e.g., "adaptive β needed")
-    kb_entries_created: list[str]       # Negative knowledge entered into KB
+    root_cause_hypothesis: str  # Why it failed (testable)
+    search_space_explored: dict  # Hyperparameters, seeds, architectures tried
+    partial_successes: list[str]  # What DID work (e.g., "converges at depth 10")
+    next_experiment_implication: str  # What to try next (e.g., "adaptive β needed")
+    kb_entries_created: list[str]  # Negative knowledge entered into KB
 ```
 
 **Credit for failure**: `base_value × 0.3 × novelty` (if manifesto complete)
@@ -273,7 +301,9 @@ class FailureManifestoEntry:
 ### 8.1 KB Query for Proposals
 
 ```python
-def kb_query(max_cost: float, exclude_tried: bool, require_lineage: bool) -> list[Proposal]:
+def kb_query(
+    max_cost: float, exclude_tried: bool, require_lineage: bool
+) -> list[Proposal]:
     """Returns candidate proposals ranked by expected_value / cost."""
     # 1. Identify KB gaps (missing scaling laws, untested algorithm/task combos)
     # 2. Generate proposals to fill gaps
@@ -295,7 +325,7 @@ def absorb_result(kb: KnowledgeBase, result: VerifiedResult):
         git_commit=result.git_commit,
         artifacts=result.artifacts,
         credit_earned=result.credit_earned,
-        failure_manifesto_id=result.failure_manifesto_id
+        failure_manifesto_id=result.failure_manifesto_id,
     )
     # Trigger meta-analysis if enough new data
     if kb.entries_since_last_meta > META_ANALYSIS_THRESHOLD:
@@ -324,7 +354,7 @@ def emit_resource_request(credit: float, gpus: int, justification: str):
         "verification_url": f"https://domain/director/cycle_{cycle}/report.md",
         "ledger_merkle_root": merkle_root(ledger),
         "ledger_proof": merkle_proof(ledger),
-        "constitution_hash": hash(CONSTITUTION)
+        "constitution_hash": hash(CONSTITUTION),
     }
     write_json("director_resource_request.json", request)
     # Also POST to resource coordinator if available

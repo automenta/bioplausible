@@ -19,6 +19,7 @@ from bioplausible.core.joint.state import (
     StateRegistry,
     StateVariable,
 )
+from bioplausible.core.joint.trajectory import JointTrajectory
 from bioplausible.core.joint.transition import (
     CoupledTransition,
     LegacyDynamicsAsCoupledTransition,
@@ -26,7 +27,6 @@ from bioplausible.core.joint.transition import (
     PlasticityConfig,
     PlasticityPrimitive,
 )
-from bioplausible.core.joint.trajectory import JointTrajectory
 
 __all__ = [
     # State

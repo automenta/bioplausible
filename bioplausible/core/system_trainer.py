@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Protocol, TypeVar
 import torch
 from torch import Tensor
 
+from bioplausible.core.joint.transition import PlasticityConfig, PlasticityPrimitive
 from bioplausible.core.logging import get_logger
 from bioplausible.core.ontology import (
     CreditAssignment,
@@ -30,7 +31,6 @@ from bioplausible.core.ontology import (
     System,
     SystemState,
 )
-from bioplausible.core.joint.transition import PlasticityConfig, PlasticityPrimitive
 
 if TYPE_CHECKING:
     from bioplausible.config.experiment import ExperimentConfig
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 
     class JointSystem(Protocol):
         """Protocol for 6-D joint systems."""
+
         substrate: Substrate
         geometry: Geometry
         dynamics: StateDynamics
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
         def to_spec(self) -> dict: ...
         @classmethod
         def from_spec(cls, spec: dict) -> JointSystem: ...
+
 
 logger = get_logger()
 
@@ -132,10 +134,10 @@ class SystemTrainer:
     @classmethod
     def from_configs(
         cls,
-        experiment_config: "ExperimentConfig",
+        experiment_config: ExperimentConfig,
         train_data: _DataProvider,
         val_data: _DataProvider | None = None,
-    ) -> "SystemTrainer":
+    ) -> SystemTrainer:
         """Create a SystemTrainer from an ExperimentConfig.
 
         This is the primary factory for creating trainers from the unified
@@ -151,36 +153,31 @@ class SystemTrainer:
             A configured SystemTrainer ready to call fit().
         """
         from bioplausible.core.ontology import (
-            SubstrateConfig,
-            GeometryConfig,
-            StateDynamicsConfig,
-            CreditAssignmentConfig,
-            ParameterUpdateConfig,
-            DigitalSubstrate,
             AnalogSubstrate,
+            BackpropCredit,
+            DigitalSubstrate,
+            ElasticConsolidationUpdate,
+            EnergyMinimizationDynamics,
+            EuclideanUpdate,
+            FeedforwardGeometry,
+            InstantaneousDynamics,
+            LocalGoodnessCredit,
             MemristiveSubstrate,
+            NaturalGradientUpdate,
             NeuromorphicSubstrate,
             OpticalSubstrate,
-            QuantumSubstrate,
-            FeedforwardGeometry,
-            RecurrentGeometry,
-            TileGeometry,
-            EnergyMinimizationDynamics,
-            InstantaneousDynamics,
             PredictiveSettlingDynamics,
-            SpikeIntegrationDynamics,
-            ThermodynamicContrast,
+            QuantumSubstrate,
             RandomProjectionsCredit,
-            LocalGoodnessCredit,
-            TemporalTraceCredit,
-            TargetInversionCredit,
-            BackpropCredit,
-            EuclideanUpdate,
+            RecurrentGeometry,
             RiemannianOrthogonalUpdate,
             SpectralConstrainedUpdate,
-            NaturalGradientUpdate,
-            ElasticConsolidationUpdate,
+            SpikeIntegrationDynamics,
             SystemConfig,
+            TargetInversionCredit,
+            TemporalTraceCredit,
+            ThermodynamicContrast,
+            TileGeometry,
         )
         from bioplausible.core.system_trainer import compose_system
 
@@ -668,10 +665,10 @@ def compose_system(
             self.geometry.update_params(new_params)
 
             return {
-                "loss": float(nudged_state.loss)
+                "loss": nudged_state.loss.item()
                 if nudged_state.loss is not None
                 else 0.0,
-                "energy": float(free_state.energy)
+                "energy": free_state.energy.item()
                 if free_state.energy is not None
                 else 0.0,
                 "accuracy": free_state.metrics.get("accuracy", 0.0),
@@ -838,9 +835,7 @@ def create_backprop_system(
         )
     )
 
-    dynamics = InstantaneousDynamics(
-        StateDynamicsConfig.instantaneous()
-    )
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
     credit = BackpropCredit(
         CreditAssignmentConfig(
@@ -912,9 +907,7 @@ def create_fa_system(
         )
     )
 
-    dynamics = InstantaneousDynamics(
-        StateDynamicsConfig.instantaneous()
-    )
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
     credit = RandomProjectionsCredit(
         CreditAssignmentConfig(
@@ -1094,10 +1087,10 @@ def compose_joint_system(
     substrate: Substrate,
     geometry: Geometry,
     dynamics: StateDynamics,
-    plasticity: "PlasticityPrimitive",
+    plasticity: PlasticityPrimitive,
     credit: CreditAssignment,
     update: ParameterUpdate,
-) -> "JointSystem":
+) -> JointSystem:
     """Compose a JointSystem from six orthogonal components.
 
     This is the primary factory function for creating bioplausible joint systems
@@ -1121,19 +1114,20 @@ def compose_joint_system(
         substrate: Substrate
         geometry: Geometry
         dynamics: StateDynamics
-        plasticity: "PlasticityPrimitive"
+        plasticity: PlasticityPrimitive
         credit: CreditAssignment
         update: ParameterUpdate
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
             """Execute one training step through the 6-layer pipeline."""
-            from bioplausible.core.joint.context import SystemContext
             from bioplausible.core.joint.state import CompositeState
 
             # Build initial joint state
             z = CompositeState(
                 activity={"x": x, "y": y},
-                plastic=self.plasticity.initial_psi(self._make_context(), batch_size=x.shape[0]),
+                plastic=self.plasticity.initial_psi(
+                    self._make_context(), batch_size=x.shape[0]
+                ),
                 substrate={},
             )
 
@@ -1160,7 +1154,9 @@ def compose_joint_system(
             nudged_state = self.dynamics.settle(
                 state, self.geometry, self.substrate, target=y
             )
-            nudged_state.energy = self.dynamics.compute_energy(nudged_state, self.geometry)
+            nudged_state.energy = self.dynamics.compute_energy(
+                nudged_state, self.geometry
+            )
             nudged_state.loss = self._compute_loss(nudged_state, y)
 
             # 4. CreditAssignment: Compute pseudo-gradients
@@ -1169,12 +1165,18 @@ def compose_joint_system(
             )
 
             # 5. ParameterUpdate: Apply updates
-            new_params = self.update.step(self.geometry.params, pseudo_grads, self.geometry)
+            new_params = self.update.step(
+                self.geometry.params, pseudo_grads, self.geometry
+            )
             self.geometry.update_params(new_params)
 
             return {
-                "loss": float(nudged_state.loss) if nudged_state.loss is not None else 0.0,
-                "energy": float(free_state.energy) if free_state.energy is not None else 0.0,
+                "loss": nudged_state.loss.item()
+                if nudged_state.loss is not None
+                else 0.0,
+                "energy": free_state.energy.item()
+                if free_state.energy is not None
+                else 0.0,
                 "accuracy": free_state.metrics.get("accuracy", 0.0),
             }
 
@@ -1192,7 +1194,9 @@ def compose_joint_system(
             state.activations = self.geometry.forward(x, self.substrate)
             if state.activations is not None:
                 state.activations = self.substrate.inject_state_noise(state.activations)
-            state = self.dynamics.settle(state, self.geometry, self.substrate, target=None)
+            state = self.dynamics.settle(
+                state, self.geometry, self.substrate, target=None
+            )
             acts = state.activations
             if acts is None:
                 return torch.empty(0)
@@ -1200,7 +1204,7 @@ def compose_joint_system(
                 return acts[-1]
             return acts
 
-        def _make_context(self) -> "SystemContext":
+        def _make_context(self) -> SystemContext:
             """Create SystemContext from this joint system."""
             from bioplausible.core.joint.context import SystemContext
             from bioplausible.core.joint.state import StateRegistry
@@ -1212,14 +1216,27 @@ def compose_joint_system(
             # Register persistent parameters (theta)
             for name, param in self.geometry.params.items():
                 registry.register(
-                    StateVariable(name=name, persistent=True, fast_plastic=False, consolidatable=True)
+                    StateVariable(
+                        name=name,
+                        persistent=True,
+                        fast_plastic=False,
+                        consolidatable=True,
+                    )
                 )
 
             # Register plastic variables if any
-            if hasattr(self.plasticity, "config") and self.plasticity.config.plastic_state_dims:
+            if (
+                hasattr(self.plasticity, "config")
+                and self.plasticity.config.plastic_state_dims
+            ):
                 for name, dim in self.plasticity.config.plastic_state_dims.items():
                     registry.register(
-                        StateVariable(name=name, persistent=False, fast_plastic=True, consolidatable=True)
+                        StateVariable(
+                            name=name,
+                            persistent=False,
+                            fast_plastic=True,
+                            consolidatable=True,
+                        )
                     )
 
             # Build configs from components
@@ -1228,7 +1245,9 @@ def compose_joint_system(
             dynamics_config = self.dynamics.config
             credit_config = self.credit.config
             update_config = self.update.config
-            plasticity_config = getattr(self.plasticity, "config", PlasticityConfig.null())
+            plasticity_config = getattr(
+                self.plasticity, "config", PlasticityConfig.null()
+            )
 
             return SystemContext(
                 theta=self.geometry.params,
@@ -1246,8 +1265,13 @@ def compose_joint_system(
         def to_spec(self) -> dict:
             """Serialize the JointSystem to a specification dictionary."""
             geometry_dict = dataclasses.asdict(self.geometry.config)
-            if hasattr(self.geometry, "_recurrent_weight") and self.geometry._recurrent_weight is not None:
-                geometry_dict["recurrent_weight"] = self.geometry._recurrent_weight.tolist()
+            if (
+                hasattr(self.geometry, "_recurrent_weight")
+                and self.geometry._recurrent_weight is not None
+            ):
+                geometry_dict["recurrent_weight"] = (
+                    self.geometry._recurrent_weight.tolist()
+                )
 
             geometry_params = {}
             for name, param in self.geometry.params.items():
@@ -1259,22 +1283,28 @@ def compose_joint_system(
                 "substrate": dataclasses.asdict(self.substrate.config),
                 "geometry": geometry_dict,
                 "dynamics": dataclasses.asdict(self.dynamics.config),
-                "plasticity": dataclasses.asdict(getattr(self.plasticity, "config", PlasticityConfig.null())),
+                "plasticity": dataclasses.asdict(
+                    getattr(self.plasticity, "config", PlasticityConfig.null())
+                ),
                 "credit": dataclasses.asdict(self.credit.config),
                 "update": dataclasses.asdict(self.update.config),
             }
 
         @classmethod
-        def from_spec(cls, spec: dict) -> "JointSystem":
+        def from_spec(cls, spec: dict) -> JointSystem:
             """Reconstruct a JointSystem from a specification dictionary."""
             # Delegate to compose_joint_system_from_configs
-            from bioplausible.core.system_trainer import compose_joint_system_from_configs
+            from bioplausible.core.system_trainer import (
+                compose_joint_system_from_configs,
+            )
 
             return compose_joint_system_from_configs(
                 SubstrateConfig(**spec["substrate"]),
                 GeometryConfig(**spec["geometry"]),
                 StateDynamicsConfig(**spec["dynamics"]),
-                PlasticityConfig(**spec.get("plasticity", PlasticityConfig.null().__dict__)),
+                PlasticityConfig(
+                    **spec.get("plasticity", PlasticityConfig.null().__dict__)
+                ),
                 CreditAssignmentConfig(**spec["credit"]),
                 ParameterUpdateConfig(**spec["update"]),
             )
@@ -1285,6 +1315,7 @@ def compose_joint_system(
         from bioplausible.core.system_trainer import compose_system
 
         base_system = compose_system(substrate, geometry, dynamics, credit, update)
+
         # Wrap with a null plasticity interface
         class _NullJointSystem:
             def __init__(self, system):
@@ -1303,7 +1334,11 @@ def compose_joint_system(
                 return self._system.forward(x)
 
             def _make_context(self):
-                return base_system._make_context() if hasattr(base_system, "_make_context") else None
+                return (
+                    base_system._make_context()
+                    if hasattr(base_system, "_make_context")
+                    else None
+                )
 
             def to_spec(self):
                 spec = base_system.to_spec()
@@ -1312,14 +1347,18 @@ def compose_joint_system(
                 return spec
 
             @classmethod
-            def from_spec(cls, spec: dict) -> "JointSystem":
-                from bioplausible.core.system_trainer import compose_joint_system_from_configs
+            def from_spec(cls, spec: dict) -> JointSystem:
+                from bioplausible.core.system_trainer import (
+                    compose_joint_system_from_configs,
+                )
 
                 return compose_joint_system_from_configs(
                     SubstrateConfig(**spec["substrate"]),
                     GeometryConfig(**spec["geometry"]),
                     StateDynamicsConfig(**spec["dynamics"]),
-                    PlasticityConfig(**spec.get("plasticity", PlasticityConfig.null().__dict__)),
+                    PlasticityConfig(
+                        **spec.get("plasticity", PlasticityConfig.null().__dict__)
+                    ),
                     CreditAssignmentConfig(**spec["credit"]),
                     ParameterUpdateConfig(**spec["update"]),
                 )
@@ -1343,10 +1382,10 @@ def compose_joint_system_from_configs(
     substrate: SubstrateConfig,
     geometry: GeometryConfig,
     dynamics: StateDynamicsConfig,
-    plasticity: "PlasticityConfig",
+    plasticity: PlasticityConfig,
     credit: CreditAssignmentConfig,
     update: ParameterUpdateConfig,
-) -> "JointSystem":
+) -> JointSystem:
     """Compose a JointSystem from six configuration objects.
 
     This is the inverse of extract_config(), enabling the round-trip:
@@ -1383,14 +1422,11 @@ def compose_joint_system_from_configs(
         SpectralConstrainedUpdate,
         SpikeIntegrationDynamics,
         TargetInversionCredit,
-        ThermodynamicContrast,
         TemporalTraceCredit,
+        ThermodynamicContrast,
     )
     from bioplausible.core.plasticity import (
-        FastWeightPlasticity,
         NullPlasticity,
-        RoutingPlasticity,
-        SubstrateCoupledPlasticity,
         create_fast_weight_plasticity,
         create_routing_plasticity,
         create_substrate_coupled_plasticity,
@@ -1407,7 +1443,9 @@ def compose_joint_system_from_configs(
         "quantized": "QuantizedSubstrate",
         "noisy": "NoisySubstrate",
     }
-    substrate_cls_name = substrate_map.get(substrate.precision.lower(), "DigitalSubstrate")
+    substrate_cls_name = substrate_map.get(
+        substrate.precision.lower(), "DigitalSubstrate"
+    )
     substrate_cls = globals().get(substrate_cls_name, DigitalSubstrate)
     substrate_instance = substrate_cls(substrate)
 
@@ -1507,7 +1545,7 @@ def create_routing_eqprop_system(
     lr: float = 0.01,
     gate_dim: int = 64,
     gate_init_scale: float = 0.1,
-) -> "JointSystem":
+) -> JointSystem:
     """Create an EqProp system with RoutingPlasticity (6-D coordinate)."""
     from bioplausible.core.ontology import (
         CreditAssignmentConfig,
@@ -1585,7 +1623,9 @@ def create_routing_eqprop_system(
         )
     )
 
-    return compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)
+    return compose_joint_system(
+        substrate, geometry, dynamics, plasticity, credit, update
+    )
 
 
 def create_fast_weight_eqprop_system(
@@ -1597,7 +1637,7 @@ def create_fast_weight_eqprop_system(
     settle_steps: int = 30,
     lr: float = 0.01,
     fast_weight_dim: int = 512,
-) -> "JointSystem":
+) -> JointSystem:
     """Create an EqProp system with FastWeightPlasticity (6-D coordinate)."""
     from bioplausible.core.ontology import (
         CreditAssignmentConfig,
@@ -1611,7 +1651,10 @@ def create_fast_weight_eqprop_system(
         SubstrateConfig,
         ThermodynamicContrast,
     )
-    from bioplausible.core.plasticity import FastWeightPlasticity, FastWeightPlasticityConfig
+    from bioplausible.core.plasticity import (
+        FastWeightPlasticity,
+        FastWeightPlasticityConfig,
+    )
 
     substrate = DigitalSubstrate(
         SubstrateConfig(
@@ -1674,20 +1717,22 @@ def create_fast_weight_eqprop_system(
         )
     )
 
-    return compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)
+    return compose_joint_system(
+        substrate, geometry, dynamics, plasticity, credit, update
+    )
 
 
 __all__ = [
     "SystemTrainer",
     "SystemTrainerConfig",
-    "compose_system",
-    "compose_system_from_configs",
     "compose_joint_system",
     "compose_joint_system_from_configs",
+    "compose_system",
+    "compose_system_from_configs",
     "create_backprop_system",
     "create_eqprop_system",
     "create_fa_system",
-    "create_routing_eqprop_system",
     "create_fast_weight_eqprop_system",
+    "create_routing_eqprop_system",
     "extract_config",
 ]

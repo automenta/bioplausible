@@ -93,8 +93,9 @@ def _instantiate_model_with_config(
         return model
 
     elif model_name == "directed_ep":
-        from bioplausible.config.unified import ModelConfig
         from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
+
+        from bioplausible.config.unified import ModelConfig
 
         model_config = ModelConfig(
             name="directed_ep",

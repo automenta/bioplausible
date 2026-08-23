@@ -11,8 +11,8 @@ geometry:
   type: recurrent
   input_dim: 784
   output_dim: 10
-  hidden_dims: [256, 128]
-  num_layers: 2
+  hidden_dims: [256]
+  num_layers: 1
   topology_type: recurrent
   connectivity: null
   recurrent_weight: null

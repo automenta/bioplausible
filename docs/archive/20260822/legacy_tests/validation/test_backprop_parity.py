@@ -104,8 +104,9 @@ def _instantiate_model_tuned(
         return model.to(device)
 
     elif model_name == "directed_ep":
-        from bioplausible.config.unified import ModelConfig
         from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
+
+        from bioplausible.config.unified import ModelConfig
 
         model_config = ModelConfig(
             name="directed_ep",

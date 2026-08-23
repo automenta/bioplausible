@@ -317,9 +317,9 @@ def test_infer_metadata_regular_field():
 
 def test_runtime_checkable_transition_graph():
     """All registered EqProp models pass isinstance(..., TransitionGraph)."""
+    from bioplausible.config.unified import ModelConfig
     from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
     from bioplausible.zoo.models.transitions import TransitionGraph
-    from bioplausible.config.unified import ModelConfig
 
     # Test the consolidated EquilibriumMLP engine
     config = ModelConfig(

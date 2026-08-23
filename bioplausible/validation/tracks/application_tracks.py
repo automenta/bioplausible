@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING
 import torch
 from torch import nn
 
+from bioplausible.config.unified import ModelConfig
 from bioplausible.core.logging import get_logger
 from bioplausible.core.losses import compute_accuracy
 from bioplausible.core.utils.optimizer import OptimizerConfig, create_optimizer
 from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
-from bioplausible.config.unified import ModelConfig
 
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 from ._base import build_track_result, track_header

@@ -339,14 +339,14 @@ class KernelBackend(Protocol):
 ```python
 @dataclass(frozen=True, slots=True)
 class KernelConfig:
-    algorithm: AlgorithmFamily        # Enum: EQPROP, FA, HEBBIAN, FF, TP, PC, SNN, TILE, MEP, O1MEMORY, BACKPROP
-    hardware: HardwareTarget          # Enum: CPU, CUDA, TRITON, FPGA, NEUROMORPHIC, OPTICAL, CROSSBAR, QUANTUM
+    algorithm: AlgorithmFamily  # Enum: EQPROP, FA, HEBBIAN, FF, TP, PC, SNN, TILE, MEP, O1MEMORY, BACKPROP
+    hardware: HardwareTarget  # Enum: CPU, CUDA, TRITON, FPGA, NEUROMORPHIC, OPTICAL, CROSSBAR, QUANTUM
     dtype: torch.dtype = torch.float32
-    use_autograd: bool = False        # False → contrastive/O(1) path
-    settle_steps: int = 0             # For algorithms with settling
-    beta: float = 0.0                 # Nudge strength (EqProp, MEP)
-    gamma: float = 1.0                # Decay/leak factor
-    spectral_norm: bool = False       # Apply spectral normalization
+    use_autograd: bool = False  # False → contrastive/O(1) path
+    settle_steps: int = 0  # For algorithms with settling
+    beta: float = 0.0  # Nudge strength (EqProp, MEP)
+    gamma: float = 1.0  # Decay/leak factor
+    spectral_norm: bool = False  # Apply spectral normalization
     # Algorithm-specific extras via **kwargs
     # FA: dropout_prob, feedback_mode
     # Hebbian: use_oja, learning_rate
@@ -409,28 +409,37 @@ def muon_orthogonalize_triton(W: Tensor, ns_steps: int = 5) -> Tensor:
     """Fused Newton-Schulz iterations on GPU."""
     ...
 
+
 # Dion low-rank update kernel
 def dion_update_triton(W: Tensor, rank_frac: float, threshold: int) -> Tensor:
     """Randomized SVD + low-rank projection."""
     ...
+
 
 # Fisher whitening kernel (diagonal/empirical)
 def fisher_whiten_triton(grad: Tensor, fisher_diag: Tensor, damping: float) -> Tensor:
     """Diagonal Fisher preconditioning."""
     ...
 
+
 # EP settling kernel (shared with EqPropKernel)
 def ep_settle_triton(h, x_emb, W1, b1, W2, b2, gamma, steps, lr, beta) -> Tensor:
     """Fused EP settle: layernorm → W1 → tanh → W2 → residual."""
     ...
 
+
 # O1Memory analytic gradient kernel
-def analytic_state_grad_triton(states, transition_modules, target_vec, beta, loss_type) -> Tensor:
+def analytic_state_grad_triton(
+    states, transition_modules, target_vec, beta, loss_type
+) -> Tensor:
     """Analytic dE/dstate = state - h (MSE) or softmax diff (CE)."""
     ...
 
+
 # Contrastive Hebbian update kernel (shared)
-def contrastive_hebbian_update_triton(src_free, dst_free, src_nudged, dst_nudged, lr, beta, batch_size) -> Tensor:
+def contrastive_hebbian_update_triton(
+    src_free, dst_free, src_nudged, dst_nudged, lr, beta, batch_size
+) -> Tensor:
     """(free - nudged) / beta contrastive update."""
     ...
 ```
@@ -481,7 +490,9 @@ class SettleProtocol(Protocol):
     def _step(self, state: Tensor, x_transformed: Tensor) -> Tensor: ...
 
     # Optional: algorithm-specific convergence check
-    def _check_converged(self, state_new: Tensor, state_old: Tensor, step: int) -> bool: ...
+    def _check_converged(
+        self, state_new: Tensor, state_old: Tensor, step: int
+    ) -> bool: ...
 
     # Telemetry hooks (called by shared primitive)
     def _on_step_end(self, step: int, state: Tensor, delta: float): ...
@@ -541,8 +552,16 @@ Each target gets a facade in `zoo/models/eqprop/hardware_variants.py` extending 
 ```python
 class NeuromorphicLoopedMLP(LoopedMLP):
     """Event-driven LIF dynamics with spike-based contrastive updates."""
-    def __init__(self, *, tau_mem=20.0, tau_syn=5.0, spike_threshold=1.0, 
-                 refractory_period=2.0, **kwargs):
+
+    def __init__(
+        self,
+        *,
+        tau_mem=20.0,
+        tau_syn=5.0,
+        spike_threshold=1.0,
+        refractory_period=2.0,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.tau_mem = tau_mem
         self.tau_syn = tau_syn
@@ -556,22 +575,36 @@ class NeuromorphicLoopedMLP(LoopedMLP):
         # Contrastive update: weight change from spike timing differences
         ...
 
+
 class OpticalLoopedMLP(LoopedMLP):
     """Phase-encoded optical equilibrium propagation."""
-    def __init__(self, *, wavelength=1550e-9, phase_noise=0.01, 
-                 detector_noise=0.005, **kwargs):
+
+    def __init__(
+        self, *, wavelength=1550e-9, phase_noise=0.01, detector_noise=0.005, **kwargs
+    ):
         super().__init__(**kwargs)
         ...
+
 
 class CrossbarLoopedMLP(LoopedMLP):
     """Analog crossbar with conductance-based weights."""
-    def __init__(self, *, conductance_range=(1e-6, 1e-3), adc_bits=8,
-                 dac_bits=6, ir_drop_factor=0.1, **kwargs):
+
+    def __init__(
+        self,
+        *,
+        conductance_range=(1e-6, 1e-3),
+        adc_bits=8,
+        dac_bits=6,
+        ir_drop_factor=0.1,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         ...
 
+
 class QuantumLoopedMLP(LoopedMLP):
     """Variational quantum equilibrium propagation."""
+
     def __init__(self, *, n_qubits=10, ansatz_depth=4, shot_noise=1000, **kwargs):
         super().__init__(**kwargs)
         ...
@@ -640,29 +673,52 @@ class ContrastiveHebbianKernel:
 ```python
 class FAContrastiveKernel(ContrastiveHebbianKernel):
     """Feedback Alignment with fixed random B matrix."""
-    def free_phase(self, x): return self.fa_forward(x)
-    def nudged_phase(self, x, y): return self.fa_forward_nudged(x, y)
-    def compute_update(self, free, nudged): 
+
+    def free_phase(self, x):
+        return self.fa_forward(x)
+
+    def nudged_phase(self, x, y):
+        return self.fa_forward_nudged(x, y)
+
+    def compute_update(self, free, nudged):
         return self.fa_contrastive_backward(free, nudged)
+
 
 class HebbianContrastiveKernel(ContrastiveHebbianKernel):
     """Pure Hebbian / 3-factor with neuromodulator."""
-    def free_phase(self, x): return self.hebbian_forward(x)
-    def nudged_phase(self, x, y): return self.hebbian_forward(x)  # Same, modulated by 3rd factor
+
+    def free_phase(self, x):
+        return self.hebbian_forward(x)
+
+    def nudged_phase(self, x, y):
+        return self.hebbian_forward(x)  # Same, modulated by 3rd factor
+
     def compute_update(self, free, nudged):
         return self.hebbian_outer_product(free, self.modulator)
 
+
 class FFContrastiveKernel(ContrastiveHebbianKernel):
     """Forward-Forward: positive/negative passes."""
-    def free_phase(self, x): return self.ff_forward(x, positive=True)
-    def nudged_phase(self, x, y): return self.ff_forward(x, positive=False)
+
+    def free_phase(self, x):
+        return self.ff_forward(x, positive=True)
+
+    def nudged_phase(self, x, y):
+        return self.ff_forward(x, positive=False)
+
     def compute_update(self, free, nudged):
         return self.ff_goodness_contrast(free, nudged)
 
+
 class TileContrastiveKernel(ContrastiveHebbianKernel):
     """Tile substrate: uses core/tile/kernels.py primitives."""
-    def free_phase(self, x): return self.tile_settle(x, beta=0)
-    def nudged_phase(self, x, y): return self.tile_settle(x, beta=self.beta)
+
+    def free_phase(self, x):
+        return self.tile_settle(x, beta=0)
+
+    def nudged_phase(self, x, y):
+        return self.tile_settle(x, beta=self.beta)
+
     def compute_update(self, free, nudged):
         return compute_contrastive_hebbian_update(free, nudged, ...)
 ```
@@ -701,7 +757,7 @@ Extract common operations to `acceleration/contrastive_primitives.py`:
 ```python
 def export_kernel_to_hls(kernel: KernelBackend, config: KernelConfig) -> Path:
     """Generate Vivado HLS project from Triton/PyTorch kernel.
-    
+
     1. Extract Triton kernel IR (TTIR)
     2. Lower to HLS C++ via custom pass
     3. Generate Vivado HLS project with testbench
@@ -709,32 +765,36 @@ def export_kernel_to_hls(kernel: KernelBackend, config: KernelConfig) -> Path:
     """
     ...
 
+
 def export_kernel_to_verilog(kernel: KernelBackend, config: KernelConfig) -> Path:
     """Generate Verilog via Chisel from kernel IR.
-    
+
     1. Convert Triton ops to Chisel hardware generators
     2. Parameterize by dtype, parallelism, pipeline depth
     3. Emit Verilog + simulation testbench
     """
     ...
 
+
 def export_kernel_to_nxsdk(kernel: KernelBackend) -> Path:
     """Generate NxSDK network description for Loihi.
-    
+
     1. Map LIF params to Loihi compartment model
     2. Map 3-factor STDP to Loihi learning rules
     3. Generate NxSDK script + weight initialization
     """
     ...
 
+
 def export_kernel_to_spice(kernel: KernelBackend, config: KernelConfig) -> Path:
     """Generate SPICE netlist for analog crossbar.
-    
+
     1. Map conductance matrices to memristor models
     2. Add ADC/DAC behavioral models
     3. Include IR drop parasitic network
     """
     ...
+
 
 # CLI (extends biopl-deploy or new biopl-export-kernel)
 # biopl-export-kernel --algorithm eqprop --target fpga --output ./hls_proj --precision fp16
@@ -801,9 +861,19 @@ def _canonicalize(obj) -> bytes:
     if isinstance(obj, (list, tuple)):
         return b"[" + b",".join(_canonicalize(v) for v in obj) + b"]"
     if isinstance(obj, torch.Tensor):
-        return b"tensor:" + obj.dtype.name.encode() + str(obj.shape).encode() + hashlib.sha256(obj.cpu().numpy().tobytes()).digest()[:8]
+        return (
+            b"tensor:"
+            + obj.dtype.name.encode()
+            + str(obj.shape).encode()
+            + hashlib.sha256(obj.cpu().numpy().tobytes()).digest()[:8]
+        )
     if isinstance(obj, np.ndarray):
-        return b"ndarray:" + obj.dtype.name.encode() + str(obj.shape).encode() + hashlib.sha256(obj.tobytes()).digest()[:8]
+        return (
+            b"ndarray:"
+            + obj.dtype.name.encode()
+            + str(obj.shape).encode()
+            + hashlib.sha256(obj.tobytes()).digest()[:8]
+        )
     if isinstance(obj, (int, float, str, bool, type(None))):
         return json.dumps(obj, sort_keys=True).encode()
     # Fallback for custom objects
@@ -824,6 +894,7 @@ Add `KernelBackendProtocol` with full generics:
 ```python
 type KernelInput = Tensor | tuple[Tensor, ...]
 type KernelOutput = Tensor | tuple[Tensor, ...]
+
 
 class KernelBackend(Protocol[KernelInput, KernelOutput]):
     def forward(self, *args: KernelInput) -> KernelOutput: ...

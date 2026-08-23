@@ -18,9 +18,11 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 if TYPE_CHECKING:
-    from bioplausible.core.joint.state import CompositeState
+    from bioplausible.core.campaign.campaign_store import (
+        CampaignState as StoredCampaignState,
+    )
     from bioplausible.core.joint.context import SystemContext
-    from bioplausible.core.campaign.campaign_store import CampaignState as StoredCampaignState
+    from bioplausible.core.joint.state import CompositeState
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,10 +98,10 @@ class CheckpointManager:
 
     def create_checkpoint(
         self,
-        campaign_state: "StoredCampaignState",
+        campaign_state: StoredCampaignState,
         episode_index: int,
-        composite_state: "CompositeState",
-        context: "SystemContext",
+        composite_state: CompositeState,
+        context: SystemContext,
         coordinate: str,
         task_name: str,
         metadata: dict[str, Any] | None = None,
@@ -119,14 +121,22 @@ class CheckpointManager:
         Returns:
             Path to the checkpoint file
         """
-        import numpy as np
         import random
+
+        import numpy as np
 
         # Serialize composite state
         composite_dict = {
-            "activity": {k: v.detach().cpu().numpy() for k, v in composite_state.activity.items()},
-            "plastic": {k: v.detach().cpu().numpy() for k, v in composite_state.plastic.items()},
-            "substrate": {k: v.detach().cpu().numpy() for k, v in composite_state.substrate.items()},
+            "activity": {
+                k: v.detach().cpu().numpy() for k, v in composite_state.activity.items()
+            },
+            "plastic": {
+                k: v.detach().cpu().numpy() for k, v in composite_state.plastic.items()
+            },
+            "substrate": {
+                k: v.detach().cpu().numpy()
+                for k, v in composite_state.substrate.items()
+            },
         }
 
         # Serialize theta
@@ -175,8 +185,9 @@ class CheckpointManager:
 
     def restore_rng_states(self, checkpoint: JointCheckpoint) -> None:
         """Restore RNG states from checkpoint."""
-        import numpy as np
         import random
+
+        import numpy as np
 
         torch.set_rng_state(pickle.loads(checkpoint.torch_rng_state))
         np.random.set_state(pickle.loads(checkpoint.numpy_rng_state))
@@ -188,13 +199,22 @@ class CheckpointManager:
         self,
         checkpoint: JointCheckpoint,
         device: str | torch.device = "cpu",
-    ) -> "CompositeState":
+    ) -> CompositeState:
         """Restore CompositeState from checkpoint."""
         from bioplausible.core.joint.state import CompositeState
 
-        activity = {k: torch.from_numpy(v).to(device) for k, v in checkpoint.composite_state["activity"].items()}
-        plastic = {k: torch.from_numpy(v).to(device) for k, v in checkpoint.composite_state["plastic"].items()}
-        substrate = {k: torch.from_numpy(v).to(device) for k, v in checkpoint.composite_state["substrate"].items()}
+        activity = {
+            k: torch.from_numpy(v).to(device)
+            for k, v in checkpoint.composite_state["activity"].items()
+        }
+        plastic = {
+            k: torch.from_numpy(v).to(device)
+            for k, v in checkpoint.composite_state["plastic"].items()
+        }
+        substrate = {
+            k: torch.from_numpy(v).to(device)
+            for k, v in checkpoint.composite_state["substrate"].items()
+        }
 
         return CompositeState(activity=activity, plastic=plastic, substrate=substrate)
 
@@ -208,8 +228,12 @@ class CheckpointManager:
 
     def list_checkpoints(self, campaign_id: str | None = None) -> list[Path]:
         """List available checkpoints, optionally filtered by campaign."""
-        pattern = f"checkpoint_{campaign_id}_*.pkl" if campaign_id else "checkpoint_*.pkl"
-        return sorted(self.checkpoint_dir.glob(pattern), key=lambda p: p.stat().st_mtime)
+        pattern = (
+            f"checkpoint_{campaign_id}_*.pkl" if campaign_id else "checkpoint_*.pkl"
+        )
+        return sorted(
+            self.checkpoint_dir.glob(pattern), key=lambda p: p.stat().st_mtime
+        )
 
     def get_latest_checkpoint(self, campaign_id: str) -> Path | None:
         """Get the latest checkpoint for a campaign."""

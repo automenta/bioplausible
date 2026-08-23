@@ -5,9 +5,9 @@ The native ``eqprop_mlp`` factory (registered as ``eqprop_mlp``) returns a
 This replaces the legacy ``LoopedMLP`` facade and ``EquilibriumMLP`` engine.
 """
 
+from bioplausible.core.model_status import status_tag
 from bioplausible.core.ontology import System
 from bioplausible.core.registry import LocalityLevel, register_model
-from bioplausible.core.model_status import status_tag
 from bioplausible.models.native.eqprop_native import native_eqprop_mlp
 
 __all__ = []

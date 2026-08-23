@@ -17,15 +17,9 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
-
-if TYPE_CHECKING:
-    from bioplausible.core.campaign.frontier_record import FrontierRecord
-    from bioplausible.core.campaign.resource_vector import ResourceUsage
-
 
 # ============================================================
 # Z3 Task Generators
@@ -396,7 +390,7 @@ def evaluate_z3(
     seed: int = 42,
 ) -> dict:
     """Evaluate Z3: meta-train then freeze θ and evaluate task switching."""
-    import torch.nn as nn
+    from torch import nn
 
     torch.manual_seed(seed)
     random.seed(seed)

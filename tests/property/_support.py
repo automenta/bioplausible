@@ -13,7 +13,6 @@ from torch import Tensor
 
 from bioplausible.core.ontology import System, SystemState
 
-
 # ----------------------------------------------------------------------
 # Constants (do not inline shapes)
 # ----------------------------------------------------------------------

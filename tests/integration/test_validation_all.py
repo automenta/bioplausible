@@ -10,15 +10,13 @@ from torch.utils.data import DataLoader, TensorDataset
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from bioplausible.core.local_learning.rules.fa import AdaptiveFA
 from bioplausible.config.unified import ModelConfig
+from bioplausible.core.local_learning.rules.fa import AdaptiveFA
 from bioplausible.zoo.models.eqprop import (
-    BackpropMLP,
     ConvEqProp,
     FullEqPropLM,
     HomeostaticEqProp,
     ModernConvEqProp,
-    NeuralCube,
     RecurrentEqPropLM,
     SimpleConvEqProp,
     TransformerEqProp,

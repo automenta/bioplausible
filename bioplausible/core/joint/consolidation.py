@@ -3,17 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Mapping
-
-import torch
-from torch import Tensor
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bioplausible.core.joint.state import CompositeState
     from bioplausible.core.joint.context import SystemContext
-    from bioplausible.core.joint.transition import PlasticityConfig
+    from bioplausible.core.joint.state import CompositeState
 
-__all__ = ["consolidate", "ConsolidationConfig"]
+__all__ = ["ConsolidationConfig", "consolidate"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,10 +28,10 @@ class ConsolidationConfig:
 
 
 def consolidate(
-    z_final: "CompositeState",
-    context: "SystemContext",
+    z_final: CompositeState,
+    context: SystemContext,
     config: ConsolidationConfig | None = None,
-) -> "SystemContext":
+) -> SystemContext:
     """Promote consolidatable ψ → θ at episode boundaries only.
 
     This is the ONLY place where θ (persistent parameters) can be modified.

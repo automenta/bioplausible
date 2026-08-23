@@ -6,16 +6,12 @@ Provides efficient complex64 arithmetic on GPU via real/imag channel emulation
 
 from __future__ import annotations
 
-import math
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
 
 import torch
 from torch import Tensor
 
 from bioplausible.core.ontology import DigitalSubstrate, SubstrateConfig
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 class ComplexSubstrate(DigitalSubstrate):
@@ -48,8 +44,9 @@ class ComplexSubstrate(DigitalSubstrate):
 
     def _check_triton_available(self) -> bool:
         try:
-            import triton  # noqa: F401
-            import triton.language as tl  # noqa: F401
+            import triton  # ruff: ignore[unused-import]
+            import triton.language as tl  # ruff: ignore[unused-import]
+
             return torch.cuda.is_available()
         except ImportError:
             return False
@@ -124,7 +121,9 @@ class ComplexSubstrate(DigitalSubstrate):
         out_i = torch.sinh(two_i) / denom
         return torch.stack([out_r, out_i], dim=-1).flatten(-2)
 
-    def complex_linear(self, x: Tensor, weight: Tensor, bias: Tensor | None = None) -> Tensor:
+    def complex_linear(
+        self, x: Tensor, weight: Tensor, bias: Tensor | None = None
+    ) -> Tensor:
         """Complex linear layer: x @ W^H + b (conjugate transpose of weight)."""
         x = self.to_real(x)
         w = self.to_real(weight)
@@ -187,7 +186,10 @@ try:
 
     @triton.jit
     def _complex_tanh_kernel(
-        real_ptr, imag_ptr, out_real_ptr, out_imag_ptr,
+        real_ptr,
+        imag_ptr,
+        out_real_ptr,
+        out_imag_ptr,
         n_elements,
         BLOCK_SIZE: tl.constexpr,
     ):
@@ -211,10 +213,18 @@ try:
 
     @triton.jit
     def _complex_matmul_kernel(
-        a_real_ptr, a_imag_ptr, b_real_ptr, b_imag_ptr,
-        out_real_ptr, out_imag_ptr,
-        M, N, K,
-        BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
+        a_real_ptr,
+        a_imag_ptr,
+        b_real_ptr,
+        b_imag_ptr,
+        out_real_ptr,
+        out_imag_ptr,
+        M,
+        N,
+        K,
+        BLOCK_M: tl.constexpr,
+        BLOCK_N: tl.constexpr,
+        BLOCK_K: tl.constexpr,
     ):
         """Triton kernel for complex batched matrix multiplication."""
         # Simplified: each block computes one output element

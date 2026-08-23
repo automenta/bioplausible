@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import torch
 
 from bioplausible.core.joint.state import CompositeState
+
 if TYPE_CHECKING:
     from bioplausible.core.joint.context import SystemContext
 
 
 def measure_settling_time(
-    transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-    z: "CompositeState",
-    context: "SystemContext",
+    transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+    z: CompositeState,
+    context: SystemContext,
     tolerance: float = 1e-4,
     max_steps: int = 1000,
     activity_key: str = "x",
@@ -77,10 +79,10 @@ class SettlingMonitor:
 
     def __call__(
         self,
-        transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-        z: "CompositeState",
-        context: "SystemContext",
-    ) -> tuple[int, list[float], list["CompositeState"] | None]:
+        transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+        z: CompositeState,
+        context: SystemContext,
+    ) -> tuple[int, list[float], list[CompositeState] | None]:
         """Measure settling time, optionally recording trajectory."""
         step_norms = []
         trajectory = [] if self.record_trajectory else None
@@ -118,9 +120,9 @@ class SettlingMonitor:
 
     def fast_proxy(
         self,
-        transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-        z: "CompositeState",
-        context: "SystemContext",
+        transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+        z: CompositeState,
+        context: SystemContext,
     ) -> int:
         """Fast proxy: estimate settling from first few steps.
 
@@ -165,16 +167,22 @@ class SettlingMonitor:
             # t = (log(a) - log(tolerance)) / b
             a = torch.exp(coeffs[0]).item()
             if a > self.tolerance:
-                estimated = int((torch.log(torch.tensor(a)) - torch.log(torch.tensor(self.tolerance))) / b)
+                estimated = int(
+                    (
+                        torch.log(torch.tensor(a))
+                        - torch.log(torch.tensor(self.tolerance))
+                    )
+                    / b
+                )
                 return min(estimated, self.max_steps)
 
         return self.max_steps
 
 
 def measure_settling_time_full_state(
-    transition_fn: Callable[["CompositeState", "SystemContext"], "CompositeState"],
-    z: "CompositeState",
-    context: "SystemContext",
+    transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+    z: CompositeState,
+    context: SystemContext,
     tolerance: float = 1e-4,
     max_steps: int = 1000,
 ) -> tuple[int, dict[str, list[float]]]:
@@ -190,7 +198,11 @@ def measure_settling_time_full_state(
     Returns:
         Tuple of (settling_steps, dict of step_norms per component).
     """
-    step_norms: dict[str, list[float]] = {"activity": [], "plastic": [], "substrate": []}
+    step_norms: dict[str, list[float]] = {
+        "activity": [],
+        "plastic": [],
+        "substrate": [],
+    }
     z_current = z
     z_next = z_current  # Initialize
 
@@ -206,7 +218,9 @@ def measure_settling_time_full_state(
                 x_after = z_next.activity.get(key)
                 if x_after is not None:
                     delta = x_after - x_before
-                    norm = delta.norm(dim=-1).mean() / (x_before.norm(dim=-1).mean() + 1e-8)
+                    norm = delta.norm(dim=-1).mean() / (
+                        x_before.norm(dim=-1).mean() + 1e-8
+                    )
                     step_norms["activity"].append(norm.item())
                     max_norm = max(max_norm, norm.item())
                 break  # Just check first activity key

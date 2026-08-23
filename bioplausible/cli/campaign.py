@@ -10,7 +10,6 @@ Runs and manages 6-D joint architecture campaigns with:
 from __future__ import annotations
 
 import argparse
-import sys
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,17 +27,42 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # run
     run_parser = subparsers.add_parser("run", help="Run a campaign")
-    run_parser.add_argument("--space", required=True, help="Search space name (e.g., joint_smoke, joint_full)")
-    run_parser.add_argument("--objective", required=True, help="Objective to optimize (e.g., adaptation_efficiency, stability, pareto)")
+    run_parser.add_argument(
+        "--space",
+        required=True,
+        help="Search space name (e.g., joint_smoke, joint_full)",
+    )
+    run_parser.add_argument(
+        "--objective",
+        required=True,
+        help="Objective to optimize (e.g., adaptation_efficiency, stability, pareto)",
+    )
     run_parser.add_argument("--branch", default="main", help="Branch name")
-    run_parser.add_argument("--campaign-id", help="Campaign ID (auto-generated if not provided)")
-    run_parser.add_argument("--iterations", type=int, default=10, help="Number of iterations")
-    run_parser.add_argument("--experiments-per-iter", type=int, default=5, help="Experiments per iteration")
-    run_parser.add_argument("--output-dir", default="campaigns", help="Output directory")
+    run_parser.add_argument(
+        "--campaign-id", help="Campaign ID (auto-generated if not provided)"
+    )
+    run_parser.add_argument(
+        "--iterations", type=int, default=10, help="Number of iterations"
+    )
+    run_parser.add_argument(
+        "--experiments-per-iter", type=int, default=5, help="Experiments per iteration"
+    )
+    run_parser.add_argument(
+        "--output-dir", default="campaigns", help="Output directory"
+    )
     run_parser.add_argument("--db", help="SQLite database path")
-    run_parser.add_argument("--checkpoint-interval", type=int, default=5, help="Checkpoint interval (episodes)")
-    run_parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
-    run_parser.add_argument("--dry-run", action="store_true", help="Propose without executing")
+    run_parser.add_argument(
+        "--checkpoint-interval",
+        type=int,
+        default=5,
+        help="Checkpoint interval (episodes)",
+    )
+    run_parser.add_argument(
+        "--resume", action="store_true", help="Resume from latest checkpoint"
+    )
+    run_parser.add_argument(
+        "--dry-run", action="store_true", help="Propose without executing"
+    )
 
     # status
     status_parser = subparsers.add_parser("status", help="Show campaign status")
@@ -53,28 +77,44 @@ def _build_parser() -> argparse.ArgumentParser:
     # compare
     compare_parser = subparsers.add_parser("compare", help="Compare campaigns")
     compare_parser.add_argument("--campaign-a", required=True, help="First campaign ID")
-    compare_parser.add_argument("--campaign-b", required=True, help="Second campaign ID")
+    compare_parser.add_argument(
+        "--campaign-b", required=True, help="Second campaign ID"
+    )
     compare_parser.add_argument("--db", help="SQLite database path")
 
     # checkpoint
     checkpoint_parser = subparsers.add_parser("checkpoint", help="Manage checkpoints")
-    checkpoint_subparsers = checkpoint_parser.add_subparsers(dest="checkpoint_action", help="Checkpoint action")
+    checkpoint_subparsers = checkpoint_parser.add_subparsers(
+        dest="checkpoint_action", help="Checkpoint action"
+    )
 
     checkpoint_list = checkpoint_subparsers.add_parser("list", help="List checkpoints")
     checkpoint_list.add_argument("--campaign-id", required=True, help="Campaign ID")
-    checkpoint_list.add_argument("--checkpoint-dir", default="campaigns/checkpoints", help="Checkpoint directory")
+    checkpoint_list.add_argument(
+        "--checkpoint-dir", default="campaigns/checkpoints", help="Checkpoint directory"
+    )
 
-    checkpoint_show = checkpoint_subparsers.add_parser("show", help="Show checkpoint details")
-    checkpoint_show.add_argument("--checkpoint", required=True, help="Checkpoint file path")
+    checkpoint_show = checkpoint_subparsers.add_parser(
+        "show", help="Show checkpoint details"
+    )
+    checkpoint_show.add_argument(
+        "--checkpoint", required=True, help="Checkpoint file path"
+    )
 
-    checkpoint_resume = checkpoint_subparsers.add_parser("resume", help="Generate resume script")
-    checkpoint_resume.add_argument("--checkpoint", required=True, help="Checkpoint file path")
+    checkpoint_resume = checkpoint_subparsers.add_parser(
+        "resume", help="Generate resume script"
+    )
+    checkpoint_resume.add_argument(
+        "--checkpoint", required=True, help="Checkpoint file path"
+    )
     checkpoint_resume.add_argument("--output", help="Output script path")
 
     # export
     export_parser = subparsers.add_parser("export", help="Export campaign data")
     export_parser.add_argument("--campaign-id", required=True, help="Campaign ID")
-    export_parser.add_argument("--format", choices=["json", "csv", "yaml"], default="json")
+    export_parser.add_argument(
+        "--format", choices=["json", "csv", "yaml"], default="json"
+    )
     export_parser.add_argument("--output", help="Output file path")
     export_parser.add_argument("--db", help="SQLite database path")
 
@@ -94,12 +134,44 @@ def _get_search_space(space_name: str) -> dict:
             "tasks": ["mnist"],
         },
         "joint_full": {
-            "substrates": ["digital", "analog", "memristive", "neuromorphic", "ternary", "sparse"],
+            "substrates": [
+                "digital",
+                "analog",
+                "memristive",
+                "neuromorphic",
+                "ternary",
+                "sparse",
+            ],
             "geometries": ["feedforward", "recurrent", "tile_mesh"],
-            "dynamics": ["energy_minimization", "instantaneous", "predictive_settling", "spike_integration", "diffusion"],
-            "plasticity": ["null", "routing", "fast_weights", "substrate_coupled", "rule_state"],
-            "credits": ["thermodynamic_contrast", "random_projections", "local_goodness", "temporal_trace", "target_inversion", "gradient"],
-            "updates": ["euclidean", "riemannian_orthogonal", "spectral_constrained", "natural_gradient", "elastic_consolidation"],
+            "dynamics": [
+                "energy_minimization",
+                "instantaneous",
+                "predictive_settling",
+                "spike_integration",
+                "diffusion",
+            ],
+            "plasticity": [
+                "null",
+                "routing",
+                "fast_weights",
+                "substrate_coupled",
+                "rule_state",
+            ],
+            "credits": [
+                "thermodynamic_contrast",
+                "random_projections",
+                "local_goodness",
+                "temporal_trace",
+                "target_inversion",
+                "gradient",
+            ],
+            "updates": [
+                "euclidean",
+                "riemannian_orthogonal",
+                "spectral_constrained",
+                "natural_gradient",
+                "elastic_consolidation",
+            ],
             "tasks": ["mnist", "cifar10"],
         },
     }
@@ -122,13 +194,16 @@ def _generate_random_coordinate(space: dict) -> str:
 
 def _run_campaign(args) -> int:
     """Run a campaign."""
+    import random
+
+    import torch
+
     from bioplausible.core.campaign import CampaignStore, get_kernel_cache
+    from bioplausible.core.campaign.checkpoint import (
+        CheckpointManager,
+    )
     from bioplausible.core.campaign.frontier_record import FrontierRecord
     from bioplausible.core.campaign.resource_vector import ResourceUsage
-    from bioplausible.core.campaign.checkpoint import CheckpointManager, create_resume_script
-
-    import random
-    import torch
 
     space = _get_search_space(args.space)
     campaign_id = args.campaign_id or f"camp_{uuid.uuid4().hex[:8]}"
@@ -140,7 +215,9 @@ def _run_campaign(args) -> int:
 
     store = CampaignStore(db_path, checkpoint_dir)
     kernel_cache = get_kernel_cache()
-    checkpoint_mgr = CheckpointManager(checkpoint_dir, checkpoint_interval=args.checkpoint_interval)
+    checkpoint_mgr = CheckpointManager(
+        checkpoint_dir, checkpoint_interval=args.checkpoint_interval
+    )
 
     # Create or resume campaign
     if args.resume:
@@ -149,7 +226,9 @@ def _run_campaign(args) -> int:
             print(f"No campaign found on branch '{args.branch}' to resume")
             return 1
         campaign_id = campaign_state.campaign_id
-        print(f"Resuming campaign {campaign_id} on branch '{args.branch}' at iteration {campaign_state.iteration}")
+        print(
+            f"Resuming campaign {campaign_id} on branch '{args.branch}' at iteration {campaign_state.iteration}"
+        )
     else:
         campaign_state = store.create_campaign(
             campaign_id=campaign_id,
@@ -160,7 +239,9 @@ def _run_campaign(args) -> int:
         print(f"Created campaign {campaign_id} on branch '{args.branch}'")
 
     # Run iterations
-    for iteration in range(campaign_state.iteration + 1, campaign_state.iteration + args.iterations + 1):
+    for iteration in range(
+        campaign_state.iteration + 1, campaign_state.iteration + args.iterations + 1
+    ):
         print(f"\n=== Iteration {iteration} ===")
 
         # Generate coordinates to evaluate
@@ -224,7 +305,9 @@ def _run_campaign(args) -> int:
                 plasticity_config=frontier_record.plasticity_config,
             )
 
-            print(f"    ✓ Accuracy: {frontier_record.task_accuracy:.4f}, Loss: {frontier_record.task_loss:.4f}")
+            print(
+                f"    ✓ Accuracy: {frontier_record.task_accuracy:.4f}, Loss: {frontier_record.task_loss:.4f}"
+            )
 
         # Checkpoint
         if checkpoint_mgr.should_checkpoint(iteration):
@@ -265,7 +348,9 @@ def _show_status(args) -> int:
     print(f"\nEpisodes: {len(episodes)}")
     for ep in episodes[-5:]:  # Show last 5
         fr = ep.frontier_record
-        print(f"  Iter {ep.iteration}: {ep.coordinate} -> acc={fr.get('task_accuracy', 0):.4f}")
+        print(
+            f"  Iter {ep.iteration}: {ep.coordinate} -> acc={fr.get('task_accuracy', 0):.4f}"
+        )
 
     return 0
 
@@ -285,7 +370,9 @@ def _list_campaigns(args) -> int:
     print(f"{'Campaign ID':<15} {'Branch':<15} {'Iter':<6} {'Created':<20} {'Parent'}")
     print("-" * 80)
     for c in campaigns:
-        print(f"{c.campaign_id:<15} {c.branch_name:<15} {c.iteration:<6} {c.created_at:<20} {c.parent_branch or '-'}")
+        print(
+            f"{c.campaign_id:<15} {c.branch_name:<15} {c.iteration:<6} {c.created_at:<20} {c.parent_branch or '-'}"
+        )
 
     return 0
 
@@ -318,15 +405,22 @@ def _compare_campaigns(args) -> int:
         fr_a = best_a.frontier_record
         fr_b = best_b.frontier_record
 
-        print(f"\nBest A: {fr_a.get('task_accuracy', 0):.4f} acc, {fr_a.get('task_loss', 0):.4f} loss")
-        print(f"Best B: {fr_b.get('task_accuracy', 0):.4f} acc, {fr_b.get('task_loss', 0):.4f} loss")
+        print(
+            f"\nBest A: {fr_a.get('task_accuracy', 0):.4f} acc, {fr_a.get('task_loss', 0):.4f} loss"
+        )
+        print(
+            f"Best B: {fr_b.get('task_accuracy', 0):.4f} acc, {fr_b.get('task_loss', 0):.4f} loss"
+        )
 
     return 0
 
 
 def _manage_checkpoints(args) -> int:
     """Manage checkpoints."""
-    from bioplausible.core.campaign.checkpoint import CheckpointManager, create_resume_script
+    from bioplausible.core.campaign.checkpoint import (
+        CheckpointManager,
+        create_resume_script,
+    )
 
     checkpoint_dir = Path(args.checkpoint_dir)
     mgr = CheckpointManager(checkpoint_dir)
@@ -362,9 +456,10 @@ def _manage_checkpoints(args) -> int:
 
 def _export_campaign(args) -> int:
     """Export campaign data."""
-    from bioplausible.core.campaign import CampaignStore
-    import json
     import csv
+    import json
+
+    from bioplausible.core.campaign import CampaignStore
 
     db_path = args.db or "campaigns/campaign.db"
     store = CampaignStore(db_path)
@@ -403,9 +498,11 @@ def _export_campaign(args) -> int:
         output = json.dumps(data, indent=2)
     elif args.format == "yaml":
         import yaml
+
         output = yaml.dump(data, default_flow_style=False)
     else:  # csv
         import io
+
         output_io = io.StringIO()
         if episodes:
             fieldnames = ["iteration", "timestamp", "coordinate", "task_name"]

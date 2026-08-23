@@ -494,9 +494,7 @@ class TestGradientEquivalence:
             GeometryConfig.feedforward(input_dim=10, output_dim=5, hidden_dims=(20,))
         )
         substrate = DigitalSubstrate()
-        dynamics = InstantaneousDynamics(
-            StateDynamicsConfig.instantaneous()
-        )
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
         update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
 
         # System 1: ThermodynamicContrast with large β

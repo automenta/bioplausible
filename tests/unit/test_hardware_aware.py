@@ -10,7 +10,9 @@ import tempfile
 import pytest
 import torch
 
+from bioplausible.config.unified import ModelConfig
 from bioplausible.core.registry import ComponentCategory, Registry
+from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 from bioplausible.zoo.models.eqprop.hardware_variants import (
     CrossbarLoopedMLP,
     NoisyLoopedMLP,
@@ -19,18 +21,10 @@ from bioplausible.zoo.models.eqprop.hardware_variants import (
     QuantumLoopedMLP,
     SpikingLoopedMLP,
 )
-from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
-from bioplausible.config.unified import ModelConfig
 
 # Skip KnowledgeBase tests due to legacy CoreTrainer import chain
 pytestmark = pytest.mark.skip(
     reason="Hardware track KB tests depend on legacy CoreTrainer import chain"
-)
-from bioplausible.zoo.models.eqprop.hardware_variants import (
-    CrossbarLoopedMLP,
-    OpticalLoopedMLP,
-    QuantumLoopedMLP,
-    SpikingLoopedMLP,
 )
 
 
@@ -41,7 +35,7 @@ def _kpw(**kwargs):
 
 def _make_config(**kwargs):
     """Create a ModelConfig for hardware variant constructors."""
-    from bioplausible.config.unified import ModelConfig
+
     return ModelConfig(
         name="eqprop_mlp",
         input_dim=32,
@@ -118,7 +112,9 @@ def test_noisy_step_injects_stochastic_noise():
     assert len(outs) > 1  # runs with fresh noise differ
 
 
-@pytest.mark.skip(reason="CoreTrainer/TrainerConfig removed in Sprint 7; uses new SystemTrainer/ExperimentConfig")
+@pytest.mark.skip(
+    reason="CoreTrainer/TrainerConfig removed in Sprint 7; uses new SystemTrainer/ExperimentConfig"
+)
 @pytest.mark.parametrize(
     ("target", "expected_cls", "meta_key"),
     [
@@ -146,7 +142,9 @@ def test_target_hardware_swaps_eqprop_model(target, expected_cls, meta_key):
     assert meta_key in trainer._hardware_meta
 
 
-@pytest.mark.skip(reason="CoreTrainer/TrainerConfig removed in Sprint 7; uses new SystemTrainer/ExperimentConfig")
+@pytest.mark.skip(
+    reason="CoreTrainer/TrainerConfig removed in Sprint 7; uses new SystemTrainer/ExperimentConfig"
+)
 def test_target_hardware_none_is_inert():
     """No knob / gpu target leaves the base model untouched."""
     for target in (None, "gpu"):
@@ -191,7 +189,9 @@ def test_facades_are_registered_models():
         assert issubclass(cls, EquilibriumMLP)
 
 
-@pytest.mark.skip(reason="CoreTrainer/TrainerConfig removed in Sprint 7; uses new SystemTrainer/ExperimentConfig")
+@pytest.mark.skip(
+    reason="CoreTrainer/TrainerConfig removed in Sprint 7; uses new SystemTrainer/ExperimentConfig"
+)
 def test_target_hardware_inert_for_non_looped_model():
     """A non-equilibrium model is not swapped (no substrate defined)."""
     cfg = TrainerConfig(

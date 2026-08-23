@@ -34,14 +34,31 @@ There is exactly **one** `raise X from Y` in the entire codebase, and **127** `e
 class BioplausibleError(Exception):
     """Base for all bioplausible domain errors."""
 
+
 class ConfigError(BioplausibleError): ...
+
+
 class RegistryError(BioplausibleError): ...
-class IncompatibilityError(RegistryError): ...   # already exists — re-parent
+
+
+class IncompatibilityError(RegistryError): ...  # already exists — re-parent
+
+
 class CheckpointError(BioplausibleError): ...
+
+
 class LoadStateError(CheckpointError): ...
+
+
 class KnowledgeBaseError(BioplausibleError): ...
+
+
 class TrialExecutionError(BioplausibleError): ...
+
+
 class PropagatorError(BioplausibleError): ...
+
+
 class TileGraphError(BioplausibleError): ...
 ```
 
@@ -66,11 +83,15 @@ class TileGraphError(BioplausibleError): ...
 class _Predicate(Protocol):
     def __call__(self, meta: ComponentMetadata) -> bool: ...
 
+
 @dataclass(frozen=True, slots=True)
 class _DomainIn:
     domains: frozenset[Domain]
+
     def __call__(self, meta: ComponentMetadata) -> bool:
         return any(d in meta.domains for d in self.domains)
+
+
 # ...one per axis
 ```
 

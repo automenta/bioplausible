@@ -9,15 +9,13 @@ Models sparsity-constrained hardware and algorithms:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Literal
+from collections.abc import Callable
+from typing import Literal
 
 import torch
 from torch import Tensor
 
 from bioplausible.core.ontology import DigitalSubstrate, SubstrateConfig
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 class SparseSubstrate(DigitalSubstrate):
@@ -38,11 +36,15 @@ class SparseSubstrate(DigitalSubstrate):
         self,
         config: SubstrateConfig | None = None,
         *,
-        sparsity_type: Literal["unstructured", "n_m", "block", "channel"] = "unstructured",
+        sparsity_type: Literal[
+            "unstructured", "n_m", "block", "channel"
+        ] = "unstructured",
         n_m_ratio: tuple[int, int] = (2, 4),
         block_size: tuple[int, int] = (8, 8),
         update_mask_frequency: int = 100,
-        prune_criterion: Literal["magnitude", "gradient", "random", "snip"] = "magnitude",
+        prune_criterion: Literal[
+            "magnitude", "gradient", "random", "snip"
+        ] = "magnitude",
         regrow_criterion: Literal["gradient", "random"] = "gradient",
     ):
         super().__init__(
@@ -65,7 +67,7 @@ class SparseSubstrate(DigitalSubstrate):
         self._step_counter = 0
 
     @classmethod
-    def from_config(cls, config: SubstrateConfig) -> "SparseSubstrate":
+    def from_config(cls, config: SubstrateConfig) -> SparseSubstrate:
         """Create SparseSubstrate from SubstrateConfig."""
         return cls(config=config)
 
@@ -101,7 +103,9 @@ class SparseSubstrate(DigitalSubstrate):
         else:
             raise ValueError(f"Unknown sparsity_type: {self.sparsity_type}")
 
-    def _create_n_m_mask(self, weight: Tensor, n: int, m: int, device: torch.device) -> Tensor:
+    def _create_n_m_mask(
+        self, weight: Tensor, n: int, m: int, device: torch.device
+    ) -> Tensor:
         """Create N:M structured sparsity mask."""
         # Reshape to groups of M elements along last dimension
         *batch, out_features, in_features = weight.shape
@@ -119,7 +123,7 @@ class SparseSubstrate(DigitalSubstrate):
         _, topk_indices = weight_reshaped.abs().topk(n, dim=-1)
         mask = torch.zeros_like(weight_reshaped)
         mask.scatter_(-1, topk_indices, 1.0)
-        return mask.view(*batch, out_features, -1)[..., :weight.shape[-1]]
+        return mask.view(*batch, out_features, -1)[..., : weight.shape[-1]]
 
     def _create_block_mask(self, weight: Tensor, device: torch.device) -> Tensor:
         """Create block sparsity mask."""
@@ -132,7 +136,13 @@ class SparseSubstrate(DigitalSubstrate):
 
         # Score each block by L2 norm of weights
         weight_padded = torch.nn.functional.pad(
-            weight, (0, n_blocks_w * block_w - in_features, 0, n_blocks_h * block_h - out_features)
+            weight,
+            (
+                0,
+                n_blocks_w * block_w - in_features,
+                0,
+                n_blocks_h * block_h - out_features,
+            ),
         )
         blocks = weight_padded.view(*batch, n_blocks_h, block_h, n_blocks_w, block_w)
         block_scores = blocks.pow(2).sum(dim=(-2, -1))  # [..., n_blocks_h, n_blocks_w]
@@ -154,7 +164,9 @@ class SparseSubstrate(DigitalSubstrate):
         mask = mask.reshape(*batch, n_blocks_h * block_h, n_blocks_w * block_w)
         return mask[..., :out_features, :in_features].to(weight.dtype)
 
-    def _create_channel_mask(self, weight: Tensor, sparsity: float, device: torch.device) -> Tensor:
+    def _create_channel_mask(
+        self, weight: Tensor, sparsity: float, device: torch.device
+    ) -> Tensor:
         """Create channel-wise sparsity mask (prune entire output channels)."""
         *batch, out_features, in_features = weight.shape
         # Score each output channel by L2 norm

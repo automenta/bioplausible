@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Mapping
+from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
 
 if TYPE_CHECKING:
+    from bioplausible.core.joint.state import StateRegistry
+    from bioplausible.core.joint.transition import PlasticityConfig
     from bioplausible.core.ontology import (
         CreditAssignmentConfig,
         Geometry,
@@ -18,8 +21,6 @@ if TYPE_CHECKING:
         Substrate,
         SubstrateConfig,
     )
-    from bioplausible.core.joint.state import StateRegistry
-    from bioplausible.core.joint.transition import PlasticityConfig
 
 __all__ = ["SystemContext"]
 
@@ -46,15 +47,15 @@ class SystemContext:
     """
 
     theta: Mapping[str, Tensor]
-    geometry: "Geometry"
-    substrate: "Substrate"
-    substrate_config: "SubstrateConfig"
-    geometry_config: "GeometryConfig"
-    dynamics_config: "StateDynamicsConfig"
-    credit_config: "CreditAssignmentConfig"
-    update_config: "ParameterUpdateConfig"
-    plasticity_config: "PlasticityConfig"
-    registry: "StateRegistry"
+    geometry: Geometry
+    substrate: Substrate
+    substrate_config: SubstrateConfig
+    geometry_config: GeometryConfig
+    dynamics_config: StateDynamicsConfig
+    credit_config: CreditAssignmentConfig
+    update_config: ParameterUpdateConfig
+    plasticity_config: PlasticityConfig
+    registry: StateRegistry
 
     def __post_init__(self) -> None:
         # Validate that all theta tensors require grad
@@ -72,7 +73,7 @@ class SystemContext:
             return torch.device("cpu")
         return next(iter(self.theta.values())).device
 
-    def with_updated_theta(self, new_theta: Mapping[str, Tensor]) -> "SystemContext":
+    def with_updated_theta(self, new_theta: Mapping[str, Tensor]) -> SystemContext:
         """Create a new context with updated theta (for episode boundary consolidation)."""
         return SystemContext(
             theta=new_theta,

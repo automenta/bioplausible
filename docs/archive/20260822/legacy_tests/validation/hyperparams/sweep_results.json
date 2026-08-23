@@ -1,50 +1,46 @@
 {
-  "backprop_baseline": 0.3659999966621399,
-  "best_configs": {
-    "eqprop_mlp": {
-      "config": {
-        "hidden_dim": 64,
-        "num_layers": 2,
-        "lr": 0.001,
-        "beta": 0.1,
-        "max_steps": 30,
-        "gradient_method": "contrastive",
-        "use_spectral_norm": true,
-        "hebbian_lr": 0.01
-      },
-      "diff": 0.0559999942779541,
-      "passed": false
+    "backprop_baseline": 0.3659999966621399,
+    "best_configs": {
+        "eqprop_mlp": {
+            "config": {
+                "hidden_dim": 64,
+                "num_layers": 2,
+                "lr": 0.001,
+                "beta": 0.1,
+                "max_steps": 30,
+                "gradient_method": "contrastive",
+                "use_spectral_norm": true,
+                "hebbian_lr": 0.01,
+            },
+            "diff": 0.0559999942779541,
+            "passed": false,
+        },
+        "directed_ep": {
+            "config": {
+                "hidden_dim": 64,
+                "num_layers": 2,
+                "lr": 0.03,
+                "beta": 0.3,
+                "eq_steps": 20,
+            },
+            "diff": 0.04399999976158142,
+            "passed": true,
+        },
+        "forward_forward": {
+            "config": {
+                "hidden_dim": 64,
+                "num_layers": 2,
+                "threshold": 0.5,
+                "layer_lr": 0.01,
+                "classifier_lr": 0.005,
+            },
+            "diff": 0.041999995708465576,
+            "passed": true,
+        },
+        "pepita": {
+            "config": {"hidden_dim": 64, "num_layers": 2, "lr": 0.1},
+            "diff": 0.19599999487400055,
+            "passed": false,
+        },
     },
-    "directed_ep": {
-      "config": {
-        "hidden_dim": 64,
-        "num_layers": 2,
-        "lr": 0.03,
-        "beta": 0.3,
-        "eq_steps": 20
-      },
-      "diff": 0.04399999976158142,
-      "passed": true
-    },
-    "forward_forward": {
-      "config": {
-        "hidden_dim": 64,
-        "num_layers": 2,
-        "threshold": 0.5,
-        "layer_lr": 0.01,
-        "classifier_lr": 0.005
-      },
-      "diff": 0.041999995708465576,
-      "passed": true
-    },
-    "pepita": {
-      "config": {
-        "hidden_dim": 64,
-        "num_layers": 2,
-        "lr": 0.1
-      },
-      "diff": 0.19599999487400055,
-      "passed": false
-    }
-  }
 }

@@ -15,16 +15,19 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
+from bioplausible.core.dynamics.adapters import (
+    EnergyToInstantaneousAdapter,
+    StateDynamicsConfig,
+)
 from bioplausible.core.joint import (
     CompositeState,
-    CoupledTransition,
+    ConsolidationConfig,
     NullPlasticity,
     PlasticityConfig,
     StateRegistry,
     StateVariable,
     SystemContext,
     consolidate,
-    ConsolidationConfig,
 )
 from bioplausible.core.ontology import (
     CreditAssignmentConfig,
@@ -37,16 +40,11 @@ from bioplausible.core.ontology import (
     StateDynamicsConfig,
     SubstrateConfig,
     SystemConfig,
-    ThermodynamicContrast,
     SystemState,
+    ThermodynamicContrast,
 )
-from bioplausible.core.substrates.ternary_substrate import TernarySubstrate
 from bioplausible.core.substrates.adapters import DigitalToTernaryAdapter
-from bioplausible.core.dynamics.adapters import (
-    EnergyToInstantaneousAdapter,
-    InstantaneousDynamics,
-    StateDynamicsConfig,
-)
+from bioplausible.core.substrates.ternary_substrate import TernarySubstrate
 from bioplausible.core.system_trainer import compose_system
 
 
@@ -76,9 +74,13 @@ def _create_registry_with_geometry(geometry: RecurrentGeometry) -> StateRegistry
     return registry
 
 
-def _create_dummy_state_for_registry(registry: StateRegistry, geometry: RecurrentGeometry) -> CompositeState:
+def _create_dummy_state_for_registry(
+    registry: StateRegistry, geometry: RecurrentGeometry
+) -> CompositeState:
     """Create a dummy CompositeState that satisfies registry validation."""
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
     return CompositeState(activity=dummy_activity, plastic={}, substrate={})
 
 
@@ -98,7 +100,9 @@ def test_j1_null_plasticity_zero_extension():
     plasticity = NullPlasticity()
     sys_config = SystemConfig(
         substrate=SubstrateConfig.digital(),
-        geometry=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         plasticity=PlasticityConfig.null(),
         credit=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
@@ -115,7 +119,9 @@ def test_j1_null_plasticity_zero_extension():
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -152,7 +158,9 @@ def test_j2_theta_immutable_intra_episode():
     substrate, geometry, dynamics, credit, update = _create_test_system()
 
     # Snapshot initial theta
-    theta_initial = {name: param.detach().clone() for name, param in geometry.params.items()}
+    theta_initial = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
 
     # Create registry and context
     registry = _create_registry_with_geometry(geometry)
@@ -163,7 +171,9 @@ def test_j2_theta_immutable_intra_episode():
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -193,7 +203,9 @@ def test_j2_theta_immutable_intra_episode():
 
     # Theta should be unchanged
     for name, param in context.theta.items():
-        assert torch.allclose(param, theta_initial[name]), f"Theta {name} was mutated intra-episode!"
+        assert torch.allclose(param, theta_initial[name]), (
+            f"Theta {name} was mutated intra-episode!"
+        )
 
 
 # ============================================================
@@ -204,7 +216,9 @@ def test_j2_theta_immutable_intra_episode():
 class TestPlasticity:
     """Minimal test plasticity primitive for lifecycle testing."""
 
-    config = PlasticityConfig(plasticity_type="test", plastic_state_dims={"test_psi": 10})
+    config = PlasticityConfig(
+        plasticity_type="test", plastic_state_dims={"test_psi": 10}
+    )
 
     def initial_psi(self, context: SystemContext) -> dict[str, Tensor]:
         return {"test_psi": torch.zeros(4, 10)}
@@ -217,7 +231,9 @@ class TestPlasticity:
     ) -> dict[str, Tensor]:
         # Only plasticity projection should modify psi
         new_psi = {k: v.clone() for k, v in psi.items()}
-        new_psi["test_psi"] = new_psi["test_psi"] + 0.1 * torch.randn_like(new_psi["test_psi"])
+        new_psi["test_psi"] = new_psi["test_psi"] + 0.1 * torch.randn_like(
+            new_psi["test_psi"]
+        )
         return new_psi
 
 
@@ -230,22 +246,30 @@ def test_j3_fast_plastic_only_via_plasticity():
 
     # Include fast_plastic in plastic dict for validation
     dummy_plastic = {"test_psi": torch.zeros(4, 10)}
-    registry.validate(CompositeState(
-        activity={name: param.detach().clone() for name, param in geometry.params.items()},
-        plastic=dummy_plastic,
-        substrate={},
-    ))
+    registry.validate(
+        CompositeState(
+            activity={
+                name: param.detach().clone() for name, param in geometry.params.items()
+            },
+            plastic=dummy_plastic,
+            substrate={},
+        )
+    )
 
     context = SystemContext(
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
-        plasticity_config=PlasticityConfig(plasticity_type="test", plastic_state_dims={"test_psi": 10}),
+        plasticity_config=PlasticityConfig(
+            plasticity_type="test", plastic_state_dims={"test_psi": 10}
+        ),
         registry=registry,
     )
 
@@ -294,7 +318,9 @@ def test_j4_substrate_owned_respects_physics():
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.ternary(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -331,17 +357,23 @@ def test_j4_substrate_adapter_preserves_constraints():
     registry.register(StateVariable(name="conductance", substrate_owned=True))
 
     # Dummy state with all persistent params in activity
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
     dummy_activity["x"] = torch.randn(4, 10)
     dummy_substrate = {"conductance": torch.randn(4, 20)}
-    registry.validate(CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate))
+    registry.validate(
+        CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate)
+    )
 
     context = SystemContext(
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.ternary(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -376,19 +408,27 @@ def test_j5_consolidation_only_at_episode_boundary():
 
     registry = _create_registry_with_geometry(geometry)
     # Consolidatable fast weight
-    registry.register(StateVariable(name="fast_weight", fast_plastic=True, consolidatable=True))
+    registry.register(
+        StateVariable(name="fast_weight", fast_plastic=True, consolidatable=True)
+    )
 
     # Include fast_plastic in plastic dict for validation
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
     dummy_plastic = {"fast_weight": torch.zeros(4, 20)}
-    registry.validate(CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate={}))
+    registry.validate(
+        CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate={})
+    )
 
     context = SystemContext(
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -401,7 +441,9 @@ def test_j5_consolidation_only_at_episode_boundary():
     )
 
     # Initial theta snapshot
-    theta_initial = {name: param.detach().clone() for name, param in context.theta.items()}
+    theta_initial = {
+        name: param.detach().clone() for name, param in context.theta.items()
+    }
 
     # Simulate intra-episode: fast_weight evolves but is NOT consolidated
     psi_value = torch.randn(4, 20)
@@ -418,7 +460,9 @@ def test_j5_consolidation_only_at_episode_boundary():
     # Now at episode boundary: consolidate
     # Save psi before consolidation (it gets zeroed)
     psi_before = z.plastic["fast_weight"].clone()
-    new_context = consolidate(z, context, ConsolidationConfig(promote_all=True, promotion_scale=0.1))
+    new_context = consolidate(
+        z, context, ConsolidationConfig(promote_all=True, promotion_scale=0.1)
+    )
 
     # Theta should now include promoted fast_weight
     # (Note: fast_weight is new, so it gets added to theta)
@@ -435,18 +479,26 @@ def test_j5_consolidation_resets_plastic():
     substrate, geometry, dynamics, credit, update = _create_test_system()
 
     registry = _create_registry_with_geometry(geometry)
-    registry.register(StateVariable(name="fast_weight", fast_plastic=True, consolidatable=True))
+    registry.register(
+        StateVariable(name="fast_weight", fast_plastic=True, consolidatable=True)
+    )
 
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
     dummy_plastic = {"fast_weight": torch.zeros(4, 20)}
-    registry.validate(CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate={}))
+    registry.validate(
+        CompositeState(activity=dummy_activity, plastic=dummy_plastic, substrate={})
+    )
 
     context = SystemContext(
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -466,7 +518,11 @@ def test_j5_consolidation_resets_plastic():
     )
 
     # Consolidate with reset_plastic=True (default) and promotion_scale=0.1
-    new_context = consolidate(z, context, ConsolidationConfig(promote_all=True, reset_plastic=True, promotion_scale=0.1))
+    new_context = consolidate(
+        z,
+        context,
+        ConsolidationConfig(promote_all=True, reset_plastic=True, promotion_scale=0.1),
+    )
 
     # Plastic state should be zeroed
     assert torch.allclose(z.plastic["fast_weight"], torch.zeros(4, 20))
@@ -491,17 +547,23 @@ def test_j6_substrate_adapter_preserves_registry_semantics():
     registry = _create_registry_with_geometry(geometry)
     registry.register(StateVariable(name="conductance", substrate_owned=True))
 
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
     dummy_activity["x"] = torch.randn(4, 10)
     dummy_substrate = {"conductance": torch.randn(4, 20)}
-    registry.validate(CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate))
+    registry.validate(
+        CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate)
+    )
 
     context = SystemContext(
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.ternary(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -529,6 +591,7 @@ def test_j6_substrate_adapter_preserves_registry_semantics():
 def test_j6_dynamics_adapter_preserves_shape():
     """J6: Dynamics adapter preserves CompositeState structure."""
     import pytest
+
     # Skip: EnergyToInstantaneousAdapter has a bug where it tries to modify frozen config
     pytest.skip("EnergyToInstantaneousAdapter modifies frozen config - bug in adapter")
     substrate = DigitalSubstrate(SubstrateConfig.digital())
@@ -548,7 +611,9 @@ def test_j6_dynamics_adapter_preserves_shape():
         geometry=geometry,
         substrate=substrate,
         substrate_config=SubstrateConfig.digital(),
-        geometry_config=GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
+        geometry_config=GeometryConfig.recurrent(
+            input_dim=10, output_dim=2, hidden_dims=(20,)
+        ),
         dynamics_config=StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5),
         credit_config=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
         update_config=ParameterUpdateConfig.euclidean(step_size=0.01),
@@ -556,7 +621,9 @@ def test_j6_dynamics_adapter_preserves_shape():
         registry=registry,
     )
 
-    dummy_activity = {name: param.detach().clone() for name, param in geometry.params.items()}
+    dummy_activity = {
+        name: param.detach().clone() for name, param in geometry.params.items()
+    }
     dummy_activity["x"] = torch.randn(4, 10)
     registry.validate(CompositeState(activity=dummy_activity, plastic={}, substrate={}))
 
@@ -585,7 +652,9 @@ def test_j7_trajectory_records_full_joint_state():
     """J7: JointTrajectory records activity, plastic, and substrate."""
     from bioplausible.core.joint import JointTrajectoryRecorder
 
-    recorder = JointTrajectoryRecorder(max_steps=10, record_plastic=True, record_substrate=True)
+    recorder = JointTrajectoryRecorder(
+        max_steps=10, record_plastic=True, record_substrate=True
+    )
 
     registry = StateRegistry()
     registry.register(StateVariable(name="weight", persistent=True))
@@ -624,7 +693,9 @@ def test_j7_trajectory_optional_components():
     from bioplausible.core.joint import JointTrajectoryRecorder
 
     # Record only activity
-    recorder = JointTrajectoryRecorder(max_steps=10, record_plastic=False, record_substrate=False)
+    recorder = JointTrajectoryRecorder(
+        max_steps=10, record_plastic=False, record_substrate=False
+    )
 
     for i in range(3):
         z = CompositeState(

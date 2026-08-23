@@ -7,7 +7,9 @@ class TestRefactor(unittest.TestCase):
     def test_imports_and_models(self):
         """Test that native 5-D compositions can be instantiated."""
         # Use native 5-D composition for eqprop_mlp
-        system = Registry.to_system("eqprop_mlp", input_dim=10, hidden_dim=20, output_dim=5)
+        system = Registry.to_system(
+            "eqprop_mlp", input_dim=10, hidden_dim=20, output_dim=5
+        )
         self.assertTrue(hasattr(system, "forward"))
         self.assertTrue(hasattr(system, "train_step"))
 

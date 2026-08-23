@@ -233,9 +233,11 @@ protocol union (already drafted in `zoo/propagators/base.py:PlausibleStep`).
 
 ```python
 match self.model, self.optimizer:
-    case EnergyModel(), _:        return EBMTrainer(self.model, ...).train_step(x, y)
-    case m, o if hasattr(o, "_plausible"): return o.step(x=x, target=y)  # LearningRuleOptimizer
-    case m, _:                   # standard BPTT
+    case EnergyModel(), _:
+        return EBMTrainer(self.model, ...).train_step(x, y)
+    case m, o if hasattr(o, "_plausible"):
+        return o.step(x=x, target=y)  # LearningRuleOptimizer
+    case m, _:  # standard BPTT
         ...
 ```
 
@@ -1286,13 +1288,23 @@ structure building, target preparation):
 
 ```python
 states = [s.requires_grad_(True) for s in states]
+
+
 def wrapped_energy_fn(s):
     return energy_fn(model, x, s, compat_structure, target_vec, beta)
+
+
 return energy_gradient_descent(
-    states, wrapped_energy_fn, self.steps,
-    lr=self.lr, momentum=self.MOMENTUM, adaptive=self.adaptive,
-    tol=self.tol, patience=self.patience,
-    step_size_growth=self.step_size_growth, step_size_decay=self.step_size_decay,
+    states,
+    wrapped_energy_fn,
+    self.steps,
+    lr=self.lr,
+    momentum=self.MOMENTUM,
+    adaptive=self.adaptive,
+    tol=self.tol,
+    patience=self.patience,
+    step_size_growth=self.step_size_growth,
+    step_size_decay=self.step_size_decay,
 )
 ```
 

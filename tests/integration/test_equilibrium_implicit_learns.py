@@ -20,9 +20,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from bioplausible.config.unified import ModelConfig
 from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 from bioplausible.zoo.models.eqprop.conv_eqprop import ConvEqProp
-from bioplausible.config.unified import ModelConfig
 
 _GRAD_PARITY_TOL = 5e-2  # implicit-diff vs BPTT relative error budget
 
@@ -166,7 +166,9 @@ def test_equilibrium_learns_looped_mlp_with_spectral_norm() -> None:
     )
 
 
-@pytest.mark.skip(reason="ConvEqProp is marked 'broken' in registry (phantom num_layers knob)")
+@pytest.mark.skip(
+    reason="ConvEqProp is marked 'broken' in registry (phantom num_layers knob)"
+)
 def test_conv_eqprop_equilibrium_learns() -> None:
     """Conv models default to the O(1) implicit method and still learn."""
     torch.manual_seed(0)

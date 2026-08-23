@@ -7,9 +7,9 @@ Flagship experiments for publishable bio-plausible learning results.
 try:
     from .joint import (
         adaptation_efficiency,
+        algorithm_migration,
         compute_efficiency,
         structural_robustness,
-        algorithm_migration,
         z3_fixed_weights,
     )
 except ImportError:

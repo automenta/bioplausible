@@ -18,13 +18,13 @@ from bioplausible.core.optimization.factory import make_strategy_optimizer
 
 optimizer = make_strategy_optimizer(
     model=model,
-    gradient="backprop",      # or "fa", "target_prop", "pc", "hebbian", "ep"
-    update="plain",           # or "muon", "dion"
-    constraint="none",        # or "spectral"
-    feedback="none",          # or "error_feedback"
+    gradient="backprop",  # or "fa", "target_prop", "pc", "hebbian", "ep"
+    update="plain",  # or "muon", "dion"
+    constraint="none",  # or "spectral"
+    feedback="none",  # or "error_feedback"
     lr=0.01,
-    beta=0.5,                 # for EP/contrastive
-    **kwargs
+    beta=0.5,  # for EP/contrastive
+    **kwargs,
 )
 ```
 
@@ -83,7 +83,7 @@ from bioplausible.core.optimization.factory import STRATEGY_PRESETS
 
 # List available presets
 print(STRATEGY_PRESETS.keys())
-# ['backprop_plain', 'backprop_muon', 'plain_tp', 'muon_tp', 
+# ['backprop_plain', 'backprop_muon', 'plain_tp', 'muon_tp',
 #  'plain_pc', 'muon_pc', 'plain_hebbian', 'muon_hebbian',
 #  'smep', 'sdmep']  # MEP-style (need energy_fn)
 ```
@@ -104,7 +104,10 @@ print(STRATEGY_PRESETS.keys())
 ### Using Presets
 
 ```python
-from bioplausible.core.optimization.factory import make_strategy_optimizer, STRATEGY_PRESETS
+from bioplausible.core.optimization.factory import (
+    make_strategy_optimizer,
+    STRATEGY_PRESETS,
+)
 
 # Use a preset
 config = STRATEGY_PRESETS["muon_pc"]
@@ -226,7 +229,7 @@ config = STRATEGY_PRESETS["smep"]
 optimizer = make_strategy_optimizer(
     model=model,
     energy_fn=my_energy_fn,  # Required for EP-based presets
-    **config
+    **config,
 )
 ```
 

@@ -131,11 +131,28 @@ class CrossDomainBenchmarkSuite:
         """Get models compatible with a domain from registry."""
         # Domain-specific model families (hardcoded for now since registry doesn't have domain field)
         domain_models = {
-            "vision": ["backprop_mlp", "feedback_alignment", "eqprop_mlp", "forward_forward", "tile_mlp"],
-            "lm": ["backprop_transformer_lm", "eqprop_causal_transformer", "tile_transformer"],
+            "vision": [
+                "backprop_mlp",
+                "feedback_alignment",
+                "eqprop_mlp",
+                "forward_forward",
+                "tile_mlp",
+            ],
+            "lm": [
+                "backprop_transformer_lm",
+                "eqprop_causal_transformer",
+                "tile_transformer",
+            ],
             "rl": ["backprop_mlp", "feedback_alignment", "eqprop_mlp"],
             "graph": ["backprop_mlp", "graph_tile", "graph_tile_fa"],
-            "tabular": ["backprop_mlp", "feedback_alignment", "eqprop_mlp", "forward_forward", "hebbian_mlp", "tile_mlp"],
+            "tabular": [
+                "backprop_mlp",
+                "feedback_alignment",
+                "eqprop_mlp",
+                "forward_forward",
+                "hebbian_mlp",
+                "tile_mlp",
+            ],
             "timeseries": ["backprop_mlp", "feedback_alignment", "eqprop_mlp"],
             "scientific": ["backprop_mlp", "feedback_alignment", "eqprop_mlp"],
         }
