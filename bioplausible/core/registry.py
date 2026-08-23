@@ -122,6 +122,8 @@ class ComponentMetadata:
     # "mep", "equitile", etc. Directory layout mirrors this but `family` is the
     # canonical searchable attribute for grouping in the README/Registry queries.
     family: str = ""
+    # Domain support: "vision", "lm", "rl", "graph", "tabular", "timeseries", "scientific"
+    domain: str = ""
     # Required and provided capabilities (per REFACTOR3 §4)
     requires: list[str] = field(default_factory=list)
     provides: list[str] = field(default_factory=list)
@@ -145,6 +147,7 @@ class _QueryFilter:
     tags: list[str] | None = None
     credit_type: CreditAssignmentType | None = None
     family: str | None = None
+    domain: str | None = None
     _predicates: tuple[_Predicate, ...] = field(init=False, repr=False, default=())
 
     def __post_init__(self) -> None:
@@ -166,6 +169,8 @@ class _QueryFilter:
             predicates.append(_TagsAll(frozenset(self.tags)))
         if self.family is not None:
             predicates.append(_FamilyIs(self.family))
+        if self.domain is not None:
+            predicates.append(_DomainIs(self.domain))
         object.__setattr__(self, "_predicates", tuple(predicates))
 
     def matches(self, meta: ComponentMetadata) -> bool:
@@ -257,6 +262,16 @@ class _FamilyIs:
 
     def __call__(self, meta: ComponentMetadata) -> bool:
         return meta.family == self.family
+
+
+@dataclass(frozen=True, slots=True)
+class _DomainIs:
+    """True iff ``meta`` domain matches exactly."""
+
+    domain: str
+
+    def __call__(self, meta: ComponentMetadata) -> bool:
+        return meta.domain == self.domain
 
 
 class Registry:
@@ -470,6 +485,7 @@ class Registry:
         tags: list[str] | None = None,
         credit_type: CreditAssignmentType | None = None,
         family: str | None = None,
+        domain: str | None = None,
     ) -> list[dict[str, object]]:
         """Query registry with capability constraints.
 
@@ -486,6 +502,7 @@ class Registry:
             tags=tags,
             credit_type=credit_type,
             family=family,
+            domain=domain,
         )
         cats = [category] if category else list(cls._components.keys())
         categories = [cls._resolve_category(c) for c in cats]

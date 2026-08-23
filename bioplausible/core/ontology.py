@@ -1773,7 +1773,7 @@ class FeedforwardGeometry(nn.Module):
                 # Add after activation functions (ReLU, etc.)
                 acts.append(h)
         # Add final output if last layer was Linear (no trailing activation)
-        if isinstance(self._layers[-1], nn.Linear):
+        if self._layers and isinstance(self._layers[-1], nn.Linear):
             acts.append(h)
         return acts
 
@@ -2730,8 +2730,8 @@ class ModelAdapter:
             layers = self.model.transition_modules()  # type: ignore[attr-defined]
             geometry = FeedforwardGeometry(
                 GeometryConfig(
-                    input_dim=getattr(self.model, "input_dim", 0),
-                    output_dim=getattr(self.model, "output_dim", 0),
+                    input_dim=self._infer_input_dim(),
+                    output_dim=self._infer_output_dim(),
                     hidden_dims=self._infer_hidden_dims(),
                     num_layers=len(self._infer_hidden_dims()),
                     topology_type="feedforward",
@@ -2744,8 +2744,8 @@ class ModelAdapter:
         if geometry is None:
             geometry = FeedforwardGeometry(
                 GeometryConfig(
-                    input_dim=getattr(self.model, "input_dim", 0),
-                    output_dim=getattr(self.model, "output_dim", 0),
+                    input_dim=self._infer_input_dim(),
+                    output_dim=self._infer_output_dim(),
                     hidden_dims=self._infer_hidden_dims(),
                     num_layers=len(self._infer_hidden_dims()),
                     topology_type="feedforward",
@@ -2755,6 +2755,24 @@ class ModelAdapter:
             )
 
         return geometry
+
+    def _infer_input_dim(self) -> int:
+        if hasattr(self.model, "input_dim"):
+            return int(self.model.input_dim)
+        if isinstance(self.model, nn.Sequential):
+            for layer in self.model:
+                if isinstance(layer, nn.Linear):
+                    return layer.in_features
+        return 0
+
+    def _infer_output_dim(self) -> int:
+        if hasattr(self.model, "output_dim"):
+            return int(self.model.output_dim)
+        if isinstance(self.model, nn.Sequential):
+            for layer in reversed(self.model):
+                if isinstance(layer, nn.Linear):
+                    return layer.out_features
+        return 0
 
     def _infer_hidden_dims(self) -> tuple[int, ...]:
         if hasattr(self.model, "hidden_dims"):
@@ -2775,13 +2793,24 @@ class ModelAdapter:
                 hidden_dims = config.hidden_dims
                 if isinstance(hidden_dims, (list, tuple)):
                     return tuple(int(d) for d in hidden_dims)
+
+        # Try to infer from nn.Sequential or ModuleList
+        if isinstance(self.model, nn.Sequential):
+            dims = []
+            for layer in self.model:
+                if isinstance(layer, nn.Linear):
+                    if not dims:
+                        dims.append(layer.in_features)
+                    dims.append(layer.out_features)
+            if len(dims) >= 3:  # input, hidden..., output
+                return tuple(dims[1:-1])  # Exclude input and output
         return ()
 
     def _make_recurrent_geometry(self) -> RecurrentGeometry:
         return RecurrentGeometry(
             GeometryConfig(
-                input_dim=getattr(self.model, "input_dim", 0),
-                output_dim=getattr(self.model, "output_dim", 0),
+                input_dim=self._infer_input_dim(),
+                output_dim=self._infer_output_dim(),
                 hidden_dims=self._infer_hidden_dims(),
                 num_layers=len(self._infer_hidden_dims()),
                 topology_type="recurrent",

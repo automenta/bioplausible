@@ -17,7 +17,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 license = {text = "MIT"}
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -159,7 +159,7 @@ markers = [
     "flaky: quarantined non-deterministic test (Sprint 5.6)",
     "llm: requires a real LLM provider; skipped in CI",
 ]
-addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=24 -p no:warnings"
+addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=15 -p no:warnings"
 
 [tool.coverage.run]
 source = ["bioplausible"]

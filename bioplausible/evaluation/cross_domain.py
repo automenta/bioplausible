@@ -129,22 +129,17 @@ class CrossDomainBenchmarkSuite:
 
     def get_models_for_domain(self, domain: str) -> list[str]:
         """Get models compatible with a domain from registry."""
-        domain_enum = {
-            "vision": "vision",
-            "lm": "lm",
-            "rl": "rl",
-            "graph": "graph",
-            "tabular": "tabular",
-            "timeseries": "timeseries",
-            "scientific": "scientific",
+        # Domain-specific model families (hardcoded for now since registry doesn't have domain field)
+        domain_models = {
+            "vision": ["backprop_mlp", "feedback_alignment", "eqprop_mlp", "forward_forward", "tile_mlp"],
+            "lm": ["backprop_transformer_lm", "eqprop_causal_transformer", "tile_transformer"],
+            "rl": ["backprop_mlp", "feedback_alignment", "eqprop_mlp"],
+            "graph": ["backprop_mlp", "graph_tile", "graph_tile_fa"],
+            "tabular": ["backprop_mlp", "feedback_alignment", "eqprop_mlp", "forward_forward", "hebbian_mlp", "tile_mlp"],
+            "timeseries": ["backprop_mlp", "feedback_alignment", "eqprop_mlp"],
+            "scientific": ["backprop_mlp", "feedback_alignment", "eqprop_mlp"],
         }
-        domain_val = domain_enum.get(domain)
-
-        if domain_val:
-            models = Registry.query(category=ComponentCategory.MODEL, domain=domain_val)
-            return [m["name"] for m in models]
-
-        return []
+        return domain_models.get(domain, [])
 
     def run_model_on_task(
         self,

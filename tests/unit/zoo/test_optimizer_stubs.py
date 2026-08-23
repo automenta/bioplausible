@@ -56,10 +56,10 @@ def test_ewc_optimizer_update_fisher():
 
 
 def test_spectral_constraint_registered():
-    """SpectralConstraint is registered under the CONSTRAINT category."""
+    """SpectralConstraint is registered under the PARAM_UPDATE category."""
     from bioplausible.core.registry import ComponentCategory, Registry
 
-    cls = Registry.get(ComponentCategory.CONSTRAINT, "spectral")
+    cls = Registry.get(ComponentCategory.PARAM_UPDATE, "spectral")
     assert cls is not None
     assert cls.__name__ == "SpectralConstraint"
 
