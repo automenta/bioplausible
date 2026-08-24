@@ -687,10 +687,11 @@ def compose_system[
             nudged_state = self.dynamics.settle(
                 state, self.geometry, self.substrate, target=y
             )
+            # Compute loss before energy so InstantaneousDynamics.compute_energy can use it
+            nudged_state.loss = self._compute_loss(nudged_state, y)
             nudged_state.energy = self.dynamics.compute_energy(
                 nudged_state, self.geometry
             )
-            nudged_state.loss = self._compute_loss(nudged_state, y)
 
             # 4. CreditAssignment
             pseudo_grads = self.credit.compute_pseudo_gradient(
