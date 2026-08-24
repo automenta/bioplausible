@@ -58,25 +58,9 @@ def create_native_backprop_mlp(
 
     substrate = DigitalSubstrate()
     geometry = FeedforwardGeometry(geometry_cfg)
-    dynamics = InstantaneousDynamics(
-        StateDynamicsConfig(
-            dynamics_type="instantaneous",
-            max_steps=1,
-            beta=0.1,
-        )
-    )
-    credit = BackpropCredit(
-        CreditAssignmentConfig(
-            credit_type="gradient",
-            beta=0.5,
-        )
-    )
-    update = EuclideanUpdate(
-        ParameterUpdateConfig(
-            update_type="euclidean",
-            step_size=lr,
-        )
-    )
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    credit = BackpropCredit(CreditAssignmentConfig.gradient())
+    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=lr))
 
     return compose_system(substrate, geometry, dynamics, credit, update)
 

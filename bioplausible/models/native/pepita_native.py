@@ -63,16 +63,12 @@ def create_native_pepita_mlp(
     geometry = FeedforwardGeometry(geometry_cfg)
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = LocalGoodnessCredit(
-        CreditAssignmentConfig(
-            credit_type="local_goodness",
+        CreditAssignmentConfig.local_goodness(
             feedback_scale=0.01,
         )
     )
     update = EuclideanUpdate(
-        ParameterUpdateConfig(
-            update_type="euclidean",
-            step_size=lr,
-        )
+        ParameterUpdateConfig.euclidean(step_size=lr)
     )
 
     return compose_system(substrate, geometry, dynamics, credit, update)

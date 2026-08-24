@@ -22,6 +22,7 @@ from bioplausible.core.ontology import (
     FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
+    LocalGoodnessCredit,
     ParameterUpdateConfig,
     RandomProjectionsCredit,
     RecurrentGeometry,
@@ -248,6 +249,201 @@ def create_fa_mlp(
     return compose_system(substrate, geometry, dynamics, credit, update)
 
 
+def create_ff_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    layer_lr: float = 0.03,
+    classifier_lr: float = 0.01,
+    threshold: float = 2.0,
+    num_layers: int | None = None,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a Forward-Forward MLP system (5-D coordinate, native ontology).
+
+    Implements Hinton's Forward-Forward algorithm using the 5-D ontology:
+    - Two forward passes per batch (positive/negative with label injection)
+    - Layer-local goodness objective (sum of squared activations)
+    - Per-layer independent optimizers
+    - No backward pass through the network (biologically plausible)
+
+    Args:
+        input_dim: Input dimension (e.g., 784 for MNIST)
+        hidden_dims: Tuple of hidden layer dimensions (e.g., (256, 128))
+        output_dim: Output dimension (e.g., 10 for MNIST)
+        layer_lr: Learning rate for hidden layers
+        classifier_lr: Learning rate for output classifier
+        threshold: Goodness threshold for softplus loss
+        num_layers: Number of hidden layers (defaults to len(hidden_dims))
+        init_scale: Weight initialization scale
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System with custom Forward-Forward train_step.
+    """
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from torch.optim import Adam
+
+    substrate = _default_substrate(device)
+    geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
+    update = _default_update(layer_lr)
+
+    base_system = compose_system(substrate, geometry, dynamics, credit, update)
+
+    # Determine number of hidden layers
+    n_layers = num_layers if num_layers is not None else len(hidden_dims)
+
+    # Build per-layer linear modules with ReLU and L2 normalization to match FFLayer
+    # Geometry params are at even indices: 0, 2, 4... (Linear layers)
+    # with ReLU at odd indices: 1, 3, 5...
+    layer_dims = [input_dim] + list(hidden_dims[:n_layers])
+    layers = nn.ModuleList()
+    layer_opts = []
+    for i in range(n_layers):
+        # Custom layer with L2 normalization like FFLayer
+        class _FFLayer(nn.Module):
+            def __init__(self, in_features, out_features):
+                super().__init__()
+                self.linear = nn.Linear(in_features, out_features)
+                self.relu = nn.ReLU()
+
+            def forward(self, x):
+                # L2 normalize input like FFLayer
+                x_dir = x / (x.norm(2, 1, keepdim=True) + 1e-4)
+                return self.relu(self.linear(x_dir))
+
+        layer = _FFLayer(layer_dims[i], layer_dims[i + 1])
+        # Copy weights from geometry (even indices: 0, 2, 4...)
+        param_idx = 2 * i
+        weight_key = f"{param_idx}.weight"
+        bias_key = f"{param_idx}.bias"
+        if weight_key in geometry.params:
+            with torch.no_grad():
+                layer.linear.weight.copy_(geometry.params[weight_key])
+                if bias_key in geometry.params:
+                    layer.linear.bias.copy_(geometry.params[bias_key])
+        layers.append(layer.to(device))
+        layer_opts.append(Adam(layer.parameters(), lr=layer_lr, weight_decay=0.0))
+
+    # Classifier on top of concatenated hidden states
+    classifier_in_dim = sum(hidden_dims[:n_layers])
+    classifier = nn.Linear(classifier_in_dim, output_dim).to(device)
+    classifier_opt = Adam(classifier.parameters(), lr=classifier_lr, weight_decay=0.0)
+
+    # Create a wrapper system that delegates to base but overrides train_step
+    class _FFSystem:
+        def __init__(self, base):
+            self._base = base
+            self.substrate = base.substrate
+            self.geometry = base.geometry
+            self.dynamics = base.dynamics
+            self.credit = base.credit
+            self.update = base.update
+
+        def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+            if x.dim() > 2:
+                x = x.view(x.size(0), -1)
+            x = x.to(device)
+            y = y.to(device)
+
+            batch_size = x.shape[0]
+
+            # Create positive and negative inputs with label injection
+            x_pos = x.clone()
+            x_neg = x.clone()
+
+            y_neg = torch.randint(0, output_dim, (batch_size,), device=device)
+            for i in range(batch_size):
+                while y_neg[i] == y[i]:
+                    y_neg[i] = torch.randint(0, output_dim, (1,), device=device).item()
+
+            x_pos[:, :output_dim] = 0.0
+            x_neg[:, :output_dim] = 0.0
+            x_pos[range(batch_size), y] = x.max()
+            x_neg[range(batch_size), y_neg] = x.max()
+
+            total_loss = 0.0
+            h_pos, h_neg = x_pos, x_neg
+            hidden_states_pos = []
+
+            for i, (layer, opt) in enumerate(zip(layers, layer_opts)):
+                h_pos = layer(h_pos)
+                g_pos = (h_pos**2).mean(dim=1)
+
+                h_neg = layer(h_neg)
+                g_neg = (h_neg**2).mean(dim=1)
+
+                loss = F.softplus(
+                    torch.cat([-g_pos + threshold, g_neg - threshold])
+                ).mean()
+
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
+
+                total_loss += loss.item()
+
+                hidden_states_pos.append(h_pos.detach())
+
+                h_pos = h_pos.detach()
+                h_neg = h_neg.detach()
+
+            # Sync weights back to geometry for inference
+            # Geometry params are at even indices: 0, 2, 4...
+            with torch.no_grad():
+                for i, layer in enumerate(layers):
+                    param_idx = 2 * i
+                    weight_key = f"{param_idx}.weight"
+                    bias_key = f"{param_idx}.bias"
+                    if weight_key in geometry.params:
+                        geometry.params[weight_key].copy_(layer.linear.weight)
+                        if bias_key in geometry.params:
+                            geometry.params[bias_key].copy_(layer.linear.bias)
+
+            # Train classifier on concatenated hidden states
+            h_all = torch.cat(hidden_states_pos, dim=1).detach()
+            logits = classifier(h_all)
+            cls_loss = F.cross_entropy(logits, y)
+            cls_acc = (logits.argmax(-1) == y).float().mean().item()
+
+            classifier_opt.zero_grad()
+            cls_loss.backward()
+            classifier_opt.step()
+
+            return {
+                "loss": total_loss / max(n_layers, 1),
+                "accuracy": cls_acc,
+                "cls_loss": cls_loss.item(),
+            }
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            # Use custom layers + classifier for inference to match training
+            if x.dim() > 2:
+                x = x.view(x.size(0), -1)
+            x = x.to(device)
+            h = x
+            hidden_states = []
+            for layer in layers:
+                h = layer(h)
+                hidden_states.append(h)
+            h_all = torch.cat(hidden_states, dim=1)
+            return classifier(h_all)
+
+        def to_spec(self) -> dict:
+            return self._base.to_spec()
+
+        @classmethod
+        def from_spec(cls, spec: dict) -> System:
+            return base_system.from_spec(spec)
+
+    return _FFSystem(base_system)
+
+
 # ============================================================
 # 6-D Joint System Factories (Extended Ontology with Plasticity)
 # ============================================================
@@ -350,6 +546,7 @@ __all__ = [
     "create_backprop_mlp",
     "create_eqprop_mlp",
     "create_fa_mlp",
+    "create_ff_mlp",
     # 6-D factories
     "create_routing_mlp",
     "create_fast_weight_mlp",

@@ -672,7 +672,7 @@ def compose_system(
                 "energy": free_state.energy.item()
                 if free_state.energy is not None
                 else 0.0,
-                "accuracy": free_state.metrics.get("accuracy", 0.0),
+                "accuracy": nudged_state.metrics.get("accuracy", 0.0),
             }
 
         def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:
@@ -1185,7 +1185,7 @@ def compose_joint_system(
                 "energy": free_state.energy.item()
                 if free_state.energy is not None
                 else 0.0,
-                "accuracy": free_state.metrics.get("accuracy", 0.0),
+                "accuracy": nudged_state.metrics.get("accuracy", 0.0),
             }
 
         def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:
@@ -1194,7 +1194,13 @@ def compose_joint_system(
             if acts is None:
                 return torch.tensor(0.0)
             logits = acts[-1] if isinstance(acts, list) else acts
-            return torch.nn.functional.cross_entropy(logits, y)
+            loss = torch.nn.functional.cross_entropy(logits, y)
+            # Compute accuracy and store in state.metrics
+            with torch.no_grad():
+                preds = logits.argmax(dim=-1)
+                acc = (preds == y).float().mean().item()
+            state.metrics = {"accuracy": acc}
+            return loss
 
         def forward(self, x: Tensor) -> Tensor:
             """Inference forward pass (free phase only, no weight updates)."""

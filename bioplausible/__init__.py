@@ -21,6 +21,7 @@ One-Line System Construction:
         create_backprop_mlp,
         create_eqprop_mlp,
         create_fa_mlp,
+        create_ff_mlp,
         create_routing_mlp,
         create_fast_weight_mlp,
     )
@@ -32,6 +33,9 @@ One-Line System Construction:
         input_dim=784, hidden_dims=(256, 128), output_dim=10, beta=0.5, n_iters=20
     )
     system = create_fa_mlp(
+        input_dim=784, hidden_dims=(256, 128), output_dim=10
+    )
+    system = create_ff_mlp(
         input_dim=784, hidden_dims=(256, 128), output_dim=10
     )
     system = create_routing_mlp(
@@ -124,9 +128,10 @@ from bioplausible.core.presets import (
     create_backprop_mlp,
     create_eqprop_mlp,
     create_fa_mlp,
+    create_ff_mlp,
+    create_routing_mlp,
     create_fast_weight_mlp,
     # Preset factories (6-D)
-    create_routing_mlp,
 )
 from bioplausible.core.system_trainer import (
     # Trainers
@@ -258,6 +263,7 @@ __all__ = [
     "create_eqprop_system",
     "create_fa_mlp",
     "create_fa_system",
+    "create_ff_mlp",
     "create_fast_weight_mlp",
     "create_routing_mlp",
     "extract_config",
