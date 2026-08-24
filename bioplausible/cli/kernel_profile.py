@@ -118,8 +118,8 @@ def _create_joint_system(
     else:
         raise ValueError(f"Unknown geometry: {geometry_type}")
 
-    # Dynamics
-    if dynamics_type == "energy_minimization":
+    # Dynamics (support shorthands)
+    if dynamics_type in ("energy_minimization", "energy_min"):
         dynamics = EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(
                 max_steps=10, beta=0.5, step_size=0.1

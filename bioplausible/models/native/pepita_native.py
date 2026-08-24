@@ -67,9 +67,7 @@ def create_native_pepita_mlp(
             feedback_scale=0.01,
         )
     )
-    update = EuclideanUpdate(
-        ParameterUpdateConfig.euclidean(step_size=lr)
-    )
+    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=lr))
 
     return compose_system(substrate, geometry, dynamics, credit, update)
 

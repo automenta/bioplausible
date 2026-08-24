@@ -128,10 +128,10 @@ from bioplausible.core.presets import (
     create_backprop_mlp,
     create_eqprop_mlp,
     create_fa_mlp,
-    create_ff_mlp,
-    create_routing_mlp,
     create_fast_weight_mlp,
     # Preset factories (6-D)
+    create_ff_mlp,
+    create_routing_mlp,
 )
 from bioplausible.core.system_trainer import (
     # Trainers
@@ -263,8 +263,8 @@ __all__ = [
     "create_eqprop_system",
     "create_fa_mlp",
     "create_fa_system",
-    "create_ff_mlp",
     "create_fast_weight_mlp",
+    "create_ff_mlp",
     "create_routing_mlp",
     "extract_config",
 ]

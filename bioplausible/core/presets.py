@@ -283,8 +283,8 @@ def create_ff_mlp(
         A composed 5-D System with custom Forward-Forward train_step.
     """
     import torch
-    import torch.nn as nn
     import torch.nn.functional as F
+    from torch import nn
     from torch.optim import Adam
 
     substrate = _default_substrate(device)
