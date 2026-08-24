@@ -1,14 +1,30 @@
-# Computronium
+## 🌌 Searching for Computronium
 
-## 🧬 Introduction
+> **[Computronium](https://en.wikipedia.org/wiki/Computronium) is the theoretical limit of physical computation—matter organized to compute, learn, and adapt.** 
+> This framework is the scientific engine designed to discover it. We provide a rigorous, composable ontology for building learning systems out of local, physical dynamics, bridging the gap between abstract algorithms and the thermodynamic reality of optical, memristive, neuromorphic, biological, quantum, and other substrates.
 
-Modern deep learning is built on backpropagation — an algorithm that is mathematically elegant but physically impossible. It demands three things no physical or biological system can provide: symmetric feedback weights (weight transport), a global clock that freezes forward activity to propagate errors backward, and memory proportional to network depth. These constraints anchor deep learning to digital hardware, blocking its realization in analog circuits, neuromorphic chips, optical processors, and — most importantly — the brain.
+Modern deep learning has achieved miracles in the realm of mathematical abstraction. But abstraction hides physical cost. True intelligence in the natural world does not require global clocks, infinite memory for backward passes, or perfect numerical precision. It emerges from local interactions, energy minimization, and physical constraints. 
 
-Computronium is a research framework for the alternative: **learning algorithms whose synaptic updates depend only on signals locally available at each connection**. Instead of a global gradient, training emerges from local, energy-based dynamics — networks relax toward equilibrium and contrasts between free and nudged states drive weight changes. The implications are substantial: memory complexity becomes independent of depth, allowing arbitrarily deep networks on fixed hardware. Learning becomes asynchronous and event-driven, naturally matching the physics of analog substrates. Contractive dynamics confer fault tolerance: networks self-heal from perturbation, making them candidates for noisy, low-power, imprecise physical computation. The same locality that makes these algorithms biologically plausible also makes them physically realizable.
+The **Search for Computronium** is the quest to find learning algorithms that are native to the physical universe. It is about building systems that learn asynchronously, self-heal from noise, and operate at the thermodynamic limits of efficiency. To achieve this, we must decouple machine learning from the rigid, non-physical requirements of digital abstraction and embrace local, energy-based dynamics where networks relax toward equilibrium.
 
-The framework demonstrates that capabilities previously reserved for backpropagation can be matched under constrained hardware regimes where backpropagation is inapplicable. It provides a **composable framework** built on a **6-axis decomposition** that factors every learning system into orthogonal, composable primitives, plus the infrastructure to evaluate them rigorously and search the configuration space automatically.
+### 🎯 Why Computronium? (Choose Your Lens)
 
-The joint architecture extends the 5-D engine with a **Plasticity (MetaDynamics) axis**, elevating the computational rule itself to a dynamical variable. The mathematical center becomes the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$, enabling the **AutoScientist** to search over **composable coupled dynamical systems** — not just fixed learning algorithms. **The 5-D engine is recovered as the `M = NullPlasticity` slice** (`F_θ^Null = D_θ`), making the **Zero-Extension Invariant** a genuine consistency property, not just an integration test.
+Computronium is not just a software library; it is a **parameterized algorithm space** and a physics simulator for AI. Depending on your background, here is what the search for computronium unlocks for you:
+
+| Audience | The Paradigm Shift | What You Get |
+| :--- | :--- | :--- |
+| 🧠 **Natural Scientists & Physicists** | **Thermodynamic AI.** Computation as a physical process. | A mathematically rigorous playground for local, Hebbian, and contrastive learning that obeys thermodynamic constraints, Lyapunov stability, and physical passivity. |
+| 📊 **Data Scientists & ML Researchers** | **The Algorithmic Genome.** | A **6-D composable search space** to discover novel learning rules. Achieve O(1) memory credit assignment and train arbitrarily deep networks without the memory wall. |
+| 🛠️ **Hardware & Silicon Architects** | **Algorithm-Hardware Co-Design.** | Native physics modeling for Memristive (IR-drop), Optical (phase), and Quantum (unitary) substrates. Test your chip's physical realities against algorithmic stability *before* tape-out. |
+| 💻 **Systems Engineers & Developers** | **Correctness by Construction.** | Type-safe, property-locked (Hypothesis), and Triton-accelerated infrastructure. An `AutoScientist` that automates the scientific method across hardware topologies. |
+
+### 🧬 The Telescope: Coupled Dynamical Systems
+
+Historically, ML frameworks treat models as static computational graphs. To search for computronium, we must treat them as **coupled dynamical systems**. 
+
+By elevating the computational rule itself to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ that unifies fast neural activity, slow synaptic consolidation, and substrate physics into a single mathematical center. In this framework, standard digital backpropagation is not the default; it is merely recovered as a restricted, null-plasticity slice of a much larger, physically grounded universe.
+
+Computronium provides the ontology, the infrastructure, and the automated scientific engine to map the **physical limits of learning**.
 
 ---
 
