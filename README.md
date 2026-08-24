@@ -146,39 +146,39 @@ This enables the AutoScientist to reason about *physical realizability* and the 
 
 ## 🖥️ CLI Commands
 
-All entry points installed with `uv sync --dev`. The CLI has been consolidated under the `biopl` dispatcher:
+All entry points installed with `uv sync --dev`. The CLI has been consolidated under the `comp` dispatcher:
 
-### Main Dispatcher: `biopl`
+### Main Dispatcher: `comp`
 
 ```bash
-biopl <command> [args]
+comp <command> [args]
 ```
 
 | Subcommand | Purpose | Legacy Alias |
 |------------|---------|--------------|
-| `biopl run` | Campaign runner (validate/plan/run) | `biopl-run` |
-| `biopl report` | Render experiment reports | `biopl-report` |
-| `biopl parity` | Backprop parity benchmark | `biopl-parity` |
-| `biopl repro` | Reproducibility verification | `biopl-repro-check` |
-| `biopl hpo` | Hyperparameter optimization | `biopl-hpo` |
-| `biopl audit` | Registry metadata audit | `biopl-registry-audit` |
-| `biopl frontier` | Pareto frontier analysis | `biopl-frontier` |
-| `biopl rank` | Family ranking from HPO studies | `biopl-compare` |
-| `biopl lab` | Interactive experiments & model inspection | — |
-| `biopl joint-validate` | Validate arbitrary 6-D joint coordinates | — |
-| `biopl campaign` | Run/compare/resume joint campaigns | — |
-| `biopl stability` | Stability-plasticity frontier reports | — |
-| `biopl benchmark` | Run joint benchmark suites (adaptation, Z3, etc.) | — |
+| `comp run` | Campaign runner (validate/plan/run) | `comp-run` |
+| `comp report` | Render experiment reports | `comp-report` |
+| `comp parity` | Backprop parity benchmark | `comp-parity` |
+| `comp repro` | Reproducibility verification | `comp-repro-check` |
+| `comp hpo` | Hyperparameter optimization | `comp-hpo` |
+| `comp audit` | Registry metadata audit | `comp-registry-audit` |
+| `comp frontier` | Pareto frontier analysis | `comp-frontier` |
+| `comp rank` | Family ranking from HPO studies | `comp-compare` |
+| `comp lab` | Interactive experiments & model inspection | — |
+| `comp joint-validate` | Validate arbitrary 6-D joint coordinates | — |
+| `comp campaign` | Run/compare/resume joint campaigns | — |
+| `comp stability` | Stability-plasticity frontier reports | — |
+| `comp benchmark` | Run joint benchmark suites (adaptation, Z3, etc.) | — |
 
 ### Standalone Commands (for scripting/CI)
 
 | Command | Purpose |
 |---------|---------|
-| `biopl-scientist` | Autonomous experiment loop (AutoScientist hypercube campaigns) |
-| `biopl-failure-manifesto` | Structured negative result documentation |
-| `biopl-export-kernel` | Export kernel backend (untrained) |
-| `biopl-export-trained-kernel` | Train + export kernel backend with weights |
-| `biopl-p2p-worker` | P2P worker for distributed training (renamed from `eqprop-p2p-worker`) |
+| `comp-scientist` | Autonomous experiment loop (AutoScientist hypercube campaigns) |
+| `comp-failure-manifesto` | Structured negative result documentation |
+| `comp-export-kernel` | Export kernel backend (untrained) |
+| `comp-export-trained-kernel` | Train + export kernel backend with weights |
+| `comp-p2p-worker` | P2P worker for distributed training (renamed from `eqprop-p2p-worker`) |
 
 ---
 
@@ -206,9 +206,9 @@ Both biologically plausible and standard learning work!
 
 ```bash
 # Using preset YAML configs
-biopl run from-config --config configs/presets/eqprop_mnist.yaml
-biopl run from-config --config configs/presets/backprop_mnist.yaml
-biopl run from-config --config configs/presets/eqprop_routing_mnist.yaml
+comp run from-config --config configs/presets/eqprop_mnist.yaml
+comp run from-config --config configs/presets/backprop_mnist.yaml
+comp run from-config --config configs/presets/eqprop_routing_mnist.yaml
 ```
 
 ### Quickstart: Interactive Demo
@@ -471,11 +471,11 @@ class FrontierRecord:
 
 Commands:
 ```bash
-biopl benchmark run --suite adaptation_efficiency
-biopl benchmark run --suite compute_efficiency
-biopl benchmark run --suite structural_robustness
-biopl benchmark run --suite algorithm_migration
-biopl benchmark run --suite z3_fixed_weights
+comp benchmark run --suite adaptation_efficiency
+comp benchmark run --suite compute_efficiency
+comp benchmark run --suite structural_robustness
+comp benchmark run --suite algorithm_migration
+comp benchmark run --suite z3_fixed_weights
 ```
 
 ---
@@ -559,10 +559,10 @@ The framework supports **7 evaluation domains** with 60+ tasks/datasets, unified
 
 ```bash
 # Run vision benchmark (all models, all vision tasks)
-biopl lab benchmark --domain vision --quick
+comp lab benchmark --domain vision --quick
 
 # Run specific model on MNIST
-biopl lab core-train --model eqprop_mlp --task mnist --epochs 10
+comp lab core-train --model eqprop_mlp --task mnist --epochs 10
 
 # Cross-domain transfer: vision → LM
 python experiments/cross_domain_transfer.py --source vision --target lm
@@ -581,10 +581,10 @@ python experiments/cross_domain_transfer.py --source vision --target lm
 python experiments/language_modeling_comparison.py --epochs 50
 
 # Run LM benchmark
-biopl lab benchmark --domain lm --models backprop_transformer,eqprop_causal_transformer
+comp lab benchmark --domain lm --models backprop_transformer,eqprop_causal_transformer
 
 # AutoScientist campaign on LM
-biopl scientist --campaign campaigns/lm_hypercube.yaml
+comp scientist --campaign campaigns/lm_hypercube.yaml
 ```
 
 ---
@@ -597,10 +597,10 @@ biopl scientist --campaign campaigns/lm_hypercube.yaml
 
 ```bash
 # RL benchmark across algorithms
-biopl lab benchmark --domain rl --quick
+comp lab benchmark --domain rl --quick
 
 # EqProp on CartPole (energy-based policy)
-biopl lab core-train --model eqprop_ppo --task cartpole --epochs 100
+comp lab core-train --model eqprop_ppo --task cartpole --epochs 100
 
 # FA vs Backprop on continuous control
 python experiments/fa_rl_comparison.py --env pendulum --seeds 10
@@ -651,14 +651,14 @@ Decentralized coordination at `computronium/p2p/`:
 - 🔀 **DistributedSystemTrainer**: In-process multi-worker coordination; shards along TileGeometry, federates at ParameterUpdate
 - 🛡️ **Fault Tolerance**: `DistributedTrainingError` captures lost workers, step, partial metrics on gRPC failure
 
-CLI: `biopl-p2p-worker` starts a worker node (renamed from `eqprop-p2p-worker` — the P2P layer is algorithm-agnostic).
+CLI: `comp-p2p-worker` starts a worker node (renamed from `eqprop-p2p-worker` — the P2P layer is algorithm-agnostic).
 
 ```bash
 # Start a P2P worker
-biopl-p2p-worker --bootstrap-ip 192.168.1.100 --task mnist --mode deep
+comp-p2p-worker --bootstrap-ip 192.168.1.100 --task mnist --mode deep
 
 # Run distributed TileNet training
-biopl run --config campaigns/distributed_tile.yaml
+comp run --config campaigns/distributed_tile.yaml
 ```
 
 ---
