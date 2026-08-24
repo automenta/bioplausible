@@ -34,7 +34,7 @@ This decomposition transforms the framework from a "library of models" into a **
 ### Architecture Diagram
 
 ```mermaid
-graph LR
+flowchart LR
     S[Substrate] --> G[Geometry]
     G --> D[StateDynamics]
     D --> M[Plasticity]
