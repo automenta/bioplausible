@@ -6,21 +6,21 @@ Modern deep learning is built on backpropagation — an algorithm that is mathem
 
 Computronium is a research framework for the alternative: **learning algorithms whose synaptic updates depend only on signals locally available at each connection**. Instead of a global gradient, training emerges from local, energy-based dynamics — networks relax toward equilibrium and contrasts between free and nudged states drive weight changes. The implications are substantial: memory complexity becomes independent of depth, allowing arbitrarily deep networks on fixed hardware. Learning becomes asynchronous and event-driven, naturally matching the physics of analog substrates. Contractive dynamics confer fault tolerance: networks self-heal from perturbation, making them candidates for noisy, low-power, imprecise physical computation. The same locality that makes these algorithms biologically plausible also makes them physically realizable.
 
-The framework demonstrates that capabilities previously reserved for backpropagation can be matched — and in regimes backpropagation cannot reach, exceeded — by algorithms compatible with the actual physics of computation. It provides a **generative physico-computational engine** built on a **6-dimensional ontology** that decomposes every learning system into orthogonal, composable primitives, plus the infrastructure to evaluate them rigorously and discover better ones autonomously.
+The framework demonstrates that capabilities previously reserved for backpropagation can be matched under constrained hardware regimes where backpropagation is inapplicable. It provides a **composable framework** built on a **6-axis decomposition** that factors every learning system into orthogonal, composable primitives, plus the infrastructure to evaluate them rigorously and search the configuration space automatically.
 
-The joint architecture extends the 5-D engine with a **Plasticity (MetaDynamics) axis**, elevating the computational rule itself to a dynamical variable. The mathematical center becomes the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$, enabling the AutoScientist to search over **composable coupled dynamical systems** — not just fixed learning algorithms. **The 5-D engine is recovered as the `M = NullPlasticity` slice** (`F_θ^Null = D_θ`), making the Zero-Extension Theorem a genuine mathematical statement, not just an integration test.
+The joint architecture extends the 5-D engine with a **Plasticity (MetaDynamics) axis**, elevating the computational rule itself to a dynamical variable. The mathematical center becomes the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$, enabling the **AutoScientist** to search over **composable coupled dynamical systems** — not just fixed learning algorithms. **The 5-D engine is recovered as the `M = NullPlasticity` slice** (`F_θ^Null = D_θ`), making the **Zero-Extension Invariant** a genuine consistency property, not just an integration test.
 
 ---
 
-## 🔮 The 6-Dimensional Ontology
+## 🔮 The 6-Axis Decomposition
 
-Every learning system in Computronium maps uniquely to a coordinate in a tensor product of six fundamental axes:
+Every learning system in Computronium maps uniquely to a coordinate in a Cartesian product of six fundamental axes:
 
 ```
-System = Substrate ⊗ Geometry ⊗ StateDynamics ⊗ Plasticity ⊗ CreditAssignment ⊗ ParameterUpdate
+System = Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate
 ```
 
-This decomposition transforms the framework from a "library of models" into a **generative engine** — any valid combination of primitives yields a coherent learning system, and the space of all combinations is the search space for the AutoScientist.
+This decomposition transforms the framework from a "library of models" into a **parameterized algorithm space** — any valid combination of primitives yields a coherent learning system, and the space of all combinations is the search space for the **AutoScientist**.
 
 | Axis | Symbol | Role | Primitives |
 |------|:------:|------|------------|
@@ -107,13 +107,13 @@ The framework includes native implementations of novel research directions as fi
 
 | Model | Coordinate | Description |
 |-------|------------|-------------|
-| `holomorphic_ep` | `QuantumSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Complex-valued Equilibrium Propagation using holomorphic (analytic) activation functions and conjugate-transpose feedback pathways. Enables complex-domain credit assignment with potential for phase-based computation. |
-| `directed_ep` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ RandomProjections ⊗ EuclideanUpdate` | Directed/Asymmetric Equilibrium Propagation implementing Feedback Alignment within energy-based framework. Fixed random feedback matrices (no weight transport) with thermodynamic settling dynamics. |
-| `finite_nudge_ep` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast(beta≥1) ⊗ EuclideanUpdate` | Finite-Nudge Equilibrium Propagation using large β (finite nudge) instead of infinitesimal limit. Stronger supervision signals while maintaining equilibrium dynamics. |
-| `ternary_eqprop` | `TernarySubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Ternary-weight Equilibrium Propagation with STE-based quantization. Weights constrained to {-α, 0, +α}. |
-| `momentum_eqprop` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization(momentum) ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Heavy-ball settling dynamics for faster equilibrium convergence. |
-| `sparse_eqprop` | `SparseSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Dynamic sparsity masks with efficient sparse matmul. |
-| `diffusion_eqprop` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ DiffusionDynamics ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Continuous-time diffusion settling dynamics. |
+| `holomorphic_ep` | `QuantumSubstrate × RecurrentGeometry × EnergyMinimization × ThermodynamicContrast × EuclideanUpdate` | Complex-valued Equilibrium Propagation using holomorphic (analytic) activation functions and conjugate-transpose feedback pathways. Enables complex-domain credit assignment with potential for phase-based computation. |
+| `directed_ep` | `DigitalSubstrate × RecurrentGeometry × EnergyMinimization × RandomProjections × EuclideanUpdate` | Directed/Asymmetric Equilibrium Propagation implementing Feedback Alignment within energy-based framework. Fixed random feedback matrices (no weight transport) with thermodynamic settling dynamics. |
+| `finite_nudge_ep` | `DigitalSubstrate × RecurrentGeometry × EnergyMinimization × ThermodynamicContrast(beta≥1) × EuclideanUpdate` | Finite-Nudge Equilibrium Propagation using large β (finite nudge) instead of infinitesimal limit. Stronger supervision signals while maintaining equilibrium dynamics. |
+| `ternary_eqprop` | `TernarySubstrate × RecurrentGeometry × EnergyMinimization × ThermodynamicContrast × EuclideanUpdate` | Ternary-weight Equilibrium Propagation with STE-based quantization. Weights constrained to {-α, 0, +α}. |
+| `momentum_eqprop` | `DigitalSubstrate × RecurrentGeometry × EnergyMinimization(momentum) × ThermodynamicContrast × EuclideanUpdate` | Heavy-ball settling dynamics for faster equilibrium convergence. |
+| `sparse_eqprop` | `SparseSubstrate × RecurrentGeometry × EnergyMinimization × ThermodynamicContrast × EuclideanUpdate` | Dynamic sparsity masks with efficient sparse matmul. |
+| `diffusion_eqprop` | `DigitalSubstrate × RecurrentGeometry × DiffusionDynamics × ThermodynamicContrast × EuclideanUpdate` | Continuous-time diffusion settling dynamics. |
 
 These models are available via the native API in `computronium.models.native`:
 ```python
@@ -140,7 +140,7 @@ Energy binds Geometry and StateDynamics. The framework elevates the energy funct
 
 **Joint Architecture Extension**: The mathematical center is now the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$. The `StateRegistry` assigns lifecycle metadata to every variable (persistent θ, fast plastic ψ, substrate-owned σ, consolidatable), resolving ontological overlaps where a single physical variable (e.g., memristive conductance) serves multiple roles. Slow learning operates on persistent θ at episode boundaries: $\theta_{e+1} = U(\theta_e, C(\tau_e))$. **The 5-D energy-based dynamics are the restriction `F_θ^Null = D_θ` where `M=Null`, `ψ=∅`, `σ=σ₀`.**
 
-This enables the AutoScientist to reason about *physical realizability* and the **stability-plasticity frontier** as constraints, not afterthoughts.
+This enables the **AutoScientist** to reason about *physical realizability* and the **stability-plasticity trade-off** as constraints, not afterthoughts.
 
 ---
 
@@ -262,7 +262,7 @@ The joint dynamical system elevates the computational rule to a dynamical variab
 | `ModelAdapter` | Strangler Fig adapter: projects legacy Registry models → 5-D System via metadata inference with per-family tolerance calibration |
 | `Registry.to_system()` | One-call projection of any registered component |
 
-**Zero-Extension Theorem**: `M=Null, ψ=const, σ=σ₀ ⟹ F_θ(z)|_x = D_θ(x)`. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture. J1 test certifies this equivalence within numerical tolerance.
+**Zero-Extension Invariant**: `M=Null, ψ=const, σ=σ₀ ⟹ F_θ(z)|_x = D_θ(x)`. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture. J1 test certifies this equivalence within numerical tolerance.
 
 ### 4. Factories (`computronium/core/system_trainer.py`)
 
@@ -310,9 +310,9 @@ joint = compose_joint_system(
 
 ---
 
-## 🔬 Validation Framework: Machine-Certified Hypercube
+## 🔬 Validation Framework: Property-Verified Hypercube
 
-The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate certifies the entire hypercube in seconds on CPU.
+The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate validates the entire hypercube in seconds on CPU.
 
 ### ✅ Property Locks (L1–L7 + S/G/D/C/U/M Axes + J1–J7)
 
@@ -330,7 +330,7 @@ The framework enforces **correctness by construction** through a layered verific
 | **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |
 | **U-axis** | Muon orthogonalizes gradient (G^T G ≈ I); SpectralConstrained SVD ≤ 1.0; Natural whitens; Elastic moves toward old params | Newton-Schulz converges; diagonal Fisher whitening; δ·(w-old_w) < 0 |
 | **M-axis** | NullPlasticity Zero-Extension (`F_θ^Null = D_θ`); RoutingPlasticity gate entropy; FastWeightPlasticity decay bounds | Null ≡ 5-D; gate entropy ≥ 0; decay ∈ [0,1] |
-| **J1** | NullPlasticity preserves 5-D dynamics (Zero-Extension Theorem) | `F_θ^Null = D_θ` within numerical tolerance |
+| **J1** | NullPlasticity preserves 5-D dynamics (Zero-Extension Invariant) | `F_θ^Null = D_θ` within numerical tolerance |
 | **J2** | Persistent θ not mutated during intra-episode steps | θ data_ptr() unchanged during CoupledTransition.step |
 | **J3** | fast_plastic variables mutate only through plasticity projection | ψ updates only via PlasticityPrimitive.step |
 | **J4** | substrate_owned variables respect substrate physics constraints | σ updates only via Substrate.forward_operator |
@@ -403,11 +403,11 @@ uv run ruff format --check . && uv run ruff check .
 
 ---
 
-## 📐 Stability-Plasticity Frontier
+## 📐 Stability-Plasticity Trade-off Hypothesis
 
 v1 relied on strict Lyapunov descent and global contraction. In the joint architecture, we recognize that global contraction is a *sufficient* condition for a unique fixed point, but not a *necessary* condition for useful computation. Systems can exhibit local contraction, multiple attractors, limit cycles, or metastable states.
 
-### The Frontier Hypothesis
+### The Hypothesis
 
 We formulate the research object as:
 
@@ -482,7 +482,7 @@ comp benchmark run --suite z3_fixed_weights
 
 ## 🤖 Automated Research: Hypercube Campaigns
 
-The 6-D ontology gives the AutoScientist a **structured search space** instead of a flat model list:
+The 6-axis decomposition gives the **AutoScientist** a **structured search space** instead of a flat model list:
 
 | Campaign Type | Fixed Axes | Varied Axis | Example Hypothesis |
 |---------------|------------|-------------|-------------------|
@@ -491,7 +491,7 @@ The 6-D ontology gives the AutoScientist a **structured search space** instead o
 | Kinetics Discovery | S, G, D, C | U: Euclidean ↔ Riemannian ↔ Spectral ↔ Natural | Can Spectral constraints stabilize Memristive settling? |
 | Plasticity Search | S, G, D, C, U | M: Null ↔ Routing ↔ FastWeight | Does routing reduce compute at stability margin? |
 | Composite | S=Memristive, D=EnergyMinimization, M=Routing | U=SpectralConstrained | "IR-drop (S) + Routing (M) + Spectral (U) → stable settling (D)" |
-| Stability-Plasticity Frontier | S, G, D, C, U | M + ρ(J_F) constraint | Maximize adaptation s.t. ρ(J_F) ≈ 0.99 |
+| Stability-Plasticity Trade-off | S, G, D, C, U | M + ρ(J_F) constraint | Maximize adaptation s.t. ρ(J_F) ≈ 0.99 |
 
 **Key AutoScientist capabilities:**
 - 🧠 Chain-of-thought templates operating on ontology axes
@@ -528,7 +528,7 @@ The 6-D ontology gives the AutoScientist a **structured search space** instead o
 | Compute Efficiency | `experiments/joint/compute_efficiency.py` | Does routing reduce effective operations (dynamic sparsity)? |
 | Structural Robustness | `experiments/joint/structural_robustness.py` | Can joint system recover after topology/device damage via autonomous rerouting? |
 | Algorithm Migration | `experiments/joint/algorithm_migration.py` | Can ψ switch strategy A₀→A₁ without changing θ? (Experiment 3.5) |
-| Z3: Fixed Weights, Changing Algorithm | `experiments/joint/z3.py` | **Crown jewel**: Frozen θ, multiple tasks via ψ-mediated rule selection (Experiment 4) |
+| Z3: Fixed Weights, Changing Algorithm | `experiments/joint/z3.py` | Frozen θ, multiple tasks via ψ-mediated rule selection (Experiment 4) |
 
 ---
 
