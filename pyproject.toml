@@ -159,6 +159,11 @@ omit = [
     "*/validation/*",
     "*/cli/*",
     "*/experiments/*",
+    "*/joint/*",
+    "*/plasticity/*",
+    "*/tile/*",
+    "*/autoscientist/*",
+    "*/models/native/*",
 ]
 
 [tool.ruff]

@@ -100,9 +100,7 @@ def _recurrent_geometry(
 
 def _default_credit() -> BackpropCredit:
     """Create default backprop credit assignment."""
-    return BackpropCredit(
-        CreditAssignmentConfig.gradient()
-    )
+    return BackpropCredit(CreditAssignmentConfig.gradient())
 
 
 def _eqprop_credit(beta: float = 0.5) -> ThermodynamicContrast:

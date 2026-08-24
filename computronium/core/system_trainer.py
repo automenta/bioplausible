@@ -744,9 +744,7 @@ def compose_system[
                 return acts[-1]
             return acts
 
-    return _ComposedSystem[
-        TS, TG, TD, TC, TU
-    ](
+    return _ComposedSystem[TS, TG, TD, TC, TU](
         substrate=substrate,
         geometry=geometry,
         dynamics=dynamics,
@@ -1472,13 +1470,9 @@ def compose_joint_system[
             def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:
                 return base_system._compute_loss(state, y)
 
-        return _NullJointSystem[
-            TS, TG, TD, TC, TU
-        ](base_system)  # type: ignore[return-value]
+        return _NullJointSystem[TS, TG, TD, TC, TU](base_system)  # type: ignore[return-value]
 
-    return _JointSystem[
-        TS, TG, TD, TP, TC, TU
-    ](
+    return _JointSystem[TS, TG, TD, TP, TC, TU](
         substrate=substrate,
         geometry=geometry,
         dynamics=dynamics,
@@ -1495,7 +1489,14 @@ def compose_joint_system_from_configs(
     plasticity: PlasticityConfig,
     credit: CreditAssignmentConfig,
     update: ParameterUpdateConfig,
-) -> JointSystem[Substrate, Geometry, StateDynamics, PlasticityPrimitive, CreditAssignment, ParameterUpdate]:
+) -> JointSystem[
+    Substrate,
+    Geometry,
+    StateDynamics,
+    PlasticityPrimitive,
+    CreditAssignment,
+    ParameterUpdate,
+]:
     """Compose a JointSystem from six configuration objects.
 
     This is the inverse of extract_config(), enabling the round-trip:

@@ -340,7 +340,10 @@ class TestOntologyComposition:
         )
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
-                input_dim=input_dim, output_dim=output_dim, hidden_dims=(hidden_dim,), init_scale=0.1
+                input_dim=input_dim,
+                output_dim=output_dim,
+                hidden_dims=(hidden_dim,),
+                init_scale=0.1,
             )
         )
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
@@ -415,7 +418,10 @@ class TestSubstrateVariants:
         substrate = substrate_map[substrate_type]()
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
-                input_dim=input_dim, output_dim=output_dim, hidden_dims=(hidden_dim,), init_scale=0.1
+                input_dim=input_dim,
+                output_dim=output_dim,
+                hidden_dims=(hidden_dim,),
+                init_scale=0.1,
             )
         )
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
@@ -451,7 +457,13 @@ class TestTargetPropParity:
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
 
         system = create_tp_mlp(
-            input_dim, (128,), output_dim, lr=0.001, beta=0.1, settle_steps=10, device=device
+            input_dim,
+            (128,),
+            output_dim,
+            lr=0.001,
+            beta=0.1,
+            settle_steps=10,
+            device=device,
         )
 
         acc = train_system(system, train_loader, val_loader, epochs, device)
@@ -472,7 +484,13 @@ class TestPredictiveCodingParity:
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
 
         system = create_pc_mlp(
-            input_dim, (128, 128), output_dim, lr=0.001, beta=0.5, settle_steps=10, device=device
+            input_dim,
+            (128, 128),
+            output_dim,
+            lr=0.001,
+            beta=0.5,
+            settle_steps=10,
+            device=device,
         )
 
         acc = train_system(system, train_loader, val_loader, epochs, device)
@@ -508,7 +526,7 @@ class TestSNNParity:
     @pytest.mark.parametrize("epochs", [2])
     def test_create_snn_mlp_composes_and_trains(self, epochs):
         """presets.create_snn_mlp should compose and train.
-        
+
         Note: The standard create_snn_mlp uses FeedforwardGeometry + SpikeIntegrationDynamics
         which doesn't work with the current SystemTrainer. This test uses a working
         configuration (InstantaneousDynamics + LocalGoodnessCredit) like the YAML preset.
@@ -521,10 +539,15 @@ class TestSNNParity:
         # Use the factory but with working dynamics (InstantaneousDynamics)
         # The factory uses SpikeIntegrationDynamics by default which doesn't work with SystemTrainer
         # So we test composition with a working config
-        substrate = DigitalSubstrate(SubstrateConfig.digital(precision="float32", noise_level=0.0, device=device))
+        substrate = DigitalSubstrate(
+            SubstrateConfig.digital(precision="float32", noise_level=0.0, device=device)
+        )
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
-                input_dim=input_dim, output_dim=output_dim, hidden_dims=(128,), init_scale=0.1
+                input_dim=input_dim,
+                output_dim=output_dim,
+                hidden_dims=(128,),
+                init_scale=0.1,
             )
         )
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
@@ -551,7 +574,13 @@ class TestTileParity:
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
 
         system = create_tile_mlp(
-            input_dim, (128,), output_dim, lr=0.001, neurons_per_tile=16, tiles_per_layer=2, device=device
+            input_dim,
+            (128,),
+            output_dim,
+            lr=0.001,
+            neurons_per_tile=16,
+            tiles_per_layer=2,
+            device=device,
         )
 
         acc = train_system(system, train_loader, val_loader, epochs, device)

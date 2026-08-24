@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
 
 from compat import apply_compat_shims
@@ -474,14 +475,18 @@ def create_page(demo: DemoUi) -> None:
 
         async def train_one(panel: DemoPanel) -> None:
             loop = asyncio.get_running_loop()
-            if (
-                hasattr(panel, "_ontology_system")
-                and panel._ontology_system is not None
-            ):
-                # Train using the ontology system
-                await loop.run_in_executor(None, _run_ontology_system, panel)
-            else:
-                await loop.run_in_executor(None, run_headless, panel)
+            executor = ThreadPoolExecutor(max_workers=1)
+            try:
+                if (
+                    hasattr(panel, "_ontology_system")
+                    and panel._ontology_system is not None
+                ):
+                    # Train using the ontology system
+                    await loop.run_in_executor(executor, _run_ontology_system, panel)
+                else:
+                    await loop.run_in_executor(executor, run_headless, panel)
+            finally:
+                executor.shutdown(wait=True)
 
         await asyncio.gather(train_one(demo.panel_a), train_one(demo.panel_b))
 

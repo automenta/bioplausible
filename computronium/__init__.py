@@ -103,8 +103,14 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "BackpropCredit": ("computronium.core.ontology", "BackpropCredit"),
     "CreditAssignmentConfig": ("computronium.core.ontology", "CreditAssignmentConfig"),
     "DigitalSubstrate": ("computronium.core.ontology", "DigitalSubstrate"),
-    "ElasticConsolidationUpdate": ("computronium.core.ontology", "ElasticConsolidationUpdate"),
-    "EnergyMinimizationDynamics": ("computronium.core.ontology", "EnergyMinimizationDynamics"),
+    "ElasticConsolidationUpdate": (
+        "computronium.core.ontology",
+        "ElasticConsolidationUpdate",
+    ),
+    "EnergyMinimizationDynamics": (
+        "computronium.core.ontology",
+        "EnergyMinimizationDynamics",
+    ),
     "EuclideanUpdate": ("computronium.core.ontology", "EuclideanUpdate"),
     "FeedforwardGeometry": ("computronium.core.ontology", "FeedforwardGeometry"),
     "GeometryConfig": ("computronium.core.ontology", "GeometryConfig"),
@@ -115,13 +121,28 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "NeuromorphicSubstrate": ("computronium.core.ontology", "NeuromorphicSubstrate"),
     "OpticalSubstrate": ("computronium.core.ontology", "OpticalSubstrate"),
     "ParameterUpdateConfig": ("computronium.core.ontology", "ParameterUpdateConfig"),
-    "PredictiveSettlingDynamics": ("computronium.core.ontology", "PredictiveSettlingDynamics"),
+    "PredictiveSettlingDynamics": (
+        "computronium.core.ontology",
+        "PredictiveSettlingDynamics",
+    ),
     "QuantumSubstrate": ("computronium.core.ontology", "QuantumSubstrate"),
-    "RandomProjectionsCredit": ("computronium.core.ontology", "RandomProjectionsCredit"),
+    "RandomProjectionsCredit": (
+        "computronium.core.ontology",
+        "RandomProjectionsCredit",
+    ),
     "RecurrentGeometry": ("computronium.core.ontology", "RecurrentGeometry"),
-    "RiemannianOrthogonalUpdate": ("computronium.core.ontology", "RiemannianOrthogonalUpdate"),
-    "SpectralConstrainedUpdate": ("computronium.core.ontology", "SpectralConstrainedUpdate"),
-    "SpikeIntegrationDynamics": ("computronium.core.ontology", "SpikeIntegrationDynamics"),
+    "RiemannianOrthogonalUpdate": (
+        "computronium.core.ontology",
+        "RiemannianOrthogonalUpdate",
+    ),
+    "SpectralConstrainedUpdate": (
+        "computronium.core.ontology",
+        "SpectralConstrainedUpdate",
+    ),
+    "SpikeIntegrationDynamics": (
+        "computronium.core.ontology",
+        "SpikeIntegrationDynamics",
+    ),
     "StateDynamicsConfig": ("computronium.core.ontology", "StateDynamicsConfig"),
     "SubstrateConfig": ("computronium.core.ontology", "SubstrateConfig"),
     "System": ("computronium.core.ontology", "System"),
@@ -130,7 +151,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "TargetInversionCredit": ("computronium.core.ontology", "TargetInversionCredit"),
     "TemporalTraceCredit": ("computronium.core.ontology", "TemporalTraceCredit"),
     "ThermodynamicContrast": ("computronium.core.ontology", "ThermodynamicContrast"),
-    "ThermodynamicContrastCredit": ("computronium.core.ontology", "ThermodynamicContrastCredit"),
+    "ThermodynamicContrastCredit": (
+        "computronium.core.ontology",
+        "ThermodynamicContrastCredit",
+    ),
     "TileGeometry": ("computronium.core.ontology", "TileGeometry"),
     # Plasticity Primitives
     "FastWeightPlasticity": ("computronium.core.plasticity", "FastWeightPlasticity"),
@@ -138,7 +162,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "PlasticityConfig": ("computronium.core.plasticity", "PlasticityConfig"),
     "RoutingPlasticity": ("computronium.core.plasticity", "RoutingPlasticity"),
     "RuleStatePlasticity": ("computronium.core.plasticity", "RuleStatePlasticity"),
-    "SubstrateCoupledPlasticity": ("computronium.core.plasticity", "SubstrateCoupledPlasticity"),
+    "SubstrateCoupledPlasticity": (
+        "computronium.core.plasticity",
+        "SubstrateCoupledPlasticity",
+    ),
     # Preset Factories (5-D)
     "create_backprop_mlp": ("computronium.core.presets", "create_backprop_mlp"),
     "create_eqprop_mlp": ("computronium.core.presets", "create_eqprop_mlp"),
@@ -156,12 +183,27 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     # System Trainers
     "SystemTrainer": ("computronium.core.system_trainer", "SystemTrainer"),
     "SystemTrainerConfig": ("computronium.core.system_trainer", "SystemTrainerConfig"),
-    "compose_joint_system": ("computronium.core.system_trainer", "compose_joint_system"),
-    "compose_joint_system_from_configs": ("computronium.core.system_trainer", "compose_joint_system_from_configs"),
+    "compose_joint_system": (
+        "computronium.core.system_trainer",
+        "compose_joint_system",
+    ),
+    "compose_joint_system_from_configs": (
+        "computronium.core.system_trainer",
+        "compose_joint_system_from_configs",
+    ),
     "compose_system": ("computronium.core.system_trainer", "compose_system"),
-    "compose_system_from_configs": ("computronium.core.system_trainer", "compose_system_from_configs"),
-    "create_backprop_system": ("computronium.core.system_trainer", "create_backprop_system"),
-    "create_eqprop_system": ("computronium.core.system_trainer", "create_eqprop_system"),
+    "compose_system_from_configs": (
+        "computronium.core.system_trainer",
+        "compose_system_from_configs",
+    ),
+    "create_backprop_system": (
+        "computronium.core.system_trainer",
+        "create_backprop_system",
+    ),
+    "create_eqprop_system": (
+        "computronium.core.system_trainer",
+        "create_eqprop_system",
+    ),
     "create_fa_system": ("computronium.core.system_trainer", "create_fa_system"),
     "extract_config": ("computronium.core.system_trainer", "extract_config"),
     # Config/Experiment

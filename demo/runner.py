@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from threading import Lock
 
@@ -153,7 +154,7 @@ def model_metadata(model: str) -> dict[str, object]:
     """
     try:
         meta = Registry.get_metadata(ComponentCategory.MODEL, model)
-    except (ValueError, KeyError):
+    except ValueError, KeyError:
         return {}
     return {
         "bio_plausibility_score": meta.bio_plausibility_score,
@@ -199,6 +200,7 @@ def create_system(model: str, task: str, hidden_dim: int | None, device: str) ->
     output_dim = spec.output_dim
     if isinstance(input_dim, (tuple, list)):
         import math
+
         input_dim = math.prod(input_dim)
     if hidden_dim is None:
         hidden_dim = default_hidden_dim(model)
@@ -357,7 +359,9 @@ def prepare_trainer_config(
     if prev is not None:
         prev.max_epochs = int(epochs)
         return prev
-    return default_trainer_config(model=model, task=task, epochs=int(epochs), lr=float(lr))
+    return default_trainer_config(
+        model=model, task=task, epochs=int(epochs), lr=float(lr)
+    )
 
 
 def run_headless(panel: DemoPanel) -> None:
@@ -374,6 +378,7 @@ def run_headless(panel: DemoPanel) -> None:
         # The actual model is determined by the UI selection
         # This is a simplified version - the UI should pass the model name
         import sys
+
         model_name = getattr(panel, "_model_name", "backprop_mlp")
         task_name = getattr(panel, "_task_name", "mnist")
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -422,12 +427,11 @@ async def run_async(panel: DemoPanel) -> None:
     """Train a panel in a worker thread so the event loop stays responsive."""
     loop = asyncio.get_running_loop()
     # Use a dedicated thread pool executor that we can shut down
-    executor = panel._executor if hasattr(panel, "_executor") else None
+    executor = ThreadPoolExecutor(max_workers=1)
     try:
         await loop.run_in_executor(executor, run_headless, panel)
     finally:
-        if executor is not None:
-            executor.shutdown(wait=True)
+        executor.shutdown(wait=True)
 
 
 def elapsed(last: float) -> float:
