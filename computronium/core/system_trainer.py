@@ -411,6 +411,22 @@ class SystemTrainer:
         logger.info("Training complete")
         return self.history
 
+    def close(self) -> None:
+        """Clean up resources (e.g., move model to CPU, clear CUDA cache)."""
+        if hasattr(self, 'system') and self.system is not None:
+            if hasattr(self.system.geometry, "cpu"):
+                self.system.geometry.cpu()
+        if hasattr(self, 'device') and self.device.type == "cuda":
+            torch.cuda.empty_cache()
+        logger.info("SystemTrainer resources cleaned up")
+
+    def __enter__(self) -> SystemTrainer:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+        return False
+
 
 def compose_system(
     substrate: Substrate,

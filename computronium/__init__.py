@@ -35,7 +35,7 @@ One-Line System Construction:
         input_dim=784, hidden_dims=(256, 128), output_dim=10
     )
     system = create_eqprop_mlp(
-        input_dim=784, hidden_dims=(256, 128), output_dim=10, beta=0.5, n_iters=20
+        input_dim=784, hidden_dims=(512, 512, 512), output_dim=10, beta=0.1, inference_steps=20
     )
     system = create_fa_mlp(
         input_dim=784, hidden_dims=(256, 128), output_dim=10
@@ -90,93 +90,81 @@ compatibility alias map to the model-side registration
 
 __version__ = "1.0.0"
 
-# Eager imports for core API (always available)
-from computronium.core.joint import (
-    # Joint 6-D architecture
-    CompositeState,
-    CoupledTransition,
-    StateRegistry,
-    SystemContext,
-)
-from computronium.core.ontology import (
-    AnalogSubstrate,
-    BackpropCredit,
-    CreditAssignmentConfig,
-    DigitalSubstrate,
-    ElasticConsolidationUpdate,
-    EnergyMinimizationDynamics,
-    EuclideanUpdate,
-    FeedforwardGeometry,
-    GeometryConfig,
-    InstantaneousDynamics,
-    LocalGoodnessCredit,
-    MemristiveSubstrate,
-    NaturalGradientUpdate,
-    NeuromorphicSubstrate,
-    OpticalSubstrate,
-    ParameterUpdateConfig,
-    PredictiveSettlingDynamics,
-    QuantumSubstrate,
-    RandomProjectionsCredit,
-    RecurrentGeometry,
-    RiemannianOrthogonalUpdate,
-    SpectralConstrainedUpdate,
-    SpikeIntegrationDynamics,
-    StateDynamicsConfig,
-    SubstrateConfig,
-    # Core 5-D ontology
-    System,
-    SystemConfig,
-    SystemState,
-    TargetInversionCredit,
-    TemporalTraceCredit,
-    ThermodynamicContrast,
-    ThermodynamicContrastCredit,  # alias
-    TileGeometry,
-)
-from computronium.core.plasticity import (
-    FastWeightPlasticity,
-    # Plasticity primitives
-    NullPlasticity,
-    PlasticityConfig,
-    RoutingPlasticity,
-    RuleStatePlasticity,
-    SubstrateCoupledPlasticity,
-)
-from computronium.core.presets import (
-    # Preset factories (5-D)
-    create_backprop_mlp,
-    create_eqprop_mlp,
-    create_fa_mlp,
-    create_ff_mlp,
-    create_pepita_mlp,
-    create_tp_mlp,
-    create_pc_mlp,
-    create_hebbian_mlp,
-    create_snn_mlp,
-    # Preset factories (6-D)
-    create_routing_mlp,
-    create_fast_weight_mlp,
-)
-from computronium.core.system_trainer import (
-    # Trainers
-    SystemTrainer,
-    SystemTrainerConfig,
-    compose_joint_system,
-    compose_joint_system_from_configs,
-    # System composition (5-D and 6-D)
-    compose_system,
-    compose_system_from_configs,
-    # Core system factories
-    create_backprop_system,
-    create_eqprop_system,
-    create_fa_system,
-    extract_config,
-)
-
-# Lazy imports for heavy dependencies (zoo, experiment, config)
+# Lazy imports for heavy dependencies (zoo, experiment, config, core components)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
 _LAZY: dict[str, tuple[str, str | None]] = {
+    # 6-D Joint Architecture
+    "CompositeState": ("computronium.core.joint.state", "CompositeState"),
+    "CoupledTransition": ("computronium.core.joint.transition", "CoupledTransition"),
+    "StateRegistry": ("computronium.core.joint.state", "StateRegistry"),
+    "SystemContext": ("computronium.core.joint.context", "SystemContext"),
+    # Core 5-D Ontology
+    "AnalogSubstrate": ("computronium.core.ontology", "AnalogSubstrate"),
+    "BackpropCredit": ("computronium.core.ontology", "BackpropCredit"),
+    "CreditAssignmentConfig": ("computronium.core.ontology", "CreditAssignmentConfig"),
+    "DigitalSubstrate": ("computronium.core.ontology", "DigitalSubstrate"),
+    "ElasticConsolidationUpdate": ("computronium.core.ontology", "ElasticConsolidationUpdate"),
+    "EnergyMinimizationDynamics": ("computronium.core.ontology", "EnergyMinimizationDynamics"),
+    "EuclideanUpdate": ("computronium.core.ontology", "EuclideanUpdate"),
+    "FeedforwardGeometry": ("computronium.core.ontology", "FeedforwardGeometry"),
+    "GeometryConfig": ("computronium.core.ontology", "GeometryConfig"),
+    "InstantaneousDynamics": ("computronium.core.ontology", "InstantaneousDynamics"),
+    "LocalGoodnessCredit": ("computronium.core.ontology", "LocalGoodnessCredit"),
+    "MemristiveSubstrate": ("computronium.core.ontology", "MemristiveSubstrate"),
+    "NaturalGradientUpdate": ("computronium.core.ontology", "NaturalGradientUpdate"),
+    "NeuromorphicSubstrate": ("computronium.core.ontology", "NeuromorphicSubstrate"),
+    "OpticalSubstrate": ("computronium.core.ontology", "OpticalSubstrate"),
+    "ParameterUpdateConfig": ("computronium.core.ontology", "ParameterUpdateConfig"),
+    "PredictiveSettlingDynamics": ("computronium.core.ontology", "PredictiveSettlingDynamics"),
+    "QuantumSubstrate": ("computronium.core.ontology", "QuantumSubstrate"),
+    "RandomProjectionsCredit": ("computronium.core.ontology", "RandomProjectionsCredit"),
+    "RecurrentGeometry": ("computronium.core.ontology", "RecurrentGeometry"),
+    "RiemannianOrthogonalUpdate": ("computronium.core.ontology", "RiemannianOrthogonalUpdate"),
+    "SpectralConstrainedUpdate": ("computronium.core.ontology", "SpectralConstrainedUpdate"),
+    "SpikeIntegrationDynamics": ("computronium.core.ontology", "SpikeIntegrationDynamics"),
+    "StateDynamicsConfig": ("computronium.core.ontology", "StateDynamicsConfig"),
+    "SubstrateConfig": ("computronium.core.ontology", "SubstrateConfig"),
+    "System": ("computronium.core.ontology", "System"),
+    "SystemConfig": ("computronium.core.ontology", "SystemConfig"),
+    "SystemState": ("computronium.core.ontology", "SystemState"),
+    "TargetInversionCredit": ("computronium.core.ontology", "TargetInversionCredit"),
+    "TemporalTraceCredit": ("computronium.core.ontology", "TemporalTraceCredit"),
+    "ThermodynamicContrast": ("computronium.core.ontology", "ThermodynamicContrast"),
+    "ThermodynamicContrastCredit": ("computronium.core.ontology", "ThermodynamicContrastCredit"),
+    "TileGeometry": ("computronium.core.ontology", "TileGeometry"),
+    # Plasticity Primitives
+    "FastWeightPlasticity": ("computronium.core.plasticity", "FastWeightPlasticity"),
+    "NullPlasticity": ("computronium.core.plasticity", "NullPlasticity"),
+    "PlasticityConfig": ("computronium.core.plasticity", "PlasticityConfig"),
+    "RoutingPlasticity": ("computronium.core.plasticity", "RoutingPlasticity"),
+    "RuleStatePlasticity": ("computronium.core.plasticity", "RuleStatePlasticity"),
+    "SubstrateCoupledPlasticity": ("computronium.core.plasticity", "SubstrateCoupledPlasticity"),
+    # Preset Factories (5-D)
+    "create_backprop_mlp": ("computronium.core.presets", "create_backprop_mlp"),
+    "create_eqprop_mlp": ("computronium.core.presets", "create_eqprop_mlp"),
+    "create_fa_mlp": ("computronium.core.presets", "create_fa_mlp"),
+    "create_ff_mlp": ("computronium.core.presets", "create_ff_mlp"),
+    "create_pepita_mlp": ("computronium.core.presets", "create_pepita_mlp"),
+    "create_tp_mlp": ("computronium.core.presets", "create_tp_mlp"),
+    "create_pc_mlp": ("computronium.core.presets", "create_pc_mlp"),
+    "create_hebbian_mlp": ("computronium.core.presets", "create_hebbian_mlp"),
+    "create_snn_mlp": ("computronium.core.presets", "create_snn_mlp"),
+    "create_tile_mlp": ("computronium.core.presets", "create_tile_mlp"),
+    # Preset Factories (6-D)
+    "create_routing_mlp": ("computronium.core.presets", "create_routing_mlp"),
+    "create_fast_weight_mlp": ("computronium.core.presets", "create_fast_weight_mlp"),
+    # System Trainers
+    "SystemTrainer": ("computronium.core.system_trainer", "SystemTrainer"),
+    "SystemTrainerConfig": ("computronium.core.system_trainer", "SystemTrainerConfig"),
+    "compose_joint_system": ("computronium.core.system_trainer", "compose_joint_system"),
+    "compose_joint_system_from_configs": ("computronium.core.system_trainer", "compose_joint_system_from_configs"),
+    "compose_system": ("computronium.core.system_trainer", "compose_system"),
+    "compose_system_from_configs": ("computronium.core.system_trainer", "compose_system_from_configs"),
+    "create_backprop_system": ("computronium.core.system_trainer", "create_backprop_system"),
+    "create_eqprop_system": ("computronium.core.system_trainer", "create_eqprop_system"),
+    "create_fa_system": ("computronium.core.system_trainer", "create_fa_system"),
+    "extract_config": ("computronium.core.system_trainer", "extract_config"),
+    # Config/Experiment
     "ExperimentConfig": ("computronium.config.experiment", "ExperimentConfig"),
     "ModelConfig": ("computronium.config.experiment", "ModelConfig"),
     "TrainingConfig": ("computronium.config.experiment", "TrainingConfig"),
@@ -194,6 +182,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {
         "computronium.config.experiment",
         "make_timeseries_preset",
     ),
+    # Native Models
     "native_eqprop_mlp": (
         "computronium.models.native.eqprop_native",
         "native_eqprop_mlp",
@@ -226,6 +215,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {
         "computronium.models.native.tile_native",
         "native_tile_snn",
     ),
+    # MEP Presets
     "muon_backprop": ("computronium.zoo.mep.presets", "muon_backprop"),
     "smep": ("computronium.zoo.mep.presets", "smep"),
     "smep_fast": ("computronium.zoo.mep.presets", "smep_fast"),

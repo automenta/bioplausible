@@ -137,6 +137,7 @@ TRAINABLE_MODELS: tuple[str, ...] = (
     "pc_mlp",
     "hebbian_mlp",
     "snn_mlp",
+    "tile_mlp",
     "routing_mlp",
     "fast_weight_mlp",
 )
@@ -180,6 +181,7 @@ _DEFAULT_HIDDEN_DIM: dict[str, int] = {
     "pc_mlp": 128,
     "hebbian_mlp": 128,
     "snn_mlp": 128,
+    "tile_mlp": 128,
     "routing_mlp": 128,
     "fast_weight_mlp": 128,
 }
@@ -215,8 +217,8 @@ def create_system(model: str, task: str, hidden_dim: int | None, device: str) ->
             input_dim=input_dim,
             hidden_dims=(hidden_dim, hidden_dim),
             output_dim=output_dim,
-            beta=0.5,
-            n_iters=20,
+            beta=0.1,
+            inference_steps=20,
             lr=0.001,
             device=device,
         )
@@ -273,6 +275,14 @@ def create_system(model: str, task: str, hidden_dim: int | None, device: str) ->
         )
     elif model == "snn_mlp":
         return create_snn_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            lr=0.001,
+            device=device,
+        )
+    elif model == "tile_mlp":
+        return create_tile_mlp(
             input_dim=input_dim,
             hidden_dims=(hidden_dim, hidden_dim),
             output_dim=output_dim,
@@ -399,7 +409,8 @@ def run_headless(panel: DemoPanel) -> None:
             val_data=val_loader,
         )
         trainer.add_execution_callback(_DemoCallback(panel, trainer.system.geometry))
-        trainer.fit()
+        with trainer:
+            trainer.fit()
     except Exception as e:
         panel.error = str(e)
     finally:
@@ -410,7 +421,13 @@ def run_headless(panel: DemoPanel) -> None:
 async def run_async(panel: DemoPanel) -> None:
     """Train a panel in a worker thread so the event loop stays responsive."""
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, run_headless, panel)
+    # Use a dedicated thread pool executor that we can shut down
+    executor = panel._executor if hasattr(panel, "_executor") else None
+    try:
+        await loop.run_in_executor(executor, run_headless, panel)
+    finally:
+        if executor is not None:
+            executor.shutdown(wait=True)
 
 
 def elapsed(last: float) -> float:

@@ -154,11 +154,11 @@ def create_backprop_mlp(
 
 def create_eqprop_mlp(
     input_dim: int,
-    hidden_dims: tuple[int, ...],
-    output_dim: int,
-    beta: float = 0.5,
-    n_iters: int = 20,
-    lr: float = 0.01,
+    hidden_dims: tuple[int, ...] = (512, 512, 512),
+    output_dim: int = 10,
+    beta: float = 0.1,
+    inference_steps: int = 20,
+    lr: float = 0.001,
     init_scale: float = 0.1,
     device: str = "cpu",
 ) -> System:
@@ -166,11 +166,11 @@ def create_eqprop_mlp(
 
     Args:
         input_dim: Input dimension (e.g., 784 for MNIST)
-        hidden_dims: Tuple of hidden layer dimensions (e.g., (256, 128))
+        hidden_dims: Tuple of hidden layer dimensions (default: 3 layers of 512)
         output_dim: Output dimension (e.g., 10 for MNIST)
-        beta: Nudge strength for EqProp
-        n_iters: Number of settling iterations
-        lr: Learning rate
+        beta: Nudge strength for EqProp (default: 0.1, matches vision parity)
+        inference_steps: Number of settling iterations (default: 20)
+        lr: Learning rate (default: 0.001, matches vision parity)
         init_scale: Weight initialization scale
         device: Target device ("cpu" or "cuda")
 
@@ -182,7 +182,7 @@ def create_eqprop_mlp(
     geometry = _recurrent_geometry(input_dim, hidden_dims, output_dim, init_scale)
     dynamics = EnergyMinimizationDynamics(
         StateDynamicsConfig.energy_minimization(
-            max_steps=n_iters,
+            max_steps=inference_steps,
             convergence_threshold=1e-4,
             convergence_start=5,
             step_size=0.1,
@@ -723,6 +723,62 @@ def create_fast_weight_mlp(
     )
 
 
+def create_tile_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    neurons_per_tile: int = 8,
+    tiles_per_layer: int = 2,
+    device: str = "cpu",
+) -> System:
+    """Create a Tile MLP system (5-D coordinate with TileGeometry).
+
+    TileGeometry organizes neurons into tiles with local connectivity,
+    enabling structured sparsity and efficient computation.
+
+    Args:
+        input_dim: Input dimension
+        hidden_dims: Tuple of hidden layer dimensions
+        output_dim: Output dimension
+        lr: Learning rate
+        init_scale: Weight initialization scale
+        neurons_per_tile: Number of neurons per tile
+        tiles_per_layer: Number of tiles per layer
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System with TileGeometry + InstantaneousDynamics
+        + BackpropCredit + EuclideanUpdate
+    """
+    substrate = _default_substrate(device)
+    geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    # Replace with TileGeometry
+    from computronium.core.ontology import TileGeometry, GeometryConfig
+
+    tile_cfg = GeometryConfig(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_dims=hidden_dims,
+        num_layers=len(hidden_dims) + 1,
+        topology_type="tile_mesh",
+        connectivity=None,
+        recurrent_weight=None,
+        init_scale=init_scale,
+    )
+    geometry = TileGeometry(
+        tile_cfg,
+        neurons_per_tile=neurons_per_tile,
+        tiles_per_layer=tiles_per_layer,
+    )
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    credit = _default_credit()
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
 __all__ = [
     # 5-D factories
     "create_backprop_mlp",
@@ -734,6 +790,7 @@ __all__ = [
     "create_pc_mlp",
     "create_hebbian_mlp",
     "create_snn_mlp",
+    "create_tile_mlp",
     # 6-D factories
     "create_routing_mlp",
     "create_fast_weight_mlp",

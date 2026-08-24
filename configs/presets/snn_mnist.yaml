@@ -1,4 +1,4 @@
-# EqProp MLP on MNIST - 5-D coordinate (Competitive Vision Parity Config)
+# Spiking Neural Network MLP on MNIST - 5-D coordinate
 substrate:
   type: digital
   precision: float32
@@ -8,19 +8,19 @@ substrate:
   device: auto
 
 geometry:
-  type: recurrent
+  type: feedforward
   input_dim: 784
   output_dim: 10
-  hidden_dims: [512, 512, 512]
+  hidden_dims: [256, 256]
   num_layers: 3
-  topology_type: recurrent
+  topology_type: feedforward
   connectivity: null
   recurrent_weight: null
   init_scale: 0.1
 
 dynamics:
-  type: energy_minimization
-  max_steps: 20
+  type: spike_integration
+  max_steps: 30
   convergence_threshold: 1e-4
   convergence_start: 5
   step_size: 0.1
@@ -32,8 +32,8 @@ plasticity:
   type: null
 
 credit:
-  type: thermodynamic_contrast
-  beta: 0.1
+  type: temporal_trace
+  beta: 0.5
   feedback_matrix: null
   local_objective: mse
   orthogonal_init: false
@@ -49,8 +49,8 @@ update:
   ewc_lambda: 1000.0
 
 training:
-  max_epochs: 20
-  batch_size: 128
+  max_epochs: 10
+  batch_size: 64
   val_batch_size: 64
   lr: 0.001
   device: auto

@@ -1,4 +1,4 @@
-# EqProp MLP on MNIST - 5-D coordinate (Competitive Vision Parity Config)
+# Forward-Forward MLP on MNIST - 5-D coordinate
 substrate:
   type: digital
   precision: float32
@@ -8,51 +8,40 @@ substrate:
   device: auto
 
 geometry:
-  type: recurrent
+  type: feedforward
   input_dim: 784
   output_dim: 10
-  hidden_dims: [512, 512, 512]
+  hidden_dims: [256, 256]
   num_layers: 3
-  topology_type: recurrent
+  topology_type: feedforward
   connectivity: null
   recurrent_weight: null
   init_scale: 0.1
 
 dynamics:
-  type: energy_minimization
-  max_steps: 20
-  convergence_threshold: 1e-4
-  convergence_start: 5
-  step_size: 0.1
-  beta: 0.1
-  momentum: 0.0
-  track_free_energy_per_iter: false
+  type: instantaneous
 
 plasticity:
   type: null
 
 credit:
-  type: thermodynamic_contrast
-  beta: 0.1
-  feedback_matrix: null
-  local_objective: mse
-  orthogonal_init: false
+  type: local_goodness
   feedback_scale: 0.01
 
 update:
   type: euclidean
-  step_size: 0.001
-  momentum: 0.9
+  step_size: 0.03
+  momentum: 0.0
   ortho_steps: 5
   spectral_norm: 1.0
   fisher_damping: 1e-3
   ewc_lambda: 1000.0
 
 training:
-  max_epochs: 20
-  batch_size: 128
+  max_epochs: 3
+  batch_size: 64
   val_batch_size: 64
-  lr: 0.001
+  lr: 0.03
   device: auto
   grad_clip: 1.0
   track_energy: true
