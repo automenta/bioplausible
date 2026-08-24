@@ -72,21 +72,18 @@ def create_native_tile_ep(
         tiles_per_layer=tiles_per_layer,
     )
     dynamics = EnergyMinimizationDynamics(
-        StateDynamicsConfig(
-            dynamics_type="energy_minimization",
+        StateDynamicsConfig.energy_minimization(
             max_steps=settle_steps,
             beta=beta,
         )
     )
     credit = ThermodynamicContrast(
-        CreditAssignmentConfig(
-            credit_type="thermodynamic_contrast",
+        CreditAssignmentConfig.thermodynamic_contrast(
             beta=beta,
         )
     )
     update = EuclideanUpdate(
-        ParameterUpdateConfig(
-            update_type="euclidean",
+        ParameterUpdateConfig.euclidean(
             step_size=lr,
         )
     )
@@ -134,22 +131,15 @@ def create_native_tile_fa(
         neurons_per_tile=neurons_per_tile,
         tiles_per_layer=tiles_per_layer,
     )
-    dynamics = InstantaneousDynamics(
-        StateDynamicsConfig(
-            dynamics_type="instantaneous",
-            max_steps=1,
-            beta=0.1,
-        )
-    )
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = RandomProjectionsCredit(
-        CreditAssignmentConfig(
-            credit_type="random_projections",
+        CreditAssignmentConfig.random_projections(
+            beta=0.5,
             feedback_scale=0.01,
         )
     )
     update = EuclideanUpdate(
-        ParameterUpdateConfig(
-            update_type="euclidean",
+        ParameterUpdateConfig.euclidean(
             step_size=lr,
         )
     )
@@ -202,21 +192,19 @@ def create_native_tile_tp(
         tiles_per_layer=tiles_per_layer,
     )
     dynamics = PredictiveSettlingDynamics(
-        StateDynamicsConfig(
-            dynamics_type="predictive_settling",
+        StateDynamicsConfig.predictive_settling(
             max_steps=settle_steps,
             beta=beta,
         )
     )
     credit = TargetInversionCredit(
-        CreditAssignmentConfig(
-            credit_type="target_inversion",
+        CreditAssignmentConfig.target_inversion(
+            beta=beta,
             feedback_scale=0.01,
         )
     )
     update = EuclideanUpdate(
-        ParameterUpdateConfig(
-            update_type="euclidean",
+        ParameterUpdateConfig.euclidean(
             step_size=lr,
         )
     )
@@ -265,21 +253,18 @@ def create_native_tile_snn(
         tiles_per_layer=tiles_per_layer,
     )
     dynamics = SpikeIntegrationDynamics(
-        StateDynamicsConfig(
-            dynamics_type="spike_integration",
+        StateDynamicsConfig.spike_integration(
             max_steps=30,
             beta=0.1,
         )
     )
     credit = LocalGoodnessCredit(
-        CreditAssignmentConfig(
-            credit_type="local_goodness",
+        CreditAssignmentConfig.local_goodness(
             feedback_scale=0.01,
         )
     )
     update = EuclideanUpdate(
-        ParameterUpdateConfig(
-            update_type="euclidean",
+        ParameterUpdateConfig.euclidean(
             step_size=lr,
         )
     )

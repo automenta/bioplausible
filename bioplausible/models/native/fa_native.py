@@ -58,23 +58,15 @@ def create_native_fa_mlp(
 
     substrate = DigitalSubstrate()
     geometry = FeedforwardGeometry(geometry_cfg)
-    dynamics = InstantaneousDynamics(
-        StateDynamicsConfig(
-            dynamics_type="instantaneous",
-            max_steps=1,
-            beta=0.1,
-        )
-    )
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = RandomProjectionsCredit(
-        CreditAssignmentConfig(
-            credit_type="random_projections",
+        CreditAssignmentConfig.random_projections(
             beta=0.5,
             feedback_scale=0.01,
         )
     )
     update = EuclideanUpdate(
-        ParameterUpdateConfig(
-            update_type="euclidean",
+        ParameterUpdateConfig.euclidean(
             step_size=lr,
         )
     )

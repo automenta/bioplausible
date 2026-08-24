@@ -4,7 +4,7 @@
 
 **Guiding Principle**: Backwards compatibility: NONE. Professional, not explanatory. Self-documenting code. Working functionality > coverage.
 
-**Last Updated**: 2026-08-23 - **ALL TASKS COMPLETED** (P0-P4) + **IMMEDIATE FIX PLAN COMPLETED** + **VERIFICATION COMPLETE**
+**Last Updated**: 2026-08-23 - **ALL TASKS COMPLETED** (P0-P4) + **IMMEDIATE FIX PLAN COMPLETED** + **VERIFICATION COMPLETE** + **ADDITIONAL ONTOLOGY FACTORIES COMPLETED (2026-08-23)**
 
 ---
 
@@ -465,6 +465,19 @@ A developer (or AI agent) can:
 - ✅ Locality axiom tests (full: thermodynamic contrast invariance) — Added `test_thermodynamic_contrast_local_gradients` and `test_thermodynamic_contrast_no_weight_transport` in `tests/property/test_gradient_equivalence.py`
 - ✅ Empirical resource analysis (FLOPs, nvml integration for `analyze_joint_system`) — Implemented in `bioplausible/core/profiling.py` with `count_flops_detailed`, `get_gpu_memory_mb`, `get_gpu_peak_memory_mb`, and `analyze_joint_system`
 
+### Additional Ontology Factories Completed (2026-08-23)
+- ✅ Fixed `fa_native.py` to use classmethod config constructors (`StateDynamicsConfig.instantaneous()`, `CreditAssignmentConfig.random_projections()`, `ParameterUpdateConfig.euclidean()`)
+- ✅ Fixed `tile_native.py` to use classmethod config constructors (all 4 tile variants: EP, FA, TP, SNN)
+- ✅ Added 5 new 5-D ontology factories to `core/presets.py`:
+  - `create_pepita_mlp` — PEPITA (forward-only local learning)
+  - `create_tp_mlp` — Target Propagation (learned inverse mappings)
+  - `create_pc_mlp` — Predictive Coding (hierarchical prediction errors)
+  - `create_hebbian_mlp` — Hebbian learning (correlation-based updates)
+  - `create_snn_mlp` — Spiking Neural Networks (temporal integration + temporal trace credit)
+- ✅ Exported all new factories from `bioplausible/__init__.py` with updated docstring examples
+- ✅ Fixed 6-D factory functions in `presets.py` to pass individual parameters to plasticity constructors
+- ✅ Updated `bioplausible/__init__.py` docstring with examples for all 11 factories
+
 ---
 
 ## 🔮 FUTURE IMPROVEMENT OPPORTUNITIES
@@ -623,26 +636,26 @@ EQPROP_CONFIG = {
 - Tests for all credit assignment types composition
 - **Status**: Backprop parity passes; EqProp fails at ~9% (needs hyperparam tuning); FA/FF/PEPITA pending
 
-### 2. Native Model Fixes Needed
+### 2. Native Model Fixes Needed — ✅ COMPLETED
 | Model | Status | Notes |
 |-------|--------|-------|
 | `backprop_native.py` | ✅ Fixed | Used `StateDynamicsConfig.instantaneous()` and `CreditAssignmentConfig.gradient()` |
 | `pepita_native.py` | ✅ Fixed | Same fixes applied |
-| `fa_native.py` | ⚠️ Needs audit | May have same config issues |
-| `eqprop_native.py` | ⚠️ Needs audit | May have same config issues |
-| `*_native.py` (others) | ⚠️ Needs audit | `diffusion_eqprop`, `momentum_eqprop`, `sparse_eqprop`, `ternary_eqprop`, `tile_native`, `research_native` |
+| `fa_native.py` | ✅ Fixed | Updated to use classmethod constructors |
+| `eqprop_native.py` | ✅ Fixed | Already used classmethod constructors |
+| `*_native.py` (others) | ✅ Fixed | `diffusion_eqprop`, `momentum_eqprop`, `sparse_eqprop`, `ternary_eqprop`, `tile_native`, `research_native` — all use classmethods |
 
-### 3. Missing Ontology Factories in `presets.py` (for Zoo parity)
-| Zoo Model | Ontology Factory Needed | Credit Assignment | Dynamics |
-|-----------|------------------------|-------------------|----------|
-| ForwardForwardNet | ✅ `create_ff_mlp` | LocalGoodnessCredit | Instantaneous |
-| PEPITA | ❌ `create_pepita_mlp` | LocalGoodnessCredit | Instantaneous |
-| TargetProp | ❌ `create_tp_mlp` | TargetInversionCredit | Instantaneous |
-| PredictiveCoding | ❌ `create_pc_mlp` | LocalGoodnessCredit | PredictiveSettling |
-| Hebbian | ❌ `create_hebbian_mlp` | LocalGoodnessCredit | Instantaneous |
-| Spiking | ❌ `create_snn_mlp` | TemporalTraceCredit | SpikeIntegration |
-| MEP variants | ❌ Multiple | Various | EnergyMinimization |
-| O1Memory | ❌ `create_o1memory` | Custom | Custom |
+### 3. Missing Ontology Factories in `presets.py` (for Zoo parity) — ✅ COMPLETED
+| Zoo Model | Ontology Factory | Credit Assignment | Dynamics | Status |
+|-----------|-----------------|-------------------|----------|--------|
+| ForwardForwardNet | ✅ `create_ff_mlp` | LocalGoodnessCredit | Instantaneous | Done |
+| PEPITA | ✅ `create_pepita_mlp` | LocalGoodnessCredit | Instantaneous | **Done** |
+| TargetProp | ✅ `create_tp_mlp` | TargetInversionCredit | PredictiveSettling | **Done** |
+| PredictiveCoding | ✅ `create_pc_mlp` | LocalGoodnessCredit | PredictiveSettling | **Done** |
+| Hebbian | ✅ `create_hebbian_mlp` | LocalGoodnessCredit | Instantaneous | **Done** |
+| Spiking | ✅ `create_snn_mlp` | TemporalTraceCredit | SpikeIntegration | **Done** |
+| MEP variants | ❌ Multiple | Various | EnergyMinimization | Pending |
+| O1Memory | ❌ `create_o1memory` | Custom | Custom | Pending |
 
 ### 4. EqProp Parity Issue
 - **Presets `create_eqprop_mlp`**: ~9% accuracy (3 epochs, hidden_dim=128)
@@ -650,10 +663,10 @@ EQPROP_CONFIG = {
 - **Root cause**: Hyperparams (beta=0.1, n_iters=10, hidden_dim=128) insufficient for MNIST
 - **Fix**: Use competitive config from `eqprop_vision_parity.py` (hidden_dim=512, num_layers=3, beta=0.1, 20 epochs)
 
-### 5. Architecture Gaps for Full Deprecation
-- [ ] Add `create_pepita_mlp`, `create_tp_mlp`, `create_pc_mlp`, `create_hebbian_mlp`, `create_snn_mlp` to `presets.py`
-- [ ] Export all new factories from `bioplausible/__init__.py`
-- [ ] Fix all `*_native.py` to use classmethod config constructors
+### 5. Architecture Gaps for Full Deprecation — ✅ MOSTLY DONE
+- [x] Add `create_pepita_mlp`, `create_tp_mlp`, `create_pc_mlp`, `create_hebbian_mlp`, `create_snn_mlp` to `presets.py`
+- [x] Export all new factories from `bioplausible/__init__.py`
+- [x] Fix all `*_native.py` to use classmethod config constructors
 - [ ] Run full parity test suite for all algorithms
 - [ ] Update quickstart to demonstrate 3+ algorithms (Backprop, FF, FA, EqProp)
 - [ ] Add `configs/presets/` YAML for each native algorithm
@@ -742,6 +755,9 @@ Ontology Parity:          1 passed (backprop), 1 failed (eqprop - hyperparams)
 Module Boundary:          1 passed, 2 failed (pre-existing)
 ```
 
-### Files Modified in This Verification Pass
+### Files Modified in This Verification Pass (2026-08-23)
 
-No code changes required — all verification runs against existing implementation. This summary documents the current state for future work.
+- `bioplausible/models/native/fa_native.py` — Fixed to use classmethod config constructors
+- `bioplausible/models/native/tile_native.py` — Fixed to use classmethod config constructors
+- `bioplausible/core/presets.py` — Added 5 new 5-D factories (PEPITA, TP, PC, Hebbian, SNN), fixed 6-D factories
+- `bioplausible/__init__.py` — Exported new factories, updated docstring with all 11 factory examples

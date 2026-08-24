@@ -24,17 +24,19 @@ from bioplausible.core.ontology import (
     InstantaneousDynamics,
     LocalGoodnessCredit,
     ParameterUpdateConfig,
+    PredictiveSettlingDynamics,
     RandomProjectionsCredit,
     RecurrentGeometry,
+    SpikeIntegrationDynamics,
     StateDynamicsConfig,
     SubstrateConfig,
+    TargetInversionCredit,
+    TemporalTraceCredit,
     ThermodynamicContrast,
 )
 from bioplausible.core.plasticity import (
     FastWeightPlasticity,
-    FastWeightPlasticityConfig,
     RoutingPlasticity,
-    RoutingPlasticityConfig,
 )
 from bioplausible.core.system_trainer import (
     compose_joint_system,
@@ -99,28 +101,14 @@ def _recurrent_geometry(
 def _default_credit() -> BackpropCredit:
     """Create default backprop credit assignment."""
     return BackpropCredit(
-        CreditAssignmentConfig(
-            credit_type="gradient",
-            beta=0.5,
-            feedback_matrix=None,
-            local_objective="mse",
-            orthogonal_init=False,
-            feedback_scale=0.01,
-        )
+        CreditAssignmentConfig.gradient()
     )
 
 
 def _eqprop_credit(beta: float = 0.5) -> ThermodynamicContrast:
     """Create EqProp thermodynamic contrast credit assignment."""
     return ThermodynamicContrast(
-        CreditAssignmentConfig(
-            credit_type="thermodynamic_contrast",
-            beta=beta,
-            feedback_matrix=None,
-            local_objective="mse",
-            orthogonal_init=False,
-            feedback_scale=0.01,
-        )
+        CreditAssignmentConfig.thermodynamic_contrast(beta=beta)
     )
 
 
@@ -235,12 +223,8 @@ def create_fa_mlp(
     geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = RandomProjectionsCredit(
-        CreditAssignmentConfig(
-            credit_type="random_projections",
+        CreditAssignmentConfig.random_projections(
             beta=0.5,
-            feedback_matrix=None,
-            local_objective="mse",
-            orthogonal_init=False,
             feedback_scale=feedback_scale,
         )
     )
@@ -444,6 +428,208 @@ def create_ff_mlp(
     return _FFSystem(base_system)
 
 
+def create_pepita_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float = 0.01,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a PEPITA MLP system (5-D coordinate).
+
+    PEPITA uses forward-only local learning with error-modulated input
+    perturbation and layer-local contrastive updates.
+
+    Args:
+        input_dim: Input dimension
+        hidden_dims: Tuple of hidden layer dimensions
+        output_dim: Output dimension
+        lr: Learning rate
+        init_scale: Weight initialization scale
+        device: Target device
+
+    Returns:
+        A composed 5-D System with FeedforwardGeometry + InstantaneousDynamics
+        + LocalGoodnessCredit + EuclideanUpdate
+    """
+    substrate = _default_substrate(device)
+    geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_tp_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    beta: float = 0.1,
+    settle_steps: int = 30,
+    device: str = "cpu",
+) -> System:
+    """Create a Target Propagation MLP system (5-D coordinate).
+
+    Target Propagation uses learned inverse mappings to propagate targets
+    backwards through the network instead of gradients.
+
+    Args:
+        input_dim: Input dimension
+        hidden_dims: Tuple of hidden layer dimensions
+        output_dim: Output dimension
+        lr: Learning rate
+        init_scale: Weight initialization scale
+        beta: Nudge strength for target propagation
+        settle_steps: Number of settling iterations for predictive dynamics
+        device: Target device
+
+    Returns:
+        A composed 5-D System with FeedforwardGeometry + PredictiveSettlingDynamics
+        + TargetInversionCredit + EuclideanUpdate
+    """
+    substrate = _default_substrate(device)
+    geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = PredictiveSettlingDynamics(
+        StateDynamicsConfig.predictive_settling(
+            max_steps=settle_steps,
+            beta=beta,
+        )
+    )
+    credit = TargetInversionCredit(
+        CreditAssignmentConfig.target_inversion(
+            beta=beta,
+            feedback_scale=0.01,
+        )
+    )
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_pc_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    beta: float = 0.5,
+    settle_steps: int = 30,
+    device: str = "cpu",
+) -> System:
+    """Create a Predictive Coding MLP system (5-D coordinate).
+
+    Predictive Coding minimizes prediction errors through a hierarchy of
+    top-down predictions and bottom-up error signals.
+
+    Args:
+        input_dim: Input dimension
+        hidden_dims: Tuple of hidden layer dimensions
+        output_dim: Output dimension
+        lr: Learning rate
+        init_scale: Weight initialization scale
+        beta: Nudge strength for predictive coding
+        settle_steps: Number of settling iterations
+        device: Target device
+
+    Returns:
+        A composed 5-D System with RecurrentGeometry + PredictiveSettlingDynamics
+        + LocalGoodnessCredit + EuclideanUpdate
+    """
+    substrate = _default_substrate(device)
+    geometry = _recurrent_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = PredictiveSettlingDynamics(
+        StateDynamicsConfig.predictive_settling(
+            max_steps=settle_steps,
+            beta=beta,
+        )
+    )
+    credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_hebbian_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a Hebbian MLP system (5-D coordinate).
+
+    Hebbian learning uses local correlation-based weight updates
+    (neurons that fire together, wire together).
+
+    Args:
+        input_dim: Input dimension
+        hidden_dims: Tuple of hidden layer dimensions
+        output_dim: Output dimension
+        lr: Learning rate
+        init_scale: Weight initialization scale
+        device: Target device
+
+    Returns:
+        A composed 5-D System with FeedforwardGeometry + InstantaneousDynamics
+        + LocalGoodnessCredit + EuclideanUpdate
+    """
+    substrate = _default_substrate(device)
+    geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_snn_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a Spiking Neural Network MLP system (5-D coordinate).
+
+    SNNs use spike-based computation with temporal integration dynamics
+    and temporal trace credit assignment.
+
+    Args:
+        input_dim: Input dimension
+        hidden_dims: Tuple of hidden layer dimensions
+        output_dim: Output dimension
+        lr: Learning rate
+        init_scale: Weight initialization scale
+        device: Target device
+
+    Returns:
+        A composed 5-D System with FeedforwardGeometry + SpikeIntegrationDynamics
+        + TemporalTraceCredit + EuclideanUpdate
+    """
+    substrate = _default_substrate(device)
+    geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = SpikeIntegrationDynamics(
+        StateDynamicsConfig.spike_integration(
+            max_steps=30,
+            beta=0.1,
+        )
+    )
+    credit = TemporalTraceCredit(
+        CreditAssignmentConfig.temporal_trace(
+            feedback_scale=0.01,
+        )
+    )
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
 # ============================================================
 # 6-D Joint System Factories (Extended Ontology with Plasticity)
 # ============================================================
@@ -481,12 +667,10 @@ def create_routing_mlp(
     update = _default_update(lr)
 
     plasticity = RoutingPlasticity(
-        RoutingPlasticityConfig(
-            gate_dim=gate_dim,
-            temperature=1.0,
-            decay=0.99,
-            learning_rate=0.01,
-        )
+        gate_dim=gate_dim,
+        temperature=1.0,
+        decay=0.99,
+        learning_rate=0.01,
     )
 
     return compose_joint_system(
@@ -528,12 +712,10 @@ def create_fast_weight_mlp(
     update = _default_update(lr)
 
     plasticity = FastWeightPlasticity(
-        FastWeightPlasticityConfig(
-            fast_weight_dim=fast_weight_dim,
-            decay=decay,
-            learning_rate=learning_rate,
-            outer_product_scale=1.0,
-        )
+        fast_weight_dim=fast_weight_dim,
+        decay=decay,
+        learning_rate=learning_rate,
+        outer_product_scale=1.0,
     )
 
     return compose_joint_system(
@@ -547,6 +729,11 @@ __all__ = [
     "create_eqprop_mlp",
     "create_fa_mlp",
     "create_ff_mlp",
+    "create_pepita_mlp",
+    "create_tp_mlp",
+    "create_pc_mlp",
+    "create_hebbian_mlp",
+    "create_snn_mlp",
     # 6-D factories
     "create_routing_mlp",
     "create_fast_weight_mlp",
