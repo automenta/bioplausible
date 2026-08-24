@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
-from bioplausible.graph import (
+from computronium.graph import (
     Edge,
     InferenceSGD,
     Linear,

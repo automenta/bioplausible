@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.core.optimization import (
+from computronium.core.optimization import (
     HebbianGradient,
     StrategyConfig,
     StrategyOptimizer,
@@ -190,7 +190,7 @@ class TestFactoryIntegration:
 
     def test_unknown_gradient_registers(self) -> None:
         # Ensure the new names are resolvable via the registry.
-        from bioplausible.core.optimization.factory import StrategyRegistry
+        from computronium.core.optimization.factory import StrategyRegistry
 
         assert "target_prop" in StrategyRegistry
         assert "hebbian" in StrategyRegistry

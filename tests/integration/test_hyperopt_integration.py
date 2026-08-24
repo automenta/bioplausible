@@ -1,9 +1,9 @@
 import unittest
 from pathlib import Path
 
-from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.hyperopt.experiment import TrialRunner
-from bioplausible.hyperopt.storage import HyperoptStorage
+from computronium.core.registry import ComponentCategory, Registry
+from computronium.hyperopt.experiment import TrialRunner
+from computronium.hyperopt.storage import HyperoptStorage
 
 
 class TestHyperoptIntegration(unittest.TestCase):

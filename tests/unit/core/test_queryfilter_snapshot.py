@@ -7,7 +7,7 @@ Verifies that:
   - Empty filter matches everything.
 """
 
-from bioplausible.core.registry import (
+from computronium.core.registry import (
     ComponentMetadata,
     ComputeProfile,
     LocalityLevel,

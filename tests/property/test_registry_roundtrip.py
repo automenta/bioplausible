@@ -14,7 +14,7 @@ import copy
 from hypothesis import given
 from hypothesis import strategies as st
 
-from bioplausible.core.registry import (
+from computronium.core.registry import (
     ComponentCategory,
     ComponentMetadata,
     LocalityLevel,

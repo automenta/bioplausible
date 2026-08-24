@@ -5,7 +5,7 @@ import copy
 import pytest
 from torch import nn
 
-from bioplausible.core.registry import (
+from computronium.core.registry import (
     ComponentCategory,
     ComponentMetadata,
     LocalityLevel,
@@ -317,9 +317,9 @@ def test_infer_metadata_regular_field():
 
 def test_runtime_checkable_transition_graph():
     """All registered EqProp models pass isinstance(..., TransitionGraph)."""
-    from bioplausible.config.unified import ModelConfig
-    from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
-    from bioplausible.zoo.models.transitions import TransitionGraph
+    from computronium.config.unified import ModelConfig
+    from computronium.zoo.models.eqprop._energy import EquilibriumMLP
+    from computronium.zoo.models.transitions import TransitionGraph
 
     # Test the consolidated EquilibriumMLP engine
     config = ModelConfig(
@@ -353,8 +353,8 @@ def test_runtime_checkable_transition_graph():
 
 def test_all_models_have_transition_modules_or_override():
     """Verify all registered BioModel subclasses expose transition_modules()."""
-    from bioplausible.core.model import BioModel
-    from bioplausible.core.registry import ComponentCategory, Registry
+    from computronium.core.model import BioModel
+    from computronium.core.registry import ComponentCategory, Registry
 
     models = Registry.list(ComponentCategory.MODEL).get("model", [])
     # Models that use non-nn.Module internal dynamics (graph, kernel, plain nn.Module)

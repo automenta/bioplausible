@@ -1,6 +1,6 @@
 import unittest
 
-from bioplausible.core.registry import ComponentCategory, Registry
+from computronium.core.registry import ComponentCategory, Registry
 
 
 class TestRefactor(unittest.TestCase):

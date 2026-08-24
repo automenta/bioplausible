@@ -11,7 +11,7 @@ import json
 
 # Importing the zoo/equitile packages is what registers the components the
 # audit enumerates; the module does this lazily inside ``audit_rows``.
-from bioplausible.core.audit import (
+from computronium.core.audit import (
     CRITICAL_FIELDS,
     AuditRow,
     _missing_critical,
@@ -118,5 +118,5 @@ def test_main_fails_when_critical_field_empty(monkeypatch):
         parity_status="n/a",
         test_coverage="n/a",
     )
-    monkeypatch.setattr("bioplausible.core.audit.audit_rows", lambda: [bad])
+    monkeypatch.setattr("computronium.core.audit.audit_rows", lambda: [bad])
     assert main([]) == 1

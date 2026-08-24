@@ -12,7 +12,7 @@ class TestAdaptationEfficiency:
 
     def test_adaptation_efficiency_null_vs_routing(self):
         """Test that routing plasticity adapts faster than null."""
-        from bioplausible.experiments.joint.adaptation_efficiency import (
+        from computronium.experiments.joint.adaptation_efficiency import (
             evaluate_adaptation,
         )
 
@@ -56,7 +56,7 @@ class TestComputeEfficiency:
 
     def test_compute_efficiency_null_vs_routing(self):
         """Test that routing reduces active routes."""
-        from bioplausible.experiments.joint.compute_efficiency import (
+        from computronium.experiments.joint.compute_efficiency import (
             evaluate_compute_efficiency,
         )
 
@@ -96,7 +96,7 @@ class TestStructuralRobustness:
 
     def test_structural_robustness_runs(self):
         """Test that structural robustness evaluation runs."""
-        from bioplausible.experiments.joint.structural_robustness import (
+        from computronium.experiments.joint.structural_robustness import (
             evaluate_structural_robustness,
         )
 
@@ -126,7 +126,7 @@ class TestAlgorithmMigration:
 
     def test_algorithm_migration_runs(self):
         """Test that algorithm migration evaluation runs."""
-        from bioplausible.experiments.joint.algorithm_migration import (
+        from computronium.experiments.joint.algorithm_migration import (
             evaluate_migration,
         )
 
@@ -156,7 +156,7 @@ class TestZ3FixedWeights:
 
     def test_z3_fixed_weights_runs(self):
         """Test that Z3 evaluation runs and maintains theta invariance."""
-        from bioplausible.experiments.joint.z3_fixed_weights import evaluate_z3
+        from computronium.experiments.joint.z3_fixed_weights import evaluate_z3
 
         result = evaluate_z3(
             coordinate="digital/recurrent/energy_minimization/rule_state/thermodynamic_contrast/euclidean",
@@ -197,7 +197,7 @@ class TestBenchmarkCLI:
             ["uv", "run", "biopl", "benchmark", "list"],
             capture_output=True,
             text=True,
-            cwd="/home/me/bioplausible",
+            cwd="/home/me/computronium",
         )
         assert result.returncode == 0
         assert "adaptation_efficiency" in result.stdout
@@ -225,7 +225,7 @@ class TestBenchmarkCLI:
             ],
             capture_output=True,
             text=True,
-            cwd="/home/me/bioplausible",
+            cwd="/home/me/computronium",
             timeout=60,
         )
         assert result.returncode == 0
@@ -250,7 +250,7 @@ class TestBenchmarkCLI:
             ],
             capture_output=True,
             text=True,
-            cwd="/home/me/bioplausible",
+            cwd="/home/me/computronium",
             timeout=60,
         )
         assert result.returncode == 0

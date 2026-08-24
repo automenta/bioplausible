@@ -2,7 +2,7 @@
 
 import pytest
 
-from bioplausible.hyperopt.portfolio import (
+from computronium.hyperopt.portfolio import (
     PortfolioRow,
     decide_status,
     has_regime_advantage,

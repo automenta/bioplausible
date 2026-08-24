@@ -1,8 +1,8 @@
-"""Tests for named default-config registry (bioplausible.config.defaults)."""
+"""Tests for named default-config registry (computronium.config.defaults)."""
 
 import pytest
 
-from bioplausible.config import (
+from computronium.config import (
     get_named_config,
     list_named_configs,
     register_default_config,

@@ -14,8 +14,8 @@ Usage:
 import pytest
 import torch
 
-from bioplausible.data.lm import CharacterTokenizer
-from bioplausible.zoo.models.deployments import (
+from computronium.data.lm import CharacterTokenizer
+from computronium.zoo.models.deployments import (
     ConvTileNet,  # Vision; RL
     ConvTileNetConfig,
     RecurrentRLTileNet,
@@ -28,7 +28,7 @@ from bioplausible.zoo.models.deployments import (
     create_mnist_model,
     create_rl_model,
 )
-from bioplausible.zoo.models.tile_lm import TileLM
+from computronium.zoo.models.tile_lm import TileLM
 from tests.conftest import lm_train_step
 
 # =============================================================================

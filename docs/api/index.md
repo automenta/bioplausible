@@ -11,11 +11,11 @@
 
 ## Core Modules
 
-- `bioplausible.acceleration` — Multi-algorithm kernel acceleration layer
-- `bioplausible.core.trainer` — Core training loop with kernel dispatch
-- `bioplausible.core.registry` — Component registry with kernel backend category
-- `bioplausible.core.local_learning` — Local learning rules and settling primitives
-- `bioplausible.core.optimization.factory` — Strategy permutation factory (`make_strategy_optimizer`)
+- `computronium.acceleration` — Multi-algorithm kernel acceleration layer
+- `computronium.core.trainer` — Core training loop with kernel dispatch
+- `computronium.core.registry` — Component registry with kernel backend category
+- `computronium.core.local_learning` — Local learning rules and settling primitives
+- `computronium.core.optimization.factory` — Strategy permutation factory (`make_strategy_optimizer`)
 
 ## Algorithm Families
 
@@ -43,7 +43,7 @@
 
 ## Configuration
 
-See `bioplausible.config.unified.TrainerConfig` for kernel-related options:
+See `computronium.config.unified.TrainerConfig` for kernel-related options:
 - `use_kernel: bool` — Enable kernel backend
 - `target_hardware: HardwareTarget` — Target hardware (cpu, cuda, triton, fpga, neuromorphic, optical, crossbar, quantum)
 - `kernel_backend: str` — Backend selection

@@ -2,7 +2,7 @@ import unittest
 
 import optuna
 
-from bioplausible.hyperopt.optuna_bridge import create_optuna_space
+from computronium.hyperopt.optuna_bridge import create_optuna_space
 
 
 class TestOptunaBridgeIntegration(unittest.TestCase):

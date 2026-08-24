@@ -1,11 +1,11 @@
 # Acceleration API Reference
 
-This document provides a complete reference for the `bioplausible.acceleration` module, which contains all kernel backends, export utilities, and hardware target facades.
+This document provides a complete reference for the `computronium.acceleration` module, which contains all kernel backends, export utilities, and hardware target facades.
 
 ## Module Structure
 
 ```
-bioplausible.acceleration
+computronium.acceleration
 ├── kernel_backend.py      # KernelBackend protocol & registry
 ├── fa_kernels.py          # Feedback Alignment kernels
 ├── hebbian_kernels.py     # Hebbian / 3-factor kernels
@@ -140,7 +140,7 @@ class KernelRegistry:
 
 **Usage:**
 ```python
-from bioplausible.acceleration import KernelRegistry, AlgorithmFamily, HardwareTarget
+from computronium.acceleration import KernelRegistry, AlgorithmFamily, HardwareTarget
 
 # Get best backend for a family/hardware combination
 backend = KernelRegistry.get_best(
@@ -300,7 +300,7 @@ class EqPropKernelBackend:
 
 **Usage:**
 ```python
-from bioplausible.acceleration import (
+from computronium.acceleration import (
     EqPropKernelBackend,
     KernelRegistry,
     AlgorithmFamily,
@@ -381,7 +381,7 @@ class MEP_TritonOps:
 ## Usage with CoreTrainer
 
 ```python
-from bioplausible.core.trainer import CoreTrainer, TrainerConfig
+from computronium.core.trainer import CoreTrainer, TrainerConfig
 
 config = TrainerConfig(
     model="standard_fa",
@@ -442,8 +442,8 @@ This integrates with `TrainingMetrics.extra["settle_telemetry"]`.
 3. Add to `AlgorithmFamily` if new family
 
 ```python
-from bioplausible.acceleration import KernelBackend, KernelRegistry, KernelConfig
-from bioplausible.acceleration.kernel_backend import AlgorithmFamily, HardwareTarget
+from computronium.acceleration import KernelBackend, KernelRegistry, KernelConfig
+from computronium.acceleration.kernel_backend import AlgorithmFamily, HardwareTarget
 import torch
 from torch import Tensor
 

@@ -4,7 +4,7 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.evaluation.base import (
+from computronium.evaluation.base import (
     BenchmarkResult,
     MetricSuite,
     accuracy_fn,
@@ -12,7 +12,7 @@ from bioplausible.evaluation.base import (
     mse_fn,
     perplexity_fn,
 )
-from bioplausible.evaluation.benchmarks import get_benchmark, list_benchmarks
+from computronium.evaluation.benchmarks import get_benchmark, list_benchmarks
 
 
 class SimpleModel(nn.Module):
@@ -134,7 +134,7 @@ class TestBenchmarkRegistry:
 class TestEvaluateModelOnTask:
     def test_with_vision_task(self):
         model = SimpleModel(784, 10)
-        from bioplausible.domains import VisionTask
+        from computronium.domains import VisionTask
 
         task = VisionTask(
             name="test_mnist",

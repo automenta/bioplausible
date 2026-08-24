@@ -5,7 +5,7 @@
 # Stop with Ctrl-C; re-run to resume (studies persist in SQLite, load_if_exists=True).
 # Dashboard prints every --interval seconds; interim portfolio emitted every --emit-every trials.
 
-# Families to search (CLI labels; see bioplausible.cli.run.FAMILY_MAP).
+# Families to search (CLI labels; see computronium.cli.run.FAMILY_MAP).
 # backprop is the baseline and MUST be run first/alongside so the portfolio
 # can compute parity gaps.
 families:

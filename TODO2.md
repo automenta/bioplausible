@@ -17,7 +17,7 @@
 | `biopl lab inspect` | `ValueError: Unknown category: ComponentCategory.MODEL` | `cli/lab.py` uses old registry API | ✅ Fixed registry import + task name |
 | `biopl run` | Not tested | May have similar issues | ✅ Updated to `SystemTrainer`, added `from-config` |
 
-**Files fixed**: `bioplausible/cli/parity.py`, `bioplausible/cli/lab.py`, `bioplausible/cli/run.py`
+**Files fixed**: `computronium/cli/parity.py`, `computronium/cli/lab.py`, `computronium/cli/run.py`
 
 ---
 
@@ -141,7 +141,7 @@ GitHub Actions workflow updated to: `ruff format --check` → `ruff check` → `
 Generated `api_schema.json` from type hints for programmatic discovery via `scripts/generate_api_schema.py`.
 
 ### 18. Typed Exception Hierarchy — ✅ DONE
-Added `ConfigurationError`, `CompositionError`, and `TrainingError` aliases in `bioplausible/core/exceptions.py`.
+Added `ConfigurationError`, `CompositionError`, and `TrainingError` aliases in `computronium/core/exceptions.py`.
 
 ### 19. Auto-Discovery of Valid Compositions — ✅ DONE
 Added `SystemConfig.valid_combinations()` classmethod returning all valid 6-D coordinate combinations for AutoScientist.
@@ -195,7 +195,7 @@ biopl lab inspect-state --coordinate digital/recurrent/energy_min/routing/thermo
 # - Energy per iteration
 # - Spectral radius ρ(J_F) per step
 ```
-**Implemented in `bioplausible/cli/lab.py`** — Added `inspect-state` subcommand with JSON/HTML output.
+**Implemented in `computronium/cli/lab.py`** — Added `inspect-state` subcommand with JSON/HTML output.
 
 ### 26. 6-D Ontology Explorer (Interactive) — ✅ DONE
 ```bash
@@ -210,12 +210,12 @@ uv run scripts/ontology_explorer.py
 
 ### 27. Training Dynamics Visualizer — ✅ DONE
 ```python
-from bioplausible.analysis.training_dynamics import plot_training_dynamics, JointTrajectory
+from computronium.analysis.training_dynamics import plot_training_dynamics, JointTrajectory
 
 plot_training_dynamics(trajectory=joint_trajectory, save_html="training_dynamics.html")
 # Shows: energy, loss, accuracy, ρ(J_F), gate entropy, settling time, plastic state, substrate state
 ```
-**Implemented in `bioplausible/analysis/training_dynamics.py`** — Comprehensive Plotly visualizations for joint training trajectories.
+**Implemented in `computronium/analysis/training_dynamics.py`** — Comprehensive Plotly visualizations for joint training trajectories.
 
 ### 28. Plasticity Effect Comparison Benchmark — ✅ DONE
 ```bash
@@ -230,7 +230,7 @@ biopl benchmark compare --suite adaptation_efficiency \
 # - Resource usage (compute, memory, plastic state)
 # - Stability proxies (ρ(J_F), Lyapunov)
 ```
-**Implemented in `bioplausible/cli/benchmark.py`** — Added `compare` subcommand with HTML report generation.
+**Implemented in `computronium/cli/benchmark.py`** — Added `compare` subcommand with HTML report generation.
 
 ---
 
@@ -252,7 +252,7 @@ biopl scientist explore --space joint_smoke \
 #   update: [euclidean]
 # }
 ```
-**Implemented in `bioplausible/cli/scientist.py`** — Autonomous exploration campaign runner with configurable search spaces, objectives, and budgets.
+**Implemented in `computronium/cli/scientist.py`** — Autonomous exploration campaign runner with configurable search spaces, objectives, and budgets.
 
 ### 30. Campaign Result Browser — ✅ DONE
 ```bash
@@ -260,7 +260,7 @@ biopl scientist list --format table
 biopl scientist show <campaign_id> --include frontier,resources,stability
 biopl scientist pareto <campaign_id> --objectives accuracy,adaptation_time,rho_jacobian
 ```
-**Implemented in `bioplausible/cli/scientist.py`** — Campaign listing, detail viewing, and Pareto frontier analysis.
+**Implemented in `computronium/cli/scientist.py`** — Campaign listing, detail viewing, and Pareto frontier analysis.
 
 ### 31. Hypothesis Template Library — ✅ DONE
 Pre-built chain-of-thought templates for AutoScientist:
@@ -268,7 +268,7 @@ Pre-built chain-of-thought templates for AutoScientist:
 biopl scientist hypothesis --list
 biopl scientist hypothesis --show substrate_ablation
 ```
-**Implemented in `bioplausible/cli/scientist.py`** — Four templates: substrate_ablation, credit_swap, plasticity_search, stability_frontier with parameterized Markdown templates.
+**Implemented in `computronium/cli/scientist.py`** — Four templates: substrate_ablation, credit_swap, plasticity_search, stability_frontier with parameterized Markdown templates.
 
 ---
 
@@ -286,7 +286,7 @@ biopl benchmark profile --coordinate digital/recurrent/energy_min/routing/thermo
 # - Stability estimators
 # - Adapter projections
 ```
-**Implemented in `bioplausible/cli/kernel_profile.py` and `bioplausible/cli/benchmark.py`** — Profiles train_step, plasticity step, geometry forward, and dynamics settle with latency and memory measurements. Outputs JSON and interactive HTML reports.
+**Implemented in `computronium/cli/kernel_profile.py` and `computronium/cli/benchmark.py`** — Profiles train_step, plasticity step, geometry forward, and dynamics settle with latency and memory measurements. Outputs JSON and interactive HTML reports.
 
 ### 33. Empirical Resource Analysis — 🔄 TODO
 ```python
@@ -312,7 +312,7 @@ def analyze_joint_system(coordinate: SystemCoordinate) -> ResourceUsage:
 | **P1** | Add preset factory functions (`create_eqprop_mlp`, etc.) | 3 hrs | Reduces boilerplate 10x | Usability | ✅ DONE |
 | **P1** | Fix naming inconsistencies (alias `ThermodynamicContrastCredit`) | 1 hr | Eliminates "works in code not docs" | Usability | ✅ DONE |
 | **P1** | Gradient equivalence in CI gate (property tests) | 3 hrs | **Core scientific claim** | Rigor | ✅ DONE |
-| **P2** | Unified `__init__.py` exports | 1 hr | `from bioplausible import *` works | Usability | ✅ DONE |
+| **P2** | Unified `__init__.py` exports | 1 hr | `from computronium import *` works | Usability | ✅ DONE |
 | **P2** | Preset YAML configs + `biopl run --config` | 2 hrs | Config-driven experimentation | Usability | ✅ DONE |
 | **P2** | Joint state inspector CLI (`biopl lab inspect-state`) | 4 hrs | **Visual debugging of joint dynamics** | Demo | ✅ DONE |
 | **P2** | Determinism lock for all 6-D coordinates | 2 hrs | Reproducibility guarantee | Rigor | ✅ DONE |
@@ -343,7 +343,7 @@ biopl run --config configs/presets/eqprop_mnist.yaml
 biopl benchmark run --suite adaptation_efficiency
 
 # 3. One-line system creation works
-from bioplausible import create_eqprop_mlp, SystemTrainer
+from computronium import create_eqprop_mlp, SystemTrainer
 system = create_eqprop_mlp(784, (256, 128), 10)
 trainer = SystemTrainer(system, train_data=...)
 
@@ -371,7 +371,7 @@ biopl benchmark report --suite adaptation_efficiency --output plasticity_compari
 uv run pytest tests/property/test_gradient_equivalence.py -v
 
 # 11. Empirical resource analysis works
-python -c "from bioplausible.core.profiling import analyze_joint_system; r = analyze_joint_system('digital/feedforward/instantaneous/null/thermo/euclidean', device='cpu'); print(f'FLOPs: {r.total_flops:,}, Latency: {r.wall_time_ms:.1f}ms')"
+python -c "from computronium.core.profiling import analyze_joint_system; r = analyze_joint_system('digital/feedforward/instantaneous/null/thermo/euclidean', device='cpu'); print(f'FLOPs: {r.total_flops:,}, Latency: {r.wall_time_ms:.1f}ms')"
 ```
 
 ---
@@ -394,10 +394,10 @@ python -c "from bioplausible.core.profiling import analyze_joint_system; r = ana
 ## 🎯 DEFINITION OF DONE (Expanded)
 
 A developer (or AI agent) can:
-1. `git clone && cd bioplausible && uv sync --dev`
+1. `git clone && cd computronium && uv sync --dev`
 2. `uv run scripts/quickstart.py` → sees working results in <2 min
 3. `uv run biopl run --config configs/presets/eqprop_mnist.yaml` → trains model
-4. `from bioplausible import create_eqprop_mlp` → builds system in 1 line
+4. `from computronium import create_eqprop_mlp` → builds system in 1 line
 5. Read README → all code examples copy-paste and run
 6. Run tests → all property tests pass, type checking clean (strict mode)
 7. `uv run scripts/ontology_explorer.py` → explores 6-D space interactively
@@ -430,7 +430,7 @@ A developer (or AI agent) can:
 ### P1 - Usability Improvements (COMPLETED)
 - ✅ `scripts/quickstart.py` - trains EqProp vs Backprop on MNIST
 - ✅ `core/presets.py` - one-line factory functions (5-D and 6-D)
-- ✅ `bioplausible/__init__.py` - unified public API exports
+- ✅ `computronium/__init__.py` - unified public API exports
 - ✅ `configs/presets/` - 5 YAML presets for config-driven training
 - ✅ `biopl run from-config` - config-driven training CLI
 
@@ -449,7 +449,7 @@ A developer (or AI agent) can:
 - ✅ **Determinism lock for 6-D coordinates** (`tests/property/test_determinism_extended.py`) — 15 tests passing
 - ✅ **Joint state inspector CLI** (`biopl lab inspect-state`) — JSON + HTML output
 - ✅ **6-D Ontology Explorer** (`scripts/ontology_explorer.py`) — NiceGUI interactive
-- ✅ **Training dynamics visualizer** (`bioplausible/analysis/training_dynamics.py`) — Plotly visualizations
+- ✅ **Training dynamics visualizer** (`computronium/analysis/training_dynamics.py`) — Plotly visualizations
 
 ### P3 - Visualization & AutoScientist (COMPLETED)
 - ✅ **Plasticity comparison benchmark** (`biopl benchmark compare`) — HTML reports
@@ -463,7 +463,7 @@ A developer (or AI agent) can:
 
 ### Remaining P3/P4 Tasks (✅ COMPLETED 2026-08-23)
 - ✅ Locality axiom tests (full: thermodynamic contrast invariance) — Added `test_thermodynamic_contrast_local_gradients` and `test_thermodynamic_contrast_no_weight_transport` in `tests/property/test_gradient_equivalence.py`
-- ✅ Empirical resource analysis (FLOPs, nvml integration for `analyze_joint_system`) — Implemented in `bioplausible/core/profiling.py` with `count_flops_detailed`, `get_gpu_memory_mb`, `get_gpu_peak_memory_mb`, and `analyze_joint_system`
+- ✅ Empirical resource analysis (FLOPs, nvml integration for `analyze_joint_system`) — Implemented in `computronium/core/profiling.py` with `count_flops_detailed`, `get_gpu_memory_mb`, `get_gpu_peak_memory_mb`, and `analyze_joint_system`
 
 ### Additional Ontology Factories Completed (2026-08-23)
 - ✅ Fixed `fa_native.py` to use classmethod config constructors (`StateDynamicsConfig.instantaneous()`, `CreditAssignmentConfig.random_projections()`, `ParameterUpdateConfig.euclidean()`)
@@ -474,9 +474,9 @@ A developer (or AI agent) can:
   - `create_pc_mlp` — Predictive Coding (hierarchical prediction errors)
   - `create_hebbian_mlp` — Hebbian learning (correlation-based updates)
   - `create_snn_mlp` — Spiking Neural Networks (temporal integration + temporal trace credit)
-- ✅ Exported all new factories from `bioplausible/__init__.py` with updated docstring examples
+- ✅ Exported all new factories from `computronium/__init__.py` with updated docstring examples
 - ✅ Fixed 6-D factory functions in `presets.py` to pass individual parameters to plasticity constructors
-- ✅ Updated `bioplausible/__init__.py` docstring with examples for all 11 factories
+- ✅ Updated `computronium/__init__.py` docstring with examples for all 11 factories
 
 ---
 
@@ -529,7 +529,7 @@ A developer (or AI agent) can:
     - `test_thermodynamic_contrast_local_gradients`: Verifies EqProp uses local contrastive Hebbian rule (free_corr - nudged_corr) / β
     - `test_thermodynamic_contrast_no_weight_transport`: Verifies no access to forward weight transposes
 
-11. **Empirical resource analysis — ✅ COMPLETED 2026-08-23**: Implemented in `bioplausible/core/profiling.py`:
+11. **Empirical resource analysis — ✅ COMPLETED 2026-08-23**: Implemented in `computronium/core/profiling.py`:
     - `count_flops_detailed`: Layer-wise FLOPs counting for Linear/Conv2d
     - `get_gpu_memory_mb` / `get_gpu_peak_memory_mb`: NVML integration with torch fallback
     - `analyze_joint_system`: Complete resource profiling for 6-D coordinates
@@ -541,7 +541,7 @@ A developer (or AI agent) can:
     - Updated quickstart to use `create_backprop_mlp` + `SystemTrainer` for 5-D ontology demo
     - ForwardForwardNet uses native positive/negative pass training loop
 
-13. **Module boundary test failures — PRE-EXISTING ISSUE**: Two tests in `tests/unit/core/test_module_boundary.py` fail because `SystemTrainer` is eagerly imported in `bioplausible/__init__.py` (line 133). The tests expect lazy loading via `__getattr__`. This is a pre-existing architectural decision, not caused by recent changes. Consider implementing lazy loading in `__init__.py` if strict module boundaries are required.
+13. **Module boundary test failures — PRE-EXISTING ISSUE**: Two tests in `tests/unit/core/test_module_boundary.py` fail because `SystemTrainer` is eagerly imported in `computronium/__init__.py` (line 133). The tests expect lazy loading via `__getattr__`. This is a pre-existing architectural decision, not caused by recent changes. Consider implementing lazy loading in `__init__.py` if strict module boundaries are required.
 
 ---
 ## 🎯 IMMEDIATE FIX PLAN — Quickstart & Accuracy Issues (2026-08-23) — ✅ ALL COMPLETED
@@ -559,13 +559,13 @@ A developer (or AI agent) can:
 ### Action Plan — ✅ COMPLETED
 
 #### P0 - Fix Accuracy Metric (30 min) — ✅ DONE
-- [x] Updated `bioplausible/core/system_trainer.py` to compute accuracy from logits in `_compute_loss` (both 5-D and 6-D systems)
+- [x] Updated `computronium/core/system_trainer.py` to compute accuracy from logits in `_compute_loss` (both 5-D and 6-D systems)
 - [x] Fixed reading from `nudged_state.metrics` instead of `free_state.metrics`
 - [x] Added accuracy computation to 6-D `_JointSystem._compute_loss`
 
 #### P1 - Quickstart: Use Fast Algorithm for Demo (1-2 hrs) — ✅ DONE
 - [x] **Switched to Forward-Forward via native 5-D Ontology API (`create_ff_mlp`)** — achieves ~93% in 3 epochs like backprop
-- [x] Quickstart goal: "See bioplausible working in <2 min" — now demonstrates Backprop vs Forward-Forward
+- [x] Quickstart goal: "See computronium working in <2 min" — now demonstrates Backprop vs Forward-Forward
 - [x] Forward-Forward validated: 3 epochs, ~93% MNIST accuracy (vs 95% for backprop)
 
 #### P2 - Quickstart Refactor (1 hr) — ✅ DONE
@@ -665,7 +665,7 @@ EQPROP_CONFIG = {
 
 ### 5. Architecture Gaps for Full Deprecation — ✅ MOSTLY DONE
 - [x] Add `create_pepita_mlp`, `create_tp_mlp`, `create_pc_mlp`, `create_hebbian_mlp`, `create_snn_mlp` to `presets.py`
-- [x] Export all new factories from `bioplausible/__init__.py`
+- [x] Export all new factories from `computronium/__init__.py`
 - [x] Fix all `*_native.py` to use classmethod config constructors
 - [ ] Run full parity test suite for all algorithms
 - [ ] Update quickstart to demonstrate 3+ algorithms (Backprop, FF, FA, EqProp)
@@ -692,7 +692,7 @@ EQPROP_CONFIG = {
 |---|-----------|--------|----------|
 | 1 | Quickstart works in <2 min | ✅ PASS | `uv run scripts/quickstart.py` → Backprop 95.5%, FF 92.3% |
 | 2 | All README CLI commands work | ✅ PASS | `biopl run from-config`, `biopl benchmark run`, `biopl lab inspect-state`, `biopl scientist` |
-| 3 | One-line system creation | ✅ PASS | `from bioplausible import create_eqprop_mlp, SystemTrainer` |
+| 3 | One-line system creation | ✅ PASS | `from computronium import create_eqprop_mlp, SystemTrainer` |
 | 4 | Property tests pass (CI gate) | ✅ PASS | Gradient equivalence (6), Determinism (15), Energy invariants (15), Null equivalence (3) |
 | 5 | Type checking clean (strict) | ⚠️ WARNINGS | Pyright: 0 errors, many warnings (unknown types in large codebase) |
 | 6 | Pre-commit passes | ⚠️ TIMEOUT | Pre-commit runs but times out; individual hooks work |
@@ -741,7 +741,7 @@ uv run biopl benchmark compare --suite adaptation_efficiency --plast null routin
 uv run biopl benchmark profile --coordinate digital/recurrent/energy_minimization/routing/thermodynamic_contrast/euclidean --batch-sizes 32 --device cpu
 
 # Resource analysis
-python -c "from bioplausible.core.profiling import analyze_joint_system; r = analyze_joint_system('digital/feedforward/instantaneous/null/thermo/euclidean', device='cpu'); print(f'FLOPs: {r.total_flops:,}, Latency: {r.wall_time_ms:.1f}ms')"
+python -c "from computronium.core.profiling import analyze_joint_system; r = analyze_joint_system('digital/feedforward/instantaneous/null/thermo/euclidean', device='cpu'); print(f'FLOPs: {r.total_flops:,}, Latency: {r.wall_time_ms:.1f}ms')"
 ```
 
 ### Test Results Summary
@@ -757,7 +757,7 @@ Module Boundary:          1 passed, 2 failed (pre-existing)
 
 ### Files Modified in This Verification Pass (2026-08-23)
 
-- `bioplausible/models/native/fa_native.py` — Fixed to use classmethod config constructors
-- `bioplausible/models/native/tile_native.py` — Fixed to use classmethod config constructors
-- `bioplausible/core/presets.py` — Added 5 new 5-D factories (PEPITA, TP, PC, Hebbian, SNN), fixed 6-D factories
-- `bioplausible/__init__.py` — Exported new factories, updated docstring with all 11 factory examples
+- `computronium/models/native/fa_native.py` — Fixed to use classmethod config constructors
+- `computronium/models/native/tile_native.py` — Fixed to use classmethod config constructors
+- `computronium/core/presets.py` — Added 5 new 5-D factories (PEPITA, TP, PC, Hebbian, SNN), fixed 6-D factories
+- `computronium/__init__.py` — Exported new factories, updated docstring with all 11 factory examples

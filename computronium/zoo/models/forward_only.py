@@ -1,0 +1,297 @@
+"""
+Combined Forward-Only Models
+=============================
+
+Aggregates all forward-only learning models into a single module for the model zoo.
+"""
+
+import math
+
+import torch
+import torch.nn.functional as F
+from torch import nn
+
+from computronium.core.losses import compute_accuracy
+from computronium.core.model_status import status_tag
+from computronium.core.registry import LocalityLevel, register_model
+from computronium.core.training_mixin import supervised_step
+from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
+from computronium.zoo.models.transitions import TransitionGraphMixin
+
+# ============================================================================
+# forward_forward.py - ForwardForwardNet
+# ============================================================================
+
+
+__all__ = [
+    "PEPITA",
+    "FFLayer",
+    "ForwardForwardNet",
+]
+
+
+class FFLayer(nn.Linear):
+    def __init__(
+        self, in_features, out_features, bias=True, device=None, dtype=None, lr=0.03
+    ):
+        super().__init__(in_features, out_features, bias=bias)
+        self.relu = nn.ReLU()
+        self.opt = create_optimizer(
+            self, OptimizerConfig(name="adam", lr=lr, weight_decay=0.0)
+        )
+
+    def forward(self, x):
+        x_dir = x / (x.norm(2, 1, keepdim=True) + 1e-4)
+        return self.relu(torch.mm(x_dir, self.weight.T) + self.bias.unsqueeze(0))
+
+
+@register_model(
+    "forward_forward",
+    locality_level=LocalityLevel.FORWARD_ONLY,
+    bio_plausibility_score=0.85,
+    credit_assignment_type="forward-only",
+    requires_backward=False,
+    family="forward_only",
+    typical_lr_range=(0.01, 0.1),
+    tags=["forward-forward", "forward-only", "local", status_tag("stable")],
+    extra={"parity_threshold": 0.05},
+    description="Forward-Forward network: trained with local goodness function.",
+)
+class ForwardForwardNet(TransitionGraphMixin, nn.Module):
+    """
+    Hinton's Forward-Forward (2022).
+    Two forward passes (positive/negative), layer-local goodness objective.
+    No backward pass.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        threshold: float = 2.0,
+        num_layers: int = 2,
+        layer_lr: float = 0.03,
+        classifier_lr: float = 0.01,
+    ):
+        super().__init__()
+        if isinstance(input_dim, tuple):
+            input_dim = math.prod(input_dim)
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.threshold = threshold
+
+        self.layers = nn.ModuleList([FFLayer(input_dim, hidden_dim, lr=layer_lr)])
+        for _ in range(num_layers - 1):
+            self.layers.append(FFLayer(hidden_dim, hidden_dim, lr=layer_lr))
+
+        self.classifier = nn.Linear(hidden_dim * num_layers, output_dim)
+        self.classifier_opt = create_optimizer(
+            self.classifier,
+            OptimizerConfig(name="adam", lr=classifier_lr, weight_decay=0.0),
+        )
+
+    @classmethod
+    def build(
+        cls,
+        spec,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        num_layers=2,
+        device="cpu",
+        task_type="vision",
+        **kwargs,
+    ):
+        return cls(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            num_layers=num_layers,
+            layer_lr=kwargs.get("layer_lr", 0.03),
+            classifier_lr=kwargs.get("classifier_lr", 0.01),
+        ).to(device)
+
+    def predict(self, x):
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
+        h = x
+        hidden_states = []
+        for layer in self.layers:
+            h = layer(h)
+            hidden_states.append(h)
+        h_all = torch.cat(hidden_states, dim=1)
+        return self.classifier(h_all)
+
+    def forward(self, x):
+        return self.predict(x)
+
+    def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
+        x_pos = x.clone()
+        x_neg = x.clone()
+
+        batch_size = x.shape[0]
+        y_neg = torch.randint(0, self.output_dim, (batch_size,), device=x.device)
+        for i in range(batch_size):
+            while y_neg[i] == y[i]:
+                y_neg[i] = torch.randint(0, self.output_dim, (1,)).item()
+
+        x_pos[:, : self.output_dim] = 0.0
+        x_neg[:, : self.output_dim] = 0.0
+        x_pos[range(batch_size), y] = x.max()
+        x_neg[range(batch_size), y_neg] = x.max()
+
+        total_loss = 0.0
+        h_pos, h_neg = x_pos, x_neg
+
+        for layer in self.layers:
+            h_pos = layer(h_pos)
+            g_pos = (h_pos**2).mean(dim=1)
+
+            h_neg = layer(h_neg)
+            g_neg = (h_neg**2).mean(dim=1)
+
+            loss = F.softplus(
+                torch.cat([-g_pos + self.threshold, g_neg - self.threshold])
+            ).mean()
+
+            layer.opt.zero_grad()
+            loss.backward()
+            layer.opt.step()
+
+            total_loss += loss.item()
+
+            h_pos = h_pos.detach()
+            h_neg = h_neg.detach()
+
+        h = x
+        hidden_states = []
+        with torch.no_grad():
+            for layer in self.layers:
+                h = layer(h)
+                hidden_states.append(h)
+        h_all = torch.cat(hidden_states, dim=1).detach()
+
+        cls_metrics = supervised_step(self.classifier, self.classifier_opt, h_all, y)
+
+        return {
+            "loss": total_loss / len(self.layers),
+            "accuracy": cls_metrics["accuracy"],
+            "cls_loss": cls_metrics["loss"],
+        }
+
+
+# ============================================================================
+# pepita.py - PEPITA
+# ============================================================================
+
+
+@register_model(
+    "pepita",
+    locality_level=LocalityLevel.LOCAL,
+    bio_plausibility_score=0.8,
+    credit_assignment_type="forward-only",
+    requires_backward=False,
+    family="forward_only",
+    typical_lr_range=(0.01, 0.1),
+    tags=["pepita", "forward-only", "local", status_tag("stable")],
+    extra={"parity_threshold": 0.2},
+    description="PEPITA: random feedback alignment variant.",
+)
+class PEPITA(TransitionGraphMixin, nn.Module):
+    """
+    PEPITA: Present the Error to Perturb the Input To modulate Activity.
+    Two forward passes; error-modulated input; no backward pass through network.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_layers: int = 2,
+        lr: float = 0.01,
+    ):
+        super().__init__()
+        if isinstance(input_dim, tuple):
+            input_dim = math.prod(input_dim)
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+
+        self.layers = nn.ModuleList([nn.Linear(input_dim, hidden_dim)])
+        for _ in range(num_layers - 1):
+            self.layers.append(nn.Linear(hidden_dim, hidden_dim))
+        self.out_layer = nn.Linear(hidden_dim, output_dim)
+
+        self.relu = nn.ReLU()
+        self.feedback_matrix = nn.Parameter(
+            torch.randn(input_dim, output_dim) / input_dim**0.5
+        )
+        self.lr = lr
+
+    @classmethod
+    def build(
+        cls,
+        spec,
+        input_dim,
+        output_dim,
+        hidden_dim,
+        num_layers=2,
+        device="cpu",
+        task_type="vision",
+        **kwargs,
+    ):
+        return cls(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            num_layers=num_layers,
+        ).to(device)
+
+    def forward(self, x, return_activations=False):
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
+        activations = []
+        h = x
+        for layer in self.layers:
+            h = self.relu(layer(h))
+            activations.append(h)
+        out = self.out_layer(h)
+        if return_activations:
+            return out, activations
+        return out
+
+    def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
+        y_onehot = torch.zeros(x.shape[0], self.output_dim, device=x.device)
+        y_onehot.scatter_(1, y.unsqueeze(1), 1.0)
+
+        with torch.no_grad():
+            out_s, act_s = self.forward(x, return_activations=True)
+            error = out_s - y_onehot
+
+            x_mod = x + torch.mm(error, self.feedback_matrix.T)
+
+            out_m, act_m = self.forward(x_mod, return_activations=True)
+
+            inputs = [x] + act_s[:-1]
+            for layer, a_s, a_m, inp in zip(self.layers, act_s, act_m, inputs):
+                delta_a = a_m - a_s
+                layer.weight.data -= self.lr * torch.mm(delta_a.T, inp) / x.shape[0]
+                if layer.bias is not None:
+                    layer.bias.data -= self.lr * delta_a.mean(0)
+
+            self.out_layer.weight.data -= (
+                self.lr * torch.mm(error.T, act_s[-1]) / x.shape[0]
+            )
+            if self.out_layer.bias is not None:
+                self.out_layer.bias.data -= self.lr * error.mean(0)
+
+        loss = (error**2).sum(1).mean().item()
+        acc = compute_accuracy(out_s, y)
+        return {"loss": loss, "accuracy": acc}

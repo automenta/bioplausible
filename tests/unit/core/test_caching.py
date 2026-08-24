@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from bioplausible.core._caching import DatasetCache, ModelCache, _stable_hash
+from computronium.core._caching import DatasetCache, ModelCache, _stable_hash
 
 
 def test_dataset_cache_roundtrip_and_eviction():

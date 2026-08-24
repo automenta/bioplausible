@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from bioplausible.core.joint import (
+from computronium.core.joint import (
     CompositeState,
     NullPlasticity,
     PlasticityConfig,
@@ -12,7 +12,7 @@ from bioplausible.core.joint import (
     StateVariable,
     SystemContext,
 )
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -25,7 +25,7 @@ from bioplausible.core.ontology import (
     SystemConfig,
     ThermodynamicContrast,
 )
-from bioplausible.core.system_trainer import compose_system
+from computronium.core.system_trainer import compose_system
 
 
 def _create_5d_system() -> tuple:

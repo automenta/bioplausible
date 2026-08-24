@@ -10,10 +10,10 @@ import tempfile
 import pytest
 import torch
 
-from bioplausible.config.unified import ModelConfig
-from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
-from bioplausible.zoo.models.eqprop.hardware_variants import (
+from computronium.config.unified import ModelConfig
+from computronium.core.registry import ComponentCategory, Registry
+from computronium.zoo.models.eqprop._energy import EquilibriumMLP
+from computronium.zoo.models.eqprop.hardware_variants import (
     CrossbarLoopedMLP,
     NoisyLoopedMLP,
     OpticalLoopedMLP,
@@ -70,10 +70,10 @@ def test_hardware_variants_are_registered_models():
     assert issubclass(q, QuantizedLoopedMLP) and issubclass(q, EquilibriumMLP)
     assert issubclass(n, NoisyLoopedMLP) and issubclass(n, EquilibriumMLP)
     # The validation-tracks module re-exports the SAME registered classes.
-    from bioplausible.validation.tracks.hardware_tracks import (
+    from computronium.validation.tracks.hardware_tracks import (
         NoisyLoopedMLP as TrackN,
     )
-    from bioplausible.validation.tracks.hardware_tracks import (
+    from computronium.validation.tracks.hardware_tracks import (
         QuantizedLoopedMLP as TrackQ,
     )
 
@@ -209,9 +209,9 @@ def test_target_hardware_inert_for_non_looped_model():
 
 def test_sink_wires_hardware_track_into_kb(sink_paths):
     """A completed hardware-track result lands in the KnowledgeBase."""
-    from bioplausible.knowledge.kb import KnowledgeBase
-    from bioplausible.validation.notebook import TrackResult
-    from bioplausible.validation.tracks.hardware_tracks import _sink_hardware_track
+    from computronium.knowledge.kb import KnowledgeBase
+    from computronium.validation.notebook import TrackResult
+    from computronium.validation.tracks.hardware_tracks import _sink_hardware_track
 
     result = TrackResult(
         track_id=16,
@@ -234,9 +234,9 @@ def test_sink_wires_hardware_track_into_kb(sink_paths):
 
 def test_sink_wires_failed_hardware_track_into_failures(sink_paths):
     """A failed hardware-track result lands in the FailureTracker."""
-    from bioplausible.execution._state import FailureTracker
-    from bioplausible.validation.notebook import TrackResult
-    from bioplausible.validation.tracks.hardware_tracks import _sink_hardware_track
+    from computronium.execution._state import FailureTracker
+    from computronium.validation.notebook import TrackResult
+    from computronium.validation.tracks.hardware_tracks import _sink_hardware_track
 
     result = TrackResult(
         track_id=17,
@@ -274,7 +274,7 @@ class _FakeDriver:
 
 def test_target_hardware_is_part_of_frontier_cache_identity(tmp_path):
     """GPU and FPGA frontiers cache under distinct keys (plan §17 / §16.3)."""
-    from bioplausible.hyperopt.ideal_backprop import IdealBackpropFinder
+    from computronium.hyperopt.ideal_backprop import IdealBackpropFinder
 
     gpu = IdealBackpropFinder(
         _FakeDriver(),

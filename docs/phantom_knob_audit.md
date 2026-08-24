@@ -6,8 +6,8 @@ A "phantom knob" is a search-space key that a sweep samples but the model
 silently drops at construction — the probe then trains with a default instead
 of the value the sweep *thinks* it sampled. Phantom knobs poison parity,
 liveness, and hyperparameter searches in identical ways and are detected by
-:func:`bioplausible.core.construction.phantom_knobs` (and enforced by the P0a
-surface gate in :mod:`bioplausible.hyperopt.search_space`).
+:func:`computronium.core.construction.phantom_knobs` (and enforced by the P0a
+surface gate in :mod:`computronium.hyperopt.search_space`).
 
 Every model in the default (non-``--include-broken``) sweep is verified
 phantom-free via ``validate_all_rule_spaces()`` and the config-knob regression
@@ -79,5 +79,5 @@ full `len(hidden_dims)`; the registry-wide depth guard prevents regression.
 uv run python scripts/broad_sweep.py --include-broken --families eqprop
 ```
 
-The registry status tags are defined in `bioplausible/core/model_status.py`
+The registry status tags are defined in `computronium/core/model_status.py`
 and rendered on registrations via the `status_tag()` helper.

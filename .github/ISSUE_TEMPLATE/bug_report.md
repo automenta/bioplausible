@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in bioplausible
+about: Report a bug in computronium
 title: "[BUG] "
 labels: bug
 assignees: ""
@@ -10,8 +10,8 @@ assignees: ""
 A clear description of the bug.
 
 ## Steps to Reproduce
-1. Install bioplausible
-2. Run `python -m bioplausible.cli --help`
+1. Install computronium
+2. Run `python -m computronium.cli --help`
 3. Observe the error
 
 ## Expected Behavior

@@ -12,7 +12,7 @@ import torch
 from hypothesis import given
 from hypothesis import strategies as st
 
-from bioplausible.domains.base import Batch, DomainSpec, DomainType, Metrics
+from computronium.domains.base import Batch, DomainSpec, DomainType, Metrics
 
 RESERVED = {"loss", "accuracy", "perplexity"}
 CUSTOM_VALUE = 0.5

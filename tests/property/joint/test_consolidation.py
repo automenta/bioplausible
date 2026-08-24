@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
-from bioplausible.core.joint import (
+from computronium.core.joint import (
     CompositeState,
     ConsolidationConfig,
     PlasticityConfig,
@@ -14,7 +14,7 @@ from bioplausible.core.joint import (
     SystemContext,
     consolidate,
 )
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     GeometryConfig,

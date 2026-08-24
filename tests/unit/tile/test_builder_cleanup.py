@@ -1,7 +1,7 @@
 import unittest
 
-from bioplausible.zoo.models.deployments.graph import GraphTileNet, GraphTileNetConfig
-from bioplausible.zoo.models.deployments.timeseries import (
+from computronium.zoo.models.deployments.graph import GraphTileNet, GraphTileNetConfig
+from computronium.zoo.models.deployments.timeseries import (
     TimeSeriesConfig,
     TimeSeriesTileNet,
 )

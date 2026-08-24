@@ -165,243 +165,6 @@ wheels = [
 ]
 
 [[package]]
-name = "bioplausible"
-version = "1.0.0"
-source = { editable = "." }
-dependencies = [
-    { name = "cupy-cuda13x" },
-    { name = "nicegui" },
-    { name = "numpy" },
-    { name = "omegaconf" },
-    { name = "pydantic" },
-    { name = "rich" },
-    { name = "snntorch" },
-    { name = "torch" },
-    { name = "tqdm" },
-]
-
-[package.optional-dependencies]
-analysis = [
-    { name = "optuna" },
-    { name = "tabulate" },
-]
-deploy = [
-    { name = "fastapi" },
-    { name = "onnxruntime" },
-    { name = "uvicorn" },
-]
-dev = [
-    { name = "build" },
-    { name = "cryptography" },
-    { name = "datasets" },
-    { name = "fastapi" },
-    { name = "gymnasium" },
-    { name = "hypothesis" },
-    { name = "kademlia" },
-    { name = "matplotlib" },
-    { name = "nicegui" },
-    { name = "onnxruntime" },
-    { name = "optuna" },
-    { name = "pandas" },
-    { name = "pip-audit" },
-    { name = "plotly" },
-    { name = "pre-commit" },
-    { name = "psutil" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "pytest-mock" },
-    { name = "pytest-xdist" },
-    { name = "pytorch-lightning" },
-    { name = "ruff" },
-    { name = "scikit-learn" },
-    { name = "scipy" },
-    { name = "seaborn" },
-    { name = "tabulate" },
-    { name = "torchvision" },
-    { name = "twine" },
-    { name = "uvicorn" },
-]
-export = [
-    { name = "onnx" },
-    { name = "onnxscript" },
-]
-full = [
-    { name = "botorch" },
-    { name = "datasets" },
-    { name = "fastapi" },
-    { name = "gpytorch" },
-    { name = "grpcio" },
-    { name = "grpcio-tools" },
-    { name = "gymnasium" },
-    { name = "kademlia" },
-    { name = "matplotlib" },
-    { name = "networkx" },
-    { name = "onnx" },
-    { name = "onnxruntime" },
-    { name = "onnxscript" },
-    { name = "openai" },
-    { name = "optuna" },
-    { name = "pandas" },
-    { name = "psutil" },
-    { name = "pyqt6" },
-    { name = "pyqtgraph" },
-    { name = "pytorch-lightning" },
-    { name = "scikit-learn" },
-    { name = "scipy" },
-    { name = "seaborn" },
-    { name = "snntorch" },
-    { name = "sympy" },
-    { name = "tabulate" },
-    { name = "tokenizers" },
-    { name = "torch-geometric" },
-    { name = "torchvision" },
-    { name = "transformers" },
-    { name = "uvicorn" },
-]
-graphs = [
-    { name = "networkx" },
-    { name = "torch-geometric" },
-]
-knowledgebase = [
-    { name = "botorch" },
-    { name = "gpytorch" },
-    { name = "sympy" },
-]
-lightning = [
-    { name = "pytorch-lightning" },
-]
-llm = [
-    { name = "openai" },
-]
-lm = [
-    { name = "datasets" },
-    { name = "tokenizers" },
-    { name = "transformers" },
-]
-ml = [
-    { name = "pandas" },
-    { name = "scikit-learn" },
-    { name = "scipy" },
-]
-monitoring = [
-    { name = "psutil" },
-]
-p2p = [
-    { name = "grpcio" },
-    { name = "grpcio-tools" },
-    { name = "kademlia" },
-]
-plot = [
-    { name = "matplotlib" },
-    { name = "seaborn" },
-]
-rl = [
-    { name = "gymnasium" },
-]
-spiking = [
-    { name = "snntorch" },
-]
-ui = [
-    { name = "pyqt6" },
-    { name = "pyqtgraph" },
-]
-vision = [
-    { name = "torchvision" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "grpcio-tools" },
-    { name = "hypothesis" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "bioplausible", extras = ["vision", "lm", "rl", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "spiking", "llm"], marker = "extra == 'full'" },
-    { name = "botorch", marker = "extra == 'knowledgebase'" },
-    { name = "build", marker = "extra == 'dev'" },
-    { name = "cryptography", marker = "extra == 'dev'", specifier = "==50.0.0" },
-    { name = "cupy-cuda13x", specifier = ">=14.1.1" },
-    { name = "datasets", marker = "extra == 'dev'" },
-    { name = "datasets", marker = "extra == 'lm'" },
-    { name = "fastapi", marker = "extra == 'deploy'" },
-    { name = "fastapi", marker = "extra == 'dev'" },
-    { name = "gpytorch", marker = "extra == 'knowledgebase'" },
-    { name = "grpcio", marker = "extra == 'p2p'", specifier = ">=1.62" },
-    { name = "grpcio-tools", marker = "extra == 'p2p'", specifier = ">=1.62" },
-    { name = "gymnasium", marker = "extra == 'dev'" },
-    { name = "gymnasium", marker = "extra == 'rl'" },
-    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0" },
-    { name = "kademlia", marker = "extra == 'dev'" },
-    { name = "kademlia", marker = "extra == 'p2p'" },
-    { name = "matplotlib", marker = "extra == 'dev'" },
-    { name = "matplotlib", marker = "extra == 'plot'" },
-    { name = "networkx", marker = "extra == 'graphs'" },
-    { name = "nicegui", specifier = ">=3.16.0" },
-    { name = "nicegui", marker = "extra == 'dev'", specifier = ">=3.16.0" },
-    { name = "numpy" },
-    { name = "omegaconf", specifier = ">=2.3" },
-    { name = "onnx", marker = "extra == 'export'" },
-    { name = "onnxruntime", marker = "extra == 'deploy'" },
-    { name = "onnxruntime", marker = "extra == 'dev'" },
-    { name = "onnxscript", marker = "extra == 'export'" },
-    { name = "openai", marker = "extra == 'llm'", specifier = ">=1.0" },
-    { name = "optuna", marker = "extra == 'analysis'" },
-    { name = "optuna", marker = "extra == 'dev'" },
-    { name = "pandas", marker = "extra == 'dev'" },
-    { name = "pandas", marker = "extra == 'ml'" },
-    { name = "pip-audit", marker = "extra == 'dev'" },
-    { name = "plotly", marker = "extra == 'dev'", specifier = ">=6.9.0" },
-    { name = "pre-commit", marker = "extra == 'dev'" },
-    { name = "psutil", marker = "extra == 'dev'" },
-    { name = "psutil", marker = "extra == 'monitoring'" },
-    { name = "pydantic", specifier = ">=2.0" },
-    { name = "pyqt6", marker = "extra == 'ui'" },
-    { name = "pyqtgraph", marker = "extra == 'ui'" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "pytest-mock", marker = "extra == 'dev'" },
-    { name = "pytest-xdist", marker = "extra == 'dev'" },
-    { name = "pytorch-lightning", marker = "extra == 'dev'", specifier = ">=2.0.0" },
-    { name = "pytorch-lightning", marker = "extra == 'lightning'", specifier = ">=2.0.0" },
-    { name = "rich" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
-    { name = "scikit-learn", marker = "extra == 'dev'" },
-    { name = "scikit-learn", marker = "extra == 'ml'" },
-    { name = "scipy", marker = "extra == 'dev'" },
-    { name = "scipy", marker = "extra == 'ml'" },
-    { name = "seaborn", marker = "extra == 'dev'" },
-    { name = "seaborn", marker = "extra == 'plot'" },
-    { name = "snntorch", specifier = ">=0.8" },
-    { name = "snntorch", marker = "extra == 'spiking'", specifier = ">=0.8" },
-    { name = "sympy", marker = "extra == 'knowledgebase'" },
-    { name = "tabulate", marker = "extra == 'analysis'", specifier = ">=0.9" },
-    { name = "tabulate", marker = "extra == 'dev'", specifier = ">=0.9" },
-    { name = "tokenizers", marker = "extra == 'lm'" },
-    { name = "torch", specifier = ">=2.0.0" },
-    { name = "torch-geometric", marker = "extra == 'graphs'", specifier = ">=2.5" },
-    { name = "torchvision", marker = "extra == 'dev'" },
-    { name = "torchvision", marker = "extra == 'vision'" },
-    { name = "tqdm" },
-    { name = "transformers", marker = "extra == 'lm'" },
-    { name = "twine", marker = "extra == 'dev'" },
-    { name = "uvicorn", marker = "extra == 'deploy'" },
-    { name = "uvicorn", marker = "extra == 'dev'" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "grpcio-tools", specifier = ">=1.83.0" },
-    { name = "hypothesis", specifier = ">=6.161.2" },
-    { name = "pytest-asyncio", specifier = ">=1.4.0" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
-]
-
-[[package]]
 name = "boolean-py"
 version = "5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -614,6 +377,247 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8c/55/ba79756cb90c8d69d599d57785398ac87bba7b19c80e87f4e8a562197c93/colorlog-6.12.0.tar.gz", hash = "sha256:2a7924c1dadf18b22a0eb8b06d1c7b01d5341707ec1641eb6fcc4fde0c3e8e5f", size = 18151 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d4/19/0b6647bf5e331521e55d2b63bfbdc210bd9cd605189273f03614a05f702d/colorlog-6.12.0-py3-none-any.whl", hash = "sha256:30d392604e9110045a2c2aeefc27d7a017abbab63f3a8aee594eac0801df784e", size = 12239 },
+]
+
+[[package]]
+name = "computronium"
+version = "1.0.0"
+source = { editable = "." }
+dependencies = [
+    { name = "cupy-cuda13x" },
+    { name = "nicegui" },
+    { name = "numpy" },
+    { name = "omegaconf" },
+    { name = "optuna" },
+    { name = "plotly" },
+    { name = "pydantic" },
+    { name = "rich" },
+    { name = "snntorch" },
+    { name = "torch" },
+    { name = "tqdm" },
+]
+
+[package.optional-dependencies]
+analysis = [
+    { name = "optuna" },
+    { name = "tabulate" },
+]
+deploy = [
+    { name = "fastapi" },
+    { name = "onnxruntime" },
+    { name = "uvicorn" },
+]
+dev = [
+    { name = "build" },
+    { name = "cryptography" },
+    { name = "datasets" },
+    { name = "fastapi" },
+    { name = "gymnasium" },
+    { name = "hypothesis" },
+    { name = "kademlia" },
+    { name = "matplotlib" },
+    { name = "nicegui" },
+    { name = "onnxruntime" },
+    { name = "optuna" },
+    { name = "pandas" },
+    { name = "pip-audit" },
+    { name = "plotly" },
+    { name = "pre-commit" },
+    { name = "psutil" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "pytest-xdist" },
+    { name = "pytorch-lightning" },
+    { name = "ruff" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "seaborn" },
+    { name = "tabulate" },
+    { name = "torchvision" },
+    { name = "twine" },
+    { name = "uvicorn" },
+]
+export = [
+    { name = "onnx" },
+    { name = "onnxscript" },
+]
+full = [
+    { name = "botorch" },
+    { name = "datasets" },
+    { name = "fastapi" },
+    { name = "gpytorch" },
+    { name = "grpcio" },
+    { name = "grpcio-tools" },
+    { name = "gymnasium" },
+    { name = "kademlia" },
+    { name = "matplotlib" },
+    { name = "networkx" },
+    { name = "onnx" },
+    { name = "onnxruntime" },
+    { name = "onnxscript" },
+    { name = "openai" },
+    { name = "optuna" },
+    { name = "pandas" },
+    { name = "psutil" },
+    { name = "pyqt6" },
+    { name = "pyqtgraph" },
+    { name = "pytorch-lightning" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "seaborn" },
+    { name = "snntorch" },
+    { name = "sympy" },
+    { name = "tabulate" },
+    { name = "tokenizers" },
+    { name = "torch-geometric" },
+    { name = "torchvision" },
+    { name = "transformers" },
+    { name = "uvicorn" },
+]
+graphs = [
+    { name = "networkx" },
+    { name = "torch-geometric" },
+]
+knowledgebase = [
+    { name = "botorch" },
+    { name = "gpytorch" },
+    { name = "sympy" },
+]
+lightning = [
+    { name = "pytorch-lightning" },
+]
+llm = [
+    { name = "openai" },
+]
+lm = [
+    { name = "datasets" },
+    { name = "tokenizers" },
+    { name = "transformers" },
+]
+ml = [
+    { name = "pandas" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+]
+monitoring = [
+    { name = "psutil" },
+]
+p2p = [
+    { name = "grpcio" },
+    { name = "grpcio-tools" },
+    { name = "kademlia" },
+]
+plot = [
+    { name = "matplotlib" },
+    { name = "seaborn" },
+]
+rl = [
+    { name = "gymnasium" },
+]
+spiking = [
+    { name = "snntorch" },
+]
+ui = [
+    { name = "pyqt6" },
+    { name = "pyqtgraph" },
+]
+vision = [
+    { name = "torchvision" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "grpcio-tools" },
+    { name = "hypothesis" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "botorch", marker = "extra == 'knowledgebase'" },
+    { name = "build", marker = "extra == 'dev'" },
+    { name = "computronium", extras = ["vision", "lm", "rl", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "spiking", "llm"], marker = "extra == 'full'" },
+    { name = "cryptography", marker = "extra == 'dev'", specifier = "==50.0.0" },
+    { name = "cupy-cuda13x", specifier = ">=14.1.1" },
+    { name = "datasets", marker = "extra == 'dev'" },
+    { name = "datasets", marker = "extra == 'lm'" },
+    { name = "fastapi", marker = "extra == 'deploy'" },
+    { name = "fastapi", marker = "extra == 'dev'" },
+    { name = "gpytorch", marker = "extra == 'knowledgebase'" },
+    { name = "grpcio", marker = "extra == 'p2p'", specifier = ">=1.62" },
+    { name = "grpcio-tools", marker = "extra == 'p2p'", specifier = ">=1.62" },
+    { name = "gymnasium", marker = "extra == 'dev'" },
+    { name = "gymnasium", marker = "extra == 'rl'" },
+    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0" },
+    { name = "kademlia", marker = "extra == 'dev'" },
+    { name = "kademlia", marker = "extra == 'p2p'" },
+    { name = "matplotlib", marker = "extra == 'dev'" },
+    { name = "matplotlib", marker = "extra == 'plot'" },
+    { name = "networkx", marker = "extra == 'graphs'" },
+    { name = "nicegui", specifier = ">=3.16.0" },
+    { name = "nicegui", marker = "extra == 'dev'", specifier = ">=3.16.0" },
+    { name = "numpy" },
+    { name = "omegaconf", specifier = ">=2.3" },
+    { name = "onnx", marker = "extra == 'export'" },
+    { name = "onnxruntime", marker = "extra == 'deploy'" },
+    { name = "onnxruntime", marker = "extra == 'dev'" },
+    { name = "onnxscript", marker = "extra == 'export'" },
+    { name = "openai", marker = "extra == 'llm'", specifier = ">=1.0" },
+    { name = "optuna", specifier = ">=4.9.0" },
+    { name = "optuna", marker = "extra == 'analysis'" },
+    { name = "optuna", marker = "extra == 'dev'" },
+    { name = "pandas", marker = "extra == 'dev'" },
+    { name = "pandas", marker = "extra == 'ml'" },
+    { name = "pip-audit", marker = "extra == 'dev'" },
+    { name = "plotly", specifier = ">=6.9.0" },
+    { name = "plotly", marker = "extra == 'dev'", specifier = ">=6.9.0" },
+    { name = "pre-commit", marker = "extra == 'dev'" },
+    { name = "psutil", marker = "extra == 'dev'" },
+    { name = "psutil", marker = "extra == 'monitoring'" },
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pyqt6", marker = "extra == 'ui'" },
+    { name = "pyqtgraph", marker = "extra == 'ui'" },
+    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pytest-mock", marker = "extra == 'dev'" },
+    { name = "pytest-xdist", marker = "extra == 'dev'" },
+    { name = "pytorch-lightning", marker = "extra == 'dev'", specifier = ">=2.0.0" },
+    { name = "pytorch-lightning", marker = "extra == 'lightning'", specifier = ">=2.0.0" },
+    { name = "rich" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
+    { name = "scikit-learn", marker = "extra == 'dev'" },
+    { name = "scikit-learn", marker = "extra == 'ml'" },
+    { name = "scipy", marker = "extra == 'dev'" },
+    { name = "scipy", marker = "extra == 'ml'" },
+    { name = "seaborn", marker = "extra == 'dev'" },
+    { name = "seaborn", marker = "extra == 'plot'" },
+    { name = "snntorch", specifier = ">=0.8" },
+    { name = "snntorch", marker = "extra == 'spiking'", specifier = ">=0.8" },
+    { name = "sympy", marker = "extra == 'knowledgebase'" },
+    { name = "tabulate", marker = "extra == 'analysis'", specifier = ">=0.9" },
+    { name = "tabulate", marker = "extra == 'dev'", specifier = ">=0.9" },
+    { name = "tokenizers", marker = "extra == 'lm'" },
+    { name = "torch", specifier = ">=2.0.0" },
+    { name = "torch-geometric", marker = "extra == 'graphs'", specifier = ">=2.5" },
+    { name = "torchvision", marker = "extra == 'dev'" },
+    { name = "torchvision", marker = "extra == 'vision'" },
+    { name = "tqdm" },
+    { name = "transformers", marker = "extra == 'lm'" },
+    { name = "twine", marker = "extra == 'dev'" },
+    { name = "uvicorn", marker = "extra == 'deploy'" },
+    { name = "uvicorn", marker = "extra == 'dev'" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "grpcio-tools", specifier = ">=1.83.0" },
+    { name = "hypothesis", specifier = ">=6.161.2" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
 ]
 
 [[package]]

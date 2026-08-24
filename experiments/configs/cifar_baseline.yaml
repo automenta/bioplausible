@@ -8,4 +8,4 @@ training:
   lr: 0.001
   batch_size: 128
 tracking:
-  wandb_project: bioplausible-cifar
+  wandb_project: computronium-cifar

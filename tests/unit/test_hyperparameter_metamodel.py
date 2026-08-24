@@ -1,7 +1,7 @@
 import unittest
 from dataclasses import dataclass
 
-from bioplausible.hyperopt.hyperparameter_metamodel import HYPERPARAM_METAMODEL
+from computronium.hyperopt.hyperparameter_metamodel import HYPERPARAM_METAMODEL
 
 
 @dataclass

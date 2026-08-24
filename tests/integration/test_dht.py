@@ -4,7 +4,7 @@ import unittest
 
 import pytest
 
-from bioplausible.p2p.dht import DHTNode
+from computronium.p2p.dht import DHTNode
 
 # Configure logging to see output during tests
 logging.basicConfig(level=logging.DEBUG)

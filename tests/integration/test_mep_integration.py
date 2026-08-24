@@ -14,8 +14,8 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.zoo.models.transitions import TransitionGraphMixin
+from computronium.core.registry import ComponentCategory, Registry
+from computronium.zoo.models.transitions import TransitionGraphMixin
 
 
 class TinyMLP(TransitionGraphMixin, nn.Module):
@@ -49,7 +49,7 @@ class TestMEPImport:
     def test_import_smep(self):
         """Test importing smep preset."""
         try:
-            from bioplausible import smep
+            from computronium import smep
 
             assert smep is not None
         except ImportError:
@@ -58,7 +58,7 @@ class TestMEPImport:
     def test_import_smep_fast(self):
         """Test importing smep_fast preset."""
         try:
-            from bioplausible import smep_fast
+            from computronium import smep_fast
 
             assert smep_fast is not None
         except ImportError:
@@ -67,7 +67,7 @@ class TestMEPImport:
     def test_import_composite_optimizer(self):
         """Test importing CompositeOptimizer from MEP."""
         try:
-            from bioplausible.zoo.mep.optimizers import CompositeOptimizer
+            from computronium.zoo.mep.optimizers import CompositeOptimizer
 
             assert CompositeOptimizer is not None
         except ImportError:
@@ -76,7 +76,7 @@ class TestMEPImport:
     def test_import_strategies(self):
         """Test importing strategy components from MEP."""
         try:
-            from bioplausible.zoo.mep.optimizers import (
+            from computronium.zoo.mep.optimizers import (
                 EPGradient,
                 MuonUpdate,
                 SpectralConstraint,
@@ -104,7 +104,7 @@ class TestZooIntegration:
 
     def test_list_models(self):
         """Test listing models."""
-        from bioplausible.core.registry import list_models
+        from computronium.core.registry import list_models
 
         models = list_models()
         assert len(models) > 0
@@ -132,7 +132,7 @@ class TestMEPOptimizers:
     def test_smep_basic(self, model, data):
         """Test basic SMEP functionality."""
         try:
-            from bioplausible import smep
+            from computronium import smep
         except ImportError:
             pytest.skip("MEP not installed")
 
@@ -144,7 +144,7 @@ class TestMEPOptimizers:
     def test_smep_fast_basic(self, model, data):
         """Test basic smep_fast functionality."""
         try:
-            from bioplausible import smep_fast
+            from computronium import smep_fast
         except ImportError:
             pytest.skip("MEP not installed")
 
@@ -156,7 +156,7 @@ class TestMEPOptimizers:
     def test_muon_backprop_basic(self, model, data):
         """Test basic muon_backprop functionality."""
         try:
-            from bioplausible import muon_backprop
+            from computronium import muon_backprop
         except ImportError:
             pytest.skip("MEP not installed")
 
@@ -171,7 +171,7 @@ class TestMEPOptimizers:
     def test_composite_optimizer(self, model, data):
         """Test CompositeOptimizer."""
         try:
-            from bioplausible.zoo.mep.optimizers import (
+            from computronium.zoo.mep.optimizers import (
                 CompositeOptimizer,
                 EPGradient,
                 MuonUpdate,
@@ -199,7 +199,7 @@ class TestLearning:
     def test_mnist_learning(self):
         """Test that EP learns on MNIST (mini test)."""
         try:
-            from bioplausible import smep
+            from computronium import smep
         except ImportError:
             pytest.skip("MEP not installed")
 
@@ -237,7 +237,7 @@ def main():
 
     print("\nTesting imports...")
     try:
-        from bioplausible import smep
+        from computronium import smep
 
         print("All imports successful")
     except ImportError as e:
@@ -245,7 +245,7 @@ def main():
         return 1
 
     print("\nTesting Zoo...")
-    from bioplausible.core.registry import list_models
+    from computronium.core.registry import list_models
 
     models = list_models()
     result = Registry.list(ComponentCategory.OPTIMIZER)

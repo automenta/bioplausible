@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 import torch
 
-from bioplausible.core.dynamics.adapters import create_dynamics_adapter
-from bioplausible.core.joint import (
+from computronium.core.dynamics.adapters import create_dynamics_adapter
+from computronium.core.joint import (
     CompositeState,
     NullPlasticity,
     PlasticityConfig,
@@ -17,7 +17,7 @@ from bioplausible.core.joint import (
     StateVariable,
     SystemContext,
 )
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -34,8 +34,8 @@ from bioplausible.core.ontology import (
     SystemConfig,
     ThermodynamicContrast,
 )
-from bioplausible.core.substrates.adapters import create_substrate_adapter
-from bioplausible.core.system_trainer import compose_system
+from computronium.core.substrates.adapters import create_substrate_adapter
+from computronium.core.system_trainer import compose_system
 
 # ============================================================
 # Valid coordinate factories for each axis (using actual API)
@@ -538,7 +538,7 @@ def test_state_registry_lifecycle_groups():
 
 def test_consolidation_respects_registry():
     """Consolidation should only promote consolidatable variables."""
-    from bioplausible.core.joint import ConsolidationConfig, consolidate
+    from computronium.core.joint import ConsolidationConfig, consolidate
 
     geometry = RecurrentGeometry(
         GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,))

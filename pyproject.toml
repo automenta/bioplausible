@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 exclude = ["docs.archive*"]
-include = ["bioplausible", "bioplausible.*"]
+include = ["computronium", "computronium.*"]
 
 [tool.setuptools]
 include-package-data = true
 
 [project]
-name = "bioplausible"
+name = "computronium"
 version = "1.0.0"
 description = "Unified platform for exploring the full spectrum of bio-plausible learning rules across machine intelligence"
 readme = "README.md"
@@ -39,6 +39,8 @@ dependencies = [
     "snnTorch>=0.8",
     "cupy-cuda13x>=14.1.1",
     "nicegui>=3.16.0",
+    "optuna>=4.9.0",
+    "plotly>=6.9.0",
 ]
 
 [project.optional-dependencies]
@@ -115,31 +117,16 @@ llm = ["openai>=1.0"]
 
 # --- Full install ---
 full = [
-    "bioplausible[vision,lm,rl,lightning,analysis,ml,plot,deploy,export,p2p,ui,monitoring,knowledgebase,graphs,spiking,llm]",
+    "computronium[vision,lm,rl,lightning,analysis,ml,plot,deploy,export,p2p,ui,monitoring,knowledgebase,graphs,spiking,llm]",
 ]
 
 [project.urls]
-homepage = "https://github.com/bioplausible/bioplausible"
-repository = "https://github.com/bioplausible/bioplausible"
-documentation = "https://bioplausible.readthedocs.io"
+homepage = "https://github.com/computronium/computronium"
+repository = "https://github.com/computronium/computronium"
+documentation = "https://computronium.readthedocs.io"
 
 [project.scripts]
-biopl = "bioplausible.cli.__main__:main"
-biopl-hpo = "bioplausible.cli.hpo:main"
-biopl-run = "bioplausible.experiment.cli:main"
-biopl-p2p-worker = "bioplausible.p2p.p2p_worker:main"
-biopl-scientist = "bioplausible.execution.engine:main"
-biopl-report = "bioplausible.experiment.cli:main_report"
-biopl-registry-audit = "bioplausible.core.audit:main"
-biopl-repro-check = "bioplausible.cli.repro:main"
-biopl-parity = "bioplausible.cli.parity:main"
-biopl-frontier = "bioplausible.cli.frontier:main"
-biopl-failure-manifesto = "bioplausible.analysis.failure_manifesto:main"
-biopl-export-kernel = "bioplausible.cli.export_kernel:main"
-biopl-export-trained-kernel = "bioplausible.cli.export_trained_kernel:main"
-biopl-campaign = "bioplausible.cli.campaign:main"
-biopl-stability = "bioplausible.cli.stability:main"
-biopl-benchmark = "bioplausible.cli.benchmark:main"
+comp = "computronium.cli.__main__:main"
 
 [dependency-groups]
 dev = [
@@ -160,10 +147,10 @@ markers = [
     "flaky: quarantined non-deterministic test (Sprint 5.6)",
     "llm: requires a real LLM provider; skipped in CI",
 ]
-addopts = "--cov=bioplausible --cov-report=term-missing --cov-fail-under=15 -p no:warnings"
+addopts = "--cov=computronium --cov-report=term-missing --cov-fail-under=15 -p no:warnings"
 
 [tool.coverage.run]
-source = ["bioplausible"]
+source = ["computronium"]
 omit = [
     "*/tests/*",
     "*/test_*.py",

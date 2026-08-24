@@ -20,9 +20,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from bioplausible.config.unified import ModelConfig
-from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
-from bioplausible.zoo.models.eqprop.conv_eqprop import ConvEqProp
+from computronium.config.unified import ModelConfig
+from computronium.zoo.models.eqprop._energy import EquilibriumMLP
+from computronium.zoo.models.eqprop.conv_eqprop import ConvEqProp
 
 _GRAD_PARITY_TOL = 5e-2  # implicit-diff vs BPTT relative error budget
 

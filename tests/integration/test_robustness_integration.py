@@ -6,9 +6,9 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from bioplausible.execution.engine import ExecutionEngine
-from bioplausible.execution.task import ExperimentTask
-from bioplausible.hyperopt import PatientLevel
+from computronium.execution.engine import ExecutionEngine
+from computronium.execution.task import ExperimentTask
+from computronium.hyperopt import PatientLevel
 
 
 class TestRobustnessIntegration(unittest.TestCase):
@@ -25,7 +25,7 @@ class TestRobustnessIntegration(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.test_dir)
 
-    @patch("bioplausible.execution.engine.run_robustness_check")
+    @patch("computronium.execution.engine.run_robustness_check")
     def test_robustness_uses_pretrained_weights_zip(self, mock_run_robustness):
         """Test that robustness check correctly extracts and uses weights from zip artifact."""
 
@@ -91,7 +91,7 @@ class TestRobustnessIntegration(unittest.TestCase):
             if artifact_path.exists():
                 Path(artifact_path).unlink()
 
-    @patch("bioplausible.execution.engine.run_robustness_check")
+    @patch("computronium.execution.engine.run_robustness_check")
     def test_robustness_uses_pretrained_weights_dir(self, mock_run_robustness):
         """Test that robustness check correctly uses weights from directory artifact."""
         mock_run_robustness.return_value = {"robustness_score": 0.85, "ood_score": 0.7}

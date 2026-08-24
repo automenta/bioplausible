@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 
 # Hard dependencies — no mock stubs needed
-# bioplausible.acceleration checks for cupy
+# computronium.acceleration checks for cupy
 from unittest.mock import MagicMock  # ruff: ignore[module-import-not-at-top-of-file]
 
 sys.modules["cupy"] = MagicMock()
@@ -29,7 +29,7 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.zoo.models.transitions import TransitionGraphMixin
+from computronium.zoo.models.transitions import TransitionGraphMixin
 
 
 def lm_train_step(
@@ -41,7 +41,7 @@ def lm_train_step(
     ``NotImplementedError``), so the dispatcher's BPTT fallback owns the step.
     This mirrors the historical standalone ``train_step`` contract.
     """
-    from bioplausible.core.trainer import dispatch_train_step
+    from computronium.core.trainer import dispatch_train_step
 
     if target_ids is None:
         target_ids = input_ids.clone()
@@ -104,10 +104,10 @@ def sample_batch() -> tuple[torch.Tensor, torch.Tensor]:
 
 def pytest_unconfigure(config: object) -> None:
     """Clean up test artifacts after session ends."""
-    kb_tmp = Path(tempfile.gettempdir()) / "bioplausible-knowledgebase.json"
+    kb_tmp = Path(tempfile.gettempdir()) / "computronium-knowledgebase.json"
     if kb_tmp.exists():
         kb_tmp.unlink()
-    kb_tmp_dir = Path(tempfile.gettempdir()) / "bioplausible_kb"
+    kb_tmp_dir = Path(tempfile.gettempdir()) / "computronium_kb"
     if kb_tmp_dir.exists():
         shutil.rmtree(kb_tmp_dir, ignore_errors=True)
     cwd_kb = Path.cwd() / "knowledgebase.json"
@@ -147,7 +147,7 @@ def mnist_quick_task():
 
     Returns a VisionTask configured for quick test runs.
     """
-    from bioplausible.tasks.vision import VisionTask
+    from computronium.tasks.vision import VisionTask
 
     return VisionTask("mnist", quick_mode=True)
 
@@ -155,8 +155,8 @@ def mnist_quick_task():
 @pytest.fixture
 def eqprop_model():
     """Minimal EquilibriumMLP for settling/contrastive tests."""
-    from bioplausible.config.unified import ModelConfig
-    from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+    from computronium.config.unified import ModelConfig
+    from computronium.zoo.models.eqprop._energy import EquilibriumMLP
 
     config = ModelConfig(name="test", input_dim=64, output_dim=10, max_steps=5)
     return EquilibriumMLP(config=config)

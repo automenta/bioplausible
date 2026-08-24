@@ -20,7 +20,7 @@ def test_settling_releases_graph_between_steps() -> None:
     test runs enough steps that retained graphs would fail (device-cpu, so an
     actual "OOM" is a MemoryError) whereas correct release stays bounded.
     """
-    from bioplausible.core.local_learning.settling import energy_gradient_descent
+    from computronium.core.local_learning.settling import energy_gradient_descent
 
     states = [torch.randn(4, 8, 8, requires_grad=True)]
     settled = energy_gradient_descent(states, _energy_fn, steps=200, lr=0.1)
@@ -36,7 +36,7 @@ def test_sequential_settling_bounded_memory() -> None:
     bound. We assert the peak-allocated byte count stays flat after a warm-up
     call.
     """
-    from bioplausible.core.local_learning.settling import energy_gradient_descent
+    from computronium.core.local_learning.settling import energy_gradient_descent
 
     def run_once() -> None:
         s = [torch.randn(4, 8, 8, requires_grad=True)]

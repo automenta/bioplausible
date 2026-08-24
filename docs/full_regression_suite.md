@@ -104,7 +104,7 @@ uv run ruff check --fix .
 uv run pyright .
 
 # 4. Full test suite with coverage floor
-uv run pytest --cov=bioplausible --cov-report=term-missing --cov-fail-under=55
+uv run pytest --cov=computronium --cov-report=term-missing --cov-fail-under=55
 
 # 5. Dependency audit
 uv run pip-audit
@@ -139,7 +139,7 @@ uv run pytest -m benchmark ...
 If coverage fails (`--cov-fail-under=55`), the issue is typically in untested kernel backend code paths. Focus on:
 
 ```bash
-uv run pytest tests/unit/acceleration/ --cov=bioplausible.acceleration --cov-report=term-missing
+uv run pytest tests/unit/acceleration/ --cov=computronium.acceleration --cov-report=term-missing
 ```
 
 ### CUDA Tests on CPU-Only Machines

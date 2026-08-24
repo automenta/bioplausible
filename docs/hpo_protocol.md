@@ -15,8 +15,8 @@ uv run biopl-hpo search \
   --output ./hpo_results
 ```
 
-Console script `biopl-hpo` resolves to `bioplausible/cli/hpo.py:main`, which dispatches to
-`bioplausible.cli.run`.
+Console script `biopl-hpo` resolves to `computronium/cli/hpo.py:main`, which dispatches to
+`computronium.cli.run`.
 
 ## 2. Family mapping
 
@@ -41,7 +41,7 @@ skipped automatically with a warning.
 ## 3. Study layout
 
 For each compatible model in a family, **one Optuna study is created per model**
-named `{reg_family}_{model}_{task}` (stored in `sqlite:///bioplausible.db` by
+named `{reg_family}_{model}_{task}` (stored in `sqlite:///computronium.db` by
 default; pass `--db <file>` to any HPO subcommand to isolate a run in a dedicated
 SQLite file).
 
@@ -94,7 +94,7 @@ These feed the comparison and Pareto ranking tools.
 
 - All samplers are seeded (`--seed`). `optuna_bridge.create_study` threads the seed
   into `TPESampler`, `RandomSampler`, and `NSGAIISampler`.
-- Storage is SQLite (`bioplausible.db`), so studies resume idempotent via
+- Storage is SQLite (`computronium.db`), so studies resume idempotent via
   `load_if_exists=True`.
 - Each trial writes `model_name` + `family` into `user_attrs`; re-running the same
   study name appends to the existing trial set.

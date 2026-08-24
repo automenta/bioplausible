@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from bioplausible.domains.base import (
+from computronium.domains.base import (
     Batch,
     DomainSpec,
     DomainTask,
@@ -118,7 +118,7 @@ def test_domain_task_get_model_kwargs():
 
 def test_vision_task_creation():
     """Test creating a VisionTask."""
-    from bioplausible.domains.vision import VisionTask
+    from computronium.domains.vision import VisionTask
 
     task = VisionTask(name="test_vision", dataset_name="mnist", device="cpu")
     assert task.domain_type == DomainType.VISION
@@ -127,7 +127,7 @@ def test_vision_task_creation():
 
 def test_lm_task_creation():
     """Test creating a LMTask."""
-    from bioplausible.domains.lm import LMTask
+    from computronium.domains.lm import LMTask
 
     task = LMTask(
         name="test_lm", dataset_name="tiny_shakespeare", device="cpu", vocab_size=100
@@ -138,7 +138,7 @@ def test_lm_task_creation():
 
 def test_rl_task_creation():
     """Test creating an RLTask."""
-    from bioplausible.domains.rl import RLTask
+    from computronium.domains.rl import RLTask
 
     task = RLTask(name="test_rl", env_id="CartPole-v1", device="cpu")
     assert task.domain_type == DomainType.RL
@@ -147,7 +147,7 @@ def test_rl_task_creation():
 
 def test_domain_registry():
     """Test the domain registry via create_domain_task."""
-    from bioplausible.domains import create_domain_task, list_domains
+    from computronium.domains import create_domain_task, list_domains
 
     domains = list_domains()
     assert "vision" in domains

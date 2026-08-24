@@ -10,9 +10,9 @@ from torch.utils.data import DataLoader, TensorDataset
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from bioplausible.config.unified import ModelConfig
-from bioplausible.core.local_learning.rules.fa import AdaptiveFA
-from bioplausible.zoo.models.eqprop import (
+from computronium.config.unified import ModelConfig
+from computronium.core.local_learning.rules.fa import AdaptiveFA
+from computronium.zoo.models.eqprop import (
     ConvEqProp,
     FullEqPropLM,
     HomeostaticEqProp,
@@ -21,8 +21,8 @@ from bioplausible.zoo.models.eqprop import (
     SimpleConvEqProp,
     TransformerEqProp,
 )
-from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
-from bioplausible.zoo.models.fa import FeedbackAlignmentEqProp
+from computronium.zoo.models.eqprop._energy import EquilibriumMLP
+from computronium.zoo.models.fa import FeedbackAlignmentEqProp
 
 
 class TestValidationAll(unittest.TestCase):

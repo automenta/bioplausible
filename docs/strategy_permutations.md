@@ -11,10 +11,10 @@ REFACTOR8 introduces **generic strategy permutation factories** that decouple up
 
 ## Core Factory: `make_strategy_optimizer()`
 
-Located in `bioplausible/core/optimization/factory.py`.
+Located in `computronium/core/optimization/factory.py`.
 
 ```python
-from bioplausible.core.optimization.factory import make_strategy_optimizer
+from computronium.core.optimization.factory import make_strategy_optimizer
 
 optimizer = make_strategy_optimizer(
     model=model,
@@ -79,7 +79,7 @@ optimizer = make_strategy_optimizer(
 The factory includes 8 curated presets for common research permutations:
 
 ```python
-from bioplausible.core.optimization.factory import STRATEGY_PRESETS
+from computronium.core.optimization.factory import STRATEGY_PRESETS
 
 # List available presets
 print(STRATEGY_PRESETS.keys())
@@ -104,7 +104,7 @@ print(STRATEGY_PRESETS.keys())
 ### Using Presets
 
 ```python
-from bioplausible.core.optimization.factory import (
+from computronium.core.optimization.factory import (
     make_strategy_optimizer,
     STRATEGY_PRESETS,
 )
@@ -119,7 +119,7 @@ optimizer = make_strategy_optimizer(model=model, **config, lr=0.01)
 The `CoreTrainer` supports strategy optimizers via the `optimizer` config field:
 
 ```python
-from bioplausible.core.trainer import CoreTrainer, TrainerConfig
+from computronium.core.trainer import CoreTrainer, TrainerConfig
 
 config = TrainerConfig(
     model="predictive_coding_hybrid",
@@ -193,7 +193,7 @@ Each permutation must reach **≥90% of `backprop_plain` accuracy** on digits wi
 For advanced research, register custom strategies:
 
 ```python
-from bioplausible.core.optimization.factory import (
+from computronium.core.optimization.factory import (
     register_gradient_strategy,
     register_update_strategy,
     GradientStrategy,
@@ -222,7 +222,7 @@ optimizer = make_strategy_optimizer(model, gradient="my_custom", ...)
 REFACTOR7 MEP presets (`smep`, `sdmep`, `local_ep`, `natural_ep`, `muon_backprop`) are still available but now implemented as compositions of the generic factory. They require an `energy_fn` parameter:
 
 ```python
-from bioplausible.core.optimization.factory import STRATEGY_PRESETS
+from computronium.core.optimization.factory import STRATEGY_PRESETS
 
 # MEP presets (require energy_fn)
 config = STRATEGY_PRESETS["smep"]

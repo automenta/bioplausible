@@ -5,7 +5,7 @@ import copy
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
-from bioplausible.core.registry import (
+from computronium.core.registry import (
     ComponentCategory,
     ComponentMetadata,
     ComputeProfile,

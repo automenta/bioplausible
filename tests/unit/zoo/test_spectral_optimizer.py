@@ -2,7 +2,7 @@
 
 import torch
 
-from bioplausible.zoo.optimizers.spectral import SpectralConstraint
+from computronium.zoo.optimizers.spectral import SpectralConstraint
 
 
 class TestSpectralConstraint:

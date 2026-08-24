@@ -6,7 +6,7 @@ on our node forward functions, the entire PC training approach fails.
 
 import torch
 
-from bioplausible.graph.nodes import Linear
+from computronium.graph.nodes import Linear
 
 
 def test_torch_func_grad_on_linear_node():

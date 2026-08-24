@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from bioplausible.graph import (
+from computronium.graph import (
     Edge,
     InferenceSGD,
     Linear,

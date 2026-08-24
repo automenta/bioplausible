@@ -15,11 +15,11 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
-from bioplausible.core.dynamics.adapters import (
+from computronium.core.dynamics.adapters import (
     EnergyToInstantaneousAdapter,
     StateDynamicsConfig,
 )
-from bioplausible.core.joint import (
+from computronium.core.joint import (
     CompositeState,
     ConsolidationConfig,
     NullPlasticity,
@@ -29,7 +29,7 @@ from bioplausible.core.joint import (
     SystemContext,
     consolidate,
 )
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -43,9 +43,9 @@ from bioplausible.core.ontology import (
     SystemState,
     ThermodynamicContrast,
 )
-from bioplausible.core.substrates.adapters import DigitalToTernaryAdapter
-from bioplausible.core.substrates.ternary_substrate import TernarySubstrate
-from bioplausible.core.system_trainer import compose_system
+from computronium.core.substrates.adapters import DigitalToTernaryAdapter
+from computronium.core.substrates.ternary_substrate import TernarySubstrate
+from computronium.core.system_trainer import compose_system
 
 
 def _create_test_system():
@@ -650,7 +650,7 @@ def test_j6_dynamics_adapter_preserves_shape():
 
 def test_j7_trajectory_records_full_joint_state():
     """J7: JointTrajectory records activity, plastic, and substrate."""
-    from bioplausible.core.joint import JointTrajectoryRecorder
+    from computronium.core.joint import JointTrajectoryRecorder
 
     recorder = JointTrajectoryRecorder(
         max_steps=10, record_plastic=True, record_substrate=True
@@ -690,7 +690,7 @@ def test_j7_trajectory_records_full_joint_state():
 
 def test_j7_trajectory_optional_components():
     """J7: Trajectory can optionally omit plastic/substrate recording."""
-    from bioplausible.core.joint import JointTrajectoryRecorder
+    from computronium.core.joint import JointTrajectoryRecorder
 
     # Record only activity
     recorder = JointTrajectoryRecorder(

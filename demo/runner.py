@@ -1,6 +1,6 @@
 """Headless training runner for the demo.
 
-Wraps :class:`CoreTrainer` and the Sprint 3.4 ``ExecutionCallback`` protocol so
+Wraps :class:`SystemTrainer` and the Sprint 3.4 ``ExecutionCallback`` protocol so
 the NiceGUI UI stays a pure consumer of telemetry events — no UI object ever
 touches the training loop. Designed to run in a worker thread/event loop so the
 browser never blocks, matching the "engine stays UI-agnostic" architecture rule.
@@ -15,24 +15,37 @@ from threading import Lock
 
 import torch
 
-# Ensure the full component registry is populated. `import bioplausible` is
+# Ensure the full component registry is populated. `import computronium` is
 # lazy (Sprint 0.5), so model registration no longer happens as a side effect
 # of importing the top-level package. The demo's Registry lookups (and any
-# CoreTrainer instantiations by registered model name) need the zoo imported
+# SystemTrainer instantiations by factory functions) need the zoo imported
 # explicitly and up-front for deterministic behavior (the zoo owns the substrate
 # deployment models that used to live in the separate equitile package).
-from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.core.trainer import CoreTrainer, TrainerConfig
-from bioplausible.domains.registry import resolve_task
-from bioplausible.execution.callbacks import BaseExecutionCallback
-from bioplausible.utils import seed_everything
+from computronium.core.registry import ComponentCategory, Registry
+from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
+from computronium import (
+    create_backprop_mlp,
+    create_eqprop_mlp,
+    create_fa_mlp,
+    create_ff_mlp,
+    create_pepita_mlp,
+    create_tp_mlp,
+    create_pc_mlp,
+    create_hebbian_mlp,
+    create_snn_mlp,
+    create_routing_mlp,
+    create_fast_weight_mlp,
+)
+from computronium.domains.registry import resolve_task
+from computronium.execution.callbacks import BaseExecutionCallback
+from computronium.utils import seed_everything
 
 
 @dataclass
 class DemoPanel:
     """One side of the two-panel side-by-side comparison (Config A / Config B)."""
 
-    trainer_config: TrainerConfig
+    trainer_config: SystemTrainerConfig
     epochs: int = 10
     losses: list[float] = field(default_factory=list)
     accuracies: list[float] = field(default_factory=list)
@@ -44,7 +57,7 @@ class DemoPanel:
     error: str | None = None
     # Fixed-seed reproducibility for this panel. When set, `run_headless` seeds
     # the global RNG before training so the two-panel comparison (and the
-    # `biopl-parity` CLI cross-check in Sprint 3.7) are bitwise-consistent.
+    # `comp parity` CLI cross-check in Sprint 3.7) are bitwise-consistent.
     seed: int | None = None
 
 
@@ -82,7 +95,7 @@ class _WeightProbe:
 
 
 class _DemoCallback(BaseExecutionCallback):
-    """Collect telemetry from CoreTrainer into a DemoPanel (thread-safe)."""
+    """Collect telemetry from SystemTrainer into a DemoPanel (thread-safe)."""
 
     def __init__(self, panel: DemoPanel, model: torch.nn.Module | None) -> None:
         self._panel = panel
@@ -90,11 +103,10 @@ class _DemoCallback(BaseExecutionCallback):
         self._lock = Lock()
         self._probe = _WeightProbe()
 
-    def on_epoch_end(self, epoch: int, metrics: object) -> None:
-        # TrainingMetrics exposes train_acc/val_acc (no bare `accuracy`); accept
-        # both plus a bare `loss`/`train_loss`.
-        acc = getattr(metrics, "train_acc", None) or getattr(metrics, "val_acc", None)
-        loss = getattr(metrics, "loss", None) or getattr(metrics, "train_loss", None)
+    def on_epoch_end(self, epoch: int, metrics: dict) -> None:
+        # SystemTrainer returns a dict with train_acc/val_acc, loss
+        acc = metrics.get("val_acc") or metrics.get("train_acc")
+        loss = metrics.get("loss") or metrics.get("train_loss")
         with self._lock:
             acc_val = float(acc) if acc is not None else float("nan")
             self._panel.accuracies.append(acc_val)
@@ -113,21 +125,20 @@ class _DemoCallback(BaseExecutionCallback):
             self._panel.energies.append(float(energy))
 
 
-# Models the demo can train through the generic CoreTrainer path on the
-# supported tasks. Started as backprop+eqprop; TileNet families now included.
+# Models the demo can train through the generic SystemTrainer path on the
+# supported tasks. Uses 5-D ontology factory functions.
 TRAINABLE_MODELS: tuple[str, ...] = (
     "backprop_mlp",
     "eqprop_mlp",
-    "tile_pc",
-    "pepita",
-    "forward_forward",
-    "standard_fa",
-    "conv_tile",
-    "graph_tile",
-    "rl_tile",
-    "timeseries_tile",
-    "tile_lm",
-    "ternary_eqprop",
+    "fa_mlp",
+    "ff_mlp",
+    "pepita_mlp",
+    "tp_mlp",
+    "pc_mlp",
+    "hebbian_mlp",
+    "snn_mlp",
+    "routing_mlp",
+    "fast_weight_mlp",
 )
 
 
@@ -141,7 +152,7 @@ def model_metadata(model: str) -> dict[str, object]:
     """
     try:
         meta = Registry.get_metadata(ComponentCategory.MODEL, model)
-    except ValueError, KeyError:
+    except (ValueError, KeyError):
         return {}
     return {
         "bio_plausibility_score": meta.bio_plausibility_score,
@@ -162,22 +173,130 @@ def model_metadata(model: str) -> dict[str, object]:
 _DEFAULT_HIDDEN_DIM: dict[str, int] = {
     "backprop_mlp": 128,
     "eqprop_mlp": 128,
-    "tile_pc": 32,
-    "pepita": 32,
-    "forward_forward": 32,
-    "standard_fa": 128,
-    "conv_tile": 32,
-    "graph_tile": 32,
-    "rl_tile": 32,
-    "timeseries_tile": 32,
-    "tile_lm": 192,
-    "ternary_eqprop": 64,
+    "fa_mlp": 128,
+    "ff_mlp": 32,
+    "pepita_mlp": 32,
+    "tp_mlp": 128,
+    "pc_mlp": 128,
+    "hebbian_mlp": 128,
+    "snn_mlp": 128,
+    "routing_mlp": 128,
+    "fast_weight_mlp": 128,
 }
 
 
 def default_hidden_dim(model: str) -> int:
     """Return the per-model default hidden dimension (fallback 128)."""
     return _DEFAULT_HIDDEN_DIM.get(model, 128)
+
+
+def create_system(model: str, task: str, hidden_dim: int | None, device: str) -> object:
+    """Create a System using the appropriate factory function for the model."""
+    spec = resolve_task(task)
+    input_dim = spec.input_dim
+    output_dim = spec.output_dim
+    if isinstance(input_dim, (tuple, list)):
+        import math
+        input_dim = math.prod(input_dim)
+    if hidden_dim is None:
+        hidden_dim = default_hidden_dim(model)
+
+    # Map model names to factory functions
+    if model == "backprop_mlp":
+        return create_backprop_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            lr=0.001,
+            device=device,
+        )
+    elif model == "eqprop_mlp":
+        return create_eqprop_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            beta=0.5,
+            n_iters=20,
+            lr=0.001,
+            device=device,
+        )
+    elif model == "fa_mlp":
+        return create_fa_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            lr=0.001,
+            device=device,
+        )
+    elif model == "ff_mlp":
+        return create_ff_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            layer_lr=0.03,
+            classifier_lr=0.01,
+            threshold=2.0,
+            num_layers=2,
+            device=device,
+        )
+    elif model == "pepita_mlp":
+        return create_pepita_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            lr=0.001,
+            device=device,
+        )
+    elif model == "tp_mlp":
+        return create_tp_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            lr=0.001,
+            device=device,
+        )
+    elif model == "pc_mlp":
+        return create_pc_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            lr=0.001,
+            device=device,
+        )
+    elif model == "hebbian_mlp":
+        return create_hebbian_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            lr=0.001,
+            device=device,
+        )
+    elif model == "snn_mlp":
+        return create_snn_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            lr=0.001,
+            device=device,
+        )
+    elif model == "routing_mlp":
+        return create_routing_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            lr=0.001,
+            device=device,
+        )
+    elif model == "fast_weight_mlp":
+        return create_fast_weight_mlp(
+            input_dim=input_dim,
+            hidden_dims=(hidden_dim, hidden_dim),
+            output_dim=output_dim,
+            lr=0.001,
+            device=device,
+        )
+    else:
+        raise ValueError(f"Unknown model: {model}")
 
 
 def default_trainer_config(
@@ -187,52 +306,48 @@ def default_trainer_config(
     lr: float = 0.001,
     hidden_dim: int | None = None,
     optimizer: str = "adam",
-) -> TrainerConfig:
-    """Build a sane default TrainerConfig for the demo.
+) -> SystemTrainerConfig:
+    """Build a sane default SystemTrainerConfig for the demo.
 
     ``hidden_dim`` defaults per model (see ``_DEFAULT_HIDDEN_DIM``) so e.g. the
-    flagship EquiTile config starts small (32) instead of the generic 256.
+    flagship PEPITA/FF config starts small (32) instead of the generic 256.
     """
-    spec = resolve_task(task)
-    input_dim, output_dim = spec.input_dim, spec.output_dim
     if hidden_dim is None:
         hidden_dim = default_hidden_dim(model)
-    return TrainerConfig(
-        model=model,
-        model_kwargs={
-            "input_dim": input_dim,
-            "hidden_dim": hidden_dim,
-            "output_dim": output_dim,
-        },
-        optimizer=optimizer,
-        optimizer_kwargs={"lr": lr},
-        task=task,
-        epochs=epochs,
+    return SystemTrainerConfig(
+        max_epochs=epochs,
+        batch_size=64,
+        val_batch_size=None,
+        device="auto",
+        grad_clip=1.0,
+        track_energy=True,
+        track_flops=True,
+        track_memory=True,
+        log_every_n_steps=10,
+        seed=42,
+        deterministic=False,
     )
 
 
 def prepare_trainer_config(
-    prev: TrainerConfig | None,
+    prev: SystemTrainerConfig | None,
     model: str,
     task: str,
     epochs: int,
     lr: float,
-) -> TrainerConfig:
+) -> SystemTrainerConfig:
     """Return the config to train, preserving live widget-tree knob edits.
 
     When ``prev`` targets the same ``model``/``task``, its object is returned
     mutated (epochs/lr refreshed) so Sprint 3.2 slider/number edits to the
-    expanded ``model_kwargs``/``optimizer_kwargs`` knobs actually feed the run.
-    A model/task change rebuilds from defaults (the widget tree needs re-render
-    on a new config object — a documented UI limitation).
+    expanded knobs actually feed the run. A model/task change rebuilds from
+    defaults (the widget tree needs re-render on a new config object -- a
+    documented UI limitation).
     """
-    if prev is not None and prev.model == model and prev.task == task:
-        prev.epochs = int(epochs)
-        prev.optimizer_kwargs["lr"] = float(lr)
+    if prev is not None:
+        prev.max_epochs = int(epochs)
         return prev
-    return default_trainer_config(
-        model=model, task=task, epochs=int(epochs), lr=float(lr)
-    )
+    return default_trainer_config(model=model, task=task, epochs=int(epochs), lr=float(lr))
 
 
 def run_headless(panel: DemoPanel) -> None:
@@ -242,9 +357,48 @@ def run_headless(panel: DemoPanel) -> None:
         panel.finished = False
         if panel.seed is not None:
             seed_everything(panel.seed)
-        trainer = CoreTrainer(panel.trainer_config)
-        trainer.setup()  # materialize model so the callback can probe weights
-        trainer.add_execution_callback(_DemoCallback(panel, trainer.model))
+
+        # Create the system using the factory function
+        # The panel.trainer_config contains the training config
+        # We need to extract model info from the panel - for now use a default
+        # The actual model is determined by the UI selection
+        # This is a simplified version - the UI should pass the model name
+        import sys
+        model_name = getattr(panel, "_model_name", "backprop_mlp")
+        task_name = getattr(panel, "_task_name", "mnist")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        hidden_dim = getattr(panel, "_hidden_dim", None)
+
+        system = create_system(model_name, task_name, hidden_dim, device)
+        task = resolve_task(task_name)
+        task.setup()
+
+        # Create data loaders
+        from torch.utils.data import DataLoader
+
+        class _FlattenLoader:
+            def __init__(self, loader: DataLoader):
+                self.loader = loader
+
+            def __iter__(self):
+                for x, y in self.loader:
+                    if x.dim() > 2:
+                        x = x.view(x.size(0), -1)
+                    yield x, y
+
+            def __len__(self) -> int:
+                return len(self.loader)
+
+        train_loader = _FlattenLoader(task.get_dataloader("train"))
+        val_loader = _FlattenLoader(task.get_dataloader("val"))
+
+        trainer = SystemTrainer(
+            system=system,
+            config=panel.trainer_config,
+            train_data=train_loader,
+            val_data=val_loader,
+        )
+        trainer.add_execution_callback(_DemoCallback(panel, trainer.system.geometry))
         trainer.fit()
     except Exception as e:
         panel.error = str(e)

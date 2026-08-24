@@ -10,7 +10,7 @@ import asyncio
 import pytest
 import torch
 
-from bioplausible.p2p.grpc_service import GRPCServer
+from computronium.p2p.grpc_service import GRPCServer
 
 
 def run_server(port_queue, geometry_shard, node_id, ready_event, barrier):
@@ -56,7 +56,7 @@ def test_grpc_seam_fault_injection():
     # This test requires the DistributedTrainingError to be raised
     # when a worker fails during boundary sync.
     # Skipping full implementation for now - relies on G6 DistributedTrainingError
-    from bioplausible.core.distributed_trainer import DistributedTrainingError
+    from computronium.core.distributed_trainer import DistributedTrainingError
 
     # Verify the error class exists and has the right structure
     try:

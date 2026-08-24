@@ -2,8 +2,8 @@ import unittest
 
 import torch
 
-from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.zoo.models.eqprop import EqPropDiffusion
+from computronium.core.registry import ComponentCategory, Registry
+from computronium.zoo.models.eqprop import EqPropDiffusion
 
 
 class TestDiffusionIntegration(unittest.TestCase):

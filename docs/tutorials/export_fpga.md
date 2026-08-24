@@ -238,8 +238,8 @@ Add custom pragmas via export config:
 
 ```python
 # In your training script before export
-from bioplausible.acceleration.export import export_kernel_to_hls
-from bioplausible.core.acceleration.kernel_backend import (
+from computronium.acceleration.export import export_kernel_to_hls
+from computronium.core.acceleration.kernel_backend import (
     KernelConfig,
     AlgorithmFamily,
     HardwareTarget,

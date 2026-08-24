@@ -9,20 +9,20 @@ from __future__ import annotations
 import pytest
 import torch
 
-from bioplausible.core.local_learning.algorithm import (
+from computronium.core.local_learning.algorithm import (
     TileAlgorithm,
     TileAlgorithmConfig,
 )
-from bioplausible.core.local_learning.settling import (
+from computronium.core.local_learning.settling import (
     SettleProtocol,
     SettleTelemetry,
 )
 
 # Import zoo models to trigger registration
-from bioplausible.zoo.models.mep import MEPEqPropModel
-from bioplausible.zoo.models.o1memory import O1MemoryModel
-from bioplausible.zoo.models.predictive_coding import PredictiveCodingHybrid
-from bioplausible.zoo.models.tile_models import TilePC
+from computronium.zoo.models.mep import MEPEqPropModel
+from computronium.zoo.models.o1memory import O1MemoryModel
+from computronium.zoo.models.predictive_coding import PredictiveCodingHybrid
+from computronium.zoo.models.tile_models import TilePC
 
 
 def _run_model_settle(model, x, max_steps=10, convergence_threshold=1e-3, **kwargs):

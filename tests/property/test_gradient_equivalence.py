@@ -6,7 +6,7 @@ Verifies that bio-plausible algorithms produce gradients that align with BPTT.
 import pytest
 import torch
 
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -20,7 +20,7 @@ from bioplausible.core.ontology import (
     SubstrateConfig,
     ThermodynamicContrast,
 )
-from bioplausible.core.system_trainer import compose_system
+from computronium.core.system_trainer import compose_system
 
 
 class TestGradientEquivalence:
@@ -137,7 +137,7 @@ class TestGradientEquivalence:
         ΔW ∝ (free_pre @ free_post - nudged_pre @ nudged_post) / β
         This is fundamentally local - no weight transpose access required.
         """
-        from bioplausible.core.ontology import SystemState
+        from computronium.core.ontology import SystemState
 
         system = self._create_mlp_system("thermodynamic_contrast", beta=0.5)
 
@@ -191,7 +191,7 @@ class TestGradientEquivalence:
         Unlike backprop, EqProp computes gradients without ever reading W^T.
         This test ensures the pseudo-gradient computation only uses activations.
         """
-        from bioplausible.core.ontology import SystemState
+        from computronium.core.ontology import SystemState
 
         system = self._create_mlp_system("thermodynamic_contrast", beta=0.5)
 
@@ -243,8 +243,8 @@ def test_eqprop_joint_system():
     """EqProp joint system should run a training step."""
     import torch
 
-    from bioplausible.core.joint import PlasticityConfig
-    from bioplausible.core.ontology import (
+    from computronium.core.joint import PlasticityConfig
+    from computronium.core.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
         EnergyMinimizationDynamics,
@@ -256,7 +256,7 @@ def test_eqprop_joint_system():
         SubstrateConfig,
         ThermodynamicContrast,
     )
-    from bioplausible.core.system_trainer import compose_joint_system
+    from computronium.core.system_trainer import compose_joint_system
 
     torch.manual_seed(42)
     substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
@@ -296,7 +296,7 @@ def test_eqprop_joint_system():
 )
 def test_fa_produces_gradients():
     """FA system should run a training step and produce gradients."""
-    from bioplausible.core.ontology import (
+    from computronium.core.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
         EuclideanUpdate,
@@ -308,7 +308,7 @@ def test_fa_produces_gradients():
         StateDynamicsConfig,
         SubstrateConfig,
     )
-    from bioplausible.core.system_trainer import compose_system
+    from computronium.core.system_trainer import compose_system
 
     torch.manual_seed(42)
     substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))

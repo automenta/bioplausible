@@ -1,0 +1,23 @@
+"""Peer-to-peer distributed training (Kademlia DHT + gRPC)."""
+
+from computronium.p2p.dht import DHTNode
+from computronium.p2p.evolution import P2PEvolution, get_config_hash
+from computronium.p2p.grpc_service import (
+    GRPCClient,
+    GRPCConnectionPool,
+    GRPCServer,
+    TileMeshServicer,
+)
+from computronium.p2p.state import load_state, save_state
+
+__all__ = [
+    "DHTNode",
+    "GRPCClient",
+    "GRPCConnectionPool",
+    "GRPCServer",
+    "P2PEvolution",
+    "TileMeshServicer",
+    "get_config_hash",
+    "load_state",
+    "save_state",
+]

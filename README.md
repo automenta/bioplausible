@@ -1,10 +1,10 @@
-# Bioplausible
+# Computronium
 
 ## 🧬 Introduction
 
 Modern deep learning is built on backpropagation — an algorithm that is mathematically elegant but physically impossible. It demands three things no physical or biological system can provide: symmetric feedback weights (weight transport), a global clock that freezes forward activity to propagate errors backward, and memory proportional to network depth. These constraints anchor deep learning to digital hardware, blocking its realization in analog circuits, neuromorphic chips, optical processors, and — most importantly — the brain.
 
-Bioplausible is a research framework for the alternative: **learning algorithms whose synaptic updates depend only on signals locally available at each connection**. Instead of a global gradient, training emerges from local, energy-based dynamics — networks relax toward equilibrium and contrasts between free and nudged states drive weight changes. The implications are substantial: memory complexity becomes independent of depth, allowing arbitrarily deep networks on fixed hardware. Learning becomes asynchronous and event-driven, naturally matching the physics of analog substrates. Contractive dynamics confer fault tolerance: networks self-heal from perturbation, making them candidates for noisy, low-power, imprecise physical computation. The same locality that makes these algorithms biologically plausible also makes them physically realizable.
+Computronium is a research framework for the alternative: **learning algorithms whose synaptic updates depend only on signals locally available at each connection**. Instead of a global gradient, training emerges from local, energy-based dynamics — networks relax toward equilibrium and contrasts between free and nudged states drive weight changes. The implications are substantial: memory complexity becomes independent of depth, allowing arbitrarily deep networks on fixed hardware. Learning becomes asynchronous and event-driven, naturally matching the physics of analog substrates. Contractive dynamics confer fault tolerance: networks self-heal from perturbation, making them candidates for noisy, low-power, imprecise physical computation. The same locality that makes these algorithms biologically plausible also makes them physically realizable.
 
 The framework demonstrates that capabilities previously reserved for backpropagation can be matched — and in regimes backpropagation cannot reach, exceeded — by algorithms compatible with the actual physics of computation. It provides a **generative physico-computational engine** built on a **6-dimensional ontology** that decomposes every learning system into orthogonal, composable primitives, plus the infrastructure to evaluate them rigorously and discover better ones autonomously.
 
@@ -14,7 +14,7 @@ The joint architecture extends the 5-D engine with a **Plasticity (MetaDynamics)
 
 ## 🔮 The 6-Dimensional Ontology
 
-Every learning system in Bioplausible maps uniquely to a coordinate in a tensor product of six fundamental axes:
+Every learning system in Computronium maps uniquely to a coordinate in a tensor product of six fundamental axes:
 
 ```
 System = Substrate ⊗ Geometry ⊗ StateDynamics ⊗ Plasticity ⊗ CreditAssignment ⊗ ParameterUpdate
@@ -48,7 +48,7 @@ graph LR
 Construct systems by composing primitives across the six axes. The `System` generic enforces valid combinations at type-check time.
 
 ```python
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     System,
     DigitalSubstrate,
     FeedforwardGeometry,
@@ -65,7 +65,7 @@ from bioplausible.core.ontology import (
     LazyStateDynamics,
     HomeostaticCredit,
 )
-from bioplausible.core.joint import PlasticityConfig
+from computronium.core.joint import PlasticityConfig
 ```
 
 **5-D compatible (M = NullPlasticity)** — standard backprop MLP, Equilibrium Propagation, TileNet:
@@ -115,9 +115,9 @@ The framework includes native implementations of novel research directions as fi
 | `sparse_eqprop` | `SparseSubstrate ⊗ RecurrentGeometry ⊗ EnergyMinimization ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Dynamic sparsity masks with efficient sparse matmul. |
 | `diffusion_eqprop` | `DigitalSubstrate ⊗ RecurrentGeometry ⊗ DiffusionDynamics ⊗ ThermodynamicContrast ⊗ EuclideanUpdate` | Continuous-time diffusion settling dynamics. |
 
-These models are available via the native API in `bioplausible.models.native`:
+These models are available via the native API in `computronium.models.native`:
 ```python
-from bioplausible.models.native import (
+from computronium.models.native import (
     create_native_holomorphic_ep,
     create_native_directed_ep,
     create_native_finite_nudge_ep,
@@ -227,9 +227,9 @@ Launches a NiceGUI web dashboard at `http://localhost:8080` with:
 
 ## 🏗️ Core Architecture
 
-### 1. Ontology Protocols (`bioplausible/core/ontology.py`)
+### 1. Ontology Protocols (`computronium/core/ontology.py`)
 
-Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure. See `bioplausible/core/ontology.py` for full Protocol definitions:
+Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure. See `computronium/core/ontology.py` for full Protocol definitions:
 
 - `Substrate` — `forward_operator`, `weight_update_operator`
 - `Geometry` — `forward`, `route`
@@ -237,9 +237,9 @@ Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses
 - `CreditAssignment` — `compute_pseudo_gradient`, `surrogate_objective`
 - `ParameterUpdate` — `step`
 
-### 2. Joint Architecture Protocols (`bioplausible/core/joint/`)
+### 2. Joint Architecture Protocols (`computronium/core/joint/`)
 
-The joint dynamical system elevates the computational rule to a dynamical variable via the **CoupledTransition** protocol operating on `CompositeState`. Key types defined in `bioplausible/core/joint/state.py`, `bioplausible/core/joint/context.py`, `bioplausible/core/joint/transition.py`:
+The joint dynamical system elevates the computational rule to a dynamical variable via the **CoupledTransition** protocol operating on `CompositeState`. Key types defined in `computronium/core/joint/state.py`, `computronium/core/joint/context.py`, `computronium/core/joint/transition.py`:
 
 - **CompositeState** — joint intra-episode state `z_t = (x_t, ψ_t, σ_t)` with `activity`, `plastic`, `substrate` mappings
 - **SystemContext** — immutable context: `theta`, `geometry`, `substrate_physics`, `registry`, `config` (6-axis)
@@ -264,12 +264,12 @@ The joint dynamical system elevates the computational rule to a dynamical variab
 
 **Zero-Extension Theorem**: `M=Null, ψ=const, σ=σ₀ ⟹ F_θ(z)|_x = D_θ(x)`. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture. J1 test certifies this equivalence within numerical tolerance.
 
-### 4. Factories (`bioplausible/core/system_trainer.py`)
+### 4. Factories (`computronium/core/system_trainer.py`)
 
 Factory functions for composing systems from primitives or configs:
 
 ```python
-from bioplausible.core.system_trainer import (
+from computronium.core.system_trainer import (
     compose_system,
     compose_system_from_configs,
     extract_config,
@@ -442,7 +442,7 @@ The campaign asks whether adaptive-rule systems occupy a superior Pareto frontie
 
 ### Frontier Record
 
-Defined in `bioplausible/core/campaign/frontier_record.py`:
+Defined in `computronium/core/campaign/frontier_record.py`:
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -634,7 +634,7 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 
 **Tasks**: `synthetic_physics` (Heat, Wave, Burgers PDEs), `navier_stokes` (planned)
 
-**Models**: Physics-informed variants (PINO, DeepONet, FNO) adapted to bioplausible credit assignments.
+**Models**: Physics-informed variants (PINO, DeepONet, FNO) adapted to computronium credit assignments.
 
 ---
 
@@ -644,7 +644,7 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 PyTorch Lightning with DDP, FSDP, DeepSpeed. `TileShardedBackend` with NCCL `all_reduce_gradients`/`broadcast_params` scales TileNet beyond 1B parameters.
 
 ### P2P Coordinator System (gRPC + Kademlia)
-Decentralized coordination at `bioplausible/p2p/`:
+Decentralized coordination at `computronium/p2p/`:
 - 🔑 **Kademlia DHT** (`dht.py`): Peer discovery, KV storage, bootstrap nodes, async background operation. Integration test: 2-node connectivity + best-model propagation with score-based optimistic locking
 - 🔗 **gRPC Service** (`proto/tile_mesh.proto`, `grpc_service.py`): `TileMeshService` with `ExecuteStep`, `BroadcastParams`, `AggregateGradients`
 - 🏊 **Connection Pool** (`GRPCConnectionPool`): Peer lifecycle, health checks, retry/backoff
@@ -665,7 +665,7 @@ biopl run --config campaigns/distributed_tile.yaml
 
 ## 🚀 Deployment & Inference
 
-### Model Export (`bioplausible/deployment.py`)
+### Model Export (`computronium/deployment.py`)
 - 📦 **ONNX**: dynamic axes, opset 17+, TileNet deployment models export with 0 diff vs PyTorch
 - 🔗 **TorchScript**: trace method works for all TileNet models
 - 🔢 **INT8 Quantization**: dynamic PTQ, static PTQ, QAT preparation
@@ -681,7 +681,7 @@ biopl run --config campaigns/distributed_tile.yaml
 
 ---
 
-## 📊 Analysis & Visualization (`bioplausible/analysis/`)
+## 📊 Analysis & Visualization (`computronium/analysis/`)
 
 | Module | Purpose |
 |--------|---------|
@@ -698,7 +698,7 @@ biopl run --config campaigns/distributed_tile.yaml
 
 ---
 
-## ⚡ Hardware Acceleration (`bioplausible/acceleration/`)
+## ⚡ Hardware Acceleration (`computronium/acceleration/`)
 
 | Module | Purpose |
 |--------|---------|

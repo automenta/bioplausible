@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bioplausible.execution._state import ExperimentState
-from bioplausible.execution.strategy import ExecutionStrategy
+from computronium.execution._state import ExperimentState
+from computronium.execution.strategy import ExecutionStrategy
 
 
 @pytest.fixture

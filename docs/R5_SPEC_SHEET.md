@@ -162,7 +162,7 @@ sampled `beta`/`learning_rate`/`max_steps` landed in `ModelConfig.extra`
 trained with identical defaults — the same loss for every sampled config, so
 the sweep was measuring nothing while reporting success.
 
-**Fix — single construction layer** (`bioplausible/core/construction.py`):
+**Fix — single construction layer** (`computronium/core/construction.py`):
 - `ModelConfig`'s dataclass fields are the canonical knob schema,
   **reflection-derived** via `dataclasses.fields` (add a field → it's a knob).
 - `construct_model()` is the one canonical entrypoint used by the trainer, the

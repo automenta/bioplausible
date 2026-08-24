@@ -11,7 +11,7 @@ import json
 import pytest
 import torch
 
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     ElasticConsolidationUpdate,
@@ -31,7 +31,7 @@ from bioplausible.core.ontology import (
     TargetInversionCredit,
     ThermodynamicContrast,
 )
-from bioplausible.core.system_trainer import compose_system
+from computronium.core.system_trainer import compose_system
 from tests.property._support import (
     DEPTH,
     WIDTH,

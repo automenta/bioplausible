@@ -1,0 +1,84 @@
+"""
+NEBC Base Classes - Modular Foundation for Bio-Plausible Algorithms
+
+This module provides:
+1. NEBCBase - Abstract base class for all NEBC algorithms
+2. Common utilities for spectral normalization, training, and evaluation
+3. Extensible interface for adding new bio-plausible algorithms
+
+All NEBC algorithms test spectral normalization as a "stability unlock".
+"""
+
+from abc import ABC, abstractmethod
+
+from computronium.core.logging import get_logger
+from computronium.core.model import BioModel
+from computronium.core.nebc import (
+    evaluate_nebc_model,
+    run_nebc_ablation,
+    train_nebc_model,
+)
+
+logger = get_logger()
+
+__all__ = [
+    "NEBCBase",
+    "evaluate_nebc_model",
+    "logger",
+    "run_nebc_ablation",
+    "train_nebc_model",
+]
+
+
+class NEBCBase(BioModel, ABC):
+    """
+    Abstract base class for NEBC (Nobody Ever Bothered to Check) algorithms.
+
+    Inherits from BioModel for unified architecture.
+    """
+
+    algorithm_name: str = "NEBCBase"
+
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_layers: int = 3,
+        use_spectral_norm: bool = True,
+        max_steps: int = 30,
+        lipschitz_mode: str = "power_iteration",
+        **kwargs,
+    ):
+        self.num_layers = num_layers
+
+        super().__init__(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            use_spectral_norm=use_spectral_norm,
+            max_steps=max_steps,
+            lipschitz_mode=lipschitz_mode,
+            **kwargs,
+        )
+
+    # _build_layers, forward, apply_spectral_norm, compute_lipschitz, etc.
+    # are inherited from BioModel.
+    # Subclasses must implement _build_layers and forward.
+
+    @abstractmethod
+    def _build_layers(self) -> None:
+        """Build the model's hidden layers (subclass responsibility)."""
+
+    def get_stats(self) -> dict[str, float]:
+        """Get algorithm-specific statistics for reporting."""
+        stats = super().get_stats()
+        stats["num_layers"] = self.num_layers
+        return stats
+
+    @classmethod
+    def create_pair(
+        cls, input_dim: int, hidden_dim: int, output_dim: int, **kwargs
+    ) -> tuple[NEBCBase, NEBCBase]:
+        """Create a pair of models: with and without spectral norm (for ablation)."""
+        return super().create_pair(input_dim, hidden_dim, output_dim, **kwargs)

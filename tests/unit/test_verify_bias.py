@@ -9,7 +9,7 @@ import pytest
 )
 class TestBias(unittest.TestCase):
     def setUp(self):
-        from bioplausible.execution.strategy import ExecutionStrategy
+        from computronium.execution.strategy import ExecutionStrategy
 
         self.mock_state = MockExperimentState()
         self.strategy = ExecutionStrategy(self.mock_state)
@@ -30,7 +30,7 @@ class TestBias(unittest.TestCase):
         with (
             patch.object(self.strategy.curriculum, "TRACKS", mock_tracks),
             patch.object(self.strategy, "TASK_WEIGHTS", mock_weights),
-            patch("bioplausible.execution.strategy._MODEL_SPECS", mock_reg),
+            patch("computronium.execution.strategy._MODEL_SPECS", mock_reg),
         ):
             candidates = self.strategy.generate_candidates()
 

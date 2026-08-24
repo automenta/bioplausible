@@ -11,7 +11,7 @@ Each test uses PyTorch autograd to verify mathematical properties numerically.
 import pytest
 import torch
 
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     DigitalSubstrate,
     EnergyMinimizationDynamics,
     FeedforwardGeometry,
@@ -25,7 +25,7 @@ from bioplausible.core.ontology import (
     SubstrateConfig,
     SystemState,
 )
-from bioplausible.core.system_trainer import compose_system
+from computronium.core.system_trainer import compose_system
 
 
 class TestLyapunovStability:
@@ -481,7 +481,7 @@ class TestGradientEquivalence:
 
     def test_thermodynamic_contrast_limit(self):
         """ThermodynamicContrast approaches backprop as β→∞."""
-        from bioplausible.core.ontology import (
+        from computronium.core.ontology import (
             BackpropCredit,
             CreditAssignmentConfig,
             EuclideanUpdate,
@@ -593,7 +593,7 @@ class TestEnergyInvariantComposition:
 
 
 # Import needed classes
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     EuclideanUpdate,
     ParameterUpdateConfig,
     ThermodynamicContrast,

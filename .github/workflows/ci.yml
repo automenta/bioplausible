@@ -30,9 +30,9 @@ jobs:
       - name: Property Tests (Fast CI Gate)
         run: uv run pytest tests/property/ -q
       - name: Registry Audit (metadata completeness)
-        run: uv run biopl-registry-audit --metadata
+        run: uv run comp audit --metadata
       - name: Reproducibility Check
-        run: uv run biopl-repro-check --device cpu
+        run: uv run comp repro --device cpu
       - name: Dependency Scan (pip-audit)
         run: uv run pip-audit
 

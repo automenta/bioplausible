@@ -10,8 +10,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from torch import nn, optim
 
-from bioplausible.config.unified import ModelConfig
-from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+from computronium.config.unified import ModelConfig
+from computronium.zoo.models.eqprop._energy import EquilibriumMLP
 
 
 def _make_synthetic_dataset(
@@ -269,7 +269,7 @@ class TestDeepNetworkCreditAssignment:
 # =============================================================================
 # REMOVED: LazyEqProp was a legacy facade deleted in Sprint 9.
 # The LazyEqProp learning rule optimizer exists at
-# bioplausible.core.local_learning.rules.eqprop.LazyEqProp but is not a model.
+# computronium.core.local_learning.rules.eqprop.LazyEqProp but is not a model.
 # Native compositions use LazyStateDynamics via SystemConfig.
 
 
@@ -285,7 +285,7 @@ class TestNeuralCubeTopology:
     @given(st.data())
     def test_neural_cube_connection_reduction(self, data):
         """Neural Cube should have 90%+ fewer connections than fully-connected."""
-        from bioplausible.zoo.models.eqprop import NeuralCube
+        from computronium.zoo.models.eqprop import NeuralCube
 
         model = NeuralCube(cube_size=6, input_dim=64, output_dim=10)
         topo = model.get_topology_stats()
@@ -306,7 +306,7 @@ class TestNeuralCubeTopology:
 
     def test_neural_cube_trainable(self):
         """Neural Cube should be trainable (at least with BPTT)."""
-        from bioplausible.zoo.models.eqprop import NeuralCube
+        from computronium.zoo.models.eqprop import NeuralCube
 
         model = NeuralCube(cube_size=4, input_dim=32, output_dim=10)
 
@@ -342,7 +342,7 @@ class TestEqPropBackpropAccuracyParity:
     @given(st.data())
     def test_eqprop_vs_backprop_accuracy(self, data):
         """EqProp accuracy should be within 15% of Backprop on synthetic data."""
-        from bioplausible.zoo.models.eqprop import BackpropMLP
+        from computronium.zoo.models.eqprop import BackpropMLP
 
         bp_model = BackpropMLP(64, 128, 10)
         eq_config = ModelConfig(
@@ -412,7 +412,7 @@ class TestNoiseDampingSelfHealing:
     def test_noise_damping(self, data):
         """Injected noise should be damped to zero through relaxation."""
         try:
-            from bioplausible.core.local_learning.settling import (
+            from computronium.core.local_learning.settling import (
                 settle_activations_list,
             )
         except ImportError:

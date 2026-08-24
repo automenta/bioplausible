@@ -2,7 +2,7 @@
 
 import torch
 
-from bioplausible.core.energies import (
+from computronium.core.energies import (
     contrastive_energy,
     hybrid_energy,
     mse_energy,

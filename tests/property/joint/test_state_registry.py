@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from bioplausible.core.joint import (
+from computronium.core.joint import (
     CompositeState,
     StateRegistry,
     StateVariable,

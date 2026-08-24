@@ -4,12 +4,12 @@ import unittest
 from dataclasses import dataclass
 from pathlib import Path
 
-from bioplausible.execution.training_dynamics import (
+from computronium.execution.training_dynamics import (
     ContinuousTrainingSchedule,
     TrainingCheckpoint,
     TrainingTrajectory,
 )
-from bioplausible.hyperopt.storage import HyperoptStorage
+from computronium.hyperopt.storage import HyperoptStorage
 
 
 # Mock classes

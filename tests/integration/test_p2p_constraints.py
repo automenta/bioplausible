@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from bioplausible.hyperopt.search_space import SearchSpace
-from bioplausible.p2p.evolution import P2PEvolution
+from computronium.hyperopt.search_space import SearchSpace
+from computronium.p2p.evolution import P2PEvolution
 
 
 class TestP2PConstraints(unittest.TestCase):
@@ -36,7 +36,7 @@ class TestP2PConstraints(unittest.TestCase):
         self.assertLessEqual(sample["num_layers"], 4)
         self.assertLessEqual(sample["steps"], 20)
 
-    @patch("bioplausible.p2p.evolution.DHTNode")
+    @patch("computronium.p2p.evolution.DHTNode")
     def test_p2p_evolution_settings(self, mock_dht):
         # Test Quick Mode
         evo = P2PEvolution(discovery_mode="quick")

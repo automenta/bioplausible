@@ -9,11 +9,11 @@ import torch
 from hypothesis import given
 from hypothesis import strategies as st
 
-from bioplausible.core.local_learning.settling import (
+from computronium.core.local_learning.settling import (
     EquilibriumSettleProtocol,
     settle_state,
 )
-from bioplausible.zoo.models.eqprop.neural_cube import NeuralCube
+from computronium.zoo.models.eqprop.neural_cube import NeuralCube
 
 
 def _make(threshold, start=2, max_steps=20, cube=3):

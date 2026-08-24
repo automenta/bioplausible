@@ -23,7 +23,7 @@ How the seven hardware targets map to facades, kernel backends, and export.
 ## 2. Facades
 
 All non-reference facades live in
-`bioplausible/zoo/models/eqprop/hardware_variants.py` and extend `LoopedMLP`.
+`computronium/zoo/models/eqprop/hardware_variants.py` and extend `LoopedMLP`.
 They follow the `forward_dynamics` override pattern: call
 `super().forward_dynamics(...)` then transform hidden activations (layers
 `1..len-1`), keeping the output layer clean.

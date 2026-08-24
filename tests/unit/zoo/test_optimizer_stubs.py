@@ -7,7 +7,7 @@ from torch import nn
 def test_ewc_optimizer_step():
     """EWC optimizer can step without error."""
     model = nn.Linear(10, 5)
-    from bioplausible.zoo.optimizers.ewc import EWC
+    from computronium.zoo.optimizers.ewc import EWC
 
     optim = EWC(model.parameters(), lr=0.01, ewc_lambda=0.1)
     x = torch.randn(4, 10)
@@ -21,7 +21,7 @@ def test_ewc_optimizer_step():
 def test_ewc_optimizer_zero_grad():
     """EWC optimizer can zero gradients."""
     model = nn.Linear(10, 5)
-    from bioplausible.zoo.optimizers.ewc import EWC
+    from computronium.zoo.optimizers.ewc import EWC
 
     optim = EWC(model.parameters(), lr=0.01)
     x = torch.randn(4, 10)
@@ -42,7 +42,7 @@ def test_ewc_optimizer_zero_grad():
 def test_ewc_optimizer_update_fisher():
     """EWC optimizer can compute Fisher information."""
     model = nn.Linear(10, 5)
-    from bioplausible.zoo.optimizers.ewc import EWC
+    from computronium.zoo.optimizers.ewc import EWC
 
     optim = EWC(model.parameters(), lr=0.01)
     x = torch.randn(4, 10)
@@ -57,7 +57,7 @@ def test_ewc_optimizer_update_fisher():
 
 def test_spectral_constraint_registered():
     """SpectralConstraint is registered under the PARAM_UPDATE category."""
-    from bioplausible.core.registry import ComponentCategory, Registry
+    from computronium.core.registry import ComponentCategory, Registry
 
     cls = Registry.get(ComponentCategory.PARAM_UPDATE, "spectral")
     assert cls is not None
@@ -67,7 +67,7 @@ def test_spectral_constraint_registered():
 def test_spectral_constraint_step():
     """SpectralConstraint projects weights to have bounded spectral norm."""
     model = nn.Linear(10, 5, bias=False)
-    from bioplausible.zoo.optimizers.spectral import SpectralConstraint
+    from computronium.zoo.optimizers.spectral import SpectralConstraint
 
     optim = SpectralConstraint(model.parameters(), lr=0.01, max_norm=0.5)
 

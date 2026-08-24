@@ -8,14 +8,14 @@ class TestTransferLoading(unittest.TestCase):
         # Patch dependencies for TrialRunner instantiation
 
         self.patches = [
-            patch("bioplausible.hyperopt.experiment.ExperimentTracker"),
-            patch("bioplausible.hyperopt.experiment.ExperimentArchiver"),
+            patch("computronium.hyperopt.experiment.ExperimentTracker"),
+            patch("computronium.hyperopt.experiment.ExperimentArchiver"),
         ]
 
         for p in self.patches:
             p.start()
 
-        from bioplausible.hyperopt.experiment import TrialRunner
+        from computronium.hyperopt.experiment import TrialRunner
 
         self.runner = TrialRunner(
             storage=MagicMock(), task="mnist", quick_mode=True, epochs=1
@@ -25,7 +25,7 @@ class TestTransferLoading(unittest.TestCase):
         for p in self.patches:
             p.stop()
 
-    @patch("bioplausible.hyperopt.experiment.load_weights")
+    @patch("computronium.hyperopt.experiment.load_weights")
     @patch("pathlib.Path.exists")
     @patch("pathlib.Path.iterdir")
     def test_load_transfer_weights_directory(
@@ -56,7 +56,7 @@ class TestTransferLoading(unittest.TestCase):
         self.assertEqual(mock_load_weights.call_args[0][0], model)
         self.assertEqual(mock_load_weights.call_args[1]["freeze_layers"], True)
 
-    @patch("bioplausible.hyperopt.experiment.load_weights")
+    @patch("computronium.hyperopt.experiment.load_weights")
     @patch("zipfile.ZipFile")
     @patch("pathlib.Path.exists")
     @patch("pathlib.Path.iterdir")
@@ -94,7 +94,7 @@ class TestTransferLoading(unittest.TestCase):
         # The easiest way to verify the 'exists' check passes is to mock load_weights call.
 
         # Let's mock Path inside the module to control .exists()
-        with patch("bioplausible.hyperopt.experiment.Path") as mock_path_cls:
+        with patch("computronium.hyperopt.experiment.Path") as mock_path_cls:
             # Make sure the initial artifacts dir check passes
             mock_path_instance = MagicMock()
             mock_path_instance.exists.return_value = True

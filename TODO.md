@@ -19,7 +19,7 @@
 - Pyright: 0 errors, 2,879 warnings (non-blocking)
 
 ### Sprint 7: Configuration Unification & Magic Number Elimination
-- **ExperimentConfig** created (`bioplausible/config/experiment.py`) — 5 ontology configs + top-level
+- **ExperimentConfig** created (`computronium/config/experiment.py`) — 5 ontology configs + top-level
 - **Ontology config factories** added to all 5 configs
 - **Magic numbers eliminated** in new pipeline
 - **Legacy pipeline fully deprecated**: `CoreTrainer`, `TrainerConfig`, `ModelConfig` (legacy paths), `BioModel.build()` legacy path, `construct_model` legacy paths removed
@@ -97,7 +97,7 @@
 #### Core Additions (organized by mathematical object) ✅
 
 ```
-bioplausible/core/joint/
+computronium/core/joint/
     __init__.py
     state.py              # CompositeState, StateVariable, StateRegistry, JointTrajectoryRecorder
     context.py            # SystemContext (immutable θ, geometry, physics, registry)
@@ -293,7 +293,7 @@ tests/property/joint/
     test_coupled_transition_protocol.py (6 tests: from J0)
     test_consolidation.py           (6 tests: from J0)
 
-bioplausible/cli/
+computronium/cli/
     joint_validate.py               # New CLI command
 ```
 
@@ -323,9 +323,9 @@ bioplausible/cli/
 
 | Primitive | File | Purpose | Minimal State |
 |-----------|------|---------|---------------|
-| `RoutingPlasticity` | `bioplausible/core/plasticity/routing.py` | State-dependent gating, sparse pathway selection, rerouting | `gate_logits`, `active_routes` |
-| `FastWeightPlasticity` | `bioplausible/core/plasticity/fast_weights.py` | Episode-local associative memory | `fast_weights` (A_{t+1} = decay(A_t) + η outer(pre, post)) |
-| `SubstrateCoupledPlasticity` | `bioplausible/core/plasticity/substrate_coupled.py` | Reuse substrate adapters as physical plasticity (memristive drift, analog noise) | `ψ_t ≡ σ_t` or tightly coupled |
+| `RoutingPlasticity` | `computronium/core/plasticity/routing.py` | State-dependent gating, sparse pathway selection, rerouting | `gate_logits`, `active_routes` |
+| `FastWeightPlasticity` | `computronium/core/plasticity/fast_weights.py` | Episode-local associative memory | `fast_weights` (A_{t+1} = decay(A_t) + η outer(pre, post)) |
+| `SubstrateCoupledPlasticity` | `computronium/core/plasticity/substrate_coupled.py` | Reuse substrate adapters as physical plasticity (memristive drift, analog noise) | `ψ_t ≡ σ_t` or tightly coupled |
 
 #### Consolidation (Episode Boundary) ✅ Already Implemented
 
@@ -350,10 +350,10 @@ def consolidate(
 - ⏳ At least one non-null plasticity beats Null on toy adaptation task — **requires Sprint J3/J4 integration (stability metrics + campaign runner)**
 
 #### Files Created/Modified
-- `bioplausible/core/plasticity/routing.py` — RoutingPlasticity with differentiable routing
-- `bioplausible/core/plasticity/fast_weights.py` — FastWeightPlasticity with Hebbian updates
-- `bioplausible/core/plasticity/substrate_coupled.py` — SubstrateCoupledPlasticity (substrate-coupled)
-- `bioplausible/core/plasticity/__init__.py` — Exports all primitives and factory functions
+- `computronium/core/plasticity/routing.py` — RoutingPlasticity with differentiable routing
+- `computronium/core/plasticity/fast_weights.py` — FastWeightPlasticity with Hebbian updates
+- `computronium/core/plasticity/substrate_coupled.py` — SubstrateCoupledPlasticity (substrate-coupled)
+- `computronium/core/plasticity/__init__.py` — Exports all primitives and factory functions
 - All axis certification tests pass (17 tests in `test_plasticity_axis_certifications.py`)
 
 #### Tests: 97 passing (10 skipped), pyright 0 errors
@@ -364,10 +364,10 @@ def consolidate(
 
 **Goal**: Make the joint system scientifically measurable. Absorbs H4 + part of Sprint 11.
 
-#### Stability Monitors (`bioplausible/core/stability/`) ✅ Implemented
+#### Stability Monitors (`computronium/core/stability/`) ✅ Implemented
 
 ```
-bioplausible/core/stability/
+computronium/core/stability/
     __init__.py
     spectral_radius.py      # ρ(J_F) estimation
     lyapunov.py             # Local Lyapunov exponents
@@ -439,12 +439,12 @@ Pareto frontier computation over multiple records.
 #### Files Created
 
 ```
-bioplausible/core/stability/__init__.py
-bioplausible/core/stability/frontier.py
-bioplausible/core/stability/spectral_radius.py
-bioplausible/core/stability/lyapunov.py
-bioplausible/core/stability/settling.py
-bioplausible/core/stability/basin.py
+computronium/core/stability/__init__.py
+computronium/core/stability/frontier.py
+computronium/core/stability/spectral_radius.py
+computronium/core/stability/lyapunov.py
+computronium/core/stability/settling.py
+computronium/core/stability/basin.py
 tests/property/joint/test_stability_metrics.py (33 tests)
 ```
 
@@ -466,7 +466,7 @@ tests/property/joint/test_stability_metrics.py (33 tests)
 #### Files Created
 
 ```
-bioplausible/core/campaign/
+computronium/core/campaign/
     __init__.py
     resource_vector.py      # ResourceUsage: compute, memory, energy, latency, plastic_state_capacity
     frontier_record.py      # FrontierRecord: complete 6-D coordinate evaluation
@@ -475,7 +475,7 @@ bioplausible/core/campaign/
     kernel_cache.py         # JointKernelCache: compiled kernel persistence
     checkpoint.py           # CheckpointManager: fault tolerance checkpointing
 
-bioplausible/cli/
+computronium/cli/
     campaign.py             # biopl campaign (run, status, list, compare, checkpoint, export)
     stability.py            # biopl stability (report, compare, summary)
     benchmark.py            # biopl benchmark (run, list, report)
@@ -483,13 +483,13 @@ bioplausible/cli/
 
 #### Campaign Persistence ✅ IMPLEMENTED
 
-- **CampaignStore** (`bioplausible/core/campaign/campaign_store.py`):
+- **CampaignStore** (`computronium/core/campaign/campaign_store.py`):
   - SQLite backend with campaigns, episodes, registry_snapshots tables
   - YAML checkpoints for human-readable state
   - Branch support (git-like: create_branch, checkout, merge)
   - Stores: 6-D coordinate, StateRegistry signature, CompositeState shape, FrontierRecord, ResourceUsage, consolidation events, RNG state
 
-- **FrontierRecord** (`bioplausible/core/campaign/frontier_record.py`):
+- **FrontierRecord** (`computronium/core/campaign/frontier_record.py`):
   - Task performance (loss, accuracy, adaptation_time)
   - Stability metrics (rho_jacobian, lyapunov_local, settling_time, basin_stability)
   - ResourceUsage vector
@@ -498,7 +498,7 @@ bioplausible/cli/
   - Consolidation events log
   - Campaign tracking (campaign_id, episode_index)
 
-- **ResourceUsage** (`bioplausible/core/campaign/resource_vector.py`):
+- **ResourceUsage** (`computronium/core/campaign/resource_vector.py`):
   - Compute (FLOPs), memory (MB), energy (J), latency (s)
   - Plastic state capacity (bytes)
   - Forward/backward FLOPs breakdown
@@ -507,7 +507,7 @@ bioplausible/cli/
 
 #### Joint Kernel Cache ✅ IMPLEMENTED
 
-- **JointKernelCache** (`bioplausible/core/campaign/kernel_cache.py`):
+- **JointKernelCache** (`computronium/core/campaign/kernel_cache.py`):
   - In-memory LRU + persistent disk cache
   - Cache key: coordinate hash + tensor shapes + dtype + device + adapter stack + kernel_type
   - Supports: `CoupledTransition.step`, `PlasticityPrimitive.step`, stability estimators, adapter projections
@@ -516,7 +516,7 @@ bioplausible/cli/
 
 #### Fault Tolerance Checkpointing ✅ IMPLEMENTED
 
-- **CheckpointManager** (`bioplausible/core/campaign/checkpoint.py`):
+- **CheckpointManager** (`computronium/core/campaign/checkpoint.py`):
   - Complete state: `z=(x,ψ,σ)`, `θ`, episode index, campaign state, RNG states (torch, numpy, python, CUDA)
   - Periodic automatic checkpointing (configurable interval)
   - Resume script generation
@@ -525,7 +525,7 @@ bioplausible/cli/
 
 #### Pareto Frontier Computation ✅ IMPLEMENTED
 
-- **pareto_frontier()** (`bioplausible/core/campaign/pareto.py`):
+- **pareto_frontier()** (`computronium/core/campaign/pareto.py`):
   - Multi-objective Pareto dominance (accuracy, stability, efficiency, resources)
   - Exact 2D/3D hypervolume computation, Monte Carlo for higher dimensions
   - Non-dominated sorting for Pareto layer ranking
@@ -585,19 +585,19 @@ g_k(ψ_t) = softmax(controller(ψ_t, x_t))
 #### Files Created
 
 ```
-bioplausible/core/plasticity/rule_state.py           # RuleStatePlasticity (Z3 primitive)
-bioplausible/experiments/joint/__init__.py
-bioplausible/experiments/joint/adaptation_efficiency.py
-bioplausible/experiments/joint/compute_efficiency.py
-bioplausible/experiments/joint/structural_robustness.py
-bioplausible/experiments/joint/algorithm_migration.py
-bioplausible/experiments/joint/z3_fixed_weights.py
+computronium/core/plasticity/rule_state.py           # RuleStatePlasticity (Z3 primitive)
+computronium/experiments/joint/__init__.py
+computronium/experiments/joint/adaptation_efficiency.py
+computronium/experiments/joint/compute_efficiency.py
+computronium/experiments/joint/structural_robustness.py
+computronium/experiments/joint/algorithm_migration.py
+computronium/experiments/joint/z3_fixed_weights.py
 tests/integration/joint/test_benchmarks.py           # Integration tests for all 5 suites
 ```
 
 #### CLI Integration
 
-Updated `bioplausible/cli/benchmark.py` to delegate to experiment modules:
+Updated `computronium/cli/benchmark.py` to delegate to experiment modules:
 - `biopl benchmark run --suite adaptation_efficiency`
 - `biopl benchmark run --suite compute_efficiency`
 - `biopl benchmark run --suite structural_robustness`
@@ -693,7 +693,7 @@ Removed legacy test files with import errors (deprecated APIs):
     - `.pre-commit-config.yaml`: Removed local hooks for `check_imports.py` and `check_seams.py`
     - `pyrightconfig.json`: Removed `**/examples/**/*.py` from exclude list
     - `pyproject.toml`: Removed `*/tools/*` from coverage omit list
-    - `bioplausible/cli/rank.py`: Updated default DB path from `examples/shallow_benchmark.db` to `shallow_benchmark.db`
+    - `computronium/cli/rank.py`: Updated default DB path from `examples/shallow_benchmark.db` to `shallow_benchmark.db`
     - `TODO.md`: Updated documentation status table to reflect removals
 12. **Verified all joint architecture functionality**:
     - Property tests: 351 passed, 37 skipped, 7 xfailed, 2 xpassed
@@ -710,7 +710,7 @@ Removed legacy test files with import errors (deprecated APIs):
 ## 📁 Joint Architecture File Layout
 
 ```
-bioplausible/
+computronium/
     core/
         joint/
             __init__.py

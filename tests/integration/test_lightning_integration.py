@@ -7,12 +7,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
-from bioplausible.lightning_.callbacks import (
+from computronium.lightning_.callbacks import (
     BioPrecisionCallback,
     EnergyConvergenceCallback,
 )
-from bioplausible.lightning_.module import BioLightningModule
-from bioplausible.lightning_.strategies import BioPrecisionMixin, build_trainer
+from computronium.lightning_.module import BioLightningModule
+from computronium.lightning_.strategies import BioPrecisionMixin, build_trainer
 
 
 # pytorch_lightning.Trainer pays a one-time framework-init cost (~1s, GPU/CUDA
@@ -215,7 +215,7 @@ class TestHPOIntegration:
 
     def test_optuna_pruner_init(self):
         """Test BioOptunaPruner initialization."""
-        from bioplausible.lightning_.hpo import BioOptunaPruner
+        from computronium.lightning_.hpo import BioOptunaPruner
 
         pruner = BioOptunaPruner(
             model_name="backprop_mlp",
@@ -229,7 +229,7 @@ class TestHPOIntegration:
 
     def test_optuna_pruner_init_with_task_name(self):
         """Test BioOptunaPruner initialization with task_name."""
-        from bioplausible.lightning_.hpo import BioOptunaPruner
+        from computronium.lightning_.hpo import BioOptunaPruner
 
         pruner = BioOptunaPruner(
             model_name="backprop_mlp",
@@ -241,7 +241,7 @@ class TestHPOIntegration:
 
     def test_optuna_pruner_sample(self):
         """Test BioOptunaPruner hyperparameter sampling uses metamodel."""
-        from bioplausible.lightning_.hpo import BioOptunaPruner
+        from computronium.lightning_.hpo import BioOptunaPruner
 
         pruner = BioOptunaPruner(
             model_name="backprop_mlp",
@@ -261,7 +261,7 @@ class TestHPOIntegration:
 
     def test_optuna_pruner_sample_with_task_name(self):
         """Test that task_name constraints are applied in hyperparameter sampling."""
-        from bioplausible.lightning_.hpo import BioOptunaPruner
+        from computronium.lightning_.hpo import BioOptunaPruner
 
         pruner = BioOptunaPruner(
             model_name="backprop_mlp",
@@ -286,7 +286,7 @@ class TestHPOIntegration:
 
     def test_ray_tune_search_init(self):
         """Test BioRayTuneSearch initialization."""
-        from bioplausible.lightning_.hpo import BioRayTuneSearch
+        from computronium.lightning_.hpo import BioRayTuneSearch
 
         searcher = BioRayTuneSearch(
             model_name="backprop_mlp",
@@ -302,14 +302,14 @@ class TestNASIntegration:
 
     def test_get_plausible_model_names(self):
         """Test getting plausible model names for NAS."""
-        from bioplausible.lightning_.nas import get_plausible_model_names
+        from computronium.lightning_.nas import get_plausible_model_names
 
         names = get_plausible_model_names()
         assert isinstance(names, list)
 
     def test_get_bio_optimizer_names(self):
         """Test getting bio optimizer names for NAS."""
-        from bioplausible.lightning_.nas import get_bio_optimizer_names
+        from computronium.lightning_.nas import get_bio_optimizer_names
 
         names = get_bio_optimizer_names()
         assert isinstance(names, list)
@@ -320,7 +320,7 @@ class TestAutoScientistIntegration:
 
     def test_execute_standard_trial_use_lightning(self):
         """Test that AutoScientist can use Lightning when configured."""
-        from bioplausible.execution.engine import ExecutionEngine
+        from computronium.execution.engine import ExecutionEngine
 
         # Verify the method exists and handles use_lightning config
         assert hasattr(ExecutionEngine, "_execute_standard_trial")
@@ -331,7 +331,7 @@ class TestAutoScientistIntegration:
         """Test run_nas_search function exists."""
         import inspect
 
-        from bioplausible.lightning_.nas import run_nas_search
+        from computronium.lightning_.nas import run_nas_search
 
         sig = inspect.signature(run_nas_search)
         params = list(sig.parameters.keys())
@@ -346,7 +346,7 @@ class TestPLTrialIntegration:
 
     def test_pl_trial_runs_backprop(self):
         """Test run_pl_trial with backprop model."""
-        from bioplausible.lightning_.experiment import run_pl_trial
+        from computronium.lightning_.experiment import run_pl_trial
 
         # Create mock data loaders
         mock_loader = MagicMock()
@@ -365,7 +365,7 @@ class TestPLTrialIntegration:
                 return None  # Let automatic optimization handle it
 
         # Use a real model instance
-        with patch("bioplausible.lightning_.module.create_model") as mock_create:
+        with patch("computronium.lightning_.module.create_model") as mock_create:
             mock_create.return_value = SimpleModel()
 
             with patch("pytorch_lightning.Trainer") as MockTrainer:
@@ -399,7 +399,7 @@ class TestPLTrialIntegration:
 
     def test_pl_trial_returns_none_on_failure(self):
         """Test run_pl_trial returns None gracefully on failure."""
-        from bioplausible.lightning_.experiment import run_pl_trial
+        from computronium.lightning_.experiment import run_pl_trial
 
         # Create mock data loaders
         mock_loader = MagicMock()
@@ -414,7 +414,7 @@ class TestPLTrialIntegration:
             mock_trainer_instance.fit = mock_fit_failure
             MockTrainer.return_value = mock_trainer_instance
 
-            with patch("bioplausible.lightning_.module.create_model") as mock_create:
+            with patch("computronium.lightning_.module.create_model") as mock_create:
                 mock_create.return_value = MagicMock()
 
                 result = run_pl_trial(
@@ -433,7 +433,7 @@ class TestPLTrialIntegration:
         # Just verify the function exists and accepts the right signature
         import inspect
 
-        from bioplausible.lightning_.experiment import run_pl_trial_with_wandb
+        from computronium.lightning_.experiment import run_pl_trial_with_wandb
 
         sig = inspect.signature(run_pl_trial_with_wandb)
         params = list(sig.parameters.keys())

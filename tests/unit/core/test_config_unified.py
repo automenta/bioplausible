@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from bioplausible.config.unified import (
+from computronium.config.unified import (
     BaseConfig,
     BaseStructuredConfig,
     config_to_dict,

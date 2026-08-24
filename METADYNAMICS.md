@@ -1,14 +1,14 @@
-# Bioplausible MetaDynamics  Final Specification
+# Computronium MetaDynamics  Final Specification
 ## Composable Coupled Dynamical Systems & Adaptive Computational Rules
 
 **Status:** Definitive Architectural Specification
-**Scope:** Mathematical formalism, API contracts, state lifecycle semantics, stability theory, and experimental campaign for extending Bioplausible into a framework for **Adaptive Computational Dynamics**.
+**Scope:** Mathematical formalism, API contracts, state lifecycle semantics, stability theory, and experimental campaign for extending Computronium into a framework for **Adaptive Computational Dynamics**.
 
 ---
 
 ## 1. Conceptual Thesis
 
-Bioplausible v1 models learning systems as compositions of fixed transition rules acting on changing states. Bioplausible v2 elevates the framework to model systems where **the transition rule can itself be state**.
+Computronium v1 models learning systems as compositions of fixed transition rules acting on changing states. Computronium v2 elevates the framework to model systems where **the transition rule can itself be state**.
 
 The central axiom of v2 is:
 > **Computation is the evolution of computational state, where the computational state may include the parameters, routing, and physics that determine its own subsequent evolution.**
@@ -213,7 +213,7 @@ If the rule-state system can rapidly instantiate fundamentally different effecti
 
 ## 9. Summary
 
-Bioplausible v2 is a paradigm shift from searching over fixed learning algorithms to searching over **composable coupled dynamical systems**.
+Computronium v2 is a paradigm shift from searching over fixed learning algorithms to searching over **composable coupled dynamical systems**.
 
 By defining the joint transition operator $z_{t+1} = F_\theta(z_t; G, S)$, introducing the State Registry to handle complex physical lifecycles, and elevating `RuleStatePlasticity` to the apex of the primitive hierarchy, the framework gains the capacity to scientifically investigate the **stability-plasticity frontier**.
 

@@ -7,8 +7,8 @@ import signal
 
 import torch
 
-from bioplausible.core.ontology import GeometryConfig, TileGeometry
-from bioplausible.p2p.grpc_service import GRPCServer
+from computronium.core.ontology import GeometryConfig, TileGeometry
+from computronium.p2p.grpc_service import GRPCServer
 
 
 def run_grpc_worker(node_id: str, port: int, ready_pipe, device_str: str) -> None:

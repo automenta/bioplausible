@@ -8,7 +8,7 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.zoo.mep.optimizers.strategies import (
+from computronium.zoo.mep.optimizers.strategies import (
     BackpropGradient,
     DionUpdate,
     EPGradient,
@@ -23,7 +23,7 @@ from bioplausible.zoo.mep.optimizers.strategies import (
     SettlingSpectralPenalty,
     SpectralConstraint,
 )
-from bioplausible.zoo.mep.optimizers.strategies.base import (
+from computronium.zoo.mep.optimizers.strategies.base import (
     ConstraintStrategy,
     FeedbackStrategy,
     GradientStrategy,

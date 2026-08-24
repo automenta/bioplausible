@@ -10,7 +10,7 @@ Run: uv run pytest tests/property/test_ontology_parity.py -v
 import pytest
 import torch
 
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EuclideanUpdate,
@@ -24,37 +24,37 @@ from bioplausible.core.ontology import (
     SubstrateConfig,
     ThermodynamicContrast,
 )
-from bioplausible.core.system_trainer import (
+from computronium.core.system_trainer import (
     SystemTrainer,
     SystemTrainerConfig,
     compose_system,
 )
-from bioplausible.domains.factory import create_task
+from computronium.domains.factory import create_task
 
 # Skip if native models not available
 try:
-    from bioplausible.models.native.pepita_native import create_native_pepita_mlp
+    from computronium.models.native.pepita_native import create_native_pepita_mlp
 
     PEPITA_NATIVE_AVAILABLE = True
 except ImportError:
     PEPITA_NATIVE_AVAILABLE = False
 
 try:
-    from bioplausible.models.native.fa_native import create_native_fa_mlp
+    from computronium.models.native.fa_native import create_native_fa_mlp
 
     FA_NATIVE_AVAILABLE = True
 except ImportError:
     FA_NATIVE_AVAILABLE = False
 
 try:
-    from bioplausible.models.native.eqprop_native import create_native_eqprop_mlp
+    from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
     EQPROP_NATIVE_AVAILABLE = True
 except ImportError:
     EQPROP_NATIVE_AVAILABLE = False
 
 try:
-    from bioplausible.zoo.models.forward_only import PEPITA, ForwardForwardNet
+    from computronium.zoo.models.forward_only import PEPITA, ForwardForwardNet
 
     ZOO_FF_AVAILABLE = True
 except ImportError:
@@ -146,8 +146,8 @@ class TestBackpropParity:
     @pytest.mark.parametrize("epochs", [2])
     def test_create_backprop_mlp_matches_native(self, epochs):
         """presets.create_backprop_mlp should match native_backprop_mlp."""
-        from bioplausible import create_backprop_mlp
-        from bioplausible.models.native.backprop_native import (
+        from computronium import create_backprop_mlp
+        from computronium.models.native.backprop_native import (
             create_native_backprop_mlp,
         )
 
@@ -179,8 +179,8 @@ class TestEqPropParity:
     @pytest.mark.parametrize("epochs", [3])
     def test_create_eqprop_mlp_matches_native(self, epochs):
         """presets.create_eqprop_mlp should match native_eqprop_mlp."""
-        from bioplausible import create_eqprop_mlp
-        from bioplausible.models.native.eqprop_native import create_native_eqprop_mlp
+        from computronium import create_eqprop_mlp
+        from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
@@ -213,8 +213,8 @@ class TestFAParity:
     @pytest.mark.parametrize("epochs", [3])
     def test_create_fa_mlp_matches_native(self, epochs):
         """presets.create_fa_mlp should match native_fa_mlp."""
-        from bioplausible import create_fa_mlp
-        from bioplausible.models.native.fa_native import create_native_fa_mlp
+        from computronium import create_fa_mlp
+        from computronium.models.native.fa_native import create_native_fa_mlp
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
@@ -244,8 +244,8 @@ class TestForwardForwardParity:
     @pytest.mark.parametrize("epochs", [3])
     def test_create_ff_mlp_matches_zoo(self, epochs):
         """presets.create_ff_mlp should match zoo ForwardForwardNet."""
-        from bioplausible import create_ff_mlp
-        from bioplausible.zoo.models.forward_only import ForwardForwardNet
+        from computronium import create_ff_mlp
+        from computronium.zoo.models.forward_only import ForwardForwardNet
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
@@ -287,8 +287,8 @@ class TestPEPITAParity:
     @pytest.mark.parametrize("epochs", [3])
     def test_native_pepita_matches_zoo(self, epochs):
         """native_pepita_mlp should match zoo PEPITA."""
-        from bioplausible.models.native.pepita_native import create_native_pepita_mlp
-        from bioplausible.zoo.models.forward_only import PEPITA
+        from computronium.models.native.pepita_native import create_native_pepita_mlp
+        from computronium.zoo.models.forward_only import PEPITA
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
@@ -379,7 +379,7 @@ class TestSubstrateVariants:
     )
     def test_substrate_composition(self, substrate_type):
         """Each substrate should compose and run forward pass."""
-        from bioplausible.core.ontology import (
+        from computronium.core.ontology import (
             AnalogSubstrate,
             BackpropCredit,
             MemristiveSubstrate,

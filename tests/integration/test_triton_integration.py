@@ -9,9 +9,9 @@ import torch
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from bioplausible.acceleration.triton_kernels import HAS_TRITON, TritonEqPropOps
-from bioplausible.config.unified import ModelConfig
-from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+from computronium.acceleration.triton_kernels import HAS_TRITON, TritonEqPropOps
+from computronium.config.unified import ModelConfig
+from computronium.zoo.models.eqprop._energy import EquilibriumMLP
 
 pytestmark = pytest.mark.gpu
 

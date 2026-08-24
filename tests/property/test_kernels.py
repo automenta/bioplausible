@@ -14,7 +14,7 @@ import torch
 from hypothesis import given
 from hypothesis import strategies as st
 
-from bioplausible.acceleration.kernels import (
+from computronium.acceleration.kernels import (
     cross_entropy,
     softmax,
     spectral_normalize,

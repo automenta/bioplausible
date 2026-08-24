@@ -11,7 +11,7 @@ from collections.abc import Generator
 import torch
 from torch import Tensor
 
-from bioplausible.core.ontology import System, SystemState
+from computronium.core.ontology import System, SystemState
 
 # ----------------------------------------------------------------------
 # Constants (do not inline shapes)
@@ -160,7 +160,7 @@ def perturb_nonlocal(state: SystemState, layer: int, eps: float) -> SystemState:
 # ----------------------------------------------------------------------
 def _all_registered_model_names() -> list[str]:
     """Get all registered model names from Registry."""
-    from bioplausible.core.registry import ComponentCategory, Registry
+    from computronium.core.registry import ComponentCategory, Registry
 
     try:
         return list(Registry._components.get(ComponentCategory.MODEL, {}).keys())
@@ -182,7 +182,7 @@ def _round_trip_configs(system: System) -> System:
     update_cfg = system.update.config
 
     # Reconstruct from configs
-    from bioplausible.core.ontology import (
+    from computronium.core.ontology import (
         BackpropCredit,
         DigitalSubstrate,
         ElasticConsolidationUpdate,
@@ -217,7 +217,7 @@ def _round_trip_configs(system: System) -> System:
     if geometry_cfg.topology_type == "recurrent":
         geometry = RecurrentGeometry(geometry_cfg)
     elif geometry_cfg.topology_type == "tile_mesh":
-        from bioplausible.core.ontology import TileGeometry
+        from computronium.core.ontology import TileGeometry
 
         geometry = TileGeometry(geometry_cfg)
     else:
@@ -256,6 +256,6 @@ def _round_trip_configs(system: System) -> System:
     update_cls = update_map.get(update_cfg.update_type, EuclideanUpdate)
     update = update_cls(update_cfg)
 
-    from bioplausible.core.system_trainer import compose_system
+    from computronium.core.system_trainer import compose_system
 
     return compose_system(substrate, geometry, dynamics, credit, update)

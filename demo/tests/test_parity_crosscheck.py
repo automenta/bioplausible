@@ -16,7 +16,7 @@ pytest.importorskip("runner", reason="demo-local module; run from the demo venv"
 from charts import parity_gap
 from runner import DemoPanel, default_trainer_config, run_headless
 
-from bioplausible.cli.parity import run_parity as cli_run_parity
+from computronium.cli.parity import run_parity as cli_run_parity
 
 TASK = "digits"
 EPOCHS = 1

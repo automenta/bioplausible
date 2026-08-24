@@ -15,12 +15,12 @@ from pathlib import Path
 import pytest
 import torch
 
-from bioplausible.core.distributed_trainer import (
+from computronium.core.distributed_trainer import (
     DistributedConfig,
     DistributedSystemTrainer,
     DistributedTrainingError,
 )
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     DigitalSubstrate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
@@ -29,8 +29,8 @@ from bioplausible.core.ontology import (
     TargetInversionCredit,
     TileGeometry,
 )
-from bioplausible.core.system_trainer import compose_system
-from bioplausible.p2p.grpc_service import GRPCClient
+from computronium.core.system_trainer import compose_system
+from computronium.p2p.grpc_service import GRPCClient
 from tests.integration._grpc_worker import run_grpc_worker
 
 # ----------------------------------------------------------------------
@@ -63,7 +63,7 @@ def _create_test_system(device: torch.device):
     ).to(device)
 
     substrate = DigitalSubstrate()
-    from bioplausible.core.ontology import ParameterUpdateConfig, StateDynamicsConfig
+    from computronium.core.ontology import ParameterUpdateConfig, StateDynamicsConfig
 
     dynamics = EnergyMinimizationDynamics(
         StateDynamicsConfig(
@@ -282,7 +282,7 @@ class TestGRPCSeamSubprocess:
             tiles_per_layer=TILES_PER_LAYER,
         ).to(device)
         substrate = DigitalSubstrate()
-        from bioplausible.core.ontology import (
+        from computronium.core.ontology import (
             ParameterUpdateConfig,
             StateDynamicsConfig,
         )
@@ -472,7 +472,7 @@ class TestGRPCSeamSubprocessScript:
         """Verify the grpc_worker.py script exists and is importable."""
         script_path = (
             Path(__file__).parent.parent.parent
-            / "bioplausible"
+            / "computronium"
             / "p2p"
             / "grpc_worker.py"
         )
@@ -483,7 +483,7 @@ class TestGRPCSeamSubprocessScript:
         """Test that the grpc_worker.py script spawns and prints port."""
         script_path = (
             Path(__file__).parent.parent.parent
-            / "bioplausible"
+            / "computronium"
             / "p2p"
             / "grpc_worker.py"
         )

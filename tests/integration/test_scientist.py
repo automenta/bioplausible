@@ -9,15 +9,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.execution._state import ExperimentState
-from bioplausible.execution.engine import ExecutionEngine
-from bioplausible.execution.resources import ResourceMonitor
-from bioplausible.execution.strategy import ExecutionStrategy
-from bioplausible.execution.task import ExperimentTask
-from bioplausible.hyperopt import PatientLevel
-from bioplausible.hyperopt.parallel_runner import ParallelTrialRunner
-from bioplausible.hyperopt.storage import HyperoptStorage
+from computronium.core.registry import ComponentCategory, Registry
+from computronium.execution._state import ExperimentState
+from computronium.execution.engine import ExecutionEngine
+from computronium.execution.resources import ResourceMonitor
+from computronium.execution.strategy import ExecutionStrategy
+from computronium.execution.task import ExperimentTask
+from computronium.hyperopt import PatientLevel
+from computronium.hyperopt.parallel_runner import ParallelTrialRunner
+from computronium.hyperopt.storage import HyperoptStorage
 
 
 @pytest.fixture
@@ -132,10 +132,10 @@ def test_auto_scientist_robustness():
 
     # Mock everything
     with (
-        patch("bioplausible.execution.engine.ExperimentState"),
-        patch("bioplausible.execution.engine.ExecutionStrategy") as MockStrategy,
-        patch("bioplausible.execution.engine.run_single_trial_task") as mock_run,
-        patch("bioplausible.execution.engine.ResourceMonitor") as MockResource,
+        patch("computronium.execution.engine.ExperimentState"),
+        patch("computronium.execution.engine.ExecutionStrategy") as MockStrategy,
+        patch("computronium.execution.engine.run_single_trial_task") as mock_run,
+        patch("computronium.execution.engine.ResourceMonitor") as MockResource,
     ):  # Need to mock resource too
         # Setup mocks
         mock_strategy = MockStrategy.return_value
@@ -190,9 +190,9 @@ def test_resource_monitor():
 
     # We must patch where it's USED or IMPORTED.
     # ResourceMonitor imports psutil.
-    # So we patch bioplausible.execution.resources.psutil
+    # So we patch computronium.execution.resources.psutil
 
-    with patch("bioplausible.execution.resources.psutil") as mock_psutil:
+    with patch("computronium.execution.resources.psutil") as mock_psutil:
         # Case 1: Low usage
         mock_psutil.cpu_percent.return_value = 10.0
         mock_psutil.virtual_memory.return_value.percent = 10.0
@@ -209,14 +209,14 @@ def test_resource_monitor_multi_gpu():
 
     with (
         patch(
-            "bioplausible.execution.resources.torch.cuda.is_available",
+            "computronium.execution.resources.torch.cuda.is_available",
             return_value=True,
         ),
         patch(
-            "bioplausible.execution.resources.torch.cuda.device_count", return_value=2
+            "computronium.execution.resources.torch.cuda.device_count", return_value=2
         ),
         patch(
-            "bioplausible.execution.resources.torch.cuda.mem_get_info"
+            "computronium.execution.resources.torch.cuda.mem_get_info"
         ) as mock_mem_get_info,
     ):
         # GPU 0: 10% used, GPU 1: 10% used (Low usage)
@@ -276,7 +276,7 @@ def test_parallel_trial_runner(temp_db):
         ]
 
         with patch(
-            "bioplausible.hyperopt.parallel_runner.run_single_trial_task"
+            "computronium.hyperopt.parallel_runner.run_single_trial_task"
         ) as mock_run:
             mock_run.side_effect = [{"accuracy": 0.9}, {"accuracy": 0.8}]
 
@@ -292,9 +292,9 @@ def test_parallel_trial_runner(temp_db):
 def test_auto_scientist_safe_mode_diagnostic_failure(temp_db):
     """Test that ExecutionEngine terminates when the diagnostic task fails in Safe Mode."""
     with (
-        patch("bioplausible.execution.engine.ExperimentState"),
-        patch("bioplausible.execution.engine.ExecutionStrategy"),
-        patch("bioplausible.execution.engine.ResourceMonitor") as MockResource,
+        patch("computronium.execution.engine.ExperimentState"),
+        patch("computronium.execution.engine.ExecutionStrategy"),
+        patch("computronium.execution.engine.ResourceMonitor") as MockResource,
     ):
         MockResource.return_value.should_pause.return_value = False
 
@@ -328,9 +328,9 @@ def test_auto_scientist_safe_mode_diagnostic_failure(temp_db):
 def test_auto_scientist_safe_mode_diagnostic_success(temp_db):
     """Test that ExecutionEngine recovers when the diagnostic task succeeds."""
     with (
-        patch("bioplausible.execution.engine.ExperimentState"),
-        patch("bioplausible.execution.engine.ExecutionStrategy"),
-        patch("bioplausible.execution.engine.ResourceMonitor") as MockResource,
+        patch("computronium.execution.engine.ExperimentState"),
+        patch("computronium.execution.engine.ExecutionStrategy"),
+        patch("computronium.execution.engine.ResourceMonitor") as MockResource,
     ):
         MockResource.return_value.should_pause.return_value = False
 
@@ -362,8 +362,8 @@ def test_inject_tier_config():
     # We don't need a DB for this unit test if we just test the method directly
     # but ExecutionEngine needs db_path in init, so we pass a dummy string
     with (
-        patch("bioplausible.execution.engine.ExperimentState"),
-        patch("bioplausible.execution.engine.ExecutionStrategy"),
+        patch("computronium.execution.engine.ExperimentState"),
+        patch("computronium.execution.engine.ExecutionStrategy"),
     ):
         scientist = ExecutionEngine(db_path="dummy.db")
 

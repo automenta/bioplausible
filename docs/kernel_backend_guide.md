@@ -7,19 +7,19 @@ bio-plausible algorithm family, and how the infra consumes it at runtime.
 
 ## 1. The protocol surface
 
-All kernels live under `bioplausible/acceleration/`. One module per family
+All kernels live under `computronium/acceleration/`. One module per family
 (`fa_kernels.py`, `hebbian_kernels.py`, `ff_kernels.py`, `tp_kernels.py`,
 `pc_kernels.py`, `snn_kernels.py`, `tile_kernels.py`, `mep_kernels.py`,
 `backprop_kernels.py`), each downloading a `KernelBackend` implementation and
 registering it lazily at import end:
 
 ```python
-from bioplausible.acceleration.kernel_backend import (
+from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelRegistry,
 )
-from bioplausible.acceleration.triton_kernels import MEP_TritonOps
+from computronium.acceleration.triton_kernels import MEP_TritonOps
 
 
 class MyKernelBackend:
@@ -78,7 +78,7 @@ resolved hidden dims and cause `IndexError`s.
 
 Families with settling dynamics must record and expose their settle loop via
 `get_settle_telemetry()`. The unified protocol is
-`bioplausible/core/local_learning/settling.py::SettleProtocol` with
+`computronium/core/local_learning/settling.py::SettleProtocol` with
 `settle_universal()`, `SettleConfig`, `SettleTelemetry`. The shared primitives
 `settle_state` / `settle_activations_list` / `energy_gradient_descent` /
 `settle_manual_o1` are reused; a backend simply stores the last loop's

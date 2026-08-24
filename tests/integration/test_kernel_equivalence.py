@@ -7,8 +7,8 @@ on every commit. Ensures bitwise/numerical equivalence across backends.
 import pytest
 import torch
 
-from bioplausible.acceleration.backends import HAS_CUPY, HAS_TRITON
-from bioplausible.acceleration.triton_kernels import MEP_TritonOps, TritonEqPropOps
+from computronium.acceleration.backends import HAS_CUPY, HAS_TRITON
+from computronium.acceleration.triton_kernels import MEP_TritonOps, TritonEqPropOps
 
 
 class TestTritonEqPropEquivalence:
@@ -264,7 +264,7 @@ class TestKernelRegistryAutoTune:
 
     def test_autotune_cache_works(self):
         """Test that auto-tune caching works correctly."""
-        from bioplausible.acceleration.kernel_backend import (
+        from computronium.acceleration.kernel_backend import (
             AlgorithmFamily,
             HardwareTarget,
             KernelRegistry,
@@ -324,7 +324,7 @@ class TestBackendNumericalParity:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_registered_backends_exist(self, algorithm):
         """Verify backends are registered for key algorithms."""
-        from bioplausible.acceleration.kernel_backend import (
+        from computronium.acceleration.kernel_backend import (
             AlgorithmFamily,
             KernelRegistry,
         )

@@ -7,7 +7,7 @@ related helpers produce the expected types and behaviors.
 import torch
 from torch import nn
 
-from bioplausible.zoo.utils import (
+from computronium.zoo.utils import (
     _get_layer_weight,
     _has_spectral_norm,
     _reshape_weight_for_power_iteration,

@@ -64,7 +64,7 @@ class TestShareableUrl:
 
     def test_url_prefix_and_no_secrets(self):
         url = config_to_url(default_trainer_config())
-        assert url.startswith("bioplausible://")
+        assert url.startswith("computronium://")
         # Only compact knobs (optimizer_kwargs/model_kwargs), no secrets.
         assert "token" not in url
 

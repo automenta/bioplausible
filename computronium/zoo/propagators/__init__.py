@@ -1,0 +1,14 @@
+"""
+Zoo Propagators Package
+
+MEP (Modulatory Error Propagation) learning rules.
+"""
+
+from computronium.core.registry import register_propagator
+
+from . import mep
+
+__all__: list[str] = [
+    "mep",
+    "register_propagator",
+]

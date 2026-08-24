@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bioplausible.hyperopt.experiment import TrialRunner
-from bioplausible.hyperopt.storage import HyperoptStorage
+from computronium.hyperopt.experiment import TrialRunner
+from computronium.hyperopt.storage import HyperoptStorage
 
 
 class TestPhase2Integration(unittest.TestCase):

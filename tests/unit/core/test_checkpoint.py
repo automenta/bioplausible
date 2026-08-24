@@ -7,7 +7,7 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.core.checkpoint import (
+from computronium.core.checkpoint import (
     Checkpoint,
     find_trial_artifact,
     load_checkpoint,

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from widgets import build_widget_tree
 
-from bioplausible.core.trainer import TrainerConfig
+from computronium.core.trainer import TrainerConfig
 
 
 @dataclass

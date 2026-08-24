@@ -431,7 +431,7 @@ These constraints appeared across all prompt categories. Append as needed:
 | Variable | Example value | Description |
 |----------|--------------|-------------|
 | `<PROJECT_ROOT>` | `/home/me/myproject` | Absolute path to repo root |
-| `<PACKAGE_DIR>` | `bioplausible` | Importable Python package name |
+| `<PACKAGE_DIR>` | `computronium` | Importable Python package name |
 | `<PLAN_FILE>` | `REFACTOR3.md` | Current plan document |
 | `<GUIDELINES_FILE>` | `AGENTS.md` | Coding standards/conventions file |
 | `<README_FILE>` | `README.md` | Project readme |

@@ -18,7 +18,7 @@ from collections.abc import Callable
 
 from compat import apply_compat_shims
 
-from bioplausible.core.ontology import System
+from computronium.core.ontology import System
 
 apply_compat_shims()  # must run before `import nicegui`
 
@@ -156,7 +156,7 @@ def _meta_text(name: str) -> str:
 
 def _build_ontology_system(layer_choices: dict[str, str]) -> System:
     """Build a System from 5 layer choices."""
-    from bioplausible.core.ontology import (
+    from computronium.core.ontology import (
         BackpropCredit,
         CreditAssignmentConfig,
         DigitalSubstrate,
@@ -186,7 +186,7 @@ def _build_ontology_system(layer_choices: dict[str, str]) -> System:
         TemporalTraceCredit,
         ThermodynamicContrast,
     )
-    from bioplausible.core.system_trainer import compose_system
+    from computronium.core.system_trainer import compose_system
 
     # Map layer names to instances
     substrate_map = {
@@ -328,7 +328,7 @@ def create_page(demo: DemoUi) -> None:
         task_sel = ui.select(
             [t.name for t in build_tasks()], value="mnist", label="Task"
         )
-        model_a = ui.select(DEMO_MODELS, value="tile_pc", label="Config A")
+        model_a = ui.select(DEMO_MODELS, value="ff_mlp", label="Config A")
         model_b = ui.select(DEMO_MODELS, value="backprop_mlp", label="Config B")
         epochs = ui.number(value=5, min=1, max=50, label="Epochs")
         lr = ui.number(value=0.001, format="%.4f", label="Learning Rate")
@@ -525,7 +525,7 @@ def _run_ontology_system(panel: DemoPanel) -> None:
     """Run training for an ontology-composed system."""
     import torch
 
-    from bioplausible.domains.registry import resolve_task
+    from computronium.domains.registry import resolve_task
 
     try:
         panel.running = True
@@ -534,7 +534,7 @@ def _run_ontology_system(panel: DemoPanel) -> None:
         task_spec = resolve_task(panel.trainer_config.task)
 
         # Get data
-        from bioplausible.data import get_dataloaders
+        from computronium.data import get_dataloaders
 
         train_loader, val_loader = get_dataloaders(
             panel.trainer_config.task,
@@ -598,7 +598,7 @@ def _save_cfg(side: str, demo: DemoUi, status) -> Callable[[], None]:
         panel = demo.panel_a if side == "a" else demo.panel_b
         if panel is None:
             return
-        path = Path(f"/tmp/bioplausible-{side}.json")
+        path = Path(f"/tmp/computronium-{side}.json")
         save_config(panel.trainer_config, path)
         ui.download(path)
         status.set_text(f"Saved Config {side.upper()} to {path}")
@@ -613,7 +613,7 @@ def _load_cfg(side: str, demo: DemoUi, status) -> Callable[[], None]:
         panel = demo.panel_a if side == "a" else demo.panel_b
         if panel is None:
             return
-        path = Path(f"/tmp/bioplausible-{side}.json")
+        path = Path(f"/tmp/computronium-{side}.json")
         if not path.exists():
             status.set_text(f"No saved Config {side.upper()} yet")
             return
@@ -643,8 +643,8 @@ def _export_run(demo: DemoUi, status) -> Callable[[], None]:
             return
         status.set_text("Exporting run CSV + PNG…")
         for label, panel in (("A", a), ("B", b)):
-            csv_path = Path(f"/tmp/bioplausible-run-{label}.csv")
-            png_path = Path(f"/tmp/bioplausible-run-{label}.png")
+            csv_path = Path(f"/tmp/computronium-run-{label}.csv")
+            png_path = Path(f"/tmp/computronium-run-{label}.png")
             export_run_csv(
                 panel.losses,
                 panel.accuracies,

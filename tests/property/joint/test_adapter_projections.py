@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from bioplausible.core.credit.adapters import (
+from computronium.core.credit.adapters import (
     BackpropToThermodynamicAdapter,
     LocalGoodnessToThermodynamicAdapter,
     RandomProjectionsToThermodynamicAdapter,
@@ -20,12 +20,12 @@ from bioplausible.core.credit.adapters import (
     ThermodynamicToBackpropAdapter,
     ThermodynamicToHomeostaticAdapter,
 )
-from bioplausible.core.dynamics.adapters import (
+from computronium.core.dynamics.adapters import (
     EnergyToInstantaneousAdapter,
     InstantaneousToEnergyAdapter,
     create_dynamics_adapter,
 )
-from bioplausible.core.joint import (
+from computronium.core.joint import (
     CompositeState,
     JointTrajectoryRecorder,
     NullPlasticity,
@@ -34,7 +34,7 @@ from bioplausible.core.joint import (
     StateVariable,
     SystemContext,
 )
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -46,7 +46,7 @@ from bioplausible.core.ontology import (
     SubstrateConfig,
     ThermodynamicContrast,
 )
-from bioplausible.core.substrates.adapters import (
+from computronium.core.substrates.adapters import (
     DigitalToAnalogAdapter,
     DigitalToQuantumAdapter,
     DigitalToSparseAdapter,
@@ -54,7 +54,7 @@ from bioplausible.core.substrates.adapters import (
     SubstrateAdapter,
     create_substrate_adapter,
 )
-from bioplausible.core.system_trainer import compose_system
+from computronium.core.system_trainer import compose_system
 
 # ============================================================
 # Test Fixtures
@@ -214,7 +214,7 @@ def test_dynamics_adapter_preserves_composite_state_activity(
     source_type, target_type, adapter_class
 ):
     """Dynamics adapter should preserve activity component of CompositeState."""
-    from bioplausible.core.ontology import SystemState
+    from computronium.core.ontology import SystemState
 
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())
@@ -225,7 +225,7 @@ def test_dynamics_adapter_preserves_composite_state_activity(
             StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
         )
     elif source_type == "instantaneous":
-        from bioplausible.core.ontology import InstantaneousDynamics
+        from computronium.core.ontology import InstantaneousDynamics
 
         source_dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     else:
@@ -259,7 +259,7 @@ def test_dynamics_adapter_factory_creates_correct_types():
     assert isinstance(adapter, EnergyToInstantaneousAdapter)
 
     # Instantaneous -> Energy
-    from bioplausible.core.ontology import InstantaneousDynamics
+    from computronium.core.ontology import InstantaneousDynamics
 
     instant_dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     adapter = create_dynamics_adapter(
@@ -392,7 +392,7 @@ def test_substrate_then_dynamics_adapter_composition():
     assert y.shape == (4, 2)
 
     # Apply dynamics adapter (via settle)
-    from bioplausible.core.ontology import SystemState
+    from computronium.core.ontology import SystemState
 
     state = SystemState(x=z.activity["x"])
     state.activations = geometry.forward(state.x, substrate)
@@ -428,7 +428,7 @@ def test_adapter_stack_preserves_registry():
     # Apply adapters
     _ = geometry.forward(z.activity["x"], substrate)
 
-    from bioplausible.core.ontology import SystemState
+    from computronium.core.ontology import SystemState
 
     state = SystemState(x=z.activity["x"])
     state.activations = geometry.forward(state.x, substrate)
@@ -530,7 +530,7 @@ def test_dynamics_adapter_projection_preserves_energy_descent():
         "energy_minimization", "instantaneous", source_dynamics
     )
 
-    from bioplausible.core.ontology import SystemState
+    from computronium.core.ontology import SystemState
 
     state = SystemState(x=torch.randn(4, 10))
     state.activations = geometry.forward(state.x, substrate)
@@ -567,7 +567,7 @@ def test_null_plasticity_as_adapter():
 
 def test_joint_transition_with_null_plasticity():
     """Joint transition with NullPlasticity should match 5-D system."""
-    from bioplausible.core.joint import LegacyDynamicsAsCoupledTransition
+    from computronium.core.joint import LegacyDynamicsAsCoupledTransition
 
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())

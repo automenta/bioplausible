@@ -14,7 +14,7 @@ import pytest
 import torch
 from torch import Tensor
 
-from bioplausible.core.joint import (
+from computronium.core.joint import (
     CompositeState,
     NullPlasticity,
     PlasticityConfig,
@@ -22,7 +22,7 @@ from bioplausible.core.joint import (
     StateVariable,
     SystemContext,
 )
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -540,7 +540,7 @@ def test_plasticity_config_in_system_config():
 
 def test_consolidation_with_plasticity_config():
     """Consolidation should respect plasticity config consolidation_config."""
-    from bioplausible.core.joint import ConsolidationConfig, consolidate
+    from computronium.core.joint import ConsolidationConfig, consolidate
 
     context, geometry, registry = _create_test_context(
         PlasticityConfig.fast_weights(
@@ -642,7 +642,7 @@ def test_plasticity_state_dims_match_registry():
 
 def test_zero_extension_theorem_null_plasticity():
     """Zero-Extension Theorem: Joint(M=Null) ≡ 5-D system."""
-    from bioplausible.core.system_trainer import compose_system
+    from computronium.core.system_trainer import compose_system
 
     substrate = DigitalSubstrate(SubstrateConfig.digital())
     geometry = RecurrentGeometry(

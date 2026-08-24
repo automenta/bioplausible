@@ -9,7 +9,7 @@ import torch
 root_path = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(root_path))
 
-from bioplausible.acceleration.triton_kernels import TritonEqPropOps
+from computronium.acceleration.triton_kernels import TritonEqPropOps
 
 pytestmark = pytest.mark.gpu
 

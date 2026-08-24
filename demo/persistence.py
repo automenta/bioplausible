@@ -1,6 +1,6 @@
 """Experiment persistence (Sprint 3.6).
 
-Pure helpers to (de)serialize a TrainerConfig to/from JSON so a saved demo
+Pure helpers to (de)serialize a SystemTrainerConfig to/from JSON so a saved demo
 config reloads identically and runs can be exported. The NiceGUI layer calls
 these; the logic is browser-free and unit-tested.
 """
@@ -14,7 +14,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
-from bioplausible.core.trainer import TrainerConfig
+from computronium.core.system_trainer import SystemTrainerConfig
 
 
 def _scrub(value: Any) -> Any:
@@ -28,12 +28,12 @@ def _scrub(value: Any) -> Any:
     return value
 
 
-def config_to_dict(config: TrainerConfig) -> dict[str, Any]:
-    """Serialize a TrainerConfig to a JSON-safe dict."""
+def config_to_dict(config: SystemTrainerConfig) -> dict[str, Any]:
+    """Serialize a SystemTrainerConfig to a JSON-safe dict."""
     return _scrub(config)  # type: ignore[return-value]
 
 
-def save_config(config: TrainerConfig, path: str | Path) -> Path:
+def save_config(config: SystemTrainerConfig, path: str | Path) -> Path:
     """Write a config to ``path`` as formatted JSON; returns the path."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -41,10 +41,10 @@ def save_config(config: TrainerConfig, path: str | Path) -> Path:
     return path
 
 
-def load_config(path: str | Path) -> TrainerConfig:
-    """Reconstruct a TrainerConfig from a previously saved JSON file."""
+def load_config(path: str | Path) -> SystemTrainerConfig:
+    """Reconstruct a SystemTrainerConfig from a previously saved JSON file."""
     data = json.loads(Path(path).read_text())
-    return TrainerConfig.from_dict(data)
+    return SystemTrainerConfig(**data)
 
 
 def export_summary(
@@ -92,30 +92,27 @@ def export_run_csv(
     return path
 
 
-_URL_PREFIX = "bioplausible://"
+_URL_PREFIX = "computronium://"
 
 
-def config_to_url(config: TrainerConfig) -> str:
-    """Encode a TrainerConfig into a compact shareable URL.
+def config_to_url(config: SystemTrainerConfig) -> str:
+    """Encode a SystemTrainerConfig into a compact shareable URL.
 
-    ``bioplausible://`` + urlsafe-base64(JSON) so a saved demo comparison can
+    ``computronium://`` + urlsafe-base64(JSON) so a saved demo comparison can
     be pasted into a chat/doc and rehydrated with :func:`config_from_url`.
     Only the selector-relevant knobs are encoded so the URL stays short.
     """
     knobs = {
-        "model": config.model,
-        "task": config.task,
-        "epochs": config.epochs,
-        "optimizer_kwargs": {
-            k: config.optimizer_kwargs[k]
-            for k in ("lr",)
-            if k in config.optimizer_kwargs
-        },
-        "model_kwargs": {
-            k: config.model_kwargs[k]
-            for k in ("hidden_dim",)
-            if k in config.model_kwargs
-        },
+        "max_epochs": config.max_epochs,
+        "batch_size": config.batch_size,
+        "device": config.device,
+        "grad_clip": config.grad_clip,
+        "track_energy": config.track_energy,
+        "track_flops": config.track_flops,
+        "track_memory": config.track_memory,
+        "log_every_n_steps": config.log_every_n_steps,
+        "seed": config.seed,
+        "deterministic": config.deterministic,
     }
     payload = base64.urlsafe_b64encode(
         json.dumps(knobs, sort_keys=True).encode("utf-8")
@@ -123,20 +120,20 @@ def config_to_url(config: TrainerConfig) -> str:
     return _URL_PREFIX + payload
 
 
-def config_from_url(url: str) -> TrainerConfig:
-    """Rehydrate a TrainerConfig from a :func:`config_to_url` URL."""
+def config_from_url(url: str) -> SystemTrainerConfig:
+    """Rehydrate a SystemTrainerConfig from a :func:`config_to_url` URL."""
     if not url.startswith(_URL_PREFIX):
-        raise ValueError("not a bioplausible share URL")
+        raise ValueError("not a computronium share URL")
     raw = url[len(_URL_PREFIX) :]
     knobs = json.loads(base64.urlsafe_b64decode(raw.encode("ascii")).decode("utf-8"))
-    return TrainerConfig.from_dict(knobs)
+    return SystemTrainerConfig(**knobs)
 
 
 def export_run_png(
     losses: list[float],
     accuracies: list[float],
     path: str | Path,
-    title: str = "Bioplausible run",
+    title: str = "Computronium run",
 ) -> Path:
     """Render a loss/accuracy trace to a PNG (Agg backend, headless-safe).
 

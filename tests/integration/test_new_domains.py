@@ -3,7 +3,7 @@
 import pytest
 from torch import nn
 
-from bioplausible.domains import (
+from computronium.domains import (
     DomainType,
     ScientificTask,
     TabularTask,

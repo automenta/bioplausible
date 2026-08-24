@@ -6,7 +6,7 @@ import tempfile
 
 import pytest
 
-from bioplausible.execution.synthesizer import ResearchSynthesizer
+from computronium.execution.synthesizer import ResearchSynthesizer
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -293,6 +293,6 @@ def test_estimate_param_count_basic() -> None:
 
 def test_module_all() -> None:
     """Module exports ResearchSynthesizer."""
-    from bioplausible.execution import synthesizer
+    from computronium.execution import synthesizer
 
     assert hasattr(synthesizer, "ResearchSynthesizer")

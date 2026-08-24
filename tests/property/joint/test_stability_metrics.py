@@ -6,10 +6,10 @@ import pytest
 import torch
 from torch import Tensor
 
-from bioplausible.core.joint.context import SystemContext
-from bioplausible.core.joint.state import CompositeState
-from bioplausible.core.joint.transition import NullPlasticity, PlasticityConfig
-from bioplausible.core.stability import (
+from computronium.core.joint.context import SystemContext
+from computronium.core.joint.state import CompositeState
+from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
+from computronium.core.stability import (
     BasinStabilityEstimator,
     FrontierAggregator,
     FrontierRecord,
@@ -77,7 +77,7 @@ class MockContractingTransition:
 @pytest.fixture
 def mock_context():
     """Create a minimal SystemContext for testing."""
-    from bioplausible.core.joint.state import StateRegistry, StateVariable
+    from computronium.core.joint.state import StateRegistry, StateVariable
 
     registry = StateRegistry()
     registry.register(StateVariable(name="x", persistent=True))

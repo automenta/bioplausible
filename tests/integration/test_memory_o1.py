@@ -1,6 +1,6 @@
 import numpy as np
 
-from bioplausible.acceleration.kernels import EqPropKernel
+from computronium.acceleration.kernels import EqPropKernel
 
 
 def test_eqprop_kernel_memory_o1():

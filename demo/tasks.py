@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import torch
 
-from bioplausible.data.vision import generate_toy_points
+from computronium.data.vision import generate_toy_points
 
 _MNIST_CACHE: tuple[torch.Tensor, torch.Tensor] | None = None
 _CIFAR_CACHE: tuple[torch.Tensor, torch.Tensor] | None = None
@@ -112,7 +112,7 @@ def _tiny_shakespeare(batch: int, device: str) -> tuple[torch.Tensor, torch.Tens
     """
     global _LM_CACHE
     if _LM_CACHE is None:
-        from bioplausible.data.lm import get_lm_dataset
+        from computronium.data.lm import get_lm_dataset
 
         ds = get_lm_dataset("tiny_shakespeare", seq_len=16)
         x = ds.data[: ds.seq_len * 2000].view(-1, ds.seq_len)

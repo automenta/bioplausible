@@ -8,7 +8,7 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.zoo.sparsity.methods import (
+from computronium.zoo.sparsity.methods import (
     ActivityDrivenPruning,
     RandomPruning,
     TopKPruning,

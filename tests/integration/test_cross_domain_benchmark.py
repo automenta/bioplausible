@@ -4,7 +4,7 @@ import tempfile
 
 import pytest
 
-from bioplausible.evaluation.cross_domain import (
+from computronium.evaluation.cross_domain import (
     BenchmarkSuiteConfig,
     BenchmarkSuiteResult,
     CrossDomainBenchmarkSuite,

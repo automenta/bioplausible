@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EuclideanUpdate,
@@ -20,7 +20,7 @@ from bioplausible.core.ontology import (
     ThermodynamicContrast,
     TileGeometry,
 )
-from bioplausible.core.system_trainer import (
+from computronium.core.system_trainer import (
     SystemTrainer,
     SystemTrainerConfig,
     create_backprop_system,
@@ -106,7 +106,7 @@ class TestSubstrate:
         assert torch.equal(state, x)
 
     def test_noisy_substrate_injects_noise(self):
-        from bioplausible.core.ontology import NoisySubstrate
+        from computronium.core.ontology import NoisySubstrate
 
         substrate = NoisySubstrate(
             SubstrateConfig(
@@ -609,7 +609,7 @@ class TestModelAdapter:
 
     def test_validate_with_legacy_model(self):
         """Test ModelAdapter.validate compares legacy and system metrics."""
-        from bioplausible.zoo.models.forward_only import ForwardForwardNet
+        from computronium.zoo.models.forward_only import ForwardForwardNet
 
         model = ForwardForwardNet(input_dim=10, hidden_dim=20, output_dim=3)
         adapter = ModelAdapter(model)
@@ -642,7 +642,7 @@ class TestModelAdapter:
 
     def test_validate_with_custom_data(self):
         """Test ModelAdapter.validate with user-provided test data."""
-        from bioplausible.zoo.models.forward_only import ForwardForwardNet
+        from computronium.zoo.models.forward_only import ForwardForwardNet
 
         model = ForwardForwardNet(input_dim=10, hidden_dim=20, output_dim=3)
         adapter = ModelAdapter(model)

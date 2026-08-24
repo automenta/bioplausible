@@ -14,8 +14,8 @@ import torch
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.zoo import get_model_spec
+from computronium.core.registry import ComponentCategory, Registry
+from computronium.zoo import get_model_spec
 
 # =============================================================================
 # Shared Fixtures & Helpers

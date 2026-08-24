@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 import torch
 
-from bioplausible.zoo.models.deployments import (
+from computronium.zoo.models.deployments import (
     ConvTileNet,  # Vision; RL
     ConvTileNetConfig,
     RLTileNet,
@@ -27,7 +27,7 @@ from bioplausible.zoo.models.deployments import (
     create_mnist_model,
     create_rl_model,
 )
-from bioplausible.zoo.models.tile_lm import TileLM
+from computronium.zoo.models.tile_lm import TileLM
 from tests.conftest import lm_train_step
 
 pytestmark = pytest.mark.gpu

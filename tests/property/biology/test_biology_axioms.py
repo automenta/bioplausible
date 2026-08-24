@@ -12,9 +12,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from torch import nn, optim
 
-from bioplausible.core.registry import ComponentCategory, Registry
-from bioplausible.zoo import get_model_spec
-from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+from computronium.core.registry import ComponentCategory, Registry
+from computronium.zoo import get_model_spec
+from computronium.zoo.models.eqprop._energy import EquilibriumMLP
 
 # =============================================================================
 # Shared Fixtures & Helpers
@@ -84,7 +84,7 @@ class TestEPGradientEquivalence:
 
         try:
             if model_name == "eqprop_mlp":
-                from bioplausible.config.unified import ModelConfig
+                from computronium.config.unified import ModelConfig
 
                 config = ModelConfig(
                     name="eqprop_mlp",
@@ -163,7 +163,7 @@ class TestEPGradientEquivalence:
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
-            from bioplausible.config.unified import ModelConfig
+            from computronium.config.unified import ModelConfig
 
             config = ModelConfig(
                 name="eqprop_mlp",
@@ -247,7 +247,7 @@ class TestLyapunovEnergyDescent:
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
-            from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
+            from computronium.zoo.models.eqprop.looped_mlp import LoopedMLP
 
             model = LoopedMLP(
                 input_dim=input_dim,
@@ -306,7 +306,7 @@ class TestContractionMapping:
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
-            from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
+            from computronium.zoo.models.eqprop.looped_mlp import LoopedMLP
 
             model = LoopedMLP(
                 input_dim=input_dim,
@@ -353,7 +353,7 @@ class TestContractionMapping:
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
-            from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
+            from computronium.zoo.models.eqprop.looped_mlp import LoopedMLP
 
             model = LoopedMLP(
                 input_dim=input_dim,
@@ -414,7 +414,7 @@ class TestFixedPointReliability:
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
-            from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
+            from computronium.zoo.models.eqprop.looped_mlp import LoopedMLP
 
             model = LoopedMLP(
                 input_dim=input_dim,
@@ -463,7 +463,7 @@ class TestFixedPointReliability:
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
-            from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
+            from computronium.zoo.models.eqprop.looped_mlp import LoopedMLP
 
             model = LoopedMLP(
                 input_dim=input_dim,
@@ -610,7 +610,7 @@ class TestAdaptiveFAAlignment:
     # -- xfail root cause (Sprint −1.2 triage, 2026-08-02) -------------------
     # AdaptiveFeedbackAlignment uses a deliberately slow feedback evolution:
     # `b_optimizer` runs at `learning_rate * 0.001` (see
-    # bioplausible/zoo/models/fa.py:443). In K=50 training steps the forward
+    # computronium/zoo/models/fa.py:443). In K=50 training steps the forward
     # weights W move substantially, but B crawls, so cos(B, W.T) does not move
     # > 0.05. This is a *biologically motivated* ceiling — slow synaptic
     # feedback reconfiguration — not an implementation bug. Keep xfailing
@@ -713,8 +713,8 @@ class TestWiredUpDisabledTests:
 
     def test_oracle_convergence_time_vs_noise(self):
         """Wire up test_oracle.py::test_oracle_metric - verify dynamics are computed correctly."""
-        from bioplausible.config.unified import ModelConfig
-        from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
+        from computronium.config.unified import ModelConfig
+        from computronium.zoo.models.eqprop._energy import EquilibriumMLP
 
         input_dim = 16
         hidden_dim = 32

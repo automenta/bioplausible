@@ -11,7 +11,7 @@ Laws:
 from hypothesis import given
 from hypothesis import strategies as st
 
-from bioplausible.knowledge.kb import KnowledgeEntry
+from computronium.knowledge.kb import KnowledgeEntry
 
 text_strat = st.text(min_size=1, max_size=40, alphabet="abcdefghijklmnopqrstuvwxyz ")
 source_strat = st.sampled_from(["manual", "experiment", "surrogate", "causal"])

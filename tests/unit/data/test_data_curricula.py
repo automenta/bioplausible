@@ -2,7 +2,7 @@
 
 import pytest
 
-from bioplausible.data.curricula import (
+from computronium.data.curricula import (
     CURRICULA,
     AntiCurriculum,
     CurriculumScheduler,

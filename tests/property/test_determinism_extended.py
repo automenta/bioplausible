@@ -7,8 +7,8 @@ for any valid 6-D coordinate combination.
 import pytest
 import torch
 
-from bioplausible.core.joint.transition import NullPlasticity, PlasticityConfig
-from bioplausible.core.ontology import (
+from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
+from computronium.core.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -24,9 +24,9 @@ from bioplausible.core.ontology import (
     SubstrateConfig,
     ThermodynamicContrast,
 )
-from bioplausible.core.plasticity.fast_weights import create_fast_weight_plasticity
-from bioplausible.core.plasticity.routing import create_routing_plasticity
-from bioplausible.core.system_trainer import compose_joint_system
+from computronium.core.plasticity.fast_weights import create_fast_weight_plasticity
+from computronium.core.plasticity.routing import create_routing_plasticity
+from computronium.core.system_trainer import compose_joint_system
 from tests.property._support import (
     BITWISE,
     DEPTH,
@@ -93,7 +93,7 @@ def _make_6d_system(coordinate: dict, device: str = "cpu") -> object:
     elif dynamics_type == "instantaneous":
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     elif dynamics_type == "predictive_settling":
-        from bioplausible.core.ontology import PredictiveSettlingDynamics
+        from computronium.core.ontology import PredictiveSettlingDynamics
 
         dynamics = PredictiveSettlingDynamics(
             StateDynamicsConfig.predictive_settling(max_steps=10, step_size=0.1)

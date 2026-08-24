@@ -8,14 +8,14 @@ import torch
 @pytest.mark.gpu
 def test_backprop_vs_eqprop_mnist():
     """Both algorithms train on same architecture, achieve >50% on MNIST in 3 epochs."""
-    from bioplausible.core.ontology import DigitalSubstrate, SubstrateConfig
-    from bioplausible.core.system_trainer import (
+    from computronium.core.ontology import DigitalSubstrate, SubstrateConfig
+    from computronium.core.system_trainer import (
         SystemTrainer,
         SystemTrainerConfig,
         create_backprop_system,
         create_eqprop_system,
     )
-    from bioplausible.domains.factory import create_task
+    from computronium.domains.factory import create_task
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 

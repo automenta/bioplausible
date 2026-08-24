@@ -6,7 +6,7 @@ import pytest
 import torch
 from torch import nn
 
-from bioplausible.domains import create_task
+from computronium.domains import create_task
 
 _SKIP_ON_DOWNLOAD_KEYWORDS = ("download", "socket", "timeout", "url", "ssl")
 _OFFLINE_VISION_DATASETS = {

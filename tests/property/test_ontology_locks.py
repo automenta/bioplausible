@@ -11,7 +11,7 @@ import pytest
 import torch
 from torch import Tensor
 
-from bioplausible.core.ontology import (
+from computronium.core.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -36,8 +36,8 @@ from bioplausible.core.ontology import (
     ThermodynamicContrast,
     TileGeometry,
 )
-from bioplausible.core.registry import Registry
-from bioplausible.core.system_trainer import (
+from computronium.core.registry import Registry
+from computronium.core.system_trainer import (
     SystemTrainer,
     SystemTrainerConfig,
     compose_system,
@@ -909,7 +909,7 @@ def test_u_elastic_moves_toward_old_params() -> None:
 class TestC_SurrogateLocks:
     """Surrogate objective property tests using check_surrogate_equivalence.
 
-    Skipped: bioplausible.validation.gradient_check imports validation tracks which
+    Skipped: computronium.validation.gradient_check imports validation tracks which
     have legacy LoopedMLP imports (removed in Sprint 9). These tests are
     part of the validation tracks infrastructure, not the core ontology locks.
     """
@@ -941,7 +941,7 @@ class TestC_TemporalTraceSTDP:
     )
     def test_stdp_causal_potentiation(self, pre_time, post_time, expected_sign) -> None:
         """STDP window sign matches causal/anti-causal timing."""
-        from bioplausible.core.ontology import TemporalTraceCredit
+        from computronium.core.ontology import TemporalTraceCredit
 
         credit = TemporalTraceCredit()
         pre_spikes = torch.tensor([[pre_time]])
@@ -962,7 +962,7 @@ class TestC_TemporalTraceSTDP:
 
     def test_stdp_antisymmetry(self) -> None:
         """STDP window is antisymmetric: W(Δt) = -W(-Δt)."""
-        from bioplausible.core.ontology import TemporalTraceCredit
+        from computronium.core.ontology import TemporalTraceCredit
 
         credit = TemporalTraceCredit()
         pre_spikes = torch.tensor([[0.0]])
@@ -980,7 +980,7 @@ class TestC_TemporalTraceSTDP:
 
     def test_stdp_exponential_decay(self) -> None:
         """STDP window magnitude decays exponentially with |Δt|."""
-        from bioplausible.core.ontology import TemporalTraceCredit
+        from computronium.core.ontology import TemporalTraceCredit
 
         credit = TemporalTraceCredit()
 
@@ -1046,7 +1046,7 @@ class TestU_StepProperties:
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        from bioplausible.core.ontology import NaturalGradientUpdate
+        from computronium.core.ontology import NaturalGradientUpdate
 
         with seeded(42):
             update = NaturalGradientUpdate(
@@ -1094,14 +1094,14 @@ def test_d_spike_integration_lyapunov() -> None:
     if device.type == "cuda":
         enable_deterministic_cuda()
 
-    from bioplausible.core.ontology import (
+    from computronium.core.ontology import (
         DigitalSubstrate,
         FeedforwardGeometry,
         GeometryConfig,
         SpikeIntegrationDynamics,
         StateDynamicsConfig,
     )
-    from bioplausible.core.system_trainer import compose_system
+    from computronium.core.system_trainer import compose_system
 
     with seeded(42):
         # Use a simple geometry without hidden layers for testing spike dynamics
