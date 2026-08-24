@@ -29,6 +29,54 @@ jobs:
         run: uv run pyright .
       - name: Property Tests (Fast CI Gate)
         run: uv run pytest tests/property/ -q
+      - name: Preset Validation (from-config)
+        run: |
+          uv run python -c "
+          import sys
+          from omegaconf import OmegaConf
+          from computronium.cli.run import _build_system_from_flat_config
+          import torch
+          
+          device = 'cpu'
+          for preset in [
+              'configs/presets/backprop_mnist.yaml',
+              'configs/presets/eqprop_mnist.yaml',
+              'configs/presets/fa_mnist.yaml',
+              'configs/presets/ff_mnist.yaml',
+              'configs/presets/pepita_mnist.yaml',
+              'configs/presets/tp_mnist.yaml',
+              'configs/presets/pc_mnist.yaml',
+              'configs/presets/hebbian_mnist.yaml',
+              'configs/presets/snn_mnist.yaml',
+              'configs/presets/tile_mnist.yaml',
+              'configs/presets/routing_mnist.yaml',
+              'configs/presets/fast_weight_mnist.yaml',
+              'configs/presets/eqprop_routing_mnist.yaml',
+              'configs/presets/eqprop_fast_weight_mnist.yaml',
+          ]:
+              print(f'Validating {preset}...', end=' ')
+              sys.stdout.flush()
+              try:
+                  cfg = OmegaConf.load(preset)
+                  config = OmegaConf.to_container(cfg, resolve=True)
+                  
+                  substrate_cfg = config.get('substrate', {})
+                  geometry_cfg = config.get('geometry', {})
+                  dynamics_cfg = config.get('dynamics', {})
+                  plasticity_cfg = config.get('plasticity', {})
+                  credit_cfg = config.get('credit', {})
+                  update_cfg = config.get('update', {})
+                  
+                  system = _build_system_from_flat_config(
+                      substrate_cfg, geometry_cfg, dynamics_cfg,
+                      plasticity_cfg, credit_cfg, update_cfg, device
+                  )
+                  print('OK')
+              except Exception as e:
+                  print(f'FAILED: {e}')
+                  sys.exit(1)
+          print('All presets validated successfully!')
+          "
       - name: Registry Audit (metadata completeness)
         run: uv run comp audit --metadata
       - name: Reproducibility Check

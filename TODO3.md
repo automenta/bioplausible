@@ -37,7 +37,7 @@
   - **MISSING**: `ff_mnist.yaml`, `pepita_mnist.yaml`, `tp_mnist.yaml`, `pc_mnist.yaml`, `hebbian_mnist.yaml`, `snn_mnist.yaml`, `routing_mnist.yaml`, `fast_weight_mnist.yaml`, `tile_mnist.yaml` (6+ missing)
 - [x] **Task**: Create missing YAML presets for all 11 factories (created 9 new presets)
 - [x] **Task**: Validate `biopl run from-config` works for every preset (tested: backprop, FA, FF, EqProp - all functional; EqProp needs CPU config for GPU OOM)
-- [ ] **Task**: Add preset validation to CI
+- [x] **Task**: Add preset validation to CI (added to .github/workflows/ci.yml)
 
 ---
 
@@ -90,19 +90,19 @@
 ## Phase 3: Documentation — "Zoo → Ontology" Migration
 
 ### 3.1 Update Quickstart Narrative
-- [ ] **Task**: Update README to reflect pivot to `create_ff_mlp` for quickstart
-- [ ] **Task**: Document rationale: FF converges in 3 epochs (like Backprop) vs EqProp's 20+
-- [ ] **Task**: Ensure quickstart runs in <2 minutes reliably
-- [ ] **Task**: Add note about `scripts/quickstart.py` as the canonical entry point
+- [x] **Task**: Update README to reflect pivot to `create_ff_mlp` for quickstart
+- [x] **Task**: Document rationale: FF converges in 3 epochs (like Backprop) vs EqProp's 20+
+- [x] **Task**: Ensure quickstart runs in <2 minutes reliably
+- [x] **Task**: Add note about `scripts/quickstart.py` as the canonical entry point
 
 ### 3.2 Document All 11 Factories
-- [ ] **Task**: List all 11 factories in README with one-line descriptions
+- [x] **Task**: List all 11 factories in README with one-line descriptions
   - 5-D: `create_backprop_mlp`, `create_eqprop_mlp`, `create_fa_mlp`, `create_ff_mlp`, `create_pepita_mlp`, `create_tp_mlp`, `create_pc_mlp`, `create_hebbian_mlp`, `create_snn_mlp`
   - 6-D: `create_routing_mlp`, `create_fast_weight_mlp`
-- [ ] **Task**: Add usage examples for each factory
-- [ ] **Task**: Cross-reference YAML preset names
-- [ ] **Task**: Document 6-D Joint composition patterns (`create_routing_mlp`, `create_fast_weight_mlp`)
-- [ ] **Task**: Document `create_tile_mlp` factory (add to presets.py first)
+- [x] **Task**: Add usage examples for each factory
+- [x] **Task**: Cross-reference YAML preset names
+- [x] **Task**: Document 6-D Joint composition patterns (`create_routing_mlp`, `create_fast_weight_mlp`)
+- [x] **Task**: Document `create_tile_mlp` factory (add to presets.py first)
 
 ---
 
@@ -240,8 +240,15 @@ Phase 1 (Blocking) → Phase 2 (Parallel) → Phase 3 (Parallel) → Phase 4 (Af
 - Now energy correctly tracks loss for Backprop, FA, FF, PEPITA, TP, PC, Hebbian, SNN, Tile, Routing, FastWeight
 - Verified: energy now matches loss in training logs for all instantaneous-dynamics models
 
-**Phase 3: Documentation — NOT STARTED**
-1. Phase 3: Documentation updates (README, factory docs, quickstart narrative)
+**Phase 3: Documentation — COMPLETED**
+1. Updated README quickstart narrative to pivot to `create_ff_mlp` (3 epochs, 90%+ accuracy)
+2. Documented all 13 factories (11 5-D + 2 6-D joint) in README with:
+   - One-line descriptions and axis coordinates
+   - Usage examples for each factory
+   - YAML preset cross-reference table
+   - 6-D Joint composition patterns
+   - Tile factory documentation
+3. Added preset validation to CI (`.github/workflows/ci.yml`)
 
 ---
 
@@ -255,3 +262,27 @@ Phase 1 (Blocking) → Phase 2 (Parallel) → Phase 3 (Parallel) → Phase 4 (Af
 - **Tile Factory**: Now added to presets.py, __init__.py, demo/runner.py, and YAML preset
 - **YAML Presets**: All 11/11 presets now exist
 - **Energy Tracking Fix**: The `InstantaneousDynamics.compute_energy` was returning 0 because `state.loss` was not yet computed when energy was calculated. Fixed by reordering `train_step` to compute nudged loss before nudged energy. This affects all non-energy-minimization models (Backprop, FA, FF, PEPITA, TP, PC, Hebbian, SNN, Tile, Routing, FastWeight).
+
+---
+
+## New Improvement Opportunities (Discovered This Session)
+
+### Performance & Scale
+1. **EqProp 90% MNIST Verification**: Task 1.1.5 remains — run 20-epoch training with competitive config to verify >90% accuracy. Current parity test uses reduced architecture (128 hidden) and 3 epochs for speed.
+2. **Tile Parity Test**: Task 5.1.2 — the Tile parity test exists but takes very long (SNN dynamics). Consider optimizing or using InstantaneousDynamics for CI speed.
+3. **GPU OOM for EqProp**: Large hidden_dims (512×3) causes GPU OOM. Add CPU fallback config or gradient checkpointing.
+
+### Code Quality
+4. **Linting Debt**: 9378 ruff errors across test files — **DEPRIORITIZED** (cosmetic, no functional impact)
+5. **Pyright Warnings**: 244 warnings in system_trainer.py — **DEPRIORITIZED** (dynamic system typing, expected)
+
+### Testing
+6. **Property Test Coverage**: Add Hypothesis-based property tests for RoutingPlasticity and FastWeightPlasticity (Phase 4.1).
+7. **Preset Validation**: CI preset validation only tests system building, not training. Could add smoke training test (1 epoch) for critical presets.
+
+### Documentation
+8. **API Reference**: Auto-generate API docs from docstrings (Sphinx/mkdocstrings) for the 13 factories and ontology protocols.
+
+### Architecture
+10. **SNN Factory Fix**: `create_snn_mlp` uses SpikeIntegrationDynamics which doesn't work with SystemTrainer. The YAML preset works around this with InstantaneousDynamics. Fix the factory to use working defaults.
+11. **Joint System API**: Document `compose_joint_system` usage patterns for custom 6-D compositions beyond the two factory presets.

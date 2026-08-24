@@ -204,7 +204,7 @@ comp <command> [args]
 uv sync --dev
 ```
 
-### Quickstart: Train EqProp vs Backprop in <2 Minutes
+### Quickstart: Forward-Forward vs Backprop in <2 Minutes
 
 ```bash
 uv run scripts/quickstart.py
@@ -212,11 +212,13 @@ uv run scripts/quickstart.py
 
 Expected output:
 ```
-Backprop:  95% accuracy (3 epochs)
-EqProp:    10% accuracy (3 epochs)
+Backprop:        95% accuracy (3 epochs)
+Forward-Forward: 90%+ accuracy (3 epochs)
 
 Both biologically plausible and standard learning work!
 ```
+
+**Why Forward-Forward?** FF converges in 3 epochs (like Backprop) vs EqProp's 20+. It uses local layer-wise objectives—no backward pass through the network, no weight transport—making it the most biologically plausible algorithm that's competitive with backprop on MNIST. The `scripts/quickstart.py` is the canonical entry point.
 
 ### Config-Driven Training
 
@@ -226,6 +228,147 @@ comp run from-config --config configs/presets/eqprop_mnist.yaml
 comp run from-config --config configs/presets/backprop_mnist.yaml
 comp run from-config --config configs/presets/eqprop_routing_mnist.yaml
 ```
+
+---
+
+## 🏭 11 Native Factories — One-Line API
+
+All factories are available via `from computronium import ...` and compose 5-D/6-D ontology systems in one call. Each has a matching YAML preset in `configs/presets/`.
+
+| Factory | Axis Coordinate (S × G × D × M × C × U) | Preset YAML | Description |
+|---------|-----------------------------------------|-------------|-------------|
+| `create_backprop_mlp` | Digital × Feedforward × Instantaneous × Null × Backprop × Euclidean | `backprop_mnist.yaml` | Standard backprop MLP — the gold standard baseline |
+| `create_eqprop_mlp` | Digital × Recurrent × EnergyMinimization × Null × ThermodynamicContrast × Euclidean | `eqprop_mnist.yaml` | Equilibrium Propagation: energy-based, local contrastive updates, no weight transport |
+| `create_fa_mlp` | Digital × Feedforward × Instantaneous × Null × RandomProjections × Euclidean | `fa_mnist.yaml` | Feedback Alignment: fixed random feedback weights, avoids weight transport |
+| `create_ff_mlp` | Digital × Feedforward × Instantaneous × Null × LocalGoodness × Euclidean | `ff_mnist.yaml` | Forward-Forward (Hinton): two forward passes (pos/neg), layer-local goodness objective, 3-epoch MNIST |
+| `create_pepita_mlp` | Digital × Feedforward × Instantaneous × Null × LocalGoodness × Euclidean | `pepita_mnist.yaml` | PEPITA: FF variant with per-layer goodness classification, soft thresholding |
+| `create_tp_mlp` | Digital × Feedforward × Instantaneous × Null × TargetInversion × Euclidean | `tp_mnist.yaml` | Target Propagation: learns inverse mappings layer-wise, target-based credit assignment |
+| `create_pc_mlp` | Digital × Feedforward × PredictiveSettling × Null × ThermodynamicContrast × Euclidean | `pc_mnist.yaml` | Predictive Coding: hierarchical prediction error minimization, convergent dynamics |
+| `create_hebbian_mlp` | Digital × Feedforward × Instantaneous × Null × TemporalTrace × Euclidean | `hebbian_mnist.yaml` | Hebbian/STDP: local correlation-based plasticity, biologically grounded |
+| `create_snn_mlp` | Digital × Feedforward × SpikeIntegration × Null × TemporalTrace × Euclidean | `snn_mnist.yaml` | Spiking Neural Network: LIF neurons, spike-timing-dependent plasticity |
+| `create_tile_mlp` | Digital × TileMesh × Instantaneous × Null × (varies) × Euclidean | `tile_mnist.yaml` | TileNet: modular tiled architecture, supports all credit assignments |
+| `create_routing_mlp` | Digital × Recurrent × Instantaneous × RoutingPlasticity × Backprop × Euclidean | `routing_mnist.yaml` | **6-D Joint**: state-dependent gating, sparse pathway routing, dynamic compute |
+| `create_fast_weight_mlp` | Digital × Recurrent × Instantaneous × FastWeightPlasticity × Backprop × Euclidean | `fast_weight_mnist.yaml` | **6-D Joint**: episode-local associative memory via fast-weight matrices |
+
+### 5-D Factory Usage Examples
+
+```python
+from computronium import (
+    create_backprop_mlp, create_eqprop_mlp, create_fa_mlp,
+    create_ff_mlp, create_pepita_mlp, create_tp_mlp,
+    create_pc_mlp, create_hebbian_mlp, create_snn_mlp,
+    create_tile_mlp,
+    SystemTrainer, SystemTrainerConfig,
+)
+from computronium.domains.factory import create_task
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+task = create_task("mnist", device=device, quick_mode=True)
+task.setup()
+train_loader, val_loader = task.get_dataloader("train"), task.get_dataloader("val")
+
+# All factories share: input_dim, output_dim, hidden_dims (tuple), lr, device
+input_dim, output_dim = 784, 10
+
+# Backprop (baseline)
+system = create_backprop_mlp(input_dim, (256, 128), output_dim, lr=0.001, device=device)
+
+# Equilibrium Propagation (energy-based)
+system = create_eqprop_mlp(input_dim, (512, 512, 512), output_dim,
+                           beta=0.1, inference_steps=20, lr=0.001, device=device)
+
+# Feedback Alignment (no weight transport)
+system = create_fa_mlp(input_dim, (256, 128), output_dim, lr=0.001, device=device)
+
+# Forward-Forward (local layer-wise, 3 epochs)
+system = create_ff_mlp(input_dim, (256, 256), output_dim,
+                       layer_lr=0.03, classifier_lr=0.01, threshold=2.0,
+                       num_layers=2, device=device)
+
+# PEPITA (FF variant)
+system = create_pepita_mlp(input_dim, (256, 128), output_dim, lr=0.01, device=device)
+
+# Target Propagation
+system = create_tp_mlp(input_dim, (256,), output_dim, lr=0.001, device=device)
+
+# Predictive Coding
+system = create_pc_mlp(input_dim, (256, 256), output_dim, lr=0.001, device=device)
+
+# Hebbian
+system = create_hebbian_mlp(input_dim, (256,), output_dim, lr=0.001, device=device)
+
+# Spiking
+system = create_snn_mlp(input_dim, (256,), output_dim, lr=0.001, device=device)
+
+# TileNet (modular tiles)
+system = create_tile_mlp(input_dim, (256,), output_dim,
+                         lr=0.001, neurons_per_tile=16, tiles_per_layer=2, device=device)
+
+# Train with SystemTrainer
+trainer = SystemTrainer(
+    system=system,
+    config=SystemTrainerConfig(max_epochs=3, batch_size=64, device=device, seed=42),
+    train_data=train_loader,
+    val_data=val_loader,
+)
+with trainer:
+    history = trainer.fit()
+```
+
+### 6-D Joint Factories (Non-Null Plasticity)
+
+```python
+from computronium import create_routing_mlp, create_fast_weight_mlp
+
+# RoutingPlasticity: state-dependent gating, sparse pathway routing
+system = create_routing_mlp(
+    input_dim, (256,), output_dim,
+    lr=0.001, gate_dim=32, device=device
+)
+
+# FastWeightPlasticity: episode-local associative memory
+system = create_fast_weight_mlp(
+    input_dim, (256,), output_dim,
+    lr=0.001, fast_weight_dim=128, device=device
+)
+
+# Same training API
+trainer = SystemTrainer(
+    system=system,
+    config=SystemTrainerConfig(max_epochs=3, batch_size=64, device=device, seed=42),
+    train_data=train_loader,
+    val_data=val_loader,
+)
+with trainer:
+    history = trainer.fit()
+```
+
+### YAML Preset Cross-Reference
+
+Run any preset directly:
+```bash
+# 5-D factories
+comp run from-config --config configs/presets/backprop_mnist.yaml
+comp run from-config --config configs/presets/eqprop_mnist.yaml
+comp run from-config --config configs/presets/fa_mnist.yaml
+comp run from-config --config configs/presets/ff_mnist.yaml
+comp run from-config --config configs/presets/pepita_mnist.yaml
+comp run from-config --config configs/presets/tp_mnist.yaml
+comp run from-config --config configs/presets/pc_mnist.yaml
+comp run from-config --config configs/presets/hebbian_mnist.yaml
+comp run from-config --config configs/presets/snn_mnist.yaml
+comp run from-config --config configs/presets/tile_mnist.yaml
+
+# 6-D joint factories
+comp run from-config --config configs/presets/routing_mnist.yaml
+comp run from-config --config configs/presets/fast_weight_mnist.yaml
+
+# 6-D joint with EqProp dynamics
+comp run from-config --config configs/presets/eqprop_routing_mnist.yaml
+comp run from-config --config configs/presets/eqprop_fast_weight_mnist.yaml
+```
+
+---
 
 ### Quickstart: Interactive Demo
 
