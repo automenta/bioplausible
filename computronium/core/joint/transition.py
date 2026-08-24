@@ -121,7 +121,9 @@ class PlasticityPrimitive(Protocol):
         ...
 
     @abstractmethod
-    def initial_psi(self, context: SystemContext) -> dict[str, Tensor]:
+    def initial_psi(
+        self, context: SystemContext, batch_size: int = 1
+    ) -> dict[str, Tensor]:
         """Create initial plastic state for a new episode."""
         ...
 

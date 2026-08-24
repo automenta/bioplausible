@@ -194,10 +194,9 @@ select = [
     "RSE",  # flake8-raise
     "SIM",  # flake8-simplify
 ]
-ignore = ["non-empty-init-module"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["assert", "no-self-use"]  # S101: assert in tests; PLR6301: no-self-use in test methods
+"tests/**/*.py" = ["S101", "PLR6301"]  # S101: assert in tests; PLR6301: no-self-use in test methods
 
 [tool.ruff.lint.flake8-type-checking]
 

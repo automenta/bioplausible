@@ -35,22 +35,31 @@ from computronium.core.ontology import (
 )
 
 if TYPE_CHECKING:
+    from types import TracebackType
+
     from computronium.config.experiment import ExperimentConfig
 
 
-class JointSystem(Protocol):
+class JointSystem[
+    TS: Substrate,
+    TG: Geometry,
+    TD: StateDynamics,
+    TP: PlasticityPrimitive,
+    TC: CreditAssignment,
+    TU: ParameterUpdate,
+](Protocol):
     """Protocol for 6-D joint systems."""
 
-    substrate: Substrate
-    geometry: Geometry
-    dynamics: StateDynamics
-    plasticity: PlasticityPrimitive
-    credit: CreditAssignment
-    update: ParameterUpdate
+    substrate: TS
+    geometry: TG
+    dynamics: TD
+    plasticity: TP
+    credit: TC
+    update: TU
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]: ...
     def forward(self, x: Tensor) -> Tensor: ...
-    def to_spec(self) -> dict: ...
+    def to_spec(self) -> dict[str, object]: ...
     @classmethod
     def from_spec(cls, spec: dict) -> JointSystem: ...
 
@@ -125,12 +134,12 @@ class SystemTrainer:
     global_step: int = field(default=0, init=False)
     history: list[dict[str, float]] = field(default_factory=list, init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._setup_device()
         self._set_seed()
         # Move system components to device
         if hasattr(self.system.geometry, "to"):
-            self.system.geometry.to(self.device)
+            self.system.geometry.to(self.device)  # type: ignore[attr-defined]
 
     @classmethod
     def from_configs(
@@ -413,28 +422,39 @@ class SystemTrainer:
 
     def close(self) -> None:
         """Clean up resources (e.g., move model to CPU, clear CUDA cache)."""
-        if hasattr(self, 'system') and self.system is not None:
+        if hasattr(self, "system") and self.system is not None:
             if hasattr(self.system.geometry, "cpu"):
                 self.system.geometry.cpu()
-        if hasattr(self, 'device') and self.device.type == "cuda":
+        if hasattr(self, "device") and self.device.type == "cuda":
             torch.cuda.empty_cache()
         logger.info("SystemTrainer resources cleaned up")
 
     def __enter__(self) -> SystemTrainer:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool:
         self.close()
         return False
 
 
-def compose_system(
-    substrate: Substrate,
-    geometry: Geometry,
-    dynamics: StateDynamics,
-    credit: CreditAssignment,
-    update: ParameterUpdate,
-) -> System:
+def compose_system[
+    TS: Substrate,
+    TG: Geometry,
+    TD: StateDynamics,
+    TC: CreditAssignment,
+    TU: ParameterUpdate,
+](
+    substrate: TS,
+    geometry: TG,
+    dynamics: TD,
+    credit: TC,
+    update: TU,
+) -> System[TS, TG, TD, TC, TU]:
     """Compose a System from five orthogonal components.
 
     This is the primary factory function for creating computronium systems
@@ -451,12 +471,18 @@ def compose_system(
     """
 
     @dataclass(frozen=True, slots=True)
-    class _ComposedSystem:
-        substrate: Substrate
-        geometry: Geometry
-        dynamics: StateDynamics
-        credit: CreditAssignment
-        update: ParameterUpdate
+    class _ComposedSystem[
+        TS: Substrate,
+        TG: Geometry,
+        TD: StateDynamics,
+        TC: CreditAssignment,
+        TU: ParameterUpdate,
+    ]:
+        substrate: TS
+        geometry: TG
+        dynamics: TD
+        credit: TC
+        update: TU
 
         def to_spec(self) -> dict:
             """Serialize the System to a specification dictionary.
@@ -466,13 +492,9 @@ def compose_system(
             """
             geometry_dict = dataclasses.asdict(self.geometry.config)
             # Include recurrent_weight from geometry if present (runtime state)
-            if (
-                hasattr(self.geometry, "_recurrent_weight")
-                and self.geometry._recurrent_weight is not None
-            ):
-                geometry_dict["recurrent_weight"] = (
-                    self.geometry._recurrent_weight.tolist()
-                )
+            recurrent_weight = getattr(self.geometry, "_recurrent_weight", None)
+            if recurrent_weight is not None:
+                geometry_dict["recurrent_weight"] = recurrent_weight.tolist()
 
             # Include all geometry parameters for exact round-trip
             geometry_params = {}
@@ -722,7 +744,9 @@ def compose_system(
                 return acts[-1]
             return acts
 
-    return _ComposedSystem(
+    return _ComposedSystem[
+        TS, TG, TD, TC, TU
+    ](
         substrate=substrate,
         geometry=geometry,
         dynamics=dynamics,
@@ -1107,14 +1131,21 @@ def compose_system_from_configs(
     )
 
 
-def compose_joint_system(
-    substrate: Substrate,
-    geometry: Geometry,
-    dynamics: StateDynamics,
-    plasticity: PlasticityPrimitive,
-    credit: CreditAssignment,
-    update: ParameterUpdate,
-) -> JointSystem:
+def compose_joint_system[
+    TS: Substrate,
+    TG: Geometry,
+    TD: StateDynamics,
+    TP: PlasticityPrimitive,
+    TC: CreditAssignment,
+    TU: ParameterUpdate,
+](
+    substrate: TS,
+    geometry: TG,
+    dynamics: TD,
+    plasticity: TP,
+    credit: TC,
+    update: TU,
+) -> JointSystem[TS, TG, TD, TP, TC, TU]:
     """Compose a JointSystem from six orthogonal components.
 
     This is the primary factory function for creating computronium joint systems
@@ -1134,13 +1165,20 @@ def compose_joint_system(
     from computronium.core.plasticity import NullPlasticity as _NullPlasticity
 
     @dataclass(frozen=True, slots=True)
-    class _JointSystem:
-        substrate: Substrate
-        geometry: Geometry
-        dynamics: StateDynamics
-        plasticity: PlasticityPrimitive
-        credit: CreditAssignment
-        update: ParameterUpdate
+    class _JointSystem[
+        TS: Substrate,
+        TG: Geometry,
+        TD: StateDynamics,
+        TP: PlasticityPrimitive,
+        TC: CreditAssignment,
+        TU: ParameterUpdate,
+    ]:
+        substrate: TS
+        geometry: TG
+        dynamics: TD
+        plasticity: TP
+        credit: TC
+        update: TU
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
             """Execute one training step through the 6-layer pipeline."""
@@ -1292,16 +1330,12 @@ def compose_joint_system(
                 registry=registry,
             )
 
-        def to_spec(self) -> dict:
+        def to_spec(self) -> dict[str, object]:
             """Serialize the JointSystem to a specification dictionary."""
             geometry_dict = dataclasses.asdict(self.geometry.config)
-            if (
-                hasattr(self.geometry, "_recurrent_weight")
-                and self.geometry._recurrent_weight is not None
-            ):
-                geometry_dict["recurrent_weight"] = (
-                    self.geometry._recurrent_weight.tolist()
-                )
+            recurrent_weight = getattr(self.geometry, "_recurrent_weight", None)
+            if recurrent_weight is not None:
+                geometry_dict["recurrent_weight"] = recurrent_weight.tolist()
 
             geometry_params = {}
             for name, param in self.geometry.params.items():
@@ -1347,8 +1381,17 @@ def compose_joint_system(
         base_system = compose_system(substrate, geometry, dynamics, credit, update)
 
         # Wrap with a null plasticity interface
-        class _NullJointSystem:
-            def __init__(self, system):
+        class _NullJointSystem[
+            TS: Substrate,
+            TG: Geometry,
+            TD: StateDynamics,
+            TC: CreditAssignment,
+            TU: ParameterUpdate,
+        ]:
+            def __init__(
+                self,
+                system: System[TS, TG, TD, TC, TU],
+            ):
                 self._system = system
                 self.substrate = system.substrate
                 self.geometry = system.geometry
@@ -1363,14 +1406,47 @@ def compose_joint_system(
             def forward(self, x: Tensor) -> Tensor:
                 return self._system.forward(x)
 
-            def _make_context(self):
-                return (
-                    base_system._make_context()
-                    if hasattr(base_system, "_make_context")
-                    else None
+            def _make_context(self) -> SystemContext:
+                from computronium.core.joint.context import SystemContext
+                from computronium.core.joint.state import StateRegistry, StateVariable
+                from computronium.core.joint.transition import PlasticityConfig
+
+                # Build registry from all components
+                registry = StateRegistry()
+
+                # Register persistent parameters (theta)
+                for name, param in self.geometry.params.items():
+                    registry.register(
+                        StateVariable(
+                            name=name,
+                            persistent=True,
+                            fast_plastic=False,
+                            consolidatable=False,
+                        )
+                    )
+
+                # Build configs from components
+                substrate_config = self.substrate.config
+                geometry_config = self.geometry.config
+                dynamics_config = self.dynamics.config
+                credit_config = self.credit.config
+                update_config = self.update.config
+                plasticity_config = PlasticityConfig.null()
+
+                return SystemContext(
+                    theta=self.geometry.params,
+                    geometry=self.geometry,
+                    substrate=self.substrate,
+                    substrate_config=substrate_config,
+                    geometry_config=geometry_config,
+                    dynamics_config=dynamics_config,
+                    credit_config=credit_config,
+                    update_config=update_config,
+                    plasticity_config=plasticity_config,
+                    registry=registry,
                 )
 
-            def to_spec(self):
+            def to_spec(self) -> dict[str, object]:
                 spec = base_system.to_spec()
                 spec["plasticity"] = dataclasses.asdict(PlasticityConfig.null())
                 spec["schema_version"] = "2.0"
@@ -1396,16 +1472,20 @@ def compose_joint_system(
             def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:
                 return base_system._compute_loss(state, y)
 
-        return _NullJointSystem(base_system)
+        return _NullJointSystem[
+            TS, TG, TD, TC, TU
+        ](base_system)  # type: ignore[return-value]
 
-    return _JointSystem(
+    return _JointSystem[
+        TS, TG, TD, TP, TC, TU
+    ](
         substrate=substrate,
         geometry=geometry,
         dynamics=dynamics,
         plasticity=plasticity,
         credit=credit,
         update=update,
-    )
+    )  # type: ignore[return-value]
 
 
 def compose_joint_system_from_configs(
@@ -1415,7 +1495,7 @@ def compose_joint_system_from_configs(
     plasticity: PlasticityConfig,
     credit: CreditAssignmentConfig,
     update: ParameterUpdateConfig,
-) -> JointSystem:
+) -> JointSystem[Substrate, Geometry, StateDynamics, PlasticityPrimitive, CreditAssignment, ParameterUpdate]:
     """Compose a JointSystem from six configuration objects.
 
     This is the inverse of extract_config(), enabling the round-trip:
@@ -1589,7 +1669,7 @@ def create_routing_eqprop_system(
         SubstrateConfig,
         ThermodynamicContrast,
     )
-    from computronium.core.plasticity import RoutingPlasticity, RoutingPlasticityConfig
+    from computronium.core.plasticity import RoutingPlasticity
 
     substrate = DigitalSubstrate(
         SubstrateConfig(
@@ -1645,12 +1725,10 @@ def create_routing_eqprop_system(
     )
 
     plasticity = RoutingPlasticity(
-        RoutingPlasticityConfig(
-            gate_dim=gate_dim,
-            temperature=1.0,
-            decay=0.99,
-            learning_rate=0.01,
-        )
+        gate_dim=gate_dim,
+        temperature=1.0,
+        decay=0.99,
+        learning_rate=0.01,
     )
 
     return compose_joint_system(
@@ -1683,7 +1761,6 @@ def create_fast_weight_eqprop_system(
     )
     from computronium.core.plasticity import (
         FastWeightPlasticity,
-        FastWeightPlasticityConfig,
     )
 
     substrate = DigitalSubstrate(
@@ -1740,11 +1817,9 @@ def create_fast_weight_eqprop_system(
     )
 
     plasticity = FastWeightPlasticity(
-        FastWeightPlasticityConfig(
-            fast_weight_dim=fast_weight_dim,
-            decay=0.99,
-            learning_rate=0.1,
-        )
+        fast_weight_dim=fast_weight_dim,
+        decay=0.99,
+        learning_rate=0.1,
     )
 
     return compose_joint_system(
