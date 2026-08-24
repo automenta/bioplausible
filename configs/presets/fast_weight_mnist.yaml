@@ -22,7 +22,7 @@ dynamics:
   type: instantaneous
 
 plasticity:
-  type: fast_weight
+  type: fast_weights
   fast_weight_dim: 512
   decay: 0.9
   learning_rate: 0.1

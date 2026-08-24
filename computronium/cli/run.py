@@ -816,12 +816,18 @@ def _build_system_from_flat_config(
         FeedforwardGeometry,
         GeometryConfig,
         InstantaneousDynamics,
+        LocalGoodnessCredit,
         ParameterUpdateConfig,
+        PredictiveSettlingDynamics,
         RandomProjectionsCredit,
         RecurrentGeometry,
+        SpikeIntegrationDynamics,
         StateDynamicsConfig,
         SubstrateConfig,
+        TargetInversionCredit,
         ThermodynamicContrast,
+        TileGeometry,
+        TemporalTraceCredit,
     )
     from computronium.core.plasticity import (
         FastWeightPlasticity,
@@ -857,6 +863,21 @@ def _build_system_from_flat_config(
             hidden_dim=geometry_cfg["hidden_dims"][-1]
             if geometry_cfg["hidden_dims"]
             else geometry_cfg["output_dim"],
+        )
+    elif geo_type == "tile_mesh":
+        geometry = TileGeometry(
+            GeometryConfig(
+                input_dim=geometry_cfg["input_dim"],
+                output_dim=geometry_cfg["output_dim"],
+                hidden_dims=tuple(geometry_cfg["hidden_dims"]),
+                num_layers=len(geometry_cfg["hidden_dims"]) + 1,
+                topology_type="tile_mesh",
+                connectivity=None,
+                recurrent_weight=None,
+                init_scale=geometry_cfg.get("init_scale", 0.1),
+            ),
+            neurons_per_tile=geometry_cfg.get("neurons_per_tile", 8),
+            tiles_per_layer=geometry_cfg.get("tiles_per_layer", 2),
         )
     else:
         geometry = FeedforwardGeometry(
@@ -898,6 +919,13 @@ def _build_system_from_flat_config(
                 ),
             )
         )
+    elif dyn_type == "spike_integration":
+        dynamics = SpikeIntegrationDynamics(
+            StateDynamicsConfig.spike_integration(
+                max_steps=dynamics_cfg.get("max_steps", 30),
+                beta=dynamics_cfg.get("beta", 0.1),
+            )
+        )
     else:
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
@@ -922,6 +950,25 @@ def _build_system_from_flat_config(
                 feedback_matrix=None,
                 local_objective=credit_cfg.get("local_objective", "mse"),
                 orthogonal_init=credit_cfg.get("orthogonal_init", False),
+                feedback_scale=credit_cfg.get("feedback_scale", 0.01),
+            )
+        )
+    elif credit_type == "target_inversion":
+        credit = TargetInversionCredit(
+            CreditAssignmentConfig.target_inversion(
+                beta=credit_cfg.get("beta", 0.1),
+                feedback_scale=credit_cfg.get("feedback_scale", 0.01),
+            )
+        )
+    elif credit_type == "local_goodness":
+        credit = LocalGoodnessCredit(
+            CreditAssignmentConfig.local_goodness(
+                feedback_scale=credit_cfg.get("feedback_scale", 0.01),
+            )
+        )
+    elif credit_type == "temporal_trace":
+        credit = TemporalTraceCredit(
+            CreditAssignmentConfig.temporal_trace(
                 feedback_scale=credit_cfg.get("feedback_scale", 0.01),
             )
         )
@@ -966,22 +1013,18 @@ def _build_system_from_flat_config(
     plast_type = plasticity_cfg.get("type", "null")
     if plast_type == "routing":
         plasticity = RoutingPlasticity(
-            RoutingPlasticityConfig(
-                gate_dim=plasticity_cfg.get("gate_dim", 64),
-                temperature=plasticity_cfg.get("temperature", 1.0),
-                top_k=plasticity_cfg.get("top_k"),
-                decay=plasticity_cfg.get("decay", 0.99),
-                learning_rate=plasticity_cfg.get("learning_rate", 0.01),
-            )
+            gate_dim=plasticity_cfg.get("gate_dim", 64),
+            temperature=plasticity_cfg.get("temperature", 1.0),
+            top_k=plasticity_cfg.get("top_k"),
+            decay=plasticity_cfg.get("decay", 0.99),
+            learning_rate=plasticity_cfg.get("learning_rate", 0.01),
         )
     elif plast_type == "fast_weights":
         plasticity = FastWeightPlasticity(
-            FastWeightPlasticityConfig(
-                fast_weight_dim=plasticity_cfg.get("fast_weight_dim", 512),
-                decay=plasticity_cfg.get("decay", 0.9),
-                learning_rate=plasticity_cfg.get("learning_rate", 0.1),
-                outer_product_scale=plasticity_cfg.get("outer_product_scale", 1.0),
-            )
+            fast_weight_dim=plasticity_cfg.get("fast_weight_dim", 512),
+            decay=plasticity_cfg.get("decay", 0.9),
+            learning_rate=plasticity_cfg.get("learning_rate", 0.1),
+            outer_product_scale=plasticity_cfg.get("outer_product_scale", 1.0),
         )
     else:
         plasticity = NullPlasticity()

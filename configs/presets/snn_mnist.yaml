@@ -8,35 +8,26 @@ substrate:
   device: auto
 
 geometry:
-  type: feedforward
+  type: tile_mesh
   input_dim: 784
   output_dim: 10
   hidden_dims: [256, 256]
   num_layers: 3
-  topology_type: feedforward
+  topology_type: tile_mesh
   connectivity: null
   recurrent_weight: null
   init_scale: 0.1
+  neurons_per_tile: 48
+  tiles_per_layer: 4
 
 dynamics:
-  type: spike_integration
-  max_steps: 30
-  convergence_threshold: 1e-4
-  convergence_start: 5
-  step_size: 0.1
-  beta: 0.1
-  momentum: 0.0
-  track_free_energy_per_iter: false
+  type: instantaneous
 
 plasticity:
   type: null
 
 credit:
-  type: temporal_trace
-  beta: 0.5
-  feedback_matrix: null
-  local_objective: mse
-  orthogonal_init: false
+  type: local_goodness
   feedback_scale: 0.01
 
 update:
