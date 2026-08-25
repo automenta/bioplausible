@@ -380,6 +380,8 @@ class StateDynamicsConfig:
         momentum: Momentum coefficient for heavy-ball dynamics (energy_minimization)
         track_free_energy_per_iter: Record free energy at each iteration
             for Control-Lyapunov analysis
+        gradient_checkpointing: Use gradient checkpointing to trade compute
+            for memory during settling (energy_minimization only)
     """
 
     dynamics_type: str
@@ -390,6 +392,7 @@ class StateDynamicsConfig:
     beta: float
     momentum: float
     track_free_energy_per_iter: bool
+    gradient_checkpointing: bool = False
 
     @classmethod
     def energy_minimization(
@@ -402,6 +405,7 @@ class StateDynamicsConfig:
         beta: float = 0.5,
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
+        gradient_checkpointing: bool = False,
     ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="energy_minimization",
@@ -412,6 +416,7 @@ class StateDynamicsConfig:
             beta=beta,
             momentum=momentum,
             track_free_energy_per_iter=track_free_energy_per_iter,
+            gradient_checkpointing=gradient_checkpointing,
         )
 
     @classmethod
@@ -3927,11 +3932,164 @@ class EnergyMinimizationDynamics:
     Supports heavy-ball momentum for accelerated convergence.
     Implements the contrastive nudged phase: output layer receives
     beta * (target - output) during the nudged phase.
+
+    Gradient checkpointing trades compute for memory by recomputing
+    intermediate activations during backward pass.
+
+    Free energy tracking enables Control-Lyapunov analysis of the
+    thermodynamic contrast between free and nudged phases.
     """
 
     def __init__(self, config: StateDynamicsConfig | None = None):
         self.config = config or StateDynamicsConfig.energy_minimization()
         self._velocity: list[Tensor] | None = None
+        self._free_energy_history: list[float] | None = None
+
+    def _compute_energy(self, all_acts: list[Tensor], geometry: Geometry) -> float:
+        """Compute Hopfield energy for the current state.
+        
+        E = 0.5 * sum(h_i^2) - sum_{i,j} W_{ij} h_i h_j - sum_i b_i h_i
+        For ReLU networks with symmetric weights approximation.
+        """
+        if not all_acts or len(all_acts) < 2:
+            return 0.0
+
+        # Use hidden + output layers (skip input)
+        acts = all_acts[1:]  # [hidden1, hidden2, ..., output]
+        device = acts[0].device
+        total_energy = torch.tensor(0.0, device=device)
+
+        # Extract weight matrices from geometry params
+        # Params are named like "0.weight", "2.weight", etc. (layer indices)
+        # Exclude recurrent_weight which is not a feedforward weight
+        params = geometry.params
+        weight_names = [
+            n for n in params
+            if "weight" in n and params[n].ndim == 2 and not n.startswith("recurrent")
+        ]
+        # Sort by layer index (e.g., "0.weight" -> 0, "2.weight" -> 2)
+        weight_names.sort(key=lambda x: int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0)
+        
+        if not weight_names:
+            return 0.0
+
+        num_hidden = len(acts) - 1  # Number of hidden layers (excluding output)
+        num_ff_weights = len(weight_names)  # Number of feedforward weight matrices
+
+        # For each hidden/output layer, compute energy contribution
+        # E = 0.5 * ||h||^2 - h^T * W * h_prev (for each layer)
+        for i in range(len(acts)):
+            h = acts[i]
+            # 0.5 * ||h||^2
+            total_energy = total_energy + 0.5 * (h**2).sum()
+
+        # Subtract interaction terms: h^T * W * h_prev
+        for i in range(len(acts)):
+            h = acts[i]
+            if i < num_hidden:
+                # Hidden layer i: weight index i (0, 1, ..., num_hidden-1)
+                weight_idx = i
+                h_prev = acts[i - 1] if i > 0 else all_acts[0]
+            else:
+                # Output layer: last feedforward weight (hidden -> output)
+                weight_idx = num_ff_weights - 1
+                h_prev = acts[i - 1]  # Last hidden layer
+            
+            if weight_idx < num_ff_weights:
+                W = params[weight_names[weight_idx]]
+                # h^T * W * h_prev -> sum over batch, then mean
+                # h: (batch, dim_i), W: (dim_i, dim_{i-1}), h_prev: (batch, dim_{i-1})
+                # h @ W: (batch, dim_{i-1}) @ h_prev.T: (dim_{i-1}, batch) -> (batch, batch)
+                interaction = (h @ W @ h_prev.T).trace()
+                total_energy = total_energy - interaction
+
+        # Subtract bias terms (exclude recurrent bias if any)
+        bias_names = [
+            n for n in params
+            if "bias" in n and params[n].ndim == 1 and not n.startswith("recurrent")
+        ]
+        bias_names.sort(key=lambda x: int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0)
+        num_ff_biases = len(bias_names)
+        for i in range(len(acts)):
+            h = acts[i]
+            if i < num_hidden:
+                bias_idx = i
+            else:
+                bias_idx = num_ff_biases - 1
+            if bias_idx < num_ff_biases:
+                b = params[bias_names[bias_idx]]
+                total_energy = total_energy - (h @ b).sum()
+
+        # Return mean per sample
+        batch_size = acts[0].size(0)
+        return (total_energy / batch_size).item()
+
+    def _settle_step(
+        self,
+        all_acts: list[Tensor],
+        geometry: Geometry,
+        beta: float,
+        target: Tensor | None,
+        velocity: list[Tensor] | None,
+        momentum: float,
+    ) -> tuple[list[Tensor], list[Tensor] | None]:
+        """One settling step, pure function for gradient checkpointing."""
+        num_hidden = len(all_acts) - 2
+        new_acts = [all_acts[0]]  # Input layer is fixed
+        new_velocity = None
+
+        if momentum > 0 and velocity is not None:
+            new_velocity = []
+
+        # Update each hidden layer
+        for i in range(num_hidden):
+            layer = geometry._layers[i * 2]  # Linear layer at even indices
+            pre = layer(all_acts[i])  # Bottom-up from previous layer
+
+            # Recurrent term (for RecurrentGeometry, last hidden layer only)
+            if hasattr(geometry, '_recurrent_weight') and geometry._recurrent_weight is not None:
+                if i == num_hidden - 1:  # Last hidden layer has recurrent connection
+                    pre = pre + all_acts[i + 1] @ geometry._recurrent_weight.T
+
+            # Top-down drive from layer above
+            next_layer = geometry._layers[(i + 1) * 2]  # Next Linear layer
+            top_down = all_acts[i + 2] @ next_layer.weight
+
+            total = pre + top_down
+
+            # Apply momentum (heavy-ball)
+            if momentum > 0 and velocity is not None:
+                total = momentum * velocity[i] + total
+                new_velocity.append(total.detach().clone())
+
+            # Apply activation (ReLU)
+            if i < len(geometry._layers) - 2 and isinstance(geometry._layers[i * 2 + 1], nn.Module):
+                act_fn = geometry._layers[i * 2 + 1]
+                h_new = act_fn(total)
+            else:
+                h_new = total
+
+            new_acts.append(h_new)
+
+        # Output layer
+        out_layer = geometry._layers[-1] if isinstance(geometry._layers[-1], nn.Linear) else None
+        if out_layer is not None:
+            out = out_layer(new_acts[-1])
+            # Apply nudging to output layer during nudged phase
+            if beta > 0 and target is not None:
+                # Convert target to one-hot if needed
+                if target.dim() == 1:
+                    target_oh = torch.zeros_like(out)
+                    target_oh.scatter_(1, target.unsqueeze(1), 1.0)
+                else:
+                    target_oh = target
+                out = out + beta * (target_oh - out)
+
+            new_acts.append(out)
+        else:
+            new_acts.append(all_acts[-1])
+
+        return new_acts, new_velocity
 
     def settle(
         self,
@@ -3942,86 +4100,135 @@ class EnergyMinimizationDynamics:
     ) -> SystemState:
         # Run settling iterations for full multi-layer EqProp dynamics
         # Implements the same dynamics as legacy EquilibriumMLP.forward_dynamics
-        
+
         if state.x is None:
             return state
-            
+
         # Get initial activations with intermediates for credit assignment
         all_acts = geometry.forward_with_intermediates(state.x, substrate)
         if not all_acts:
             return state
-            
+
         # Number of hidden layers (excluding input and output)
         # all_acts = [input, hidden1, hidden2, ..., output]
         num_hidden = len(all_acts) - 2
-        
+
         # Initialize velocity for momentum (per hidden layer)
         if self.config.momentum > 0:
             batch_size = all_acts[0].size(0)
             self._velocity = [
                 torch.zeros_like(all_acts[i + 1]) for i in range(num_hidden)
             ]
+        else:
+            self._velocity = None
+
+        # Initialize free energy history if tracking enabled
+        if self.config.track_free_energy_per_iter:
+            self._free_energy_history = []
+            # Track initial energy
+            self._free_energy_history.append(self._compute_energy(all_acts, geometry))
+        else:
+            self._free_energy_history = None
 
         beta = self.config.beta if target is not None else 0.0
-        
-        for step in range(self.config.max_steps):
-            new_acts = [all_acts[0]]  # Input layer is fixed
-            
-            # Update each hidden layer
-            for i in range(num_hidden):
-                layer = geometry._layers[i * 2]  # Linear layer at even indices
-                pre = layer(all_acts[i])  # Bottom-up from previous layer
-                
-                # Recurrent term (for RecurrentGeometry, last hidden layer only)
-                if hasattr(geometry, '_recurrent_weight') and geometry._recurrent_weight is not None:
-                    if i == num_hidden - 1:  # Last hidden layer has recurrent connection
-                        pre = pre + all_acts[i + 1] @ geometry._recurrent_weight.T
-                
-                # Top-down drive from layer above
-                next_layer = geometry._layers[(i + 1) * 2]  # Next Linear layer
-                top_down = all_acts[i + 2] @ next_layer.weight
-                
-                total = pre + top_down
-                
-                # Apply momentum (heavy-ball)
-                if self.config.momentum > 0 and self._velocity is not None:
-                    total = self.config.momentum * self._velocity[i] + total
-                    self._velocity[i] = total.detach().clone()
-                
-                # Apply activation (ReLU)
-                if i < len(geometry._layers) - 2 and isinstance(geometry._layers[i * 2 + 1], nn.Module):
-                    act_fn = geometry._layers[i * 2 + 1]
-                    h_new = act_fn(total)
-                else:
-                    h_new = total
-                    
-                new_acts.append(h_new)
-            
-            # Output layer
-            out_layer = geometry._layers[-1] if isinstance(geometry._layers[-1], nn.Linear) else None
-            if out_layer is not None:
-                out = out_layer(new_acts[-1])
-                # Apply nudging to output layer during nudged phase
-                if beta > 0 and target is not None:
-                    # Convert target to one-hot if needed
-                    if target.dim() == 1:
-                        target_oh = torch.zeros_like(out)
-                        target_oh.scatter_(1, target.unsqueeze(1), 1.0)
-                    else:
-                        target_oh = target
-                    out = out + beta * (target_oh - out)
+        momentum = self.config.momentum
 
-                new_acts.append(out)
-            else:
-                new_acts.append(all_acts[-1])
-            
-            # Check convergence
-            if step >= self.config.convergence_start:
-                delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
-                if delta < self.config.convergence_threshold:
-                    all_acts = new_acts
-                    break
-            all_acts = new_acts
+        # Use gradient checkpointing if enabled
+        if self.config.gradient_checkpointing:
+            import torch.utils.checkpoint as checkpoint
+
+            for step in range(self.config.max_steps):
+                # Checkpoint the step function
+                all_acts, self._velocity = checkpoint.checkpoint(
+                    self._settle_step,
+                    all_acts,
+                    geometry,
+                    beta,
+                    target,
+                    self._velocity,
+                    momentum,
+                    use_reentrant=False,
+                )
+
+                # Track free energy if enabled
+                if self._free_energy_history is not None:
+                    self._free_energy_history.append(self._compute_energy(all_acts, geometry))
+
+                # Check convergence (can't checkpoint this as it's not differentiable)
+                if step >= self.config.convergence_start:
+                    delta = torch.dist(all_acts[-1], all_acts[-1], p=float("inf")).item()
+                    if delta < self.config.convergence_threshold:
+                        break
+        else:
+            # Original non-checkpointed path
+            for step in range(self.config.max_steps):
+                new_acts = [all_acts[0]]  # Input layer is fixed
+                new_velocity = None
+
+                if momentum > 0 and self._velocity is not None:
+                    new_velocity = []
+
+                # Update each hidden layer
+                for i in range(num_hidden):
+                    layer = geometry._layers[i * 2]  # Linear layer at even indices
+                    pre = layer(all_acts[i])  # Bottom-up from previous layer
+
+                    # Recurrent term (for RecurrentGeometry, last hidden layer only)
+                    if hasattr(geometry, '_recurrent_weight') and geometry._recurrent_weight is not None:
+                        if i == num_hidden - 1:  # Last hidden layer has recurrent connection
+                            pre = pre + all_acts[i + 1] @ geometry._recurrent_weight.T
+
+                    # Top-down drive from layer above
+                    next_layer = geometry._layers[(i + 1) * 2]  # Next Linear layer
+                    top_down = all_acts[i + 2] @ next_layer.weight
+
+                    total = pre + top_down
+
+                    # Apply momentum (heavy-ball)
+                    if momentum > 0 and self._velocity is not None:
+                        total = momentum * self._velocity[i] + total
+                        new_velocity.append(total.detach().clone())
+
+                    # Apply activation (ReLU)
+                    if i < len(geometry._layers) - 2 and isinstance(geometry._layers[i * 2 + 1], nn.Module):
+                        act_fn = geometry._layers[i * 2 + 1]
+                        h_new = act_fn(total)
+                    else:
+                        h_new = total
+
+                    new_acts.append(h_new)
+
+                # Output layer
+                out_layer = geometry._layers[-1] if isinstance(geometry._layers[-1], nn.Linear) else None
+                if out_layer is not None:
+                    out = out_layer(new_acts[-1])
+                    # Apply nudging to output layer during nudged phase
+                    if beta > 0 and target is not None:
+                        # Convert target to one-hot if needed
+                        if target.dim() == 1:
+                            target_oh = torch.zeros_like(out)
+                            target_oh.scatter_(1, target.unsqueeze(1), 1.0)
+                        else:
+                            target_oh = target
+                        out = out + beta * (target_oh - out)
+
+                    new_acts.append(out)
+                else:
+                    new_acts.append(all_acts[-1])
+
+                # Track free energy if enabled
+                if self._free_energy_history is not None:
+                    self._free_energy_history.append(self._compute_energy(new_acts, geometry))
+
+                # Check convergence
+                if step >= self.config.convergence_start:
+                    delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
+                    if delta < self.config.convergence_threshold:
+                        all_acts = new_acts
+                        break
+                all_acts = new_acts
+                if new_velocity is not None:
+                    self._velocity = new_velocity
 
         if target is None:
             state.free_state = all_acts
@@ -4030,8 +4237,8 @@ class EnergyMinimizationDynamics:
         state.activations = all_acts
         return state
 
-    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use, unused-method-argument]
-        # Simplified energy: reconstruction error
+    def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:
+        """Compute free energy (Hopfield energy) for the current state."""
         acts = state.free_state
         if acts is None:
             acts = state.nudged_state
@@ -4040,8 +4247,17 @@ class EnergyMinimizationDynamics:
         if acts is None:
             return torch.tensor(0.0)
         if isinstance(acts, list):
-            acts = acts[-1]
+            # Use hidden + output layers
+            energy_val = self._compute_energy(acts, geometry)
+            return torch.tensor(energy_val, device=acts[0].device if acts else "cpu")
         return (acts**2).mean()
+
+    def get_free_energy_history(self) -> list[float] | None:
+        """Return the free energy history tracked during settling.
+
+        Returns None if tracking was not enabled (track_free_energy_per_iter=False).
+        """
+        return self._free_energy_history
 
 
 class PredictiveSettlingDynamics:
@@ -4309,7 +4525,12 @@ class PredictiveSettlingDynamics:
 
 
 class SpikeIntegrationDynamics:
-    """Spiking dynamics: membrane potential integration and thresholding."""
+    """Spiking dynamics: membrane potential integration and thresholding.
+
+    Implements Leaky Integrate-and-Fire (LIF) neuron dynamics for feedforward
+    and recurrent architectures. Supports multi-layer networks by iterating
+    through geometry layers.
+    """
 
     def __init__(self, config: StateDynamicsConfig | None = None):
         self.config = config or StateDynamicsConfig.spike_integration()
@@ -4321,30 +4542,67 @@ class SpikeIntegrationDynamics:
         substrate: Substrate,  # ruff: ignore[unused-method-argument]
         target: Tensor | None = None,  # ruff: ignore[unused-method-argument]
     ) -> SystemState:
-        # Simplified LIF dynamics
-        h = state.activations
-        if h is None:
+        # Simplified LIF dynamics for feedforward networks
+        if state.x is None:
             return state
-        if isinstance(h, list):
-            h = h[-1]
-        spike_counts = []
-        for _step in range(self.config.max_steps):
-            h_new = geometry.route(h)
-            # Spike thresholding
-            spikes = (h_new > 1.0).float()  # Threshold crossing
-            spike_counts.append(spikes.sum(dim=0))  # (n_neurons,) per step
-            h_new = torch.where(h_new > 1.0, torch.zeros_like(h_new), h_new)
-            if (
-                torch.dist(h_new, h, p=float("inf")).item()
-                < self.config.convergence_threshold
-            ):
-                h = h_new
-                break
-            h = h_new
-        state.activations = h
-        state.spike_counts = spike_counts
+
+        # Get initial activations with intermediates
+        all_acts = geometry.forward_with_intermediates(state.x, substrate)
+        if not all_acts:
+            return state
+
+        # all_acts = [input, hidden1, hidden2, ..., output]
+        # We'll simulate spiking dynamics on hidden layers
+        num_layers = len(all_acts) - 1  # Exclude input
+        
+        spike_counts_per_layer = []
+        
+        for step in range(self.config.max_steps):
+            # Forward pass with spiking at each layer
+            h = all_acts[0]  # Input layer (no spiking)
+            new_acts = [h]
+            
+            for i in range(num_layers):
+                # Get weight matrix for this layer
+                if hasattr(geometry, '_layers'):
+                    layer_idx = i * 2
+                    if layer_idx < len(geometry._layers) and isinstance(geometry._layers[layer_idx], nn.Linear):
+                        layer = geometry._layers[layer_idx]
+                        h = layer(h)
+                    else:
+                        # Fallback: use route
+                        h = geometry.route(h)
+                else:
+                    h = geometry.route(h)
+                
+                # Apply activation if present
+                if hasattr(geometry, '_layers'):
+                    act_idx = i * 2 + 1
+                    if act_idx < len(geometry._layers):
+                        act_layer = geometry._layers[act_idx]
+                        if isinstance(act_layer, nn.Module) and not isinstance(act_layer, nn.Linear):
+                            h = act_layer(h)
+                
+                # Spike thresholding (LIF)
+                spikes = (h > 1.0).float()
+                spike_counts_per_layer.append(spikes.sum(dim=0))  # Per neuron spike count
+                h = torch.where(h > 1.0, torch.zeros_like(h), h)  # Reset after spike
+                
+                new_acts.append(h)
+            
+            # Check convergence on output layer
+            if step >= self.config.convergence_start:
+                delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
+                if delta < self.config.convergence_threshold:
+                    all_acts = new_acts
+                    break
+            
+            all_acts = new_acts
+
+        state.activations = all_acts
+        state.spike_counts = spike_counts_per_layer
         if state.metrics is not None:
-            state.metrics["spike_counts"] = spike_counts
+            state.metrics["spike_counts"] = spike_counts_per_layer
         return state
 
     def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use]

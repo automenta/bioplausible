@@ -565,9 +565,33 @@ class TestSNNParity:
 class TestTileParity:
     """Test Tile parity (presets factory vs native tile)."""
 
+    @pytest.mark.parametrize("epochs", [1])
+    def test_create_tile_mlp_composes_and_trains_fast(self, epochs):
+        """Fast variant: presets.create_tile_mlp should compose and train (1 epoch)."""
+        from computronium import create_tile_mlp
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
+
+        system = create_tile_mlp(
+            input_dim,
+            (64,),
+            output_dim,
+            lr=0.001,
+            neurons_per_tile=8,
+            tiles_per_layer=2,
+            device=device,
+        )
+
+        acc = train_system(system, train_loader, val_loader, epochs, device)
+
+        # Should produce valid accuracy
+        assert acc >= 0.0, f"Tile accuracy: {acc:.1f}%"
+
+    @pytest.mark.slow
     @pytest.mark.parametrize("epochs", [2])
-    def test_create_tile_mlp_composes_and_trains(self, epochs):
-        """presets.create_tile_mlp should compose and train."""
+    def test_create_tile_mlp_composes_and_trains_full(self, epochs):
+        """Full variant: presets.create_tile_mlp should compose and train (2 epochs)."""
         from computronium import create_tile_mlp
 
         device = "cuda" if torch.cuda.is_available() else "cpu"

@@ -719,8 +719,10 @@ def run_from_yaml(args):
     update_cfg = config.get("update", {})
     training_cfg = config.get("training", {})
 
-    # Get training params
-    device = training_cfg.get("device", "auto")
+    # Get training params - CLI --device overrides config
+    device = getattr(args, "device", "auto")
+    if device == "auto":
+        device = training_cfg.get("device", "auto")
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
     epochs = training_cfg.get("max_epochs", 10)
@@ -1760,6 +1762,12 @@ def main():  # ruff: ignore[too-many-statements, complex-structure]  (argparse s
     )
     config_parser.add_argument(
         "--config", required=True, help="Path to YAML config file"
+    )
+    config_parser.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cpu", "cuda"],
+        help="Override device from config (auto, cpu, cuda)",
     )
 
     # ---- search ----

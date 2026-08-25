@@ -27,6 +27,7 @@ One-Line System Construction:
         create_pc_mlp,
         create_hebbian_mlp,
         create_snn_mlp,
+        create_spiking_snn_mlp,
         create_routing_mlp,
         create_fast_weight_mlp,
     )
@@ -56,6 +57,9 @@ One-Line System Construction:
         input_dim=784, hidden_dims=(256, 128), output_dim=10
     )
     system = create_snn_mlp(
+        input_dim=784, hidden_dims=(256, 128), output_dim=10
+    )
+    system = create_spiking_snn_mlp(
         input_dim=784, hidden_dims=(256, 128), output_dim=10
     )
     system = create_routing_mlp(
@@ -176,6 +180,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "create_pc_mlp": ("computronium.core.presets", "create_pc_mlp"),
     "create_hebbian_mlp": ("computronium.core.presets", "create_hebbian_mlp"),
     "create_snn_mlp": ("computronium.core.presets", "create_snn_mlp"),
+    "create_spiking_snn_mlp": ("computronium.core.presets", "create_spiking_snn_mlp"),
     "create_tile_mlp": ("computronium.core.presets", "create_tile_mlp"),
     # Preset Factories (6-D)
     "create_routing_mlp": ("computronium.core.presets", "create_routing_mlp"),

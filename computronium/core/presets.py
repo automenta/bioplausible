@@ -600,8 +600,7 @@ def create_snn_mlp(
 
     This factory now aligns with the working YAML preset (snn_mnist.yaml)
     which uses InstantaneousDynamics + LocalGoodnessCredit for compatibility
-    with SystemTrainer. For true spiking dynamics, use the YAML preset directly
-    or a dedicated SpikingSystemTrainer (future work).
+    with SystemTrainer. For true spiking dynamics, use create_spiking_snn_mlp.
 
     Args:
         input_dim: Input dimension
@@ -619,6 +618,53 @@ def create_snn_mlp(
     geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_spiking_snn_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+    max_steps: int = 30,
+    beta: float = 0.1,
+) -> System:
+    """Create a true Spiking Neural Network MLP with SpikeIntegrationDynamics and TemporalTraceCredit.
+
+    This factory uses:
+    - SpikeIntegrationDynamics: LIF membrane potential integration with thresholding
+    - TemporalTraceCredit: STDP-based credit assignment using spike timing
+    - FeedforwardGeometry: Standard MLP topology
+
+    Requires SystemTrainer with spiking support (implemented in compose_system).
+
+    Args:
+        input_dim: Input dimension
+        hidden_dims: Tuple of hidden layer dimensions
+        output_dim: Output dimension
+        lr: Learning rate
+        init_scale: Weight initialization scale
+        device: Target device
+        max_steps: Number of simulation time steps
+        beta: Nudge strength for nudged phase
+
+    Returns:
+        A composed 5-D System with FeedforwardGeometry + SpikeIntegrationDynamics
+        + TemporalTraceCredit + EuclideanUpdate
+    """
+    substrate = _default_substrate(device)
+    geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = SpikeIntegrationDynamics(
+        StateDynamicsConfig.spike_integration(
+            max_steps=max_steps,
+            beta=beta,
+        )
+    )
+    credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace())
     update = _default_update(lr)
 
     return compose_system(substrate, geometry, dynamics, credit, update)
@@ -784,6 +830,7 @@ __all__ = [
     "create_pc_mlp",
     "create_hebbian_mlp",
     "create_snn_mlp",
+    "create_spiking_snn_mlp",
     "create_tile_mlp",
     # 6-D factories
     "create_routing_mlp",

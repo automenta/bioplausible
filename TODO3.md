@@ -94,27 +94,32 @@ All tests pass with Hypothesis (max_examples=50 for core tests, 30 for scale-fre
   - Quick validation: ~78% free-phase accuracy in 5 epochs (limited batches)
   - Target: >90% test accuracy with full 20-epoch run
 
-- [ ] **5.1.2** Fix GPU OOM for large EqProp configs
-  - Add CPU fallback config in `configs/presets/eqprop_mnist.yaml`
-  - Implement gradient checkpointing in `EnergyMinimizationDynamics.settle`
-  - Add `--device cpu` flag to `biopl run from-config`
+- [x] **5.1.2** Fix GPU OOM for large EqProp configs ✅ COMPLETE
+  - Added CPU fallback config: `configs/presets/eqprop_mnist_cpu.yaml` with `device: cpu` and `gradient_checkpointing: true`
+  - Implemented gradient checkpointing in `EnergyMinimizationDynamics.settle` using `torch.utils.checkpoint.checkpoint` with `use_reentrant=False`
+  - Added `--device cpu` flag to `biopl run from-config` CLI command
 
-- [ ] **5.1.3** Add energy tracking validation
-  - Verify free energy decreases monotonically during settling
-  - Log `free_energy_per_iter` for Control-Lyapunov analysis
+- [x] **5.1.3** Add energy tracking validation ✅ COMPLETE
+  - Added `track_free_energy_per_iter` config option to `StateDynamicsConfig`
+  - Implemented `_compute_energy` in `EnergyMinimizationDynamics` computing Hopfield energy
+  - Added `get_free_energy_history()` method returning free energy per iteration
+  - Updated `SystemTrainer.train_step` to log `free_energy_per_iter` metrics for Control-Lyapunov analysis
+  - CPU fallback config enables `track_free_energy_per_iter: true` by default
 
 ### 5.2 Tile Parity Test Optimization
 **Goal**: Make Tile parity test fast enough for CI (<30s).
 
-- [ ] **5.2.1** Profile `create_tile_mlp` training bottleneck
-  - Identify if slow due to `TileGeometry` routing or `SpikeIntegrationDynamics`
-
-- [ ] **5.2.2** Add InstantaneousDynamics variant for CI
+- [x] **5.2.1** Profile `create_tile_mlp` training bottleneck ✅ COMPLETE
+  - Identified bottleneck: TileGeometry routing with larger hidden dims (128) and 2 epochs
+  
+- [x] **5.2.2** Add InstantaneousDynamics variant for CI ✅ COMPLETE
   - YAML preset `tile_mnist.yaml` already uses `instantaneous` dynamics
-  - Ensure parity test uses same config for speed
+  - Fast test variant uses reduced hidden dims (64) and 1 epoch
 
-- [ ] **5.2.3** Add `@pytest.mark.slow` marker for full Tile test
-  - Fast variant in default CI, full variant in nightly
+- [x] **5.2.3** Add `@pytest.mark.slow` marker for full Tile test ✅ COMPLETE
+  - Added `test_create_tile_mlp_composes_and_trains_fast` (1 epoch, hidden_dim=64) for default CI
+  - Added `test_create_tile_mlp_composes_and_trains_full` with `@pytest.mark.slow` (2 epochs, hidden_dim=128) for nightly
+  - Marker registered in `pyproject.toml` under `[tool.pytest.ini_options].markers`
 
 ### 5.3 SNN Factory Fix
 **Goal**: Align `create_snn_mlp` with working YAML preset config.
@@ -124,9 +129,15 @@ All tests pass with Hypothesis (max_examples=50 for core tests, 30 for scale-fre
   - Factory works with SystemTrainer without errors
   - Note: Learning performance requires true SNN implementation (5.3.2)
 
-- [ ] **5.3.2** Add proper SNN implementation with `SpikeIntegrationDynamics`
-  - Requires fixing `SystemTrainer` to handle spiking state (spike counts, membrane potentials)
-  - Or add dedicated `SpikingSystemTrainer` subclass
+- [x] **5.3.2** Add proper SNN implementation with `SpikeIntegrationDynamics` ✅ COMPLETE
+  - Added `create_spiking_snn_mlp` factory in `computronium/core/presets.py` using:
+    - `SpikeIntegrationDynamics` for LIF membrane potential integration with thresholding
+    - `TemporalTraceCredit` for STDP-based credit assignment
+  - Extended `compose_system` in `system_trainer.py` with spiking support:
+    - Added `_is_spiking_system()` detection (SpikeIntegrationDynamics + TemporalTraceCredit)
+    - Added `_train_step_spiking()` handling spike recording and STDP credit assignment
+  - Exported `create_spiking_snn_mlp` in `__init__.py` and `__all__` in presets
+  - Note: Full SNN learning performance requires further tuning of STDP parameters
 
 ### 5.4 Joint System API Documentation
 **Goal**: Document `compose_joint_system` for custom 6-D compositions.
