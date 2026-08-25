@@ -34,7 +34,7 @@ Computronium serves three roles simultaneously. The library is usable independen
 
 Historically, ML frameworks treat models as static computational graphs. Computronium treats them as **coupled dynamical systems**.
 
-By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ unifying fast neural activity, slow synaptic consolidation, and substrate physics. Existing 5-D learning systems are represented as the `M = NullPlasticity` slice of this joint 6-D formulation. The representation is substrate-aware; that does not by itself make any particular algorithm a physical process.
+By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ unifying fast neural activity, slow synaptic consolidation, and substrate physics. Existing 5-D learning systems are represented as the `M = NullPlasticity` slice of this joint 6-D formulation. The representation is substrate-aware; that does not by itself make any particular algorithm a physical process. Formal specification and protocol implementations: *Core Architecture* below.
 
 Computronium provides the ontology, infrastructure, and automation tooling used to investigate **limits imposed by stability, locality, and resource constraints**.
 
@@ -181,7 +181,7 @@ Energy binds Geometry and StateDynamics. The framework elevates the energy funct
 - **Directed topology** → requires Control-Lyapunov formulation for stability (formally verified for PredictiveSettlingDynamics)
 - **Free energy tracking** → per-iteration Lyapunov certificates (`track_free_energy_per_iter`) for predictive coding and directed FA
 
-**Joint Architecture Extension**: The mathematical center is now the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$. The `StateRegistry` assigns lifecycle metadata to every variable (persistent θ, fast plastic ψ, substrate-owned σ, consolidatable), resolving ontological overlaps where a single physical variable (e.g., memristive conductance) serves multiple roles. Slow learning operates on persistent θ at episode boundaries: $\theta_{e+1} = U(\theta_e, C(\tau_e))$. **The 5-D energy-based dynamics are the restriction `F_θ^Null = D_θ` where `M=Null`, `ψ=∅`, `σ=σ₀`.**
+The joint extension of these dynamics — composite state $z_t = (x_t, \psi_t, \sigma_t)$, lifecycle registry, episode-boundary consolidation — is specified once in *Core Architecture* below.
 
 Campaign tooling treats the **stability-plasticity trade-off** and resource constraints as explicit search constraints rather than afterthoughts; the **AutoScientist** searches the declared ontology space and records experiment results.
 
@@ -474,12 +474,12 @@ The joint dynamical system elevates the computational rule to a dynamical variab
 |-----------|---------|
 | `System[TS, TG, TD, TM, TC, TU]` | Generic 6-layer composition; invalid combos caught at type-check |
 | `JointSystemTrainer` | **Single mathematical center**: executes `CoupledTransition.step` (joint transition `z_{t+1} = F_θ(z_t; G, S)`) → trajectory recording → CreditAssignment → ParameterUpdate.consolidate |
-| `SystemTrainer` | Compatibility wrapper: instantiates `JointSystemTrainer` with `plasticity=NullPlasticity`, `ψ=∅`, `σ=σ₀`. The 5-D pipeline `Geometry.forward → StateDynamics.settle → ...` is the **restriction** `F_θ^Null = D_θ` of the joint dynamics. |
+| `SystemTrainer` | Compatibility wrapper: `JointSystemTrainer` instantiated with `plasticity=NullPlasticity`; executes the 5-D pipeline `Geometry.forward → StateDynamics.settle → …` |
 | `DistributedSystemTrainer` | In-process P2P coordination; shards along Geometry (TileMesh), federates at ParameterUpdate; CreditAssignment stays local |
 | `ModelAdapter` | Strangler Fig adapter: projects legacy Registry models → 5-D System via metadata inference with per-family tolerance calibration |
 | `Registry.to_system()` | One-call projection of any registered component |
 
-**Zero-Extension Invariant**: `M=Null, ψ=const, σ=σ₀ ⟹ F_θ(z)|_x = D_θ(x)`. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture. J1 test certifies this equivalence within numerical tolerance.
+**Zero-Extension Invariant**: `M=Null, ψ=const, σ=σ₀ ⟹ F_θ(z)|_x = D_θ(x)`. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture; slow consolidation touches persistent θ only at episode boundaries, $\theta_{e+1} = U(\theta_e, C(\tau_e))$. J1 test certifies this equivalence within numerical tolerance.
 
 ### 4. Factories (`computronium/core/system_trainer.py`)
 
