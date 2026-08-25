@@ -399,7 +399,7 @@ The joint dynamical system elevates the computational rule to a dynamical variab
 - **CompositeState** — joint intra-episode state `z_t = (x_t, ψ_t, σ_t)` with `activity`, `plastic`, `substrate` mappings
 - **SystemContext** — immutable context: `theta`, `geometry`, `substrate_physics`, `registry`, `config` (6-axis)
 - **StateVariable** — lifecycle metadata: `persistent`, `fast_plastic`, `substrate_owned`, `consolidatable`
-- **StateRegistry** — registers variables, validates lifecycle, provides lifecycle groups
+- **StateRegistry** — registers variables, validates lifecycle, provides lifecycle groups; resolves ontological overlaps where one physical variable serves multiple roles (e.g., memristive conductance as both substrate state and plastic medium)
 - **CoupledTransition** — linchpin protocol: `step(z, context) -> CompositeState` executing `z_{t+1} = F_θ(z_t; G, S)`
 - **PlasticityPrimitive** — M-axis protocol: `step(psi, z, context) -> updated psi`
 - **StabilityMonitor** — `spectral_radius`, `lyapunov_exponent` estimation
