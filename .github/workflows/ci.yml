@@ -84,6 +84,20 @@ jobs:
       - name: Dependency Scan (pip-audit)
         run: uv run pip-audit
 
+  formal-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rocq
+        run: |
+          sudo apt-get update && sudo apt-get install -y rocq
+      - name: Verify Rocq Installation
+        run: rocq --version
+      - name: Compile Rocq Formalization
+        run: |
+          cd rocq
+          rocq compile -I /usr/lib/ocaml/coq/user-contrib/Stdlib/Reals -I /usr/lib/ocaml/coq/theories ComputroniumFormal.v
+
   build-package:
     runs-on: ubuntu-latest
     steps:

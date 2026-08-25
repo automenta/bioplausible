@@ -31,3 +31,10 @@ checkpoints/
 lightning_logs/
 scripts
 runs
+
+# Rocq/Coq build artifacts
+*.vo
+*.vok
+*.vos
+*.glob
+.*.aux

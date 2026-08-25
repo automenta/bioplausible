@@ -25,22 +25,27 @@
 
 **Created**: `tests/property/test_eqprop_locality.py` with 8 property-based tests. All tests pass with Hypothesis.
 
-### 4.3 Formal Verification Scaffolding
-**Goal**: Create infrastructure for machine-checked proofs (Rocq/Coq).
+### 4.3 Formal Verification Scaffolding (Rocq — Lean retired)
+**Goal**: Machine-checked statements for the energy dynamics, in `rocq/` (Rocq 9.x / Coq syntax). Lean scaffold deleted; original recoverable at `git show HEAD:lean/`.
 
-- [x] **4.3.1** Research Rocq integration: standard library, Reals, Vectors
-- [x] **4.3.2** Scaffold Lyapunov proof for `EnergyMinimizationDynamics.settle`
-  - Define energy function E(h) in Rocq
-  - Prove `E(h_{t+1}) ≤ E(h_t)` for step_size < 2/L (L = Lipschitz constant) - statement in Rocq
-  - Prove convergence to fixed point under convexity assumptions - statement in Rocq
-- [x] **4.3.3** Scaffold Control-Lyapunov proof for nudged phase
-  - Define V = E_free - E_nudged as Lyapunov function
-  - Prove `dV/dt ≤ -k * V` for matched beta (thermodynamic contrast) - statement in Rocq
+- [x] **4.3.1** Rocq toolchain: system install (Rocq 9.1.1), `-Q . Computronium` layout, Makefile build (`make` in `rocq/`)
+- [x] **4.3.2** Scaffold Lyapunov statements for `EnergyMinimizationDynamics.settle` in Rocq
+  - [x] Define E(h) with corrected cross-term coefficient (½·hᵀWh matches settled gradient)
+  - [x] Statement: energy decreases for step_size < 2/L
+  - [x] Statement: convergence to fixed point under convexity
+- [x] **4.3.3** Scaffold Control-Lyapunov statement for nudged phase
+  - V = E_free - E_nudged defined; statement corrected to use genuinely distinct free/nudged dynamics
 
-- [x] **4.3.4** Create proof-of-concept verified artifact (FINAL TASK) ✅ COMPLETE
-  - Minimal Rocq file proving `EnergyMinimizationDynamics` decreases energy
-  - CI integration: `rocq compile` in GitHub Actions
-  - **Then STOP** — no further formalization. Hypothesis property tests in 4.1/4.2 provide 95% rigor with 5% effort.
+- [~] **4.3.4** Proof artifact — PARTIAL (statements repaired & compiling; proofs partially done)
+  - [x] `rocq/Utils.v` — finite-sum algebra, fully proved (8 Qed, 0 admits)
+  - [x] `rocq/EnergyDynamics.v` compiles clean via `make`
+  - [x] Proved: `gradE_diagonal`, `energyFunction_diagonal`, `stationary_is_fixed_point`
+  - [ ] **Prove `energy_decreases_diagonal`** (NEXT, plumbing only): paper derivation complete — per-index Δ = −(η/2)(2−ηu)t² ≤ 0 with u = 1−W i i > 0, t = u·h i − b i, ηu < 2. Recipe in STUB comment: remember u/t → rewrite Hstep/Hb → difference by `field` → sign chain `Rmult_le_pos` + `sq_nonneg` + `lra`. Watch-outs learned: no `nra`/`nlinarith` in this install (use lra + factored atoms + explicit sign certificates); `ring` cannot clear `/2` (use `field`); `remember` already substitutes (skip follow-up rewrites); `assert .. := tactic.` invalid (use `{ tactic }` or `by`).
+  - [ ] General-case `energy_decreases`: needs Cauchy-Schwarz descent inequality on symmetrized form
+  - [ ] `settle_converges`: needs classical coercivity/completeness argument (fixed-point half already proved)
+  - [ ] EqProp module split-out: controlLyapunov + nudgedSettleStep + locality axiom stub → new `rocq/EqProp.v` importing EnergyDynamics (numeric counterpart: `tests/property/test_eqprop_locality.py`)
+  - [ ] Optional CI: apt `rocq-prover` job exists in ci.yml but its `-I` flags need verification against a real runner
+  - **Then STOP** — Hypothesis property tests in 4.1/4.2 provide 95% rigor with 5% effort.
 
 ---
 
@@ -166,7 +171,7 @@ THEN STOP:  No further formalization. No Phase 6 work.
 
 ## Definition of Done (Sprint Completion)
 
-- [x] **4.3.4** Rocq proof compiles (`rocq compile` passes) — minimal EnergyMinimizationDynamics energy decrease
+- [x] **4.3.4** Rocq artifact compiles (`make` in `rocq/` passes) — statements repaired; diagonal-case energy decrease admitted with complete paper proof + recipe (see 4.3.4 checklist)
 - [ ] **5.1.1** EqProp 20-epoch MNIST achieves >80% accuracy (or documented why not)
-- [ ] All CI gates pass: ruff, pyright, pytest, coverage ≥15%, `rocq compile`
+- [ ] All CI gates pass: ruff, pyright, pytest, coverage ≥15%, `make` in `rocq/`
 - [ ] **NO FURTHER WORK** — sprint complete after these two items
