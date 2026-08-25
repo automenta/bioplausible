@@ -4143,8 +4143,33 @@ class EnergyMinimizationDynamics:
         beta = self.config.beta if target is not None else 0.0
         momentum = self.config.momentum
 
+        # Auto-detect gradient checkpointing: never on CPU (pure overhead),
+        # on GPU enable only if explicitly set OR if VRAM would be exceeded.
+        device = all_acts[0].device
+        use_checkpointing = self.config.gradient_checkpointing
+        if use_checkpointing and device.type == "cpu":
+            # Never checkpoint on CPU - it's pure compute overhead with no memory benefit
+            use_checkpointing = False
+        elif use_checkpointing == False and device.type == "cuda":
+            # Auto-enable if model + activations would exceed ~80% of available VRAM
+            try:
+                free_vram, _ = torch.cuda.mem_get_info(device)
+                # Estimate: params + optimizer state + activations (max_steps * layers * batch * hidden)
+                total_params = sum(p.numel() for p in geometry.params.values() if p.requires_grad)
+                hidden_size = all_acts[1].numel() // all_acts[1].shape[0]  # per-sample hidden dim
+                batch_size = all_acts[0].shape[0]
+                # Rough estimate: activations for all settle steps (each step has ~layers activations)
+                est_activation_mem = (
+                    self.config.max_steps * len(geometry._layers) * batch_size * hidden_size * 4  # fp32 bytes
+                )
+                est_total = (total_params * 4 * 3) + est_activation_mem  # params + optimizer + activations
+                if est_total > free_vram * 0.8:
+                    use_checkpointing = True
+            except Exception:
+                pass  # Fall back to config value
+
         # Use gradient checkpointing if enabled
-        if self.config.gradient_checkpointing:
+        if use_checkpointing:
             import torch.utils.checkpoint as checkpoint
 
             for step in range(self.config.max_steps):

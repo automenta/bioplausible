@@ -27,7 +27,6 @@ dynamics:
   beta: 0.1
   momentum: 0.0
   track_free_energy_per_iter: false
-  gradient_checkpointing: true
 
 plasticity:
   type: null

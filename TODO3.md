@@ -98,9 +98,12 @@ All tests pass with Hypothesis (max_examples=50 for core tests, 30 for scale-fre
   - **Status**: 5-epoch CPU validation run started but slow; full 20-epoch run pending
 
 - [x] **5.1.2** Fix GPU OOM for large EqProp configs ✅ COMPLETE
-  - Enabled `gradient_checkpointing: true` in `eqprop_mnist.yaml` — competitive 512×3 EqProp now fits on 10GB GPU (~100MB VRAM)
-  - Implemented gradient checkpointing in `EnergyMinimizationDynamics.settle` using `torch.utils.checkpoint.checkpoint` with `use_reentrant=False`
-  - Removed unnecessary CPU fallback config (`eqprop_mnist_cpu.yaml` deleted)
+  - **Auto-detect gradient checkpointing** in `EnergyMinimizationDynamics.settle`:
+    - Never on CPU (pure overhead)
+    - On GPU: auto-enable if estimated VRAM > 80% of available
+  - Removed explicit `gradient_checkpointing` from presets — now adaptive
+  - Competitive 512×3 EqProp fits on 10GB GPU (~100MB) with auto-checkpointing
+  - Deleted unnecessary CPU fallback config (`eqprop_mnist_cpu.yaml`)
 
 - [x] **5.1.3** Add energy tracking validation ✅ COMPLETE
   - Added `track_free_energy_per_iter` config option to `StateDynamicsConfig`
