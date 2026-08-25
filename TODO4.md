@@ -18,7 +18,7 @@
 - [ ] **7.1.2** General-case `energy_decreases`: Cauchy-Schwarz descent inequality on symmetrized form *(currently admitted w/ paper proof — CP-B pull-based)*
 - [ ] **7.1.3** `settle_converges`: classical coercivity/completeness argument (fixed-point half already proved) *(CP-B pull-based)*
 - [ ] **7.1.4** EqProp module split-out → new `rocq/EqProp.v` importing EnergyDynamics: controlLyapunov + nudgedSettleStep + locality axiom stub (numeric counterpart exists: `tests/property/test_eqprop_locality.py`) *(CP-B pull-based)*
-- [~] **7.1.5** Optional CI: `rocq-prover` apt job `-I` flags vs. real runner — **SUPERSEDED by RESEARCH3 Theory Program ψ-coverage proposition**; do only if trivial
+- [~] **7.1.5** Optional CI: `rocq-prover` apt job `-I` flags vs. real runner — **SUPERSEDED by RESEARCH3 Theory Program ψ-coverage proposition**; job already exists (`ci.yml:91–97`) — touch only if it fails on a real runner
 
 ### 7.2 EqProp Competitive Verification (was TODO3 §5.1.1 — FINAL TASK)
 **Config**: `hidden_dims=(512,512,512)`, `beta=0.1`, `inference_steps=20`, `lr=0.001`, `grad_clip=1.0`; auto-gradient checkpointing enabled (512×3 fits 10GB VRAM).
@@ -30,7 +30,21 @@ Locked-in fixes: separate free/nudged state objects in `train_step`; multi-layer
 - [ ] **7.2.3** Target >80% test accuracy — or document why not (either closes the task)
 
 ### 7.3 CI Gates (TODO3 DoD remainder)
-- [ ] All gates green: ruff format/check, pyright strict, pytest, coverage ≥15%, `make` in `rocq/`
+Gate = current *configured* baseline (`pyproject.toml [tool.pyright]` — `strict` was deliberately relaxed to a per-rule profile; do NOT reintroduce), not aspirational strictness:
+
+- [ ] pytest (full suite) green; coverage ≥15% measured on **full suite** only (partial runs read ~13%)
+- [ ] `make` in `rocq/` compiles clean
+- [ ] `ruff format --check .` + no *new* violations on touched files (9,578 existing findings are parked debt — burn-down deferred to the post-settlement dead-code purge, which shrinks the problem first)
+- [ ] Pyright green at its configured per-rule profile — requires 7.4
+
+**De-prioritized by design**: lint burn-down and coverage growth wait until the architecture settles and dead code is purged; both get cheaper then.
+
+### 7.4 Hard Type Errors in Core (blocks the 7.3 pyright gate)
+Genuine correctness errors surfacing even under the relaxed profile — invariants, not cosmetics:
+
+- [ ] `computronium/core/ontology.py` (~52): `ExperimentConfig.ontology` unknown attr (:1539); `update_map` possibly unbound (:1648); `_param_name` assigned on `Tensor`/`Parameter` ×12 (:1951–:2284); `SystemState` list-invariance assignments `free_state`/`nudged_state`/`activations` (:2587–:2590 → widen to `Sequence`); `Tensor | float` returned as `Tensor` (:2670); `_AdaptedSystem` missing `to_spec`/`from_spec` protocol members (:2795); `int(Tensor | Module)` (:3004)
+- [ ] `computronium/core/registry.py` (2): phantom `ComponentCategory.PROPAGATOR` attribute (:547); unbound generic params `num_layers`/`topology_type`/`connectivity`/`recurrent_weight` (:637)
+- Policy: prefer deletion over patching where the code path is already dead (architecture settling); each fix either restores an invariant or removes the path
 
 ---
 
@@ -43,7 +57,7 @@ Built once; consumed by the RESEARCH3 catalog. Startup sequence per RESEARCH3 §
 | **PR-0** | Verification gate | `docs/baseline.md` gates at-or-better (pytest / pyright strict / ruff) + TIER 0/digits campaign green | Every empirical item | **Day 1** |
 | **PR-1** | Optimizer-phase hygiene | Rebuild Adam between meta-train and ψ-adaptation; `evaluate_z3` currently carries momentum buffers over frozen θ → contaminates exact-zero Δθ claim | Z3, Algorithm Migration | Days 2–3 |
 | **PR-2** | θ-invariance audit harness | Snapshot → freeze → run → re-snapshot → exact-diff as reusable context manager, per-seed reports | Z3, Algorithm Migration, continual learning | Days 2–3 |
-| **PR-3a** | Software resource instrumentation | `ResourceUsage` + `core/profiling.py` wired into every suite runner (proxy FLOPs/memory/latency; no hardware needed) | Z3 proxy-tier energy, L2 effective-FLOPs, AutoScientist frontier | Days 3–4 |
+| **PR-3a** | Software resource instrumentation | Canonical `ResourceUsage` = `core/profiling.py:38` — **consolidate the two duplicate definitions first** (`core/stability/frontier.py:9`, `core/campaign/resource_vector.py:18`), then wire into every suite runner (proxy FLOPs/memory/latency; no hardware needed) | Z3 proxy-tier energy, L2 effective-FLOPs, AutoScientist frontier | Days 3–4 |
 | **PR-3b** | Physical calibration anchor | One *measured* Joule/FLOP anchor workload (board sensor / wall meter / RAPL per `docs/hardware_targets.md`); calibrates proxies → measured tier w/ error bars | Measured-tier energy claims, Edge/Green AI, Hardware pilot | Procurement **Day 1** (lead-time-gated) |
 | **PR-4** | Pre-registration & statistics kit | Seed count ≥5, bootstrap-CI utility, paired-comparison harness, threshold-registration template in repo | Z3, L1–L3.5, benchmark contract, discovery replication gates | Days 4–5 |
 | **PR-5** | Calibrated stability guard | ROC-calibrated kill thresholds (<5% false-kill on known-good, >95% kill on unstable, <10% overhead); `_fast_proxy` vs full-Jacobian disagreement rate quantified | Unattended campaigns, discovery | After PR-7 |
@@ -97,9 +111,9 @@ Bridge points from Phase 7:
 | Rocq formalization | `rocq/` (canonical; Lean retired) |
 | Z3 substrate | `computronium/experiments/joint/z3_fixed_weights.py`, `computronium/core/plasticity/rule_state.py` |
 | Shakedown suites | `algorithm_migration.py`, `adaptation_efficiency.py`, `compute_efficiency.py`, `structural_robustness.py` (all in `computronium/experiments/joint/` unless noted) |
-| Profiling / resources | `computronium/core/profiling.py`, `frontier.py::ResourceUsage` |
+| Profiling / resources | `computronium/core/profiling.py:38` (canonical `ResourceUsage`; dupes in `stability/frontier.py`, `campaign/resource_vector.py` — consolidate per PR-3a) |
 | Stability stack | `computronium/core/stability/` (`SpectralRadiusEstimator`, `_fast_proxy`) |
-| Failure manifesto | `analysis/failure_manifesto.py` |
+| Failure manifesto | `computronium/analysis/failure_manifesto.py` |
 | Campaign stack | `autoscientist_campaigns/` (empty — see PR-9) |
 | Hardware targets | `docs/hardware_targets.md`; baseline gates `docs/baseline.md` |
 | Research catalog & protocol | `RESEARCH3.md` (items, CP-A…CP-E, E-1…E-11) |
@@ -124,7 +138,8 @@ Bridge points from Phase 7:
 
 - [ ] **7.1.1** `energy_decreases_diagonal` proved (0-admit diagonal case); 7.1.2–7.1.4 either closed or explicitly parked under CP-B pull-based policy
 - [ ] **7.2** EqProp 20-epoch MNIST >80% accuracy (or documented why not)
-- [ ] **7.3** All CI gates pass (ruff, pyright strict, pytest, coverage ≥15%, `make` in `rocq/`)
+- [ ] **7.4** Hard type errors cleared from `ontology.py`/`registry.py` — fixed or dead paths deleted
+- [ ] **7.3** CI green at configured baseline: pytest full suite, coverage ≥15% (full-suite measure), `make` in `rocq/`, `ruff format --check`, pyright per-rule profile; full lint burn-down explicitly deferred to post-settlement purge
 - [ ] **PR-0…PR-4** merged and green
 - [ ] **PR-7** shakedown green w/ harvested good/bad config sets
 - [ ] **PR-5** calibrated + **PR-9** commissioned
